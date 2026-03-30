@@ -663,7 +663,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
           <colgroup>
             <col style={{ width: "20px" }} />
             <col style={{ width: "52px" }} />
-            <col />
+            <col style={{ width: "140px" }} />
             <col style={{ width: "52px" }} />
             <col style={{ width: "80px" }} />
             <col style={{ width: "96px" }} />
@@ -688,8 +688,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
               <th className="px-2 py-1.5 text-center font-medium">Số khách</th>
               <th className="px-2 py-1.5 text-center font-medium">Đơn giá</th>
               <th className="px-2 py-1.5 text-right font-medium">Thành tiền</th>
-              <th className="px-2 py-1.5 text-left font-medium">TT ĐNTT</th>
-              <th className="px-2 py-1.5 text-left font-medium">TT Thanh toán</th>
+              <th className="px-2 py-1.5 text-center font-medium">TT ĐNTT</th>
+              <th className="px-2 py-1.5 text-center font-medium">TT Thanh toán</th>
               <th className="px-2 py-1.5" />
             </tr>
           </thead>
@@ -835,7 +835,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Trạng thái ĐNTT */}
-                <td className="px-2 py-1.5 align-top">
+                <td className="px-2 py-1.5 align-top text-center">
                   {activeDntts.length === 0 ? (
                     <span className="text-[10px] text-muted-foreground">—</span>
                   ) : (
@@ -904,7 +904,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Trạng thái Thanh toán */}
-                <td className="px-2 py-1.5 align-top">
+                <td className="px-2 py-1.5 align-top text-center">
                   <div className="space-y-1">
                     {activeDntts.map(d => (
                       <div key={d.id}>
