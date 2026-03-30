@@ -222,22 +222,22 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                   <tr key={row.id} className="hover:bg-muted/20">
                     {/* Ngày */}
                     {i === 0 && (
-                      <td className="px-3 py-2 text-muted-foreground align-top" rowSpan={rows.length}>
+                      <td className="px-3 py-2.5 text-muted-foreground align-top whitespace-nowrap" rowSpan={rows.length}>
                         {day > 0 ? `Ngày ${day}` : "—"}
                       </td>
                     )}
 
                     {/* Dịch vụ */}
-                    <td className="px-3 py-2 font-medium">{row.mo_ta || "—"}</td>
+                    <td className="px-3 py-2.5 font-medium">{row.mo_ta || "—"}</td>
 
                     {/* SL */}
-                    <td className="px-2 py-2 text-center text-muted-foreground">{row.so_luong}</td>
+                    <td className="px-2 py-2.5 text-center text-muted-foreground">{row.so_luong}</td>
 
                     {/* Đơn giá */}
-                    <td className="px-3 py-2 text-right text-muted-foreground">{fmt(row.don_gia)} ₫</td>
+                    <td className="px-3 py-2.5 text-right text-muted-foreground whitespace-nowrap">{fmt(row.don_gia)} ₫</td>
 
                     {/* Thành tiền */}
-                    <td className="px-3 py-2 text-right font-semibold text-primary">{fmt(thanhTien)} ₫</td>
+                    <td className="px-3 py-2.5 text-right font-semibold text-primary whitespace-nowrap">{fmt(thanhTien)} ₫</td>
 
                     {/* TT ĐNTT */}
                     <td className="px-2 py-2 align-top">
