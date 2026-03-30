@@ -682,15 +682,15 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   className="h-3.5 w-3.5"
                 />
               </th>
-              <th className="px-2 py-1.5 text-center font-medium">Ngày</th>
-              <th className="px-2 py-1.5 text-left font-medium">Nhà hàng</th>
-              <th className="px-2 py-1.5 text-center font-medium">Bữa</th>
-              <th className="px-2 py-1.5 text-center font-medium">Số khách</th>
-              <th className="px-2 py-1.5 text-center font-medium">Đơn giá</th>
-              <th className="px-2 py-1.5 text-right font-medium">Thành tiền</th>
-              <th className="px-2 py-1.5 text-center font-medium">TT ĐNTT</th>
-              <th className="px-2 py-1.5 text-center font-medium">TT Thanh toán</th>
-              <th className="px-2 py-1.5" />
+              <th className="px-3 py-2 text-center font-medium">Ngày</th>
+              <th className="px-3 py-2 text-left font-medium">Nhà hàng</th>
+              <th className="px-3 py-2 text-center font-medium">Bữa</th>
+              <th className="px-3 py-2 text-center font-medium">Số khách</th>
+              <th className="px-3 py-2 text-center font-medium">Đơn giá</th>
+              <th className="px-3 py-2 text-right font-medium">Thành tiền</th>
+              <th className="px-3 py-2 text-center font-medium">TT ĐNTT</th>
+              <th className="px-3 py-2 text-center font-medium">TT Thanh toán</th>
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           {/* Rows */}
