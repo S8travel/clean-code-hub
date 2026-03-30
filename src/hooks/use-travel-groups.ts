@@ -7,16 +7,14 @@ export interface TravelGroup {
   created_at: string;
   [key: string]: any;
 }
-type TravelGroupInsert = Partial<TravelGroup>;
-type TravelGroupUpdate = Partial<TravelGroup>;
-
-export type { TravelGroup, TravelGroupInsert, TravelGroupUpdate };
+export type TravelGroupInsert = Partial<TravelGroup>;
+export type TravelGroupUpdate = Partial<TravelGroup>;
 
 export function useTravelGroups() {
   return useQuery({
     queryKey: ["travel_groups"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await externalSupabase
         .from("travel_groups")
         .select("*")
         .order("created_at", { ascending: false });
@@ -30,7 +28,7 @@ export function useCreateGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (group: TravelGroupInsert) => {
-      const { data, error } = await supabase.from("travel_groups").insert(group).select().single();
+      const { data, error } = await externalSupabase.from("travel_groups").insert(group).select().single();
       if (error) throw error;
       return data;
     },
@@ -42,7 +40,7 @@ export function useUpdateGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: TravelGroupUpdate & { id: string }) => {
-      const { data, error } = await supabase.from("travel_groups").update(updates).eq("id", id).select().single();
+      const { data, error } = await externalSupabase.from("travel_groups").update(updates).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
@@ -54,7 +52,7 @@ export function useDeleteGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("travel_groups").delete().eq("id", id);
+      const { error } = await externalSupabase.from("travel_groups").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["travel_groups"] }),
