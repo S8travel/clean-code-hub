@@ -661,16 +661,16 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
       <div className="rounded-lg border border-border overflow-hidden">
         <table className="w-full border-collapse text-xs">
           <colgroup>
-            <col style={{ width: "20px" }} />
-            <col style={{ width: "52px" }} />
-            <col style={{ width: "140px" }} />
-            <col style={{ width: "52px" }} />
-            <col style={{ width: "80px" }} />
-            <col style={{ width: "96px" }} />
-            <col style={{ width: "100px" }} />
-            <col style={{ width: "160px" }} />
-            <col style={{ width: "120px" }} />
-            <col style={{ width: "130px" }} />
+            <col className="w-[28px]" />
+            <col className="w-[64px]" />
+            <col />
+            <col className="w-[56px]" />
+            <col className="w-[80px]" />
+            <col className="w-[100px]" />
+            <col className="w-[110px]" />
+            <col className="w-[180px]" />
+            <col className="w-[150px]" />
+            <col className="w-[100px]" />
           </colgroup>
           {/* Header */}
           <thead>
@@ -682,15 +682,15 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   className="h-3.5 w-3.5"
                 />
               </th>
-              <th className="px-2 py-1.5 text-center font-medium">Ngày</th>
-              <th className="px-2 py-1.5 text-left font-medium">Nhà hàng</th>
-              <th className="px-2 py-1.5 text-center font-medium">Bữa</th>
-              <th className="px-2 py-1.5 text-center font-medium">Số khách</th>
-              <th className="px-2 py-1.5 text-center font-medium">Đơn giá</th>
-              <th className="px-2 py-1.5 text-right font-medium">Thành tiền</th>
-              <th className="px-2 py-1.5 text-center font-medium">TT ĐNTT</th>
-              <th className="px-2 py-1.5 text-center font-medium">TT Thanh toán</th>
-              <th className="px-2 py-1.5" />
+              <th className="px-3 py-2 text-center font-medium">Ngày</th>
+              <th className="px-3 py-2 text-left font-medium">Nhà hàng</th>
+              <th className="px-3 py-2 text-center font-medium">Bữa</th>
+              <th className="px-3 py-2 text-center font-medium">Số khách</th>
+              <th className="px-3 py-2 text-center font-medium">Đơn giá</th>
+              <th className="px-3 py-2 text-right font-medium">Thành tiền</th>
+              <th className="px-3 py-2 text-center font-medium">TT ĐNTT</th>
+              <th className="px-3 py-2 text-center font-medium">TT Thanh toán</th>
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           {/* Rows */}
@@ -775,12 +775,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Ngày */}
-                <td className="px-2 py-1.5 text-center text-muted-foreground whitespace-nowrap text-[11px]">
+                <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap text-[11px]">
                   {dateLabel}
                 </td>
 
                 {/* NH name */}
-                <td className="px-2 py-1.5 font-medium max-w-0">
+                <td className="px-3 py-2 font-medium">
                   <div className="truncate">
                     {nh?.ten || `NH #${meal.nha_hang_id}`}
                     {nh?.ncc_so_tai_khoan && (
@@ -792,12 +792,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Bữa */}
-                <td className="px-2 py-1.5 text-center text-muted-foreground">
+                <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap">
                   {buaIcon} {buaLabel}
                 </td>
 
                 {/* Số khách */}
-                <td className="px-2 py-1.5">
+                <td className="px-3 py-2">
                   <div className="flex items-center justify-center gap-1">
                     {row ? (
                       <>
@@ -816,7 +816,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Đơn giá */}
-                <td className="px-2 py-1.5">
+                <td className="px-3 py-2">
                   <div className="flex justify-center">
                     {row ? (
                       <NHInput
@@ -830,7 +830,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Thành tiền (đã trừ FOC) */}
-                <td className="px-2 py-1.5 text-right font-semibold text-primary">
+                <td className="px-3 py-2 text-right font-semibold text-primary whitespace-nowrap">
                   {row ? fmt(totalBua) : "—"}
                 </td>
 
