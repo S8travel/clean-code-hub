@@ -52,6 +52,7 @@ export interface DNTTRow {
   ghi_chu: string | null;
   sent_at: string | null;
   sent_by: string | null;
+  ngay_can_thanh_toan: string | null;
 }
 
 // ── Queries ──

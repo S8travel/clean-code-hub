@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
-import { format, getDay } from "date-fns";
+import { format, getDay, subDays, parseISO } from "date-fns";
 import { Plus, Ban, Printer, Trash2, SlidersHorizontal, Pencil, Check, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -130,6 +130,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
   const [dnttDepositAmount, setDnttDepositAmount] = useState(0);
   const [dnttAlreadyPaid, setDnttAlreadyPaid] = useState(0); // amount already paid (for partial flow)
   const [dnttBsAmount, setDnttBsAmount] = useState(0); // bổ sung: nhập tự do khi đã TT đủ
+  const [dnttNgayCan, setDnttNgayCan] = useState(""); // ngày cần thanh toán
   const [dnttSubmitting, setDnttSubmitting] = useState(false);
   const [canTruByMeal, setCanTruByMeal] = useState<Record<string, CanTruSelection | null>>({});
 
@@ -478,6 +479,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         trang_thai_thanh_toan: "chua_tt",
         ref_loai: "doan_chi_phi",
         ref_id: row.id,
+        ngay_can_thanh_toan: dnttNgayCan || null,
         allocations: [{ chi_phi_id: row.id, so_tien: soTien }],
       });
 
@@ -984,6 +986,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                           setDnttAlreadyPaid(0);
                           setDnttModalMode("full");
                           setDnttDepositAmount(0);
+                          setDnttNgayCan(meal.ngay_date ? (() => { try { return format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"); } catch { return ""; } })() : "");
                           setDnttModalKey(key);
                         }}>
                         ĐNTT
@@ -996,6 +999,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                           setDnttModalMode("full");
                           setDnttDepositAmount(0);
                           setDnttBsAmount(0);
+                          setDnttNgayCan(meal.ngay_date ? (() => { try { return format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"); } catch { return ""; } })() : "");
                           setDnttModalKey(key);
                         }}>
                         {conLai > 0 ? `ĐNTT còn lại` : "ĐNTT bổ sung"}
@@ -1244,6 +1248,16 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                     )}
                   </>
                 )}
+                {/* Ngày cần thanh toán */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Ngày cần thanh toán</Label>
+                  <Input
+                    type="date"
+                    className="h-8 text-xs"
+                    value={dnttNgayCan}
+                    onChange={(e) => setDnttNgayCan(e.target.value)}
+                  />
+                </div>
                 <KSCongNoPanel
                   nccId={nh?.nha_cung_cap_id}
                   doanId={doanId}

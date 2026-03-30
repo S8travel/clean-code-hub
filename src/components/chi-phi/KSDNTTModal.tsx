@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format } from "date-fns";
+import { format, subDays, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -34,11 +34,21 @@ interface Props {
   chiPhiRowIds: number[];
   canTru: CanTruSelection | null;
   tenDoanMoi: string;
+  serviceDate?: string;
+}
+
+function defaultNgayCan(serviceDate?: string): string {
+  if (!serviceDate) return "";
+  try {
+    return format(subDays(parseISO(serviceDate), 1), "yyyy-MM-dd");
+  } catch {
+    return "";
+  }
 }
 
 export default function KSDNTTModal({
   open, onClose, doanId, ksId, ksName, nccId, nccTen, nccStk, nccNganHang,
-  totalKS, daCoc, localRows, chiPhiRowIds, canTru, tenDoanMoi,
+  totalKS, daCoc, localRows, chiPhiRowIds, canTru, tenDoanMoi, serviceDate,
 }: Props) {
   const conLai = totalKS - daCoc;
   const canTruAmount = canTru?.soTienCanTru ?? 0;
@@ -47,6 +57,7 @@ export default function KSDNTTModal({
   const [mode, setMode] = useState<"full" | "deposit">("full");
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const [ghiChu, setGhiChu] = useState("");
+  const [ngayCan, setNgayCan] = useState<string>(() => defaultNgayCan(serviceDate));
   const insertDNTT = useInsertDNTT();
   const qc = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
@@ -98,6 +109,7 @@ export default function KSDNTTModal({
           ref_loai: "khach_san",
           ref_id: ksId,
           ghi_chu: ghiChu || null,
+          ngay_can_thanh_toan: ngayCan || null,
           allocations: allocations.length > 0 ? allocations : undefined,
         };
         await insertDNTT.mutateAsync(payload);
@@ -234,6 +246,17 @@ export default function KSDNTTModal({
               )}
             </div>
           )}
+
+          {/* Ngày cần thanh toán */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Ngày cần thanh toán</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={ngayCan}
+              onChange={(e) => setNgayCan(e.target.value)}
+            />
+          </div>
 
           {/* Ghi chú */}
           <div className="space-y-1.5">

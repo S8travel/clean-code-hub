@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format } from "date-fns";
+import { format, subDays, parseISO } from "date-fns";
 import { Check, Pencil, X, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,15 +20,15 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   tu_choi:   { text: "Từ chối",         cls: "bg-red-100 text-red-700" },
 };
 
-interface CocTarget { chiPhiId: number; thanhTien: number; moTa: string; nccId: number | null }
 interface CancelTarget { dnttId: number; isPaid: boolean }
 
 interface Props {
   doanId: number;
   tenDoan?: string;
+  ngayBatDau?: string;
 }
 
-export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
+export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const insertDNTT = useInsertDNTT();
@@ -39,10 +39,12 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editAmount, setEditAmount] = useState("");
 
-  // Cọc dialog
-  const [cocTarget, setCocTarget] = useState<CocTarget | null>(null);
-  const [cocMode, setCocMode] = useState<"percent" | "amount">("percent");
-  const [cocValue, setCocValue] = useState(30);
+  // ĐNTT modal
+  interface DVModalTarget { chiPhiId: number; thanhTien: number; moTa: string; nccId: number | null; nhaySo: number | null }
+  const [dvModal, setDvModal] = useState<DVModalTarget | null>(null);
+  const [dvModalMode, setDvModalMode] = useState<"full" | "deposit">("full");
+  const [dvDepositAmount, setDvDepositAmount] = useState(0);
+  const [dvNgayCan, setDvNgayCan] = useState("");
 
   // Resend dialog (rejected)
   const [resendTarget, setResendTarget] = useState<DNTTRow | null>(null);
@@ -80,40 +82,43 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const handleSendDNTT = (
-    chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null,
-    laCoc: boolean, soTien: number, tyleCoc?: number,
-  ) => {
+  const openDvModal = (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null, ngaySo: number | null) => {
+    let ngayCan = "";
+    if (ngayBatDau && ngaySo != null && ngaySo > 0) {
+      try {
+        const serviceDate = new Date(parseISO(ngayBatDau));
+        serviceDate.setDate(serviceDate.getDate() + ngaySo - 1);
+        ngayCan = format(subDays(serviceDate, 1), "yyyy-MM-dd");
+      } catch { /* ignore */ }
+    }
+    setDvModal({ chiPhiId, thanhTien, moTa, nccId, nhaySo: ngaySo });
+    setDvModalMode("full");
+    setDvDepositAmount(0);
+    setDvNgayCan(ngayCan);
+  };
+
+  const handleDvModalSubmit = () => {
+    if (!dvModal) return;
+    const { chiPhiId, thanhTien, moTa, nccId } = dvModal;
+    const soTien = dvModalMode === "full" ? thanhTien : dvDepositAmount;
+    if (soTien <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
+    if (dvModalMode === "deposit" && soTien >= thanhTien) { toast.error("Số tiền cọc phải nhỏ hơn tổng tiền"); return; }
     insertDNTT.mutate({
       doan_id: doanId,
       loai: "dich_vu",
       mo_ta: moTa || tenDoan || "Dịch vụ",
       nha_cung_cap_id: nccId,
       so_tien: soTien,
-      la_coc: laCoc,
-      ty_le_coc: tyleCoc ?? null,
+      la_coc: dvModalMode === "deposit",
       trang_thai_duyet: "cho_duyet",
       trang_thai_thanh_toan: "chua_tt",
       ref_loai: "doan_chi_phi",
       ref_id: chiPhiId,
-      so_tien_con_lai: laCoc ? thanhTien - soTien : 0,
+      so_tien_con_lai: dvModalMode === "deposit" ? thanhTien - soTien : 0,
+      ngay_can_thanh_toan: dvNgayCan || null,
     } as any, {
-      onSuccess: () => toast.success("Đã gửi ĐNTT"),
+      onSuccess: () => { toast.success("Đã gửi ĐNTT"); setDvModal(null); },
     });
-  };
-
-  const handleCocSubmit = () => {
-    if (!cocTarget) return;
-    const { chiPhiId, thanhTien, moTa, nccId } = cocTarget;
-    const soTien = cocMode === "percent"
-      ? Math.round(thanhTien * cocValue / 100)
-      : cocValue;
-    if (soTien <= 0 || soTien >= thanhTien) {
-      toast.error("Số tiền cọc không hợp lệ");
-      return;
-    }
-    handleSendDNTT(chiPhiId, thanhTien, moTa, nccId, true, soTien, cocMode === "percent" ? cocValue : undefined);
-    setCocTarget(null);
   };
 
   const handleResendSubmit = () => {
@@ -346,23 +351,14 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                           </Button>
                         )}
                         {activeDntts.length === 0 && thanhTien > 0 && (
-                          <>
-                            <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
-                              disabled={insertDNTT.isPending}
-                              onClick={() => handleSendDNTT(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id, false, thanhTien)}>
-                              ĐNTT
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
-                              disabled={insertDNTT.isPending}
-                              onClick={() => { setCocMode("percent"); setCocValue(30); setCocTarget({ chiPhiId: row.id!, thanhTien, moTa: row.mo_ta || "", nccId: row.nha_cung_cap_id }); }}>
-                              Cọc
-                            </Button>
-                          </>
+                          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
+                            onClick={() => openDvModal(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
+                            ĐNTT
+                          </Button>
                         )}
                         {activeDntts.length > 0 && daDeNghi === 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
-                            disabled={insertDNTT.isPending}
-                            onClick={() => handleSendDNTT(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id, false, conLai > 0 ? conLai : thanhTien)}>
+                            onClick={() => openDvModal(row.id!, conLai > 0 ? conLai : thanhTien, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
                             {conLai > 0 ? "ĐNTT còn lại" : "ĐNTT bổ sung"}
                           </Button>
                         )}
@@ -376,35 +372,50 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
         </table>
       </div>
 
-      {/* Cọc Dialog */}
-      <Dialog open={!!cocTarget} onOpenChange={v => { if (!v) setCocTarget(null); }}>
-        <DialogContent className="sm:max-w-[360px]">
-          <DialogHeader><DialogTitle className="text-sm">Gửi cọc</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Thành tiền: {fmt(cocTarget?.thanhTien ?? 0)} VND</p>
-            <RadioGroup value={cocMode} onValueChange={v => setCocMode(v as any)} className="flex gap-4">
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="percent" id="dv-coc-pct" />
-                <Label htmlFor="dv-coc-pct" className="text-xs">% cọc</Label>
+      {/* ĐNTT Modal */}
+      <Dialog open={!!dvModal} onOpenChange={v => { if (!v) setDvModal(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Tạo đề nghị thanh toán — {dvModal?.moTa || "Dịch vụ"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <p>Tổng tiền: <span className="font-semibold">{fmt(dvModal?.thanhTien ?? 0)} VND</span></p>
+            <RadioGroup value={dvModalMode} onValueChange={v => setDvModalMode(v as "full" | "deposit")} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="full" id="dv-full" />
+                <Label htmlFor="dv-full" className="text-xs cursor-pointer">
+                  Toàn bộ — {fmt(dvModal?.thanhTien ?? 0)} VND
+                </Label>
               </div>
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="amount" id="dv-coc-amt" />
-                <Label htmlFor="dv-coc-amt" className="text-xs">Số tiền</Label>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="deposit" id="dv-dep" />
+                <Label htmlFor="dv-dep" className="text-xs cursor-pointer">1 phần (cọc)</Label>
               </div>
             </RadioGroup>
-            <Input type="number" value={cocValue || ""}
-              onChange={e => setCocValue(Number(e.target.value) || 0)}
-              placeholder={cocMode === "percent" ? "VD: 30" : "VD: 5000000"}
-              className="h-8 text-xs" />
-            {cocMode === "percent" && cocValue > 0 && cocTarget && (
-              <p className="text-xs text-muted-foreground">
-                = {fmt(Math.round(cocTarget.thanhTien * cocValue / 100))} VND
-              </p>
+            {dvModalMode === "deposit" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Số tiền cọc</Label>
+                <Input type="number" className="h-8 text-xs"
+                  value={dvDepositAmount || ""}
+                  onChange={e => setDvDepositAmount(Number(e.target.value) || 0)}
+                  max={dvModal?.thanhTien} />
+                {dvDepositAmount > 0 && dvModal && (
+                  <p className="text-[11px] text-muted-foreground">Còn lại: {fmt(dvModal.thanhTien - dvDepositAmount)} VND</p>
+                )}
+              </div>
             )}
+            <div className="space-y-1">
+              <Label className="text-xs">Ngày cần thanh toán</Label>
+              <Input type="date" className="h-8 text-xs"
+                value={dvNgayCan}
+                onChange={e => setDvNgayCan(e.target.value)} />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCocTarget(null)}>Hủy</Button>
-            <Button size="sm" onClick={handleCocSubmit} disabled={insertDNTT.isPending}>Gửi cọc</Button>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setDvModal(null)}>Hủy</Button>
+            <Button size="sm" className="text-xs" onClick={handleDvModalSubmit} disabled={insertDNTT.isPending}>
+              Tạo đề nghị TT
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

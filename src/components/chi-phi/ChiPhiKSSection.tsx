@@ -1191,6 +1191,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id).map((r) => r.id!)}
           canTru={canTruByKs[modalKsId] ?? null}
           tenDoanMoi={tenDoan}
+          serviceDate={(() => {
+            const rows = grouped[modalKsId] || [];
+            const dates = rows.map((r) => r.ngay_date).filter(Boolean).sort();
+            return dates[0] || undefined;
+          })()}
         />
       )}
 
