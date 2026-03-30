@@ -1,10 +1,14 @@
-import { supabase } from "@/integrations/supabase/client";
+import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Database } from "@/integrations/supabase/types";
 
-type TravelGroup = Database["public"]["Tables"]["travel_groups"]["Row"];
-type TravelGroupInsert = Database["public"]["Tables"]["travel_groups"]["Insert"];
-type TravelGroupUpdate = Database["public"]["Tables"]["travel_groups"]["Update"];
+export interface TravelGroup {
+  id: string;
+  name: string;
+  created_at: string;
+  [key: string]: any;
+}
+type TravelGroupInsert = Partial<TravelGroup>;
+type TravelGroupUpdate = Partial<TravelGroup>;
 
 export type { TravelGroup, TravelGroupInsert, TravelGroupUpdate };
 
