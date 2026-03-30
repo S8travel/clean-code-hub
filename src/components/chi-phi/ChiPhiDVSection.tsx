@@ -240,19 +240,19 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                     <td className="px-3 py-2.5 text-right font-semibold text-primary whitespace-nowrap">{fmt(thanhTien)} ₫</td>
 
                     {/* TT ĐNTT */}
-                    <td className="px-2 py-2 align-top">
+                    <td className="px-3 py-2.5 align-top">
                       {shownDntts.length === 0 ? (
                         <span className="text-[10px] text-muted-foreground">—</span>
                       ) : (
-                        <div className="space-y-1 flex flex-col items-center">
+                        <div className="space-y-1.5 flex flex-col items-center">
                           {shownDntts.map(d => {
                             const isRejected = d.trang_thai_duyet === "tu_choi";
                             const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
                             return (
-                              <div key={d.id} className="flex items-center gap-1 flex-wrap justify-center">
+                              <div key={d.id} className="flex items-center gap-1.5 flex-wrap justify-center">
                                 {isRejected ? (
                                   <>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusInfo.cls}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
                                       {statusInfo.text} · {fmt(d.so_tien)}
                                     </span>
                                     <Button variant="outline" size="sm" className="h-5 text-[10px] px-1.5"
@@ -281,7 +281,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                                   </>
                                 ) : (
                                   <>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusInfo.cls}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
                                       {statusInfo.text} · {fmt(d.so_tien)}
                                     </span>
                                     {d.la_coc && <span className="text-[9px] text-muted-foreground">(Cọc)</span>}
