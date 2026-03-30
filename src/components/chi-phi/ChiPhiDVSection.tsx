@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, subDays, parseISO } from "date-fns";
+import { format, subDays, parseISO, addDays } from "date-fns";
 import { Check, Pencil, X, Ban, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,6 +136,28 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       don_gia: local.don_gia,
     } as any, {
       onSuccess: () => setEditRow(prev => { const next = { ...prev }; delete next[row.id]; return next; }),
+    });
+  };
+
+  // ── Date label ────────────────────────────────────────────────────────────
+
+  const getDateLabel = (ngaySo: number | null): string => {
+    if (!ngaySo || ngaySo <= 0) return "—";
+    if (!ngayBatDau) return `Ngày ${ngaySo}`;
+    try {
+      const d = addDays(parseISO(ngayBatDau), ngaySo - 1);
+      return `N${ngaySo} · ${format(d, "d/M")}`;
+    } catch {
+      return `Ngày ${ngaySo}`;
+    }
+  };
+
+  // ── Định kỳ toggle ────────────────────────────────────────────────────────
+
+  const handleToggleDinhKy = (row: typeof dvRows[0]) => {
+    const newVal = !row.thanh_toan_dinh_ky;
+    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal } as any, {
+      onSuccess: () => toast.success(newVal ? "Đã bật thanh toán định kỳ" : "Đã tắt thanh toán định kỳ"),
     });
   };
 
@@ -289,8 +311,8 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                   <tr key={row.id} className="hover:bg-muted/20">
                     {/* Ngày */}
                     {i === 0 && (
-                      <td className="px-3 py-2.5 text-muted-foreground align-top whitespace-nowrap" rowSpan={rows.length}>
-                        {day > 0 ? `Ngày ${day}` : "—"}
+                      <td className="px-3 py-2.5 text-muted-foreground align-top whitespace-nowrap text-[11px]" rowSpan={rows.length}>
+                        {getDateLabel(day > 0 ? day : null)}
                       </td>
                     )}
 
@@ -444,7 +466,17 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                             <Ban className="h-3 w-3" />
                           </Button>
                         )}
-                        {activeDntts.length === 0 && thanhTien > 0 && (
+                        <Button variant="ghost" size="sm"
+                          className={cn("h-6 text-[10px] px-1.5", row.thanh_toan_dinh_ky ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
+                          title={row.thanh_toan_dinh_ky ? "Đang định kỳ — bấm để tắt" : "Đặt thanh toán định kỳ"}
+                          disabled={upsertMut.isPending}
+                          onClick={() => handleToggleDinhKy(row)}>
+                          ⏱
+                        </Button>
+                        {row.thanh_toan_dinh_ky && activeDntts.length === 0 && (
+                          <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
+                        )}
+                        {!row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                             onClick={() => openDvModal(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
                             ĐNTT
