@@ -177,14 +177,14 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
-              <th className="text-left px-3 py-2">Ngày</th>
-              <th className="text-left px-3 py-2">Dịch vụ</th>
-              <th className="text-center px-2 py-2">SL</th>
-              <th className="text-right px-3 py-2">Đơn giá</th>
-              <th className="text-right px-3 py-2">Thành tiền</th>
-              <th className="text-center px-2 py-2">TT ĐNTT</th>
-              <th className="text-center px-2 py-2">TT Thanh toán</th>
-              <th className="px-2 py-2" />
+              <th className="text-left px-3 py-2.5">Ngày</th>
+              <th className="text-left px-3 py-2.5">Dịch vụ</th>
+              <th className="text-center px-2 py-2.5">SL</th>
+              <th className="text-right px-3 py-2.5">Đơn giá</th>
+              <th className="text-right px-3 py-2.5">Thành tiền</th>
+              <th className="text-center px-3 py-2.5">TT ĐNTT</th>
+              <th className="text-center px-3 py-2.5">TT Thanh toán</th>
+              <th className="px-2 py-2.5" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
