@@ -166,14 +166,14 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <colgroup>
-            <col style={{ width: "60px" }} />
+            <col className="w-[60px]" />
             <col />
-            <col style={{ width: "40px" }} />
-            <col style={{ width: "100px" }} />
-            <col style={{ width: "110px" }} />
-            <col style={{ width: "160px" }} />
-            <col style={{ width: "120px" }} />
-            <col style={{ width: "120px" }} />
+            <col className="w-[50px]" />
+            <col className="w-[120px]" />
+            <col className="w-[130px]" />
+            <col className="w-[180px]" />
+            <col className="w-[150px]" />
+            <col className="w-[100px]" />
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
