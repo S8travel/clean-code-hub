@@ -668,7 +668,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
             <col style={{ width: "80px" }} />
             <col style={{ width: "96px" }} />
             <col style={{ width: "100px" }} />
-            <col />
+            <col style={{ width: "160px" }} />
+            <col style={{ width: "120px" }} />
+            <col style={{ width: "130px" }} />
           </colgroup>
           {/* Header */}
           <thead>
@@ -686,6 +688,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
               <th className="px-2 py-1.5 text-center font-medium">Số khách</th>
               <th className="px-2 py-1.5 text-center font-medium">Đơn giá</th>
               <th className="px-2 py-1.5 text-right font-medium">Thành tiền</th>
+              <th className="px-2 py-1.5 text-left font-medium">TT ĐNTT</th>
+              <th className="px-2 py-1.5 text-left font-medium">TT Thanh toán</th>
               <th className="px-2 py-1.5" />
             </tr>
           </thead>
@@ -830,122 +834,129 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   {row ? fmt(totalBua) : "—"}
                 </td>
 
-                {/* Info + Actions */}
-                <td className="px-2 py-1.5">
-                  <div className="flex items-center gap-1 justify-end flex-wrap">
-                    {/* Badges theo trạng thái thanh toán */}
-                    {isDaTT ? (
-                      <>
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">Đã TT</span>
-                        {paidDntts.length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-                            title="Điều chỉnh sau thanh toán"
-                            onClick={() => {
-                              const lastPaid = paidDntts[paidDntts.length - 1];
-                              setAdjustTarget(lastPaid as unknown as DNTTRow);
-                              setAdjustAmount(String(lastPaid.so_tien));
-                              setAdjustReason("");
-                            }}
-                          >
-                            <SlidersHorizontal className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </>
-                    ) : congNoAmount > 0 ? (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">CN: {fmt(congNoAmount)}</span>
-                    ) : hoanTienAmount > 0 ? (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">HT: {fmt(hoanTienAmount)}</span>
-                    ) : (
-                      <>
-                        {daTT > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-                            Cọc {fmt(daTT)}
-                          </span>
-                        )}
-                        {pendingStatusInfo && (
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${pendingStatusInfo.cls}`}>
-                            {pendingStatusInfo.text}
-                          </span>
-                        )}
-                        {/* Sửa số tiền khi ĐNTT chờ duyệt */}
-                        {pendingDntts[0]?.trang_thai_duyet === "cho_duyet" && (
-                          editingDnttId === pendingDntts[0].id ? (
-                            <>
-                              <Input
-                                autoFocus
-                                type="number"
-                                value={editAmount}
-                                onChange={(e) => setEditAmount(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
+                {/* Trạng thái ĐNTT */}
+                <td className="px-2 py-1.5 align-top">
+                  {activeDntts.length === 0 ? (
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                  ) : (
+                    <div className="space-y-1">
+                      {activeDntts.map(d => {
+                        const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
+                        return (
+                          <div key={d.id} className="flex items-center gap-1 flex-wrap">
+                            {editingDnttId === d.id ? (
+                              <>
+                                <Input
+                                  autoFocus
+                                  type="number"
+                                  value={editAmount}
+                                  onChange={(e) => setEditAmount(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const v = parseInt(editAmount.replace(/\D/g, ""), 10);
+                                      if (!isNaN(v) && v > 0) {
+                                        updateDNTT.mutate({ id: d.id, soTien: v });
+                                        setEditingDnttId(null);
+                                      }
+                                    }
+                                    if (e.key === "Escape") setEditingDnttId(null);
+                                  }}
+                                  className="h-6 w-20 text-xs px-2 py-0"
+                                />
+                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-emerald-600 hover:text-emerald-700"
+                                  disabled={updateDNTT.isPending}
+                                  onClick={() => {
                                     const v = parseInt(editAmount.replace(/\D/g, ""), 10);
                                     if (!isNaN(v) && v > 0) {
-                                      updateDNTT.mutate({ id: pendingDntts[0].id, soTien: v });
+                                      updateDNTT.mutate({ id: d.id, soTien: v });
                                       setEditingDnttId(null);
                                     }
-                                  }
-                                  if (e.key === "Escape") setEditingDnttId(null);
-                                }}
-                                className="h-6 w-24 text-xs px-2 py-0"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-emerald-600 hover:text-emerald-700"
-                                disabled={updateDNTT.isPending}
-                                onClick={() => {
-                                  const v = parseInt(editAmount.replace(/\D/g, ""), 10);
-                                  if (!isNaN(v) && v > 0) {
-                                    updateDNTT.mutate({ id: pendingDntts[0].id, soTien: v });
-                                    setEditingDnttId(null);
-                                  }
-                                }}
-                              >
-                                <Check className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                                onClick={() => setEditingDnttId(null)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-                              title="Sửa số tiền ĐNTT"
-                              onClick={() => {
-                                setEditingDnttId(pendingDntts[0].id);
-                                setEditAmount(String(pendingDntts[0].so_tien));
-                              }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          )
+                                  }}>
+                                  <Check className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground"
+                                  onClick={() => setEditingDnttId(null)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusInfo.cls}`}>
+                                  {statusInfo.text} · {fmt(d.so_tien)}
+                                </span>
+                                {d.la_coc && (
+                                  <span className="text-[9px] text-muted-foreground">(Cọc)</span>
+                                )}
+                                {d.trang_thai_duyet === "cho_duyet" && (
+                                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-blue-500 hover:text-blue-600"
+                                    title="Sửa số tiền"
+                                    onClick={() => { setEditingDnttId(d.id); setEditAmount(String(d.so_tien)); }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </td>
+
+                {/* Trạng thái Thanh toán */}
+                <td className="px-2 py-1.5 align-top">
+                  <div className="space-y-1">
+                    {activeDntts.map(d => (
+                      <div key={d.id}>
+                        {d.trang_thai_thanh_toan === "da_tt" ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                            Đã TT{(d as any).ngay_thanh_toan ? ` ${format(new Date((d as any).ngay_thanh_toan), "dd/MM")}` : ""}
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">
+                            Chờ UNC · {fmt(d.so_tien)}
+                          </span>
                         )}
-                      </>
+                      </div>
+                    ))}
+                    {congNoAmount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                        CN: {fmt(congNoAmount)}
+                      </span>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    {hoanTienAmount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                        HT: {fmt(hoanTienAmount)}
+                      </span>
+                    )}
+                    {activeDntts.length === 0 && congNoAmount === 0 && hoanTienAmount === 0 && (
+                      <span className="text-[10px] text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </td>
+
+                {/* Actions */}
+                <td className="px-2 py-1.5">
+                  <div className="flex items-center gap-1 justify-end">
+                    {isDaTT && paidDntts.length > 0 && (
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
+                        title="Điều chỉnh sau thanh toán"
+                        onClick={() => {
+                          const lastPaid = paidDntts[paidDntts.length - 1];
+                          setAdjustTarget(lastPaid as unknown as DNTTRow);
+                          setAdjustAmount(String(lastPaid.so_tien));
+                          setAdjustReason("");
+                        }}>
+                        <SlidersHorizontal className="h-3 w-3" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                       title="Thêm dịch vụ phát sinh"
-                      onClick={() => addExtra(key)}
-                    >
+                      onClick={() => addExtra(key)}>
                       <Plus className="h-3 w-3" />
                     </Button>
                     {canCancel && activeDntt && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                         title="Hủy"
                         onClick={() => {
                           setCancelMode("hoan_tien");
@@ -954,54 +965,39 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                             isPaid: activeDntt.trang_thai_thanh_toan === "da_tt",
                             nhName: nh?.ten || "Nhà hàng",
                           });
-                        }}
-                      >
+                        }}>
                         <Ban className="h-3 w-3" />
                       </Button>
                     )}
-                    {/* Toggle định kỳ */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
+                    <Button variant="ghost" size="sm"
                       className={cn("h-6 text-[10px] px-1.5", isMealDinhKy ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
                       onClick={() => handleToggleDinhKyNH(key)}
-                      title={isMealDinhKy ? "Đang định kỳ — bấm để bỏ" : "Đặt thanh toán định kỳ"}
-                    >
+                      title={isMealDinhKy ? "Đang định kỳ — bấm để bỏ" : "Đặt thanh toán định kỳ"}>
                       ⏱
                     </Button>
                     {isMealDinhKy && activeDntts.length === 0 && (
                       <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
                     )}
-                    {/* ĐNTT lần đầu — chưa có DNTT nào */}
                     {!isMealDinhKy && activeDntts.length === 0 && totalBua > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-[10px] px-2"
+                      <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                         onClick={() => {
                           setDnttAlreadyPaid(0);
                           setDnttModalMode("full");
                           setDnttDepositAmount(0);
                           setDnttModalKey(key);
-                        }}
-                      >
+                        }}>
                         ĐNTT
                       </Button>
                     )}
-                    {/* ĐNTT tiếp theo — đã có DNTT, luôn cho phép tạo thêm */}
                     {!isMealDinhKy && activeDntts.length > 0 && daDeNghi === 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
+                      <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                         onClick={() => {
                           setDnttAlreadyPaid(daTT);
                           setDnttModalMode("full");
                           setDnttDepositAmount(0);
                           setDnttBsAmount(0);
                           setDnttModalKey(key);
-                        }}
-                      >
+                        }}>
                         {conLai > 0 ? `ĐNTT còn lại` : "ĐNTT bổ sung"}
                       </Button>
                     )}
@@ -1031,6 +1027,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                     {extra.so_luong > 0 && extra.don_gia > 0 ? fmt(extra.so_luong * extra.don_gia) : ""}
                   </td>
                   <td />
+                  <td />
+                  <td />
                 </tr>
               ))}
             </Fragment>
@@ -1059,7 +1057,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
             return (
               <>
                 <tr>
-                  <td colSpan={8} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
+                  <td colSpan={10} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
                     Không còn trong lịch trình điều tour
                   </td>
                 </tr>
@@ -1100,21 +1098,47 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                       <td className="px-2 py-1.5 text-right font-semibold text-muted-foreground">
                         {fmt(cpTotal)}
                       </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex items-center gap-1 justify-end flex-wrap">
-                          {cpIsDaTT ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">Đã TT</span>
-                          ) : cpCongNo > 0 ? (
+                      {/* Trạng thái ĐNTT - orphaned */}
+                      <td className="px-2 py-1.5 align-top">
+                        {cpActiveDntts.length === 0 ? (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        ) : (
+                          <div className="space-y-1">
+                            {cpActiveDntts.map(d => {
+                              const si = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
+                              return (
+                                <span key={d.id} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${si.cls}`}>
+                                  {si.text} · {fmt(d.so_tien)}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                      {/* Trạng thái TT - orphaned */}
+                      <td className="px-2 py-1.5 align-top">
+                        <div className="space-y-1">
+                          {cpActiveDntts.map(d => (
+                            <div key={d.id}>
+                              {d.trang_thai_thanh_toan === "da_tt" ? (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">Đã TT</span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">Chờ UNC</span>
+                              )}
+                            </div>
+                          ))}
+                          {cpCongNo > 0 && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">CN: {fmt(cpCongNo)}</span>
-                          ) : cpHoanTien > 0 ? (
+                          )}
+                          {cpHoanTien > 0 && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">HT: {fmt(cpHoanTien)}</span>
-                          ) : cpDaTT > 0 ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">Cọc {fmt(cpDaTT)}</span>
-                          ) : cpPendingInfo ? (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cpPendingInfo.cls}`}>{cpPendingInfo.text}</span>
-                          ) : null}
+                          )}
+                          {cpActiveDntts.length === 0 && cpCongNo === 0 && cpHoanTien === 0 && (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
                         </div>
                       </td>
+                      <td />
                     </tr>
                   );
                 })}
