@@ -1,0 +1,210 @@
+import { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { DeleteDialog } from "@/components/DeleteDialog";
+import { useUpdateCanhDiem, useDeleteCanhDiem, type CanhDiem } from "@/hooks/use-canh-diem";
+import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
+import { SearchableSelect } from "@/components/SearchableSelect";
+
+interface Props {
+  canhDiem: CanhDiem;
+  onDeleted: () => void;
+}
+
+export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
+  const updateMut = useUpdateCanhDiem();
+  const deleteMut = useDeleteCanhDiem();
+  const { data: nccList } = useNhaCungCapList();
+  const nccOptions = (nccList ?? []).map((n) => ({ value: String(n.id), label: n.ten }));
+
+  const [ten, setTen] = useState("");
+  const [loai, setLoai] = useState("canh_diem");
+  const [diaDiem, setDiaDiem] = useState("");
+  const [icon, setIcon] = useState("");
+  const [coPhi, setCoPhi] = useState(false);
+  const [giaMacDinh, setGiaMacDinh] = useState("");
+  const [donVi, setDonVi] = useState("");
+  const [nguoiThanhToan, setNguoiThanhToan] = useState("");
+  const [email, setEmail] = useState("");
+  const [taiKhoanThanhToan, setTaiKhoanThanhToan] = useState("");
+  const [ghiChu, setGhiChu] = useState("");
+  const [nhaCungCapId, setNhaCungCapId] = useState("");
+  const [delOpen, setDelOpen] = useState(false);
+
+  useEffect(() => {
+    setTen(canhDiem.ten || "");
+    setLoai(canhDiem.loai || "canh_diem");
+    setDiaDiem(canhDiem.dia_diem || "");
+    setIcon(canhDiem.icon || "");
+    setCoPhi(canhDiem.co_phi ?? false);
+    setGiaMacDinh(canhDiem.gia_mac_dinh?.toString() || "");
+    setDonVi(canhDiem.don_vi || "");
+    setNguoiThanhToan(canhDiem.nguoi_thanh_toan || "");
+    setEmail(canhDiem.email || "");
+    setTaiKhoanThanhToan(canhDiem.tai_khoan_thanh_toan || "");
+    setGhiChu(canhDiem.ghi_chu || "");
+    setNhaCungCapId((canhDiem as any).nha_cung_cap_id?.toString() || "");
+  }, [canhDiem]);
+
+  const handleSave = async () => {
+    if (!ten.trim()) {
+      toast.warning("Tên cảnh điểm không được để trống");
+      return;
+    }
+    if (!nhaCungCapId) {
+      toast.warning("Vui lòng chọn nhà cung cấp");
+      return;
+    }
+    try {
+      await updateMut.mutateAsync({
+        id: canhDiem.id,
+        updates: {
+          ten: ten.trim(),
+          loai,
+          dia_diem: diaDiem || null,
+          icon: icon || null,
+          co_phi: coPhi,
+          gia_mac_dinh: coPhi && giaMacDinh ? Number(giaMacDinh) : null,
+          don_vi: coPhi ? donVi || null : null,
+          nguoi_thanh_toan: coPhi ? nguoiThanhToan || null : null,
+          email: email || null,
+          tai_khoan_thanh_toan: taiKhoanThanhToan || null,
+          ghi_chu: ghiChu || null,
+          nha_cung_cap_id: nhaCungCapId ? Number(nhaCungCapId) : null,
+        },
+      });
+      toast.success("Đã lưu");
+    } catch {
+      toast.error("Lỗi khi lưu");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteMut.mutateAsync(canhDiem.id);
+      toast.success("Đã xóa");
+      onDeleted();
+    } catch {
+      toast.error("Lỗi khi xóa");
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-2xl space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Chi tiết cảnh điểm</h2>
+        <Badge className={loai === "dich_vu" ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"}>
+          {loai === "dich_vu" ? "Dịch vụ" : "Cảnh điểm"}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Tên *</Label>
+          <Input value={ten} onChange={(e) => setTen(e.target.value)} className="h-9 text-sm" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Loại</Label>
+          <Select value={loai} onValueChange={setLoai}>
+            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="canh_diem">Cảnh điểm</SelectItem>
+              <SelectItem value="dich_vu">Dịch vụ</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Địa điểm</Label>
+          <Input value={diaDiem} onChange={(e) => setDiaDiem(e.target.value)} className="h-9 text-sm" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Icon</Label>
+          <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="🏞️" className="h-9 text-sm" />
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="flex items-center gap-3">
+        <Switch checked={coPhi} onCheckedChange={setCoPhi} />
+        <Label className="text-sm">Có phí</Label>
+      </div>
+
+      {coPhi && (
+        <div className="grid grid-cols-2 gap-4 pl-2 border-l-2 border-accent/30">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Giá mặc định</Label>
+            <Input type="number" value={giaMacDinh} onChange={(e) => setGiaMacDinh(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Đơn vị</Label>
+            <Input value={donVi} onChange={(e) => setDonVi(e.target.value)} placeholder="VND/người" className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-xs">Người thanh toán</Label>
+            <Select value={nguoiThanhToan} onValueChange={setNguoiThanhToan}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="-- Chọn --" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cong_ty">Công ty</SelectItem>
+                <SelectItem value="hdv">Hướng dẫn viên</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
+      <Separator />
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs">Nhà cung cấp *</Label>
+          <SearchableSelect
+            options={nccOptions}
+            value={nhaCungCapId}
+            onChange={setNhaCungCapId}
+            placeholder="Chọn nhà cung cấp"
+            className="h-9 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs">Email booking</Label>
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-9 text-sm" />
+        </div>
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs">Tài khoản thanh toán</Label>
+          <Textarea value={taiKhoanThanhToan} onChange={(e) => setTaiKhoanThanhToan(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={2} />
+        </div>
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs">Ghi chú</Label>
+          <Textarea value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={3} />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-2">
+        <Button size="sm" onClick={handleSave} disabled={updateMut.isPending} className="bg-green-600 hover:bg-green-700 text-white">
+          <Save className="h-4 w-4 mr-1" /> {updateMut.isPending ? "Đang lưu..." : "Lưu"}
+        </Button>
+        <Button size="sm" variant="destructive" onClick={() => setDelOpen(true)}>
+          <Trash2 className="h-4 w-4 mr-1" /> Xóa
+        </Button>
+        <DeleteDialog
+          open={delOpen}
+          name={canhDiem.ten}
+          onConfirm={handleDelete}
+          onCancel={() => setDelOpen(false)}
+          isDeleting={deleteMut.isPending}
+        />
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,291 @@
+import { externalSupabase } from "@/lib/supabase-external";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+export interface Doan {
+  id: number;
+  ten_doan: string;
+  agent_id: number | null;
+  agent_huy_id: number | null;
+  dia_diem_id: number | null;
+  huong_dan_vien_id: number | null;
+  xe_id: number | null;
+  chuyen_bay_don: string | null;
+  chuyen_bay_tien: string | null;
+  booking_khach_san_id: number | null;
+  booking_nha_hang_id: number | null;
+  so_khach: number | null;
+  so_khach_lon: number | null;
+  so_khach_em1: number | null;
+  so_khach_em2: number | null;
+  so_khach_tl: number | null;
+  ngay_di: string | null;
+  ngay_ve: string | null;
+  trang_thai: string | null;
+  ghi_chu: string | null;
+  ghi_chu_dieu_tour: string | null;
+  assigned_to: string | null;
+  created_by: string | null;
+  created_at?: string;
+}
+
+export interface DoanInsert {
+  ten_doan: string;
+  agent_id?: number | null;
+  agent_huy_id?: number | null;
+  dia_diem_id?: number | null;
+  huong_dan_vien_id?: number | null;
+  xe_id?: number | null;
+  chuyen_bay_don?: string | null;
+  chuyen_bay_tien?: string | null;
+  booking_khach_san_id?: number | null;
+  booking_nha_hang_id?: number | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+  trang_thai?: string | null;
+  ghi_chu?: string | null;
+  ghi_chu_dieu_tour?: string | null;
+  assigned_to?: string | null;
+  created_by?: string | null;
+}
+
+export interface LookupItem {
+  id: number;
+  ten: string;
+}
+
+export interface AgentItem {
+  id: number;
+  ten: string;
+}
+
+export interface UserRole {
+  id: string;
+  user_id: string;
+  role: string;
+  ho_ten: string;
+}
+
+export interface DoanPermission {
+  id: number;
+  doan_id: number;
+  user_id: string;
+  ho_ten: string | null;
+  quyen: string;
+  created_at: string;
+}
+
+// Lookup hooks
+export function useAgents() {
+  return useQuery({
+    queryKey: ["agents"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase.from("agents").select("id, ten").order("ten");
+      if (error) throw error;
+      return data as AgentItem[];
+    },
+  });
+}
+
+export function useDiaDiem() {
+  return useQuery({
+    queryKey: ["dia_diem"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase.from("dia_diem").select("id, ten").order("ten");
+      if (error) throw error;
+      return data as LookupItem[];
+    },
+  });
+}
+
+export function useHuongDanVien() {
+  return useQuery({
+    queryKey: ["huong_dan_vien"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase.from("huong_dan_vien").select("id, ten").order("ten");
+      if (error) throw error;
+      return data as LookupItem[];
+    },
+  });
+}
+
+export function useXeList() {
+  return useQuery({
+    queryKey: ["xe_list"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("xe")
+        .select("id, ten_nha_xe, so_cho, loai_xe")
+        .order("ten_nha_xe");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+}
+
+export function useTrangThai() {
+  return useQuery({
+    queryKey: ["trang_thai"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase.from("trang_thai").select("id, ten").order("ten");
+      if (error) throw error;
+      return data as LookupItem[];
+    },
+  });
+}
+
+export function useUserRoles() {
+  return useQuery({
+    queryKey: ["user_roles"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_roles")
+        .select("id, user_id, role, ho_ten")
+        .order("ho_ten");
+      if (error) throw error;
+      return data as UserRole[];
+    },
+  });
+}
+
+export function useCurrentUserName() {
+  return useQuery({
+    queryKey: ["current-user-name"],
+    queryFn: async () => {
+      const { data: auth } = await externalSupabase.auth.getUser();
+      if (!auth.user) return "";
+      const { data } = await externalSupabase
+        .from("user_roles")
+        .select("ho_ten")
+        .eq("user_id", auth.user.id)
+        .maybeSingle();
+      return (data?.ho_ten || auth.user.email || "") as string;
+    },
+  });
+}
+
+// Doan list
+export function useDoanList() {
+  return useQuery({
+    queryKey: ["doan"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("doan")
+        .select(`
+          *,
+          agents:agent_id(id, ten),
+          agent_huy:agent_huy_id(id, ten),
+          dia_diem:dia_diem_id(ten),
+          huong_dan_vien:huong_dan_vien_id(id, ten),
+          xe:xe_id(id, ten_nha_xe, so_cho, loai_xe)
+        `)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+// Subscribe to realtime changes on doan table
+export function useDoanRealtime() {
+  const qc = useQueryClient();
+
+  useQuery({
+    queryKey: ["doan_realtime_sub"],
+    queryFn: () => {
+      const channel = externalSupabase
+        .channel("doan_changes")
+        .on("postgres_changes", { event: "*", schema: "public", table: "doan" }, () => {
+          qc.invalidateQueries({ queryKey: ["doan"] });
+        })
+        .subscribe();
+      return channel;
+    },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Doan permissions
+export function useDoanPermissions(doanId: number | null) {
+  return useQuery({
+    queryKey: ["doan_permissions", doanId],
+    queryFn: async () => {
+      if (!doanId) return [];
+      const { data, error } = await externalSupabase
+        .from("doan_permissions")
+        .select("*")
+        .eq("doan_id", doanId)
+        .order("created_at");
+      if (error) throw error;
+      return data as DoanPermission[];
+    },
+    enabled: !!doanId,
+  });
+}
+
+export function useAddDoanPermission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (perm: { doan_id: number; user_id: string; ho_ten: string; quyen?: string }) => {
+      const { data, error } = await externalSupabase
+        .from("doan_permissions")
+        .insert({ ...perm, quyen: perm.quyen || "view" })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ["doan_permissions", vars.doan_id] }),
+  });
+}
+
+export function useRemoveDoanPermission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, doan_id }: { id: number; doan_id: number }) => {
+      const { error } = await externalSupabase.from("doan_permissions").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ["doan_permissions", vars.doan_id] }),
+  });
+}
+
+export function useCreateDoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (doan: DoanInsert) => {
+      const { data, error } = await externalSupabase.from("doan").insert(doan).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+  });
+}
+
+export function useUpdateDoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: DoanInsert & { id: number }) => {
+      const { data, error } = await externalSupabase.from("doan").update(updates).eq("id", id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+  });
+}
+
+export function useDeleteDoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await externalSupabase.from("doan").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+  });
+}

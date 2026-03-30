@@ -1,0 +1,53 @@
+import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { type DNTTRow } from "@/hooks/use-chi-phi";
+
+const fmt = (n: number) => n.toLocaleString("vi-VN");
+
+interface Props {
+  chiPhiId: number | undefined;
+  dnttList: DNTTRow[];
+}
+
+export default function ThanhToanCell({ chiPhiId, dnttList }: Props) {
+  if (!chiPhiId) return <span className="text-xs text-muted-foreground">—</span>;
+
+  const myDntt = dnttList.filter(
+    d => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId && d.trang_thai_duyet === "da_duyet"
+  );
+
+  if (myDntt.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  return (
+    <div className="space-y-1 min-w-[100px]">
+      {myDntt.map(d => (
+        <div key={d.id} className="text-xs">
+          {d.trang_thai_thanh_toan === "da_tt" ? (
+            <div>
+              <Badge className="text-[10px] px-1.5 py-0 bg-primary">Đã TT</Badge>
+              {d.ngay_thanh_toan && (
+                <span className="ml-1 text-muted-foreground">
+                  {format(new Date(d.ngay_thanh_toan), "dd/MM")}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-yellow-100 text-yellow-800 border-yellow-300">
+                Chờ UNC
+              </Badge>
+              <span className="ml-1 font-medium">{fmt(d.so_tien)}</span>
+            </div>
+          )}
+          {d.la_coc && (
+            <span className="text-[9px] text-muted-foreground">
+              (Cọc{d.ty_le_coc ? ` ${d.ty_le_coc}%` : ""})
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -1,0 +1,295 @@
+import { useState } from "react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Plus, Trash2 } from "lucide-react";
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
+import {
+  useUpsertBookingNH,
+  useUpdateBookingNH,
+  useSetMenuOptions,
+  useSetMenuMons,
+  type MenuDayData,
+  type BookingNHRow,
+} from "@/hooks/use-booking-nh";
+import { cn } from "@/lib/utils";
+
+function fmtDay(d: string | null) {
+  if (!d) return "—";
+  try { return format(new Date(d + "T00:00:00"), "dd/MM (EEE)", { locale: vi }); } catch { return d; }
+}
+
+interface MonListEditorProps {
+  doanId: number;
+  doanNgayId: number;
+  buaAn: "trua" | "toi";
+  nhaHangId: number | null;
+  booking: BookingNHRow | null;
+  onUpdated: () => void;
+}
+
+function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, onUpdated }: MonListEditorProps) {
+  const upsertMut = useUpsertBookingNH();
+  const updateMut = useUpdateBookingNH();
+  const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
+  const [selectedSetMenuId, setSelectedSetMenuId] = useState<number | null>(null);
+  const { data: setMenuMons = [] } = useSetMenuMons(selectedSetMenuId);
+  const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
+  const [newMon, setNewMon] = useState("");
+
+  if (!nhaHangId) {
+    return <span className="text-xs text-muted-foreground/40 italic">Không có nhà hàng</span>;
+  }
+
+  const save = (next: string[], extras: Partial<BookingNHRow> = {}) => {
+    const payload = {
+      doan_id: doanId,
+      doan_ngay_id: doanNgayId,
+      bua_an: buaAn,
+      nha_hang_id: nhaHangId,
+      mon_an_snapshot: next,
+      booking_status: booking?.booking_status ?? "chua_gui",
+      ...extras,
+    };
+    if (booking?.id) {
+      updateMut.mutate({ id: booking.id, doan_id: doanId, mon_an_snapshot: next, ...extras }, { onSuccess: onUpdated });
+    } else {
+      upsertMut.mutate(payload as any, { onSuccess: onUpdated });
+    }
+  };
+
+  const handleApplySetMenu = () => {
+    if (!selectedSetMenuId || !setMenuMons.length) return;
+    const opt = setMenuOptions.find((o) => o.id === selectedSetMenuId);
+    const next = [...setMenuMons];
+    setMonList(next);
+    save(next, {
+      set_menu_id: selectedSetMenuId,
+      ten_set_snapshot: opt?.ten_set ?? null,
+      gia_snapshot: opt?.gia ?? null,
+      don_vi_snapshot: opt?.don_vi ?? null,
+    });
+    setSelectedSetMenuId(null);
+  };
+
+  const handleAdd = () => {
+    if (!newMon.trim()) return;
+    const next = [...monList, newMon.trim()];
+    setMonList(next);
+    setNewMon("");
+    save(next);
+  };
+
+  const handleRemove = (i: number) => {
+    const next = monList.filter((_, idx) => idx !== i);
+    setMonList(next);
+    save(next);
+  };
+
+  const handleBlur = () => save(monList);
+
+  return (
+    <div className="space-y-1 min-w-[160px]">
+      {/* Set menu selector */}
+      {setMenuOptions.length > 0 && (
+        <div className="flex items-center gap-1 pb-1.5 border-b border-border/50">
+          <select
+            className="flex-1 text-xs border border-input rounded px-1.5 py-0.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-w-0"
+            value={selectedSetMenuId ?? ""}
+            onChange={(e) => setSelectedSetMenuId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">-- Chọn set menu --</option>
+            {setMenuOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.ten_set}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleApplySetMenu}
+            disabled={!selectedSetMenuId || !setMenuMons.length}
+            className="text-xs text-primary hover:text-primary/80 disabled:text-muted-foreground/40 shrink-0 px-2 py-0.5 rounded border border-primary/30 hover:bg-primary/5 disabled:border-muted disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            Cập nhật
+          </button>
+        </div>
+      )}
+      {monList.length === 0 ? (
+        <p className="text-xs text-muted-foreground/50 italic">Chưa có món</p>
+      ) : (
+        <ul className="space-y-0.5">
+          {monList.map((mon, i) => (
+            <li key={i} className="flex items-center gap-1 group">
+              <span className="text-muted-foreground text-xs w-4 shrink-0">{i + 1}.</span>
+              <input
+                className="flex-1 text-xs bg-transparent border-none outline-none hover:bg-muted/50 focus:bg-muted/50 px-1 rounded min-w-0"
+                value={mon}
+                onChange={(e) => {
+                  const next = [...monList];
+                  next[i] = e.target.value;
+                  setMonList(next);
+                }}
+                onBlur={handleBlur}
+              />
+              <button
+                onClick={() => handleRemove(i)}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center gap-1 pt-1">
+        <input
+          className="flex-1 text-xs border border-input rounded px-1.5 py-0.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-w-0"
+          placeholder="Thêm món..."
+          value={newMon}
+          onChange={(e) => setNewMon(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        />
+        <button
+          onClick={handleAdd}
+          className="text-muted-foreground hover:text-foreground shrink-0 p-0.5"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const STATUS_DOT: Record<string, string> = {
+  chua_gui:    "bg-muted-foreground/30",
+  da_gui:      "bg-amber-400",
+  nh_xac_nhan: "bg-emerald-500",
+  da_huy:      "bg-red-400",
+};
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  doanId: number;
+  days: MenuDayData[];
+  onUpdated: () => void;
+}
+
+export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdated }: Props) {
+  const daysWithNH = days.filter(
+    (d) => d.an_trua_nha_hang_id || d.an_toi_nha_hang_id
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Menu tổng quan cả đoàn</DialogTitle>
+        </DialogHeader>
+
+        {daysWithNH.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            Chưa có nhà hàng nào được chỉ định trong điều tour.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-muted/40 text-xs text-muted-foreground">
+                  <th className="text-left px-3 py-2 font-medium border border-border w-[100px]">Ngày</th>
+                  <th className="text-left px-3 py-2 font-medium border border-border">
+                    🍱 Bữa trưa
+                  </th>
+                  <th className="text-left px-3 py-2 font-medium border border-border">
+                    🍽 Bữa tối
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {daysWithNH.map((day) => (
+                  <tr key={day.doan_ngay_id} className="border-b border-border align-top hover:bg-muted/20 transition-colors">
+                    {/* Ngày */}
+                    <td className="px-3 py-3 border border-border">
+                      <p className="font-medium text-xs">Ngày {day.ngay_so}</p>
+                      <p className="text-muted-foreground text-xs">{fmtDay(day.ngay_date)}</p>
+                    </td>
+
+                    {/* Trưa */}
+                    <td className="px-3 py-3 border border-border">
+                      {day.an_trua_nha_hang_id ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn(
+                              "w-2 h-2 rounded-full shrink-0",
+                              STATUS_DOT[day.booking_trua?.booking_status ?? "chua_gui"]
+                            )} />
+                            <span className="text-xs font-medium">{day.an_trua_nha_hang_ten}</span>
+                          </div>
+                          <MonListEditor
+                            doanId={doanId}
+                            doanNgayId={day.doan_ngay_id}
+                            buaAn="trua"
+                            nhaHangId={day.an_trua_nha_hang_id}
+                            booking={day.booking_trua}
+                            onUpdated={onUpdated}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/40 italic">—</span>
+                      )}
+                    </td>
+
+                    {/* Tối */}
+                    <td className="px-3 py-3 border border-border">
+                      {day.an_toi_nha_hang_id ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn(
+                              "w-2 h-2 rounded-full shrink-0",
+                              STATUS_DOT[day.booking_toi?.booking_status ?? "chua_gui"]
+                            )} />
+                            <span className="text-xs font-medium">{day.an_toi_nha_hang_ten}</span>
+                          </div>
+                          <MonListEditor
+                            doanId={doanId}
+                            doanNgayId={day.doan_ngay_id}
+                            buaAn="toi"
+                            nhaHangId={day.an_toi_nha_hang_id}
+                            booking={day.booking_toi}
+                            onUpdated={onUpdated}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/40 italic">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+              <span className="font-medium">Trạng thái:</span>
+              {[
+                { cls: "bg-muted-foreground/30", label: "Chưa gửi" },
+                { cls: "bg-amber-400",           label: "Đã gửi" },
+                { cls: "bg-emerald-500",          label: "Xác nhận" },
+                { cls: "bg-red-400",              label: "Đã hủy" },
+              ].map(({ cls, label }) => (
+                <span key={label} className="flex items-center gap-1">
+                  <span className={cn("w-2 h-2 rounded-full", cls)} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-2">
+          <Button variant="outline" onClick={onClose}>Đóng</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

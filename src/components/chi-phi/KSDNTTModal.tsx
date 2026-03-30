@@ -1,0 +1,264 @@
+import { useState } from "react";
+import { format } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import { useInsertDNTT } from "@/hooks/use-chi-phi";
+import { appendCanTruLog } from "@/hooks/use-dntt";
+import { externalSupabase } from "@/lib/supabase-external";
+import type { LocalKSRow } from "./ChiPhiKSSection";
+import type { CanTruSelection } from "./KSCongNoPanel";
+
+const fmt = (n: number) => n.toLocaleString("vi-VN");
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  doanId: number;
+  ksId: number;
+  ksName: string;
+  nccId: number | null;
+  nccTen: string | null;
+  nccStk: string | null;
+  nccNganHang: string | null;
+  totalKS: number;
+  daCoc: number;
+  localRows: LocalKSRow[];
+  chiPhiRowIds: number[];
+  canTru: CanTruSelection | null;
+  tenDoanMoi: string;
+}
+
+export default function KSDNTTModal({
+  open, onClose, doanId, ksId, ksName, nccId, nccTen, nccStk, nccNganHang,
+  totalKS, daCoc, localRows, chiPhiRowIds, canTru, tenDoanMoi,
+}: Props) {
+  const conLai = totalKS - daCoc;
+  const canTruAmount = canTru?.soTienCanTru ?? 0;
+  const thucThanhToan = Math.max(conLai - canTruAmount, 0);
+
+  const [mode, setMode] = useState<"full" | "deposit">("full");
+  const [depositAmount, setDepositAmount] = useState<number>(0);
+  const [ghiChu, setGhiChu] = useState("");
+  const insertDNTT = useInsertDNTT();
+  const qc = useQueryClient();
+  const [submitting, setSubmitting] = useState(false);
+
+  const soTien = mode === "full" ? thucThanhToan : depositAmount;
+  const soTienConLai = mode === "full" ? 0 : thucThanhToan - depositAmount;
+
+  const buildMoTa = () => {
+    const parts: string[] = [];
+    localRows.forEach((r) => {
+      const dateStr = r.ngay_date ? format(new Date(r.ngay_date), "dd/MM") : "?";
+      parts.push(`${r.loai_phong || "Phòng"} x${r.so_phong} (${dateStr})`);
+    });
+    return `${ksName} - ${parts.join(", ")}`;
+  };
+
+  const handleSubmit = async () => {
+    if (soTien <= 0 && canTruAmount <= 0) {
+      toast.error("Số tiền phải lớn hơn 0");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      // 1. Tạo DNTT chính (số tiền thực thanh toán sau cấn trừ)
+      if (soTien > 0) {
+        // Tính allocations pro-rata theo thanh_tien của từng phòng
+        const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id));
+        const totalThanhTien = allocRows.reduce((s, r) => s + r.thanh_tien, 0);
+        const allocations = allocRows.map((r) => ({
+          chi_phi_id: r.id!,
+          so_tien: totalThanhTien > 0
+            ? Math.round(soTien * (r.thanh_tien / totalThanhTien))
+            : Math.round(soTien / allocRows.length),
+        }));
+
+        const payload = {
+          doan_id: doanId,
+          loai: "khach_san",
+          mo_ta: buildMoTa(),
+          nha_cung_cap_id: nccId,
+          ten_nha_cung_cap: nccTen,
+          so_tai_khoan: nccStk,
+          ngan_hang: nccNganHang,
+          so_tien: soTien,
+          la_coc: mode === "deposit",
+          so_tien_con_lai: soTienConLai > 0 ? soTienConLai : 0,
+          trang_thai_duyet: "cho_duyet",
+          trang_thai_thanh_toan: "chua_tt",
+          ref_loai: "khach_san",
+          ref_id: ksId,
+          ghi_chu: ghiChu || null,
+          allocations: allocations.length > 0 ? allocations : undefined,
+        };
+        await insertDNTT.mutateAsync(payload);
+      }
+
+      // 2. Nếu có cấn trừ: tạo record cấn trừ (la_coc=true → in vào cột cọc/cấn trừ)
+      if (canTru && canTruAmount > 0) {
+        await externalSupabase.from("de_nghi_thanh_toan").insert({
+          doan_id: doanId,
+          loai: "khach_san",
+          mo_ta: `Cấn trừ công nợ từ đoàn: ${canTru.tenDoan}`,
+          nha_cung_cap_id: nccId,
+          ten_nha_cung_cap: nccTen,
+          so_tai_khoan: nccStk,
+          ngan_hang: nccNganHang,
+          so_tien: canTruAmount,
+          la_coc: true,
+          trang_thai_duyet: "da_duyet",
+          trang_thai_thanh_toan: "can_tru",
+          ref_loai: "khach_san",
+          ref_id: ksId,
+          ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
+        });
+
+        // Cập nhật record công nợ gốc
+        const remaining = canTru.soTienConLai - canTruAmount;
+        if (remaining <= 0) {
+          await externalSupabase
+            .from("de_nghi_thanh_toan")
+            .update({ trang_thai_thanh_toan: "da_can_tru", so_tien_con_lai: 0 })
+            .eq("id", canTru.congNoId);
+        } else {
+          await externalSupabase
+            .from("de_nghi_thanh_toan")
+            .update({ so_tien_con_lai: remaining })
+            .eq("id", canTru.congNoId);
+        }
+        // Ghi log cấn trừ vào ghi_chu của công nợ gốc
+        await appendCanTruLog(canTru.congNoId, canTruAmount, tenDoanMoi);
+
+        qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
+        qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      }
+
+      // 3. Update trạng thái chi phí
+      if (chiPhiRowIds.length > 0) {
+        await externalSupabase
+          .from("doan_chi_phi")
+          .update({ trang_thai_dntt: "cho_duyet" })
+          .in("id", chiPhiRowIds);
+      }
+
+      qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+      toast.success("Đã tạo đề nghị thanh toán");
+      onClose();
+    } catch (err: any) {
+      toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Tạo đề nghị thanh toán — {ksName}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Tóm tắt số tiền */}
+          <div className="text-xs space-y-1 bg-muted/40 rounded-md px-3 py-2">
+            <div className="flex justify-between">
+              <span>Tổng tiền KS:</span>
+              <span className="font-semibold">{fmt(totalKS)} VND</span>
+            </div>
+            {daCoc > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Đã thanh toán:</span>
+                <span>{fmt(daCoc)} VND</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span>Còn lại:</span>
+              <span className="font-semibold">{fmt(conLai)} VND</span>
+            </div>
+            {canTru && canTruAmount > 0 && (
+              <>
+                <div className="flex justify-between text-amber-600">
+                  <span>Cấn trừ (từ đoàn {canTru.tenDoan}):</span>
+                  <span className="font-semibold">− {fmt(canTruAmount)} VND</span>
+                </div>
+                <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
+                  <span>Thực thanh toán:</span>
+                  <span>{fmt(thucThanhToan)} VND</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Chọn hình thức */}
+          {thucThanhToan > 0 && (
+            <RadioGroup value={mode} onValueChange={(v) => setMode(v as "full" | "deposit")} className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="full" id="full" />
+                <Label htmlFor="full" className="text-xs cursor-pointer">
+                  Toàn bộ — {fmt(thucThanhToan)} VND
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="deposit" id="deposit" />
+                <Label htmlFor="deposit" className="text-xs cursor-pointer">
+                  1 phần (cọc/cấn trừ)
+                </Label>
+              </div>
+            </RadioGroup>
+          )}
+
+          {mode === "deposit" && thucThanhToan > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs">Số tiền cọc/cấn trừ</Label>
+              <Input
+                type="number"
+                className="h-8 text-xs"
+                value={depositAmount || ""}
+                onChange={(e) => setDepositAmount(Number(e.target.value) || 0)}
+                max={thucThanhToan}
+                min={0}
+              />
+              {depositAmount > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Còn lại: {fmt(thucThanhToan - depositAmount)} VND
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Ghi chú */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Ghi chú</Label>
+            <Textarea
+              className="text-xs min-h-[60px] resize-none"
+              placeholder="Ghi chú thêm (tùy chọn)"
+              value={ghiChu}
+              onChange={(e) => setGhiChu(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>Hủy</Button>
+          <Button
+            size="sm"
+            className="text-xs"
+            onClick={handleSubmit}
+            disabled={submitting || (soTien <= 0 && canTruAmount <= 0)}
+          >
+            Tạo đề nghị TT
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1,40 +1,41 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 210 30% 10%;
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 210 30% 10%;
+    --card-foreground: 240 10% 3.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 210 30% 10%;
+    --popover-foreground: 240 10% 3.9%;
 
-    --primary: 199 89% 38%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 40 95% 55%;
-    --secondary-foreground: 210 30% 10%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
 
-    --muted: 210 15% 93%;
-    --muted-foreground: 210 10% 45%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
 
-    --accent: 199 70% 95%;
-    --accent-foreground: 199 89% 28%;
+    --accent: 213 78% 37%;
+    --accent-foreground: 0 0% 100%;
+
+    --brand: 213 78% 37%;
+    --brand-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 210 15% 88%;
-    --input: 210 15% 88%;
-    --ring: 199 89% 38%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 221.2 83.2% 53.3%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -45,45 +46,7 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    --gold: 40 95% 55%;
-    --gold-light: 40 90% 70%;
-    --ocean: 199 89% 38%;
-    --ocean-dark: 199 89% 25%;
-    --ocean-light: 199 70% 92%;
-    --sand: 35 30% 95%;
-
-    --font-display: 'Playfair Display', serif;
-    --font-body: 'DM Sans', sans-serif;
-
-    --gradient-ocean: linear-gradient(135deg, hsl(199 89% 38%), hsl(199 89% 25%));
-    --gradient-gold: linear-gradient(135deg, hsl(40 95% 55%), hsl(40 90% 70%));
-    --gradient-hero: linear-gradient(180deg, hsla(210 30% 10% / 0.6) 0%, hsla(210 30% 10% / 0.2) 50%, hsla(210 30% 10% / 0.7) 100%);
-
-    --shadow-card: 0 4px 30px hsla(210 30% 10% / 0.08);
-    --shadow-card-hover: 0 12px 40px hsla(210 30% 10% / 0.15);
-    --shadow-elevated: 0 20px 60px hsla(210 30% 10% / 0.12);
-  }
-
-  .dark {
-    --background: 210 30% 7%;
-    --foreground: 210 20% 95%;
-    --card: 210 30% 10%;
-    --card-foreground: 210 20% 95%;
-    --popover: 210 30% 10%;
-    --popover-foreground: 210 20% 95%;
-    --primary: 199 89% 48%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 40 95% 55%;
-    --secondary-foreground: 210 30% 10%;
-    --muted: 210 20% 15%;
-    --muted-foreground: 210 10% 60%;
-    --accent: 199 50% 15%;
-    --accent-foreground: 199 89% 70%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 210 20% 18%;
-    --input: 210 20% 18%;
-    --ring: 199 89% 48%;
+    --card-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
   }
 }
 
@@ -93,40 +56,133 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-body);
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display);
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 }
 
 @layer utilities {
-  .text-gradient-ocean {
-    background: var(--gradient-ocean);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media print {
+  /* Hide interactive elements */
+  .print-hide {
+    display: none !important;
   }
 
-  .bg-gradient-ocean {
-    background: var(--gradient-ocean);
+  /* Hide placeholders */
+  input::placeholder,
+  textarea::placeholder {
+    color: transparent !important;
   }
 
-  .bg-gradient-hero {
-    background: var(--gradient-hero);
+  /* Body & global */
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    font-size: 10px !important;
   }
 
-  .shadow-card {
-    box-shadow: var(--shadow-card);
+  /* Scale everything to fit A4 portrait */
+  .max-w-7xl {
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
-  .shadow-card-hover {
-    box-shadow: var(--shadow-card-hover);
+  /* Compact table cells */
+  .grid > div {
+    padding: 4px !important;
   }
 
-  .shadow-elevated {
-    box-shadow: var(--shadow-elevated);
+  /* Day rows avoid page break inside */
+  .print-avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
+
+  /* Text sizing for print */
+  * {
+    font-size: inherit;
+  }
+  h2 { font-size: 14px !important; }
+  h3 { font-size: 11px !important; }
+  .text-sm { font-size: 10px !important; }
+  .text-xs { font-size: 9px !important; }
+  .print-text-tiny { font-size: 9px !important; }
+  .text-lg { font-size: 13px !important; }
+
+  /* Clean borders */
+  .border {
+    border-color: #d1d5db !important;
+  }
+
+  /* Hide Lovable badge */
+  #lovable-badge,
+  [data-lovable-badge],
+  iframe[src*="lovable"] {
+    display: none !important;
+  }
+
+  /* Inputs look like plain text */
+  input, select, button[role="combobox"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+  }
+
+  textarea {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    overflow: visible !important;
+    resize: none !important;
+  }
+
+  /* Ensure all text wraps in print */
+  button[role="combobox"] span,
+  .grid span,
+  .grid div,
+  .grid p {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4 portrait;
+    margin: 10mm 15mm;
+  }
+}
+
+/* Hide number input spinners */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
