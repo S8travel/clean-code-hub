@@ -301,28 +301,28 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                     </td>
 
                     {/* TT Thanh toán */}
-                    <td className="px-2 py-2 align-top">
-                      <div className="space-y-1 flex flex-col items-center">
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="space-y-1.5 flex flex-col items-center">
                         {activeDntts.map(d => (
                           <div key={d.id}>
                             {d.trang_thai_thanh_toan === "da_tt" ? (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
                                 Đã TT{d.ngay_thanh_toan ? ` ${format(new Date(d.ngay_thanh_toan), "dd/MM")}` : ""}
                               </span>
                             ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
                                 Chờ UNC · {fmt(d.so_tien)}
                               </span>
                             )}
                           </div>
                         ))}
                         {congNoAmount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
                             CN: {fmt(congNoAmount)}
                           </span>
                         )}
                         {hoanTienAmount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
                             HT: {fmt(hoanTienAmount)}
                           </span>
                         )}
