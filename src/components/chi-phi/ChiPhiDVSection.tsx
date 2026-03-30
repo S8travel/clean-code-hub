@@ -166,25 +166,25 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <colgroup>
-            <col style={{ width: "60px" }} />
+            <col className="w-[60px]" />
             <col />
-            <col style={{ width: "40px" }} />
-            <col style={{ width: "100px" }} />
-            <col style={{ width: "110px" }} />
-            <col style={{ width: "160px" }} />
-            <col style={{ width: "120px" }} />
-            <col style={{ width: "120px" }} />
+            <col className="w-[50px]" />
+            <col className="w-[120px]" />
+            <col className="w-[130px]" />
+            <col className="w-[180px]" />
+            <col className="w-[150px]" />
+            <col className="w-[100px]" />
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
-              <th className="text-left px-3 py-2">Ngày</th>
-              <th className="text-left px-3 py-2">Dịch vụ</th>
-              <th className="text-center px-2 py-2">SL</th>
-              <th className="text-right px-3 py-2">Đơn giá</th>
-              <th className="text-right px-3 py-2">Thành tiền</th>
-              <th className="text-center px-2 py-2">TT ĐNTT</th>
-              <th className="text-center px-2 py-2">TT Thanh toán</th>
-              <th className="px-2 py-2" />
+              <th className="text-left px-3 py-2.5">Ngày</th>
+              <th className="text-left px-3 py-2.5">Dịch vụ</th>
+              <th className="text-center px-2 py-2.5">SL</th>
+              <th className="text-right px-3 py-2.5">Đơn giá</th>
+              <th className="text-right px-3 py-2.5">Thành tiền</th>
+              <th className="text-center px-3 py-2.5">TT ĐNTT</th>
+              <th className="text-center px-3 py-2.5">TT Thanh toán</th>
+              <th className="px-2 py-2.5" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -222,37 +222,37 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                   <tr key={row.id} className="hover:bg-muted/20">
                     {/* Ngày */}
                     {i === 0 && (
-                      <td className="px-3 py-2 text-muted-foreground align-top" rowSpan={rows.length}>
+                      <td className="px-3 py-2.5 text-muted-foreground align-top whitespace-nowrap" rowSpan={rows.length}>
                         {day > 0 ? `Ngày ${day}` : "—"}
                       </td>
                     )}
 
                     {/* Dịch vụ */}
-                    <td className="px-3 py-2 font-medium">{row.mo_ta || "—"}</td>
+                    <td className="px-3 py-2.5 font-medium">{row.mo_ta || "—"}</td>
 
                     {/* SL */}
-                    <td className="px-2 py-2 text-center text-muted-foreground">{row.so_luong}</td>
+                    <td className="px-2 py-2.5 text-center text-muted-foreground">{row.so_luong}</td>
 
                     {/* Đơn giá */}
-                    <td className="px-3 py-2 text-right text-muted-foreground">{fmt(row.don_gia)} ₫</td>
+                    <td className="px-3 py-2.5 text-right text-muted-foreground whitespace-nowrap">{fmt(row.don_gia)} ₫</td>
 
                     {/* Thành tiền */}
-                    <td className="px-3 py-2 text-right font-semibold text-primary">{fmt(thanhTien)} ₫</td>
+                    <td className="px-3 py-2.5 text-right font-semibold text-primary whitespace-nowrap">{fmt(thanhTien)} ₫</td>
 
                     {/* TT ĐNTT */}
-                    <td className="px-2 py-2 align-top">
+                    <td className="px-3 py-2.5 align-top">
                       {shownDntts.length === 0 ? (
                         <span className="text-[10px] text-muted-foreground">—</span>
                       ) : (
-                        <div className="space-y-1 flex flex-col items-center">
+                        <div className="space-y-1.5 flex flex-col items-center">
                           {shownDntts.map(d => {
                             const isRejected = d.trang_thai_duyet === "tu_choi";
                             const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
                             return (
-                              <div key={d.id} className="flex items-center gap-1 flex-wrap justify-center">
+                              <div key={d.id} className="flex items-center gap-1.5 flex-wrap justify-center">
                                 {isRejected ? (
                                   <>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusInfo.cls}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
                                       {statusInfo.text} · {fmt(d.so_tien)}
                                     </span>
                                     <Button variant="outline" size="sm" className="h-5 text-[10px] px-1.5"
@@ -281,7 +281,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                                   </>
                                 ) : (
                                   <>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusInfo.cls}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
                                       {statusInfo.text} · {fmt(d.so_tien)}
                                     </span>
                                     {d.la_coc && <span className="text-[9px] text-muted-foreground">(Cọc)</span>}
@@ -301,28 +301,28 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                     </td>
 
                     {/* TT Thanh toán */}
-                    <td className="px-2 py-2 align-top">
-                      <div className="space-y-1 flex flex-col items-center">
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="space-y-1.5 flex flex-col items-center">
                         {activeDntts.map(d => (
                           <div key={d.id}>
                             {d.trang_thai_thanh_toan === "da_tt" ? (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
                                 Đã TT{d.ngay_thanh_toan ? ` ${format(new Date(d.ngay_thanh_toan), "dd/MM")}` : ""}
                               </span>
                             ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
                                 Chờ UNC · {fmt(d.so_tien)}
                               </span>
                             )}
                           </div>
                         ))}
                         {congNoAmount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
                             CN: {fmt(congNoAmount)}
                           </span>
                         )}
                         {hoanTienAmount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
                             HT: {fmt(hoanTienAmount)}
                           </span>
                         )}
@@ -333,8 +333,8 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-2 py-2">
-                      <div className="flex items-center gap-1 justify-end">
+                    <td className="px-2 py-2.5">
+                      <div className="flex items-center gap-1.5 justify-end">
                         {canCancel && activeDntt && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             title="Hủy ĐNTT"
@@ -342,7 +342,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                               setCancelMode("hoan_tien");
                               setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.trang_thai_thanh_toan === "da_tt" });
                             }}>
-                            <Ban className="h-3 w-3" />
+                            <Ban className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         {activeDntts.length === 0 && thanhTien > 0 && (
