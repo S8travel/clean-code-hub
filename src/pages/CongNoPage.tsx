@@ -141,7 +141,7 @@ export default function CongNoPage() {
           <SearchableSelect
             options={doanSelectOpts}
             value={doanId}
-            onValueChange={setDoanId}
+            onChange={setDoanId}
             placeholder="Tất cả đoàn"
             searchPlaceholder="Tìm đoàn..."
           />
