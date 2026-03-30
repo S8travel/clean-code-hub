@@ -333,8 +333,8 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-2 py-2">
-                      <div className="flex items-center gap-1 justify-end">
+                    <td className="px-2 py-2.5">
+                      <div className="flex items-center gap-1.5 justify-end">
                         {canCancel && activeDntt && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             title="Hủy ĐNTT"
@@ -342,7 +342,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan }: Props) {
                               setCancelMode("hoan_tien");
                               setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.trang_thai_thanh_toan === "da_tt" });
                             }}>
-                            <Ban className="h-3 w-3" />
+                            <Ban className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         {activeDntts.length === 0 && thanhTien > 0 && (
