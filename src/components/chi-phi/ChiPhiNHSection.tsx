@@ -661,16 +661,16 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
       <div className="rounded-lg border border-border overflow-hidden">
         <table className="w-full border-collapse text-xs">
           <colgroup>
-            <col style={{ width: "20px" }} />
-            <col style={{ width: "52px" }} />
-            <col style={{ width: "140px" }} />
-            <col style={{ width: "52px" }} />
-            <col style={{ width: "80px" }} />
-            <col style={{ width: "96px" }} />
-            <col style={{ width: "100px" }} />
-            <col style={{ width: "160px" }} />
-            <col style={{ width: "120px" }} />
-            <col style={{ width: "130px" }} />
+            <col className="w-[28px]" />
+            <col className="w-[64px]" />
+            <col />
+            <col className="w-[56px]" />
+            <col className="w-[80px]" />
+            <col className="w-[100px]" />
+            <col className="w-[110px]" />
+            <col className="w-[180px]" />
+            <col className="w-[150px]" />
+            <col className="w-[100px]" />
           </colgroup>
           {/* Header */}
           <thead>
