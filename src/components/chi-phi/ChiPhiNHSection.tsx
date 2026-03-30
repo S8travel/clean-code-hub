@@ -792,12 +792,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Bữa */}
-                <td className="px-2 py-1.5 text-center text-muted-foreground">
+                <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap">
                   {buaIcon} {buaLabel}
                 </td>
 
                 {/* Số khách */}
-                <td className="px-2 py-1.5">
+                <td className="px-3 py-2">
                   <div className="flex items-center justify-center gap-1">
                     {row ? (
                       <>
@@ -816,7 +816,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Đơn giá */}
-                <td className="px-2 py-1.5">
+                <td className="px-3 py-2">
                   <div className="flex justify-center">
                     {row ? (
                       <NHInput
@@ -830,7 +830,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Thành tiền (đã trừ FOC) */}
-                <td className="px-2 py-1.5 text-right font-semibold text-primary">
+                <td className="px-3 py-2 text-right font-semibold text-primary whitespace-nowrap">
                   {row ? fmt(totalBua) : "—"}
                 </td>
 
