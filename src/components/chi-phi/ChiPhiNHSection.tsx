@@ -775,12 +775,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                 </td>
 
                 {/* Ngày */}
-                <td className="px-2 py-1.5 text-center text-muted-foreground whitespace-nowrap text-[11px]">
+                <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap text-[11px]">
                   {dateLabel}
                 </td>
 
                 {/* NH name */}
-                <td className="px-2 py-1.5 font-medium max-w-0">
+                <td className="px-3 py-2 font-medium">
                   <div className="truncate">
                     {nh?.ten || `NH #${meal.nha_hang_id}`}
                     {nh?.ncc_so_tai_khoan && (
