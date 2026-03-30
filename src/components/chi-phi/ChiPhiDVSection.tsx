@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { format, subDays, parseISO } from "date-fns";
-import { Check, Pencil, X, Ban } from "lucide-react";
+import { Check, Pencil, X, Ban, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useChiPhiList, useDNTTList, useInsertDNTT, type DNTTRow } from "@/hooks/use-chi-phi";
-import { useCancelDNTT, useUpdateDNTT } from "@/hooks/use-dntt";
+import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi } from "@/hooks/use-chi-phi";
+import type { DNTTRow } from "@/hooks/use-chi-phi";
+import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
+import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -28,16 +32,40 @@ interface Props {
   ngayBatDau?: string;
 }
 
+// Small inline number input (like NH's NHInput)
+function DVInput({ value, onChange, onBlur, width = "w-[60px]" }: {
+  value: number;
+  onChange: (v: number) => void;
+  onBlur: () => void;
+  width?: string;
+}) {
+  return (
+    <Input
+      type="number"
+      value={value || ""}
+      onChange={e => onChange(Number(e.target.value) || 0)}
+      onBlur={onBlur}
+      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+      className={cn("h-6 text-xs px-1.5 py-0 text-center", width)}
+    />
+  );
+}
+
 export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const insertDNTT = useInsertDNTT();
   const updateDNTT = useUpdateDNTT();
+  const upsertMut = useUpsertChiPhi();
   const cancelMut = useCancelDNTT();
+  const adjustMut = useCreateAdjustment();
 
-  // Inline edit state
+  // Inline edit state for DNTT amount
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editAmount, setEditAmount] = useState("");
+
+  // Inline edit for row fields (so_luong, don_gia)
+  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
 
   // ĐNTT modal
   interface DVModalTarget { chiPhiId: number; thanhTien: number; moTa: string; nccId: number | null; nhaySo: number | null }
@@ -45,6 +73,11 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const [dvModalMode, setDvModalMode] = useState<"full" | "deposit">("full");
   const [dvDepositAmount, setDvDepositAmount] = useState(0);
   const [dvNgayCan, setDvNgayCan] = useState("");
+
+  // Adjust dialog (after payment)
+  const [adjustTarget, setAdjustTarget] = useState<DNTTRowDntt | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
 
   // Resend dialog (rejected)
   const [resendTarget, setResendTarget] = useState<DNTTRow | null>(null);
@@ -69,8 +102,6 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
     );
   }
 
-  const total = dvRows.reduce((s, r) => s + r.tien_cong_ty, 0);
-
   // Nhóm theo ngày
   const byDay = new Map<number, typeof dvRows>();
   for (const row of dvRows) {
@@ -79,8 +110,36 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
     byDay.get(day)!.push(row);
   }
   const sortedDays = [...byDay.entries()].sort((a, b) => a[0] - b[0]);
+  const total = dvRows.reduce((s, r) => s + r.tien_cong_ty, 0);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Row field helpers ─────────────────────────────────────────────────────
+
+  const getRowEdit = (row: typeof dvRows[0]) =>
+    editRow[row.id] ?? { so_luong: row.so_luong, don_gia: row.don_gia };
+
+  const handleRowChange = (id: number, field: "so_luong" | "don_gia", val: number) => {
+    setEditRow(prev => {
+      const base = dvRows.find(r => r.id === id);
+      const existing = prev[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
+      return { ...prev, [id]: { ...existing, [field]: val } };
+    });
+  };
+
+  const handleRowSave = (row: typeof dvRows[0]) => {
+    const local = editRow[row.id];
+    if (!local) return;
+    if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
+    upsertMut.mutate({
+      id: row.id,
+      doan_id: doanId,
+      so_luong: local.so_luong,
+      don_gia: local.don_gia,
+    } as any, {
+      onSuccess: () => setEditRow(prev => { const next = { ...prev }; delete next[row.id]; return next; }),
+    });
+  };
+
+  // ── ĐNTT handlers ─────────────────────────────────────────────────────────
 
   const openDvModal = (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null, ngaySo: number | null) => {
     let ngayCan = "";
@@ -171,21 +230,21 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <colgroup>
-            <col className="w-[60px]" />
+            <col style={{ width: "60px" }} />
             <col />
-            <col className="w-[50px]" />
-            <col className="w-[120px]" />
-            <col className="w-[130px]" />
-            <col className="w-[180px]" />
-            <col className="w-[150px]" />
-            <col className="w-[100px]" />
+            <col style={{ width: "60px" }} />
+            <col style={{ width: "110px" }} />
+            <col style={{ width: "120px" }} />
+            <col style={{ width: "180px" }} />
+            <col style={{ width: "140px" }} />
+            <col style={{ width: "130px" }} />
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
               <th className="text-left px-3 py-2.5">Ngày</th>
               <th className="text-left px-3 py-2.5">Dịch vụ</th>
               <th className="text-center px-2 py-2.5">SL</th>
-              <th className="text-right px-3 py-2.5">Đơn giá</th>
+              <th className="text-center px-3 py-2.5">Đơn giá</th>
               <th className="text-right px-3 py-2.5">Thành tiền</th>
               <th className="text-center px-3 py-2.5">TT ĐNTT</th>
               <th className="text-center px-3 py-2.5">TT Thanh toán</th>
@@ -195,6 +254,9 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           <tbody className="divide-y divide-border">
             {sortedDays.map(([day, rows]) =>
               rows.map((row, i) => {
+                const local = getRowEdit(row);
+                const thanhTienLocal = local.so_luong * local.don_gia;
+
                 const allDntts = dnttList.filter(
                   d => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id,
                 );
@@ -235,19 +297,39 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                     {/* Dịch vụ */}
                     <td className="px-3 py-2.5 font-medium">{row.mo_ta || "—"}</td>
 
-                    {/* SL */}
-                    <td className="px-2 py-2.5 text-center text-muted-foreground">{row.so_luong}</td>
+                    {/* SL — editable */}
+                    <td className="px-2 py-2.5">
+                      <div className="flex justify-center">
+                        <DVInput
+                          value={local.so_luong}
+                          onChange={v => handleRowChange(row.id, "so_luong", v)}
+                          onBlur={() => handleRowSave(row)}
+                          width="w-[44px]"
+                        />
+                      </div>
+                    </td>
 
-                    {/* Đơn giá */}
-                    <td className="px-3 py-2.5 text-right text-muted-foreground whitespace-nowrap">{fmt(row.don_gia)} ₫</td>
+                    {/* Đơn giá — editable */}
+                    <td className="px-3 py-2.5">
+                      <div className="flex justify-center">
+                        <DVInput
+                          value={local.don_gia}
+                          onChange={v => handleRowChange(row.id, "don_gia", v)}
+                          onBlur={() => handleRowSave(row)}
+                          width="w-[90px]"
+                        />
+                      </div>
+                    </td>
 
                     {/* Thành tiền */}
-                    <td className="px-3 py-2.5 text-right font-semibold text-primary whitespace-nowrap">{fmt(thanhTien)} ₫</td>
+                    <td className="px-3 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
+                      {fmt(thanhTienLocal)} ₫
+                    </td>
 
                     {/* TT ĐNTT */}
                     <td className="px-3 py-2.5 align-top">
                       {shownDntts.length === 0 ? (
-                        <span className="text-[10px] text-muted-foreground">—</span>
+                        <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
                       ) : (
                         <div className="space-y-1.5 flex flex-col items-center">
                           {shownDntts.map(d => {
@@ -257,7 +339,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                               <div key={d.id} className="flex items-center gap-1.5 flex-wrap justify-center">
                                 {isRejected ? (
                                   <>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
                                       {statusInfo.text} · {fmt(d.so_tien)}
                                     </span>
                                     <Button variant="outline" size="sm" className="h-5 text-[10px] px-1.5"
@@ -286,7 +368,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                                   </>
                                 ) : (
                                   <>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
                                       {statusInfo.text} · {fmt(d.so_tien)}
                                     </span>
                                     {d.la_coc && <span className="text-[9px] text-muted-foreground">(Cọc)</span>}
@@ -311,23 +393,23 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                         {activeDntts.map(d => (
                           <div key={d.id}>
                             {d.trang_thai_thanh_toan === "da_tt" ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
                                 Đã TT{d.ngay_thanh_toan ? ` ${format(new Date(d.ngay_thanh_toan), "dd/MM")}` : ""}
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
                                 Chờ UNC · {fmt(d.so_tien)}
                               </span>
                             )}
                           </div>
                         ))}
                         {congNoAmount > 0 && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
                             CN: {fmt(congNoAmount)}
                           </span>
                         )}
                         {hoanTienAmount > 0 && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
                             HT: {fmt(hoanTienAmount)}
                           </span>
                         )}
@@ -339,7 +421,19 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
                     {/* Actions */}
                     <td className="px-2 py-2.5">
-                      <div className="flex items-center gap-1.5 justify-end">
+                      <div className="flex items-center gap-1 justify-end">
+                        {isDaTT && paidDntts.length > 0 && (
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
+                            title="Điều chỉnh sau thanh toán"
+                            onClick={() => {
+                              const lastPaid = paidDntts[paidDntts.length - 1];
+                              setAdjustTarget(lastPaid as unknown as DNTTRowDntt);
+                              setAdjustAmount(String(lastPaid.so_tien));
+                              setAdjustReason("");
+                            }}>
+                            <SlidersHorizontal className="h-3 w-3" />
+                          </Button>
+                        )}
                         {canCancel && activeDntt && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             title="Hủy ĐNTT"
@@ -347,7 +441,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                               setCancelMode("hoan_tien");
                               setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.trang_thai_thanh_toan === "da_tt" });
                             }}>
-                            <Ban className="h-3.5 w-3.5" />
+                            <Ban className="h-3 w-3" />
                           </Button>
                         )}
                         {activeDntts.length === 0 && thanhTien > 0 && (
@@ -415,6 +509,89 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
             <Button variant="outline" size="sm" className="text-xs" onClick={() => setDvModal(null)}>Hủy</Button>
             <Button size="sm" className="text-xs" onClick={handleDvModalSubmit} disabled={insertDNTT.isPending}>
               Tạo đề nghị TT
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjust Dialog */}
+      <Dialog open={!!adjustTarget} onOpenChange={o => { if (!o) setAdjustTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Điều chỉnh sau thanh toán</DialogTitle>
+          </DialogHeader>
+          {adjustTarget && (
+            <div className="space-y-3 py-1 text-sm">
+              <p className="text-xs text-muted-foreground">{adjustTarget.mo_ta}</p>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Đã thanh toán:</span>
+                <span className="font-semibold">{fmt(adjustTarget.so_tien)} ₫</span>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Số tiền thực tế</Label>
+                <Input
+                  className="h-8 text-sm"
+                  value={adjustAmount}
+                  onChange={e => setAdjustAmount(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Nhập số tiền..."
+                />
+              </div>
+              {(() => {
+                const actual = parseInt(adjustAmount.replace(/\D/g, ""), 10);
+                if (isNaN(actual) || actual === adjustTarget.so_tien) return null;
+                const delta = actual - adjustTarget.so_tien;
+                return (
+                  <div className={cn(
+                    "rounded px-3 py-2 text-xs font-medium",
+                    delta > 0 ? "bg-yellow-50 text-yellow-700" : "bg-purple-50 text-purple-700",
+                  )}>
+                    {delta > 0
+                      ? `Thiếu ${fmt(delta)} ₫ → tạo ĐNTT bổ sung (chờ duyệt)`
+                      : `Thừa ${fmt(Math.abs(delta))} ₫ → ghi công nợ NCC`
+                    }
+                  </div>
+                );
+              })()}
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Lý do</Label>
+                <Textarea
+                  className="text-xs min-h-[56px]"
+                  value={adjustReason}
+                  onChange={e => setAdjustReason(e.target.value)}
+                  placeholder="VD: Thay đổi số lượng..."
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustTarget(null)}>Đóng</Button>
+            <Button
+              size="sm"
+              className="text-xs"
+              disabled={
+                adjustMut.isPending ||
+                !adjustAmount ||
+                parseInt(adjustAmount.replace(/\D/g, ""), 10) === adjustTarget?.so_tien
+              }
+              onClick={() => {
+                if (!adjustTarget) return;
+                const soTienThucTe = parseInt(adjustAmount.replace(/\D/g, ""), 10);
+                if (isNaN(soTienThucTe)) return;
+                adjustMut.mutate(
+                  { dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || "Điều chỉnh số lượng" },
+                  {
+                    onSuccess: (result) => {
+                      if (!result) return;
+                      if (result.delta > 0) toast.success(`Đã tạo ĐNTT bổ sung ${fmt(result.delta)} ₫`);
+                      else toast.success(`Đã ghi công nợ ${fmt(Math.abs(result.delta))} ₫`);
+                      setAdjustTarget(null);
+                    },
+                    onError: (err: any) => toast.error(err?.message || "Lỗi điều chỉnh"),
+                  },
+                );
+              }}
+            >
+              Xác nhận
             </Button>
           </DialogFooter>
         </DialogContent>
