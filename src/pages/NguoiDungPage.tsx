@@ -21,7 +21,7 @@ import {
   useCreateNguoiDung,
   useUpdateNguoiDung,
   useDeleteNguoiDung,
-  type NguoiDungRow,
+  type UserRoleRow,
 } from "@/hooks/use-nguoi-dung";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { toast } from "sonner";
@@ -31,10 +31,11 @@ const VAI_TRO_OPTS = [
   { value: "nhan_vien", label: "Nhân viên" },
 ];
 
-const emptyForm = (): Omit<NguoiDungRow, "id" | "created_at"> => ({
-  ten: "",
+const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
+  user_id: "",
+  ho_ten: "",
   email: "",
-  vai_tro: "nhan_vien",
+  role: "nhan_vien",
   so_dien_thoai: null,
   ghi_chu: null,
   active: true,
@@ -63,7 +64,9 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
               type="email"
               value={inputEmail}
               onChange={(e) => setInputEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && inputEmail.trim() && setEmail(inputEmail.trim().toLowerCase())}
+              onKeyDown={(e) =>
+                e.key === "Enter" && inputEmail.trim() && setEmail(inputEmail.trim().toLowerCase())
+              }
             />
             <Button
               className="h-9 text-sm shrink-0"
@@ -85,16 +88,14 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!currentUser || currentUser.vai_tro !== "admin") {
+  if (!currentUser || currentUser.role !== "admin") {
     return (
       <div className="flex flex-1 items-center justify-center h-[calc(100vh-3rem)]">
         <div className="text-center space-y-3">
           <ShieldAlert className="h-12 w-12 mx-auto text-destructive opacity-60" />
           <div>
             <h2 className="font-semibold text-base">Không có quyền truy cập</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Trang này chỉ dành cho Admin.
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">Trang này chỉ dành cho Admin.</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Đang đăng nhập với: <span className="font-medium">{email}</span>
             </p>
@@ -126,18 +127,18 @@ function NguoiDungContent() {
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [form, setForm] = useState<Omit<NguoiDungRow, "id" | "created_at">>(emptyForm());
-  const [deleteTarget, setDeleteTarget] = useState<NguoiDungRow | null>(null);
+  const [form, setForm] = useState<Omit<UserRoleRow, "id" | "created_at">>(emptyForm());
+  const [deleteTarget, setDeleteTarget] = useState<UserRoleRow | null>(null);
   const [dirty, setDirty] = useState(false);
 
   const filtered = list.filter((u) =>
-    u.ten.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    (u.ho_ten ?? "").toLowerCase().includes(search.toLowerCase()) ||
+    (u.email ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   const selected = list.find((u) => u.id === selectedId) ?? null;
@@ -145,9 +146,10 @@ function NguoiDungContent() {
   useEffect(() => {
     if (selected) {
       setForm({
-        ten: selected.ten,
+        user_id: selected.user_id,
+        ho_ten: selected.ho_ten,
         email: selected.email,
-        vai_tro: selected.vai_tro,
+        role: selected.role,
         so_dien_thoai: selected.so_dien_thoai,
         ghi_chu: selected.ghi_chu,
         active: selected.active,
@@ -156,7 +158,7 @@ function NguoiDungContent() {
     }
   }, [selectedId, list]);
 
-  const set = (field: keyof Omit<NguoiDungRow, "id" | "created_at">, value: any) => {
+  const set = (field: keyof Omit<UserRoleRow, "id" | "created_at">, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setDirty(true);
   };
@@ -167,7 +169,8 @@ function NguoiDungContent() {
     try {
       const created = await createMut.mutateAsync({
         ...emptyForm(),
-        ten: newName.trim(),
+        user_id: crypto.randomUUID(),
+        ho_ten: newName.trim(),
         email: emailLower,
       });
       setSelectedId(created.id);
@@ -185,9 +188,13 @@ function NguoiDungContent() {
   };
 
   const handleSave = async () => {
-    if (!selected || !form.ten.trim() || !form.email.trim()) return;
+    if (!selected || !form.ho_ten?.trim() || !form.email?.trim()) return;
     try {
-      await updateMut.mutateAsync({ id: selected.id, ...form, email: form.email.trim().toLowerCase() });
+      await updateMut.mutateAsync({
+        id: selected.id,
+        ...form,
+        email: form.email?.trim().toLowerCase() ?? null,
+      });
       setDirty(false);
       toast.success("Đã lưu");
     } catch (e: any) {
@@ -244,10 +251,17 @@ function NguoiDungContent() {
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
               <div className="flex gap-1">
-                <Button size="sm" className="h-7 text-xs flex-1" onClick={handleCreate} disabled={!newName.trim() || !newEmail.trim()}>
+                <Button
+                  size="sm" className="h-7 text-xs flex-1"
+                  onClick={handleCreate}
+                  disabled={!newName.trim() || !newEmail.trim() || createMut.isPending}
+                >
                   Tạo
                 </Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowCreate(false); setNewName(""); setNewEmail(""); }}>
+                <Button
+                  size="sm" variant="ghost" className="h-7 text-xs"
+                  onClick={() => { setShowCreate(false); setNewName(""); setNewEmail(""); }}
+                >
                   Hủy
                 </Button>
               </div>
@@ -284,20 +298,22 @@ function NguoiDungContent() {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate">{u.ten}</span>
+                    <span className="truncate">{u.ho_ten ?? "(Chưa có tên)"}</span>
                     <div className="flex items-center gap-1 shrink-0">
                       {!u.active && (
                         <Badge variant="secondary" className="text-[10px] h-4 px-1">Ẩn</Badge>
                       )}
                       <Badge
-                        variant={u.vai_tro === "admin" ? "default" : "secondary"}
+                        variant={u.role === "admin" ? "default" : "secondary"}
                         className="text-[10px] h-4 px-1"
                       >
-                        {u.vai_tro === "admin" ? "Admin" : "NV"}
+                        {u.role === "admin" ? "Admin" : "NV"}
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{u.email}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    {u.email ?? "—"}
+                  </p>
                 </button>
               ))}
             </div>
@@ -318,7 +334,7 @@ function NguoiDungContent() {
           <div className="max-w-xl mx-auto p-6 space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
-              <h1 className="text-lg font-semibold">{selected.ten}</h1>
+              <h1 className="text-lg font-semibold">{selected.ho_ten ?? "(Chưa có tên)"}</h1>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm" variant="destructive" className="h-8 text-xs"
@@ -337,22 +353,22 @@ function NguoiDungContent() {
               </div>
             </div>
 
-            {/* Thông tin cơ bản */}
+            {/* Thông tin */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Họ tên <span className="text-destructive">*</span></Label>
                 <Input
                   className="h-8 text-sm"
-                  value={form.ten}
-                  onChange={(e) => set("ten", e.target.value)}
+                  value={form.ho_ten ?? ""}
+                  onChange={(e) => set("ho_ten", e.target.value || null)}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs">Vai trò</Label>
                 <Select
-                  value={form.vai_tro}
-                  onValueChange={(v) => set("vai_tro", v as "admin" | "nhan_vien")}
+                  value={form.role}
+                  onValueChange={(v) => set("role", v as "admin" | "nhan_vien")}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
@@ -371,8 +387,8 @@ function NguoiDungContent() {
                   className="h-8 text-sm"
                   type="email"
                   placeholder="example@s8travel.vn"
-                  value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
+                  value={form.email ?? ""}
+                  onChange={(e) => set("email", e.target.value || null)}
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Dùng để gửi email trực tiếp từ hệ thống
@@ -424,7 +440,7 @@ function NguoiDungContent() {
           <AlertDialogHeader>
             <AlertDialogTitle>Xóa người dùng?</AlertDialogTitle>
             <AlertDialogDescription>
-              Xóa <strong>{deleteTarget?.ten}</strong> ({deleteTarget?.email}). Hành động này không thể hoàn tác.
+              Xóa <strong>{deleteTarget?.ho_ten}</strong> ({deleteTarget?.email}). Hành động này không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

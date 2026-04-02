@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 
-export interface NguoiDungRow {
-  id: number;
-  ten: string;
-  email: string;
-  vai_tro: "admin" | "nhan_vien";
+export interface UserRoleRow {
+  id: string;
+  user_id: string;
+  role: "admin" | "nhan_vien";
+  ho_ten: string | null;
+  email: string | null;
   so_dien_thoai: string | null;
   ghi_chu: string | null;
   active: boolean;
@@ -17,11 +18,11 @@ export function useNguoiDungList() {
     queryKey: ["nguoi-dung-list"],
     queryFn: async () => {
       const { data, error } = await externalSupabase
-        .from("nguoi_dung")
+        .from("user_roles")
         .select("*")
-        .order("ten");
+        .order("ho_ten");
       if (error) throw error;
-      return data as NguoiDungRow[];
+      return data as UserRoleRow[];
     },
   });
 }
@@ -32,12 +33,12 @@ export function useNguoiDungByEmail(email: string | null) {
     enabled: !!email,
     queryFn: async () => {
       const { data, error } = await externalSupabase
-        .from("nguoi_dung")
+        .from("user_roles")
         .select("*")
         .eq("email", email!)
         .maybeSingle();
       if (error) throw error;
-      return data as NguoiDungRow | null;
+      return data as UserRoleRow | null;
     },
   });
 }
@@ -45,14 +46,14 @@ export function useNguoiDungByEmail(email: string | null) {
 export function useCreateNguoiDung() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: Omit<NguoiDungRow, "id" | "created_at">) => {
+    mutationFn: async (payload: Omit<UserRoleRow, "id" | "created_at">) => {
       const { data, error } = await externalSupabase
-        .from("nguoi_dung")
+        .from("user_roles")
         .insert(payload)
         .select()
         .single();
       if (error) throw error;
-      return data as NguoiDungRow;
+      return data as UserRoleRow;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["nguoi-dung-list"] });
@@ -63,15 +64,15 @@ export function useCreateNguoiDung() {
 export function useUpdateNguoiDung() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...rest }: Partial<NguoiDungRow> & { id: number }) => {
+    mutationFn: async ({ id, ...rest }: Partial<UserRoleRow> & { id: string }) => {
       const { data, error } = await externalSupabase
-        .from("nguoi_dung")
+        .from("user_roles")
         .update(rest)
         .eq("id", id)
         .select()
         .single();
       if (error) throw error;
-      return data as NguoiDungRow;
+      return data as UserRoleRow;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["nguoi-dung-list"] });
@@ -83,9 +84,9 @@ export function useUpdateNguoiDung() {
 export function useDeleteNguoiDung() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id: string) => {
       const { error } = await externalSupabase
-        .from("nguoi_dung")
+        .from("user_roles")
         .delete()
         .eq("id", id);
       if (error) throw error;
