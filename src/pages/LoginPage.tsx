@@ -40,7 +40,7 @@ export default function LoginPage() {
       {/* ── Left panel: branding ── */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#0a3d7c] flex-col items-center justify-center gap-6 p-12">
         <img
-          src="/logo.png"
+          src="/logo.jpg"
           alt="S8 Travel"
           className="w-52 h-52 object-contain drop-shadow-xl"
         />
@@ -56,7 +56,7 @@ export default function LoginPage() {
           {/* Logo nhỏ trên mobile */}
           <div className="flex flex-col items-center gap-3 lg:hidden">
             <img
-              src="/logo.png"
+              src="/logo.jpg"
               alt="S8 Travel"
               className="w-20 h-20 object-contain"
             />

@@ -83,7 +83,7 @@ export function AppSidebar() {
       <SidebarHeader className="px-3 py-3">
         <div className="flex items-center gap-2">
           <img
-            src="/logo.png"
+            src="/logo.jpg"
             alt="S8 Travel"
             className="h-8 w-8 shrink-0 object-contain"
           />
