@@ -12,9 +12,10 @@ import {
   CreditCard,
   Wallet,
   CalendarClock,
+  LogOut,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -25,8 +26,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
 
 const menuGroups = [
   {
@@ -63,20 +67,29 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const isActive = (url: string) =>
     location.pathname === url || location.pathname.startsWith(url + "/");
 
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="px-4 py-4">
+      <SidebarHeader className="px-3 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-            S8
-          </div>
+          <img
+            src="/logo.png"
+            alt="S8 Travel"
+            className="h-8 w-8 shrink-0 object-contain"
+          />
           {!collapsed && (
-            <span className="font-semibold text-sm text-foreground truncate">
-              S8 Travel
+            <span className="font-bold text-sm text-[#0a3d7c] truncate">
+              S8 TRAVEL
             </span>
           )}
         </div>
@@ -111,6 +124,36 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+
+      <SidebarFooter className="border-t p-2">
+        {!collapsed ? (
+          <div className="flex items-center justify-between gap-2 px-2 py-1">
+            <div className="min-w-0">
+              <p className="text-xs font-medium truncate">{user?.ho_ten ?? user?.email}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={handleLogout}
+              title="Đăng xuất"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 mx-auto text-muted-foreground hover:text-destructive"
+            onClick={handleLogout}
+            title="Đăng xuất"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        )}
+      </SidebarFooter>
     </Sidebar>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Trash2, Save, Users, ShieldAlert, LogIn } from "lucide-react";
+import { Plus, Search, Trash2, Save, Users, ShieldAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,7 +17,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   useNguoiDungList,
-  useNguoiDungByEmail,
   useCreateNguoiDung,
   useUpdateNguoiDung,
   useDeleteNguoiDung,
@@ -25,7 +24,7 @@ import {
   type VaiTro,
   type BoPhan,
 } from "@/hooks/use-nguoi-dung";
-import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 
 const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
@@ -63,51 +62,9 @@ const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
 // ── Admin Guard ─────────────────────────────────────────────────────────────
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { email, setEmail } = useCurrentUserEmail();
-  const [inputEmail, setInputEmail] = useState("");
-  const { data: currentUser, isLoading } = useNguoiDungByEmail(email);
+  const { user } = useAuth();
 
-  if (!email) {
-    return (
-      <div className="flex flex-1 items-center justify-center h-[calc(100vh-3rem)]">
-        <div className="w-full max-w-sm space-y-4 text-center">
-          <LogIn className="h-10 w-10 mx-auto text-muted-foreground opacity-50" />
-          <div>
-            <h2 className="font-semibold text-base">Nhập email của bạn</h2>
-            <p className="text-sm text-muted-foreground mt-1">Để xác định quyền truy cập</p>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              className="h-9 text-sm"
-              placeholder="email@s8travel.vn"
-              type="email"
-              value={inputEmail}
-              onChange={(e) => setInputEmail(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" && inputEmail.trim() && setEmail(inputEmail.trim().toLowerCase())
-              }
-            />
-            <Button
-              className="h-9 text-sm shrink-0"
-              onClick={() => inputEmail.trim() && setEmail(inputEmail.trim().toLowerCase())}
-            >
-              Xác nhận
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center h-[calc(100vh-3rem)]">
-        <p className="text-sm text-muted-foreground">Đang kiểm tra quyền...</p>
-      </div>
-    );
-  }
-
-  if (!currentUser || currentUser.role !== "admin") {
+  if (!user || user.role !== "admin") {
     return (
       <div className="flex flex-1 items-center justify-center h-[calc(100vh-3rem)]">
         <div className="text-center space-y-3">
@@ -115,13 +72,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
           <div>
             <h2 className="font-semibold text-base">Không có quyền truy cập</h2>
             <p className="text-sm text-muted-foreground mt-1">Trang này chỉ dành cho Admin.</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Đang đăng nhập với: <span className="font-medium">{email}</span>
-            </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setEmail(null)}>
-            Đổi tài khoản
-          </Button>
         </div>
       </div>
     );
