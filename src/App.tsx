@@ -15,6 +15,7 @@ import DNTTPage from "./pages/DNTTPage.tsx";
 import CongNoPage from "./pages/CongNoPage.tsx";
 import ThanhToanDinhKyPage from "./pages/ThanhToanDinhKyPage.tsx";
 import HDVPage from "./pages/HDVPage.tsx";
+import NguoiDungPage from "./pages/NguoiDungPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/thanh-toan-dinh-ky" element={<ThanhToanDinhKyPage />} />
             <Route path="/cong-no" element={<CongNoPage />} />
             <Route path="/quan-ly/hdv" element={<HDVPage />} />
+            <Route path="/quan-ly/nguoi-dung" element={<NguoiDungPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
