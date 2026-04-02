@@ -1,13 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 
+export type VaiTro = "admin" | "truong_phong" | "giam_doc" | "nhan_vien_cao_cap" | "nhan_vien";
+export type BoPhan = "dieu_hanh" | "ke_toan";
+
 export interface UserRoleRow {
   id: string;
   user_id: string;
-  role: "admin" | "nhan_vien";
+  role: VaiTro;
   ho_ten: string | null;
   email: string | null;
   so_dien_thoai: string | null;
+  bo_phan: BoPhan | null;
   ghi_chu: string | null;
   active: boolean;
   created_at: string;
@@ -30,6 +34,22 @@ export function useNguoiDungList() {
 export function useNguoiDungByEmail(email: string | null) {
   return useQuery({
     queryKey: ["nguoi-dung-email", email],
+    enabled: !!email,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_roles")
+        .select("*")
+        .eq("email", email!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as UserRoleRow | null;
+    },
+  });
+}
+
+export function useNguoiDungByEmailFull(email: string | null) {
+  return useQuery({
+    queryKey: ["nguoi-dung-email-full", email],
     enabled: !!email,
     queryFn: async () => {
       const { data, error } = await externalSupabase

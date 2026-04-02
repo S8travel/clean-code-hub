@@ -22,20 +22,39 @@ import {
   useUpdateNguoiDung,
   useDeleteNguoiDung,
   type UserRoleRow,
+  type VaiTro,
+  type BoPhan,
 } from "@/hooks/use-nguoi-dung";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { toast } from "sonner";
 
-const VAI_TRO_OPTS = [
+const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
   { value: "admin", label: "Admin" },
+  { value: "giam_doc", label: "Giám đốc" },
+  { value: "truong_phong", label: "Trưởng phòng" },
+  { value: "nhan_vien_cao_cap", label: "Nhân viên cao cấp" },
   { value: "nhan_vien", label: "Nhân viên" },
 ];
+
+const BO_PHAN_OPTS: { value: BoPhan; label: string }[] = [
+  { value: "dieu_hanh", label: "Điều hành" },
+  { value: "ke_toan", label: "Kế toán" },
+];
+
+const VAI_TRO_LABEL: Record<VaiTro, string> = {
+  admin: "Admin",
+  giam_doc: "Giám đốc",
+  truong_phong: "Trưởng phòng",
+  nhan_vien_cao_cap: "NV Cao cấp",
+  nhan_vien: "Nhân viên",
+};
 
 const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   user_id: "",
   ho_ten: "",
   email: "",
   role: "nhan_vien",
+  bo_phan: null,
   so_dien_thoai: null,
   ghi_chu: null,
   active: true,
@@ -150,6 +169,7 @@ function NguoiDungContent() {
         ho_ten: selected.ho_ten,
         email: selected.email,
         role: selected.role,
+        bo_phan: selected.bo_phan,
         so_dien_thoai: selected.so_dien_thoai,
         ghi_chu: selected.ghi_chu,
         active: selected.active,
@@ -304,16 +324,23 @@ function NguoiDungContent() {
                         <Badge variant="secondary" className="text-[10px] h-4 px-1">Ẩn</Badge>
                       )}
                       <Badge
-                        variant={u.role === "admin" ? "default" : "secondary"}
+                        variant={u.role === "admin" || u.role === "giam_doc" ? "default" : "secondary"}
                         className="text-[10px] h-4 px-1"
                       >
-                        {u.role === "admin" ? "Admin" : "NV"}
+                        {VAI_TRO_LABEL[u.role]}
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                    {u.email ?? "—"}
-                  </p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <p className="text-[11px] text-muted-foreground truncate flex-1">
+                      {u.email ?? "—"}
+                    </p>
+                    {u.bo_phan && (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0">
+                        {u.bo_phan === "dieu_hanh" ? "Điều hành" : "Kế toán"}
+                      </Badge>
+                    )}
+                  </div>
                 </button>
               ))}
             </div>
@@ -368,13 +395,31 @@ function NguoiDungContent() {
                 <Label className="text-xs">Vai trò</Label>
                 <Select
                   value={form.role}
-                  onValueChange={(v) => set("role", v as "admin" | "nhan_vien")}
+                  onValueChange={(v) => set("role", v as VaiTro)}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {VAI_TRO_OPTS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Bộ phận</Label>
+                <Select
+                  value={form.bo_phan ?? "none"}
+                  onValueChange={(v) => set("bo_phan", v === "none" ? null : v as BoPhan)}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Chọn bộ phận" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Không có —</SelectItem>
+                    {BO_PHAN_OPTS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                     ))}
                   </SelectContent>
