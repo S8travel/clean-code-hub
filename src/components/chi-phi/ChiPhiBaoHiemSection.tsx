@@ -229,162 +229,196 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         )}
       </div>
 
-      {/* Formula row */}
-      <div className="px-4 py-3 border-b border-border flex items-end gap-6 flex-wrap">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="bg-muted px-2 py-1 rounded">{soKhach} khách</span>
-          <span>×</span>
-          <span className="bg-muted px-2 py-1 rounded">{soNgay} ngày</span>
-          <span>×</span>
-          <div className="flex flex-col gap-0.5">
-            <Label className="text-[10px] text-muted-foreground">Giá/người/ngày</Label>
-            <Input
-              type="number"
-              value={donGia || ""}
-              onChange={(e) => setDonGia(Number(e.target.value) || 0)}
-              onBlur={handleSave}
-              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-              className="h-7 w-28 text-xs text-center"
-              placeholder="0"
-              disabled={saving}
-            />
-          </div>
-          <span>=</span>
-          <span className={`font-semibold ${thanhTien > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-            {thanhTien > 0 ? `${fmt(thanhTien)} ₫` : "—"}
-          </span>
-        </div>
-      </div>
+      {/* Table — cùng layout với Xe / Visa / DV */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <colgroup>
+            <col />
+            <col style={{ width: "80px" }} />
+            <col style={{ width: "110px" }} />
+            <col style={{ width: "120px" }} />
+            <col style={{ width: "180px" }} />
+            <col style={{ width: "140px" }} />
+            <col style={{ width: "130px" }} />
+          </colgroup>
+          <thead>
+            <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
+              <th className="text-left px-4 py-2.5">Mô tả</th>
+              <th className="text-center px-2 py-2.5">SL</th>
+              <th className="text-center px-3 py-2.5">Giá/người/ngày</th>
+              <th className="text-right px-3 py-2.5">Thành tiền</th>
+              <th className="text-center px-3 py-2.5">TT ĐNTT</th>
+              <th className="text-center px-3 py-2.5">TT Thanh toán</th>
+              <th className="px-2 py-2.5" />
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="hover:bg-muted/20">
+              {/* Mô tả */}
+              <td className="px-4 py-2.5">
+                <div className="font-medium">{baoHiemCD ? baoHiemCD.ten : "Bảo hiểm"}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {soKhach} khách × {soNgay} ngày
+                </div>
+              </td>
 
-      {/* ĐNTT row — chỉ hiện khi đã có existing record */}
-      {existing && (
-        <div className="px-4 py-2.5 flex items-center gap-4 flex-wrap">
-          {/* TT ĐNTT */}
-          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span className="text-[11px] text-muted-foreground shrink-0">ĐNTT:</span>
-            {shownDntts.length === 0 ? (
-              <span className="text-[10px] text-muted-foreground">—</span>
-            ) : (
-              shownDntts.map((d) => {
-                const isRejected = d.trang_thai_duyet === "tu_choi";
-                const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
-                return (
-                  <div key={d.id} className="flex items-center gap-1 flex-wrap">
-                    {isRejected ? (
-                      <>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                          {statusInfo.text} · {fmt(d.so_tien)}
-                        </span>
-                        <Button variant="outline" size="sm" className="h-5 text-[10px] px-1.5"
-                          onClick={() => { setResendTarget(d); setResendMode("full"); setResendAmount(d.so_tien); }}>
-                          Gửi lại
-                        </Button>
-                      </>
-                    ) : editingId === d.id ? (
-                      <>
-                        <Input autoFocus type="number" value={editAmount}
-                          onChange={(e) => setEditAmount(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") handleEditSave(d.id); if (e.key === "Escape") setEditingId(null); }}
-                          className="h-6 w-20 text-xs px-2 py-0" />
-                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-emerald-600" disabled={updateDNTT.isPending} onClick={() => handleEditSave(d.id)}>
-                          <Check className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                          {statusInfo.text} · {fmt(d.so_tien)}
-                        </span>
-                        {d.la_coc && <span className="text-[9px] text-muted-foreground">(Cọc)</span>}
-                        {d.trang_thai_duyet === "cho_duyet" && (
-                          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-blue-500"
-                            onClick={() => { setEditingId(d.id); setEditAmount(String(d.so_tien)); }}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </>
+              {/* SL (computed) */}
+              <td className="px-2 py-2.5 text-center text-muted-foreground">
+                {soKhach * soNgay}
+              </td>
+
+              {/* Giá/người/ngày — editable */}
+              <td className="px-3 py-2.5">
+                <div className="flex justify-center">
+                  <Input
+                    type="number"
+                    value={donGia || ""}
+                    onChange={(e) => setDonGia(Number(e.target.value) || 0)}
+                    onBlur={handleSave}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                    className="h-6 text-xs px-1.5 py-0 text-center w-[90px]"
+                    placeholder="0"
+                    disabled={saving}
+                  />
+                </div>
+              </td>
+
+              {/* Thành tiền */}
+              <td className="px-3 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
+                {thanhTien > 0 ? `${fmt(thanhTien)} ₫` : "—"}
+              </td>
+
+              {/* TT ĐNTT */}
+              <td className="px-3 py-2.5">
+                {shownDntts.length === 0 ? (
+                  <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-1 justify-center">
+                    {shownDntts.map((d) => {
+                      const isRejected = d.trang_thai_duyet === "tu_choi";
+                      const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
+                      return (
+                        <div key={d.id} className="flex items-center gap-1">
+                          {isRejected ? (
+                            <>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                {statusInfo.text} · {fmt(d.so_tien)}
+                              </span>
+                              <Button variant="outline" size="sm" className="h-5 text-[10px] px-1.5"
+                                onClick={() => { setResendTarget(d); setResendMode("full"); setResendAmount(d.so_tien); }}>
+                                Gửi lại
+                              </Button>
+                            </>
+                          ) : editingId === d.id ? (
+                            <>
+                              <Input autoFocus type="number" value={editAmount}
+                                onChange={(e) => setEditAmount(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleEditSave(d.id); if (e.key === "Escape") setEditingId(null); }}
+                                className="h-6 w-20 text-xs px-2 py-0" />
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-emerald-600" disabled={updateDNTT.isPending} onClick={() => handleEditSave(d.id)}>
+                                <Check className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                {statusInfo.text} · {fmt(d.so_tien)}
+                              </span>
+                              {d.la_coc && <span className="text-[9px] text-muted-foreground">(Cọc)</span>}
+                              {d.trang_thai_duyet === "cho_duyet" && (
+                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-blue-500"
+                                  onClick={() => { setEditingId(d.id); setEditAmount(String(d.so_tien)); }}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </td>
+
+              {/* TT Thanh toán */}
+              <td className="px-3 py-2.5">
+                <div className="flex flex-wrap items-center gap-1 justify-center">
+                  {activeDntts.map((d) => (
+                    <span key={d.id} className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${
+                      d.trang_thai_thanh_toan === "da_tt"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}>
+                      {d.trang_thai_thanh_toan === "da_tt"
+                        ? `Đã TT${d.ngay_thanh_toan ? ` ${new Date(d.ngay_thanh_toan).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}` : ""}`
+                        : `Chờ UNC · ${fmt(d.so_tien)}`}
+                    </span>
+                  ))}
+                  {congNoAmount > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">CN: {fmt(congNoAmount)}</span>}
+                  {hoanTienAmount > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 whitespace-nowrap">HT: {fmt(hoanTienAmount)}</span>}
+                  {activeDntts.length === 0 && congNoAmount === 0 && hoanTienAmount === 0 && (
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                  )}
+                </div>
+              </td>
+
+              {/* Actions */}
+              <td className="px-2 py-2.5">
+                {existing && (
+                  <div className="flex items-center gap-1 justify-end">
+                    {isDaTT && paidDntts.length > 0 && (
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
+                        title="Điều chỉnh sau thanh toán"
+                        onClick={() => {
+                          const lastPaid = paidDntts[paidDntts.length - 1];
+                          setAdjustTarget(lastPaid as unknown as DNTTRowDntt);
+                          setAdjustAmount(String(lastPaid.so_tien));
+                          setAdjustReason("");
+                        }}>
+                        <SlidersHorizontal className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {canCancel && activeDntt && (
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                        title="Hủy ĐNTT"
+                        onClick={() => {
+                          setCancelMode("hoan_tien");
+                          setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.trang_thai_thanh_toan === "da_tt" });
+                        }}>
+                        <Ban className="h-3 w-3" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm"
+                      className={cn("h-6 text-[10px] px-1.5", existing.thanh_toan_dinh_ky ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
+                      title={existing.thanh_toan_dinh_ky ? "Đang định kỳ — bấm để tắt" : "Đặt thanh toán định kỳ"}
+                      disabled={upsertMut.isPending}
+                      onClick={handleToggleDinhKy}>
+                      ⏱
+                    </Button>
+                    {!existing.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
+                      <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={openModal}>
+                        ĐNTT
+                      </Button>
+                    )}
+                    {activeDntts.length > 0 && daDeNghi === 0 && (
+                      <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
+                        onClick={() => {
+                          setModal({ chiPhiId: existing.id, thanhTien: conLai > 0 ? conLai : thanhTien, moTa: existing.mo_ta || "Bảo hiểm", nccId });
+                          setModalMode("full"); setDepositAmount(0); setNgayCan("");
+                        }}>
+                        {conLai > 0 ? "ĐNTT còn lại" : "ĐNTT bổ sung"}
+                      </Button>
                     )}
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* TT Thanh toán */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] text-muted-foreground shrink-0">Thanh toán:</span>
-            {activeDntts.map((d) => (
-              <div key={d.id}>
-                {d.trang_thai_thanh_toan === "da_tt" ? (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                    Đã TT{d.ngay_thanh_toan ? ` ${new Date(d.ngay_thanh_toan).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}` : ""}
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                    Chờ UNC · {fmt(d.so_tien)}
-                  </span>
                 )}
-              </div>
-            ))}
-            {congNoAmount > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">CN: {fmt(congNoAmount)}</span>}
-            {hoanTienAmount > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 whitespace-nowrap">HT: {fmt(hoanTienAmount)}</span>}
-            {activeDntts.length === 0 && congNoAmount === 0 && hoanTienAmount === 0 && (
-              <span className="text-[10px] text-muted-foreground">—</span>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-1 ml-auto">
-            {isDaTT && paidDntts.length > 0 && (
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-                title="Điều chỉnh sau thanh toán"
-                onClick={() => {
-                  const lastPaid = paidDntts[paidDntts.length - 1];
-                  setAdjustTarget(lastPaid as unknown as DNTTRowDntt);
-                  setAdjustAmount(String(lastPaid.so_tien));
-                  setAdjustReason("");
-                }}>
-                <SlidersHorizontal className="h-3 w-3" />
-              </Button>
-            )}
-            {canCancel && activeDntt && (
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                title="Hủy ĐNTT"
-                onClick={() => {
-                  setCancelMode("hoan_tien");
-                  setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.trang_thai_thanh_toan === "da_tt" });
-                }}>
-                <Ban className="h-3 w-3" />
-              </Button>
-            )}
-            <Button variant="ghost" size="sm"
-              className={cn("h-6 text-[10px] px-1.5", existing.thanh_toan_dinh_ky ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
-              title={existing.thanh_toan_dinh_ky ? "Đang định kỳ — bấm để tắt" : "Đặt thanh toán định kỳ"}
-              disabled={upsertMut.isPending}
-              onClick={handleToggleDinhKy}>
-              ⏱
-            </Button>
-            {!existing.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
-              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={openModal}>
-                ĐNTT
-              </Button>
-            )}
-            {activeDntts.length > 0 && daDeNghi === 0 && (
-              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
-                onClick={() => {
-                  if (!existing) return;
-                  setModal({ chiPhiId: existing.id, thanhTien: conLai > 0 ? conLai : thanhTien, moTa: existing.mo_ta || "Bảo hiểm", nccId });
-                  setModalMode("full"); setDepositAmount(0); setNgayCan("");
-                }}>
-                {conLai > 0 ? "ĐNTT còn lại" : "ĐNTT bổ sung"}
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       {/* ĐNTT Modal */}
       <Dialog open={!!modal} onOpenChange={(v) => { if (!v) setModal(null); }}>
