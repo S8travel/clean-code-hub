@@ -3,6 +3,7 @@ import { differenceInDays, parseISO } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useChiPhiList, useUpsertChiPhi } from "@/hooks/use-chi-phi";
+import { useCanhDiemList } from "@/hooks/use-canh-diem";
 import { toast } from "sonner";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -16,20 +17,32 @@ interface Props {
 
 export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: canhDiemList = [] } = useCanhDiemList();
   const upsertMut = useUpsertChiPhi();
+
+  // Tìm record bảo hiểm trong danh mục cảnh điểm (loai = "dich_vu", ten chứa "bảo hiểm")
+  const baoHiemCD = canhDiemList.find(
+    (cd) => cd.loai === "dich_vu" && cd.ten.toLowerCase().includes("bảo hiểm")
+  );
+  const nccId = (baoHiemCD as any)?.nha_cung_cap_id ?? null;
+  const giaMacDinh = baoHiemCD?.gia_mac_dinh ?? 0;
 
   const soNgay = ngayDi && ngayVe
     ? Math.max(1, differenceInDays(parseISO(ngayVe), parseISO(ngayDi)) + 1)
     : 0;
 
   const existing = chiPhiRows.find((r) => r.danh_muc === "bao_hiem");
-  const [donGia, setDonGia] = useState<number>(existing?.don_gia ?? 0);
+  const [donGia, setDonGia] = useState<number>(0);
   const [saving, setSaving] = useState(false);
 
-  // Sync khi load xong
+  // Sync: ưu tiên giá đã lưu, fallback về giá mặc định từ danh mục
   useEffect(() => {
-    if (existing) setDonGia(existing.don_gia ?? 0);
-  }, [existing?.id]);
+    if (existing) {
+      setDonGia(existing.don_gia ?? 0);
+    } else if (giaMacDinh) {
+      setDonGia(giaMacDinh);
+    }
+  }, [existing?.id, giaMacDinh]);
 
   const thanhTien = soKhach * soNgay * donGia;
 
@@ -45,11 +58,12 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         doan_id: doanId,
         danh_muc: "bao_hiem",
         loai: "bao_hiem",
-        mo_ta: "Bảo hiểm",
+        mo_ta: baoHiemCD ? `Bảo hiểm - ${baoHiemCD.ten}` : "Bảo hiểm",
         don_gia: donGia,
         so_luong: soKhach * soNgay,
         tien_cong_ty: thanhTien,
         tien_hdv: 0,
+        nha_cung_cap_id: nccId,
       } as any);
       toast.success("Đã lưu bảo hiểm");
     } catch {
@@ -63,9 +77,11 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold">🛡️ Bảo hiểm</span>
-          <span className="text-xs text-muted-foreground">(cố định, tự động tính)</span>
+          {baoHiemCD && (
+            <span className="text-xs text-muted-foreground">· {baoHiemCD.ten}</span>
+          )}
         </div>
         {thanhTien > 0 && (
           <span className="text-sm font-semibold text-foreground">{fmt(thanhTien)} ₫</span>
