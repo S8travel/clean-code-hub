@@ -538,6 +538,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     setBatchPrinting(true);
     try {
       const entries: NHDocEntry[] = [];
+      // Track cấn trừ đã phân bổ cho từng NCC (chỉ hiện 1 lần)
+      const canTruShownByNcc: Record<number, boolean> = {};
+
       for (const key of selectedKeys) {
         const row = localRowsRef.current[key];
         if (!row) continue;
@@ -565,14 +568,29 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         const mealDntts = chiPhiId
           ? dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId)
           : [];
+
+        // Cọc đã thanh toán thực sự (da_tt)
         const soCoc = mealDntts
-          .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy")
+          .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.trang_thai_thanh_toan === "da_tt")
           .reduce((s, d) => s + d.so_tien, 0);
+
+        // Cấn trừ công nợ đã duyệt (NCC-level, chỉ hiện 1 lần mỗi NCC)
+        const nccId = nh.nha_cung_cap_id ?? null;
+        let canTruAmount = 0;
+        if (nccId && !canTruShownByNcc[nccId]) {
+          canTruAmount = dnttList
+            .filter(
+              (d) =>
+                d.trang_thai_thanh_toan === "can_tru" &&
+                d.trang_thai_duyet === "da_duyet" &&
+                d.nha_cung_cap_id === nccId,
+            )
+            .reduce((s, d) => s + d.so_tien, 0);
+          if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
+        }
+
         const totalEntry = items.reduce((s, i) => s + i.so_luong * i.don_gia, 0);
-        const activeDntt = mealDntts.find(
-          (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
-        );
-        const soTienConTT = activeDntt?.so_tien ?? Math.max(0, totalEntry - soCoc);
+        const soTienConTT = Math.max(0, totalEntry - soCoc - canTruAmount);
 
         // Format ngay_date
         const d = new Date(row.ngay_date + "T00:00:00");
@@ -588,7 +606,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
             ? { ten: nh.ten_ncc || undefined, so_tai_khoan: nh.ncc_so_tai_khoan || undefined, ngan_hang: nh.ncc_ngan_hang || undefined }
             : null,
           so_tien_coc: soCoc,
-          can_tru: 0,
+          can_tru: canTruAmount,
           so_tien_con_tt: soTienConTT,
         });
       }
