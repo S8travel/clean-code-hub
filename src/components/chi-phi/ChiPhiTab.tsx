@@ -116,7 +116,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
 
         <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_bat_dau} />
+        <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di} />
 
         <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
 
