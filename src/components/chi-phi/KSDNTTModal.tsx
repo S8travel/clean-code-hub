@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useInsertDNTT } from "@/hooks/use-chi-phi";
-import { appendCanTruLog } from "@/hooks/use-dntt";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { LocalKSRow } from "./ChiPhiKSSection";
 import type { CanTruSelection } from "./KSCongNoPanel";
@@ -115,7 +114,7 @@ export default function KSDNTTModal({
         await insertDNTT.mutateAsync(payload);
       }
 
-      // 2. Nếu có cấn trừ: tạo record cấn trừ (la_coc=true → in vào cột cọc/cấn trừ)
+      // 2. Nếu có cấn trừ: tạo record chờ duyệt — công nợ sẽ được ghi nhận sau khi được duyệt
       if (canTru && canTruAmount > 0) {
         await externalSupabase.from("de_nghi_thanh_toan").insert({
           doan_id: doanId,
@@ -127,28 +126,12 @@ export default function KSDNTTModal({
           ngan_hang: nccNganHang,
           so_tien: canTruAmount,
           la_coc: true,
-          trang_thai_duyet: "da_duyet",
+          trang_thai_duyet: "cho_duyet",
           trang_thai_thanh_toan: "can_tru",
-          ref_loai: "khach_san",
-          ref_id: ksId,
+          ref_loai: "can_tru_cong_no",
+          ref_id: canTru.congNoId,
           ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
         });
-
-        // Cập nhật record công nợ gốc
-        const remaining = canTru.soTienConLai - canTruAmount;
-        if (remaining <= 0) {
-          await externalSupabase
-            .from("de_nghi_thanh_toan")
-            .update({ trang_thai_thanh_toan: "da_can_tru", so_tien_con_lai: 0 })
-            .eq("id", canTru.congNoId);
-        } else {
-          await externalSupabase
-            .from("de_nghi_thanh_toan")
-            .update({ so_tien_con_lai: remaining })
-            .eq("id", canTru.congNoId);
-        }
-        // Ghi log cấn trừ vào ghi_chu của công nợ gốc
-        await appendCanTruLog(canTru.congNoId, canTruAmount, tenDoanMoi);
 
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
         qc.invalidateQueries({ queryKey: ["dntt-list"] });

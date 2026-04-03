@@ -41,8 +41,16 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   const [showQuyetToan, setShowQuyetToan] = useState(false);
   const [showThemChiPhi, setShowThemChiPhi] = useState(false);
 
-  // Tip state
-  const [tyGia, setTyGia] = useState<number>(3500);
+  // Tip state — persist tỷ giá NDT vào localStorage
+  const [tyGia, setTyGia] = useState<number>(() => {
+    const saved = localStorage.getItem("hdv_ty_gia_ndt");
+    return saved ? Number(saved) : 800;
+  });
+
+  const handleTyGiaChange = (v: number) => {
+    setTyGia(v);
+    localStorage.setItem("hdv_ty_gia_ndt", String(v));
+  };
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
@@ -195,7 +203,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
       )}
 
       {/* ── Phải thu ── */}
-      <TipSection doan={doan} tyGia={tyGia} onTyGiaChange={setTyGia} />
+      <TipSection doan={doan} tyGia={tyGia} onTyGiaChange={handleTyGiaChange} />
 
       {/* Modals */}
       {showTamUng && (

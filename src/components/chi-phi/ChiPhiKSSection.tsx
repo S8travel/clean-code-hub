@@ -820,8 +820,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         // Orphaned + công nợ → auto-xóa, ẩn luôn khỏi UI
         if (isOrphaned && ksStatus === "cong_no") return null;
 
+        // KS còn trong điều tour dù đã có cong_no → coi như chi phí mới, không show annotation
+        const effectiveKsStatus = (!isOrphaned && ksStatus === "cong_no") ? "chua_de_nghi" : ksStatus;
+
         // cong_no/hoan_tien: collapsed by default; others: expanded by default
-        const defaultCollapsed = ksStatus === "cong_no" || ksStatus === "hoan_tien";
+        const defaultCollapsed = effectiveKsStatus === "cong_no" || effectiveKsStatus === "hoan_tien";
         const isCollapsed = toggledKsIds.has(ksId) ? !defaultCollapsed : defaultCollapsed;
         const showContent = !isCollapsed;
 
@@ -841,12 +844,12 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                   >
                     {ks?.ten || `KS #${ksId}`}
                     {ks?.dia_diem && <span className="text-muted-foreground font-normal text-xs">({ks.dia_diem})</span>}
-                    {ksStatus === "cong_no" && congNoAmount > 0 && (
+                    {effectiveKsStatus === "cong_no" && congNoAmount > 0 && (
                       <span className="text-purple-600 font-semibold text-xs">
                         — Công nợ: {fmt(congNoAmount)} VND
                       </span>
                     )}
-                    {ksStatus === "hoan_tien" && hoanTienAmount > 0 && (
+                    {effectiveKsStatus === "hoan_tien" && hoanTienAmount > 0 && (
                       <span className="text-blue-600 font-semibold text-xs">
                         — Hoàn tiền: {fmt(hoanTienAmount)} VND
                       </span>
@@ -1128,11 +1131,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                       </Button>
                     )}
                     {/* Thanh toán định kỳ: ẩn nút ĐNTT, kế toán xử lý qua trang định kỳ */}
-                    {isKsDinhKy && ksStatus === "chua_de_nghi" && (
+                    {isKsDinhKy && effectiveKsStatus === "chua_de_nghi" && (
                       <span className="text-[11px] text-indigo-500 italic">Thanh toán định kỳ</span>
                     )}
                     {/* Chưa có DNTT nào → nút tạo lần đầu */}
-                    {!isKsDinhKy && ksStatus === "chua_de_nghi" && (
+                    {!isKsDinhKy && effectiveKsStatus === "chua_de_nghi" && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1144,7 +1147,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                       </Button>
                     )}
                     {/* Đã có DNTT → luôn cho phép tạo thêm (trừ khi đã hủy dịch vụ) */}
-                    {!isKsDinhKy && ksStatus !== "chua_de_nghi" && ksStatus !== "cong_no" && ksStatus !== "hoan_tien" && (
+                    {!isKsDinhKy && effectiveKsStatus !== "chua_de_nghi" && effectiveKsStatus !== "cong_no" && effectiveKsStatus !== "hoan_tien" && (
                       <Button
                         variant="outline"
                         size="sm"
