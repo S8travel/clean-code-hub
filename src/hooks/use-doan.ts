@@ -185,7 +185,13 @@ export function useDoanList() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("doan")
-        .select("*")
+        .select(`
+          *,
+          agents:agent_id(id, ten),
+          agent_huy:agent_huy_id(id, ten),
+          dia_diem:dia_diem_id(ten),
+          huong_dan_vien:huong_dan_vien_id(id, ten)
+        `)
         .order("created_at", { ascending: false });
       if (error) {
         console.error("useDoanList error:", JSON.stringify(error));
