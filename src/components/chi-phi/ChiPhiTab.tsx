@@ -6,6 +6,8 @@ import ChiPhiNHSection from "./ChiPhiNHSection";
 import ChiPhiDVSection from "./ChiPhiDVSection";
 import ChiPhiHDVSection from "./ChiPhiHDVSection";
 import ChiPhiBaoHiemSection from "./ChiPhiBaoHiemSection";
+import ChiPhiXeSection from "./ChiPhiXeSection";
+import ChiPhiVisaSection from "./ChiPhiVisaSection";
 import { cn } from "@/lib/utils";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -45,7 +47,13 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
     const totalBH = activeRows
       .filter((r) => r.danh_muc === "bao_hiem")
       .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const total = totalKS + totalNH + totalDV + totalBH;
+    const totalXe = activeRows
+      .filter((r) => r.danh_muc === "xe")
+      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
+    const totalVisa = activeRows
+      .filter((r) => r.danh_muc === "visa")
+      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
+    const total = totalKS + totalNH + totalDV + totalBH + totalXe + totalVisa;
 
     const thucTeKS = activeRows
       .filter((r) => r.danh_muc === "khach_san")
@@ -53,7 +61,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
     const thucTeNH = activeRows
       .filter((r) => r.danh_muc === "nha_hang")
       .reduce((s, r) => s + (r.thanh_tien_thuc_te ?? r.thanh_tien), 0);
-    const thucTe = thucTeKS + thucTeNH + totalDV + totalBH;
+    const thucTe = thucTeKS + thucTeNH + totalDV + totalBH + totalXe + totalVisa;
     const daDieuChinh = thucTe !== total;
 
     const activeDntts = dnttList.filter(
@@ -109,6 +117,10 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
         <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} tenDoan={doan?.ten_doan || ""} />
 
         <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_bat_dau} />
+
+        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
+
+        <ChiPhiVisaSection doanId={doanId} />
 
         <ChiPhiBaoHiemSection
           doanId={doanId}

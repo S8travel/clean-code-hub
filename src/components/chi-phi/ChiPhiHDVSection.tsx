@@ -22,6 +22,7 @@ import {
   useCancelDNTT,
   type HDVDNTTRow,
 } from "@/hooks/use-chi-phi-hdv";
+import { useUpsertChiPhi } from "@/hooks/use-chi-phi";
 import { cn } from "@/lib/utils";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -34,6 +35,7 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
   const [showQuyetToan, setShowQuyetToan] = useState(false);
+  const [showThemChiPhi, setShowThemChiPhi] = useState(false);
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
@@ -103,7 +105,10 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
           </div>
 
           {/* Buttons */}
-          <div className="flex gap-2 shrink-0">
+          <div className="flex gap-2 shrink-0 flex-wrap">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowThemChiPhi(true)}>
+              <Plus className="h-3 w-3 mr-1" /> Thêm chi phí
+            </Button>
             {!daQuyetToan && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowTamUng(true)}>
                 <Plus className="h-3 w-3 mr-1" /> Tạm ứng
@@ -203,6 +208,9 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
           onClose={() => setShowQuyetToan(false)}
         />
       )}
+      {showThemChiPhi && (
+        <ThemChiPhiHDVModal doanId={doanId} onClose={() => setShowThemChiPhi(false)} />
+      )}
     </div>
   );
 }
@@ -300,6 +308,67 @@ interface CreateModalProps {
   defaultSoTien?: number;
   defaultLaThuHoi?: boolean;
   onClose: () => void;
+}
+
+function ThemChiPhiHDVModal({ doanId, onClose }: { doanId: number; onClose: () => void }) {
+  const upsertMut = useUpsertChiPhi();
+  const [moTa, setMoTa] = useState("");
+  const [soLuong, setSoLuong] = useState(1);
+  const [donGia, setDonGia] = useState(0);
+
+  const thanhTien = soLuong * donGia;
+
+  const handleSubmit = async () => {
+    if (!moTa.trim()) { toast.error("Vui lòng nhập mô tả"); return; }
+    if (donGia <= 0) { toast.error("Đơn giá phải lớn hơn 0"); return; }
+    try {
+      await upsertMut.mutateAsync({
+        doan_id: doanId,
+        danh_muc: "canh_diem",
+        loai: "hdv_phat_sinh",
+        mo_ta: moTa.trim(),
+        don_gia: donGia,
+        so_luong: soLuong,
+        tien_cong_ty: 0,
+        tien_hdv: thanhTien,
+      } as any);
+      toast.success("Đã thêm chi phí");
+      onClose();
+    } catch {
+      toast.error("Lỗi khi thêm");
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Thêm chi phí phát sinh HDV</DialogTitle></DialogHeader>
+        <div className="space-y-3 pt-2">
+          <div>
+            <Label className="text-xs">Mô tả *</Label>
+            <Input className="h-8 text-sm" value={moTa} onChange={(e) => setMoTa(e.target.value)} placeholder="VD: Phí cầu đường, tiền tip..." autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Số lượng</Label>
+              <Input className="h-8 text-sm" type="number" min={1} value={soLuong} onChange={(e) => setSoLuong(Number(e.target.value) || 1)} />
+            </div>
+            <div>
+              <Label className="text-xs">Đơn giá (VND)</Label>
+              <Input className="h-8 text-sm" type="number" min={0} value={donGia || ""} onChange={(e) => setDonGia(Number(e.target.value) || 0)} />
+            </div>
+          </div>
+          {thanhTien > 0 && (
+            <p className="text-xs text-muted-foreground">Thành tiền: <span className="font-semibold text-foreground">{fmt(thanhTien)} ₫</span></p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={onClose}>Hủy</Button>
+            <Button size="sm" onClick={handleSubmit} disabled={upsertMut.isPending}>Thêm</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function CreateHDVPaymentModal({
