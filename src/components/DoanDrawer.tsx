@@ -115,10 +115,12 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     (hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten })), [hdv]);
 
   const xeOptions = useMemo(() =>
-    (xeList ?? []).map((x: any) => ({
-      value: x.id.toString(),
-      label: x.loai_xe ? `${x.ten_nha_xe} · ${x.so_cho} chỗ · ${x.loai_xe}` : `${x.ten_nha_xe} · ${x.so_cho} chỗ`,
-    })), [xeList]);
+    (xeList ?? []).map((x: any) => {
+      const nhaXe = x.nha_xe?.ten ?? "";
+      const socho = x.so_cho ? `${x.so_cho} chỗ` : "";
+      const parts = [nhaXe, x.ten_xe, socho].filter(Boolean);
+      return { value: x.id.toString(), label: parts.join(" · ") };
+    }), [xeList]);
 
   const userOptions = useMemo(() =>
     (userRoles ?? []).map((u) => ({ value: u.user_id, label: u.ho_ten })), [userRoles]);

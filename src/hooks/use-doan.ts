@@ -118,9 +118,9 @@ export function useXeList() {
     queryKey: ["xe_list"],
     queryFn: async () => {
       const { data, error } = await externalSupabase
-        .from("xe")
-        .select("id, ten_nha_xe, so_cho, loai_xe")
-        .order("ten_nha_xe");
+        .from("nha_xe_loai_xe")
+        .select("id, ten_xe, so_cho, ghi_chu, nha_xe:nha_xe_id(id, ten)")
+        .order("ten_xe");
       if (error) throw error;
       return data as any[];
     },
@@ -181,7 +181,7 @@ export function useDoanList() {
           agent_huy:agent_huy_id(id, ten),
           dia_diem:dia_diem_id(ten),
           huong_dan_vien:huong_dan_vien_id(id, ten),
-          xe:xe_id(id, ten_nha_xe, so_cho, loai_xe)
+          xe:xe_id(id, ten_xe, so_cho, ghi_chu, nha_xe:nha_xe_id(id, ten))
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;

@@ -28,10 +28,10 @@ function lookup(obj: any, field = "ten"): string {
 
 function xeLabel(xe: any): string | null {
   if (!xe) return null;
-  const name = xe.ten_nha_xe;
-  if (!name) return null;
-  const base = `${name} · ${xe.so_cho} chỗ`;
-  return xe.loai_xe ? `${base} · ${xe.loai_xe}` : base;
+  const nhaXe = xe.nha_xe?.ten ?? "";
+  const socho = xe.so_cho ? `${xe.so_cho} chỗ` : "";
+  const parts = [nhaXe, xe.ten_xe, socho].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
 }
 
 const PALETTE = [

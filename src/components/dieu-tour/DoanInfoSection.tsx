@@ -11,9 +11,10 @@ function formatDate(d: string | null) {
 
 function xeLabel(xe: any) {
   if (!xe) return "—";
-  const parts = [xe.ten_nha_xe, `${xe.so_cho} chỗ`];
-  if (xe.loai_xe) parts.push(xe.loai_xe);
-  return parts.join(" · ");
+  const nhaXe = xe.nha_xe?.ten ?? "";
+  const socho = xe.so_cho ? `${xe.so_cho} chỗ` : "";
+  const parts = [nhaXe, xe.ten_xe, socho].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "—";
 }
 
 interface Props {

@@ -19,7 +19,7 @@ export default function ChiPhiHeader({ doan }: Props) {
         : "—",
     },
     { label: "HDV", value: doan.huong_dan_vien?.ten || "—" },
-    { label: "Xe", value: doan.xe?.ten_nha_xe || "—" },
+    { label: "Xe", value: doan.xe ? [doan.xe.nha_xe?.ten, doan.xe.ten_xe, doan.xe.so_cho ? `${doan.xe.so_cho} chỗ` : ""].filter(Boolean).join(" · ") || "—" : "—" },
     { label: "OP", value: doan.assigned_to || "—" },
     {
       label: "Quà tặng",
