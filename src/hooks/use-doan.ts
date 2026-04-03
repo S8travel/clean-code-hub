@@ -190,7 +190,8 @@ export function useDoanList() {
           agents:agent_id(id, ten),
           agent_huy:agent_huy_id(id, ten),
           dia_diem:dia_diem_id(ten),
-          huong_dan_vien:huong_dan_vien_id(id, ten)
+          huong_dan_vien:huong_dan_vien_id(id, ten),
+          xe:xe_id(id, ten_xe, so_cho, nha_xe_id, nha_xe:nha_xe_id(id, ten))
         `)
         .order("created_at", { ascending: false });
       if (error) {

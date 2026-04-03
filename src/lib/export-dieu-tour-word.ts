@@ -96,7 +96,9 @@ function formatDateShort(dateStr: string): string {
 
 function xeLabel(xe: any): string {
   if (!xe) return "—";
-  const parts = [xe.ten_nha_xe, xe.so_cho ? `${xe.so_cho} chỗ` : null, xe.loai_xe].filter(Boolean);
+  const nhaXe = xe.nha_xe?.ten ?? "";
+  const socho = xe.so_cho ? `${xe.so_cho} chỗ` : "";
+  const parts = [nhaXe, xe.ten_xe, socho].filter(Boolean);
   return parts.join(" · ") || "—";
 }
 
