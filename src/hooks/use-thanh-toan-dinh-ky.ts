@@ -47,7 +47,7 @@ export function useDinhKyChiPhiList(filters?: {
       const doanIds = [...new Set(cpRows.map((r: any) => r.doan_id))];
       const { data: doanList } = await externalSupabase
         .from("doan")
-        .select("id, ten_doan, ngay_kh_di")
+        .select("id, ten_doan, ngay_di")
         .in("id", doanIds);
       const doanMap: Record<number, any> = {};
       (doanList || []).forEach((d: any) => { doanMap[d.id] = d; });
@@ -70,7 +70,7 @@ export function useDinhKyChiPhiList(filters?: {
           id: r.id,
           doan_id: r.doan_id,
           ten_doan: doan.ten_doan ?? null,
-          ngay_kh_di: doan.ngay_kh_di ?? null,
+          ngay_kh_di: doan.ngay_di ?? null,
           danh_muc: r.danh_muc,
           mo_ta: r.mo_ta,
           thanh_tien: r.thanh_tien,

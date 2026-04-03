@@ -124,7 +124,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       so_luong: 1,
       tien_cong_ty: 0,
       tien_hdv: 0,
-      nha_cung_cap_id: xe?.nha_xe?.id ?? null,
+      nha_cung_cap_id: xe?.nha_xe?.nha_cung_cap_id ?? null,
     } as any, {
       onSuccess: () => toast.success("Đã thêm dòng xe"),
     });
