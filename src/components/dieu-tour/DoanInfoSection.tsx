@@ -11,10 +11,9 @@ function formatDate(d: string | null) {
 
 function xeLabel(xe: any) {
   if (!xe) return "—";
-  const nhaXe = xe.nha_xe?.ten ?? "";
-  const socho = xe.so_cho ? `${xe.so_cho} chỗ` : "";
-  const parts = [nhaXe, xe.ten_xe, socho].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "—";
+  const name = xe.ten_nha_xe ?? "";
+  const base = xe.so_cho ? `${name} · ${xe.so_cho} chỗ` : name;
+  return xe.loai_xe ? `${base} · ${xe.loai_xe}` : base || "—";
 }
 
 interface Props {
