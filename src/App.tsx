@@ -16,6 +16,7 @@ import CongNoPage from "./pages/CongNoPage.tsx";
 import ThanhToanDinhKyPage from "./pages/ThanhToanDinhKyPage.tsx";
 import HDVPage from "./pages/HDVPage.tsx";
 import NguoiDungPage from "./pages/NguoiDungPage.tsx";
+import NhaXePage from "./pages/NhaXePage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/quan-ly/nha-hang" element={<NhaHangPage />} />
             <Route path="/quan-ly/khach-san" element={<KhachSanPage />} />
             <Route path="/quan-ly/canh-diem" element={<CanhDiemPage />} />
+            <Route path="/quan-ly/xe" element={<NhaXePage />} />
             <Route path="/quan-ly/nha-cung-cap" element={<NhaCungCapPage />} />
             <Route path="/de-nghi-thanh-toan" element={<DNTTPage />} />
             <Route path="/thanh-toan-dinh-ky" element={<ThanhToanDinhKyPage />} />
