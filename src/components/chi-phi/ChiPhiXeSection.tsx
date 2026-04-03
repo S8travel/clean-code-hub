@@ -1,19 +1,25 @@
 import { useEffect, useState } from "react";
-import { useChiPhiList, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
+import { Trash2 } from "lucide-react";
+import { useChiPhiList, useDNTTList, useUpsertChiPhi, useDeleteChiPhi, type DNTTRow } from "@/hooks/use-chi-phi";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import DNTTCell from "./DNTTCell";
+import ThanhToanCell from "./ThanhToanCell";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 interface Props {
   doanId: number;
-  xe: any; // xe object từ doan (join nha_xe_loai_xe)
+  xe: any;
 }
 
-function XeRow({ row, doanId }: { row: any; doanId: number }) {
+function XeRow({
+  row, doanId, dnttList, selectedDnttIds, onToggleDntt,
+}: {
+  row: any; doanId: number; dnttList: DNTTRow[];
+  selectedDnttIds: Set<number>; onToggleDntt: (id: number) => void;
+}) {
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const [soLuong, setSoLuong] = useState(row.so_luong ?? 1);
@@ -33,35 +39,49 @@ function XeRow({ row, doanId }: { row: any; doanId: number }) {
       so_luong: soLuong,
       don_gia: donGia,
       tien_cong_ty: thanhTien,
-    } as any, {
-      onSuccess: () => toast.success("Đã lưu"),
-    });
+    } as any);
   };
 
   return (
     <tr className="border-b border-border last:border-0">
       <td className="px-4 py-2.5 text-sm">{row.mo_ta}</td>
-      <td className="px-4 py-2 w-20">
+      <td className="px-3 py-2 w-20">
         <Input
-          type="number"
-          value={soLuong || ""}
+          type="number" value={soLuong || ""}
           onChange={(e) => setSoLuong(Number(e.target.value) || 0)}
           onBlur={handleSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
           className="h-6 text-xs text-center px-1"
         />
       </td>
-      <td className="px-4 py-2 w-32">
+      <td className="px-3 py-2 w-36">
         <Input
-          type="number"
-          value={donGia || ""}
+          type="number" value={donGia || ""}
           onChange={(e) => setDonGia(Number(e.target.value) || 0)}
           onBlur={handleSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
           className="h-6 text-xs text-center px-1"
         />
       </td>
-      <td className="px-4 py-2.5 text-right text-sm font-medium">{thanhTien > 0 ? fmt(thanhTien) + " ₫" : "—"}</td>
+      <td className="px-4 py-2.5 text-right text-sm font-medium w-32">
+        {thanhTien > 0 ? fmt(thanhTien) + " ₫" : "—"}
+      </td>
+      <td className="px-3 py-2">
+        <DNTTCell
+          chiPhiId={row.id}
+          doanId={doanId}
+          thanhTien={row.tien_cong_ty}
+          moTa={row.mo_ta || "Chi phí xe"}
+          nhaCungCapId={row.nha_cung_cap_id}
+          loai="xe"
+          dnttList={dnttList}
+          selectedDnttIds={selectedDnttIds}
+          onToggleDntt={onToggleDntt}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <ThanhToanCell chiPhiId={row.id} dnttList={dnttList} />
+      </td>
       <td className="px-2 py-2.5 w-8">
         <Button
           size="icon" variant="ghost"
@@ -78,21 +98,19 @@ function XeRow({ row, doanId }: { row: any; doanId: number }) {
 
 export default function ChiPhiXeSection({ doanId, xe }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: dnttList = [] } = useDNTTList(doanId);
   const upsertMut = useUpsertChiPhi();
+  const [selectedDnttIds, setSelectedDnttIds] = useState<Set<number>>(new Set());
 
   const xeRows = chiPhiRows.filter((r) => r.danh_muc === "xe");
   const total = xeRows.reduce((s, r) => s + r.tien_cong_ty, 0);
 
-  // Tên xe từ doan
   const xeLabel = xe
     ? [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean).join(" · ")
     : null;
 
   const handleAddXe = () => {
-    if (!xeLabel) {
-      toast.warning("Đoàn chưa chọn xe trong phần điều tour");
-      return;
-    }
+    if (!xeLabel) { toast.warning("Đoàn chưa chọn xe trong phần điều tour"); return; }
     upsertMut.mutate({
       doan_id: doanId,
       danh_muc: "xe",
@@ -105,6 +123,14 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       nha_cung_cap_id: xe?.nha_xe?.id ?? null,
     } as any, {
       onSuccess: () => toast.success("Đã thêm dòng xe"),
+    });
+  };
+
+  const handleToggleDntt = (id: number) => {
+    setSelectedDnttIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   };
 
@@ -128,22 +154,29 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
           {xeLabel ? `Bấm "+ Thêm" để ghi nhận chi phí xe.` : "Chưa có xe trong điều tour. Vào tab Điều Tour để chọn xe."}
         </p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/20">
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Mô tả</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-muted-foreground">SL</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-muted-foreground">Đơn giá</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Thành tiền</th>
-              <th className="w-8" />
-            </tr>
-          </thead>
-          <tbody>
-            {xeRows.map((row) => (
-              <XeRow key={row.id} row={row} doanId={doanId} />
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border bg-muted/20">
+                <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Mô tả</th>
+                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">SL</th>
+                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Đơn giá</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Thành tiền</th>
+                <th className="px-3 py-2 text-xs font-medium text-muted-foreground">TT ĐNTT</th>
+                <th className="px-3 py-2 text-xs font-medium text-muted-foreground">TT Thanh toán</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {xeRows.map((row) => (
+                <XeRow
+                  key={row.id} row={row} doanId={doanId}
+                  dnttList={dnttList} selectedDnttIds={selectedDnttIds} onToggleDntt={handleToggleDntt}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { useChiPhiList, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
+import { useChiPhiList, useDNTTList, useUpsertChiPhi, useDeleteChiPhi, type DNTTRow } from "@/hooks/use-chi-phi";
 import { useDonViVisaList, useLoaiVisaList } from "@/hooks/use-visa";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import DNTTCell from "./DNTTCell";
+import ThanhToanCell from "./ThanhToanCell";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -14,7 +16,12 @@ interface Props {
   doanId: number;
 }
 
-function VisaRow({ row, doanId }: { row: any; doanId: number }) {
+function VisaRow({
+  row, doanId, dnttList, selectedDnttIds, onToggleDntt,
+}: {
+  row: any; doanId: number; dnttList: DNTTRow[];
+  selectedDnttIds: Set<number>; onToggleDntt: (id: number) => void;
+}) {
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const [soLuong, setSoLuong] = useState(row.so_luong ?? 1);
@@ -34,15 +41,13 @@ function VisaRow({ row, doanId }: { row: any; doanId: number }) {
       so_luong: soLuong,
       don_gia: donGia,
       tien_cong_ty: thanhTien,
-    } as any, {
-      onSuccess: () => toast.success("Đã lưu"),
-    });
+    } as any);
   };
 
   return (
     <tr className="border-b border-border last:border-0">
       <td className="px-4 py-2.5 text-sm">{row.mo_ta}</td>
-      <td className="px-4 py-2 w-20">
+      <td className="px-3 py-2 w-20">
         <Input
           type="number"
           value={soLuong || ""}
@@ -52,7 +57,7 @@ function VisaRow({ row, doanId }: { row: any; doanId: number }) {
           className="h-6 text-xs text-center px-1"
         />
       </td>
-      <td className="px-4 py-2 w-32">
+      <td className="px-3 py-2 w-36">
         <Input
           type="number"
           value={donGia || ""}
@@ -62,7 +67,25 @@ function VisaRow({ row, doanId }: { row: any; doanId: number }) {
           className="h-6 text-xs text-center px-1"
         />
       </td>
-      <td className="px-4 py-2.5 text-right text-sm font-medium">{thanhTien > 0 ? fmt(thanhTien) + " ₫" : "—"}</td>
+      <td className="px-4 py-2.5 text-right text-sm font-medium w-32">
+        {thanhTien > 0 ? fmt(thanhTien) + " ₫" : "—"}
+      </td>
+      <td className="px-3 py-2">
+        <DNTTCell
+          chiPhiId={row.id}
+          doanId={doanId}
+          thanhTien={row.tien_cong_ty}
+          moTa={row.mo_ta || "Chi phí visa"}
+          nhaCungCapId={row.nha_cung_cap_id}
+          loai="visa"
+          dnttList={dnttList}
+          selectedDnttIds={selectedDnttIds}
+          onToggleDntt={onToggleDntt}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <ThanhToanCell chiPhiId={row.id} dnttList={dnttList} />
+      </td>
       <td className="px-2 py-2.5 w-8">
         <Button
           size="icon" variant="ghost"
@@ -152,10 +175,20 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
 
 export default function ChiPhiVisaSection({ doanId }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: dnttList = [] } = useDNTTList(doanId);
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedDnttIds, setSelectedDnttIds] = useState<Set<number>>(new Set());
 
   const visaRows = chiPhiRows.filter((r) => r.danh_muc === "visa");
   const total = visaRows.reduce((s, r) => s + r.tien_cong_ty, 0);
+
+  const handleToggleDntt = (id: number) => {
+    setSelectedDnttIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -170,22 +203,29 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       </div>
 
       {visaRows.length > 0 && (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/20">
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Loại visa</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-muted-foreground">SL</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-muted-foreground">Đơn giá</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Thành tiền</th>
-              <th className="w-8" />
-            </tr>
-          </thead>
-          <tbody>
-            {visaRows.map((row) => (
-              <VisaRow key={row.id} row={row} doanId={doanId} />
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border bg-muted/20">
+                <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Loại visa</th>
+                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">SL</th>
+                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Đơn giá</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Thành tiền</th>
+                <th className="px-3 py-2 text-xs font-medium text-muted-foreground">TT ĐNTT</th>
+                <th className="px-3 py-2 text-xs font-medium text-muted-foreground">TT Thanh toán</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {visaRows.map((row) => (
+                <VisaRow
+                  key={row.id} row={row} doanId={doanId}
+                  dnttList={dnttList} selectedDnttIds={selectedDnttIds} onToggleDntt={handleToggleDntt}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {visaRows.length === 0 && !showAdd && (
