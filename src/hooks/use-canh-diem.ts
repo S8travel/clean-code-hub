@@ -38,13 +38,14 @@ export function useCanhDiemList() {
 export function useCreateCanhDiem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { ten: string; loai?: string; dia_diem?: string }) => {
+    mutationFn: async (params: { ten: string; loai?: string; dia_diem?: string; nha_cung_cap_id?: number | null }) => {
       const { data, error } = await externalSupabase
         .from("canh_diem")
         .insert({
           ten: params.ten,
           loai: params.loai || "canh_diem",
           dia_diem: params.dia_diem || null,
+          nha_cung_cap_id: params.nha_cung_cap_id || null,
         })
         .select()
         .single();

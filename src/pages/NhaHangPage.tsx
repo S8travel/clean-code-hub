@@ -6,16 +6,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useNhaHangList, useCreateNhaHang, type NhaHang } from "@/hooks/use-nha-hang";
+import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast } from "sonner";
 import NhaHangDetail from "@/components/nha-hang/NhaHangDetail";
 
 export default function NhaHangPage() {
   const { data: list, isLoading } = useNhaHangList();
   const createMut = useCreateNhaHang();
+  const { data: nccList } = useNhaCungCapList();
+  const nccOptions = (nccList ?? []).map((n) => ({ value: String(n.id), label: n.ten }));
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newNccId, setNewNccId] = useState("");
 
   const filtered = (list ?? []).filter(
     (nh) => nh.ten.toLowerCase().includes(search.toLowerCase())
@@ -25,10 +30,15 @@ export default function NhaHangPage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
+    if (!newNccId) {
+      toast.warning("Vui lòng chọn nhà cung cấp");
+      return;
+    }
     try {
-      const created = await createMut.mutateAsync({ ten: newName.trim() });
+      const created = await createMut.mutateAsync({ ten: newName.trim(), nha_cung_cap_id: Number(newNccId) });
       setSelectedId(created.id);
       setNewName("");
+      setNewNccId("");
       setShowCreate(false);
       toast.success("Đã tạo nhà hàng");
     } catch {
@@ -48,18 +58,26 @@ export default function NhaHangPage() {
             </Button>
           </div>
           {showCreate && (
-            <div className="flex gap-1">
+            <div className="space-y-1">
               <Input
                 placeholder="Tên nhà hàng *"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 className="h-7 text-xs"
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 autoFocus
               />
-              <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleCreate} disabled={createMut.isPending}>
-                Tạo
-              </Button>
+              <div className="flex gap-1">
+                <SearchableSelect
+                  options={nccOptions}
+                  value={newNccId}
+                  onChange={setNewNccId}
+                  placeholder="Nhà cung cấp *"
+                  className="h-7 text-xs flex-1"
+                />
+                <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleCreate} disabled={createMut.isPending}>
+                  Tạo
+                </Button>
+              </div>
             </div>
           )}
           <div className="relative">

@@ -10,17 +10,22 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useCanhDiemList, useCreateCanhDiem, type CanhDiem } from "@/hooks/use-canh-diem";
+import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast } from "sonner";
 import CanhDiemDetail from "@/components/canh-diem/CanhDiemDetail";
 
 export default function CanhDiemPage() {
   const { data: list, isLoading } = useCanhDiemList();
   const createMut = useCreateCanhDiem();
+  const { data: nccList } = useNhaCungCapList();
+  const nccOptions = (nccList ?? []).map((n) => ({ value: String(n.id), label: n.ten }));
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newLoai, setNewLoai] = useState("canh_diem");
+  const [newNccId, setNewNccId] = useState("");
 
   const filtered = (list ?? []).filter(
     (cd) => cd.ten.toLowerCase().includes(search.toLowerCase())
@@ -30,10 +35,15 @@ export default function CanhDiemPage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
+    if (!newNccId) {
+      toast.warning("Vui lòng chọn nhà cung cấp");
+      return;
+    }
     try {
-      const created = await createMut.mutateAsync({ ten: newName.trim(), loai: newLoai });
+      const created = await createMut.mutateAsync({ ten: newName.trim(), loai: newLoai, nha_cung_cap_id: Number(newNccId) });
       setSelectedId(created.id);
       setNewName("");
+      setNewNccId("");
       setShowCreate(false);
       toast.success("Đã tạo cảnh điểm");
     } catch {
@@ -59,17 +69,23 @@ export default function CanhDiemPage() {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 className="h-7 text-xs"
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 autoFocus
               />
+              <Select value={newLoai} onValueChange={setNewLoai}>
+                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="canh_diem">Cảnh điểm</SelectItem>
+                  <SelectItem value="dich_vu">Dịch vụ</SelectItem>
+                </SelectContent>
+              </Select>
               <div className="flex gap-1">
-                <Select value={newLoai} onValueChange={setNewLoai}>
-                  <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="canh_diem">Cảnh điểm</SelectItem>
-                    <SelectItem value="dich_vu">Dịch vụ</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={nccOptions}
+                  value={newNccId}
+                  onChange={setNewNccId}
+                  placeholder="Nhà cung cấp *"
+                  className="h-7 text-xs flex-1"
+                />
                 <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleCreate} disabled={createMut.isPending}>
                   Tạo
                 </Button>

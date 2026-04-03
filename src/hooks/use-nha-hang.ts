@@ -54,7 +54,7 @@ export function useNhaHangList() {
 export function useCreateNhaHang() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { ten: string; dia_diem?: string; email?: string }) => {
+    mutationFn: async (payload: { ten: string; dia_diem?: string; email?: string; nha_cung_cap_id?: number | null }) => {
       const { data, error } = await externalSupabase
         .from("nha_hang")
         .insert(payload)
