@@ -135,7 +135,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
         <h2 className="text-base font-semibold border-b border-border pb-2">
           Hướng dẫn viên
         </h2>
-        <ChiPhiHDVSection doanId={doanId} />
+        <ChiPhiHDVSection doanId={doanId} doan={doan} />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { format } from "date-fns";
-import { Plus, Ban, CheckCircle, CreditCard } from "lucide-react";
+import { format, differenceInDays, parseISO } from "date-fns";
+import { Plus, Ban, CheckCircle, CreditCard, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,17 +25,24 @@ import {
 import { useUpsertChiPhi } from "@/hooks/use-chi-phi";
 import { cn } from "@/lib/utils";
 
+const NDT_TIP_CO_TL = 150;
+const NDT_TIP_KHONG_TL = 300;
+
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 interface Props {
   doanId: number;
+  doan?: any;
 }
 
-export default function ChiPhiHDVSection({ doanId }: Props) {
+export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
   const [showQuyetToan, setShowQuyetToan] = useState(false);
   const [showThemChiPhi, setShowThemChiPhi] = useState(false);
+
+  // Tip state
+  const [tyGia, setTyGia] = useState<number>(3500);
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
@@ -187,6 +194,9 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
         </div>
       )}
 
+      {/* ── Phải thu ── */}
+      <TipSection doan={doan} tyGia={tyGia} onTyGiaChange={setTyGia} />
+
       {/* Modals */}
       {showTamUng && (
         <CreateHDVPaymentModal
@@ -214,6 +224,161 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
     </div>
   );
 }
+
+// ── Tip section ───────────────────────────────────────────────────────────────
+
+interface ExtraRow { id: number; moTa: string; soNDT: number; tyGia: number }
+
+function TipSection({ doan, tyGia, onTyGiaChange }: {
+  doan?: any;
+  tyGia: number;
+  onTyGiaChange: (v: number) => void;
+}) {
+  const soKhach = (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
+    (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) || doan?.so_khach || 0;
+
+  const soNgay = doan?.ngay_di && doan?.ngay_ve
+    ? Math.max(1, differenceInDays(parseISO(doan.ngay_ve), parseISO(doan.ngay_di)) + 1)
+    : 0;
+
+  const coTL = (doan?.so_khach_tl ?? 0) > 0;
+  const ndtPerNgay = coTL ? NDT_TIP_CO_TL : NDT_TIP_KHONG_TL;
+  const tongNDT = soKhach * soNgay * ndtPerNgay;
+  const tongVND = tongNDT * tyGia;
+
+  const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
+  const nextId = () => Date.now();
+
+  const addRow = () => setExtraRows((prev) => [...prev, { id: nextId(), moTa: "", soNDT: 0, tyGia }]);
+  const removeRow = (id: number) => setExtraRows((prev) => prev.filter((r) => r.id !== id));
+  const updateRow = (id: number, field: keyof Omit<ExtraRow, "id">, val: string | number) =>
+    setExtraRows((prev) => prev.map((r) => r.id === id ? { ...r, [field]: val } : r));
+
+  const totalVND = tongVND + extraRows.reduce((s, r) => s + r.soNDT * r.tyGia, 0);
+
+  if (!soKhach || !soNgay) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center justify-between">
+        <p className="text-sm font-semibold">💰 Phải thu</p>
+        <div className="flex items-center gap-3">
+          {totalVND > 0 && (
+            <span className="text-xs text-muted-foreground">Tổng: {fmt(totalVND)} ₫</span>
+          )}
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addRow}>
+            <Plus className="h-3 w-3 mr-1" /> Thêm
+          </Button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
+              <th className="text-left px-4 py-2.5">Mục</th>
+              <th className="text-center px-3 py-2.5">Khách</th>
+              <th className="text-center px-3 py-2.5">Ngày</th>
+              <th className="text-center px-3 py-2.5">NDT/khách/ngày</th>
+              <th className="text-right px-3 py-2.5">Tổng NDT</th>
+              <th className="text-center px-3 py-2.5">Tỷ giá</th>
+              <th className="text-right px-4 py-2.5">Thành tiền VND</th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {/* Tip row — cố định */}
+            <tr className="hover:bg-muted/20">
+              <td className="px-4 py-2.5 font-medium">
+                Tip
+                <span className={cn(
+                  "ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium",
+                  coTL ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700",
+                )}>
+                  {coTL ? "Có T/L" : "Không T/L"}
+                </span>
+              </td>
+              <td className="px-3 py-2.5 text-center text-muted-foreground">{soKhach}</td>
+              <td className="px-3 py-2.5 text-center text-muted-foreground">{soNgay}</td>
+              <td className="px-3 py-2.5 text-center font-medium">{ndtPerNgay} NDT</td>
+              <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">{fmt(tongNDT)} NDT</td>
+              <td className="px-3 py-2.5">
+                <div className="flex justify-center">
+                  <Input
+                    type="number"
+                    value={tyGia || ""}
+                    onChange={(e) => onTyGiaChange(Number(e.target.value) || 0)}
+                    className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
+                    placeholder="3500"
+                  />
+                </div>
+              </td>
+              <td className="px-4 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
+                {tyGia > 0 ? `${fmt(tongVND)} ₫` : "—"}
+              </td>
+              <td />
+            </tr>
+
+            {/* Extra rows */}
+            {extraRows.map((row) => (
+              <tr key={row.id} className="hover:bg-muted/20">
+                <td className="px-4 py-2">
+                  <Input
+                    value={row.moTa}
+                    onChange={(e) => updateRow(row.id, "moTa", e.target.value)}
+                    className="h-6 text-xs px-1.5"
+                    placeholder="Mô tả khoản thu..."
+                    autoFocus
+                  />
+                </td>
+                <td className="px-3 py-2 text-center text-muted-foreground">—</td>
+                <td className="px-3 py-2 text-center text-muted-foreground">—</td>
+                <td className="px-3 py-2">
+                  <div className="flex justify-center">
+                    <Input
+                      type="number"
+                      value={row.soNDT || ""}
+                      onChange={(e) => updateRow(row.id, "soNDT", Number(e.target.value) || 0)}
+                      className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
+                      placeholder="0"
+                    />
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+                  {row.soNDT > 0 ? `${fmt(row.soNDT)} NDT` : "—"}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex justify-center">
+                    <Input
+                      type="number"
+                      value={row.tyGia || ""}
+                      onChange={(e) => updateRow(row.id, "tyGia", Number(e.target.value) || 0)}
+                      className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
+                      placeholder="3500"
+                    />
+                  </div>
+                </td>
+                <td className="px-4 py-2 text-right font-semibold text-primary whitespace-nowrap">
+                  {row.soNDT > 0 && row.tyGia > 0 ? `${fmt(row.soNDT * row.tyGia)} ₫` : "—"}
+                </td>
+                <td className="px-2 py-2">
+                  <Button
+                    size="icon" variant="ghost"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeRow(row.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function HDVDNTTCard({ d, doanId }: { d: HDVDNTTRow; doanId: number }) {
   const approveMut = useApproveDNTT();
