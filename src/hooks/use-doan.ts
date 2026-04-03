@@ -117,12 +117,22 @@ export function useXeList() {
   return useQuery({
     queryKey: ["xe_list"],
     queryFn: async () => {
-      const { data, error } = await externalSupabase
+      const { data: loaiXe, error: e1 } = await externalSupabase
         .from("nha_xe_loai_xe")
-        .select("id, ten_xe, so_cho, ghi_chu, nha_xe:nha_xe_id(id, ten)")
+        .select("id, ten_xe, so_cho, ghi_chu, nha_xe_id")
         .order("ten_xe");
-      if (error) throw error;
-      return data as any[];
+      if (e1) throw e1;
+
+      const { data: nhaXe, error: e2 } = await externalSupabase
+        .from("nha_xe")
+        .select("id, ten");
+      if (e2) throw e2;
+
+      const nhaXeMap = Object.fromEntries((nhaXe ?? []).map((n: any) => [n.id, n.ten]));
+      return (loaiXe ?? []).map((x: any) => ({
+        ...x,
+        nha_xe: { id: x.nha_xe_id, ten: nhaXeMap[x.nha_xe_id] ?? "" },
+      })) as any[];
     },
   });
 }
@@ -175,16 +185,12 @@ export function useDoanList() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("doan")
-        .select(`
-          *,
-          agents:agent_id(id, ten),
-          agent_huy:agent_huy_id(id, ten),
-          dia_diem:dia_diem_id(ten),
-          huong_dan_vien:huong_dan_vien_id(id, ten),
-          xe:xe_id(id, ten_nha_xe, so_cho, loai_xe)
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error("useDoanList error:", JSON.stringify(error));
+        throw error;
+      }
       return data;
     },
   });
