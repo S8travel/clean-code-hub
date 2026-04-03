@@ -5,6 +5,7 @@ import ChiPhiKSSection from "./ChiPhiKSSection";
 import ChiPhiNHSection from "./ChiPhiNHSection";
 import ChiPhiDVSection from "./ChiPhiDVSection";
 import ChiPhiHDVSection from "./ChiPhiHDVSection";
+import ChiPhiBaoHiemSection from "./ChiPhiBaoHiemSection";
 import { cn } from "@/lib/utils";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -41,7 +42,10 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
     const totalDV = activeRows
       .filter((r) => r.danh_muc === "canh_diem" && r.tien_cong_ty > 0)
       .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const total = totalKS + totalNH + totalDV;
+    const totalBH = activeRows
+      .filter((r) => r.danh_muc === "bao_hiem")
+      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
+    const total = totalKS + totalNH + totalDV + totalBH;
 
     const thucTeKS = activeRows
       .filter((r) => r.danh_muc === "khach_san")
@@ -49,7 +53,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
     const thucTeNH = activeRows
       .filter((r) => r.danh_muc === "nha_hang")
       .reduce((s, r) => s + (r.thanh_tien_thuc_te ?? r.thanh_tien), 0);
-    const thucTe = thucTeKS + thucTeNH + totalDV;
+    const thucTe = thucTeKS + thucTeNH + totalDV + totalBH;
     const daDieuChinh = thucTe !== total;
 
     const activeDntts = dnttList.filter(
@@ -105,6 +109,13 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
         <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} tenDoan={doan?.ten_doan || ""} />
 
         <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_bat_dau} />
+
+        <ChiPhiBaoHiemSection
+          doanId={doanId}
+          soKhach={soKhach}
+          ngayDi={doan?.ngay_di ?? null}
+          ngayVe={doan?.ngay_ve ?? null}
+        />
       </div>
 
       {/* ── HDV thanh toán ── */}
