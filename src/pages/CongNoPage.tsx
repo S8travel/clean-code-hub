@@ -24,8 +24,9 @@ const loaiLabel: Record<string, { text: string; color: string }> = {
 };
 
 const statusBadge: Record<string, { text: string; cls: string }> = {
-  cong_no: { text: "Công nợ", cls: "bg-purple-100 text-purple-700" },
-  hoan_tien: { text: "Hoàn tiền", cls: "bg-blue-100 text-blue-700" },
+  cong_no:    { text: "Công nợ",        cls: "bg-purple-100 text-purple-700" },
+  hoan_tien:  { text: "Hoàn tiền",      cls: "bg-blue-100 text-blue-700" },
+  da_can_tru: { text: "Đã cấn trừ hết", cls: "bg-green-100 text-green-700" },
 };
 
 export default function CongNoPage() {
@@ -33,6 +34,7 @@ export default function CongNoPage() {
   const [doanId, setDoanId] = useState<string>("");
   const [loai, setLoai] = useState("");
   const [trangThai, setTrangThai] = useState("all"); // "cong_no" | "hoan_tien" | "all"
+  const [canTruFilter, setCanTruFilter] = useState("all"); // "all" | "chua" | "da"
   const [nccId, setNccId] = useState<string>("");
   const [search, setSearch] = useState("");
 
@@ -63,12 +65,27 @@ export default function CongNoPage() {
     return [...seen.entries()].map(([value, label]) => ({ value, label }));
   }, [allRows]);
 
-  // Lọc client-side: chỉ lấy cong_no và hoan_tien
+  // Lọc client-side: cong_no, hoan_tien, và da_can_tru
   const rows = useMemo(() => {
     let filtered = allRows.filter((r) =>
-      r.trang_thai_thanh_toan === "cong_no" || r.trang_thai_thanh_toan === "hoan_tien"
+      r.trang_thai_thanh_toan === "cong_no" ||
+      r.trang_thai_thanh_toan === "hoan_tien" ||
+      r.trang_thai_thanh_toan === "da_can_tru"
     );
-    if (trangThai && trangThai !== "all") filtered = filtered.filter((r) => r.trang_thai_thanh_toan === trangThai);
+    // Lọc theo loại công nợ / hoàn tiền
+    if (trangThai === "cong_no") {
+      filtered = filtered.filter((r) =>
+        r.trang_thai_thanh_toan === "cong_no" || r.trang_thai_thanh_toan === "da_can_tru"
+      );
+    } else if (trangThai === "hoan_tien") {
+      filtered = filtered.filter((r) => r.trang_thai_thanh_toan === "hoan_tien");
+    }
+    // Lọc trạng thái cấn trừ (chỉ áp dụng cho công nợ)
+    if (canTruFilter === "chua") {
+      filtered = filtered.filter((r) => r.trang_thai_thanh_toan === "cong_no");
+    } else if (canTruFilter === "da") {
+      filtered = filtered.filter((r) => r.trang_thai_thanh_toan === "da_can_tru");
+    }
     if (nccId) filtered = filtered.filter((r) => String(r.nha_cung_cap_id) === nccId);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -80,21 +97,27 @@ export default function CongNoPage() {
       );
     }
     return filtered;
-  }, [allRows, trangThai, nccId, search]);
+  }, [allRows, trangThai, canTruFilter, nccId, search]);
 
   const metrics = useMemo(() => {
-    const congNo = rows.filter((r) => r.trang_thai_thanh_toan === "cong_no");
-    const hoanTien = rows.filter((r) => r.trang_thai_thanh_toan === "hoan_tien");
-    // so_tien_con_lai = null khi mới hủy (useCancelDNTT reset), được set khi cấn trừ một phần
+    const base = allRows.filter((r) =>
+      r.trang_thai_thanh_toan === "cong_no" ||
+      r.trang_thai_thanh_toan === "hoan_tien" ||
+      r.trang_thai_thanh_toan === "da_can_tru"
+    );
+    const congNo = base.filter((r) => r.trang_thai_thanh_toan === "cong_no");
+    const hoanTien = base.filter((r) => r.trang_thai_thanh_toan === "hoan_tien");
+    const daCanTru = base.filter((r) => r.trang_thai_thanh_toan === "da_can_tru");
     const conLai = (r: any) => r.so_tien_con_lai ?? r.so_tien;
     return {
-      total: rows.length,
+      total: base.length,
       tongCongNo: congNo.reduce((s, r) => s + conLai(r), 0),
       tongHoanTien: hoanTien.reduce((s, r) => s + conLai(r), 0),
       demCongNo: congNo.length,
       demHoanTien: hoanTien.length,
+      demDaCanTru: daCanTru.length,
     };
-  }, [rows]);
+  }, [allRows]);
 
   const doanSelectOpts = doanOpts.map((d: any) => ({
     value: String(d.id),
@@ -105,6 +128,7 @@ export default function CongNoPage() {
     setDoanId("");
     setLoai("");
     setTrangThai("all");
+    setCanTruFilter("all");
     setNccId("");
     setSearch("");
   };
@@ -117,11 +141,12 @@ export default function CongNoPage() {
       </p>
 
       {/* Metrics */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {[
           { label: "Tổng khoản", value: metrics.total, cls: "text-foreground", isMoney: false },
-          { label: "Công nợ", value: metrics.demCongNo, cls: "text-purple-600", isMoney: false },
-          { label: "Tổng công nợ", value: metrics.tongCongNo, cls: "text-purple-600", isMoney: true },
+          { label: "Công nợ chưa CT", value: metrics.demCongNo, cls: "text-purple-600", isMoney: false },
+          { label: "Đã cấn trừ hết", value: metrics.demDaCanTru, cls: "text-green-600", isMoney: false },
+          { label: "Tổng công nợ còn", value: metrics.tongCongNo, cls: "text-purple-600", isMoney: true },
           { label: "Tổng hoàn tiền", value: metrics.tongHoanTien, cls: "text-blue-600", isMoney: true },
         ].map((m) => (
           <Card key={m.label}>
@@ -154,6 +179,16 @@ export default function CongNoPage() {
             <SelectItem value="all">Tất cả</SelectItem>
             <SelectItem value="cong_no">Công nợ</SelectItem>
             <SelectItem value="hoan_tien">Hoàn tiền</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={canTruFilter} onValueChange={setCanTruFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Cấn trừ" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả cấn trừ</SelectItem>
+            <SelectItem value="chua">Chưa cấn trừ hết</SelectItem>
+            <SelectItem value="da">Đã cấn trừ hết</SelectItem>
           </SelectContent>
         </Select>
         <div className="w-56">

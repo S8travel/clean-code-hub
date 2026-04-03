@@ -282,7 +282,10 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
       }),
       new TableRow({
         children: sigWidths.map((w) =>
-          cell([p("", { size: 36 })], { width: w, borders: NO_BORDERS }),
+          cell(
+            [p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 })],
+            { width: w, borders: NO_BORDERS },
+          ),
         ),
       }),
       new TableRow({

@@ -53,6 +53,7 @@ export interface DNTTRow {
   ghi_chu: string | null;
   ref_loai: string | null;
   ref_id: number | null;
+  ngay_can_thanh_toan: string | null;
   created_at: string;
   // joined
   ten_doan?: string;

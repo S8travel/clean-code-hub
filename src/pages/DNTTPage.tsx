@@ -312,6 +312,7 @@ export default function DNTTPage() {
               <TableHead className="min-w-[180px]">Mô tả</TableHead>
               <TableHead className="min-w-[150px]">Nhà cung cấp</TableHead>
               <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
+              <TableHead className="w-[90px]">Ngày cần TT</TableHead>
               <TableHead className="min-w-[110px]">ĐNTT</TableHead>
               <TableHead className="min-w-[110px]">Thanh toán</TableHead>
               <TableHead className="w-[90px]">Ngày tạo</TableHead>
@@ -320,9 +321,9 @@ export default function DNTTPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
             ) : rows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const db = duyetBadge[row.trang_thai_duyet] || duyetBadge.cho_duyet;
@@ -351,6 +352,11 @@ export default function DNTTPage() {
                         Cọc {row.ty_le_coc}%
                       </span>
                     )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {row.ngay_can_thanh_toan
+                      ? format(new Date(row.ngay_can_thanh_toan), "dd/MM/yyyy")
+                      : "—"}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">

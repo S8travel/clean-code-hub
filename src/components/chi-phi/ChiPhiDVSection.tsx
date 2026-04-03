@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, subDays, parseISO, addDays } from "date-fns";
-import { Check, Pencil, X, Ban, SlidersHorizontal } from "lucide-react";
+import { Check, Pencil, Printer, X, Ban, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,8 @@ import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi } from "@/ho
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
+import { exportDNTTNHWordFromData, type NHDocEntry } from "@/lib/export-dntt-nh-word";
+import { useCurrentUserName } from "@/hooks/use-doan";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -54,11 +56,13 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]" }: {
 export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
+  const { data: currentUserName = "" } = useCurrentUserName();
   const insertDNTT = useInsertDNTT();
   const updateDNTT = useUpdateDNTT();
   const upsertMut = useUpsertChiPhi();
   const cancelMut = useCancelDNTT();
   const adjustMut = useCreateAdjustment();
+  const [batchPrinting, setBatchPrinting] = useState(false);
 
   // Inline edit state for DNTT amount
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -240,13 +244,109 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
     );
   };
 
+  // ── Print handler ─────────────────────────────────────────────────────────
+
+  const handlePrint = async () => {
+    if (sortedDays.length === 0) return;
+    setBatchPrinting(true);
+    try {
+      const entries: NHDocEntry[] = [];
+      const canTruShownByNcc: Record<number, boolean> = {};
+
+      for (const [day, rows] of sortedDays) {
+        for (const row of rows) {
+          const chiPhiId = row.id;
+          if (!chiPhiId) continue;
+
+          const allDntts = dnttList.filter(
+            (d) => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId,
+          );
+          const activeDntts = allDntts.filter(
+            (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
+          );
+          if (activeDntts.length === 0) continue;
+
+          const activeDntt = activeDntts[0];
+          const thanhTien = row.tien_cong_ty;
+
+          const soCoc = allDntts
+            .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.trang_thai_thanh_toan === "da_tt")
+            .reduce((s, d) => s + d.so_tien, 0);
+
+          const nccId = row.nha_cung_cap_id ?? null;
+          let canTruAmount = 0;
+          if (nccId && !canTruShownByNcc[nccId]) {
+            canTruAmount = dnttList
+              .filter(
+                (d) =>
+                  d.trang_thai_thanh_toan === "can_tru" &&
+                  d.trang_thai_duyet === "da_duyet" &&
+                  d.nha_cung_cap_id === nccId,
+              )
+              .reduce((s, d) => s + d.so_tien, 0);
+            if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
+          }
+
+          const soTienConTT = Math.max(0, thanhTien - soCoc - canTruAmount);
+          const ngayDisplay = getDateLabel(day > 0 ? day : null);
+
+          entries.push({
+            ngay_date: ngayDisplay,
+            ten_nh: row.mo_ta || "Dịch vụ",
+            so_khach: row.so_luong,
+            foc: null,
+            items: [{ so_luong: row.so_luong, don_gia: row.don_gia, ghi_chu: "" }],
+            ncc: activeDntt.ten_nha_cung_cap
+              ? {
+                  ten: activeDntt.ten_nha_cung_cap || undefined,
+                  so_tai_khoan: activeDntt.so_tai_khoan || undefined,
+                  ngan_hang: activeDntt.ngan_hang || undefined,
+                }
+              : null,
+            so_tien_coc: soCoc,
+            can_tru: canTruAmount,
+            so_tien_con_tt: soTienConTT,
+          });
+        }
+      }
+
+      if (entries.length === 0) {
+        toast.error("Không có dịch vụ nào có ĐNTT để xuất");
+        return;
+      }
+
+      await exportDNTTNHWordFromData({
+        doan: { ten_doan: tenDoan || String(doanId) },
+        entries,
+        nguoiDeNghi: currentUserName,
+      });
+      toast.success("Đã xuất file Word");
+    } catch (err: any) {
+      toast.error("Lỗi xuất file: " + (err?.message || ""));
+    } finally {
+      setBatchPrinting(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="rounded-lg border border-border overflow-hidden">
       <div className="px-4 py-2.5 bg-muted/40 border-b border-border flex items-center justify-between">
         <p className="text-sm font-semibold">🎫 Dịch vụ</p>
-        <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={handlePrint}
+            disabled={batchPrinting}
+          >
+            <Printer className="h-3 w-3" />
+            {batchPrinting ? "Đang xuất..." : "In ĐNTT"}
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">

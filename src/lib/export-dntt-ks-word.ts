@@ -246,7 +246,10 @@ export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
       // Row 3: empty space for signature
       new TableRow({
         children: sigWidths.map((w) =>
-          cell([p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 })], { width: w, borders: NO_BORDERS })
+          cell(
+            [p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 })],
+            { width: w, borders: NO_BORDERS }
+          )
         ),
       }),
       // Row 4: names
