@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { Plus, Ban, CheckCircle, CreditCard, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,7 +34,7 @@ const NDT_TIP_KHONG_TL = 300;
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-type LoaiTien = "NDT" | "USD" | "VND";
+type LoaiTien = "NDT" | "NT$" | "US$" | "USD" | "VND";
 
 interface Props {
   doanId: number;
@@ -213,6 +214,7 @@ function ChiPhiUngTable({ doanId, chiPhiItems }: {
   doanId: number;
   chiPhiItems: import("@/hooks/use-chi-phi-hdv").HDVChiPhiItem[];
 }) {
+  const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
@@ -227,6 +229,8 @@ function ChiPhiUngTable({ doanId, chiPhiItems }: {
       return { ...prev, [id]: { ...cur, [field]: val } };
     });
 
+  const invalidateHDV = () => qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
+
   const handleSave = (item: typeof chiPhiItems[0]) => {
     const local = editRow[item.id];
     if (!local) return;
@@ -235,13 +239,16 @@ function ChiPhiUngTable({ doanId, chiPhiItems }: {
       return;
     }
     upsertMut.mutate({ id: item.id, doan_id: doanId, so_luong: local.so_luong, don_gia: local.don_gia } as any, {
-      onSuccess: () => setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; }),
+      onSuccess: () => {
+        setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+        invalidateHDV();
+      },
     });
   };
 
   const handleDelete = (item: typeof chiPhiItems[0]) => {
     deleteMut.mutate({ id: item.id, doanId }, {
-      onSuccess: () => toast.success("Đã xóa chi phí"),
+      onSuccess: () => { invalidateHDV(); toast.success("Đã xóa chi phí"); },
       onError: (e: any) => toast.error(e?.message || "Lỗi xóa"),
     });
   };
@@ -321,7 +328,7 @@ function ChiPhiUngTable({ doanId, chiPhiItems }: {
 
 interface ExtraRow { id: number; moTa: string; soTien: number; loaiTien: LoaiTien; tyGia: number }
 
-const LOAI_TIEN_LABEL: Record<LoaiTien, string> = { NDT: "NDT", USD: "USD", VND: "VND" };
+const LOAI_TIEN_LABEL: Record<LoaiTien, string> = { NDT: "NDT", "NT$": "NT$", "US$": "US$", USD: "USD", VND: "VND" };
 
 function TipSection({ doan, tyGia, onTyGiaChange }: {
   doan?: any;
@@ -336,9 +343,12 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
     : 0;
 
   const coTL = (doan?.so_khach_tl ?? 0) > 0;
-  const ndtPerNgay = coTL ? NDT_TIP_CO_TL : NDT_TIP_KHONG_TL;
-  const tongNDT = soKhach * soNgay * ndtPerNgay;
-  const tongVND = tongNDT * tyGia;
+  const defaultTipDonGia = coTL ? NDT_TIP_CO_TL : NDT_TIP_KHONG_TL;
+  const [tipDonGia, setTipDonGia] = useState(defaultTipDonGia);
+  const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>("NDT");
+
+  const tongTip = soKhach * soNgay * tipDonGia;
+  const tongVND = tongTip * tyGia;
 
   const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
   const nextId = () => Date.now();
@@ -381,7 +391,7 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
               <th className="text-left px-4 py-2.5">Mục</th>
               <th className="text-center px-3 py-2.5">Khách</th>
               <th className="text-center px-3 py-2.5">Ngày</th>
-              <th className="text-center px-3 py-2.5">Đơn giá</th>
+              <th className="text-center px-3 py-2.5">Đơn giá/khách/ngày</th>
               <th className="text-right px-3 py-2.5">Tổng</th>
               <th className="text-center px-3 py-2.5">Tỷ giá</th>
               <th className="text-right px-4 py-2.5">Thành tiền VND</th>
@@ -389,7 +399,7 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {/* Tip row — cố định, luôn NDT */}
+            {/* Tip row */}
             <tr className="hover:bg-muted/20">
               <td className="px-4 py-2.5 font-medium">
                 Tip
@@ -402,8 +412,31 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
               </td>
               <td className="px-3 py-2.5 text-center text-muted-foreground">{soKhach}</td>
               <td className="px-3 py-2.5 text-center text-muted-foreground">{soNgay}</td>
-              <td className="px-3 py-2.5 text-center font-medium">{ndtPerNgay} NDT/khách/ngày</td>
-              <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">{fmt(tongNDT)} NDT</td>
+              <td className="px-3 py-2 text-center">
+                <div className="flex items-center gap-1 justify-center">
+                  <Input
+                    type="number"
+                    value={tipDonGia || ""}
+                    onChange={(e) => setTipDonGia(Number(e.target.value) || 0)}
+                    className="h-6 text-xs px-1.5 py-0 text-center w-[60px]"
+                  />
+                  <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)}>
+                    <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NDT">NDT</SelectItem>
+                      <SelectItem value="NT$">NT$</SelectItem>
+                      <SelectItem value="US$">US$</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="VND">VND</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
+                {tongTip > 0 ? `${fmt(tongTip)} ${LOAI_TIEN_LABEL[tipLoaiTien]}` : "—"}
+              </td>
               <td className="px-3 py-2.5">
                 <div className="flex justify-center">
                   <Input
@@ -452,6 +485,8 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="NDT">NDT</SelectItem>
+                          <SelectItem value="NT$">NT$</SelectItem>
+                          <SelectItem value="US$">US$</SelectItem>
                           <SelectItem value="USD">USD</SelectItem>
                           <SelectItem value="VND">VND</SelectItem>
                         </SelectContent>
@@ -592,6 +627,7 @@ interface CreateModalProps {
 }
 
 function ThemChiPhiHDVModal({ doanId, onClose }: { doanId: number; onClose: () => void }) {
+  const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const [moTa, setMoTa] = useState("");
   const [soLuong, setSoLuong] = useState(1);
@@ -613,6 +649,7 @@ function ThemChiPhiHDVModal({ doanId, onClose }: { doanId: number; onClose: () =
         tien_cong_ty: 0,
         tien_hdv: thanhTien,
       } as any);
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
       toast.success("Đã thêm chi phí");
       onClose();
     } catch {
