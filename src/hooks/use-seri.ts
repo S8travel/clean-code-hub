@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
+import type { DayLocal, DayItemLocal } from "@/hooks/use-dieu-tour";
 
 // ── Types ──
 
@@ -317,6 +318,100 @@ export function useApplySeriToDoan() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["doan_ngay", vars.doanId] });
       qc.invalidateQueries({ queryKey: ["doan_ngay_item", vars.doanId] });
+    },
+  });
+}
+
+// ── Convert seri DB rows → DayLocal[] for DayScheduleTable ──
+export function seriToDayLocals(ngayRows: SeriNgay[], items: SeriNgayItem[]): DayLocal[] {
+  const itemsByNgayId = new Map<number, SeriNgayItem[]>();
+  for (const it of items) {
+    if (!itemsByNgayId.has(it.seri_ngay_id)) itemsByNgayId.set(it.seri_ngay_id, []);
+    itemsByNgayId.get(it.seri_ngay_id)!.push(it);
+  }
+  return ngayRows.map((sn) => {
+    const myItems: DayItemLocal[] = (itemsByNgayId.get(sn.id) ?? [])
+      .sort((a, b) => a.thu_tu - b.thu_tu)
+      .map((it) => ({ id: it.id, canh_diem_id: it.canh_diem_id, thu_tu: it.thu_tu, ghi_chu: it.ghi_chu || "" }));
+    return {
+      id: sn.id,
+      ngay_so: sn.ngay_so,
+      ngay_date: "2000-01-01", // fake — không dùng khi có dayLabel
+      thu: "",
+      thanh_pho: sn.thanh_pho || "",
+      an_trua_nha_hang_id: sn.an_trua_nha_hang_id,
+      an_toi_nha_hang_id: sn.an_toi_nha_hang_id,
+      an_trua_set_menu_id: sn.an_trua_set_menu_id,
+      an_toi_set_menu_id: sn.an_toi_set_menu_id,
+      khach_san_id: sn.khach_san_id,
+      ks_ma_code: sn.ks_ma_code || "",
+      ks_loai_phong: sn.ks_loai_phong || "",
+      items: myItems,
+    };
+  });
+}
+
+// ── Save toàn bộ seri (xóa cũ, insert mới) ──
+export function useSaveSeri() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ seriId, days }: { seriId: number; days: DayLocal[] }) => {
+      // Xóa toàn bộ ngày cũ (cascade xóa items)
+      const { error: delErr } = await externalSupabase
+        .from("seri_tour_ngay")
+        .delete()
+        .eq("seri_id", seriId);
+      if (delErr) throw delErr;
+
+      if (days.length === 0) return;
+
+      // Insert ngày mới
+      const ngayInserts = days.map((d) => ({
+        seri_id: seriId,
+        ngay_so: d.ngay_so,
+        thanh_pho: d.thanh_pho || null,
+        an_trua_nha_hang_id: d.an_trua_nha_hang_id,
+        an_trua_set_menu_id: d.an_trua_set_menu_id,
+        an_toi_nha_hang_id: d.an_toi_nha_hang_id,
+        an_toi_set_menu_id: d.an_toi_set_menu_id,
+        khach_san_id: d.khach_san_id,
+        ks_loai_phong: d.ks_loai_phong || null,
+        ks_ma_code: d.ks_ma_code || null,
+      }));
+      const { data: insertedNgay, error: ngayErr } = await externalSupabase
+        .from("seri_tour_ngay")
+        .insert(ngayInserts)
+        .select("id, ngay_so");
+      if (ngayErr) throw ngayErr;
+
+      // Insert items
+      const ngaySoToId = new Map<number, number>(
+        (insertedNgay ?? []).map((r: any) => [r.ngay_so, r.id])
+      );
+      const itemInserts: any[] = [];
+      days.forEach((d) => {
+        const ngayId = ngaySoToId.get(d.ngay_so);
+        if (!ngayId) return;
+        d.items.forEach((item, idx) => {
+          if (!item.canh_diem_id) return;
+          itemInserts.push({
+            seri_ngay_id: ngayId,
+            canh_diem_id: item.canh_diem_id,
+            thu_tu: idx,
+            ghi_chu: item.ghi_chu || null,
+          });
+        });
+      });
+      if (itemInserts.length > 0) {
+        const { error: itemErr } = await externalSupabase
+          .from("seri_tour_ngay_item")
+          .insert(itemInserts);
+        if (itemErr) throw itemErr;
+      }
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["seri_tour_ngay", vars.seriId] });
+      qc.invalidateQueries({ queryKey: ["seri_tour_ngay_item", vars.seriId] });
     },
   });
 }

@@ -10,9 +10,10 @@ interface Props {
   canhDiemList: CanhDiemItem[];
   nhaHangList: NhaHangItem[];
   khachSanList: KhachSanItem[];
+  getDayLabel?: (day: DayLocal, index: number) => string;
 }
 
-export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList }: Props) {
+export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel }: Props) {
   const canhDiemOptions = useMemo(() =>
     canhDiemList.map((c) => ({
       value: String(c.id),
@@ -94,6 +95,7 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
             canhDiemOptions={canhDiemOptions}
             nhaHangOptions={nhaHangOptions}
             khachSanOptions={khachSanOptions}
+            dayLabel={getDayLabel ? getDayLabel(day, i) : undefined}
           />
         ))}
       </div>

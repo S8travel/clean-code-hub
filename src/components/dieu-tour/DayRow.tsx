@@ -20,6 +20,7 @@ interface Props {
   canhDiemOptions: { value: string; label: string }[];
   nhaHangOptions: { value: string; label: string }[];
   khachSanOptions: { value: string; label: string }[];
+  dayLabel?: string;
 }
 
 function formatDayDisplay(dateStr: string) {
@@ -99,7 +100,7 @@ function SetMenuSelect({
   );
 }
 
-export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions }: Props) {
+export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel }: Props) {
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
 
@@ -111,8 +112,14 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
     <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border-b border-border min-h-[100px] print-avoid-break">
       {/* NGÀY */}
       <div className="p-1.5 bg-muted/40 border-r border-border flex flex-col items-center justify-start pt-3">
-        <span className="text-[13px] font-bold tabular-nums leading-tight">{formatDayDisplay(day.ngay_date)}</span>
-        <span className="text-[11px] text-muted-foreground">{day.thu}</span>
+        {dayLabel ? (
+          <span className="text-[12px] font-bold leading-tight text-center">{dayLabel}</span>
+        ) : (
+          <>
+            <span className="text-[13px] font-bold tabular-nums leading-tight">{formatDayDisplay(day.ngay_date)}</span>
+            <span className="text-[11px] text-muted-foreground">{day.thu}</span>
+          </>
+        )}
       </div>
 
       {/* CHƯƠNG TRÌNH */}
