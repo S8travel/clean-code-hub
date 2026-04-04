@@ -15,6 +15,7 @@ import {
   LogOut,
   Stamp,
   FileStack,
+  LayoutTemplate,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -50,6 +51,7 @@ const menuGroups = [
       { title: "Xe", url: "/quan-ly/xe", icon: Car },
       { title: "Cảnh điểm", url: "/quan-ly/canh-diem", icon: MapPin },
       { title: "Hướng dẫn viên", url: "/quan-ly/hdv", icon: UserCheck },
+      { title: "Mẫu seri", url: "/quan-ly/seri", icon: LayoutTemplate },
       { title: "Visa", url: "/quan-ly/visa", icon: Stamp },
       { title: "Nhà cung cấp", url: "/quan-ly/nha-cung-cap", icon: Package },
     ],

@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-doan";
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
+import { useSeriList } from "@/hooks/use-seri";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
@@ -24,6 +25,7 @@ const EMPTY_FORM: DoanInsert = {
   dia_diem_id: null,
   huong_dan_vien_id: null,
   xe_id: null,
+  seri_id: null,
   chuyen_bay_don: "",
   chuyen_bay_tien: "",
   so_khach_lon: 0,
@@ -53,6 +55,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   const { data: hdv } = useHuongDanVien();
   const { data: xeList } = useXeList();
   const { data: userRoles } = useUserRoles();
+  const { data: seriList = [] } = useSeriList();
 
   useEffect(() => {
     externalSupabase.auth.getUser().then(({ data }) => {
@@ -84,7 +87,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         ghi_chu: doan.ghi_chu || "",
       });
     } else {
-      setForm({ ...EMPTY_FORM, assigned_to: currentUserId });
+      setForm({ ...EMPTY_FORM, assigned_to: currentUserId, seri_id: null });
     }
   }, [doan, open, currentUserId]);
 
@@ -121,6 +124,9 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
       const parts = [nhaXe, x.ten_xe, socho].filter(Boolean);
       return { value: x.id.toString(), label: parts.join(" · ") };
     }), [xeList]);
+
+  const seriOptions = useMemo(() =>
+    seriList.map((s) => ({ value: s.id.toString(), label: s.ten_seri })), [seriList]);
 
   const userOptions = useMemo(() =>
     (userRoles ?? []).map((u) => ({ value: u.user_id, label: u.ho_ten })), [userRoles]);
@@ -208,6 +214,22 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   placeholder="Chọn xe"
                 />
               </Field>
+
+              {!doan && (
+                <Field label="Mẫu seri (áp dụng chương trình)">
+                  <SearchableSelect
+                    options={seriOptions}
+                    value={form.seri_id?.toString() || ""}
+                    onChange={(v) => set("seri_id", v ? parseInt(v) : null)}
+                    placeholder="Chọn seri (tuỳ chọn)"
+                  />
+                  {form.seri_id && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Lịch trình sẽ được tự động điền sau khi tạo đoàn
+                    </p>
+                  )}
+                </Field>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Chuyến Bay Đến">

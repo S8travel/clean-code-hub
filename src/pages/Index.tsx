@@ -27,6 +27,7 @@ import {
 } from "@/hooks/use-doan";
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
+import { useApplySeriToDoan } from "@/hooks/use-seri";
 
 const PAGE_SIZE = 20;
 
@@ -44,6 +45,7 @@ export default function Index() {
   const updateDoan = useUpdateDoan();
   const deleteDoan = useDeleteDoan();
   const addPerm = useAddDoanPermission();
+  const applySeri = useApplySeriToDoan();
   const { data: agents } = useAgents();
   const { data: diaDiemList } = useDiaDiem();
   const { data: userRoles } = useUserRoles();
@@ -135,6 +137,16 @@ export default function Index() {
               quyen: "admin",
             });
           } catch { /* ignore if permission already exists */ }
+        }
+        // Apply seri if selected
+        if (created && data.seri_id && data.ngay_di) {
+          try {
+            await applySeri.mutateAsync({
+              doanId: created.id,
+              seriId: data.seri_id,
+              ngayDi: data.ngay_di,
+            });
+          } catch { /* seri apply failure non-fatal */ }
         }
         toast.success("✓ Tạo đoàn thành công");
       }

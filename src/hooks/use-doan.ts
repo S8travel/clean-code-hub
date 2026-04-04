@@ -9,6 +9,7 @@ export interface Doan {
   dia_diem_id: number | null;
   huong_dan_vien_id: number | null;
   xe_id: number | null;
+  seri_id: number | null;
   chuyen_bay_don: string | null;
   chuyen_bay_tien: string | null;
   booking_khach_san_id: number | null;
@@ -35,6 +36,7 @@ export interface DoanInsert {
   dia_diem_id?: number | null;
   huong_dan_vien_id?: number | null;
   xe_id?: number | null;
+  seri_id?: number | null;
   chuyen_bay_don?: string | null;
   chuyen_bay_tien?: string | null;
   booking_khach_san_id?: number | null;
