@@ -346,8 +346,10 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
   const defaultTipDonGia = coTL ? NDT_TIP_CO_TL : NDT_TIP_KHONG_TL;
   const [tipDonGia, setTipDonGia] = useState(defaultTipDonGia);
   const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>("NDT");
+  const [tipSoKhach, setTipSoKhach] = useState(soKhach);
+  const [tipSoNgay, setTipSoNgay] = useState(soNgay);
 
-  const tongTip = soKhach * soNgay * tipDonGia;
+  const tongTip = tipSoKhach * tipSoNgay * tipDonGia;
   const tongVND = tongTip * tyGia;
 
   const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
@@ -410,8 +412,22 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
                   {coTL ? "Có T/L" : "Không T/L"}
                 </span>
               </td>
-              <td className="px-3 py-2.5 text-center text-muted-foreground">{soKhach}</td>
-              <td className="px-3 py-2.5 text-center text-muted-foreground">{soNgay}</td>
+              <td className="px-2 py-2 text-center">
+                <Input
+                  type="number"
+                  value={tipSoKhach || ""}
+                  onChange={(e) => setTipSoKhach(Number(e.target.value) || 0)}
+                  className="h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto"
+                />
+              </td>
+              <td className="px-2 py-2 text-center">
+                <Input
+                  type="number"
+                  value={tipSoNgay || ""}
+                  onChange={(e) => setTipSoNgay(Number(e.target.value) || 0)}
+                  className="h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto"
+                />
+              </td>
               <td className="px-3 py-2 text-center">
                 <div className="flex items-center gap-1 justify-center">
                   <Input
