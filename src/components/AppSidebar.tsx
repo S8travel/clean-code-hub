@@ -14,6 +14,7 @@ import {
   CalendarClock,
   LogOut,
   Stamp,
+  FileStack,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -58,6 +59,7 @@ const menuGroups = [
     items: [
       { title: "Thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard },
       { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock },
+      { title: "Hóa đơn & UNC", url: "/hoa-don-unc", icon: FileStack },
       { title: "Công nợ", url: "/cong-no", icon: Wallet },
       { title: "Người dùng", url: "/quan-ly/nguoi-dung", icon: Users },
       { title: "Agent", url: "/quan-ly/agent", icon: Bot },
