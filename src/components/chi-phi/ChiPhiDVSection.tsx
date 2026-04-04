@@ -332,8 +332,8 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
   return (
     <div className="rounded-lg border border-border overflow-hidden">
-      <div className="px-4 py-2.5 bg-muted/40 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">🎫 Dịch vụ</p>
+      <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
+        <p className="text-sm font-semibold text-purple-900">🎫 Dịch vụ</p>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
           <Button

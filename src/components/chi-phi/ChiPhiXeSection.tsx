@@ -203,9 +203,9 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-green-100 bg-green-50">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">🚌 Xe</span>
+          <span className="text-sm font-semibold text-green-900">🚌 Xe</span>
           {xeLabel && <span className="text-xs text-muted-foreground">· {xeLabel}</span>}
         </div>
         <div className="flex items-center gap-3">

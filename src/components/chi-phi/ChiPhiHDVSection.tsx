@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -22,13 +25,15 @@ import {
   useCancelDNTT,
   type HDVDNTTRow,
 } from "@/hooks/use-chi-phi-hdv";
-import { useUpsertChiPhi } from "@/hooks/use-chi-phi";
+import { useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import { cn } from "@/lib/utils";
 
 const NDT_TIP_CO_TL = 150;
 const NDT_TIP_KHONG_TL = 300;
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
+
+type LoaiTien = "NDT" | "USD" | "VND";
 
 interface Props {
   doanId: number;
@@ -64,13 +69,6 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   const tamUngDaTT = data?.tamUngDaTT ?? 0;
   const soConPhaiTra = data?.soConPhaiTra ?? 0;
   const daQuyetToan = data?.daQuyetToan ?? false;
-
-  const activeTamUng = tamUngList.filter(
-    (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
-  );
-  const activeQuyetToan = quyetToanList.filter(
-    (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
-  );
 
   return (
     <div className="space-y-4">
@@ -121,9 +119,6 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
 
           {/* Buttons */}
           <div className="flex gap-2 shrink-0 flex-wrap">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowThemChiPhi(true)}>
-              <Plus className="h-3 w-3 mr-1" /> Thêm chi phí
-            </Button>
             {!daQuyetToan && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowTamUng(true)}>
                 <Plus className="h-3 w-3 mr-1" /> Tạm ứng
@@ -172,35 +167,14 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
       </div>
 
       {/* ── Chi phí HDV ứng (bảng) ── */}
-      {chiPhiItems.length > 0 && (
-        <div className="rounded-lg border border-border overflow-hidden">
-          <div className="px-4 py-2 bg-muted/40 border-b border-border">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Chi phí HDV ứng
-            </p>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/20">
-                <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Dịch vụ</th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-16">SL</th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Đơn giá</th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Thành tiền</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {chiPhiItems.map((item) => (
-                <tr key={item.id} className="hover:bg-muted/20">
-                  <td className="px-4 py-2.5 font-medium">{item.mo_ta || item.danh_muc}</td>
-                  <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">{item.so_luong}</td>
-                  <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">{fmt(item.don_gia)} ₫</td>
-                  <td className="px-4 py-2.5 text-right font-medium">{fmt(item.tien_hdv)} ₫</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ChiPhiUngTable doanId={doanId} chiPhiItems={chiPhiItems} />
+
+      {/* ── Nút thêm chi phí HDV ứng ── */}
+      <div>
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowThemChiPhi(true)}>
+          <Plus className="h-3 w-3 mr-1" /> Thêm chi phí HDV ứng
+        </Button>
+      </div>
 
       {/* ── Phải thu ── */}
       <TipSection doan={doan} tyGia={tyGia} onTyGiaChange={handleTyGiaChange} />
@@ -233,9 +207,121 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   );
 }
 
-// ── Tip section ───────────────────────────────────────────────────────────────
+// ── Chi phí HDV ứng table with inline edit + delete ───────────────────────────
 
-interface ExtraRow { id: number; moTa: string; soNDT: number; tyGia: number }
+function ChiPhiUngTable({ doanId, chiPhiItems }: {
+  doanId: number;
+  chiPhiItems: import("@/hooks/use-chi-phi-hdv").HDVChiPhiItem[];
+}) {
+  const upsertMut = useUpsertChiPhi();
+  const deleteMut = useDeleteChiPhi();
+  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
+
+  const getLocal = (item: typeof chiPhiItems[0]) =>
+    editRow[item.id] ?? { so_luong: item.so_luong, don_gia: item.don_gia };
+
+  const handleChange = (id: number, field: "so_luong" | "don_gia", val: number) =>
+    setEditRow((prev) => {
+      const base = chiPhiItems.find((r) => r.id === id);
+      const cur = prev[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
+      return { ...prev, [id]: { ...cur, [field]: val } };
+    });
+
+  const handleSave = (item: typeof chiPhiItems[0]) => {
+    const local = editRow[item.id];
+    if (!local) return;
+    if (local.so_luong === item.so_luong && local.don_gia === item.don_gia) {
+      setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+      return;
+    }
+    upsertMut.mutate({ id: item.id, doan_id: doanId, so_luong: local.so_luong, don_gia: local.don_gia } as any, {
+      onSuccess: () => setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; }),
+    });
+  };
+
+  const handleDelete = (item: typeof chiPhiItems[0]) => {
+    deleteMut.mutate({ id: item.id, doanId }, {
+      onSuccess: () => toast.success("Đã xóa chi phí"),
+      onError: (e: any) => toast.error(e?.message || "Lỗi xóa"),
+    });
+  };
+
+  if (chiPhiItems.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="px-4 py-2 bg-amber-50 border-b border-amber-100">
+        <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">
+          Chi phí HDV ứng
+        </p>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-muted/20">
+            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Dịch vụ</th>
+            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-24">SL</th>
+            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Đơn giá</th>
+            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Thành tiền</th>
+            <th className="w-8" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {chiPhiItems.map((item) => {
+            const local = getLocal(item);
+            const isDirty = editRow[item.id] !== undefined;
+            return (
+              <tr key={item.id} className="hover:bg-muted/20">
+                <td className="px-4 py-2.5 font-medium">{item.mo_ta || item.danh_muc}</td>
+                <td className="px-4 py-2 text-right">
+                  <Input
+                    type="number"
+                    value={local.so_luong || ""}
+                    onChange={(e) => handleChange(item.id, "so_luong", Number(e.target.value) || 0)}
+                    onBlur={() => handleSave(item)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                    className="h-6 text-xs px-1.5 py-0 text-center w-16 ml-auto"
+                  />
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <Input
+                    type="number"
+                    value={local.don_gia || ""}
+                    onChange={(e) => handleChange(item.id, "don_gia", Number(e.target.value) || 0)}
+                    onBlur={() => handleSave(item)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                    className="h-6 text-xs px-1.5 py-0 text-right w-28 ml-auto"
+                  />
+                </td>
+                <td className="px-4 py-2.5 text-right font-medium">
+                  {fmt(local.so_luong * local.don_gia)} ₫
+                  {isDirty && (
+                    <span className="ml-1 text-[10px] text-amber-600">*</span>
+                  )}
+                </td>
+                <td className="px-2 py-2 text-right">
+                  <Button
+                    size="icon" variant="ghost"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDelete(item)}
+                    disabled={deleteMut.isPending}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Tip / Phải thu section ────────────────────────────────────────────────────
+
+interface ExtraRow { id: number; moTa: string; soTien: number; loaiTien: LoaiTien; tyGia: number }
+
+const LOAI_TIEN_LABEL: Record<LoaiTien, string> = { NDT: "NDT", USD: "USD", VND: "VND" };
 
 function TipSection({ doan, tyGia, onTyGiaChange }: {
   doan?: any;
@@ -257,12 +343,21 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
   const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
   const nextId = () => Date.now();
 
-  const addRow = () => setExtraRows((prev) => [...prev, { id: nextId(), moTa: "", soNDT: 0, tyGia }]);
+  const addRow = () => setExtraRows((prev) => [
+    ...prev,
+    { id: nextId(), moTa: "", soTien: 0, loaiTien: "NDT", tyGia },
+  ]);
   const removeRow = (id: number) => setExtraRows((prev) => prev.filter((r) => r.id !== id));
-  const updateRow = (id: number, field: keyof Omit<ExtraRow, "id">, val: string | number) =>
+  const updateRow = <K extends keyof Omit<ExtraRow, "id">>(id: number, field: K, val: ExtraRow[K]) =>
     setExtraRows((prev) => prev.map((r) => r.id === id ? { ...r, [field]: val } : r));
 
-  const totalVND = tongVND + extraRows.reduce((s, r) => s + r.soNDT * r.tyGia, 0);
+  // Khi đổi loại tiền sang VND, tỷ giá = 1 tự động
+  const handleLoaiTienChange = (id: number, val: LoaiTien) => {
+    setExtraRows((prev) => prev.map((r) => r.id === id ? { ...r, loaiTien: val, tyGia: val === "VND" ? 1 : r.tyGia } : r));
+  };
+
+  const extraTotalVND = extraRows.reduce((s, r) => s + r.soTien * r.tyGia, 0);
+  const totalVND = tongVND + extraTotalVND;
 
   if (!soKhach || !soNgay) return null;
 
@@ -286,15 +381,15 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
               <th className="text-left px-4 py-2.5">Mục</th>
               <th className="text-center px-3 py-2.5">Khách</th>
               <th className="text-center px-3 py-2.5">Ngày</th>
-              <th className="text-center px-3 py-2.5">NDT/khách/ngày</th>
-              <th className="text-right px-3 py-2.5">Tổng NDT</th>
+              <th className="text-center px-3 py-2.5">Đơn giá</th>
+              <th className="text-right px-3 py-2.5">Tổng</th>
               <th className="text-center px-3 py-2.5">Tỷ giá</th>
               <th className="text-right px-4 py-2.5">Thành tiền VND</th>
               <th className="w-8" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {/* Tip row — cố định */}
+            {/* Tip row — cố định, luôn NDT */}
             <tr className="hover:bg-muted/20">
               <td className="px-4 py-2.5 font-medium">
                 Tip
@@ -307,7 +402,7 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
               </td>
               <td className="px-3 py-2.5 text-center text-muted-foreground">{soKhach}</td>
               <td className="px-3 py-2.5 text-center text-muted-foreground">{soNgay}</td>
-              <td className="px-3 py-2.5 text-center font-medium">{ndtPerNgay} NDT</td>
+              <td className="px-3 py-2.5 text-center font-medium">{ndtPerNgay} NDT/khách/ngày</td>
               <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">{fmt(tongNDT)} NDT</td>
               <td className="px-3 py-2.5">
                 <div className="flex justify-center">
@@ -316,7 +411,6 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
                     value={tyGia || ""}
                     onChange={(e) => onTyGiaChange(Number(e.target.value) || 0)}
                     className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
-                    placeholder="3500"
                   />
                 </div>
               </td>
@@ -327,58 +421,72 @@ function TipSection({ doan, tyGia, onTyGiaChange }: {
             </tr>
 
             {/* Extra rows */}
-            {extraRows.map((row) => (
-              <tr key={row.id} className="hover:bg-muted/20">
-                <td className="px-4 py-2">
-                  <Input
-                    value={row.moTa}
-                    onChange={(e) => updateRow(row.id, "moTa", e.target.value)}
-                    className="h-6 text-xs px-1.5"
-                    placeholder="Mô tả khoản thu..."
-                    autoFocus
-                  />
-                </td>
-                <td className="px-3 py-2 text-center text-muted-foreground">—</td>
-                <td className="px-3 py-2 text-center text-muted-foreground">—</td>
-                <td className="px-3 py-2">
-                  <div className="flex justify-center">
+            {extraRows.map((row) => {
+              const isVND = row.loaiTien === "VND";
+              const thanhTienVND = row.soTien * row.tyGia;
+              return (
+                <tr key={row.id} className="hover:bg-muted/20">
+                  <td className="px-4 py-2">
                     <Input
-                      type="number"
-                      value={row.soNDT || ""}
-                      onChange={(e) => updateRow(row.id, "soNDT", Number(e.target.value) || 0)}
-                      className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
-                      placeholder="0"
+                      value={row.moTa}
+                      onChange={(e) => updateRow(row.id, "moTa", e.target.value)}
+                      className="h-6 text-xs px-1.5"
+                      placeholder="Mô tả khoản thu..."
+                      autoFocus
                     />
-                  </div>
-                </td>
-                <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                  {row.soNDT > 0 ? `${fmt(row.soNDT)} NDT` : "—"}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex justify-center">
-                    <Input
-                      type="number"
-                      value={row.tyGia || ""}
-                      onChange={(e) => updateRow(row.id, "tyGia", Number(e.target.value) || 0)}
-                      className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
-                      placeholder="3500"
-                    />
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-right font-semibold text-primary whitespace-nowrap">
-                  {row.soNDT > 0 && row.tyGia > 0 ? `${fmt(row.soNDT * row.tyGia)} ₫` : "—"}
-                </td>
-                <td className="px-2 py-2">
-                  <Button
-                    size="icon" variant="ghost"
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                    onClick={() => removeRow(row.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-3 py-2 text-center text-muted-foreground">—</td>
+                  <td className="px-3 py-2 text-center text-muted-foreground">—</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1 justify-center">
+                      <Input
+                        type="number"
+                        value={row.soTien || ""}
+                        onChange={(e) => updateRow(row.id, "soTien", Number(e.target.value) || 0)}
+                        className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
+                        placeholder="0"
+                      />
+                      <Select value={row.loaiTien} onValueChange={(v) => handleLoaiTienChange(row.id, v as LoaiTien)}>
+                        <SelectTrigger className="h-6 text-xs px-1.5 w-[56px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NDT">NDT</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="VND">VND</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+                    {row.soTien > 0 ? `${fmt(row.soTien)} ${LOAI_TIEN_LABEL[row.loaiTien]}` : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-center">
+                      <Input
+                        type="number"
+                        value={isVND ? 1 : (row.tyGia || "")}
+                        onChange={(e) => !isVND && updateRow(row.id, "tyGia", Number(e.target.value) || 0)}
+                        disabled={isVND}
+                        className="h-6 text-xs px-1.5 py-0 text-center w-[72px] disabled:opacity-50"
+                      />
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-right font-semibold text-primary whitespace-nowrap">
+                    {row.soTien > 0 && row.tyGia > 0 ? `${fmt(thanhTienVND)} ₫` : "—"}
+                  </td>
+                  <td className="px-2 py-2">
+                    <Button
+                      size="icon" variant="ghost"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeRow(row.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -219,9 +219,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-rose-100 bg-rose-50">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-semibold">🛡️ Bảo hiểm</span>
+          <span className="text-sm font-semibold text-rose-900">🛡️ Bảo hiểm</span>
           {baoHiemCD && <span className="text-xs text-muted-foreground">· {baoHiemCD.ten}</span>}
         </div>
         {thanhTien > 0 && (

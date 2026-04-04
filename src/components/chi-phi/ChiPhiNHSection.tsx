@@ -639,7 +639,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
   if (meals.length === 0) {
     return (
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
+        <h3 className="text-sm font-semibold flex items-center gap-2 bg-orange-50 border border-orange-100 text-orange-900 px-3 py-1.5 rounded-md">
           🍽️ Nhà hàng
           <Badge variant="secondary" className="text-xs">Điều tour</Badge>
         </h3>
@@ -655,7 +655,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     <div className="space-y-3">
       {/* Header + toolbar */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
+        <h3 className="text-sm font-semibold flex items-center gap-2 bg-orange-50 border border-orange-100 text-orange-900 px-3 py-1.5 rounded-md">
           🍽️ Nhà hàng
           <Badge variant="secondary" className="text-xs">Điều tour</Badge>
         </h3>

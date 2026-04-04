@@ -260,8 +260,8 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
-        <span className="text-sm font-semibold">🛂 Visa</span>
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-indigo-100 bg-indigo-50">
+        <span className="text-sm font-semibold text-indigo-900">🛂 Visa</span>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(!showAdd)}>
