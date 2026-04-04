@@ -1,5 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { FileSpreadsheet } from "lucide-react";
 import { useChiPhiList, useDNTTList } from "@/hooks/use-chi-phi";
+import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
 import ChiPhiHeader from "./ChiPhiHeader";
 import ChiPhiKSSection from "./ChiPhiKSSection";
 import ChiPhiNHSection from "./ChiPhiNHSection";
@@ -8,7 +10,10 @@ import ChiPhiHDVSection from "./ChiPhiHDVSection";
 import ChiPhiBaoHiemSection from "./ChiPhiBaoHiemSection";
 import ChiPhiXeSection from "./ChiPhiXeSection";
 import ChiPhiVisaSection from "./ChiPhiVisaSection";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
+import { toast } from "sonner";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -18,6 +23,7 @@ interface Props {
 }
 
 export default function ChiPhiTab({ doanId, doan }: Props) {
+  const [exportingExcel, setExportingExcel] = useState(false);
   const soKhach =
     (doan?.so_khach_lon ?? 0) +
     (doan?.so_khach_em1 ?? 0) +
@@ -28,6 +34,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
 
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
+  const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
 
   const summary = useMemo(() => {
     // Loại trừ chi phí đã hủy dịch vụ (cong_no, hoan_tien)
@@ -80,8 +87,43 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
 
   const hasData = summary.total > 0 || summary.daTT > 0;
 
+  const handleExportExcel = async () => {
+    if (chiPhiRows.length === 0 && dnttList.length === 0) {
+      toast.error("Chưa có dữ liệu chi phí để xuất Excel");
+      return;
+    }
+
+    try {
+      setExportingExcel(true);
+      await exportChiPhiDoanExcel({
+        doan,
+        chiPhiRows,
+        dnttList,
+        hdvData,
+      });
+      toast.success("Đã xuất file Excel");
+    } catch (error: any) {
+      toast.error(error?.message || "Không thể xuất file Excel");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 text-xs gap-1.5"
+          onClick={handleExportExcel}
+          disabled={exportingExcel || isHDVLoading}
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          {exportingExcel ? "Đang xuất..." : "Xuất Excel"}
+        </Button>
+      </div>
+
       <ChiPhiHeader doan={doan} />
 
       {/* ── Summary bar ── */}

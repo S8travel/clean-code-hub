@@ -1,0 +1,152 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { externalSupabase } from "@/lib/supabase-external";
+
+export type TrangThaiDoc = "chua_co" | "da_co" | "khong_can";
+
+export interface HoaDonUNCRow {
+  id: number;
+  doan_id: number | null;
+  ten_doan: string | null;
+  loai: string;
+  mo_ta: string | null;
+  so_tien: number;
+  nha_cung_cap_id: number | null;
+  ten_nha_cung_cap: string | null;
+  thanh_toan_luc: string | null;
+  trang_thai_hoa_don: TrangThaiDoc;
+  trang_thai_unc: TrangThaiDoc;
+  hoa_don_url: string | null;
+  unc_url: string | null;
+}
+
+export interface HoaDonUNCFilters {
+  doanId?: number | null;
+  loai?: string | null;
+  trangThaiHoaDon?: TrangThaiDoc | "all";
+  trangThaiUNC?: TrangThaiDoc | "all";
+}
+
+export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
+  return useQuery({
+    queryKey: ["hoa-don-unc", filters],
+    queryFn: async (): Promise<HoaDonUNCRow[]> => {
+      let q = externalSupabase
+        .from("de_nghi_thanh_toan")
+        .select(
+          "id, doan_id, loai, mo_ta, so_tien, nha_cung_cap_id, ten_nha_cung_cap, thanh_toan_luc, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, doan:doan_id(ten_doan)"
+        )
+        .eq("trang_thai_thanh_toan", "da_tt")
+        .neq("trang_thai_duyet", "da_huy")
+        .order("thanh_toan_luc", { ascending: false });
+
+      if (filters.doanId) q = q.eq("doan_id", filters.doanId);
+      if (filters.loai) q = q.eq("loai", filters.loai);
+      if (filters.trangThaiHoaDon && filters.trangThaiHoaDon !== "all")
+        q = q.eq("trang_thai_hoa_don", filters.trangThaiHoaDon);
+      if (filters.trangThaiUNC && filters.trangThaiUNC !== "all")
+        q = q.eq("trang_thai_unc", filters.trangThaiUNC);
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        doan_id: r.doan_id,
+        ten_doan: r.doan?.ten_doan ?? null,
+        loai: r.loai,
+        mo_ta: r.mo_ta,
+        so_tien: r.so_tien,
+        nha_cung_cap_id: r.nha_cung_cap_id,
+        ten_nha_cung_cap: r.ten_nha_cung_cap,
+        thanh_toan_luc: r.thanh_toan_luc,
+        trang_thai_hoa_don: r.trang_thai_hoa_don ?? "chua_co",
+        trang_thai_unc: r.trang_thai_unc ?? "chua_co",
+        hoa_don_url: r.hoa_don_url,
+        unc_url: r.unc_url,
+      }));
+    },
+  });
+}
+
+export function useUpdateDocStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      field,
+      value,
+    }: {
+      id: number;
+      field: "trang_thai_hoa_don" | "trang_thai_unc";
+      value: TrangThaiDoc;
+    }) => {
+      const { error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({ [field]: value })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
+  });
+}
+
+export function useUploadDNTTDoc() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      file,
+      loaiDoc,
+    }: {
+      id: number;
+      file: File;
+      loaiDoc: "hoa_don" | "unc";
+    }) => {
+      const ext = file.name.split(".").pop() ?? "bin";
+      const path = `${id}/${loaiDoc}/${Date.now()}.${ext}`;
+
+      const { error: uploadErr } = await externalSupabase.storage
+        .from("dntt-documents")
+        .upload(path, file, { upsert: true });
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = externalSupabase.storage
+        .from("dntt-documents")
+        .getPublicUrl(path);
+
+      const urlField = loaiDoc === "hoa_don" ? "hoa_don_url" : "unc_url";
+      const statusField = loaiDoc === "hoa_don" ? "trang_thai_hoa_don" : "trang_thai_unc";
+
+      const { error: updateErr } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({ [urlField]: urlData.publicUrl, [statusField]: "da_co" })
+        .eq("id", id);
+      if (updateErr) throw updateErr;
+
+      return urlData.publicUrl;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
+  });
+}
+
+export function useDeleteDNTTDoc() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      loaiDoc,
+    }: {
+      id: number;
+      loaiDoc: "hoa_don" | "unc";
+    }) => {
+      const urlField = loaiDoc === "hoa_don" ? "hoa_don_url" : "unc_url";
+      const statusField = loaiDoc === "hoa_don" ? "trang_thai_hoa_don" : "trang_thai_unc";
+      const { error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({ [urlField]: null, [statusField]: "chua_co" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
+  });
+}
