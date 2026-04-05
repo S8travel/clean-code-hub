@@ -304,3 +304,17 @@ export function useDeleteDoan() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
   });
 }
+
+export function useCancelDoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await externalSupabase
+        .from("doan")
+        .update({ trang_thai: "huy" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+  });
+}

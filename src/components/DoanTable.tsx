@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, KeyRound } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, KeyRound, Ban } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,10 +72,11 @@ interface Props {
   isLoading: boolean;
   userRolesMap: Map<string, string>; // user_id → ho_ten
   onEdit?: (doan: any) => void;
+  onCancel?: (doan: any) => void;
   onDelete?: (doan: any) => void;
 }
 
-export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onDelete }: Props) {
+export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, onDelete }: Props) {
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("ngay_di");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -318,12 +319,23 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onDelete }:
                       >
                         <KeyRound className="h-3.5 w-3.5" />
                       </Button>
+                      {g.trang_thai !== "huy" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                          onClick={(e) => { e.stopPropagation(); onCancel?.(g); }}
+                          title="Hủy đoàn"
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={(e) => { e.stopPropagation(); onDelete?.(g); }}
-                        title="Xoá"
+                        title="Xóa vĩnh viễn"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -366,6 +378,12 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onDelete }:
                     onClick={(e) => { e.stopPropagation(); onEdit?.(g); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
+                  {g.trang_thai !== "huy" && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-orange-500"
+                      onClick={(e) => { e.stopPropagation(); onCancel?.(g); }}>
+                      <Ban className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
                     onClick={(e) => { e.stopPropagation(); onDelete?.(g); }}>
                     <Trash2 className="h-3.5 w-3.5" />

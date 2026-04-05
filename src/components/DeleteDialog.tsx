@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -8,9 +8,35 @@ interface Props {
   onConfirm: () => void;
   onCancel: () => void;
   isDeleting: boolean;
+  // Customization for different dialog types
+  title?: string;
+  description?: string;
+  confirmLabel?: string;
+  confirmLoadingLabel?: string;
+  variant?: "delete" | "cancel";
 }
 
-export function DeleteDialog({ open, name, onConfirm, onCancel, isDeleting }: Props) {
+export function DeleteDialog({
+  open,
+  name,
+  onConfirm,
+  onCancel,
+  isDeleting,
+  title,
+  description,
+  confirmLabel,
+  confirmLoadingLabel,
+  variant = "delete",
+}: Props) {
+  const isCancel = variant === "cancel";
+
+  const defaultTitle = isCancel ? "Hủy đoàn?" : "Xác nhận xóa?";
+  const defaultDesc = isCancel
+    ? `Đoàn "${name}" sẽ được chuyển sang trạng thái Đã hủy. Dữ liệu vẫn được giữ lại.`
+    : `Đoàn "${name}" sẽ bị xóa vĩnh viễn. Không thể khôi phục lại.`;
+  const defaultConfirm = isCancel ? "Hủy đoàn" : "Xóa";
+  const defaultLoading = isCancel ? "Đang hủy..." : "Đang xóa...";
+
   return (
     <AnimatePresence>
       {open && (
@@ -30,28 +56,34 @@ export function DeleteDialog({ open, name, onConfirm, onCancel, isDeleting }: Pr
             className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-background rounded-xl shadow-card p-6 border border-border/40"
           >
             <div className="flex items-start gap-3">
-              <div className="p-2 rounded-full bg-destructive/10 shrink-0">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
+              <div className={`p-2 rounded-full shrink-0 ${isCancel ? "bg-amber-100" : "bg-destructive/10"}`}>
+                {isCancel
+                  ? <Ban className="h-4 w-4 text-amber-600" />
+                  : <AlertTriangle className="h-4 w-4 text-destructive" />
+                }
               </div>
               <div>
-                <h3 className="font-semibold text-body">Xác nhận xóa?</h3>
+                <h3 className="font-semibold text-body">{title ?? defaultTitle}</h3>
                 <p className="text-muted-foreground text-[13px] mt-1">
-                  This will permanently delete <span className="font-medium text-foreground">"{name}"</span>. This action cannot be undone.
+                  {description ?? defaultDesc}
                 </p>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" size="sm" onClick={onCancel} className="active:scale-[0.98]">
-                Cancel
+                Đóng
               </Button>
               <Button
-                variant="destructive"
+                variant={isCancel ? "outline" : "destructive"}
                 size="sm"
                 onClick={onConfirm}
                 disabled={isDeleting}
-                className="active:scale-[0.98]"
+                className={`active:scale-[0.98] ${isCancel ? "border-amber-400 text-amber-700 hover:bg-amber-50" : ""}`}
               >
-                {isDeleting ? "Deleting..." : "Delete"}
+                {isDeleting
+                  ? (confirmLoadingLabel ?? defaultLoading)
+                  : (confirmLabel ?? defaultConfirm)
+                }
               </Button>
             </div>
           </motion.div>

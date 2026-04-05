@@ -20,6 +20,7 @@ import {
   useCreateDoan,
   useUpdateDoan,
   useDeleteDoan,
+  useCancelDoan,
   useAgents,
   useDiaDiem,
   useUserRoles,
@@ -44,6 +45,7 @@ export default function Index() {
   const createDoan = useCreateDoan();
   const updateDoan = useUpdateDoan();
   const deleteDoan = useDeleteDoan();
+  const cancelDoan = useCancelDoan();
   const addPerm = useAddDoanPermission();
   const applySeri = useApplySeriToDoan();
   const { data: agents } = useAgents();
@@ -53,6 +55,7 @@ export default function Index() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDoan, setEditingDoan] = useState<any | null>(null);
   const [deletingDoan, setDeletingDoan] = useState<any | null>(null);
+  const [cancelingDoan, setCancelingDoan] = useState<any | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -168,6 +171,17 @@ export default function Index() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!cancelingDoan) return;
+    try {
+      await cancelDoan.mutateAsync(cancelingDoan.id);
+      toast.success("Đã hủy đoàn");
+      setCancelingDoan(null);
+    } catch {
+      toast.error("Hủy đoàn thất bại");
+    }
+  };
+
   const openNew = () => {
     setEditingDoan(null);
     setDrawerOpen(true);
@@ -263,6 +277,7 @@ export default function Index() {
             isLoading={isLoading}
             userRolesMap={userRolesMap}
             onEdit={(doan) => { setEditingDoan(doan); setDrawerOpen(true); }}
+            onCancel={(doan) => setCancelingDoan(doan)}
             onDelete={(doan) => setDeletingDoan(doan)}
           />
         </div>
@@ -304,6 +319,15 @@ export default function Index() {
         onClose={() => { setDrawerOpen(false); setEditingDoan(null); }}
         onSave={handleSave}
         isSaving={createDoan.isPending || updateDoan.isPending}
+      />
+
+      <DeleteDialog
+        open={!!cancelingDoan}
+        name={cancelingDoan?.ten_doan || ""}
+        onConfirm={handleCancel}
+        onCancel={() => setCancelingDoan(null)}
+        isDeleting={cancelDoan.isPending}
+        variant="cancel"
       />
 
       <DeleteDialog
