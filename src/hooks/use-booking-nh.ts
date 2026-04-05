@@ -189,6 +189,53 @@ export function useDeleteBookingNH() {
   });
 }
 
+const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbHNid29xem1ia256ZHBhZXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MDAzNzcsImV4cCI6MjA4OTI3NjM3N30.RLsKYfH6XZw3Mcmk2fm1R6rKKzrtm0MLrYhtjIT--T0";
+
+export function useSendNHBookingEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      bookingId: number;
+      doanId: number;
+      to: string;
+      subject: string;
+      html: string;
+      sentBy: string;
+    }) => {
+      const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ to: params.to, subject: params.subject, html: params.html }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || "Lỗi gửi email qua server");
+      }
+      const data = await res.json();
+      if (data?.error) throw new Error(data.error);
+
+      const { error } = await externalSupabase
+        .from("doan_booking_nh")
+        .update({
+          booking_status: "da_gui",
+          sent_at: new Date().toISOString(),
+          sent_by: params.sentBy,
+        })
+        .eq("id", params.bookingId);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [QK, vars.doanId] });
+    },
+  });
+}
+
 export function useSetMenuOptions(nhaHangId: number | null) {
   return useQuery({
     queryKey: ["nh_set_menu_options", nhaHangId],

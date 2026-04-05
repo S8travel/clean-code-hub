@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Building2, Mail, Send, Check, X, RotateCcw, ChevronDown, ChevronUp, Trash2,
@@ -18,6 +14,7 @@ import {
   type BookingDVRow as DVRow,
 } from "@/hooks/use-booking-dv";
 import { cn } from "@/lib/utils";
+import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 
 const STATUS_CFG = {
   chua_dat:     { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -158,11 +155,6 @@ export default function BookingDVCard({ row, tenDoan, currentUserName }: Props) 
     setEmailModalOpen(true);
   };
 
-  const handleMockSend = () => {
-    save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
-    toast.success("Đã gửi email booking");
-  };
-
   const handleSendViaServer = async () => {
     if (!emailTo) { toast.error("Vui lòng nhập email nhà cung cấp"); return; }
     setSending(true);
@@ -185,15 +177,12 @@ export default function BookingDVCard({ row, tenDoan, currentUserName }: Props) 
   };
 
   const handleMailtoFallback = () => {
-    const recipient = emailTo || "";
     const bodyText = [
       `Kính gửi ${tenNCC || row.ten_nha_cung_cap},`,
       "",
       `S8 Travel xin đặt dịch vụ cho đoàn ${tenDoan}:`,
       "",
-      ...dvSorted.map(
-        (d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khách)`
-      ),
+      ...dvSorted.map((d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khách)`),
       ...(ghiChu ? ["", `Ghi chú: ${ghiChu}`] : []),
       "",
       "Kính nhờ xác nhận booking trong vòng 24 giờ.",
@@ -201,7 +190,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName }: Props) 
       "CÔNG TY TNHH DU LỊCH S8",
     ].join("\n");
 
-    window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(bodyText)}`;
+    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(bodyText)}`;
     save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
@@ -339,13 +328,13 @@ export default function BookingDVCard({ row, tenDoan, currentUserName }: Props) 
             <div className="flex flex-wrap gap-1.5 shrink-0 pt-0.5">
               {/* Gửi email */}
               {(row.booking_status === "chua_dat") && (
-                <Button size="sm" className="h-8 text-xs" onClick={handleMockSend}>
+                <Button size="sm" className="h-8 text-xs" onClick={openEmailModal}>
                   <Send className="h-3.5 w-3.5 mr-1" />
                   Gửi email
                 </Button>
               )}
               {(row.booking_status === "cho_xac_nhan" || row.booking_status === "da_xac_nhan") && (
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleMockSend}>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openEmailModal}>
                   <Send className="h-3.5 w-3.5 mr-1" />
                   Gửi lại
                 </Button>
@@ -393,64 +382,20 @@ export default function BookingDVCard({ row, tenDoan, currentUserName }: Props) 
       )}
 
       {/* ── Email Modal ───────────────────────────────────────────────── */}
-      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Mail className="h-4 w-4" />
-              Gửi email đặt dịch vụ
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Đến</p>
-                <Input
-                  value={emailTo}
-                  onChange={(e) => setEmailTo(e.target.value)}
-                  placeholder="email@nhacungcap.com"
-                  className="text-sm"
-                />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Tiêu đề</p>
-                <Input
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  className="text-sm"
-                />
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Nội dung email (HTML)</p>
-              <Textarea
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                rows={12}
-                className="text-xs font-mono"
-              />
-            </div>
-
-            <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              <strong>Lưu ý:</strong> "Gửi qua server" dùng Supabase Edge Function (cần cấu hình RESEND_API_KEY).
-              "Mở email client" dùng ứng dụng mail mặc định trên máy, không cần cấu hình.
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 flex-wrap">
-            <Button variant="outline" onClick={handleMailtoFallback} type="button">
-              <Mail className="h-4 w-4 mr-1" />
-              Mở email client
-            </Button>
-            <Button onClick={handleSendViaServer} disabled={sending || !emailTo}>
-              <Send className="h-4 w-4 mr-1" />
-              {sending ? "Đang gửi..." : "Gửi qua server"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EmailPreviewModal
+        open={emailModalOpen}
+        onOpenChange={setEmailModalOpen}
+        title="Gửi email đặt dịch vụ"
+        to={emailTo}
+        onToChange={setEmailTo}
+        subject={emailSubject}
+        onSubjectChange={setEmailSubject}
+        html={emailBody}
+        onHtmlChange={setEmailBody}
+        onSendViaServer={handleSendViaServer}
+        onMailtoFallback={handleMailtoFallback}
+        sending={sending}
+      />
     </div>
   );
 }

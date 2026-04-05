@@ -11,11 +11,13 @@ import {
   useUpsertBookingNH,
   useUpdateBookingNH,
   useDeleteBookingNH,
+  useSendNHBookingEmail,
   useSetMenuOptions,
   useSetMenuMons,
   type BookingNHRow,
 } from "@/hooks/use-booking-nh";
 import { cn } from "@/lib/utils";
+import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 
 const STATUS_CFG = {
   chua_gui:    { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -64,7 +66,14 @@ export default function MealCard({
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
   const deleteMut = useDeleteBookingNH();
+  const sendEmailMut = useSendNHBookingEmail();
   const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
+
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailHtml, setEmailHtml] = useState("");
+  const [sending, setSending] = useState(false);
 
   // Set menu đang chọn: ưu tiên booking đã lưu, fallback về điều tour
   const [selectedSetMenuId, setSelectedSetMenuId] = useState<number | null>(
@@ -190,11 +199,101 @@ export default function MealCard({
 
   const handleMonBlur = () => saveBooking({ mon_an_snapshot: monList });
 
-  // Status actions — chưa gửi email thật, chỉ cập nhật trạng thái
-  const handleSend = () => {
-    saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName });
-    toast.success("Đã gửi booking");
+  const buildEmailHtml = () => {
+    const buaLabel = buaAn === "trua" ? "Ăn trưa" : "Ăn tối";
+    const monRows = monList.map((m, i) => `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px">${i + 1}</td><td style="border:1px solid #e2e8f0;padding:6px 12px">${m}</td></tr>`).join("");
+    return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
+  <div style="max-width:620px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+    <div style="background:#0f172a;padding:24px 32px;text-align:center">
+      <h2 style="margin:0;color:#fff;font-size:18px">CÔNG TY TNHH DU LỊCH S8</h2>
+      <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY | MST: 0402021137</p>
+    </div>
+    <div style="padding:28px 32px">
+      <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${nhaHangTen || "Quý nhà hàng"}</strong>,</p>
+      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt <strong>${buaLabel}</strong>:</p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:16px">
+        <tr style="background:#f1f5f9">
+          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
+          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
+        </tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Bữa ăn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${buaLabel}</td></tr>
+        ${selectedMenu ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Set menu</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}</td></tr>` : ""}
+      </table>
+      ${monList.length > 0 ? `
+      <p style="font-weight:600;margin:0 0 8px">Danh sách món:</p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px">
+        <tr style="background:#f1f5f9">
+          <th style="border:1px solid #e2e8f0;padding:6px 12px;width:40px">#</th>
+          <th style="border:1px solid #e2e8f0;padding:6px 12px;text-align:left">Tên món</th>
+        </tr>
+        ${monRows}
+      </table>` : ""}
+      ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
+      <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý nhà hàng xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+      <p style="margin:0;font-size:12px;color:#94a3b8"><strong style="color:#475569">CÔNG TY TNHH DU LỊCH S8</strong><br>S8 TRAVEL COMPANY | MST: 0402021137</p>
+    </div>
+  </div>
+</body></html>`;
   };
+
+  const openEmailModal = () => {
+    setEmailTo(nhaHangEmail || "");
+    setEmailSubject(`[S8 Travel] Đặt ${buaAn === "trua" ? "ăn trưa" : "ăn tối"} – ${nhaHangTen || "Nhà hàng"}`);
+    setEmailHtml(buildEmailHtml());
+    setEmailModalOpen(true);
+  };
+
+  const handleSendViaServer = async () => {
+    if (!booking?.id) {
+      // Upsert booking trước nếu chưa có
+      await new Promise<void>((resolve) => {
+        upsertMut.mutate({
+          doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn,
+          nha_hang_id: nhaHangId, mon_an_snapshot: monList, ghi_chu: ghiChu,
+          booking_status: "chua_gui",
+        } as any, { onSuccess: () => resolve(), onError: () => resolve() });
+      });
+    }
+    setSending(true);
+    try {
+      if (!booking?.id) throw new Error("Chưa có booking ID");
+      await sendEmailMut.mutateAsync({
+        bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName,
+      });
+      setEmailModalOpen(false);
+      toast.success("Đã gửi email booking");
+    } catch (err: any) {
+      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleMailtoFallback = () => {
+    const buaLabel = buaAn === "trua" ? "ăn trưa" : "ăn tối";
+    const body = [
+      `Kính gửi ${nhaHangTen},`,
+      ``,
+      `S8 Travel xin đặt ${buaLabel}:`,
+      selectedMenu ? `- Set menu: ${selectedMenu.ten_set}` : "",
+      ...monList.map((m, i) => `${i + 1}. ${m}`),
+      ...(ghiChu ? [`Ghi chú: ${ghiChu}`] : []),
+      ``,
+      `Kính nhờ xác nhận trong 24 giờ.`,
+      ``,
+      `CÔNG TY TNHH DU LỊCH S8`,
+    ].filter((l) => l !== undefined).join("\n");
+    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
+    saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName });
+    setEmailModalOpen(false);
+    toast.success("Đã mở email client");
+  };
+
+  // Status actions
+  const handleSend = () => openEmailModal();
   const handleConfirm = () => {
     saveBooking({ booking_status: "nh_xac_nhan" });
     toast.success("Đã xác nhận");
@@ -211,6 +310,7 @@ export default function MealCard({
   };
 
   return (
+    <>
     <div className={cn("rounded-lg border bg-card overflow-hidden", isCancelled && "opacity-60", !conTrongDieuTour ? "border-amber-300" : "border-border")}>
       {/* Orphaned warning */}
       {!conTrongDieuTour && (
@@ -375,5 +475,20 @@ export default function MealCard({
         </>
       )}
     </div>
+    <EmailPreviewModal
+      open={emailModalOpen}
+      onOpenChange={setEmailModalOpen}
+      title={`Gửi email đặt ${buaAn === "trua" ? "ăn trưa" : "ăn tối"}`}
+      to={emailTo}
+      onToChange={setEmailTo}
+      subject={emailSubject}
+      onSubjectChange={setEmailSubject}
+      html={emailHtml}
+      onHtmlChange={setEmailHtml}
+      onSendViaServer={handleSendViaServer}
+      onMailtoFallback={handleMailtoFallback}
+      sending={sending}
+    />
+    </>
   );
 }

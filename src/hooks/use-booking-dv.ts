@@ -77,6 +77,32 @@ export function useDeleteBookingDV() {
   });
 }
 
+const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbHNid29xem1ia256ZHBhZXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MDAzNzcsImV4cCI6MjA4OTI3NjM3N30.RLsKYfH6XZw3Mcmk2fm1R6rKKzrtm0MLrYhtjIT--T0";
+
+export async function callSendBookingEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<void> {
+  const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(errText || "Lỗi gửi email qua server");
+  }
+  const data = await res.json();
+  if (data?.error) throw new Error(data.error);
+}
+
 export function useSendBookingEmail() {
   const qc = useQueryClient();
   return useMutation({
@@ -88,13 +114,7 @@ export function useSendBookingEmail() {
       html: string;
       sentBy: string;
     }) => {
-      // TODO: gọi edge function khi sẵn sàng
-      // const { data, error } = await externalSupabase.functions.invoke(
-      //   "send-booking-email",
-      //   { body: { to: params.to, subject: params.subject, html: params.html } }
-      // );
-      // if (error) throw new Error(error.message || "Lỗi gọi edge function");
-      // if (data?.error) throw new Error(data.error);
+      await callSendBookingEmail({ to: params.to, subject: params.subject, html: params.html });
 
       const { error: updateErr } = await externalSupabase
         .from("doan_booking_dv")

@@ -20,6 +20,11 @@ serve(async (req) => {
       );
     }
 
+    // to có thể là string đơn, string cách nhau bằng dấu phẩy, hoặc string[]
+    const toList: string[] = Array.isArray(to)
+      ? to
+      : String(to).split(",").map((e: string) => e.trim()).filter(Boolean);
+
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) {
       return new Response(
@@ -36,7 +41,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: "S8 Travel <booking@s8travel.vn>",
-        to: [to],
+        to: toList,
         subject,
         html,
       }),
