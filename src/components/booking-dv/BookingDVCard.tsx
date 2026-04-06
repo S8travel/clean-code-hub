@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-booking-dv";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import { useCurrentUserProfile } from "@/hooks/use-doan";
 
 const STATUS_CFG = {
   chua_dat:     { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -62,6 +63,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const updateMut = useUpdateBookingDV();
   const deleteMut = useDeleteBookingDV();
   const sendEmailMut = useSendBookingEmail();
+  const { data: userProfile } = useCurrentUserProfile();
 
   const [tenNCC, setTenNCC] = useState(row.ten_nha_cung_cap || "");
   const [email, setEmail] = useState(row.email_nha_cung_cap || "");
@@ -138,9 +140,12 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
       </p>
 
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6">
-        <strong style="color:#475569">CÔNG TY TNHH DU LỊCH S8</strong><br>
-        S8 TRAVEL COMPANY &nbsp;|&nbsp; MST: 0402021137
+      <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
+        <strong>${userProfile?.ho_ten || currentUserName}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>
+        <strong style="color:#0f172a">CÔNG TY TNHH DU LỊCH S8</strong><br>
+        MST: 0402021137<br>
+        Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam<br>
+        Email: s8travel.hddt@gmail.com
       </p>
     </div>
   </div>
@@ -189,7 +194,13 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
       "",
       "Kính nhờ xác nhận booking trong vòng 24 giờ.",
       "",
+      userProfile?.ho_ten || currentUserName,
+      ...(userProfile?.so_dien_thoai ? [userProfile.so_dien_thoai] : []),
+      "",
       "CÔNG TY TNHH DU LỊCH S8",
+      "MST: 0402021137",
+      "Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam",
+      "Email: s8travel.hddt@gmail.com",
     ].join("\n");
 
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(bodyText)}`;

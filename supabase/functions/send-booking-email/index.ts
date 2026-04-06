@@ -40,7 +40,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "S8 Travel <booking@s8travel.com>",
+        from: "S8 Travel <booking@email.s8travel.com>",
         to: toList,
         subject,
         html,

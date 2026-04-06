@@ -19,7 +19,7 @@ import {
   syncBookingStatus,
   type BookingKSDisplay,
 } from "@/hooks/use-booking-ks";
-import { useCurrentUserName } from "@/hooks/use-doan";
+import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 
@@ -263,6 +263,7 @@ function BookingKSCard({
 
   // Email state
   const sendMut = useSendKSBookingEmail();
+  const { data: userProfile } = useCurrentUserProfile();
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
@@ -314,7 +315,13 @@ function BookingKSCard({
       ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
       <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý khách sạn xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="margin:0;font-size:12px;color:#94a3b8"><strong style="color:#475569">CÔNG TY TNHH DU LỊCH S8</strong><br>S8 TRAVEL COMPANY | MST: 0402021137</p>
+      <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
+        <strong>${userProfile?.ho_ten || currentUserName}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>
+        <strong style="color:#0f172a">CÔNG TY TNHH DU LỊCH S8</strong><br>
+        MST: 0402021137<br>
+        Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam<br>
+        Email: s8travel.hddt@gmail.com
+      </p>
     </div>
   </div>
 </body></html>`;
@@ -349,7 +356,9 @@ function BookingKSCard({
 
   const handleMailtoFallback = () => {
     const loai = row.ks_dat_truoc_status !== "ks_xac_nhan" ? "dat_truoc" : "final";
-    const body = `Kính gửi ${row.khach_san_ten},\n\nS8 Travel xin đặt phòng:\n- Đoàn: ${tenDoan}\n- Ngày: ${row.ngay_dates.map(fmtDate).join(", ")} (${row.so_dem} đêm)\n- Số phòng: ${soPhongFinal || soPhong || "—"}\n\nKính nhờ xác nhận trong 24 giờ.\n\nCÔNG TY TNHH DU LỊCH S8`;
+    const userPhone = userProfile?.so_dien_thoai || "";
+    const userName = userProfile?.ho_ten || currentUserName;
+    const body = `Kính gửi ${row.khach_san_ten},\n\nCông ty TNHH Du lịch S8 xin đặt phòng cho đoàn ${tenDoan}:\n- Ngày đi: ${ngayDi ? fmtDate(ngayDi) : "—"}\n- Check-in: ${row.ngay_dates.length ? fmtDate([...row.ngay_dates].sort()[0]) : "—"}\n- Ngày: ${row.ngay_dates.map(fmtDate).join(", ")} (${row.so_dem} đêm)\n- Số phòng: ${soPhongFinal || soPhong || "—"}\n\nKính nhờ xác nhận trong 24 giờ.\n\n${userName}${userPhone ? `\n${userPhone}` : ""}\n\nCÔNG TY TNHH DU LỊCH S8\nMST: 0402021137\nĐ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam\nEmail: s8travel.hddt@gmail.com`;
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
     if (loai === "dat_truoc") {
       updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
@@ -653,7 +662,13 @@ function FinalSection({
       </table>
       <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý khách sạn xác nhận hủy trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="margin:0;font-size:12px;color:#94a3b8"><strong style="color:#475569">CÔNG TY TNHH DU LỊCH S8</strong></p>
+      <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
+        <strong>${userProfile?.ho_ten || currentUserName}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>
+        <strong style="color:#0f172a">CÔNG TY TNHH DU LỊCH S8</strong><br>
+        MST: 0402021137<br>
+        Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam<br>
+        Email: s8travel.hddt@gmail.com
+      </p>
     </div>
   </div>
 </body></html>`;
@@ -681,7 +696,9 @@ function FinalSection({
   };
 
   const handleHuyMailtoFallback = () => {
-    const body = `Kính gửi ${row.khach_san_ten},\n\nS8 Travel xin thông báo hủy booking:\n- Đoàn: ${tenDoan}\n- Ngày: ${ngayStr}\n\nKính nhờ xác nhận hủy trong 24 giờ.\n\nCÔNG TY TNHH DU LỊCH S8`;
+    const userPhone = userProfile?.so_dien_thoai || "";
+    const userName = userProfile?.ho_ten || currentUserName;
+    const body = `Kính gửi ${row.khach_san_ten},\n\nCông ty TNHH Du lịch S8 xin thông báo hủy booking:\n- Đoàn: ${tenDoan}\n- Ngày đi: ${ngayDiStr}\n- Ngày: ${ngayStr}\n\nKính nhờ xác nhận hủy trong 24 giờ.\n\n${userName}${userPhone ? `\n${userPhone}` : ""}\n\nCÔNG TY TNHH DU LỊCH S8\nMST: 0402021137\nĐ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam\nEmail: s8travel.hddt@gmail.com`;
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
     updateStatus(row, { ks_final_status: "cho_ks_xac_nhan_huy", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
     setHuyModalOpen(false);

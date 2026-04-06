@@ -180,6 +180,25 @@ export function useCurrentUserName() {
   });
 }
 
+export function useCurrentUserProfile() {
+  return useQuery({
+    queryKey: ["current-user-profile"],
+    queryFn: async () => {
+      const { data: auth } = await externalSupabase.auth.getUser();
+      if (!auth.user) return { ho_ten: "", so_dien_thoai: null as string | null };
+      const { data } = await externalSupabase
+        .from("user_roles")
+        .select("ho_ten, so_dien_thoai")
+        .eq("user_id", auth.user.id)
+        .maybeSingle();
+      return {
+        ho_ten: (data?.ho_ten || auth.user.email || "") as string,
+        so_dien_thoai: (data?.so_dien_thoai || null) as string | null,
+      };
+    },
+  });
+}
+
 // Doan list
 export function useDoanList() {
   return useQuery({
