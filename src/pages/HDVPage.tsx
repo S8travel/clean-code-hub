@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { useHDVList, useCreateHDV, useUpdateHDV, useDeleteHDV, type HDVRow } from "@/hooks/use-hdv";
 import { useAgents } from "@/hooks/use-doan";
 import { toast } from "sonner";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 const GIOI_TINH_OPTS = [
   { value: "nam", label: "Nam" },
@@ -43,6 +45,9 @@ const emptyForm = (): Omit<HDVRow, "id"> => ({
 });
 
 export default function HDVPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
+
   const { data: list = [], isLoading } = useHDVList();
   const { data: agents = [] } = useAgents();
   const createMut = useCreateHDV();

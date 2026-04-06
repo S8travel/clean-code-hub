@@ -10,8 +10,12 @@ import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast } from "sonner";
 import NhaHangDetail from "@/components/nha-hang/NhaHangDetail";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 export default function NhaHangPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
   const { data: list, isLoading } = useNhaHangList();
   const createMut = useCreateNhaHang();
   const { data: nccList } = useNhaCungCapList();

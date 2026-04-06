@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { Plus, Search, Trash2, Save, Users, ShieldAlert } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Search, Trash2, Save, Users, ShieldAlert, Shield, History } from "lucide-react";
+import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -14,6 +17,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   useNguoiDungList,
@@ -25,6 +31,11 @@ import {
   type BoPhan,
 } from "@/hooks/use-nguoi-dung";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  useRolePermissions, useUpsertRolePermissions,
+  type Resource, type PermAction, type RolePermission,
+} from "@/hooks/use-permissions";
+import { useActivityLogList, useLogActivity, type ActivityLogFilters, type ActivityAction } from "@/hooks/use-activity-log";
 import { toast } from "sonner";
 
 const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
@@ -46,6 +57,34 @@ const VAI_TRO_LABEL: Record<VaiTro, string> = {
   truong_phong: "Trưởng phòng",
   nhan_vien_cao_cap: "NV Cao cấp",
   nhan_vien: "Nhân viên",
+};
+
+const RESOURCES: { value: Resource; label: string }[] = [
+  { value: "doan", label: "Đoàn" },
+  { value: "chi_phi", label: "Chi phí" },
+  { value: "dntt", label: "ĐNTT" },
+  { value: "danh_muc", label: "Danh mục" },
+  { value: "seri", label: "Seri" },
+  { value: "thanh_toan_dk", label: "TT định kỳ" },
+  { value: "cong_no", label: "Công nợ" },
+  { value: "hoa_don_unc", label: "HĐ & UNC" },
+  { value: "nguoi_dung", label: "Người dùng" },
+];
+
+const ACTIONS: { field: keyof Pick<RolePermission, "can_view" | "can_create" | "can_edit" | "can_delete">; label: string }[] = [
+  { field: "can_view", label: "Xem" },
+  { field: "can_create", label: "Tạo" },
+  { field: "can_edit", label: "Sửa" },
+  { field: "can_delete", label: "Xóa" },
+];
+
+const ACTION_LABEL: Record<string, string> = {
+  tao: "Tạo",
+  sua: "Sửa",
+  xoa: "Xóa",
+  duyet: "Duyệt",
+  tu_choi: "Từ chối",
+  thanh_toan: "Thanh toán",
 };
 
 const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
@@ -92,10 +131,46 @@ export default function NguoiDungPage() {
 }
 
 function NguoiDungContent() {
+  return (
+    <div className="h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
+      <Tabs defaultValue="nguoi_dung" className="flex flex-col flex-1 overflow-hidden">
+        <div className="border-b px-6 pt-4 pb-0 shrink-0">
+          <h1 className="text-lg font-semibold mb-3">Quản lý hệ thống</h1>
+          <TabsList className="h-9">
+            <TabsTrigger value="nguoi_dung" className="text-xs gap-1.5">
+              <Users className="h-3.5 w-3.5" /> Người dùng
+            </TabsTrigger>
+            <TabsTrigger value="phan_quyen" className="text-xs gap-1.5">
+              <Shield className="h-3.5 w-3.5" /> Phân quyền
+            </TabsTrigger>
+            <TabsTrigger value="nhat_ky" className="text-xs gap-1.5">
+              <History className="h-3.5 w-3.5" /> Nhật ký
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="nguoi_dung" className="flex-1 overflow-hidden mt-0">
+          <NguoiDungTab />
+        </TabsContent>
+        <TabsContent value="phan_quyen" className="flex-1 overflow-auto mt-0 px-6 py-4">
+          <PhanQuyenTab />
+        </TabsContent>
+        <TabsContent value="nhat_ky" className="flex-1 overflow-auto mt-0 px-6 py-4">
+          <NhatKyTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ── Tab 1: Người dùng ────────────────────────────────────────────────────────
+
+function NguoiDungTab() {
   const { data: list = [], isLoading } = useNguoiDungList();
   const createMut = useCreateNguoiDung();
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
+  const logActivity = useLogActivity();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -148,6 +223,7 @@ function NguoiDungContent() {
       setNewName("");
       setNewEmail("");
       setShowCreate(false);
+      logActivity.mutate({ action: "tao", table_name: "user_roles", record_id: created.id, mo_ta: `Tạo tài khoản ${newName.trim()}` });
       toast.success("Đã thêm người dùng");
     } catch (e: any) {
       if (e?.code === "23505") {
@@ -180,7 +256,9 @@ function NguoiDungContent() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
+      const name = deleteTarget.ho_ten;
       await deleteMut.mutateAsync(deleteTarget.id);
+      logActivity.mutate({ action: "xoa", table_name: "user_roles", record_id: deleteTarget.id, mo_ta: `Xóa tài khoản ${name}` });
       if (selectedId === deleteTarget.id) setSelectedId(null);
       setDeleteTarget(null);
       toast.success("Đã xóa");
@@ -190,7 +268,7 @@ function NguoiDungContent() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* ── Left: danh sách ── */}
       <div className="w-72 shrink-0 border-r flex flex-col bg-card">
         <div className="p-3 border-b space-y-2">
@@ -450,6 +528,277 @@ function NguoiDungContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ── Tab 2: Phân quyền ────────────────────────────────────────────────────────
+
+// Matrix state: role → resource → { can_view, can_create, can_edit, can_delete }
+type PermMatrix = Record<string, Record<string, Record<string, boolean>>>;
+
+function buildMatrix(perms: RolePermission[]): PermMatrix {
+  const m: PermMatrix = {};
+  for (const role of VAI_TRO_OPTS.map((o) => o.value)) {
+    m[role] = {};
+    for (const res of RESOURCES.map((r) => r.value)) {
+      const row = perms.find((p) => p.role === role && p.resource === res);
+      m[role][res] = {
+        can_view: row?.can_view ?? false,
+        can_create: row?.can_create ?? false,
+        can_edit: row?.can_edit ?? false,
+        can_delete: row?.can_delete ?? false,
+      };
+    }
+  }
+  return m;
+}
+
+function PhanQuyenTab() {
+  const { data: perms = [], isLoading } = useRolePermissions();
+  const upsertMut = useUpsertRolePermissions();
+
+  const [matrix, setMatrix] = useState<PermMatrix>({});
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setMatrix(buildMatrix(perms));
+      setDirty(false);
+    }
+  }, [perms, isLoading]);
+
+  const toggle = (role: string, resource: string, field: string) => {
+    if (role === "admin") return; // admin luôn có tất cả
+    setMatrix((prev) => ({
+      ...prev,
+      [role]: {
+        ...prev[role],
+        [resource]: {
+          ...prev[role]?.[resource],
+          [field]: !prev[role]?.[resource]?.[field],
+        },
+      },
+    }));
+    setDirty(true);
+  };
+
+  const handleSave = () => {
+    const rows: Omit<RolePermission, "id">[] = [];
+    for (const role of VAI_TRO_OPTS.map((o) => o.value)) {
+      for (const res of RESOURCES.map((r) => r.value)) {
+        const cell = matrix[role]?.[res] ?? {};
+        rows.push({
+          role,
+          resource: res,
+          can_view: role === "admin" ? true : !!cell.can_view,
+          can_create: role === "admin" ? true : !!cell.can_create,
+          can_edit: role === "admin" ? true : !!cell.can_edit,
+          can_delete: role === "admin" ? true : !!cell.can_delete,
+        });
+      }
+    }
+    upsertMut.mutate(rows, {
+      onSuccess: () => { toast.success("Đã lưu phân quyền"); setDirty(false); },
+      onError: (e: any) => toast.error("Lỗi: " + e?.message),
+    });
+  };
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Đang tải...</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Ma trận phân quyền</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Admin luôn có toàn quyền. Thay đổi sẽ có hiệu lực khi người dùng đăng nhập lại.
+          </p>
+        </div>
+        <Button size="sm" onClick={handleSave} disabled={!dirty || upsertMut.isPending}>
+          <Save className="h-3.5 w-3.5 mr-1.5" />
+          {upsertMut.isPending ? "Đang lưu..." : "Lưu"}
+        </Button>
+      </div>
+
+      <div className="border rounded-lg overflow-auto">
+        <table className="text-xs w-full">
+          <thead>
+            <tr className="border-b bg-muted/40">
+              <th className="text-left px-3 py-2 font-medium sticky left-0 bg-muted/40 w-36">Vai trò</th>
+              {RESOURCES.map((r) => (
+                <th key={r.value} colSpan={4} className="px-2 py-2 font-medium text-center border-l">
+                  {r.label}
+                </th>
+              ))}
+            </tr>
+            <tr className="border-b bg-muted/20">
+              <th className="sticky left-0 bg-muted/20" />
+              {RESOURCES.map((r) =>
+                ACTIONS.map((a) => (
+                  <th key={r.value + a.field} className="px-1 py-1.5 font-normal text-muted-foreground text-center w-10">
+                    {a.label}
+                  </th>
+                ))
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {VAI_TRO_OPTS.map((role, ri) => (
+              <tr key={role.value} className={cn("border-b last:border-0", ri % 2 === 0 ? "" : "bg-muted/10")}>
+                <td className={cn("px-3 py-2 font-medium sticky left-0", ri % 2 === 0 ? "bg-background" : "bg-muted/10")}>
+                  {role.label}
+                  {role.value === "admin" && (
+                    <span className="ml-1.5 text-[10px] text-muted-foreground">(tất cả)</span>
+                  )}
+                </td>
+                {RESOURCES.map((res) =>
+                  ACTIONS.map((act) => {
+                    const checked = role.value === "admin"
+                      ? true
+                      : !!matrix[role.value]?.[res.value]?.[act.field];
+                    return (
+                      <td key={res.value + act.field} className="text-center px-1 py-2">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggle(role.value, res.value, act.field)}
+                          disabled={role.value === "admin"}
+                          className="h-3.5 w-3.5"
+                        />
+                      </td>
+                    );
+                  })
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab 3: Nhật ký ───────────────────────────────────────────────────────────
+
+function NhatKyTab() {
+  const { data: userList = [] } = useNguoiDungList();
+
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [userId, setUserId] = useState("");
+  const [action, setAction] = useState("");
+
+  const filters = useMemo<ActivityLogFilters>(() => ({
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+    userId: userId || null,
+    action: (action as ActivityAction) || null,
+  }), [fromDate, toDate, userId, action]);
+
+  const { data: logs = [], isLoading } = useActivityLogList(filters);
+
+  return (
+    <div className="space-y-4">
+      <h2 className="font-semibold">Nhật ký hoạt động</h2>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Từ ngày</label>
+          <Input
+            type="date"
+            className="h-8 text-sm w-36"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Đến ngày</label>
+          <Input
+            type="date"
+            className="h-8 text-sm w-36"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Người dùng</label>
+          <Select value={userId || "all"} onValueChange={(v) => setUserId(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-44 h-8 text-sm"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              {userList.map((u) => (
+                <SelectItem key={u.user_id} value={u.user_id}>
+                  {u.ho_ten ?? u.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Hành động</label>
+          <Select value={action || "all"} onValueChange={(v) => setAction(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="tao">Tạo</SelectItem>
+              <SelectItem value="sua">Sửa</SelectItem>
+              <SelectItem value="xoa">Xóa</SelectItem>
+              <SelectItem value="duyet">Duyệt</SelectItem>
+              <SelectItem value="tu_choi">Từ chối</SelectItem>
+              <SelectItem value="thanh_toan">Thanh toán</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant="ghost" size="sm"
+          onClick={() => { setFromDate(""); setToDate(""); setUserId(""); setAction(""); }}
+        >
+          Đặt lại
+        </Button>
+      </div>
+
+      {/* Table */}
+      <div className="border rounded-lg overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="text-xs">
+              <TableHead className="w-36">Thời gian</TableHead>
+              <TableHead className="w-36">Người dùng</TableHead>
+              <TableHead className="w-24">Hành động</TableHead>
+              <TableHead>Mô tả</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                  Đang tải...
+                </TableCell>
+              </TableRow>
+            ) : logs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                  Không có dữ liệu
+                </TableCell>
+              </TableRow>
+            ) : logs.map((log) => (
+              <TableRow key={log.id} className="text-sm">
+                <TableCell className="text-xs text-muted-foreground">
+                  {format(new Date(log.created_at), "dd/MM/yyyy HH:mm")}
+                </TableCell>
+                <TableCell className="text-sm">{log.ho_ten ?? "—"}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-xs">
+                    {ACTION_LABEL[log.action] ?? log.action}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{log.mo_ta ?? "—"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

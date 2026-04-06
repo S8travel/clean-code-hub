@@ -14,8 +14,12 @@ import KhachSanDetail from "@/components/khach-san/KhachSanDetail";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 export default function KhachSanPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
   const { data: list, isLoading } = useKhachSanList();
   const { data: nccList } = useNhaCungCapList();
   const createMut = useCreateKhachSan();

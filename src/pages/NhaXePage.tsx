@@ -14,8 +14,12 @@ import NhaXeDetail from "@/components/nha-xe/NhaXeDetail";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 export default function NhaXePage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
   const { data: list, isLoading } = useNhaXeList();
   const { data: nccList } = useNhaCungCapList();
   const createMut = useCreateNhaXe();

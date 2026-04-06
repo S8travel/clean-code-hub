@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
 import { Search, RotateCcw, Check, X, Trash2, CreditCard, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +37,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
+import { useLogActivity } from "@/hooks/use-activity-log";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -56,6 +59,9 @@ const ttBadge: Record<string, { text: string; cls: string }> = {
 };
 
 export default function DNTTPage() {
+  const canView = usePermission("dntt", "view");
+  if (!canView) return <AccessDenied />;
+
   const navigate = useNavigate();
   const now = new Date();
   const [doanId, setDoanId] = useState<string>("");
@@ -83,6 +89,7 @@ export default function DNTTPage() {
   const cancelMut = useCancelDNTT();
 
   const adjustMut = useCreateAdjustment();
+  const logActivity = useLogActivity();
 
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -112,7 +119,10 @@ export default function DNTTPage() {
 
   const handleApprove = (id: number) => {
     approveMut.mutate(id, {
-      onSuccess: () => toast({ title: "Đã duyệt ĐNTT" }),
+      onSuccess: () => {
+        toast({ title: "Đã duyệt ĐNTT" });
+        logActivity.mutate({ action: "duyet", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Duyệt ĐNTT #${id}` });
+      },
     });
   };
 
@@ -121,6 +131,7 @@ export default function DNTTPage() {
     rejectMut.mutate({ id: rejectId, ghiChu: rejectReason }, {
       onSuccess: () => {
         toast({ title: "Đã từ chối ĐNTT" });
+        logActivity.mutate({ action: "tu_choi", table_name: "de_nghi_thanh_toan", record_id: rejectId, mo_ta: `Từ chối ĐNTT #${rejectId}` });
         setRejectId(null);
         setRejectReason("");
       },
@@ -129,7 +140,10 @@ export default function DNTTPage() {
 
   const handleMarkPaid = (id: number) => {
     markPaidMut.mutate(id, {
-      onSuccess: () => toast({ title: "Đã xác nhận thanh toán" }),
+      onSuccess: () => {
+        toast({ title: "Đã xác nhận thanh toán" });
+        logActivity.mutate({ action: "thanh_toan", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Xác nhận TT ĐNTT #${id}` });
+      },
     });
   };
 

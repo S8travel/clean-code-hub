@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +45,8 @@ const ttLabel: Record<string, { text: string; cls: string }> = {
 };
 
 export default function ThanhToanDinhKyPage() {
+  const canView = usePermission("thanh_toan_dk", "view");
+  if (!canView) return <AccessDenied />;
   const [filterNcc, setFilterNcc] = useState<string>("all");
   const [tuNgay, setTuNgay] = useState<Date | undefined>();
   const [denNgay, setDenNgay] = useState<Date | undefined>();

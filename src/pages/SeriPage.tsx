@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 import { Plus, Pencil, Trash2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,6 +110,9 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
 
 // ── Main page ──
 export default function SeriPage() {
+  const canView = usePermission("seri", "view");
+  if (!canView) return <AccessDenied />;
+
   const { data: seriList = [], isLoading } = useSeriList();
   const createSeri = useCreateSeri();
   const updateSeri = useUpdateSeri();

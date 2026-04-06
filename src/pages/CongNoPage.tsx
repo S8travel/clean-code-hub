@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 import { Search, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,8 @@ const statusBadge: Record<string, { text: string; cls: string }> = {
 };
 
 export default function CongNoPage() {
+  const canView = usePermission("cong_no", "view");
+  if (!canView) return <AccessDenied />;
   const navigate = useNavigate();
   const [doanId, setDoanId] = useState<string>("");
   const [loai, setLoai] = useState("");

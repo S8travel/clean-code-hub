@@ -14,8 +14,12 @@ import DonViVisaDetail from "@/components/visa/DonViVisaDetail";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 export default function VisaPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
   const { data: list, isLoading } = useDonViVisaList();
   const { data: nccList } = useNhaCungCapList();
   const createMut = useCreateDonViVisa();

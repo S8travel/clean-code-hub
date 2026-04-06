@@ -14,8 +14,12 @@ import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast } from "sonner";
 import CanhDiemDetail from "@/components/canh-diem/CanhDiemDetail";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 export default function CanhDiemPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
   const { data: list, isLoading } = useCanhDiemList();
   const createMut = useCreateCanhDiem();
   const { data: nccList } = useNhaCungCapList();

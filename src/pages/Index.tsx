@@ -29,6 +29,7 @@ import {
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useApplySeriToDoan } from "@/hooks/use-seri";
+import { useLogActivity } from "@/hooks/use-activity-log";
 
 const PAGE_SIZE = 20;
 
@@ -48,6 +49,7 @@ export default function Index() {
   const cancelDoan = useCancelDoan();
   const addPerm = useAddDoanPermission();
   const applySeri = useApplySeriToDoan();
+  const logActivity = useLogActivity();
   const { data: agents } = useAgents();
   const { data: diaDiemList } = useDiaDiem();
   const { data: userRoles } = useUserRoles();
@@ -126,6 +128,7 @@ export default function Index() {
     try {
       if (editingDoan) {
         await updateDoan.mutateAsync({ id: editingDoan.id, ...data });
+        logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         toast.success("Đã cập nhật đoàn");
       } else {
         const created = await createDoan.mutateAsync(data);
@@ -140,6 +143,9 @@ export default function Index() {
               quyen: "admin",
             });
           } catch { /* ignore if permission already exists */ }
+        }
+        if (created) {
+          logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${data.ten_doan}` });
         }
         // Apply seri if selected
         if (created && data.seri_id && data.ngay_di) {
@@ -163,7 +169,9 @@ export default function Index() {
   const handleDelete = async () => {
     if (!deletingDoan) return;
     try {
+      const name = deletingDoan.ten_doan;
       await deleteDoan.mutateAsync(deletingDoan.id);
+      logActivity.mutate({ action: "xoa", table_name: "doan", record_id: deletingDoan.id, mo_ta: `Xóa đoàn ${name}` });
       toast.success("Đã xoá đoàn");
       setDeletingDoan(null);
     } catch {

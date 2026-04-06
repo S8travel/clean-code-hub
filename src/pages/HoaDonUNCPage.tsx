@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef } from "react";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
@@ -181,6 +183,9 @@ function DocCell({
 }
 
 export default function HoaDonUNCPage() {
+  const canView = usePermission("hoa_don_unc", "view");
+  if (!canView) return <AccessDenied />;
+
   const navigate = useNavigate();
 
   const [doanId, setDoanId] = useState<string>("");

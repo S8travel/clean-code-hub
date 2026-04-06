@@ -8,8 +8,12 @@ import { cn } from "@/lib/utils";
 import { useNhaCungCapList, useCreateNhaCungCap, type NhaCungCap } from "@/hooks/use-nha-cung-cap";
 import { toast } from "sonner";
 import NhaCungCapDetail from "@/components/nha-cung-cap/NhaCungCapDetail";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 export default function NhaCungCapPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
   const { data: list, isLoading } = useNhaCungCapList();
   const createMut = useCreateNhaCungCap();
   const [selectedId, setSelectedId] = useState<number | null>(null);
