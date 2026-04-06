@@ -1,4 +1,5 @@
 import { externalSupabase } from "@/lib/supabase-external";
+import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export interface Doan {
@@ -184,7 +185,7 @@ export function useCurrentUserProfile() {
   return useQuery({
     queryKey: ["current-user-profile"],
     queryFn: async () => {
-      const { data: auth } = await externalSupabase.auth.getUser();
+      const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return { ho_ten: "", so_dien_thoai: null as string | null, email: null as string | null };
       const { data } = await externalSupabase
         .from("user_roles")
