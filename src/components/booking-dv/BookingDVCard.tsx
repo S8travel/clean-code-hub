@@ -176,6 +176,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         html: emailBody,
         sentBy: currentUserName,
         replyTo: currentUserEmail ?? undefined,
+        emailThreadId: row.email_thread_id,
       });
       setEmailModalOpen(false);
       toast.success("Đã gửi email booking");

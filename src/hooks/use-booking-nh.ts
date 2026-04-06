@@ -16,6 +16,7 @@ export interface BookingNHRow {
   booking_status: string;
   sent_at: string | null;
   sent_by: string | null;
+  email_thread_id: string | null;
 }
 
 export interface MenuDayData {
@@ -204,7 +205,11 @@ export function useSendNHBookingEmail() {
       html: string;
       sentBy: string;
       replyTo?: string;
+      emailThreadId?: string | null;
     }) => {
+      const threadId = params.emailThreadId ?? crypto.randomUUID();
+      const isFirst = !params.emailThreadId;
+
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
         headers: {
@@ -212,7 +217,11 @@ export function useSendNHBookingEmail() {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo || localStorage.getItem("crm_current_user_email") || undefined }),
+        body: JSON.stringify({
+          to: params.to, subject: params.subject, html: params.html,
+          replyTo: params.replyTo || localStorage.getItem("crm_current_user_email") || undefined,
+          ...(isFirst ? { messageId: threadId } : { inReplyTo: threadId }),
+        }),
       });
       if (!res.ok) {
         const errText = await res.text();
@@ -227,6 +236,7 @@ export function useSendNHBookingEmail() {
           booking_status: "da_gui",
           sent_at: new Date().toISOString(),
           sent_by: params.sentBy,
+          email_thread_id: threadId,
         })
         .eq("id", params.bookingId);
       if (error) throw error;

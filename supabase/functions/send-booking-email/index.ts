@@ -11,8 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { to, subject, html, replyTo } = await req.json();
-    console.log("[debug] replyTo:", replyTo);
+    const { to, subject, html, replyTo, messageId, inReplyTo } = await req.json();
 
     if (!to || !subject || !html) {
       return new Response(
@@ -46,6 +45,12 @@ serve(async (req) => {
         subject,
         html,
         ...(replyTo ? { reply_to: [replyTo] } : {}),
+        ...((messageId || inReplyTo) ? {
+          headers: {
+            ...(messageId  ? { "Message-ID":  `<${messageId}@email.s8travel.com>` } : {}),
+            ...(inReplyTo  ? { "In-Reply-To": `<${inReplyTo}@email.s8travel.com>`, "References": `<${inReplyTo}@email.s8travel.com>` } : {}),
+          }
+        } : {}),
       }),
     });
 

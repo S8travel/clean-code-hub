@@ -20,6 +20,7 @@ export interface BookingDVRow {
   sent_by: string | null;
   confirm_at: string | null;
   created_at: string;
+  email_thread_id: string | null;
 }
 
 export function useBookingDVList(doanId: number | undefined) {
@@ -85,6 +86,8 @@ export async function callSendBookingEmail(params: {
   subject: string;
   html: string;
   replyTo?: string;
+  messageId?: string;
+  inReplyTo?: string;
 }): Promise<void> {
   const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
     method: "POST",
@@ -114,8 +117,15 @@ export function useSendBookingEmail() {
       html: string;
       sentBy: string;
       replyTo?: string;
+      emailThreadId?: string | null;
     }) => {
-      await callSendBookingEmail({ to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo });
+      const threadId = params.emailThreadId ?? crypto.randomUUID();
+      const isFirst = !params.emailThreadId;
+
+      await callSendBookingEmail({
+        to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo,
+        ...(isFirst ? { messageId: threadId } : { inReplyTo: threadId }),
+      });
 
       const { error: updateErr } = await externalSupabase
         .from("doan_booking_dv")
@@ -123,6 +133,7 @@ export function useSendBookingEmail() {
           booking_status: "cho_xac_nhan",
           sent_at: new Date().toISOString(),
           sent_by: params.sentBy,
+          email_thread_id: threadId,
         })
         .eq("id", params.bookingId);
       if (updateErr) throw updateErr;
