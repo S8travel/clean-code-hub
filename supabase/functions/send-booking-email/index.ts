@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { to, subject, html, replyTo, inReplyTo } = await req.json();
+    const { to, subject, html, replyTo, messageId, inReplyTo } = await req.json();
 
     if (!to || !subject || !html) {
       return new Response(
@@ -45,10 +45,10 @@ serve(async (req) => {
         subject,
         html,
         ...(replyTo ? { reply_to: [replyTo], bcc: [replyTo] } : {}),
-        ...(inReplyTo ? {
+        ...((messageId || inReplyTo) ? {
           headers: {
-            "In-Reply-To": `<${inReplyTo}@resend.dev>`,
-            "References":  `<${inReplyTo}@resend.dev>`,
+            ...(messageId  ? { "Message-ID":  `<${messageId}@email.s8travel.com>` } : {}),
+            ...(inReplyTo  ? { "In-Reply-To": `<${inReplyTo}@email.s8travel.com>`, "References": `<${inReplyTo}@email.s8travel.com>` } : {}),
           }
         } : {}),
       }),

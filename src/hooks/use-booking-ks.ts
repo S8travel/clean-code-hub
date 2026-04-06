@@ -155,6 +155,7 @@ export function useSendKSBookingEmail() {
       emailThreadId?: string | null;
     }) => {
       const isFirst = !params.emailThreadId;
+      const newThreadId = isFirst ? crypto.randomUUID() : null;
 
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
@@ -166,7 +167,7 @@ export function useSendKSBookingEmail() {
         body: JSON.stringify({
           to: params.to, subject: params.subject, html: params.html,
           replyTo: params.replyTo || localStorage.getItem("crm_current_user_email") || undefined,
-          ...(!isFirst ? { inReplyTo: params.emailThreadId } : {}),
+          ...(isFirst ? { messageId: newThreadId } : { inReplyTo: params.emailThreadId }),
         }),
       });
       if (!res.ok) {
@@ -176,7 +177,7 @@ export function useSendKSBookingEmail() {
       const data = await res.json();
       if (data?.error) throw new Error(data.error);
 
-      const threadId = isFirst ? (data.id ?? null) : params.emailThreadId;
+      const threadId = isFirst ? newThreadId : params.emailThreadId;
 
       // Cập nhật trạng thái tương ứng
       const now = new Date().toISOString();
