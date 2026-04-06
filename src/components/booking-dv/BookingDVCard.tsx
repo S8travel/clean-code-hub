@@ -183,7 +183,27 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     }
   };
 
+  const buildMailtoBody = () => [
+    `KÃ­nh gá»­i ${tenNCC || row.ten_nha_cung_cap},`,
+    "",
+    `S8 Travel xin Ä‘áº·t dá»‹ch vá»¥ cho Ä‘oÃ n ${tenDoan}:`,
+    "",
+    ...dvSorted.map((d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khÃ¡ch)`),
+    ...(ghiChu ? ["", `Ghi chÃº: ${ghiChu}`] : []),
+    "",
+    "KÃ­nh nhá» xÃ¡c nháº­n booking trong vÃ²ng 24 giá».",
+    "",
+    userProfile?.ho_ten || currentUserName,
+    ...(userProfile?.so_dien_thoai ? [userProfile.so_dien_thoai] : []),
+    "",
+    "CÃ”NG TY TNHH DU Lá»ŠCH S8",
+    "MST: 0402021137",
+    "Ä/C: Táº§ng 2, TÃ²a nhÃ  Kim SÆ¡n, Sá»‘ 18 Phan ThÃ nh TÃ i, PhÆ°á»ng HÃ²a CÆ°á»ng, ThÃ nh Phá»‘ ÄÃ  Náºµng, Viá»‡t Nam",
+    "Email: s8travel.hddt@gmail.com",
+  ].join("\n");
+
   const handleMailtoFallback = () => {
+    const mailtoBody = buildMailtoBody();
     const bodyText = [
       `Kính gửi ${tenNCC || row.ten_nha_cung_cap},`,
       "",
@@ -203,7 +223,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
       "Email: s8travel.hddt@gmail.com",
     ].join("\n");
 
-    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(bodyText)}`;
+    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
     save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
@@ -405,6 +425,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         onSubjectChange={setEmailSubject}
         html={emailBody}
         onHtmlChange={setEmailBody}
+        textBody={buildMailtoBody()}
         onSendViaServer={handleSendViaServer}
         onMailtoFallback={handleMailtoFallback}
         sending={sending}

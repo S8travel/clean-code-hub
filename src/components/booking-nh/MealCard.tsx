@@ -267,6 +267,34 @@ export default function MealCard({
     setEmailModalOpen(true);
   };
 
+  const buildMailtoBody = () => {
+    const buaLabel = buaAn === "trua" ? "Ä‚n trÆ°a" : "Ä‚n tá»‘i";
+    const userPhone = userProfile?.so_dien_thoai || "";
+    const userName = userProfile?.ho_ten || currentUserName;
+    return [
+      `KÃ­nh gá»­i ${nhaHangTen},`,
+      ``,
+      `CÃ´ng ty TNHH Du lá»‹ch S8 xin Ä‘áº·t ${buaLabel.toLowerCase()} cho Ä‘oÃ n ${tenDoan || ""}:`,
+      ngayDate ? `- NgÃ y: ${fmtDate(ngayDate)}` : "",
+      `- Bá»¯a Äƒn: ${buaLabel}`,
+      soKhach != null ? `- Sá»‘ khÃ¡ch: ${soKhach} khÃ¡ch` : "",
+      selectedMenu ? `- Set menu: ${selectedMenu.ten_set}` : "",
+      monList.length > 0 ? `\nDanh sÃ¡ch mÃ³n:` : "",
+      ...monList.map((m, i) => `${i + 1}. ${m}`),
+      ...(ghiChu ? [`\nGhi chÃº: ${ghiChu}`] : []),
+      ``,
+      `KÃ­nh nhá» xÃ¡c nháº­n trong 24 giá».`,
+      ``,
+      userName,
+      userPhone,
+      ``,
+      `CÃ”NG TY TNHH DU Lá»ŠCH S8`,
+      `MST: 0402021137`,
+      `Ä/C: Táº§ng 2, TÃ²a nhÃ  Kim SÆ¡n, Sá»‘ 18 Phan ThÃ nh TÃ i, PhÆ°á»ng HÃ²a CÆ°á»ng, ThÃ nh Phá»‘ ÄÃ  Náºµng, Viá»‡t Nam`,
+      `Email: s8travel.hddt@gmail.com`,
+    ].filter(Boolean).join("\n");
+  };
+
   const handleSendViaServer = async () => {
     if (!booking?.id) {
       // Upsert booking trước nếu chưa có
@@ -294,6 +322,7 @@ export default function MealCard({
   };
 
   const handleMailtoFallback = () => {
+    const mailtoBody = buildMailtoBody();
     const buaLabel = buaAn === "trua" ? "Ăn trưa" : "Ăn tối";
     const userPhone = userProfile?.so_dien_thoai || "";
     const userName = userProfile?.ho_ten || currentUserName;
@@ -319,7 +348,7 @@ export default function MealCard({
       `Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam`,
       `Email: s8travel.hddt@gmail.com`,
     ].filter(Boolean).join("\n");
-    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
     saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName });
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
@@ -518,6 +547,7 @@ export default function MealCard({
       onSubjectChange={setEmailSubject}
       html={emailHtml}
       onHtmlChange={setEmailHtml}
+      textBody={buildMailtoBody()}
       onSendViaServer={handleSendViaServer}
       onMailtoFallback={handleMailtoFallback}
       sending={sending}

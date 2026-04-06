@@ -20,6 +20,7 @@ interface Props {
   onSubjectChange: (v: string) => void;
   html: string;
   onHtmlChange: (v: string) => void;
+  textBody?: string;
   onSendViaServer: () => Promise<void>;
   onMailtoFallback: () => void;
   sending: boolean;
@@ -28,28 +29,27 @@ interface Props {
 export default function EmailPreviewModal({
   open,
   onOpenChange,
-  title = "Gửi email",
+  title = "Gui email",
   to,
   onToChange,
   subject,
   onSubjectChange,
   html,
   onHtmlChange,
+  textBody = "",
   onSendViaServer,
   onMailtoFallback,
   sending,
 }: Props) {
-  const [tab, setTab] = useState<"preview" | "edit">("preview");
+  const [tab, setTab] = useState<"preview" | "client" | "edit">("preview");
   const editRef = useRef<HTMLDivElement>(null);
 
-  // Khi switch sang tab edit, render HTML vào contenteditable div
   useEffect(() => {
     if (tab === "edit" && editRef.current) {
       editRef.current.innerHTML = html;
     }
-  }, [tab]);
+  }, [tab, html]);
 
-  // Reset về preview khi modal đóng
   useEffect(() => {
     if (!open) setTab("preview");
   }, [open]);
@@ -65,13 +65,12 @@ export default function EmailPreviewModal({
         </DialogHeader>
 
         <div className="px-6 py-4 space-y-3 overflow-y-auto flex-1">
-          {/* To + Subject */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-muted-foreground mb-1">
-                Đến{" "}
+                Den{" "}
                 <span className="text-muted-foreground/60 font-normal">
-                  (nhiều email cách nhau bằng dấu phẩy)
+                  (nhieu email cach nhau bang dau phay)
                 </span>
               </p>
               <Input
@@ -82,7 +81,7 @@ export default function EmailPreviewModal({
               />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Tiêu đề</p>
+              <p className="text-xs text-muted-foreground mb-1">Tieu de</p>
               <Input
                 value={subject}
                 onChange={(e) => onSubjectChange(e.target.value)}
@@ -91,7 +90,6 @@ export default function EmailPreviewModal({
             </div>
           </div>
 
-          {/* Tab toggle */}
           <div className="flex items-center gap-1 border-b border-border pb-1">
             <button
               onClick={() => setTab("preview")}
@@ -102,7 +100,18 @@ export default function EmailPreviewModal({
               }`}
             >
               <Eye className="h-3 w-3" />
-              Xem trước
+              Xem truoc HTML
+            </button>
+            <button
+              onClick={() => setTab("client")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                tab === "client"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Mail className="h-3 w-3" />
+              Mail client
             </button>
             <button
               onClick={() => setTab("edit")}
@@ -113,11 +122,10 @@ export default function EmailPreviewModal({
               }`}
             >
               <Pencil className="h-3 w-3" />
-              Chỉnh sửa
+              Chinh sua HTML
             </button>
           </div>
 
-          {/* Content */}
           {tab === "preview" ? (
             <iframe
               srcDoc={html}
@@ -125,6 +133,12 @@ export default function EmailPreviewModal({
               className="w-full h-[380px] rounded border border-border bg-white"
               title="Email preview"
             />
+          ) : tab === "client" ? (
+            <div className="w-full h-[380px] rounded border border-border bg-white overflow-auto p-4">
+              <pre className="text-sm whitespace-pre-wrap break-words font-sans text-slate-800">
+                {textBody || "Mail client se nhan noi dung text thuan qua mailto:."}
+              </pre>
+            </div>
           ) : (
             <div
               ref={editRef}
@@ -138,20 +152,20 @@ export default function EmailPreviewModal({
           )}
 
           <p className="text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
-            <strong>Gửi qua server</strong> dùng Supabase Edge Function (cần cấu hình{" "}
-            <code className="text-[11px]">RESEND_API_KEY</code>).{" "}
-            <strong>Mở email client</strong> dùng ứng dụng mail mặc định, không cần cấu hình.
+            <strong>Gui qua server</strong> dung HTML dung nhu tab xem truoc.{" "}
+            <strong>Mo email client</strong> dung <code className="text-[11px]">mailto:</code>,
+            nen da so app mail, dac biet Outlook, chi nhan ban text thuan va se khac bo cuc HTML.
           </p>
         </div>
 
         <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
           <Button variant="outline" onClick={onMailtoFallback} type="button">
             <Mail className="h-4 w-4 mr-1.5" />
-            Mở email client
+            Mo email client
           </Button>
           <Button onClick={onSendViaServer} disabled={sending || !to}>
             <Send className="h-4 w-4 mr-1.5" />
-            {sending ? "Đang gửi..." : "Gửi qua server"}
+            {sending ? "Dang gui..." : "Gui qua server"}
           </Button>
         </DialogFooter>
       </DialogContent>
