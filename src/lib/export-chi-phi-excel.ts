@@ -549,7 +549,7 @@ function createZipBlob(files: Array<{ name: string; content: string }>): Blob {
   endView.setUint32(16, offset, true);
   endView.setUint16(20, 0, true);
 
-  return new Blob([...localParts, ...centralParts, endHeader], {
+  return new Blob([...localParts, ...centralParts, endHeader] as BlobPart[], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 }

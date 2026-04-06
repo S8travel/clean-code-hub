@@ -42,7 +42,7 @@ export function useLogActivity() {
 
   return useMutation({
     mutationFn: async (vars: LogActivityVars) => {
-      const { error } = await supabase.from("activity_log").insert({
+      const { error } = await externalSupabase.from("activity_log").insert({
         user_id: user?.id ?? null,
         ho_ten: user?.ho_ten ?? null,
         action: vars.action,
@@ -60,7 +60,7 @@ export function useActivityLogList(filters: ActivityLogFilters = {}) {
   return useQuery({
     queryKey: ["activity_log", filters],
     queryFn: async () => {
-      let q = supabase
+      let q = externalSupabase
         .from("activity_log")
         .select("*")
         .order("created_at", { ascending: false })

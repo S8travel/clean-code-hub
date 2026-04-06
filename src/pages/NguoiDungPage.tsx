@@ -98,6 +98,7 @@ const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   so_dien_thoai: null,
   ghi_chu: null,
   active: true,
+  password_hash: null,
 });
 
 // ── Admin Guard ─────────────────────────────────────────────────────────────

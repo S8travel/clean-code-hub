@@ -12,6 +12,7 @@ serve(async (req) => {
 
   try {
     const { to, subject, html, replyTo } = await req.json();
+    console.log("[debug] replyTo:", replyTo);
 
     if (!to || !subject || !html) {
       return new Response(
