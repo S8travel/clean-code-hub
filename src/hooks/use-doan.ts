@@ -185,7 +185,7 @@ export function useCurrentUserProfile() {
     queryKey: ["current-user-profile"],
     queryFn: async () => {
       const { data: auth } = await externalSupabase.auth.getUser();
-      if (!auth.user) return { ho_ten: "", so_dien_thoai: null as string | null };
+      if (!auth.user) return { ho_ten: "", so_dien_thoai: null as string | null, email: null as string | null };
       const { data } = await externalSupabase
         .from("user_roles")
         .select("ho_ten, so_dien_thoai")
@@ -194,6 +194,7 @@ export function useCurrentUserProfile() {
       return {
         ho_ten: (data?.ho_ten || auth.user.email || "") as string,
         so_dien_thoai: (data?.so_dien_thoai || null) as string | null,
+        email: (auth.user.email || null) as string | null,
       };
     },
   });

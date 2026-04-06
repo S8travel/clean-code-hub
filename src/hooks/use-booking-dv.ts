@@ -84,6 +84,7 @@ export async function callSendBookingEmail(params: {
   to: string;
   subject: string;
   html: string;
+  replyTo?: string;
 }): Promise<void> {
   const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
     method: "POST",
@@ -112,8 +113,9 @@ export function useSendBookingEmail() {
       subject: string;
       html: string;
       sentBy: string;
+      replyTo?: string;
     }) => {
-      await callSendBookingEmail({ to: params.to, subject: params.subject, html: params.html });
+      await callSendBookingEmail({ to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo });
 
       const { error: updateErr } = await externalSupabase
         .from("doan_booking_dv")

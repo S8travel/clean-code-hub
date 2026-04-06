@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { to, subject, html } = await req.json();
+    const { to, subject, html, replyTo } = await req.json();
 
     if (!to || !subject || !html) {
       return new Response(
@@ -44,6 +44,7 @@ serve(async (req) => {
         to: toList,
         subject,
         html,
+        ...(replyTo ? { reply_to: [replyTo] } : {}),
       }),
     });
 

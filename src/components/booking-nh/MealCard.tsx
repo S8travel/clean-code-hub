@@ -310,7 +310,7 @@ export default function MealCard({
     try {
       if (!booking?.id) throw new Error("Chưa có booking ID");
       await sendEmailMut.mutateAsync({
-        bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName,
+        bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email ?? undefined,
       });
       setEmailModalOpen(false);
       toast.success("Đã gửi email booking");

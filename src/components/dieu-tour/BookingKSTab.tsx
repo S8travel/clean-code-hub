@@ -345,7 +345,7 @@ function BookingKSCard({
     setSending(true);
     try {
       const loai = row.ks_dat_truoc_status !== "ks_xac_nhan" ? "dat_truoc" : "final";
-      await sendMut.mutateAsync({ bookingId: row.id, loai, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName });
+      await sendMut.mutateAsync({ bookingId: row.id, loai, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email ?? undefined });
       if (loai === "dat_truoc") {
         await updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
       } else {
@@ -698,7 +698,7 @@ function FinalSection({
   const handleHuySendViaServer = async () => {
     setSending(true);
     try {
-      await sendMut.mutateAsync({ bookingId: row.id, loai: "huy", to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName });
+      await sendMut.mutateAsync({ bookingId: row.id, loai: "huy", to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email ?? undefined });
       await updateStatus(row, { ks_final_status: "cho_ks_xac_nhan_huy", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
       setHuyModalOpen(false);
       toast.success("Đã gửi mail hủy");

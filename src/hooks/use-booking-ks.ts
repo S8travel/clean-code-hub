@@ -150,6 +150,7 @@ export function useSendKSBookingEmail() {
       subject: string;
       html: string;
       sentBy: string;
+      replyTo?: string;
     }) => {
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
@@ -158,7 +159,7 @@ export function useSendKSBookingEmail() {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ to: params.to, subject: params.subject, html: params.html }),
+        body: JSON.stringify({ to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo }),
       });
       if (!res.ok) {
         const errText = await res.text();
