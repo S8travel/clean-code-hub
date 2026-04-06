@@ -210,6 +210,8 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
             key={row.id}
             row={row}
             doanId={doanId}
+            tenDoan={tenDoan}
+            ngayDi={ngayDi}
             currentUserName={currentUserName}
             updateMut={updateMut}
             onDelete={() => setDeleteTarget(row)}
@@ -235,6 +237,8 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
 function BookingKSCard({
   row,
   doanId,
+  tenDoan,
+  ngayDi,
   currentUserName,
   updateMut,
   onDelete,
@@ -244,6 +248,8 @@ function BookingKSCard({
 }: {
   row: BookingKSDisplay;
   doanId: number;
+  tenDoan: string;
+  ngayDi?: string | null;
   currentUserName: string;
   updateMut: ReturnType<typeof useUpdateBookingKS>;
   onDelete: () => void;
@@ -255,11 +261,104 @@ function BookingKSCard({
   const [soPhongFinal, setSoPhongFinal] = useState(row.ks_final || "");
   const [ghiChu, setGhiChu] = useState(row.ks_ghi_chu_booking || "");
 
+  // Email state
+  const sendMut = useSendKSBookingEmail();
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailHtml, setEmailHtml] = useState("");
+  const [sending, setSending] = useState(false);
+
   useEffect(() => {
     setSoPhong(row.ks_dat_truoc || "");
     setSoPhongFinal(row.ks_final || "");
     setGhiChu(row.ks_ghi_chu_booking || "");
   }, [row.id]);
+
+  const buildEmailHtml = () => {
+    const sortedDates = [...row.ngay_dates].sort();
+    const checkIn = sortedDates[0] ? fmtDate(sortedDates[0]) : "—";
+    const lastDate = sortedDates[sortedDates.length - 1];
+    let checkOut = "—";
+    if (lastDate) {
+      try {
+        const d = new Date(lastDate + "T00:00:00");
+        d.setDate(d.getDate() + 1);
+        checkOut = format(d, "dd/MM", { locale: vi });
+      } catch { checkOut = lastDate; }
+    }
+    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
+    const soPhongHtml = soPhongFinal || soPhong || row.ks_final || row.ks_dat_truoc || "—";
+    return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
+  <div style="max-width:620px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+    <div style="background:#0f172a;padding:24px 32px;text-align:center">
+      <h2 style="margin:0;color:#fff;font-size:18px">CÔNG TY TNHH DU LỊCH S8</h2>
+      <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY | MST: 0402021137</p>
+    </div>
+    <div style="padding:28px 32px">
+      <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${row.khach_san_ten}</strong>,</p>
+      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt phòng cho đoàn <strong>${tenDoan}</strong>:</p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px">
+        <tr style="background:#f1f5f9">
+          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
+          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
+        </tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkIn}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkOut} (${row.so_dem} đêm)</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soPhongHtml}</td></tr>
+      </table>
+      ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
+      <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý khách sạn xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+      <p style="margin:0;font-size:12px;color:#94a3b8"><strong style="color:#475569">CÔNG TY TNHH DU LỊCH S8</strong><br>S8 TRAVEL COMPANY | MST: 0402021137</p>
+    </div>
+  </div>
+</body></html>`;
+  };
+
+  const openEmailModal = () => {
+    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "";
+    setEmailTo(row.khach_san_email || "");
+    setEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""} – ${row.khach_san_ten}`);
+    setEmailHtml(buildEmailHtml());
+    setEmailModalOpen(true);
+  };
+
+  const handleSendViaServer = async () => {
+    setSending(true);
+    try {
+      const loai = row.ks_dat_truoc_status !== "ks_xac_nhan" ? "dat_truoc" : "final";
+      await sendMut.mutateAsync({ bookingId: row.id, loai, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName });
+      if (loai === "dat_truoc") {
+        await updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
+      } else {
+        await updateStatus(row, { ks_final_status: "cho_ks_xac_nhan", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
+      }
+      setEmailModalOpen(false);
+      toast.success("Đã gửi email đặt phòng");
+    } catch (err: any) {
+      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleMailtoFallback = () => {
+    const loai = row.ks_dat_truoc_status !== "ks_xac_nhan" ? "dat_truoc" : "final";
+    const body = `Kính gửi ${row.khach_san_ten},\n\nS8 Travel xin đặt phòng:\n- Đoàn: ${tenDoan}\n- Ngày: ${row.ngay_dates.map(fmtDate).join(", ")} (${row.so_dem} đêm)\n- Số phòng: ${soPhongFinal || soPhong || "—"}\n\nKính nhờ xác nhận trong 24 giờ.\n\nCÔNG TY TNHH DU LỊCH S8`;
+    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
+    if (loai === "dat_truoc") {
+      updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
+    } else {
+      updateStatus(row, { ks_final_status: "cho_ks_xac_nhan", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
+    }
+    setEmailModalOpen(false);
+    toast.success("Đã mở email client");
+  };
 
   const save = async (fields: Record<string, any>) => {
     try {
@@ -384,14 +483,23 @@ function BookingKSCard({
           </div>
         </div>
 
+        {/* Gửi email */}
+        {!isCancelled && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs w-full"
+            onClick={openEmailModal}
+          >
+            <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi email đặt phòng
+          </Button>
+        )}
+
         {/* Booking flow */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <DatTruocSection
             row={row}
             updateStatus={updateStatus}
-            currentUserName={currentUserName}
-            tenDoan={tenDoan}
-            ngayDi={ngayDi}
           />
           <FinalSection
             row={row}
@@ -404,196 +512,11 @@ function BookingKSCard({
         </div>
       </div>
     </div>
-  );
-}
 
-// ── Đặt trước ─────────────────────────────────────────────────────────────────
-function DatTruocSection({
-  row,
-  updateStatus,
-  currentUserName,
-  tenDoan,
-  ngayDi,
-}: {
-  row: BookingKSDisplay;
-  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSDisplay>) => Promise<void>;
-  currentUserName: string;
-  tenDoan: string;
-  ngayDi?: string | null;
-}) {
-  const status = row.ks_dat_truoc_status;
-  const sendMut = useSendKSBookingEmail();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [emailTo, setEmailTo] = useState("");
-  const [emailSubject, setEmailSubject] = useState("");
-  const [emailHtml, setEmailHtml] = useState("");
-  const [sending, setSending] = useState(false);
-
-  const buildHtml = () => {
-    const sortedDates = [...row.ngay_dates].sort();
-    const checkIn = sortedDates[0] ? fmtDate(sortedDates[0]) : "—";
-    const lastDate = sortedDates[sortedDates.length - 1];
-    let checkOut = "—";
-    if (lastDate) {
-      try {
-        const d = new Date(lastDate + "T00:00:00");
-        d.setDate(d.getDate() + 1);
-        checkOut = format(d, "dd/MM", { locale: vi });
-      } catch { checkOut = lastDate; }
-    }
-    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
-    return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
-  <div style="max-width:620px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
-    <div style="background:#0f172a;padding:24px 32px;text-align:center">
-      <h2 style="margin:0;color:#fff;font-size:18px">CÔNG TY TNHH DU LỊCH S8</h2>
-      <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY | MST: 0402021137</p>
-    </div>
-    <div style="padding:28px 32px">
-      <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${row.khach_san_ten}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt phòng trước cho đoàn <strong>${tenDoan}</strong>:</p>
-      <table style="border-collapse:collapse;width:100%;font-size:14px">
-        <tr style="background:#f1f5f9">
-          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
-        </tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkIn}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkOut} (${row.so_dem} đêm)</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng đặt trước</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.ks_dat_truoc || "—"}</td></tr>
-      </table>
-      ${row.ks_ghi_chu_booking ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${row.ks_ghi_chu_booking}</div>` : ""}
-      <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý khách sạn xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
-      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="margin:0;font-size:12px;color:#94a3b8"><strong style="color:#475569">CÔNG TY TNHH DU LỊCH S8</strong><br>S8 TRAVEL COMPANY | MST: 0402021137</p>
-    </div>
-  </div>
-</body></html>`;
-  };
-
-  const openModal = () => {
-    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "";
-    setEmailTo(row.khach_san_email || "");
-    setEmailSubject(`[S8 Travel] Đặt phòng trước – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""} – ${row.khach_san_ten}`);
-    setEmailHtml(buildHtml());
-    setModalOpen(true);
-  };
-
-  const handleSendViaServer = async () => {
-    setSending(true);
-    try {
-      await sendMut.mutateAsync({
-        bookingId: row.id,
-        loai: "dat_truoc",
-        to: emailTo,
-        subject: emailSubject,
-        html: emailHtml,
-        sentBy: currentUserName,
-      });
-      setModalOpen(false);
-      toast.success("Đã gửi mail đặt trước");
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleMailtoFallback = () => {
-    const body = `Kính gửi ${row.khach_san_ten},\n\nS8 Travel xin đặt phòng trước:\n- Ngày: ${row.ngay_dates.map(fmtDate).join(", ")} (${row.so_dem} đêm)\n- Số phòng: ${row.ks_dat_truoc || "—"}\n\nKính nhờ xác nhận trong 24 giờ.\n\nCÔNG TY TNHH DU LỊCH S8`;
-    window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
-    updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
-    setModalOpen(false);
-    toast.success("Đã mở email client");
-  };
-
-  const BADGE: Record<string, { label: string; dot: string }> = {
-    chua_gui:        { label: "Chưa gửi",          dot: "bg-muted-foreground/30" },
-    cho_ks_xac_nhan: { label: "Chờ KS xác nhận",   dot: "bg-amber-400" },
-    ks_xac_nhan:     { label: "KS đã xác nhận",     dot: "bg-teal-500" },
-  };
-  const badge = BADGE[status] || BADGE.chua_gui;
-
-  return (
-    <>
-    <div className="rounded-lg border border-blue-200/60 bg-blue-50/30 p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-blue-700">Đặt trước</p>
-        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-          <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
-          {badge.label}
-        </span>
-      </div>
-
-      {status === "chua_gui" && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs text-blue-600 border-blue-300 w-full"
-          onClick={openModal}
-        >
-          <Mail className="h-3 w-3 mr-1" /> Gửi mail đặt trước
-        </Button>
-      )}
-
-      {status === "cho_ks_xac_nhan" && (
-        <div className="space-y-1.5">
-          {row.ks_dat_truoc_sent_at && (
-            <p className="text-[10px] text-muted-foreground">
-              Gửi lúc: {fmtDatetime(row.ks_dat_truoc_sent_at)}
-            </p>
-          )}
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs text-teal-600 border-teal-300 flex-1"
-              onClick={() =>
-                updateStatus(row, {
-                  ks_dat_truoc_status: "ks_xac_nhan",
-                  ks_dat_truoc_confirm_at: new Date().toISOString(),
-                }).then(() => toast.success("KS đã xác nhận đặt trước"))
-              }
-            >
-              <Check className="h-3 w-3 mr-1" /> KS xác nhận
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-muted-foreground"
-              onClick={openModal}
-              title="Gửi lại"
-            >
-              <RotateCcw className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {status === "ks_xac_nhan" && (
-        <div className="space-y-1.5">
-          {row.ks_dat_truoc_confirm_at && (
-            <p className="text-[10px] text-teal-600">
-              ✓ XN lúc: {fmtDatetime(row.ks_dat_truoc_confirm_at)}
-            </p>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs text-muted-foreground w-full"
-            onClick={openModal}
-          >
-            <RotateCcw className="h-3 w-3 mr-1" /> Gửi lại
-          </Button>
-        </div>
-      )}
-    </div>
     <EmailPreviewModal
-      open={modalOpen}
-      onOpenChange={setModalOpen}
-      title="Gửi mail đặt phòng trước"
+      open={emailModalOpen}
+      onOpenChange={setEmailModalOpen}
+      title="Gửi email đặt phòng"
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}
@@ -604,7 +527,65 @@ function DatTruocSection({
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
     />
-    </>
+  );
+}
+
+// ── Đặt trước ─────────────────────────────────────────────────────────────────
+function DatTruocSection({
+  row,
+  updateStatus,
+}: {
+  row: BookingKSDisplay;
+  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSDisplay>) => Promise<void>;
+}) {
+  const status = row.ks_dat_truoc_status;
+
+  const BADGE: Record<string, { label: string; dot: string }> = {
+    chua_gui:        { label: "Chưa gửi",         dot: "bg-muted-foreground/30" },
+    cho_ks_xac_nhan: { label: "Chờ KS xác nhận",  dot: "bg-amber-400" },
+    ks_xac_nhan:     { label: "KS đã xác nhận",    dot: "bg-teal-500" },
+  };
+  const badge = BADGE[status] || BADGE.chua_gui;
+
+  return (
+    <div className="rounded-lg border border-blue-200/60 bg-blue-50/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-blue-700">Đặt trước</p>
+        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
+          {badge.label}
+        </span>
+      </div>
+
+      {status === "cho_ks_xac_nhan" && (
+        <div className="space-y-1.5">
+          {row.ks_dat_truoc_sent_at && (
+            <p className="text-[10px] text-muted-foreground">
+              Gửi lúc: {fmtDatetime(row.ks_dat_truoc_sent_at)}
+            </p>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs text-teal-600 border-teal-300 w-full"
+            onClick={() =>
+              updateStatus(row, {
+                ks_dat_truoc_status: "ks_xac_nhan",
+                ks_dat_truoc_confirm_at: new Date().toISOString(),
+              }).then(() => toast.success("KS đã xác nhận đặt trước"))
+            }
+          >
+            <Check className="h-3 w-3 mr-1" /> KS xác nhận đặt trước
+          </Button>
+        </div>
+      )}
+
+      {status === "ks_xac_nhan" && row.ks_dat_truoc_confirm_at && (
+        <p className="text-[10px] text-teal-600">
+          ✓ XN lúc: {fmtDatetime(row.ks_dat_truoc_confirm_at)}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -626,8 +607,7 @@ function FinalSection({
 }) {
   const status = row.ks_final_status;
   const sendMut = useSendKSBookingEmail();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalLoai, setModalLoai] = useState<"final" | "huy">("final");
+  const [huyModalOpen, setHuyModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailHtml, setEmailHtml] = useState("");
@@ -653,36 +633,7 @@ function FinalSection({
     } catch { checkOut = lastDate; }
   }
   const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
-
-  const buildFinalHtml = () => `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
-  <div style="max-width:620px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
-    <div style="background:#0f172a;padding:24px 32px;text-align:center">
-      <h2 style="margin:0;color:#fff;font-size:18px">CÔNG TY TNHH DU LỊCH S8</h2>
-      <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY | MST: 0402021137</p>
-    </div>
-    <div style="padding:28px 32px">
-      <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${row.khach_san_ten}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin xác nhận <strong>đặt phòng final</strong> cho đoàn <strong>${tenDoan}</strong>:</p>
-      <table style="border-collapse:collapse;width:100%;font-size:14px">
-        <tr style="background:#f1f5f9">
-          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
-        </tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkIn}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkOut} (${row.so_dem} đêm)</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng final</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.ks_final || row.ks_dat_truoc || "—"}</td></tr>
-      </table>
-      ${row.ks_ghi_chu_booking ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${row.ks_ghi_chu_booking}</div>` : ""}
-      <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý khách sạn xác nhận trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
-      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="margin:0;font-size:12px;color:#94a3b8"><strong style="color:#475569">CÔNG TY TNHH DU LỊCH S8</strong><br>S8 TRAVEL COMPANY | MST: 0402021137</p>
-    </div>
-  </div>
-</body></html>`;
+  const ngayStr = row.ngay_dates.map(fmtDate).join(", ");
 
   const buildHuyHtml = () => `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
@@ -712,23 +663,21 @@ function FinalSection({
   </div>
 </body></html>`;
 
-  const openModal = (loai: "final" | "huy") => {
+  const openHuyModal = () => {
     const subjectNgay = ngayDi ? ` – ${fmtDate(ngayDi)}` : "";
-    setModalLoai(loai);
     setEmailTo(row.khach_san_email || "");
-    setEmailSubject(loai === "final"
-      ? `[S8 Travel] Đặt phòng final – ${tenDoan}${subjectNgay} – ${row.khach_san_ten}`
-      : `[S8 Travel] Hủy phòng – ${tenDoan}${subjectNgay} – ${row.khach_san_ten}`);
-    setEmailHtml(loai === "final" ? buildFinalHtml() : buildHuyHtml());
-    setModalOpen(true);
+    setEmailSubject(`[S8 Travel] Hủy phòng – ${tenDoan}${subjectNgay} – ${row.khach_san_ten}`);
+    setEmailHtml(buildHuyHtml());
+    setHuyModalOpen(true);
   };
 
-  const handleSendViaServer = async () => {
+  const handleHuySendViaServer = async () => {
     setSending(true);
     try {
-      await sendMut.mutateAsync({ bookingId: row.id, loai: modalLoai, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName });
-      setModalOpen(false);
-      toast.success(modalLoai === "final" ? "Đã gửi mail Final" : "Đã gửi mail hủy");
+      await sendMut.mutateAsync({ bookingId: row.id, loai: "huy", to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName });
+      await updateStatus(row, { ks_final_status: "cho_ks_xac_nhan_huy", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
+      setHuyModalOpen(false);
+      toast.success("Đã gửi mail hủy");
     } catch (err: any) {
       toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
     } finally {
@@ -736,25 +685,20 @@ function FinalSection({
     }
   };
 
-  const handleMailtoFallback = () => {
-    const body = modalLoai === "final"
-      ? `Kính gửi ${row.khach_san_ten},\n\nS8 Travel xác nhận đặt phòng final:\n- Ngày: ${ngayStr}\n- Số phòng: ${row.ks_final || row.ks_dat_truoc || "—"}\n\nKính nhờ xác nhận trong 24 giờ.\n\nCÔNG TY TNHH DU LỊCH S8`
-      : `Kính gửi ${row.khach_san_ten},\n\nS8 Travel xin thông báo hủy booking:\n- Ngày: ${ngayStr}\n\nKính nhờ xác nhận hủy trong 24 giờ.\n\nCÔNG TY TNHH DU LỊCH S8`;
+  const handleHuyMailtoFallback = () => {
+    const body = `Kính gửi ${row.khach_san_ten},\n\nS8 Travel xin thông báo hủy booking:\n- Đoàn: ${tenDoan}\n- Ngày: ${ngayStr}\n\nKính nhờ xác nhận hủy trong 24 giờ.\n\nCÔNG TY TNHH DU LỊCH S8`;
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
-    const fields = modalLoai === "final"
-      ? { ks_final_status: "cho_ks_xac_nhan", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName }
-      : { ks_final_status: "cho_ks_xac_nhan_huy", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName };
-    updateStatus(row, fields);
-    setModalOpen(false);
+    updateStatus(row, { ks_final_status: "cho_ks_xac_nhan_huy", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
+    setHuyModalOpen(false);
     toast.success("Đã mở email client");
   };
 
   const BADGE: Record<string, { label: string; dot: string }> = {
-    chua_gui:             { label: "Chưa gửi",         dot: "bg-muted-foreground/30" },
-    cho_ks_xac_nhan:      { label: "Chờ KS xác nhận",  dot: "bg-amber-400" },
-    ks_xac_nhan_final:    { label: "KS đã XN Final",   dot: "bg-purple-500" },
-    cho_ks_xac_nhan_huy:  { label: "Chờ XN hủy",       dot: "bg-orange-400" },
-    ks_xac_nhan_huy:      { label: "Đã hủy",            dot: "bg-red-400" },
+    chua_gui:             { label: "Chưa gửi",        dot: "bg-muted-foreground/30" },
+    cho_ks_xac_nhan:      { label: "Chờ KS xác nhận", dot: "bg-amber-400" },
+    ks_xac_nhan_final:    { label: "KS đã XN Final",  dot: "bg-purple-500" },
+    cho_ks_xac_nhan_huy:  { label: "Chờ XN hủy",      dot: "bg-orange-400" },
+    ks_xac_nhan_huy:      { label: "Đã hủy",           dot: "bg-red-400" },
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
@@ -769,29 +713,7 @@ function FinalSection({
         </span>
       </div>
 
-      {status === "chua_gui" && (
-        <div className="flex gap-1">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs text-green-600 border-green-300 flex-1"
-            onClick={() => openModal("final")}
-          >
-            <Mail className="h-3 w-3 mr-1" /> Gửi Final
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 w-7 p-0 text-red-500 border-red-300"
-            onClick={() => openModal("huy")}
-            title="Gửi hủy"
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
-
-      {status === "cho_ks_xac_nhan" && (
+      {(status === "chua_gui" || status === "cho_ks_xac_nhan") && (
         <div className="space-y-1.5">
           {row.ks_final_sent_at && (
             <p className="text-[10px] text-muted-foreground">
@@ -799,27 +721,29 @@ function FinalSection({
             </p>
           )}
           <div className="flex gap-1">
+            {status === "cho_ks_xac_nhan" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs text-purple-600 border-purple-300 flex-1"
+                onClick={() =>
+                  updateStatus(row, {
+                    ks_final_status: "ks_xac_nhan_final",
+                    ks_final_confirm_at: new Date().toISOString(),
+                  }).then(() => toast.success("KS đã xác nhận Final"))
+                }
+              >
+                <Check className="h-3 w-3 mr-1" /> KS xác nhận Final
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs text-purple-600 border-purple-300 flex-1"
-              onClick={() =>
-                updateStatus(row, {
-                  ks_final_status: "ks_xac_nhan_final",
-                  ks_final_confirm_at: new Date().toISOString(),
-                }).then(() => toast.success("KS đã xác nhận Final"))
-              }
+              className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
+              onClick={openHuyModal}
+              title="Gửi hủy"
             >
-              <Check className="h-3 w-3 mr-1" /> KS xác nhận Final
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-muted-foreground"
-              onClick={() => openModal("final")}
-              title="Gửi lại"
-            >
-              <RotateCcw className="h-3 w-3" />
+              <X className="h-3 w-3" />
             </Button>
           </div>
         </div>
@@ -832,24 +756,14 @@ function FinalSection({
               ✓ Final lúc: {fmtDatetime(row.ks_final_confirm_at)}
             </p>
           )}
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs text-green-600 flex-1"
-              onClick={() => openModal("final")}
-            >
-              <RotateCcw className="h-3 w-3 mr-1" /> Gửi lại Final
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs text-red-500 border-red-300"
-              onClick={() => openModal("huy")}
-            >
-              <X className="h-3 w-3 mr-1" /> Hủy
-            </Button>
-          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs text-red-500 border-red-300 w-full"
+            onClick={openHuyModal}
+          >
+            <X className="h-3 w-3 mr-1" /> Gửi hủy
+          </Button>
         </div>
       )}
 
@@ -876,7 +790,7 @@ function FinalSection({
               size="sm"
               variant="ghost"
               className="h-7 w-7 p-0 text-muted-foreground"
-              onClick={() => openModal("huy")}
+              onClick={openHuyModal}
               title="Gửi lại"
             >
               <RotateCcw className="h-3 w-3" />
@@ -893,17 +807,17 @@ function FinalSection({
       )}
     </div>
     <EmailPreviewModal
-      open={modalOpen}
-      onOpenChange={setModalOpen}
-      title={modalLoai === "final" ? "Gửi mail xác nhận final" : "Gửi mail hủy booking"}
+      open={huyModalOpen}
+      onOpenChange={setHuyModalOpen}
+      title="Gửi mail hủy booking"
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}
       onSubjectChange={setEmailSubject}
       html={emailHtml}
       onHtmlChange={setEmailHtml}
-      onSendViaServer={handleSendViaServer}
-      onMailtoFallback={handleMailtoFallback}
+      onSendViaServer={handleHuySendViaServer}
+      onMailtoFallback={handleHuyMailtoFallback}
       sending={sending}
     />
     </>
