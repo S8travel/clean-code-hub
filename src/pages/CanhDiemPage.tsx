@@ -39,12 +39,8 @@ export default function CanhDiemPage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    if (!newNccId) {
-      toast.warning("Vui lòng chọn nhà cung cấp");
-      return;
-    }
     try {
-      const created = await createMut.mutateAsync({ ten: newName.trim(), loai: newLoai, nha_cung_cap_id: Number(newNccId) });
+      const created = await createMut.mutateAsync({ ten: newName.trim(), loai: newLoai, nha_cung_cap_id: newNccId ? Number(newNccId) : null });
       setSelectedId(created.id);
       setNewName("");
       setNewNccId("");
@@ -87,7 +83,7 @@ export default function CanhDiemPage() {
                   options={nccOptions}
                   value={newNccId}
                   onChange={setNewNccId}
-                  placeholder="Nhà cung cấp *"
+                  placeholder="Nhà cung cấp"
                   className="h-7 text-xs flex-1"
                 />
                 <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleCreate} disabled={createMut.isPending}>
