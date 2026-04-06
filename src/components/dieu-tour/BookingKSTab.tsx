@@ -373,6 +373,7 @@ function BookingKSCard({
   const overall = getOverallStatus(row);
 
   return (
+    <>
     <div
       className={cn(
         "rounded-xl border bg-card overflow-hidden transition-colors",
@@ -527,6 +528,7 @@ function BookingKSCard({
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
     />
+    </>
   );
 }
 
