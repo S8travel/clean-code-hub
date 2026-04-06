@@ -86,9 +86,8 @@ export async function callSendBookingEmail(params: {
   subject: string;
   html: string;
   replyTo?: string;
-  messageId?: string;
   inReplyTo?: string;
-}): Promise<void> {
+}): Promise<string | null> {
   const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
     method: "POST",
     headers: {
@@ -104,6 +103,7 @@ export async function callSendBookingEmail(params: {
   }
   const data = await res.json();
   if (data?.error) throw new Error(data.error);
+  return data.id ?? null;
 }
 
 export function useSendBookingEmail() {
@@ -119,13 +119,14 @@ export function useSendBookingEmail() {
       replyTo?: string;
       emailThreadId?: string | null;
     }) => {
-      const threadId = params.emailThreadId ?? crypto.randomUUID();
       const isFirst = !params.emailThreadId;
 
-      await callSendBookingEmail({
+      const resendId = await callSendBookingEmail({
         to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo,
-        ...(isFirst ? { messageId: threadId } : { inReplyTo: threadId }),
+        ...(!isFirst ? { inReplyTo: params.emailThreadId } : {}),
       });
+
+      const threadId = isFirst ? resendId : params.emailThreadId;
 
       const { error: updateErr } = await externalSupabase
         .from("doan_booking_dv")

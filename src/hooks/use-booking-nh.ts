@@ -207,7 +207,6 @@ export function useSendNHBookingEmail() {
       replyTo?: string;
       emailThreadId?: string | null;
     }) => {
-      const threadId = params.emailThreadId ?? crypto.randomUUID();
       const isFirst = !params.emailThreadId;
 
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
@@ -220,7 +219,7 @@ export function useSendNHBookingEmail() {
         body: JSON.stringify({
           to: params.to, subject: params.subject, html: params.html,
           replyTo: params.replyTo || localStorage.getItem("crm_current_user_email") || undefined,
-          ...(isFirst ? { messageId: threadId } : { inReplyTo: threadId }),
+          ...(!isFirst ? { inReplyTo: params.emailThreadId } : {}),
         }),
       });
       if (!res.ok) {
@@ -229,6 +228,8 @@ export function useSendNHBookingEmail() {
       }
       const data = await res.json();
       if (data?.error) throw new Error(data.error);
+
+      const threadId = isFirst ? (data.id ?? null) : params.emailThreadId;
 
       const { error } = await externalSupabase
         .from("doan_booking_nh")
