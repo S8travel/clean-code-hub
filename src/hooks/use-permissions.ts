@@ -47,6 +47,7 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
 
   if (!user) return false;
   if (user.role === "admin") return true;
+  if (resource === "danh_muc") return true; // tạm thời mở cho tất cả
 
   const row = perms.find((p) => p.role === user.role && p.resource === resource);
   if (!row) return false;
