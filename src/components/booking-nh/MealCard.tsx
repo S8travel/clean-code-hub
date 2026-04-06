@@ -31,6 +31,11 @@ function fmtDatetime(d: string | null | undefined) {
   try { return format(new Date(d), "dd/MM HH:mm", { locale: vi }); } catch { return ""; }
 }
 
+function fmtDate(d: string | null | undefined) {
+  if (!d) return "—";
+  try { return format(new Date(d + "T00:00:00"), "dd/MM/yyyy (EEE)", { locale: vi }); } catch { return d; }
+}
+
 function TrackingDot({ label, time, active, by }: { label: string; time?: string | null; active: boolean; by?: string | null }) {
   return (
     <div className={cn("flex flex-col items-center gap-0.5 min-w-[60px]", active ? "text-foreground" : "text-muted-foreground/40")}>
@@ -57,11 +62,14 @@ interface Props {
   currentUserName: string;
   conTrongDieuTour?: boolean;
   setMenuIdFromDieuTour?: number | null;
+  tenDoan?: string;
+  soKhach?: number;
+  ngayDate?: string | null;
 }
 
 export default function MealCard({
   doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail, booking, currentUserName,
-  conTrongDieuTour = true, setMenuIdFromDieuTour,
+  conTrongDieuTour = true, setMenuIdFromDieuTour, tenDoan, soKhach, ngayDate,
 }: Props) {
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
@@ -212,13 +220,16 @@ export default function MealCard({
     </div>
     <div style="padding:28px 32px">
       <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${nhaHangTen || "Quý nhà hàng"}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt <strong>${buaLabel}</strong>:</p>
+      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt <strong>${buaLabel}</strong> cho đoàn <strong>${tenDoan || "—"}</strong>:</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:16px">
         <tr style="background:#f1f5f9">
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
         </tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Đoàn</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan || "—"}</strong></td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(ngayDate)}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Bữa ăn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${buaLabel}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số khách</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soKhach ?? "—"} khách</td></tr>
         ${selectedMenu ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Set menu</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}</td></tr>` : ""}
       </table>
       ${monList.length > 0 ? `
@@ -240,8 +251,10 @@ export default function MealCard({
   };
 
   const openEmailModal = () => {
+    const buaLabel = buaAn === "trua" ? "ăn trưa" : "ăn tối";
+    const ngayStr = ngayDate ? format(new Date(ngayDate + "T00:00:00"), "dd/MM", { locale: vi }) : "";
     setEmailTo(nhaHangEmail || "");
-    setEmailSubject(`[S8 Travel] Đặt ${buaAn === "trua" ? "ăn trưa" : "ăn tối"} – ${nhaHangTen || "Nhà hàng"}`);
+    setEmailSubject(`[S8 Travel] Đặt ${buaLabel}${tenDoan ? ` – ${tenDoan}` : ""}${ngayStr ? ` – ${ngayStr}` : ""} – ${nhaHangTen || "Nhà hàng"}`);
     setEmailHtml(buildEmailHtml());
     setEmailModalOpen(true);
   };

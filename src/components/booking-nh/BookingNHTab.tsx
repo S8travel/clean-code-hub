@@ -22,7 +22,7 @@ interface Props {
   soKhach: number;
 }
 
-export default function BookingNHTab({ doanId, tenDoan }: Props) {
+export default function BookingNHTab({ doanId, tenDoan, soKhach }: Props) {
   const { data: days = [], isLoading } = useBookingNH(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
   const qc = useQueryClient();
@@ -124,6 +124,9 @@ export default function BookingNHTab({ doanId, tenDoan }: Props) {
                     currentUserName={currentUserName}
                     conTrongDieuTour={day.trua_con_trong_tour}
                     setMenuIdFromDieuTour={day.an_trua_set_menu_id}
+                    tenDoan={tenDoan}
+                    soKhach={soKhach}
+                    ngayDate={day.ngay_date}
                   />
                 )}
                 {day.orphan_trua && (
@@ -137,6 +140,9 @@ export default function BookingNHTab({ doanId, tenDoan }: Props) {
                     booking={day.orphan_trua.booking}
                     currentUserName={currentUserName}
                     conTrongDieuTour={false}
+                    tenDoan={tenDoan}
+                    soKhach={soKhach}
+                    ngayDate={day.ngay_date}
                   />
                 )}
                 {day.an_toi_nha_hang_id && (
@@ -151,6 +157,9 @@ export default function BookingNHTab({ doanId, tenDoan }: Props) {
                     currentUserName={currentUserName}
                     conTrongDieuTour={day.toi_con_trong_tour}
                     setMenuIdFromDieuTour={day.an_toi_set_menu_id}
+                    tenDoan={tenDoan}
+                    soKhach={soKhach}
+                    ngayDate={day.ngay_date}
                   />
                 )}
                 {day.orphan_toi && (
@@ -164,6 +173,9 @@ export default function BookingNHTab({ doanId, tenDoan }: Props) {
                     booking={day.orphan_toi.booking}
                     currentUserName={currentUserName}
                     conTrongDieuTour={false}
+                    tenDoan={tenDoan}
+                    soKhach={soKhach}
+                    ngayDate={day.ngay_date}
                   />
                 )}
               </div>

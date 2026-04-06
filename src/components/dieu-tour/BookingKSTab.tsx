@@ -64,9 +64,10 @@ function fmtDatetime(d: string | null) {
 interface Props {
   doanId: number;
   tenDoan: string;
+  ngayDi?: string | null;
 }
 
-export default function BookingKSTab({ doanId, tenDoan }: Props) {
+export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
   const { data: bookings, isLoading } = useBookingKS(doanId);
   const updateMut = useUpdateBookingKS();
   const deleteMut = useDeleteBookingKS();
@@ -389,12 +390,16 @@ function BookingKSCard({
             row={row}
             updateStatus={updateStatus}
             currentUserName={currentUserName}
+            tenDoan={tenDoan}
+            ngayDi={ngayDi}
           />
           <FinalSection
             row={row}
             updateStatus={updateStatus}
             currentUserName={currentUserName}
             datTruocConfirmed={datTruocConfirmed}
+            tenDoan={tenDoan}
+            ngayDi={ngayDi}
           />
         </div>
       </div>
@@ -407,10 +412,14 @@ function DatTruocSection({
   row,
   updateStatus,
   currentUserName,
+  tenDoan,
+  ngayDi,
 }: {
   row: BookingKSDisplay;
   updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSDisplay>) => Promise<void>;
   currentUserName: string;
+  tenDoan: string;
+  ngayDi?: string | null;
 }) {
   const status = row.ks_dat_truoc_status;
   const sendMut = useSendKSBookingEmail();
@@ -421,7 +430,18 @@ function DatTruocSection({
   const [sending, setSending] = useState(false);
 
   const buildHtml = () => {
-    const ngayStr = row.ngay_dates.map(fmtDate).join(", ");
+    const sortedDates = [...row.ngay_dates].sort();
+    const checkIn = sortedDates[0] ? fmtDate(sortedDates[0]) : "—";
+    const lastDate = sortedDates[sortedDates.length - 1];
+    let checkOut = "—";
+    if (lastDate) {
+      try {
+        const d = new Date(lastDate + "T00:00:00");
+        d.setDate(d.getDate() + 1);
+        checkOut = format(d, "dd/MM", { locale: vi });
+      } catch { checkOut = lastDate; }
+    }
+    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
@@ -432,14 +452,16 @@ function DatTruocSection({
     </div>
     <div style="padding:28px 32px">
       <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${row.khach_san_ten}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt phòng trước cho đoàn <strong>${row.khach_san_ten}</strong>:</p>
+      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt phòng trước cho đoàn <strong>${tenDoan}</strong>:</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px">
         <tr style="background:#f1f5f9">
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
         </tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày lưu trú</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${ngayStr} (${row.so_dem} đêm)</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkIn}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkOut} (${row.so_dem} đêm)</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng đặt trước</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.ks_dat_truoc || "—"}</td></tr>
       </table>
       ${row.ks_ghi_chu_booking ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${row.ks_ghi_chu_booking}</div>` : ""}
@@ -452,8 +474,9 @@ function DatTruocSection({
   };
 
   const openModal = () => {
+    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "";
     setEmailTo(row.khach_san_email || "");
-    setEmailSubject(`[S8 Travel] Đặt phòng trước – ${row.khach_san_ten}`);
+    setEmailSubject(`[S8 Travel] Đặt phòng trước – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""} – ${row.khach_san_ten}`);
     setEmailHtml(buildHtml());
     setModalOpen(true);
   };
@@ -591,11 +614,15 @@ function FinalSection({
   updateStatus,
   currentUserName,
   datTruocConfirmed,
+  tenDoan,
+  ngayDi,
 }: {
   row: BookingKSDisplay;
   updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSDisplay>) => Promise<void>;
   currentUserName: string;
   datTruocConfirmed: boolean;
+  tenDoan: string;
+  ngayDi?: string | null;
 }) {
   const status = row.ks_final_status;
   const sendMut = useSendKSBookingEmail();
@@ -614,7 +641,18 @@ function FinalSection({
     );
   }
 
-  const ngayStr = row.ngay_dates.map(fmtDate).join(", ");
+  const sortedDates = [...row.ngay_dates].sort();
+  const checkIn = sortedDates[0] ? fmtDate(sortedDates[0]) : "—";
+  const lastDate = sortedDates[sortedDates.length - 1];
+  let checkOut = "—";
+  if (lastDate) {
+    try {
+      const d = new Date(lastDate + "T00:00:00");
+      d.setDate(d.getDate() + 1);
+      checkOut = format(d, "dd/MM", { locale: vi });
+    } catch { checkOut = lastDate; }
+  }
+  const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
 
   const buildFinalHtml = () => `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
@@ -626,14 +664,16 @@ function FinalSection({
     </div>
     <div style="padding:28px 32px">
       <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${row.khach_san_ten}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin xác nhận <strong>đặt phòng final</strong>:</p>
+      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin xác nhận <strong>đặt phòng final</strong> cho đoàn <strong>${tenDoan}</strong>:</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px">
         <tr style="background:#f1f5f9">
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
         </tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày lưu trú</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${ngayStr} (${row.so_dem} đêm)</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkIn}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkOut} (${row.so_dem} đêm)</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng final</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.ks_final || row.ks_dat_truoc || "—"}</td></tr>
       </table>
       ${row.ks_ghi_chu_booking ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${row.ks_ghi_chu_booking}</div>` : ""}
@@ -654,14 +694,16 @@ function FinalSection({
     </div>
     <div style="padding:28px 32px">
       <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${row.khach_san_ten}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin thông báo <strong>hủy booking</strong> sau:</p>
+      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin thông báo <strong>hủy booking</strong> cho đoàn <strong>${tenDoan}</strong>:</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px">
         <tr style="background:#fef2f2">
           <th style="border:1px solid #fecaca;padding:8px 12px;text-align:left">Hạng mục</th>
           <th style="border:1px solid #fecaca;padding:8px 12px;text-align:left">Thông tin</th>
         </tr>
+        <tr><td style="border:1px solid #fecaca;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #fecaca;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
         <tr><td style="border:1px solid #fecaca;padding:8px 12px">Khách sạn</td><td style="border:1px solid #fecaca;padding:8px 12px">${row.khach_san_ten}</td></tr>
-        <tr><td style="border:1px solid #fecaca;padding:8px 12px">Ngày lưu trú</td><td style="border:1px solid #fecaca;padding:8px 12px">${ngayStr}</td></tr>
+        <tr><td style="border:1px solid #fecaca;padding:8px 12px">Check-in</td><td style="border:1px solid #fecaca;padding:8px 12px">${checkIn}</td></tr>
+        <tr><td style="border:1px solid #fecaca;padding:8px 12px">Check-out</td><td style="border:1px solid #fecaca;padding:8px 12px">${checkOut} (${row.so_dem} đêm)</td></tr>
       </table>
       <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý khách sạn xác nhận hủy trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
@@ -671,9 +713,12 @@ function FinalSection({
 </body></html>`;
 
   const openModal = (loai: "final" | "huy") => {
+    const subjectNgay = ngayDi ? ` – ${fmtDate(ngayDi)}` : "";
     setModalLoai(loai);
     setEmailTo(row.khach_san_email || "");
-    setEmailSubject(loai === "final" ? `[S8 Travel] Xác nhận đặt phòng final – ${row.khach_san_ten}` : `[S8 Travel] Hủy booking – ${row.khach_san_ten}`);
+    setEmailSubject(loai === "final"
+      ? `[S8 Travel] Đặt phòng final – ${tenDoan}${subjectNgay} – ${row.khach_san_ten}`
+      : `[S8 Travel] Hủy phòng – ${tenDoan}${subjectNgay} – ${row.khach_san_ten}`);
     setEmailHtml(loai === "final" ? buildFinalHtml() : buildHuyHtml());
     setModalOpen(true);
   };

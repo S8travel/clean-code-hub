@@ -1,8 +1,7 @@
-import { useState } from "react";
-import { Mail, Send, Eye, Code } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Mail, Send, Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +40,19 @@ export default function EmailPreviewModal({
   sending,
 }: Props) {
   const [tab, setTab] = useState<"preview" | "edit">("preview");
+  const editRef = useRef<HTMLDivElement>(null);
+
+  // Khi switch sang tab edit, render HTML vào contenteditable div
+  useEffect(() => {
+    if (tab === "edit" && editRef.current) {
+      editRef.current.innerHTML = html;
+    }
+  }, [tab]);
+
+  // Reset về preview khi modal đóng
+  useEffect(() => {
+    if (!open) setTab("preview");
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -100,8 +112,8 @@ export default function EmailPreviewModal({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Code className="h-3 w-3" />
-              Chỉnh sửa HTML
+              <Pencil className="h-3 w-3" />
+              Chỉnh sửa
             </button>
           </div>
 
@@ -114,11 +126,14 @@ export default function EmailPreviewModal({
               title="Email preview"
             />
           ) : (
-            <Textarea
-              value={html}
-              onChange={(e) => onHtmlChange(e.target.value)}
-              rows={16}
-              className="text-xs font-mono resize-none"
+            <div
+              ref={editRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={() => {
+                if (editRef.current) onHtmlChange(editRef.current.innerHTML);
+              }}
+              className="w-full min-h-[380px] overflow-y-auto border border-border rounded-md p-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-white"
             />
           )}
 

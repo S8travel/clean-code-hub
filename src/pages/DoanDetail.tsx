@@ -356,7 +356,7 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="booking-ks" className="mt-4">
-            <BookingKSTab doanId={doanId} tenDoan={doan.ten_doan} />
+            <BookingKSTab doanId={doanId} tenDoan={doan.ten_doan} ngayDi={doan.ngay_di} />
           </TabsContent>
 
           <TabsContent value="menu" className="mt-4">
@@ -364,7 +364,7 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="booking-dv" className="mt-4">
-            <BookingDVTab doanId={doanId} tenDoan={doan.ten_doan} hdvTen={doan.hdv || ""} />
+            <BookingDVTab doanId={doanId} tenDoan={doan.ten_doan} hdvTen={doan.hdv || ""} ngayDi={doan.ngay_di} />
           </TabsContent>
 
           <TabsContent value="chi-phi" className="mt-4">

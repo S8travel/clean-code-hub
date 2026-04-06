@@ -55,9 +55,10 @@ interface Props {
   row: DVRow;
   tenDoan: string;
   currentUserName: string;
+  ngayDi?: string | null;
 }
 
-export default function BookingDVCard({ row, tenDoan, currentUserName }: Props) {
+export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }: Props) {
   const updateMut = useUpdateBookingDV();
   const deleteMut = useDeleteBookingDV();
   const sendEmailMut = useSendBookingEmail();
@@ -149,8 +150,9 @@ export default function BookingDVCard({ row, tenDoan, currentUserName }: Props) 
 
   const openEmailModal = () => {
     const ncc = tenNCC || row.ten_nha_cung_cap || "";
+    const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(email || row.email_nha_cung_cap || "");
-    setEmailSubject(`[S8 Travel] Đặt dịch vụ – Đoàn ${tenDoan}${ncc ? ` – ${ncc}` : ""}`);
+    setEmailSubject(`[S8 Travel] Đặt dịch vụ – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}${ncc ? ` – ${ncc}` : ""}`);
     setEmailBody(buildEmailHTML());
     setEmailModalOpen(true);
   };

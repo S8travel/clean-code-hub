@@ -9,9 +9,10 @@ interface Props {
   doanId: number;
   tenDoan: string;
   hdvTen?: string;
+  ngayDi?: string | null;
 }
 
-export default function BookingDVTab({ doanId, tenDoan }: Props) {
+export default function BookingDVTab({ doanId, tenDoan, ngayDi }: Props) {
   const { data: rows, isLoading } = useBookingDVList(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
 
@@ -78,6 +79,7 @@ export default function BookingDVTab({ doanId, tenDoan }: Props) {
               key={row.id}
               row={row}
               tenDoan={tenDoan}
+              ngayDi={ngayDi}
               currentUserName={currentUserName}
             />
           ))}
