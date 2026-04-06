@@ -22,10 +22,11 @@ import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 
 const STATUS_CFG = {
-  chua_gui:    { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
-  da_gui:      { label: "Đã gửi",         cls: "bg-amber-100 text-amber-700" },
-  nh_xac_nhan: { label: "Đã xác nhận",   cls: "bg-emerald-100 text-emerald-700" },
-  da_huy:      { label: "Đã hủy",         cls: "bg-red-100 text-red-700" },
+  chua_gui:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
+  da_gui:          { label: "Đã gửi",         cls: "bg-amber-100 text-amber-700" },
+  nh_xac_nhan:     { label: "Đã xác nhận",   cls: "bg-emerald-100 text-emerald-700" },
+  cho_xac_nhan_huy:{ label: "Chờ XN hủy",    cls: "bg-orange-100 text-orange-700" },
+  da_huy:          { label: "Đã hủy",         cls: "bg-red-100 text-red-700" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -138,7 +139,7 @@ export default function MealCard({
 
   const status = booking?.booking_status as keyof typeof STATUS_CFG | undefined;
   const statusCfg = STATUS_CFG[status ?? "chua_gui"];
-  const isCancelled = booking?.booking_status === "da_huy";
+  const isCancelled = booking?.booking_status === "da_huy" || booking?.booking_status === "cho_xac_nhan_huy";
 
   const selectedMenu = setMenuOptions.find((m) => m.id === selectedSetMenuId) ?? null;
 
@@ -363,10 +364,8 @@ export default function MealCard({
     toast.success("Đã xác nhận");
   };
   const handleCancel = () => {
-    if (booking?.id) {
-      deleteMut.mutate({ id: booking.id, doan_id: doanId });
-    }
-    toast("Đã hủy");
+    saveBooking({ booking_status: "cho_xac_nhan_huy" });
+    toast("Đã cập nhật trạng thái hủy");
   };
   const handleReset = () => {
     saveBooking({ booking_status: "chua_gui", sent_at: null, sent_by: null });
@@ -510,25 +509,23 @@ export default function MealCard({
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleConfirm}>
                       <Check className="h-3 w-3 mr-1" /> Xác nhận
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSend}>
-                      <Send className="h-3 w-3 mr-1" /> Gửi lại
-                    </Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
                       <X className="h-3 w-3 mr-1" /> Hủy
                     </Button>
                   </>
                 )}
                 {booking?.booking_status === "nh_xac_nhan" && (
-                  <>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSend}>
-                      <Send className="h-3 w-3 mr-1" /> Gửi lại
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
-                      <X className="h-3 w-3 mr-1" /> Hủy
-                    </Button>
-                  </>
+                  <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
+                    <X className="h-3 w-3 mr-1" /> Hủy
+                  </Button>
                 )}
-                {isCancelled && (
+                {booking?.booking_status === "cho_xac_nhan_huy" && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300"
+                    onClick={() => saveBooking({ booking_status: "da_huy" })}>
+                    <Check className="h-3 w-3 mr-1" /> Xác nhận hủy
+                  </Button>
+                )}
+                {booking?.booking_status === "da_huy" && (
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReset}>
                     <RotateCcw className="h-3 w-3 mr-1" /> Đặt lại
                   </Button>

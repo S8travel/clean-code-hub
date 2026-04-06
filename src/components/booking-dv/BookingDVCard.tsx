@@ -19,10 +19,11 @@ import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 
 const STATUS_CFG = {
-  chua_dat:     { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
-  cho_xac_nhan: { label: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
-  da_xac_nhan:  { label: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
-  da_huy:       { label: "Đã hủy",        cls: "bg-red-100 text-red-700" },
+  chua_dat:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
+  cho_xac_nhan:    { label: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
+  da_xac_nhan:     { label: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
+  cho_xac_nhan_huy:{ label: "Chờ XN hủy",   cls: "bg-orange-100 text-orange-700" },
+  da_huy:          { label: "Đã hủy",        cls: "bg-red-100 text-red-700" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -77,7 +78,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const [emailBody, setEmailBody] = useState("");
   const [sending, setSending] = useState(false);
 
-  const isCancelled = row.booking_status === "da_huy";
+  const isCancelled = row.booking_status === "da_huy" || row.booking_status === "cho_xac_nhan_huy";
   const statusKey = row.booking_status as keyof typeof STATUS_CFG;
   const status = STATUS_CFG[statusKey] || STATUS_CFG.chua_dat;
 
@@ -239,8 +240,8 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     toast.success("Đã xác nhận booking");
   };
   const handleCancel = () => {
-    save({ booking_status: "da_huy" });
-    toast("Đã hủy booking");
+    save({ booking_status: "cho_xac_nhan_huy" });
+    toast("Đã cập nhật trạng thái hủy");
   };
   const handleReset = () => {
     save({ booking_status: "chua_dat", sent_at: null, sent_by: null, confirm_at: null });
@@ -363,17 +364,11 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
             />
 
             <div className="flex flex-wrap gap-1.5 shrink-0 pt-0.5">
-              {/* Gửi email */}
-              {(row.booking_status === "chua_dat") && (
+              {/* Gửi email — chỉ lần đầu */}
+              {row.booking_status === "chua_dat" && (
                 <Button size="sm" className="h-8 text-xs" onClick={openEmailModal}>
                   <Send className="h-3.5 w-3.5 mr-1" />
                   Gửi email
-                </Button>
-              )}
-              {(row.booking_status === "cho_xac_nhan" || row.booking_status === "da_xac_nhan") && (
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openEmailModal}>
-                  <Send className="h-3.5 w-3.5 mr-1" />
-                  Gửi lại
                 </Button>
               )}
               {/* Xác nhận */}
@@ -394,8 +389,19 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                   Hủy
                 </Button>
               )}
-              {/* Đặt lại */}
-              {isCancelled && (
+              {/* Xác nhận hủy */}
+              {row.booking_status === "cho_xac_nhan_huy" && (
+                <Button
+                  size="sm" variant="outline"
+                  className="h-8 text-xs text-red-600 border-red-300"
+                  onClick={() => save({ booking_status: "da_huy" })}
+                >
+                  <Check className="h-3.5 w-3.5 mr-1" />
+                  Xác nhận hủy
+                </Button>
+              )}
+              {/* Đặt lại — chỉ khi đã hủy hoàn toàn */}
+              {row.booking_status === "da_huy" && (
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleReset}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
                   Đặt lại
