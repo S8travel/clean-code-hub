@@ -36,6 +36,8 @@ import {
   type Resource, type PermAction, type RolePermission,
 } from "@/hooks/use-permissions";
 import { useActivityLogList, useLogActivity, type ActivityLogFilters, type ActivityAction } from "@/hooks/use-activity-log";
+import { useSetUserPassword } from "@/hooks/use-nguoi-dung";
+import { hashPassword } from "@/lib/crypto";
 import { toast } from "sonner";
 
 const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
@@ -170,6 +172,7 @@ function NguoiDungTab() {
   const createMut = useCreateNguoiDung();
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
+  const setPasswordMut = useSetUserPassword();
   const logActivity = useLogActivity();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -180,6 +183,9 @@ function NguoiDungTab() {
   const [form, setForm] = useState<Omit<UserRoleRow, "id" | "created_at">>(emptyForm());
   const [deleteTarget, setDeleteTarget] = useState<UserRoleRow | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [newPass, setNewPass] = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [showNewPass, setShowNewPass] = useState(false);
 
   const filtered = list.filter((u) =>
     (u.ho_ten ?? "").toLowerCase().includes(search.toLowerCase()) ||
@@ -250,6 +256,21 @@ function NguoiDungTab() {
       } else {
         toast.error("Lỗi khi lưu");
       }
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (!selected || !newPass) return;
+    if (newPass !== confirmPass) { toast.error("Mật khẩu xác nhận không khớp"); return; }
+    if (newPass.length < 6) { toast.error("Mật khẩu phải ít nhất 6 ký tự"); return; }
+    try {
+      const hash = await hashPassword(newPass);
+      await setPasswordMut.mutateAsync({ id: selected.id, hash });
+      setNewPass("");
+      setConfirmPass("");
+      toast.success("Đã đặt mật khẩu");
+    } catch {
+      toast.error("Lỗi khi đặt mật khẩu");
     }
   };
 
@@ -499,6 +520,65 @@ function NguoiDungTab() {
                 value={form.ghi_chu ?? ""}
                 onChange={(e) => set("ghi_chu", e.target.value || null)}
               />
+            </div>
+
+            {/* Đặt mật khẩu */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Mật khẩu đăng nhập</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {selected.password_hash ? "Đã đặt mật khẩu" : "Chưa có mật khẩu — có thể đăng nhập không cần mật khẩu"}
+                  </p>
+                </div>
+                {selected.password_hash && (
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">Đã có</Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Mật khẩu mới</Label>
+                  <div className="relative">
+                    <Input
+                      type={showNewPass ? "text" : "password"}
+                      className="h-8 text-sm pr-8"
+                      placeholder="Tối thiểu 6 ký tự"
+                      value={newPass}
+                      onChange={(e) => setNewPass(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      onClick={() => setShowNewPass((v) => !v)}
+                      tabIndex={-1}
+                    >
+                      {showNewPass
+                        ? <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        : <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Xác nhận</Label>
+                  <Input
+                    type="password"
+                    className="h-8 text-sm"
+                    placeholder="Nhập lại mật khẩu"
+                    value={confirmPass}
+                    onChange={(e) => setConfirmPass(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSetPassword()}
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleSetPassword}
+                disabled={!newPass || !confirmPass || setPasswordMut.isPending}
+              >
+                {setPasswordMut.isPending ? "Đang lưu..." : "Lưu mật khẩu"}
+              </Button>
             </div>
 
             <div className="text-[11px] text-muted-foreground border-t pt-3">

@@ -1,39 +1,70 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useNguoiDungByEmail } from "@/hooks/use-nguoi-dung";
+import { hashPassword } from "@/lib/crypto";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setEmail } = useCurrentUserEmail();
   const [inputEmail, setInputEmail] = useState("");
+  const [inputPassword, setInputPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const { data: user, isLoading } = useNguoiDungByEmail(submitted ? inputEmail.trim().toLowerCase() : null);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     const email = inputEmail.trim().toLowerCase();
-    if (!email) return;
+    if (!email || !inputPassword) return;
     setSubmitted(true);
   };
 
-  // Khi có kết quả trả về
-  if (submitted && !isLoading) {
-    if (!user) {
-      toast.error("Email không tồn tại trong hệ thống");
-      setSubmitted(false);
-    } else if (!user.active) {
-      toast.error("Tài khoản đã bị vô hiệu hoá");
-      setSubmitted(false);
-    } else {
-      setEmail(inputEmail.trim().toLowerCase());
-      navigate("/dashboard", { replace: true });
-    }
-  }
+  useEffect(() => {
+    if (!submitted || isLoading) return;
+
+    const verify = async () => {
+      setChecking(true);
+      try {
+        if (!user) {
+          toast.error("Email không tồn tại trong hệ thống");
+          setSubmitted(false);
+          return;
+        }
+        if (!user.active) {
+          toast.error("Tài khoản đã bị vô hiệu hoá");
+          setSubmitted(false);
+          return;
+        }
+
+        // Kiểm tra mật khẩu nếu đã được đặt
+        if (user.password_hash) {
+          const hash = await hashPassword(inputPassword);
+          if (hash !== user.password_hash) {
+            toast.error("Mật khẩu không đúng");
+            setInputPassword("");
+            setSubmitted(false);
+            return;
+          }
+        }
+        // Nếu chưa đặt password → cho qua (admin chưa cấu hình)
+        setEmail(inputEmail.trim().toLowerCase());
+        navigate("/dashboard", { replace: true });
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    verify();
+  }, [submitted, isLoading, user]);
+
+  const isPending = isLoading || checking;
 
   return (
     <div className="min-h-screen flex">
@@ -65,7 +96,7 @@ export default function LoginPage() {
 
           <div className="space-y-1">
             <h2 className="text-2xl font-bold">Đăng nhập</h2>
-            <p className="text-sm text-muted-foreground">Nhập email để truy cập hệ thống</p>
+            <p className="text-sm text-muted-foreground">Nhập thông tin tài khoản để truy cập</p>
           </div>
 
           <div className="space-y-4">
@@ -77,18 +108,43 @@ export default function LoginPage() {
                 placeholder="example@s8travel.vn"
                 value={inputEmail}
                 onChange={(e) => setInputEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                onKeyDown={(e) => e.key === "Enter" && document.getElementById("password")?.focus()}
                 className="h-10"
                 autoFocus
+                disabled={isPending}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Mật khẩu</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Nhập mật khẩu"
+                  value={inputPassword}
+                  onChange={(e) => setInputPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  className="h-10 pr-10"
+                  disabled={isPending}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <Button
               className="w-full h-10 bg-[#0a3d7c] hover:bg-[#0a3d7c]/90"
               onClick={handleLogin}
-              disabled={!inputEmail.trim() || isLoading}
+              disabled={!inputEmail.trim() || !inputPassword || isPending}
             >
-              {isLoading ? "Đang kiểm tra..." : "Đăng nhập"}
+              {isPending ? "Đang kiểm tra..." : "Đăng nhập"}
             </Button>
           </div>
 

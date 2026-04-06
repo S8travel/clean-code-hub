@@ -14,6 +14,7 @@ export interface UserRoleRow {
   bo_phan: BoPhan | null;
   ghi_chu: string | null;
   active: boolean;
+  password_hash: string | null;
   created_at: string;
 }
 
@@ -93,6 +94,23 @@ export function useUpdateNguoiDung() {
         .single();
       if (error) throw error;
       return data as UserRoleRow;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["nguoi-dung-list"] });
+      qc.invalidateQueries({ queryKey: ["nguoi-dung-email"] });
+    },
+  });
+}
+
+export function useSetUserPassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, hash }: { id: string; hash: string }) => {
+      const { error } = await externalSupabase
+        .from("user_roles")
+        .update({ password_hash: hash })
+        .eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["nguoi-dung-list"] });
