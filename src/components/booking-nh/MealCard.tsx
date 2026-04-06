@@ -17,6 +17,7 @@ import {
   type BookingNHRow,
 } from "@/hooks/use-booking-nh";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
+import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 
@@ -77,6 +78,7 @@ export default function MealCard({
   const deleteMut = useDeleteBookingNH();
   const sendEmailMut = useSendNHBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
+  const { email: currentUserEmail } = useCurrentUserEmail();
   const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -310,7 +312,7 @@ export default function MealCard({
     try {
       if (!booking?.id) throw new Error("Chưa có booking ID");
       await sendEmailMut.mutateAsync({
-        bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email ?? undefined,
+        bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: currentUserEmail ?? undefined,
       });
       setEmailModalOpen(false);
       toast.success("Đã gửi email booking");

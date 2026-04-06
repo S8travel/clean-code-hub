@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
+import { useCurrentUserEmail } from "@/hooks/use-current-user";
 
 const STATUS_CFG = {
   chua_dat:     { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -64,6 +65,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const deleteMut = useDeleteBookingDV();
   const sendEmailMut = useSendBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
+  const { email: currentUserEmail } = useCurrentUserEmail();
 
   const [tenNCC, setTenNCC] = useState(row.ten_nha_cung_cap || "");
   const [email, setEmail] = useState(row.email_nha_cung_cap || "");
@@ -173,7 +175,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         subject: emailSubject,
         html: emailBody,
         sentBy: currentUserName,
-        replyTo: userProfile?.email ?? undefined,
+        replyTo: currentUserEmail ?? undefined,
       });
       setEmailModalOpen(false);
       toast.success("Đã gửi email booking");
