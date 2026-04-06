@@ -48,7 +48,9 @@ export default function EmailPreviewModal({
     if (tab === "edit" && editRef.current) {
       editRef.current.innerHTML = html;
     }
-  }, [tab, html]);
+    // Chỉ set innerHTML khi chuyển sang tab edit, không re-set khi html prop thay đổi
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   useEffect(() => {
     if (!open) setTab("preview");
