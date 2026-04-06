@@ -44,7 +44,7 @@ serve(async (req) => {
         to: toList,
         subject,
         html,
-        ...(replyTo ? { reply_to: [replyTo] } : {}),
+        ...(replyTo ? { reply_to: [replyTo], bcc: [replyTo] } : {}),
         ...((messageId || inReplyTo) ? {
           headers: {
             ...(messageId  ? { "Message-ID":  `<${messageId}@email.s8travel.com>` } : {}),
