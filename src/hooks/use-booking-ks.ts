@@ -159,7 +159,7 @@ export function useSendKSBookingEmail() {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo }),
+        body: JSON.stringify({ to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo || localStorage.getItem("crm_current_user_email") || undefined }),
       });
       if (!res.ok) {
         const errText = await res.text();
