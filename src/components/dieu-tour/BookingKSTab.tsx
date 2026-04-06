@@ -613,14 +613,7 @@ function FinalSection({
   const [emailHtml, setEmailHtml] = useState("");
   const [sending, setSending] = useState(false);
 
-  if (!datTruocConfirmed) {
-    return (
-      <div className="rounded-lg border border-dashed border-border bg-muted/10 p-3 flex items-center justify-center min-h-[80px]">
-        <p className="text-xs text-muted-foreground italic">Chờ xác nhận đặt trước</p>
-      </div>
-    );
-  }
-
+  // Compute all derived values before any conditional return
   const sortedDates = [...row.ngay_dates].sort();
   const checkIn = sortedDates[0] ? fmtDate(sortedDates[0]) : "—";
   const lastDate = sortedDates[sortedDates.length - 1];
@@ -701,6 +694,14 @@ function FinalSection({
     ks_xac_nhan_huy:      { label: "Đã hủy",           dot: "bg-red-400" },
   };
   const badge = BADGE[status] || BADGE.chua_gui;
+
+  if (!datTruocConfirmed) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-muted/10 p-3 flex items-center justify-center min-h-[80px]">
+        <p className="text-xs text-muted-foreground italic">Chờ xác nhận đặt trước</p>
+      </div>
+    );
+  }
 
   return (
     <>
