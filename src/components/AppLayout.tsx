@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import AiChat from "@/components/AiChat";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="flex-1">{children}</main>
         </div>
       </div>
+      <AiChat />
     </SidebarProvider>
   );
 }
