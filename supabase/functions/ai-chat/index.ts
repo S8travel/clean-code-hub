@@ -34,56 +34,55 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const [doanRes, ksRes, nhRes, dvRes, dnttRes, khachSanRes, nhaHangRes] = await Promise.all([
+    const [doanRes, ksRes, dvRes, dnttRes, khachSanRes, nhaHangRes] = await Promise.all([
       supabase.from("doan")
-        .select("id, ten_doan, ngay_di, ngay_ve, trang_thai, booking_status, created_at")
-        .order("created_at", { ascending: false })
-        .limit(60),
+        .select("id, ten_doan, ngay_di, trang_thai, booking_status")
+        .order("ngay_di", { ascending: false })
+        .limit(30),
 
       supabase.from("doan_booking_ks")
-        .select("doan_id, ks_dat_truoc_status, ks_final_status, khach_san:khach_san_id(ten)"),
-
-      supabase.from("doan_booking_nh")
-        .select("doan_id, bua_an, booking_status, nha_hang:nha_hang_id(ten)"),
+        .select("doan_id, ks_dat_truoc_status, ks_final_status, khach_san:khach_san_id(ten)")
+        .limit(60),
 
       supabase.from("doan_booking_dv")
-        .select("doan_id, ten_nha_cung_cap, booking_status"),
+        .select("doan_id, ten_nha_cung_cap, booking_status")
+        .limit(60),
 
       supabase.from("de_nghi_thanh_toan")
         .select("doan_id, mo_ta, so_tien, trang_thai_duyet, trang_thai_thanh_toan")
         .not("doan_id", "is", null)
         .neq("loai", "dinh_ky")
         .neq("trang_thai_duyet", "da_huy")
-        .limit(120),
+        .limit(60),
 
       supabase.from("khach_san")
-        .select("id, ten, dia_diem, email, so_dien_thoai"),
+        .select("id, ten, dia_diem")
+        .limit(50),
 
       supabase.from("nha_hang")
-        .select("id, ten, dia_diem, email"),
+        .select("id, ten, dia_diem")
+        .limit(50),
     ]);
 
     const context = {
       doan: doanRes.data ?? [],
       booking_ks: (ksRes.data ?? []).map((r: any) => ({
         doan_id: r.doan_id,
-        khach_san: r.khach_san?.ten,
-        dat_truoc: r.ks_dat_truoc_status,
-        final: r.ks_final_status,
+        ks: r.khach_san?.ten,
+        dt: r.ks_dat_truoc_status,
+        fn: r.ks_final_status,
       })),
-      booking_nh: (nhRes.data ?? []).map((r: any) => ({
+      booking_dv: (dvRes.data ?? []).map((r: any) => ({
         doan_id: r.doan_id,
-        nha_hang: r.nha_hang?.ten,
-        bua: r.bua_an,
-        status: r.booking_status,
+        ncc: r.ten_nha_cung_cap,
+        st: r.booking_status,
       })),
-      booking_dv: dvRes.data ?? [],
       dntt: (dnttRes.data ?? []).map((r: any) => ({
         doan_id: r.doan_id,
         mo_ta: r.mo_ta,
-        so_tien: r.so_tien,
+        tien: r.so_tien,
         duyet: r.trang_thai_duyet,
-        thanh_toan: r.trang_thai_thanh_toan,
+        tt: r.trang_thai_thanh_toan,
       })),
       khach_san: khachSanRes.data ?? [],
       nha_hang: nhaHangRes.data ?? [],
