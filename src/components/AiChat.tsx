@@ -12,12 +12,6 @@ interface Message {
   content: string;
 }
 
-const SUGGESTIONS = [
-  "Đoàn nào đang chạy?",
-  "Đoàn nào chưa final booking KS?",
-  "ĐNTT nào chưa được duyệt?",
-];
-
 export default function AiChat() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -109,20 +103,9 @@ export default function AiChat() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
             {messages.length === 0 && (
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground text-center pt-2">
-                  Hỏi tôi về dữ liệu đoàn, booking, thanh toán...
-                </p>
-                <div className="space-y-1.5">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => sendMessage(s)}
-                      className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-muted-foreground"
-                    >
-                      {s}
-                    </button>
-                  ))}
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl rounded-bl-sm px-3 py-2 text-xs leading-relaxed bg-muted text-foreground">
+                  Xin chào, em là trợ lý AI của S8 Travel. Em có thể giúp được gì ạ?
                 </div>
               </div>
             )}
