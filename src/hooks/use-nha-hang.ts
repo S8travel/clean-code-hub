@@ -30,6 +30,7 @@ export interface SetMenuMon {
   id: number;
   set_menu_id: number;
   ten_mon: string;
+  ten_mon_trung: string | null;
   thu_tu: number;
 }
 
@@ -240,7 +241,7 @@ export function useBatchUpdateMonOrder() {
 export function useReplaceMonList() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ set_menu_id, items }: { set_menu_id: number; items: { ten_mon: string; thu_tu: number }[] }) => {
+    mutationFn: async ({ set_menu_id, items }: { set_menu_id: number; items: { ten_mon: string; ten_mon_trung?: string | null; thu_tu: number }[] }) => {
       // Delete all existing
       const { error: delErr } = await externalSupabase
         .from("nha_hang_set_menu_mon")
@@ -251,7 +252,7 @@ export function useReplaceMonList() {
       if (items.length > 0) {
         const { error: insErr } = await externalSupabase
           .from("nha_hang_set_menu_mon")
-          .insert(items.map((it) => ({ set_menu_id, ten_mon: it.ten_mon, thu_tu: it.thu_tu })));
+          .insert(items.map((it) => ({ set_menu_id, ten_mon: it.ten_mon, ten_mon_trung: it.ten_mon_trung ?? null, thu_tu: it.thu_tu })));
         if (insErr) throw insErr;
       }
     },

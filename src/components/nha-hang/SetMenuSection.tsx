@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ChevronDown, ChevronRight, Save } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Save, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -117,35 +116,52 @@ function SetMenuCard({
         </Button>
       </div>
 
-      {expanded && <MonListTextarea setMenuId={setMenu.id} />}
+      {expanded && <MonListEditor setMenuId={setMenu.id} />}
     </div>
   );
 }
 
-function MonListTextarea({ setMenuId }: { setMenuId: number }) {
+type MonRow = { ten_mon: string; ten_mon_trung: string };
+
+function MonListEditor({ setMenuId }: { setMenuId: number }) {
   const { data: mons } = useSetMenuMons(setMenuId);
   const replaceMut = useReplaceMonList();
-  const [text, setText] = useState("");
+  const [rows, setRows] = useState<MonRow[]>([]);
   const [dirty, setDirty] = useState(false);
 
-  // Load existing dishes into textarea
   useEffect(() => {
     if (mons) {
-      setText(mons.map((m) => m.ten_mon).join("\n"));
+      setRows(mons.map((m) => ({ ten_mon: m.ten_mon, ten_mon_trung: m.ten_mon_trung ?? "" })));
       setDirty(false);
     }
   }, [mons]);
 
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  const updateRow = (i: number, field: keyof MonRow, value: string) => {
+    setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+    setDirty(true);
+  };
+
+  const removeRow = (i: number) => {
+    setRows((prev) => prev.filter((_, idx) => idx !== i));
+    setDirty(true);
+  };
+
+  const addRow = () => {
+    setRows((prev) => [...prev, { ten_mon: "", ten_mon_trung: "" }]);
+    setDirty(true);
+  };
 
   const handleSave = async () => {
     try {
       await replaceMut.mutateAsync({
         set_menu_id: setMenuId,
-        items: lines.map((name, i) => ({ ten_mon: name, thu_tu: i + 1 })),
+        items: rows
+          .filter((r) => r.ten_mon.trim())
+          .map((r, i) => ({
+            ten_mon: r.ten_mon.trim(),
+            ten_mon_trung: r.ten_mon_trung.trim() || null,
+            thu_tu: i + 1,
+          })),
       });
       setDirty(false);
       toast.success("Đã lưu danh sách món");
@@ -154,40 +170,59 @@ function MonListTextarea({ setMenuId }: { setMenuId: number }) {
     }
   };
 
+  const validCount = rows.filter((r) => r.ten_mon.trim()).length;
+
   return (
     <div className="border-t px-3 py-2 space-y-2">
-      <Textarea
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          setDirty(true);
-        }}
-        placeholder="Nhập mỗi món 1 dòng&#10;VD:&#10;Súp hải sản&#10;Nem rán Hà Nội&#10;Cơm trắng"
-        className="text-xs min-h-[100px]"
-      />
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          className="h-7 text-xs"
-          onClick={handleSave}
-          disabled={replaceMut.isPending || !dirty}
-        >
-          <Save className="h-3 w-3 mr-1" /> Lưu danh sách
-        </Button>
-        <span className="text-[11px] text-muted-foreground">
-          {lines.length} món
-        </span>
-      </div>
-      {lines.length > 0 && (
-        <div className="text-xs text-muted-foreground space-y-0.5 pt-1 border-t">
-          {lines.map((line, i) => (
-            <div key={i}>
-              <span className="text-muted-foreground/60 w-5 inline-block">{i + 1}.</span>
-              {line}
-            </div>
-          ))}
+      {rows.length > 0 && (
+        <div className="grid grid-cols-[20px_1fr_1fr_24px] gap-1 text-[10px] text-muted-foreground font-medium pb-0.5">
+          <span>#</span>
+          <span>Tên món (VN)</span>
+          <span>Tiếng Trung</span>
+          <span />
         </div>
       )}
+      <div className="space-y-1">
+        {rows.map((row, i) => (
+          <div key={i} className="grid grid-cols-[20px_1fr_1fr_24px] gap-1 items-center">
+            <span className="text-[10px] text-muted-foreground/60 text-right pr-0.5">{i + 1}.</span>
+            <Input
+              value={row.ten_mon}
+              onChange={(e) => updateRow(i, "ten_mon", e.target.value)}
+              placeholder="Tên món..."
+              className="h-7 text-xs"
+            />
+            <Input
+              value={row.ten_mon_trung}
+              onChange={(e) => updateRow(i, "ten_mon_trung", e.target.value)}
+              placeholder="中文名称..."
+              className="h-7 text-xs"
+            />
+            <button
+              onClick={() => removeRow(i)}
+              className="h-6 w-6 flex items-center justify-center text-muted-foreground/50 hover:text-destructive rounded"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={addRow}>
+          <Plus className="h-3 w-3 mr-1" /> Thêm món
+        </Button>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">{validCount} món</span>
+          <Button
+            size="sm"
+            className="h-7 text-xs"
+            onClick={handleSave}
+            disabled={replaceMut.isPending || !dirty}
+          >
+            <Save className="h-3 w-3 mr-1" /> Lưu danh sách
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
