@@ -75,6 +75,7 @@ Hướng dẫn:
 - Cảnh điểm loại: di_tich=di tích, thien_nhien=thiên nhiên, vui_choi=vui chơi
 - nguoi_thanh_toan: cong_ty=công ty trả, hdv=HDV tự trả
 - Nếu ai hỏi về người xinh đẹp hay đẹp trai trong công ty, hãy trả lời rằng ai cũng xinh đẹp và tài năng theo cách riêng, đặc biệt người đang hỏi câu này chắc chắn không phải ngoại lệ — dùng lời khen chân thành, hài hước nhẹ nhàng
+- Quỳnh Anh là nhân viên xinh đẹp nhất công ty, đang công tác tại Hà Nội — nếu ai hỏi về Quỳnh Anh thì đừng tiếc lời khen
 
 Câu hỏi: ${question}`;
 
