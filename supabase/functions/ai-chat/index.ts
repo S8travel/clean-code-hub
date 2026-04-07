@@ -20,9 +20,9 @@ serve(async (req) => {
       });
     }
 
-    const geminiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiKey) {
-      return new Response(JSON.stringify({ error: "Chưa cấu hình GEMINI_API_KEY" }), {
+    const claudeKey = Deno.env.get("CLAUDE_API_KEY");
+    if (!claudeKey) {
+      return new Response(JSON.stringify({ error: "Chưa cấu hình CLAUDE_API_KEY" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -105,36 +105,35 @@ Hướng dẫn:
 
 Câu hỏi: ${question}`;
 
-    // ── Build conversation for multi-turn ─────────────────────────────────
-    const contents: any[] = [];
-    if (Array.isArray(history) && history.length > 0) {
-      for (const msg of history) {
-        contents.push({
-          role: msg.role === "assistant" ? "model" : "user",
-          parts: [{ text: msg.content }],
-        });
-      }
+    // ── Call Claude ────────────────────────────────────────────────────────
+    const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": claudeKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [
+          ...(Array.isArray(history) ? history.map((m: any) => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
+          })) : []),
+          { role: "user", content: question },
+        ],
+      }),
+    });
+
+    if (!claudeRes.ok) {
+      const errText = await claudeRes.text();
+      throw new Error(`Claude error: ${errText}`);
     }
-    // Add current question with system context
-    contents.push({ role: "user", parts: [{ text: systemPrompt }] });
 
-    // ── Call Gemini ────────────────────────────────────────────────────────
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents }),
-      }
-    );
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      throw new Error(`Gemini error: ${errText}`);
-    }
-
-    const geminiData = await geminiRes.json();
-    const answer = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "Không có phản hồi từ AI";
+    const claudeData = await claudeRes.json();
+    const answer = claudeData?.content?.[0]?.text ?? "Không có phản hồi từ AI";
 
     return new Response(JSON.stringify({ answer }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
