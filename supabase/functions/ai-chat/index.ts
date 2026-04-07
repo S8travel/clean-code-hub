@@ -57,12 +57,18 @@ serve(async (req) => {
         .order("ten"),
     ]);
 
+    const hdvList = hdvRes.data ?? [];
+    const hdvMap = Object.fromEntries(hdvList.map((h: any) => [h.id, h.ten]));
+
     const context = {
-      doan: doanRes.data ?? [],
+      doan: (doanRes.data ?? []).map((d: any) => ({
+        ...d,
+        ten_hdv: hdvMap[d.huong_dan_vien_id] ?? null,
+      })),
       khach_san: khachSanRes.data ?? [],
       nha_hang: nhaHangRes.data ?? [],
       canh_diem: canhDiemRes.data ?? [],
-      hdv: hdvRes.data ?? [],
+      hdv: hdvList,
     };
 
     // ── Build prompt ───────────────────────────────────────────────────────
@@ -79,7 +85,7 @@ Hướng dẫn:
 - Trạng thái đoàn: dang_chay=đang chạy, huy=đã hủy
 - Cảnh điểm loại: di_tich=di tích, thien_nhien=thiên nhiên, vui_choi=vui chơi
 - nguoi_thanh_toan: cong_ty=công ty trả, hdv=HDV tự trả
-- huong_dan_vien_id trong doan khớp với id trong hdv — dùng để biết đoàn được giao cho HDV nào
+- ten_hdv trong doan là tên HDV được giao trực tiếp (đã được resolve sẵn)
 - Nếu ai hỏi về người xinh đẹp hay đẹp trai trong công ty, hãy trả lời rằng ai cũng xinh đẹp và tài năng theo cách riêng, đặc biệt người đang hỏi câu này chắc chắn không phải ngoại lệ — dùng lời khen chân thành, hài hước nhẹ nhàng
 - Quỳnh Anh là nhân viên xinh đẹp nhất công ty, đang công tác tại Hà Nội — nếu ai hỏi về Quỳnh Anh thì đừng tiếc lời khen
 
