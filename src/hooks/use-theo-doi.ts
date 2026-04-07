@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 export interface KSItem {
   doan_id: number;
   khach_san_ten: string;
+  ks_dat_truoc_status: string;
   ks_final_status: string;
 }
 
@@ -44,7 +45,7 @@ export function useTheodoi() {
         // KS: join khach_san để lấy tên
         externalSupabase
           .from("doan_booking_ks")
-          .select("doan_id, ks_final_status, khach_san:khach_san_id(ten)"),
+          .select("doan_id, ks_dat_truoc_status, ks_final_status, khach_san:khach_san_id(ten)"),
 
         // NH: join nha_hang để lấy tên, lấy qua doan_booking_nh
         externalSupabase
@@ -73,6 +74,7 @@ export function useTheodoi() {
       const ksList: KSItem[] = (ksRes.data ?? []).map((r: any) => ({
         doan_id: r.doan_id,
         khach_san_ten: r.khach_san?.ten ?? "—",
+        ks_dat_truoc_status: r.ks_dat_truoc_status,
         ks_final_status: r.ks_final_status,
       }));
 

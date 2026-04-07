@@ -30,14 +30,15 @@ function fmtMoney(n: number) {
   return n.toLocaleString("vi-VN");
 }
 
-// ── KS status label ──────────────────────────────────────────────────────────
-function ksStatusLabel(status: string) {
-  if (status === "ks_xac_nhan_final") return { label: "✓ Final", cls: "text-purple-600" };
-  if (status === "cho_ks_xac_nhan") return { label: "⏳ Chờ XN", cls: "text-amber-600" };
-  if (status === "cho_ks_xac_nhan_huy") return { label: "⏳ Chờ XN hủy", cls: "text-orange-600" };
-  if (status === "ks_xac_nhan_huy") return { label: "✗ Đã hủy", cls: "text-red-600" };
-  if (status === "chua_gui") return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
-  return { label: status, cls: "text-muted-foreground" };
+// ── KS overall status (dùng cả dat_truoc + final) ───────────────────────────
+function ksOverallStatus(dt: string, fn: string) {
+  if (fn === "ks_xac_nhan_huy")      return { label: "✗ Đã hủy",            cls: "text-red-600" };
+  if (fn === "cho_ks_xac_nhan_huy")  return { label: "⏳ Chờ XN hủy",       cls: "text-orange-600" };
+  if (fn === "ks_xac_nhan_final")    return { label: "✓ Final",              cls: "text-purple-600" };
+  if (fn === "cho_ks_xac_nhan")      return { label: "⏳ Chờ XN Final",      cls: "text-green-600" };
+  if (dt === "ks_xac_nhan")          return { label: "✓ Đặt trước XN",       cls: "text-teal-600" };
+  if (dt === "cho_ks_xac_nhan")      return { label: "⏳ Chờ XN đặt trước",  cls: "text-blue-600" };
+  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
 }
 
 // ── NH status label ───────────────────────────────────────────────────────────
@@ -248,7 +249,7 @@ export default function TheodoiPage() {
                           </Badge>
                         }
                         items={ks.map((r) => {
-                          const s = ksStatusLabel(r.ks_final_status);
+                          const s = ksOverallStatus(r.ks_dat_truoc_status, r.ks_final_status);
                           return { label: r.khach_san_ten, statusLabel: s.label, statusCls: s.cls };
                         })}
                       />
