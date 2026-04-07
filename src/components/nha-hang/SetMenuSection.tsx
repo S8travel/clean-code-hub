@@ -141,6 +141,24 @@ function MonListEditor({ setMenuId }: { setMenuId: number }) {
     setDirty(true);
   };
 
+  const handlePasteTrung = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    if (lines.length <= 1) return; // single line — let default paste handle it
+    e.preventDefault();
+    setRows((prev) => {
+      const next = [...prev];
+      lines.forEach((line, offset) => {
+        const idx = i + offset;
+        if (idx < next.length) {
+          next[idx] = { ...next[idx], ten_mon_trung: line };
+        }
+      });
+      return next;
+    });
+    setDirty(true);
+  };
+
   const removeRow = (i: number) => {
     setRows((prev) => prev.filter((_, idx) => idx !== i));
     setDirty(true);
@@ -195,6 +213,7 @@ function MonListEditor({ setMenuId }: { setMenuId: number }) {
             <Input
               value={row.ten_mon_trung}
               onChange={(e) => updateRow(i, "ten_mon_trung", e.target.value)}
+              onPaste={(e) => handlePasteTrung(i, e)}
               placeholder="中文名称..."
               className="h-7 text-xs"
             />
