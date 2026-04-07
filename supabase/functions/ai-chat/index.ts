@@ -41,15 +41,15 @@ serve(async (req) => {
         .limit(50),
 
       supabase.from("khach_san")
-        .select("id, ten, dia_diem, email, so_dien_thoai")
+        .select("id, ten, dia_diem, dia_chi, email, so_dien_thoai, website, foc_khach, foc_mien, nguoi_thanh_toan")
         .limit(100),
 
       supabase.from("nha_hang")
-        .select("id, ten, dia_diem, email")
+        .select("id, ten, dia_diem, dia_chi, email, website, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, set_menu:nha_hang_set_menu(ten_set, gia, don_vi)")
         .limit(100),
 
       supabase.from("canh_diem")
-        .select("id, ten, dia_diem, loai, co_phi, gia_mac_dinh, don_vi")
+        .select("id, ten, dia_diem, loai, co_phi, gia_mac_dinh, don_vi, nguoi_thanh_toan")
         .limit(100),
     ]);
 
@@ -73,6 +73,7 @@ Hướng dẫn:
 - Nếu không tìm thấy trong dữ liệu, nói rõ "Không có thông tin"
 - Trạng thái đoàn: dang_chay=đang chạy, huy=đã hủy
 - Cảnh điểm loại: di_tich=di tích, thien_nhien=thiên nhiên, vui_choi=vui chơi
+- nguoi_thanh_toan: cong_ty=công ty trả, hdv=HDV tự trả
 
 Câu hỏi: ${question}`;
 
