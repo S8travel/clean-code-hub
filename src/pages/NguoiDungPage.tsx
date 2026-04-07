@@ -206,6 +206,7 @@ function NguoiDungTab() {
         so_dien_thoai: selected.so_dien_thoai,
         ghi_chu: selected.ghi_chu,
         active: selected.active,
+        password_hash: selected.password_hash,
       });
       setDirty(false);
     }
