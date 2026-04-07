@@ -40,6 +40,7 @@ const emptyForm = (): Omit<HDVRow, "id"> => ({
   chuyen_mon: null,
   agent_ids: [],
   ghi_chu: null,
+  so_dien_thoai: null,
   so_tai_khoan: null,
   ngan_hang: null,
 });
@@ -79,6 +80,7 @@ export default function HDVPage() {
         chuyen_mon: selected.chuyen_mon,
         agent_ids: selected.agent_ids ?? [],
         ghi_chu: selected.ghi_chu,
+        so_dien_thoai: selected.so_dien_thoai ?? null,
         so_tai_khoan: selected.so_tai_khoan ?? null,
         ngan_hang: selected.ngan_hang ?? null,
       });
@@ -298,6 +300,16 @@ export default function HDVPage() {
                     {new Date().getFullYear() - form.nam_sinh} tuổi
                   </p>
                 )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Số điện thoại</Label>
+                <Input
+                  className="h-8 text-sm"
+                  placeholder="VD: 0901234567"
+                  value={form.so_dien_thoai ?? ""}
+                  onChange={(e) => set("so_dien_thoai", e.target.value || null)}
+                />
               </div>
 
               <div className="space-y-1.5">

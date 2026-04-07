@@ -10,6 +10,7 @@ export interface HDVRow {
   chuyen_mon: string | null;
   agent_ids: number[] | null;
   ghi_chu: string | null;
+  so_dien_thoai: string | null;
   so_tai_khoan: string | null;
   ngan_hang: string | null;
 }
