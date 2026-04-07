@@ -18,7 +18,8 @@ import { toast } from "sonner";
 import { useState, useEffect, useCallback } from "react";
 import { exportDieuTourWord } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDoanList } from "@/hooks/use-doan";
+import { useDoanList, useDoanPermissions } from "@/hooks/use-doan";
+import { useAuth } from "@/hooks/use-auth";
 import {
   useCanhDiem,
   useNhaHang,
@@ -50,6 +51,12 @@ export default function DoanDetail() {
   const doanId = Number(id);
 
   const { data: groups, isLoading } = useDoanList();
+  const { user: currentUser } = useAuth();
+  const { data: doanPerms = [] } = useDoanPermissions(doanId || null);
+  const isAdmin = currentUser?.role === "admin";
+  const myPerm = doanPerms.find((p) => p.user_id === currentUser?.user_id);
+  const canEdit = isAdmin || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
+
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();
   const { data: khachSanList = [] } = useKhachSan();
@@ -275,17 +282,22 @@ export default function DoanDetail() {
             <span className="font-semibold">{doan.ten_doan}</span>
           </div>
           <div className="flex items-center gap-2">
+            {!canEdit && (
+              <span className="text-xs text-muted-foreground border rounded px-2 py-1">Chỉ xem</span>
+            )}
             <Button variant="outline" size="sm" onClick={() => window.print()}>
               <Printer className="h-4 w-4 mr-1.5" /> In / Xuất PDF
             </Button>
-            <Button
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white"
-              onClick={handleSave}
-              disabled={saveMutation.isPending || isChecking}
-            >
-              <Save className="h-4 w-4 mr-1.5" /> {isChecking ? "Đang kiểm tra..." : saveMutation.isPending ? "Đang lưu..." : "Lưu"}
-            </Button>
+            {canEdit && (
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={handleSave}
+                disabled={saveMutation.isPending || isChecking}
+              >
+                <Save className="h-4 w-4 mr-1.5" /> {isChecking ? "Đang kiểm tra..." : saveMutation.isPending ? "Đang lưu..." : "Lưu"}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -299,6 +311,7 @@ export default function DoanDetail() {
             <TabsTrigger value="chi-phi">Chi phí</TabsTrigger>
           </TabsList>
 
+          <fieldset disabled={!canEdit} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
           <TabsContent value="dieu-tour" className="mt-4 space-y-6">
             <div className="flex justify-end print-hide">
               <Button
@@ -370,6 +383,7 @@ export default function DoanDetail() {
           <TabsContent value="chi-phi" className="mt-4">
             <ChiPhiTab doanId={doanId} doan={doan} />
           </TabsContent>
+          </fieldset>
         </Tabs>
       </div>
 
