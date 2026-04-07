@@ -55,7 +55,9 @@ export default function DoanDetail() {
   const { data: doanPerms = [] } = useDoanPermissions(doanId || null);
   const isAdmin = currentUser?.role === "admin";
   const myPerm = doanPerms.find((p) => p.user_id === currentUser?.user_id);
-  const canEdit = isAdmin || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
+  // Nếu chưa phân quyền (doanPerms rỗng) → ai cũng sửa được
+  // Nếu đã phân quyền → chỉ admin hệ thống hoặc người có quyen edit/admin mới sửa được
+  const canEdit = isAdmin || doanPerms.length === 0 || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
 
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();
