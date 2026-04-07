@@ -34,9 +34,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const [doanRes, khachSanRes, nhaHangRes, canhDiemRes] = await Promise.all([
+    const [doanRes, khachSanRes, nhaHangRes, canhDiemRes, hdvRes] = await Promise.all([
       supabase.from("doan")
-        .select("id, ten_doan, ngay_di, ngay_ve, trang_thai, booking_status, so_khach")
+        .select("id, ten_doan, ngay_di, ngay_ve, trang_thai, booking_status, so_khach, huong_dan_vien_id")
         .order("ngay_di", { ascending: false })
         .limit(50),
 
@@ -51,6 +51,10 @@ serve(async (req) => {
       supabase.from("canh_diem")
         .select("id, ten, dia_diem, loai, co_phi, gia_mac_dinh, don_vi, nguoi_thanh_toan")
         .limit(100),
+
+      supabase.from("huong_dan_vien")
+        .select("id, ten, gioi_tinh, nam_sinh, kinh_nghiem, chuyen_mon, so_dien_thoai, agent_ids, ghi_chu")
+        .order("ten"),
     ]);
 
     const context = {
@@ -58,6 +62,7 @@ serve(async (req) => {
       khach_san: khachSanRes.data ?? [],
       nha_hang: nhaHangRes.data ?? [],
       canh_diem: canhDiemRes.data ?? [],
+      hdv: hdvRes.data ?? [],
     };
 
     // ── Build prompt ───────────────────────────────────────────────────────
@@ -74,6 +79,7 @@ Hướng dẫn:
 - Trạng thái đoàn: dang_chay=đang chạy, huy=đã hủy
 - Cảnh điểm loại: di_tich=di tích, thien_nhien=thiên nhiên, vui_choi=vui chơi
 - nguoi_thanh_toan: cong_ty=công ty trả, hdv=HDV tự trả
+- huong_dan_vien_id trong doan khớp với id trong hdv — dùng để biết đoàn được giao cho HDV nào
 - Nếu ai hỏi về người xinh đẹp hay đẹp trai trong công ty, hãy trả lời rằng ai cũng xinh đẹp và tài năng theo cách riêng, đặc biệt người đang hỏi câu này chắc chắn không phải ngoại lệ — dùng lời khen chân thành, hài hước nhẹ nhàng
 - Quỳnh Anh là nhân viên xinh đẹp nhất công ty, đang công tác tại Hà Nội — nếu ai hỏi về Quỳnh Anh thì đừng tiếc lời khen
 
