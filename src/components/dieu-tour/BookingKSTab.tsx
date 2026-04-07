@@ -346,13 +346,7 @@ function BookingKSCard({
   const handleSendViaServer = async () => {
     setSending(true);
     try {
-      const loai = row.ks_dat_truoc_status !== "ks_xac_nhan" ? "dat_truoc" : "final";
-      await sendMut.mutateAsync({ bookingId: row.id, loai, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: row.email_thread_id });
-      if (loai === "dat_truoc") {
-        await updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
-      } else {
-        await updateStatus(row, { ks_final_status: "cho_ks_xac_nhan", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
-      }
+      await sendMut.mutateAsync({ bookingId: row.id, loai: "dat_truoc", to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: row.email_thread_id });
       setEmailModalOpen(false);
       toast.success("Đã gửi email đặt phòng");
     } catch (err: any) {
@@ -363,17 +357,9 @@ function BookingKSCard({
   };
 
   const handleMailtoFallback = () => {
-    const loai = row.ks_dat_truoc_status !== "ks_xac_nhan" ? "dat_truoc" : "final";
     const mailtoBody = buildMailtoBody();
-    const userPhone = userProfile?.so_dien_thoai || "";
-    const userName = userProfile?.ho_ten || currentUserName;
-    const body = `Kính gửi ${row.khach_san_ten},\n\nCông ty TNHH Du lịch S8 xin đặt phòng cho đoàn ${tenDoan}:\n- Ngày đi: ${ngayDi ? fmtDate(ngayDi) : "—"}\n- Check-in: ${row.ngay_dates.length ? fmtDate([...row.ngay_dates].sort()[0]) : "—"}\n- Ngày: ${row.ngay_dates.map(fmtDate).join(", ")} (${row.so_dem} đêm)\n- Số phòng: ${soPhongFinal || soPhong || "—"}\n\nKính nhờ xác nhận trong 24 giờ.\n\n${userName}${userPhone ? `\n${userPhone}` : ""}\n\nCÔNG TY TNHH DU LỊCH S8\nMST: 0402021137\nĐ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam\nEmail: s8travel.hddt@gmail.com`;
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    if (loai === "dat_truoc") {
-      updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
-    } else {
-      updateStatus(row, { ks_final_status: "cho_ks_xac_nhan", ks_final_sent_at: new Date().toISOString(), ks_final_sent_by: currentUserName });
-    }
+    updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
   };
@@ -502,11 +488,8 @@ function BookingKSCard({
           </div>
         </div>
 
-        {/* Gửi email — chỉ hiện khi lần đầu gửi */}
-        {!isCancelled && (
-          row.ks_dat_truoc_status === "chua_gui" ||
-          (datTruocConfirmed && row.ks_final_status === "chua_gui")
-        ) && (
+        {/* Gửi email — chỉ hiện ở giai đoạn đặt trước */}
+        {!isCancelled && row.ks_dat_truoc_status === "chua_gui" && (
           <Button
             size="sm"
             variant="outline"
@@ -628,11 +611,11 @@ function FinalSection({
   };
 
   const BADGE: Record<string, { label: string; dot: string }> = {
-    chua_gui:             { label: "Chưa gửi",        dot: "bg-muted-foreground/30" },
-    cho_ks_xac_nhan:      { label: "Chờ KS xác nhận", dot: "bg-amber-400" },
-    ks_xac_nhan_final:    { label: "KS đã XN Final",  dot: "bg-purple-500" },
-    cho_ks_xac_nhan_huy:  { label: "Chờ XN hủy",      dot: "bg-orange-400" },
-    ks_xac_nhan_huy:      { label: "Đã hủy",           dot: "bg-red-400" },
+    chua_gui:             { label: "Chờ xử lý",        dot: "bg-muted-foreground/30" },
+    cho_ks_xac_nhan:      { label: "Chờ KS xác nhận",  dot: "bg-amber-400" },
+    ks_xac_nhan_final:    { label: "KS đã XN Final",   dot: "bg-purple-500" },
+    cho_ks_xac_nhan_huy:  { label: "Chờ XN hủy",       dot: "bg-orange-400" },
+    ks_xac_nhan_huy:      { label: "Đã hủy",            dot: "bg-red-400" },
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
@@ -654,39 +637,55 @@ function FinalSection({
         </span>
       </div>
 
-      {(status === "chua_gui" || status === "cho_ks_xac_nhan") && (
-        <div className="space-y-1.5">
-          {row.ks_final_sent_at && (
-            <p className="text-[10px] text-muted-foreground">
-              Gửi lúc: {fmtDatetime(row.ks_final_sent_at)}
-            </p>
-          )}
-          <div className="flex gap-1">
-            {status === "cho_ks_xac_nhan" && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs text-purple-600 border-purple-300 flex-1"
-                onClick={() =>
-                  updateStatus(row, {
-                    ks_final_status: "ks_xac_nhan_final",
-                    ks_final_confirm_at: new Date().toISOString(),
-                  }).then(() => toast.success("KS đã xác nhận Final"))
-                }
-              >
-                <Check className="h-3 w-3 mr-1" /> KS xác nhận Final
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
-              onClick={handleHuy}
-              title="Hủy booking"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
+      {status === "chua_gui" && (
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs text-green-700 border-green-300 flex-1"
+            onClick={() =>
+              updateStatus(row, { ks_final_status: "cho_ks_xac_nhan" })
+                .then(() => toast.success("Chờ KS xác nhận Final"))
+            }
+          >
+            <Check className="h-3 w-3 mr-1" /> Final
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
+            onClick={handleHuy}
+            title="Hủy booking"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
+      {status === "cho_ks_xac_nhan" && (
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs text-purple-600 border-purple-300 flex-1"
+            onClick={() =>
+              updateStatus(row, {
+                ks_final_status: "ks_xac_nhan_final",
+                ks_final_confirm_at: new Date().toISOString(),
+              }).then(() => toast.success("KS đã xác nhận Final"))
+            }
+          >
+            <Check className="h-3 w-3 mr-1" /> KS xác nhận Final
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
+            onClick={handleHuy}
+            title="Hủy booking"
+          >
+            <X className="h-3 w-3" />
+          </Button>
         </div>
       )}
 
