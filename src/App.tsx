@@ -20,6 +20,7 @@ import NhaXePage from "./pages/NhaXePage.tsx";
 import VisaPage from "./pages/VisaPage.tsx";
 import HoaDonUNCPage from "./pages/HoaDonUNCPage.tsx";
 import SeriPage from "./pages/SeriPage.tsx";
+import TheodoiPage from "./pages/TheodoiPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -54,6 +55,7 @@ const App = () => (
             <Route path="/quan-ly/nguoi-dung" element={<NguoiDungPage />} />
             <Route path="/hoa-don-unc" element={<HoaDonUNCPage />} />
             <Route path="/quan-ly/seri" element={<SeriPage />} />
+            <Route path="/theo-doi" element={<TheodoiPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Route>
