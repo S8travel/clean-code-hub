@@ -34,36 +34,35 @@ import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
 // ─── Parse ngày từ Excel ──────────────────────────────────────────
-// Hỗ trợ: Date object (cellDates:true), serial number, D/M/YYYY, DD/MM/YYYY, YYYY-MM-DD
+// Dùng cellDates: false → serial number hoặc string, tránh lỗi timezone của JS Date
 function parseExcelDate(raw: any): string {
   if (raw == null || raw === "") return "";
 
-  // Date object — khi xlsx đọc với cellDates: true
-  if (raw instanceof Date) {
-    if (isNaN(raw.getTime())) return "";
-    const y = raw.getFullYear();
-    const m = String(raw.getMonth() + 1).padStart(2, "0");
-    const d = String(raw.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  // Serial number dự phòng
-  if (typeof raw === "number") {
-    try {
-      const info = XLSX.SSF.parse_date_code(raw);
-      if (info?.y) {
-        return `${info.y}-${String(info.m).padStart(2, "0")}-${String(info.d).padStart(2, "0")}`;
-      }
-    } catch {}
+  // Serial number Excel (cellDates: false) — tính thủ công bằng UTC tránh lệch timezone
+  if (typeof raw === "number" && raw > 0) {
+    // Excel epoch: Dec 30, 1899 UTC
+    // Excel có bug coi năm 1900 là năm nhuận (serial 60 = 29/2/1900 không tồn tại)
+    // → serial >= 60 thì trừ 1 để bù lại
+    const serial = raw >= 60 ? raw - 1 : raw;
+    const ms = Date.UTC(1899, 11, 30) + serial * 86400000;
+    const d = new Date(ms);
+    const y = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dy = String(d.getUTCDate()).padStart(2, "0");
+    if (y >= 1900 && y <= 2200) return `${y}-${mo}-${dy}`;
     return "";
   }
 
   const s = String(raw).trim();
-  // D/M/YYYY hoặc DD/MM/YYYY (cả dấu /, -, .)
+  if (!s) return "";
+
+  // D/M/YYYY hoặc DD/MM/YYYY (định dạng Việt Nam)
   const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+
   // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
   return "";
 }
 
@@ -615,7 +614,7 @@ export default function XepHDVPage() {
     reader.onload = (ev) => {
       try {
         const data = new Uint8Array(ev.target!.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: "array", cellDates: true });
+        const wb = XLSX.read(data, { type: "array", cellDates: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
