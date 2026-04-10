@@ -99,20 +99,16 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     }
   }
 
-  // Bậc 1 — Agent: HDV có cấu hình agent → phải khớp; không cấu hình → không giới hạn
+  // Agent: tour có agent → HDV phải được tích agent đó; tour không có agent → tất cả đều pass
   function passesAgent(hdv: HDVRow, tour: TourInput): boolean {
     if (!tour.agent_id) return true;
-    const ids = hdv.agent_ids ?? [];
-    if (ids.length === 0) return true;          // HDV chưa tích agent nào → đi được tất cả
-    return ids.includes(tour.agent_id);
+    return (hdv.agent_ids ?? []).includes(tour.agent_id);
   }
 
-  // Bậc 2 — Địa điểm: tương tự, chỉ áp dụng sau khi đã pass agent
+  // Địa điểm: tour có địa điểm → HDV phải được tích địa điểm đó; tour không có → tất cả đều pass
   function passesLocation(hdv: HDVRow, tour: TourInput): boolean {
     if (!tour.dia_diem_id) return true;
-    const ids = hdv.dia_diem_ids ?? [];
-    if (ids.length === 0) return true;          // HDV chưa tích địa điểm → đi được tất cả
-    return ids.includes(tour.dia_diem_id);
+    return (hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id);
   }
 
   function scoreCandidates(pool: HDVRow[], tour: TourInput) {
