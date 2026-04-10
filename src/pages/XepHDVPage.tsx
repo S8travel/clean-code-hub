@@ -572,9 +572,8 @@ export default function XepHDVPage() {
   const [result, setResult] = useState<TourInput[] | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "grid">("cards");
 
-  // Ràng buộc tái xếp
-  const [lockedAgentIds, setLockedAgentIds] = useState<Set<number>>(new Set());
-  const [showConstraints, setShowConstraints] = useState(false);
+  // Ràng buộc tái xếp — key = "db-{doan_id}" hoặc "file-{_key}"
+  const [lockedTourKeys, setLockedTourKeys] = useState<Set<string>>(new Set());
 
   // Review dialog khi file có lỗi
   const [reviewRows, setReviewRows] = useState<ReviewRow[] | null>(null);
@@ -740,11 +739,35 @@ export default function XepHDVPage() {
     return tours;
   }
 
+  // Key ổn định cho mỗi tour trong result
+  function tourResultKey(t: TourInput) {
+    return t.doan_id != null ? `db-${t.doan_id}` : `${t.ten_doan}|${t.ngay_di}`;
+  }
+
   function handleRun() {
     const tours = getSelectedTours();
     if (tours.length === 0) { toast.error("Chưa chọn đoàn nào"); return; }
     if (poolHdvs.length === 0) { toast.error("Không có hướng dẫn viên nào trong pool"); return; }
-    setResult(assignHDVs(tours, poolHdvs, [...lockedAgentIds]));
+    setResult(assignHDVs(tours, poolHdvs));
+    setLockedTourKeys(new Set());
+    setViewMode("cards");
+  }
+
+  function handleRerun() {
+    if (!result) return;
+    if (poolHdvs.length === 0) { toast.error("Không có hướng dẫn viên nào trong pool"); return; }
+    const toursForRerun = result.map((t) => {
+      const key = tourResultKey(t);
+      const isLocked = lockedTourKeys.has(key);
+      return {
+        ...t,
+        _hard_locked: isLocked,
+        // Locked tours: giữ assigned hiện tại làm locked_hdv_id
+        // Unlocked: dùng assigned hiện tại làm soft preference
+        locked_hdv_id: t.assigned_hdv_id,
+      };
+    });
+    setResult(assignHDVs(toursForRerun, poolHdvs));
     setViewMode("cards");
   }
 
@@ -1224,54 +1247,121 @@ export default function XepHDVPage() {
                 </div>
               </div>
 
-              {/* Section: Ràng buộc tái xếp */}
-              <div className="space-y-2">
-                <button
-                  className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-full"
-                  onClick={() => setShowConstraints((v) => !v)}
-                >
-                  {showConstraints ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                  Ràng buộc khi xếp lại
-                  {lockedAgentIds.size > 0 && (
-                    <Badge variant="secondary" className="ml-auto text-[9px] h-4 px-1.5 normal-case">
-                      {lockedAgentIds.size} agent khóa
-                    </Badge>
-                  )}
-                </button>
-                {showConstraints && (
-                  <div className="border rounded-md p-2.5 space-y-2">
-                    <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      Đoàn đã có HDV của agent được chọn sẽ <strong>không đổi</strong> khi chạy lại.
-                      Các đoàn khác sẽ cố giữ HDV cũ nếu có thể.
+              {/* Section: Ràng buộc tái xếp — chỉ hiện khi có kết quả */}
+              {result && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+                      Xếp lại
                     </p>
-                    <p className="text-[10px] font-medium">Agent bị khóa:</p>
-                    <div className="space-y-0.5 max-h-36 overflow-y-auto">
-                      {agents.map((ag) => {
-                        const locked = lockedAgentIds.has(ag.id);
-                        return (
-                          <label key={ag.id} className={cn(
-                            "flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer transition-colors",
-                            locked ? "bg-primary/10" : "hover:bg-muted/50"
-                          )}>
-                            <Checkbox
-                              checked={locked}
-                              onCheckedChange={() => {
-                                setLockedAgentIds((prev) => {
-                                  const next = new Set(prev);
-                                  next.has(ag.id) ? next.delete(ag.id) : next.add(ag.id);
-                                  return next;
-                                });
-                              }}
-                            />
-                            {locked && <Lock className="h-3 w-3 text-primary shrink-0" />}
-                            {ag.ten}
-                          </label>
-                        );
-                      })}
-                    </div>
+                    {lockedTourKeys.size > 0 && (
+                      <Badge variant="secondary" className="text-[9px] h-4 px-1.5 normal-case">
+                        {lockedTourKeys.size} khóa
+                      </Badge>
+                    )}
                   </div>
-                )}
-              </div>
+                  <div className="border rounded-md p-2.5 space-y-2">
+                    <p className="text-[10px] text-muted-foreground">
+                      Khóa các đoàn không muốn thay đổi, rồi bấm <strong>Xếp lại</strong>.
+                    </p>
+
+                    {/* Quick-lock theo agent */}
+                    {agents.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-medium text-muted-foreground">Khóa nhanh theo agent:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {agents
+                            .filter((ag) => result.some((t) => t.agent_id === ag.id && t.assigned_hdv_id !== null))
+                            .map((ag) => {
+                              const tourKeysOfAgent = result
+                                .filter((t) => t.agent_id === ag.id && t.assigned_hdv_id !== null)
+                                .map(tourResultKey);
+                              const allLocked = tourKeysOfAgent.every((k) => lockedTourKeys.has(k));
+                              return (
+                                <button
+                                  key={ag.id}
+                                  onClick={() => {
+                                    setLockedTourKeys((prev) => {
+                                      const next = new Set(prev);
+                                      if (allLocked) {
+                                        tourKeysOfAgent.forEach((k) => next.delete(k));
+                                      } else {
+                                        tourKeysOfAgent.forEach((k) => next.add(k));
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  className={cn(
+                                    "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border transition-colors",
+                                    allLocked
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "bg-background hover:bg-muted/60 border-border"
+                                  )}
+                                >
+                                  {allLocked && <Lock className="h-2.5 w-2.5" />}
+                                  {ag.ten}
+                                  <span className="opacity-60">({tourKeysOfAgent.length})</span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Danh sách đoàn */}
+                    <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                      {[...result]
+                        .sort((a, b) => a.ngay_di.localeCompare(b.ngay_di))
+                        .map((tour) => {
+                          const key = tourResultKey(tour);
+                          const isLocked = lockedTourKeys.has(key);
+                          const hdvName = tour.assigned_hdv_id
+                            ? (hdvMap.get(tour.assigned_hdv_id) ?? `HDV #${tour.assigned_hdv_id}`)
+                            : "—";
+                          return (
+                            <label
+                              key={key}
+                              className={cn(
+                                "flex items-center gap-2 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors",
+                                isLocked ? "bg-primary/10" : "hover:bg-muted/40"
+                              )}
+                            >
+                              <Checkbox
+                                checked={isLocked}
+                                onCheckedChange={() => {
+                                  setLockedTourKeys((prev) => {
+                                    const next = new Set(prev);
+                                    next.has(key) ? next.delete(key) : next.add(key);
+                                    return next;
+                                  });
+                                }}
+                              />
+                              {isLocked && <Lock className="h-3 w-3 text-primary shrink-0" />}
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium truncate block">{tour.ten_doan}</span>
+                                <span className="text-muted-foreground text-[10px]">
+                                  {formatDate(tour.ngay_di)}→{formatDate(tour.ngay_ve)}
+                                  {" · "}
+                                  <span className={tour.assigned_hdv_id ? "text-primary font-medium" : "text-destructive"}>
+                                    {hdvName}
+                                  </span>
+                                </span>
+                              </div>
+                            </label>
+                          );
+                        })}
+                    </div>
+
+                    <Button
+                      size="sm" className="w-full h-7 text-xs gap-1.5"
+                      onClick={handleRerun}
+                    >
+                      <Play className="h-3.5 w-3.5" /> Xếp lại
+                      {lockedTourKeys.size > 0 && ` (${result.length - lockedTourKeys.size} đoàn)`}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </ScrollArea>
         </Panel>

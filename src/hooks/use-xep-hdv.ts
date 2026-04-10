@@ -16,6 +16,7 @@ export interface TourInput {
   // kết quả xếp
   assigned_hdv_id: number | null;
   locked_hdv_id: number | null;  // HDV đã chỉ định trước (từ DB hoặc Excel)
+  _hard_locked?: boolean;        // true = không cho thuật toán thay đổi (khi tái xếp)
   is_chained?: boolean;
 }
 
@@ -79,11 +80,7 @@ function toursOverlap(a: TourInput, b: TourInput): boolean {
   return !(a.ngay_ve < b.ngay_di || a.ngay_di > b.ngay_ve);
 }
 
-export function assignHDVs(
-  tours: TourInput[],
-  hdvs: HDVRow[],
-  lockedAgentIds: number[] = []
-): TourInput[] {
+export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
   const activeHdvs = hdvs.filter((h) => h.active);
   if (activeHdvs.length === 0 || tours.length === 0) return tours;
 
@@ -93,17 +90,10 @@ export function assignHDVs(
   const hdvSchedule = new Map<number, TourInput[]>();
   activeHdvs.forEach((h) => hdvSchedule.set(h.id, []));
 
-  // Tour bị khóa cứng: thuộc agent bị khóa VÀ đã có locked_hdv_id
-  const isHardLocked = (t: TourInput) =>
-    t.locked_hdv_id !== null &&
-    t.agent_id !== null &&
-    lockedAgentIds.includes(t.agent_id);
-
   // Pass 1: nạp hard-locked tours vào schedule, không xếp lại
   for (const tour of sorted) {
-    if (isHardLocked(tour)) {
-      tour.assigned_hdv_id = tour.locked_hdv_id;
-      const sched = hdvSchedule.get(tour.locked_hdv_id!);
+    if (tour._hard_locked && tour.assigned_hdv_id !== null) {
+      const sched = hdvSchedule.get(tour.assigned_hdv_id);
       if (sched) sched.push(tour);
     }
   }
@@ -130,7 +120,7 @@ export function assignHDVs(
       // Cân bằng tải
       score += Math.max(0, 5 - assigned.length);
 
-      // Stability: ưu tiên giữ HDV cũ nếu không bị hard-lock
+      // Stability: ưu tiên giữ HDV cũ
       if (tour.locked_hdv_id !== null && hdv.id === tour.locked_hdv_id) score += 4;
 
       if (score > bestScore) {
@@ -145,7 +135,7 @@ export function assignHDVs(
 
   // Pass 2: xếp các tour không bị hard-lock
   for (const tour of sorted) {
-    if (isHardLocked(tour)) continue;
+    if (tour._hard_locked) continue;
 
     tour.assigned_hdv_id = null;
     tour.is_chained = false;
