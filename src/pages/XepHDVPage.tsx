@@ -1,11 +1,12 @@
 import { useState, useId, useRef } from "react";
 import * as XLSX from "xlsx";
+import { parseISO, eachDayOfInterval, format } from "date-fns";
 import {
   Panel, PanelGroup, PanelResizeHandle,
 } from "react-resizable-panels";
 import {
   CalendarCheck, Trash2, Play, Save, ChevronDown, ChevronRight, Zap, AlertCircle,
-  Upload, Download,
+  Upload, Download, LayoutGrid, List,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,20 +30,33 @@ import {
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
-// ─── Parse ngày từ Excel (DD/MM/YYYY hoặc YYYY-MM-DD hoặc serial number) ──
+// ─── Parse ngày từ Excel ──────────────────────────────────────────
+// Hỗ trợ: Date object (cellDates:true), serial number, D/M/YYYY, DD/MM/YYYY, YYYY-MM-DD
 function parseExcelDate(raw: any): string {
-  if (!raw) return "";
-  // Serial number từ Excel
-  if (typeof raw === "number") {
-    const date = XLSX.SSF.parse_date_code(raw);
-    if (date) {
-      const m = String(date.m).padStart(2, "0");
-      const d = String(date.d).padStart(2, "0");
-      return `${date.y}-${m}-${d}`;
-    }
+  if (raw == null || raw === "") return "";
+
+  // Date object — khi xlsx đọc với cellDates: true
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return "";
+    const y = raw.getFullYear();
+    const m = String(raw.getMonth() + 1).padStart(2, "0");
+    const d = String(raw.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
+
+  // Serial number dự phòng
+  if (typeof raw === "number") {
+    try {
+      const info = XLSX.SSF.parse_date_code(raw);
+      if (info?.y) {
+        return `${info.y}-${String(info.m).padStart(2, "0")}-${String(info.d).padStart(2, "0")}`;
+      }
+    } catch {}
+    return "";
+  }
+
   const s = String(raw).trim();
-  // DD/MM/YYYY
+  // D/M/YYYY hoặc DD/MM/YYYY (cả dấu /, -, .)
   const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
   // YYYY-MM-DD
@@ -160,6 +174,164 @@ function HDVResultCard({
   );
 }
 
+// ─── Schedule Grid (view lịch) ────────────────────────────────────
+// Màu nền luân phiên cho từng tour trong một hàng (dễ phân biệt)
+const TOUR_COLORS = [
+  "bg-yellow-200", "bg-sky-200", "bg-green-200",
+  "bg-orange-200", "bg-pink-200", "bg-purple-200",
+];
+
+function ScheduleGrid({
+  result,
+  hdvList,
+}: {
+  result: TourInput[];
+  hdvList: { id: number; ten: string }[];
+}) {
+  const assignedTours = result.filter((t) => t.assigned_hdv_id !== null);
+  if (assignedTours.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-8">Không có đoàn nào được xếp</p>;
+  }
+
+  // Phạm vi ngày
+  const allDateStrs = assignedTours.flatMap((t) => [t.ngay_di, t.ngay_ve]).filter(Boolean);
+  const minStr = allDateStrs.reduce((a, b) => (a < b ? a : b));
+  const maxStr = allDateStrs.reduce((a, b) => (a > b ? a : b));
+  const days = eachDayOfInterval({ start: parseISO(minStr), end: parseISO(maxStr) });
+  const dayStrs = days.map((d) => format(d, "yyyy-MM-dd"));
+
+  // Nhóm tháng cho header
+  const monthGroups: { label: string; month: string; count: number }[] = [];
+  for (const day of days) {
+    const key = format(day, "yyyy-MM");
+    const label = `Tháng ${format(day, "M")}`;
+    if (!monthGroups.length || monthGroups[monthGroups.length - 1].month !== key) {
+      monthGroups.push({ month: key, label, count: 1 });
+    } else {
+      monthGroups[monthGroups.length - 1].count++;
+    }
+  }
+
+  // Danh sách HDV có đoàn, sort theo tên
+  const hdvIds = [
+    ...new Set(assignedTours.map((t) => t.assigned_hdv_id!)),
+  ].sort((a, b) => {
+    const na = hdvList.find((h) => h.id === a)?.ten ?? "";
+    const nb = hdvList.find((h) => h.id === b)?.ten ?? "";
+    return na.localeCompare(nb, "vi");
+  });
+
+  const titleMonth = format(parseISO(minStr), "M");
+  const titleYear = format(parseISO(minStr), "yyyy");
+
+  function renderRow(hdvId: number) {
+    const tours = assignedTours
+      .filter((t) => t.assigned_hdv_id === hdvId)
+      .sort((a, b) => a.ngay_di.localeCompare(b.ngay_di));
+
+    const cells: React.ReactNode[] = [];
+    let dayIdx = 0;
+
+    tours.forEach((tour, ti) => {
+      const startIdx = dayStrs.indexOf(tour.ngay_di);
+      const endIdx = dayStrs.indexOf(tour.ngay_ve);
+      if (startIdx < 0 || endIdx < 0) return;
+
+      // Gap trước tour
+      const gap = startIdx - dayIdx;
+      if (gap > 0) {
+        cells.push(
+          <td key={`g-${dayIdx}`} colSpan={gap} className="border border-gray-200 bg-white" />
+        );
+      }
+
+      const span = endIdx - startIdx + 1;
+      const colorClass = TOUR_COLORS[ti % TOUR_COLORS.length];
+      cells.push(
+        <td
+          key={`t-${ti}`}
+          colSpan={span}
+          className={`border border-gray-400 ${colorClass} text-[10px] px-0.5 text-center font-semibold overflow-hidden`}
+        >
+          <div className="truncate whitespace-nowrap leading-tight py-0.5">
+            {tour.is_chained && "⚡ "}
+            {tour.ten_doan}
+          </div>
+        </td>
+      );
+
+      dayIdx = endIdx + 1;
+    });
+
+    // Đuôi trống
+    if (dayIdx < days.length) {
+      cells.push(
+        <td key="trail" colSpan={days.length - dayIdx} className="border border-gray-200 bg-white" />
+      );
+    }
+    return cells;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-center">
+        <p className="font-bold text-sm uppercase tracking-wide">
+          LỊCH ĐIỀU HƯỚNG DẪN VIÊN THÁNG {titleMonth} NĂM {titleYear}
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="border-collapse text-[11px]" style={{ minWidth: "max-content" }}>
+          <thead>
+            {/* Hàng nhóm tháng */}
+            <tr className="bg-green-600 text-white text-center">
+              <th rowSpan={2} className="border border-green-700 px-2 py-1 whitespace-nowrap">STT</th>
+              <th rowSpan={2} className="border border-green-700 px-3 py-1 whitespace-nowrap">Họ tên</th>
+              <th rowSpan={2} className="border border-green-700 px-2 py-1">Tên</th>
+              {monthGroups.map((mg) => (
+                <th key={mg.month} colSpan={mg.count} className="border border-green-700 px-1 py-0.5">
+                  {mg.label}
+                </th>
+              ))}
+            </tr>
+            {/* Hàng số ngày */}
+            <tr className="bg-green-600 text-white text-center">
+              {days.map((d) => (
+                <th
+                  key={format(d, "yyyy-MM-dd")}
+                  className="border border-green-700 py-0.5 font-medium"
+                  style={{ minWidth: 26, width: 26 }}
+                >
+                  {format(d, "d")}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {hdvIds.map((hdvId, idx) => {
+              const hdv = hdvList.find((h) => h.id === hdvId);
+              if (!hdv) return null;
+              const parts = hdv.ten.trim().split(/\s+/);
+              const shortName = parts[parts.length - 1].toUpperCase();
+              return (
+                <tr key={hdvId} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                  <td className="border border-gray-300 px-2 py-1 text-center">{idx + 1}</td>
+                  <td className="border border-gray-300 px-2 py-1 font-medium uppercase whitespace-nowrap">
+                    {hdv.ten.toUpperCase()}
+                  </td>
+                  <td className="border border-gray-300 px-1 py-1 text-center font-semibold">
+                    {shortName}
+                  </td>
+                  {renderRow(hdvId)}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────
 export default function XepHDVPage() {
   const canView = usePermission("doan", "view");
@@ -193,6 +365,7 @@ export default function XepHDVPage() {
 
   // Kết quả
   const [result, setResult] = useState<TourInput[] | null>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "grid">("cards");
 
   const saveMut = useSaveHDVAssignments();
 
@@ -216,7 +389,7 @@ export default function XepHDVPage() {
     reader.onload = (ev) => {
       try {
         const data = new Uint8Array(ev.target!.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: "array", cellDates: false });
+        const wb = XLSX.read(data, { type: "array", cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
@@ -286,10 +459,6 @@ export default function XepHDVPage() {
           });
         }
 
-        if (errors.length > 0) {
-          toast.warning(`Import xong, ${errors.length} hàng bị lỗi:\n${errors.slice(0, 3).join("\n")}${errors.length > 3 ? "\n..." : ""}`);
-        }
-
         if (newTours.length === 0) { toast.error("Không có hàng hợp lệ nào"); return; }
 
         setFileTours((prev) => [...prev, ...newTours]);
@@ -299,7 +468,15 @@ export default function XepHDVPage() {
           return next;
         });
         setResult(null);
-        toast.success(`Đã import ${newTours.length} đoàn từ file`);
+        if (errors.length > 0) {
+          toast.warning(
+            `Import ${newTours.length} đoàn · bỏ qua ${errors.length} hàng lỗi:\n` +
+            errors.slice(0, 5).join("\n") +
+            (errors.length > 5 ? `\n... và ${errors.length - 5} hàng nữa` : "")
+          );
+        } else {
+          toast.success(`Đã import ${newTours.length} đoàn từ file`);
+        }
       } catch (err) {
         toast.error("Lỗi đọc file Excel");
         console.error(err);
@@ -335,6 +512,7 @@ export default function XepHDVPage() {
     if (tours.length === 0) { toast.error("Chưa chọn đoàn nào"); return; }
     if (poolHdvs.length === 0) { toast.error("Không có hướng dẫn viên nào trong pool"); return; }
     setResult(assignHDVs(tours, poolHdvs));
+    setViewMode("cards");
   }
 
   function handleReassign(tourIdx: number, newHdvId: number | null) {
@@ -384,6 +562,28 @@ export default function XepHDVPage() {
           <h1 className="font-semibold text-sm">Xếp hướng dẫn viên</h1>
         </div>
         <div className="flex items-center gap-2">
+          {result && (
+            <div className="flex items-center border rounded-md overflow-hidden h-8">
+              <button
+                onClick={() => setViewMode("cards")}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 h-full text-xs transition-colors",
+                  viewMode === "cards" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
+                )}
+              >
+                <List className="h-3.5 w-3.5" /> Phân công
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 h-full text-xs transition-colors border-l",
+                  viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
+                )}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Lịch
+              </button>
+            </div>
+          )}
           <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleRun} disabled={selectedDoanIds.size === 0}>
             <Play className="h-3.5 w-3.5" /> Chạy xếp
           </Button>
@@ -614,12 +814,15 @@ export default function XepHDVPage() {
                   <CalendarCheck className="h-10 w-10 opacity-20" />
                   <p className="text-sm">Chọn đoàn và HDV, rồi bấm "Chạy xếp"</p>
                 </div>
+              ) : viewMode === "grid" ? (
+                <ScheduleGrid result={result} hdvList={activeHdvs} />
               ) : (
                 <>
+                  {/* Stats bar */}
                   <div className="flex items-center gap-3 pb-1 text-xs text-muted-foreground">
                     <span>{result.length} đoàn</span>
                     <span>·</span>
-                    <span>{(groupedResult!.size - (unassignedCount > 0 ? 1 : 0))} HDV được xếp</span>
+                    <span>{groupedResult!.size - (unassignedCount > 0 ? 1 : 0)} HDV được xếp</span>
                     {unassignedCount > 0 && (
                       <span className="text-destructive font-medium">· {unassignedCount} chưa xếp được</span>
                     )}

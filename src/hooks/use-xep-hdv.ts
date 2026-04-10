@@ -86,40 +86,29 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
   const sorted = [...tours].map((t) => ({ ...t, assigned_hdv_id: null as number | null, is_chained: false }));
   sorted.sort((a, b) => a.ngay_di.localeCompare(b.ngay_di));
 
-  // Lịch của từng HDV: hdvSchedule[hdv.id] = list tour đã gán (theo thứ tự thời gian)
   const hdvSchedule = new Map<number, TourInput[]>();
   activeHdvs.forEach((h) => hdvSchedule.set(h.id, []));
 
-  for (const tour of sorted) {
+  function scoreCandidates(pool: HDVRow[], tour: TourInput) {
     let bestHdvId: number | null = null;
     let bestScore = -Infinity;
     let bestIsChained = false;
 
-    for (const hdv of activeHdvs) {
+    for (const hdv of pool) {
       const assigned = hdvSchedule.get(hdv.id) ?? [];
-
-      // Kiểm tra không overlap với bất kỳ tour đã gán
-      const hasConflict = assigned.some((t) => toursOverlap(t, tour));
-      if (hasConflict) continue;
+      if (assigned.some((t) => toursOverlap(t, tour))) continue;
 
       let score = 0;
 
-      // Location match
-      if (tour.dia_diem_id && (hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id)) {
-        score += 2;
-      }
+      // Địa điểm khớp
+      if (tour.dia_diem_id && (hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id)) score += 2;
 
-      // Agent match
-      if (tour.agent_id && (hdv.agent_ids ?? []).includes(tour.agent_id)) {
-        score += 2;
-      }
-
-      // Chain bonus: tour cuối cùng của HDV kết thúc đúng ngày tour này bắt đầu
+      // Ghép chuyến liên tiếp
       const lastTour = assigned[assigned.length - 1];
       const isChained = !!lastTour && lastTour.ngay_ve === tour.ngay_di;
       if (isChained) score += 3;
 
-      // Load balance: HDV ít đoàn hơn ưu tiên hơn
+      // Cân bằng tải
       score += Math.max(0, 5 - assigned.length);
 
       if (score > bestScore) {
@@ -129,12 +118,37 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
       }
     }
 
-    tour.assigned_hdv_id = bestHdvId;
-    tour.is_chained = bestIsChained;
+    return { bestHdvId, bestIsChained };
+  }
 
-    if (bestHdvId !== null) {
-      hdvSchedule.get(bestHdvId)!.push(tour);
+  for (const tour of sorted) {
+    // ── Agent là tiêu chí CỨNG: thử pool agent-matched trước ──
+    const agentPool = tour.agent_id
+      ? activeHdvs.filter((h) => (h.agent_ids ?? []).includes(tour.agent_id!))
+      : [];
+    const fallbackPool = tour.agent_id
+      ? activeHdvs.filter((h) => !(h.agent_ids ?? []).includes(tour.agent_id!))
+      : activeHdvs;
+
+    let hdvId: number | null = null;
+    let isChained = false;
+
+    if (agentPool.length > 0) {
+      const res = scoreCandidates(agentPool, tour);
+      hdvId = res.bestHdvId;
+      isChained = res.bestIsChained;
     }
+
+    // Fallback nếu không có HDV agent-matched nào available
+    if (hdvId === null) {
+      const res = scoreCandidates(fallbackPool, tour);
+      hdvId = res.bestHdvId;
+      isChained = res.bestIsChained;
+    }
+
+    tour.assigned_hdv_id = hdvId;
+    tour.is_chained = isChained;
+    if (hdvId !== null) hdvSchedule.get(hdvId)!.push(tour);
   }
 
   return sorted;
