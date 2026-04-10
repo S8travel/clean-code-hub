@@ -99,6 +99,22 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     }
   }
 
+  // Bậc 1 — Agent: HDV có cấu hình agent → phải khớp; không cấu hình → không giới hạn
+  function passesAgent(hdv: HDVRow, tour: TourInput): boolean {
+    if (!tour.agent_id) return true;
+    const ids = hdv.agent_ids ?? [];
+    if (ids.length === 0) return true;          // HDV chưa tích agent nào → đi được tất cả
+    return ids.includes(tour.agent_id);
+  }
+
+  // Bậc 2 — Địa điểm: tương tự, chỉ áp dụng sau khi đã pass agent
+  function passesLocation(hdv: HDVRow, tour: TourInput): boolean {
+    if (!tour.dia_diem_id) return true;
+    const ids = hdv.dia_diem_ids ?? [];
+    if (ids.length === 0) return true;          // HDV chưa tích địa điểm → đi được tất cả
+    return ids.includes(tour.dia_diem_id);
+  }
+
   function scoreCandidates(pool: HDVRow[], tour: TourInput) {
     let bestHdvId: number | null = null;
     let bestScore = -Infinity;
@@ -110,7 +126,7 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
 
       let score = 0;
 
-      // Địa điểm khớp
+      // Địa điểm khớp → bonus
       if (tour.dia_diem_id && (hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id)) score += 2;
 
       // Ghép chuyến liên tiếp
@@ -141,32 +157,21 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     tour.assigned_hdv_id = null;
     tour.is_chained = false;
 
-    // Agent là tiêu chí CỨNG: thử pool agent-matched trước
-    const agentPool = tour.agent_id
-      ? activeHdvs.filter((h) => (h.agent_ids ?? []).includes(tour.agent_id!))
-      : [];
-    const fallbackPool = tour.agent_id
-      ? activeHdvs.filter((h) => !(h.agent_ids ?? []).includes(tour.agent_id!))
-      : activeHdvs;
+    // Bậc 1: lọc theo agent (ràng buộc cứng tuyệt đối)
+    const agentEligible = activeHdvs.filter((h) => passesAgent(h, tour));
 
-    let hdvId: number | null = null;
-    let isChained = false;
+    // Bậc 2: trong số đã pass agent, ưu tiên những người cũng pass địa điểm
+    const locationEligible = agentEligible.filter((h) => passesLocation(h, tour));
 
-    if (agentPool.length > 0) {
-      const res = scoreCandidates(agentPool, tour);
-      hdvId = res.bestHdvId;
-      isChained = res.bestIsChained;
+    // Thử pool agent+location trước; nếu không ai available thì fallback agent-only
+    let res = scoreCandidates(locationEligible, tour);
+    if (res.bestHdvId === null && locationEligible.length < agentEligible.length) {
+      res = scoreCandidates(agentEligible, tour);
     }
 
-    if (hdvId === null) {
-      const res = scoreCandidates(fallbackPool, tour);
-      hdvId = res.bestHdvId;
-      isChained = res.bestIsChained;
-    }
-
-    tour.assigned_hdv_id = hdvId;
-    tour.is_chained = isChained;
-    if (hdvId !== null) hdvSchedule.get(hdvId)!.push(tour);
+    tour.assigned_hdv_id = res.bestHdvId;
+    tour.is_chained = res.bestIsChained;
+    if (res.bestHdvId !== null) hdvSchedule.get(res.bestHdvId)!.push(tour);
   }
 
   return sorted;
