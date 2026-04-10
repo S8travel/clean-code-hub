@@ -569,6 +569,7 @@ export default function XepHDVPage() {
   // Kết quả
   const [result, setResult] = useState<TourInput[] | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "grid">("cards");
+  const [assignView, setAssignView] = useState<"byhdv" | "bydate">("byhdv");
 
   // Ràng buộc tái xếp — key = "db-{doan_id}" hoặc "file-{_key}"
   const [lockedTourKeys, setLockedTourKeys] = useState<Set<string>>(new Set());
@@ -760,8 +761,7 @@ export default function XepHDVPage() {
       return {
         ...t,
         _hard_locked: isLocked,
-        // Locked tours: giữ assigned hiện tại làm locked_hdv_id
-        // Unlocked: dùng assigned hiện tại làm soft preference
+        _prev_hdv_id: t.assigned_hdv_id,   // lưu lại để đánh dấu thay đổi
         locked_hdv_id: t.assigned_hdv_id,
       };
     });
@@ -961,6 +961,38 @@ export default function XepHDVPage() {
     XLSX.writeFile(wb, `phan_cong_hdv_${today}.xlsx`);
   }
 
+  function exportByDateToExcel() {
+    if (!result) return;
+    const today = format(new Date(), "yyyy-MM-dd");
+    const HEADERS = ["ten_doan", "hdv", "agent", "ngay_di", "ngay_ve", "chuyen_bay_tien", "chuyen_bay_don", "dia_diem"];
+    const rows = [...result]
+      .sort((a, b) => a.ngay_di.localeCompare(b.ngay_di) || a.ten_doan.localeCompare(b.ten_doan));
+    const aoa: (string | number)[][] = [HEADERS];
+    for (const tour of rows) {
+      const hdvId = tour.assigned_hdv_id;
+      const hdvName = hdvId ? (hdvMap.get(hdvId) ?? `HDV #${hdvId}`) : "";
+      const changed = tour._prev_hdv_id !== undefined && tour._prev_hdv_id !== tour.assigned_hdv_id;
+      aoa.push([
+        tour.ten_doan + (changed ? " ✱" : ""),
+        (tour.is_chained ? "⚡ " : "") + hdvName,
+        tour.agent_ten ?? "",
+        formatDate(tour.ngay_di),
+        formatDate(tour.ngay_ve),
+        tour.chuyen_bay_tien ?? "",
+        tour.chuyen_bay_don ?? "",
+        tour.dia_diem_ten ?? "",
+      ]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [
+      { wch: 32 }, { wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 12 },
+      { wch: 14 }, { wch: 14 }, { wch: 16 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Phân công theo ngày");
+    XLSX.writeFile(wb, `phan_cong_theo_ngay_${today}.xlsx`);
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)] overflow-hidden">
       {/* Top bar */}
@@ -971,31 +1003,57 @@ export default function XepHDVPage() {
         </div>
         <div className="flex items-center gap-2">
           {result && (
-            <div className="flex items-center border rounded-md overflow-hidden h-8">
-              <button
-                onClick={() => setViewMode("cards")}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 h-full text-xs transition-colors",
-                  viewMode === "cards" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
-                )}
-              >
-                <List className="h-3.5 w-3.5" /> Phân công
-              </button>
-              <button
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 h-full text-xs transition-colors border-l",
-                  viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
-                )}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" /> Lịch
-              </button>
-            </div>
+            <>
+              {/* Main view toggle */}
+              <div className="flex items-center border rounded-md overflow-hidden h-8">
+                <button
+                  onClick={() => setViewMode("cards")}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 h-full text-xs transition-colors",
+                    viewMode === "cards" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
+                  )}
+                >
+                  <List className="h-3.5 w-3.5" /> Phân công
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 h-full text-xs transition-colors border-l",
+                    viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
+                  )}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" /> Lịch
+                </button>
+              </div>
+              {/* Sub-toggle chỉ hiện ở view Phân công */}
+              {viewMode === "cards" && (
+                <div className="flex items-center border rounded-md overflow-hidden h-8">
+                  <button
+                    onClick={() => setAssignView("byhdv")}
+                    className={cn(
+                      "flex items-center gap-1 px-2.5 h-full text-xs transition-colors",
+                      assignView === "byhdv" ? "bg-muted font-medium" : "hover:bg-muted/60"
+                    )}
+                  >
+                    Theo HDV
+                  </button>
+                  <button
+                    onClick={() => setAssignView("bydate")}
+                    className={cn(
+                      "flex items-center gap-1 px-2.5 h-full text-xs transition-colors border-l",
+                      assignView === "bydate" ? "bg-muted font-medium" : "hover:bg-muted/60"
+                    )}
+                  >
+                    Theo ngày
+                  </button>
+                </div>
+              )}
+            </>
           )}
           {result && viewMode === "cards" && (
             <Button
               size="sm" variant="outline" className="h-8 text-xs gap-1.5"
-              onClick={exportAssignmentToExcel}
+              onClick={assignView === "byhdv" ? exportAssignmentToExcel : exportByDateToExcel}
             >
               <Download className="h-3.5 w-3.5" /> Tải Excel
             </Button>
@@ -1381,7 +1439,67 @@ export default function XepHDVPage() {
                 </div>
               ) : viewMode === "grid" ? (
                 <ScheduleGrid result={result} hdvList={activeHdvs} />
+              ) : assignView === "bydate" ? (
+                /* ── View theo ngày ── */
+                <div className="border rounded-md overflow-hidden">
+                  <table className="text-xs w-full border-collapse">
+                    <thead>
+                      <tr className="bg-[#E6F1FB] text-left">
+                        <th className="border px-2 py-1.5 min-w-[160px]">Tên đoàn</th>
+                        <th className="border px-2 py-1.5 min-w-[120px]">HDV</th>
+                        <th className="border px-2 py-1.5 min-w-[80px]">Agent</th>
+                        <th className="border px-2 py-1.5 w-24">Ngày đi</th>
+                        <th className="border px-2 py-1.5 w-24">Ngày về</th>
+                        <th className="border px-2 py-1.5 w-20">Bay tiễn</th>
+                        <th className="border px-2 py-1.5 w-20">Bay đón</th>
+                        <th className="border px-2 py-1.5 min-w-[80px]">Địa điểm</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...result]
+                        .sort((a, b) => a.ngay_di.localeCompare(b.ngay_di) || a.ten_doan.localeCompare(b.ten_doan))
+                        .map((tour, idx) => {
+                          const hdvId = tour.assigned_hdv_id;
+                          const hdvName = hdvId ? (hdvMap.get(hdvId) ?? `HDV #${hdvId}`) : null;
+                          const changed = tour._prev_hdv_id !== undefined && tour._prev_hdv_id !== tour.assigned_hdv_id;
+                          return (
+                            <tr key={idx} className={cn(
+                              idx % 2 === 0 ? "bg-white" : "bg-gray-50/50",
+                              changed && "bg-amber-50"
+                            )}>
+                              <td className="border px-2 py-1 font-medium">
+                                <div className="flex items-center gap-1">
+                                  {changed && (
+                                    <span className="text-amber-600 font-bold text-[10px] shrink-0" title="Đã thay đổi HDV">✱</span>
+                                  )}
+                                  {tour.ten_doan}
+                                  {!tour.doan_id && (
+                                    <span className="text-[9px] border rounded px-1 text-muted-foreground ml-1">File</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="border px-2 py-1">
+                                <div className="flex items-center gap-1">
+                                  {tour.is_chained && <Zap className="h-3 w-3 text-amber-500 shrink-0" />}
+                                  <span className={hdvName ? "text-primary font-medium" : "text-destructive"}>
+                                    {hdvName ?? "— Chưa xếp —"}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="border px-2 py-1 text-muted-foreground">{tour.agent_ten ?? ""}</td>
+                              <td className="border px-2 py-1">{formatDate(tour.ngay_di)}</td>
+                              <td className="border px-2 py-1">{formatDate(tour.ngay_ve)}</td>
+                              <td className="border px-2 py-1 text-muted-foreground">{tour.chuyen_bay_tien ?? ""}</td>
+                              <td className="border px-2 py-1 text-muted-foreground">{tour.chuyen_bay_don ?? ""}</td>
+                              <td className="border px-2 py-1 text-muted-foreground">{tour.dia_diem_ten ?? ""}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
+                /* ── View theo HDV ── */
                 <>
                   {/* Stats bar */}
                   <div className="flex items-center gap-3 pb-1 text-xs text-muted-foreground">
@@ -1394,6 +1512,11 @@ export default function XepHDVPage() {
                     {result.some((t) => t.is_chained) && (
                       <span className="text-amber-600 flex items-center gap-0.5">
                         <Zap className="h-3 w-3" /> {result.filter((t) => t.is_chained).length} ghép chuyến
+                      </span>
+                    )}
+                    {result.some((t) => t._prev_hdv_id !== undefined && t._prev_hdv_id !== t.assigned_hdv_id) && (
+                      <span className="text-amber-600 font-medium">
+                        · ✱ {result.filter((t) => t._prev_hdv_id !== undefined && t._prev_hdv_id !== t.assigned_hdv_id).length} thay đổi
                       </span>
                     )}
                   </div>

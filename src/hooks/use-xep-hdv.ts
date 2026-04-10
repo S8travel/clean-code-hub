@@ -17,6 +17,7 @@ export interface TourInput {
   assigned_hdv_id: number | null;
   locked_hdv_id: number | null;  // HDV đã chỉ định trước (từ DB hoặc Excel)
   _hard_locked?: boolean;        // true = không cho thuật toán thay đổi (khi tái xếp)
+  _prev_hdv_id?: number | null;  // HDV trước khi xếp lại (để đánh dấu thay đổi)
   is_chained?: boolean;
 }
 
