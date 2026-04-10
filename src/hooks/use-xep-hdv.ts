@@ -157,16 +157,16 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     tour.assigned_hdv_id = null;
     tour.is_chained = false;
 
-    // Bậc 1: lọc theo agent (ràng buộc cứng tuyệt đối)
-    const agentEligible = activeHdvs.filter((h) => passesAgent(h, tour));
+    // Lọc cứng: agent VÀ địa điểm đều phải pass
+    const eligible = activeHdvs.filter((h) => passesAgent(h, tour) && passesLocation(h, tour));
 
-    // Bậc 2: trong số đã pass agent, ưu tiên những người cũng pass địa điểm
-    const locationEligible = agentEligible.filter((h) => passesLocation(h, tour));
-
-    // Thử pool agent+location trước; nếu không ai available thì fallback agent-only
-    let res = scoreCandidates(locationEligible, tour);
-    if (res.bestHdvId === null && locationEligible.length < agentEligible.length) {
-      res = scoreCandidates(agentEligible, tour);
+    // Xếp theo từng bậc (1 → 5), dừng lại khi tìm được HDV
+    let res = { bestHdvId: null as number | null, bestIsChained: false };
+    for (let bac = 1; bac <= 5; bac++) {
+      const pool = eligible.filter((h) => (h.bac ?? 3) === bac);
+      if (pool.length === 0) continue;
+      res = scoreCandidates(pool, tour);
+      if (res.bestHdvId !== null) break;
     }
 
     tour.assigned_hdv_id = res.bestHdvId;

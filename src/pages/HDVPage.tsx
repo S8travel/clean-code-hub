@@ -33,6 +33,8 @@ const tuoiHDV = (namSinh: number | null) => {
   return new Date().getFullYear() - namSinh;
 };
 
+const BAC_OPTS = [1, 2, 3, 4, 5];
+
 const emptyForm = (): Omit<HDVRow, "id"> => ({
   ten: "",
   gioi_tinh: null,
@@ -46,6 +48,7 @@ const emptyForm = (): Omit<HDVRow, "id"> => ({
   ngan_hang: null,
   active: true,
   dia_diem_ids: [],
+  bac: 3,
 });
 
 export default function HDVPage() {
@@ -89,6 +92,7 @@ export default function HDVPage() {
         ngan_hang: selected.ngan_hang ?? null,
         active: selected.active ?? true,
         dia_diem_ids: selected.dia_diem_ids ?? [],
+        bac: selected.bac ?? 3,
       });
       setDirty(false);
     }
@@ -224,6 +228,9 @@ export default function HDVPage() {
                             Nghỉ
                           </Badge>
                         )}
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1">
+                          B{hdv.bac ?? 3}
+                        </Badge>
                         {agentCount > 0 && (
                           <Badge variant="secondary" className="text-[10px] h-4 px-1">
                             {agentCount} agent
@@ -315,6 +322,24 @@ export default function HDVPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Bậc HDV</Label>
+                <Select
+                  value={String(form.bac ?? 3)}
+                  onValueChange={(v) => set("bac", Number(v))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BAC_OPTS.map((b) => (
+                      <SelectItem key={b} value={String(b)}>Bậc {b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Bậc 1 được ưu tiên xếp trước</p>
               </div>
 
               <div className="space-y-1.5">

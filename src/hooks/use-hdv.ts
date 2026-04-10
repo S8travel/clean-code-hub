@@ -15,6 +15,7 @@ export interface HDVRow {
   ngan_hang: string | null;
   active: boolean;
   dia_diem_ids: number[];
+  bac: number;  // 1–5, bậc ưu tiên xếp (1 cao nhất)
 }
 
 export function useHDVList() {
