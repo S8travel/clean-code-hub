@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Trash2, Save, UserCheck } from "lucide-react";
+import { Plus, Search, Trash2, Save, UserCheck, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useHDVList, useCreateHDV, useUpdateHDV, useDeleteHDV, type HDVRow } from "@/hooks/use-hdv";
-import { useAgents } from "@/hooks/use-doan";
+import { useAgents, useDiaDiem } from "@/hooks/use-doan";
 import { toast } from "sonner";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
@@ -43,6 +44,8 @@ const emptyForm = (): Omit<HDVRow, "id"> => ({
   so_dien_thoai: null,
   so_tai_khoan: null,
   ngan_hang: null,
+  active: true,
+  dia_diem_ids: [],
 });
 
 export default function HDVPage() {
@@ -51,6 +54,7 @@ export default function HDVPage() {
 
   const { data: list = [], isLoading } = useHDVList();
   const { data: agents = [] } = useAgents();
+  const { data: diaDiemList = [] } = useDiaDiem();
   const createMut = useCreateHDV();
   const updateMut = useUpdateHDV();
   const deleteMut = useDeleteHDV();
@@ -83,6 +87,8 @@ export default function HDVPage() {
         so_dien_thoai: selected.so_dien_thoai ?? null,
         so_tai_khoan: selected.so_tai_khoan ?? null,
         ngan_hang: selected.ngan_hang ?? null,
+        active: selected.active ?? true,
+        dia_diem_ids: selected.dia_diem_ids ?? [],
       });
       setDirty(false);
     }
@@ -99,6 +105,14 @@ export default function HDVPage() {
       ? current.filter((id) => id !== agentId)
       : [...current, agentId];
     set("agent_ids", next);
+  };
+
+  const toggleDiaDiem = (ddId: number) => {
+    const current = form.dia_diem_ids ?? [];
+    const next = current.includes(ddId)
+      ? current.filter((id) => id !== ddId)
+      : [...current, ddId];
+    set("dia_diem_ids", next);
   };
 
   const handleCreate = async () => {
@@ -198,16 +212,24 @@ export default function HDVPage() {
                       "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
                       selectedId === hdv.id
                         ? "bg-primary/10 text-primary font-medium"
-                        : "hover:bg-muted/60"
+                        : "hover:bg-muted/60",
+                      !hdv.active && "opacity-50"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate">{hdv.ten}</span>
-                      {agentCount > 0 && (
-                        <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">
-                          {agentCount} agent
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!hdv.active && (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">
+                            Nghỉ
+                          </Badge>
+                        )}
+                        {agentCount > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1">
+                            {agentCount} agent
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     {(hdv.gioi_tinh || tuoi) && (
                       <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -237,7 +259,18 @@ export default function HDVPage() {
           <div className="max-w-2xl mx-auto p-6 space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
-              <h1 className="text-lg font-semibold">{selected.ten}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-lg font-semibold">{selected.ten}</h1>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={form.active}
+                    onCheckedChange={(v) => set("active", v)}
+                  />
+                  <span className={cn("text-xs font-medium", form.active ? "text-green-600" : "text-muted-foreground")}>
+                    {form.active ? "Đang hoạt động" : "Tạm nghỉ"}
+                  </span>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm" variant="destructive" className="h-8 text-xs"
@@ -384,6 +417,44 @@ export default function HDVPage() {
                           onCheckedChange={() => toggleAgent(agent.id)}
                         />
                         {agent.ten}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Địa điểm hoạt động */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" /> Địa điểm hoạt động
+                </Label>
+                {(form.dia_diem_ids ?? []).length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {(form.dia_diem_ids ?? []).length} địa điểm được chọn
+                  </p>
+                )}
+              </div>
+              {diaDiemList.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Chưa có địa điểm nào</p>
+              ) : (
+                <div className="border rounded-md p-3 grid grid-cols-2 gap-2">
+                  {diaDiemList.map((dd) => {
+                    const checked = (form.dia_diem_ids ?? []).includes(dd.id);
+                    return (
+                      <label
+                        key={dd.id}
+                        className={cn(
+                          "flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5 text-sm transition-colors",
+                          checked ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+                        )}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggleDiaDiem(dd.id)}
+                        />
+                        {dd.ten}
                       </label>
                     );
                   })}

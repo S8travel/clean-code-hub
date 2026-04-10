@@ -13,6 +13,8 @@ export interface HDVRow {
   so_dien_thoai: string | null;
   so_tai_khoan: string | null;
   ngan_hang: string | null;
+  active: boolean;
+  dia_diem_ids: number[];
 }
 
 export function useHDVList() {
