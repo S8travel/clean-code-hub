@@ -1430,6 +1430,12 @@ export default function XepHDVPage() {
 
         {/* ── Right panel: kết quả ── */}
         <Panel minSize={40}>
+          {/* View lịch cần scroll cả 2 chiều → dùng div thường thay ScrollArea */}
+          {result && viewMode === "grid" ? (
+            <div className="h-full overflow-auto p-3">
+              <ScheduleGrid result={result} hdvList={activeHdvs} />
+            </div>
+          ) : (
           <ScrollArea className="h-full">
             <div className="p-3 space-y-2">
               {!result ? (
@@ -1437,8 +1443,6 @@ export default function XepHDVPage() {
                   <CalendarCheck className="h-10 w-10 opacity-20" />
                   <p className="text-sm">Chọn đoàn và HDV, rồi bấm "Chạy xếp"</p>
                 </div>
-              ) : viewMode === "grid" ? (
-                <ScheduleGrid result={result} hdvList={activeHdvs} />
               ) : assignView === "bydate" ? (
                 /* ── View theo ngày ── */
                 <div className="border rounded-md overflow-hidden">
@@ -1555,6 +1559,7 @@ export default function XepHDVPage() {
               )}
             </div>
           </ScrollArea>
+          )}
         </Panel>
       </PanelGroup>
 
