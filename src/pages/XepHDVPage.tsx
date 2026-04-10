@@ -806,7 +806,7 @@ export default function XepHDVPage() {
     return map;
   })();
 
-  const hdvMap = new Map(hdvList.map((h) => [h.id, h.ten]));
+  const hdvMap = new Map<number, string>(hdvList.map((h) => [h.id, h.ten]));
   const unassignedCount = result?.filter((t) => t.assigned_hdv_id === null).length ?? 0;
 
   function exportScheduleToExcel() {
@@ -921,7 +921,7 @@ export default function XepHDVPage() {
     const merges: XLSX.Range[] = [];
 
     // Nhóm: assigned trước, unassigned cuối
-    const assignedIds = [...new Set(result.filter((t) => t.assigned_hdv_id !== null).map((t) => t.assigned_hdv_id!))]
+    const assignedIds = [...new Set<number>(result.filter((t) => t.assigned_hdv_id !== null).map((t) => t.assigned_hdv_id!))]
       .sort((a, b) => (hdvMap.get(a) ?? "").localeCompare(hdvMap.get(b) ?? "", "vi"));
 
     let stt = 1;
@@ -1247,82 +1247,88 @@ export default function XepHDVPage() {
                 </div>
               </div>
 
-              {/* Section: Ràng buộc tái xếp — chỉ hiện khi có kết quả */}
-              {result && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
-                      Xếp lại
-                    </p>
-                    {lockedTourKeys.size > 0 && (
-                      <Badge variant="secondary" className="text-[9px] h-4 px-1.5 normal-case">
-                        {lockedTourKeys.size} khóa
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="border rounded-md p-2.5 space-y-2">
-                    <p className="text-[10px] text-muted-foreground">
-                      Khóa các đoàn không muốn thay đổi, rồi bấm <strong>Xếp lại</strong>.
-                    </p>
+              {/* Section: Khóa đoàn — hiện khi có đoàn được chọn */}
+              {selectedDoanIds.size > 0 && (() => {
+                // Dùng result nếu đã chạy, ngược lại dùng danh sách đang chọn
+                const lockList: TourInput[] = result
+                  ? [...result].sort((a, b) => a.ngay_di.localeCompare(b.ngay_di))
+                  : getSelectedTours().sort((a, b) => a.ngay_di.localeCompare(b.ngay_di));
 
-                    {/* Quick-lock theo agent */}
-                    {agents.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-medium text-muted-foreground">Khóa nhanh theo agent:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {agents
-                            .filter((ag) => result.some((t) => t.agent_id === ag.id && t.assigned_hdv_id !== null))
-                            .map((ag) => {
-                              const tourKeysOfAgent = result
-                                .filter((t) => t.agent_id === ag.id && t.assigned_hdv_id !== null)
-                                .map(tourResultKey);
-                              const allLocked = tourKeysOfAgent.every((k) => lockedTourKeys.has(k));
-                              return (
-                                <button
-                                  key={ag.id}
-                                  onClick={() => {
-                                    setLockedTourKeys((prev) => {
-                                      const next = new Set(prev);
-                                      if (allLocked) {
-                                        tourKeysOfAgent.forEach((k) => next.delete(k));
-                                      } else {
-                                        tourKeysOfAgent.forEach((k) => next.add(k));
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                  className={cn(
-                                    "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border transition-colors",
-                                    allLocked
-                                      ? "bg-primary text-primary-foreground border-primary"
-                                      : "bg-background hover:bg-muted/60 border-border"
-                                  )}
-                                >
-                                  {allLocked && <Lock className="h-2.5 w-2.5" />}
-                                  {ag.ten}
-                                  <span className="opacity-60">({tourKeysOfAgent.length})</span>
-                                </button>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    )}
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+                        Khóa đoàn
+                      </p>
+                      {lockedTourKeys.size > 0 && (
+                        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 normal-case">
+                          {lockedTourKeys.size} đoàn khóa
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="border rounded-md p-2.5 space-y-2">
+                      {/* Quick-lock theo agent */}
+                      {(() => {
+                        const agentsInList = agents.filter((ag) =>
+                          lockList.some((t) => t.agent_id === ag.id)
+                        );
+                        if (agentsInList.length === 0) return null;
+                        return (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Khóa nhanh theo agent:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {agentsInList.map((ag) => {
+                                const tourKeysOfAgent = lockList
+                                  .filter((t) => t.agent_id === ag.id)
+                                  .map(tourResultKey);
+                                const allLocked = tourKeysOfAgent.length > 0 &&
+                                  tourKeysOfAgent.every((k) => lockedTourKeys.has(k));
+                                return (
+                                  <button
+                                    key={ag.id}
+                                    onClick={() => {
+                                      setLockedTourKeys((prev) => {
+                                        const next = new Set(prev);
+                                        if (allLocked) {
+                                          tourKeysOfAgent.forEach((k) => next.delete(k));
+                                        } else {
+                                          tourKeysOfAgent.forEach((k) => next.add(k));
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className={cn(
+                                      "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border transition-colors",
+                                      allLocked
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-background hover:bg-muted/60 border-border"
+                                    )}
+                                  >
+                                    {allLocked && <Lock className="h-2.5 w-2.5" />}
+                                    {ag.ten}
+                                    <span className="opacity-60">({tourKeysOfAgent.length})</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
-                    {/* Danh sách đoàn */}
-                    <div className="space-y-0.5 max-h-64 overflow-y-auto">
-                      {[...result]
-                        .sort((a, b) => a.ngay_di.localeCompare(b.ngay_di))
-                        .map((tour) => {
+                      {/* Danh sách đoàn */}
+                      <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                        {lockList.map((tour) => {
                           const key = tourResultKey(tour);
                           const isLocked = lockedTourKeys.has(key);
-                          const hdvName = tour.assigned_hdv_id
-                            ? (hdvMap.get(tour.assigned_hdv_id) ?? `HDV #${tour.assigned_hdv_id}`)
-                            : "—";
+                          const hdvId = result ? tour.assigned_hdv_id : tour.locked_hdv_id;
+                          const hdvName = hdvId
+                            ? (hdvMap.get(hdvId) ?? hdvList.find((h) => h.id === hdvId)?.ten ?? `HDV #${hdvId}`)
+                            : null;
                           return (
                             <label
                               key={key}
                               className={cn(
-                                "flex items-center gap-2 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors",
+                                "flex items-center gap-1.5 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors",
                                 isLocked ? "bg-primary/10" : "hover:bg-muted/40"
                               )}
                             >
@@ -1341,27 +1347,30 @@ export default function XepHDVPage() {
                                 <span className="font-medium truncate block">{tour.ten_doan}</span>
                                 <span className="text-muted-foreground text-[10px]">
                                   {formatDate(tour.ngay_di)}→{formatDate(tour.ngay_ve)}
-                                  {" · "}
-                                  <span className={tour.assigned_hdv_id ? "text-primary font-medium" : "text-destructive"}>
-                                    {hdvName}
-                                  </span>
+                                  {hdvName && (
+                                    <span className="ml-1 text-primary font-medium">· {hdvName}</span>
+                                  )}
                                 </span>
                               </div>
                             </label>
                           );
                         })}
-                    </div>
+                      </div>
 
-                    <Button
-                      size="sm" className="w-full h-7 text-xs gap-1.5"
-                      onClick={handleRerun}
-                    >
-                      <Play className="h-3.5 w-3.5" /> Xếp lại
-                      {lockedTourKeys.size > 0 && ` (${result.length - lockedTourKeys.size} đoàn)`}
-                    </Button>
+                      {/* Nút Xếp lại — chỉ sau khi có kết quả */}
+                      {result && (
+                        <Button
+                          size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5"
+                          onClick={handleRerun}
+                        >
+                          <Play className="h-3.5 w-3.5" /> Xếp lại
+                          {lockedTourKeys.size > 0 && ` (${lockList.length - lockedTourKeys.size} đoàn còn lại)`}
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </ScrollArea>
         </Panel>
