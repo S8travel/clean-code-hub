@@ -17,6 +17,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useHDVList } from "@/hooks/use-hdv";
@@ -171,6 +174,183 @@ function HDVResultCard({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Review Dialog (kiểm tra / sửa khi có lỗi) ───────────────────
+interface ReviewRow {
+  rowNum: number;
+  ten_doan: string;
+  ngay_di: string;       // YYYY-MM-DD (hoặc "" nếu lỗi)
+  ngay_ve: string;
+  chuyen_bay_tien: string;
+  chuyen_bay_don: string;
+  dia_diem_ten: string;
+  agent_ten: string;
+  error?: string;
+}
+
+function validateReviewRow(r: ReviewRow): string | undefined {
+  if (!r.ten_doan.trim()) return "Thiếu tên đoàn";
+  if (!r.ngay_di) return "Ngày đi không hợp lệ";
+  if (!r.ngay_ve) return "Ngày về không hợp lệ";
+  if (r.ngay_di > r.ngay_ve) return "Ngày đi sau ngày về";
+  return undefined;
+}
+
+function ReviewDialog({
+  rows,
+  onConfirm,
+  onCancel,
+}: {
+  rows: ReviewRow[];
+  onConfirm: (rows: ReviewRow[]) => void;
+  onCancel: () => void;
+}) {
+  const [editRows, setEditRows] = useState<ReviewRow[]>(() =>
+    rows.map((r) => ({ ...r, error: validateReviewRow(r) }))
+  );
+
+  function updateRow(idx: number, patch: Partial<ReviewRow>) {
+    setEditRows((prev) => {
+      const next = [...prev];
+      const updated = { ...next[idx], ...patch };
+      updated.error = validateReviewRow(updated);
+      next[idx] = updated;
+      return next;
+    });
+  }
+
+  const errorCount = editRows.filter((r) => r.error).length;
+  const validCount = editRows.length - errorCount;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-5xl flex flex-col" style={{ maxHeight: "85vh" }}>
+        <DialogHeader>
+          <DialogTitle>Kiểm tra dữ liệu import</DialogTitle>
+          <DialogDescription>
+            <span className="text-green-600 font-medium">{validCount} hàng hợp lệ</span>
+            {errorCount > 0 && (
+              <span className="text-destructive font-medium ml-2">· {errorCount} hàng lỗi — chỉnh sửa trực tiếp trong bảng</span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Table */}
+        <div className="flex-1 overflow-auto border rounded-md">
+          <table className="text-xs w-full border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-[#E6F1FB] text-left">
+                <th className="border px-2 py-1.5 w-8">#</th>
+                <th className="border px-2 py-1.5 min-w-[140px]">Tên đoàn</th>
+                <th className="border px-2 py-1.5 w-28">Ngày đi</th>
+                <th className="border px-2 py-1.5 w-28">Ngày về</th>
+                <th className="border px-2 py-1.5 min-w-[100px]">Bay tiễn</th>
+                <th className="border px-2 py-1.5 min-w-[100px]">Bay đón</th>
+                <th className="border px-2 py-1.5 min-w-[90px]">Địa điểm</th>
+                <th className="border px-2 py-1.5 min-w-[80px]">Agent</th>
+                <th className="border px-2 py-1.5 w-32">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              {editRows.map((row, idx) => (
+                <tr key={idx} className={row.error ? "bg-red-50" : idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                  <td className="border px-2 py-0.5 text-center text-muted-foreground">{row.rowNum}</td>
+
+                  {/* ten_doan */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      className={cn("h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent", !row.ten_doan && "bg-red-100")}
+                      value={row.ten_doan}
+                      onChange={(e) => updateRow(idx, { ten_doan: e.target.value })}
+                    />
+                  </td>
+
+                  {/* ngay_di */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      type="date"
+                      className={cn("h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent", !row.ngay_di && "bg-red-100")}
+                      value={row.ngay_di}
+                      onChange={(e) => updateRow(idx, { ngay_di: e.target.value })}
+                    />
+                  </td>
+
+                  {/* ngay_ve */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      type="date"
+                      className={cn("h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent", !row.ngay_ve && "bg-red-100")}
+                      value={row.ngay_ve}
+                      onChange={(e) => updateRow(idx, { ngay_ve: e.target.value })}
+                    />
+                  </td>
+
+                  {/* chuyen_bay_tien */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      className="h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent"
+                      value={row.chuyen_bay_tien}
+                      onChange={(e) => updateRow(idx, { chuyen_bay_tien: e.target.value })}
+                    />
+                  </td>
+
+                  {/* chuyen_bay_don */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      className="h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent"
+                      value={row.chuyen_bay_don}
+                      onChange={(e) => updateRow(idx, { chuyen_bay_don: e.target.value })}
+                    />
+                  </td>
+
+                  {/* dia_diem */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      className="h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent"
+                      value={row.dia_diem_ten}
+                      onChange={(e) => updateRow(idx, { dia_diem_ten: e.target.value })}
+                    />
+                  </td>
+
+                  {/* agent */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      className="h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent"
+                      value={row.agent_ten}
+                      onChange={(e) => updateRow(idx, { agent_ten: e.target.value })}
+                    />
+                  </td>
+
+                  {/* status */}
+                  <td className="border px-2 py-0.5">
+                    {row.error
+                      ? <span className="text-destructive text-[10px] leading-tight">{row.error}</span>
+                      : <span className="text-green-600 font-medium">✓ Hợp lệ</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <DialogFooter className="pt-2">
+          <div className="flex items-center gap-2 w-full justify-between">
+            <p className="text-xs text-muted-foreground">
+              {errorCount > 0 && `${errorCount} hàng lỗi sẽ bị bỏ qua khi xác nhận`}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onCancel}>Hủy</Button>
+              <Button onClick={() => onConfirm(editRows)} disabled={validCount === 0}>
+                Thêm {validCount} đoàn hợp lệ
+              </Button>
+            </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -367,7 +547,53 @@ export default function XepHDVPage() {
   const [result, setResult] = useState<TourInput[] | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "grid">("cards");
 
+  // Review dialog khi file có lỗi
+  const [reviewRows, setReviewRows] = useState<ReviewRow[] | null>(null);
+
   const saveMut = useSaveHDVAssignments();
+
+  // Xác nhận từ ReviewDialog → chuyển hàng hợp lệ vào fileTours
+  function confirmImport(rows: ReviewRow[]) {
+    const validRows = rows.filter((r) => !r.error && r.ten_doan.trim() && r.ngay_di && r.ngay_ve);
+    if (validRows.length === 0) { toast.error("Không có hàng hợp lệ"); return; }
+
+    const newTours: (TourInput & { _key: string })[] = validRows.map((r, i) => {
+      const dia_diem_id = diaDiemList.find(
+        (d) => d.ten.toLowerCase() === r.dia_diem_ten.toLowerCase()
+      )?.id ?? null;
+      const agent_id = agents.find(
+        (a) => a.ten.toLowerCase() === r.agent_ten.toLowerCase()
+      )?.id ?? null;
+      return {
+        _key: `file-${Date.now()}-${i}`,
+        ten_doan: r.ten_doan.trim(),
+        ngay_di: r.ngay_di,
+        ngay_ve: r.ngay_ve,
+        chuyen_bay_tien: r.chuyen_bay_tien.trim() || null,
+        chuyen_bay_don: r.chuyen_bay_don.trim() || null,
+        dia_diem_id,
+        dia_diem_ten: r.dia_diem_ten || undefined,
+        agent_id,
+        agent_ten: r.agent_ten || undefined,
+        assigned_hdv_id: null,
+        is_chained: false,
+      };
+    });
+
+    setFileTours((prev) => [...prev, ...newTours]);
+    setSelectedDoanIds((prev) => {
+      const next = new Set(prev);
+      newTours.forEach((t) => next.add(t._key));
+      return next;
+    });
+    setReviewRows(null);
+    setResult(null);
+    const skipped = rows.length - validRows.length;
+    toast.success(
+      `Đã thêm ${newTours.length} đoàn` +
+      (skipped > 0 ? ` · bỏ qua ${skipped} hàng lỗi` : "")
+    );
+  }
 
   const activeHdvs = hdvList.filter((h) => h.active);
   const poolHdvs = hdvMode === "all" ? activeHdvs : activeHdvs.filter((h) => selectedHdvIds.has(h.id));
@@ -412,70 +638,41 @@ export default function XepHDVPage() {
           return;
         }
 
-        const newTours: (TourInput & { _key: string })[] = [];
-        const errors: string[] = [];
+        // Thu thập TẤT CẢ hàng (cả hợp lệ lẫn lỗi) vào reviewData
+        const reviewData: ReviewRow[] = [];
 
         for (let r = 1; r < rows.length; r++) {
           const row = rows[r];
-          const ten = String(row[iName] ?? "").trim();
-          if (!ten) continue; // bỏ qua hàng trống
+          const ten_doan = String(row[iName] ?? "").trim();
+          if (!ten_doan) continue; // bỏ qua hàng hoàn toàn trống
 
           const ngay_di = parseExcelDate(row[iFrom]);
           const ngay_ve = parseExcelDate(row[iTo]);
 
-          if (!ngay_di || !ngay_ve) {
-            errors.push(`Hàng ${r + 1}: ngày không hợp lệ (${row[iFrom]} / ${row[iTo]})`);
-            continue;
-          }
-          if (ngay_di > ngay_ve) {
-            errors.push(`Hàng ${r + 1}: ngày đi sau ngày về`);
-            continue;
-          }
-
-          const diaDiemTen = iDd >= 0 ? String(row[iDd] ?? "").trim() : "";
-          const agentTen   = iAgent >= 0 ? String(row[iAgent] ?? "").trim() : "";
-
-          // Match theo tên (case-insensitive)
-          const dia_diem_id = diaDiemList.find(
-            (d) => d.ten.toLowerCase() === diaDiemTen.toLowerCase()
-          )?.id ?? null;
-          const agent_id = agents.find(
-            (a) => a.ten.toLowerCase() === agentTen.toLowerCase()
-          )?.id ?? null;
-
-          newTours.push({
-            _key: `file-${Date.now()}-${r}`,
-            ten_doan: ten,
+          reviewData.push({
+            rowNum: r + 1,
+            ten_doan,
             ngay_di,
             ngay_ve,
-            chuyen_bay_tien: iTien >= 0 ? (String(row[iTien] ?? "").trim() || null) : null,
-            chuyen_bay_don:  iDon  >= 0 ? (String(row[iDon]  ?? "").trim() || null) : null,
-            dia_diem_id,
-            dia_diem_ten: diaDiemTen || undefined,
-            agent_id,
-            agent_ten: agentTen || undefined,
-            assigned_hdv_id: null,
-            is_chained: false,
+            chuyen_bay_tien: iTien >= 0 ? String(row[iTien] ?? "").trim() : "",
+            chuyen_bay_don:  iDon  >= 0 ? String(row[iDon]  ?? "").trim() : "",
+            dia_diem_ten:    iDd   >= 0 ? String(row[iDd]   ?? "").trim() : "",
+            agent_ten:       iAgent >= 0 ? String(row[iAgent] ?? "").trim() : "",
           });
         }
 
-        if (newTours.length === 0) { toast.error("Không có hàng hợp lệ nào"); return; }
+        if (reviewData.length === 0) { toast.error("Không có dữ liệu nào"); return; }
 
-        setFileTours((prev) => [...prev, ...newTours]);
-        setSelectedDoanIds((prev) => {
-          const next = new Set(prev);
-          newTours.forEach((t) => next.add(t._key));
-          return next;
-        });
-        setResult(null);
-        if (errors.length > 0) {
-          toast.warning(
-            `Import ${newTours.length} đoàn · bỏ qua ${errors.length} hàng lỗi:\n` +
-            errors.slice(0, 5).join("\n") +
-            (errors.length > 5 ? `\n... và ${errors.length - 5} hàng nữa` : "")
-          );
+        const errorCount = reviewData.filter(
+          (r) => !r.ngay_di || !r.ngay_ve || r.ngay_di > r.ngay_ve
+        ).length;
+
+        if (errorCount > 0) {
+          // Có lỗi → mở dialog để user kiểm tra + sửa
+          setReviewRows(reviewData);
         } else {
-          toast.success(`Đã import ${newTours.length} đoàn từ file`);
+          // Không lỗi → thêm thẳng qua confirmImport
+          confirmImport(reviewData.map((r) => ({ ...r, error: undefined })));
         }
       } catch (err) {
         toast.error("Lỗi đọc file Excel");
@@ -869,6 +1066,15 @@ export default function XepHDVPage() {
           </ScrollArea>
         </Panel>
       </PanelGroup>
+
+      {/* Review Dialog */}
+      {reviewRows && (
+        <ReviewDialog
+          rows={reviewRows}
+          onConfirm={confirmImport}
+          onCancel={() => setReviewRows(null)}
+        />
+      )}
     </div>
   );
 }
