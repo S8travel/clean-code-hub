@@ -99,16 +99,22 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     }
   }
 
-  // Agent: tour có agent → HDV phải được tích agent đó; tour không có agent → tất cả đều pass
-  function passesAgent(hdv: HDVRow, tour: TourInput): boolean {
-    if (!tour.agent_id) return true;
-    return (hdv.agent_ids ?? []).includes(tour.agent_id);
-  }
-
-  // Địa điểm: tour có địa điểm → HDV phải được tích địa điểm đó; tour không có → tất cả đều pass
-  function passesLocation(hdv: HDVRow, tour: TourInput): boolean {
-    if (!tour.dia_diem_id) return true;
-    return (hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id);
+  // Kiểm tra HDV có đủ điều kiện đi tour không
+  // Nguyên tắc: agent kiểm tra trước, địa điểm sau, cả 2 đều phải thỏa mãn
+  // Nếu tour có agent_id → HDV phải tích agent đó
+  // Nếu tour có dia_diem_id → HDV phải tích địa điểm đó
+  // Nếu tour có dia_diem_ten nhưng dia_diem_id null (không tìm thấy trong DB) → không HDV nào được xếp
+  function isEligible(hdv: HDVRow, tour: TourInput): boolean {
+    // Agent (ưu tiên xét trước)
+    if (tour.agent_id !== null) {
+      if (!(hdv.agent_ids ?? []).includes(tour.agent_id)) return false;
+    }
+    // Địa điểm: nếu có tên địa điểm nhưng không resolve được ID → không ai eligible
+    if (tour.dia_diem_ten && !tour.dia_diem_id) return false;
+    if (tour.dia_diem_id !== null) {
+      if (!(hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id)) return false;
+    }
+    return true;
   }
 
   function scoreCandidates(pool: HDVRow[], tour: TourInput) {
@@ -154,7 +160,7 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     tour.is_chained = false;
 
     // Lọc cứng: agent VÀ địa điểm đều phải pass
-    const eligible = activeHdvs.filter((h) => passesAgent(h, tour) && passesLocation(h, tour));
+    const eligible = activeHdvs.filter((h) => isEligible(h, tour));
 
     // Xếp theo từng bậc (1 → 5), dừng lại khi tìm được HDV
     let res = { bestHdvId: null as number | null, bestIsChained: false };
