@@ -15,6 +15,7 @@ export interface TourInput {
   agent_ten?: string;
   // kết quả xếp
   assigned_hdv_id: number | null;
+  locked_hdv_id: number | null;  // HDV đã chỉ định trước (từ DB hoặc Excel)
   is_chained?: boolean;
 }
 
@@ -43,6 +44,7 @@ export function useDoanForXep(filter: { from: string; to: string } | null) {
         dia_diem_ten: d.dia_diem?.ten ?? null,
         agent_ten: d.agents?.ten ?? null,
         assigned_hdv_id: d.huong_dan_vien_id ?? null,
+        locked_hdv_id: d.huong_dan_vien_id ?? null,
         is_chained: false,
         _has_hdv: !!d.huong_dan_vien_id,
       } as TourInput & { _has_hdv: boolean }));
@@ -74,20 +76,37 @@ export function useSaveHDVAssignments() {
 // ─── Thuật toán xếp HDV (pure function) ───────────────────────────
 
 function toursOverlap(a: TourInput, b: TourInput): boolean {
-  // overlap nếu không phải a kết thúc trước b bắt đầu, và không phải b kết thúc trước a bắt đầu
   return !(a.ngay_ve < b.ngay_di || a.ngay_di > b.ngay_ve);
 }
 
-export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
+export function assignHDVs(
+  tours: TourInput[],
+  hdvs: HDVRow[],
+  lockedAgentIds: number[] = []
+): TourInput[] {
   const activeHdvs = hdvs.filter((h) => h.active);
   if (activeHdvs.length === 0 || tours.length === 0) return tours;
 
-  // Sort theo ngày đi tăng dần
-  const sorted = [...tours].map((t) => ({ ...t, assigned_hdv_id: null as number | null, is_chained: false }));
+  const sorted = [...tours].map((t) => ({ ...t, is_chained: false }));
   sorted.sort((a, b) => a.ngay_di.localeCompare(b.ngay_di));
 
   const hdvSchedule = new Map<number, TourInput[]>();
   activeHdvs.forEach((h) => hdvSchedule.set(h.id, []));
+
+  // Tour bị khóa cứng: thuộc agent bị khóa VÀ đã có locked_hdv_id
+  const isHardLocked = (t: TourInput) =>
+    t.locked_hdv_id !== null &&
+    t.agent_id !== null &&
+    lockedAgentIds.includes(t.agent_id);
+
+  // Pass 1: nạp hard-locked tours vào schedule, không xếp lại
+  for (const tour of sorted) {
+    if (isHardLocked(tour)) {
+      tour.assigned_hdv_id = tour.locked_hdv_id;
+      const sched = hdvSchedule.get(tour.locked_hdv_id!);
+      if (sched) sched.push(tour);
+    }
+  }
 
   function scoreCandidates(pool: HDVRow[], tour: TourInput) {
     let bestHdvId: number | null = null;
@@ -111,6 +130,9 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
       // Cân bằng tải
       score += Math.max(0, 5 - assigned.length);
 
+      // Stability: ưu tiên giữ HDV cũ nếu không bị hard-lock
+      if (tour.locked_hdv_id !== null && hdv.id === tour.locked_hdv_id) score += 4;
+
       if (score > bestScore) {
         bestScore = score;
         bestHdvId = hdv.id;
@@ -121,8 +143,14 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     return { bestHdvId, bestIsChained };
   }
 
+  // Pass 2: xếp các tour không bị hard-lock
   for (const tour of sorted) {
-    // ── Agent là tiêu chí CỨNG: thử pool agent-matched trước ──
+    if (isHardLocked(tour)) continue;
+
+    tour.assigned_hdv_id = null;
+    tour.is_chained = false;
+
+    // Agent là tiêu chí CỨNG: thử pool agent-matched trước
     const agentPool = tour.agent_id
       ? activeHdvs.filter((h) => (h.agent_ids ?? []).includes(tour.agent_id!))
       : [];
@@ -139,7 +167,6 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
       isChained = res.bestIsChained;
     }
 
-    // Fallback nếu không có HDV agent-matched nào available
     if (hdvId === null) {
       const res = scoreCandidates(fallbackPool, tour);
       hdvId = res.bestHdvId;
