@@ -6,7 +6,7 @@ import {
 } from "react-resizable-panels";
 import {
   CalendarCheck, Trash2, Play, Save, ChevronDown, ChevronRight, Zap, AlertCircle,
-  Upload, Download, LayoutGrid, List, Lock,
+  Upload, Download, LayoutGrid, List, Lock, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useHDVList } from "@/hooks/use-hdv";
@@ -576,6 +580,9 @@ export default function XepHDVPage() {
 
   // Số đoàn tối đa mỗi HDV (null = không giới hạn)
   const [maxToursPerHDV, setMaxToursPerHDV] = useState<number | null>(null);
+
+  // Popover đang mở trong bydate view (lưu index tour trong result)
+  const [openPopoverIdx, setOpenPopoverIdx] = useState<number | null>(null);
 
   // Review dialog khi file có lỗi
   const [reviewRows, setReviewRows] = useState<ReviewRow[] | null>(null);
@@ -1503,13 +1510,64 @@ export default function XepHDVPage() {
                                   )}
                                 </div>
                               </td>
-                              <td className="border px-2 py-1">
-                                <div className="flex items-center gap-1">
-                                  {tour.is_chained && <Zap className="h-3 w-3 text-amber-500 shrink-0" />}
-                                  <span className={hdvName ? "text-primary font-medium" : "text-destructive"}>
-                                    {hdvName ?? "— Chưa xếp —"}
-                                  </span>
-                                </div>
+                              <td className="border px-1 py-0.5">
+                                {(() => {
+                                  const resultIdx = result.findIndex((t) => t === tour);
+                                  return (
+                                    <Popover
+                                      open={openPopoverIdx === resultIdx}
+                                      onOpenChange={(open) => setOpenPopoverIdx(open ? resultIdx : null)}
+                                    >
+                                      <PopoverTrigger asChild>
+                                        <button className={cn(
+                                          "flex items-center gap-1 w-full px-1.5 py-1 rounded hover:bg-muted/60 text-left text-xs",
+                                          hdvName ? "text-primary font-medium" : "text-destructive"
+                                        )}>
+                                          {tour.is_chained && <Zap className="h-3 w-3 text-amber-500 shrink-0" />}
+                                          <span className="flex-1 truncate">{hdvName ?? "— Chưa xếp —"}</span>
+                                          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-52 p-0" align="start">
+                                        <Command>
+                                          <CommandInput placeholder="Tìm HDV..." className="h-8 text-xs" />
+                                          <CommandList>
+                                            <CommandEmpty className="py-2 text-xs text-center text-muted-foreground">
+                                              Không tìm thấy
+                                            </CommandEmpty>
+                                            <CommandGroup>
+                                              <CommandItem
+                                                value="__unassign__"
+                                                onSelect={() => {
+                                                  handleReassign(resultIdx, null);
+                                                  setOpenPopoverIdx(null);
+                                                }}
+                                                className="text-xs text-muted-foreground"
+                                              >
+                                                <Check className={cn("h-3 w-3 mr-2", hdvId === null ? "opacity-100" : "opacity-0")} />
+                                                — Chưa xếp —
+                                              </CommandItem>
+                                              {poolHdvs.map((hdv) => (
+                                                <CommandItem
+                                                  key={hdv.id}
+                                                  value={hdv.ten}
+                                                  onSelect={() => {
+                                                    handleReassign(resultIdx, hdv.id);
+                                                    setOpenPopoverIdx(null);
+                                                  }}
+                                                  className="text-xs"
+                                                >
+                                                  <Check className={cn("h-3 w-3 mr-2", hdvId === hdv.id ? "opacity-100" : "opacity-0")} />
+                                                  {hdv.ten}
+                                                </CommandItem>
+                                              ))}
+                                            </CommandGroup>
+                                          </CommandList>
+                                        </Command>
+                                      </PopoverContent>
+                                    </Popover>
+                                  );
+                                })()}
                               </td>
                               <td className="border px-2 py-1 text-muted-foreground">{tour.agent_ten ?? ""}</td>
                               <td className="border px-2 py-1">{formatDate(tour.ngay_di)}</td>
