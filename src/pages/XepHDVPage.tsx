@@ -68,29 +68,27 @@ function parseExcelDate(raw: any): string {
 
 // ─── Tải file mẫu Excel ───────────────────────────────────────────
 function downloadTemplate() {
+  // Thứ tự cột theo file mẫu chuẩn
   const headers = [
-    "ten_doan", "ngay_di", "ngay_ve",
-    "chuyen_bay_tien", "chuyen_bay_don",
-    "dia_diem", "agent", "hdv",
+    "ten_doan", "hdv", "agent", "ngay_di", "ngay_ve",
+    "chuyen_bay_tien", "chuyen_bay_don", "dia_diem",
   ];
   const example = [
-    "Tour Hà Nội 1", "15/04/2026", "20/04/2026", "VJ100", "VJ101", "Hà Nội", "Agent ABC", "",
+    "Tour Hà Nội 1", "", "Agent ABC", "15/04/2026", "20/04/2026", "VJ100", "VJ101", "Hà Nội",
   ];
   const ws = XLSX.utils.aoa_to_sheet([headers, example]);
   ws["!cols"] = headers.map(() => ({ wch: 20 }));
 
-  // Format cột ngay_di (B) và ngay_ve (C) là Text để Excel không tự convert
-  // Áp dụng cho toàn cột từ hàng 2 trở đi (1000 hàng)
+  // Format cột ngay_di (D) và ngay_ve (E) là Text để Excel không tự convert
   for (let r = 1; r <= 1000; r++) {
-    ["B", "C"].forEach((col) => {
+    ["D", "E"].forEach((col) => {
       const addr = `${col}${r + 1}`;
       if (!ws[addr]) ws[addr] = { t: "s", v: "" };
-      ws[addr].z = "@"; // format text
+      ws[addr].z = "@";
     });
   }
-  // Đặt format text cho header dòng mẫu
-  ws["B2"] = { t: "s", v: "15/04/2026", z: "@" };
-  ws["C2"] = { t: "s", v: "20/04/2026", z: "@" };
+  ws["D2"] = { t: "s", v: "15/04/2026", z: "@" };
+  ws["E2"] = { t: "s", v: "20/04/2026", z: "@" };
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Danh sách đoàn");
@@ -916,7 +914,8 @@ export default function XepHDVPage() {
     if (!result) return;
     const today = format(new Date(), "yyyy-MM-dd");
 
-    const HEADERS = ["STT", "Hướng dẫn viên", "Tên đoàn", "Ngày đi", "Ngày về", "Địa điểm", "Agent", "Bay tiễn", "Bay đón", "Ghép chuyến"];
+    // Thứ tự cột theo file mẫu: ten_doan · hdv · agent · ngay_di · ngay_ve · chuyen_bay_tien · chuyen_bay_don · dia_diem
+    const HEADERS = ["ten_doan", "hdv", "agent", "ngay_di", "ngay_ve", "chuyen_bay_tien", "chuyen_bay_don", "dia_diem"];
     const aoa: (string | number)[][] = [HEADERS];
     const merges: XLSX.Range[] = [];
 
@@ -924,34 +923,28 @@ export default function XepHDVPage() {
     const assignedIds = [...new Set<number>(result.filter((t) => t.assigned_hdv_id !== null).map((t) => t.assigned_hdv_id!))]
       .sort((a, b) => (hdvMap.get(a) ?? "").localeCompare(hdvMap.get(b) ?? "", "vi"));
 
-    let stt = 1;
-
     const addGroup = (hdvId: number | null, tours: TourInput[]) => {
       const hdvName = hdvId ? (hdvMap.get(hdvId) ?? `HDV #${hdvId}`) : "Chưa xếp được";
-      const headerRow: (string | number)[] = [`${hdvName.toUpperCase()} — ${tours.length} đoàn`, ...Array(HEADERS.length - 1).fill("")];
       const groupRowIdx = aoa.length;
-      aoa.push(headerRow);
+      aoa.push([`${hdvName.toUpperCase()} — ${tours.length} đoàn`, ...Array(HEADERS.length - 1).fill("")]);
       merges.push({ s: { r: groupRowIdx, c: 0 }, e: { r: groupRowIdx, c: HEADERS.length - 1 } });
 
-      for (const tour of tours.sort((a, b) => a.ngay_di.localeCompare(b.ngay_di))) {
+      for (const tour of [...tours].sort((a, b) => a.ngay_di.localeCompare(b.ngay_di))) {
         aoa.push([
-          stt++,
-          hdvName,
           tour.ten_doan,
+          (tour.is_chained ? "⚡ " : "") + hdvName,
+          tour.agent_ten ?? "",
           formatDate(tour.ngay_di),
           formatDate(tour.ngay_ve),
-          tour.dia_diem_ten ?? "",
-          tour.agent_ten ?? "",
           tour.chuyen_bay_tien ?? "",
           tour.chuyen_bay_don ?? "",
-          tour.is_chained ? "⚡ Ghép" : "",
+          tour.dia_diem_ten ?? "",
         ]);
       }
     };
 
     for (const hdvId of assignedIds) {
-      const tours = result.filter((t) => t.assigned_hdv_id === hdvId);
-      addGroup(hdvId, tours);
+      addGroup(hdvId, result.filter((t) => t.assigned_hdv_id === hdvId));
     }
     const unassigned = result.filter((t) => t.assigned_hdv_id === null);
     if (unassigned.length > 0) addGroup(null, unassigned);
@@ -959,8 +952,8 @@ export default function XepHDVPage() {
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws["!merges"] = merges;
     ws["!cols"] = [
-      { wch: 5 }, { wch: 22 }, { wch: 28 }, { wch: 12 }, { wch: 12 },
-      { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+      { wch: 30 }, { wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 12 },
+      { wch: 14 }, { wch: 14 }, { wch: 16 },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -1123,7 +1116,7 @@ export default function XepHDVPage() {
                     </Button>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    Cột: ten_doan · ngay_di · ngay_ve · chuyen_bay_tien · chuyen_bay_don · dia_diem · agent · hdv (tùy chọn)
+                    Cột: ten_doan · hdv · agent · ngay_di · ngay_ve · chuyen_bay_tien · chuyen_bay_don · dia_diem
                   </p>
 
                   <input
