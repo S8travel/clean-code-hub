@@ -1,9 +1,11 @@
-import { useState, useId } from "react";
+import { useState, useId, useRef } from "react";
+import * as XLSX from "xlsx";
 import {
   Panel, PanelGroup, PanelResizeHandle,
 } from "react-resizable-panels";
 import {
-  CalendarCheck, Plus, Trash2, Play, Save, ChevronDown, ChevronRight, Zap, AlertCircle,
+  CalendarCheck, Trash2, Play, Save, ChevronDown, ChevronRight, Zap, AlertCircle,
+  Upload, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,17 +29,43 @@ import {
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
-// ─── Form nhập đoàn thủ công ──────────────────────────────────────
-const emptyManual = (): Omit<TourInput, "assigned_hdv_id"> => ({
-  ten_doan: "",
-  ngay_di: "",
-  ngay_ve: "",
-  chuyen_bay_don: null,
-  chuyen_bay_tien: null,
-  agent_id: null,
-  dia_diem_id: null,
-  is_chained: false,
-});
+// ─── Parse ngày từ Excel (DD/MM/YYYY hoặc YYYY-MM-DD hoặc serial number) ──
+function parseExcelDate(raw: any): string {
+  if (!raw) return "";
+  // Serial number từ Excel
+  if (typeof raw === "number") {
+    const date = XLSX.SSF.parse_date_code(raw);
+    if (date) {
+      const m = String(date.m).padStart(2, "0");
+      const d = String(date.d).padStart(2, "0");
+      return `${date.y}-${m}-${d}`;
+    }
+  }
+  const s = String(raw).trim();
+  // DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return "";
+}
+
+// ─── Tải file mẫu Excel ───────────────────────────────────────────
+function downloadTemplate() {
+  const headers = [
+    "ten_doan", "ngay_di", "ngay_ve",
+    "chuyen_bay_tien", "chuyen_bay_don",
+    "dia_diem", "agent",
+  ];
+  const example = [
+    "Tour Hà Nội 1", "15/04/2026", "20/04/2026", "VJ100", "VJ101", "Hà Nội", "Agent ABC",
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  ws["!cols"] = headers.map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Danh sách đoàn");
+  XLSX.writeFile(wb, "mau_xep_hdv.xlsx");
+}
 
 function formatDate(d: string) {
   if (!d) return "?";
@@ -57,14 +85,13 @@ function HDVResultCard({
   hdvName: string;
   tours: TourInput[];
   allHdvs: { id: number; ten: string }[];
-  onReassign: (tourIndex: number, newHdvId: number | null) => void;
+  onReassign: (tourIdx: number, newHdvId: number | null) => void;
 }) {
   const [open, setOpen] = useState(true);
   const isUnassigned = hdvId === null;
 
   return (
     <div className={cn("border rounded-lg overflow-hidden", isUnassigned && "border-destructive/40")}>
-      {/* Header */}
       <button
         className={cn(
           "w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-left",
@@ -73,24 +100,20 @@ function HDVResultCard({
         onClick={() => setOpen((v) => !v)}
       >
         {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-        {isUnassigned ? (
-          <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
-        ) : (
-          <CalendarCheck className="h-3.5 w-3.5 text-primary shrink-0" />
-        )}
+        {isUnassigned
+          ? <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+          : <CalendarCheck className="h-3.5 w-3.5 text-primary shrink-0" />}
         <span className={isUnassigned ? "text-destructive" : ""}>{hdvName}</span>
         <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">
           {tours.length} đoàn
         </Badge>
       </button>
 
-      {/* Rows */}
       {open && (
         <div className="divide-y">
           {tours.map((tour, idx) => (
             <div key={idx} className="px-3 py-2 text-xs flex flex-col gap-1">
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Chain indicator */}
                 {tour.is_chained && (
                   <span className="flex items-center gap-0.5 text-amber-600 font-medium shrink-0">
                     <Zap className="h-3 w-3" /> Ghép chuyến
@@ -99,7 +122,7 @@ function HDVResultCard({
                 <span className="font-medium">{tour.ten_doan}</span>
                 {!tour.doan_id && (
                   <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">
-                    Thủ công
+                    File
                   </Badge>
                 )}
               </div>
@@ -114,7 +137,6 @@ function HDVResultCard({
                     {tour.chuyen_bay_don && `↓${tour.chuyen_bay_don}`}
                   </span>
                 )}
-                {/* Reassign */}
                 <Select
                   value={tour.assigned_hdv_id?.toString() ?? "none"}
                   onValueChange={(v) => onReassign(idx, v === "none" ? null : Number(v))}
@@ -144,6 +166,7 @@ export default function XepHDVPage() {
   if (!canView) return <AccessDenied />;
 
   const id = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Lookup data
   const { data: hdvList = [] } = useHDVList();
@@ -160,11 +183,9 @@ export default function XepHDVPage() {
     isFetching: boolean;
   };
 
-  // Danh sách đoàn đã chọn (từ DB + thủ công)
-  const [selectedDoanIds, setSelectedDoanIds] = useState<Set<string>>(new Set()); // "db-{id}" | "manual-{idx}"
-  const [manualTours, setManualTours] = useState<(Omit<TourInput, "assigned_hdv_id"> & { _key: string })[]>([]);
-  const [showManualForm, setShowManualForm] = useState(false);
-  const [manualForm, setManualForm] = useState(emptyManual());
+  // Danh sách đoàn đã chọn
+  const [selectedDoanIds, setSelectedDoanIds] = useState<Set<string>>(new Set());
+  const [fileTours, setFileTours] = useState<(TourInput & { _key: string })[]>([]);
 
   // HDV pool
   const [hdvMode, setHdvMode] = useState<"all" | "manual">("all");
@@ -175,58 +196,135 @@ export default function XepHDVPage() {
 
   const saveMut = useSaveHDVAssignments();
 
-  // ── helpers ──
   const activeHdvs = hdvList.filter((h) => h.active);
   const poolHdvs = hdvMode === "all" ? activeHdvs : activeHdvs.filter((h) => selectedHdvIds.has(h.id));
-
   const displayDbTours = hideWithHdv ? dbTours.filter((t) => !t._has_hdv) : dbTours;
 
   function toggleDbTour(doan_id: number) {
     const key = `db-${doan_id}`;
-    setSelectedDoanIds((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+    setSelectedDoanIds((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
     setResult(null);
   }
 
-  function addManualTour() {
-    if (!manualForm.ten_doan || !manualForm.ngay_di || !manualForm.ngay_ve) {
-      toast.error("Cần nhập tên đoàn, ngày đi và ngày về");
-      return;
-    }
-    if (manualForm.ngay_di > manualForm.ngay_ve) {
-      toast.error("Ngày đi phải trước ngày về");
-      return;
-    }
-    const key = `manual-${Date.now()}`;
-    const diaDiemTen = diaDiemList.find((d) => d.id === manualForm.dia_diem_id)?.ten;
-    const agentTen = agents.find((a) => a.id === manualForm.agent_id)?.ten;
-    setManualTours((prev) => [...prev, { ...manualForm, dia_diem_ten: diaDiemTen, agent_ten: agentTen, _key: key }]);
-    setSelectedDoanIds((prev) => new Set([...prev, key]));
-    setManualForm(emptyManual());
-    setShowManualForm(false);
-    setResult(null);
+  // ── Upload Excel ──────────────────────────────────────────────────
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ""; // reset để có thể upload lại cùng file
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = new Uint8Array(ev.target!.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: "array", cellDates: false });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+
+        if (rows.length < 2) { toast.error("File không có dữ liệu"); return; }
+
+        // Xác định cột từ header row (row 0)
+        const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
+        const col = (names: string[]) => names.map((n) => headers.indexOf(n)).find((i) => i >= 0) ?? -1;
+
+        const iName   = col(["ten_doan", "tên đoàn", "ten doan", "name"]);
+        const iFrom   = col(["ngay_di", "ngày đi", "ngay di", "departure"]);
+        const iTo     = col(["ngay_ve", "ngày về", "ngay ve", "return"]);
+        const iTien   = col(["chuyen_bay_tien", "chuyến bay tiễn", "cb_tien", "flight_out"]);
+        const iDon    = col(["chuyen_bay_don", "chuyến bay đón", "cb_don", "flight_in"]);
+        const iDd     = col(["dia_diem", "địa điểm", "dia diem", "location"]);
+        const iAgent  = col(["agent"]);
+
+        if (iName < 0 || iFrom < 0 || iTo < 0) {
+          toast.error("File thiếu cột bắt buộc: ten_doan, ngay_di, ngay_ve");
+          return;
+        }
+
+        const newTours: (TourInput & { _key: string })[] = [];
+        const errors: string[] = [];
+
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r];
+          const ten = String(row[iName] ?? "").trim();
+          if (!ten) continue; // bỏ qua hàng trống
+
+          const ngay_di = parseExcelDate(row[iFrom]);
+          const ngay_ve = parseExcelDate(row[iTo]);
+
+          if (!ngay_di || !ngay_ve) {
+            errors.push(`Hàng ${r + 1}: ngày không hợp lệ (${row[iFrom]} / ${row[iTo]})`);
+            continue;
+          }
+          if (ngay_di > ngay_ve) {
+            errors.push(`Hàng ${r + 1}: ngày đi sau ngày về`);
+            continue;
+          }
+
+          const diaDiemTen = iDd >= 0 ? String(row[iDd] ?? "").trim() : "";
+          const agentTen   = iAgent >= 0 ? String(row[iAgent] ?? "").trim() : "";
+
+          // Match theo tên (case-insensitive)
+          const dia_diem_id = diaDiemList.find(
+            (d) => d.ten.toLowerCase() === diaDiemTen.toLowerCase()
+          )?.id ?? null;
+          const agent_id = agents.find(
+            (a) => a.ten.toLowerCase() === agentTen.toLowerCase()
+          )?.id ?? null;
+
+          newTours.push({
+            _key: `file-${Date.now()}-${r}`,
+            ten_doan: ten,
+            ngay_di,
+            ngay_ve,
+            chuyen_bay_tien: iTien >= 0 ? (String(row[iTien] ?? "").trim() || null) : null,
+            chuyen_bay_don:  iDon  >= 0 ? (String(row[iDon]  ?? "").trim() || null) : null,
+            dia_diem_id,
+            dia_diem_ten: diaDiemTen || undefined,
+            agent_id,
+            agent_ten: agentTen || undefined,
+            assigned_hdv_id: null,
+            is_chained: false,
+          });
+        }
+
+        if (errors.length > 0) {
+          toast.warning(`Import xong, ${errors.length} hàng bị lỗi:\n${errors.slice(0, 3).join("\n")}${errors.length > 3 ? "\n..." : ""}`);
+        }
+
+        if (newTours.length === 0) { toast.error("Không có hàng hợp lệ nào"); return; }
+
+        setFileTours((prev) => [...prev, ...newTours]);
+        setSelectedDoanIds((prev) => {
+          const next = new Set(prev);
+          newTours.forEach((t) => next.add(t._key));
+          return next;
+        });
+        setResult(null);
+        toast.success(`Đã import ${newTours.length} đoàn từ file`);
+      } catch (err) {
+        toast.error("Lỗi đọc file Excel");
+        console.error(err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }
 
-  function removeManualTour(key: string) {
-    setManualTours((prev) => prev.filter((t) => t._key !== key));
+  function removeFileTour(key: string) {
+    setFileTours((prev) => prev.filter((t) => t._key !== key));
     setSelectedDoanIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
     setResult(null);
   }
 
-  // Tổng hợp tours đã chọn
+  // ── Tổng hợp tours đã chọn ──
   function getSelectedTours(): TourInput[] {
     const tours: TourInput[] = [];
     for (const key of selectedDoanIds) {
       if (key.startsWith("db-")) {
-        const id = Number(key.replace("db-", ""));
-        const t = dbTours.find((d) => d.doan_id === id);
+        const dbId = Number(key.replace("db-", ""));
+        const t = dbTours.find((d) => d.doan_id === dbId);
         if (t) tours.push({ ...t, assigned_hdv_id: null, is_chained: false });
       } else {
-        const manual = manualTours.find((m) => m._key === key);
-        if (manual) tours.push({ ...manual, assigned_hdv_id: null, is_chained: false });
+        const ft = fileTours.find((m) => m._key === key);
+        if (ft) tours.push({ ...ft, assigned_hdv_id: null, is_chained: false });
       }
     }
     return tours;
@@ -236,11 +334,9 @@ export default function XepHDVPage() {
     const tours = getSelectedTours();
     if (tours.length === 0) { toast.error("Chưa chọn đoàn nào"); return; }
     if (poolHdvs.length === 0) { toast.error("Không có hướng dẫn viên nào trong pool"); return; }
-    const res = assignHDVs(tours, poolHdvs);
-    setResult(res);
+    setResult(assignHDVs(tours, poolHdvs));
   }
 
-  // Reassign tay từ result
   function handleReassign(tourIdx: number, newHdvId: number | null) {
     if (!result) return;
     setResult((prev) => {
@@ -251,20 +347,14 @@ export default function XepHDVPage() {
     });
   }
 
-  // Lưu vào DB
   async function handleSave() {
     if (!result) return;
     const toSave = result.filter((t) => t.doan_id != null);
     const skipped = result.filter((t) => t.doan_id == null).length;
-    if (toSave.length === 0) {
-      toast.error("Không có đoàn nào từ DB để lưu");
-      return;
-    }
+    if (toSave.length === 0) { toast.error("Không có đoàn nào từ DB để lưu"); return; }
     try {
-      await saveMut.mutateAsync(
-        toSave.map((t) => ({ doan_id: t.doan_id!, hdv_id: t.assigned_hdv_id }))
-      );
-      toast.success(`Đã lưu ${toSave.length} đoàn${skipped > 0 ? ` · ${skipped} đoàn thủ công không lưu được vào DB` : ""}`);
+      await saveMut.mutateAsync(toSave.map((t) => ({ doan_id: t.doan_id!, hdv_id: t.assigned_hdv_id })));
+      toast.success(`Đã lưu ${toSave.length} đoàn${skipped > 0 ? ` · ${skipped} đoàn từ file không lưu vào DB` : ""}`);
     } catch {
       toast.error("Lỗi khi lưu");
     }
@@ -308,9 +398,8 @@ export default function XepHDVPage() {
         </div>
       </div>
 
-      {/* Main panels */}
       <PanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-        {/* ── Left panel: cấu hình ── */}
+        {/* ── Left panel ── */}
         <Panel defaultSize={32} minSize={24}>
           <ScrollArea className="h-full">
             <div className="p-3 space-y-4">
@@ -344,10 +433,7 @@ export default function XepHDVPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                      <Checkbox
-                        checked={hideWithHdv}
-                        onCheckedChange={(v) => setHideWithHdv(!!v)}
-                      />
+                      <Checkbox checked={hideWithHdv} onCheckedChange={(v) => setHideWithHdv(!!v)} />
                       Chỉ đoàn chưa có HDV
                     </label>
                     <Button
@@ -358,21 +444,16 @@ export default function XepHDVPage() {
                       {dbFetching ? "Đang tải..." : "Tải"}
                     </Button>
                   </div>
-
-                  {/* Danh sách từ DB */}
                   {displayDbTours.length > 0 && (
                     <div className="space-y-0.5 max-h-48 overflow-y-auto">
                       {displayDbTours.map((tour) => {
                         const key = `db-${tour.doan_id}`;
                         const checked = selectedDoanIds.has(key);
                         return (
-                          <label
-                            key={key}
-                            className={cn(
-                              "flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors",
-                              checked ? "bg-primary/10" : "hover:bg-muted/50"
-                            )}
-                          >
+                          <label key={key} className={cn(
+                            "flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors",
+                            checked ? "bg-primary/10" : "hover:bg-muted/50"
+                          )}>
                             <Checkbox checked={checked} onCheckedChange={() => toggleDbTour(tour.doan_id!)} />
                             <div className="min-w-0">
                               <span className="font-medium truncate">{tour.ten_doan}</span>
@@ -391,138 +472,75 @@ export default function XepHDVPage() {
                   )}
                 </div>
 
-                {/* Đoàn thủ công */}
-                {manualTours.length > 0 && (
-                  <div className="space-y-0.5">
-                    {manualTours.map((tour) => {
-                      const checked = selectedDoanIds.has(tour._key);
-                      return (
-                        <div key={tour._key} className={cn(
-                          "flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors",
-                          checked ? "bg-primary/10" : "hover:bg-muted/50"
-                        )}>
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={() => {
-                              setSelectedDoanIds((prev) => {
-                                const next = new Set(prev);
-                                next.has(tour._key) ? next.delete(tour._key) : next.add(tour._key);
-                                return next;
-                              });
-                              setResult(null);
-                            }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <span className="font-medium">{tour.ten_doan}</span>
-                            <Badge variant="outline" className="text-[9px] h-3.5 px-1 ml-1">Thủ công</Badge>
-                            <span className="text-muted-foreground ml-1 text-[10px]">
-                              {formatDate(tour.ngay_di)}→{formatDate(tour.ngay_ve)}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => removeManualTour(tour._key)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
+                {/* Upload Excel */}
+                <div className="border rounded-md p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium">Upload file Excel</p>
+                    <Button
+                      size="sm" variant="ghost" className="h-6 text-[11px] gap-1 text-muted-foreground"
+                      onClick={downloadTemplate}
+                    >
+                      <Download className="h-3 w-3" /> Tải file mẫu
+                    </Button>
                   </div>
-                )}
+                  <p className="text-[10px] text-muted-foreground">
+                    Cột: ten_doan · ngay_di · ngay_ve · chuyen_bay_tien · chuyen_bay_don · dia_diem · agent
+                  </p>
 
-                {/* Form thêm thủ công */}
-                {showManualForm ? (
-                  <div className="border rounded-md p-2.5 space-y-2 bg-muted/30">
-                    <p className="text-xs font-medium">Thêm đoàn thủ công</p>
-                    <Input
-                      className="h-7 text-xs" placeholder="Tên đoàn *"
-                      value={manualForm.ten_doan}
-                      onChange={(e) => setManualForm((p) => ({ ...p, ten_doan: e.target.value }))}
-                    />
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Ngày đi *</Label>
-                        <Input
-                          type="date" className="h-7 text-xs"
-                          value={manualForm.ngay_di}
-                          onChange={(e) => setManualForm((p) => ({ ...p, ngay_di: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Ngày về *</Label>
-                        <Input
-                          type="date" className="h-7 text-xs"
-                          value={manualForm.ngay_ve}
-                          onChange={(e) => setManualForm((p) => ({ ...p, ngay_ve: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Chuyến bay tiễn</Label>
-                        <Input
-                          className="h-7 text-xs" placeholder="VD: VJ100"
-                          value={manualForm.chuyen_bay_tien ?? ""}
-                          onChange={(e) => setManualForm((p) => ({ ...p, chuyen_bay_tien: e.target.value || null }))}
-                        />
-                      </div>
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Chuyến bay đón</Label>
-                        <Input
-                          className="h-7 text-xs" placeholder="VD: VJ101"
-                          value={manualForm.chuyen_bay_don ?? ""}
-                          onChange={(e) => setManualForm((p) => ({ ...p, chuyen_bay_don: e.target.value || null }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Địa điểm</Label>
-                        <Select
-                          value={manualForm.dia_diem_id?.toString() ?? ""}
-                          onValueChange={(v) => setManualForm((p) => ({ ...p, dia_diem_id: v ? Number(v) : null }))}
-                        >
-                          <SelectTrigger className="h-7 text-xs">
-                            <SelectValue placeholder="Chọn..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {diaDiemList.map((d) => (
-                              <SelectItem key={d.id} value={d.id.toString()}>{d.ten}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] text-muted-foreground">Agent</Label>
-                        <Select
-                          value={manualForm.agent_id?.toString() ?? ""}
-                          onValueChange={(v) => setManualForm((p) => ({ ...p, agent_id: v ? Number(v) : null }))}
-                        >
-                          <SelectTrigger className="h-7 text-xs">
-                            <SelectValue placeholder="Chọn..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {agents.map((a) => (
-                              <SelectItem key={a.id} value={a.id.toString()}>{a.ten}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" className="h-7 text-xs flex-1" onClick={addManualTour}>Thêm</Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowManualForm(false)}>Hủy</Button>
-                    </div>
-                  </div>
-                ) : (
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
                   <Button
-                    size="sm" variant="outline" className="w-full h-7 text-xs gap-1"
-                    onClick={() => setShowManualForm(true)}
+                    size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5"
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    <Plus className="h-3 w-3" /> Thêm đoàn thủ công
+                    <Upload className="h-3.5 w-3.5" /> Chọn file (.xlsx / .xls)
                   </Button>
-                )}
+
+                  {/* Danh sách đoàn từ file */}
+                  {fileTours.length > 0 && (
+                    <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                      {fileTours.map((tour) => {
+                        const checked = selectedDoanIds.has(tour._key);
+                        return (
+                          <div key={tour._key} className={cn(
+                            "flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors",
+                            checked ? "bg-primary/10" : "hover:bg-muted/50"
+                          )}>
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={() => {
+                                setSelectedDoanIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.has(tour._key) ? next.delete(tour._key) : next.add(tour._key);
+                                  return next;
+                                });
+                                setResult(null);
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium">{tour.ten_doan}</span>
+                              <span className="text-muted-foreground ml-1.5 text-[10px]">
+                                {formatDate(tour.ngay_di)}→{formatDate(tour.ngay_ve)}
+                                {tour.dia_diem_ten ? ` · ${tour.dia_diem_ten}` : ""}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => removeFileTour(tour._key)}
+                              className="text-muted-foreground hover:text-destructive shrink-0"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Section: Hướng dẫn viên */}
@@ -552,19 +570,15 @@ export default function XepHDVPage() {
                       Chọn thủ công
                     </label>
                   </div>
-
                   {hdvMode === "manual" && (
                     <div className="space-y-0.5 max-h-48 overflow-y-auto">
                       {activeHdvs.map((hdv) => {
                         const checked = selectedHdvIds.has(hdv.id);
                         return (
-                          <label
-                            key={hdv.id}
-                            className={cn(
-                              "flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors",
-                              checked ? "bg-primary/10" : "hover:bg-muted/50"
-                            )}
-                          >
+                          <label key={hdv.id} className={cn(
+                            "flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors",
+                            checked ? "bg-primary/10" : "hover:bg-muted/50"
+                          )}>
                             <Checkbox
                               checked={checked}
                               onCheckedChange={() => {
@@ -582,10 +596,7 @@ export default function XepHDVPage() {
                       })}
                     </div>
                   )}
-
-                  <p className="text-[10px] text-muted-foreground">
-                    Pool: {poolHdvs.length} HDV
-                  </p>
+                  <p className="text-[10px] text-muted-foreground">Pool: {poolHdvs.length} HDV</p>
                 </div>
               </div>
             </div>
@@ -605,11 +616,10 @@ export default function XepHDVPage() {
                 </div>
               ) : (
                 <>
-                  {/* Stats */}
                   <div className="flex items-center gap-3 pb-1 text-xs text-muted-foreground">
                     <span>{result.length} đoàn</span>
                     <span>·</span>
-                    <span>{groupedResult!.size - (unassignedCount > 0 ? 1 : 0)} HDV được xếp</span>
+                    <span>{(groupedResult!.size - (unassignedCount > 0 ? 1 : 0))} HDV được xếp</span>
                     {unassignedCount > 0 && (
                       <span className="text-destructive font-medium">· {unassignedCount} chưa xếp được</span>
                     )}
@@ -620,7 +630,6 @@ export default function XepHDVPage() {
                     )}
                   </div>
 
-                  {/* Unassigned first */}
                   {unassignedCount > 0 && groupedResult!.has(null) && (
                     <HDVResultCard
                       hdvId={null}
@@ -628,16 +637,13 @@ export default function XepHDVPage() {
                       tours={groupedResult!.get(null)!}
                       allHdvs={activeHdvs}
                       onReassign={(idx, newHdvId) => {
-                        // Tìm global index trong result
                         const unassigned = result.filter((t) => t.assigned_hdv_id === null);
-                        const tourToReassign = unassigned[idx];
-                        const globalIdx = result.findIndex((t) => t === tourToReassign);
+                        const globalIdx = result.findIndex((t) => t === unassigned[idx]);
                         handleReassign(globalIdx, newHdvId);
                       }}
                     />
                   )}
 
-                  {/* Grouped by HDV */}
                   {[...groupedResult!.entries()]
                     .filter(([hdvId]) => hdvId !== null)
                     .sort(([a], [b]) => (hdvMap.get(a!)?.localeCompare(hdvMap.get(b!) ?? "") ?? 0))
@@ -649,8 +655,7 @@ export default function XepHDVPage() {
                         tours={tours}
                         allHdvs={activeHdvs}
                         onReassign={(idx, newHdvId) => {
-                          const tourToReassign = tours[idx];
-                          const globalIdx = result.findIndex((t) => t === tourToReassign);
+                          const globalIdx = result.findIndex((t) => t === tours[idx]);
                           handleReassign(globalIdx, newHdvId);
                         }}
                       />
