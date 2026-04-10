@@ -81,7 +81,7 @@ function toursOverlap(a: TourInput, b: TourInput): boolean {
   return !(a.ngay_ve < b.ngay_di || a.ngay_di > b.ngay_ve);
 }
 
-export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
+export function assignHDVs(tours: TourInput[], hdvs: HDVRow[], maxToursPerHDV?: number | null): TourInput[] {
   const activeHdvs = hdvs.filter((h) => h.active);
   if (activeHdvs.length === 0 || tours.length === 0) return tours;
 
@@ -125,6 +125,7 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[]): TourInput[] {
     for (const hdv of pool) {
       const assigned = hdvSchedule.get(hdv.id) ?? [];
       if (assigned.some((t) => toursOverlap(t, tour))) continue;
+      if (maxToursPerHDV != null && assigned.length >= maxToursPerHDV) continue;
 
       let score = 0;
 

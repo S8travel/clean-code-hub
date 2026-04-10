@@ -574,6 +574,9 @@ export default function XepHDVPage() {
   // Ràng buộc tái xếp — key = "db-{doan_id}" hoặc "file-{_key}"
   const [lockedTourKeys, setLockedTourKeys] = useState<Set<string>>(new Set());
 
+  // Số đoàn tối đa mỗi HDV (null = không giới hạn)
+  const [maxToursPerHDV, setMaxToursPerHDV] = useState<number | null>(null);
+
   // Review dialog khi file có lỗi
   const [reviewRows, setReviewRows] = useState<ReviewRow[] | null>(null);
 
@@ -747,7 +750,7 @@ export default function XepHDVPage() {
     const tours = getSelectedTours();
     if (tours.length === 0) { toast.error("Chưa chọn đoàn nào"); return; }
     if (poolHdvs.length === 0) { toast.error("Không có hướng dẫn viên nào trong pool"); return; }
-    setResult(assignHDVs(tours, poolHdvs));
+    setResult(assignHDVs(tours, poolHdvs, maxToursPerHDV));
     setLockedTourKeys(new Set());
     setViewMode("cards");
   }
@@ -765,7 +768,7 @@ export default function XepHDVPage() {
         locked_hdv_id: t.assigned_hdv_id,
       };
     });
-    setResult(assignHDVs(toursForRerun, poolHdvs));
+    setResult(assignHDVs(toursForRerun, poolHdvs, maxToursPerHDV));
     setViewMode("cards");
   }
 
@@ -1295,6 +1298,24 @@ export default function XepHDVPage() {
                     </div>
                   )}
                   <p className="text-[10px] text-muted-foreground">Pool: {poolHdvs.length} HDV</p>
+                </div>
+              </div>
+
+              {/* Section: Giới hạn đoàn */}
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Giới hạn xếp
+                </p>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs shrink-0 w-28">Đoàn tối đa / HDV</Label>
+                  <Input
+                    className="h-7 text-xs w-20"
+                    type="number"
+                    min={1}
+                    placeholder="∞"
+                    value={maxToursPerHDV ?? ""}
+                    onChange={(e) => setMaxToursPerHDV(e.target.valueAsNumber > 0 ? e.target.valueAsNumber : null)}
+                  />
                 </div>
               </div>
 
