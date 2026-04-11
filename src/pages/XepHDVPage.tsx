@@ -32,6 +32,7 @@ import {
   useDoanForXep,
   useSaveHDVAssignments,
   assignHDVs,
+  getSuggestions,
   type TourInput,
 } from "@/hooks/use-xep-hdv";
 import { usePermission } from "@/hooks/use-permissions";
@@ -112,14 +113,17 @@ function HDVResultCard({
   tours,
   allHdvs,
   onReassign,
+  getSuggestionsForTour,
 }: {
   hdvId: number | null;
   hdvName: string;
   tours: TourInput[];
   allHdvs: { id: number; ten: string }[];
   onReassign: (tourIdx: number, newHdvId: number | null) => void;
+  getSuggestionsForTour?: (tour: TourInput) => { primary: { id: number; ten: string }[]; secondary: { id: number; ten: string }[] };
 }) {
   const [open, setOpen] = useState(true);
+  const [openPopover, setOpenPopover] = useState<number | null>(null);
   const isUnassigned = hdvId === null;
 
   return (
@@ -169,20 +173,91 @@ function HDVResultCard({
                     {tour.chuyen_bay_don && `↓${tour.chuyen_bay_don}`}
                   </span>
                 )}
-                <Select
-                  value={tour.assigned_hdv_id?.toString() ?? "none"}
-                  onValueChange={(v) => onReassign(idx, v === "none" ? null : Number(v))}
-                >
-                  <SelectTrigger className="h-6 text-[11px] w-36 ml-auto">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Chưa xếp —</SelectItem>
-                    {allHdvs.map((h) => (
-                      <SelectItem key={h.id} value={h.id.toString()}>{h.ten}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  const sugg = getSuggestionsForTour?.(tour);
+                  const curName = tour.assigned_hdv_id
+                    ? (allHdvs.find((h) => h.id === tour.assigned_hdv_id)?.ten ?? `HDV #${tour.assigned_hdv_id}`)
+                    : null;
+                  if (sugg) {
+                    // Combobox có nhóm gợi ý (cho đoàn chưa xếp)
+                    return (
+                      <Popover open={openPopover === idx} onOpenChange={(o) => setOpenPopover(o ? idx : null)}>
+                        <PopoverTrigger asChild>
+                          <button className={cn(
+                            "flex items-center gap-1 h-6 px-2 text-[11px] border rounded ml-auto min-w-[120px] max-w-[160px] hover:bg-muted/60",
+                            curName ? "text-primary font-medium" : "text-muted-foreground"
+                          )}>
+                            <span className="flex-1 truncate text-left">{curName ?? "— Chưa xếp —"}</span>
+                            <ChevronDown className="h-3 w-3 shrink-0" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-0" align="end">
+                          <Command>
+                            <CommandInput placeholder="Tìm HDV..." className="h-8 text-xs" />
+                            <CommandList>
+                              <CommandEmpty className="py-2 text-xs text-center text-muted-foreground">Không tìm thấy</CommandEmpty>
+                              <CommandItem
+                                value="__none__"
+                                onSelect={() => { onReassign(idx, null); setOpenPopover(null); }}
+                                className="text-xs text-muted-foreground"
+                              >
+                                <Check className={cn("h-3 w-3 mr-2", !tour.assigned_hdv_id ? "opacity-100" : "opacity-0")} />
+                                — Chưa xếp —
+                              </CommandItem>
+                              {sugg.primary.length > 0 && (
+                                <CommandGroup heading="Phù hợp (agent + địa điểm)">
+                                  {sugg.primary.map((h) => (
+                                    <CommandItem key={h.id} value={h.ten} onSelect={() => { onReassign(idx, h.id); setOpenPopover(null); }} className="text-xs">
+                                      <Check className={cn("h-3 w-3 mr-2", tour.assigned_hdv_id === h.id ? "opacity-100" : "opacity-0")} />
+                                      {h.ten}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
+                              {sugg.secondary.length > 0 && (
+                                <CommandGroup heading="Phù hợp địa điểm">
+                                  {sugg.secondary.map((h) => (
+                                    <CommandItem key={h.id} value={h.ten} onSelect={() => { onReassign(idx, h.id); setOpenPopover(null); }} className="text-xs">
+                                      <Check className={cn("h-3 w-3 mr-2", tour.assigned_hdv_id === h.id ? "opacity-100" : "opacity-0")} />
+                                      {h.ten}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
+                              {sugg.primary.length === 0 && sugg.secondary.length === 0 && (
+                                <CommandGroup heading="Tất cả HDV">
+                                  {allHdvs.map((h) => (
+                                    <CommandItem key={h.id} value={h.ten} onSelect={() => { onReassign(idx, h.id); setOpenPopover(null); }} className="text-xs">
+                                      <Check className={cn("h-3 w-3 mr-2", tour.assigned_hdv_id === h.id ? "opacity-100" : "opacity-0")} />
+                                      {h.ten}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  }
+                  // Select thông thường (cho đoàn đã có HDV)
+                  return (
+                    <Select
+                      value={tour.assigned_hdv_id?.toString() ?? "none"}
+                      onValueChange={(v) => onReassign(idx, v === "none" ? null : Number(v))}
+                    >
+                      <SelectTrigger className="h-6 text-[11px] w-36 ml-auto">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— Chưa xếp —</SelectItem>
+                        {allHdvs.map((h) => (
+                          <SelectItem key={h.id} value={h.id.toString()}>{h.ten}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                })()}
               </div>
             </div>
           ))}
@@ -579,7 +654,7 @@ export default function XepHDVPage() {
   const [lockedTourKeys, setLockedTourKeys] = useState<Set<string>>(new Set());
 
   // Số đoàn tối đa mỗi HDV (null = không giới hạn)
-  const [maxToursPerHDV, setMaxToursPerHDV] = useState<number | null>(null);
+  const [maxToursPerHDV, setMaxToursPerHDV] = useState<number | null>(3);
 
   // Popover đang mở trong bydate view (lưu index tour trong result)
   const [openPopoverIdx, setOpenPopoverIdx] = useState<number | null>(null);
@@ -1615,6 +1690,7 @@ export default function XepHDVPage() {
                         const globalIdx = result.findIndex((t) => t === unassigned[idx]);
                         handleReassign(globalIdx, newHdvId);
                       }}
+                      getSuggestionsForTour={(tour) => getSuggestions(tour, result, poolHdvs)}
                     />
                   )}
 

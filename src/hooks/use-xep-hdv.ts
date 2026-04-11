@@ -81,6 +81,62 @@ function toursOverlap(a: TourInput, b: TourInput): boolean {
   return !(a.ngay_ve < b.ngay_di || a.ngay_di > b.ngay_ve);
 }
 
+// HDV thỏa mãn cả agent lẫn địa điểm
+function isEligible(hdv: HDVRow, tour: TourInput): boolean {
+  if (tour.agent_id !== null) {
+    if (!(hdv.agent_ids ?? []).includes(tour.agent_id)) return false;
+  }
+  if (tour.dia_diem_ten && !tour.dia_diem_id) return false;
+  if (tour.dia_diem_id !== null) {
+    if (!(hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id)) return false;
+  }
+  return true;
+}
+
+// HDV thỏa mãn địa điểm (không xét agent)
+function passesLocationOnly(hdv: HDVRow, tour: TourInput): boolean {
+  if (tour.dia_diem_ten && !tour.dia_diem_id) return false;
+  if (tour.dia_diem_id !== null) {
+    if (!(hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id)) return false;
+  }
+  return true;
+}
+
+// Gợi ý HDV cho đoàn chưa được xếp
+// primary  = không conflict ngày + thỏa agent + địa điểm
+// secondary = không conflict ngày + chỉ thỏa địa điểm
+export function getSuggestions(
+  tour: TourInput,
+  result: TourInput[],
+  hdvs: HDVRow[]
+): { primary: HDVRow[]; secondary: HDVRow[] } {
+  const activeHdvs = hdvs.filter((h) => h.active);
+
+  // Build schedule từ kết quả hiện tại, bỏ qua tour đang xét
+  const schedule = new Map<number, TourInput[]>();
+  for (const t of result) {
+    if (t === tour || t.assigned_hdv_id === null) continue;
+    const sched = schedule.get(t.assigned_hdv_id) ?? [];
+    sched.push(t);
+    schedule.set(t.assigned_hdv_id, sched);
+  }
+
+  const primary: HDVRow[] = [];
+  const secondary: HDVRow[] = [];
+
+  for (const hdv of activeHdvs) {
+    const assigned = schedule.get(hdv.id) ?? [];
+    if (assigned.some((t) => toursOverlap(t, tour))) continue;
+    if (isEligible(hdv, tour)) {
+      primary.push(hdv);
+    } else if (passesLocationOnly(hdv, tour)) {
+      secondary.push(hdv);
+    }
+  }
+
+  return { primary, secondary };
+}
+
 export function assignHDVs(tours: TourInput[], hdvs: HDVRow[], maxToursPerHDV?: number | null): TourInput[] {
   const activeHdvs = hdvs.filter((h) => h.active);
   if (activeHdvs.length === 0 || tours.length === 0) return tours;
@@ -97,24 +153,6 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[], maxToursPerHDV?: 
       const sched = hdvSchedule.get(tour.assigned_hdv_id);
       if (sched) sched.push(tour);
     }
-  }
-
-  // Kiểm tra HDV có đủ điều kiện đi tour không
-  // Nguyên tắc: agent kiểm tra trước, địa điểm sau, cả 2 đều phải thỏa mãn
-  // Nếu tour có agent_id → HDV phải tích agent đó
-  // Nếu tour có dia_diem_id → HDV phải tích địa điểm đó
-  // Nếu tour có dia_diem_ten nhưng dia_diem_id null (không tìm thấy trong DB) → không HDV nào được xếp
-  function isEligible(hdv: HDVRow, tour: TourInput): boolean {
-    // Agent (ưu tiên xét trước)
-    if (tour.agent_id !== null) {
-      if (!(hdv.agent_ids ?? []).includes(tour.agent_id)) return false;
-    }
-    // Địa điểm: nếu có tên địa điểm nhưng không resolve được ID → không ai eligible
-    if (tour.dia_diem_ten && !tour.dia_diem_id) return false;
-    if (tour.dia_diem_id !== null) {
-      if (!(hdv.dia_diem_ids ?? []).includes(tour.dia_diem_id)) return false;
-    }
-    return true;
   }
 
   function scoreCandidates(pool: HDVRow[], tour: TourInput) {
