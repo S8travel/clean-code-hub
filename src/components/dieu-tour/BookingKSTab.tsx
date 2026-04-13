@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -333,7 +334,7 @@ function BookingKSCard({
 
   const openEmailModal = () => {
     const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "";
-    setEmailTo(row.khach_san_email || "");
+    setEmailTo(normalizeEmails(row.khach_san_email));
     setEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""} – ${row.khach_san_ten}`);
     setEmailHtml(buildEmailHtml());
     setEmailModalOpen(true);

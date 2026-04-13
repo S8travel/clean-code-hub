@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -266,7 +267,7 @@ export default function MealCard({
   const openEmailModal = () => {
     const buaLabel = buaAn === "trua" ? "ăn trưa" : "ăn tối";
     const ngayStr = ngayDate ? format(new Date(ngayDate + "T00:00:00"), "dd/MM", { locale: vi }) : "";
-    setEmailTo(nhaHangEmail || "");
+    setEmailTo(normalizeEmails(nhaHangEmail));
     setEmailSubject(`[S8 Travel] Đặt ${buaLabel}${tenDoan ? ` – ${tenDoan}` : ""}${ngayStr ? ` – ${ngayStr}` : ""} – ${nhaHangTen || "Nhà hàng"}`);
     setEmailHtml(buildEmailHtml());
     setEmailModalOpen(true);

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { normalizeEmails } from "@/lib/utils";
 import { Save, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,7 +78,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         dia_diem: form.dia_diem || null,
         dia_diem_zh: form.dia_diem_zh || null,
         dia_chi: form.dia_chi || null,
-        email: form.email || null,
+        email: normalizeEmails(form.email) || null,
         website: form.website || null,
         hinh_anh: form.hinh_anh || null,
         tai_khoan_thanh_toan: form.tai_khoan_thanh_toan || null,
