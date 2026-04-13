@@ -111,8 +111,8 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {day.items.map((item, idx) => {
           const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
           return (
-            <div key={idx} className="flex items-start gap-1 rounded-md p-1 bg-muted/60">
-              <div className="flex-1 min-w-0 space-y-1">
+            <div key={idx} className="flex items-center gap-1 rounded-md px-1 py-0.5 bg-muted/60">
+              <div className="flex-1 min-w-0 space-y-0.5">
                 <SearchableSelect
                   options={canhDiemOptions}
                   value={item.canh_diem_id ? String(item.canh_diem_id) : ""}
@@ -141,13 +141,13 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   />
                 )}
               </div>
-              <div className="flex flex-col items-center gap-0.5 shrink-0 pt-0.5">
+              <div className="flex flex-col items-center gap-0 shrink-0">
                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6 print-hide" onClick={() => updateItems(day.items.filter((_, i) => i !== idx))}>
                   <X className="h-3 w-3" />
                 </Button>
                 <button
                   type="button"
-                  className="h-6 w-6 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded print-hide leading-none"
+                  className="h-6 w-6 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded print-hide"
                   onClick={() => {
                     if (noteOpen) {
                       updateGhiChu(idx, "");
@@ -158,7 +158,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   }}
                   title={noteOpen ? "Hủy chú thích" : "Thêm chú thích"}
                 >
-                  {noteOpen ? <X className="h-3 w-3" /> : <span className="text-[13px] font-light">+</span>}
+                  {noteOpen ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
                 </button>
               </div>
             </div>
