@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -74,6 +75,16 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
         <div>
           <h2 className="text-base font-semibold">{seri.ten_seri}</h2>
           {seri.mo_ta && <p className="text-xs text-muted-foreground mt-0.5">{seri.mo_ta}</p>}
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {seri.shopping !== null && seri.shopping !== undefined && (
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${seri.shopping ? "bg-green-100 text-green-700" : "bg-red-50 text-red-600"}`}>
+                Shopping: {seri.shopping ? "YES" : "NO"}
+              </span>
+            )}
+            {seri.tang_pham && (
+              <span className="text-xs text-muted-foreground">🎁 {seri.tang_pham}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">{days.length} ngày</Badge>
@@ -124,6 +135,8 @@ export default function SeriPage() {
   const [deleteTarget, setDeleteTarget] = useState<SeriTour | null>(null);
   const [formName, setFormName] = useState("");
   const [formMoTa, setFormMoTa] = useState("");
+  const [formTangPham, setFormTangPham] = useState("");
+  const [formShopping, setFormShopping] = useState<"yes" | "no" | "">("");
 
   const selectedSeri = useMemo(
     () => seriList.find((s) => s.id === selectedId) ?? null,
@@ -134,6 +147,8 @@ export default function SeriPage() {
     setEditTarget(null);
     setFormName("");
     setFormMoTa("");
+    setFormTangPham("");
+    setFormShopping("");
     setModalOpen(true);
   };
 
@@ -142,19 +157,22 @@ export default function SeriPage() {
     setEditTarget(s);
     setFormName(s.ten_seri);
     setFormMoTa(s.mo_ta ?? "");
+    setFormTangPham(s.tang_pham ?? "");
+    setFormShopping(s.shopping === true ? "yes" : s.shopping === false ? "no" : "");
     setModalOpen(true);
   };
 
   const handleSave = () => {
     if (!formName.trim()) return;
+    const shoppingVal = formShopping === "yes" ? true : formShopping === "no" ? false : null;
     if (editTarget) {
       updateSeri.mutate(
-        { id: editTarget.id, ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined },
+        { id: editTarget.id, ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined, tang_pham: formTangPham.trim() || null, shopping: shoppingVal },
         { onSuccess: () => setModalOpen(false) }
       );
     } else {
       createSeri.mutate(
-        { ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined },
+        { ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined, tang_pham: formTangPham.trim() || null, shopping: shoppingVal },
         {
           onSuccess: (data) => {
             setSelectedId(data.id);
@@ -200,6 +218,16 @@ export default function SeriPage() {
                   {s.mo_ta && (
                     <p className="text-xs text-muted-foreground truncate">{s.mo_ta}</p>
                   )}
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {s.shopping !== null && s.shopping !== undefined && (
+                      <span className={`text-[10px] font-medium px-1 rounded ${s.shopping ? "bg-green-100 text-green-700" : "bg-red-50 text-red-600"}`}>
+                        Shop: {s.shopping ? "YES" : "NO"}
+                      </span>
+                    )}
+                    {s.tang_pham && (
+                      <span className="text-[10px] text-muted-foreground truncate">🎁 {s.tang_pham}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 shrink-0 ml-2">
                   <Button
@@ -263,6 +291,29 @@ export default function SeriPage() {
                 onChange={(e) => setFormMoTa(e.target.value)}
                 placeholder="Ghi chú ngắn về chương trình..."
               />
+            </div>
+            <div>
+              <Label className="text-sm">Tặng phẩm</Label>
+              <Textarea
+                className="mt-1 resize-none"
+                rows={2}
+                value={formTangPham}
+                onChange={(e) => setFormTangPham(e.target.value)}
+                placeholder="VD: Nón, túi, quạt..."
+              />
+            </div>
+            <div>
+              <Label className="text-sm">Shopping</Label>
+              <Select value={formShopping} onValueChange={(v) => setFormShopping(v as "yes" | "no" | "")}>
+                <SelectTrigger className="mt-1 h-8 text-sm">
+                  <SelectValue placeholder="Chọn..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="yes">YES</SelectItem>
+                  <SelectItem value="no">NO</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

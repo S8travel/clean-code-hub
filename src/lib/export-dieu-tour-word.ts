@@ -28,11 +28,11 @@ const BLUE_SHADING = { fill: "185FA5", type: ShadingType.CLEAR, color: "auto" };
 // A4 Landscape
 const PAGE_W = 11906;
 const PAGE_H = 16838;
-const MARGIN = 720;
-const CONTENT_W = PAGE_H - MARGIN * 2; // 15398
+const MARGIN = 1080; // ~19mm per side — safe for most printers
+const CONTENT_W = PAGE_H - MARGIN * 2; // 14678
 
 // Schedule table col widths: Ngày | Chương trình | Ăn trưa | Ăn tối | Khách sạn
-const SCHED_COL = [900, 4500, 3000, 3000, 3998];
+const SCHED_COL = [900, 4100, 2900, 2900, 3878];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function cell(

@@ -8,6 +8,8 @@ export interface SeriTour {
   id: number;
   ten_seri: string;
   mo_ta: string | null;
+  tang_pham: string | null;
+  shopping: boolean | null;
   created_at: string;
 }
 
@@ -55,7 +57,7 @@ export function useSeriList() {
 export function useCreateSeri() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { ten_seri: string; mo_ta?: string }) => {
+    mutationFn: async (payload: { ten_seri: string; mo_ta?: string; tang_pham?: string | null; shopping?: boolean | null }) => {
       const { data, error } = await externalSupabase
         .from("seri_tour")
         .insert(payload)
@@ -71,7 +73,7 @@ export function useCreateSeri() {
 export function useUpdateSeri() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...payload }: { id: number; ten_seri: string; mo_ta?: string }) => {
+    mutationFn: async ({ id, ...payload }: { id: number; ten_seri: string; mo_ta?: string; tang_pham?: string | null; shopping?: boolean | null }) => {
       const { data, error } = await externalSupabase
         .from("seri_tour")
         .update(payload)

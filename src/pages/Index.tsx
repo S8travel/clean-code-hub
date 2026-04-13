@@ -143,7 +143,7 @@ export default function Index() {
         logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         toast.success("Đã cập nhật đoàn");
       } else {
-        const created = await createDoan.mutateAsync(data);
+        const created = await createDoan.mutateAsync({ ...data, shopping: false });
         // Auto-insert permission for creator
         if (created && data.assigned_to) {
           const creatorName = userRolesMap.get(data.assigned_to) || "";
