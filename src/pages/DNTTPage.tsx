@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { usePermission } from "@/hooks/use-permissions";
+import { useBoPhan } from "@/hooks/use-permissions";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
 import { Search, RotateCcw, Check, X, Trash2, CreditCard, Ban } from "lucide-react";
@@ -59,7 +59,7 @@ const ttBadge: Record<string, { text: string; cls: string }> = {
 };
 
 export default function DNTTPage() {
-  const canView = usePermission("dntt", "view");
+  const canView = useBoPhan("ke_toan");
   if (!canView) return <AccessDenied />;
 
   const navigate = useNavigate();

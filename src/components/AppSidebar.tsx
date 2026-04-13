@@ -36,13 +36,15 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { usePermission, type Resource } from "@/hooks/use-permissions";
+import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks/use-permissions";
 
 interface MenuItem {
   title: string;
   url: string;
   icon: React.ElementType;
   resource?: Resource;  // undefined = luôn hiển thị
+  minRole?: string;     // yêu cầu role tối thiểu
+  boPhanOnly?: string;  // chỉ hiện với bộ phận này (+ admin)
 }
 
 const menuGroups: { label: string; items: MenuItem[] }[] = [
@@ -51,8 +53,8 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard },
       { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
-      { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, resource: "doan" },
-      { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, resource: "doan" },
+      { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, minRole: "truong_phong" },
+      { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },
     ],
   },
   {
@@ -71,10 +73,10 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "HỆ THỐNG",
     items: [
-      { title: "Thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, resource: "dntt" },
-      { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock, resource: "thanh_toan_dk" },
+      { title: "Thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, boPhanOnly: "ke_toan" },
+      { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock },
       { title: "Hóa đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc" },
-      { title: "Công nợ", url: "/cong-no", icon: Wallet, resource: "cong_no" },
+      { title: "Công nợ", url: "/cong-no", icon: Wallet },
       { title: "Người dùng", url: "/quan-ly/nguoi-dung", icon: Users, resource: "nguoi_dung" },
       { title: "Agent", url: "/quan-ly/agent", icon: Bot },
     ],
@@ -83,7 +85,12 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
 
 function MenuItemWrapper({ item, collapsed, isActive }: { item: MenuItem; collapsed: boolean; isActive: boolean }) {
   const allowed = usePermission(item.resource ?? "doan", "view");
+  const roleOk = useRoleAtLeast(item.minRole ?? "nhan_vien");
+  const boPhanOk = useBoPhan(item.boPhanOnly ?? "");
+
   if (item.resource && !allowed) return null;
+  if (item.minRole && !roleOk) return null;
+  if (item.boPhanOnly && !boPhanOk) return null;
 
   return (
     <SidebarMenuItem>

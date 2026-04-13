@@ -59,6 +59,29 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
   return false;
 }
 
+const ROLE_LEVELS: Record<string, number> = {
+  nhan_vien: 1,
+  nhan_vien_cao_cap: 2,
+  truong_phong: 3,
+  giam_doc: 4,
+  admin: 5,
+};
+
+/** Trả về true nếu role của user >= minRole trong hierarchy */
+export function useRoleAtLeast(minRole: string): boolean {
+  const { user } = useAuth();
+  if (!user) return false;
+  return (ROLE_LEVELS[user.role] ?? 0) >= (ROLE_LEVELS[minRole] ?? 999);
+}
+
+/** Trả về true nếu user thuộc boPhan chỉ định, hoặc là admin */
+export function useBoPhan(boPhan: string): boolean {
+  const { user } = useAuth();
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return user.bo_phan === boPhan;
+}
+
 /** Mutation để admin lưu toàn bộ matrix quyền */
 export function useUpsertRolePermissions() {
   const qc = useQueryClient();

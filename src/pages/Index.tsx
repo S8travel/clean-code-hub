@@ -128,6 +128,18 @@ export default function Index() {
     try {
       if (editingDoan) {
         await updateDoan.mutateAsync({ id: editingDoan.id, ...data });
+        // Auto-add permission nếu assigned_to thay đổi
+        if (data.assigned_to && data.assigned_to !== editingDoan.assigned_to) {
+          const assigneeName = userRolesMap.get(data.assigned_to) || "";
+          try {
+            await addPerm.mutateAsync({
+              doan_id: editingDoan.id,
+              user_id: data.assigned_to,
+              ho_ten: assigneeName,
+              quyen: "admin",
+            });
+          } catch { /* ignore if permission already exists */ }
+        }
         logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         toast.success("Đã cập nhật đoàn");
       } else {

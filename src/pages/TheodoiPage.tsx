@@ -15,6 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDoanList } from "@/hooks/use-doan";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { cn } from "@/lib/utils";
+import { useRoleAtLeast } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 function fmtDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -118,6 +120,7 @@ function InfoTooltip({ trigger, items }: {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TheodoiPage() {
+  const canView = useRoleAtLeast("truong_phong");
   const navigate = useNavigate();
   const { data: groups = [], isLoading: loadingDoan } = useDoanList();
   const { data: td, isLoading: loadingTD } = useTheodoi();
@@ -155,6 +158,8 @@ export default function TheodoiPage() {
         return { g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT };
       });
   }, [groups, td, search, trangThai]);
+
+  if (!canView) return <AccessDenied />;
 
   return (
     <TooltipProvider delayDuration={200}>

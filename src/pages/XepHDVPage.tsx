@@ -35,7 +35,7 @@ import {
   getSuggestions,
   type TourInput,
 } from "@/hooks/use-xep-hdv";
-import { usePermission } from "@/hooks/use-permissions";
+import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
 // ─── Parse ngày từ Excel ──────────────────────────────────────────
@@ -642,7 +642,7 @@ function ScheduleGrid({
 
 // ─── Main page ────────────────────────────────────────────────────
 export default function XepHDVPage() {
-  const canView = usePermission("doan", "view");
+  const canView = useRoleAtLeast("giam_doc");
   if (!canView) return <AccessDenied />;
 
   const id = useId();
