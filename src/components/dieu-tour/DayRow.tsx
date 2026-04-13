@@ -38,35 +38,6 @@ function DetailLine({ item }: { item: { dia_chi?: string | null; thong_tin_chung
   );
 }
 
-function ItemNote({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const hasValue = value.trim().length > 0;
-
-  if (!editing && !hasValue) {
-    return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors print-hide"
-      >
-        + Chú thích
-      </button>
-    );
-  }
-
-  return (
-    <textarea
-      className="w-full min-h-[24px] text-[13px] border border-border/50 rounded-md px-2 py-1 mt-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={() => { if (!value.trim()) setEditing(false); }}
-      autoFocus={editing && !hasValue}
-      placeholder="VD: buổi sáng, 15h, tự túc..."
-      rows={1}
-      onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
-    />
-  );
-}
 
 function SetMenuSelect({
   nhaHangId,
@@ -103,6 +74,13 @@ function SetMenuSelect({
 export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel }: Props) {
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
+  const [noteOpenMap, setNoteOpenMap] = useState<Record<number, boolean>>({});
+
+  const updateGhiChu = (idx: number, val: string) => {
+    const newItems = [...day.items];
+    newItems[idx] = { ...newItems[idx], ghi_chu: val };
+    updateItems(newItems);
+  };
 
   const selectedNhaTrua = nhaHangList.find((n) => n.id === day.an_trua_nha_hang_id);
   const selectedNhaToi = nhaHangList.find((n) => n.id === day.an_toi_nha_hang_id);
@@ -131,35 +109,45 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
           placeholder="Thành phố..."
         />
         {day.items.map((item, idx) => {
+          const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
           return (
-            <div key={idx} className="space-y-0.5">
-              <div className="flex items-start gap-1 rounded-md p-1 bg-muted/60">
-                <div className="flex-1 min-w-0">
-                  <SearchableSelect
-                    options={canhDiemOptions}
-                    value={item.canh_diem_id ? String(item.canh_diem_id) : ""}
-                    onChange={(v) => {
-                      const newItems = [...day.items];
-                      newItems[idx] = { ...item, canh_diem_id: v ? Number(v) : 0 };
-                      updateItems(newItems);
-                    }}
-                    placeholder="Chọn cảnh điểm"
-                    className="h-auto min-h-[28px] text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&_span]:!text-ellipsis-none [&_span]:!truncate-none"
-                  />
-                </div>
-                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={() => updateItems(day.items.filter((_, i) => i !== idx))}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-              <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                <ItemNote
-                  value={item.ghi_chu || ""}
+            <div key={idx} className="flex items-start gap-1 rounded-md p-1 bg-muted/60">
+              <div className="flex-1 min-w-0 space-y-1">
+                <SearchableSelect
+                  options={canhDiemOptions}
+                  value={item.canh_diem_id ? String(item.canh_diem_id) : ""}
                   onChange={(v) => {
                     const newItems = [...day.items];
-                    newItems[idx] = { ...item, ghi_chu: v };
+                    newItems[idx] = { ...item, canh_diem_id: v ? Number(v) : 0 };
                     updateItems(newItems);
                   }}
+                  placeholder="Chọn cảnh điểm"
+                  className="h-auto min-h-[28px] text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&_span]:!text-ellipsis-none [&_span]:!truncate-none"
                 />
+                {noteOpen && (
+                  <textarea
+                    className="w-full text-[12px] border border-border/40 rounded px-2 py-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                    rows={1}
+                    autoFocus={!item.ghi_chu?.trim()}
+                    placeholder="Chú thích..."
+                    value={item.ghi_chu || ""}
+                    onChange={(e) => updateGhiChu(idx, e.target.value)}
+                    onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                  />
+                )}
+              </div>
+              <div className="flex flex-col items-center gap-0.5 shrink-0 pt-0.5">
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 print-hide" onClick={() => updateItems(day.items.filter((_, i) => i !== idx))}>
+                  <X className="h-3 w-3" />
+                </Button>
+                {!noteOpen && (
+                  <button
+                    type="button"
+                    className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded text-[11px] print-hide leading-none"
+                    onClick={() => setNoteOpenMap((m) => ({ ...m, [idx]: true }))}
+                    title="Thêm chú thích"
+                  >+</button>
+                )}
               </div>
             </div>
           );
