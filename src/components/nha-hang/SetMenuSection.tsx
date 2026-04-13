@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ChevronDown, ChevronRight, Save, X } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Save, X, ClipboardPaste } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -123,11 +124,32 @@ function SetMenuCard({
 
 type MonRow = { ten_mon: string; ten_mon_trung: string };
 
+/** Parse text paste thành rows:
+ *  - Mỗi dòng = 1 món
+ *  - Nếu có tab → cột 1 = VN, cột 2 = Trung (từ Excel)
+ *  - Nếu không có tab → chỉ điền VN, giữ Trung cũ
+ */
+function parsePasteText(text: string): MonRow[] {
+  return text
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+    .map((line) => {
+      const parts = line.split("\t");
+      return {
+        ten_mon: parts[0]?.trim() ?? "",
+        ten_mon_trung: parts[1]?.trim() ?? "",
+      };
+    });
+}
+
 function MonListEditor({ setMenuId }: { setMenuId: number }) {
   const { data: mons } = useSetMenuMons(setMenuId);
   const replaceMut = useReplaceMonList();
   const [rows, setRows] = useState<MonRow[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   useEffect(() => {
     if (mons) {
@@ -138,6 +160,40 @@ function MonListEditor({ setMenuId }: { setMenuId: number }) {
 
   const updateRow = (i: number, field: keyof MonRow, value: string) => {
     setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+    setDirty(true);
+  };
+
+  const handleApplyPaste = () => {
+    const parsed = parsePasteText(pasteText);
+    if (parsed.length === 0) return;
+    setRows(parsed);
+    setDirty(true);
+    setShowPaste(false);
+    setPasteText("");
+    toast.success(`Đã nhập ${parsed.length} món`);
+  };
+
+  const handlePasteVN = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    const lines = text.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim().length > 0);
+    if (lines.length <= 1) return;
+    e.preventDefault();
+    const parsed = lines.map((line) => {
+      const parts = line.split("\t");
+      return { ten_mon: parts[0]?.trim() ?? "", ten_mon_trung: parts[1]?.trim() ?? "" };
+    });
+    setRows((prev) => {
+      const next = [...prev];
+      parsed.forEach((p, offset) => {
+        const idx = i + offset;
+        if (idx < next.length) {
+          next[idx] = { ten_mon: p.ten_mon, ten_mon_trung: p.ten_mon_trung || next[idx].ten_mon_trung };
+        } else {
+          next.push(p);
+        }
+      });
+      return next;
+    });
     setDirty(true);
   };
 
@@ -207,6 +263,7 @@ function MonListEditor({ setMenuId }: { setMenuId: number }) {
             <Input
               value={row.ten_mon}
               onChange={(e) => updateRow(i, "ten_mon", e.target.value)}
+              onPaste={(e) => handlePasteVN(i, e)}
               placeholder="Tên món..."
               className="h-7 text-xs"
             />
@@ -226,10 +283,38 @@ function MonListEditor({ setMenuId }: { setMenuId: number }) {
           </div>
         ))}
       </div>
+      {showPaste && (
+        <div className="border rounded-md p-2 space-y-2 bg-muted/30">
+          <p className="text-[11px] text-muted-foreground">
+            Paste danh sách món — mỗi dòng 1 món. Nếu copy từ Excel 2 cột (VN + Trung) sẽ tự điền cả hai.
+          </p>
+          <Textarea
+            autoFocus
+            className="text-xs min-h-[120px] font-mono"
+            placeholder={"Cơm chiên dương châu\t扬州炒饭\nGà xào sả ớt\t香茅辣椒炒鸡\n..."}
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+          />
+          <div className="flex gap-2 justify-end">
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowPaste(false); setPasteText(""); }}>
+              Hủy
+            </Button>
+            <Button size="sm" className="h-7 text-xs" onClick={handleApplyPaste} disabled={!pasteText.trim()}>
+              Áp dụng
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 pt-1">
-        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={addRow}>
-          <Plus className="h-3 w-3 mr-1" /> Thêm món
-        </Button>
+        <div className="flex gap-1">
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={addRow}>
+            <Plus className="h-3 w-3 mr-1" /> Thêm món
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowPaste(!showPaste)}>
+            <ClipboardPaste className="h-3 w-3 mr-1" /> Paste nhanh
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground">{validCount} món</span>
           <Button
