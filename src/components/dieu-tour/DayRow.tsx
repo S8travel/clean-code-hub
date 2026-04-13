@@ -133,6 +133,11 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                     value={item.ghi_chu || ""}
                     onChange={(e) => updateGhiChu(idx, e.target.value)}
                     onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                    onBlur={() => {
+                      if (!item.ghi_chu?.trim()) {
+                        setNoteOpenMap((m) => ({ ...m, [idx]: false }));
+                      }
+                    }}
                   />
                 )}
               </div>
@@ -140,14 +145,21 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6 print-hide" onClick={() => updateItems(day.items.filter((_, i) => i !== idx))}>
                   <X className="h-3 w-3" />
                 </Button>
-                {!noteOpen && (
-                  <button
-                    type="button"
-                    className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded text-[11px] print-hide leading-none"
-                    onClick={() => setNoteOpenMap((m) => ({ ...m, [idx]: true }))}
-                    title="Thêm chú thích"
-                  >+</button>
-                )}
+                <button
+                  type="button"
+                  className="h-6 w-6 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded print-hide leading-none"
+                  onClick={() => {
+                    if (noteOpen) {
+                      updateGhiChu(idx, "");
+                      setNoteOpenMap((m) => ({ ...m, [idx]: false }));
+                    } else {
+                      setNoteOpenMap((m) => ({ ...m, [idx]: true }));
+                    }
+                  }}
+                  title={noteOpen ? "Hủy chú thích" : "Thêm chú thích"}
+                >
+                  {noteOpen ? <X className="h-3 w-3" /> : <span className="text-[13px] font-light">+</span>}
+                </button>
               </div>
             </div>
           );
