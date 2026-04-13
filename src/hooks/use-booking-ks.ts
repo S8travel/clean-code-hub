@@ -167,7 +167,7 @@ export function useSendKSBookingEmail() {
         },
         body: JSON.stringify({
           to: params.to, subject: params.subject, html: params.html,
-          replyTo: params.replyTo || localStorage.getItem("crm_current_user_email") || undefined,
+          replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined,
           ...(isFirst ? { messageId: newThreadId } : { inReplyTo: params.emailThreadId }),
         }),
       });

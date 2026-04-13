@@ -48,6 +48,22 @@ export function useNguoiDungByEmail(email: string | null) {
   });
 }
 
+export function useNguoiDungByUserId(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["nguoi-dung-uid", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_roles")
+        .select("*")
+        .eq("user_id", userId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as UserRoleRow | null;
+    },
+  });
+}
+
 export function useNguoiDungByEmailFull(email: string | null) {
   return useQuery({
     queryKey: ["nguoi-dung-email-full", email],

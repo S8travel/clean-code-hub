@@ -1,14 +1,25 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
+import { useCurrentSession } from "@/hooks/use-current-user";
 import { AppLayout } from "./AppLayout";
 
 export function ProtectedLayout() {
-  const { email, isAuthenticated, isLoading } = useAuth();
+  const session = useCurrentSession();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  // Chưa nhập email → về login
-  if (!email) return <Navigate to="/login" replace />;
+  // Session chưa được xác định (đang load từ Supabase)
+  if (session === null && isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">Đang tải...</p>
+      </div>
+    );
+  }
 
-  // Đang load user từ DB
+  // Không có session → về login
+  if (!session) return <Navigate to="/login" replace />;
+
+  // Đang load thông tin user từ user_roles
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -17,7 +28,7 @@ export function ProtectedLayout() {
     );
   }
 
-  // Email không tồn tại hoặc tài khoản bị khoá → về login
+  // Tài khoản không tồn tại hoặc bị khoá → về login
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (

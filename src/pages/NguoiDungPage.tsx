@@ -36,8 +36,7 @@ import {
   type Resource, type PermAction, type RolePermission,
 } from "@/hooks/use-permissions";
 import { useActivityLogList, useLogActivity, type ActivityLogFilters, type ActivityAction } from "@/hooks/use-activity-log";
-import { useSetUserPassword } from "@/hooks/use-nguoi-dung";
-import { hashPassword } from "@/lib/crypto";
+import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
 import { toast } from "sonner";
 
 const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
@@ -173,7 +172,6 @@ function NguoiDungTab() {
   const createMut = useCreateNguoiDung();
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
-  const setPasswordMut = useSetUserPassword();
   const logActivity = useLogActivity();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -187,6 +185,7 @@ function NguoiDungTab() {
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [showNewPass, setShowNewPass] = useState(false);
+  const [passwordPending, setPasswordPending] = useState(false);
 
   const filtered = list.filter((u) =>
     (u.ho_ten ?? "").toLowerCase().includes(search.toLowerCase()) ||
@@ -265,14 +264,30 @@ function NguoiDungTab() {
     if (!selected || !newPass) return;
     if (newPass !== confirmPass) { toast.error("Mật khẩu xác nhận không khớp"); return; }
     if (newPass.length < 6) { toast.error("Mật khẩu phải ít nhất 6 ký tự"); return; }
+    if (!selected.user_id) { toast.error("Người dùng chưa có Supabase UID"); return; }
+    setPasswordPending(true);
     try {
-      const hash = await hashPassword(newPass);
-      await setPasswordMut.mutateAsync({ id: selected.id, hash });
+      const { data: { session } } = await externalSupabase.auth.getSession();
+      const res = await fetch(`${EXTERNAL_SUPABASE_URL}/functions/v1/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ target_user_id: selected.user_id, new_password: newPass }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Lỗi khi đặt mật khẩu");
+        return;
+      }
       setNewPass("");
       setConfirmPass("");
       toast.success("Đã đặt mật khẩu");
     } catch {
       toast.error("Lỗi khi đặt mật khẩu");
+    } finally {
+      setPasswordPending(false);
     }
   };
 
@@ -530,12 +545,9 @@ function NguoiDungTab() {
                 <div>
                   <p className="text-sm font-medium">Mật khẩu đăng nhập</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {selected.password_hash ? "Đã đặt mật khẩu" : "Chưa có mật khẩu — có thể đăng nhập không cần mật khẩu"}
+                    Mật khẩu được quản lý qua Supabase Auth
                   </p>
                 </div>
-                {selected.password_hash && (
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">Đã có</Badge>
-                )}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
@@ -577,9 +589,9 @@ function NguoiDungTab() {
                 size="sm"
                 className="h-8 text-xs"
                 onClick={handleSetPassword}
-                disabled={!newPass || !confirmPass || setPasswordMut.isPending}
+                disabled={!newPass || !confirmPass || passwordPending}
               >
-                {setPasswordMut.isPending ? "Đang lưu..." : "Lưu mật khẩu"}
+                {passwordPending ? "Đang lưu..." : "Lưu mật khẩu"}
               </Button>
             </div>
 

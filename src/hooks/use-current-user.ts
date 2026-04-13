@@ -1,28 +1,46 @@
 import { useState, useEffect } from "react";
+import { Session } from "@supabase/supabase-js";
+import { externalSupabase } from "@/lib/supabase-external";
 
-const STORAGE_KEY = "crm_current_user_email";
+let cachedSession: Session | null = null;
+let listeners: Array<(s: Session | null) => void> = [];
 
-export function useCurrentUserEmail() {
-  const [email, setEmailState] = useState<string | null>(() => {
-    return localStorage.getItem(STORAGE_KEY);
+// Shared singleton — avoids multiple onAuthStateChange subscriptions
+function notifyListeners(s: Session | null) {
+  cachedSession = s;
+  listeners.forEach((fn) => fn(s));
+}
+
+let subscribed = false;
+function ensureSubscribed() {
+  if (subscribed) return;
+  subscribed = true;
+  externalSupabase.auth.getSession().then(({ data }) => {
+    notifyListeners(data.session);
   });
+  externalSupabase.auth.onAuthStateChange((_event, session) => {
+    notifyListeners(session);
+  });
+}
 
-  const setEmail = (val: string | null) => {
-    if (val) {
-      localStorage.setItem(STORAGE_KEY, val);
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-    setEmailState(val);
-  };
+export function useCurrentSession() {
+  const [session, setSession] = useState<Session | null>(cachedSession);
 
   useEffect(() => {
-    const handler = () => {
-      setEmailState(localStorage.getItem(STORAGE_KEY));
+    ensureSubscribed();
+    // Sync with latest cached value in case it changed before we subscribed
+    setSession(cachedSession);
+    listeners.push(setSession);
+    return () => {
+      listeners = listeners.filter((fn) => fn !== setSession);
     };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
   }, []);
 
-  return { email, setEmail };
+  return session;
+}
+
+/** Backwards-compat shim — returns email from session */
+export function useCurrentUserEmail() {
+  const session = useCurrentSession();
+  return { email: session?.user?.email ?? null };
 }

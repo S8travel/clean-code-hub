@@ -97,7 +97,7 @@ export async function callSendBookingEmail(params: {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({ ...params, replyTo: params.replyTo || localStorage.getItem("crm_current_user_email") || undefined }),
+    body: JSON.stringify({ ...params, replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined }),
   });
   if (!res.ok) {
     const errText = await res.text();

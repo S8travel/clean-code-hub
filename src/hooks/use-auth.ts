@@ -1,13 +1,14 @@
-import { useNguoiDungByEmail } from "./use-nguoi-dung";
-import { useCurrentUserEmail } from "./use-current-user";
+import { externalSupabase } from "@/lib/supabase-external";
+import { useCurrentSession } from "./use-current-user";
+import { useNguoiDungByUserId } from "./use-nguoi-dung";
 
 export function useAuth() {
-  const { email, setEmail } = useCurrentUserEmail();
-  const { data: user, isLoading } = useNguoiDungByEmail(email);
+  const session = useCurrentSession();
+  const { data: user, isLoading } = useNguoiDungByUserId(session?.user?.id);
 
-  const isAuthenticated = !!email && !!user && user.active;
+  const isAuthenticated = !!session && !!user && user.active;
 
-  const logout = () => setEmail(null);
+  const logout = () => externalSupabase.auth.signOut();
 
-  return { email, user, isLoading, isAuthenticated, logout };
+  return { email: session?.user?.email ?? null, user, isLoading: !session && isLoading, isAuthenticated, logout };
 }

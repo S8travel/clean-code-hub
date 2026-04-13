@@ -1,70 +1,38 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { useCurrentUserEmail } from "@/hooks/use-current-user";
-import { useNguoiDungByEmail } from "@/hooks/use-nguoi-dung";
-import { hashPassword } from "@/lib/crypto";
+import { externalSupabase } from "@/lib/supabase-external";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { setEmail } = useCurrentUserEmail();
   const [inputEmail, setInputEmail] = useState("");
   const [inputPassword, setInputPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [isPending, setIsPending] = useState(false);
 
-  const { data: user, isLoading } = useNguoiDungByEmail(submitted ? inputEmail.trim().toLowerCase() : null);
-
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const email = inputEmail.trim().toLowerCase();
     if (!email || !inputPassword) return;
-    setSubmitted(true);
-  };
-
-  useEffect(() => {
-    if (!submitted || isLoading) return;
-
-    const verify = async () => {
-      setChecking(true);
-      try {
-        if (!user) {
-          toast.error("Email không tồn tại trong hệ thống");
-          setSubmitted(false);
-          return;
-        }
-        if (!user.active) {
-          toast.error("Tài khoản đã bị vô hiệu hoá");
-          setSubmitted(false);
-          return;
-        }
-
-        // Kiểm tra mật khẩu nếu đã được đặt
-        if (user.password_hash) {
-          const hash = await hashPassword(inputPassword);
-          if (hash !== user.password_hash) {
-            toast.error("Mật khẩu không đúng");
-            setInputPassword("");
-            setSubmitted(false);
-            return;
-          }
-        }
-        // Nếu chưa đặt password → cho qua (admin chưa cấu hình)
-        setEmail(inputEmail.trim().toLowerCase());
-        navigate("/dashboard", { replace: true });
-      } finally {
-        setChecking(false);
+    setIsPending(true);
+    try {
+      const { error } = await externalSupabase.auth.signInWithPassword({
+        email,
+        password: inputPassword,
+      });
+      if (error) {
+        toast.error("Email hoặc mật khẩu không đúng");
+        setInputPassword("");
+        return;
       }
-    };
-
-    verify();
-  }, [submitted, isLoading, user]);
-
-  const isPending = isLoading || checking;
+      navigate("/dashboard", { replace: true });
+    } finally {
+      setIsPending(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex">
