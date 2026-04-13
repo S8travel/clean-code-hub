@@ -30,7 +30,9 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
 
   const [form, setForm] = useState({
     ten: "",
+    ten_zh: "",
     dia_diem: "",
+    dia_diem_zh: "",
     dia_chi: "",
     email: "",
     website: "",
@@ -46,7 +48,9 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
   useEffect(() => {
     setForm({
       ten: nhaHang.ten ?? "",
+      ten_zh: nhaHang.ten_zh ?? "",
       dia_diem: nhaHang.dia_diem ?? "",
+      dia_diem_zh: nhaHang.dia_diem_zh ?? "",
       dia_chi: nhaHang.dia_chi ?? "",
       email: nhaHang.email ?? "",
       website: nhaHang.website ?? "",
@@ -69,7 +73,9 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
       await updateMut.mutateAsync({
         id: nhaHang.id,
         ten: form.ten,
+        ten_zh: form.ten_zh || null,
         dia_diem: form.dia_diem || null,
+        dia_diem_zh: form.dia_diem_zh || null,
         dia_chi: form.dia_chi || null,
         email: form.email || null,
         website: form.website || null,
@@ -134,6 +140,10 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
           <Label className="text-xs">Tên nhà hàng *</Label>
           <Input value={form.ten} onChange={(e) => set("ten", e.target.value)} className="h-8 text-sm" />
         </div>
+        <div className="col-span-2">
+          <Label className="text-xs">Tên tiếng Trung</Label>
+          <Input value={form.ten_zh} onChange={(e) => set("ten_zh", e.target.value)} className="h-8 text-sm" placeholder="餐廳名稱..." />
+        </div>
         <div>
           <Label className="text-xs">Nhà cung cấp *</Label>
           <SearchableSelect
@@ -147,6 +157,10 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         <div>
           <Label className="text-xs">Địa điểm</Label>
           <Input value={form.dia_diem} onChange={(e) => set("dia_diem", e.target.value)} className="h-8 text-sm" />
+        </div>
+        <div>
+          <Label className="text-xs">Địa điểm tiếng Trung</Label>
+          <Input value={form.dia_diem_zh} onChange={(e) => set("dia_diem_zh", e.target.value)} className="h-8 text-sm" placeholder="地點..." />
         </div>
         <div>
           <Label className="text-xs">Email</Label>

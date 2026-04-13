@@ -15,6 +15,8 @@ export interface KhachSan {
   foc_khach: number | null;
   foc_mien: number | null;
   nha_cung_cap_id: number | null;
+  ten_zh: string | null;
+  dia_diem_zh: string | null;
 }
 
 const QK = "khach_san_list";

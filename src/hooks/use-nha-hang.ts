@@ -15,6 +15,8 @@ export interface NhaHang {
   website: string | null;
   hinh_anh: string | null;
   nha_cung_cap_id: number | null;
+  ten_zh: string | null;
+  dia_diem_zh: string | null;
 }
 
 export interface SetMenu {
