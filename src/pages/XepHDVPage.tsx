@@ -76,10 +76,10 @@ function downloadTemplate() {
   // Thứ tự cột theo file mẫu chuẩn
   const headers = [
     "ten_doan", "hdv", "agent", "ngay_di", "ngay_ve",
-    "chuyen_bay_tien", "chuyen_bay_don", "dia_diem",
+    "chuyen_bay_tien", "chuyen_bay_don", "dia_diem", "so_khach", "ghi_chu",
   ];
   const example = [
-    "Tour Hà Nội 1", "", "Agent ABC", "15/04/2026", "20/04/2026", "VJ100", "VJ101", "Hà Nội",
+    "Tour Hà Nội 1", "", "Agent ABC", "15/04/2026", "20/04/2026", "VJ100", "VJ101", "Hà Nội", 20, "",
   ];
   const ws = XLSX.utils.aoa_to_sheet([headers, example]);
   ws["!cols"] = headers.map(() => ({ wch: 20 }));
@@ -278,6 +278,8 @@ interface ReviewRow {
   dia_diem_ten: string;
   agent_ten: string;
   hdv_ten: string;       // tên HDV chỉ định (optional)
+  so_khach: string;
+  ghi_chu: string;
   error?: string;
 }
 
@@ -693,6 +695,8 @@ export default function XepHDVPage() {
         assigned_hdv_id: locked_hdv_id,
         locked_hdv_id,
         is_chained: false,
+        so_khach: r.so_khach ? Number(r.so_khach) || null : null,
+        ghi_chu: r.ghi_chu.trim() || null,
       };
     });
 
@@ -747,8 +751,10 @@ export default function XepHDVPage() {
         const iTien   = col(["chuyen_bay_tien", "chuyến bay tiễn", "cb_tien", "flight_out"]);
         const iDon    = col(["chuyen_bay_don", "chuyến bay đón", "cb_don", "flight_in"]);
         const iDd     = col(["dia_diem", "địa điểm", "dia diem", "location"]);
-        const iAgent  = col(["agent"]);
-        const iHdv    = col(["hdv", "hướng dẫn viên", "huong_dan_vien", "huong dan vien"]);
+        const iAgent   = col(["agent"]);
+        const iHdv     = col(["hdv", "hướng dẫn viên", "huong_dan_vien", "huong dan vien"]);
+        const iSoKhach = col(["so_khach", "số khách", "so khach", "khach", "pax"]);
+        const iGhiChu  = col(["ghi_chu", "ghi chú", "ghi chu", "note", "notes"]);
 
         if (iName < 0 || iFrom < 0 || iTo < 0) {
           toast.error("File thiếu cột bắt buộc: ten_doan, ngay_di, ngay_ve");
@@ -774,8 +780,10 @@ export default function XepHDVPage() {
             chuyen_bay_tien: iTien >= 0 ? String(row[iTien] ?? "").trim() : "",
             chuyen_bay_don:  iDon  >= 0 ? String(row[iDon]  ?? "").trim() : "",
             dia_diem_ten:    iDd   >= 0 ? String(row[iDd]   ?? "").trim() : "",
-            agent_ten:       iAgent >= 0 ? String(row[iAgent] ?? "").trim() : "",
-            hdv_ten:         iHdv  >= 0 ? String(row[iHdv]  ?? "").trim() : "",
+            agent_ten:       iAgent   >= 0 ? String(row[iAgent]   ?? "").trim() : "",
+            hdv_ten:         iHdv     >= 0 ? String(row[iHdv]     ?? "").trim() : "",
+            so_khach:        iSoKhach >= 0 ? String(row[iSoKhach] ?? "").trim() : "",
+            ghi_chu:         iGhiChu  >= 0 ? String(row[iGhiChu]  ?? "").trim() : "",
           });
         }
 

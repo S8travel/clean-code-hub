@@ -13,6 +13,8 @@ export interface TourInput {
   dia_diem_id: number | null;
   dia_diem_ten?: string;
   agent_ten?: string;
+  so_khach?: number | null;
+  ghi_chu?: string | null;
   // kết quả xếp
   assigned_hdv_id: number | null;
   locked_hdv_id: number | null;  // HDV đã chỉ định trước (từ DB hoặc Excel)
