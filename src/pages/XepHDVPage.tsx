@@ -173,6 +173,8 @@ function HDVResultCard({
                     {tour.chuyen_bay_don && `↓${tour.chuyen_bay_don}`}
                   </span>
                 )}
+                {tour.so_khach != null && <span className="text-[10px]">{tour.so_khach} khách</span>}
+                {tour.ghi_chu && <span className="text-[10px] italic">{tour.ghi_chu}</span>}
                 {(() => {
                   const sugg = getSuggestionsForTour?.(tour);
                   const curName = tour.assigned_hdv_id
@@ -344,6 +346,8 @@ function ReviewDialog({
                 <th className="border px-2 py-1.5 min-w-[90px]">Địa điểm</th>
                 <th className="border px-2 py-1.5 min-w-[80px]">Agent</th>
                 <th className="border px-2 py-1.5 min-w-[100px]">HDV</th>
+                <th className="border px-2 py-1.5 w-20">Số khách</th>
+                <th className="border px-2 py-1.5 min-w-[120px]">Ghi chú</th>
                 <th className="border px-2 py-1.5 w-32">Trạng thái</th>
               </tr>
             </thead>
@@ -424,6 +428,26 @@ function ReviewDialog({
                       value={row.hdv_ten}
                       onChange={(e) => updateRow(idx, { hdv_ten: e.target.value })}
                       placeholder="(tùy chọn)"
+                    />
+                  </td>
+
+                  {/* so_khach */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      type="number"
+                      className="h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent w-16"
+                      value={row.so_khach}
+                      onChange={(e) => updateRow(idx, { so_khach: e.target.value })}
+                      placeholder=""
+                    />
+                  </td>
+
+                  {/* ghi_chu */}
+                  <td className="border px-1 py-0.5">
+                    <Input
+                      className="h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent"
+                      value={row.ghi_chu}
+                      onChange={(e) => updateRow(idx, { ghi_chu: e.target.value })}
                     />
                   </td>
 
@@ -1568,6 +1592,8 @@ export default function XepHDVPage() {
                         <th className="border px-2 py-1.5 w-20">Bay tiễn</th>
                         <th className="border px-2 py-1.5 w-20">Bay đón</th>
                         <th className="border px-2 py-1.5 min-w-[80px]">Địa điểm</th>
+                        <th className="border px-2 py-1.5 w-20">Số khách</th>
+                        <th className="border px-2 py-1.5 min-w-[100px]">Ghi chú</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1658,6 +1684,8 @@ export default function XepHDVPage() {
                               <td className="border px-2 py-1 text-muted-foreground">{tour.chuyen_bay_tien ?? ""}</td>
                               <td className="border px-2 py-1 text-muted-foreground">{tour.chuyen_bay_don ?? ""}</td>
                               <td className="border px-2 py-1 text-muted-foreground">{tour.dia_diem_ten ?? ""}</td>
+                              <td className="border px-2 py-1 text-center text-muted-foreground">{tour.so_khach ?? ""}</td>
+                              <td className="border px-2 py-1 text-muted-foreground">{tour.ghi_chu ?? ""}</td>
                             </tr>
                           );
                         })}
