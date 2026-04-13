@@ -18,6 +18,7 @@ import {
   LayoutTemplate,
   ClipboardList,
   CalendarCheck,
+  BriefcaseBusiness,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -52,6 +53,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "QUẢN LÝ ĐOÀN",
     items: [
       { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness },
       { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, minRole: "truong_phong" },
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },

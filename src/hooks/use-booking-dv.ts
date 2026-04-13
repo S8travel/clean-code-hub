@@ -21,6 +21,7 @@ export interface BookingDVRow {
   confirm_at: string | null;
   created_at: string;
   email_thread_id: string | null;
+  deadline: string | null;
 }
 
 export function useBookingDVList(doanId: number | undefined) {

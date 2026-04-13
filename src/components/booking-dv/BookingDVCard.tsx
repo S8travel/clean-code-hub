@@ -71,6 +71,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const [tenNCC, setTenNCC] = useState(row.ten_nha_cung_cap || "");
   const [email, setEmail] = useState(row.email_nha_cung_cap || "");
   const [ghiChu, setGhiChu] = useState(row.ghi_chu || "");
+  const [deadline, setDeadline] = useState(row.deadline || "");
   const [expanded, setExpanded] = useState(true);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState(row.email_nha_cung_cap || "");
@@ -353,15 +354,27 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
 
           {/* ── Notes + Actions ──────────────────────────────────────── */}
           <div className="px-4 py-3 border-t border-border flex items-start gap-4">
-            <Textarea
-              placeholder="Ghi chú..."
-              value={ghiChu}
-              onChange={(e) => setGhiChu(e.target.value)}
-              onBlur={() => save({ ghi_chu: ghiChu })}
-              disabled={isCancelled}
-              className="text-xs min-h-[52px] resize-none flex-1"
-              rows={2}
-            />
+            <div className="flex-1 space-y-2">
+              <Textarea
+                placeholder="Ghi chú..."
+                value={ghiChu}
+                onChange={(e) => setGhiChu(e.target.value)}
+                onBlur={() => save({ ghi_chu: ghiChu })}
+                disabled={isCancelled}
+                className="text-xs min-h-[52px] resize-none w-full"
+                rows={2}
+              />
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
+                <input
+                  type="date"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  onBlur={() => save({ deadline: deadline || null })}
+                  className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            </div>
 
             <div className="flex flex-wrap gap-1.5 shrink-0 pt-0.5">
               {/* Gửi email — chỉ lần đầu */}

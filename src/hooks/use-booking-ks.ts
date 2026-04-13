@@ -18,6 +18,7 @@ export interface BookingKSRow {
   ks_final_confirm_at: string | null;
   ks_ghi_chu_booking: string | null;
   email_thread_id: string | null;
+  deadline: string | null;
 }
 
 export interface BookingKSDisplay extends BookingKSRow {

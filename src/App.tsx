@@ -22,6 +22,7 @@ import HoaDonUNCPage from "./pages/HoaDonUNCPage.tsx";
 import SeriPage from "./pages/SeriPage.tsx";
 import TheodoiPage from "./pages/TheodoiPage.tsx";
 import XepHDVPage from "./pages/XepHDVPage.tsx";
+import MyJobPage from "./pages/MyJobPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="/quan-ly/seri" element={<SeriPage />} />
             <Route path="/theo-doi" element={<TheodoiPage />} />
             <Route path="/xep-hdv" element={<XepHDVPage />} />
+            <Route path="/my-job" element={<MyJobPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Route>

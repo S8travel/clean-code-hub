@@ -97,12 +97,14 @@ export default function MealCard({
   const [expanded, setExpanded] = useState(true);
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
   const [ghiChu, setGhiChu] = useState(booking?.ghi_chu ?? "");
+  const [deadline, setDeadline] = useState(booking?.deadline ?? "");
   const [newMon, setNewMon] = useState("");
 
   // Sync khi booking thay đổi từ bên ngoài (overview modal)
   useEffect(() => {
     setMonList(booking?.mon_an_snapshot ?? []);
     setGhiChu(booking?.ghi_chu ?? "");
+    setDeadline(booking?.deadline ?? "");
     setSelectedSetMenuId(booking?.set_menu_id ?? setMenuIdFromDieuTour ?? null);
   }, [booking?.id, JSON.stringify(booking?.mon_an_snapshot)]);
 
@@ -489,15 +491,27 @@ export default function MealCard({
             </div>
 
             <div className="flex items-start gap-3">
-              <Textarea
-                placeholder="Ghi chú..."
-                value={ghiChu}
-                onChange={(e) => setGhiChu(e.target.value)}
-                onBlur={() => saveBooking({ ghi_chu: ghiChu })}
-                disabled={isCancelled}
-                className="text-xs min-h-[40px] resize-none flex-1"
-                rows={1}
-              />
+              <div className="flex-1 space-y-1.5">
+                <Textarea
+                  placeholder="Ghi chú..."
+                  value={ghiChu}
+                  onChange={(e) => setGhiChu(e.target.value)}
+                  onBlur={() => saveBooking({ ghi_chu: ghiChu })}
+                  disabled={isCancelled}
+                  className="text-xs min-h-[40px] resize-none w-full"
+                  rows={1}
+                />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Deadline:</span>
+                  <input
+                    type="date"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    onBlur={() => saveBooking({ deadline: deadline || null })}
+                    className="h-7 w-36 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              </div>
               <div className="flex flex-wrap gap-1 shrink-0">
                 {(!booking || booking.booking_status === "chua_gui") && (
                   <Button size="sm" className="h-7 text-xs" onClick={handleSend}>

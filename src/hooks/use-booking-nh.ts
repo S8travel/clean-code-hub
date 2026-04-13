@@ -17,6 +17,7 @@ export interface BookingNHRow {
   sent_at: string | null;
   sent_by: string | null;
   email_thread_id: string | null;
+  deadline: string | null;
 }
 
 export interface MenuDayData {

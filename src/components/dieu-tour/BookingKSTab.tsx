@@ -261,6 +261,7 @@ function BookingKSCard({
   const [soPhong, setSoPhong] = useState(row.ks_dat_truoc || "");
   const [soPhongFinal, setSoPhongFinal] = useState(row.ks_final || "");
   const [ghiChu, setGhiChu] = useState(row.ks_ghi_chu_booking || "");
+  const [deadline, setDeadline] = useState(row.deadline || "");
 
   // Email state
   const sendMut = useSendKSBookingEmail();
@@ -276,6 +277,7 @@ function BookingKSCard({
     setSoPhong(row.ks_dat_truoc || "");
     setSoPhongFinal(row.ks_final || "");
     setGhiChu(row.ks_ghi_chu_booking || "");
+    setDeadline(row.deadline || "");
   }, [row.id]);
 
   const buildEmailHtml = () => {
@@ -486,6 +488,16 @@ function BookingKSCard({
               className="h-8 text-xs"
             />
           </div>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
+          <input
+            type="date"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+            onBlur={() => save({ deadline: deadline || null })}
+            className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          />
         </div>
 
         {/* Gửi email — chỉ hiện ở giai đoạn đặt trước */}
