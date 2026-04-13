@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { externalSupabase } from "@/lib/supabase-external";
+import { setCurrentSession } from "@/hooks/use-current-user";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -19,7 +20,7 @@ export default function LoginPage() {
     if (!email || !inputPassword) return;
     setIsPending(true);
     try {
-      const { error } = await externalSupabase.auth.signInWithPassword({
+      const { data, error } = await externalSupabase.auth.signInWithPassword({
         email,
         password: inputPassword,
       });
@@ -28,6 +29,8 @@ export default function LoginPage() {
         setInputPassword("");
         return;
       }
+      // Cập nhật state ngay — không chờ onAuthStateChange async
+      setCurrentSession(data.session);
       navigate("/dashboard", { replace: true });
     } finally {
       setIsPending(false);

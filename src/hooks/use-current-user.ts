@@ -2,45 +2,48 @@ import { useState, useEffect } from "react";
 import { Session } from "@supabase/supabase-js";
 import { externalSupabase } from "@/lib/supabase-external";
 
-let cachedSession: Session | null = null;
-let listeners: Array<(s: Session | null) => void> = [];
+type SessionState = { loading: true; session: null } | { loading: false; session: Session | null };
 
-// Shared singleton — avoids multiple onAuthStateChange subscriptions
-function notifyListeners(s: Session | null) {
-  cachedSession = s;
-  listeners.forEach((fn) => fn(s));
+let state: SessionState = { loading: true, session: null };
+let listeners: Array<(s: SessionState) => void> = [];
+
+function setState(newState: SessionState) {
+  state = newState;
+  listeners.forEach((fn) => fn(newState));
 }
 
-let subscribed = false;
-function ensureSubscribed() {
-  if (subscribed) return;
-  subscribed = true;
-  externalSupabase.auth.getSession().then(({ data }) => {
-    notifyListeners(data.session);
-  });
-  externalSupabase.auth.onAuthStateChange((_event, session) => {
-    notifyListeners(session);
-  });
+// Khởi tạo ngay khi module load — không chờ component mount
+// Để onAuthStateChange bắt được SIGNED_IN từ signInWithPassword()
+externalSupabase.auth.getSession().then(({ data }) => {
+  setState({ loading: false, session: data.session });
+});
+
+externalSupabase.auth.onAuthStateChange((_event, session) => {
+  setState({ loading: false, session });
+});
+
+/** Gọi sau signInWithPassword để cập nhật state ngay — không chờ async event */
+export function setCurrentSession(session: Session | null) {
+  setState({ loading: false, session });
 }
 
 export function useCurrentSession() {
-  const [session, setSession] = useState<Session | null>(cachedSession);
+  const [s, setS] = useState<SessionState>(state);
 
   useEffect(() => {
-    ensureSubscribed();
-    // Sync with latest cached value in case it changed before we subscribed
-    setSession(cachedSession);
-    listeners.push(setSession);
+    // Sync với state mới nhất (có thể đã resolved trước khi effect chạy)
+    setS(state);
+    listeners.push(setS);
     return () => {
-      listeners = listeners.filter((fn) => fn !== setSession);
+      listeners = listeners.filter((fn) => fn !== setS);
     };
   }, []);
 
-  return session;
+  return s;
 }
 
-/** Backwards-compat shim — returns email from session */
+/** Backwards-compat shim */
 export function useCurrentUserEmail() {
-  const session = useCurrentSession();
+  const { session } = useCurrentSession();
   return { email: session?.user?.email ?? null };
 }
