@@ -22,6 +22,7 @@ import {
   useSeriNgayList, useSeriNgayItems, useSaveSeri, seriToDayLocals,
   type SeriTour,
 } from "@/hooks/use-seri";
+import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
 import { useCanhDiem, useNhaHang, useKhachSan } from "@/hooks/use-dieu-tour";
 import type { DayLocal } from "@/hooks/use-dieu-tour";
 import { getWeekday } from "@/hooks/use-dieu-tour";
@@ -81,8 +82,8 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
                 Shopping: {seri.shopping ? "YES" : "NO"}
               </span>
             )}
-            {seri.tang_pham && (
-              <span className="text-xs text-muted-foreground">🎁 {seri.tang_pham}</span>
+            {seri.tang_pham && seri.tang_pham.length > 0 && (
+              <span className="text-xs text-muted-foreground">🎁 {seri.tang_pham.join(", ")}</span>
             )}
           </div>
         </div>
@@ -135,7 +136,7 @@ export default function SeriPage() {
   const [deleteTarget, setDeleteTarget] = useState<SeriTour | null>(null);
   const [formName, setFormName] = useState("");
   const [formMoTa, setFormMoTa] = useState("");
-  const [formTangPham, setFormTangPham] = useState("");
+  const [formTangPham, setFormTangPham] = useState<string[]>([]);
   const [formShopping, setFormShopping] = useState<"yes" | "no" | "">("");
 
   const selectedSeri = useMemo(
@@ -147,7 +148,7 @@ export default function SeriPage() {
     setEditTarget(null);
     setFormName("");
     setFormMoTa("");
-    setFormTangPham("");
+    setFormTangPham([]);
     setFormShopping("");
     setModalOpen(true);
   };
@@ -157,7 +158,7 @@ export default function SeriPage() {
     setEditTarget(s);
     setFormName(s.ten_seri);
     setFormMoTa(s.mo_ta ?? "");
-    setFormTangPham(s.tang_pham ?? "");
+    setFormTangPham(Array.isArray(s.tang_pham) ? s.tang_pham : []);
     setFormShopping(s.shopping === true ? "yes" : s.shopping === false ? "no" : "");
     setModalOpen(true);
   };
@@ -167,12 +168,12 @@ export default function SeriPage() {
     const shoppingVal = formShopping === "yes" ? true : formShopping === "no" ? false : null;
     if (editTarget) {
       updateSeri.mutate(
-        { id: editTarget.id, ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined, tang_pham: formTangPham.trim() || null, shopping: shoppingVal },
+        { id: editTarget.id, ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined, tang_pham: formTangPham.length > 0 ? formTangPham : null, shopping: shoppingVal },
         { onSuccess: () => setModalOpen(false) }
       );
     } else {
       createSeri.mutate(
-        { ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined, tang_pham: formTangPham.trim() || null, shopping: shoppingVal },
+        { ten_seri: formName.trim(), mo_ta: formMoTa.trim() || undefined, tang_pham: formTangPham.length > 0 ? formTangPham : null, shopping: shoppingVal },
         {
           onSuccess: (data) => {
             setSelectedId(data.id);
@@ -224,8 +225,8 @@ export default function SeriPage() {
                         Shop: {s.shopping ? "YES" : "NO"}
                       </span>
                     )}
-                    {s.tang_pham && (
-                      <span className="text-[10px] text-muted-foreground truncate">🎁 {s.tang_pham}</span>
+                    {s.tang_pham && s.tang_pham.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground truncate">🎁 {s.tang_pham.join(", ")}</span>
                     )}
                   </div>
                 </div>
@@ -266,7 +267,7 @@ export default function SeriPage() {
 
       {/* Create/Edit modal */}
       <Dialog open={modalOpen} onOpenChange={(o) => { if (!o) setModalOpen(false); }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editTarget ? "Sửa mẫu seri" : "Tạo mẫu seri mới"}</DialogTitle>
           </DialogHeader>
@@ -292,16 +293,7 @@ export default function SeriPage() {
                 placeholder="Ghi chú ngắn về chương trình..."
               />
             </div>
-            <div>
-              <Label className="text-sm">Tặng phẩm</Label>
-              <Textarea
-                className="mt-1 resize-none"
-                rows={2}
-                value={formTangPham}
-                onChange={(e) => setFormTangPham(e.target.value)}
-                placeholder="VD: Nón, túi, quạt..."
-              />
-            </div>
+            <GiftTagsSection gifts={formTangPham} setGifts={setFormTangPham} />
             <div>
               <Label className="text-sm">Shopping</Label>
               <Select value={formShopping} onValueChange={(v) => setFormShopping(v as "yes" | "no" | "")}>
