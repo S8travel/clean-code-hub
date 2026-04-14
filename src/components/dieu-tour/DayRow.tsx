@@ -122,7 +122,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                     updateItems(newItems);
                   }}
                   placeholder="Chọn cảnh điểm"
-                  className="h-auto min-h-[24px] text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&_span]:!text-ellipsis-none [&_span]:!truncate-none"
+                  className="h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3"
                 />
                 {noteOpen && (
                   <textarea
