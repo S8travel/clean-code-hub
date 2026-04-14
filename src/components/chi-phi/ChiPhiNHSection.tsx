@@ -169,7 +169,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         ngay_date: meal.ngay_date,
         ngay_so: meal.ngay_so,
         bua_an: meal.bua_an,
-        so_khach: mainCp?.so_luong ?? soKhachDefault,
+        // Nếu DB có so_luong > 1 thì dùng DB, còn lại dùng soKhachDefault (tránh giá trị 1 sai từ lần lưu cũ)
+        so_khach: (mainCp?.so_luong != null && mainCp.so_luong > 1) ? mainCp.so_luong : (soKhachDefault || mainCp?.so_luong || 0),
         don_gia: (mainCp?.don_gia != null && mainCp.don_gia > 0) ? mainCp.don_gia : (meal.gia_set_menu ?? 0),
       };
 
