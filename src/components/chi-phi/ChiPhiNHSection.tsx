@@ -242,7 +242,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
       let changed = false;
       const next = { ...prev };
       for (const key of Object.keys(next)) {
-        if (next[key].so_khach === 0) {
+        // Cập nhật nếu so_khach = 0 hoặc = 1 (default sai từ lần lưu trước)
+        if (next[key].so_khach === 0 || (soKhachDefault > 1 && next[key].so_khach === 1)) {
           next[key] = { ...next[key], so_khach: soKhachDefault };
           changed = true;
         }
@@ -998,7 +999,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                     {isMealDinhKy && activeDntts.length === 0 && (
                       <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
                     )}
-                    {!isMealDinhKy && activeDntts.length === 0 && totalBua > 0 && (
+                    {!isMealDinhKy && activeDntts.length === 0 && !!row && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                         onClick={() => {
                           setDnttAlreadyPaid(0);
