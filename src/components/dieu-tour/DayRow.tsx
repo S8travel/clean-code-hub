@@ -111,7 +111,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {day.items.map((item, idx) => {
           const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
           return (
-            <div key={idx} className="flex items-center gap-0.5 px-1 bg-muted/60 rounded">
+            <div key={idx} className="flex items-center gap-0.5 bg-muted/60 rounded">
               <div className="flex-1 min-w-0 space-y-0.5">
                 <SearchableSelect
                   options={canhDiemOptions}
