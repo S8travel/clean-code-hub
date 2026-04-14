@@ -386,7 +386,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
       {
         properties: {
           page: {
-            size: { width: PAGE_H, height: PAGE_W, orientation: PageOrientation.LANDSCAPE },
+            size: { width: PAGE_W, height: PAGE_H, orientation: PageOrientation.LANDSCAPE },
             margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
           },
         },
