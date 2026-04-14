@@ -267,11 +267,11 @@ export default function SeriPage() {
 
       {/* Create/Edit modal */}
       <Dialog open={modalOpen} onOpenChange={(o) => { if (!o) setModalOpen(false); }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editTarget ? "Sửa mẫu seri" : "Tạo mẫu seri mới"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1 overflow-y-auto max-h-[70vh]">
+          <div className="space-y-3 py-1 overflow-y-auto flex-1 pr-1">
             <div>
               <Label className="text-sm">Tên seri *</Label>
               <Input
@@ -296,19 +296,22 @@ export default function SeriPage() {
             <GiftTagsSection gifts={formTangPham} setGifts={setFormTangPham} />
             <div>
               <Label className="text-sm">Shopping</Label>
-              <Select value={formShopping} onValueChange={(v) => setFormShopping(v as "yes" | "no" | "")}>
+              <Select
+                value={formShopping || "none"}
+                onValueChange={(v) => setFormShopping(v === "none" ? "" : v as "yes" | "no")}
+              >
                 <SelectTrigger className="mt-1 h-8 text-sm">
                   <SelectValue placeholder="Chọn..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="none">—</SelectItem>
                   <SelectItem value="yes">YES</SelectItem>
                   <SelectItem value="no">NO</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setModalOpen(false)}>Hủy</Button>
             <Button
               onClick={handleSave}
