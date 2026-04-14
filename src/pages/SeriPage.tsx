@@ -271,7 +271,7 @@ export default function SeriPage() {
           <DialogHeader>
             <DialogTitle>{editTarget ? "Sửa mẫu seri" : "Tạo mẫu seri mới"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1">
+          <div className="space-y-3 py-1 overflow-y-auto max-h-[70vh]">
             <div>
               <Label className="text-sm">Tên seri *</Label>
               <Input

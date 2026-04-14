@@ -103,7 +103,7 @@ export default function DoanDetail() {
     // Preserve local edits: only re-populate non-schedule fields if not initialized
     if (!initialized) {
       setBangDon(doan.bang_don || "");
-      setShopping(doan.shopping ?? null);
+      setShopping(doan.shopping ?? false);
       setTruongDoan(doan.truong_doan || "");
       setChuyenBayDon(doan.chuyen_bay_don || "");
       setChuyenBayTien(doan.chuyen_bay_tien || "");

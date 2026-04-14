@@ -11,7 +11,6 @@ import {
   BorderStyle,
   ShadingType,
   VerticalAlign,
-  PageOrientation,
 } from "docx";
 import { saveAs } from "file-saver";
 import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
@@ -25,14 +24,14 @@ const HEADER_SHADING = { fill: "D9D9D9", type: ShadingType.CLEAR, color: "auto" 
 const NO_SHADING = { fill: "FFFFFF", type: ShadingType.CLEAR, color: "auto" };
 const BLUE_SHADING = { fill: "185FA5", type: ShadingType.CLEAR, color: "auto" };
 
-// A4 Landscape
-const PAGE_W = 11906;
-const PAGE_H = 16838;
-const MARGIN = 1080; // ~19mm per side — safe for most printers
-const CONTENT_W = PAGE_H - MARGIN * 2; // 14678
+// A4 Portrait
+const PAGE_W = 11906; // 210mm
+const PAGE_H = 16838; // 297mm
+const MARGIN = 1080;  // ~19mm per side
+const CONTENT_W = PAGE_W - MARGIN * 2; // 9746
 
 // Schedule table col widths: Ngày | Chương trình | Ăn trưa | Ăn tối | Khách sạn
-const SCHED_COL = [900, 4100, 2900, 2900, 3878];
+const SCHED_COL = [650, 2800, 2000, 2000, 2296];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function cell(
@@ -194,9 +193,8 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
   });
 
   // ── 3. Tour info table ───────────────────────────────────────────────────
-  const LW = 2200; // label width
-  const VW = CONTENT_W / 2 - LW; // value width per side
-  const HALF2 = CONTENT_W / 2;
+  const LW = 1500; // label width
+  const HALF2 = Math.floor(CONTENT_W / 2); // 4873
 
   const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
   const bayStr = [chuyenBayDon, chuyenBayTien].filter(Boolean).join(" → ") || "—";
@@ -207,53 +205,54 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
       // Row 1: Code đoàn | Bảng đón
       new TableRow({
         children: [
-          cell([p("Code đoàn:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(tenDoan, { bold: true, size: 20, color: "185FA5" })], { width: HALF2 - 1800 }),
-          cell([p("Bảng đón:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(bangDon || "—", { size: 20 })], { width: HALF2 - 1800 }),
+          cell([p("Code đoàn:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(tenDoan, { bold: true, size: 20, color: "185FA5" })], { width: HALF2 - LW }),
+          cell([p("Bảng đón:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(bangDon || "—", { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
         ],
       }),
       // Row 2: HDV | Shopping
       new TableRow({
         children: [
-          cell([p("HDV:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(hdv || "—", { size: 20 })], { width: HALF2 - 1800 }),
-          cell([p("Shopping:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(shopStr, { size: 20 })], { width: HALF2 - 1800 }),
+          cell([p("HDV:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(hdv || "—", { size: 20 })], { width: HALF2 - LW }),
+          cell([p("Shopping:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(shopStr, { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
         ],
       }),
       // Row 3: Xe | T/L
       new TableRow({
         children: [
-          cell([p("Xe:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(xeLabel(xe), { size: 20 })], { width: HALF2 - 1800 }),
-          cell([p("T/L:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(truongDoan || "—", { size: 20 })], { width: HALF2 - 1800 }),
+          cell([p("Xe:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(xeLabel(xe), { size: 20 })], { width: HALF2 - LW }),
+          cell([p("T/L:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(truongDoan || "—", { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
         ],
       }),
       // Row 4: Ngày đón | Chuyến bay
       new TableRow({
         children: [
-          cell([p("Ngày đón:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(formatDate(ngayDi), { size: 20 })], { width: HALF2 - 1800 }),
-          cell([p("Chuyến bay:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(bayStr, { size: 20 })], { width: HALF2 - 1800 }),
+          cell([p("Ngày đón:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(formatDate(ngayDi), { size: 20 })], { width: HALF2 - LW }),
+          cell([p("Chuyến bay:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(bayStr, { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
         ],
       }),
       // Row 5: Ngày tiễn
       new TableRow({
         children: [
-          cell([p("Ngày tiễn:", { bold: true, size: 20 })], { width: 1800, shading: HEADER_SHADING }),
-          cell([p(formatDate(ngayVe), { size: 20 })], { width: HALF2 - 1800 }),
-          cell([p("", { size: 20 })], { width: 1800 }),
-          cell([p("", { size: 20 })], { width: HALF2 - 1800 }),
+          cell([p("Ngày tiễn:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
+          cell([p(formatDate(ngayVe), { size: 20 })], { width: HALF2 - LW }),
+          cell([p("", { size: 20 })], { width: LW }),
+          cell([p("", { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
         ],
       }),
     ],
   });
 
   // ── 4. Guest count table ─────────────────────────────────────────────────
-  const GW = Math.floor(CONTENT_W / 6);
+  const GW = Math.floor(CONTENT_W / 6); // 1624
+  const GW_LAST = CONTENT_W - GW * 5;   // fill remaining (1626)
   const guestTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
@@ -264,7 +263,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
           cell([p("Trẻ em 6–10", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING }),
           cell([p(String(soKhachEm1), { size: 20, align: AlignmentType.CENTER })], { width: GW }),
           cell([p("Trẻ em <6", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING }),
-          cell([p(String(soKhachEm2), { size: 20, align: AlignmentType.CENTER })], { width: GW }),
+          cell([p(String(soKhachEm2), { size: 20, align: AlignmentType.CENTER })], { width: GW_LAST }),
         ],
       }),
       new TableRow({
@@ -274,7 +273,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
           cell([p("Tổng", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING }),
           cell([p(String(totalKhach), { bold: true, size: 20, align: AlignmentType.CENTER, color: "185FA5" })], { width: GW }),
           cell([p("Chú thích:", { bold: true, size: 20 })], { width: GW, shading: HEADER_SHADING }),
-          cell([p(chuThichKhach || "—", { size: 20 })], { width: GW }),
+          cell([p(chuThichKhach || "—", { size: 20 })], { width: GW_LAST }),
         ],
       }),
     ],
@@ -386,7 +385,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
       {
         properties: {
           page: {
-            size: { width: PAGE_W, height: PAGE_H, orientation: PageOrientation.LANDSCAPE },
+            size: { width: PAGE_W, height: PAGE_H },
             margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
           },
         },

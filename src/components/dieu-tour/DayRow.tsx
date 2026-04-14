@@ -101,9 +101,9 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       </div>
 
       {/* CHƯƠNG TRÌNH */}
-      <div className="p-2 border-r border-border space-y-2 min-w-0" style={{ wordBreak: 'break-word' }}>
+      <div className="p-1.5 border-r border-border space-y-1 min-w-0" style={{ wordBreak: 'break-word' }}>
         <Input
-          className="h-8 text-[13px] font-medium"
+          className="h-7 text-[13px] font-medium"
           value={day.thanh_pho}
           onChange={(e) => update({ thanh_pho: e.target.value })}
           placeholder="Thành phố..."
@@ -111,7 +111,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {day.items.map((item, idx) => {
           const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
           return (
-            <div key={idx} className="flex items-center gap-1 rounded-md px-1 py-0.5 bg-muted/60">
+            <div key={idx} className="flex items-center gap-0.5 px-1 bg-muted/60 rounded">
               <div className="flex-1 min-w-0 space-y-0.5">
                 <SearchableSelect
                   options={canhDiemOptions}
@@ -122,7 +122,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                     updateItems(newItems);
                   }}
                   placeholder="Chọn cảnh điểm"
-                  className="h-auto min-h-[28px] text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&_span]:!text-ellipsis-none [&_span]:!truncate-none"
+                  className="h-auto min-h-[24px] text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&_span]:!text-ellipsis-none [&_span]:!truncate-none"
                 />
                 {noteOpen && (
                   <textarea
