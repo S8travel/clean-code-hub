@@ -19,6 +19,7 @@ import {
   ClipboardList,
   CalendarCheck,
   BriefcaseBusiness,
+  CalendarRange,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -57,6 +58,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, minRole: "truong_phong" },
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },
+      { title: "Lock Phòng", url: "/lock-phong", icon: CalendarRange },
     ],
   },
   {
