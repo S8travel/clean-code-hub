@@ -115,19 +115,27 @@ export function getSuggestions(
   const activeHdvs = hdvs.filter((h) => h.active);
 
   // Build schedule từ kết quả hiện tại, bỏ qua tour đang xét
+  // Dùng cả assigned_hdv_id (kết quả xếp) lẫn locked_hdv_id (gốc từ DB/Excel)
+  // để tránh gợi ý sai khi thuật toán đã chuyển tour sang HDV khác
   const schedule = new Map<number, TourInput[]>();
   for (const t of result) {
-    if (t === tour || t.assigned_hdv_id === null) continue;
-    const sched = schedule.get(t.assigned_hdv_id) ?? [];
-    sched.push(t);
-    schedule.set(t.assigned_hdv_id, sched);
+    if (t === tour) continue;
+    const idsToBlock = new Set<number>();
+    if (t.assigned_hdv_id !== null) idsToBlock.add(Number(t.assigned_hdv_id));
+    if (t.locked_hdv_id !== null) idsToBlock.add(Number(t.locked_hdv_id));
+    for (const id of idsToBlock) {
+      if (isNaN(id)) continue;
+      const sched = schedule.get(id) ?? [];
+      sched.push(t);
+      schedule.set(id, sched);
+    }
   }
 
   const primary: HDVRow[] = [];
   const secondary: HDVRow[] = [];
 
   for (const hdv of activeHdvs) {
-    const assigned = schedule.get(hdv.id) ?? [];
+    const assigned = schedule.get(Number(hdv.id)) ?? [];
     if (assigned.some((t) => toursOverlap(t, tour))) continue;
     if (isEligible(hdv, tour)) {
       primary.push(hdv);

@@ -88,6 +88,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         tien_cong_ty: thanhTien,
         tien_hdv: 0,
         nha_cung_cap_id: nccId,
+        thanh_toan_dinh_ky: true,
       } as any);
       toast.success("Đã lưu bảo hiểm");
     } catch {
