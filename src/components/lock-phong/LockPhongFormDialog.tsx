@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -27,27 +27,25 @@ import {
 
 const hotelSchema = z.object({
   id: z.number().optional(),
-  khach_san_id: z.number({ required_error: "Chọn khách sạn" }),
+  khach_san_id: z.number({ required_error: "Chọn KS" }),
   check_in: z.string().min(1, "Bắt buộc"),
   check_out: z.string().min(1, "Bắt buộc"),
   so_phong: z.string().optional(),
   ghi_chu: z.string().optional(),
 });
 
-// Create: nhiều code đoàn, cùng danh sách hotel (mỗi hotel có ngày riêng)
+const doanSchema = z.object({
+  ten_doan: z.string().min(1, "Bắt buộc"),
+  ngay_xuat_phat: z.string().min(1, "Bắt buộc"),
+  hotels: z.array(hotelSchema).min(1, "Thêm ít nhất 1 KS"),
+});
+
 const createSchema = z.object({
   ten_seri: z.string().min(1, "Bắt buộc"),
   ghi_chu: z.string().optional(),
-  doans: z.array(
-    z.object({
-      ten_doan: z.string().min(1, "Bắt buộc"),
-      ngay_xuat_phat: z.string().min(1, "Bắt buộc"),
-    })
-  ).min(1),
-  hotels: z.array(hotelSchema).min(1, "Thêm ít nhất 1 khách sạn"),
+  doans: z.array(doanSchema).min(1),
 });
 
-// Edit: sửa 1 record
 const editSchema = z.object({
   ten_seri: z.string().min(1, "Bắt buộc"),
   ten_doan: z.string().min(1, "Bắt buộc"),
@@ -59,133 +57,102 @@ const editSchema = z.object({
 type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
 
+const emptyHotel = () => ({ khach_san_id: 0, check_in: "", check_out: "", so_phong: "", ghi_chu: "" });
+const emptyDoan = () => ({ ten_doan: "", ngay_xuat_phat: "", hotels: [emptyHotel()] });
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initialData?: LockPhongDisplay | null;
 }
 
-// ── Shared hotel list section ──
+// ── Hotel rows for one đoàn ──
 
-function HotelList({
+function DoanHotelRows({
+  doanIdx,
   control,
   register,
   ksOptions,
-  namePrefix = "hotels",
 }: {
+  doanIdx: number;
   control: any;
   register: any;
   ksOptions: { value: string; label: string }[];
-  namePrefix?: string;
 }) {
-  const { fields, append, remove } = useFieldArray({ control, name: namePrefix });
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `doans.${doanIdx}.hotels`,
+  });
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <Label className="text-xs font-semibold">
-            Khách sạn <span className="text-destructive">*</span>
-          </Label>
-          <p className="text-[11px] text-muted-foreground">
-            Mỗi KS có ngày check-in / check-out riêng. Áp dụng cho tất cả code đoàn.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs gap-1 shrink-0"
-          onClick={() =>
-            append({ khach_san_id: 0, check_in: "", check_out: "", so_phong: "", ghi_chu: "" })
-          }
-        >
-          <Plus className="h-3 w-3" />
-          Thêm KS
-        </Button>
-      </div>
-
-      <div className="space-y-2">
-        {fields.map((field, idx) => (
-          <div
-            key={field.id}
-            className="border border-border rounded-lg p-3 space-y-2 bg-muted/20"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">KS {idx + 1}</span>
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => remove(idx)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs">Khách sạn</Label>
-              <Controller
-                control={control}
-                name={`${namePrefix}.${idx}.khach_san_id`}
-                render={({ field: cf }) => (
-                  <SearchableSelect
-                    options={ksOptions}
-                    value={cf.value ? String(cf.value) : ""}
-                    onChange={(val) => cf.onChange(val ? Number(val) : 0)}
-                    placeholder="Chọn khách sạn..."
-                    className="h-9 text-sm"
-                  />
-                )}
+    <div className="space-y-1.5">
+      {fields.map((field, hIdx) => (
+        <div key={field.id} className="grid grid-cols-[180px_1fr_1fr_140px_28px] gap-1.5 items-center">
+          {/* KS name */}
+          <Controller
+            control={control}
+            name={`doans.${doanIdx}.hotels.${hIdx}.khach_san_id`}
+            render={({ field: cf }) => (
+              <SearchableSelect
+                options={ksOptions}
+                value={cf.value ? String(cf.value) : ""}
+                onChange={(val) => cf.onChange(val ? Number(val) : 0)}
+                placeholder="Chọn KS..."
+                className="h-8 text-xs"
               />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Check-in</Label>
-                <Input
-                  {...register(`${namePrefix}.${idx}.check_in`)}
-                  type="date"
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Check-out</Label>
-                <Input
-                  {...register(`${namePrefix}.${idx}.check_out`)}
-                  type="date"
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Số phòng</Label>
-                <Input
-                  {...register(`${namePrefix}.${idx}.so_phong`)}
-                  placeholder="vd: 6 TWN, 1 DBL"
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs">Ghi chú</Label>
-              <Input
-                {...register(`${namePrefix}.${idx}.ghi_chu`)}
-                placeholder="Ghi chú cho KS này..."
-                className="h-9 text-sm"
-              />
-            </div>
+            )}
+          />
+          {/* Check-in */}
+          <div>
+            <Input
+              {...register(`doans.${doanIdx}.hotels.${hIdx}.check_in`)}
+              type="date"
+              className="h-8 text-xs"
+            />
           </div>
-        ))}
-      </div>
+          {/* Check-out */}
+          <div>
+            <Input
+              {...register(`doans.${doanIdx}.hotels.${hIdx}.check_out`)}
+              type="date"
+              className="h-8 text-xs"
+            />
+          </div>
+          {/* Số phòng */}
+          <Input
+            {...register(`doans.${doanIdx}.hotels.${hIdx}.so_phong`)}
+            placeholder="6 TWN, 1 DBL"
+            className="h-8 text-xs"
+          />
+          {/* Remove */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+            onClick={() => remove(hIdx)}
+            disabled={fields.length <= 1}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      ))}
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground px-1"
+        onClick={() => append(emptyHotel())}
+      >
+        <Plus className="h-3 w-3" />
+        Thêm KS
+      </Button>
     </div>
   );
 }
 
-// ── Create form: batch ──
+// ── Create form ──
 
 function CreateForm({
   onOpenChange,
@@ -202,36 +169,41 @@ function CreateForm({
     handleSubmit,
     control,
     watch,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     defaultValues: {
       ten_seri: "",
       ghi_chu: "",
-      doans: [{ ten_doan: "", ngay_xuat_phat: "" }],
-      hotels: [{ khach_san_id: 0, check_in: "", check_out: "", so_phong: "", ghi_chu: "" }],
+      doans: [emptyDoan()],
     },
   });
 
-  const {
-    fields: doanFields,
-    append: appendDoan,
-    remove: removeDoan,
-  } = useFieldArray({ control, name: "doans" });
+  const { fields: doanFields, append: appendDoan, remove: removeDoan } = useFieldArray({
+    control,
+    name: "doans",
+  });
 
-  const doanCount = watch("doans")?.length ?? 1;
+  // Copy hotel structure (same hotels + so_phong) from last đoàn, empty dates
+  const addDoanFromLast = () => {
+    const current = getValues("doans");
+    const last = current[current.length - 1];
+    appendDoan({
+      ten_doan: "",
+      ngay_xuat_phat: "",
+      hotels: last.hotels.map((h) => ({
+        khach_san_id: h.khach_san_id,
+        check_in: "",
+        check_out: "",
+        so_phong: h.so_phong || "",
+        ghi_chu: h.ghi_chu || "",
+      })),
+    });
+  };
 
   const onSubmit = async (values: CreateValues) => {
     try {
-      const hotels = values.hotels.map((h) => ({
-        id: h.id,
-        khach_san_id: h.khach_san_id,
-        check_in: h.check_in,
-        check_out: h.check_out,
-        so_phong: h.so_phong || undefined,
-        ghi_chu: h.ghi_chu || undefined,
-      }));
-
       await Promise.all(
         values.doans.map((d) =>
           createMut.mutateAsync({
@@ -242,11 +214,17 @@ function CreateForm({
               ngay_xuat_phat: d.ngay_xuat_phat,
               ghi_chu: values.ghi_chu || undefined,
             },
-            hotels,
+            hotels: d.hotels.map((h) => ({
+              id: h.id,
+              khach_san_id: h.khach_san_id,
+              check_in: h.check_in,
+              check_out: h.check_out,
+              so_phong: h.so_phong || undefined,
+              ghi_chu: h.ghi_chu || undefined,
+            })),
           })
         )
       );
-
       toast.success(
         values.doans.length > 1
           ? `Đã tạo ${values.doans.length} lock phòng`
@@ -266,18 +244,12 @@ function CreateForm({
           <Label className="text-xs">
             Tên seri <span className="text-destructive">*</span>
           </Label>
-          <Input
-            {...register("ten_seri")}
-            placeholder="vd: Trung Quốc 6N5Đ"
-            className="h-9 text-sm"
-          />
-          {errors.ten_seri && (
-            <p className="text-xs text-destructive">{errors.ten_seri.message}</p>
-          )}
+          <Input {...register("ten_seri")} placeholder="vd: Trung Quốc 6N5Đ" className="h-9 text-sm" />
+          {errors.ten_seri && <p className="text-xs text-destructive">{errors.ten_seri.message}</p>}
         </div>
 
-        {/* Code đoàn — dạng bảng compact */}
-        <div className="space-y-2">
+        {/* Danh sách đoàn */}
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label className="text-xs font-semibold">
               Code đoàn <span className="text-destructive">*</span>
@@ -287,66 +259,65 @@ function CreateForm({
               variant="outline"
               size="sm"
               className="h-7 text-xs gap-1"
-              onClick={() => appendDoan({ ten_doan: "", ngay_xuat_phat: "" })}
+              onClick={addDoanFromLast}
             >
-              <Plus className="h-3 w-3" />
-              Thêm đoàn
+              <Copy className="h-3 w-3" />
+              Copy & thêm đoàn
             </Button>
           </div>
 
-          <div className="rounded-lg border border-border overflow-hidden">
-            <div className="grid grid-cols-[1fr_160px_32px] bg-muted/40 border-b border-border px-3 py-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Code đoàn</span>
-              <span className="text-xs font-medium text-muted-foreground">Ngày xuất phát</span>
-              <span />
-            </div>
-            {doanFields.map((field, idx) => (
-              <div
-                key={field.id}
-                className="grid grid-cols-[1fr_160px_32px] items-center border-b border-border last:border-0 px-3 py-1"
-              >
-                <div className="pr-2">
-                  <Input
-                    {...register(`doans.${idx}.ten_doan`)}
-                    placeholder="vd: TQ250501"
-                    className="h-8 text-sm border-0 shadow-none focus-visible:ring-0 px-0 bg-transparent"
-                  />
-                  {errors.doans?.[idx]?.ten_doan && (
-                    <p className="text-xs text-destructive">{errors.doans[idx]?.ten_doan?.message}</p>
-                  )}
-                </div>
-                <div className="pr-2">
-                  <Input
-                    {...register(`doans.${idx}.ngay_xuat_phat`)}
-                    type="date"
-                    className="h-8 text-sm border-0 shadow-none focus-visible:ring-0 px-0 bg-transparent"
-                  />
-                  {errors.doans?.[idx]?.ngay_xuat_phat && (
-                    <p className="text-xs text-destructive">{errors.doans[idx]?.ngay_xuat_phat?.message}</p>
-                  )}
-                </div>
-                <div className="flex justify-center">
-                  {doanFields.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeDoan(idx)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
+          {doanFields.map((field, dIdx) => (
+            <div key={field.id} className="border border-border rounded-lg overflow-hidden">
+              {/* Đoàn header */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
+                <span className="text-xs font-medium text-muted-foreground shrink-0">
+                  Đoàn {dIdx + 1}
+                </span>
+                <Input
+                  {...register(`doans.${dIdx}.ten_doan`)}
+                  placeholder="Code đoàn, vd: TQ250501"
+                  className="h-7 text-xs flex-1"
+                />
+                <Input
+                  {...register(`doans.${dIdx}.ngay_xuat_phat`)}
+                  type="date"
+                  className="h-7 text-xs w-36"
+                />
+                {doanFields.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => removeDoan(dIdx)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
-            ))}
-          </div>
+
+              {/* Hotel rows */}
+              <div className="px-3 py-2 space-y-1">
+                {/* Column headers */}
+                <div className="grid grid-cols-[180px_1fr_1fr_140px_28px] gap-1.5 mb-1">
+                  <span className="text-[11px] text-muted-foreground">Khách sạn</span>
+                  <span className="text-[11px] text-muted-foreground">Check-in</span>
+                  <span className="text-[11px] text-muted-foreground">Check-out</span>
+                  <span className="text-[11px] text-muted-foreground">Số phòng</span>
+                  <span />
+                </div>
+                <DoanHotelRows
+                  doanIdx={dIdx}
+                  control={control}
+                  register={register}
+                  ksOptions={ksOptions}
+                />
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Khách sạn — dùng HotelList component */}
-        <HotelList control={control} register={register} ksOptions={ksOptions} namePrefix="hotels" />
-
-        {/* Ghi chú chung */}
+        {/* Ghi chú */}
         <div className="space-y-1">
           <Label className="text-xs">Ghi chú chung</Label>
           <Textarea
@@ -359,19 +330,14 @@ function CreateForm({
       </div>
 
       <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => onOpenChange(false)}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
           Hủy
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting
             ? "Đang tạo..."
-            : doanCount > 1
-            ? `Tạo ${doanCount} đoàn`
+            : doanFields.length > 1
+            ? `Tạo ${doanFields.length} đoàn`
             : "Tạo mới"}
         </Button>
       </DialogFooter>
@@ -379,7 +345,7 @@ function CreateForm({
   );
 }
 
-// ── Edit form: single record ──
+// ── Edit form ──
 
 function EditForm({
   initialData,
@@ -393,32 +359,29 @@ function EditForm({
   const updateMut = useUpdateLockPhong();
   const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten }));
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<EditValues>({
-    resolver: zodResolver(editSchema),
-    defaultValues: {
-      ten_seri: initialData.ten_seri,
-      ten_doan: initialData.ten_doan,
-      ngay_xuat_phat: initialData.ngay_xuat_phat,
-      ghi_chu: initialData.ghi_chu || "",
-      hotels:
-        initialData.hotels.length > 0
-          ? initialData.hotels.map((h) => ({
-              id: h.id,
-              khach_san_id: h.khach_san_id,
-              check_in: h.check_in,
-              check_out: h.check_out,
-              so_phong: h.so_phong || "",
-              ghi_chu: h.ghi_chu || "",
-            }))
-          : [{ khach_san_id: 0, check_in: "", check_out: "", so_phong: "", ghi_chu: "" }],
-    },
-  });
+  const defaultHotels =
+    initialData.hotels.length > 0
+      ? initialData.hotels.map((h) => ({
+          id: h.id,
+          khach_san_id: h.khach_san_id,
+          check_in: h.check_in,
+          check_out: h.check_out,
+          so_phong: h.so_phong || "",
+          ghi_chu: h.ghi_chu || "",
+        }))
+      : [emptyHotel()];
+
+  const { register, handleSubmit, control, reset, formState: { errors, isSubmitting } } =
+    useForm<EditValues>({
+      resolver: zodResolver(editSchema),
+      defaultValues: {
+        ten_seri: initialData.ten_seri,
+        ten_doan: initialData.ten_doan,
+        ngay_xuat_phat: initialData.ngay_xuat_phat,
+        ghi_chu: initialData.ghi_chu || "",
+        hotels: defaultHotels,
+      },
+    });
 
   useEffect(() => {
     reset({
@@ -426,19 +389,15 @@ function EditForm({
       ten_doan: initialData.ten_doan,
       ngay_xuat_phat: initialData.ngay_xuat_phat,
       ghi_chu: initialData.ghi_chu || "",
-      hotels:
-        initialData.hotels.length > 0
-          ? initialData.hotels.map((h) => ({
-              id: h.id,
-              khach_san_id: h.khach_san_id,
-              check_in: h.check_in,
-              check_out: h.check_out,
-              so_phong: h.so_phong || "",
-              ghi_chu: h.ghi_chu || "",
-            }))
-          : [{ khach_san_id: 0, check_in: "", check_out: "", so_phong: "", ghi_chu: "" }],
+      hotels: defaultHotels,
     });
-  }, [initialData, reset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData.id]);
+
+  const { fields: hotelFields, append: appendHotel, remove: removeHotel } = useFieldArray({
+    control,
+    name: "hotels",
+  });
 
   const onSubmit = async (values: EditValues) => {
     try {
@@ -472,34 +431,22 @@ function EditForm({
       <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">
-              Tên seri <span className="text-destructive">*</span>
-            </Label>
+            <Label className="text-xs">Tên seri <span className="text-destructive">*</span></Label>
             <Input {...register("ten_seri")} className="h-9 text-sm" />
-            {errors.ten_seri && (
-              <p className="text-xs text-destructive">{errors.ten_seri.message}</p>
-            )}
+            {errors.ten_seri && <p className="text-xs text-destructive">{errors.ten_seri.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">
-              Code đoàn <span className="text-destructive">*</span>
-            </Label>
+            <Label className="text-xs">Code đoàn <span className="text-destructive">*</span></Label>
             <Input {...register("ten_doan")} className="h-9 text-sm" />
-            {errors.ten_doan && (
-              <p className="text-xs text-destructive">{errors.ten_doan.message}</p>
-            )}
+            {errors.ten_doan && <p className="text-xs text-destructive">{errors.ten_doan.message}</p>}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">
-              Ngày xuất phát <span className="text-destructive">*</span>
-            </Label>
+            <Label className="text-xs">Ngày xuất phát <span className="text-destructive">*</span></Label>
             <Input {...register("ngay_xuat_phat")} type="date" className="h-9 text-sm" />
-            {errors.ngay_xuat_phat && (
-              <p className="text-xs text-destructive">{errors.ngay_xuat_phat.message}</p>
-            )}
+            {errors.ngay_xuat_phat && <p className="text-xs text-destructive">{errors.ngay_xuat_phat.message}</p>}
           </div>
         </div>
 
@@ -508,16 +455,64 @@ function EditForm({
           <Textarea {...register("ghi_chu")} rows={2} className="text-sm resize-none" />
         </div>
 
-        <HotelList control={control} register={register} ksOptions={ksOptions} namePrefix="hotels" />
+        {/* Hotel rows */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold">Khách sạn</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => appendHotel(emptyHotel())}
+            >
+              <Plus className="h-3 w-3" />
+              Thêm KS
+            </Button>
+          </div>
+          {/* Column headers */}
+          <div className="grid grid-cols-[180px_1fr_1fr_140px_28px] gap-1.5">
+            <span className="text-[11px] text-muted-foreground">Khách sạn</span>
+            <span className="text-[11px] text-muted-foreground">Check-in</span>
+            <span className="text-[11px] text-muted-foreground">Check-out</span>
+            <span className="text-[11px] text-muted-foreground">Số phòng</span>
+            <span />
+          </div>
+          {hotelFields.map((field, hIdx) => (
+            <div key={field.id} className="grid grid-cols-[180px_1fr_1fr_140px_28px] gap-1.5 items-center">
+              <Controller
+                control={control}
+                name={`hotels.${hIdx}.khach_san_id`}
+                render={({ field: cf }) => (
+                  <SearchableSelect
+                    options={ksOptions}
+                    value={cf.value ? String(cf.value) : ""}
+                    onChange={(val) => cf.onChange(val ? Number(val) : 0)}
+                    placeholder="Chọn KS..."
+                    className="h-8 text-xs"
+                  />
+                )}
+              />
+              <Input {...register(`hotels.${hIdx}.check_in`)} type="date" className="h-8 text-xs" />
+              <Input {...register(`hotels.${hIdx}.check_out`)} type="date" className="h-8 text-xs" />
+              <Input {...register(`hotels.${hIdx}.so_phong`)} placeholder="6 TWN, 1 DBL" className="h-8 text-xs" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                onClick={() => removeHotel(hIdx)}
+                disabled={hotelFields.length <= 1}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
       </div>
 
       <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => onOpenChange(false)}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
           Hủy
         </Button>
         <Button type="submit" disabled={isSubmitting}>
@@ -535,7 +530,7 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col overflow-hidden p-0">
+      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col overflow-hidden p-0">
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-border shrink-0">
           <DialogTitle className="text-base">
             {initialData ? "Chỉnh sửa Lock Phòng" : "Thêm Lock Phòng"}
