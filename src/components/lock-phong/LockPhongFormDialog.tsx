@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/SearchableSelect";
-import { useSeriList } from "@/hooks/use-seri";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import {
   useCreateLockPhong,
@@ -35,7 +34,6 @@ const hotelSchema = z.object({
 
 const schema = z.object({
   ten_seri: z.string().min(1, "Bắt buộc"),
-  seri_id: z.number().nullable(),
   ten_doan: z.string().min(1, "Bắt buộc"),
   ngay_xuat_phat: z.string().min(1, "Bắt buộc"),
   ghi_chu: z.string().optional(),
@@ -52,7 +50,6 @@ interface Props {
 
 export default function LockPhongFormDialog({ open, onOpenChange, initialData }: Props) {
   const isEdit = !!initialData;
-  const { data: seriList = [] } = useSeriList();
   const { data: ksList = [] } = useKhachSanList();
 
   const createMut = useCreateLockPhong();
@@ -62,15 +59,12 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
     register,
     handleSubmit,
     control,
-    watch,
-    setValue,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       ten_seri: "",
-      seri_id: null,
       ten_doan: "",
       ngay_xuat_phat: "",
       ghi_chu: "",
@@ -80,13 +74,11 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
 
   const { fields, append, remove } = useFieldArray({ control, name: "hotels" });
 
-  // Populate form when editing
   useEffect(() => {
     if (!open) return;
     if (initialData) {
       reset({
         ten_seri: initialData.ten_seri,
-        seri_id: initialData.seri_id,
         ten_doan: initialData.ten_doan,
         ngay_xuat_phat: initialData.ngay_xuat_phat,
         ghi_chu: initialData.ghi_chu || "",
@@ -105,7 +97,6 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
     } else {
       reset({
         ten_seri: "",
-        seri_id: null,
         ten_doan: "",
         ngay_xuat_phat: "",
         ghi_chu: "",
@@ -114,15 +105,13 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
     }
   }, [open, initialData, reset]);
 
-  const seriOptions = seriList.map((s) => ({ value: String(s.id), label: s.ten_seri }));
   const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten }));
-  const selectedSeriId = watch("seri_id");
 
   const onSubmit = async (values: FormValues) => {
     try {
       const header = {
         ten_seri: values.ten_seri,
-        seri_id: values.seri_id,
+        seri_id: null as null,
         ten_doan: values.ten_doan,
         ngay_xuat_phat: values.ngay_xuat_phat,
         ghi_chu: values.ghi_chu || undefined,
@@ -163,56 +152,38 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
           className="flex flex-col flex-1 overflow-hidden"
         >
           <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
-            {/* Row 1: Seri + Tên đoàn */}
+            {/* Row 1: Tên seri + Code đoàn */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Seri</Label>
-                <SearchableSelect
-                  options={seriOptions}
-                  value={selectedSeriId ? String(selectedSeriId) : ""}
-                  onChange={(val) => {
-                    if (val) {
-                      const seri = seriList.find((s) => String(s.id) === val);
-                      setValue("seri_id", Number(val));
-                      if (seri) setValue("ten_seri", seri.ten_seri);
-                    } else {
-                      setValue("seri_id", null);
-                    }
-                  }}
-                  placeholder="Chọn seri (tuỳ chọn)"
-                  className="h-9 text-sm"
-                />
-              </div>
               <div className="space-y-1">
                 <Label className="text-xs">
                   Tên seri <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   {...register("ten_seri")}
-                  placeholder="Nhập tên seri"
+                  placeholder="vd: Trung Quốc 6N5Đ"
                   className="h-9 text-sm"
                 />
                 {errors.ten_seri && (
                   <p className="text-xs text-destructive">{errors.ten_seri.message}</p>
                 )}
               </div>
-            </div>
-
-            {/* Row 2: Tên đoàn + Ngày xuất phát */}
-            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">
-                  Tên đoàn <span className="text-destructive">*</span>
+                  Code đoàn <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   {...register("ten_doan")}
-                  placeholder="Nhập tên đoàn"
+                  placeholder="vd: TQ250501"
                   className="h-9 text-sm"
                 />
                 {errors.ten_doan && (
                   <p className="text-xs text-destructive">{errors.ten_doan.message}</p>
                 )}
               </div>
+            </div>
+
+            {/* Row 2: Ngày xuất phát */}
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">
                   Ngày xuất phát <span className="text-destructive">*</span>
@@ -259,9 +230,6 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
                 </Button>
               </div>
 
-              {errors.hotels?.root && (
-                <p className="text-xs text-destructive">{errors.hotels.root.message}</p>
-              )}
               {typeof errors.hotels === "object" && "message" in errors.hotels && (
                 <p className="text-xs text-destructive">{(errors.hotels as any).message}</p>
               )}
@@ -289,7 +257,6 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
                       )}
                     </div>
 
-                    {/* KS name */}
                     <div className="space-y-1">
                       <Label className="text-xs">Khách sạn</Label>
                       <Controller
@@ -312,7 +279,6 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
                       )}
                     </div>
 
-                    {/* Check-in / Check-out / So phong */}
                     <div className="grid grid-cols-3 gap-2">
                       <div className="space-y-1">
                         <Label className="text-xs">Check-in</Label>
@@ -350,7 +316,6 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
                       </div>
                     </div>
 
-                    {/* Ghi chú hotel */}
                     <div className="space-y-1">
                       <Label className="text-xs">Ghi chú</Label>
                       <Input
