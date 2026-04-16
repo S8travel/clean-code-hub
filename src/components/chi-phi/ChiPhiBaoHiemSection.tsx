@@ -86,6 +86,8 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
       tien_hdv: 0,
       nha_cung_cap_id: nccId,
       thanh_toan_dinh_ky: true,
+      trang_thai_dntt: "chua_de_nghi",
+      trang_thai_thanh_toan: "unpaid",
     } as any, {
       onError: () => { autoSaved.current = false; },
     });
@@ -112,6 +114,10 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         tien_hdv: 0,
         nha_cung_cap_id: nccId,
         thanh_toan_dinh_ky: true,
+        ...(!existing && {
+          trang_thai_dntt: "chua_de_nghi",
+          trang_thai_thanh_toan: "unpaid",
+        }),
       } as any);
       toast.success("Đã lưu bảo hiểm");
     } catch {
