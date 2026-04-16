@@ -23,6 +23,14 @@ import {
   type LockPhongDisplay,
 } from "@/hooks/use-lock-phong";
 
+// ── Helpers ──
+
+function calcDeadline(ngayXuatPhat: string): string {
+  const d = new Date(ngayXuatPhat + "T00:00:00");
+  d.setDate(d.getDate() - 45);
+  return d.toISOString().slice(0, 10);
+}
+
 // ── Schemas ──
 
 const hotelSchema = z.object({
@@ -37,6 +45,7 @@ const hotelSchema = z.object({
 const doanSchema = z.object({
   ten_doan: z.string().min(1, "Bắt buộc"),
   ngay_xuat_phat: z.string().min(1, "Bắt buộc"),
+  deadline: z.string().optional(),
   hotels: z.array(hotelSchema).min(1, "Thêm ít nhất 1 KS"),
 });
 
@@ -50,6 +59,7 @@ const editSchema = z.object({
   ten_seri: z.string().min(1, "Bắt buộc"),
   ten_doan: z.string().min(1, "Bắt buộc"),
   ngay_xuat_phat: z.string().min(1, "Bắt buộc"),
+  deadline: z.string().optional(),
   ghi_chu: z.string().optional(),
   hotels: z.array(hotelSchema).min(1),
 });
@@ -58,7 +68,7 @@ type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
 
 const emptyHotel = () => ({ khach_san_id: 0, check_in: "", check_out: "", so_phong: "", ghi_chu: "" });
-const emptyDoan = () => ({ ten_doan: "", ngay_xuat_phat: "", hotels: [emptyHotel()] });
+const emptyDoan = () => ({ ten_doan: "", ngay_xuat_phat: "", deadline: "", hotels: [emptyHotel()] });
 
 interface Props {
   open: boolean;
@@ -168,7 +178,7 @@ function CreateForm({
     register,
     handleSubmit,
     control,
-    watch,
+    setValue,
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<CreateValues>({
@@ -212,6 +222,7 @@ function CreateForm({
               seri_id: null,
               ten_doan: d.ten_doan,
               ngay_xuat_phat: d.ngay_xuat_phat,
+              deadline: d.deadline || (d.ngay_xuat_phat ? calcDeadline(d.ngay_xuat_phat) : null),
               ghi_chu: values.ghi_chu || undefined,
             },
             hotels: d.hotels.map((h) => ({
@@ -269,20 +280,37 @@ function CreateForm({
           {doanFields.map((field, dIdx) => (
             <div key={field.id} className="border border-border rounded-lg overflow-hidden">
               {/* Đoàn header */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border flex-wrap">
                 <span className="text-xs font-medium text-muted-foreground shrink-0">
                   Đoàn {dIdx + 1}
                 </span>
                 <Input
                   {...register(`doans.${dIdx}.ten_doan`)}
                   placeholder="Code đoàn, vd: TQ250501"
-                  className="h-7 text-xs flex-1"
+                  className="h-7 text-xs flex-1 min-w-[120px]"
                 />
-                <Input
-                  {...register(`doans.${dIdx}.ngay_xuat_phat`)}
-                  type="date"
-                  className="h-7 text-xs w-36"
-                />
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[11px] text-muted-foreground">Xuất phát</span>
+                  <Input
+                    {...register(`doans.${dIdx}.ngay_xuat_phat`, {
+                      onChange: (e) => {
+                        const v = e.target.value;
+                        if (v) setValue(`doans.${dIdx}.deadline`, calcDeadline(v));
+                      },
+                    })}
+                    type="date"
+                    className="h-7 text-xs w-36"
+                  />
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[11px] text-muted-foreground">Deadline</span>
+                  <Input
+                    {...register(`doans.${dIdx}.deadline`)}
+                    type="date"
+                    className="h-7 text-xs w-36"
+                    title="Mặc định ngày xuất phát - 45 ngày"
+                  />
+                </div>
                 {doanFields.length > 1 && (
                   <Button
                     type="button"
@@ -371,13 +399,14 @@ function EditForm({
         }))
       : [emptyHotel()];
 
-  const { register, handleSubmit, control, reset, formState: { errors, isSubmitting } } =
+  const { register, handleSubmit, control, reset, setValue, formState: { errors, isSubmitting } } =
     useForm<EditValues>({
       resolver: zodResolver(editSchema),
       defaultValues: {
         ten_seri: initialData.ten_seri,
         ten_doan: initialData.ten_doan,
         ngay_xuat_phat: initialData.ngay_xuat_phat,
+        deadline: initialData.deadline || (initialData.ngay_xuat_phat ? calcDeadline(initialData.ngay_xuat_phat) : ""),
         ghi_chu: initialData.ghi_chu || "",
         hotels: defaultHotels,
       },
@@ -388,6 +417,7 @@ function EditForm({
       ten_seri: initialData.ten_seri,
       ten_doan: initialData.ten_doan,
       ngay_xuat_phat: initialData.ngay_xuat_phat,
+      deadline: initialData.deadline || (initialData.ngay_xuat_phat ? calcDeadline(initialData.ngay_xuat_phat) : ""),
       ghi_chu: initialData.ghi_chu || "",
       hotels: defaultHotels,
     });
@@ -408,6 +438,7 @@ function EditForm({
           seri_id: initialData.seri_id,
           ten_doan: values.ten_doan,
           ngay_xuat_phat: values.ngay_xuat_phat,
+          deadline: values.deadline || (values.ngay_xuat_phat ? calcDeadline(values.ngay_xuat_phat) : null),
           ghi_chu: values.ghi_chu || undefined,
         },
         hotels: values.hotels.map((h) => ({
@@ -445,8 +476,21 @@ function EditForm({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Ngày xuất phát <span className="text-destructive">*</span></Label>
-            <Input {...register("ngay_xuat_phat")} type="date" className="h-9 text-sm" />
+            <Input
+              {...register("ngay_xuat_phat", {
+                onChange: (e) => {
+                  const v = e.target.value;
+                  if (v) setValue("deadline", calcDeadline(v));
+                },
+              })}
+              type="date"
+              className="h-9 text-sm"
+            />
             {errors.ngay_xuat_phat && <p className="text-xs text-destructive">{errors.ngay_xuat_phat.message}</p>}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Deadline <span className="text-muted-foreground">(mặc định -45 ngày)</span></Label>
+            <Input {...register("deadline")} type="date" className="h-9 text-sm" />
           </div>
         </div>
 

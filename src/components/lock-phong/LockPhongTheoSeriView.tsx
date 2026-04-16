@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
+import { format, differenceInDays, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ChevronDown, ChevronRight, Hotel, MapPin, ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Hotel, MapPin, ArrowRight, Pencil, Trash2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -14,6 +14,33 @@ function fmtDate(d: string) {
   } catch {
     return d;
   }
+}
+
+function DeadlineBadge({ deadline }: { deadline: string | null }) {
+  if (!deadline) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dl = parseISO(deadline);
+  const diff = differenceInDays(dl, today);
+  if (diff < 0) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] text-red-600 font-medium">
+        <Clock className="h-2.5 w-2.5" /> Quá hạn {Math.abs(diff)}n
+      </span>
+    );
+  }
+  if (diff <= 3) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 font-medium">
+        <Clock className="h-2.5 w-2.5" /> DL: {fmtDate(deadline)} ({diff === 0 ? "hôm nay" : `còn ${diff}n`})
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+      <Clock className="h-2.5 w-2.5" /> DL: {fmtDate(deadline)}
+    </span>
+  );
 }
 
 interface SeriGroup {
@@ -117,10 +144,13 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
                       {/* Entry header */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <span className="font-medium text-sm">{entry.ten_doan}</span>
-                          <span className="text-xs text-muted-foreground ml-2">
-                            Xuất phát: {fmtDate(entry.ngay_xuat_phat)}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">{entry.ten_doan}</span>
+                            <span className="text-xs text-muted-foreground">
+                              Xuất phát: {fmtDate(entry.ngay_xuat_phat)}
+                            </span>
+                            <DeadlineBadge deadline={entry.deadline} />
+                          </div>
                           {entry.ghi_chu && (
                             <p className="text-xs text-muted-foreground italic mt-0.5">
                               {entry.ghi_chu}

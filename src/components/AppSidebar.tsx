@@ -39,6 +39,8 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks/use-permissions";
+import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
+import { useCurrentSession } from "@/hooks/use-current-user";
 
 interface MenuItem {
   title: string;
@@ -118,6 +120,8 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { session } = useCurrentSession();
+  const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null);
 
   const isActive = (url: string) =>
     location.pathname === url || location.pathname.startsWith(url + "/");
@@ -150,14 +154,39 @@ export function AppSidebar() {
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => (
-                  <MenuItemWrapper
-                    key={item.url}
-                    item={item}
-                    collapsed={collapsed}
-                    isActive={isActive(item.url)}
-                  />
-                ))}
+                {group.items.map((item) => {
+                  if (item.url === "/lock-phong" && deadlineAlerts.length > 0) {
+                    return (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                          <NavLink
+                            to={item.url}
+                            className="hover:bg-muted/50"
+                            activeClassName="bg-muted text-primary font-medium"
+                          >
+                            <item.icon className="h-4 w-4" />
+                            {!collapsed && (
+                              <span className="flex-1 flex items-center justify-between">
+                                {item.title}
+                                <span className="ml-1 min-w-[18px] h-[18px] rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                                  {deadlineAlerts.length}
+                                </span>
+                              </span>
+                            )}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  }
+                  return (
+                    <MenuItemWrapper
+                      key={item.url}
+                      item={item}
+                      collapsed={collapsed}
+                      isActive={isActive(item.url)}
+                    />
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

@@ -1,19 +1,23 @@
 import { useState } from "react";
-import { Plus, Lock } from "lucide-react";
+import { Plus, Lock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useLockPhongList, type LockPhongDisplay } from "@/hooks/use-lock-phong";
+import { useLockPhongList, useLockPhongDeadlineAlerts, type LockPhongDisplay } from "@/hooks/use-lock-phong";
+import { useCurrentSession } from "@/hooks/use-current-user";
 import LockPhongTheoSeriView from "@/components/lock-phong/LockPhongTheoSeriView";
 import LockPhongTheoKSView from "@/components/lock-phong/LockPhongTheoKSView";
 import LockPhongFormDialog from "@/components/lock-phong/LockPhongFormDialog";
+import { format, parseISO, differenceInDays } from "date-fns";
 
 export default function LockPhongPage() {
   const [view, setView] = useState<"doan" | "ks">("doan");
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<LockPhongDisplay | null>(null);
 
+  const { session } = useCurrentSession();
   const { data = [], isLoading } = useLockPhongList();
+  const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null);
 
   const handleEdit = (entry: LockPhongDisplay) => {
     setEditTarget(entry);
@@ -27,6 +31,34 @@ export default function LockPhongPage() {
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+      {/* Deadline alerts */}
+      {deadlineAlerts.length > 0 && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-orange-700">
+              {deadlineAlerts.length} lock phòng sắp đến deadline
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {deadlineAlerts.map((lp) => {
+                const dl = parseISO(lp.deadline!);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const diff = differenceInDays(dl, today);
+                return (
+                  <li key={lp.id} className="text-xs text-orange-600">
+                    <span className="font-medium">{lp.ten_doan}</span>
+                    {" — deadline "}
+                    <span className="font-medium">{format(dl, "dd/MM/yyyy")}</span>
+                    {diff === 0 ? " (hôm nay)" : diff < 0 ? ` (quá hạn ${Math.abs(diff)} ngày)` : ` (còn ${diff} ngày)`}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-2">

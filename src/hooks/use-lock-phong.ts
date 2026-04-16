@@ -9,6 +9,7 @@ export interface LockPhong {
   seri_id: number | null;
   ten_doan: string;
   ngay_xuat_phat: string; // "yyyy-MM-dd"
+  deadline: string | null; // "yyyy-MM-dd"
   ghi_chu: string | null;
   created_by: string | null;
   created_at: string;
@@ -140,6 +141,7 @@ export function useCreateLockPhong() {
         seri_id: number | null;
         ten_doan: string;
         ngay_xuat_phat: string;
+        deadline?: string | null;
         ghi_chu?: string;
       };
       hotels: LockPhongKSInput[];
@@ -185,6 +187,7 @@ export function useUpdateLockPhong() {
         seri_id: number | null;
         ten_doan: string;
         ngay_xuat_phat: string;
+        deadline?: string | null;
         ghi_chu?: string;
       };
       hotels: LockPhongKSInput[];
@@ -277,6 +280,24 @@ export function useUpdateLockPhongKSEmail() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+  });
+}
+
+// ── Deadline alerts ──
+
+/** Returns locks belonging to currentUserId with deadline within the next `withinDays` days */
+export function useLockPhongDeadlineAlerts(currentUserId: string | null, withinDays = 3) {
+  const { data = [] } = useLockPhongList();
+  if (!currentUserId) return [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const limit = new Date(today);
+  limit.setDate(limit.getDate() + withinDays);
+  return data.filter((lp) => {
+    if (lp.created_by !== currentUserId) return false;
+    if (!lp.deadline) return false;
+    const dl = new Date(lp.deadline + "T00:00:00");
+    return dl >= today && dl <= limit;
   });
 }
 
