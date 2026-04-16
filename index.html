@@ -34,6 +34,21 @@
 </head>
 
   <body>
+    <!-- Patch removeChild/insertBefore to prevent React + Google Translate DOM conflict -->
+    <script>
+      (function() {
+        var _removeChild = Node.prototype.removeChild;
+        Node.prototype.removeChild = function(child) {
+          if (child.parentNode !== this) { return child; }
+          return _removeChild.call(this, child);
+        };
+        var _insertBefore = Node.prototype.insertBefore;
+        Node.prototype.insertBefore = function(newNode, refNode) {
+          if (refNode && refNode.parentNode !== this) { return newNode; }
+          return _insertBefore.call(this, newNode, refNode);
+        };
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
