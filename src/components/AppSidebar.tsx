@@ -36,11 +36,72 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks/use-permissions";
 import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
 import { useCurrentSession } from "@/hooks/use-current-user";
+
+// ── Google Translate button ──
+
+function isTranslated(): boolean {
+  return document.cookie.includes("googtrans=/vi/zh-TW");
+}
+
+function TranslateButton({ collapsed }: { collapsed: boolean }) {
+  const [translated, setTranslated] = useState(isTranslated);
+
+  useEffect(() => {
+    setTranslated(isTranslated());
+  }, []);
+
+  const handleTranslate = () => {
+    // Try using GT widget's built-in function first (no reload)
+    const combo = document.querySelector<HTMLSelectElement>(".goog-te-combo");
+    if (combo) {
+      combo.value = "zh-TW";
+      combo.dispatchEvent(new Event("change"));
+      setTranslated(true);
+      return;
+    }
+    // Fallback: set cookie + reload
+    const host = window.location.hostname;
+    document.cookie = `googtrans=/vi/zh-TW; path=/`;
+    document.cookie = `googtrans=/vi/zh-TW; domain=${host}; path=/`;
+    window.location.reload();
+  };
+
+  const handleRestore = () => {
+    const host = window.location.hostname;
+    document.cookie = `googtrans=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    document.cookie = `googtrans=; domain=${host}; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    window.location.reload();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={translated ? handleRestore : handleTranslate}
+      title={translated ? "Khôi phục tiếng Việt" : "Dịch sang tiếng Trung (phồn thể)"}
+      className={`
+        notranslate flex items-center justify-center rounded-md border text-[11px] font-semibold
+        transition-colors h-6 shrink-0
+        ${collapsed ? "w-6 px-0" : "px-2 gap-1"}
+        ${translated
+          ? "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+          : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+        }
+      `}
+    >
+      {translated ? (
+        collapsed ? "VI" : <><span>🇻🇳</span><span>VI</span></>
+      ) : (
+        collapsed ? "中" : <><span>🇹🇼</span><span>中文</span></>
+      )}
+    </button>
+  );
+}
 
 interface MenuItem {
   title: string;
@@ -141,10 +202,11 @@ export function AppSidebar() {
             className="h-8 w-8 shrink-0 object-contain"
           />
           {!collapsed && (
-            <span className="font-bold text-sm text-[#0a3d7c] truncate">
+            <span className="font-bold text-sm text-[#0a3d7c] truncate flex-1">
               S8 TRAVEL
             </span>
           )}
+          <TranslateButton collapsed={collapsed} />
         </div>
       </SidebarHeader>
 
