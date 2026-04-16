@@ -33,9 +33,10 @@ export default function GuestCountSection(props: Props) {
 }
 
 function ReadonlyField({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+  const isZh = document.cookie.includes("googtrans=/vi/zh-TW");
   return (
     <div className="space-y-1">
-      <label className="text-xs text-muted-foreground">{label}</label>
+      <label className={`text-xs text-muted-foreground${isZh ? " notranslate" : ""}`}>{label}</label>
       <div
         className="h-9 rounded-md border border-border flex items-center justify-center font-bold text-sm tabular-nums bg-muted/50"
         style={highlight ? { color: "#185FA5" } : undefined}

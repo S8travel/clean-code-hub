@@ -300,9 +300,10 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const isZh = document.cookie.includes("googtrans=/vi/zh-TW");
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs uppercase text-muted-foreground font-medium">{label}</Label>
+      <Label className={`text-xs uppercase text-muted-foreground font-medium${isZh ? " notranslate" : ""}`}>{label}</Label>
       {children}
     </div>
   );

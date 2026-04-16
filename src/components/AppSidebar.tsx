@@ -57,15 +57,6 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
   }, []);
 
   const handleTranslate = () => {
-    // Try using GT widget's built-in function first (no reload)
-    const combo = document.querySelector<HTMLSelectElement>(".goog-te-combo");
-    if (combo) {
-      combo.value = "zh-TW";
-      combo.dispatchEvent(new Event("change"));
-      setTranslated(true);
-      return;
-    }
-    // Fallback: set cookie + reload
     const host = window.location.hostname;
     document.cookie = `googtrans=/vi/zh-TW; path=/`;
     document.cookie = `googtrans=/vi/zh-TW; domain=${host}; path=/`;

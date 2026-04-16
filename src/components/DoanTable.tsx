@@ -438,9 +438,10 @@ function Th({ children, onClick, className = "" }: { children: React.ReactNode; 
 }
 
 function KhachCell({ label, value }: { label: string; value: number }) {
+  const isZh = document.cookie.includes("googtrans=/vi/zh-TW");
   return (
     <div className="flex flex-col items-center px-2 py-0.5 border border-border/40 min-w-[36px] first:rounded-l-md">
-      <span className="text-muted-foreground text-[8px]">{label}</span>
+      <span className={`text-muted-foreground text-[8px]${isZh ? " notranslate" : ""}`}>{label}</span>
       <span className="tabular-nums">{value}</span>
     </div>
   );
