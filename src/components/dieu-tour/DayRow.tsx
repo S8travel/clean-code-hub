@@ -31,7 +31,7 @@ function formatDayDisplay(dateStr: string) {
 function DetailLine({ item }: { item: { dia_chi?: string | null; thong_tin_chung?: string | null } }) {
   if (!item.dia_chi && !item.thong_tin_chung) return null;
   return (
-    <div className="text-[11px] text-muted-foreground mt-0.5 space-y-0.5">
+    <div className="text-[13px] text-muted-foreground mt-0.5 space-y-0.5">
       {item.dia_chi && <p>{item.dia_chi}</p>}
       {item.thong_tin_chung && <p>{item.thong_tin_chung}</p>}
     </div>
@@ -111,7 +111,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {day.items.map((item, idx) => {
           const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
           return (
-            <div key={idx} className="flex items-center gap-0.5 bg-muted/60 rounded">
+            <div key={idx} className="flex items-center gap-0.5">
               <div className="flex-1 min-w-0 space-y-0.5">
                 <SearchableSelect
                   options={canhDiemOptions}
