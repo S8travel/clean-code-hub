@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Check, Pencil, X, Ban, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -59,14 +59,37 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   const existing = chiPhiRows.find((r) => r.danh_muc === "bao_hiem");
   const [donGia, setDonGia] = useState<number>(0);
   const [saving, setSaving] = useState(false);
+  const autoSaved = useRef(false);
 
   useEffect(() => {
     if (existing) {
       setDonGia(existing.don_gia ?? 0);
+      autoSaved.current = true;
     } else if (giaMacDinh) {
       setDonGia(giaMacDinh);
     }
   }, [existing?.id, giaMacDinh]);
+
+  // Auto-save với giá mặc định khi chưa có record và đủ dữ liệu
+  useEffect(() => {
+    if (existing || autoSaved.current) return;
+    if (!giaMacDinh || !soKhach || !soNgay) return;
+    autoSaved.current = true;
+    upsertMut.mutate({
+      doan_id: doanId,
+      danh_muc: "bao_hiem",
+      loai: "bao_hiem",
+      mo_ta: baoHiemCD ? `Bảo hiểm - ${baoHiemCD.ten}` : "Bảo hiểm",
+      don_gia: giaMacDinh,
+      so_luong: soKhach * soNgay,
+      tien_cong_ty: soKhach * soNgay * giaMacDinh,
+      tien_hdv: 0,
+      nha_cung_cap_id: nccId,
+      thanh_toan_dinh_ky: true,
+    } as any, {
+      onError: () => { autoSaved.current = false; },
+    });
+  }, [existing, giaMacDinh, soKhach, soNgay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const thanhTien = soKhach * soNgay * donGia;
 
@@ -399,6 +422,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                       onClick={handleToggleDinhKy}>
                       ⏱
                     </Button>
+                    {existing.thanh_toan_dinh_ky && activeDntts.length === 0 && (
+                      <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
+                    )}
                     {!existing.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={openModal}>
                         ĐNTT

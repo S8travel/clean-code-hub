@@ -34,6 +34,7 @@ const danhMucLabel: Record<string, string> = {
   nha_hang: "Nhà hàng",
   xe: "Xe",
   dich_vu: "Dịch vụ",
+  bao_hiem: "Bảo hiểm",
 };
 
 const ttLabel: Record<string, { text: string; cls: string }> = {
