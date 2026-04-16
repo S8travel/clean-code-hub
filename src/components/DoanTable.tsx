@@ -151,6 +151,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
               <Th className="min-w-[90px]">Địa Điểm</Th>
               <Th className="min-w-[200px]">Số Khách</Th>
               <Th className="min-w-[120px]">Loại Xe</Th>
+              <Th className="min-w-[150px]">Ghi Chú</Th>
               <Th onClick={() => toggleSort("ngay_di")} className="min-w-[100px]">
                 Ngày Đón <SortIcon col="ngay_di" />
               </Th>
@@ -263,6 +264,15 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
                   <td className="px-3 py-3">
                     {xe ? (
                       <span className="text-[10px] bg-muted px-2 py-1 rounded-md">{xe}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
+
+                  {/* Ghi Chú */}
+                  <td className="px-3 py-3">
+                    {g.ghi_chu ? (
+                      <span className="text-xs text-muted-foreground truncate block max-w-[150px]" title={g.ghi_chu}>{g.ghi_chu}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
