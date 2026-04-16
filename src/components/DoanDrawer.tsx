@@ -16,6 +16,7 @@ import {
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useSeriList } from "@/hooks/use-seri";
+import { t } from "@/lib/i18n";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
@@ -243,7 +244,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
               <div className="space-y-2">
                 <Label className="text-xs uppercase text-muted-foreground font-medium">Số Khách</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Người lớn">
+                  <Field label={t("Người lớn")}>
                     <Input type="number" min={0} value={form.so_khach_lon ?? 0} onChange={(e) => set("so_khach_lon", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
                   <Field label="Trẻ em 6-10">

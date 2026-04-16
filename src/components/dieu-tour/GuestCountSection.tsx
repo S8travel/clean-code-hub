@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n";
+
 interface Props {
   soKhachLon: number;
   soKhachEm1: number;
@@ -13,7 +15,7 @@ export default function GuestCountSection(props: Props) {
     <div className="space-y-3">
       <h3 className="text-sm font-semibold">Số lượng khách</h3>
       <div className="grid grid-cols-5 gap-3">
-        <ReadonlyField label="Người lớn" value={props.soKhachLon} />
+        <ReadonlyField label={t("Người lớn")} value={props.soKhachLon} />
         <ReadonlyField label="Trẻ em 6–10" value={props.soKhachEm1} />
         <ReadonlyField label="Trẻ em <6" value={props.soKhachEm2} />
         <ReadonlyField label="T/L" value={props.soKhachTl} />

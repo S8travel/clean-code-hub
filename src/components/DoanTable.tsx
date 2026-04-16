@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PermissionDialog } from "@/components/PermissionDialog";
 import type { UserRole } from "@/hooks/use-doan";
+import { t } from "@/lib/i18n";
 
 /* ── helpers ── */
 
@@ -249,7 +250,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
                   {/* Số Khách grid */}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-0 text-[10px] font-medium">
-                      <KhachCell label="Lớn" value={lon} />
+                      <KhachCell label={t("Lớn")} value={lon} />
                       <KhachCell label="6–10" value={em1} />
                       <KhachCell label="<6" value={em2} />
                       <KhachCell label="T/L" value={tl} />

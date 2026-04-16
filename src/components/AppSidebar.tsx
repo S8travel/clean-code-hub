@@ -105,6 +105,7 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
 
 interface MenuItem {
   title: string;
+  titleZh?: string;     // override khi đang dịch sang zh-TW
   url: string;
   icon: React.ElementType;
   resource?: Resource;  // undefined = luôn hiển thị
@@ -118,10 +119,10 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard },
       { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness },
-      { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
+      { title: "Danh sách đoàn", titleZh: "團表", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, minRole: "truong_phong" },
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },
-      { title: "Lock Phòng", url: "/lock-phong", icon: CalendarRange },
+      { title: "Lock Phòng", titleZh: "鎖房", url: "/lock-phong", icon: CalendarRange },
     ],
   },
   {
@@ -159,16 +160,19 @@ function MenuItemWrapper({ item, collapsed, isActive }: { item: MenuItem; collap
   if (item.minRole && !roleOk) return null;
   if (item.boPhanOnly && !boPhanOk) return null;
 
+  const isZh = item.titleZh && document.cookie.includes("googtrans=/vi/zh-TW");
+  const displayTitle = isZh ? item.titleZh! : item.title;
+
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+      <SidebarMenuButton asChild isActive={isActive} tooltip={displayTitle}>
         <NavLink
           to={item.url}
           className="hover:bg-muted/50"
           activeClassName="bg-muted text-primary font-medium"
         >
           <item.icon className="h-4 w-4" />
-          {!collapsed && <span>{item.title}</span>}
+          {!collapsed && <span className={isZh ? "notranslate" : undefined}>{displayTitle}</span>}
         </NavLink>
       </SidebarMenuButton>
     </SidebarMenuItem>
