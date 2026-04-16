@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ChevronDown, ChevronRight, Hotel, Mail, MapPin } from "lucide-react";
+import { ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { type LockPhongDisplay, type LockPhongKSDisplay } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
+import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
 
 function fmtDate(d: string) {
   try {
@@ -46,6 +47,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
     lockPhong: LockPhongDisplay;
     ksRow: LockPhongKSDisplay;
   } | null>(null);
+  const [batchTarget, setBatchTarget] = useState<KSGroupForBatch | null>(null);
 
   const groups = useMemo<KSGroup[]>(() => {
     const map = new Map<number, KSGroup>();
@@ -101,38 +103,62 @@ export default function LockPhongTheoKSView({ data }: Props) {
             className="rounded-xl border border-border bg-card overflow-hidden"
           >
             {/* Hotel header — clickable to expand/collapse */}
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors bg-muted/20 border-b border-border"
-              onClick={() => toggleExpand(group.khach_san_id)}
-            >
-              <Hotel className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-sm">{group.khach_san_ten}</span>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {group.entries.length} đoàn
-                  </Badge>
-                  {group.khach_san_dia_diem && (
-                    <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
-                      {group.khach_san_dia_diem}
-                    </span>
-                  )}
-                  {group.khach_san_email && (
-                    <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                      <Mail className="h-3 w-3" />
-                      {group.khach_san_email}
-                    </span>
-                  )}
+            <div className="flex items-center bg-muted/20 border-b border-border">
+              <button
+                type="button"
+                className="flex-1 min-w-0 px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
+                onClick={() => toggleExpand(group.khach_san_id)}
+              >
+                <Hotel className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm">{group.khach_san_ten}</span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {group.entries.length} đoàn
+                    </Badge>
+                    {group.khach_san_dia_diem && (
+                      <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {group.khach_san_dia_diem}
+                      </span>
+                    )}
+                    {group.khach_san_email && (
+                      <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                        <Mail className="h-3 w-3" />
+                        {group.khach_san_email}
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                )}
+              </button>
+
+              {/* Batch email button */}
+              <div className="px-3 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  title="Gửi 1 email gộp cho tất cả đoàn tại khách sạn này"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBatchTarget({
+                      khach_san_id: group.khach_san_id,
+                      khach_san_ten: group.khach_san_ten,
+                      khach_san_email: group.khach_san_email,
+                      entries: group.entries,
+                    });
+                  }}
+                >
+                  <MailPlus className="h-3.5 w-3.5" />
+                  Gửi gộp
+                </Button>
               </div>
-              {isOpen ? (
-                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              )}
-            </button>
+            </div>
 
             {/* Entries table */}
             {isOpen && (
@@ -219,6 +245,14 @@ export default function LockPhongTheoKSView({ data }: Props) {
           onOpenChange={(v) => { if (!v) setEmailTarget(null); }}
           lockPhong={emailTarget.lockPhong}
           ksRow={emailTarget.ksRow}
+        />
+      )}
+
+      {batchTarget && (
+        <LockPhongBatchEmailModal
+          open={true}
+          onOpenChange={(v) => { if (!v) setBatchTarget(null); }}
+          group={batchTarget}
         />
       )}
     </div>

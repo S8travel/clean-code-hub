@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLockPhongList, type LockPhongDisplay } from "@/hooks/use-lock-phong";
-import LockPhongCard from "@/components/lock-phong/LockPhongCard";
+import LockPhongTheoSeriView from "@/components/lock-phong/LockPhongTheoSeriView";
 import LockPhongTheoKSView from "@/components/lock-phong/LockPhongTheoKSView";
 import LockPhongFormDialog from "@/components/lock-phong/LockPhongFormDialog";
 
@@ -74,11 +74,7 @@ export default function LockPhongPage() {
           </Button>
         </div>
       ) : view === "doan" ? (
-        <div className="space-y-3">
-          {data.map((entry) => (
-            <LockPhongCard key={entry.id} entry={entry} onEdit={handleEdit} />
-          ))}
-        </div>
+        <LockPhongTheoSeriView data={data} onEdit={handleEdit} />
       ) : (
         <LockPhongTheoKSView data={data} />
       )}
