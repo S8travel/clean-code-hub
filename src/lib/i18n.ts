@@ -26,7 +26,8 @@ export const ZH_CORRECTIONS: Record<string, string> = {
    "全部的": "總",
     "集團管理": "團體管理",
     "S8 旅行": "雙發旅行社",
-    "S8": "雙發",
+    "S8旅行社": "雙發旅行社",
+    "S8旅遊有限公司": "雙發旅遊有限公司",
 };
 
 export function isZhTW(): boolean {
