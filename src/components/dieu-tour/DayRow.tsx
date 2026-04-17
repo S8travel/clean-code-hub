@@ -112,7 +112,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {day.items.map((item, idx) => {
           const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
           return (
-            <div key={idx} className="flex items-center gap-0.5">
+            <div key={idx} className="group flex items-center gap-0.5">
               <div className="flex-1 min-w-0 space-y-0.5">
                 <SearchableSelect
                   options={canhDiemOptions}
@@ -143,12 +143,12 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 )}
               </div>
               <div className="flex flex-col items-center gap-0 shrink-0">
-                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 print-hide" onClick={() => updateItems(day.items.filter((_, i) => i !== idx))}>
+                <Button type="button" variant="ghost" size="icon" className="h-5 w-6 print-hide" onClick={() => updateItems(day.items.filter((_, i) => i !== idx))}>
                   <X className="h-3 w-3" />
                 </Button>
                 <button
                   type="button"
-                  className="h-6 w-6 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded print-hide"
+                  className={`h-5 w-6 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded print-hide${noteOpen ? "" : " hidden group-hover:flex"}`}
                   onClick={() => {
                     if (noteOpen) {
                       updateGhiChu(idx, "");
