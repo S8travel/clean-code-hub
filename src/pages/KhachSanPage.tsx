@@ -33,7 +33,7 @@ export default function KhachSanPage() {
   const nccOptions = (nccList ?? []).map((n) => ({ value: String(n.id), label: n.ten }));
 
   const filtered = (list ?? []).filter(
-    (ks) => ks.ten.toLowerCase().includes(search.toLowerCase())
+    (ks) => (ks.ten ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   const selected = (list ?? []).find((ks) => ks.id === selectedId) ?? null;
