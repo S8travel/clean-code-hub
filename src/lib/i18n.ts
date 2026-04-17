@@ -24,6 +24,7 @@ export const ZH_CORRECTIONS: Record<string, string> = {
    "參與者名單": "團表",
    "大的": "大人",
    "全部的": "總",
+    "集團管理": "團體管理",
 };
 
 export function isZhTW(): boolean {

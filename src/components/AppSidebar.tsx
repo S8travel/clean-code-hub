@@ -110,13 +110,8 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
 
   const handleRestore = () => {
     setGTCookie(null);
-    if (triggerGTSelect("")) {
-      setTranslated(false);
-      notifyLanguageChange();
-      stopZhCorrectionObserver();
-    } else {
-      window.location.reload();
-    }
+    stopZhCorrectionObserver();
+    window.location.reload();
   };
 
   return (
