@@ -42,6 +42,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
     nguoi_thanh_toan: "cong_ty",
     foc_khach: "",
     foc_mien: "",
+    chiet_khau: "",
     thong_tin_chung: "",
     nha_cung_cap_id: "",
   });
@@ -60,6 +61,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
       nguoi_thanh_toan: nhaHang.nguoi_thanh_toan ?? "cong_ty",
       foc_khach: nhaHang.foc_khach?.toString() ?? "",
       foc_mien: nhaHang.foc_mien?.toString() ?? "",
+      chiet_khau: nhaHang.chiet_khau_phan_tram?.toString() ?? "",
       thong_tin_chung: nhaHang.thong_tin_chung ?? "",
       nha_cung_cap_id: (nhaHang as any).nha_cung_cap_id?.toString() ?? "",
     });
@@ -85,6 +87,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         nguoi_thanh_toan: form.nguoi_thanh_toan || null,
         foc_khach: form.foc_khach ? Number(form.foc_khach) : null,
         foc_mien: form.foc_mien ? Number(form.foc_mien) : null,
+        chiet_khau_phan_tram: form.chiet_khau ? Number(form.chiet_khau) : null,
         thong_tin_chung: form.thong_tin_chung || null,
         nha_cung_cap_id: form.nha_cung_cap_id ? Number(form.nha_cung_cap_id) : null,
       });
@@ -206,6 +209,10 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
           <div className="flex-1">
             <Label className="text-xs">FOC miễn</Label>
             <Input type="number" value={form.foc_mien} onChange={(e) => set("foc_mien", e.target.value)} className="h-8 text-sm" />
+          </div>
+          <div className="flex-1">
+            <Label className="text-xs">Chiết khấu (%)</Label>
+            <Input type="number" min="0" max="100" placeholder="0" value={form.chiet_khau} onChange={(e) => set("chiet_khau", e.target.value)} className="h-8 text-sm" />
           </div>
         </div>
         <div className="col-span-2">

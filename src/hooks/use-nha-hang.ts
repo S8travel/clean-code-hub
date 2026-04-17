@@ -17,6 +17,7 @@ export interface NhaHang {
   nha_cung_cap_id: number | null;
   ten_zh: string | null;
   dia_diem_zh: string | null;
+  chiet_khau_phan_tram: number | null;
 }
 
 export interface SetMenu {

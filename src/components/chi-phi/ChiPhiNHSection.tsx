@@ -851,9 +851,18 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   </div>
                 </td>
 
-                {/* Thành tiền (đã trừ FOC) */}
+                {/* Thành tiền (đã trừ FOC + CK) */}
                 <td className="px-3 py-2 text-right font-semibold text-primary whitespace-nowrap">
-                  {row ? fmt(totalBua) : "—"}
+                  {row ? (
+                    <div>
+                      <div>{fmt(totalBua)}</div>
+                      {chietKhauSoTien > 0 && (
+                        <div className="text-[10px] text-green-600 font-normal">
+                          CK {ckPhanTram}%: −{fmt(chietKhauSoTien)}
+                        </div>
+                      )}
+                    </div>
+                  ) : "—"}
                 </td>
 
                 {/* Trạng thái ĐNTT */}
