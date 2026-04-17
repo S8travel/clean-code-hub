@@ -117,7 +117,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     (diaDiem ?? []).map((d) => ({ value: d.id.toString(), label: d.ten })), [diaDiem]);
 
   const hdvOptions = useMemo(() =>
-    (hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten })), [hdv]);
+    [{ value: "", label: "— Không có —" }, ...(hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten }))], [hdv]);
 
   const xeOptions = useMemo(() =>
     (xeList ?? []).map((x: any) => {
