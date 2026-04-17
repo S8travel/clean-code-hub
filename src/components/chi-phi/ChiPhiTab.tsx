@@ -42,33 +42,18 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
       (r) => r.trang_thai_dntt !== "cong_no" && r.trang_thai_dntt !== "hoan_tien",
     );
 
-    const totalKS = activeRows
-      .filter((r) => r.danh_muc === "khach_san")
-      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const totalNH = activeRows
-      .filter((r) => r.danh_muc === "nha_hang")
-      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const totalDV = activeRows
-      .filter((r) => r.danh_muc === "canh_diem" && r.tien_cong_ty > 0)
-      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const totalBH = activeRows
-      .filter((r) => r.danh_muc === "bao_hiem")
-      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const totalXe = activeRows
-      .filter((r) => r.danh_muc === "xe")
-      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const totalVisa = activeRows
-      .filter((r) => r.danh_muc === "visa")
-      .reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
-    const total = totalKS + totalNH + totalDV + totalBH + totalXe + totalVisa;
+    // Dự trù = tổng toàn bộ chi phí (công ty + HDV trả) sau FOC/chiết khấu
+    const total = activeRows.reduce(
+      (s, r) => s + (r.tien_cong_ty || 0) + (r.tien_hdv || 0),
+      0,
+    );
 
-    const thucTeKS = activeRows
-      .filter((r) => r.danh_muc === "khach_san")
-      .reduce((s, r) => s + (r.thanh_tien_thuc_te ?? r.thanh_tien), 0);
-    const thucTeNH = activeRows
-      .filter((r) => r.danh_muc === "nha_hang")
-      .reduce((s, r) => s + (r.thanh_tien_thuc_te ?? r.thanh_tien), 0);
-    const thucTe = thucTeKS + thucTeNH + totalDV + totalBH + totalXe + totalVisa;
+    // Thực tế: nếu có điều chỉnh (thanh_tien_thuc_te) dùng giá điều chỉnh,
+    // ngược lại bằng dự trù → 2 số bằng nhau khi chưa điều chỉnh
+    const thucTe = activeRows.reduce((s, r) => {
+      if (r.thanh_tien_thuc_te != null) return s + r.thanh_tien_thuc_te;
+      return s + (r.tien_cong_ty || 0) + (r.tien_hdv || 0);
+    }, 0);
     const daDieuChinh = thucTe !== total;
 
     const activeDntts = dnttList.filter(
