@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide Google Translate native UI */
+.goog-te-banner-frame,
+.goog-te-balloon-frame,
+#goog-gt-tt,
+.goog-tooltip,
+.goog-tooltip-content {
+  display: none !important;
+}
+body {
+  top: 0 !important;
+}
+.skiptranslate {
+  display: none !important;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

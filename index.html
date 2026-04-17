@@ -53,13 +53,12 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- Google Translate -->
-    <div id="google_translate_element" style="display:none"></div>
+    <div id="google_translate_element" style="position:absolute;top:-9999px;visibility:hidden;overflow:hidden;height:0"></div>
     <script>
       function googleTranslateElementInit() {
         new google.translate.TranslateElement({
           pageLanguage: 'vi',
           includedLanguages: 'zh-TW',
-          autoDisplay: false,
         }, 'google_translate_element');
       }
     </script>

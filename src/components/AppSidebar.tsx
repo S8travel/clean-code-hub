@@ -49,25 +49,69 @@ function isTranslated(): boolean {
   return document.cookie.includes("googtrans=/vi/zh-TW");
 }
 
+function setGTCookie(value: string | null) {
+  const host = window.location.hostname;
+  if (value) {
+    document.cookie = `googtrans=${value}; path=/`;
+    document.cookie = `googtrans=${value}; domain=.${host}; path=/`;
+  } else {
+    document.cookie = `googtrans=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    document.cookie = `googtrans=; domain=.${host}; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  }
+}
+
+function triggerGTSelect(lang: string): boolean {
+  const select = document.querySelector("select.goog-te-combo") as HTMLSelectElement | null;
+  if (!select) return false;
+  select.value = lang;
+  select.dispatchEvent(new Event("change"));
+  return true;
+}
+
 function TranslateButton({ collapsed }: { collapsed: boolean }) {
   const [translated, setTranslated] = useState(isTranslated);
 
+  // On mount: if cookie says translated, trigger GT widget after it initializes
   useEffect(() => {
-    setTranslated(isTranslated());
+    if (!isTranslated()) return;
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (triggerGTSelect("zh-TW")) {
+        clearInterval(interval);
+      } else if (attempts >= 20) {
+        // GT widget never loaded – clear stale cookie
+        setGTCookie(null);
+        setTranslated(false);
+        clearInterval(interval);
+      }
+    }, 300);
+    return () => clearInterval(interval);
   }, []);
 
   const handleTranslate = () => {
-    const host = window.location.hostname;
-    document.cookie = `googtrans=/vi/zh-TW; path=/`;
-    document.cookie = `googtrans=/vi/zh-TW; domain=${host}; path=/`;
-    window.location.reload();
+    setGTCookie("/vi/zh-TW");
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (triggerGTSelect("zh-TW")) {
+        setTranslated(true);
+        clearInterval(interval);
+      } else if (attempts >= 20) {
+        // GT widget not available – fall back to reload
+        clearInterval(interval);
+        window.location.reload();
+      }
+    }, 300);
   };
 
   const handleRestore = () => {
-    const host = window.location.hostname;
-    document.cookie = `googtrans=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-    document.cookie = `googtrans=; domain=${host}; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-    window.location.reload();
+    setGTCookie(null);
+    if (triggerGTSelect("")) {
+      setTranslated(false);
+    } else {
+      window.location.reload();
+    }
   };
 
   return (
