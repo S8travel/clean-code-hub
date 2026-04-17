@@ -108,7 +108,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
           onChange={(e) => update({ thanh_pho: e.target.value })}
           placeholder="Thành phố..."
         />
-        <div className="space-y-0.5">
+        <div className="space-y-0">
         {day.items.map((item, idx) => {
           const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
           return (
