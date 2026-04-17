@@ -12,8 +12,8 @@ export default function CompanyHeader() {
       <div className="grid grid-cols-2 border border-border rounded-t-lg overflow-hidden">
         {/* Left: Company */}
         <div className="flex items-center gap-3 p-4 border-r border-border">
-          <div className="w-14 h-14 rounded-lg flex items-center justify-center text-white font-bold text-xl shrink-0" style={{ backgroundColor: "#185FA5" }}>
-            S8
+          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0">
+            <img src="/logo.jpg" alt="S8 Logo" className="w-full h-full object-contain" />
           </div>
           <div className="text-center flex-1">
             <p className="font-bold text-sm">CÔNG TY TNHH DU LỊCH S8</p>
