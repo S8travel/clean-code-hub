@@ -1,4 +1,4 @@
-import { t } from "@/lib/i18n";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   soKhachLon: number;
@@ -11,6 +11,7 @@ interface Props {
 }
 
 export default function GuestCountSection(props: Props) {
+  useTranslate();
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold">Số lượng khách</h3>
@@ -33,6 +34,7 @@ export default function GuestCountSection(props: Props) {
 }
 
 function ReadonlyField({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+  useTranslate();
   const isZh = document.cookie.includes("googtrans=/vi/zh-TW");
   return (
     <div className="space-y-1">

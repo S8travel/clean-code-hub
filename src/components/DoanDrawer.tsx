@@ -16,7 +16,7 @@ import {
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useSeriList } from "@/hooks/use-seri";
-import { t } from "@/lib/i18n";
+import { t, useTranslate } from "@/lib/i18n";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
@@ -48,6 +48,7 @@ interface Props {
 }
 
 export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
+  useTranslate();
   const [form, setForm] = useState<DoanInsert>({ ...EMPTY_FORM });
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 

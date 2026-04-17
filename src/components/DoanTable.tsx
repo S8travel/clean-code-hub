@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PermissionDialog } from "@/components/PermissionDialog";
 import type { UserRole } from "@/hooks/use-doan";
-import { t } from "@/lib/i18n";
+import { t, useTranslate } from "@/lib/i18n";
 
 /* ── helpers ── */
 
@@ -78,6 +78,7 @@ interface Props {
 }
 
 export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, onDelete }: Props) {
+  useTranslate();
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("ngay_di");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
