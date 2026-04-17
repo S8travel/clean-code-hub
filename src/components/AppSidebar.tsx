@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
-import { notifyLanguageChange } from "@/lib/i18n";
+import { notifyLanguageChange, startZhCorrectionObserver, stopZhCorrectionObserver } from "@/lib/i18n";
 import {
   Sidebar,
   SidebarContent,
@@ -98,6 +98,7 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
       if (triggerGTSelect("zh-TW")) {
         setTranslated(true);
         notifyLanguageChange();
+        startZhCorrectionObserver();
         clearInterval(interval);
       } else if (attempts >= 20) {
         // GT widget not available – fall back to reload
@@ -112,6 +113,7 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
     if (triggerGTSelect("")) {
       setTranslated(false);
       notifyLanguageChange();
+      stopZhCorrectionObserver();
     } else {
       window.location.reload();
     }
