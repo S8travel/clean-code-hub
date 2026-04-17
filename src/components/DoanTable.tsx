@@ -134,7 +134,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
 
   const getOpName = (g: any): string | null => {
     if (!g.assigned_to) return null;
-    return userRolesMap.get(g.assigned_to) || g.assigned_to.substring(0, 8);
+    return userRolesMap.get(g.assigned_to) || "—";
   };
 
   return (

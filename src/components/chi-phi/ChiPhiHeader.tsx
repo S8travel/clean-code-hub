@@ -2,9 +2,10 @@ import { format } from "date-fns";
 
 interface Props {
   doan: any;
+  opName?: string;
 }
 
-export default function ChiPhiHeader({ doan }: Props) {
+export default function ChiPhiHeader({ doan, opName }: Props) {
   const items = [
     { label: "Mã đoàn", value: doan.ten_doan },
     { label: "Agent", value: doan.agents?.ten || "—" },
@@ -20,7 +21,7 @@ export default function ChiPhiHeader({ doan }: Props) {
     },
     { label: "HDV", value: doan.huong_dan_vien?.ten || "—" },
     { label: "Xe", value: doan.xe ? [doan.xe.nha_xe?.ten, doan.xe.ten_xe, doan.xe.so_cho ? `${doan.xe.so_cho} chỗ` : ""].filter(Boolean).join(" · ") || "—" : "—" },
-    { label: "OP", value: doan.assigned_to || "—" },
+    { label: "OP", value: opName || "—" },
     {
       label: "Quà tặng",
       value: Array.isArray(doan.tang_pham) && doan.tang_pham.length > 0

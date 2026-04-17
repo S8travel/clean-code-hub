@@ -37,7 +37,7 @@ interface Props {
 }
 
 export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }: Props) {
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: canhDiemList = [] } = useCanhDiemList();
   const upsertMut = useUpsertChiPhi();
@@ -72,7 +72,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
 
   // Auto-save với giá mặc định khi chưa có record và đủ dữ liệu
   useEffect(() => {
-    if (existing || autoSaved.current) return;
+    if (chiPhiLoading || existing || autoSaved.current) return;
     if (!giaMacDinh || !soKhach || !soNgay) return;
     autoSaved.current = true;
     upsertMut.mutate({
@@ -91,7 +91,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
     } as any, {
       onError: () => { autoSaved.current = false; },
     });
-  }, [existing, giaMacDinh, soKhach, soNgay]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chiPhiLoading, existing, giaMacDinh, soKhach, soNgay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const thanhTien = soKhach * soNgay * donGia;
 

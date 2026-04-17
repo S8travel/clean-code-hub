@@ -177,7 +177,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         subject: emailSubject,
         html: emailBody,
         sentBy: currentUserName,
-        replyTo: currentUserEmail ?? undefined,
+        replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
       });
       setEmailModalOpen(false);

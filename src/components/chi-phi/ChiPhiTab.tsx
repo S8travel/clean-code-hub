@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
 import { useChiPhiList, useDNTTList } from "@/hooks/use-chi-phi";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
+import { useUserRoles } from "@/hooks/use-doan";
 import ChiPhiHeader from "./ChiPhiHeader";
 import ChiPhiKSSection from "./ChiPhiKSSection";
 import ChiPhiNHSection from "./ChiPhiNHSection";
@@ -35,6 +36,11 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
+  const { data: userRoles = [] } = useUserRoles();
+  const opName = useMemo(() => {
+    if (!doan?.assigned_to) return "—";
+    return userRoles.find((u) => u.user_id === doan.assigned_to)?.ho_ten || "—";
+  }, [doan?.assigned_to, userRoles]);
 
   const summary = useMemo(() => {
     // Loại trừ chi phí đã hủy dịch vụ (cong_no, hoan_tien)
@@ -85,6 +91,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
         chiPhiRows,
         dnttList,
         hdvData,
+        opName,
       });
       toast.success("Đã xuất file Excel");
     } catch (error: any) {
@@ -109,7 +116,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
         </Button>
       </div>
 
-      <ChiPhiHeader doan={doan} />
+      <ChiPhiHeader doan={doan} opName={opName} />
 
       {/* ── Summary bar ── */}
       {hasData && (

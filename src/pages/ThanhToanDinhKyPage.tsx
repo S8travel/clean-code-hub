@@ -6,9 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -162,17 +160,16 @@ export default function ThanhToanDinhKyPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
-        <Select value={filterNcc} onValueChange={setFilterNcc}>
-          <SelectTrigger className="w-[220px] h-8 text-sm">
-            <SelectValue placeholder="Tất cả nhà cung cấp" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả nhà cung cấp</SelectItem>
-            {nccOptions.map((n) => (
-              <SelectItem key={n.id} value={String(n.id)}>{n.ten}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={[
+            { value: "all", label: "Tất cả nhà cung cấp" },
+            ...nccOptions.map((n) => ({ value: String(n.id), label: n.ten })),
+          ]}
+          value={filterNcc}
+          onChange={setFilterNcc}
+          placeholder="Tất cả nhà cung cấp"
+          className="w-[220px] h-8 text-sm"
+        />
 
         {/* Từ ngày */}
         <Popover>

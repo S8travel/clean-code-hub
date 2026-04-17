@@ -22,6 +22,7 @@ interface ExportChiPhiDoanExcelParams {
   chiPhiRows: ChiPhiRow[];
   dnttList: DNTTRow[];
   hdvData?: HDVSectionData | null;
+  opName?: string;
 }
 
 const encoder = new TextEncoder();
@@ -555,7 +556,7 @@ function createZipBlob(files: Array<{ name: string; content: string }>): Blob {
 }
 
 function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
-  const { doan, chiPhiRows, dnttList, hdvData } = params;
+  const { doan, chiPhiRows, dnttList, hdvData, opName } = params;
   const activeRows = chiPhiRows.filter(isActiveChiPhi);
 
   const companyRows = COMPANY_CATEGORY_ORDER.map(({ key, label }) => {
@@ -594,7 +595,7 @@ function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
       [cell(`Xuất lúc: ${formatDateValue(new Date().toISOString(), true)}`, "note", 6)],
       [cell("THÔNG TIN ĐOÀN", "section", 6)],
       [cell("Đoàn", "label"), cell(doan?.ten_doan || "—"), cell("Agent", "label"), cell(doan?.agents?.ten || "—"), cell("Số khách", "label"), cell(getSoKhachText(doan))],
-      [cell("Ngày", "label"), cell(getDateRangeText(doan)), cell("HDV", "label"), cell(getHdvText(doan, hdvData)), cell("OP", "label"), cell(doan?.assigned_to || "—")],
+      [cell("Ngày", "label"), cell(getDateRangeText(doan)), cell("HDV", "label"), cell(getHdvText(doan, hdvData)), cell("OP", "label"), cell(opName || doan?.assigned_to || "—")],
       [cell("Xe", "label"), cell(getXeText(doan), "text", 3), cell("Trạng thái xuất", "label"), cell("Chi phí đã lưu", "text", 1)],
       [cell("", "text", 6)],
       [cell("TỔNG HỢP CÔNG TY THANH TOÁN", "section", 6)],
