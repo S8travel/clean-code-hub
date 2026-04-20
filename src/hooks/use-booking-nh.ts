@@ -119,8 +119,9 @@ export function useBookingNH(doanId: number | undefined) {
         // Ẩn NH "khách thanh toán" khỏi booking tab
         const truaRawId = r.an_trua_nha_hang_id ?? (bkgTrua?.nha_hang_id ?? null);
         const toiRawId  = r.an_toi_nha_hang_id  ?? (bkgToi?.nha_hang_id  ?? null);
-        const truaId = truaRawId && nhMap.get(truaRawId)?.nguoi_thanh_toan === "khach" ? null : truaRawId;
-        const toiId  = toiRawId  && nhMap.get(toiRawId)?.nguoi_thanh_toan  === "khach" ? null : toiRawId;
+        // Only hide "khach" NH for slots with no existing booking — preserve existing bookings
+        const truaId = (truaRawId && nhMap.get(truaRawId)?.nguoi_thanh_toan === "khach" && !bkgTrua) ? null : truaRawId;
+        const toiId  = (toiRawId  && nhMap.get(toiRawId)?.nguoi_thanh_toan  === "khach" && !bkgToi)  ? null : toiRawId;
 
         const truaNH = truaId ? nhMap.get(truaId) : null;
         const toiNH  = toiId  ? nhMap.get(toiId)  : null;

@@ -82,8 +82,9 @@ export function useBookingKS(doanId: number | undefined) {
 
       const ksMap = new Map((ksList || []).map((k: any) => [k.id, k]));
 
-      // 4. Merge (exclude "khach" payer hotels — guest pays directly, no booking needed)
-      return (bookings as any[]).filter((b) => ksMap.get(b.khach_san_id)?.nguoi_thanh_toan !== "khach").map((b): BookingKSDisplay => {
+      // 4. Merge — show all existing booking records regardless of current nguoi_thanh_toan
+      // (preventing new creation for "khach" KS is handled in use-dieu-tour.ts)
+      return (bookings as any[]).map((b): BookingKSDisplay => {
         const ks = ksMap.get(b.khach_san_id) || ({} as any);
         const g = grouped.get(b.khach_san_id) || { dates: [], codes: [] };
         return {

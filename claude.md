@@ -430,3 +430,7 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
 - Không tạo file CSS riêng — Tailwind inline
 - `doan.xe_id` trỏ vào `nha_xe_loai_xe`, KHÔNG phải bảng `xe`
 - Không sửa `so_tien` của ĐNTT đã `da_duyet` hoặc `da_tt` — tạo adjustment thay thế
+- Thay đổi danh mục (NH, KS, dịch vụ, xe, visa) không được ảnh hưởng đến đoàn hiện có:
+  - Giá → luôn snapshot vào tour khi lưu (`don_gia` trong `doan_ngay_item`, `dich_vu_list` JSONB)
+  - `nguoi_thanh_toan` → chỉ dùng để ngăn **tạo mới** record; không filter/ẩn record đã tồn tại trong DB
+  - Tên/email master → fetch live là chấp nhận được (thông tin liên lạc cần cập nhật)
