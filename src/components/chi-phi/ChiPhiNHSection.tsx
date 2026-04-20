@@ -140,6 +140,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
   useEffect(() => { dinhKyKeysRef.current = dinhKyKeys; }, [dinhKyKeys]);
 
   const initializedRef = useRef(false);
+  const autoFixedHdvRef = useRef(false);
 
   // ── Load from DB ──────────────────────────────────────────────────────────
 
@@ -214,6 +215,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     if (prevDoanIdRef.current === doanId) return;
     prevDoanIdRef.current = doanId;
     initializedRef.current = false;
+    autoFixedHdvRef.current = false;
     setLocalRows({});
     setExtrasMap({});
   }, [doanId]);
@@ -252,6 +254,26 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
       return changed ? next : prev;
     });
   }, [soKhachDefault]);
+
+  // Auto-fix: nếu NH có nguoi_thanh_toan = "hdv" nhưng DB row có tien_cong_ty > 0
+  // (hoặc chưa có trong DB), re-save để phân bổ đúng vào tien_hdv.
+  useEffect(() => {
+    if (autoFixedHdvRef.current || !initializedRef.current) return;
+    if (!nhData || Object.keys(localRows).length === 0) return;
+
+    autoFixedHdvRef.current = true;
+
+    for (const [key, row] of Object.entries(localRows)) {
+      const nh = nhData.nhaHangMap[row.nha_hang_id];
+      if (nh?.nguoi_thanh_toan !== "hdv") continue;
+      if (!row.don_gia || !row.so_khach) continue;
+
+      const dbRow = row.id ? chiPhiRows.find((cp) => cp.id === row.id) : null;
+      if (!dbRow || (dbRow.tien_cong_ty != null && dbRow.tien_cong_ty > 0)) {
+        handleSave(key);
+      }
+    }
+  }, [localRows, nhData, chiPhiRows, handleSave]);
 
   // Auto-xóa chi phí NH orphaned đã bị chuyển thành công nợ
   const autoDeletedNhIdsRef = useRef<Set<number>>(new Set());
