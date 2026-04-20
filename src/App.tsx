@@ -25,7 +25,6 @@ import XepHDVPage from "./pages/XepHDVPage.tsx";
 import MyJobPage from "./pages/MyJobPage.tsx";
 import LockPhongPage from "./pages/LockPhongPage.tsx";
 import InvoicePage from "./pages/InvoicePage.tsx";
-import SuCoPage from "./pages/SuCoPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -65,7 +64,6 @@ const App = () => (
             <Route path="/my-job" element={<MyJobPage />} />
             <Route path="/lock-phong" element={<LockPhongPage />} />
             <Route path="/invoice" element={<InvoicePage />} />
-            <Route path="/su-co" element={<SuCoPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Route>

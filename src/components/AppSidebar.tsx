@@ -162,7 +162,6 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },
       { title: "Lock Phòng", titleZh: "鎖房", url: "/lock-phong", icon: CalendarRange },
       { title: "Invoice", url: "/invoice", icon: FileText, minRole: "giam_doc" },
-      { title: "Sự cố", url: "/su-co", icon: AlertTriangle, minRole: "giam_doc" },
     ],
   },
   {
@@ -266,7 +265,7 @@ export function AppSidebar() {
                   const badgeCount =
                     item.url === "/lock-phong" ? deadlineAlerts.length :
                     item.url === "/invoice" ? invoiceBadge :
-                    item.url === "/su-co" ? suCoBadge : 0;
+                    item.url === "/theo-doi" ? suCoBadge : 0;
                   if (badgeCount > 0) {
                     return (
                       <SidebarMenuItem key={item.url}>
