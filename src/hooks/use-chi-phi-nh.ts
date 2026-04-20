@@ -120,7 +120,10 @@ export function useChiPhiNHSection(doanId?: number) {
         };
       });
 
-      return { meals, nhaHangMap };
+      const filteredMeals = meals.filter(
+        (m) => nhaHangMap[m.nha_hang_id]?.nguoi_thanh_toan !== "khach"
+      );
+      return { meals: filteredMeals, nhaHangMap };
     },
   });
 }

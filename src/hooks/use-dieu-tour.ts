@@ -537,14 +537,27 @@ export function useSaveDieuTour() {
       console.log(`[SaveDieuTour] Saved ${days.length} days for doan ${doanId}`);
 
       // 6. Sync doan_ngay → doan_booking_ks (insert-only + reset cancelled)
+      const allKsIdsInDays = [...new Set(days.map((d) => d.khach_san_id).filter((id): id is number => id != null))];
+      // Fetch nguoi_thanh_toan to skip "khach" KS (guest pays directly — no booking email needed)
+      let khachKsIds = new Set<number>();
+      if (allKsIdsInDays.length > 0) {
+        const { data: ksCheck } = await externalSupabase
+          .from("khach_san")
+          .select("id, nguoi_thanh_toan")
+          .in("id", allKsIdsInDays);
+        khachKsIds = new Set((ksCheck || []).filter((k: any) => k.nguoi_thanh_toan === "khach").map((k: any) => k.id));
+      }
+
       const { data: allBookingKs } = await externalSupabase
         .from("doan_booking_ks")
         .select("id, khach_san_id, ks_dat_truoc_status, ks_final_status")
         .eq("doan_id", doanId);
-      const distinctKsIdsFull = [...new Set(days.map((d) => d.khach_san_id).filter((id): id is number => id != null))];
+      const distinctKsIdsFull = allKsIdsInDays.filter((id) => !khachKsIds.has(id));
       if (allBookingKs) {
         for (const bk of allBookingKs) {
-          if (!distinctKsIdsFull.includes(bk.khach_san_id)) {
+          // Delete "chua_gui" bookings for KS removed from tour or now set to "khach" payer
+          const removedOrKhach = !distinctKsIdsFull.includes(bk.khach_san_id) || khachKsIds.has(bk.khach_san_id);
+          if (removedOrKhach) {
             const chuaGui = bk.ks_dat_truoc_status === "chua_gui" && bk.ks_final_status === "chua_gui";
             if (chuaGui) {
               await externalSupabase.from("doan_booking_ks").delete().eq("id", bk.id);
@@ -552,7 +565,7 @@ export function useSaveDieuTour() {
           }
         }
       }
-      const distinctKsIds = [...new Set(days.map((d) => d.khach_san_id).filter((id): id is number => id != null))];
+      const distinctKsIds = distinctKsIdsFull;
       for (const ksId of distinctKsIds) {
         const { data: existing } = await externalSupabase
           .from("doan_booking_ks")

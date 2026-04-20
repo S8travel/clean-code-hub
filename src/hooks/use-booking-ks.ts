@@ -76,14 +76,14 @@ export function useBookingKS(doanId: number | undefined) {
       const allKsIds = [...new Set(bookings.map((b: any) => b.khach_san_id))];
       const { data: ksList, error: e3 } = await externalSupabase
         .from("khach_san")
-        .select("id, ten, email, dia_chi, dia_diem, so_dien_thoai, website")
+        .select("id, ten, email, dia_chi, dia_diem, so_dien_thoai, website, nguoi_thanh_toan")
         .in("id", allKsIds);
       if (e3) throw e3;
 
       const ksMap = new Map((ksList || []).map((k: any) => [k.id, k]));
 
-      // 4. Merge
-      return (bookings as any[]).map((b): BookingKSDisplay => {
+      // 4. Merge (exclude "khach" payer hotels — guest pays directly, no booking needed)
+      return (bookings as any[]).filter((b) => ksMap.get(b.khach_san_id)?.nguoi_thanh_toan !== "khach").map((b): BookingKSDisplay => {
         const ks = ksMap.get(b.khach_san_id) || ({} as any);
         const g = grouped.get(b.khach_san_id) || { dates: [], codes: [] };
         return {

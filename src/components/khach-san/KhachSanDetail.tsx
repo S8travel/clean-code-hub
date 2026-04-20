@@ -180,6 +180,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
             <SelectContent>
               <SelectItem value="cong_ty">Công ty</SelectItem>
               <SelectItem value="hdv">Hướng dẫn viên</SelectItem>
+              <SelectItem value="khach">Khách thanh toán</SelectItem>
             </SelectContent>
           </Select>
         </div>

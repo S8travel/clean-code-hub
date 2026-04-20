@@ -88,10 +88,10 @@ export function useBookingNH(doanId: number | undefined) {
       if (nhIds.size > 0) {
         const { data: nhList } = await externalSupabase
           .from("nha_hang")
-          .select("id, ten, email")
+          .select("id, ten, email, nguoi_thanh_toan")
           .in("id", [...nhIds]);
         if (nhList) {
-          nhMap = new Map(nhList.map((n: any) => [n.id, { ten: n.ten, email: n.email }]));
+          nhMap = new Map(nhList.map((n: any) => [n.id, { ten: n.ten, email: n.email, nguoi_thanh_toan: n.nguoi_thanh_toan }]));
         }
       }
 
@@ -116,8 +116,11 @@ export function useBookingNH(doanId: number | undefined) {
         const orphanToiNH  = orphanToi  ? nhMap.get(orphanToi.nha_hang_id!)  : null;
 
         // Effective id: ưu tiên assignment hiện tại, fallback về booking cũ (NH bị xóa hẳn)
-        const truaId = r.an_trua_nha_hang_id ?? (bkgTrua?.nha_hang_id ?? null);
-        const toiId  = r.an_toi_nha_hang_id  ?? (bkgToi?.nha_hang_id  ?? null);
+        // Ẩn NH "khách thanh toán" khỏi booking tab
+        const truaRawId = r.an_trua_nha_hang_id ?? (bkgTrua?.nha_hang_id ?? null);
+        const toiRawId  = r.an_toi_nha_hang_id  ?? (bkgToi?.nha_hang_id  ?? null);
+        const truaId = truaRawId && nhMap.get(truaRawId)?.nguoi_thanh_toan === "khach" ? null : truaRawId;
+        const toiId  = toiRawId  && nhMap.get(toiRawId)?.nguoi_thanh_toan  === "khach" ? null : toiRawId;
 
         const truaNH = truaId ? nhMap.get(truaId) : null;
         const toiNH  = toiId  ? nhMap.get(toiId)  : null;

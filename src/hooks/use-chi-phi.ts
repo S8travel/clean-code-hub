@@ -122,7 +122,7 @@ export function useChiPhiKSData(doanId?: number) {
 
       const { data: ksList, error: e2 } = await externalSupabase
         .from("khach_san")
-        .select("id, ten, foc_khach, foc_mien, dia_diem, nha_cung_cap_id")
+        .select("id, ten, foc_khach, foc_mien, dia_diem, nha_cung_cap_id, nguoi_thanh_toan")
         .in("id", allKsIds);
       if (e2) throw e2;
 
@@ -151,7 +151,10 @@ export function useChiPhiKSData(doanId?: number) {
         };
       });
 
-      return { ngayRows: ngayRows || [], khachSanMap, orphanedKsIds };
+      const filteredNgayRows = (ngayRows || []).filter(
+        (r: any) => khachSanMap[r.khach_san_id]?.nguoi_thanh_toan !== "khach"
+      );
+      return { ngayRows: filteredNgayRows, khachSanMap, orphanedKsIds };
     },
   });
 }
