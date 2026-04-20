@@ -44,6 +44,7 @@ import BookingKSTab from "@/components/dieu-tour/BookingKSTab";
 import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
+import DoanLogTab from "@/components/doan-log/DoanLogTab";
 
 export default function DoanDetail() {
   const { id } = useParams<{ id: string }>();
@@ -137,6 +138,9 @@ export default function DoanDetail() {
     }
     if (activeTab === "booking-dv" && doanId) {
       queryClient.invalidateQueries({ queryKey: ["doan_booking_dv", doanId] });
+    }
+    if (activeTab === "log" && doanId) {
+      queryClient.invalidateQueries({ queryKey: ["doan_log", doanId] });
     }
   }, [activeTab, doanId, queryClient]);
 
@@ -311,6 +315,7 @@ export default function DoanDetail() {
             <TabsTrigger value="menu">Booking NH</TabsTrigger>
             <TabsTrigger value="booking-dv">Booking DV</TabsTrigger>
             <TabsTrigger value="chi-phi">Chi phí</TabsTrigger>
+            <TabsTrigger value="log">Log</TabsTrigger>
           </TabsList>
 
           <fieldset disabled={!canEdit} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
@@ -384,6 +389,10 @@ export default function DoanDetail() {
 
           <TabsContent value="chi-phi" className="mt-4">
             <ChiPhiTab doanId={doanId} doan={doan} />
+          </TabsContent>
+
+          <TabsContent value="log" className="mt-4">
+            <DoanLogTab doanId={doanId} />
           </TabsContent>
           </fieldset>
         </Tabs>

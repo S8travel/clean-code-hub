@@ -22,7 +22,9 @@ import { useDoanList } from "@/hooks/use-doan";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { useAuth } from "@/hooks/use-auth";
 import { useMyDeadlines, type DeadlineItem } from "@/hooks/use-my-job";
+import { useDoanLogGhiChu, useToggleResolved } from "@/hooks/use-doan-log";
 import { cn } from "@/lib/utils";
+import { CheckCircle2, Circle, StickyNote } from "lucide-react";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmtDate(d: string | null | undefined) {
@@ -196,6 +198,8 @@ export default function MyJobPage() {
 
   const myDoanIds = useMemo(() => myDoan.map((d: any) => d.id as number), [myDoan]);
   const { data: deadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(myDoanIds);
+  const { data: ghiChuLogs = [] } = useDoanLogGhiChu(user?.user_id);
+  const toggleResolved = useToggleResolved();
 
   // Rows cho bảng (với booking status)
   const rows = useMemo(() => {
@@ -534,6 +538,39 @@ export default function MyJobPage() {
             </div>
           )}
         </div>
+
+        {/* Section: Ghi chú cá nhân */}
+        {ghiChuLogs.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold flex items-center gap-1.5">
+              <StickyNote className="h-4 w-4 text-blue-500" /> Ghi chú của tôi
+            </h2>
+            {ghiChuLogs.map((log) => (
+              <div
+                key={log.id}
+                className="flex items-start gap-3 rounded-lg border bg-blue-50 border-blue-100 px-4 py-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <button
+                    onClick={() => navigate(`/doan/${log.doan_id}?tab=log`)}
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    {log.doan_ten ?? `Đoàn #${log.doan_id}`}
+                  </button>
+                  <p className="text-xs text-foreground mt-0.5">{log.tieu_de}</p>
+                  {log.noi_dung && <p className="text-xs text-muted-foreground">{log.noi_dung}</p>}
+                </div>
+                <button
+                  onClick={() => toggleResolved.mutate({ id: log.id, doan_id: log.doan_id, loai: "ghi_chu", is_resolved: true })}
+                  className="shrink-0 text-muted-foreground hover:text-green-600 transition-colors"
+                  title="Đánh dấu đã xong"
+                >
+                  <Circle className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Section: Việc cần xử lý */}
         <div className="space-y-3">

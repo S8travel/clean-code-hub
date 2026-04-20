@@ -20,6 +20,8 @@ import {
   CalendarCheck,
   BriefcaseBusiness,
   CalendarRange,
+  FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -43,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks/use-permissions";
 import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
 import { useCurrentSession } from "@/hooks/use-current-user";
+import { useThongBaoCount } from "@/hooks/use-thong-bao";
 
 // ── Google Translate button ──
 
@@ -158,6 +161,8 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, minRole: "truong_phong" },
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },
       { title: "Lock Phòng", titleZh: "鎖房", url: "/lock-phong", icon: CalendarRange },
+      { title: "Invoice", url: "/invoice", icon: FileText, minRole: "giam_doc" },
+      { title: "Sự cố", url: "/su-co", icon: AlertTriangle, minRole: "giam_doc" },
     ],
   },
   {
@@ -222,6 +227,8 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const { session } = useCurrentSession();
   const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null);
+  const { data: invoiceBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "gia");
+  const { data: suCoBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "su_co");
 
   const isActive = (url: string) =>
     location.pathname === url || location.pathname.startsWith(url + "/");
@@ -256,7 +263,11 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {
-                  if (item.url === "/lock-phong" && deadlineAlerts.length > 0) {
+                  const badgeCount =
+                    item.url === "/lock-phong" ? deadlineAlerts.length :
+                    item.url === "/invoice" ? invoiceBadge :
+                    item.url === "/su-co" ? suCoBadge : 0;
+                  if (badgeCount > 0) {
                     return (
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
@@ -270,7 +281,7 @@ export function AppSidebar() {
                               <span className="flex-1 flex items-center justify-between">
                                 {item.title}
                                 <span className="ml-1 min-w-[18px] h-[18px] rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
-                                  {deadlineAlerts.length}
+                                  {badgeCount}
                                 </span>
                               </span>
                             )}
