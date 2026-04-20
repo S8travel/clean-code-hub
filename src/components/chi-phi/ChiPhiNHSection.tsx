@@ -273,7 +273,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         handleSave(key);
       }
     }
-  }, [localRows, nhData, chiPhiRows, handleSave]);
+  }, [localRows, nhData, chiPhiRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-xóa chi phí NH orphaned đã bị chuyển thành công nợ
   const autoDeletedNhIdsRef = useRef<Set<number>>(new Set());
