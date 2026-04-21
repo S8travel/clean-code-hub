@@ -167,7 +167,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5 col-span-2">
-          <Label className="text-xs">Nhà cung cấp *</Label>
+          <Label className="text-xs">Nhà cung cấp</Label>
           <SearchableSelect
             options={nccOptions}
             value={nhaCungCapId}

@@ -41,11 +41,10 @@ export default function NhaXePage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) { toast.warning("Tên nhà xe bắt buộc"); return; }
-    if (!newNccId) { toast.warning("Vui lòng chọn nhà cung cấp"); return; }
     try {
       const created = await createMut.mutateAsync({
         ten: newName.trim(),
-        nha_cung_cap_id: Number(newNccId),
+        nha_cung_cap_id: newNccId ? Number(newNccId) : null,
         dia_diem: newDiaDiem.trim() || undefined,
       });
       setSelectedId(created.id);
@@ -145,7 +144,7 @@ export default function NhaXePage() {
               />
             </div>
             <div>
-              <Label className="text-xs">Nhà cung cấp *</Label>
+              <Label className="text-xs">Nhà cung cấp</Label>
               <SearchableSelect
                 options={nccOptions}
                 value={newNccId}

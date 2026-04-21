@@ -68,10 +68,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
       toast.warning("Tên khách sạn không được để trống");
       return;
     }
-    if (!form.nha_cung_cap_id) {
-      toast.warning("Vui lòng chọn nhà cung cấp");
-      return;
-    }
+
     try {
       await updateMut.mutateAsync({
         id: khachSan.id,
@@ -129,7 +126,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <Label className="text-xs">Nhà cung cấp *</Label>
+          <Label className="text-xs">Nhà cung cấp</Label>
           <SearchableSelect
             options={nccOptions}
             value={form.nha_cung_cap_id}

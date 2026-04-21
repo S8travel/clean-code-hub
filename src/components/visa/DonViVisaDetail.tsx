@@ -49,12 +49,11 @@ export default function DonViVisaDetail({ donViVisa, onDeleted }: Props) {
 
   const handleSave = async () => {
     if (!form.ten.trim()) { toast.warning("Tên đơn vị không được để trống"); return; }
-    if (!form.nha_cung_cap_id) { toast.warning("Vui lòng chọn nhà cung cấp"); return; }
     try {
       await updateMut.mutateAsync({
         id: donViVisa.id,
         ten: form.ten.trim(),
-        nha_cung_cap_id: Number(form.nha_cung_cap_id),
+        nha_cung_cap_id: form.nha_cung_cap_id ? Number(form.nha_cung_cap_id) : null,
         email: form.email || null,
         so_dien_thoai: form.so_dien_thoai || null,
         dia_chi: form.dia_chi || null,
@@ -100,7 +99,7 @@ export default function DonViVisaDetail({ donViVisa, onDeleted }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <Label className="text-xs">Nhà cung cấp *</Label>
+          <Label className="text-xs">Nhà cung cấp</Label>
           <SearchableSelect
             options={nccOptions}
             value={form.nha_cung_cap_id}

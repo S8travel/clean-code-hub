@@ -68,10 +68,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
   }, [nhaHang.id]);
 
   const handleSave = async () => {
-    if (!form.nha_cung_cap_id) {
-      toast.warning("Vui lòng chọn nhà cung cấp");
-      return;
-    }
+
     try {
       await updateMut.mutateAsync({
         id: nhaHang.id,
@@ -149,7 +146,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
           <Input value={form.ten_zh} onChange={(e) => set("ten_zh", e.target.value)} className="h-8 text-sm" placeholder="餐廳名稱..." />
         </div>
         <div>
-          <Label className="text-xs">Nhà cung cấp *</Label>
+          <Label className="text-xs">Nhà cung cấp</Label>
           <SearchableSelect
             options={nccOptions}
             value={form.nha_cung_cap_id}

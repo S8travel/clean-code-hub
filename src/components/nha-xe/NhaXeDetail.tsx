@@ -55,15 +55,11 @@ export default function NhaXeDetail({ nhaXe, onDeleted }: Props) {
       toast.warning("Tên nhà xe không được để trống");
       return;
     }
-    if (!form.nha_cung_cap_id) {
-      toast.warning("Vui lòng chọn nhà cung cấp");
-      return;
-    }
     try {
       await updateMut.mutateAsync({
         id: nhaXe.id,
         ten: form.ten.trim(),
-        nha_cung_cap_id: Number(form.nha_cung_cap_id),
+        nha_cung_cap_id: form.nha_cung_cap_id ? Number(form.nha_cung_cap_id) : null,
         dia_diem: form.dia_diem || null,
         email: form.email || null,
         so_dien_thoai: form.so_dien_thoai || null,
@@ -110,7 +106,7 @@ export default function NhaXeDetail({ nhaXe, onDeleted }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <Label className="text-xs">Nhà cung cấp *</Label>
+          <Label className="text-xs">Nhà cung cấp</Label>
           <SearchableSelect
             options={nccOptions}
             value={form.nha_cung_cap_id}
