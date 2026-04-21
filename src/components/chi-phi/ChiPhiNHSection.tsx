@@ -71,6 +71,7 @@ export interface LocalNHRow {
   bua_an: "trua" | "toi";
   so_khach: number;
   don_gia: number;
+  chiet_khau_phan_tram: number;
 }
 
 interface LocalNHExtra {
@@ -173,6 +174,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         // Nếu DB có so_luong > 1 thì dùng DB, còn lại dùng soKhachDefault (tránh giá trị 1 sai từ lần lưu cũ)
         so_khach: (mainCp?.so_luong != null && mainCp.so_luong > 1) ? mainCp.so_luong : (soKhachDefault || mainCp?.so_luong || 0),
         don_gia: (mainCp?.don_gia != null && mainCp.don_gia > 0) ? mainCp.don_gia : (meal.gia_set_menu ?? 0),
+        chiet_khau_phan_tram: nhData.nhaHangMap[meal.nha_hang_id]?.chiet_khau_phan_tram ?? 0,
       };
 
       const extraCps = nhChiPhi.filter(
@@ -275,26 +277,26 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     }
   }, [localRows, nhData, chiPhiRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-xóa chi phí NH orphaned đã bị chuyển thành công nợ
+  // Auto-xóa chi phí NH orphaned: (1) đã bị chuyển thành công nợ, hoặc (2) chưa có DNTT nào
   const autoDeletedNhIdsRef = useRef<Set<number>>(new Set());
   useEffect(() => {
-    if (!nhData || chiPhiRows.length === 0 || dnttList.length === 0) return;
+    if (!nhData || chiPhiRows.length === 0) return;
     const currentNgayIds = new Set(nhData.meals.map((m) => m.doan_ngay_id));
-    const orphanedCongNoCps = chiPhiRows.filter((cp) => {
+    const toDelete = chiPhiRows.filter((cp) => {
       if (cp.danh_muc !== "nha_hang") return false;
       if (cp.ref_doan_ngay_id == null) return false;
       if (currentNgayIds.has(cp.ref_doan_ngay_id)) return false;
       if (cp.mo_ta?.startsWith("[trua] ") || cp.mo_ta?.startsWith("[toi] ")) return false;
       if (!cp.id || autoDeletedNhIdsRef.current.has(cp.id)) return false;
-      return dnttList.some(
-        (d) =>
-          d.ref_loai === "doan_chi_phi" &&
-          d.ref_id === cp.id &&
-          d.trang_thai_duyet === "da_huy" &&
-          d.trang_thai_thanh_toan === "cong_no",
+      const cpDntts = dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === cp.id);
+      // Xóa nếu chưa có DNTT nào
+      if (cpDntts.length === 0) return true;
+      // Xóa nếu DNTT đã bị hủy thành công nợ
+      return cpDntts.some(
+        (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no",
       );
     });
-    for (const cp of orphanedCongNoCps) {
+    for (const cp of toDelete) {
       autoDeletedNhIdsRef.current.add(cp.id!);
       deleteMut.mutate({ id: cp.id!, doanId });
     }
@@ -302,7 +304,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
 
   // ── Main row handlers ─────────────────────────────────────────────────────
 
-  const handleChange = useCallback((key: string, field: "so_khach" | "don_gia", value: number) => {
+  const handleChange = useCallback((key: string, field: "so_khach" | "don_gia" | "chiet_khau_phan_tram", value: number) => {
     setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   }, []);
 
@@ -315,7 +317,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     const buaStr = row.bua_an === "trua" ? "trưa" : "tối";
     const soKhachThucTe = calcSoKhachThucTe(row.so_khach, nh?.foc_khach ?? null, nh?.foc_mien ?? null);
     const thanhTienTruocCK = soKhachThucTe * row.don_gia;
-    const ck = nh?.chiet_khau_phan_tram ?? null;
+    const ck = row.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
     const thanhTien = ck && ck > 0 ? Math.round(thanhTienTruocCK * (1 - ck / 100)) : thanhTienTruocCK;
 
     upsertMut.mutate(
@@ -451,8 +453,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
           mo_ta: `${nhName0} (${buaStr0})`,
           don_gia: row.don_gia,
           so_luong: row.so_khach,
-          tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? Math.round(skTT0 * row.don_gia * (1 - (nh0?.chiet_khau_phan_tram ?? 0) / 100)) : 0,
-          tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? Math.round(skTT0 * row.don_gia * (1 - (nh0?.chiet_khau_phan_tram ?? 0) / 100)) : 0,
+          tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? Math.round(skTT0 * row.don_gia * (1 - (row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? 0) / 100)) : 0,
+          tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? Math.round(skTT0 * row.don_gia * (1 - (row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? 0) / 100)) : 0,
         });
         if (saved?.id) {
           setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: saved.id } }));
@@ -470,7 +472,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     const soKhachThucTe = calcSoKhachThucTe(row.so_khach, nh?.foc_khach ?? null, nh?.foc_mien ?? null);
     const mainTotalTruocCK = soKhachThucTe * row.don_gia;
     const extrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
-    const ckPct = nh?.chiet_khau_phan_tram ?? null;
+    const ckPct = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
     const chietKhau = ckPct && ckPct > 0 ? Math.round(mainTotalTruocCK * ckPct / 100) : 0;
     const totalBua = mainTotalTruocCK - chietKhau + extrasTotal;
     // Số tiền chưa đề nghị (trừ phần đã cọc + thanh toán trước)
@@ -711,6 +713,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
             <col className="w-[56px]" />
             <col className="w-[80px]" />
             <col className="w-[100px]" />
+            <col className="w-[64px]" />
             <col className="w-[110px]" />
             <col className="w-[180px]" />
             <col className="w-[150px]" />
@@ -731,6 +734,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
               <th className="px-3 py-2 text-center font-medium">Bữa</th>
               <th className="px-3 py-2 text-center font-medium">Số khách</th>
               <th className="px-3 py-2 text-center font-medium">Đơn giá</th>
+              <th className="px-3 py-2 text-center font-medium">CK%</th>
               <th className="px-3 py-2 text-right font-medium">Thành tiền</th>
               <th className="px-3 py-2 text-center font-medium">TT ĐNTT</th>
               <th className="px-3 py-2 text-center font-medium">TT Thanh toán</th>
@@ -753,9 +757,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
           const mainTotal = row ? soKhachThucTe * row.don_gia : 0;
           const extrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
           const totalTruocCK = mainTotal + extrasTotal;
-          // Chiết khấu % áp dụng trên tổng sau FOC
-          const ckPhanTram = nh?.chiet_khau_phan_tram ?? null;
-          const chietKhauSoTien = ckPhanTram && ckPhanTram > 0
+          // Chiết khấu % từ local row (override) hoặc từ nha_hang
+          const ckPhanTram = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? 0;
+          const chietKhauSoTien = ckPhanTram > 0
             ? Math.round(totalTruocCK * ckPhanTram / 100)
             : 0;
           const totalBua = totalTruocCK - chietKhauSoTien;
@@ -873,18 +877,23 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   </div>
                 </td>
 
+                {/* CK% editable */}
+                <td className="px-2 py-2">
+                  <div className="flex justify-center">
+                    {row ? (
+                      <NHInput
+                        value={row.chiet_khau_phan_tram}
+                        onChange={(v) => handleChange(key, "chiet_khau_phan_tram", v)}
+                        onBlur={() => handleSave(key)}
+                        width="w-[48px]"
+                      />
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </td>
+
                 {/* Thành tiền (đã trừ FOC + CK) */}
                 <td className="px-3 py-2 text-right font-semibold text-primary whitespace-nowrap">
-                  {row ? (
-                    <div>
-                      <div>{fmt(totalBua)}</div>
-                      {chietKhauSoTien > 0 && (
-                        <div className="text-[10px] text-green-600 font-normal">
-                          CK {ckPhanTram}%: −{fmt(chietKhauSoTien)}
-                        </div>
-                      )}
-                    </div>
-                  ) : "—"}
+                  {row ? fmt(totalBua) : "—"}
                 </td>
 
                 {/* Trạng thái ĐNTT */}
@@ -1092,22 +1101,19 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
           {/* Orphaned NH rows — removed from điều tour but still have chi phí / DNTT */}
           {(() => {
             const currentNgayIds = new Set(meals.map((m) => m.doan_ngay_id));
-            const orphanedCps = chiPhiRows.filter(
-              (cp) =>
-                cp.danh_muc === "nha_hang" &&
-                cp.ref_doan_ngay_id != null &&
-                !currentNgayIds.has(cp.ref_doan_ngay_id) &&
-                !cp.mo_ta?.startsWith("[trua] ") &&
-                !cp.mo_ta?.startsWith("[toi] ") &&
-                // Ẩn luôn những row đã/đang được auto-xóa (công nợ orphaned)
-                !dnttList.some(
-                  (d) =>
-                    d.ref_loai === "doan_chi_phi" &&
-                    d.ref_id === cp.id &&
-                    d.trang_thai_duyet === "da_huy" &&
-                    d.trang_thai_thanh_toan === "cong_no",
-                ),
-            );
+            const orphanedCps = chiPhiRows.filter((cp) => {
+              if (cp.danh_muc !== "nha_hang") return false;
+              if (cp.ref_doan_ngay_id == null) return false;
+              if (currentNgayIds.has(cp.ref_doan_ngay_id)) return false;
+              if (cp.mo_ta?.startsWith("[trua] ") || cp.mo_ta?.startsWith("[toi] ")) return false;
+              const cpDntts = dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === cp.id);
+              // Ẩn nếu chưa có DNTT nào (sẽ bị auto-xóa)
+              if (cpDntts.length === 0) return false;
+              // Ẩn nếu tất cả DNTT đã bị hủy thành công nợ (đang auto-xóa)
+              return !cpDntts.every(
+                (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no",
+              );
+            });
             if (orphanedCps.length === 0) return null;
             return (
               <>
