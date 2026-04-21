@@ -22,6 +22,7 @@ import {
   CalendarRange,
   FileText,
   AlertTriangle,
+  Calculator,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -162,6 +163,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },
       { title: "Lock Phòng", titleZh: "鎖房", url: "/lock-phong", icon: CalendarRange },
       { title: "Invoice", url: "/invoice", icon: FileText, minRole: "giam_doc" },
+      { title: "Báo Giá", titleZh: "報價", url: "/bao-gia", icon: Calculator },
     ],
   },
   {
