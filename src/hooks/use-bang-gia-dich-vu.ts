@@ -54,12 +54,13 @@ export function useImportBangGia() {
 
 // ── Parser: Tab-separated pricing file ─────────────────────────────────────
 // Format: Tên [TAB] FOC [TAB] Giá
-// Two sections separated by "Chọn khách sạn" header line
+// Hai section: phần đầu (nhà hàng/dịch vụ) → phần khách sạn sau header "Chọn khách sạn"
+// Lưu ý: loai chỉ dùng để hiển thị UI, KHÔNG ảnh hưởng đến tính giá báo giá.
 export function parsePricingFile(text: string): Omit<BangGiaDichVu, "id" | "created_at">[] {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const rows: Omit<BangGiaDichVu, "id" | "created_at">[] = [];
 
-  let currentLoai: "hotel" | "nha_hang" | "dich_vu" = "nha_hang";
+  let isHotelSection = false;
 
   for (const line of lines) {
     const cols = line.split("\t").map((c) => c.trim());
@@ -67,58 +68,31 @@ export function parsePricingFile(text: string): Omit<BangGiaDichVu, "id" | "crea
 
     if (!ten) continue;
 
-    // Detect section headers — skip them
-    const lower = ten.toLowerCase();
-    if (
-      lower.startsWith("dịch vụ") ||
-      lower.startsWith("d") && lower.includes("ch v") ||
-      lower.startsWith("chọn khách sạn") ||
-      lower.startsWith("ch") && lower.includes("n kh")
-    ) {
-      if (lower.includes("khách sạn") || lower.includes("kh") && lower.includes("ch s")) {
-        currentLoai = "hotel";
+    // Detect section header "Chọn khách sạn ..." → bật hotel section
+    // Dùng includes để không phụ thuộc vào encoding chính xác
+    if (ten.toLowerCase().includes("ch") && ten.toLowerCase().includes("kh") && ten.toLowerCase().includes("s")) {
+      // "Chọn khách sạn" header
+      if (cols.length >= 2 && (cols[1]?.includes("8") || cols[1]?.toLowerCase().includes("foc"))) {
+        isHotelSection = true;
+        continue;
       }
-      continue;
     }
 
-    // Hotel section detection by content patterns
-    if (
-      ten.toUpperCase() === ten && ten.length > 5 &&
-      (ten.includes("HOTEL") || ten.includes("RESORT") || ten.includes("HOSTEL") ||
-       ten.includes("TÀU") || ten.includes("MƯỜNG THANH") || ten.includes("HYATT") ||
-       ten.includes("MARRIOTT") || ten.includes("PULLMAN") || ten.includes("NOVOTEL") ||
-       ten.includes("WYNDHAM") || ten.includes("SHERATON") || ten.includes("CRUISE"))
-    ) {
-      currentLoai = "hotel";
-    }
+    // Skip header rows (first row: "Dịch vụ / FOC / Giá")
+    if (ten.toLowerCase().startsWith("d") && cols[1]?.toLowerCase().includes("foc")) continue;
 
-    // Parse FOC (col 1)
-    const focStr = cols[1] ?? "";
-    const foc = parseFloat(focStr.replace(/[^0-9.]/g, "")) || 0;
+    // Parse FOC: col 1
+    const focStr = (cols[1] ?? "").replace(/[^0-9.]/g, "");
+    const foc = parseFloat(focStr) || 0;
 
-    // Parse Giá (col 2): "1,270,000 đ" → 1270000
+    // Parse Giá: col 2 — remove everything except digits
     const giaStr = (cols[2] ?? "").replace(/[^0-9]/g, "");
     const gia = giaStr ? parseInt(giaStr, 10) : null;
 
-    // Skip rows without a price (unless hotel section — some are placeholders)
-    if (gia === null && currentLoai !== "hotel") continue;
-    if (gia === null) {
-      // For hotels without price, still store but skip
-      continue;
-    }
+    // Bỏ qua dòng không có giá
+    if (!gia) continue;
 
-    // Determine loai: after section header, or by heuristics
-    let loai = currentLoai;
-    // Services section (bottom of file) — typically after hotels, short names
-    if (
-      ten.startsWith("BẢO TÀNG") || ten.startsWith("VÉ") || ten.startsWith("THAM QUAN") ||
-      ten.startsWith("CÁP TREO") || ten.startsWith("TÀU LEO") || ten.startsWith("COMBO") ||
-      ten.startsWith("TIỀN SIM") || ten.startsWith("TIỀN TIP") || ten.startsWith("MASSAGE") ||
-      ten.startsWith("TRÀ CHIỀU") || ten.startsWith("PHỞ") || ten.startsWith("BÁNH MỲ") ||
-      ten.endsWith("USD")
-    ) {
-      loai = currentLoai === "hotel" ? "dich_vu" : currentLoai;
-    }
+    const loai: BangGiaDichVu["loai"] = isHotelSection ? "hotel" : "nha_hang";
 
     rows.push({ ten, loai, gia, foc, active: true });
   }
