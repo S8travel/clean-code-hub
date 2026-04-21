@@ -169,6 +169,44 @@ export function useProcessBaoGia() {
   });
 }
 
+// ── Manual extraction ──
+
+export interface ExtractedChuongTrinh {
+  ten_chuong_trinh: string;
+  so_ngay: number;
+  items: Array<{
+    ngay: number;
+    loai: "hotel" | "meal" | "ticket" | "transport";
+    mo_ta_zh: string;
+    mo_ta_goi_y: string;
+  }>;
+}
+
+export function useExtractChuongTrinh() {
+  return useMutation({
+    mutationFn: async (text: string): Promise<ExtractedChuongTrinh> => {
+      const session = await externalSupabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const resp = await fetch(`${EXTERNAL_SUPABASE_URL}/functions/v1/extract-chuong-trinh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error ?? "Lỗi trích xuất");
+      }
+
+      return resp.json();
+    },
+  });
+}
+
 // ── Helpers ──
 
 function fileToBase64(file: File): Promise<string> {

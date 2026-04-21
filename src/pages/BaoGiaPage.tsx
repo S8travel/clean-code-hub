@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { BaoGiaUpload } from "@/components/bao-gia/BaoGiaUpload";
+import { BaoGiaManual } from "@/components/bao-gia/BaoGiaManual";
 import { BaoGiaResultTable } from "@/components/bao-gia/BaoGiaResultTable";
 import { BangGiaImport } from "@/components/bao-gia/BangGiaImport";
 import {
@@ -65,6 +66,7 @@ export default function BaoGiaPage() {
 
   const [view, setView] = useState<ViewState>({ mode: "list" });
   const [showUpload, setShowUpload] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   // ── New result from AI ───────────────────────────────────────────────────
   const handleNewResult = (ketQua: BaoGiaKetQua, file: File, exchangeRate: number, profitUsd: number) => {
@@ -145,9 +147,14 @@ export default function BaoGiaPage() {
     <div className="p-4 max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">Báo Giá Tour</h1>
-        <Button size="sm" onClick={() => setShowUpload(true)}>
-          <Plus className="h-4 w-4 mr-1" />Tạo báo giá mới
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowManual(true)}>
+            <Plus className="h-4 w-4 mr-1" />Thủ công
+          </Button>
+          <Button size="sm" onClick={() => setShowUpload(true)}>
+            <Plus className="h-4 w-4 mr-1" />Tự động (từ file)
+          </Button>
+        </div>
       </div>
 
       <Dialog open={showUpload} onOpenChange={setShowUpload}>
@@ -161,6 +168,29 @@ export default function BaoGiaPage() {
             </div>
           )}
           <BaoGiaUpload onResult={handleNewResult} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showManual} onOpenChange={setShowManual}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Báo giá thủ công</DialogTitle>
+          </DialogHeader>
+          <BaoGiaManual
+            onSave={(ketQua, exchangeRate, profitUsd) => {
+              createMutation.mutate(
+                { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua as any, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: "draft" },
+                {
+                  onSuccess: () => {
+                    toast.success("Đã lưu báo giá!");
+                    setShowManual(false);
+                    setView({ mode: "list" });
+                  },
+                  onError: () => toast.error("Lỗi lưu báo giá"),
+                }
+              );
+            }}
+          />
         </DialogContent>
       </Dialog>
 
