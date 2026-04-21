@@ -105,7 +105,7 @@ export function BaoGiaUpload({ onResult }: BaoGiaUploadProps) {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Lợi nhuận (USD)</Label>
+          <Label className="text-xs">Lợi nhuận/khách (USD)</Label>
           <Input
             type="number"
             value={profitUsd}

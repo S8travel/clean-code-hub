@@ -51,7 +51,7 @@ function calcCase(
   const tips = 500_000;
 
   const total_cost = hotel + meal + ticket + transport + insurance + guide + tips;
-  const profit_vnd = profitUsd * exchangeRate;
+  const profit_vnd = profitUsd * exchangeRate * guests;
   const final_price_vnd = Math.round((total_cost + profit_vnd) / guests);
   const final_price_usd = final_price_vnd / exchangeRate;
 
