@@ -24,8 +24,10 @@ const LOAI_OPTIONS = [
   { value: "hotel", label: "Khách sạn" },
   { value: "meal", label: "Bữa ăn" },
   { value: "ticket", label: "Vé/Tham quan" },
-  { value: "transport", label: "Xe/Vận chuyển" },
+  { value: "extra", label: "Chi phí khác" },
 ] as const;
+
+const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 interface BaoGiaManualProps {
   onSave: (ketQua: BaoGiaKetQua, exchangeRate: number, profitUsd: number) => void;
@@ -36,19 +38,20 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
   const [tenChuongTrinh, setTenChuongTrinh] = useState("");
   const [soNgay, setSoNgay] = useState(5);
   const [exchangeRate, setExchangeRate] = useState(26000);
-  const [profitUsd, setProfitUsd] = useState(200);
+  const [profitUsd, setProfitUsd] = useState(15);
+  const [tienXe, setTienXe] = useState(0);
+  const [tienPhuThu, setTienPhuThu] = useState(0);
   const [items, setItems] = useState<ManualItem[]>([]);
   const [ketQua, setKetQua] = useState<BaoGiaKetQua | null>(null);
 
   const extractMutation = useExtractChuongTrinh();
   const { data: bangGia = [] } = useBangGiaDichVu();
 
-  // Recalculate whenever items or params change
   useEffect(() => {
     const priced = items.filter((i) => i.gia !== null);
-    if (priced.length === 0) { setKetQua(null); return; }
-    setKetQua(calcBaoGia(items, tenChuongTrinh, soNgay, exchangeRate, profitUsd));
-  }, [items, tenChuongTrinh, soNgay, exchangeRate, profitUsd]);
+    if (priced.length === 0 && tienXe === 0 && tienPhuThu === 0) { setKetQua(null); return; }
+    setKetQua(calcBaoGia(items, tenChuongTrinh, soNgay, exchangeRate, profitUsd, tienXe, tienPhuThu));
+  }, [items, tenChuongTrinh, soNgay, exchangeRate, profitUsd, tienXe, tienPhuThu]);
 
   const handleExtract = () => {
     if (!rawText.trim()) return;
@@ -76,7 +79,7 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
   const addRow = () => {
     setItems((prev) => [
       ...prev,
-      { id: nanoid(), ngay: soNgay, loai: "meal", mo_ta_zh: "", mo_ta_goi_y: "", bang_gia_ten: "", gia: null },
+      { id: nanoid(), ngay: 1, loai: "meal", mo_ta_zh: "", mo_ta_goi_y: "", bang_gia_ten: "", gia: null },
     ]);
   };
 
@@ -84,16 +87,6 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
 
   const updateRow = (id: string, patch: Partial<ManualItem>) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
-
-  const handleSelectService = (id: string, ten: string, gia: number) =>
-    updateRow(id, { bang_gia_ten: ten, gia });
-
-  const handleClearService = (id: string) => updateRow(id, { bang_gia_ten: "", gia: null });
-
-  const handleSave = (trangThai: "draft" | "final") => {
-    if (!ketQua) return;
-    onSave(ketQua, exchangeRate, profitUsd);
-  };
 
   return (
     <div className="space-y-4">
@@ -106,15 +99,11 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
           value={rawText}
           onChange={(e) => setRawText(e.target.value)}
           placeholder="Dán nội dung chương trình tour tiếng Trung vào đây..."
-          rows={6}
+          rows={5}
           className="text-xs font-mono resize-none"
         />
         <div className="flex justify-end">
-          <Button
-            size="sm"
-            onClick={handleExtract}
-            disabled={!rawText.trim() || extractMutation.isPending}
-          >
+          <Button size="sm" onClick={handleExtract} disabled={!rawText.trim() || extractMutation.isPending}>
             {extractMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
             Phân tích
           </Button>
@@ -122,26 +111,26 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
       </div>
 
       {/* Step 2 — service rows */}
-      {items.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              2. Chọn dịch vụ tương ứng
-            </Label>
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addRow}>
-              <Plus className="h-3 w-3 mr-1" />Thêm dòng
-            </Button>
-          </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            2. Dịch vụ theo ngày
+          </Label>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addRow}>
+            <Plus className="h-3 w-3 mr-1" />Thêm dòng
+          </Button>
+        </div>
 
+        {items.length > 0 ? (
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-[#E6F1FB]">
                   <th className="py-1.5 px-2 text-center font-semibold w-12">Ngày</th>
                   <th className="py-1.5 px-2 text-left font-semibold w-28">Loại</th>
-                  <th className="py-1.5 px-2 text-left font-semibold">Mô tả (TQ)</th>
+                  <th className="py-1.5 px-2 text-left font-semibold">Mô tả</th>
                   <th className="py-1.5 px-2 text-left font-semibold">Dịch vụ VN</th>
-                  <th className="py-1.5 px-2 text-right font-semibold w-24">Giá</th>
+                  <th className="py-1.5 px-2 text-right font-semibold w-28">Giá (VND)</th>
                   <th className="py-1.5 px-2 w-8" />
                 </tr>
               </thead>
@@ -179,24 +168,29 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
                         value={item.mo_ta_zh}
                         onChange={(e) => updateRow(item.id, { mo_ta_zh: e.target.value })}
                         className="h-6 text-xs"
-                        placeholder={item.mo_ta_goi_y}
+                        placeholder={item.mo_ta_goi_y || "Mô tả..."}
                       />
                     </td>
                     <td className="py-1 px-2">
                       <ServiceCombobox
                         value={item.bang_gia_ten}
                         items={bangGia}
-                        onSelect={(ten, gia) => handleSelectService(item.id, ten, gia)}
-                        onClear={() => handleClearService(item.id)}
+                        onSelect={(ten, gia) => updateRow(item.id, { bang_gia_ten: ten, gia })}
+                        onClear={() => updateRow(item.id, { bang_gia_ten: "", gia: null })}
                       />
                     </td>
-                    <td className="py-1 px-2 text-right font-mono text-muted-foreground">
-                      {item.gia ? item.gia.toLocaleString("vi-VN") : "—"}
+                    <td className="py-1 px-2">
+                      <Input
+                        type="number"
+                        value={item.gia ?? ""}
+                        onChange={(e) => updateRow(item.id, { gia: e.target.value ? parseInt(e.target.value) : null })}
+                        className="h-6 text-xs w-full text-right"
+                        placeholder="0"
+                      />
                     </td>
                     <td className="py-1 px-2">
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="ghost" size="icon"
                         className="h-6 w-6 text-muted-foreground hover:text-destructive"
                         onClick={() => removeRow(item.id)}
                       >
@@ -208,24 +202,19 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* Empty state add row */}
-      {items.length === 0 && (
-        <div className="flex justify-center">
-          <Button variant="outline" size="sm" className="text-xs" onClick={addRow}>
-            <Plus className="h-3.5 w-3.5 mr-1" />Thêm dòng thủ công
-          </Button>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-muted-foreground text-center py-2">
+            Nhấn "Phân tích" để trích xuất từ chương trình, hoặc thêm dòng thủ công.
+          </p>
+        )}
+      </div>
 
       {/* Step 3 — params */}
       <div className="space-y-2">
         <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           3. Thông số tính giá
         </Label>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <Label className="text-xs">Tên chương trình</Label>
             <Input
@@ -264,20 +253,50 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
               min={0}
             />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Tiền xe — cả đoàn (VND)</Label>
+            <Input
+              type="number"
+              value={tienXe || ""}
+              onChange={(e) => setTienXe(parseInt(e.target.value) || 0)}
+              className="h-7 text-xs"
+              placeholder="0"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Phụ thu — cả đoàn (VND)</Label>
+            <Input
+              type="number"
+              value={tienPhuThu || ""}
+              onChange={(e) => setTienPhuThu(parseInt(e.target.value) || 0)}
+              className="h-7 text-xs"
+              placeholder="0"
+            />
+          </div>
         </div>
       </div>
 
       {/* Result */}
       {ketQua && (
         <div className="space-y-3">
+          {/* Params summary */}
+          <div className="bg-muted/40 border rounded-lg px-3 py-2 text-xs grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1">
+            <div><span className="text-muted-foreground">Chương trình:</span> <strong>{tenChuongTrinh || "—"}</strong></div>
+            <div><span className="text-muted-foreground">Số ngày:</span> <strong>{soNgay}</strong></div>
+            <div><span className="text-muted-foreground">Tỷ giá:</span> <strong>{fmt(exchangeRate)} VND/USD</strong></div>
+            <div><span className="text-muted-foreground">LN/khách:</span> <strong>{profitUsd} USD ({fmt(profitUsd * exchangeRate)} VND)</strong></div>
+            {tienXe > 0 && <div><span className="text-muted-foreground">Tiền xe:</span> <strong>{fmt(tienXe)} VND</strong></div>}
+            {tienPhuThu > 0 && <div><span className="text-muted-foreground">Phụ thu:</span> <strong>{fmt(tienPhuThu)} VND</strong></div>}
+          </div>
+
           <div className="border rounded-lg p-3">
             <BaoGiaResultTable ketQua={ketQua} />
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleSave("draft")}>
+            <Button variant="outline" size="sm" onClick={() => onSave(ketQua, exchangeRate, profitUsd)}>
               Lưu nháp
             </Button>
-            <Button size="sm" onClick={() => handleSave("final")}>
+            <Button size="sm" onClick={() => onSave(ketQua, exchangeRate, profitUsd)}>
               Lưu chính thức
             </Button>
           </div>

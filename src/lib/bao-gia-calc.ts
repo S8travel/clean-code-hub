@@ -3,7 +3,7 @@ import type { BaoGiaKetQua, BaoGiaCase } from "@/hooks/use-bao-gia";
 export interface ManualItem {
   id: string;
   ngay: number;
-  loai: "hotel" | "meal" | "ticket" | "transport";
+  loai: "hotel" | "meal" | "ticket" | "transport" | "extra";
   mo_ta_zh: string;
   mo_ta_goi_y: string;
   bang_gia_ten: string;
@@ -26,7 +26,9 @@ function calcCase(
   soNgay: number,
   exchangeRate: number,
   profitUsd: number,
-  cfg: CaseConfig
+  cfg: CaseConfig,
+  tienXe: number,
+  tienPhuThu: number,
 ): BaoGiaCase {
   const { guests, pax, rooms } = cfg;
 
@@ -42,8 +44,8 @@ function calcCase(
     .filter((i) => i.loai === "ticket" && i.gia)
     .reduce((s, i) => s + i.gia! * pax, 0);
 
-  const transport = items
-    .filter((i) => i.loai === "transport" && i.gia)
+  const transport = tienXe + tienPhuThu + items
+    .filter((i) => (i.loai === "transport" || i.loai === "extra") && i.gia)
     .reduce((s, i) => s + i.gia!, 0);
 
   const insurance = 100_000 * pax;
@@ -63,10 +65,12 @@ export function calcBaoGia(
   tenChuongTrinh: string,
   soNgay: number,
   exchangeRate: number,
-  profitUsd: number
+  profitUsd: number,
+  tienXe = 0,
+  tienPhuThu = 0,
 ): BaoGiaKetQua {
   const [case_16, case_20] = CASES.map((cfg) =>
-    calcCase(items, soNgay, exchangeRate, profitUsd, cfg)
+    calcCase(items, soNgay, exchangeRate, profitUsd, cfg, tienXe, tienPhuThu)
   );
 
   const gia_trung_binh_vnd = Math.round((case_16.final_price_vnd + case_20.final_price_vnd) / 2);
