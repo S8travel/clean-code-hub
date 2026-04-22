@@ -834,7 +834,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
 
         return (
           <Card key={ksId} className={`border-border transition-colors ${selectedKsIds.includes(ksId) ? "border-primary/50 bg-primary/5" : ""}`}>
-            <CardHeader className="py-1.5 px-4">
+            <CardHeader className="py-1 px-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2 flex-wrap">
                   <Checkbox
@@ -906,14 +906,14 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 <Table>
                   <TableHeader>
                     <TableRow className="text-xs">
-                      <TableHead className="w-[120px] py-1 px-2">Loại phòng</TableHead>
-                      <TableHead className="w-[60px] py-1 px-2">Số phòng</TableHead>
-                      <TableHead className="w-[90px] py-1 px-2">C/I</TableHead>
-                      <TableHead className="w-[90px] py-1 px-2">C/O</TableHead>
-                      <TableHead className="w-[50px] py-1 px-2">Đêm</TableHead>
-                      <TableHead className="w-[100px] py-1 px-2">Giá/phòng</TableHead>
-                      <TableHead className="w-[110px] py-1 px-2">Thành tiền</TableHead>
-                      <TableHead className="w-[32px] py-1 px-2" />
+                      <TableHead className="w-[120px] h-auto py-1 px-2">Loại phòng</TableHead>
+                      <TableHead className="w-[60px] h-auto py-1 px-2">Số phòng</TableHead>
+                      <TableHead className="w-[90px] h-auto py-1 px-2">C/I</TableHead>
+                      <TableHead className="w-[90px] h-auto py-1 px-2">C/O</TableHead>
+                      <TableHead className="w-[50px] h-auto py-1 px-2">Đêm</TableHead>
+                      <TableHead className="w-[100px] h-auto py-1 px-2">Giá/phòng</TableHead>
+                      <TableHead className="w-[110px] h-auto py-1 px-2">Thành tiền</TableHead>
+                      <TableHead className="w-[32px] h-auto py-1 px-2" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
