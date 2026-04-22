@@ -3,7 +3,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Printer, Trash2 } from "lucide-react";
+import { exportMenuOverviewWord } from "@/lib/export-menu-word";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
@@ -27,14 +28,17 @@ interface MonListEditorProps {
   buaAn: "trua" | "toi";
   nhaHangId: number | null;
   booking: BookingNHRow | null;
+  setMenuIdFromDieuTour?: number | null;
   onUpdated: () => void;
 }
 
-function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, onUpdated }: MonListEditorProps) {
+function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, setMenuIdFromDieuTour, onUpdated }: MonListEditorProps) {
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
   const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
-  const [selectedSetMenuId, setSelectedSetMenuId] = useState<number | null>(null);
+  const [selectedSetMenuId, setSelectedSetMenuId] = useState<number | null>(
+    booking?.set_menu_id ?? setMenuIdFromDieuTour ?? null,
+  );
   const { data: setMenuMons = [] } = useSetMenuMons(selectedSetMenuId);
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
   const [newMon, setNewMon] = useState("");
@@ -173,12 +177,29 @@ interface Props {
   doanId: number;
   days: MenuDayData[];
   onUpdated: () => void;
+  tenDoan?: string;
+  soKhach?: number;
+  hdvTen?: string;
 }
 
-export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdated }: Props) {
+export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdated, tenDoan, soKhach, hdvTen }: Props) {
   const daysWithNH = days.filter(
     (d) => d.an_trua_nha_hang_id || d.an_toi_nha_hang_id
   );
+
+  const handlePrint = async () => {
+    const wordDays = daysWithNH.map((day) => ({
+      ngay_so: day.ngay_so,
+      ngay_date: day.ngay_date,
+      trua: day.an_trua_nha_hang_id
+        ? { ten_nh: day.an_trua_nha_hang_ten ?? "", mon_list: day.booking_trua?.mon_an_snapshot ?? [] }
+        : null,
+      toi: day.an_toi_nha_hang_id
+        ? { ten_nh: day.an_toi_nha_hang_ten ?? "", mon_list: day.booking_toi?.mon_an_snapshot ?? [] }
+        : null,
+    }));
+    await exportMenuOverviewWord({ tenDoan: tenDoan ?? "", hdvTen: hdvTen ?? "", soKhach: soKhach ?? 0, days: wordDays });
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -231,6 +252,7 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
                             buaAn="trua"
                             nhaHangId={day.an_trua_nha_hang_id}
                             booking={day.booking_trua}
+                            setMenuIdFromDieuTour={day.an_trua_set_menu_id}
                             onUpdated={onUpdated}
                           />
                         </div>
@@ -256,6 +278,7 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
                             buaAn="toi"
                             nhaHangId={day.an_toi_nha_hang_id}
                             booking={day.booking_toi}
+                            setMenuIdFromDieuTour={day.an_toi_set_menu_id}
                             onUpdated={onUpdated}
                           />
                         </div>
@@ -286,7 +309,10 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
           </div>
         )}
 
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-between pt-2">
+          <Button variant="outline" size="sm" onClick={handlePrint} disabled={daysWithNH.length === 0}>
+            <Printer className="h-4 w-4 mr-1.5" /> In menu
+          </Button>
           <Button variant="outline" onClick={onClose}>Đóng</Button>
         </div>
       </DialogContent>

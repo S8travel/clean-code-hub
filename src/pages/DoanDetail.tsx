@@ -380,7 +380,7 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="menu" className="mt-4">
-            <BookingNHTab doanId={doanId} tenDoan={doan.ten_doan} soKhach={totalKhach || doan.so_khach || 0} />
+            <BookingNHTab doanId={doanId} tenDoan={doan.ten_doan} soKhach={totalKhach || doan.so_khach || 0} hdvTen={doan.hdv || ""} />
           </TabsContent>
 
           <TabsContent value="booking-dv" className="mt-4">

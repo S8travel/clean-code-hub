@@ -379,10 +379,21 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
             <div className="flex flex-wrap gap-1.5 shrink-0 pt-0.5">
               {/* Gửi email — chỉ lần đầu */}
               {row.booking_status === "chua_dat" && (
-                <Button size="sm" className="h-8 text-xs" onClick={openEmailModal}>
-                  <Send className="h-3.5 w-3.5 mr-1" />
-                  Gửi email
-                </Button>
+                <>
+                  <Button size="sm" className="h-8 text-xs" onClick={openEmailModal}>
+                    <Send className="h-3.5 w-3.5 mr-1" />
+                    Gửi email
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs text-green-600 border-green-300 hover:bg-green-50"
+                    onClick={() => updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates: { booking_status: "cho_xac_nhan" } })}
+                    disabled={updateMut.isPending}
+                  >
+                    Gửi Zalo
+                  </Button>
+                </>
               )}
               {/* Xác nhận */}
               {row.booking_status === "cho_xac_nhan" && (

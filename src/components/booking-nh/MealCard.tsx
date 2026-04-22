@@ -362,6 +362,16 @@ export default function MealCard({
 
   // Status actions
   const handleSend = () => openEmailModal();
+  const handleSendZalo = () => {
+    if (booking?.id) {
+      updateMut.mutate({ id: booking.id, doan_id: doanId, booking_status: "da_gui" });
+    } else {
+      upsertMut.mutate({
+        doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn,
+        nha_hang_id: nhaHangId!, mon_an_snapshot: monList, booking_status: "da_gui",
+      } as any);
+    }
+  };
   const handleConfirm = () => {
     saveBooking({ booking_status: "nh_xac_nhan" });
     toast.success("Đã xác nhận");
@@ -515,9 +525,20 @@ export default function MealCard({
               </div>
               <div className="flex flex-wrap gap-1 shrink-0">
                 {(!booking || booking.booking_status === "chua_gui") && (
-                  <Button size="sm" className="h-7 text-xs" onClick={handleSend}>
-                    <Send className="h-3 w-3 mr-1" /> Gửi
-                  </Button>
+                  <>
+                    <Button size="sm" className="h-7 text-xs" onClick={handleSend}>
+                      <Send className="h-3 w-3 mr-1" /> Gửi
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50"
+                      onClick={handleSendZalo}
+                      disabled={updateMut.isPending || upsertMut.isPending}
+                    >
+                      Gửi Zalo
+                    </Button>
+                  </>
                 )}
                 {booking?.booking_status === "da_gui" && (
                   <>

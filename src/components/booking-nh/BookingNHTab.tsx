@@ -20,9 +20,10 @@ interface Props {
   doanId: number;
   tenDoan: string;
   soKhach: number;
+  hdvTen?: string;
 }
 
-export default function BookingNHTab({ doanId, tenDoan, soKhach }: Props) {
+export default function BookingNHTab({ doanId, tenDoan, soKhach, hdvTen }: Props) {
   const { data: days = [], isLoading } = useBookingNH(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
   const qc = useQueryClient();
@@ -191,6 +192,9 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach }: Props) {
         doanId={doanId}
         days={days}
         onUpdated={() => qc.invalidateQueries({ queryKey: ["doan_booking_nh", doanId] })}
+        tenDoan={tenDoan}
+        soKhach={soKhach}
+        hdvTen={hdvTen}
       />
     </div>
   );
