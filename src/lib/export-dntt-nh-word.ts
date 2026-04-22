@@ -22,14 +22,14 @@ const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: 
 const GRAY = { fill: "D9D9D9", type: ShadingType.CLEAR, color: "auto" };
 const WHITE = { fill: "FFFFFF", type: ShadingType.CLEAR, color: "auto" };
 
-// Portrait A4
-const PAGE_W = 11906;
-const PAGE_H = 16838;
+// Landscape A4
+const PAGE_W = 16838;
+const PAGE_H = 11906;
 const MARGIN = 720;
-const CONTENT_W = PAGE_W - MARGIN * 2; // 10466
+const CONTENT_W = PAGE_W - MARGIN * 2; // 15398
 
-// 12 columns — total = 10466
-const COL_W = [950, 800, 1600, 500, 380, 820, 920, 800, 650, 850, 1400, 796];
+// 12 columns — total = 15398
+const COL_W = [1400, 1050, 2200, 700, 560, 1200, 1400, 1050, 900, 1250, 2200, 1488];
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -95,6 +95,7 @@ export interface NHDocEntry {
   foc: number | null;      // foc_mien (số miễn phí)
   items: NHDocItem[];
   ncc: { ten?: string; so_tai_khoan?: string; ngan_hang?: string } | null;
+  tai_khoan_thanh_toan: string | null;
   so_tien_coc: number;
   can_tru: number;
   so_tien_con_tt: number;
@@ -165,7 +166,7 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   const headers = [
     "CODE\nĐOÀN", "NGÀY", "TÊN NHÀ HÀNG\n/ DỊCH VỤ", "Số\nkhách",
     "FOC", "Đơn giá\n(gồm VAT)", "Thành\ntiền", "Số tiền\ncọc",
-    "Cấn\ntrừ", "Số tiền còn\nthanh toán", "Thông tin\nNgân hàng", "Ghi chú",
+    "Cấn\ntrừ", "Số tiền còn\nthanh toán", "Tài khoản\nthanh toán", "Ghi chú",
   ];
   rows.push(
     new TableRow({
@@ -183,12 +184,20 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
     const itemCount = Math.max(entry.items.length, 1);
     const items = entry.items.length > 0 ? entry.items : [{ so_luong: 0, don_gia: 0, ghi_chu: "" }];
 
-    // NCC info paragraphs
-    const nccChildren: Paragraph[] = [];
-    if (entry.ncc?.ten) nccChildren.push(p(entry.ncc.ten, { size: 13, alignment: AlignmentType.LEFT, bold: true }));
-    if (entry.ncc?.so_tai_khoan) nccChildren.push(p(entry.ncc.so_tai_khoan, { size: 13, alignment: AlignmentType.LEFT }));
-    if (entry.ncc?.ngan_hang) nccChildren.push(p(entry.ncc.ngan_hang, { size: 13, alignment: AlignmentType.LEFT }));
-    if (nccChildren.length === 0) nccChildren.push(p("—", { size: 13 }));
+    // Bank / payment account info from restaurant's tai_khoan_thanh_toan
+    const bankChildren: Paragraph[] = [];
+    if (entry.tai_khoan_thanh_toan) {
+      const lines = entry.tai_khoan_thanh_toan.split("\n").filter(Boolean);
+      lines.forEach((line) =>
+        bankChildren.push(p(line.trim(), { size: 13, alignment: AlignmentType.LEFT }))
+      );
+    } else if (entry.ncc?.ten) {
+      // fallback to NCC info if no restaurant bank account
+      bankChildren.push(p(entry.ncc.ten, { size: 13, alignment: AlignmentType.LEFT, bold: true }));
+      if (entry.ncc.so_tai_khoan) bankChildren.push(p(entry.ncc.so_tai_khoan, { size: 13, alignment: AlignmentType.LEFT }));
+      if (entry.ncc.ngan_hang) bankChildren.push(p(entry.ncc.ngan_hang, { size: 13, alignment: AlignmentType.LEFT }));
+    }
+    if (bankChildren.length === 0) bankChildren.push(p("—", { size: 13 }));
 
     for (let ri = 0; ri < items.length; ri++) {
       const item = items[ri];
@@ -241,8 +250,8 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
             width: COL_W[9], rowSpan: itemCount,
           }),
         );
-        // Thông tin NH
-        cells.push(cell(nccChildren, { width: COL_W[10], rowSpan: itemCount }));
+        // Tài khoản thanh toán
+        cells.push(cell(bankChildren, { width: COL_W[10], rowSpan: itemCount }));
       }
 
       // Ghi chú — per item
@@ -301,7 +310,7 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
     sections: [{
       properties: {
         page: {
-          size: { width: PAGE_W, height: PAGE_H, orientation: PageOrientation.PORTRAIT },
+          size: { width: PAGE_W, height: PAGE_H, orientation: PageOrientation.LANDSCAPE },
           margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
         },
       },

@@ -19,6 +19,7 @@ export interface NhaHangDetail {
   foc_mien: number | null;
   chiet_khau_phan_tram: number | null;
   nguoi_thanh_toan: string | null;
+  tai_khoan_thanh_toan: string | null;
   nha_cung_cap_id: number | null;
   ten_ncc: string | null;
   ncc_so_tai_khoan: string | null;
@@ -90,7 +91,7 @@ export function useChiPhiNHSection(doanId?: number) {
       const nhIds = [...new Set(meals.map((m) => m.nha_hang_id))];
       const { data: nhList, error: e2 } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, nha_cung_cap_id")
+        .select("id, ten, dia_chi, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, tai_khoan_thanh_toan, nha_cung_cap_id")
         .in("id", nhIds);
       if (e2) throw e2;
 
@@ -114,6 +115,7 @@ export function useChiPhiNHSection(doanId?: number) {
         const ncc = nh.nha_cung_cap_id ? nccMap[nh.nha_cung_cap_id] : null;
         nhaHangMap[nh.id] = {
           ...nh,
+          tai_khoan_thanh_toan: nh.tai_khoan_thanh_toan || null,
           ten_ncc: ncc?.ten || null,
           ncc_so_tai_khoan: ncc?.so_tai_khoan || null,
           ncc_ngan_hang: ncc?.ngan_hang || null,

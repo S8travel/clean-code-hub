@@ -378,13 +378,14 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     });
   }, []);
 
-  const handleExtraSave = useCallback((key: string, idx: number) => {
+  const handleExtraSave = useCallback((key: string, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => {
     const extra = extrasMapRef.current[key]?.[idx];
     const row = localRowsRef.current[key];
     if (!extra || !row || (!extra.mo_ta && !extra.don_gia)) return;
 
     const prefix = extraPrefix(row.bua_an);
     const thanhTien = extra.so_luong * extra.don_gia;
+    const nguoiTt = nguoiTtOverride ?? extra.nguoi_tt;
 
     upsertMut.mutate(
       {
@@ -397,8 +398,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         mo_ta: `${prefix}${extra.mo_ta}`,
         don_gia: extra.don_gia,
         so_luong: extra.so_luong,
-        tien_cong_ty: extra.nguoi_tt !== "hdv" ? thanhTien : 0,
-        tien_hdv: extra.nguoi_tt === "hdv" ? thanhTien : 0,
+        tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
+        tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
       },
       {
         onSuccess: (data) => {
@@ -631,9 +632,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
           so_khach: row.so_khach,
           foc: nh.foc_khach && nh.foc_mien ? nh.foc_mien : null,
           items,
-          ncc: nh.nha_cung_cap_id
-            ? { ten: nh.ten_ncc || undefined, so_tai_khoan: nh.ncc_so_tai_khoan || undefined, ngan_hang: nh.ncc_ngan_hang || undefined }
-            : null,
+          ncc: { ten: nh.ten_ncc || undefined, so_tai_khoan: nh.ncc_so_tai_khoan || undefined, ngan_hang: nh.ncc_ngan_hang || undefined },
+          tai_khoan_thanh_toan: nh.tai_khoan_thanh_toan || null,
           so_tien_coc: soCoc,
           can_tru: canTruAmount,
           so_tien_con_tt: soTienConTT,
@@ -1103,7 +1103,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                         onClick={() => {
                           const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
                           handleExtraChange(key, idx, "nguoi_tt", next);
-                          setTimeout(() => handleExtraSave(key, idx), 0);
+                          handleExtraSave(key, idx, next);
                         }}
                         title="Người thanh toán: công ty / HDV"
                       >
@@ -1140,7 +1140,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   {/* Col 8: thành tiền */}
                   <td className="px-3 py-1 text-right whitespace-nowrap">
                     {extra.so_luong > 0 && extra.don_gia > 0 ? (
-                      <span className={cn("text-[11px]", extra.nguoi_tt === "hdv" ? "text-amber-600" : "text-muted-foreground")}>
+                      <span className={cn("text-[11px] font-semibold", extra.nguoi_tt === "hdv" ? "text-amber-600" : "text-primary")}>
                         {fmt(extra.so_luong * extra.don_gia)}
                       </span>
                     ) : ""}
@@ -1149,7 +1149,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   <td className="px-2 py-1 text-center">
                     {extra.nguoi_tt === "hdv" && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-                        HDV tự trả
+                        HDV thanh toán
                       </span>
                     )}
                   </td>
@@ -1326,7 +1326,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   <div className="space-y-0.5 text-muted-foreground">
                     <p>Gồm: {fmt(mainTotalModal)} VND (chính){allExtrasTotalModal > 0 ? ` + ${fmt(allExtrasTotalModal)} VND (phát sinh)` : ""}</p>
                     {hdvExtrasTotalModal > 0 && (
-                      <p className="text-amber-600">HDV tự trả: <span className="font-semibold">−{fmt(hdvExtrasTotalModal)} VND</span></p>
+                      <p className="text-amber-600">HDV thanh toán: <span className="font-semibold">−{fmt(hdvExtrasTotalModal)} VND</span></p>
                     )}
                   </div>
                 )}
