@@ -79,6 +79,7 @@ interface LocalNHExtra {
   mo_ta: string;
   so_luong: number;
   don_gia: number;
+  nguoi_tt: "cong_ty" | "hdv";
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -186,6 +187,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
           mo_ta: cp.mo_ta?.slice(prefix.length) || "",
           so_luong: cp.so_luong,
           don_gia: cp.don_gia,
+          nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
         }));
       }
     }
@@ -364,7 +366,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
   const addExtra = useCallback((key: string) => {
     setExtrasMap((prev) => ({
       ...prev,
-      [key]: [...(prev[key] || []), { mo_ta: "", so_luong: 1, don_gia: 0 }],
+      [key]: [...(prev[key] || []), { mo_ta: "", so_luong: 1, don_gia: 0, nguoi_tt: "cong_ty" }],
     }));
   }, []);
 
@@ -382,7 +384,6 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     if (!extra || !row || (!extra.mo_ta && !extra.don_gia)) return;
 
     const prefix = extraPrefix(row.bua_an);
-    const nh = nhData?.nhaHangMap[row.nha_hang_id];
     const thanhTien = extra.so_luong * extra.don_gia;
 
     upsertMut.mutate(
@@ -396,8 +397,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         mo_ta: `${prefix}${extra.mo_ta}`,
         don_gia: extra.don_gia,
         so_luong: extra.so_luong,
-        tien_cong_ty: nh?.nguoi_thanh_toan !== "hdv" ? thanhTien : 0,
-        tien_hdv: nh?.nguoi_thanh_toan === "hdv" ? thanhTien : 0,
+        tien_cong_ty: extra.nguoi_tt !== "hdv" ? thanhTien : 0,
+        tien_hdv: extra.nguoi_tt === "hdv" ? thanhTien : 0,
       },
       {
         onSuccess: (data) => {
@@ -471,7 +472,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     const nh = nhData?.nhaHangMap[row.nha_hang_id];
     const soKhachThucTe = calcSoKhachThucTe(row.so_khach, nh?.foc_khach ?? null, nh?.foc_mien ?? null);
     const mainTotalTruocCK = soKhachThucTe * row.don_gia;
-    const extrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+    const allExtrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+    const hdvExtrasTotal = extras.filter(e => e.nguoi_tt === "hdv").reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+    const extrasTotal = allExtrasTotal - hdvExtrasTotal;
     const ckPct = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
     const chietKhau = ckPct && ckPct > 0 ? Math.round(mainTotalTruocCK * ckPct / 100) : 0;
     const totalBua = mainTotalTruocCK - chietKhau + extrasTotal;
@@ -1075,24 +1078,91 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   key={idx}
                   className="border-b border-border/50 last:border-b-0 bg-muted/20"
                 >
+                  {/* Col 1: empty */}
                   <td />
+                  {/* Col 2: empty */}
                   <td />
-                  <td colSpan={2} className="pl-6 py-1">
-                    <ExtraRow
-                      extra={extra}
-                      onChange={(field, val) => handleExtraChange(key, idx, field as keyof LocalNHExtra, val)}
-                      onBlur={() => handleExtraSave(key, idx)}
-                      onDelete={() => handleExtraDelete(key, idx)}
-                    />
+                  {/* Col 3: description + HDV toggle */}
+                  <td className="px-3 py-1">
+                    <div className="flex items-center gap-1.5 pl-4">
+                      <span className="text-muted-foreground text-[10px] shrink-0">↳</span>
+                      <Input
+                        placeholder="Dịch vụ phát sinh"
+                        value={extra.mo_ta}
+                        onChange={(e) => handleExtraChange(key, idx, "mo_ta", e.target.value)}
+                        onBlur={() => handleExtraSave(key, idx)}
+                        className="h-6 text-xs flex-1"
+                      />
+                      <button
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded font-medium border shrink-0 cursor-pointer",
+                          extra.nguoi_tt === "hdv"
+                            ? "bg-amber-100 text-amber-700 border-amber-300"
+                            : "bg-muted text-muted-foreground border-border"
+                        )}
+                        onClick={() => {
+                          const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
+                          handleExtraChange(key, idx, "nguoi_tt", next);
+                          setTimeout(() => handleExtraSave(key, idx), 0);
+                        }}
+                        title="Người thanh toán: công ty / HDV"
+                      >
+                        {extra.nguoi_tt === "hdv" ? "HDV" : "CT"}
+                      </button>
+                    </div>
                   </td>
+                  {/* Col 4: empty */}
                   <td />
-                  <td />
-                  <td className="px-2 py-1 text-right text-muted-foreground text-[10px]">
-                    {extra.so_luong > 0 && extra.don_gia > 0 ? fmt(extra.so_luong * extra.don_gia) : ""}
+                  {/* Col 5: số lượng */}
+                  <td className="px-2 py-1">
+                    <div className="flex justify-center">
+                      <NHInput
+                        value={extra.so_luong}
+                        onChange={(v) => handleExtraChange(key, idx, "so_luong", v)}
+                        onBlur={() => handleExtraSave(key, idx)}
+                        width="w-[44px]"
+                      />
+                    </div>
                   </td>
+                  {/* Col 6: đơn giá */}
+                  <td className="px-2 py-1">
+                    <div className="flex justify-center">
+                      <NHInput
+                        value={extra.don_gia}
+                        onChange={(v) => handleExtraChange(key, idx, "don_gia", v)}
+                        onBlur={() => handleExtraSave(key, idx)}
+                        width="w-[84px]"
+                      />
+                    </div>
+                  </td>
+                  {/* Col 7: CK% — empty */}
                   <td />
+                  {/* Col 8: thành tiền */}
+                  <td className="px-3 py-1 text-right whitespace-nowrap">
+                    {extra.so_luong > 0 && extra.don_gia > 0 ? (
+                      <span className={cn("text-[11px]", extra.nguoi_tt === "hdv" ? "text-amber-600" : "text-muted-foreground")}>
+                        {fmt(extra.so_luong * extra.don_gia)}
+                      </span>
+                    ) : ""}
+                  </td>
+                  {/* Col 9: HDV badge */}
+                  <td className="px-2 py-1 text-center">
+                    {extra.nguoi_tt === "hdv" && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
+                        HDV tự trả
+                      </span>
+                    )}
+                  </td>
+                  {/* Col 10: empty */}
                   <td />
-                  <td />
+                  {/* Col 11: delete */}
+                  <td className="px-2 py-1">
+                    <div className="flex justify-end">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleExtraDelete(key, idx)}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </Fragment>
@@ -1218,7 +1288,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         const nh = nhaHangMap[row.nha_hang_id];
         const soKhachThucTe = calcSoKhachThucTe(row.so_khach, nh?.foc_khach ?? null, nh?.foc_mien ?? null);
         const mainTotalModal = soKhachThucTe * row.don_gia;
-        const extrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+        const allExtrasTotalModal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+        const hdvExtrasTotalModal = extras.filter(e => e.nguoi_tt === "hdv").reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+        const extrasTotal = allExtrasTotalModal - hdvExtrasTotalModal;
         const ckPctModal = nh?.chiet_khau_phan_tram ?? null;
         const chietKhauModal = ckPctModal && ckPctModal > 0 ? Math.round(mainTotalModal * ckPctModal / 100) : 0;
         const totalBua = mainTotalModal - chietKhauModal + extrasTotal;
@@ -1251,9 +1323,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   </>
                 )}
                 {extras.length > 0 && dnttAlreadyPaid === 0 && (
-                  <p className="text-muted-foreground">
-                    Gồm: {fmt(mainTotalModal)} VND (chính) + {fmt(extrasTotal)} VND (phát sinh)
-                  </p>
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <p>Gồm: {fmt(mainTotalModal)} VND (chính){allExtrasTotalModal > 0 ? ` + ${fmt(allExtrasTotalModal)} VND (phát sinh)` : ""}</p>
+                    {hdvExtrasTotalModal > 0 && (
+                      <p className="text-amber-600">HDV tự trả: <span className="font-semibold">−{fmt(hdvExtrasTotalModal)} VND</span></p>
+                    )}
+                  </div>
                 )}
                 {isBSMode ? (
                   <div className="space-y-1.5">
@@ -1504,46 +1579,3 @@ function NHInput({
   );
 }
 
-function ExtraRow({
-  extra, onChange, onBlur, onDelete,
-}: {
-  extra: LocalNHExtra;
-  onChange: (field: string, val: any) => void;
-  onBlur: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <Input
-        placeholder="Dịch vụ phát sinh"
-        value={extra.mo_ta}
-        onChange={(e) => onChange("mo_ta", e.target.value)}
-        onBlur={onBlur}
-        className="h-6 text-xs flex-1 min-w-[100px]"
-      />
-      <span className="text-muted-foreground shrink-0">×</span>
-      <Input
-        type="number"
-        placeholder="SL"
-        value={extra.so_luong || ""}
-        onChange={(e) => onChange("so_luong", Number(e.target.value) || 1)}
-        onBlur={onBlur}
-        className="h-6 text-xs w-[44px] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      <Input
-        type="number"
-        placeholder="Giá"
-        value={extra.don_gia || ""}
-        onChange={(e) => onChange("don_gia", Number(e.target.value) || 0)}
-        onBlur={onBlur}
-        className="h-6 text-xs w-[80px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      <span className="text-[11px] text-muted-foreground shrink-0 w-[70px] text-right">
-        {fmt(extra.so_luong * extra.don_gia)}
-      </span>
-      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onDelete}>
-        <Trash2 className="h-3 w-3 text-destructive" />
-      </Button>
-    </div>
-  );
-}
