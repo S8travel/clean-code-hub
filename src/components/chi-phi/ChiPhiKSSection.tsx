@@ -707,7 +707,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const ksWithDnttSelected = selectedKsIds.filter((id) => activeDnttByKs[id]).length;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <h3 className="text-sm font-semibold flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-900 px-3 py-1.5 rounded-md">
         🏨 Khách sạn
         <Badge variant="secondary" className="text-xs">
@@ -834,7 +834,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
 
         return (
           <Card key={ksId} className={`border-border transition-colors ${selectedKsIds.includes(ksId) ? "border-primary/50 bg-primary/5" : ""}`}>
-            <CardHeader className="py-2 px-4">
+            <CardHeader className="py-1.5 px-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2 flex-wrap">
                   <Checkbox
@@ -896,7 +896,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 </p>
               )}
             </CardHeader>
-            {showContent && <CardContent className="px-4 pb-2 pt-0">
+            {showContent && <CardContent className="px-4 pb-1.5 pt-0">
               {isOrphaned && (
                 <p className="text-xs text-muted-foreground italic mb-2">
                   Khách sạn đã được xóa khỏi lịch trình điều tour.
@@ -949,7 +949,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
               </div>}
 
               {/* ── Thanh toán section ── */}
-              <div className="mt-3 pt-3 border-t border-border space-y-2">
+              <div className="mt-2 pt-2 border-t border-border space-y-1.5">
                 {/* ĐNTT history list */}
                 {(() => {
                   const allKsDntts = dnttList.filter(
@@ -968,7 +968,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                           <div
                             key={dntt.id}
                             className={cn(
-                              "flex items-center justify-between px-3 py-1.5 text-xs",
+                              "flex items-center justify-between px-3 py-1 text-xs",
                               i > 0 && "border-t border-border",
                               isPaid ? "bg-emerald-50/50" : "bg-muted/20",
                             )}

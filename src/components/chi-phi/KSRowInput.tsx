@@ -47,45 +47,45 @@ export default memo(function KSRowInput({
 
   return (
     <TableRow className="text-xs">
-      <TableCell className="py-1.5 px-2">
+      <TableCell className="py-0.5 px-2">
         <Input
           value={localLoaiPhong}
           onChange={(e) => setLocalLoaiPhong(e.target.value)}
           onBlur={handleLoaiPhongBlur}
-          className="h-7 text-xs"
+          className="h-6 text-xs"
           placeholder="Twin/Double..."
         />
       </TableCell>
-      <TableCell className="py-1.5 px-2">
+      <TableCell className="py-0.5 px-2">
         <Input
           type="number"
           value={localSoPhong}
           onChange={(e) => setLocalSoPhong(e.target.value)}
           onBlur={handleSoPhongBlur}
-          className="h-7 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </TableCell>
-      <TableCell className="py-1.5 px-2 text-xs">
+      <TableCell className="py-0.5 px-2 text-xs">
         {row.ci ? format(new Date(row.ci), "dd/MM/yyyy") : "—"}
       </TableCell>
-      <TableCell className="py-1.5 px-2 text-xs">
+      <TableCell className="py-0.5 px-2 text-xs">
         {row.co ? format(new Date(row.co), "dd/MM/yyyy") : "—"}
       </TableCell>
-      <TableCell className="py-1.5 px-2 text-xs text-center">{row.so_dem}</TableCell>
-      <TableCell className="py-1.5 px-2">
+      <TableCell className="py-0.5 px-2 text-xs text-center">{row.so_dem}</TableCell>
+      <TableCell className="py-0.5 px-2">
         <Input
           type="number"
           value={localGiaPhong}
           onChange={(e) => setLocalGiaPhong(e.target.value)}
           onBlur={handleGiaPhongBlur}
           placeholder="0"
-          className="h-7 text-xs w-[90px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="h-6 text-xs w-[90px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </TableCell>
-      <TableCell className="py-1.5 px-2 text-xs font-medium">
+      <TableCell className="py-0.5 px-2 text-xs font-medium">
         {fmt(thanhTien)}
       </TableCell>
-      <TableCell className="py-1.5 px-2">
+      <TableCell className="py-0.5 px-2">
         <Button
           variant="ghost"
           size="icon"
