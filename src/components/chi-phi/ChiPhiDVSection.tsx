@@ -48,7 +48,7 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]" }: {
       onChange={e => onChange(Number(e.target.value) || 0)}
       onBlur={onBlur}
       onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-      className={cn("h-6 text-xs px-1.5 py-0 text-center", width)}
+      className={cn("h-6 text-xs px-1.5 py-0 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", width)}
     />
   );
 }

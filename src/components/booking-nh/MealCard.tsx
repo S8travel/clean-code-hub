@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { normalizeEmails } from "@/lib/utils";
+import { normalizeEmails, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -98,14 +98,14 @@ export default function MealCard({
   const [expanded, setExpanded] = useState(true);
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
   const [ghiChu, setGhiChu] = useState(booking?.ghi_chu ?? "");
-  const [deadline, setDeadline] = useState(booking?.deadline ?? "");
+  const [deadline, setDeadline] = useState(booking?.deadline || getDefaultDeadline(ngayDate || ""));
   const [newMon, setNewMon] = useState("");
 
   // Sync khi booking thay đổi từ bên ngoài (overview modal)
   useEffect(() => {
     setMonList(booking?.mon_an_snapshot ?? []);
     setGhiChu(booking?.ghi_chu ?? "");
-    setDeadline(booking?.deadline ?? "");
+    setDeadline(booking?.deadline || getDefaultDeadline(ngayDate || ""));
     setSelectedSetMenuId(booking?.set_menu_id ?? setMenuIdFromDieuTour ?? null);
   }, [booking?.id, JSON.stringify(booking?.mon_an_snapshot)]);
 
@@ -172,6 +172,20 @@ export default function MealCard({
     } else {
       upsertMut.mutate(payload as any);
     }
+  };
+
+  useEffect(() => {
+    if (!booking?.deadline && ngayDate) {
+      const def = getDefaultDeadline(ngayDate);
+      if (def) saveBooking({ deadline: def });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleDeadlineChange = (val: string) => {
+    const corrected = blockWeekendDate(val);
+    setDeadline(corrected);
+    if (corrected) saveBooking({ deadline: corrected });
   };
 
   const handleSetMenuChange = (id: number | null) => {
@@ -517,7 +531,7 @@ export default function MealCard({
                   <input
                     type="date"
                     value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
+                    onChange={(e) => handleDeadlineChange(e.target.value)}
                     onBlur={() => saveBooking({ deadline: deadline || null })}
                     className="h-7 w-36 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
                   />

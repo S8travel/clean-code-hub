@@ -72,6 +72,7 @@ export interface LocalNHRow {
   so_khach: number;
   don_gia: number;
   chiet_khau_phan_tram: number;
+  nguoi_tt?: "cong_ty" | "hdv";
 }
 
 interface LocalNHExtra {
@@ -176,6 +177,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         so_khach: (mainCp?.so_luong != null && mainCp.so_luong > 1) ? mainCp.so_luong : (soKhachDefault || mainCp?.so_luong || 0),
         don_gia: (mainCp?.don_gia != null && mainCp.don_gia > 0) ? mainCp.don_gia : (meal.gia_set_menu ?? 0),
         chiet_khau_phan_tram: nhData.nhaHangMap[meal.nha_hang_id]?.chiet_khau_phan_tram ?? 0,
+        nguoi_tt: (mainCp?.tien_hdv ?? 0) > 0 ? "hdv" : (nhData.nhaHangMap[meal.nha_hang_id]?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty"),
       };
 
       const extraCps = nhChiPhi.filter(
@@ -310,7 +312,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   }, []);
 
-  const handleSave = useCallback((key: string) => {
+  const handleSave = useCallback((key: string, nguoiTtOverride?: "cong_ty" | "hdv") => {
     const row = localRowsRef.current[key];
     if (!row || (!row.don_gia && !row.so_khach)) return;
 
@@ -321,6 +323,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     const thanhTienTruocCK = soKhachThucTe * row.don_gia;
     const ck = row.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
     const thanhTien = ck && ck > 0 ? Math.round(thanhTienTruocCK * (1 - ck / 100)) : thanhTienTruocCK;
+    const nguoiTt = nguoiTtOverride ?? row.nguoi_tt ?? (nh?.nguoi_thanh_toan !== "hdv" ? "cong_ty" : "hdv");
 
     upsertMut.mutate(
       {
@@ -333,8 +336,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         mo_ta: `${nhName} (${buaStr})`,
         don_gia: row.don_gia,
         so_luong: row.so_khach,
-        tien_cong_ty: nh?.nguoi_thanh_toan !== "hdv" ? thanhTien : 0,
-        tien_hdv: nh?.nguoi_thanh_toan === "hdv" ? thanhTien : 0,
+        tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
+        tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
         thanh_toan_dinh_ky: dinhKyKeysRef.current.has(key),
       },
       {
@@ -360,6 +363,16 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
       return next;
     });
   }, [doanId, upsertMut]);
+
+  const handleToggleNguoiTtNH = useCallback((key: string) => {
+    const row = localRowsRef.current[key];
+    if (!row) return;
+    const nh = nhData?.nhaHangMap[row.nha_hang_id];
+    const current = row.nguoi_tt ?? (nh?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty");
+    const next: "cong_ty" | "hdv" = current === "hdv" ? "cong_ty" : "hdv";
+    setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], nguoi_tt: next } }));
+    handleSave(key, next);
+  }, [handleSave, nhData]);
 
   // ── Extra handlers ────────────────────────────────────────────────────────
 
@@ -718,6 +731,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
             <col className="w-[100px]" />
             <col className="w-[64px]" />
             <col className="w-[110px]" />
+            <col className="w-[70px]" />
             <col className="w-[180px]" />
             <col className="w-[150px]" />
             <col className="w-[100px]" />
@@ -739,6 +753,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
               <th className="px-3 py-2 text-center font-medium">Đơn giá</th>
               <th className="px-3 py-2 text-center font-medium">CK%</th>
               <th className="px-3 py-2 text-right font-medium">Thành tiền</th>
+              <th className="px-2 py-2 text-center font-medium">Ai trả</th>
               <th className="px-3 py-2 text-center font-medium">TT ĐNTT</th>
               <th className="px-3 py-2 text-center font-medium">TT Thanh toán</th>
               <th className="px-2 py-2" />
@@ -774,6 +789,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
           const buaIcon = meal.bua_an === "trua" ? "🌤" : "🌙";
 
           const isMealDinhKy = dinhKyKeys.has(key);
+          const nguoiTtMain = row?.nguoi_tt ?? (nh?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty");
 
           // ── DNTT state per meal ──────────────────────────────────────────
           const allMealDntts = row?.id ? dnttList.filter(
@@ -899,9 +915,29 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   {row ? fmt(totalBua) : "—"}
                 </td>
 
+                {/* Ai trả — badge */}
+                <td className="px-2 py-2 text-center">
+                  {row && (
+                    <button
+                      onClick={() => handleToggleNguoiTtNH(key)}
+                      disabled={upsertMut.isPending}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+                        nguoiTtMain === "cong_ty"
+                          ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+                          : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
+                      )}
+                    >
+                      {nguoiTtMain === "cong_ty" ? "Công ty" : "HDV"}
+                    </button>
+                  )}
+                </td>
+
                 {/* Trạng thái ĐNTT */}
                 <td className="px-2 py-1.5 align-top text-center">
-                  {activeDntts.length === 0 ? (
+                  {nguoiTtMain === "hdv" ? (
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                  ) : activeDntts.length === 0 ? (
                     <span className="text-[10px] text-muted-foreground">—</span>
                   ) : (
                     <div className="space-y-1">
@@ -970,6 +1006,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
 
                 {/* Trạng thái Thanh toán */}
                 <td className="px-2 py-1.5 align-top text-center">
+                  {nguoiTtMain === "hdv" ? (
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                  ) : (
                   <div className="space-y-1">
                     {activeDntts.map(d => (
                       <div key={d.id}>
@@ -998,12 +1037,13 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                       <span className="text-[10px] text-muted-foreground">—</span>
                     )}
                   </div>
+                  )}
                 </td>
 
                 {/* Actions */}
                 <td className="px-2 py-1.5">
                   <div className="flex items-center gap-1 justify-end">
-                    {isDaTT && paidDntts.length > 0 && (
+                    {nguoiTtMain === "cong_ty" && isDaTT && paidDntts.length > 0 && (
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
                         title="Điều chỉnh sau thanh toán"
                         onClick={() => {
@@ -1020,7 +1060,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                       onClick={() => addExtra(key)}>
                       <Plus className="h-3 w-3" />
                     </Button>
-                    {canCancel && activeDntt && (
+                    {nguoiTtMain === "cong_ty" && canCancel && activeDntt && (
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                         title="Hủy"
                         onClick={() => {
@@ -1043,7 +1083,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                     {isMealDinhKy && activeDntts.length === 0 && (
                       <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
                     )}
-                    {!isMealDinhKy && activeDntts.length === 0 && !!row && (
+                    {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length === 0 && !!row && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                         onClick={() => {
                           setDnttAlreadyPaid(0);
@@ -1055,7 +1095,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                         ĐNTT
                       </Button>
                     )}
-                    {!isMealDinhKy && activeDntts.length > 0 && daDeNghi === 0 && (
+                    {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length > 0 && daDeNghi === 0 && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                         onClick={() => {
                           setDnttAlreadyPaid(daTT);
@@ -1188,7 +1228,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
             return (
               <>
                 <tr>
-                  <td colSpan={10} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
+                  <td colSpan={11} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
                     Không còn trong lịch trình điều tour
                   </td>
                 </tr>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ import {
   useSendBookingEmail,
   type BookingDVRow as DVRow,
 } from "@/hooks/use-booking-dv";
-import { cn } from "@/lib/utils";
+import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
@@ -71,7 +71,11 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const [tenNCC, setTenNCC] = useState(row.ten_nha_cung_cap || "");
   const [email, setEmail] = useState(row.email_nha_cung_cap || "");
   const [ghiChu, setGhiChu] = useState(row.ghi_chu || "");
-  const [deadline, setDeadline] = useState(row.deadline || "");
+  const [deadline, setDeadline] = useState(() => {
+    if (row.deadline) return row.deadline;
+    const sorted = [...(row.dich_vu_list || [])].sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
+    return getDefaultDeadline(sorted[0]?.ngay_date || "");
+  });
   const [expanded, setExpanded] = useState(true);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState(row.email_nha_cung_cap || "");
@@ -88,6 +92,21 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
 
   const save = (updates: Record<string, any>) =>
     updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates });
+
+  useEffect(() => {
+    if (!row.deadline) {
+      const sorted = [...(row.dich_vu_list || [])].sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
+      const def = getDefaultDeadline(sorted[0]?.ngay_date || "");
+      if (def) save({ deadline: def });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleDeadlineChange = (val: string) => {
+    const corrected = blockWeekendDate(val);
+    setDeadline(corrected);
+    if (corrected) save({ deadline: corrected });
+  };
 
   const updateSoKhach = (tenDv: string, ngayDate: string, val: number) => {
     const next = dvList.map((d) =>
@@ -369,7 +388,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                 <input
                   type="date"
                   value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
+                  onChange={(e) => handleDeadlineChange(e.target.value)}
                   onBlur={() => save({ deadline: deadline || null })}
                   className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
                 />
