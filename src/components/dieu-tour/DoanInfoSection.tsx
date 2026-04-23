@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 function formatDate(d: string | null) {
   if (!d) return "—";
@@ -29,9 +30,22 @@ interface Props {
   setChuyenBayDon: (v: string) => void;
   chuyenBayTien: string;
   setChuyenBayTien: (v: string) => void;
+  soKhachLon: number;
+  soKhachEm1: number;
+  soKhachEm2: number;
+  soKhachTl: number;
+  totalFromDoan: number;
+  chuThichKhach: string;
+  setChuThichKhach: (v: string) => void;
 }
 
-export default function DoanInfoSection({ doan, bangDon, setBangDon, shopping, setShopping, truongDoan, setTruongDoan, chuyenBayDon, setChuyenBayDon, chuyenBayTien, setChuyenBayTien }: Props) {
+export default function DoanInfoSection({
+  doan, bangDon, setBangDon, shopping, setShopping,
+  truongDoan, setTruongDoan, chuyenBayDon, setChuyenBayDon,
+  chuyenBayTien, setChuyenBayTien,
+  soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalFromDoan,
+  chuThichKhach, setChuThichKhach,
+}: Props) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
       <div className="flex items-center gap-4 px-4 py-2 bg-muted/30 border-b border-border">
@@ -39,7 +53,7 @@ export default function DoanInfoSection({ doan, bangDon, setBangDon, shopping, s
         <Badge variant="outline" className="text-xs border-orange-400 text-orange-600 bg-orange-50">✏️ Tự điền</Badge>
       </div>
       <div className="grid grid-cols-2 divide-x divide-border">
-        {/* Left: readonly */}
+        {/* Left: readonly + chuyến bay inline */}
         <div className="p-4 space-y-2 text-sm">
           <Row label="Code đoàn">
             <span className="font-bold" style={{ color: "#185FA5" }}>{doan.ten_doan}</span>
@@ -50,14 +64,30 @@ export default function DoanInfoSection({ doan, bangDon, setBangDon, shopping, s
           <Row label="Xe">
             <span>{xeLabel(doan.xe)}</span>
           </Row>
-          <Row label="Ngày đón">
-            <span>{formatDate(doan.ngay_di)}</span>
-          </Row>
-          <Row label="Ngày tiễn">
-            <span>{formatDate(doan.ngay_ve)}</span>
-          </Row>
+          {/* Ngày đón + chuyến bay đón inline */}
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-24 shrink-0">Ngày đón:</span>
+            <span className="shrink-0">{formatDate(doan.ngay_di)}</span>
+            <Input
+              className="h-7 text-sm flex-1 min-w-0"
+              value={chuyenBayDon}
+              onChange={(e) => setChuyenBayDon(e.target.value)}
+              placeholder="Chuyến bay đón..."
+            />
+          </div>
+          {/* Ngày tiễn + chuyến bay tiễn inline */}
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-24 shrink-0">Ngày tiễn:</span>
+            <span className="shrink-0">{formatDate(doan.ngay_ve)}</span>
+            <Input
+              className="h-7 text-sm flex-1 min-w-0"
+              value={chuyenBayTien}
+              onChange={(e) => setChuyenBayTien(e.target.value)}
+              placeholder="Chuyến bay tiễn..."
+            />
+          </div>
         </div>
-        {/* Right: editable */}
+        {/* Right: editable + compact guest count */}
         <div className="p-4 space-y-2 text-sm">
           <Row label="Bảng đón" editable>
             <Input className="h-7 text-sm" value={bangDon} onChange={(e) => setBangDon(e.target.value)} placeholder="Nhập bảng đón..." />
@@ -76,13 +106,31 @@ export default function DoanInfoSection({ doan, bangDon, setBangDon, shopping, s
           <Row label="T/L" editable>
             <Input className="h-7 text-sm" value={truongDoan} onChange={(e) => setTruongDoan(e.target.value)} placeholder="Tên trưởng đoàn..." />
           </Row>
+          {/* Compact guest count */}
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground w-24 shrink-0">Chuyến bay:</span>
-            <div className="flex items-center gap-2 flex-1">
-              <Input className="h-7 text-sm flex-1" value={chuyenBayDon} onChange={(e) => setChuyenBayDon(e.target.value)} placeholder="Đón..." />
-              <span className="text-muted-foreground text-xs">→</span>
-              <Input className="h-7 text-sm flex-1" value={chuyenBayTien} onChange={(e) => setChuyenBayTien(e.target.value)} placeholder="Tiễn..." />
+            <span className="text-muted-foreground w-24 shrink-0">Số khách:</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <GuestChip label="NL" value={soKhachLon} />
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <GuestChip label="TE 6-10" value={soKhachEm1} />
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <GuestChip label="TE &lt;6" value={soKhachEm2} />
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <GuestChip label="T/L" value={soKhachTl} />
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <GuestChip label="Tổng" value={totalFromDoan} highlight />
             </div>
+          </div>
+          {/* Chú thích khách */}
+          <div className="flex items-start gap-2 pt-0.5">
+            <span className="text-muted-foreground w-24 shrink-0 pt-1.5">Chú thích:</span>
+            <textarea
+              value={chuThichKhach}
+              onChange={(e) => setChuThichKhach(e.target.value)}
+              placeholder="VD: Khách ăn chay, dị ứng, VIP..."
+              rows={2}
+              className="flex-1 text-sm resize-none rounded-md border border-input bg-background px-2 py-1.5"
+            />
           </div>
         </div>
       </div>
@@ -95,6 +143,17 @@ function Row({ label, children, editable }: { label: string; children: React.Rea
     <div className="flex items-center gap-2">
       <span className="text-muted-foreground w-24 shrink-0">{label}:</span>
       {children}
+    </div>
+  );
+}
+
+function GuestChip({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <span className="text-xs text-muted-foreground">{label}:</span>
+      <span className={cn("text-xs font-bold tabular-nums", highlight ? "text-[#185FA5]" : "")}>
+        {value}
+      </span>
     </div>
   );
 }

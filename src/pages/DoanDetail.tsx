@@ -29,7 +29,6 @@ import { useBookingNH } from "@/hooks/use-booking-nh";
 import { useChiPhiList } from "@/hooks/use-chi-phi";
 import CompanyHeader from "@/components/dieu-tour/CompanyHeader";
 import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
-import GuestCountSection from "@/components/dieu-tour/GuestCountSection";
 import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
 import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
 import BookingKSTab from "@/components/dieu-tour/BookingKSTab";
@@ -378,8 +377,6 @@ export default function DoanDetail() {
               setChuyenBayDon={handleSetChuyenBayDon}
               chuyenBayTien={chuyenBayTien}
               setChuyenBayTien={handleSetChuyenBayTien}
-            />
-            <GuestCountSection
               soKhachLon={soKhachLon}
               soKhachEm1={soKhachEm1}
               soKhachEm2={soKhachEm2}
