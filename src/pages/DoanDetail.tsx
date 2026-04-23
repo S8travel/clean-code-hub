@@ -1,21 +1,12 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Printer, Save, FileDown } from "lucide-react";
+import { ArrowLeft, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { exportDieuTourWord } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDoanList, useDoanPermissions } from "@/hooks/use-doan";
@@ -31,10 +22,11 @@ import {
   generateDays,
   mergeDaysWithDB,
   syncDieuTourToBookingDV,
-  checkPreSaveWarnings,
   type DayLocal,
-  type PreSaveWarning,
 } from "@/hooks/use-dieu-tour";
+import { useBookingKS } from "@/hooks/use-booking-ks";
+import { useBookingNH } from "@/hooks/use-booking-nh";
+import { useChiPhiList } from "@/hooks/use-chi-phi";
 import CompanyHeader from "@/components/dieu-tour/CompanyHeader";
 import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
 import GuestCountSection from "@/components/dieu-tour/GuestCountSection";
@@ -45,6 +37,15 @@ import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
+
+function TabBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 min-w-[18px]">
+      {count}
+    </span>
+  );
+}
 
 export default function DoanDetail() {
   const { id } = useParams<{ id: string }>();
@@ -68,6 +69,11 @@ export default function DoanDetail() {
   const saveMutation = useSaveDieuTour();
   const initDoanNgay = useInitDoanNgay();
 
+  // Warning badge data (React Query deduplicates — no extra requests when tabs are active)
+  const { data: bookingKSList = [] } = useBookingKS(doanId || undefined);
+  const { data: menuData = [] } = useBookingNH(doanId || undefined);
+  const { data: chiPhiRows = [] } = useChiPhiList(doanId || undefined);
+
   const doan = groups?.find((g: any) => String(g.id) === id);
 
   // Local state for editable fields
@@ -82,10 +88,13 @@ export default function DoanDetail() {
   const [days, setDays] = useState<DayLocal[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("dieu-tour");
-  const [preSaveWarnings, setPreSaveWarnings] = useState<PreSaveWarning[]>([]);
-  const [isChecking, setIsChecking] = useState(false);
   const [exportingWord, setExportingWord] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const queryClient = useQueryClient();
+
+  // Auto-save refs
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const doSaveRef = useRef<(() => void) | null>(null);
 
   const soKhachLon = doan?.so_khach_lon ?? 0;
   const soKhachEm1 = doan?.so_khach_em1 ?? 0;
@@ -94,14 +103,12 @@ export default function DoanDetail() {
   const totalKhach = soKhachLon + soKhachEm1 + soKhachEm2 + soKhachTl;
 
   // Initialize from doan data — re-merge whenever DB data changes
+  // NOTE: uses raw setDays (not handleSetDays) to avoid triggering auto-save on DB refetch
   useEffect(() => {
     if (!doan) return;
-    // Only populate when we have actual fetched data (not default empty arrays)
-    // dbNgayRows being empty is valid (new doan), but doan must exist
     const generatedDays = generateDays(doan.ngay_di, doan.ngay_ve);
     const merged = mergeDaysWithDB(generatedDays, dbNgayRows, dbNgayItems);
-    
-    // Preserve local edits: only re-populate non-schedule fields if not initialized
+
     if (!initialized) {
       setBangDon(doan.bang_don || "");
       setShopping(doan.shopping ?? false);
@@ -113,7 +120,7 @@ export default function DoanDetail() {
       setGhiChuDieuTour(doan.ghi_chu_dieu_tour || "");
       setInitialized(true);
     }
-    
+
     setDays(merged);
   }, [doan, dbNgayRows, dbNgayItems]);
 
@@ -144,8 +151,12 @@ export default function DoanDetail() {
     }
   }, [activeTab, doanId, queryClient]);
 
+  // Cleanup timer on unmount
+  useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
+
   const doSave = useCallback(() => {
     if (!doanId) return;
+    setSaveStatus("saving");
     saveMutation.mutate(
       {
         doanId,
@@ -171,56 +182,56 @@ export default function DoanDetail() {
       },
       {
         onSuccess: async () => {
-          toast.success("✓ Đã lưu!");
-          await queryClient.refetchQueries({ queryKey: ["doan_ngay", doanId] });
-          await queryClient.refetchQueries({ queryKey: ["doan_ngay_item", doanId] });
+          setSaveStatus("saved");
+          setTimeout(() => setSaveStatus("idle"), 2000);
           queryClient.invalidateQueries({ queryKey: ["doan_booking_ks", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_booking_dv", doanId] });
 
           try {
-            const result = await syncDieuTourToBookingDV({
+            await syncDieuTourToBookingDV({
               doanId,
               days,
               canhDiemList,
               soKhach: totalKhach || doan?.so_khach || 0,
             });
-            if (result.synced > 0) {
-              toast.success(`Đã sync ${result.synced} dịch vụ sang tab Booking DV`);
-            }
           } catch (e) {
             console.error("Sync to Booking DV error:", e);
           }
         },
-        onError: (err: any) => toast.error(err.message || "Lỗi khi lưu"),
+        onError: (err: any) => {
+          setSaveStatus("error");
+          toast.error(err.message || "Lỗi khi lưu");
+        },
       }
     );
   }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, chuThichKhach, gifts, ghiChuDieuTour, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
 
-  const handleSave = useCallback(async () => {
-    if (!doanId) return;
-    setIsChecking(true);
-    try {
-      const warnings = await checkPreSaveWarnings({
-        doanId,
-        days,
-        dbNgayRows,
-        dbNgayItems,
-        canhDiemList,
-        nhaHangList,
-        khachSanList,
-      });
-      if (warnings.length > 0) {
-        setPreSaveWarnings(warnings);
-      } else {
-        doSave();
-      }
-    } catch (e) {
-      console.error("Pre-save check error:", e);
-      doSave(); // Fallback: save anyway
-    } finally {
-      setIsChecking(false);
-    }
-  }, [doanId, days, dbNgayRows, dbNgayItems, canhDiemList, nhaHangList, khachSanList, doSave]);
+  // Keep ref updated so timer always calls latest doSave
+  doSaveRef.current = doSave;
+
+  const scheduleSave = useCallback(() => {
+    if (!canEdit || !doanId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      doSaveRef.current?.();
+    }, 1500);
+  }, [canEdit, doanId]);
+
+  // Wrapped setters: call original setter + schedule auto-save
+  // The init useEffect uses raw setters to avoid triggering auto-save on DB changes
+  const handleSetBangDon = useCallback((v: string) => { setBangDon(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetShopping = useCallback((v: boolean | null) => { setShopping(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetTruongDoan = useCallback((v: string) => { setTruongDoan(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetChuyenBayDon = useCallback((v: string) => { setChuyenBayDon(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetChuyenBayTien = useCallback((v: string) => { setChuyenBayTien(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetChuThichKhach = useCallback((v: string) => { setChuThichKhach(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetGifts = useCallback((v: string[]) => { setGifts(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetGhiChuDieuTour = useCallback((v: string) => { setGhiChuDieuTour(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetDays = useCallback((v: DayLocal[]) => {
+    setDays(v);
+    scheduleSave();
+  }, [scheduleSave]);
 
   const handleExportWord = useCallback(async () => {
     if (!doan) return;
@@ -254,6 +265,29 @@ export default function DoanDetail() {
       setExportingWord(false);
     }
   }, [doan, days, canhDiemList, nhaHangList, khachSanList, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, gifts, ghiChuDieuTour]);
+
+  // Warning badge counts
+  const bookingKSBadgeCount = useMemo(() =>
+    bookingKSList.filter(b => !b.con_trong_dieu_tour && b.ks_final_status !== "ks_xac_nhan_huy").length
+  , [bookingKSList]);
+
+  const bookingNHBadgeCount = useMemo(() =>
+    menuData.filter(d =>
+      d.orphan_trua !== null || d.orphan_toi !== null ||
+      (!d.trua_con_trong_tour && d.booking_trua?.booking_status === "da_gui") ||
+      (!d.toi_con_trong_tour && d.booking_toi?.booking_status === "da_gui")
+    ).length
+  , [menuData]);
+
+  const validNgayIds = useMemo(() => new Set(dbNgayRows.map(r => r.id)), [dbNgayRows]);
+
+  const chiPhiBadgeCount = useMemo(() =>
+    chiPhiRows.filter(r =>
+      r.ref_doan_ngay_id !== null &&
+      !validNgayIds.has(r.ref_doan_ngay_id) &&
+      r.trang_thai_thanh_toan === "unpaid"
+    ).length
+  , [chiPhiRows, validNgayIds]);
 
   if (isLoading) {
     return (
@@ -291,18 +325,17 @@ export default function DoanDetail() {
             {!canEdit && (
               <span className="text-xs text-muted-foreground border rounded px-2 py-1">Chỉ xem</span>
             )}
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <Printer className="h-4 w-4 mr-1.5" /> In / Xuất PDF
-            </Button>
-            {canEdit && (
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={handleSave}
-                disabled={saveMutation.isPending || isChecking}
-              >
-                <Save className="h-4 w-4 mr-1.5" /> {isChecking ? "Đang kiểm tra..." : saveMutation.isPending ? "Đang lưu..." : "Lưu"}
-              </Button>
+            {canEdit && saveStatus !== "idle" && (
+              <span className={cn(
+                "text-xs px-2 py-1 rounded",
+                saveStatus === "saving" && "text-muted-foreground",
+                saveStatus === "saved" && "text-green-600",
+                saveStatus === "error" && "text-red-600"
+              )}>
+                {saveStatus === "saving" && "Đang lưu..."}
+                {saveStatus === "saved" && "✓ Đã lưu"}
+                {saveStatus === "error" && "Lỗi lưu"}
+              </span>
             )}
           </div>
         </div>
@@ -311,10 +344,10 @@ export default function DoanDetail() {
         <Tabs defaultValue="dieu-tour" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="print-hide">
             <TabsTrigger value="dieu-tour">Điều Tour</TabsTrigger>
-            <TabsTrigger value="booking-ks">Booking KS</TabsTrigger>
-            <TabsTrigger value="menu">Booking NH</TabsTrigger>
+            <TabsTrigger value="booking-ks">Booking KS<TabBadge count={bookingKSBadgeCount} /></TabsTrigger>
+            <TabsTrigger value="menu">Booking NH<TabBadge count={bookingNHBadgeCount} /></TabsTrigger>
             <TabsTrigger value="booking-dv">Booking DV</TabsTrigger>
-            <TabsTrigger value="chi-phi">Chi phí</TabsTrigger>
+            <TabsTrigger value="chi-phi">Chi phí<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
             <TabsTrigger value="log">Log</TabsTrigger>
           </TabsList>
 
@@ -336,15 +369,15 @@ export default function DoanDetail() {
             <DoanInfoSection
               doan={doan}
               bangDon={bangDon}
-              setBangDon={setBangDon}
+              setBangDon={handleSetBangDon}
               shopping={shopping}
-              setShopping={setShopping}
+              setShopping={handleSetShopping}
               truongDoan={truongDoan}
-              setTruongDoan={setTruongDoan}
+              setTruongDoan={handleSetTruongDoan}
               chuyenBayDon={chuyenBayDon}
-              setChuyenBayDon={setChuyenBayDon}
+              setChuyenBayDon={handleSetChuyenBayDon}
               chuyenBayTien={chuyenBayTien}
-              setChuyenBayTien={setChuyenBayTien}
+              setChuyenBayTien={handleSetChuyenBayTien}
             />
             <GuestCountSection
               soKhachLon={soKhachLon}
@@ -353,12 +386,12 @@ export default function DoanDetail() {
               soKhachTl={soKhachTl}
               totalFromDoan={doan.so_khach ?? totalKhach}
               chuThichKhach={chuThichKhach}
-              setChuThichKhach={setChuThichKhach}
+              setChuThichKhach={handleSetChuThichKhach}
             />
-            <GiftTagsSection gifts={gifts} setGifts={setGifts} />
+            <GiftTagsSection gifts={gifts} setGifts={handleSetGifts} />
             <DayScheduleTable
               days={days}
-              setDays={setDays}
+              setDays={handleSetDays}
               canhDiemList={canhDiemList}
               nhaHangList={nhaHangList}
               khachSanList={khachSanList}
@@ -367,7 +400,7 @@ export default function DoanDetail() {
               <h3 className="text-sm font-semibold">Ghi chú điều tour</h3>
               <Textarea
                 value={ghiChuDieuTour}
-                onChange={(e) => setGhiChuDieuTour(e.target.value)}
+                onChange={(e) => handleSetGhiChuDieuTour(e.target.value)}
                 placeholder="Nhập ghi chú..."
                 rows={4}
                 className="resize-none text-sm"
@@ -397,40 +430,6 @@ export default function DoanDetail() {
           </fieldset>
         </Tabs>
       </div>
-
-      {/* Pre-save Warning Dialog */}
-      <AlertDialog open={preSaveWarnings.length > 0} onOpenChange={(open) => {
-        if (!open) setPreSaveWarnings([]);
-      }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>⚠ Cảnh báo thay đổi ảnh hưởng đến booking</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p>Các thay đổi sau có thể ảnh hưởng đến booking đã gửi:</p>
-                <ul className="list-disc pl-5 space-y-1">
-                  {preSaveWarnings.map((w, i) => (
-                    <li key={i}>{w.message}</li>
-                  ))}
-                </ul>
-                <p className="text-sm">
-                  Bạn vẫn muốn lưu? Sau khi lưu hãy vào các tab Booking tương ứng để xử lý.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              setPreSaveWarnings([]);
-              doSave();
-              toast.info("Đã lưu. Vui lòng kiểm tra lại các tab Booking.");
-            }}>
-              Vẫn lưu
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
