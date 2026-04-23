@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { format, subDays, parseISO, addDays } from "date-fns";
-import { Check, Pencil, Printer, X, Ban, SlidersHorizontal } from "lucide-react";
+import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi } from "@/hooks/use-chi-phi";
+import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
@@ -27,6 +28,14 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
 };
 
 interface CancelTarget { dnttId: number; isPaid: boolean }
+
+interface LocalDVExtra {
+  id?: number;
+  mo_ta: string;
+  so_luong: number;
+  don_gia: number;
+  nguoi_tt: "cong_ty" | "hdv";
+}
 
 interface Props {
   doanId: number;
@@ -60,6 +69,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const insertDNTT = useInsertDNTT();
   const updateDNTT = useUpdateDNTT();
   const upsertMut = useUpsertChiPhi();
+  const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
   const adjustMut = useCreateAdjustment();
   const [batchPrinting, setBatchPrinting] = useState(false);
@@ -70,6 +80,14 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
   // Inline edit for row fields (so_luong, don_gia)
   const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
+
+  // Extras state
+  const [extrasMap, setExtrasMap] = useState<Record<number, LocalDVExtra[]>>({});
+  const extrasMapRef = useRef(extrasMap);
+  useEffect(() => { extrasMapRef.current = extrasMap; }, [extrasMap]);
+
+  // Checkbox selection for batch print
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   // ĐNTT modal
   interface DVModalTarget { chiPhiId: number; thanhTien: number; moTa: string; nccId: number | null; nhaySo: number | null }
@@ -92,7 +110,49 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
-  const dvRows = chiPhiRows.filter((r) => r.danh_muc === "canh_diem");
+  // Split main rows vs extras
+  const allDvRows = chiPhiRows.filter((r) => r.danh_muc === "canh_diem");
+  const dvRows = allDvRows.filter((r) => !r.mo_ta?.match(/^\[dvps_\d+\] /));
+
+  // Build dbExtrasMap from DB
+  const dbExtrasMap = useMemo(() => {
+    const map: Record<number, LocalDVExtra[]> = {};
+    for (const row of allDvRows) {
+      const m = row.mo_ta?.match(/^\[dvps_(\d+)\] (.*)/);
+      if (!m) continue;
+      const mainId = parseInt(m[1]);
+      if (!map[mainId]) map[mainId] = [];
+      map[mainId].push({
+        id: row.id,
+        mo_ta: m[2] || "",
+        so_luong: row.so_luong,
+        don_gia: row.don_gia,
+        nguoi_tt: (row.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
+      });
+    }
+    return map;
+  }, [allDvRows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Init extrasMap from DB (once)
+  const extrasInitRef = useRef(false);
+  useEffect(() => {
+    if (extrasInitRef.current) return;
+    if (Object.keys(dbExtrasMap).length === 0 && allDvRows.some(r => !r.mo_ta?.match(/^\[dvps_\d+\] /))) {
+      // Main rows exist but no extras yet — mark as initialized
+      extrasInitRef.current = true;
+      return;
+    }
+    if (Object.keys(dbExtrasMap).length === 0) return;
+    setExtrasMap(dbExtrasMap);
+    extrasInitRef.current = true;
+  }, [dbExtrasMap]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset when doanId changes
+  useEffect(() => {
+    extrasInitRef.current = false;
+    setExtrasMap({});
+    setSelectedIds([]);
+  }, [doanId]);
 
   if (dvRows.length === 0) {
     return (
@@ -154,6 +214,71 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       tien_cong_ty: next === "cong_ty" ? total : 0,
       tien_hdv: next === "hdv" ? total : 0,
     } as any);
+  };
+
+  // ── Extra handlers ────────────────────────────────────────────────────────
+
+  const handleExtraAdd = (mainId: number) => {
+    setExtrasMap((prev) => ({
+      ...prev,
+      [mainId]: [...(prev[mainId] || []), { mo_ta: "", so_luong: 1, don_gia: 0, nguoi_tt: "cong_ty" }],
+    }));
+  };
+
+  const handleExtraChange = (mainId: number, idx: number, field: keyof LocalDVExtra, value: any) => {
+    setExtrasMap((prev) => {
+      const list = [...(prev[mainId] || [])];
+      list[idx] = { ...list[idx], [field]: value };
+      return { ...prev, [mainId]: list };
+    });
+  };
+
+  const handleExtraSave = (mainId: number, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => {
+    const extra = extrasMapRef.current[mainId]?.[idx];
+    const mainRow = dvRows.find((r) => r.id === mainId);
+    if (!extra || !mainRow || (!extra.mo_ta && !extra.don_gia)) return;
+
+    const thanhTien = extra.so_luong * extra.don_gia;
+    const nguoiTt = nguoiTtOverride ?? extra.nguoi_tt;
+
+    upsertMut.mutate({
+      id: extra.id,
+      doan_id: doanId,
+      ngay_so: mainRow.ngay_so,
+      loai: "chi",
+      danh_muc: "canh_diem",
+      ref_doan_ngay_id: mainRow.ref_doan_ngay_id,
+      mo_ta: `[dvps_${mainId}] ${extra.mo_ta}`,
+      don_gia: extra.don_gia,
+      so_luong: extra.so_luong,
+      tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
+      tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
+    } as any, {
+      onSuccess: (data) => {
+        if (!extra.id && data?.id) {
+          setExtrasMap((prev) => {
+            const list = [...(prev[mainId] || [])];
+            list[idx] = { ...list[idx], id: data.id };
+            return { ...prev, [mainId]: list };
+          });
+        }
+      },
+    });
+  };
+
+  const handleExtraDelete = (mainId: number, idx: number) => {
+    const extra = extrasMap[mainId]?.[idx];
+    const remove = () =>
+      setExtrasMap((prev) => {
+        const list = [...(prev[mainId] || [])];
+        list.splice(idx, 1);
+        return { ...prev, [mainId]: list };
+      });
+    if (extra?.id) {
+      deleteMut.mutate({ id: extra.id, doanId }, { onSuccess: remove });
+    } else {
+      remove();
+    }
   };
 
   // ── Date label ────────────────────────────────────────────────────────────
@@ -259,8 +384,8 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
   // ── Print handler ─────────────────────────────────────────────────────────
 
-  const handlePrint = async () => {
-    if (sortedDays.length === 0) return;
+  const handlePrintSelected = async () => {
+    if (selectedIds.length === 0) return;
     setBatchPrinting(true);
     try {
       const entries: NHDocEntry[] = [];
@@ -268,9 +393,9 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
       for (const [day, rows] of sortedDays) {
         for (const row of rows) {
-          const chiPhiId = row.id;
-          if (!chiPhiId) continue;
+          if (!row.id || !selectedIds.includes(row.id)) continue;
 
+          const chiPhiId = row.id;
           const allDntts = dnttList.filter(
             (d) => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId,
           );
@@ -325,7 +450,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       }
 
       if (entries.length === 0) {
-        toast.error("Không có dịch vụ nào có ĐNTT để xuất");
+        toast.error("Không có dịch vụ nào được chọn có ĐNTT để xuất");
         return;
       }
 
@@ -344,16 +469,32 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const allSelected = selectedIds.length === dvRows.length && dvRows.length > 0;
+
   return (
     <div className="rounded-lg border border-border overflow-hidden">
       <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
         <p className="text-sm font-semibold text-purple-900">🎫 Dịch vụ</p>
-        <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <>
+              <Button size="sm" className="h-7 text-xs" onClick={handlePrintSelected} disabled={batchPrinting}>
+                <Printer className="h-3.5 w-3.5 mr-1" />
+                In ĐNTT ({selectedIds.length})
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedIds([])}>
+                Bỏ chọn
+              </Button>
+            </>
+          )}
+          <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <colgroup>
+            <col style={{ width: "32px" }} />
             <col style={{ width: "60px" }} />
             <col />
             <col style={{ width: "60px" }} />
@@ -366,6 +507,13 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
+              <th className="px-2 py-2.5 text-center">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={(v) => v ? setSelectedIds(dvRows.map(r => r.id!)) : setSelectedIds([])}
+                  className="h-3.5 w-3.5"
+                />
+              </th>
               <th className="text-left px-3 py-2.5">Ngày</th>
               <th className="text-left px-3 py-2.5">Dịch vụ</th>
               <th className="text-center px-2 py-2.5">SL</th>
@@ -411,9 +559,25 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                   activeDntt.trang_thai_thanh_toan === "da_tt"
                 );
                 const shownDntts = [...activeDntts, ...rejectedDntts];
+                const isSelected = row.id != null && selectedIds.includes(row.id);
+                const rowExtras = extrasMap[row.id!] || [];
 
-                return (
-                  <tr key={row.id} className="hover:bg-muted/20">
+                return [
+                  <tr key={row.id} className={cn("hover:bg-muted/20", isSelected && "bg-primary/5")}>
+                    {/* Checkbox — rowspan covers main + extras */}
+                    {i === 0 && (
+                      <td className="px-2 py-2.5 text-center align-top" rowSpan={rows.length}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(v) => {
+                            if (!row.id) return;
+                            setSelectedIds(prev => v ? [...prev, row.id!] : prev.filter(id => id !== row.id));
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                      </td>
+                    )}
+
                     {/* Ngày */}
                     {i === 0 && (
                       <td className="px-3 py-2.5 text-muted-foreground align-top whitespace-nowrap text-[11px]" rowSpan={rows.length}>
@@ -600,6 +764,11 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                           onClick={() => handleToggleDinhKy(row)}>
                           ⏱
                         </Button>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                          title="Thêm dịch vụ phát sinh"
+                          onClick={() => handleExtraAdd(row.id!)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
                         {row.thanh_toan_dinh_ky && activeDntts.length === 0 && (
                           <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
                         )}
@@ -617,8 +786,82 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                         )}
                       </div>
                     </td>
-                  </tr>
-                );
+                  </tr>,
+                  /* Extra rows for this main row */
+                  ...rowExtras.map((extra, idx) => (
+                    <tr key={`extra-${row.id}-${idx}`} className="bg-muted/10 hover:bg-muted/20">
+                      <td /> {/* skip checkbox */}
+                      <td /> {/* skip ngày */}
+                      {/* Tên dịch vụ phát sinh */}
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground shrink-0">↳</span>
+                          <Input
+                            className="h-6 text-xs px-1.5 py-0 flex-1"
+                            placeholder="Tên dịch vụ phát sinh..."
+                            value={extra.mo_ta}
+                            onChange={(e) => handleExtraChange(row.id!, idx, "mo_ta", e.target.value)}
+                            onBlur={() => handleExtraSave(row.id!, idx)}
+                          />
+                        </div>
+                      </td>
+                      {/* SL */}
+                      <td className="px-2 py-1.5">
+                        <div className="flex justify-center">
+                          <DVInput
+                            value={extra.so_luong}
+                            onChange={v => handleExtraChange(row.id!, idx, "so_luong", v)}
+                            onBlur={() => handleExtraSave(row.id!, idx)}
+                            width="w-[44px]"
+                          />
+                        </div>
+                      </td>
+                      {/* Đơn giá */}
+                      <td className="px-3 py-1.5">
+                        <div className="flex justify-center">
+                          <DVInput
+                            value={extra.don_gia}
+                            onChange={v => handleExtraChange(row.id!, idx, "don_gia", v)}
+                            onBlur={() => handleExtraSave(row.id!, idx)}
+                            width="w-[90px]"
+                          />
+                        </div>
+                      </td>
+                      {/* Thành tiền */}
+                      <td className="px-3 py-1.5 text-right text-muted-foreground whitespace-nowrap">
+                        {fmt(extra.so_luong * extra.don_gia)} ₫
+                      </td>
+                      {/* Ai trả */}
+                      <td className="px-2 py-1.5 text-center">
+                        <button
+                          onClick={() => {
+                            const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
+                            handleExtraChange(row.id!, idx, "nguoi_tt", next);
+                            handleExtraSave(row.id!, idx, next);
+                          }}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+                            extra.nguoi_tt === "cong_ty"
+                              ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+                              : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
+                          )}
+                        >
+                          {extra.nguoi_tt === "cong_ty" ? "Công ty" : "HDV"}
+                        </button>
+                      </td>
+                      <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
+                      {/* Delete */}
+                      <td className="px-2 py-1.5 text-right">
+                        <button
+                          onClick={() => handleExtraDelete(row.id!, idx)}
+                          className="text-destructive hover:text-destructive/80 p-0.5"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  )),
+                ];
               }),
             )}
           </tbody>
