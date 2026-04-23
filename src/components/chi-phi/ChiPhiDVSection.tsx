@@ -319,6 +319,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
             so_tien_coc: soCoc,
             can_tru: canTruAmount,
             so_tien_con_tt: soTienConTT,
+            tai_khoan_thanh_toan: null,
           });
         }
       }
@@ -347,19 +348,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
     <div className="rounded-lg border border-border overflow-hidden">
       <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
         <p className="text-sm font-semibold text-purple-900">🎫 Dịch vụ</p>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={handlePrint}
-            disabled={batchPrinting}
-          >
-            <Printer className="h-3 w-3" />
-            {batchPrinting ? "Đang xuất..." : "In ĐNTT"}
-          </Button>
-        </div>
+        <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
       </div>
 
       <div className="overflow-x-auto">
