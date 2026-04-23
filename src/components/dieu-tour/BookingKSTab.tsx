@@ -78,6 +78,11 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
 
+  // Ẩn booking đã hủy và không còn trong điều tour
+  const visibleBookings = (bookings ?? []).filter(
+    (b) => !(b.ks_final_status === "ks_xac_nhan_huy" && !b.con_trong_dieu_tour)
+  );
+
   const toggleSelect = (id: number) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -87,9 +92,9 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
 
   const toggleAll = () =>
     setSelectedIds((prev) =>
-      prev.size === (bookings?.length ?? 0)
+      prev.size === visibleBookings.length
         ? new Set()
-        : new Set(bookings?.map((b) => b.id) ?? [])
+        : new Set(visibleBookings.map((b) => b.id))
     );
 
   const handleExportAll = async () => {
@@ -157,7 +162,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
       </div>
     );
 
-  if (!bookings?.length)
+  if (!visibleBookings.length)
     return (
       <div className="rounded-xl bg-card border border-border p-14 text-center">
         <p className="text-sm font-medium text-muted-foreground">Chưa có booking nào.</p>
@@ -167,9 +172,9 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
       </div>
     );
 
-  const total = bookings.length;
-  const dtConfirmed = bookings.filter((b) => b.ks_dat_truoc_status === "ks_xac_nhan").length;
-  const finalConfirmed = bookings.filter((b) => b.ks_final_status === "ks_xac_nhan_final").length;
+  const total = visibleBookings.length;
+  const dtConfirmed = visibleBookings.filter((b) => b.ks_dat_truoc_status === "ks_xac_nhan").length;
+  const finalConfirmed = visibleBookings.filter((b) => b.ks_final_status === "ks_xac_nhan_final").length;
   const allSelected = selectedIds.size === total;
 
   return (
@@ -207,7 +212,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
       </div>
 
       <div className="space-y-3">
-        {bookings.map((row) => (
+        {visibleBookings.map((row) => (
           <BookingKSCard
             key={row.id}
             row={row}
