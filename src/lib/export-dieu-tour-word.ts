@@ -16,24 +16,37 @@ import { saveAs } from "file-saver";
 import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-const BORDER = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
-const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
-const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+const BORDER     = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
+const BORDERS    = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+const NO_BORDER  = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
 const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER };
 const HEADER_SHADING = { fill: "D9D9D9", type: ShadingType.CLEAR, color: "auto" };
-const NO_SHADING = { fill: "FFFFFF", type: ShadingType.CLEAR, color: "auto" };
-const BLUE_SHADING = { fill: "185FA5", type: ShadingType.CLEAR, color: "auto" };
+const NO_SHADING     = { fill: "FFFFFF", type: ShadingType.CLEAR, color: "auto" };
 
-// A4 Portrait
-const PAGE_W = 11906; // 210mm
-const PAGE_H = 16838; // 297mm
-const MARGIN = 1080;  // ~19mm per side
-const CONTENT_W = PAGE_W - MARGIN * 2; // 9746
+// A4 Portrait — lề nhỏ để vừa 1 trang
+const PAGE_W    = 11906;       // 210mm
+const PAGE_H    = 16838;       // 297mm
+const MARGIN    = 400;         // ~7mm per side
+const CONTENT_W = PAGE_W - MARGIN * 2; // 11106 DXA
 
-// Schedule table col widths: Ngày | Chương trình | Ăn trưa | Ăn tối | Khách sạn
-const SCHED_COL = [650, 2800, 2000, 2000, 2296];
+// Info table: chia đôi trang, mỗi nửa có label + value
+const LW    = 1300;                       // label width
+const HALF  = Math.floor(CONTENT_W / 2); // 5553
+const VW    = HALF - LW;                 // value width = 4253
+const VW_R  = CONTENT_W - HALF - LW;    // right value = 4253
+
+// Schedule table col widths (tổng = CONTENT_W = 11106)
+const SCHED_COL = [580, 3300, 2250, 2250, 2726];
+
+// Font size (half-points): 18 = 9pt, 20 = 10pt, 22 = 11pt
+const FS      = 18; // body
+const FS_SM   = 16; // small detail
+const FS_H    = 18; // header cell
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+const CELL_MARGINS = { top: 40, bottom: 40, left: 80, right: 80 };
+const CELL_MARGINS_LG = { top: 80, bottom: 80, left: 100, right: 100 };
+
 function cell(
   children: Paragraph[],
   opts: {
@@ -52,7 +65,7 @@ function cell(
     shading: opts.shading ?? NO_SHADING,
     verticalAlign: (opts.vertAlign ?? VerticalAlign.TOP) as any,
     columnSpan: opts.colSpan,
-    margins: opts.margins ?? { top: 60, bottom: 60, left: 100, right: 100 },
+    margins: opts.margins ?? CELL_MARGINS,
   });
 }
 
@@ -64,20 +77,43 @@ function p(
     color?: string;
     align?: (typeof AlignmentType)[keyof typeof AlignmentType];
     italics?: boolean;
+    spacing?: { before?: number; after?: number };
   } = {}
 ): Paragraph {
   return new Paragraph({
     alignment: opts.align ?? AlignmentType.LEFT,
+    spacing: opts.spacing,
     children: [
       new TextRun({
         text,
         bold: opts.bold,
-        size: opts.size ?? 20,
+        size: opts.size ?? FS,
         color: opts.color ?? "000000",
         italics: opts.italics,
         font: "Times New Roman",
       }),
     ],
+  });
+}
+
+/** Paragraph với nhiều TextRun inline */
+function pRuns(
+  runs: { text: string; bold?: boolean; color?: string; size?: number; italics?: boolean }[],
+  align?: (typeof AlignmentType)[keyof typeof AlignmentType]
+): Paragraph {
+  return new Paragraph({
+    alignment: align ?? AlignmentType.LEFT,
+    children: runs.map(
+      (r) =>
+        new TextRun({
+          text: r.text,
+          bold: r.bold,
+          color: r.color ?? "000000",
+          size: r.size ?? FS,
+          italics: r.italics,
+          font: "Times New Roman",
+        })
+    ),
   });
 }
 
@@ -101,23 +137,12 @@ function xeLabel(xe: any): string {
   return parts.join(" · ") || "—";
 }
 
-// ─── Info table row ─────────────────────────────────────────────────────────
-function infoRow(label: string, value: string, labelW: number, valueW: number): TableRow {
-  return new TableRow({
-    children: [
-      cell([p(label, { bold: true, size: 20 })], { width: labelW, shading: HEADER_SHADING }),
-      cell([p(value, { size: 20 })], { width: valueW }),
-    ],
-  });
-}
-
 // ─── Main export ─────────────────────────────────────────────────────────────
 export interface DieuTourExportData {
   days: DayLocal[];
   canhDiemList: CanhDiemItem[];
   nhaHangList: NhaHangItem[];
   khachSanList: KhachSanItem[];
-  // Doan info
   tenDoan: string;
   hdv: string;
   xe: any;
@@ -148,35 +173,33 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
   } = data;
 
   const canhDiemMap = new Map(canhDiemList.map((c) => [c.id, c]));
-  const nhaHangMap = new Map(nhaHangList.map((n) => [n.id, n]));
+  const nhaHangMap  = new Map(nhaHangList.map((n) => [n.id, n]));
   const khachSanMap = new Map(khachSanList.map((k) => [k.id, k]));
   const today = new Date().toLocaleDateString("vi-VN");
+  const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
 
   // ── 1. Header: Company + Quốc hiệu ─────────────────────────────────────
-  const HALF = Math.floor(CONTENT_W / 2);
   const headerTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
       new TableRow({
         children: [
-          // Left: S8 Travel
           cell(
             [
-              p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22, align: AlignmentType.CENTER }),
-              p("S8 TRAVEL COMPANY", { size: 18, color: "555555", align: AlignmentType.CENTER }),
-              p("MST: 0402021137", { size: 18, color: "555555", align: AlignmentType.CENTER }),
+              p("CÔNG TY TNHH DU LỊCH S8",   { bold: true, size: 20, align: AlignmentType.CENTER }),
+              p("S8 TRAVEL COMPANY",           { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
+              p("MST: 0402021137",             { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
             ],
-            { width: HALF, vertAlign: VerticalAlign.CENTER, margins: { top: 120, bottom: 120, left: 120, right: 120 } }
+            { width: HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
           ),
-          // Right: Quốc hiệu
           cell(
             [
-              p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", { bold: true, size: 22, align: AlignmentType.CENTER }),
-              p("Độc lập – Tự do – Hạnh phúc", { bold: true, size: 20, align: AlignmentType.CENTER }),
-              p("——————————————", { size: 18, color: "888888", align: AlignmentType.CENTER }),
-              p(`Hà Nội, ngày ${today}`, { size: 18, italics: true, color: "555555", align: AlignmentType.CENTER }),
+              p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", { bold: true, size: 20, align: AlignmentType.CENTER }),
+              p("Độc lập – Tự do – Hạnh phúc",          { bold: true, size: FS, align: AlignmentType.CENTER }),
+              p("———————————————",                        { size: FS_SM, color: "888888", align: AlignmentType.CENTER }),
+              p(`Hà Nội, ngày ${today}`,                 { size: FS_SM, italics: true, color: "555555", align: AlignmentType.CENTER }),
             ],
-            { width: CONTENT_W - HALF, vertAlign: VerticalAlign.CENTER, margins: { top: 120, bottom: 120, left: 120, right: 120 } }
+            { width: CONTENT_W - HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
           ),
         ],
       }),
@@ -186,176 +209,171 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
   // ── 2. Title ─────────────────────────────────────────────────────────────
   const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { before: 200, after: 200 },
+    spacing: { before: 120, after: 120 },
     children: [
-      new TextRun({ text: "BẢNG ĐIỀU TOUR", bold: true, size: 32, font: "Times New Roman" }),
+      new TextRun({ text: "BẢNG ĐIỀU TOUR", bold: true, size: 28, font: "Times New Roman" }),
     ],
   });
 
-  // ── 3. Tour info table ───────────────────────────────────────────────────
-  const LW = 1500; // label width
-  const HALF2 = Math.floor(CONTENT_W / 2); // 4873
+  // ── 3. Info table — layout khớp với UI ──────────────────────────────────
+  //
+  // Cột trái: Code đoàn, HDV, Xe, Ngày đón+CB, Ngày tiễn+CB
+  // Cột phải: Bảng đón, Shopping, T/L, Số khách compact, Chú thích
+  //
+  // Cấu trúc 4 cột: [label-L | value-L | label-R | value-R]
+  // Rows 4-5 (date+flight): colSpan=2 cho nửa trái
 
-  const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
-  const bayStr = [chuyenBayDon, chuyenBayTien].filter(Boolean).join(" → ") || "—";
+  const soKhachRow = pRuns([
+    { text: "NL: ", bold: true },
+    { text: String(soKhachLon) + "   " },
+    { text: "TE 6-10: ", bold: true },
+    { text: String(soKhachEm1) + "   " },
+    { text: "TE <6: ", bold: true },
+    { text: String(soKhachEm2) + "   " },
+    { text: "T/L: ", bold: true },
+    { text: String(soKhachTl) + "   " },
+    { text: "Tổng: ", bold: true },
+    { text: String(totalKhach), bold: true, color: "185FA5" },
+  ]);
+
+  const infoRows: TableRow[] = [
+    // Row 1: Code đoàn | Bảng đón
+    new TableRow({ children: [
+      cell([p("Code đoàn:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(tenDoan, { bold: true, color: "185FA5" })], { width: VW }),
+      cell([p("Bảng đón:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(bangDon || "—")], { width: VW_R }),
+    ]}),
+    // Row 2: HDV | Shopping
+    new TableRow({ children: [
+      cell([p("HDV:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(hdv || "—")], { width: VW }),
+      cell([p("Shopping:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(shopStr)], { width: VW_R }),
+    ]}),
+    // Row 3: Xe | T/L
+    new TableRow({ children: [
+      cell([p("Xe:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(xeLabel(xe))], { width: VW }),
+      cell([p("T/L:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(truongDoan || "—")], { width: VW_R }),
+    ]}),
+    // Row 4: Ngày đón + CB đón (colSpan=2) | Số khách compact
+    new TableRow({ children: [
+      cell(
+        [pRuns([
+          { text: "Ngày đón: ", bold: true },
+          { text: formatDate(ngayDi) },
+          { text: chuyenBayDon ? `   ${chuyenBayDon}` : "", color: "444444" },
+        ])],
+        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+      ),
+      cell([p("Số khách:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([soKhachRow], { width: VW_R }),
+    ]}),
+    // Row 5: Ngày tiễn + CB tiễn (colSpan=2) | Chú thích
+    new TableRow({ children: [
+      cell(
+        [pRuns([
+          { text: "Ngày tiễn: ", bold: true },
+          { text: formatDate(ngayVe) },
+          { text: chuyenBayTien ? `   ${chuyenBayTien}` : "", color: "444444" },
+        ])],
+        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+      ),
+      cell([p("Chú thích:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(chuThichKhach || "—")], { width: VW_R }),
+    ]}),
+  ];
+
+  // Row quà tặng (nếu có)
+  if (gifts.length > 0) {
+    infoRows.push(
+      new TableRow({ children: [
+        cell([p("Quà tặng:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+        cell([p(gifts.join(", "))], { width: VW + LW + VW_R, colSpan: 3 }),
+      ]})
+    );
+  }
 
   const infoTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
-    rows: [
-      // Row 1: Code đoàn | Bảng đón
-      new TableRow({
-        children: [
-          cell([p("Code đoàn:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(tenDoan, { bold: true, size: 20, color: "185FA5" })], { width: HALF2 - LW }),
-          cell([p("Bảng đón:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(bangDon || "—", { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
-        ],
-      }),
-      // Row 2: HDV | Shopping
-      new TableRow({
-        children: [
-          cell([p("HDV:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(hdv || "—", { size: 20 })], { width: HALF2 - LW }),
-          cell([p("Shopping:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(shopStr, { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
-        ],
-      }),
-      // Row 3: Xe | T/L
-      new TableRow({
-        children: [
-          cell([p("Xe:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(xeLabel(xe), { size: 20 })], { width: HALF2 - LW }),
-          cell([p("T/L:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(truongDoan || "—", { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
-        ],
-      }),
-      // Row 4: Ngày đón | Chuyến bay
-      new TableRow({
-        children: [
-          cell([p("Ngày đón:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(formatDate(ngayDi), { size: 20 })], { width: HALF2 - LW }),
-          cell([p("Chuyến bay:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(bayStr, { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
-        ],
-      }),
-      // Row 5: Ngày tiễn
-      new TableRow({
-        children: [
-          cell([p("Ngày tiễn:", { bold: true, size: 20 })], { width: LW, shading: HEADER_SHADING }),
-          cell([p(formatDate(ngayVe), { size: 20 })], { width: HALF2 - LW }),
-          cell([p("", { size: 20 })], { width: LW }),
-          cell([p("", { size: 20 })], { width: CONTENT_W - HALF2 - LW }),
-        ],
-      }),
-    ],
+    rows: infoRows,
   });
 
-  // ── 4. Guest count table ─────────────────────────────────────────────────
-  const GW = Math.floor(CONTENT_W / 6); // 1624
-  const GW_LAST = CONTENT_W - GW * 5;   // fill remaining (1626)
-  const guestTable = new Table({
-    width: { size: CONTENT_W, type: WidthType.DXA },
-    rows: [
-      new TableRow({
-        children: [
-          cell([p("Người lớn", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-          cell([p(String(soKhachLon), { size: 20, align: AlignmentType.CENTER })], { width: GW }),
-          cell([p("Trẻ em 6–10", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING }),
-          cell([p(String(soKhachEm1), { size: 20, align: AlignmentType.CENTER })], { width: GW }),
-          cell([p("Trẻ em <6", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING }),
-          cell([p(String(soKhachEm2), { size: 20, align: AlignmentType.CENTER })], { width: GW_LAST }),
-        ],
-      }),
-      new TableRow({
-        children: [
-          cell([p("T/L", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING }),
-          cell([p(String(soKhachTl), { size: 20, align: AlignmentType.CENTER })], { width: GW }),
-          cell([p("Tổng", { bold: true, size: 20, align: AlignmentType.CENTER })], { width: GW, shading: HEADER_SHADING }),
-          cell([p(String(totalKhach), { bold: true, size: 20, align: AlignmentType.CENTER, color: "185FA5" })], { width: GW }),
-          cell([p("Chú thích:", { bold: true, size: 20 })], { width: GW, shading: HEADER_SHADING }),
-          cell([p(chuThichKhach || "—", { size: 20 })], { width: GW_LAST }),
-        ],
-      }),
-    ],
-  });
-
-  // ── 5. Gifts (if any) ─────────────────────────────────────────────────────
-  const giftParas: Paragraph[] = [];
-  if (gifts.length > 0) {
-    giftParas.push(new Paragraph({
-      spacing: { before: 160, after: 80 },
-      children: [new TextRun({ text: "Quà tặng: " + gifts.join(", "), size: 20, font: "Times New Roman", bold: true })],
-    }));
-  }
-
-  // ── 6. Day schedule table ─────────────────────────────────────────────────
+  // ── 4. Schedule table ─────────────────────────────────────────────────────
   const schedHeaderRow = new TableRow({
     tableHeader: true,
     children: [
-      cell([p("Ngày", { bold: true, align: AlignmentType.CENTER, size: 20 })], { width: SCHED_COL[0], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Chương trình", { bold: true, align: AlignmentType.CENTER, size: 20 })], { width: SCHED_COL[1], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Ăn trưa", { bold: true, align: AlignmentType.CENTER, size: 20 })], { width: SCHED_COL[2], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Ăn tối", { bold: true, align: AlignmentType.CENTER, size: 20 })], { width: SCHED_COL[3], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Khách sạn", { bold: true, align: AlignmentType.CENTER, size: 20 })], { width: SCHED_COL[4], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Ngày",      { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[0], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Chương trình", { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[1], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Ăn trưa",  { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[2], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Ăn tối",   { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[3], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Khách sạn",{ bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[4], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
     ],
   });
 
   const schedDataRows = days.map((day) => {
+    // Ngày
     const ngayParas = [
       p(formatDateShort(day.ngay_date), { bold: true, align: AlignmentType.CENTER }),
-      p(day.thu, { align: AlignmentType.CENTER, color: "555555", size: 18 }),
+      p(day.thu, { align: AlignmentType.CENTER, color: "555555", size: FS_SM }),
     ];
 
+    // Chương trình
     const ctParas: Paragraph[] = [];
     if (day.thanh_pho) ctParas.push(p(day.thanh_pho, { bold: true }));
     for (const item of day.items) {
       const cd = canhDiemMap.get(item.canh_diem_id);
       if (cd) {
-        ctParas.push(p(`• ${cd.ten}`, { size: 20 }));
-        if (item.ghi_chu) ctParas.push(p(`  ${item.ghi_chu}`, { color: "666666", size: 18 }));
+        ctParas.push(p(`• ${cd.ten}`));
+        if (item.ghi_chu) ctParas.push(p(`  ${item.ghi_chu}`, { color: "666666", size: FS_SM }));
       }
     }
     if (ctParas.length === 0) ctParas.push(p(""));
 
+    // Ăn trưa
     const truaParas: Paragraph[] = [];
     if (day.an_trua_nha_hang_id) {
       const nh = nhaHangMap.get(day.an_trua_nha_hang_id);
       if (nh) {
         truaParas.push(p(nh.ten, { bold: true }));
-        if (nh.dia_chi) truaParas.push(p(nh.dia_chi, { color: "666666", size: 18 }));
+        if (nh.dia_chi) truaParas.push(p(nh.dia_chi, { color: "666666", size: FS_SM }));
       }
     }
     if (truaParas.length === 0) truaParas.push(p(""));
 
+    // Ăn tối
     const toiParas: Paragraph[] = [];
     if (day.an_toi_nha_hang_id) {
       const nh = nhaHangMap.get(day.an_toi_nha_hang_id);
       if (nh) {
         toiParas.push(p(nh.ten, { bold: true }));
-        if (nh.dia_chi) toiParas.push(p(nh.dia_chi, { color: "666666", size: 18 }));
+        if (nh.dia_chi) toiParas.push(p(nh.dia_chi, { color: "666666", size: FS_SM }));
       }
     }
     if (toiParas.length === 0) toiParas.push(p(""));
 
+    // Khách sạn
     const ksParas: Paragraph[] = [];
     if (day.khach_san_id) {
       const ks = khachSanMap.get(day.khach_san_id);
       if (ks) {
         ksParas.push(p(ks.ten, { bold: true }));
-        if (ks.dia_chi) ksParas.push(p(ks.dia_chi, { color: "666666", size: 18 }));
+        if (ks.dia_chi) ksParas.push(p(ks.dia_chi, { color: "666666", size: FS_SM }));
       }
     }
-    if (day.ks_loai_phong) ksParas.push(p(day.ks_loai_phong, { size: 20 }));
-    if (day.ks_ma_code) ksParas.push(p(`Code: ${day.ks_ma_code}`, { color: "555555", size: 18 }));
+    if (day.ks_loai_phong) ksParas.push(p(day.ks_loai_phong));
+    if (day.ks_ma_code)    ksParas.push(p(`Code: ${day.ks_ma_code}`, { color: "555555", size: FS_SM }));
     if (ksParas.length === 0) ksParas.push(p(""));
 
     return new TableRow({
       children: [
-        cell(ngayParas, { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER }),
-        cell(ctParas, { width: SCHED_COL[1] }),
-        cell(truaParas, { width: SCHED_COL[2] }),
-        cell(toiParas, { width: SCHED_COL[3] }),
-        cell(ksParas, { width: SCHED_COL[4] }),
+        cell(ngayParas,  { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER }),
+        cell(ctParas,    { width: SCHED_COL[1] }),
+        cell(truaParas,  { width: SCHED_COL[2] }),
+        cell(toiParas,   { width: SCHED_COL[3] }),
+        cell(ksParas,    { width: SCHED_COL[4] }),
       ],
     });
   });
@@ -365,20 +383,23 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
     rows: [schedHeaderRow, ...schedDataRows],
   });
 
-  // ── 7. Ghi chú ───────────────────────────────────────────────────────────
+  // ── 5. Ghi chú ───────────────────────────────────────────────────────────
   const ghiChuParas: Paragraph[] = [];
   if (ghiChuDieuTour) {
-    ghiChuParas.push(new Paragraph({
-      spacing: { before: 200, after: 60 },
-      children: [new TextRun({ text: "Ghi chú:", bold: true, size: 20, font: "Times New Roman" })],
-    }));
-    ghiChuParas.push(new Paragraph({
-      children: [new TextRun({ text: ghiChuDieuTour, size: 20, font: "Times New Roman" })],
-    }));
+    ghiChuParas.push(
+      new Paragraph({
+        spacing: { before: 120, after: 40 },
+        children: [new TextRun({ text: "Ghi chú: ", bold: true, size: FS, font: "Times New Roman" })],
+      })
+    );
+    ghiChuParas.push(
+      new Paragraph({
+        children: [new TextRun({ text: ghiChuDieuTour, size: FS, font: "Times New Roman" })],
+      })
+    );
   }
 
-  // ── Spacer ────────────────────────────────────────────────────────────────
-  const spacer = new Paragraph({ spacing: { before: 160, after: 0 }, children: [] });
+  const spacer = new Paragraph({ spacing: { before: 100, after: 0 }, children: [] });
 
   const doc = new Document({
     sections: [
@@ -393,9 +414,6 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
           headerTable,
           titlePara,
           infoTable,
-          spacer,
-          guestTable,
-          ...giftParas,
           spacer,
           schedTable,
           ...ghiChuParas,

@@ -1122,7 +1122,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                   <td />
                   {/* Col 2: empty */}
                   <td />
-                  {/* Col 3: description + HDV toggle */}
+                  {/* Col 3: description */}
                   <td className="px-3 py-1">
                     <div className="flex items-center gap-1.5 pl-4">
                       <span className="text-muted-foreground text-[10px] shrink-0">↳</span>
@@ -1133,22 +1133,6 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                         onBlur={() => handleExtraSave(key, idx)}
                         className="h-6 text-xs flex-1"
                       />
-                      <button
-                        className={cn(
-                          "text-[10px] px-1.5 py-0.5 rounded font-medium border shrink-0 cursor-pointer",
-                          extra.nguoi_tt === "hdv"
-                            ? "bg-amber-100 text-amber-700 border-amber-300"
-                            : "bg-muted text-muted-foreground border-border"
-                        )}
-                        onClick={() => {
-                          const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
-                          handleExtraChange(key, idx, "nguoi_tt", next);
-                          handleExtraSave(key, idx, next);
-                        }}
-                        title="Người thanh toán: công ty / HDV"
-                      >
-                        {extra.nguoi_tt === "hdv" ? "HDV" : "CT"}
-                      </button>
                     </div>
                   </td>
                   {/* Col 4: empty */}
@@ -1185,13 +1169,23 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
                       </span>
                     ) : ""}
                   </td>
-                  {/* Col 9: HDV badge */}
+                  {/* Col 9: Ai trả — toggle giống main row */}
                   <td className="px-2 py-1 text-center">
-                    {extra.nguoi_tt === "hdv" && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-                        HDV thanh toán
-                      </span>
-                    )}
+                    <button
+                      onClick={() => {
+                        const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
+                        handleExtraChange(key, idx, "nguoi_tt", next);
+                        handleExtraSave(key, idx, next);
+                      }}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+                        extra.nguoi_tt === "cong_ty"
+                          ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+                          : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
+                      )}
+                    >
+                      {extra.nguoi_tt === "cong_ty" ? "Công ty" : "HDV"}
+                    </button>
                   </td>
                   {/* Col 10: empty */}
                   <td />
