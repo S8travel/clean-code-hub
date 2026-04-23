@@ -261,8 +261,10 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     });
   }, [soKhachDefault]);
 
-  // Auto-fix: nếu NH có nguoi_thanh_toan = "hdv" nhưng DB row có tien_cong_ty > 0
-  // (hoặc chưa có trong DB), re-save để phân bổ đúng vào tien_hdv.
+  // Auto-fix: đảm bảo tất cả NH rows có valid data đều tồn tại trong DB với đúng giá trị.
+  // Case 1: HDV row bị save sai tien_cong_ty > 0
+  // Case 2: Row chưa có trong DB (chưa từng blur)
+  // Case 3: Row trong DB nhưng so_luong stale (save lúc soKhachDefault chưa load xong)
   useEffect(() => {
     if (autoFixedHdvRef.current || !initializedRef.current) return;
     if (!nhData || Object.keys(localRows).length === 0) return;
@@ -270,12 +272,21 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
     autoFixedHdvRef.current = true;
 
     for (const [key, row] of Object.entries(localRows)) {
-      const nh = nhData.nhaHangMap[row.nha_hang_id];
-      if (nh?.nguoi_thanh_toan !== "hdv") continue;
       if (!row.don_gia || !row.so_khach) continue;
 
+      const nh = nhData.nhaHangMap[row.nha_hang_id];
       const dbRow = row.id ? chiPhiRows.find((cp) => cp.id === row.id) : null;
-      if (!dbRow || (dbRow.tien_cong_ty != null && dbRow.tien_cong_ty > 0)) {
+
+      // Case 1: HDV row với tien_cong_ty sai
+      if (nh?.nguoi_thanh_toan === "hdv" && (!dbRow || (dbRow.tien_cong_ty != null && dbRow.tien_cong_ty > 0))) {
+        handleSave(key); continue;
+      }
+      // Case 2: chưa có trong DB
+      if (!row.id) {
+        handleSave(key); continue;
+      }
+      // Case 3: DB so_luong khác local so_khach (stale)
+      if (dbRow && row.so_khach > 1 && dbRow.so_luong !== row.so_khach) {
         handleSave(key);
       }
     }
