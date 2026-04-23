@@ -33,6 +33,13 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
     doan?.so_khach ||
     0;
 
+  const soKhachKhongTL =
+    (doan?.so_khach_lon ?? 0) +
+    (doan?.so_khach_em1 ?? 0) +
+    (doan?.so_khach_em2 ?? 0) ||
+    doan?.so_khach ||
+    0;
+
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
@@ -143,7 +150,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
       <div className="space-y-6">
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} soKhachKhongTL={soKhachKhongTL} tenDoan={doan?.ten_doan || ""} />
 
         <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di} />
 

@@ -24,6 +24,7 @@ export interface NhaHangDetail {
   ten_ncc: string | null;
   ncc_so_tai_khoan: string | null;
   ncc_ngan_hang: string | null;
+  tinh_suat_tl: boolean | null;
 }
 
 export interface NHSectionData {
@@ -91,7 +92,7 @@ export function useChiPhiNHSection(doanId?: number) {
       const nhIds = [...new Set(meals.map((m) => m.nha_hang_id))];
       const { data: nhList, error: e2 } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, tai_khoan_thanh_toan, nha_cung_cap_id")
+        .select("id, ten, dia_chi, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, tai_khoan_thanh_toan, nha_cung_cap_id, tinh_suat_tl")
         .in("id", nhIds);
       if (e2) throw e2;
 

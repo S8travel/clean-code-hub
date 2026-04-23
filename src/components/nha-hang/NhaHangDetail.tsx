@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
@@ -46,8 +47,10 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
     thong_tin_chung: "",
     nha_cung_cap_id: "",
   });
+  const [tinhSuatTL, setTinhSuatTL] = useState(nhaHang.tinh_suat_tl ?? false);
 
   useEffect(() => {
+    setTinhSuatTL(nhaHang.tinh_suat_tl ?? false);
     setForm({
       ten: nhaHang.ten ?? "",
       ten_zh: nhaHang.ten_zh ?? "",
@@ -87,6 +90,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         chiet_khau_phan_tram: form.chiet_khau ? Number(form.chiet_khau) : null,
         thong_tin_chung: form.thong_tin_chung || null,
         nha_cung_cap_id: form.nha_cung_cap_id ? Number(form.nha_cung_cap_id) : null,
+        tinh_suat_tl: tinhSuatTL,
       });
       toast.success("Đã lưu thông tin nhà hàng");
     } catch {
@@ -185,6 +189,10 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         <div className="col-span-2">
           <Label className="text-xs">Tài khoản thanh toán</Label>
           <Textarea value={form.tai_khoan_thanh_toan} onChange={(e) => set("tai_khoan_thanh_toan", e.target.value)} className="text-sm min-h-[60px]" />
+        </div>
+        <div className="flex items-center justify-between col-span-2 py-1">
+          <Label className="text-xs">Tính suất ăn T/L</Label>
+          <Switch checked={tinhSuatTL} onCheckedChange={setTinhSuatTL} />
         </div>
         <div>
           <Label className="text-xs">Người thanh toán</Label>

@@ -88,10 +88,11 @@ interface LocalNHExtra {
 interface Props {
   doanId: number;
   soKhachDefault?: number;
+  soKhachKhongTL?: number;
   tenDoan?: string;
 }
 
-export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = "" }: Props) {
+export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKhongTL, tenDoan = "" }: Props) {
   const { data: nhData, isLoading } = useChiPhiNHSection(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -166,6 +167,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
       const mainCp = nhChiPhi.find(
         (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
       );
+      const soKhachForNH = (nh?.tinh_suat_tl === false)
+        ? (soKhachKhongTL ?? soKhachDefault)
+        : soKhachDefault;
       rows[key] = {
         id: mainCp?.id,
         nha_hang_id: meal.nha_hang_id,
@@ -173,8 +177,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
         ngay_date: meal.ngay_date,
         ngay_so: meal.ngay_so,
         bua_an: meal.bua_an,
-        // Nếu DB có so_luong > 1 thì dùng DB, còn lại dùng soKhachDefault (tránh giá trị 1 sai từ lần lưu cũ)
-        so_khach: (mainCp?.so_luong != null && mainCp.so_luong > 1) ? mainCp.so_luong : (soKhachDefault || mainCp?.so_luong || 0),
+        // Nếu DB có so_luong > 1 thì dùng DB, còn lại dùng soKhachForNH (tránh giá trị 1 sai từ lần lưu cũ)
+        so_khach: (mainCp?.so_luong != null && mainCp.so_luong > 1) ? mainCp.so_luong : (soKhachForNH || mainCp?.so_luong || 0),
         don_gia: (mainCp?.don_gia != null && mainCp.don_gia > 0) ? mainCp.don_gia : (meal.gia_set_menu ?? 0),
         chiet_khau_phan_tram: nhData.nhaHangMap[meal.nha_hang_id]?.chiet_khau_phan_tram ?? 0,
         nguoi_tt: (mainCp?.tien_hdv ?? 0) > 0 ? "hdv" : (nhData.nhaHangMap[meal.nha_hang_id]?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty"),
@@ -248,18 +252,24 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, tenDoan = 
   useEffect(() => {
     if (soKhachDefault <= 0) return;
     setLocalRows((prev) => {
+      if (!nhData) return prev;
       let changed = false;
       const next = { ...prev };
       for (const key of Object.keys(next)) {
+        const row = next[key];
+        const nh = nhData.nhaHangMap[row.nha_hang_id];
+        const target = (nh?.tinh_suat_tl === false)
+          ? (soKhachKhongTL ?? soKhachDefault)
+          : soKhachDefault;
         // Cập nhật nếu so_khach = 0 hoặc = 1 (default sai từ lần lưu trước)
-        if (next[key].so_khach === 0 || (soKhachDefault > 1 && next[key].so_khach === 1)) {
-          next[key] = { ...next[key], so_khach: soKhachDefault };
+        if (row.so_khach === 0 || (target > 1 && row.so_khach === 1)) {
+          next[key] = { ...row, so_khach: target };
           changed = true;
         }
       }
       return changed ? next : prev;
     });
-  }, [soKhachDefault]);
+  }, [soKhachDefault, soKhachKhongTL, nhData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-fix: đảm bảo tất cả NH rows có valid data đều tồn tại trong DB với đúng giá trị.
   // Case 1: HDV row bị save sai tien_cong_ty > 0
