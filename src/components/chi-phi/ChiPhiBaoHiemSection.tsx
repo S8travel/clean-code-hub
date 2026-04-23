@@ -95,6 +95,19 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
 
   const thanhTien = soKhach * soNgay * donGia;
 
+  const nguoiTt = (existing?.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty";
+
+  const handleToggleNguoiTt = () => {
+    if (!existing) return;
+    const next = nguoiTt === "cong_ty" ? "hdv" : "cong_ty";
+    upsertMut.mutate({
+      id: existing.id,
+      doan_id: doanId,
+      tien_cong_ty: next === "cong_ty" ? thanhTien : 0,
+      tien_hdv: next === "hdv" ? thanhTien : 0,
+    } as any);
+  };
+
   const handleSave = async () => {
     if (!soKhach || !soNgay) {
       toast.warning("Đoàn chưa có số khách hoặc ngày đi/về");
@@ -102,6 +115,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
     }
     setSaving(true);
     try {
+      const isHDV = nguoiTt === "hdv";
       await upsertMut.mutateAsync({
         ...(existing ? { id: existing.id } : {}),
         doan_id: doanId,
@@ -110,8 +124,8 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         mo_ta: baoHiemCD ? `Bảo hiểm - ${baoHiemCD.ten}` : "Bảo hiểm",
         don_gia: donGia,
         so_luong: soKhach * soNgay,
-        tien_cong_ty: thanhTien,
-        tien_hdv: 0,
+        tien_cong_ty: isHDV ? 0 : thanhTien,
+        tien_hdv: isHDV ? thanhTien : 0,
         nha_cung_cap_id: nccId,
         thanh_toan_dinh_ky: true,
         ...(!existing && {
@@ -267,6 +281,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
             <col style={{ width: "80px" }} />
             <col style={{ width: "110px" }} />
             <col style={{ width: "120px" }} />
+            <col style={{ width: "76px" }} />
             <col style={{ width: "180px" }} />
             <col style={{ width: "140px" }} />
             <col style={{ width: "130px" }} />
@@ -277,6 +292,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
               <th className="text-center px-2 py-2.5">SL</th>
               <th className="text-center px-3 py-2.5">Giá/người/ngày</th>
               <th className="text-right px-3 py-2.5">Thành tiền</th>
+              <th className="text-center px-2 py-2.5">Ai trả</th>
               <th className="text-center px-3 py-2.5">TT ĐNTT</th>
               <th className="text-center px-3 py-2.5">TT Thanh toán</th>
               <th className="px-2 py-2.5" />
@@ -318,9 +334,27 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                 {thanhTien > 0 ? `${fmt(thanhTien)} ₫` : "—"}
               </td>
 
+              {/* Ai trả — badge */}
+              <td className="px-2 py-2.5 text-center">
+                <button
+                  onClick={handleToggleNguoiTt}
+                  disabled={upsertMut.isPending || !existing}
+                  className={cn(
+                    "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+                    nguoiTt === "cong_ty"
+                      ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+                      : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
+                  )}
+                >
+                  {nguoiTt === "cong_ty" ? "Công ty" : "HDV"}
+                </button>
+              </td>
+
               {/* TT ĐNTT */}
               <td className="px-3 py-2.5">
-                {shownDntts.length === 0 ? (
+                {nguoiTt === "hdv" ? (
+                  <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
+                ) : shownDntts.length === 0 ? (
                   <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
                 ) : (
                   <div className="flex flex-wrap items-center gap-1 justify-center">
@@ -375,6 +409,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
 
               {/* TT Thanh toán */}
               <td className="px-3 py-2.5">
+                {nguoiTt === "hdv" ? (
+                  <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
+                ) : (
                 <div className="flex flex-wrap items-center gap-1 justify-center">
                   {activeDntts.map((d) => (
                     <span key={d.id} className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${
@@ -393,13 +430,14 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                     <span className="text-[10px] text-muted-foreground">—</span>
                   )}
                 </div>
+                )}
               </td>
 
               {/* Actions */}
               <td className="px-2 py-2.5">
                 {existing && (
                   <div className="flex items-center gap-1 justify-end">
-                    {isDaTT && paidDntts.length > 0 && (
+                    {nguoiTt === "cong_ty" && isDaTT && paidDntts.length > 0 && (
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
                         title="Điều chỉnh sau thanh toán"
                         onClick={() => {
@@ -411,7 +449,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                         <SlidersHorizontal className="h-3 w-3" />
                       </Button>
                     )}
-                    {canCancel && activeDntt && (
+                    {nguoiTt === "cong_ty" && canCancel && activeDntt && (
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                         title="Hủy ĐNTT"
                         onClick={() => {
@@ -431,12 +469,12 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                     {existing.thanh_toan_dinh_ky && activeDntts.length === 0 && (
                       <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
                     )}
-                    {!existing.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
+                    {nguoiTt === "cong_ty" && !existing.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={openModal}>
                         ĐNTT
                       </Button>
                     )}
-                    {activeDntts.length > 0 && daDeNghi === 0 && (
+                    {nguoiTt === "cong_ty" && activeDntts.length > 0 && daDeNghi === 0 && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                         onClick={() => {
                           setModal({ chiPhiId: existing.id, thanhTien: conLai > 0 ? conLai : thanhTien, moTa: existing.mo_ta || "Bảo hiểm", nccId });

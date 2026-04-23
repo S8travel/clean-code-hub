@@ -7,7 +7,6 @@ import ChiPhiHeader from "./ChiPhiHeader";
 import ChiPhiKSSection from "./ChiPhiKSSection";
 import ChiPhiNHSection from "./ChiPhiNHSection";
 import ChiPhiDVSection from "./ChiPhiDVSection";
-import ChiPhiHDVSection from "./ChiPhiHDVSection";
 import ChiPhiBaoHiemSection from "./ChiPhiBaoHiemSection";
 import ChiPhiXeSection from "./ChiPhiXeSection";
 import ChiPhiVisaSection from "./ChiPhiVisaSection";
@@ -140,12 +139,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
         </div>
       )}
 
-      {/* ── Công ty thanh toán ── */}
       <div className="space-y-6">
-        <h2 className="text-base font-semibold border-b border-border pb-2">
-          Công ty thanh toán
-        </h2>
-
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
         <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} tenDoan={doan?.ten_doan || ""} />
@@ -162,14 +156,6 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
           ngayDi={doan?.ngay_di ?? null}
           ngayVe={doan?.ngay_ve ?? null}
         />
-      </div>
-
-      {/* ── HDV thanh toán ── */}
-      <div className="space-y-6">
-        <h2 className="text-base font-semibold border-b border-border pb-2">
-          Hướng dẫn viên
-        </h2>
-        <ChiPhiHDVSection doanId={doanId} doan={doan} />
       </div>
     </div>
   );

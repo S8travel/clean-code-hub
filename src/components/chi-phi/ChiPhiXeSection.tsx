@@ -71,7 +71,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
   const xeRows = chiPhiRows.filter((r) => r.danh_muc === "xe");
-  const total = xeRows.reduce((s, r) => s + r.tien_cong_ty, 0);
+  const total = xeRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
 
   const xeLabel = xe
     ? [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean).join(" · ")
@@ -93,15 +93,29 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     const local = editRow[row.id];
     if (!local) return;
     if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
+    const total = local.so_luong * local.don_gia;
+    const isHDV = row.tien_hdv > 0;
     upsertMut.mutate({
       id: row.id,
       doan_id: doanId,
       so_luong: local.so_luong,
       don_gia: local.don_gia,
-      tien_cong_ty: local.so_luong * local.don_gia,
+      tien_cong_ty: isHDV ? 0 : total,
+      tien_hdv: isHDV ? total : 0,
     } as any, {
       onSuccess: () => setEditRow((prev) => { const next = { ...prev }; delete next[row.id]; return next; }),
     });
+  };
+
+  const handleToggleNguoiTt = (row: typeof xeRows[0]) => {
+    const total = row.so_luong * row.don_gia;
+    const next = row.tien_hdv > 0 ? "cong_ty" : "hdv";
+    upsertMut.mutate({
+      id: row.id,
+      doan_id: doanId,
+      tien_cong_ty: next === "cong_ty" ? total : 0,
+      tien_hdv: next === "hdv" ? total : 0,
+    } as any);
   };
 
   // ── Định kỳ toggle ────────────────────────────────────────────────────────
@@ -228,6 +242,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
               <col style={{ width: "60px" }} />
               <col style={{ width: "110px" }} />
               <col style={{ width: "120px" }} />
+              <col style={{ width: "76px" }} />
               <col style={{ width: "180px" }} />
               <col style={{ width: "140px" }} />
               <col style={{ width: "130px" }} />
@@ -238,6 +253,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                 <th className="text-center px-2 py-2.5">SL</th>
                 <th className="text-center px-3 py-2.5">Đơn giá</th>
                 <th className="text-right px-3 py-2.5">Thành tiền</th>
+                <th className="text-center px-2 py-2.5">Ai trả</th>
                 <th className="text-center px-3 py-2.5">TT ĐNTT</th>
                 <th className="text-center px-3 py-2.5">TT Thanh toán</th>
                 <th className="px-2 py-2.5" />
@@ -275,6 +291,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                   activeDntt.trang_thai_thanh_toan === "da_tt"
                 );
                 const shownDntts = [...activeDntts, ...rejectedDntts];
+
+                const nguoiTt = row.tien_hdv > 0 ? "hdv" : "cong_ty";
 
                 return (
                   <tr key={row.id} className="hover:bg-muted/20">
@@ -314,9 +332,27 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                       {fmt(thanhTienLocal)} ₫
                     </td>
 
+                    {/* Ai trả — badge */}
+                    <td className="px-2 py-2.5 text-center">
+                      <button
+                        onClick={() => handleToggleNguoiTt(row)}
+                        disabled={upsertMut.isPending}
+                        className={cn(
+                          "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+                          nguoiTt === "cong_ty"
+                            ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+                            : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
+                        )}
+                      >
+                        {nguoiTt === "cong_ty" ? "Công ty" : "HDV"}
+                      </button>
+                    </td>
+
                     {/* TT ĐNTT */}
                     <td className="px-3 py-2.5 align-top">
-                      {shownDntts.length === 0 ? (
+                      {nguoiTt === "hdv" ? (
+                        <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
+                      ) : shownDntts.length === 0 ? (
                         <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
                       ) : (
                         <div className="space-y-1.5 flex flex-col items-center">
@@ -377,6 +413,9 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
 
                     {/* TT Thanh toán */}
                     <td className="px-3 py-2.5 align-top">
+                      {nguoiTt === "hdv" ? (
+                        <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
+                      ) : (
                       <div className="space-y-1.5 flex flex-col items-center">
                         {activeDntts.map((d) => (
                           <div key={d.id}>
@@ -405,12 +444,13 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           <span className="text-[10px] text-muted-foreground">—</span>
                         )}
                       </div>
+                      )}
                     </td>
 
                     {/* Actions */}
                     <td className="px-2 py-2.5">
                       <div className="flex items-center gap-1 justify-end">
-                        {isDaTT && paidDntts.length > 0 && (
+                        {nguoiTt === "cong_ty" && isDaTT && paidDntts.length > 0 && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
                             title="Điều chỉnh sau thanh toán"
                             onClick={() => {
@@ -422,7 +462,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                             <SlidersHorizontal className="h-3 w-3" />
                           </Button>
                         )}
-                        {canCancel && activeDntt && (
+                        {nguoiTt === "cong_ty" && canCancel && activeDntt && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             title="Hủy ĐNTT"
                             onClick={() => {
@@ -439,13 +479,13 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           onClick={() => handleToggleDinhKy(row)}>
                           ⏱
                         </Button>
-                        {!row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
+                        {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                             onClick={() => openModal(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id)}>
                             ĐNTT
                           </Button>
                         )}
-                        {activeDntts.length > 0 && daDeNghi === 0 && (
+                        {nguoiTt === "cong_ty" && activeDntts.length > 0 && daDeNghi === 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                             onClick={() => openModal(row.id!, conLai > 0 ? conLai : thanhTien, row.mo_ta || "", row.nha_cung_cap_id)}>
                             {conLai > 0 ? "ĐNTT còn lại" : "ĐNTT bổ sung"}
