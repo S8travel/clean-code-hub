@@ -21,10 +21,13 @@ interface Props {
   tenDoan: string;
   soKhach: number;
   soNoidBo?: number;
+  soKhachLon?: number;
+  soKhachEm1?: number;
+  soKhachEm2?: number;
   hdvTen?: string;
 }
 
-export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, hdvTen }: Props) {
+export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, soKhachLon, soKhachEm1, soKhachEm2, hdvTen }: Props) {
   const { data: days = [], isLoading } = useBookingNH(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
   const qc = useQueryClient();
@@ -135,6 +138,10 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, h
                     setMenuIdFromDieuTour={day.an_trua_set_menu_id}
                     tenDoan={tenDoan}
                     soKhach={soKhach}
+                    soKhachLon={soKhachLon}
+                    soKhachEm1={soKhachEm1}
+                    soKhachEm2={soKhachEm2}
+                    soNoidBo={soNoidBo}
                     ngayDate={day.ngay_date}
                   />
                 )}
@@ -151,6 +158,10 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, h
                     conTrongDieuTour={false}
                     tenDoan={tenDoan}
                     soKhach={soKhach}
+                    soKhachLon={soKhachLon}
+                    soKhachEm1={soKhachEm1}
+                    soKhachEm2={soKhachEm2}
+                    soNoidBo={soNoidBo}
                     ngayDate={day.ngay_date}
                   />
                 )}
@@ -168,6 +179,10 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, h
                     setMenuIdFromDieuTour={day.an_toi_set_menu_id}
                     tenDoan={tenDoan}
                     soKhach={soKhach}
+                    soKhachLon={soKhachLon}
+                    soKhachEm1={soKhachEm1}
+                    soKhachEm2={soKhachEm2}
+                    soNoidBo={soNoidBo}
                     ngayDate={day.ngay_date}
                   />
                 )}
@@ -184,6 +199,10 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, h
                     conTrongDieuTour={false}
                     tenDoan={tenDoan}
                     soKhach={soKhach}
+                    soKhachLon={soKhachLon}
+                    soKhachEm1={soKhachEm1}
+                    soKhachEm2={soKhachEm2}
+                    soNoidBo={soNoidBo}
                     ngayDate={day.ngay_date}
                   />
                 )}

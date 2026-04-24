@@ -68,12 +68,16 @@ interface Props {
   setMenuIdFromDieuTour?: number | null;
   tenDoan?: string;
   soKhach?: number;
+  soKhachLon?: number;
+  soKhachEm1?: number;
+  soKhachEm2?: number;
+  soNoidBo?: number;
   ngayDate?: string | null;
 }
 
 export default function MealCard({
   doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail, booking, currentUserName,
-  conTrongDieuTour = true, setMenuIdFromDieuTour, tenDoan, soKhach, ngayDate,
+  conTrongDieuTour = true, setMenuIdFromDieuTour, tenDoan, soKhach, soKhachLon, soKhachEm1, soKhachEm2, soNoidBo, ngayDate,
 }: Props) {
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
@@ -252,6 +256,10 @@ export default function MealCard({
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(ngayDate)}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Bữa ăn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${buaLabel}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số khách</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soKhach ?? "—"} khách</td></tr>
+        ${soKhachLon ? `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px 6px 24px;color:#64748b;font-size:13px">Người lớn</td><td style="border:1px solid #e2e8f0;padding:6px 12px;color:#64748b;font-size:13px">${soKhachLon} khách</td></tr>` : ""}
+        ${soKhachEm1 ? `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px 6px 24px;color:#64748b;font-size:13px">TE 6–10 tuổi</td><td style="border:1px solid #e2e8f0;padding:6px 12px;color:#64748b;font-size:13px">${soKhachEm1} khách</td></tr>` : ""}
+        ${soKhachEm2 ? `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px 6px 24px;color:#64748b;font-size:13px">TE dưới 6 tuổi</td><td style="border:1px solid #e2e8f0;padding:6px 12px;color:#64748b;font-size:13px">${soKhachEm2} khách</td></tr>` : ""}
+        ${soNoidBo ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Nội bộ</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soNoidBo} suất (${soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"})</td></tr>` : ""}
         ${selectedMenu ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Set menu</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}</td></tr>` : ""}
       </table>
       ${monList.length > 0 ? `
@@ -353,6 +361,10 @@ export default function MealCard({
       ngayDate ? `- Ngày: ${fmtDate(ngayDate)}` : "",
       `- Bữa ăn: ${buaLabel}`,
       soKhach != null ? `- Số khách: ${soKhach} khách` : "",
+      soKhachLon ? `  + Người lớn: ${soKhachLon}` : "",
+      soKhachEm1 ? `  + TE 6-10 tuổi: ${soKhachEm1}` : "",
+      soKhachEm2 ? `  + TE dưới 6 tuổi: ${soKhachEm2}` : "",
+      soNoidBo ? `- Nội bộ: ${soNoidBo} suất (${soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"})` : "",
       selectedMenu ? `- Set menu: ${selectedMenu.ten_set}` : "",
       monList.length > 0 ? `\nDanh sách món:` : "",
       ...monList.map((m, i) => `${i + 1}. ${m}`),
