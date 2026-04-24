@@ -266,8 +266,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           : (nh?.tinh_suat_tl === false)
             ? (soKhachKhongTL ?? soKhachDefault)
             : soKhachDefault;
-        // Cập nhật nếu so_khach = 0 hoặc = 1 (default sai từ lần lưu trước)
-        if (row.so_khach === 0 || (target > 1 && row.so_khach === 1)) {
+        if (row.so_khach !== target) {
           next[key] = { ...row, so_khach: target };
           changed = true;
         }
