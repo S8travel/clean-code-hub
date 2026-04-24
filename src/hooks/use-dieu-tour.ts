@@ -252,6 +252,7 @@ export interface SaveDieuTourPayload {
     so_khach_em1?: number | null;
     so_khach_em2?: number | null;
     so_khach_tl?: number | null;
+    co_tinh_suat_tl_nha_hang?: boolean | null;
     chu_thich_khach?: string | null;
     tang_pham?: string[] | null;
     ghi_chu_dieu_tour?: string | null;

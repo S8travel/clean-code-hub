@@ -89,10 +89,11 @@ interface Props {
   doanId: number;
   soKhachDefault?: number;
   soKhachKhongTL?: number;
+  coTinhSuatTLNhaHang?: boolean;
   tenDoan?: string;
 }
 
-export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKhongTL, tenDoan = "" }: Props) {
+export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "" }: Props) {
   const { data: nhData, isLoading } = useChiPhiNHSection(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -167,9 +168,11 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       const mainCp = nhChiPhi.find(
         (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
       );
-      const soKhachForNH = (nh?.tinh_suat_tl === false)
-        ? (soKhachKhongTL ?? soKhachDefault)
-        : soKhachDefault;
+      const soKhachForNH = coTinhSuatTLNhaHang
+        ? soKhachDefault
+        : (nh?.tinh_suat_tl === false)
+          ? (soKhachKhongTL ?? soKhachDefault)
+          : soKhachDefault;
       rows[key] = {
         id: mainCp?.id,
         nha_hang_id: meal.nha_hang_id,
@@ -258,9 +261,11 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       for (const key of Object.keys(next)) {
         const row = next[key];
         const nh = nhData.nhaHangMap[row.nha_hang_id];
-        const target = (nh?.tinh_suat_tl === false)
-          ? (soKhachKhongTL ?? soKhachDefault)
-          : soKhachDefault;
+        const target = coTinhSuatTLNhaHang
+          ? soKhachDefault
+          : (nh?.tinh_suat_tl === false)
+            ? (soKhachKhongTL ?? soKhachDefault)
+            : soKhachDefault;
         // Cập nhật nếu so_khach = 0 hoặc = 1 (default sai từ lần lưu trước)
         if (row.so_khach === 0 || (target > 1 && row.so_khach === 1)) {
           next[key] = { ...row, so_khach: target };
@@ -269,7 +274,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       }
       return changed ? next : prev;
     });
-  }, [soKhachDefault, soKhachKhongTL, nhData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang, nhData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-fix: đảm bảo tất cả NH rows có valid data đều tồn tại trong DB với đúng giá trị.
   // Case 1: HDV row bị save sai tien_cong_ty > 0

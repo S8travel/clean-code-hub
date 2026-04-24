@@ -21,9 +21,10 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 interface Props {
   doanId: number;
   doan: any;
+  coTinhSuatTLNhaHang?: boolean;
 }
 
-export default function ChiPhiTab({ doanId, doan }: Props) {
+export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) {
   const [exportingExcel, setExportingExcel] = useState(false);
   const soKhach =
     (doan?.so_khach_lon ?? 0) +
@@ -150,7 +151,7 @@ export default function ChiPhiTab({ doanId, doan }: Props) {
       <div className="space-y-6">
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} soKhachKhongTL={soKhachKhongTL} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} soKhachKhongTL={soKhachKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
 
         <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di} />
 

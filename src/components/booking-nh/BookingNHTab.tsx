@@ -20,10 +20,11 @@ interface Props {
   doanId: number;
   tenDoan: string;
   soKhach: number;
+  soNoidBo?: number;
   hdvTen?: string;
 }
 
-export default function BookingNHTab({ doanId, tenDoan, soKhach, hdvTen }: Props) {
+export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, hdvTen }: Props) {
   const { data: days = [], isLoading } = useBookingNH(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
   const qc = useQueryClient();
@@ -78,16 +79,23 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, hdvTen }: Props
 
       {/* Stats */}
       {totalMeals > 0 && (
-        <div className="grid grid-cols-4 gap-3">
-          {stats.map(({ icon: Icon, label, value, cls }) => (
-            <div key={label} className="rounded-lg border border-border bg-card p-3">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Icon className={cn("h-3.5 w-3.5", cls)} />
-                <span className="text-xs text-muted-foreground">{label}</span>
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-3">
+            {stats.map(({ icon: Icon, label, value, cls }) => (
+              <div key={label} className="rounded-lg border border-border bg-card p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Icon className={cn("h-3.5 w-3.5", cls)} />
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                </div>
+                <p className={cn("text-2xl font-bold", cls)}>{value}</p>
               </div>
-              <p className={cn("text-2xl font-bold", cls)}>{value}</p>
-            </div>
-          ))}
+            ))}
+          </div>
+          {soNoidBo > 0 && (
+            <p className="text-xs text-muted-foreground px-0.5">
+              + {soNoidBo} suất nội bộ ({soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"}) — miễn phí, không tính chi phí
+            </p>
+          )}
         </div>
       )}
 

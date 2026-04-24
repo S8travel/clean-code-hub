@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 function formatDate(d: string | null) {
@@ -37,6 +38,8 @@ interface Props {
   totalFromDoan: number;
   chuThichKhach: string;
   setChuThichKhach: (v: string) => void;
+  coTinhSuatTLNhaHang: boolean;
+  setCoTinhSuatTLNhaHang: (v: boolean) => void;
 }
 
 export default function DoanInfoSection({
@@ -45,6 +48,7 @@ export default function DoanInfoSection({
   chuyenBayTien, setChuyenBayTien,
   soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalFromDoan,
   chuThichKhach, setChuThichKhach,
+  coTinhSuatTLNhaHang, setCoTinhSuatTLNhaHang,
 }: Props) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
@@ -105,6 +109,14 @@ export default function DoanInfoSection({
           </Row>
           <Row label="T/L" editable>
             <Input className="h-7 text-sm" value={truongDoan} onChange={(e) => setTruongDoan(e.target.value)} placeholder="Tên trưởng đoàn..." />
+          </Row>
+          <Row label="T/L ăn NH" editable>
+            <div className="flex items-center gap-2">
+              <Switch checked={coTinhSuatTLNhaHang} onCheckedChange={setCoTinhSuatTLNhaHang} />
+              <span className="text-xs text-muted-foreground">
+                {coTinhSuatTLNhaHang ? "Tính suất ăn T/L" : "Không tính"}
+              </span>
+            </div>
           </Row>
           {/* Compact guest count */}
           <div className="flex items-center gap-2">

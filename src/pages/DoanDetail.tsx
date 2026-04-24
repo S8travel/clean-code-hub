@@ -84,6 +84,7 @@ export default function DoanDetail() {
   const [chuThichKhach, setChuThichKhach] = useState("");
   const [gifts, setGifts] = useState<string[]>([]);
   const [ghiChuDieuTour, setGhiChuDieuTour] = useState("");
+  const [coTinhSuatTLNhaHang, setCoTinhSuatTLNhaHang] = useState(false);
   const [days, setDays] = useState<DayLocal[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("dieu-tour");
@@ -117,6 +118,7 @@ export default function DoanDetail() {
       setChuThichKhach(doan.chu_thich_khach || "");
       setGifts(Array.isArray(doan.tang_pham) ? doan.tang_pham : []);
       setGhiChuDieuTour(doan.ghi_chu_dieu_tour || "");
+      setCoTinhSuatTLNhaHang(doan.co_tinh_suat_tl_nha_hang ?? false);
       setInitialized(true);
     }
 
@@ -169,6 +171,7 @@ export default function DoanDetail() {
           so_khach_em1: soKhachEm1,
           so_khach_em2: soKhachEm2,
           so_khach_tl: soKhachTl,
+          co_tinh_suat_tl_nha_hang: coTinhSuatTLNhaHang,
           chu_thich_khach: chuThichKhach || null,
           tang_pham: gifts.length > 0 ? gifts : null,
           ghi_chu_dieu_tour: ghiChuDieuTour || null,
@@ -203,7 +206,7 @@ export default function DoanDetail() {
         },
       }
     );
-  }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, chuThichKhach, gifts, ghiChuDieuTour, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
+  }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
 
   // Keep ref updated so timer always calls latest doSave
   doSaveRef.current = doSave;
@@ -225,6 +228,7 @@ export default function DoanDetail() {
   const handleSetChuyenBayDon = useCallback((v: string) => { setChuyenBayDon(v); scheduleSave(); }, [scheduleSave]);
   const handleSetChuyenBayTien = useCallback((v: string) => { setChuyenBayTien(v); scheduleSave(); }, [scheduleSave]);
   const handleSetChuThichKhach = useCallback((v: string) => { setChuThichKhach(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetCoTinhSuatTLNhaHang = useCallback((v: boolean) => { setCoTinhSuatTLNhaHang(v); scheduleSave(); }, [scheduleSave]);
   const handleSetGifts = useCallback((v: string[]) => { setGifts(v); scheduleSave(); }, [scheduleSave]);
   const handleSetGhiChuDieuTour = useCallback((v: string) => { setGhiChuDieuTour(v); scheduleSave(); }, [scheduleSave]);
   const handleSetDays = useCallback((v: DayLocal[]) => {
@@ -384,6 +388,8 @@ export default function DoanDetail() {
               totalFromDoan={doan.so_khach ?? totalKhach}
               chuThichKhach={chuThichKhach}
               setChuThichKhach={handleSetChuThichKhach}
+              coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
+              setCoTinhSuatTLNhaHang={handleSetCoTinhSuatTLNhaHang}
             />
             <GiftTagsSection gifts={gifts} setGifts={handleSetGifts} />
             <DayScheduleTable
@@ -410,7 +416,13 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="menu" className="mt-4">
-            <BookingNHTab doanId={doanId} tenDoan={doan.ten_doan} soKhach={totalKhach || doan.so_khach || 0} hdvTen={doan.hdv || ""} />
+            <BookingNHTab
+              doanId={doanId}
+              tenDoan={doan.ten_doan}
+              soKhach={coTinhSuatTLNhaHang ? (totalKhach || doan.so_khach || 0) : ((totalKhach - soKhachTl) || doan.so_khach || 0)}
+              soNoidBo={soKhachTl > 0 && !coTinhSuatTLNhaHang ? 3 : 2}
+              hdvTen={doan.hdv || ""}
+            />
           </TabsContent>
 
           <TabsContent value="booking-dv" className="mt-4">
@@ -418,7 +430,7 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="chi-phi" className="mt-4">
-            <ChiPhiTab doanId={doanId} doan={doan} />
+            <ChiPhiTab doanId={doanId} doan={doan} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} />
           </TabsContent>
 
           <TabsContent value="log" className="mt-4">
