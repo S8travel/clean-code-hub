@@ -226,29 +226,26 @@ export default function MyJobPage() {
     return map;
   }, [myAssignments, allTeamAgents]);
 
-  // Đoàn của tôi: trực tiếp phân công HOẶC thuộc team tôi phụ trách
+  // Đoàn của tôi: thuộc team tôi phụ trách (team-based only)
+  // FEATURE_DOAN_PERM_DISABLED: bỏ nhánh d.assigned_to === uid (OP trực tiếp)
   const myDoan = useMemo(
     () =>
       (allDoan as any[]).filter(
-        (d) =>
-          d.assigned_to === uid ||
-          (d.agent_id && myAgentTaskMap.has(d.agent_id)),
+        (d) => d.agent_id && myAgentTaskMap.has(d.agent_id),
       ),
-    [allDoan, uid, myAgentTaskMap],
+    [allDoan, myAgentTaskMap],
   );
 
-  // doanId → scope ("all" nếu assigned trực tiếp, ngược lại là Set<task_type>)
+  // doanId → scope (Set<task_type> từ team assignment)
   const myDoanScopeMap = useMemo(() => {
     const map = new Map<number, Set<string>>();
     for (const d of myDoan) {
-      if (d.assigned_to === uid) {
-        map.set(d.id, new Set(["all"]));
-      } else if (d.agent_id) {
+      if (d.agent_id) {
         map.set(d.id, myAgentTaskMap.get(d.agent_id) ?? new Set());
       }
     }
     return map;
-  }, [myDoan, uid, myAgentTaskMap]);
+  }, [myDoan, myAgentTaskMap]);
 
   const myDoanIds = useMemo(() => myDoan.map((d: any) => d.id as number), [myDoan]);
   const { data: deadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(myDoanIds);
