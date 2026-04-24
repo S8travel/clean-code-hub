@@ -89,7 +89,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         ghi_chu: doan.ghi_chu || "",
       });
     } else {
-      setForm({ ...EMPTY_FORM, assigned_to: currentUserId, seri_id: null });
+      setForm({ ...EMPTY_FORM, assigned_to: null, seri_id: null });
     }
   }, [doan, open, currentUserId]);
 
@@ -98,7 +98,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     const payload: DoanInsert = {
       ...form,
       so_khach: total,
-      assigned_to: form.assigned_to || currentUserId,
+      assigned_to: form.assigned_to || null,
     };
     if (!doan) {
       payload.created_by = currentUserId;

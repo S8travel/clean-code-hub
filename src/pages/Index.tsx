@@ -168,6 +168,44 @@ export default function Index() {
     }
   };
 
+  const checkDoanCancelable = async (doanId: number): Promise<string[]> => {
+    const [ks, nh, dv, dntt] = await Promise.all([
+      externalSupabase.from("doan_booking_ks").select("ks_dat_truoc_status, ks_final_status").eq("doan_id", doanId),
+      externalSupabase.from("doan_booking_nh").select("id").eq("doan_id", doanId).eq("booking_status", "da_gui"),
+      externalSupabase.from("doan_booking_dv").select("id").eq("doan_id", doanId).in("booking_status", ["cho_xac_nhan", "da_xac_nhan"]),
+      externalSupabase.from("de_nghi_thanh_toan").select("id").eq("doan_id", doanId).not("trang_thai_duyet", "in", '("tu_choi","da_huy")'),
+    ]);
+    const errors: string[] = [];
+    const activeKS = (ks.data ?? []).filter(
+      (r: any) =>
+        (r.ks_dat_truoc_status && r.ks_dat_truoc_status !== "ks_xac_nhan_huy") ||
+        (r.ks_final_status && r.ks_final_status !== "ks_xac_nhan_huy"),
+    ).length;
+    if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn chưa hủy`);
+    if ((nh.data ?? []).length > 0) errors.push(`Booking NH: còn ${nh.data!.length} bữa chưa hủy`);
+    if ((dv.data ?? []).length > 0) errors.push(`Booking DV: còn ${dv.data!.length} dịch vụ chưa hủy`);
+    if ((dntt.data ?? []).length > 0) errors.push(`ĐNTT: còn ${dntt.data!.length} phiếu chưa hủy`);
+    return errors;
+  };
+
+  const handleOpenCancel = async (doan: any) => {
+    const errors = await checkDoanCancelable(doan.id);
+    if (errors.length > 0) {
+      toast.error("Không thể hủy đoàn", { description: errors.join(" · ") });
+      return;
+    }
+    setCancelingDoan(doan);
+  };
+
+  const handleOpenDelete = async (doan: any) => {
+    const errors = await checkDoanCancelable(doan.id);
+    if (errors.length > 0) {
+      toast.error("Không thể xóa đoàn", { description: errors.join(" · ") });
+      return;
+    }
+    setDeletingDoan(doan);
+  };
+
   const handleDelete = async () => {
     if (!deletingDoan) return;
     try {
@@ -189,6 +227,39 @@ export default function Index() {
       setCancelingDoan(null);
     } catch {
       toast.error("Hủy đoàn thất bại");
+    }
+  };
+
+  const handleClone = async (doan: any) => {
+    try {
+      const payload: DoanInsert = {
+        ten_doan: doan.ten_doan + " - bản sao",
+        agent_id: doan.agent_id,
+        dia_diem_id: doan.dia_diem_id,
+        huong_dan_vien_id: doan.huong_dan_vien_id,
+        xe_id: doan.xe_id,
+        seri_id: doan.seri_id,
+        so_khach: doan.so_khach,
+        so_khach_lon: doan.so_khach_lon,
+        so_khach_em1: doan.so_khach_em1,
+        so_khach_em2: doan.so_khach_em2,
+        so_khach_tl: doan.so_khach_tl,
+        ngay_di: doan.ngay_di,
+        ngay_ve: doan.ngay_ve,
+        chuyen_bay_don: doan.chuyen_bay_don,
+        chuyen_bay_tien: doan.chuyen_bay_tien,
+        assigned_to: doan.assigned_to,
+        ghi_chu: doan.ghi_chu,
+        trang_thai: "dang_chay",
+        shopping: doan.shopping ?? false,
+      };
+      const created = await createDoan.mutateAsync(payload);
+      if (created) {
+        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Nhân bản đoàn ${doan.ten_doan}` });
+      }
+      toast.success("Đã nhân bản đoàn");
+    } catch {
+      toast.error("Nhân bản thất bại");
     }
   };
 
@@ -287,8 +358,9 @@ export default function Index() {
             isLoading={isLoading}
             userRolesMap={userRolesMap}
             onEdit={(doan) => { setEditingDoan(doan); setDrawerOpen(true); }}
-            onCancel={(doan) => setCancelingDoan(doan)}
-            onDelete={(doan) => setDeletingDoan(doan)}
+            onClone={handleClone}
+            onCancel={handleOpenCancel}
+            onDelete={handleOpenDelete}
           />
         </div>
 

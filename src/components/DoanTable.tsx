@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, Ban } from "lucide-react"; // KeyRound: FEATURE_DOAN_PERM_DISABLED
+import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, Ban, Copy } from "lucide-react"; // KeyRound: FEATURE_DOAN_PERM_DISABLED
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,11 +73,12 @@ interface Props {
   isLoading: boolean;
   userRolesMap: Map<string, string>; // user_id → ho_ten
   onEdit?: (doan: any) => void;
+  onClone?: (doan: any) => void;
   onCancel?: (doan: any) => void;
   onDelete?: (doan: any) => void;
 }
 
-export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, onDelete }: Props) {
+export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onClone, onCancel, onDelete }: Props) {
   useTranslate();
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("ngay_di");
@@ -321,6 +322,15 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
                         title="Sửa"
                       >
                         <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-sky-600 hover:text-sky-700 hover:bg-sky-50"
+                        onClick={(e) => { e.stopPropagation(); onClone?.(g); }}
+                        title="Nhân bản"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
                       </Button>
                       {/* FEATURE_DOAN_PERM_DISABLED
                       <Button
