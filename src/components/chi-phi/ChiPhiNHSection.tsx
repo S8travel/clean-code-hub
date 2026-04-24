@@ -170,7 +170,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       );
       const soKhachForNH = coTinhSuatTLNhaHang
         ? soKhachDefault
-        : (nh?.tinh_suat_tl === false)
+        : (nh?.tinh_suat_tl !== true)
           ? (soKhachKhongTL ?? soKhachDefault)
           : soKhachDefault;
       rows[key] = {
@@ -263,7 +263,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
         const nh = nhData.nhaHangMap[row.nha_hang_id];
         const target = coTinhSuatTLNhaHang
           ? soKhachDefault
-          : (nh?.tinh_suat_tl === false)
+          : (nh?.tinh_suat_tl !== true)
             ? (soKhachKhongTL ?? soKhachDefault)
             : soKhachDefault;
         if (row.so_khach !== target) {
