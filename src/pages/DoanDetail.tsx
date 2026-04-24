@@ -421,7 +421,7 @@ export default function DoanDetail() {
               tenDoan={doan.ten_doan}
               soKhach={coTinhSuatTLNhaHang ? (totalKhach || doan.so_khach || 0) : ((totalKhach - soKhachTl) || doan.so_khach || 0)}
               soNoidBo={soKhachTl > 0 && !coTinhSuatTLNhaHang ? 3 : 2}
-              soKhachLon={soKhachLon}
+              soKhachLon={coTinhSuatTLNhaHang ? soKhachLon + soKhachTl : soKhachLon}
               soKhachEm1={soKhachEm1}
               soKhachEm2={soKhachEm2}
               hdvTen={doan.hdv || ""}
