@@ -2,11 +2,11 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, KeyRound, Ban } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, Ban } from "lucide-react"; // KeyRound: FEATURE_DOAN_PERM_DISABLED
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PermissionDialog } from "@/components/PermissionDialog";
+// import { PermissionDialog } from "@/components/PermissionDialog"; // FEATURE_DOAN_PERM_DISABLED
 import type { UserRole } from "@/hooks/use-doan";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -82,7 +82,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("ngay_di");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [permDoan, setPermDoan] = useState<{ id: number; code: string } | null>(null);
+  // FEATURE_DOAN_PERM_DISABLED: const [permDoan, setPermDoan] = useState<{ id: number; code: string } | null>(null);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -322,6 +322,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
+                      {/* FEATURE_DOAN_PERM_DISABLED
                       <Button
                         variant="ghost"
                         size="icon"
@@ -331,6 +332,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
                       >
                         <KeyRound className="h-3.5 w-3.5" />
                       </Button>
+                      */}
                       {g.trang_thai !== "huy" && (
                         <Button
                           variant="ghost"
@@ -413,6 +415,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
         })}
       </div>
 
+      {/* FEATURE_DOAN_PERM_DISABLED
       {permDoan && (
         <PermissionDialog
           doanId={permDoan.id}
@@ -421,6 +424,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onCancel, o
           onOpenChange={(open) => { if (!open) setPermDoan(null); }}
         />
       )}
+      */}
     </>
   );
 }

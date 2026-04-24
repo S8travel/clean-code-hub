@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { exportDieuTourWord } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDoanList, useDoanPermissions } from "@/hooks/use-doan";
+import { useDoanList } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
 import { useAuth } from "@/hooks/use-auth";
 import {
   useCanhDiem,
@@ -53,12 +53,13 @@ export default function DoanDetail() {
 
   const { data: groups, isLoading } = useDoanList();
   const { user: currentUser } = useAuth();
-  const { data: doanPerms = [] } = useDoanPermissions(doanId || null);
   const isAdmin = currentUser?.role === "admin";
-  const myPerm = doanPerms.find((p) => p.user_id === currentUser?.user_id);
-  // Nếu chưa phân quyền (doanPerms rỗng) → ai cũng sửa được
-  // Nếu đã phân quyền → chỉ admin hệ thống hoặc người có quyen edit/admin mới sửa được
-  const canEdit = isAdmin || doanPerms.length === 0 || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
+  // FEATURE_DOAN_PERM_DISABLED: tạm tắt per-tour permission, dùng team-based thay thế
+  // Bật lại: bỏ comment 3 dòng dưới và xóa dòng `const canEdit = true`
+  // const { data: doanPerms = [] } = useDoanPermissions(doanId || null);
+  // const myPerm = doanPerms.find((p) => p.user_id === currentUser?.user_id);
+  // const canEdit = isAdmin || doanPerms.length === 0 || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
+  const canEdit = true;
 
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();

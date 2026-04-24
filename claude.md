@@ -434,3 +434,17 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
   - Giá → luôn snapshot vào tour khi lưu (`don_gia` trong `doan_ngay_item`, `dich_vu_list` JSONB)
   - `nguoi_thanh_toan` → chỉ dùng để ngăn **tạo mới** record; không filter/ẩn record đã tồn tại trong DB
   - Tên/email master → fetch live là chấp nhận được (thông tin liên lạc cần cập nhật)
+
+---
+
+## 🔒 Tính năng tạm tắt
+
+### Per-tour permission (doan_permissions) — tắt từ 2026-04-24
+- **Tag trong code:** `FEATURE_DOAN_PERM_DISABLED`
+- **Lý do tắt:** Chuyển sang dùng team-based permission (`user_roles.role` + `role_permissions`)
+- **Files liên quan:**
+  - `src/pages/DoanDetail.tsx` — `canEdit` logic (hiện = `true`)
+  - `src/components/DoanTable.tsx` — nút PermissionDialog (key icon) + state permDoan
+  - `src/pages/Index.tsx` — 2 khối auto-add permission khi create/edit doan, import `useAddDoanPermission`
+- **Để bật lại:** tìm tag `FEATURE_DOAN_PERM_DISABLED` trong 3 files trên, bỏ comment các dòng bị comment và xóa `const canEdit = true`
+- **Không bị ảnh hưởng:** hiển thị OP (cột OP, filter OP, field "Phân cho"), MyJobPage, `use-permissions.ts`

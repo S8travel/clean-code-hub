@@ -24,7 +24,7 @@ import {
   useAgents,
   useDiaDiem,
   useUserRoles,
-  useAddDoanPermission,
+  // useAddDoanPermission, // FEATURE_DOAN_PERM_DISABLED
 } from "@/hooks/use-doan";
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
@@ -47,7 +47,7 @@ export default function Index() {
   const updateDoan = useUpdateDoan();
   const deleteDoan = useDeleteDoan();
   const cancelDoan = useCancelDoan();
-  const addPerm = useAddDoanPermission();
+  // const addPerm = useAddDoanPermission(); // FEATURE_DOAN_PERM_DISABLED
   const applySeri = useApplySeriToDoan();
   const logActivity = useLogActivity();
   const { data: agents } = useAgents();
@@ -128,34 +128,24 @@ export default function Index() {
     try {
       if (editingDoan) {
         await updateDoan.mutateAsync({ id: editingDoan.id, ...data });
-        // Auto-add permission nếu assigned_to thay đổi
-        if (data.assigned_to && data.assigned_to !== editingDoan.assigned_to) {
-          const assigneeName = userRolesMap.get(data.assigned_to) || "";
-          try {
-            await addPerm.mutateAsync({
-              doan_id: editingDoan.id,
-              user_id: data.assigned_to,
-              ho_ten: assigneeName,
-              quyen: "admin",
-            });
-          } catch { /* ignore if permission already exists */ }
-        }
+        // FEATURE_DOAN_PERM_DISABLED: auto-grant khi sửa assigned_to
+        // if (data.assigned_to && data.assigned_to !== editingDoan.assigned_to) {
+        //   const assigneeName = userRolesMap.get(data.assigned_to) || "";
+        //   try {
+        //     await addPerm.mutateAsync({ doan_id: editingDoan.id, user_id: data.assigned_to, ho_ten: assigneeName, quyen: "admin" });
+        //   } catch { /* ignore if permission already exists */ }
+        // }
         logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         toast.success("Đã cập nhật đoàn");
       } else {
         const created = await createDoan.mutateAsync({ ...data, shopping: false });
-        // Auto-insert permission for creator
-        if (created && data.assigned_to) {
-          const creatorName = userRolesMap.get(data.assigned_to) || "";
-          try {
-            await addPerm.mutateAsync({
-              doan_id: created.id,
-              user_id: data.assigned_to,
-              ho_ten: creatorName,
-              quyen: "admin",
-            });
-          } catch { /* ignore if permission already exists */ }
-        }
+        // FEATURE_DOAN_PERM_DISABLED: auto-grant khi tạo đoàn mới
+        // if (created && data.assigned_to) {
+        //   const creatorName = userRolesMap.get(data.assigned_to) || "";
+        //   try {
+        //     await addPerm.mutateAsync({ doan_id: created.id, user_id: data.assigned_to, ho_ten: creatorName, quyen: "admin" });
+        //   } catch { /* ignore if permission already exists */ }
+        // }
         if (created) {
           logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${data.ten_doan}` });
         }
