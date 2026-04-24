@@ -23,6 +23,7 @@ import {
   FileText,
   AlertTriangle,
   Calculator,
+  Users2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -188,6 +189,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Công nợ", url: "/cong-no", icon: Wallet },
       { title: "Người dùng", url: "/quan-ly/nguoi-dung", icon: Users, resource: "nguoi_dung" },
       { title: "Agent", url: "/quan-ly/agent", icon: Bot },
+      { title: "Phân công team", url: "/settings/teams", icon: Users2, minRole: "truong_phong" },
     ],
   },
 ];

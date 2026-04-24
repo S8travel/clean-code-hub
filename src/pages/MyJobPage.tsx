@@ -22,6 +22,7 @@ import { useDoanList } from "@/hooks/use-doan";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { useAuth } from "@/hooks/use-auth";
 import { useMyDeadlines, type DeadlineItem } from "@/hooks/use-my-job";
+import { useMyTeamAssignments, useAllTeamAgents } from "@/hooks/use-teams";
 import { useDoanLogGhiChu, useToggleResolved } from "@/hooks/use-doan-log";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Circle, StickyNote } from "lucide-react";
@@ -178,6 +179,23 @@ const GROUP_CFG = {
   later:   { label: "Sau đó",      cls: "text-muted-foreground", bg: "bg-muted/30 border-border" },
 };
 
+// ── Scope helpers ─────────────────────────────────────────────────────────────
+const SCOPE_TO_LOAI: Record<string, string[]> = {
+  ks:   ["khach_san"],
+  nh:   ["nha_hang"],
+  dv:   ["dich_vu"],
+  xe:   ["xe"],
+  visa: ["visa"],
+};
+
+function filterDNTTByScope(items: DNTTItem[], scope: Set<string>): DNTTItem[] {
+  if (scope.has("all")) return items;
+  return items.filter((item) => {
+    const loai = item.ref_loai || item.loai;
+    return [...scope].some((s) => SCOPE_TO_LOAI[s]?.includes(loai));
+  });
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function MyJobPage() {
   const navigate = useNavigate();
@@ -188,16 +206,65 @@ export default function MyJobPage() {
   const [search, setSearch] = useState("");
   const [trangThai, setTrangThai] = useState("dang_chay");
 
-  const isLoading = loadingDoan || loadingTD;
+  const uid = user?.user_id;
 
-  // Lọc đoàn của tôi
+  // Team-based scope data
+  const { data: myAssignments = [], isLoading: loadingAssignments } = useMyTeamAssignments(uid);
+  const { data: allTeamAgents = [], isLoading: loadingTeamAgents } = useAllTeamAgents();
+
+  const isLoading = loadingDoan || loadingTD || loadingAssignments || loadingTeamAgents;
+
+  // agentId → Set<task_type> for current user
+  const myAgentTaskMap = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    for (const a of myAssignments) {
+      for (const ta of allTeamAgents.filter((t) => t.team_id === a.team_id)) {
+        if (!map.has(ta.agent_id)) map.set(ta.agent_id, new Set());
+        map.get(ta.agent_id)!.add(a.task_type);
+      }
+    }
+    return map;
+  }, [myAssignments, allTeamAgents]);
+
+  // Đoàn của tôi: trực tiếp phân công HOẶC thuộc team tôi phụ trách
   const myDoan = useMemo(
-    () => (allDoan as any[]).filter((d) => d.assigned_to === user?.user_id),
-    [allDoan, user],
+    () =>
+      (allDoan as any[]).filter(
+        (d) =>
+          d.assigned_to === uid ||
+          (d.agent_id && myAgentTaskMap.has(d.agent_id)),
+      ),
+    [allDoan, uid, myAgentTaskMap],
   );
+
+  // doanId → scope ("all" nếu assigned trực tiếp, ngược lại là Set<task_type>)
+  const myDoanScopeMap = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    for (const d of myDoan) {
+      if (d.assigned_to === uid) {
+        map.set(d.id, new Set(["all"]));
+      } else if (d.agent_id) {
+        map.set(d.id, myAgentTaskMap.get(d.agent_id) ?? new Set());
+      }
+    }
+    return map;
+  }, [myDoan, uid, myAgentTaskMap]);
 
   const myDoanIds = useMemo(() => myDoan.map((d: any) => d.id as number), [myDoan]);
   const { data: deadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(myDoanIds);
+
+  // Lọc deadline theo scope của từng đoàn
+  const filteredDeadlines = useMemo(
+    () =>
+      deadlines.filter((item) => {
+        const scope = myDoanScopeMap.get(item.doanId);
+        if (!scope || scope.size === 0) return false;
+        if (scope.has("all")) return true;
+        return scope.has(item.type); // "ks" | "nh" | "dv"
+      }),
+    [deadlines, myDoanScopeMap],
+  );
+
   const { data: ghiChuLogs = [] } = useDoanLogGhiChu(user?.user_id);
   const toggleResolved = useToggleResolved();
 
@@ -212,13 +279,18 @@ export default function MyJobPage() {
       })
       .map((g) => {
         const id: number = g.id;
-        const ks: KSItem[]   = td.ksList.filter((r) => r.doan_id === id);
+        const scope = myDoanScopeMap.get(id) ?? new Set<string>();
+        const showKS = scope.has("all") || scope.has("ks");
+        const showNH = scope.has("all") || scope.has("nh");
+        const showDV = scope.has("all") || scope.has("dv");
+
+        const ks: KSItem[]   = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
         const ksFinal        = ks.filter((r) => r.ks_final_status === "ks_xac_nhan_final").length;
-        const nh: NHItem[]   = td.nhList.filter((r) => r.doan_id === id);
+        const nh: NHItem[]   = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
         const nhSent         = nh.filter((r) => r.booking_status === "da_gui").length;
-        const dv: DVItem[]   = td.dvList.filter((r) => r.doan_id === id);
+        const dv: DVItem[]   = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
         const dvXN           = dv.filter((r) => r.booking_status === "da_xac_nhan").length;
-        const dntt: DNTTItem[] = td.dnttList.filter((r) => r.doan_id === id);
+        const dntt: DNTTItem[] = filterDNTTByScope(td.dnttList.filter((r) => r.doan_id === id), scope);
         const dnttDuyet      = dntt.filter((r) => r.trang_thai_duyet === "da_duyet").length;
         const dnttDaTT       = dntt.filter((r) => ["da_tt", "can_tru", "da_can_tru"].includes(r.trang_thai_thanh_toan)).length;
         return { g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT };
@@ -242,14 +314,18 @@ export default function MyJobPage() {
       .filter((d) => d.ngay_di && d.ngay_di >= monthStart && d.ngay_di <= monthEnd)
       .reduce((s: number, d: any) => s + (d.so_khach ?? 0), 0);
 
-    // Đoàn đang chạy có booking chưa hoàn tất
+    // Đoàn đang chạy có booking chưa hoàn tất (trong phạm vi scope)
     const choBooking = myDoan.filter((d) => {
       if (d.trang_thai !== "dang_chay") return false;
       if (!td) return false;
       const id = d.id;
-      const ks = td.ksList.filter((r) => r.doan_id === id);
-      const nh = td.nhList.filter((r) => r.doan_id === id);
-      const dv = td.dvList.filter((r) => r.doan_id === id);
+      const scope = myDoanScopeMap.get(id) ?? new Set<string>();
+      const showKS = scope.has("all") || scope.has("ks");
+      const showNH = scope.has("all") || scope.has("nh");
+      const showDV = scope.has("all") || scope.has("dv");
+      const ks = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
+      const nh = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
+      const dv = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
       const ksOk = ks.every((r) => r.ks_final_status === "ks_xac_nhan_final");
       const nhOk = nh.every((r) => r.booking_status === "da_gui");
       const dvOk = dv.every((r) => r.booking_status === "da_xac_nhan");
@@ -257,7 +333,7 @@ export default function MyJobPage() {
     }).length;
 
     return { dangChay, sapKhoiHanh, choBooking, tongKhachThang };
-  }, [myDoan, td]);
+  }, [myDoan, td, myDoanScopeMap]);
 
   // Việc cần xử lý
   const todos = useMemo((): TodoItem[] => {
@@ -271,10 +347,15 @@ export default function MyJobPage() {
       const name = d.ten_doan;
       const daysLeft = d.ngay_di ? differenceInDays(new Date(d.ngay_di + "T00:00:00"), now) : null;
 
-      const ks   = td.ksList.filter((r) => r.doan_id === id);
-      const nh   = td.nhList.filter((r) => r.doan_id === id);
-      const dv   = td.dvList.filter((r) => r.doan_id === id);
-      const dntt = td.dnttList.filter((r) => r.doan_id === id);
+      const scope = myDoanScopeMap.get(id) ?? new Set<string>();
+      const showKS = scope.has("all") || scope.has("ks");
+      const showNH = scope.has("all") || scope.has("nh");
+      const showDV = scope.has("all") || scope.has("dv");
+
+      const ks   = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
+      const nh   = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
+      const dv   = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
+      const dntt = filterDNTTByScope(td.dnttList.filter((r) => r.doan_id === id), scope);
 
       const ksNotFinal = ks.filter((r) => r.ks_final_status !== "ks_xac_nhan_final").length;
       const nhNotSent  = nh.filter((r) => r.booking_status !== "da_gui").length;
@@ -302,7 +383,7 @@ export default function MyJobPage() {
     // Sắp xếp: high → medium → low
     const order = { high: 0, medium: 1, low: 2 };
     return items.sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 10);
-  }, [myDoan, td]);
+  }, [myDoan, td, myDoanScopeMap]);
 
   const priorityConfig = {
     high:   { icon: AlertCircle,   cls: "text-red-600",    bg: "bg-red-50 border-red-100" },
@@ -333,9 +414,9 @@ export default function MyJobPage() {
             <TabsTrigger value="tong-quan" className="text-xs">Tổng quan</TabsTrigger>
             <TabsTrigger value="deadline" className="text-xs">
               Deadline
-              {deadlines.length > 0 && (
+              {filteredDeadlines.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
-                  {deadlines.filter((d) => deadlineGroup(d.deadline) !== "later").length || deadlines.length}
+                  {filteredDeadlines.filter((d) => deadlineGroup(d.deadline) !== "later").length || filteredDeadlines.length}
                 </span>
               )}
             </TabsTrigger>
@@ -618,7 +699,7 @@ export default function MyJobPage() {
               <div className="space-y-2">
                 {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
               </div>
-            ) : deadlines.length === 0 ? (
+            ) : filteredDeadlines.length === 0 ? (
               <div className="rounded-lg border bg-muted/30 px-4 py-10 text-center">
                 <p className="text-sm text-muted-foreground font-medium">Chưa có deadline nào</p>
                 <p className="text-xs text-muted-foreground/70 mt-0.5">
@@ -628,7 +709,7 @@ export default function MyJobPage() {
             ) : (
               <div className="space-y-5">
                 {(["overdue", "today", "week", "later"] as const).map((group) => {
-                  const items = deadlines.filter((d) => deadlineGroup(d.deadline) === group);
+                  const items = filteredDeadlines.filter((d) => deadlineGroup(d.deadline) === group);
                   if (items.length === 0) return null;
                   const gcfg = GROUP_CFG[group];
                   return (

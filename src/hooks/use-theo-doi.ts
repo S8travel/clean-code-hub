@@ -27,6 +27,8 @@ export interface DNTTItem {
   so_tien: number;
   trang_thai_duyet: string;
   trang_thai_thanh_toan: string;
+  ref_loai: string | null;
+  loai: string;
 }
 
 export interface TheodoiData {
@@ -60,7 +62,7 @@ export function useTheodoi() {
         // ĐNTT — chỉ lấy per-doan (bỏ dinh_ky)
         externalSupabase
           .from("de_nghi_thanh_toan")
-          .select("doan_id, mo_ta, so_tien, trang_thai_duyet, trang_thai_thanh_toan")
+          .select("doan_id, mo_ta, so_tien, trang_thai_duyet, trang_thai_thanh_toan, ref_loai, loai")
           .not("doan_id", "is", null)
           .neq("loai", "dinh_ky")
           .neq("trang_thai_duyet", "da_huy"),
@@ -97,6 +99,8 @@ export function useTheodoi() {
         so_tien: r.so_tien ?? 0,
         trang_thai_duyet: r.trang_thai_duyet,
         trang_thai_thanh_toan: r.trang_thai_thanh_toan,
+        ref_loai: r.ref_loai ?? null,
+        loai: r.loai ?? "",
       }));
 
       return { ksList, nhList, dvList, dnttList };
