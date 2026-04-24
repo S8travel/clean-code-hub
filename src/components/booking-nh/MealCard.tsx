@@ -28,6 +28,7 @@ const STATUS_CFG = {
   nh_xac_nhan:     { label: "Đã xác nhận",   cls: "bg-emerald-100 text-emerald-700" },
   cho_xac_nhan_huy:{ label: "Chờ XN hủy",    cls: "bg-orange-100 text-orange-700" },
   da_huy:          { label: "Đã hủy",         cls: "bg-red-100 text-red-700" },
+  khong_dat:       { label: "Không đặt",      cls: "bg-slate-100 text-slate-500" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -99,7 +100,7 @@ export default function MealCard({
   );
   const { data: setMenuMons = [] } = useSetMenuMons(selectedSetMenuId);
 
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
   const [ghiChu, setGhiChu] = useState(booking?.ghi_chu ?? "");
   const [deadline, setDeadline] = useState(booking?.deadline || getDefaultDeadline(ngayDate || ""));
@@ -571,6 +572,15 @@ export default function MealCard({
                     >
                       Gửi Zalo
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-slate-500 border-slate-300 hover:bg-slate-50"
+                      onClick={() => saveBooking({ booking_status: "khong_dat" })}
+                      disabled={updateMut.isPending || upsertMut.isPending}
+                    >
+                      Không đặt
+                    </Button>
                   </>
                 )}
                 {booking?.booking_status === "da_gui" && (
@@ -595,6 +605,11 @@ export default function MealCard({
                   </Button>
                 )}
                 {booking?.booking_status === "da_huy" && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReset}>
+                    <RotateCcw className="h-3 w-3 mr-1" /> Đặt lại
+                  </Button>
+                )}
+                {booking?.booking_status === "khong_dat" && (
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReset}>
                     <RotateCcw className="h-3 w-3 mr-1" /> Đặt lại
                   </Button>

@@ -284,9 +284,9 @@ export default function MyJobPage() {
         const ks: KSItem[]   = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
         const ksFinal        = ks.filter((r) => r.ks_final_status === "ks_xac_nhan_final").length;
         const nh: NHItem[]   = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
-        const nhSent         = nh.filter((r) => r.booking_status === "da_gui").length;
+        const nhSent         = nh.filter((r) => r.booking_status === "da_gui" || r.booking_status === "khong_dat").length;
         const dv: DVItem[]   = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
-        const dvXN           = dv.filter((r) => r.booking_status === "da_xac_nhan").length;
+        const dvXN           = dv.filter((r) => r.booking_status === "da_xac_nhan" || r.booking_status === "khong_dat").length;
         const dntt: DNTTItem[] = filterDNTTByScope(td.dnttList.filter((r) => r.doan_id === id), scope);
         const dnttDuyet      = dntt.filter((r) => r.trang_thai_duyet === "da_duyet").length;
         const dnttDaTT       = dntt.filter((r) => ["da_tt", "can_tru", "da_can_tru"].includes(r.trang_thai_thanh_toan)).length;
@@ -324,8 +324,8 @@ export default function MyJobPage() {
       const nh = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
       const dv = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
       const ksOk = ks.every((r) => r.ks_final_status === "ks_xac_nhan_final");
-      const nhOk = nh.every((r) => r.booking_status === "da_gui");
-      const dvOk = dv.every((r) => r.booking_status === "da_xac_nhan");
+      const nhOk = nh.every((r) => r.booking_status === "da_gui" || r.booking_status === "khong_dat");
+      const dvOk = dv.every((r) => r.booking_status === "da_xac_nhan" || r.booking_status === "khong_dat");
       return !ksOk || !nhOk || !dvOk;
     }).length;
 
@@ -355,8 +355,8 @@ export default function MyJobPage() {
       const dntt = filterDNTTByScope(td.dnttList.filter((r) => r.doan_id === id), scope);
 
       const ksNotFinal = ks.filter((r) => r.ks_final_status !== "ks_xac_nhan_final").length;
-      const nhNotSent  = nh.filter((r) => r.booking_status !== "da_gui").length;
-      const dvNotXN    = dv.filter((r) => r.booking_status !== "da_xac_nhan").length;
+      const nhNotSent  = nh.filter((r) => r.booking_status !== "da_gui" && r.booking_status !== "khong_dat").length;
+      const dvNotXN    = dv.filter((r) => r.booking_status !== "da_xac_nhan" && r.booking_status !== "khong_dat").length;
       const dnttPending = dntt.filter((r) => r.trang_thai_duyet === "cho_duyet").length;
       const hasBookingIssue = ksNotFinal > 0 || nhNotSent > 0 || dvNotXN > 0;
 

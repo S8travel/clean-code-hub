@@ -24,6 +24,7 @@ const STATUS_CFG = {
   da_xac_nhan:     { label: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
   cho_xac_nhan_huy:{ label: "Chờ XN hủy",   cls: "bg-orange-100 text-orange-700" },
   da_huy:          { label: "Đã hủy",        cls: "bg-red-100 text-red-700" },
+  khong_dat:       { label: "Không đặt",     cls: "bg-slate-100 text-slate-500" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -76,7 +77,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     const sorted = [...(row.dich_vu_list || [])].sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
     return getDefaultDeadline(sorted[0]?.ngay_date || "");
   });
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState(row.email_nha_cung_cap || "");
   const [emailSubject, setEmailSubject] = useState("");
@@ -412,6 +413,15 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                   >
                     Gửi Zalo
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs text-slate-500 border-slate-300 hover:bg-slate-50"
+                    onClick={() => updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates: { booking_status: "khong_dat" } })}
+                    disabled={updateMut.isPending}
+                  >
+                    Không đặt
+                  </Button>
                 </>
               )}
               {/* Xác nhận */}
@@ -443,8 +453,8 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                   Xác nhận hủy
                 </Button>
               )}
-              {/* Đặt lại — chỉ khi đã hủy hoàn toàn */}
-              {row.booking_status === "da_huy" && (
+              {/* Đặt lại — khi đã hủy hoặc không đặt */}
+              {(row.booking_status === "da_huy" || row.booking_status === "khong_dat") && (
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleReset}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
                   Đặt lại
