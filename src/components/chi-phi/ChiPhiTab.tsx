@@ -34,10 +34,17 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
     doan?.so_khach ||
     0;
 
-  const soKhachKhongTL =
+  // Nhà hàng: TE 6-10 = 0.5 suất, TE <6 = miễn phí
+  const soKhachNH =
     (doan?.so_khach_lon ?? 0) +
-    (doan?.so_khach_em1 ?? 0) +
-    (doan?.so_khach_em2 ?? 0) ||
+    (doan?.so_khach_em1 ?? 0) * 0.5 +
+    (doan?.so_khach_tl ?? 0) ||
+    doan?.so_khach ||
+    0;
+
+  const soKhachNHKhongTL =
+    (doan?.so_khach_lon ?? 0) +
+    (doan?.so_khach_em1 ?? 0) * 0.5 ||
     doan?.so_khach ||
     0;
 
@@ -151,7 +158,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
       <div className="space-y-6">
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhach} soKhachKhongTL={soKhachKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
 
         <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di} />
 
