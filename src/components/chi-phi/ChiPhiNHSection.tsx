@@ -752,7 +752,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
             <col className="w-[64px]" />
             <col />
             <col className="w-[56px]" />
-            <col className="w-[80px]" />
+            <col className="w-[108px]" />
             <col className="w-[100px]" />
             <col className="w-[64px]" />
             <col className="w-[110px]" />
@@ -898,11 +898,11 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                           value={row.so_khach}
                           onChange={(v) => handleChange(key, "so_khach", v)}
                           onBlur={() => handleSave(key)}
-                          width="w-[44px]"
+                          width="w-[56px]"
                         />
-                        {focMienSo > 0 && (
-                          <span className="text-green-600 text-[10px]">-{focMienSo}</span>
-                        )}
+                        <span className="w-[20px] text-green-600 text-[10px]">
+                          {focMienSo > 0 ? `-${focMienSo}` : ""}
+                        </span>
                       </>
                     ) : <span className="text-muted-foreground">—</span>}
                   </div>
