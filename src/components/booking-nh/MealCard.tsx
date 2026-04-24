@@ -449,22 +449,29 @@ export default function MealCard({
       {expanded && (
         <>
           {/* Set menu */}
-          {setMenuOptions.length > 0 && (
+          {(setMenuOptions.length > 0 || setMenuIdFromDieuTour != null) && (
             <div className="px-4 pt-3 pb-1">
               <p className="text-xs text-muted-foreground mb-1.5">Set menu</p>
-              <select
-                className="w-full text-sm border border-input rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                value={selectedSetMenuId ?? ""}
-                disabled={isCancelled}
-                onChange={(e) => handleSetMenuChange(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">-- Không chọn --</option>
-                {setMenuOptions.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.ten_set}{m.gia != null ? ` — ${m.gia.toLocaleString("vi-VN")}/${m.don_vi}` : ""}
-                  </option>
-                ))}
-              </select>
+              {setMenuIdFromDieuTour != null ? (
+                <p className="text-sm font-medium text-foreground">
+                  {selectedMenu?.ten_set ?? "—"}
+                  {selectedMenu?.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}
+                </p>
+              ) : (
+                <select
+                  className="w-full text-sm border border-input rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={selectedSetMenuId ?? ""}
+                  disabled={isCancelled}
+                  onChange={(e) => handleSetMenuChange(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">-- Không chọn --</option>
+                  {setMenuOptions.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.ten_set}{m.gia != null ? ` — ${m.gia.toLocaleString("vi-VN")}/${m.don_vi}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 

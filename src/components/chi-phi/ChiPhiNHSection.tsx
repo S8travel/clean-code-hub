@@ -800,12 +800,13 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           const mainTotal = row ? soKhachThucTe * row.don_gia : 0;
           const extrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
           const totalTruocCK = mainTotal + extrasTotal;
-          // Chiết khấu % từ local row (override) hoặc từ nha_hang
+          // Chiết khấu % từ local row (override) hoặc từ nha_hang — chỉ áp dụng cho main row
           const ckPhanTram = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? 0;
           const chietKhauSoTien = ckPhanTram > 0
-            ? Math.round(totalTruocCK * ckPhanTram / 100)
+            ? Math.round(mainTotal * ckPhanTram / 100)
             : 0;
-          const totalBua = totalTruocCK - chietKhauSoTien;
+          const mainThanhTien = mainTotal - chietKhauSoTien;
+          const totalBua = mainThanhTien + extrasTotal;
 
           const dateLabel = meal.ngay_date
             ? `N${meal.ngay_so} · ${format(new Date(meal.ngay_date + "T00:00:00"), "d/M")}`
@@ -935,9 +936,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                   </div>
                 </td>
 
-                {/* Thành tiền (đã trừ FOC + CK) */}
+                {/* Thành tiền chính (đã trừ FOC + CK, không gồm phát sinh) */}
                 <td className="px-3 py-2 text-right font-semibold text-primary whitespace-nowrap">
-                  {row ? fmt(totalBua) : "—"}
+                  {row ? fmt(mainThanhTien) : "—"}
                 </td>
 
                 {/* Ai trả — badge */}
