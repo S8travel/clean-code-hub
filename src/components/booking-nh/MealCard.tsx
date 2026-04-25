@@ -139,12 +139,12 @@ export default function MealCard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(setMenuMons), selectedSetMenuId]);
 
-  // Sync set menu từ điều tour → DB khi options load xong mà booking chưa có snapshot
+  // Sync set menu từ điều tour → DB chỉ khi booking chưa có set_menu_id nào
   const dieuTourSynced = useRef(false);
   useEffect(() => {
     if (!setMenuIdFromDieuTour || !booking?.id) return;
     if (dieuTourSynced.current) return;
-    if (booking.set_menu_id === setMenuIdFromDieuTour) { dieuTourSynced.current = true; return; }
+    if (booking.set_menu_id != null) { dieuTourSynced.current = true; return; } // đã có set menu (tay hoặc tự động), không ghi đè
     if (!setMenuOptions.length) return;
     const menu = setMenuOptions.find((m) => m.id === setMenuIdFromDieuTour);
     if (!menu) return;
