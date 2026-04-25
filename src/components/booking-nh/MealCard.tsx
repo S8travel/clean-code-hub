@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { normalizeEmails, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -119,28 +119,45 @@ export default function MealCard({
     const canOverwrite = !booking || booking.booking_status === "chua_gui";
     if (!canOverwrite) return;
     setMonList(setMenuMons);
-    // Lưu món mới xuống DB ngay
     const menu = setMenuOptions.find((m) => m.id === selectedSetMenuId) ?? null;
-    const payload = {
-      doan_id: doanId,
-      doan_ngay_id: doanNgayId,
-      bua_an: buaAn,
-      nha_hang_id: nhaHangId,
-      mon_an_snapshot: setMenuMons,
-      ghi_chu: ghiChu,
-      booking_status: booking?.booking_status ?? "chua_gui",
+    const setMenuPayload = {
       set_menu_id: selectedSetMenuId,
       ten_set_snapshot: menu?.ten_set ?? null,
       gia_snapshot: menu?.gia ?? null,
       don_vi_snapshot: menu?.don_vi ?? null,
     };
     if (booking?.id) {
-      updateMut.mutate({ id: booking.id, doan_id: doanId, mon_an_snapshot: setMenuMons });
+      updateMut.mutate({ id: booking.id, doan_id: doanId, mon_an_snapshot: setMenuMons, ...setMenuPayload });
     } else if (selectedSetMenuId) {
-      upsertMut.mutate(payload as any);
+      upsertMut.mutate({
+        doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn, nha_hang_id: nhaHangId,
+        mon_an_snapshot: setMenuMons, ghi_chu: ghiChu,
+        booking_status: booking?.booking_status ?? "chua_gui",
+        ...setMenuPayload,
+      } as any);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(setMenuMons), selectedSetMenuId]);
+
+  // Sync set menu từ điều tour → DB khi options load xong mà booking chưa có snapshot
+  const dieuTourSynced = useRef(false);
+  useEffect(() => {
+    if (!setMenuIdFromDieuTour || !booking?.id) return;
+    if (dieuTourSynced.current) return;
+    if (booking.set_menu_id === setMenuIdFromDieuTour) { dieuTourSynced.current = true; return; }
+    if (!setMenuOptions.length) return;
+    const menu = setMenuOptions.find((m) => m.id === setMenuIdFromDieuTour);
+    if (!menu) return;
+    dieuTourSynced.current = true;
+    updateMut.mutate({
+      id: booking.id, doan_id: doanId,
+      set_menu_id: setMenuIdFromDieuTour,
+      ten_set_snapshot: menu.ten_set,
+      gia_snapshot: menu.gia ?? null,
+      don_vi_snapshot: menu.don_vi ?? null,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setMenuIdFromDieuTour, booking?.id, booking?.set_menu_id, setMenuOptions]);
 
   if (!nhaHangId) return null;
 
@@ -407,13 +424,16 @@ export default function MealCard({
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
         </div>
-        {/* Row 2: set menu badge + email (always rendered for consistent height) */}
+        {/* Row 2: set menu badge (always rendered for consistent height) */}
         <div className="flex items-center gap-2 mt-1 pl-[3.5rem] min-h-[20px]">
-          {booking?.ten_set_snapshot ? (
+          {(booking?.ten_set_snapshot || selectedMenu) ? (
             <span className="flex items-center gap-1 text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full shrink-0 max-w-[200px] truncate">
-              {booking.ten_set_snapshot}
-              {booking.gia_snapshot != null && (
-                <span className="opacity-70">· {booking.gia_snapshot.toLocaleString("vi-VN")}{booking.don_vi_snapshot ? `/${booking.don_vi_snapshot}` : ""}</span>
+              {booking?.ten_set_snapshot ?? selectedMenu!.ten_set}
+              {(booking?.gia_snapshot ?? selectedMenu?.gia) != null && (
+                <span className="opacity-70">
+                  · {(booking?.gia_snapshot ?? selectedMenu?.gia)!.toLocaleString("vi-VN")}
+                  {(booking?.don_vi_snapshot ?? selectedMenu?.don_vi) ? `/${booking?.don_vi_snapshot ?? selectedMenu?.don_vi}` : ""}
+                </span>
               )}
             </span>
           ) : (
