@@ -192,8 +192,12 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     return {
       doan: { ten_doan: tenDoan || String(doanId), so_khach: soKhach },
       ks: { ten: ks.ten, foc_khach: ks.foc_khach ?? null, foc_mien: ks.foc_mien ?? null },
-      ncc: ks.nha_cung_cap_id
-        ? { ten: ks.ten_ncc || undefined, so_tai_khoan: ks.ncc_so_tai_khoan || undefined, ngan_hang: ks.ncc_ngan_hang || undefined }
+      ncc: (ks.nha_cung_cap_id || ks.tai_khoan_thanh_toan)
+        ? {
+            ten: ks.ten_ncc || undefined,
+            so_tai_khoan: ks.ncc_so_tai_khoan || ks.tai_khoan_thanh_toan || undefined,
+            ngan_hang: ks.ncc_ngan_hang || undefined,
+          }
         : null,
       checkIn,
       checkOut,
@@ -222,7 +226,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       toast.error("Các KS đã chọn chưa có ĐNTT nào");
       return null;
     }
-    const missingBank = pairs.filter(({ ksId }) => !ksData?.khachSanMap[ksId]?.ncc_so_tai_khoan);
+    const missingBank = pairs.filter(({ ksId }) => {
+      const ks = ksData?.khachSanMap[ksId];
+      return !ks?.ncc_so_tai_khoan && !ks?.tai_khoan_thanh_toan;
+    });
     if (missingBank.length > 0) {
       const names = missingBank.map(({ ksId }) => ksData?.khachSanMap[ksId]?.ten || `KS #${ksId}`).join(", ");
       toast.error(`Chưa có số tài khoản ngân hàng: ${names}`);
