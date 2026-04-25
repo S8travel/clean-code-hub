@@ -54,6 +54,13 @@ function fmtDate(d: string) {
   }
 }
 
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function groupConsecutiveDates(dates: string[]): Array<{ checkIn: string; checkOut: string; nights: number }> {
   if (dates.length === 0) return [];
   const sorted = [...dates].sort();
@@ -69,14 +76,16 @@ function groupConsecutiveDates(dates: string[]): Array<{ checkIn: string; checkO
     } else {
       const co = new Date(end + "T00:00:00");
       co.setDate(co.getDate() + 1);
-      groups.push({ checkIn: start, checkOut: co.toISOString().split("T")[0], nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
+      const checkOut = localDateStr(co);
+      groups.push({ checkIn: start, checkOut, nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
       start = sorted[i];
       end = sorted[i];
     }
   }
   const co = new Date(end + "T00:00:00");
   co.setDate(co.getDate() + 1);
-  groups.push({ checkIn: start, checkOut: co.toISOString().split("T")[0], nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
+  const checkOut = localDateStr(co);
+  groups.push({ checkIn: start, checkOut, nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
   return groups;
 }
 
@@ -316,15 +325,17 @@ function BookingKSCard({
     const groups = groupConsecutiveDates(row.ngay_dates);
     const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
     const soPhongHtml = soPhongFinal || soPhong || row.ks_final || row.ks_dat_truoc || "—";
+    const isMulti = groups.length > 1;
     const dateRows = groups.length === 0
       ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày ở</td><td style="border:1px solid #e2e8f0;padding:8px 12px">—</td></tr>`
       : groups.map((g, i) => `
+        ${isMulti ? `<tr><td colspan="2" style="border:1px solid #e2e8f0;padding:6px 12px;background:#eff6ff;font-size:12px;font-weight:600;color:#1d4ed8${i > 0 ? ";border-top:2px solid #bfdbfe" : ""}">📅 Lần ${i + 1}</td></tr>` : ""}
         <tr>
-          <td style="border:1px solid #e2e8f0;padding:8px 12px">${groups.length > 1 ? `Lần ${i + 1} – Check-in` : "Check-in"}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td>
           <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(g.checkIn)}</td>
         </tr>
         <tr>
-          <td style="border:1px solid #e2e8f0;padding:8px 12px">${groups.length > 1 ? `Lần ${i + 1} – Check-out` : "Check-out"}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td>
           <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(g.checkOut)} (${g.nights} đêm)</td>
         </tr>`).join("");
     return `<!DOCTYPE html>
@@ -364,9 +375,13 @@ function BookingKSCard({
   };
 
   const openEmailModal = () => {
-    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "";
+    const groups = groupConsecutiveDates(row.ngay_dates);
+    const totalNights = groups.reduce((s, g) => s + g.nights, 0);
+    const datesStr = groups.length > 0
+      ? groups.map((g) => fmtDate(g.checkIn)).join(", ") + ` (${totalNights} đêm)`
+      : "";
     setEmailTo(normalizeEmails(row.khach_san_email));
-    setEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""} – ${row.khach_san_ten}`);
+    setEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`);
     setEmailHtml(buildEmailHtml());
     setEmailModalOpen(true);
   };
