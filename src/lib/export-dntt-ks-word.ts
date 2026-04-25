@@ -27,8 +27,8 @@ const PAGE_H = 16838;
 const MARGIN = 360; // 0.25 inch
 const CONTENT_W = PAGE_H - MARGIN * 2;
 
-// Columns: CODE ĐOÀN, Số khách, Tên KS, CODE KS, Check in, Check out, Loại Phòng, Số đêm, Số Lượng, FOC, Đơn giá, Thành tiền, Đã TT, Thanh toán, Ngân hàng
-const COL_FIXED = [1000, 700, 1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 1000];
+// Columns: CODE ĐOÀN/Số khách, Tên KS, CODE KS, Check in, Check out, Loại Phòng, Số đêm, Số Lượng, FOC, Đơn giá, Thành tiền, Đã TT, Thanh toán, Ngân hàng
+const COL_FIXED = [1700, 1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 1000];
 const COL_W = [...COL_FIXED, CONTENT_W - COL_FIXED.reduce((a, b) => a + b, 0)];
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -93,7 +93,7 @@ function buildBankChildren(ncc: EdgeFunctionData["ncc"]): Paragraph[] {
 }
 
 const TABLE_HEADERS = [
-  "CODE\nĐOÀN", "Số\nkhách", "Tên Khách sạn", "CODE\nKS",
+  "CODE ĐOÀN\nSố khách", "Tên Khách sạn", "CODE\nKS",
   "Check\nin", "Check\nout", "Loại Phòng", "Số\nđêm",
   "Số\nLượng", "FOC", "Đơn giá", "Thành tiền",
   "Đã thanh\ntoán", "Thanh toán", "Thông tin\nNgân hàng",
@@ -111,7 +111,7 @@ function buildDataRows(data: EdgeFunctionData): TableRow[] {
   const { doan, ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
   const bankChildren = buildBankChildren(ncc);
   const colWidths = la_coc
-    ? [...COL_FIXED.slice(0, 13), COL_W[14] + COL_W[13]]
+    ? [...COL_FIXED.slice(0, 12), COL_W[12] + COL_W[13]]
     : COL_W;
 
   const rows: TableRow[] = [];
@@ -123,34 +123,33 @@ function buildDataRows(data: EdgeFunctionData): TableRow[] {
     const cells: TableCell[] = [];
 
     if (isFirst) {
-      cells.push(cell([p(doan.ten_doan || "", { bold: true, size: 14 })], { width: colWidths[0], rowSpan: totalRoomRows }));
-      cells.push(cell([p(String(doan.so_khach || 0), { size: 14 })], { width: colWidths[1], rowSpan: totalRoomRows }));
-      cells.push(cell([p(ks.ten || "", { bold: true, size: 14 })], { width: colWidths[2], rowSpan: totalRoomRows }));
-      cells.push(cell([p(codeKS || "", { size: 14 })], { width: colWidths[3], rowSpan: totalRoomRows }));
+      cells.push(cell([p(doan.ten_doan || "", { bold: true, size: 14 }), p(`${doan.so_khach || 0} khách`, { size: 13 })], { width: colWidths[0], rowSpan: totalRoomRows }));
+      cells.push(cell([p(ks.ten || "", { bold: true, size: 14 })], { width: colWidths[1], rowSpan: totalRoomRows }));
+      cells.push(cell([p(codeKS || "", { size: 14 })], { width: colWidths[2], rowSpan: totalRoomRows }));
     }
 
-    cells.push(cell([p(room.ci || "—", { size: 14 })], { width: colWidths[4] }));
-    cells.push(cell([p(room.co || "—", { size: 14 })], { width: colWidths[5] }));
-    cells.push(cell([p(room.name, { size: 14 })], { width: colWidths[6] }));
-    cells.push(cell([p(String(rowSoDem), { size: 14 })], { width: colWidths[7] }));
-    cells.push(cell([p(String(room.so_luong), { size: 14 })], { width: colWidths[8] }));
+    cells.push(cell([p(room.ci || "—", { size: 14 })], { width: colWidths[3] }));
+    cells.push(cell([p(room.co || "—", { size: 14 })], { width: colWidths[4] }));
+    cells.push(cell([p(room.name, { size: 14 })], { width: colWidths[5] }));
+    cells.push(cell([p(String(rowSoDem), { size: 14 })], { width: colWidths[6] }));
+    cells.push(cell([p(String(room.so_luong), { size: 14 })], { width: colWidths[7] }));
 
     if (isFirst) {
-      cells.push(cell([p(focDisplay, { size: 14 })], { width: colWidths[9], rowSpan: totalRoomRows }));
+      cells.push(cell([p(focDisplay, { size: 14 })], { width: colWidths[8], rowSpan: totalRoomRows }));
     }
 
-    cells.push(cell([p(fmt(room.don_gia), { size: 14 })], { width: colWidths[10] }));
-    cells.push(cell([p(fmt(thanhTien), { bold: true, size: 14 })], { width: colWidths[11] }));
+    cells.push(cell([p(fmt(room.don_gia), { size: 14 })], { width: colWidths[9] }));
+    cells.push(cell([p(fmt(thanhTien), { bold: true, size: 14 })], { width: colWidths[10] }));
 
     if (isFirst) {
       if (la_coc) {
-        cells.push(cell([p(fmt(soTien), { bold: true, size: 14, color: "FF0000" })], { width: colWidths[12], rowSpan: totalRoomRows }));
-        cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
+        cells.push(cell([p(fmt(soTien), { bold: true, size: 14, color: "FF0000" })], { width: colWidths[11], rowSpan: totalRoomRows }));
+        cells.push(cell(bankChildren, { width: colWidths[12], rowSpan: totalRoomRows }));
       } else {
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
-        cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[12], rowSpan: totalRoomRows }));
-        cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[13], rowSpan: totalRoomRows }));
-        cells.push(cell(bankChildren, { width: colWidths[14], rowSpan: totalRoomRows }));
+        cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
+        cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[12], rowSpan: totalRoomRows }));
+        cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
       }
     }
 
@@ -161,10 +160,10 @@ function buildDataRows(data: EdgeFunctionData): TableRow[] {
 
 function buildKSTable(data: EdgeFunctionData): Table {
   const colWidths = data.la_coc
-    ? [...COL_FIXED.slice(0, 13), COL_W[14] + COL_W[13]]
+    ? [...COL_FIXED.slice(0, 12), COL_W[12] + COL_W[13]]
     : COL_W;
   const headers = data.la_coc
-    ? [...TABLE_HEADERS.slice(0, 13), TABLE_HEADERS[14]]
+    ? [...TABLE_HEADERS.slice(0, 12), TABLE_HEADERS[13]]
     : TABLE_HEADERS;
   const headerRow = new TableRow({
     children: headers.map((h, i) =>
