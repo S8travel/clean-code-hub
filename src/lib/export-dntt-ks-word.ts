@@ -86,12 +86,10 @@ export interface EdgeFunctionData {
 }
 
 function buildBankChildren(ncc: EdgeFunctionData["ncc"]): Paragraph[] {
-  const children: Paragraph[] = [];
-  if (ncc?.ten) children.push(p(ncc.ten, { bold: true, size: 14, alignment: AlignmentType.LEFT }));
-  if (ncc?.so_tai_khoan) children.push(p(`Tk: ${ncc.so_tai_khoan}`, { size: 14, alignment: AlignmentType.LEFT }));
-  if (ncc?.ngan_hang) children.push(p(ncc.ngan_hang, { size: 14, alignment: AlignmentType.LEFT }));
-  if (children.length === 0) children.push(p("—", { size: 14 }));
-  return children;
+  if (!ncc?.so_tai_khoan) return [p("—", { size: 18, alignment: AlignmentType.LEFT })];
+  const lines = ncc.so_tai_khoan.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [p("—", { size: 18, alignment: AlignmentType.LEFT })];
+  return lines.map((line) => p(line, { size: 18, alignment: AlignmentType.LEFT }));
 }
 
 const TABLE_HEADERS = [
