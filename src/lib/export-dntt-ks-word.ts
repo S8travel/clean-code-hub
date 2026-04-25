@@ -12,6 +12,7 @@ import {
   ShadingType,
   VerticalAlign,
   PageOrientation,
+  HeightRule,
 } from "docx";
 import { saveAs } from "file-saver";
 
@@ -153,7 +154,7 @@ function buildDataRows(data: EdgeFunctionData): TableRow[] {
       }
     }
 
-    rows.push(new TableRow({ children: cells }));
+    rows.push(new TableRow({ children: cells, height: { value: 480, rule: HeightRule.EXACT } }));
   });
   return rows;
 }
