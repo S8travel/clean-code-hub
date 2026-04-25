@@ -11,7 +11,6 @@ import { vi } from "date-fns/locale";
 import {
   useUpsertBookingNH,
   useUpdateBookingNH,
-  useDeleteBookingNH,
   useSendNHBookingEmail,
   useSetMenuOptions,
   useSetMenuMons,
@@ -82,7 +81,7 @@ export default function MealCard({
 }: Props) {
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
-  const deleteMut = useDeleteBookingNH();
+
   const sendEmailMut = useSendNHBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
@@ -352,35 +351,6 @@ export default function MealCard({
 
   const handleMailtoFallback = () => {
     const mailtoBody = buildMailtoBody();
-    const buaLabel = buaAn === "trua" ? "Ăn trưa" : "Ăn tối";
-    const userPhone = userProfile?.so_dien_thoai || "";
-    const userName = userProfile?.ho_ten || currentUserName;
-    const body = [
-      `Kính gửi ${nhaHangTen},`,
-      ``,
-      `Công ty TNHH Du lịch S8 xin đặt ${buaLabel.toLowerCase()} cho đoàn ${tenDoan || ""}:`,
-      ngayDate ? `- Ngày: ${fmtDate(ngayDate)}` : "",
-      `- Bữa ăn: ${buaLabel}`,
-      soKhach != null ? `- Số khách: ${soKhach} khách` : "",
-      soKhachLon ? `  + Người lớn: ${soKhachLon}` : "",
-      soKhachEm1 ? `  + TE 6-10 tuổi: ${soKhachEm1}` : "",
-      soKhachEm2 ? `  + TE dưới 6 tuổi: ${soKhachEm2}` : "",
-      soNoidBo ? `- Nội bộ: ${soNoidBo} suất (${soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"})` : "",
-      selectedMenu ? `- Set menu: ${selectedMenu.ten_set}` : "",
-      monList.length > 0 ? `\nDanh sách món:` : "",
-      ...monList.map((m, i) => `${i + 1}. ${m}`),
-      ...(ghiChu ? [`\nGhi chú: ${ghiChu}`] : []),
-      ``,
-      `Kính nhờ xác nhận trong 24 giờ.`,
-      ``,
-      userName,
-      userPhone,
-      ``,
-      `CÔNG TY TNHH DU LỊCH S8`,
-      `MST: 0402021137`,
-      `Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam`,
-      `Email: s8travel.hddt@gmail.com`,
-    ].filter(Boolean).join("\n");
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
     saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName });
     setEmailModalOpen(false);
@@ -423,28 +393,33 @@ export default function MealCard({
         </div>
       )}
       {/* Header */}
-      <div className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center gap-2">
-        <span className="text-xs font-semibold text-muted-foreground uppercase w-14 shrink-0">
-          {buaAn === "trua" ? "🍱 Trưa" : "🍽 Tối"}
-        </span>
-        <span className="text-sm font-medium truncate">{nhaHangTen || "—"}</span>
-        {booking?.ten_set_snapshot && (
-          <span className="flex items-center gap-1 text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full shrink-0 max-w-[180px] truncate">
-            {booking.ten_set_snapshot}
-            {booking.gia_snapshot != null && (
-              <span className="opacity-70">· {booking.gia_snapshot.toLocaleString("vi-VN")}{booking.don_vi_snapshot ? `/${booking.don_vi_snapshot}` : ""}</span>
-            )}
+      <div className="px-4 py-2.5 bg-muted/30 border-b border-border">
+        {/* Row 1: bữa ăn + tên + status + toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground uppercase w-14 shrink-0">
+            {buaAn === "trua" ? "🍱 Trưa" : "🍽 Tối"}
           </span>
-        )}
-        {nhaHangEmail && (
-          <span className="text-xs text-muted-foreground truncate max-w-[160px] hidden sm:block">{nhaHangEmail}</span>
-        )}
-        <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0", statusCfg.cls)}>
-          {statusCfg.label}
-        </span>
-        <button onClick={() => setExpanded((v) => !v)} className="text-muted-foreground hover:text-foreground p-0.5">
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
+          <span className="text-sm font-medium truncate flex-1">{nhaHangTen || "—"}</span>
+          <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0", statusCfg.cls)}>
+            {statusCfg.label}
+          </span>
+          <button onClick={() => setExpanded((v) => !v)} className="text-muted-foreground hover:text-foreground p-0.5 shrink-0">
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+        {/* Row 2: set menu badge + email (always rendered for consistent height) */}
+        <div className="flex items-center gap-2 mt-1 pl-[3.5rem] min-h-[20px]">
+          {booking?.ten_set_snapshot ? (
+            <span className="flex items-center gap-1 text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full shrink-0 max-w-[200px] truncate">
+              {booking.ten_set_snapshot}
+              {booking.gia_snapshot != null && (
+                <span className="opacity-70">· {booking.gia_snapshot.toLocaleString("vi-VN")}{booking.don_vi_snapshot ? `/${booking.don_vi_snapshot}` : ""}</span>
+              )}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground/40 italic">Chưa chọn set menu</span>
+          )}
+        </div>
       </div>
 
       {expanded && (
