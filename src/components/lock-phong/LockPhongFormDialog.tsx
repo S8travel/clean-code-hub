@@ -172,7 +172,7 @@ function CreateForm({
   ksList: { id: number; ten: string }[];
 }) {
   const createMut = useCreateLockPhong();
-  const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten }));
+  const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten ?? "" }));
 
   const {
     register,
@@ -385,7 +385,7 @@ function EditForm({
   ksList: { id: number; ten: string }[];
 }) {
   const updateMut = useUpdateLockPhong();
-  const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten }));
+  const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten ?? "" }));
 
   const defaultHotels =
     initialData.hotels.length > 0

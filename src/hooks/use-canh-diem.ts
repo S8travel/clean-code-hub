@@ -16,6 +16,7 @@ export interface CanhDiem {
   so_dien_thoai: string | null;
   email: string | null;
   tai_khoan_thanh_toan: string | null;
+  nha_cung_cap_id: number | null;
   created_at: string;
 }
 
