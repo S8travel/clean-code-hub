@@ -10,8 +10,6 @@ import { vi } from "date-fns/locale";
 import {
   useUpsertBookingNH,
   useUpdateBookingNH,
-  useSetMenuOptions,
-  useSetMenuMons,
   type MenuDayData,
   type BookingNHRow,
 } from "@/hooks/use-booking-nh";
@@ -28,18 +26,12 @@ interface MonListEditorProps {
   buaAn: "trua" | "toi";
   nhaHangId: number | null;
   booking: BookingNHRow | null;
-  setMenuIdFromDieuTour?: number | null;
   onUpdated: () => void;
 }
 
-function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, setMenuIdFromDieuTour, onUpdated }: MonListEditorProps) {
+function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, onUpdated }: MonListEditorProps) {
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
-  const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
-  const [selectedSetMenuId, setSelectedSetMenuId] = useState<number | null>(
-    booking?.set_menu_id ?? setMenuIdFromDieuTour ?? null,
-  );
-  const { data: setMenuMons = [] } = useSetMenuMons(selectedSetMenuId);
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
   const [newMon, setNewMon] = useState("");
 
@@ -64,20 +56,6 @@ function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, setMenuI
     }
   };
 
-  const handleApplySetMenu = () => {
-    if (!selectedSetMenuId || !setMenuMons.length) return;
-    const opt = setMenuOptions.find((o) => o.id === selectedSetMenuId);
-    const next = [...setMenuMons];
-    setMonList(next);
-    save(next, {
-      set_menu_id: selectedSetMenuId,
-      ten_set_snapshot: opt?.ten_set ?? null,
-      gia_snapshot: opt?.gia ?? null,
-      don_vi_snapshot: opt?.don_vi ?? null,
-    });
-    setSelectedSetMenuId(null);
-  };
-
   const handleAdd = () => {
     if (!newMon.trim()) return;
     const next = [...monList, newMon.trim()];
@@ -96,34 +74,10 @@ function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, setMenuI
 
   return (
     <div className="space-y-1 min-w-[160px]">
-      {/* Set menu selector */}
-      {(setMenuOptions.length > 0 || setMenuIdFromDieuTour != null) && (
+      {/* Set menu name — locked from điều tour, display only */}
+      {booking?.ten_set_snapshot && (
         <div className="pb-1.5 border-b border-border/50">
-          {setMenuIdFromDieuTour != null ? (
-            <span className="text-xs font-medium text-foreground">
-              {setMenuOptions.find((o) => o.id === selectedSetMenuId)?.ten_set ?? "—"}
-            </span>
-          ) : (
-            <div className="flex items-center gap-1">
-              <select
-                className="flex-1 text-xs border border-input rounded px-1.5 py-0.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-w-0"
-                value={selectedSetMenuId ?? ""}
-                onChange={(e) => setSelectedSetMenuId(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">-- Chọn set menu --</option>
-                {setMenuOptions.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.ten_set}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleApplySetMenu}
-                disabled={!selectedSetMenuId || !setMenuMons.length}
-                className="text-xs text-primary hover:text-primary/80 disabled:text-muted-foreground/40 shrink-0 px-2 py-0.5 rounded border border-primary/30 hover:bg-primary/5 disabled:border-muted disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                Cập nhật
-              </button>
-            </div>
-          )}
+          <span className="text-xs font-medium text-foreground">{booking.ten_set_snapshot}</span>
         </div>
       )}
       {monList.length === 0 ? (
@@ -260,7 +214,6 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
                             buaAn="trua"
                             nhaHangId={day.an_trua_nha_hang_id}
                             booking={day.booking_trua}
-                            setMenuIdFromDieuTour={day.an_trua_set_menu_id}
                             onUpdated={onUpdated}
                           />
                         </div>
@@ -286,7 +239,6 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
                             buaAn="toi"
                             nhaHangId={day.an_toi_nha_hang_id}
                             booking={day.booking_toi}
-                            setMenuIdFromDieuTour={day.an_toi_set_menu_id}
                             onUpdated={onUpdated}
                           />
                         </div>

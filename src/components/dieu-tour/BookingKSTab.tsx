@@ -54,6 +54,32 @@ function fmtDate(d: string) {
   }
 }
 
+function groupConsecutiveDates(dates: string[]): Array<{ checkIn: string; checkOut: string; nights: number }> {
+  if (dates.length === 0) return [];
+  const sorted = [...dates].sort();
+  const groups: Array<{ checkIn: string; checkOut: string; nights: number }> = [];
+  let start = sorted[0];
+  let end = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(sorted[i - 1] + "T00:00:00");
+    const curr = new Date(sorted[i] + "T00:00:00");
+    const diff = Math.round((curr.getTime() - prev.getTime()) / 86400000);
+    if (diff === 1) {
+      end = sorted[i];
+    } else {
+      const co = new Date(end + "T00:00:00");
+      co.setDate(co.getDate() + 1);
+      groups.push({ checkIn: start, checkOut: co.toISOString().split("T")[0], nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
+      start = sorted[i];
+      end = sorted[i];
+    }
+  }
+  const co = new Date(end + "T00:00:00");
+  co.setDate(co.getDate() + 1);
+  groups.push({ checkIn: start, checkOut: co.toISOString().split("T")[0], nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
+  return groups;
+}
+
 function fmtDatetime(d: string | null) {
   if (!d) return "";
   try {
@@ -287,19 +313,20 @@ function BookingKSCard({
   }, [row.id]);
 
   const buildEmailHtml = () => {
-    const sortedDates = [...row.ngay_dates].sort();
-    const checkIn = sortedDates[0] ? fmtDate(sortedDates[0]) : "—";
-    const lastDate = sortedDates[sortedDates.length - 1];
-    let checkOut = "—";
-    if (lastDate) {
-      try {
-        const d = new Date(lastDate + "T00:00:00");
-        d.setDate(d.getDate() + 1);
-        checkOut = format(d, "dd/MM", { locale: vi });
-      } catch { checkOut = lastDate; }
-    }
+    const groups = groupConsecutiveDates(row.ngay_dates);
     const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
     const soPhongHtml = soPhongFinal || soPhong || row.ks_final || row.ks_dat_truoc || "—";
+    const dateRows = groups.length === 0
+      ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày ở</td><td style="border:1px solid #e2e8f0;padding:8px 12px">—</td></tr>`
+      : groups.map((g, i) => `
+        <tr>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${groups.length > 1 ? `Lần ${i + 1} – Check-in` : "Check-in"}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(g.checkIn)}</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${groups.length > 1 ? `Lần ${i + 1} – Check-out` : "Check-out"}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(g.checkOut)} (${g.nights} đêm)</td>
+        </tr>`).join("");
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
@@ -318,8 +345,7 @@ function BookingKSCard({
         </tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkIn}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${checkOut} (${row.so_dem} đêm)</td></tr>
+        ${dateRows}
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soPhongHtml}</td></tr>
       </table>
       ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
