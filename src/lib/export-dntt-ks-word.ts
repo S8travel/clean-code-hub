@@ -27,9 +27,9 @@ const PAGE_H = 16838;
 const MARGIN = 720;
 const CONTENT_W = PAGE_H - MARGIN * 2;
 
-// Thứ tự: CODE ĐOÀN, Số khách, Tên KS, CODE KS, Check in, Check out, Loại Phòng, Số đêm, Số Lượng, FOC, Đơn giá, Thành tiền, Đã TT, Thanh toán, Ngân hàng
+// Thứ tự: Tên KS, CODE KS, Check in, Check out, Loại Phòng, Số đêm, Số Lượng, FOC, Đơn giá, Thành tiền, Đã TT, Thanh toán, Ngân hàng
 const COL_W = [
-  1000, 700, 1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 1000, 1448,
+  1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 1000, 1448,
 ];
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -94,17 +94,17 @@ function buildKSTable(data: EdgeFunctionData): Table {
   if (bankChildren.length === 0) bankChildren.push(p("—", { size: 14 }));
 
   const colWidths = la_coc
-    ? [...COL_W.slice(0, 13), COL_W[14] + COL_W[13]]
+    ? [...COL_W.slice(0, 11), COL_W[12] + COL_W[11]]
     : COL_W;
 
   const baseHeaders = [
-    "CODE\nĐOÀN", "Số\nkhách", "Tên Khách sạn", "CODE\nKS",
+    "Tên Khách sạn", "CODE\nKS",
     "Check\nin", "Check\nout", "Loại Phòng", "Số\nđêm",
     "Số\nLượng", "FOC", "Đơn giá", "Thành tiền",
     "Đã thanh\ntoán", "Thanh toán", "Thông tin\nNgân hàng",
   ];
   const headers = la_coc
-    ? [...baseHeaders.slice(0, 13), baseHeaders[14]]
+    ? [...baseHeaders.slice(0, 11), baseHeaders[12]]
     : baseHeaders;
 
   const rows: TableRow[] = [];
@@ -124,34 +124,32 @@ function buildKSTable(data: EdgeFunctionData): Table {
     const cells: TableCell[] = [];
 
     if (isFirst) {
-      cells.push(cell([p(doan.ten_doan || "", { bold: true, size: 14 })], { width: colWidths[0], rowSpan: totalRoomRows }));
-      cells.push(cell([p(String(doan.so_khach || 0), { size: 14 })], { width: colWidths[1], rowSpan: totalRoomRows }));
-      cells.push(cell([p(ks.ten || "", { bold: true, size: 14 })], { width: colWidths[2], rowSpan: totalRoomRows }));
-      cells.push(cell([p(codeKS || "", { size: 14 })], { width: colWidths[3], rowSpan: totalRoomRows }));
+      cells.push(cell([p(ks.ten || "", { bold: true, size: 14 })], { width: colWidths[0], rowSpan: totalRoomRows }));
+      cells.push(cell([p(codeKS || "", { size: 14 })], { width: colWidths[1], rowSpan: totalRoomRows }));
     }
 
-    cells.push(cell([p(room.ci || "—", { size: 14 })], { width: colWidths[4] }));
-    cells.push(cell([p(room.co || "—", { size: 14 })], { width: colWidths[5] }));
-    cells.push(cell([p(room.name, { size: 14 })], { width: colWidths[6] }));
-    cells.push(cell([p(String(rowSoDem), { size: 14 })], { width: colWidths[7] }));
-    cells.push(cell([p(String(room.so_luong), { size: 14 })], { width: colWidths[8] }));
+    cells.push(cell([p(room.ci || "—", { size: 14 })], { width: colWidths[2] }));
+    cells.push(cell([p(room.co || "—", { size: 14 })], { width: colWidths[3] }));
+    cells.push(cell([p(room.name, { size: 14 })], { width: colWidths[4] }));
+    cells.push(cell([p(String(rowSoDem), { size: 14 })], { width: colWidths[5] }));
+    cells.push(cell([p(String(room.so_luong), { size: 14 })], { width: colWidths[6] }));
 
     if (isFirst) {
-      cells.push(cell([p(focDisplay, { size: 14 })], { width: colWidths[9], rowSpan: totalRoomRows }));
+      cells.push(cell([p(focDisplay, { size: 14 })], { width: colWidths[7], rowSpan: totalRoomRows }));
     }
 
-    cells.push(cell([p(fmt(room.don_gia), { size: 14 })], { width: colWidths[10] }));
-    cells.push(cell([p(fmt(thanhTien), { bold: true, size: 14 })], { width: colWidths[11] }));
+    cells.push(cell([p(fmt(room.don_gia), { size: 14 })], { width: colWidths[8] }));
+    cells.push(cell([p(fmt(thanhTien), { bold: true, size: 14 })], { width: colWidths[9] }));
 
     if (isFirst) {
       if (la_coc) {
-        cells.push(cell([p(fmt(soTien), { bold: true, size: 14, color: "FF0000" })], { width: colWidths[12], rowSpan: totalRoomRows }));
-        cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
+        cells.push(cell([p(fmt(soTien), { bold: true, size: 14, color: "FF0000" })], { width: colWidths[10], rowSpan: totalRoomRows }));
+        cells.push(cell(bankChildren, { width: colWidths[11], rowSpan: totalRoomRows }));
       } else {
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
-        cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[12], rowSpan: totalRoomRows }));
-        cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[13], rowSpan: totalRoomRows }));
-        cells.push(cell(bankChildren, { width: colWidths[14], rowSpan: totalRoomRows }));
+        cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[10], rowSpan: totalRoomRows }));
+        cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[11], rowSpan: totalRoomRows }));
+        cells.push(cell(bankChildren, { width: colWidths[12], rowSpan: totalRoomRows }));
       }
     }
 
@@ -211,9 +209,10 @@ export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
     children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })],
   });
 
+  const soKhachSuffix = doan.so_khach ? ` - ${doan.so_khach} khách` : "";
   const lyDoText = la_coc
-    ? `Đề nghị thanh toán tiền cọc khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}`
-    : `Đề nghị thanh toán tiền khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}`;
+    ? `Đề nghị thanh toán tiền cọc khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`
+    : `Đề nghị thanh toán tiền khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`;
 
   const lyDoPara = new Paragraph({
     alignment: AlignmentType.LEFT,
