@@ -12,7 +12,6 @@ import {
   CreditCard,
   Wallet,
   CalendarClock,
-  LogOut,
   Stamp,
   FileStack,
   LayoutTemplate,
@@ -48,6 +47,7 @@ import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks
 import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
 import { useCurrentSession } from "@/hooks/use-current-user";
 import { useThongBaoCount } from "@/hooks/use-thong-bao";
+import { UserSettingsMenu } from "@/components/UserSettingsMenu";
 
 // ── Google Translate button ──
 
@@ -315,26 +315,12 @@ export function AppSidebar() {
               <p className="text-xs font-medium truncate">{user?.ho_ten ?? user?.email}</p>
               <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-              onClick={handleLogout}
-              title="Đăng xuất"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </Button>
+            <UserSettingsMenu user={user} onLogout={handleLogout} />
           </div>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 mx-auto text-muted-foreground hover:text-destructive"
-            onClick={handleLogout}
-            title="Đăng xuất"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex justify-center">
+            <UserSettingsMenu user={user} onLogout={handleLogout} collapsed />
+          </div>
         )}
       </SidebarFooter>
     </Sidebar>

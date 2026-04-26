@@ -150,3 +150,21 @@ export function useDeleteNguoiDung() {
     },
   });
 }
+
+export function useUpdateUserProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, ho_ten, so_dien_thoai }: { userId: string; ho_ten: string; so_dien_thoai: string | null }) => {
+      const { error } = await externalSupabase
+        .from("user_roles")
+        .update({ ho_ten, so_dien_thoai })
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["nguoi-dung-uid", vars.userId] });
+      qc.invalidateQueries({ queryKey: ["current-user-profile"] });
+      qc.invalidateQueries({ queryKey: ["nguoi-dung-list"] });
+    },
+  });
+}

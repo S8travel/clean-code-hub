@@ -46,7 +46,7 @@ export function SearchableSelect({
   const selectedLabel = options.find((o) => o.value === value)?.label;
 
   const filtered = search
-    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    ? options.filter((o) => o.label?.toLowerCase().includes(search.toLowerCase()))
     : options;
 
   const handleOpenChange = (v: boolean) => {

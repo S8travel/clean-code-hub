@@ -96,6 +96,7 @@ export default function DoanDetail() {
   // Auto-save refs
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doSaveRef = useRef<(() => void) | null>(null);
+  const hasPendingChangesRef = useRef(false);
 
   const soKhachLon = doan?.so_khach_lon ?? 0;
   const soKhachEm1 = doan?.so_khach_em1 ?? 0;
@@ -123,7 +124,9 @@ export default function DoanDetail() {
       setInitialized(true);
     }
 
-    setDays(merged);
+    if (!hasPendingChangesRef.current) {
+      setDays(merged);
+    }
   }, [doan, dbNgayRows, dbNgayItems]);
 
   // Auto-init doan_ngay rows
@@ -185,6 +188,7 @@ export default function DoanDetail() {
       },
       {
         onSuccess: async () => {
+          hasPendingChangesRef.current = false;
           setSaveStatus("saved");
           setTimeout(() => setSaveStatus("idle"), 2000);
           queryClient.invalidateQueries({ queryKey: ["doan_booking_ks", doanId] });
@@ -233,6 +237,7 @@ export default function DoanDetail() {
   const handleSetGifts = useCallback((v: string[]) => { setGifts(v); scheduleSave(); }, [scheduleSave]);
   const handleSetGhiChuDieuTour = useCallback((v: string) => { setGhiChuDieuTour(v); scheduleSave(); }, [scheduleSave]);
   const handleSetDays = useCallback((v: DayLocal[]) => {
+    hasPendingChangesRef.current = true;
     setDays(v);
     scheduleSave();
   }, [scheduleSave]);

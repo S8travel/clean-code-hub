@@ -12,6 +12,7 @@ import {
   ShadingType,
   VerticalAlign,
   PageOrientation,
+  HeightRule,
 } from "docx";
 import { saveAs } from "file-saver";
 
@@ -24,13 +25,12 @@ const WHITE = { fill: "FFFFFF", type: ShadingType.CLEAR, color: "auto" };
 
 const PAGE_W = 11906;
 const PAGE_H = 16838;
-const MARGIN = 720;
+const MARGIN = 360; // 0.25 inch
 const CONTENT_W = PAGE_H - MARGIN * 2;
 
-// Thứ tự: Tên KS, CODE KS, Check in, Check out, Loại Phòng, Số đêm, Số Lượng, FOC, Đơn giá, Thành tiền, Đã TT, Thanh toán, Ngân hàng
-const COL_W = [
-  1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 1000, 1448,
-];
+// Columns: Tên KS, CODE KS, Check in, Check out, Loại Phòng, Số đêm, Số Lượng, FOC, Đơn giá, Thành tiền, Đã TT, Thanh toán, Ngân hàng
+const COL_FIXED = [1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 1000];
+const COL_W = [...COL_FIXED, CONTENT_W - COL_FIXED.reduce((a, b) => a + b, 0)];
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -52,7 +52,7 @@ function cell(
 
 function p(
   text: string,
-  opts: { bold?: boolean; size?: number; color?: string; alignment?: (typeof AlignmentType)[keyof typeof AlignmentType] } = {}
+  opts: { bold?: boolean; size?: number; color?: string; alignment?: (typeof AlignmentType)[keyof typeof AlignmentType]; italics?: boolean } = {}
 ): Paragraph {
   return new Paragraph({
     alignment: opts.alignment ?? AlignmentType.CENTER,
@@ -63,12 +63,13 @@ function p(
         size: opts.size ?? 16,
         bold: opts.bold,
         color: opts.color,
+        italics: opts.italics,
       }),
     ],
   });
 }
 
-interface EdgeFunctionData {
+export interface EdgeFunctionData {
   doan: { ten_doan: string; so_khach: number };
   ks: { ten: string; foc_khach: number | null; foc_mien: number | null };
   ncc: { ten?: string; so_tai_khoan?: string; ngan_hang?: string } | null;
@@ -82,40 +83,39 @@ interface EdgeFunctionData {
   soTien: number;
   la_coc?: boolean;
   nguoiDeNghi?: string;
+  ghiChu?: string;
 }
 
-function buildKSTable(data: EdgeFunctionData): Table {
-  const { doan, ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
+function buildBankChildren(ncc: EdgeFunctionData["ncc"]): Paragraph[] {
+  if (!ncc?.so_tai_khoan) return [p("—", { size: 18, alignment: AlignmentType.LEFT })];
+  const lines = ncc.so_tai_khoan.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [p("—", { size: 18, alignment: AlignmentType.LEFT })];
+  return lines.map((line) => p(line, { size: 18, alignment: AlignmentType.LEFT }));
+}
 
-  const bankChildren: Paragraph[] = [];
-  if (ncc?.ten) bankChildren.push(p(ncc.ten, { bold: true, size: 14, alignment: AlignmentType.LEFT }));
-  if (ncc?.so_tai_khoan) bankChildren.push(p(`Tk: ${ncc.so_tai_khoan}`, { size: 14, alignment: AlignmentType.LEFT }));
-  if (ncc?.ngan_hang) bankChildren.push(p(ncc.ngan_hang, { size: 14, alignment: AlignmentType.LEFT }));
-  if (bankChildren.length === 0) bankChildren.push(p("—", { size: 14 }));
+const TABLE_HEADERS = [
+  "Tên Khách sạn", "CODE\nKS",
+  "Check\nin", "Check\nout", "Loại Phòng", "Số\nđêm",
+  "Số\nLượng", "FOC", "Đơn giá", "Thành tiền",
+  "Đã thanh\ntoán", "Thanh toán", "Thông tin\nNgân hàng",
+];
 
+function buildHeaderRow(): TableRow {
+  return new TableRow({
+    children: TABLE_HEADERS.map((h, i) =>
+      cell([p(h, { bold: true, size: 14 })], { width: COL_W[i], shading: GRAY })
+    ),
+  });
+}
+
+function buildDataRows(data: EdgeFunctionData): TableRow[] {
+  const { ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
+  const bankChildren = buildBankChildren(ncc);
   const colWidths = la_coc
-    ? [...COL_W.slice(0, 11), COL_W[12] + COL_W[11]]
+    ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]]
     : COL_W;
 
-  const baseHeaders = [
-    "Tên Khách sạn", "CODE\nKS",
-    "Check\nin", "Check\nout", "Loại Phòng", "Số\nđêm",
-    "Số\nLượng", "FOC", "Đơn giá", "Thành tiền",
-    "Đã thanh\ntoán", "Thanh toán", "Thông tin\nNgân hàng",
-  ];
-  const headers = la_coc
-    ? [...baseHeaders.slice(0, 11), baseHeaders[12]]
-    : baseHeaders;
-
   const rows: TableRow[] = [];
-  rows.push(
-    new TableRow({
-      children: headers.map((h, i) =>
-        cell([p(h, { bold: true, size: 14 })], { width: colWidths[i], shading: GRAY })
-      ),
-    })
-  );
-
   const totalRoomRows = roomEntries.length;
   roomEntries.forEach((room, ri) => {
     const rowSoDem = room.so_dem ?? 1;
@@ -153,22 +153,54 @@ function buildKSTable(data: EdgeFunctionData): Table {
       }
     }
 
-    rows.push(new TableRow({ children: cells }));
+    rows.push(new TableRow({ children: cells, height: { value: 480, rule: HeightRule.EXACT } }));
   });
-
-  return new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, columnWidths: colWidths, rows });
+  return rows;
 }
 
-export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
-  const { doan, ks, la_coc, nguoiDeNghi = "" } = data;
+function buildKSTable(data: EdgeFunctionData): Table {
+  const colWidths = data.la_coc
+    ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]]
+    : COL_W;
+  const headers = data.la_coc
+    ? [...TABLE_HEADERS.slice(0, 11), TABLE_HEADERS[12]]
+    : TABLE_HEADERS;
+  const headerRow = new TableRow({
+    children: headers.map((h, i) =>
+      cell([p(h, { bold: true, size: 14 })], { width: colWidths[i], shading: GRAY })
+    ),
+  });
+  return new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: colWidths,
+    rows: [headerRow, ...buildDataRows(data)],
+  });
+}
 
-  const table = buildKSTable(data);
+function buildKSMergedTable(items: EdgeFunctionData[]): Table {
+  const rows: TableRow[] = [buildHeaderRow()];
+  for (const item of items) {
+    rows.push(...buildDataRows(item));
+  }
+  return new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, columnWidths: COL_W, rows });
+}
 
-  const today = new Date().toLocaleDateString("vi-VN");
+function buildGhiChuPara(items: EdgeFunctionData[]): Paragraph | null {
+  const lines = items
+    .filter((d) => d.ghiChu)
+    .map((d) => items.length > 1 ? `${d.ks.ten}: ${d.ghiChu}` : d.ghiChu!);
+  if (lines.length === 0) return null;
+  return new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: { before: 200, after: 80 },
+    children: [new TextRun({ text: `Ghi chú: ${lines.join(" | ")}`, font: "Arial", size: 18, italics: true })],
+  });
+}
+
+function buildHeaderTable(): Table {
   const HALF = Math.floor(CONTENT_W / 2);
-
-  // ── 1. Header: Company + Quốc hiệu ─────────────────────────────
-  const headerTable = new Table({
+  const today = new Date().toLocaleDateString("vi-VN");
+  return new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
       new TableRow({
@@ -194,203 +226,44 @@ export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
       }),
     ],
   });
-
-  // ── 2. Title ─────────────────────────────────────────────────────
-  const titlePara = new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 200, after: 100 },
-    children: [new TextRun({ text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })],
-  });
-
-  // ── 3. Kính gửi + Lý do ──────────────────────────────────────────
-  const kinhGuiPara = new Paragraph({
-    alignment: AlignmentType.LEFT,
-    spacing: { before: 100, after: 60 },
-    children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })],
-  });
-
-  const soKhachSuffix = doan.so_khach ? ` - ${doan.so_khach} khách` : "";
-  const lyDoText = la_coc
-    ? `Đề nghị thanh toán tiền cọc khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`
-    : `Đề nghị thanh toán tiền khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`;
-
-  const lyDoPara = new Paragraph({
-    alignment: AlignmentType.LEFT,
-    spacing: { before: 60, after: 160 },
-    children: [new TextRun({ text: lyDoText, font: "Arial", size: 20 })],
-  });
-
-  // ── 4. Signature section ─────────────────────────────────────────
-  const SIG_W = Math.floor(CONTENT_W / 5);
-  const SIG_LAST = CONTENT_W - SIG_W * 4;
-  const sigTitles = ["NGƯỜI ĐỀ NGHỊ", "TRƯỞNG BỘ PHẬN", "KẾ TOÁN THANH TOÁN", "KẾ TOÁN TRƯỞNG", "GIÁM ĐỐC"];
-  const sigNames = [nguoiDeNghi.toUpperCase(), "VÕ THỊ MINH XUÂN", "TRẦN THỊ ÁNH HỒNG", "NGUYỄN CHÍ LINH", "NGUYỄN TIẾN DŨNG"];
-  const sigWidths = [SIG_W, SIG_W, SIG_W, SIG_W, SIG_LAST];
-
-  const signatureTable = new Table({
-    width: { size: CONTENT_W, type: WidthType.DXA },
-    rows: [
-      // Row 1: titles
-      new TableRow({
-        children: sigTitles.map((t, i) =>
-          cell([p(t, { bold: true, size: 18 })], { width: sigWidths[i], borders: NO_BORDERS })
-        ),
-      }),
-      // Row 2: (Ký, ghi rõ họ tên)
-      new TableRow({
-        children: sigWidths.map((w) =>
-          cell([p("(Ký, ghi rõ họ tên)", { size: 16, color: "888888" })], { width: w, borders: NO_BORDERS })
-        ),
-      }),
-      // Row 3: empty space for signature
-      new TableRow({
-        children: sigWidths.map((w) =>
-          cell(
-            [p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 })],
-            { width: w, borders: NO_BORDERS }
-          )
-        ),
-      }),
-      // Row 4: names
-      new TableRow({
-        children: sigNames.map((n, i) =>
-          cell([p(n, { bold: true, size: 16 })], { width: sigWidths[i], borders: NO_BORDERS })
-        ),
-      }),
-    ],
-  });
-
-  const doc = new Document({
-    sections: [{
-      properties: {
-        page: {
-          size: { width: PAGE_W, height: PAGE_H, orientation: PageOrientation.LANDSCAPE },
-          margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
-        },
-      },
-      children: [
-        headerTable,
-        titlePara,
-        kinhGuiPara,
-        lyDoPara,
-        table,
-        new Paragraph({ spacing: { before: 300 }, children: [] }),
-        signatureTable,
-      ],
-    }],
-  });
-
-  const blob = await Packer.toBlob(doc);
-  const filename = `DNTT_KS_${doan.ten_doan}_${ks.ten || "KS"}.docx`;
-  saveAs(blob, filename);
 }
 
-export async function exportDNTTKSBatchWordFromData(
-  items: EdgeFunctionData[],
-  tenDoan: string,
-  nguoiDeNghi: string = "",
-) {
-  if (items.length === 0) return;
-
-  const today = new Date().toLocaleDateString("vi-VN");
-  const HALF = Math.floor(CONTENT_W / 2);
-
-  const headerTable = new Table({
-    width: { size: CONTENT_W, type: WidthType.DXA },
-    rows: [
-      new TableRow({
-        children: [
-          cell(
-            [
-              p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22 }),
-              p("S8 TRAVEL COMPANY", { size: 18, color: "555555" }),
-              p("MST: 0402021137", { size: 18, color: "555555" }),
-            ],
-            { width: HALF, borders: NO_BORDERS, margins: { top: 60, bottom: 60, left: 0, right: 0 } }
-          ),
-          cell(
-            [
-              p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", { bold: true, size: 22 }),
-              p("Độc lập – Tự do – Hạnh phúc", { bold: true, size: 20 }),
-              p("——————————————", { size: 18, color: "888888" }),
-              p(`Hà Nội, ngày ${today}`, { size: 18, color: "555555" }),
-            ],
-            { width: CONTENT_W - HALF, borders: NO_BORDERS, margins: { top: 60, bottom: 60, left: 0, right: 0 } }
-          ),
-        ],
-      }),
-    ],
-  });
-
-  const titlePara = new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 200, after: 100 },
-    children: [new TextRun({ text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })],
-  });
-
-  const kinhGuiPara = new Paragraph({
-    alignment: AlignmentType.LEFT,
-    spacing: { before: 100, after: 60 },
-    children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })],
-  });
-
-  const lyDoPara = new Paragraph({
-    alignment: AlignmentType.LEFT,
-    spacing: { before: 60, after: 160 },
-    children: [new TextRun({ text: `Đề nghị thanh toán tiền khách sạn cho đoàn ${tenDoan}`, font: "Arial", size: 20 })],
-  });
-
+function buildSignatureTable(nguoiDeNghi: string): Table {
   const SIG_W = Math.floor(CONTENT_W / 5);
   const SIG_LAST = CONTENT_W - SIG_W * 4;
   const sigTitles = ["NGƯỜI ĐỀ NGHỊ", "TRƯỞNG BỘ PHẬN", "KẾ TOÁN THANH TOÁN", "KẾ TOÁN TRƯỞNG", "GIÁM ĐỐC"];
   const sigNames = [nguoiDeNghi.toUpperCase(), "VÕ THỊ MINH XUÂN", "TRẦN THỊ ÁNH HỒNG", "NGUYỄN CHÍ LINH", "NGUYỄN TIẾN DŨNG"];
   const sigWidths = [SIG_W, SIG_W, SIG_W, SIG_W, SIG_LAST];
 
-  const signatureTable = new Table({
+  return new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
-      new TableRow({
-        children: sigTitles.map((t, i) =>
-          cell([p(t, { bold: true, size: 18 })], { width: sigWidths[i], borders: NO_BORDERS })
-        ),
-      }),
-      new TableRow({
-        children: sigWidths.map((w) =>
-          cell([p("(Ký, ghi rõ họ tên)", { size: 16, color: "888888" })], { width: w, borders: NO_BORDERS })
-        ),
-      }),
-      new TableRow({
-        children: sigWidths.map((w) =>
-          cell([p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 })], { width: w, borders: NO_BORDERS })
-        ),
-      }),
-      new TableRow({
-        children: sigNames.map((n, i) =>
-          cell([p(n, { bold: true, size: 16 })], { width: sigWidths[i], borders: NO_BORDERS })
-        ),
-      }),
+      new TableRow({ children: sigTitles.map((t, i) => cell([p(t, { bold: true, size: 18 })], { width: sigWidths[i], borders: NO_BORDERS })) }),
+      new TableRow({ children: sigWidths.map((w) => cell([p("(Ký, ghi rõ họ tên)", { size: 16, color: "888888" })], { width: w, borders: NO_BORDERS })) }),
+      new TableRow({ children: sigWidths.map((w) => cell([p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 }), p("", { size: 36 })], { width: w, borders: NO_BORDERS })) }),
+      new TableRow({ children: sigNames.map((n, i) => cell([p(n, { bold: true, size: 16 })], { width: sigWidths[i], borders: NO_BORDERS })) }),
     ],
   });
+}
 
-  // Gộp tất cả bảng KS với khoảng cách giữa
+function buildDoc(
+  headerTable: Table,
+  titlePara: Paragraph,
+  kinhGuiPara: Paragraph,
+  lyDoPara: Paragraph,
+  contentTable: Table,
+  ghiChuPara: Paragraph | null,
+  signatureTable: Table,
+): Document {
   const children: (Table | Paragraph)[] = [
-    headerTable,
-    titlePara,
-    kinhGuiPara,
-    lyDoPara,
+    headerTable, titlePara, kinhGuiPara, lyDoPara, contentTable,
+    new Paragraph({ spacing: { before: 200 }, children: [] }),
   ];
-
-  items.forEach((item, idx) => {
-    children.push(buildKSTable(item));
-    if (idx < items.length - 1) {
-      children.push(new Paragraph({ spacing: { before: 200 }, children: [] }));
-    }
-  });
-
-  children.push(new Paragraph({ spacing: { before: 300 }, children: [] }));
+  if (ghiChuPara) children.push(ghiChuPara);
+  children.push(new Paragraph({ spacing: { before: 100 }, children: [] }));
   children.push(signatureTable);
 
-  const doc = new Document({
+  return new Document({
     sections: [{
       properties: {
         page: {
@@ -401,6 +274,45 @@ export async function exportDNTTKSBatchWordFromData(
       children,
     }],
   });
+}
+
+export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
+  const { doan, ks, la_coc, nguoiDeNghi = "" } = data;
+  const soKhachSuffix = doan.so_khach ? ` - ${doan.so_khach} khách` : "";
+  const lyDoText = la_coc
+    ? `Đề nghị thanh toán tiền cọc khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`
+    : `Đề nghị thanh toán tiền khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`;
+
+  const doc = buildDoc(
+    buildHeaderTable(),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ text: lyDoText, font: "Arial", size: 20 })] }),
+    buildKSTable(data),
+    buildGhiChuPara([data]),
+    buildSignatureTable(nguoiDeNghi),
+  );
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, `DNTT_KS_${doan.ten_doan}_${ks.ten || "KS"}.docx`);
+}
+
+export async function exportDNTTKSBatchWordFromData(
+  items: EdgeFunctionData[],
+  tenDoan: string,
+  nguoiDeNghi: string = "",
+) {
+  if (items.length === 0) return;
+
+  const doc = buildDoc(
+    buildHeaderTable(),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ text: `Đề nghị thanh toán tiền khách sạn cho đoàn ${tenDoan}`, font: "Arial", size: 20 })] }),
+    buildKSMergedTable(items),
+    buildGhiChuPara(items),
+    buildSignatureTable(nguoiDeNghi),
+  );
 
   const blob = await Packer.toBlob(doc);
   saveAs(blob, `DNTT_KS_${tenDoan}.docx`);

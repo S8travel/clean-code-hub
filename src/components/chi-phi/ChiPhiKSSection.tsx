@@ -31,6 +31,7 @@ import KSRowInput from "./KSRowInput";
 import KSDNTTModal from "./KSDNTTModal";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { exportDNTTKSWordFromData, exportDNTTKSBatchWordFromData } from "@/lib/export-dntt-ks-word";
+import { exportDNTTKSExcel } from "@/lib/export-dntt-ks-excel";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -191,8 +192,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     return {
       doan: { ten_doan: tenDoan || String(doanId), so_khach: soKhach },
       ks: { ten: ks.ten, foc_khach: ks.foc_khach ?? null, foc_mien: ks.foc_mien ?? null },
-      ncc: ks.nha_cung_cap_id
-        ? { ten: ks.ten_ncc || undefined, so_tai_khoan: ks.ncc_so_tai_khoan || undefined, ngan_hang: ks.ncc_ngan_hang || undefined }
+      ncc: ks.tai_khoan_thanh_toan
+        ? { so_tai_khoan: ks.tai_khoan_thanh_toan }
         : null,
       checkIn,
       checkOut,
@@ -204,6 +205,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       soTien: dntt.so_tien,
       la_coc: dntt.la_coc ?? false,
       nguoiDeNghi: currentUserName,
+      ghiChu: dntt.ghi_chu || "",
     };
   };
 
@@ -212,14 +214,26 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     await exportDNTTKSWordFromData(data);
   };
 
-  const handlePrintSelected = async (activeDnttByKs: Record<number, number>) => {
+  const validateAndBuildPairs = (activeDnttByKs: Record<number, number>) => {
     const pairs = selectedKsIds
       .map((ksId) => ({ ksId, dnttId: activeDnttByKs[ksId] }))
       .filter((p) => p.dnttId);
     if (pairs.length === 0) {
       toast.error("Các KS đã chọn chưa có ĐNTT nào");
-      return;
+      return null;
     }
+    const missingBank = pairs.filter(({ ksId }) => !ksData?.khachSanMap[ksId]?.tai_khoan_thanh_toan);
+    if (missingBank.length > 0) {
+      const names = missingBank.map(({ ksId }) => ksData?.khachSanMap[ksId]?.ten || `KS #${ksId}`).join(", ");
+      toast.error(`Chưa có số tài khoản ngân hàng: ${names}`);
+      return null;
+    }
+    return pairs;
+  };
+
+  const handlePrintSelected = async (activeDnttByKs: Record<number, number>) => {
+    const pairs = validateAndBuildPairs(activeDnttByKs);
+    if (!pairs) return;
     setBatchPrinting(true);
     try {
       if (pairs.length === 1) {
@@ -233,6 +247,18 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       toast.error("Lỗi xuất file: " + (err?.message || ""));
     } finally {
       setBatchPrinting(false);
+    }
+  };
+
+  const handleExportExcel = (activeDnttByKs: Record<number, number>) => {
+    const pairs = validateAndBuildPairs(activeDnttByKs);
+    if (!pairs) return;
+    try {
+      const allData = pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId));
+      exportDNTTKSExcel(allData, tenDoan || String(doanId));
+      toast.success("Đã xuất file Excel");
+    } catch (err: any) {
+      toast.error("Lỗi xuất file: " + (err?.message || ""));
     }
   };
 
@@ -746,7 +772,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 title={ksWithDnttSelected === 0 ? "Không có KS nào đang có ĐNTT" : undefined}
               >
                 <Printer className="h-3.5 w-3.5 mr-1" />
-                {batchPrinting ? "Đang xuất..." : `In ĐNTT KS${ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}`}
+                {batchPrinting ? "Đang xuất..." : `In Word${ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}`}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => handleExportExcel(activeDnttByKs)}
+                disabled={batchPrinting || ksWithDnttSelected === 0}
+                title={ksWithDnttSelected === 0 ? "Không có KS nào đang có ĐNTT" : undefined}
+              >
+                Xuất Excel{ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}
               </Button>
               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedKsIds([])}>
                 Bỏ chọn
