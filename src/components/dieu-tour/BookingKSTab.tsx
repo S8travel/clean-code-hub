@@ -20,10 +20,12 @@ import {
   syncBookingStatus,
   type BookingKSDisplay,
 } from "@/hooks/use-booking-ks";
+import { useBookingTau } from "@/hooks/use-booking-tau";
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import TauNgayCard from "@/components/booking-ks/TauNgayCard";
 
 const ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbHNid29xem1ia256ZHBhZXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MDAzNzcsImV4cCI6MjA4OTI3NjM3N30.RLsKYfH6XZw3Mcmk2fm1R6rKKzrtm0MLrYhtjIT--T0";
@@ -102,10 +104,12 @@ interface Props {
   doanId: number;
   tenDoan: string;
   ngayDi?: string | null;
+  soKhach?: number;
 }
 
-export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
+export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props) {
   const { data: bookings, isLoading } = useBookingKS(doanId);
+  const { data: tauBookings = [] } = useBookingTau(doanId);
   const updateMut = useUpdateBookingKS();
   const deleteMut = useDeleteBookingKS();
   const { data: currentUserName = "" } = useCurrentUserName();
@@ -197,7 +201,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
       </div>
     );
 
-  if (!visibleBookings.length)
+  if (!visibleBookings.length && !tauBookings.length)
     return (
       <div className="rounded-xl bg-card border border-border p-14 text-center">
         <p className="text-sm font-medium text-muted-foreground">Chưa có booking nào.</p>
@@ -263,6 +267,23 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi }: Props) {
           />
         ))}
       </div>
+
+      {tauBookings.length > 0 && (
+        <div className="mt-2">
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">Tàu du lịch ngày</h3>
+          <div className="space-y-2">
+            {tauBookings.map((row) => (
+              <TauNgayCard
+                key={`${row.doan_ngay_id}_${row.bua_an}`}
+                row={row}
+                tenDoan={tenDoan}
+                soKhach={soKhach}
+                currentUserName={currentUserName}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <DeleteDialog
         open={!!deleteTarget}

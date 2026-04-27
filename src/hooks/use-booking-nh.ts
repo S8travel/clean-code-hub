@@ -28,10 +28,12 @@ export interface MenuDayData {
   an_trua_nha_hang_id: number | null;
   an_trua_nha_hang_ten: string | null;
   an_trua_nha_hang_email: string | null;
+  an_trua_nha_hang_loai: string | null;
   an_trua_set_menu_id: number | null;
   an_toi_nha_hang_id: number | null;
   an_toi_nha_hang_ten: string | null;
   an_toi_nha_hang_email: string | null;
+  an_toi_nha_hang_loai: string | null;
   an_toi_set_menu_id: number | null;
   booking_trua: BookingNHRow | null;
   booking_toi: BookingNHRow | null;
@@ -84,14 +86,14 @@ export function useBookingNH(doanId: number | undefined) {
         if (b.nha_hang_id) nhIds.add(b.nha_hang_id);
       }
 
-      let nhMap = new Map<number, { ten: string; email: string | null; nguoi_thanh_toan: string | null }>();
+      let nhMap = new Map<number, { ten: string; email: string | null; nguoi_thanh_toan: string | null; loai: string }>();
       if (nhIds.size > 0) {
         const { data: nhList } = await externalSupabase
           .from("nha_hang")
-          .select("id, ten, email, nguoi_thanh_toan")
+          .select("id, ten, email, nguoi_thanh_toan, loai")
           .in("id", [...nhIds]);
         if (nhList) {
-          nhMap = new Map(nhList.map((n: any) => [n.id, { ten: n.ten, email: n.email, nguoi_thanh_toan: n.nguoi_thanh_toan }]));
+          nhMap = new Map(nhList.map((n: any) => [n.id, { ten: n.ten, email: n.email, nguoi_thanh_toan: n.nguoi_thanh_toan, loai: n.loai ?? 'nha_hang' }]));
         }
       }
 
@@ -134,10 +136,12 @@ export function useBookingNH(doanId: number | undefined) {
           an_trua_nha_hang_id: truaId,
           an_trua_nha_hang_ten: truaNH?.ten || null,
           an_trua_nha_hang_email: truaNH?.email || null,
+          an_trua_nha_hang_loai: truaNH?.loai || null,
           an_trua_set_menu_id: r.an_trua_set_menu_id ?? null,
           an_toi_nha_hang_id: toiId,
           an_toi_nha_hang_ten: toiNH?.ten || null,
           an_toi_nha_hang_email: toiNH?.email || null,
+          an_toi_nha_hang_loai: toiNH?.loai || null,
           an_toi_set_menu_id: r.an_toi_set_menu_id ?? null,
           booking_trua: bkgTrua,
           booking_toi: bkgToi,

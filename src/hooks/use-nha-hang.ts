@@ -19,6 +19,7 @@ export interface NhaHang {
   dia_diem_zh: string | null;
   chiet_khau_phan_tram: number | null;
   tinh_suat_tl: boolean | null;
+  loai: string; // 'nha_hang' | 'tau_ngay'
 }
 
 export interface SetMenu {
@@ -28,6 +29,8 @@ export interface SetMenu {
   gia: number | null;
   don_vi: string;
   ghi_chu: string | null;
+  loai_gia: string; // 'set_menu' | 'buffet' | 'tron_goi'
+  gia_thue_tau: number;
 }
 
 export interface SetMenuMon {

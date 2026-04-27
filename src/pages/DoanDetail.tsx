@@ -418,7 +418,7 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="booking-ks" className="mt-4">
-            <BookingKSTab doanId={doanId} tenDoan={doan.ten_doan} ngayDi={doan.ngay_di} />
+            <BookingKSTab doanId={doanId} tenDoan={doan.ten_doan} ngayDi={doan.ngay_di} soKhach={doan.so_khach} />
           </TabsContent>
 
           <TabsContent value="menu" className="mt-4">

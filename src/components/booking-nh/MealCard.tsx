@@ -62,6 +62,7 @@ interface Props {
   nhaHangId: number | null;
   nhaHangTen: string | null;
   nhaHangEmail: string | null;
+  nhaHangLoai?: string | null;
   booking: BookingNHRow | null;
   currentUserName: string;
   conTrongDieuTour?: boolean;
@@ -76,9 +77,10 @@ interface Props {
 }
 
 export default function MealCard({
-  doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail, booking, currentUserName,
+  doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail, nhaHangLoai, booking, currentUserName,
   conTrongDieuTour = true, setMenuIdFromDieuTour, tenDoan, soKhach, soKhachLon, soKhachEm1, soKhachEm2, soNoidBo, ngayDate,
 }: Props) {
+  if (nhaHangLoai === "tau_ngay") return null;
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
 

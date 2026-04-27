@@ -26,7 +26,7 @@ export function useMyDeadlines(doanIds: number[]) {
 
         externalSupabase
           .from("doan_booking_nh")
-          .select("id, doan_id, deadline, booking_status, bua_an, nha_hang:nha_hang_id(ten), doan:doan_id(ten_doan)")
+          .select("id, doan_id, deadline, booking_status, bua_an, nha_hang:nha_hang_id(ten, loai), doan:doan_id(ten_doan)")
           .in("doan_id", doanIds)
           .not("deadline", "is", null),
 
@@ -53,12 +53,13 @@ export function useMyDeadlines(doanIds: number[]) {
 
       for (const row of nhRes.data ?? []) {
         const buaLabel = row.bua_an === "trua" ? "Trưa" : "Tối";
+        const loai = (row.nha_hang as any)?.loai ?? "nha_hang";
         items.push({
-          type: "nh",
+          type: loai === "tau_ngay" ? "ks" : "nh",
           bookingId: row.id,
           doanId: row.doan_id,
           doanName: (row.doan as any)?.ten_doan ?? "",
-          label: `${(row.nha_hang as any)?.ten ?? "Nhà hàng"} (${buaLabel})`,
+          label: `${(row.nha_hang as any)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
           deadline: row.deadline,
           status: row.booking_status,
         });

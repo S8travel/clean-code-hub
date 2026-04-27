@@ -41,6 +41,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
     hinh_anh: "",
     tai_khoan_thanh_toan: "",
     nguoi_thanh_toan: "cong_ty",
+    loai: "nha_hang",
     foc_khach: "",
     foc_mien: "",
     chiet_khau: "",
@@ -62,6 +63,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
       hinh_anh: nhaHang.hinh_anh ?? "",
       tai_khoan_thanh_toan: nhaHang.tai_khoan_thanh_toan ?? "",
       nguoi_thanh_toan: nhaHang.nguoi_thanh_toan ?? "cong_ty",
+      loai: nhaHang.loai ?? "nha_hang",
       foc_khach: nhaHang.foc_khach?.toString() ?? "",
       foc_mien: nhaHang.foc_mien?.toString() ?? "",
       chiet_khau: nhaHang.chiet_khau_phan_tram?.toString() ?? "",
@@ -85,6 +87,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         hinh_anh: form.hinh_anh || null,
         tai_khoan_thanh_toan: form.tai_khoan_thanh_toan || null,
         nguoi_thanh_toan: form.nguoi_thanh_toan || null,
+        loai: form.loai || "nha_hang",
         foc_khach: form.foc_khach ? Number(form.foc_khach) : null,
         foc_mien: form.foc_mien ? Number(form.foc_mien) : null,
         chiet_khau_phan_tram: form.chiet_khau ? Number(form.chiet_khau) : null,
@@ -204,6 +207,18 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
               <SelectItem value="cong_ty">Công ty</SelectItem>
               <SelectItem value="hdv">Hướng dẫn viên</SelectItem>
               <SelectItem value="khach">Khách thanh toán</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">Loại</Label>
+          <Select value={form.loai} onValueChange={(v) => set("loai", v)}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nha_hang">Nhà hàng</SelectItem>
+              <SelectItem value="tau_ngay">Tàu du lịch ngày</SelectItem>
             </SelectContent>
           </Select>
         </div>
