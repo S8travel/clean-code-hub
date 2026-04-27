@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { Mail, Send, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,8 @@ export default function EmailPreviewModal({
   sending,
 }: Props) {
   const editRef = useRef<HTMLDivElement>(null);
+  const htmlRef = useRef(html);
+  htmlRef.current = html;
   const { sigs, upsert, remove } = useEmailSignatures();
 
   const [selectedSigId, setSelectedSigId] = useState<string | null>(null);
@@ -57,20 +59,17 @@ export default function EmailPreviewModal({
   const [editName, setEditName] = useState("");
   const [editHtml, setEditHtml] = useState("");
 
-  // Initialize editor and reset sig editor when modal opens/closes
-  useEffect(() => {
+  // Initialize editor when modal opens. useLayoutEffect fires sync after DOM
+  // mutations (refs already attached) — htmlRef.current avoids stale closure.
+  useLayoutEffect(() => {
     if (open) {
-      // setTimeout waits for Dialog animation to complete before ref is available
-      setTimeout(() => {
-        if (editRef.current) {
-          editRef.current.innerHTML = extractBody(html);
-        }
-      }, 0);
+      if (editRef.current) {
+        editRef.current.innerHTML = extractBody(htmlRef.current);
+      }
     } else {
       setSigEditing(false);
       setEditingId(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const selectedSig = sigs.find((s) => s.id === selectedSigId) ?? null;
