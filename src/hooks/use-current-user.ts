@@ -6,19 +6,35 @@ type SessionState = { loading: true; session: null } | { loading: false; session
 
 let state: SessionState = { loading: true, session: null };
 let listeners: Array<(s: SessionState) => void> = [];
+let initialized = false;
 
 function setState(newState: SessionState) {
   state = newState;
   listeners.forEach((fn) => fn(newState));
 }
 
-// Khởi tạo ngay khi module load — không chờ component mount
-// Để onAuthStateChange bắt được SIGNED_IN từ signInWithPassword()
-externalSupabase.auth.getSession().then(({ data }) => {
-  setState({ loading: false, session: data.session });
-});
+// Khởi tạo ngay khi module load — không chờ component mount.
+// Có timeout để preview/root route không bị kẹt màn hình trắng nếu auth storage/network bị treo.
+const sessionTimeout = window.setTimeout(() => {
+  if (!initialized) setState({ loading: false, session: null });
+}, 3500);
+
+externalSupabase.auth
+  .getSession()
+  .then(({ data }) => {
+    initialized = true;
+    window.clearTimeout(sessionTimeout);
+    setState({ loading: false, session: data.session });
+  })
+  .catch(() => {
+    initialized = true;
+    window.clearTimeout(sessionTimeout);
+    setState({ loading: false, session: null });
+  });
 
 externalSupabase.auth.onAuthStateChange((_event, session) => {
+  initialized = true;
+  window.clearTimeout(sessionTimeout);
   setState({ loading: false, session });
 });
 
