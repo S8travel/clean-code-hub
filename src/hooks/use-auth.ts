@@ -4,9 +4,9 @@ import { useNguoiDungByUserId } from "./use-nguoi-dung";
 
 export function useAuth() {
   const { loading: sessionLoading, session } = useCurrentSession();
-  const { data: user, isLoading: userLoading } = useNguoiDungByUserId(session?.user?.id);
+  const { data: user, isLoading: userLoading, isError: userError } = useNguoiDungByUserId(session?.user?.id);
 
-  const isLoading = sessionLoading || (!!session && userLoading);
+  const isLoading = sessionLoading || (!!session && userLoading && !userError);
   const isAuthenticated = !!session && !!user && user.active;
 
   const logout = () => externalSupabase.auth.signOut();
