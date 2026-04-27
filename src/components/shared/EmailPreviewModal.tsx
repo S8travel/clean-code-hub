@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Mail, Send, Eye, Pencil } from "lucide-react";
+import { Mail, Send, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { useEmailSignatures, type EmailSignature } from "@/hooks/use-email-signatures";
+
+const SIG_HR = `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">`;
 
 interface Props {
   open: boolean;
@@ -29,32 +31,90 @@ interface Props {
 export default function EmailPreviewModal({
   open,
   onOpenChange,
-  title = "Gui email",
+  title = "Gửi email",
   to,
   onToChange,
   subject,
   onSubjectChange,
   html,
   onHtmlChange,
-  textBody = "",
+  textBody: _textBody = "",
   onSendViaServer,
   onMailtoFallback,
   sending,
 }: Props) {
-  const [tab, setTab] = useState<"preview" | "client" | "edit">("preview");
   const editRef = useRef<HTMLDivElement>(null);
+  const { sigs, upsert, remove } = useEmailSignatures();
 
+  const [selectedSigId, setSelectedSigId] = useState<string | null>(null);
+  const [sigEditing, setSigEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editHtml, setEditHtml] = useState("");
+
+  // Initialize editor and reset sig editor when modal opens/closes
   useEffect(() => {
-    if (tab === "edit" && editRef.current) {
+    if (open && editRef.current) {
       editRef.current.innerHTML = html;
     }
-    // Chỉ set innerHTML khi chuyển sang tab edit, không re-set khi html prop thay đổi
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
-
-  useEffect(() => {
-    if (!open) setTab("preview");
+    if (!open) {
+      setSigEditing(false);
+      setEditingId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  const selectedSig = sigs.find((s) => s.id === selectedSigId) ?? null;
+
+  const buildFinalHtml = (bodyHtml: string, sig: EmailSignature | null) =>
+    sig ? bodyHtml + SIG_HR + sig.html : bodyHtml;
+
+  const handleInput = () => {
+    if (editRef.current) {
+      onHtmlChange(buildFinalHtml(editRef.current.innerHTML, selectedSig));
+    }
+  };
+
+  const handleSigChange = (val: string) => {
+    const id = val === "none" ? null : val;
+    setSelectedSigId(id);
+    const sig = sigs.find((s) => s.id === id) ?? null;
+    onHtmlChange(buildFinalHtml(editRef.current?.innerHTML || html, sig));
+  };
+
+  const startNewSig = () => {
+    setEditingId(null);
+    setEditName("");
+    setEditHtml("");
+    setSigEditing(true);
+  };
+
+  const startEditSig = (sig: EmailSignature) => {
+    setEditingId(sig.id);
+    setEditName(sig.name);
+    setEditHtml(sig.html);
+    setSigEditing(true);
+  };
+
+  const saveSig = () => {
+    const id = editingId || crypto.randomUUID();
+    const newSig: EmailSignature = { id, name: editName.trim() || "Chữ ký", html: editHtml };
+    upsert(newSig);
+    setSelectedSigId(id);
+    setSigEditing(false);
+    onHtmlChange(buildFinalHtml(editRef.current?.innerHTML || html, newSig));
+  };
+
+  const deleteSig = () => {
+    if (editingId) {
+      remove(editingId);
+      if (selectedSigId === editingId) {
+        setSelectedSigId(null);
+        onHtmlChange(editRef.current?.innerHTML || html);
+      }
+    }
+    setSigEditing(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -67,13 +127,12 @@ export default function EmailPreviewModal({
         </DialogHeader>
 
         <div className="px-6 py-4 space-y-3 overflow-y-auto flex-1">
+          {/* To / Subject */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-muted-foreground mb-1">
-                Den{" "}
-                <span className="text-muted-foreground/60 font-normal">
-                  (nhieu email cach nhau bang dau phay)
-                </span>
+                Đến{" "}
+                <span className="text-muted-foreground/60 font-normal">(nhiều email cách nhau bằng dấu phẩy)</span>
               </p>
               <Input
                 value={to}
@@ -83,7 +142,7 @@ export default function EmailPreviewModal({
               />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Tieu de</p>
+              <p className="text-xs text-muted-foreground mb-1">Tiêu đề</p>
               <Input
                 value={subject}
                 onChange={(e) => onSubjectChange(e.target.value)}
@@ -92,82 +151,93 @@ export default function EmailPreviewModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 border-b border-border pb-1">
-            <button
-              onClick={() => setTab("preview")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                tab === "preview"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Eye className="h-3 w-3" />
-              Xem truoc HTML
-            </button>
-            <button
-              onClick={() => setTab("client")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                tab === "client"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Mail className="h-3 w-3" />
-              Mail client
-            </button>
-            <button
-              onClick={() => setTab("edit")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                tab === "edit"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Pencil className="h-3 w-3" />
-              Chinh sua HTML
-            </button>
+          {/* Editor */}
+          <p className="text-xs text-muted-foreground font-medium">Nội dung email</p>
+          <div
+            ref={editRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleInput}
+            className="w-full min-h-[300px] max-h-[360px] overflow-y-auto border border-border rounded-md p-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-white"
+          />
+
+          {/* Signature section */}
+          <div className="space-y-2 border-t border-border pt-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground shrink-0">Chữ ký:</span>
+              <Select value={selectedSigId ?? "none"} onValueChange={handleSigChange}>
+                <SelectTrigger className="h-7 text-xs flex-1 max-w-[220px]">
+                  <SelectValue placeholder="Không có chữ ký" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Không có chữ ký</SelectItem>
+                  {sigs.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedSig && !sigEditing && (
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => startEditSig(selectedSig)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {!sigEditing && (
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={startNewSig} title="Thêm chữ ký mới">
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+
+            {/* Sig editor form */}
+            {sigEditing && (
+              <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Tên chữ ký (vd: Chữ ký công ty)"
+                  className="h-7 text-xs"
+                />
+                <textarea
+                  value={editHtml}
+                  onChange={(e) => setEditHtml(e.target.value)}
+                  className="w-full h-28 text-xs border border-border rounded p-2 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-ring bg-white"
+                  placeholder="Nội dung HTML chữ ký..."
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={saveSig} disabled={!editName.trim() && !editHtml.trim()}>Lưu</Button>
+                  {editingId && (
+                    <Button size="sm" variant="destructive" onClick={deleteSig}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />Xóa
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => setSigEditing(false)}>Hủy</Button>
+                </div>
+              </div>
+            )}
+
+            {/* Sig preview */}
+            {selectedSig && !sigEditing && (
+              <div
+                className="border border-border rounded bg-white px-3 py-2 text-xs opacity-70 max-h-24 overflow-hidden"
+                dangerouslySetInnerHTML={{ __html: selectedSig.html }}
+              />
+            )}
           </div>
 
-          {tab === "preview" ? (
-            <iframe
-              srcDoc={html}
-              sandbox="allow-same-origin"
-              className="w-full h-[380px] rounded border border-border bg-white"
-              title="Email preview"
-            />
-          ) : tab === "client" ? (
-            <div className="w-full h-[380px] rounded border border-border bg-white overflow-auto p-4">
-              <pre className="text-sm whitespace-pre-wrap break-words font-sans text-slate-800">
-                {textBody || "Mail client se nhan noi dung text thuan qua mailto:."}
-              </pre>
-            </div>
-          ) : (
-            <div
-              ref={editRef}
-              contentEditable
-              suppressContentEditableWarning
-              onInput={() => {
-                if (editRef.current) onHtmlChange(editRef.current.innerHTML);
-              }}
-              className="w-full min-h-[380px] overflow-y-auto border border-border rounded-md p-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-white"
-            />
-          )}
-
           <p className="text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
-            <strong>Gui qua server</strong> dung HTML dung nhu tab xem truoc.{" "}
-            <strong>Mo email client</strong> dung <code className="text-[11px]">mailto:</code>,
-            nen da so app mail, dac biet Outlook, chi nhan ban text thuan va se khac bo cuc HTML.
+            <strong>Gửi qua server</strong> dùng HTML đúng như nội dung trên.{" "}
+            <strong>Mở email client</strong> dùng <code className="text-[11px]">mailto:</code>, Outlook chỉ nhận text thuần và sẽ khác bố cục.
           </p>
         </div>
 
         <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
           <Button variant="outline" onClick={onMailtoFallback} type="button">
             <Mail className="h-4 w-4 mr-1.5" />
-            Mo email client
+            Mở email client
           </Button>
           <Button onClick={onSendViaServer} disabled={sending || !to}>
             <Send className="h-4 w-4 mr-1.5" />
-            {sending ? "Dang gui..." : "Gui qua server"}
+            {sending ? "Đang gửi..." : "Gửi qua server"}
           </Button>
         </DialogFooter>
       </DialogContent>

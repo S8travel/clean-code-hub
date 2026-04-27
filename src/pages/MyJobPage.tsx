@@ -226,26 +226,35 @@ export default function MyJobPage() {
     return map;
   }, [myAssignments, allTeamAgents]);
 
-  // Đoàn của tôi: thuộc team tôi phụ trách (team-based only)
-  // FEATURE_DOAN_PERM_DISABLED: bỏ nhánh d.assigned_to === uid (OP trực tiếp)
+  // Đoàn của tôi: thuộc team tôi phụ trách HOẶC mình là OP được gắn tên trên đoàn
   const myDoan = useMemo(
     () =>
       (allDoan as any[]).filter(
-        (d) => d.agent_id && myAgentTaskMap.has(d.agent_id),
+        (d) =>
+          (d.agent_id && myAgentTaskMap.has(d.agent_id)) ||
+          d.assigned_to === uid,
       ),
-    [allDoan, myAgentTaskMap],
+    [allDoan, myAgentTaskMap, uid],
   );
 
-  // doanId → scope (Set<task_type> từ team assignment)
+  // doanId → scope: gộp từ team assignment + scope OP (nh, dv)
   const myDoanScopeMap = useMemo(() => {
     const map = new Map<number, Set<string>>();
     for (const d of myDoan) {
-      if (d.agent_id) {
-        map.set(d.id, myAgentTaskMap.get(d.agent_id) ?? new Set());
+      const scope = new Set<string>();
+      // Scope từ team assignment
+      if (d.agent_id && myAgentTaskMap.has(d.agent_id)) {
+        for (const s of myAgentTaskMap.get(d.agent_id)!) scope.add(s);
       }
+      // Scope từ OP: thêm nh + dv nếu mình là OP của đoàn
+      if (d.assigned_to === uid) {
+        scope.add("nh");
+        scope.add("dv");
+      }
+      map.set(d.id, scope);
     }
     return map;
-  }, [myDoan, myAgentTaskMap]);
+  }, [myDoan, myAgentTaskMap, uid]);
 
   const myDoanIds = useMemo(() => myDoan.map((d: any) => d.id as number), [myDoan]);
   const { data: deadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(myDoanIds);
