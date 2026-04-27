@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Mail, Send, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,7 +50,16 @@ export default function EmailPreviewModal({
 }: Props) {
   const editRef = useRef<HTMLDivElement>(null);
   const htmlRef = useRef(html);
-  htmlRef.current = html;
+  htmlRef.current = html; // always latest, no stale closure
+
+  // Callback ref fires when the editor div mounts (after Radix Portal's 2-phase mount).
+  // This is more reliable than useLayoutEffect([open]) which fires before the portal
+  // renders its content (Radix Portal uses an internal useLayoutEffect to set mounted=true).
+  const editorCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    editRef.current = node;
+    if (node) node.innerHTML = extractBody(htmlRef.current);
+  }, []);
+
   const { sigs, upsert, remove } = useEmailSignatures();
 
   const [selectedSigId, setSelectedSigId] = useState<string | null>(null);
@@ -59,17 +68,9 @@ export default function EmailPreviewModal({
   const [editName, setEditName] = useState("");
   const [editHtml, setEditHtml] = useState("");
 
-  // Initialize editor when modal opens. useLayoutEffect fires sync after DOM
-  // mutations (refs already attached) — htmlRef.current avoids stale closure.
-  useLayoutEffect(() => {
-    if (open) {
-      if (editRef.current) {
-        editRef.current.innerHTML = extractBody(htmlRef.current);
-      }
-    } else {
-      setSigEditing(false);
-      setEditingId(null);
-    }
+  // Reset sig state when modal closes
+  useEffect(() => {
+    if (!open) { setSigEditing(false); setEditingId(null); }
   }, [open]);
 
   const selectedSig = sigs.find((s) => s.id === selectedSigId) ?? null;
@@ -162,7 +163,7 @@ export default function EmailPreviewModal({
           {/* Editor */}
           <p className="text-xs text-muted-foreground font-medium">Nội dung email</p>
           <div
-            ref={editRef}
+            ref={editorCallbackRef}
             contentEditable
             suppressContentEditableWarning
             onInput={handleInput}
