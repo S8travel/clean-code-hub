@@ -290,6 +290,14 @@ export default function MealCard({
       </table>` : ""}
       ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
       <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý nhà hàng xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+      <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
+        <strong>${userProfile?.ho_ten || currentUserName}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>
+        <strong style="color:#0f172a">CÔNG TY TNHH DU LỊCH S8</strong><br>
+        MST: 0402021137<br>
+        Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam<br>
+        Email: s8travel.hddt@gmail.com
+      </p>
     </div>
   </div>
 </body></html>`;
