@@ -17,6 +17,12 @@ function extractBody(fullHtml: string): string {
   return match ? match[1] : fullHtml;
 }
 
+// Strip custom sig (everything from SIG_HR onward) to get clean body
+function stripSig(html: string): string {
+  const idx = html.indexOf(SIG_HR);
+  return idx >= 0 ? html.slice(0, idx) : html;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -75,20 +81,22 @@ export default function EmailPreviewModal({
 
   const selectedSig = sigs.find((s) => s.id === selectedSigId) ?? null;
 
-  const buildFinalHtml = (bodyHtml: string, sig: EmailSignature | null) =>
-    sig ? bodyHtml + SIG_HR + sig.html : bodyHtml;
+  // Sig appears IN the editor. helpers always strip old sig first to avoid duplication.
+  const setEditorContent = (finalHtml: string) => {
+    if (editRef.current) editRef.current.innerHTML = finalHtml;
+    onHtmlChange(finalHtml);
+  };
 
   const handleInput = () => {
-    if (editRef.current) {
-      onHtmlChange(buildFinalHtml(editRef.current.innerHTML, selectedSig));
-    }
+    if (editRef.current) onHtmlChange(editRef.current.innerHTML);
   };
 
   const handleSigChange = (val: string) => {
     const id = val === "none" ? null : val;
     setSelectedSigId(id);
     const sig = sigs.find((s) => s.id === id) ?? null;
-    onHtmlChange(buildFinalHtml(editRef.current?.innerHTML || html, sig));
+    const body = stripSig(editRef.current?.innerHTML || "");
+    setEditorContent(sig ? body + SIG_HR + sig.html : body);
   };
 
   const startNewSig = () => {
@@ -111,7 +119,8 @@ export default function EmailPreviewModal({
     upsert(newSig);
     setSelectedSigId(id);
     setSigEditing(false);
-    onHtmlChange(buildFinalHtml(editRef.current?.innerHTML || html, newSig));
+    const body = stripSig(editRef.current?.innerHTML || "");
+    setEditorContent(body + SIG_HR + newSig.html);
   };
 
   const deleteSig = () => {
@@ -119,7 +128,7 @@ export default function EmailPreviewModal({
       remove(editingId);
       if (selectedSigId === editingId) {
         setSelectedSigId(null);
-        onHtmlChange(editRef.current?.innerHTML || html);
+        setEditorContent(stripSig(editRef.current?.innerHTML || ""));
       }
     }
     setSigEditing(false);
@@ -224,13 +233,6 @@ export default function EmailPreviewModal({
               </div>
             )}
 
-            {/* Sig preview */}
-            {selectedSig && !sigEditing && (
-              <div
-                className="border border-border rounded bg-white px-3 py-2 text-xs opacity-70 max-h-24 overflow-hidden"
-                dangerouslySetInnerHTML={{ __html: selectedSig.html }}
-              />
-            )}
           </div>
 
           <p className="text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
