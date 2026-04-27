@@ -13,30 +13,34 @@ function setState(newState: SessionState) {
   listeners.forEach((fn) => fn(newState));
 }
 
-// Khởi tạo ngay khi module load — không chờ component mount.
-// Có timeout để preview/root route không bị kẹt màn hình trắng nếu auth storage/network bị treo.
-const sessionTimeout = window.setTimeout(() => {
-  if (!initialized) setState({ loading: false, session: null });
-}, 3500);
+function initSession() {
+  if (initialized) return;
 
-externalSupabase.auth
-  .getSession()
-  .then(({ data }) => {
+  const sessionTimeout = setTimeout(() => {
+    if (!initialized) setState({ loading: false, session: null });
+  }, 3500);
+
+  externalSupabase.auth.onAuthStateChange((_event, session) => {
     initialized = true;
-    window.clearTimeout(sessionTimeout);
-    setState({ loading: false, session: data.session });
-  })
-  .catch(() => {
-    initialized = true;
-    window.clearTimeout(sessionTimeout);
-    setState({ loading: false, session: null });
+    clearTimeout(sessionTimeout);
+    setState({ loading: false, session });
   });
 
-externalSupabase.auth.onAuthStateChange((_event, session) => {
-  initialized = true;
-  window.clearTimeout(sessionTimeout);
-  setState({ loading: false, session });
-});
+  externalSupabase.auth
+    .getSession()
+    .then(({ data }) => {
+      initialized = true;
+      clearTimeout(sessionTimeout);
+      setState({ loading: false, session: data.session });
+    })
+    .catch(() => {
+      initialized = true;
+      clearTimeout(sessionTimeout);
+      setState({ loading: false, session: null });
+    });
+}
+
+initSession();
 
 /** Gọi sau signInWithPassword để cập nhật state ngay — không chờ async event */
 export function setCurrentSession(session: Session | null) {
