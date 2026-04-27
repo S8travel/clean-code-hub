@@ -84,7 +84,7 @@ export function useBookingNH(doanId: number | undefined) {
         if (b.nha_hang_id) nhIds.add(b.nha_hang_id);
       }
 
-      let nhMap = new Map<number, { ten: string; email: string | null }>();
+      let nhMap = new Map<number, { ten: string; email: string | null; nguoi_thanh_toan: string | null }>();
       if (nhIds.size > 0) {
         const { data: nhList } = await externalSupabase
           .from("nha_hang")
