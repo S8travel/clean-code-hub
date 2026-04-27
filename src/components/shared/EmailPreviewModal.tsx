@@ -12,6 +12,11 @@ import { useEmailSignatures, type EmailSignature } from "@/hooks/use-email-signa
 
 const SIG_HR = `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">`;
 
+function extractBody(fullHtml: string): string {
+  const match = fullHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  return match ? match[1] : fullHtml;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -54,10 +59,14 @@ export default function EmailPreviewModal({
 
   // Initialize editor and reset sig editor when modal opens/closes
   useEffect(() => {
-    if (open && editRef.current) {
-      editRef.current.innerHTML = html;
-    }
-    if (!open) {
+    if (open) {
+      // setTimeout waits for Dialog animation to complete before ref is available
+      setTimeout(() => {
+        if (editRef.current) {
+          editRef.current.innerHTML = extractBody(html);
+        }
+      }, 0);
+    } else {
       setSigEditing(false);
       setEditingId(null);
     }
