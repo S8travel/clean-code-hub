@@ -8,7 +8,7 @@ import { ServiceCombobox } from "@/components/bao-gia/ServiceCombobox";
 import { BaoGiaResultTable } from "@/components/bao-gia/BaoGiaResultTable";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
 import { calcBaoGia, type ManualItem } from "@/lib/bao-gia-calc";
-import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
+import { exportBaoGiaWord, type ManualDayData } from "@/lib/export-bao-gia-word";
 import type { BaoGiaKetQua } from "@/hooks/use-bao-gia";
 import { toast } from "sonner";
 
@@ -91,6 +91,8 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
   const removeCanhDiem = (ngay: number, id: string) =>
     setDay(ngay, { canhDiem: getDay(ngay).canhDiem.filter((cd) => cd.id !== id) });
 
+  const days = Array.from({ length: soNgay }, (_, i) => i + 1);
+
   const handleTinhGia = () => {
     const items = flattenDays(dayData, soNgay);
     if (items.length === 0 && tienXe === 0 && tienPhuThu === 0) {
@@ -104,7 +106,17 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
     if (!ketQua) return;
     setIsExporting(true);
     try {
-      await exportBaoGiaWord(ketQua, exchangeRate, profitUsd);
+      const exportDays: ManualDayData[] = days.map((ngay) => {
+        const d = getDay(ngay);
+        return {
+          ngay,
+          canhDiem: d.canhDiem.map((c) => ({ bang_gia_ten: c.bang_gia_ten, gia: c.gia })),
+          anTrua:   { bang_gia_ten: d.anTrua.bang_gia_ten,   gia: d.anTrua.gia   },
+          anToi:    { bang_gia_ten: d.anToi.bang_gia_ten,    gia: d.anToi.gia    },
+          khachSan: { bang_gia_ten: d.khachSan.bang_gia_ten, gia: d.khachSan.gia },
+        };
+      });
+      await exportBaoGiaWord(ketQua, exchangeRate, profitUsd, exportDays);
       toast.success("Đã xuất file báo giá!");
     } catch {
       toast.error("Lỗi xuất file");
@@ -112,8 +124,6 @@ export function BaoGiaManual({ onSave }: BaoGiaManualProps) {
       setIsExporting(false);
     }
   };
-
-  const days = Array.from({ length: soNgay }, (_, i) => i + 1);
 
   return (
     <div className="space-y-5">
