@@ -82,7 +82,7 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onClone, on
   useTranslate();
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("ngay_di");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   // FEATURE_DOAN_PERM_DISABLED: const [permDoan, setPermDoan] = useState<{ id: number; code: string } | null>(null);
 
   const toggleSort = (key: SortKey) => {

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -174,10 +175,10 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Ngày Đón *">
-                  <Input type="date" required value={form.ngay_di ?? ""} onChange={(e) => set("ngay_di", e.target.value)} className="rounded-lg tabular-nums" />
+                  <DatePicker value={form.ngay_di ?? ""} onChange={(v) => set("ngay_di", v)} className="w-full rounded-lg h-10" />
                 </Field>
                 <Field label="Ngày Tiễn *">
-                  <Input type="date" required value={form.ngay_ve ?? ""} onChange={(e) => set("ngay_ve", e.target.value)} className="rounded-lg tabular-nums" />
+                  <DatePicker value={form.ngay_ve ?? ""} onChange={(v) => set("ngay_ve", v)} className="w-full rounded-lg h-10" />
                 </Field>
               </div>
 

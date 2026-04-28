@@ -3,6 +3,7 @@ import { Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -301,11 +302,9 @@ export default function Index() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-              className="h-9 text-xs rounded-lg w-[130px] tabular-nums" placeholder="Từ ngày" />
+            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder="Từ ngày" className="h-9 text-xs rounded-lg w-[145px]" align="start" />
             <span className="text-muted-foreground text-xs">→</span>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-              className="h-9 text-xs rounded-lg w-[130px] tabular-nums" placeholder="Đến ngày" />
+            <DatePicker value={dateTo} onChange={setDateTo} placeholder="Đến ngày" className="h-9 text-xs rounded-lg w-[145px]" align="start" />
           </div>
 
           <Select value={agentFilter} onValueChange={setAgentFilter}>

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import * as XLSX from "xlsx";
 import { externalSupabase } from "@/lib/supabase-external";
 
 export interface BangGiaDichVu {
@@ -50,6 +51,34 @@ export function useImportBangGia() {
       qc.invalidateQueries({ queryKey: ["bang_gia_dich_vu"] });
     },
   });
+}
+
+// ── Parser: Excel file ──────────────────────────────────────────────────────
+// Format: 1 sheet, hàng 1 là header, cột: Loại | Tên | FOC | Giá
+function detectLoai(raw: string): BangGiaDichVu["loai"] {
+  const n = raw.toLowerCase().trim();
+  if (n === "ks" || n.includes("hotel") || n.startsWith("kh")) return "hotel";
+  if (n === "nh" || n.includes("nh") || n.includes("nha") || n.includes("nhà")) return "nha_hang";
+  return "dich_vu";
+}
+
+export function parseExcelFile(buffer: ArrayBuffer): Omit<BangGiaDichVu, "id" | "created_at">[] {
+  const wb = XLSX.read(buffer, { type: "array" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+
+  return rows
+    .slice(1)
+    .map((row): Omit<BangGiaDichVu, "id" | "created_at"> | null => {
+      const loaiRaw = String(row[0] ?? "").trim();
+      const ten     = String(row[1] ?? "").trim();
+      const foc     = parseFloat(String(row[2] ?? "0").replace(/[^0-9.]/g, "")) || 0;
+      const giaStr  = String(row[3] ?? "").replace(/[^0-9]/g, "");
+      const gia     = giaStr ? parseInt(giaStr, 10) : null;
+      if (!ten || !gia) return null;
+      return { ten, loai: detectLoai(loaiRaw), gia, foc, active: true };
+    })
+    .filter((r): r is Omit<BangGiaDichVu, "id" | "created_at"> => r !== null);
 }
 
 // ── Parser: Tab-separated pricing file ─────────────────────────────────────

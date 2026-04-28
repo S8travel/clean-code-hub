@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Upload, Loader2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useImportBangGia, parsePricingFile } from "@/hooks/use-bang-gia-dich-vu";
+import { useImportBangGia, parsePricingFile, parseExcelFile } from "@/hooks/use-bang-gia-dich-vu";
 import { toast } from "sonner";
 
 const LOAI_LABEL: Record<string, string> = {
@@ -24,13 +24,21 @@ export function BangGiaImport() {
   const { mutate: importRows, isPending } = useImportBangGia();
 
   const handleFile = (file: File) => {
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const rows = parsePricingFile(text);
-      setPreview(rows);
-    };
-    reader.readAsText(file, "utf-8");
+    if (isExcel) {
+      reader.onload = (e) => {
+        const rows = parseExcelFile(e.target?.result as ArrayBuffer);
+        setPreview(rows);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (e) => {
+        const rows = parsePricingFile(e.target?.result as string);
+        setPreview(rows);
+      };
+      reader.readAsText(file, "utf-8");
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -62,7 +70,9 @@ export function BangGiaImport() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Upload file bảng giá (định dạng .txt hoặc .tsv, phân cách bằng Tab). Hệ thống sẽ tự phân tích và lưu vào database.
+        Upload file bảng giá định dạng <span className="font-medium text-foreground">Excel (.xlsx)</span> hoặc .txt/.tsv phân cách Tab. Hệ thống tự phân tích và lưu vào database.
+        <br />
+        <span className="font-medium text-foreground">Excel:</span> 1 sheet, hàng 1 là tiêu đề, cột: <span className="font-medium text-foreground">Loại | Tên | FOC | Giá</span> (Loại: KS / NH / DV).
         <br />
         <span className="font-medium text-foreground">Lưu ý:</span> Import mới sẽ thay thế toàn bộ bảng giá hiện tại.
       </p>
@@ -79,13 +89,13 @@ export function BangGiaImport() {
           <input
             ref={inputRef}
             type="file"
-            accept=".txt,.tsv,.csv"
+            accept=".xlsx,.xls,.txt,.tsv,.csv"
             className="hidden"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
           <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
           <p className="text-sm font-medium">Kéo thả hoặc nhấn để chọn file bảng giá</p>
-          <p className="text-xs text-muted-foreground mt-1">File .txt hoặc .tsv, phân cách bằng Tab</p>
+          <p className="text-xs text-muted-foreground mt-1">Excel (.xlsx) hoặc file .txt/.tsv phân cách Tab</p>
         </div>
       ) : (
         <div className="space-y-3">

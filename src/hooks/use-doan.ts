@@ -216,7 +216,7 @@ export function useDoanList() {
           huong_dan_vien:huong_dan_vien_id(id, ten),
           xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(ten))
         `)
-        .order("created_at", { ascending: false });
+        .order("ngay_di", { ascending: true });
       if (error) {
         console.error("useDoanList error:", JSON.stringify(error));
         throw error;
