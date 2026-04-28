@@ -177,12 +177,12 @@ export default function BaoGiaPage() {
             <DialogTitle>Báo giá thủ công</DialogTitle>
           </DialogHeader>
           <BaoGiaManual
-            onSave={(ketQua, exchangeRate, profitUsd) => {
+            onSave={(ketQua, exchangeRate, profitUsd, trangThai) => {
               createMutation.mutate(
-                { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua as any, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: "draft" },
+                { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua as any, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: trangThai },
                 {
                   onSuccess: () => {
-                    toast.success("Đã lưu báo giá!");
+                    toast.success(trangThai === "final" ? "Đã lưu chính thức!" : "Đã lưu bản nháp!");
                     setShowManual(false);
                     setView({ mode: "list" });
                   },

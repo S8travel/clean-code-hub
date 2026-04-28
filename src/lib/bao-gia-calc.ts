@@ -4,8 +4,7 @@ export interface ManualItem {
   id: string;
   ngay: number;
   loai: "hotel" | "meal" | "ticket" | "transport" | "extra";
-  mo_ta_zh: string;
-  mo_ta_goi_y: string;
+  mo_ta: string;
   bang_gia_ten: string;
   gia: number | null;
 }
@@ -81,9 +80,9 @@ export function calcBaoGia(
     .filter((i) => i.gia)
     .map((i) => ({
       loai: i.loai as any,
-      mo_ta: i.bang_gia_ten || i.mo_ta_goi_y,
+      mo_ta: i.bang_gia_ten || i.mo_ta,
       don_gia: i.gia!,
-      ghi_chu: i.mo_ta_zh,
+      ghi_chu: "",
     }));
 
   return {
