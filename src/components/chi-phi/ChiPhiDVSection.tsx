@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
@@ -391,6 +392,21 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       const entries: NHDocEntry[] = [];
       const canTruShownByNcc: Record<number, boolean> = {};
 
+      // Fetch tai_khoan_thanh_toan from canh_diem via doan_ngay_item
+      const refItemIds = dvRows
+        .filter((r) => r.id && selectedIds.includes(r.id) && r.ref_doan_ngay_item_id)
+        .map((r) => r.ref_doan_ngay_item_id as number);
+      const tkttMap: Record<number, string | null> = {};
+      if (refItemIds.length > 0) {
+        const { data: ngayItems } = await externalSupabase
+          .from("doan_ngay_item")
+          .select("id, canh_diem:canh_diem_id(tai_khoan_thanh_toan)")
+          .in("id", refItemIds);
+        for (const item of ngayItems ?? []) {
+          tkttMap[item.id] = (item.canh_diem as any)?.tai_khoan_thanh_toan ?? null;
+        }
+      }
+
       for (const [day, rows] of sortedDays) {
         for (const row of rows) {
           if (!row.id || !selectedIds.includes(row.id)) continue;
@@ -450,7 +466,9 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
             so_tien_coc: soCoc,
             can_tru: canTruAmount,
             so_tien_con_tt: soTienConTT,
-            tai_khoan_thanh_toan: null,
+            tai_khoan_thanh_toan: row.ref_doan_ngay_item_id
+              ? (tkttMap[row.ref_doan_ngay_item_id] ?? null)
+              : null,
           });
         }
       }

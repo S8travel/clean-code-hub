@@ -12,6 +12,7 @@ import {
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { DeleteDialog } from "@/components/DeleteDialog";
+import { exportBookingWord } from "@/lib/export-booking-word";
 import {
   useBookingKS,
   useUpdateBookingKS,
@@ -27,8 +28,6 @@ import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import TauNgayCard from "@/components/booking-ks/TauNgayCard";
 
-const ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbHNid29xem1ia256ZHBhZXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MDAzNzcsImV4cCI6MjA4OTI3NjM3N30.RLsKYfH6XZw3Mcmk2fm1R6rKKzrtm0MLrYhtjIT--T0";
 
 function getOverallStatus(row: BookingKSDisplay) {
   const dt = row.ks_dat_truoc_status;
@@ -140,26 +139,8 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
     if (selectedIds.size === 0) { toast.warning("Chọn ít nhất 1 khách sạn"); return; }
     setIsExporting(true);
     try {
-      const res = await fetch(
-        "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1/xuat-word-booking-ks",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${ANON_KEY}`,
-            apikey: ANON_KEY,
-          },
-          body: JSON.stringify({ doan_id: doanId, booking_ids: Array.from(selectedIds) }),
-        }
-      );
-      if (!res.ok) throw new Error(await res.text());
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${tenDoan}_訂房確認單.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const selected = visibleBookings.filter((b) => selectedIds.has(b.id));
+      await exportBookingWord(tenDoan, selected);
       toast.success("Đã xuất file Word");
     } catch (err: any) {
       toast.error("Lỗi xuất: " + err.message);

@@ -26,6 +26,7 @@ export interface BookingKSDisplay extends BookingKSRow {
   khach_san_email: string | null;
   khach_san_dia_chi: string | null;
   khach_san_dia_diem: string | null;
+  khach_san_dia_diem_zh: string | null;
   khach_san_so_dien_thoai: string | null;
   khach_san_website: string | null;
   so_dem: number;
@@ -76,7 +77,7 @@ export function useBookingKS(doanId: number | undefined) {
       const allKsIds = [...new Set(bookings.map((b: any) => b.khach_san_id))];
       const { data: ksList, error: e3 } = await externalSupabase
         .from("khach_san")
-        .select("id, ten, email, dia_chi, dia_diem, so_dien_thoai, website, nguoi_thanh_toan")
+        .select("id, ten, email, dia_chi, dia_diem, dia_diem_zh, so_dien_thoai, website, nguoi_thanh_toan")
         .in("id", allKsIds);
       if (e3) throw e3;
 
@@ -93,6 +94,7 @@ export function useBookingKS(doanId: number | undefined) {
           khach_san_email: ks.email || null,
           khach_san_dia_chi: ks.dia_chi || null,
           khach_san_dia_diem: ks.dia_diem || null,
+          khach_san_dia_diem_zh: ks.dia_diem_zh || null,
           khach_san_so_dien_thoai: ks.so_dien_thoai || null,
           khach_san_website: ks.website || null,
           so_dem: g.dates.length,

@@ -19,15 +19,20 @@ import type { BookingKSDisplay } from "@/hooks/use-booking-ks";
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
 const GRAY_SHADING = { fill: "D9D9D9", type: ShadingType.CLEAR, color: "auto" };
 const NO_SHADING = { fill: "FFFFFF", type: ShadingType.CLEAR, color: "auto" };
 
-// A4 with 0.5 inch margins → content width in DXA
+// Borders for hotel-detail cells within a 3-row group — no internal horizontal lines
+const DETAIL_TOP    = { top: BORDER,    bottom: NO_BORDER, left: BORDER, right: BORDER }; // row A
+const DETAIL_MIDDLE = { top: NO_BORDER, bottom: NO_BORDER, left: BORDER, right: BORDER }; // row B
+const DETAIL_BOTTOM = { top: NO_BORDER, bottom: BORDER,    left: BORDER, right: BORDER }; // row C
+
 // A4 Landscape with 0.5 inch margins
 const PAGE_W = 11906; // short edge (docx-js swaps for landscape)
 const PAGE_H = 16838; // long edge
-const MARGIN = 720; // 0.5 inch
-const CONTENT_W = PAGE_H - MARGIN * 2; // landscape uses long edge: 15398
+const MARGIN = 720;   // 0.5 inch
+const CONTENT_W = PAGE_H - MARGIN * 2; // 15398
 
 // 5 columns: HOTEL | 入住日 | 地點 | 飯店/網址 | TEL
 const COL_W = [1400, 2000, 2200, 5798, 2000];
@@ -41,17 +46,18 @@ function cell(
     shading?: typeof GRAY_SHADING;
     verticalAlign?: any;
     textDirection?: typeof TextDirection.BOTTOM_TO_TOP_LEFT_TO_RIGHT;
+    borders?: any;
   } = {}
 ): TableCell {
   return new TableCell({
     children,
-    borders: BORDERS,
+    borders: opts.borders ?? BORDERS,
     width: { size: opts.width ?? 0, type: WidthType.DXA },
     rowSpan: opts.rowSpan,
     columnSpan: opts.columnSpan,
     shading: opts.shading ?? NO_SHADING,
     verticalAlign: opts.verticalAlign ?? VerticalAlign.CENTER,
-    margins: { top: 40, bottom: 40, left: 80, right: 80 },
+    margins: { top: 60, bottom: 60, left: 100, right: 100 },
     ...(opts.textDirection ? { textDirection: opts.textDirection } : {}),
   });
 }
@@ -72,7 +78,7 @@ function p(
       new TextRun({
         text,
         font: "Arial",
-        size: opts.size ?? 18, // 9pt default
+        size: opts.size ?? 24, // 12pt default
         bold: opts.bold,
         color: opts.color,
         italics: opts.italic,
@@ -92,12 +98,12 @@ function multiLineP(
 ): Paragraph {
   const children: TextRun[] = [];
   lines.forEach((line, i) => {
-    if (i > 0) children.push(new TextRun({ text: "", break: 1, font: "Arial", size: opts.size ?? 18 }));
+    if (i > 0) children.push(new TextRun({ text: "", break: 1, font: "Arial", size: opts.size ?? 24 }));
     children.push(
       new TextRun({
         text: line,
         font: "Arial",
-        size: opts.size ?? 18,
+        size: opts.size ?? 24,
         bold: opts.bold,
         color: opts.color,
       })
@@ -131,8 +137,8 @@ export async function exportBookingWord(
   rows.push(
     new TableRow({
       children: [
-        cell([p("圖號", { bold: true, size: 20 })], { width: COL_W[0], shading: GRAY_SHADING }),
-        cell([p(tenDoan, { bold: true, size: 20 })], {
+        cell([p("圖號", { bold: true, size: 26 })], { width: COL_W[0], shading: GRAY_SHADING }),
+        cell([p(tenDoan, { bold: true, size: 26 })], {
           width: COL_W[1] + COL_W[2] + COL_W[3] + COL_W[4],
           columnSpan: 4,
         }),
@@ -145,10 +151,10 @@ export async function exportBookingWord(
     new TableRow({
       children: [
         cell([p("")], { width: COL_W[0], shading: GRAY_SHADING }),
-        cell([p("入住日", { bold: true, size: 18 })], { width: COL_W[1], shading: GRAY_SHADING }),
-        cell([p("地點", { bold: true, size: 18 })], { width: COL_W[2], shading: GRAY_SHADING }),
-        cell([p("飯店/網址", { bold: true, size: 18 })], { width: COL_W[3], shading: GRAY_SHADING }),
-        cell([p("TEL", { bold: true, size: 18 })], { width: COL_W[4], shading: GRAY_SHADING }),
+        cell([p("入住日", { bold: true, size: 24 })], { width: COL_W[1], shading: GRAY_SHADING }),
+        cell([p("地點", { bold: true, size: 24 })], { width: COL_W[2], shading: GRAY_SHADING }),
+        cell([p("飯店/網址", { bold: true, size: 24 })], { width: COL_W[3], shading: GRAY_SHADING }),
+        cell([p("TEL", { bold: true, size: 24 })], { width: COL_W[4], shading: GRAY_SHADING }),
       ],
     })
   );
@@ -158,13 +164,16 @@ export async function exportBookingWord(
     const sortedDates = [...bk.ngay_dates].sort((a, b) => new Date(a + "T00:00:00").getTime() - new Date(b + "T00:00:00").getTime());
     const roomInfo = bk.ks_final || bk.ks_dat_truoc || "";
 
+    // Use Chinese location if available, fall back to Vietnamese
+    const diaDiem = bk.khach_san_dia_diem_zh || bk.khach_san_dia_diem || "";
+
     // Row A: dates | dia_diem | ten KS (bold) | tel
     const rowAChildren: TableCell[] = [];
 
-    // HOTEL column - only on first hotel, rowSpan all
+    // HOTEL column — only on first hotel, rowSpan all
     if (idx === 0) {
       rowAChildren.push(
-        cell([p("HOTEL", { bold: true, size: 20 })], {
+        cell([p("HOTEL", { bold: true, size: 26 })], {
           width: COL_W[0],
           rowSpan: hotelRowCount,
           shading: NO_SHADING,
@@ -173,16 +182,12 @@ export async function exportBookingWord(
       );
     }
 
-    // 入住日 (rowSpan 3) — each date as its own Paragraph object
+    // 入住日 (rowSpan 3)
     const dateParagraphs = sortedDates.map((d) =>
       new Paragraph({
         alignment: AlignmentType.CENTER,
         children: [
-          new TextRun({
-            text: formatDateMD(d),
-            font: "Arial",
-            size: 18,
-          }),
+          new TextRun({ text: formatDateMD(d), font: "Arial", size: 24 }),
         ],
       })
     );
@@ -192,20 +197,20 @@ export async function exportBookingWord(
 
     // 地點 (rowSpan 3)
     rowAChildren.push(
-      cell([p(bk.khach_san_dia_diem || "", { size: 18 })], {
-        width: COL_W[2],
-        rowSpan: 3,
-      })
+      cell([p(diaDiem, { size: 24 })], { width: COL_W[2], rowSpan: 3 })
     );
 
-    // 飯店名 (bold, centered)
+    // 飯店名 (bold) — no bottom border (merges visually with room info row)
     rowAChildren.push(
-      cell([p(bk.khach_san_ten, { bold: true, size: 20 })], { width: COL_W[3] })
+      cell([p(bk.khach_san_ten, { bold: true, size: 26 })], {
+        width: COL_W[3],
+        borders: DETAIL_TOP,
+      })
     );
 
     // TEL (rowSpan 3)
     rowAChildren.push(
-      cell([p(bk.khach_san_so_dien_thoai || "", { size: 18 })], {
+      cell([p(bk.khach_san_so_dien_thoai || "", { size: 24 })], {
         width: COL_W[4],
         rowSpan: 3,
       })
@@ -213,21 +218,25 @@ export async function exportBookingWord(
 
     rows.push(new TableRow({ children: rowAChildren }));
 
-    // Row B: room info (red, bold)
+    // Row B: room info (red, bold) — no top/bottom border
     rows.push(
       new TableRow({
         children: [
-          cell([p(roomInfo, { bold: true, size: 20, color: "FF0000" })], { width: COL_W[3] }),
+          cell([p(roomInfo, { bold: true, size: 28, color: "FF0000" })], {
+            width: COL_W[3],
+            borders: DETAIL_MIDDLE,
+          }),
         ],
       })
     );
 
-    // Row C: website (blue, italic)
+    // Row C: website (blue, italic) — no top border
     rows.push(
       new TableRow({
         children: [
-          cell([p(bk.khach_san_website || "", { italic: true, size: 16, color: "0563C1" })], {
+          cell([p(bk.khach_san_website || "", { italic: true, size: 22, color: "0563C1" })], {
             width: COL_W[3],
+            borders: DETAIL_BOTTOM,
           }),
         ],
       })
@@ -244,12 +253,12 @@ export async function exportBookingWord(
   rows.push(
     new TableRow({
       children: [
-        cell([p("TOTAL:", { bold: true, size: 20 })], {
+        cell([p("TOTAL:", { bold: true, size: 26 })], {
           width: COL_W[0] + COL_W[1],
           columnSpan: 2,
           shading: GRAY_SHADING,
         }),
-        cell([p(totalText, { bold: true, size: 20, color: "FF0000" })], {
+        cell([p(totalText, { bold: true, size: 26, color: "FF0000" })], {
           width: COL_W[2] + COL_W[3] + COL_W[4],
           columnSpan: 3,
           shading: GRAY_SHADING,
@@ -262,7 +271,7 @@ export async function exportBookingWord(
   rows.push(
     new TableRow({
       children: [
-        cell([p("D/L:", { bold: true, size: 20 })], {
+        cell([p("D/L:", { bold: true, size: 26 })], {
           width: COL_W[0] + COL_W[1],
           columnSpan: 2,
           shading: GRAY_SHADING,
@@ -292,25 +301,21 @@ export async function exportBookingWord(
           },
         },
         children: [
-          // Header
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 100 },
             children: [
-              new TextRun({ text: "S8 TRAVEL LTD.  雙發旅遊", font: "Arial", size: 24, bold: true }),
+              new TextRun({ text: "S8 TRAVEL LTD.  雙發旅遊", font: "Arial", size: 28, bold: true }),
             ],
           }),
-          // Title
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 200 },
             children: [
-              new TextRun({ text: "訂房確認單", font: "Arial", size: 36, bold: true }),
+              new TextRun({ text: "訂房確認單", font: "Arial", size: 40, bold: true }),
             ],
           }),
-          // Table
           table,
-          // Footer note
           new Paragraph({
             alignment: AlignmentType.LEFT,
             spacing: { before: 200 },
@@ -318,7 +323,7 @@ export async function exportBookingWord(
               new TextRun({
                 text: "飯店一經FINAL（包含給名單及正確房數）後取消，請注意各飯店的不同產生不同取消費用，屆時請見諒！！",
                 font: "Arial",
-                size: 16,
+                size: 20,
                 italics: true,
               }),
             ],
