@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { to, subject, html, replyTo, messageId, inReplyTo } = await req.json();
+    const { to, cc, subject, html, replyTo, messageId, inReplyTo } = await req.json();
 
     if (!to || !subject || !html) {
       return new Response(
@@ -42,6 +42,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: "S8 Travel <booking@email.s8travel.com>",
         to: toList,
+        ...(cc?.length ? { cc: Array.isArray(cc) ? cc : String(cc).split(",").map((e: string) => e.trim()).filter(Boolean) } : {}),
         subject,
         html,
         ...(replyTo ? { reply_to: [replyTo], bcc: [replyTo] } : {}),

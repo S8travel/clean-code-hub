@@ -148,7 +148,6 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số khách</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soKhachStr}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Set menu / Buffet</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${menuStr}</td></tr>
       </table>
-      <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý đơn vị xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
       <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
         <strong>${userProfile?.ho_ten || currentUserName}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>

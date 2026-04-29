@@ -356,13 +356,12 @@ function BookingKSCard({
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
         </tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn / Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong> – ${ngayDiStr}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong></td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
         ${dateRows}
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soPhongHtml}</td></tr>
       </table>
       ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
-      <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý khách sạn xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
       <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
         <strong>${userProfile?.ho_ten || currentUserName}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>

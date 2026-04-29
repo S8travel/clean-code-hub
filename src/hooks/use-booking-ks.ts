@@ -169,7 +169,9 @@ export function useSendKSBookingEmail() {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          to: params.to, subject: params.subject, html: params.html,
+          to: params.to,
+          cc: ["s8travel.hddt@gmail.com", "s8travel.op2@gmail.com"],
+          subject: params.subject, html: params.html,
           replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined,
           ...(isFirst ? { messageId: newThreadId } : { inReplyTo: params.emailThreadId }),
         }),
