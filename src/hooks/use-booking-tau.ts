@@ -14,10 +14,19 @@ export interface TauNgayDisplayRow {
   nha_hang_ten: string;
   nha_hang_email: string | null;
   set_menu_id: number | null;
+  set_menu_ten: string | null;
   booking_status: string;
   sent_at: string | null;
   email_thread_id: string | null;
   deadline: string | null;
+  dat_truoc_status: string;
+  dat_truoc_sent_at: string | null;
+  dat_truoc_sent_by: string | null;
+  dat_truoc_confirm_at: string | null;
+  final_status: string;
+  final_sent_at: string | null;
+  final_sent_by: string | null;
+  final_confirm_at: string | null;
 }
 
 const QK = "doan_booking_tau";
@@ -59,7 +68,7 @@ export function useBookingTau(doanId: number | undefined) {
       // Fetch existing bookings
       const { data: bookings } = await externalSupabase
         .from("doan_booking_nh")
-        .select("*")
+        .select("*, set_menu:set_menu_id(ten_set)")
         .eq("doan_id", doanId!);
 
       const bookingMap = new Map<string, any>();
@@ -85,10 +94,19 @@ export function useBookingTau(doanId: number | undefined) {
             nha_hang_ten: nh.ten,
             nha_hang_email: nh.email,
             set_menu_id: bkg?.set_menu_id ?? null,
+            set_menu_ten: (bkg?.set_menu as any)?.ten_set ?? null,
             booking_status: bkg?.booking_status ?? "chua_gui",
             sent_at: bkg?.sent_at ?? null,
             email_thread_id: bkg?.email_thread_id ?? null,
             deadline: bkg?.deadline ?? null,
+            dat_truoc_status: bkg?.dat_truoc_status ?? "chua_gui",
+            dat_truoc_sent_at: bkg?.dat_truoc_sent_at ?? null,
+            dat_truoc_sent_by: bkg?.dat_truoc_sent_by ?? null,
+            dat_truoc_confirm_at: bkg?.dat_truoc_confirm_at ?? null,
+            final_status: bkg?.final_status ?? "chua_gui",
+            final_sent_at: bkg?.final_sent_at ?? null,
+            final_sent_by: bkg?.final_sent_by ?? null,
+            final_confirm_at: bkg?.final_confirm_at ?? null,
           });
         }
       }

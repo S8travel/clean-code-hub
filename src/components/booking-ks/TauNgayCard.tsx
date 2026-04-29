@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Mail, Check, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, Check, X, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
@@ -19,13 +19,6 @@ import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 
-const STATUS_CFG: Record<string, { label: string; cls: string }> = {
-  chua_gui:    { label: "Chưa gửi",    cls: "bg-muted text-muted-foreground" },
-  da_gui:      { label: "Đã gửi",      cls: "bg-amber-100 text-amber-700" },
-  da_xac_nhan: { label: "Đã xác nhận", cls: "bg-emerald-100 text-emerald-700" },
-  da_huy:      { label: "Đã hủy",      cls: "bg-red-100 text-red-700" },
-};
-
 function fmtDatetime(d: string | null | undefined) {
   if (!d) return "";
   try { return format(new Date(d), "dd/MM HH:mm", { locale: vi }); } catch { return ""; }
@@ -40,6 +33,17 @@ function BuaLabel({ bua }: { bua: "trua" | "toi" }) {
       {bua === "trua" ? "Trưa" : "Tối"}
     </span>
   );
+}
+
+function getOverallStatus(row: TauNgayDisplayRow): { label: string; cls: string } {
+  const { dat_truoc_status: dt, final_status: fn } = row;
+  if (fn === "xac_nhan_huy")      return { label: "Đã hủy",         cls: "bg-red-100 text-red-700" };
+  if (fn === "cho_xac_nhan_huy")  return { label: "Chờ XN hủy",     cls: "bg-orange-100 text-orange-700" };
+  if (fn === "xac_nhan_final")    return { label: "Final đã XN",     cls: "bg-purple-100 text-purple-700" };
+  if (fn === "cho_xac_nhan")      return { label: "Chờ XN Final",    cls: "bg-green-100 text-green-700" };
+  if (dt === "xac_nhan")          return { label: "Đặt trước đã XN", cls: "bg-teal-100 text-teal-700" };
+  if (dt === "cho_xac_nhan")      return { label: "Chờ XN đặt trước", cls: "bg-blue-100 text-blue-700" };
+  return { label: "Chưa gửi", cls: "bg-muted text-muted-foreground" };
 }
 
 interface Props {
@@ -86,13 +90,42 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     }
   };
 
+  const updateStatus = async (fields: Record<string, any>) => {
+    try {
+      await save(fields);
+    } catch {
+      toast.error("Lỗi cập nhật");
+    }
+  };
+
+  const ensureBookingExists = async (): Promise<boolean> => {
+    if (row.booking_id) return true;
+    try {
+      await updateMut.mutateAsync({
+        booking_id: null,
+        doan_ngay_id: row.doan_ngay_id,
+        doan_id: row.doan_id,
+        bua_an: row.bua_an,
+        nha_hang_id: row.nha_hang_id,
+        set_menu_id: selectedSetMenu,
+        booking_status: "chua_gui",
+        dat_truoc_status: "chua_gui",
+        final_status: "chua_gui",
+      });
+      toast.info("Đã tạo booking — vui lòng thử gửi lại");
+      return false;
+    } catch {
+      toast.error("Lỗi tạo booking");
+      return false;
+    }
+  };
+
   const buildEmailHtml = (smId: number | null) => {
     const sm = setMenuOptions.find((s) => s.id === smId);
     const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
     const buaStr = row.bua_an === "trua" ? "Bữa trưa" : "Bữa tối";
     const soKhachStr = soKhach ? `${soKhach} khách` : "—";
     const menuStr = sm ? `${sm.ten_set}${sm.gia ? ` – ${sm.gia.toLocaleString("vi-VN")} ${sm.don_vi}` : ""}` : "—";
-
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
@@ -138,11 +171,13 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     setEmailModalOpen(true);
   };
 
+  const handleOpenEmail = async () => {
+    const ok = await ensureBookingExists();
+    if (ok) openEmailModal();
+  };
+
   const handleSendViaServer = async () => {
-    if (!row.booking_id) {
-      toast.error("Cần lưu booking trước khi gửi email");
-      return;
-    }
+    if (!row.booking_id) { toast.error("Cần lưu booking trước khi gửi email"); return; }
     setSending(true);
     try {
       await sendEmailMut.mutateAsync({
@@ -154,6 +189,12 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         sentBy: currentUserName,
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
+      });
+      // Update dat_truoc phase status
+      await save({
+        dat_truoc_status: "cho_xac_nhan",
+        dat_truoc_sent_at: new Date().toISOString(),
+        dat_truoc_sent_by: currentUserName,
       });
       setEmailModalOpen(false);
       toast.success("Đã gửi email đặt tàu");
@@ -177,78 +218,40 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     setEmailModalOpen(false);
   };
 
-  const handleConfirm = async () => {
-    if (!row.booking_id) return;
-    try {
-      await save({ booking_status: "da_xac_nhan" });
-      toast.success("Đã xác nhận tàu");
-    } catch {
-      toast.error("Lỗi cập nhật");
-    }
-  };
-
-  const handleHuy = async () => {
-    try {
-      await save({ booking_status: "da_huy" });
-      toast.success("Đã hủy booking tàu");
-    } catch {
-      toast.error("Lỗi cập nhật");
-    }
-  };
-
-  const statusCfg = STATUS_CFG[row.booking_status] || STATUS_CFG.chua_gui;
+  const overall = getOverallStatus(row);
   const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
-
-  // Need a booking_id to send email — auto-create one by saving set_menu first if needed
-  const ensureBookingExists = async (): Promise<boolean> => {
-    if (row.booking_id) return true;
-    try {
-      await updateMut.mutateAsync({
-        booking_id: null,
-        doan_ngay_id: row.doan_ngay_id,
-        doan_id: row.doan_id,
-        bua_an: row.bua_an,
-        nha_hang_id: row.nha_hang_id,
-        set_menu_id: selectedSetMenu,
-        booking_status: "chua_gui",
-      });
-      toast.info("Đã tạo booking — vui lòng thử gửi lại");
-      return false;
-    } catch {
-      toast.error("Lỗi tạo booking");
-      return false;
-    }
-  };
-
-  const handleOpenEmail = async () => {
-    const ok = await ensureBookingExists();
-    if (ok) openEmailModal();
-  };
+  const datTruocConfirmed = row.dat_truoc_status === "xac_nhan";
+  const isCancelled = row.final_status === "xac_nhan_huy";
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className={cn(
+        "rounded-xl border bg-card overflow-hidden transition-colors",
+        isCancelled ? "opacity-60 border-border" : "border-border"
+      )}>
         {/* Header */}
         <div
           className="px-4 py-3 flex items-center justify-between gap-3 border-b border-border bg-muted/20 cursor-pointer select-none"
           onClick={() => setCollapsed((v) => !v)}
         >
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
             <span className="text-sm font-semibold truncate">{row.nha_hang_ten}</span>
             <BuaLabel bua={row.bua_an} />
             <span className="text-xs text-muted-foreground hidden sm:inline">{ngayStr}</span>
-            <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", statusCfg.cls)}>
-              {statusCfg.label}
+            <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", overall.cls)}>
+              {overall.label}
             </span>
           </div>
-          {collapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />}
+          {collapsed
+            ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            : <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />}
         </div>
 
         {!collapsed && (
           <div className="px-4 py-3 space-y-3">
             <p className="text-xs text-muted-foreground sm:hidden">{ngayStr}</p>
 
-            {/* Set menu selector */}
+            {/* Set menu */}
             {setMenuOptions.length > 0 && (
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Set menu / Buffet</p>
@@ -283,77 +286,20 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
               />
             </div>
 
-            {/* Email button */}
-            {row.booking_status === "chua_gui" && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs w-full"
-                onClick={handleOpenEmail}
-              >
-                <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi email đặt tàu
-              </Button>
-            )}
-
-            {/* Status flow */}
-            {row.booking_status === "da_gui" && (
-              <div className="rounded-lg border border-amber-200/60 bg-amber-50/30 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-amber-700">Chờ xác nhận</p>
-                  {row.sent_at && (
-                    <p className="text-[10px] text-muted-foreground">Gửi: {fmtDatetime(row.sent_at)}</p>
-                  )}
-                </div>
-                <div className="flex gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs text-emerald-700 border-emerald-300 flex-1"
-                    onClick={handleConfirm}
-                  >
-                    <Check className="h-3 w-3 mr-1" /> Đã xác nhận
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
-                    onClick={handleHuy}
-                    title="Hủy booking"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-                {/* Resend option */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 text-xs text-muted-foreground w-full"
-                  onClick={openEmailModal}
-                >
-                  <Mail className="h-3 w-3 mr-1" /> Gửi lại email
-                </Button>
-              </div>
-            )}
-
-            {row.booking_status === "da_xac_nhan" && (
-              <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/30 p-3 flex items-center justify-between gap-2">
-                <p className="text-xs text-emerald-700 font-medium">✓ Đã xác nhận</p>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 text-[10px] text-red-400"
-                  onClick={handleHuy}
-                >
-                  <X className="h-3 w-3 mr-0.5" /> Hủy
-                </Button>
-              </div>
-            )}
-
-            {row.booking_status === "da_huy" && (
-              <div className="rounded-lg border border-red-200/60 bg-red-50/30 p-3">
-                <p className="text-xs text-red-600">✕ Đã hủy</p>
-              </div>
-            )}
+            {/* Two-phase booking sections */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <DatTruocSection
+                row={row}
+                onOpenEmail={handleOpenEmail}
+                onResendEmail={openEmailModal}
+                onUpdateStatus={updateStatus}
+              />
+              <FinalSection
+                row={row}
+                datTruocConfirmed={datTruocConfirmed}
+                onUpdateStatus={updateStatus}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -373,5 +319,201 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         sending={sending}
       />
     </>
+  );
+}
+
+// ── Đặt trước ─────────────────────────────────────────────────────────────────
+function DatTruocSection({
+  row,
+  onOpenEmail,
+  onResendEmail,
+  onUpdateStatus,
+}: {
+  row: TauNgayDisplayRow;
+  onOpenEmail: () => void;
+  onResendEmail: () => void;
+  onUpdateStatus: (fields: Record<string, any>) => void;
+}) {
+  const status = row.dat_truoc_status;
+
+  const BADGE: Record<string, { label: string; dot: string }> = {
+    chua_gui:     { label: "Chưa gửi",         dot: "bg-muted-foreground/30" },
+    cho_xac_nhan: { label: "Chờ tàu xác nhận", dot: "bg-amber-400" },
+    xac_nhan:     { label: "Tàu đã xác nhận",  dot: "bg-teal-500" },
+  };
+  const badge = BADGE[status] || BADGE.chua_gui;
+
+  return (
+    <div className="rounded-lg border border-blue-200/60 bg-blue-50/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-blue-700">Đặt trước</p>
+        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
+          {badge.label}
+        </span>
+      </div>
+
+      {status === "chua_gui" && (
+        <Button size="sm" variant="outline" className="h-8 text-xs w-full" onClick={onOpenEmail}>
+          <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi email đặt tàu
+        </Button>
+      )}
+
+      {status === "cho_xac_nhan" && (
+        <div className="space-y-1.5">
+          {row.dat_truoc_sent_at && (
+            <p className="text-[10px] text-muted-foreground">
+              Gửi lúc: {fmtDatetime(row.dat_truoc_sent_at)}
+            </p>
+          )}
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-xs text-teal-600 border-teal-300 w-full"
+            onClick={() => onUpdateStatus({
+              dat_truoc_status: "xac_nhan",
+              dat_truoc_confirm_at: new Date().toISOString(),
+            })}
+          >
+            <Check className="h-3 w-3 mr-1" /> Tàu xác nhận đặt trước
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground w-full" onClick={onResendEmail}>
+            <Mail className="h-3 w-3 mr-1" /> Gửi lại email
+          </Button>
+        </div>
+      )}
+
+      {status === "xac_nhan" && row.dat_truoc_confirm_at && (
+        <p className="text-[10px] text-teal-600">
+          ✓ XN lúc: {fmtDatetime(row.dat_truoc_confirm_at)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Final ─────────────────────────────────────────────────────────────────────
+function FinalSection({
+  row,
+  datTruocConfirmed,
+  onUpdateStatus,
+}: {
+  row: TauNgayDisplayRow;
+  datTruocConfirmed: boolean;
+  onUpdateStatus: (fields: Record<string, any>) => void;
+}) {
+  const status = row.final_status;
+
+  if (!datTruocConfirmed) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-muted/10 p-3 flex items-center justify-center min-h-[80px]">
+        <p className="text-xs text-muted-foreground italic">Chờ xác nhận đặt trước</p>
+      </div>
+    );
+  }
+
+  const BADGE: Record<string, { label: string; dot: string }> = {
+    chua_gui:          { label: "Chờ xử lý",       dot: "bg-muted-foreground/30" },
+    cho_xac_nhan:      { label: "Chờ tàu XN",      dot: "bg-amber-400" },
+    xac_nhan_final:    { label: "Tàu đã XN Final", dot: "bg-purple-500" },
+    cho_xac_nhan_huy:  { label: "Chờ XN hủy",      dot: "bg-orange-400" },
+    xac_nhan_huy:      { label: "Đã hủy",           dot: "bg-red-400" },
+  };
+  const badge = BADGE[status] || BADGE.chua_gui;
+
+  const handleHuy = () =>
+    onUpdateStatus({ final_status: "cho_xac_nhan_huy" });
+
+  return (
+    <div className="rounded-lg border border-green-200/60 bg-green-50/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-green-700">Final</p>
+        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
+          {badge.label}
+        </span>
+      </div>
+
+      {status === "chua_gui" && (
+        <div className="flex gap-1">
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-xs text-green-700 border-green-300 flex-1"
+            onClick={() => onUpdateStatus({ final_status: "cho_xac_nhan" })}
+          >
+            <Check className="h-3 w-3 mr-1" /> Final
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
+            onClick={handleHuy} title="Hủy booking"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
+      {status === "cho_xac_nhan" && (
+        <div className="flex gap-1">
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-xs text-purple-600 border-purple-300 flex-1"
+            onClick={() => onUpdateStatus({
+              final_status: "xac_nhan_final",
+              final_confirm_at: new Date().toISOString(),
+            })}
+          >
+            <Check className="h-3 w-3 mr-1" /> Tàu xác nhận Final
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
+            onClick={handleHuy} title="Hủy booking"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
+      {status === "xac_nhan_final" && (
+        <div className="space-y-1.5">
+          {row.final_confirm_at && (
+            <p className="text-[10px] text-purple-600">
+              ✓ Final lúc: {fmtDatetime(row.final_confirm_at)}
+            </p>
+          )}
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-xs text-red-500 border-red-300 w-full"
+            onClick={handleHuy}
+          >
+            <X className="h-3 w-3 mr-1" /> Hủy booking
+          </Button>
+        </div>
+      )}
+
+      {status === "cho_xac_nhan_huy" && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-orange-600 flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" /> Chờ tàu xác nhận hủy
+          </p>
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-xs text-red-600 border-red-300 w-full"
+            onClick={() => onUpdateStatus({
+              final_status: "xac_nhan_huy",
+              final_confirm_at: new Date().toISOString(),
+            })}
+          >
+            <Check className="h-3 w-3 mr-1" /> Tàu xác nhận hủy
+          </Button>
+        </div>
+      )}
+
+      {status === "xac_nhan_huy" && (
+        <p className="text-xs text-red-500">
+          ✕ Đã hủy{row.final_confirm_at ? ` ${fmtDatetime(row.final_confirm_at)}` : ""}
+        </p>
+      )}
+    </div>
   );
 }

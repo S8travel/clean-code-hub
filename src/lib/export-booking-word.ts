@@ -16,6 +16,7 @@ import {
 } from "docx";
 import { saveAs } from "file-saver";
 import type { BookingKSDisplay } from "@/hooks/use-booking-ks";
+import type { TauNgayDisplayRow } from "@/hooks/use-booking-tau";
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
@@ -95,7 +96,8 @@ function formatDateMD(dateStr: string): string {
 
 export async function exportBookingWord(
   tenDoan: string,
-  selectedBookings: BookingKSDisplay[]
+  selectedBookings: BookingKSDisplay[],
+  tauRows: TauNgayDisplayRow[] = []
 ) {
   // Explode each booking into one entry per date, then sort by date
   interface Entry {
@@ -220,6 +222,64 @@ export async function exportBookingWord(
       })
     );
   });
+
+  // ── TÀU NGÀY section ──────────────────────────────────────────────────────
+  const sortedTau = [...tauRows].sort((a, b) => {
+    const da = a.ngay_date ?? "";
+    const db = b.ngay_date ?? "";
+    if (da !== db) return da.localeCompare(db);
+    return a.bua_an === "trua" ? -1 : 1;
+  });
+
+  if (sortedTau.length > 0) {
+    sortedTau.forEach((tau, idx) => {
+      const tauRowChildren: TableCell[] = [];
+
+      if (idx === 0) {
+        tauRowChildren.push(
+          cell([p("TÀU NGÀY", { bold: true, size: 26 })], {
+            width: COL_W[0],
+            rowSpan: sortedTau.length,
+            shading: NO_SHADING,
+            textDirection: TextDirection.BOTTOM_TO_TOP_LEFT_TO_RIGHT,
+          })
+        );
+      }
+
+      // 日期
+      tauRowChildren.push(
+        cell([p(tau.ngay_date ? formatDateMD(tau.ngay_date) : `Ngày ${tau.ngay_so}`, { size: 24 })], {
+          width: COL_W[1],
+        })
+      );
+
+      // 餐次
+      tauRowChildren.push(
+        cell([p(tau.bua_an === "trua" ? "午餐" : "晚餐", { size: 24 })], {
+          width: COL_W[2],
+        })
+      );
+
+      // 船名 + set menu
+      const tauDetail = tau.set_menu_ten
+        ? `${tau.nha_hang_ten}  (${tau.set_menu_ten})`
+        : tau.nha_hang_ten;
+      tauRowChildren.push(
+        cell([p(tauDetail, { bold: true, size: 26 })], {
+          width: COL_W[3],
+        })
+      );
+
+      // Email
+      tauRowChildren.push(
+        cell([p(tau.nha_hang_email || "", { size: 22, italic: true })], {
+          width: COL_W[4],
+        })
+      );
+
+      rows.push(new TableRow({ children: tauRowChildren }));
+    });
+  }
 
   // Aggregate TOTAL — one entry per unique booking (not per date)
   const seenIds = new Set<number>();
