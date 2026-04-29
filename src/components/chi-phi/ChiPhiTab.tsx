@@ -10,6 +10,7 @@ import ChiPhiDVSection from "./ChiPhiDVSection";
 import ChiPhiBaoHiemSection from "./ChiPhiBaoHiemSection";
 import ChiPhiXeSection from "./ChiPhiXeSection";
 import ChiPhiVisaSection from "./ChiPhiVisaSection";
+import ChiPhiHDVSection from "./ChiPhiHDVSection";
 import ChiPhiPhasThuSection from "./ChiPhiPhasThuSection";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -172,6 +173,8 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
           ngayDi={doan?.ngay_di ?? null}
           ngayVe={doan?.ngay_ve ?? null}
         />
+
+        <ChiPhiHDVSection doanId={doanId} doan={doan} />
 
         <ChiPhiPhasThuSection doan={doan} />
       </div>
