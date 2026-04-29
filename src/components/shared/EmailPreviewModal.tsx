@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Mail, Send, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Mail, Send, Pencil, Plus, Trash2,
+  Bold, Italic, Underline, Strikethrough,
+  AlignLeft, AlignCenter, AlignRight,
+  Palette, Link2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,6 +64,30 @@ export default function EmailPreviewModal({
   htmlRef.current = html; // always latest, no stale closure
 
   const sigEditorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+  };
+
+  const restoreAndExec = (cmd: string, val?: string) => {
+    if (sigEditorRef.current) {
+      sigEditorRef.current.focus();
+      const sel = window.getSelection();
+      if (sel && savedRangeRef.current) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current);
+      }
+    }
+    document.execCommand(cmd, false, val);
+    if (sigEditorRef.current) setEditHtml(sigEditorRef.current.innerHTML);
+  };
+
+  const handleCmd = (e: React.MouseEvent, cmd: string, val?: string) => {
+    e.preventDefault();
+    restoreAndExec(cmd, val);
+  };
 
   // Callback ref fires when the editor div mounts (after Radix Portal's 2-phase mount).
   // This is more reliable than useLayoutEffect([open]) which fires before the portal
@@ -218,6 +247,82 @@ export default function EmailPreviewModal({
                   placeholder="Tên chữ ký (vd: Chữ ký công ty)"
                   className="h-7 text-xs"
                 />
+                {/* Format toolbar */}
+                <div className="flex items-center gap-0.5 flex-wrap p-1 border border-border rounded-md bg-background">
+                  {([
+                    { title: "Bold", cmd: "bold", icon: <Bold className="h-3.5 w-3.5" /> },
+                    { title: "Italic", cmd: "italic", icon: <Italic className="h-3.5 w-3.5" /> },
+                    { title: "Underline", cmd: "underline", icon: <Underline className="h-3.5 w-3.5" /> },
+                    { title: "Strikethrough", cmd: "strikeThrough", icon: <Strikethrough className="h-3.5 w-3.5" /> },
+                  ] as const).map(({ title, cmd, icon }) => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      title={title}
+                      onMouseDown={(e) => handleCmd(e, cmd)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                  <div className="w-px h-4 bg-border mx-0.5" />
+                  {([
+                    { title: "Căn trái", cmd: "justifyLeft", icon: <AlignLeft className="h-3.5 w-3.5" /> },
+                    { title: "Căn giữa", cmd: "justifyCenter", icon: <AlignCenter className="h-3.5 w-3.5" /> },
+                    { title: "Căn phải", cmd: "justifyRight", icon: <AlignRight className="h-3.5 w-3.5" /> },
+                  ] as const).map(({ title, cmd, icon }) => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      title={title}
+                      onMouseDown={(e) => handleCmd(e, cmd)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                  <div className="w-px h-4 bg-border mx-0.5" />
+                  {/* Font size */}
+                  <select
+                    className="h-6 text-[11px] border border-border rounded px-1 bg-background text-muted-foreground cursor-pointer"
+                    defaultValue="3"
+                    onMouseDown={saveSelection}
+                    onChange={(e) => restoreAndExec("fontSize", e.target.value)}
+                  >
+                    {[["1","Nhỏ"],["2","Vừa-"],["3","Vừa"],["4","To"],["5","To+"],["6","Lớn"],["7","Lớn+"]].map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                  <div className="w-px h-4 bg-border mx-0.5" />
+                  {/* Text color */}
+                  <label
+                    title="Màu chữ"
+                    className="relative h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                    onMouseDown={saveSelection}
+                  >
+                    <Palette className="h-3.5 w-3.5 pointer-events-none" />
+                    <input
+                      type="color"
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                      onInput={(e) => restoreAndExec("foreColor", (e.target as HTMLInputElement).value)}
+                    />
+                  </label>
+                  <div className="w-px h-4 bg-border mx-0.5" />
+                  {/* Insert link */}
+                  <button
+                    type="button"
+                    title="Chèn link"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      saveSelection();
+                      const url = prompt("Nhập URL:");
+                      if (url) restoreAndExec("createLink", url);
+                    }}
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <div
                   ref={(node) => {
                     sigEditorRef.current = node;
