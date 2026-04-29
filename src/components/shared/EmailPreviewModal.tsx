@@ -105,6 +105,16 @@ export default function EmailPreviewModal({
   const [editName, setEditName] = useState("");
   const [editHtml, setEditHtml] = useState("");
 
+  const editHtmlRef = useRef(editHtml);
+  editHtmlRef.current = editHtml; // always latest, no stale closure
+
+  // Stable callback ref — fires only on mount/unmount, never on re-render
+  // (inline arrow refs fire on every render, resetting innerHTML + cursor)
+  const sigEditorCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    sigEditorRef.current = node;
+    if (node) node.innerHTML = editHtmlRef.current;
+  }, []);
+
   // Reset sig state when modal closes
   useEffect(() => {
     if (!open) { setSigEditing(false); setEditingId(null); }
@@ -324,13 +334,16 @@ export default function EmailPreviewModal({
                   </button>
                 </div>
                 <div
-                  ref={(node) => {
-                    sigEditorRef.current = node;
-                    if (node) node.innerHTML = editHtml;
-                  }}
+                  ref={sigEditorCallbackRef}
                   contentEditable
                   suppressContentEditableWarning
                   onInput={(e) => setEditHtml((e.target as HTMLDivElement).innerHTML)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      document.execCommand("insertLineBreak");
+                    }
+                  }}
                   className="w-full min-h-[112px] text-xs border border-border rounded p-2 focus:outline-none focus:ring-2 focus:ring-ring bg-white empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
                   data-placeholder="Nhập nội dung chữ ký..."
                 />
