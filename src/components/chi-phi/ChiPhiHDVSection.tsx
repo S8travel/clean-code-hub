@@ -25,6 +25,7 @@ import {
   useMarkPaidDNTT,
   useCancelDNTT,
   type HDVDNTTRow,
+  type HDVHoTroItem,
 } from "@/hooks/use-chi-phi-hdv";
 import { useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import { cn } from "@/lib/utils";
@@ -64,7 +65,9 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
 
   const hdv = data?.hdv ?? null;
   const chiPhiItems = data?.chiPhiItems ?? [];
+  const hoTroItems = data?.hoTroItems ?? [];
   const tongHdvChi = data?.tongHdvChi ?? 0;
+  const tongHoTroHDV = data?.tongHoTroHDV ?? 0;
   const tamUngList = data?.tamUngList ?? [];
   const quyetToanList = data?.quyetToanList ?? [];
   const tamUngDaTT = data?.tamUngDaTT ?? 0;
@@ -91,12 +94,20 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
               <p className="text-xs text-muted-foreground italic">Chưa chỉ định HDV</p>
             )}
 
-            {tongHdvChi > 0 && (
-              <div className="flex gap-4">
-                <div>
-                  <p className="text-[11px] text-muted-foreground">Tổng HDV chi</p>
-                  <p className="text-sm font-semibold">{fmt(tongHdvChi)} ₫</p>
-                </div>
+            {(tongHdvChi > 0 || tongHoTroHDV > 0) && (
+              <div className="flex gap-4 flex-wrap">
+                {tongHdvChi > 0 && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Tổng HDV chi</p>
+                    <p className="text-sm font-semibold">{fmt(tongHdvChi)} ₫</p>
+                  </div>
+                )}
+                {tongHoTroHDV > 0 && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Hỗ trợ HDV</p>
+                    <p className="text-sm font-semibold text-blue-600">+{fmt(tongHoTroHDV)} ₫</p>
+                  </div>
+                )}
                 {tamUngDaTT > 0 && (
                   <div>
                     <p className="text-[11px] text-muted-foreground">Đã tạm ứng</p>
@@ -125,7 +136,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
                 <Plus className="h-3 w-3 mr-1" /> Tạm ứng
               </Button>
             )}
-            {(tamUngList.length > 0 || tongHdvChi > 0) && (
+            {(tamUngList.length > 0 || tongHdvChi > 0 || tongHoTroHDV > 0) && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowQuyetToan(true)}>
                 <Plus className="h-3 w-3 mr-1" /> Quyết toán
               </Button>
@@ -176,6 +187,9 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           <Plus className="h-3 w-3 mr-1" /> Thêm chi phí HDV ứng
         </Button>
       </div>
+
+      {/* ── Chi phí công ty hỗ trợ HDV ── */}
+      <HoTroHDVTable doanId={doanId} hoTroItems={hoTroItems} />
 
       {/* ── Phải thu ── */}
       <TipSection doan={doan} tyGia={tyGia} onTyGiaChange={handleTyGiaChange} />
@@ -320,6 +334,180 @@ function ChiPhiUngTable({ doanId, chiPhiItems }: {
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── Chi phí công ty hỗ trợ HDV ───────────────────────────────────────────────
+
+const HO_TRO_LOAI: { value: string; label: string }[] = [
+  { value: "cong_tac_phi", label: "Công tác phí" },
+  { value: "tien_ngu_nb", label: "Tiền ngủ nội bộ" },
+  { value: "ho_tro_nuoc", label: "Hỗ trợ nước" },
+  { value: "khac", label: "Khác" },
+];
+
+function getLoaiLabel(loai: string) {
+  return HO_TRO_LOAI.find((l) => l.value === loai)?.label ?? loai;
+}
+
+function HoTroHDVTable({ doanId, hoTroItems }: {
+  doanId: number;
+  hoTroItems: HDVHoTroItem[];
+}) {
+  const qc = useQueryClient();
+  const upsertMut = useUpsertChiPhi();
+  const deleteMut = useDeleteChiPhi();
+  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
+  const [addingRow, setAddingRow] = useState(false);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
+
+  const getLocal = (item: HDVHoTroItem) =>
+    editRow[item.id] ?? { so_luong: item.so_luong, don_gia: item.don_gia };
+
+  const handleNumChange = (id: number, field: "so_luong" | "don_gia", val: number) =>
+    setEditRow((prev) => {
+      const base = hoTroItems.find((r) => r.id === id);
+      const cur = prev[id] ?? { so_luong: base?.so_luong ?? 1, don_gia: base?.don_gia ?? 0 };
+      return { ...prev, [id]: { ...cur, [field]: val } };
+    });
+
+  const handleSave = (item: HDVHoTroItem) => {
+    const local = editRow[item.id];
+    if (!local) return;
+    if (local.so_luong === item.so_luong && local.don_gia === item.don_gia) {
+      setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+      return;
+    }
+    upsertMut.mutate({
+      id: item.id, doan_id: doanId,
+      so_luong: local.so_luong, don_gia: local.don_gia,
+      tien_cong_ty: local.so_luong * local.don_gia,
+    } as any, {
+      onSuccess: () => {
+        setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+        invalidate();
+      },
+    });
+  };
+
+  const handleLoaiChange = (item: HDVHoTroItem, newLoai: string) => {
+    const newMoTa = newLoai !== "khac" ? getLoaiLabel(newLoai) : (item.mo_ta ?? "Khác");
+    upsertMut.mutate({ id: item.id, doan_id: doanId, loai: newLoai, mo_ta: newMoTa } as any, {
+      onSuccess: () => invalidate(),
+    });
+  };
+
+  const handleDelete = (item: HDVHoTroItem) => {
+    deleteMut.mutate({ id: item.id, doanId }, {
+      onSuccess: () => { invalidate(); toast.success("Đã xóa"); },
+      onError: (e: any) => toast.error(e?.message || "Lỗi xóa"),
+    });
+  };
+
+  const handleAdd = async () => {
+    setAddingRow(true);
+    try {
+      await upsertMut.mutateAsync({
+        doan_id: doanId,
+        danh_muc: "hdv_ho_tro",
+        loai: "cong_tac_phi",
+        mo_ta: "Công tác phí",
+        so_luong: 1,
+        don_gia: 0,
+        tien_cong_ty: 0,
+        tien_hdv: 0,
+      } as any);
+      invalidate();
+    } catch {
+      toast.error("Lỗi khi thêm");
+    } finally {
+      setAddingRow(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="px-4 py-2 bg-sky-50 border-b border-sky-100 flex items-center justify-between">
+        <p className="text-xs font-semibold text-sky-800 uppercase tracking-wide">
+          Chi phí công ty hỗ trợ HDV
+        </p>
+        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleAdd} disabled={addingRow}>
+          <Plus className="h-3 w-3 mr-1" /> Thêm
+        </Button>
+      </div>
+      {hoTroItems.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">Chưa có khoản hỗ trợ nào. Nhấn "+ Thêm" để thêm.</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/20">
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Loại</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-24">SL</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Đơn giá</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Thành tiền</th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {hoTroItems.map((item) => {
+              const local = getLocal(item);
+              const isDirty = editRow[item.id] !== undefined;
+              return (
+                <tr key={item.id} className="hover:bg-muted/20">
+                  <td className="px-3 py-2">
+                    <Select value={item.loai} onValueChange={(v) => handleLoaiChange(item, v)}>
+                      <SelectTrigger className="h-7 text-xs w-44">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HO_TRO_LOAI.map((l) => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <Input
+                      type="number"
+                      value={local.so_luong || ""}
+                      onChange={(e) => handleNumChange(item.id, "so_luong", Number(e.target.value) || 0)}
+                      onBlur={() => handleSave(item)}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                      className="h-6 text-xs px-1.5 py-0 text-center w-16 ml-auto"
+                    />
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <Input
+                      type="number"
+                      value={local.don_gia || ""}
+                      onChange={(e) => handleNumChange(item.id, "don_gia", Number(e.target.value) || 0)}
+                      onBlur={() => handleSave(item)}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                      className="h-6 text-xs px-1.5 py-0 text-right w-28 ml-auto"
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-medium">
+                    {fmt(local.so_luong * local.don_gia)} ₫
+                    {isDirty && <span className="ml-1 text-[10px] text-amber-600">*</span>}
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <Button
+                      size="icon" variant="ghost"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(item)}
+                      disabled={deleteMut.isPending}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

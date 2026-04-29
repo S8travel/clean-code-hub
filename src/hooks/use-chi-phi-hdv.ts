@@ -31,10 +31,21 @@ export interface HDVDNTTRow {
   created_at: string;
 }
 
+export interface HDVHoTroItem {
+  id: number;
+  mo_ta: string | null;
+  loai: string;
+  so_luong: number;
+  don_gia: number;
+  tien_cong_ty: number;
+}
+
 export interface HDVSectionData {
   hdv: HDVInfo | null;
   chiPhiItems: HDVChiPhiItem[];
+  hoTroItems: HDVHoTroItem[];
   tongHdvChi: number;
+  tongHoTroHDV: number;
   tamUngList: HDVDNTTRow[];
   quyetToanList: HDVDNTTRow[];
   tamUngDaTT: number;
@@ -93,6 +104,24 @@ export function useChiPhiHDVSection(doanId?: number) {
       }));
       const tongHdvChi = chiPhiItems.reduce((s, r) => s + r.tien_hdv, 0);
 
+      // 3b. Load chi phí hỗ trợ HDV (công ty chi cho HDV)
+      const { data: hoTroRows } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id, mo_ta, loai, so_luong, don_gia, tien_cong_ty")
+        .eq("doan_id", doanId!)
+        .eq("danh_muc", "hdv_ho_tro")
+        .order("created_at", { ascending: true });
+
+      const hoTroItems: HDVHoTroItem[] = (hoTroRows || []).map((r: any) => ({
+        id: r.id,
+        mo_ta: r.mo_ta,
+        loai: r.loai ?? "cong_tac_phi",
+        so_luong: r.so_luong ?? 1,
+        don_gia: r.don_gia ?? 0,
+        tien_cong_ty: r.tien_cong_ty ?? 0,
+      }));
+      const tongHoTroHDV = hoTroItems.reduce((s, r) => s + r.tien_cong_ty, 0);
+
       // 4. Load DNTT liên quan HDV
       const { data: dnttRows } = await externalSupabase
         .from("de_nghi_thanh_toan")
@@ -113,7 +142,7 @@ export function useChiPhiHDVSection(doanId?: number) {
         .filter((d) => d.trang_thai_thanh_toan !== "da_tt" && d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
         .reduce((s, d) => s + d.so_tien, 0);
 
-      const soConPhaiTra = tongHdvChi - tamUngDaTT;
+      const soConPhaiTra = tongHdvChi + tongHoTroHDV - tamUngDaTT;
 
       const daQuyetToan = quyetToanList.some(
         (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
@@ -122,7 +151,9 @@ export function useChiPhiHDVSection(doanId?: number) {
       return {
         hdv,
         chiPhiItems,
+        hoTroItems,
         tongHdvChi,
+        tongHoTroHDV,
         tamUngList,
         quyetToanList,
         tamUngDaTT,
