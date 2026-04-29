@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, differenceInDays, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { Plus, Ban, CheckCircle, CreditCard, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -30,34 +30,17 @@ import {
 import { useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import { cn } from "@/lib/utils";
 
-const NDT_TIP_CO_TL = 150;
-const NDT_TIP_KHONG_TL = 300;
-
 const fmt = (n: number) => n.toLocaleString("vi-VN");
-
-type LoaiTien = "NDT" | "NT$" | "US$" | "USD" | "VND";
 
 interface Props {
   doanId: number;
-  doan?: any;
 }
 
-export default function ChiPhiHDVSection({ doanId, doan }: Props) {
+export default function ChiPhiHDVSection({ doanId }: Props) {
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
   const [showQuyetToan, setShowQuyetToan] = useState(false);
   const [showThemChiPhi, setShowThemChiPhi] = useState(false);
-
-  // Tip state — persist tỷ giá NDT vào localStorage
-  const [tyGia, setTyGia] = useState<number>(() => {
-    const saved = localStorage.getItem("hdv_ty_gia_ndt");
-    return saved ? Number(saved) : 800;
-  });
-
-  const handleTyGiaChange = (v: number) => {
-    setTyGia(v);
-    localStorage.setItem("hdv_ty_gia_ndt", String(v));
-  };
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
@@ -190,9 +173,6 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
 
       {/* ── Chi phí công ty hỗ trợ HDV ── */}
       <HoTroHDVTable doanId={doanId} hoTroItems={hoTroItems} />
-
-      {/* ── Phải thu ── */}
-      <TipSection doan={doan} tyGia={tyGia} onTyGiaChange={handleTyGiaChange} />
 
       {/* Modals */}
       {showTamUng && (
@@ -508,227 +488,6 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
           </tbody>
         </table>
       )}
-    </div>
-  );
-}
-
-// ── Tip / Phải thu section ────────────────────────────────────────────────────
-
-interface ExtraRow { id: number; moTa: string; soTien: number; loaiTien: LoaiTien; tyGia: number }
-
-const LOAI_TIEN_LABEL: Record<LoaiTien, string> = { NDT: "NDT", "NT$": "NT$", "US$": "US$", USD: "USD", VND: "VND" };
-
-function TipSection({ doan, tyGia, onTyGiaChange }: {
-  doan?: any;
-  tyGia: number;
-  onTyGiaChange: (v: number) => void;
-}) {
-  const soKhach = (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
-    (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) || doan?.so_khach || 0;
-
-  const soNgay = doan?.ngay_di && doan?.ngay_ve
-    ? Math.max(1, differenceInDays(parseISO(doan.ngay_ve), parseISO(doan.ngay_di)) + 1)
-    : 0;
-
-  const coTL = (doan?.so_khach_tl ?? 0) > 0;
-  const defaultTipDonGia = coTL ? NDT_TIP_CO_TL : NDT_TIP_KHONG_TL;
-  const [tipDonGia, setTipDonGia] = useState(defaultTipDonGia);
-  const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>("NDT");
-  const [tipSoKhach, setTipSoKhach] = useState(soKhach);
-  const [tipSoNgay, setTipSoNgay] = useState(soNgay);
-
-  const tongTip = tipSoKhach * tipSoNgay * tipDonGia;
-  const tongVND = tongTip * tyGia;
-
-  const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
-  const nextId = () => Date.now();
-
-  const addRow = () => setExtraRows((prev) => [
-    ...prev,
-    { id: nextId(), moTa: "", soTien: 0, loaiTien: "NDT", tyGia },
-  ]);
-  const removeRow = (id: number) => setExtraRows((prev) => prev.filter((r) => r.id !== id));
-  const updateRow = <K extends keyof Omit<ExtraRow, "id">>(id: number, field: K, val: ExtraRow[K]) =>
-    setExtraRows((prev) => prev.map((r) => r.id === id ? { ...r, [field]: val } : r));
-
-  // Khi đổi loại tiền sang VND, tỷ giá = 1 tự động
-  const handleLoaiTienChange = (id: number, val: LoaiTien) => {
-    setExtraRows((prev) => prev.map((r) => r.id === id ? { ...r, loaiTien: val, tyGia: val === "VND" ? 1 : r.tyGia } : r));
-  };
-
-  const extraTotalVND = extraRows.reduce((s, r) => s + r.soTien * r.tyGia, 0);
-  const totalVND = tongVND + extraTotalVND;
-
-  if (!soKhach || !soNgay) return null;
-
-  return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">💰 Phải thu</p>
-        <div className="flex items-center gap-3">
-          {totalVND > 0 && (
-            <span className="text-xs text-muted-foreground">Tổng: {fmt(totalVND)} ₫</span>
-          )}
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addRow}>
-            <Plus className="h-3 w-3 mr-1" /> Thêm
-          </Button>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
-          <thead>
-            <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
-              <th className="text-left px-4 py-2.5">Mục</th>
-              <th className="text-center px-3 py-2.5">Khách</th>
-              <th className="text-center px-3 py-2.5">Ngày</th>
-              <th className="text-center px-3 py-2.5">Đơn giá/khách/ngày</th>
-              <th className="text-right px-3 py-2.5">Tổng</th>
-              <th className="text-center px-3 py-2.5">Tỷ giá</th>
-              <th className="text-right px-4 py-2.5">Thành tiền VND</th>
-              <th className="w-8" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {/* Tip row */}
-            <tr className="hover:bg-muted/20">
-              <td className="px-4 py-2.5 font-medium">
-                Tip
-                <span className={cn(
-                  "ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium",
-                  coTL ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700",
-                )}>
-                  {coTL ? "Có T/L" : "Không T/L"}
-                </span>
-              </td>
-              <td className="px-2 py-2 text-center">
-                <Input
-                  type="number"
-                  value={tipSoKhach || ""}
-                  onChange={(e) => setTipSoKhach(Number(e.target.value) || 0)}
-                  className="h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto"
-                />
-              </td>
-              <td className="px-2 py-2 text-center">
-                <Input
-                  type="number"
-                  value={tipSoNgay || ""}
-                  onChange={(e) => setTipSoNgay(Number(e.target.value) || 0)}
-                  className="h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto"
-                />
-              </td>
-              <td className="px-3 py-2 text-center">
-                <div className="flex items-center gap-1 justify-center">
-                  <Input
-                    type="number"
-                    value={tipDonGia || ""}
-                    onChange={(e) => setTipDonGia(Number(e.target.value) || 0)}
-                    className="h-6 text-xs px-1.5 py-0 text-center w-[60px]"
-                  />
-                  <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)}>
-                    <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NDT">NDT</SelectItem>
-                      <SelectItem value="NT$">NT$</SelectItem>
-                      <SelectItem value="US$">US$</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="VND">VND</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </td>
-              <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
-                {tongTip > 0 ? `${fmt(tongTip)} ${LOAI_TIEN_LABEL[tipLoaiTien]}` : "—"}
-              </td>
-              <td className="px-3 py-2.5">
-                <div className="flex justify-center">
-                  <Input
-                    type="number"
-                    value={tyGia || ""}
-                    onChange={(e) => onTyGiaChange(Number(e.target.value) || 0)}
-                    className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
-                  />
-                </div>
-              </td>
-              <td className="px-4 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
-                {tyGia > 0 ? `${fmt(tongVND)} ₫` : "—"}
-              </td>
-              <td />
-            </tr>
-
-            {/* Extra rows */}
-            {extraRows.map((row) => {
-              const isVND = row.loaiTien === "VND";
-              const thanhTienVND = row.soTien * row.tyGia;
-              return (
-                <tr key={row.id} className="hover:bg-muted/20">
-                  <td className="px-4 py-2">
-                    <Input
-                      value={row.moTa}
-                      onChange={(e) => updateRow(row.id, "moTa", e.target.value)}
-                      className="h-6 text-xs px-1.5"
-                      placeholder="Mô tả khoản thu..."
-                      autoFocus
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-center text-muted-foreground">—</td>
-                  <td className="px-3 py-2 text-center text-muted-foreground">—</td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1 justify-center">
-                      <Input
-                        type="number"
-                        value={row.soTien || ""}
-                        onChange={(e) => updateRow(row.id, "soTien", Number(e.target.value) || 0)}
-                        className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
-                        placeholder="0"
-                      />
-                      <Select value={row.loaiTien} onValueChange={(v) => handleLoaiTienChange(row.id, v as LoaiTien)}>
-                        <SelectTrigger className="h-6 text-xs px-1.5 w-[56px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NDT">NDT</SelectItem>
-                          <SelectItem value="NT$">NT$</SelectItem>
-                          <SelectItem value="US$">US$</SelectItem>
-                          <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="VND">VND</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                    {row.soTien > 0 ? `${fmt(row.soTien)} ${LOAI_TIEN_LABEL[row.loaiTien]}` : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex justify-center">
-                      <Input
-                        type="number"
-                        value={isVND ? 1 : (row.tyGia || "")}
-                        onChange={(e) => !isVND && updateRow(row.id, "tyGia", Number(e.target.value) || 0)}
-                        disabled={isVND}
-                        className="h-6 text-xs px-1.5 py-0 text-center w-[72px] disabled:opacity-50"
-                      />
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-right font-semibold text-primary whitespace-nowrap">
-                    {row.soTien > 0 && row.tyGia > 0 ? `${fmt(thanhTienVND)} ₫` : "—"}
-                  </td>
-                  <td className="px-2 py-2">
-                    <Button
-                      size="icon" variant="ghost"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeRow(row.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
