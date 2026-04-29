@@ -140,7 +140,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
     setIsExporting(true);
     try {
       const selected = visibleBookings.filter((b) => selectedIds.has(b.id));
-      await exportBookingWord(tenDoan, selected, tauBookings);
+      await exportBookingWord(tenDoan, selected, tauBookings, soKhach);
       toast.success("Đã xuất file Word");
     } catch (err: any) {
       toast.error("Lỗi xuất: " + err.message);
