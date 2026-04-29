@@ -87,30 +87,6 @@ function p(
   });
 }
 
-function multiLineP(
-  lines: string[],
-  opts: {
-    bold?: boolean;
-    size?: number;
-    color?: string;
-    alignment?: (typeof AlignmentType)[keyof typeof AlignmentType];
-  } = {}
-): Paragraph {
-  const children: TextRun[] = [];
-  lines.forEach((line, i) => {
-    if (i > 0) children.push(new TextRun({ text: "", break: 1, font: "Arial", size: opts.size ?? 24 }));
-    children.push(
-      new TextRun({
-        text: line,
-        font: "Arial",
-        size: opts.size ?? 24,
-        bold: opts.bold,
-        color: opts.color,
-      })
-    );
-  });
-  return new Paragraph({ alignment: opts.alignment ?? AlignmentType.CENTER, children });
-}
 
 function formatDateMD(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -121,14 +97,21 @@ export async function exportBookingWord(
   tenDoan: string,
   selectedBookings: BookingKSDisplay[]
 ) {
-  // Sort by first date ascending
-  const sorted = [...selectedBookings].sort((a, b) => {
-    const da = a.ngay_dates[0] || "";
-    const db = b.ngay_dates[0] || "";
-    return da.localeCompare(db);
-  });
+  // Explode each booking into one entry per date, then sort by date
+  interface Entry {
+    date: string;
+    bk: BookingKSDisplay;
+  }
+  const entries: Entry[] = [];
+  for (const bk of selectedBookings) {
+    const dates = bk.ngay_dates.length > 0 ? bk.ngay_dates : [""];
+    for (const date of dates) {
+      entries.push({ date, bk });
+    }
+  }
+  entries.sort((a, b) => a.date.localeCompare(b.date));
 
-  const hotelRowCount = sorted.length * 3; // 3 rows per hotel
+  const hotelRowCount = entries.length * 3; // 3 rows per entry
 
   // ── Build table rows ──
   const rows: TableRow[] = [];
@@ -159,18 +142,15 @@ export async function exportBookingWord(
     })
   );
 
-  // Hotel rows: 3 rows per booking, col 0 "HOTEL" spans all hotel rows
-  sorted.forEach((bk, idx) => {
-    const sortedDates = [...bk.ngay_dates].sort((a, b) => new Date(a + "T00:00:00").getTime() - new Date(b + "T00:00:00").getTime());
+  // Hotel rows: 3 rows per entry (one date per entry)
+  entries.forEach(({ date, bk }, idx) => {
     const roomInfo = bk.ks_final || bk.ks_dat_truoc || "";
-
-    // Use Chinese location if available, fall back to Vietnamese
     const diaDiem = bk.khach_san_dia_diem_zh || bk.khach_san_dia_diem || "";
 
-    // Row A: dates | dia_diem | ten KS (bold) | tel
+    // Row A: date | dia_diem | hotel name | tel
     const rowAChildren: TableCell[] = [];
 
-    // HOTEL column — only on first hotel, rowSpan all
+    // HOTEL column — only on first entry, rowSpan all
     if (idx === 0) {
       rowAChildren.push(
         cell([p("HOTEL", { bold: true, size: 26 })], {
@@ -182,17 +162,15 @@ export async function exportBookingWord(
       );
     }
 
-    // 入住日 (rowSpan 3)
-    const dateParagraphs = sortedDates.map((d) =>
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [
-          new TextRun({ text: formatDateMD(d), font: "Arial", size: 24 }),
-        ],
-      })
-    );
+    // 入住日 — single date (rowSpan 3)
     rowAChildren.push(
-      cell(dateParagraphs, { width: COL_W[1], rowSpan: 3 })
+      cell(
+        [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: date ? formatDateMD(date) : "", font: "Arial", size: 24 })],
+        })],
+        { width: COL_W[1], rowSpan: 3 }
+      )
     );
 
     // 地點 (rowSpan 3)
@@ -200,7 +178,7 @@ export async function exportBookingWord(
       cell([p(diaDiem, { size: 24 })], { width: COL_W[2], rowSpan: 3 })
     );
 
-    // 飯店名 (bold) — no bottom border (merges visually with room info row)
+    // 飯店名 (bold) — no bottom border
     rowAChildren.push(
       cell([p(bk.khach_san_ten, { bold: true, size: 26 })], {
         width: COL_W[3],
@@ -243,9 +221,11 @@ export async function exportBookingWord(
     );
   });
 
-  // Aggregate TOTAL from ks_final values
-  const allFinals = sorted
-    .map((bk) => bk.ks_final || bk.ks_dat_truoc || "")
+  // Aggregate TOTAL — one entry per unique booking (not per date)
+  const seenIds = new Set<number>();
+  const allFinals = entries
+    .filter(({ bk }) => { if (seenIds.has(bk.id)) return false; seenIds.add(bk.id); return true; })
+    .map(({ bk }) => bk.ks_final || bk.ks_dat_truoc || "")
     .filter(Boolean);
   const totalText = allFinals.join(", ");
 
