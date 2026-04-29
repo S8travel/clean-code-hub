@@ -288,7 +288,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
     if (!ngayBatDau) return `Ngày ${ngaySo}`;
     try {
       const d = addDays(parseISO(ngayBatDau), ngaySo - 1);
-      return `N${ngaySo} · ${format(d, "d/M")}`;
+      return format(d, "d/M");
     } catch {
       return `Ngày ${ngaySo}`;
     }
@@ -405,7 +405,10 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           if (activeDntts.length === 0) continue;
 
           const activeDntt = activeDntts[0];
-          const thanhTien = row.tien_cong_ty;
+
+          const rowExtras = (extrasMap[row.id!] ?? []).filter((e) => e.nguoi_tt !== "hdv" && e.don_gia > 0);
+          const extrasTotal = rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+          const thanhTien = row.tien_cong_ty + extrasTotal;
 
           const soCoc = allDntts
             .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.trang_thai_thanh_toan === "da_tt")
@@ -433,7 +436,10 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
             ten_nh: row.mo_ta || "Dịch vụ",
             so_khach: row.so_luong,
             foc: null,
-            items: [{ so_luong: row.so_luong, don_gia: row.don_gia, ghi_chu: "" }],
+            items: [
+              { so_luong: row.so_luong, don_gia: row.don_gia, ghi_chu: "" },
+              ...rowExtras.map((e) => ({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta || "" })),
+            ],
             ncc: activeDntt.ten_nha_cung_cap
               ? {
                   ten: activeDntt.ten_nha_cung_cap || undefined,

@@ -58,6 +58,8 @@ export default function EmailPreviewModal({
   const htmlRef = useRef(html);
   htmlRef.current = html; // always latest, no stale closure
 
+  const sigEditorRef = useRef<HTMLDivElement>(null);
+
   // Callback ref fires when the editor div mounts (after Radix Portal's 2-phase mount).
   // This is more reliable than useLayoutEffect([open]) which fires before the portal
   // renders its content (Radix Portal uses an internal useLayoutEffect to set mounted=true).
@@ -115,7 +117,8 @@ export default function EmailPreviewModal({
 
   const saveSig = () => {
     const id = editingId || crypto.randomUUID();
-    const newSig: EmailSignature = { id, name: editName.trim() || "Chữ ký", html: editHtml };
+    const finalHtml = sigEditorRef.current?.innerHTML ?? editHtml;
+    const newSig: EmailSignature = { id, name: editName.trim() || "Chữ ký", html: finalHtml };
     upsert(newSig);
     setSelectedSigId(id);
     setSigEditing(false);
@@ -215,11 +218,16 @@ export default function EmailPreviewModal({
                   placeholder="Tên chữ ký (vd: Chữ ký công ty)"
                   className="h-7 text-xs"
                 />
-                <textarea
-                  value={editHtml}
-                  onChange={(e) => setEditHtml(e.target.value)}
-                  className="w-full h-28 text-xs border border-border rounded p-2 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-ring bg-white"
-                  placeholder="Nội dung HTML chữ ký..."
+                <div
+                  ref={(node) => {
+                    sigEditorRef.current = node;
+                    if (node) node.innerHTML = editHtml;
+                  }}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={(e) => setEditHtml((e.target as HTMLDivElement).innerHTML)}
+                  className="w-full min-h-[112px] text-xs border border-border rounded p-2 focus:outline-none focus:ring-2 focus:ring-ring bg-white empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
+                  data-placeholder="Nhập nội dung chữ ký..."
                 />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={saveSig} disabled={!editName.trim() && !editHtml.trim()}>Lưu</Button>
