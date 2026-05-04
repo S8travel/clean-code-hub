@@ -705,11 +705,18 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 
     const truaRows = dayRows.filter((r) => parseNH(r.mo_ta).bua === "trua");
     const toiRows = dayRows.filter((r) => parseNH(r.mo_ta).bua === "toi");
-    const maxLen = Math.max(truaRows.length, toiRows.length, 1);
+    const maxLen = Math.max(truaRows.length, toiRows.length);
 
+    const nhHasVal = (r: ChiPhiRow | null) =>
+      !!r && ((r.thanh_tien || 0) > 0 || (r.tien_cong_ty || 0) > 0 || (r.tien_hdv || 0) > 0);
+
+    let isFirstKeptRow = true;
     for (let i = 0; i < maxLen; i++) {
       const trua = truaRows[i] ?? null;
       const toi = toiRows[i] ?? null;
+
+      // Bỏ qua sub-row không có giá trị tài chính (tránh hiển thị rows 0 đồng thừa)
+      if (!nhHasVal(trua) && !nhHasVal(toi)) continue;
 
       const truaName = trua ? parseNH(trua.mo_ta).name : "";
       const truaTong = trua ? trua.so_luong * trua.don_gia : null;
@@ -721,7 +728,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       totalHdvNH += (trua?.tien_hdv ?? 0) + (toi?.tien_hdv ?? 0);
 
       rows.push([
-        cell(i === 0 ? dateStr : ""),
+        cell(isFirstKeptRow ? dateStr : ""),
         cell(truaName),
         trua ? cell(trua.so_luong, "number") : cell(""),
         trua ? cell(trua.don_gia, "number") : cell(""),
@@ -732,6 +739,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
         toiTong !== null ? cell(toiTong, "number") : cell(""),
         ctyTotal > 0 ? cell(ctyTotal, "number") : cell(""),
       ]);
+      isFirstKeptRow = false;
     }
   }
 
