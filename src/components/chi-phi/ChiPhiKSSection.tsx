@@ -30,8 +30,9 @@ import { cn } from "@/lib/utils";
 import KSRowInput from "./KSRowInput";
 import KSDNTTModal from "./KSDNTTModal";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
-import { exportDNTTKSWordFromData, exportDNTTKSBatchWordFromData } from "@/lib/export-dntt-ks-word";
 import { exportDNTTKSExcel } from "@/lib/export-dntt-ks-excel";
+import DNTTKSPreviewModal from "./DNTTKSPreviewModal";
+import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -115,6 +116,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     });
   const [batchPrinting, setBatchPrinting] = useState(false);
   const [selectedKsIds, setSelectedKsIds] = useState<number[]>([]);
+  const [previewItems, setPreviewItems] = useState<EdgeFunctionData[] | null>(null);
 
   const toggleSelectKs = (ksId: number) =>
     setSelectedKsIds((prev) => prev.includes(ksId) ? prev.filter((x) => x !== ksId) : [...prev, ksId]);
@@ -209,11 +211,6 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     };
   };
 
-  const buildAndPrintKS = async (ksId: number, dnttId: number) => {
-    const data = buildKSData(ksId, dnttId);
-    await exportDNTTKSWordFromData(data);
-  };
-
   const validateAndBuildPairs = (activeDnttByKs: Record<number, number>) => {
     const pairs = selectedKsIds
       .map((ksId) => ({ ksId, dnttId: activeDnttByKs[ksId] }))
@@ -231,22 +228,14 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     return pairs;
   };
 
-  const handlePrintSelected = async (activeDnttByKs: Record<number, number>) => {
+  const handlePrintSelected = (activeDnttByKs: Record<number, number>) => {
     const pairs = validateAndBuildPairs(activeDnttByKs);
     if (!pairs) return;
-    setBatchPrinting(true);
     try {
-      if (pairs.length === 1) {
-        await buildAndPrintKS(pairs[0].ksId, pairs[0].dnttId);
-      } else {
-        const allData = pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId));
-        await exportDNTTKSBatchWordFromData(allData, tenDoan || String(doanId), currentUserName);
-      }
-      toast.success("Đã xuất file Word");
+      const allData = pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId));
+      setPreviewItems(allData);
     } catch (err: any) {
-      toast.error("Lỗi xuất file: " + (err?.message || ""));
-    } finally {
-      setBatchPrinting(false);
+      toast.error("Lỗi tải dữ liệu: " + (err?.message || ""));
     }
   };
 
@@ -768,11 +757,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => handlePrintSelected(activeDnttByKs)}
-                disabled={batchPrinting || ksWithDnttSelected === 0}
+                disabled={ksWithDnttSelected === 0}
                 title={ksWithDnttSelected === 0 ? "Không có KS nào đang có ĐNTT" : undefined}
               >
                 <Printer className="h-3.5 w-3.5 mr-1" />
-                {batchPrinting ? "Đang xuất..." : `In Word${ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}`}
+                {`In Word${ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}`}
               </Button>
               <Button
                 size="sm"
@@ -1397,6 +1386,13 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ĐNTT preview modal */}
+      <DNTTKSPreviewModal
+        open={!!previewItems}
+        items={previewItems ?? []}
+        onClose={() => setPreviewItems(null)}
+      />
     </div>
   );
 }

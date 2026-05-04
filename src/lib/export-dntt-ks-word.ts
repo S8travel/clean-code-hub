@@ -84,6 +84,7 @@ export interface EdgeFunctionData {
   la_coc?: boolean;
   nguoiDeNghi?: string;
   ghiChu?: string;
+  lyDoText?: string;
 }
 
 function buildBankChildren(ncc: EdgeFunctionData["ncc"]): Paragraph[] {
@@ -279,9 +280,9 @@ function buildDoc(
 export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
   const { doan, ks, la_coc, nguoiDeNghi = "" } = data;
   const soKhachSuffix = doan.so_khach ? ` - ${doan.so_khach} khách` : "";
-  const lyDoText = la_coc
+  const lyDoText = data.lyDoText ?? (la_coc
     ? `Đề nghị thanh toán tiền cọc khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`
-    : `Đề nghị thanh toán tiền khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`;
+    : `Đề nghị thanh toán tiền khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`);
 
   const doc = buildDoc(
     buildHeaderTable(),
@@ -308,7 +309,7 @@ export async function exportDNTTKSBatchWordFromData(
     buildHeaderTable(),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
     new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
-    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ text: `Đề nghị thanh toán tiền khách sạn cho đoàn ${tenDoan}`, font: "Arial", size: 20 })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ text: items[0]?.lyDoText ?? `Đề nghị thanh toán tiền khách sạn cho đoàn ${tenDoan}`, font: "Arial", size: 20 })] }),
     buildKSMergedTable(items),
     buildGhiChuPara(items),
     buildSignatureTable(nguoiDeNghi),
