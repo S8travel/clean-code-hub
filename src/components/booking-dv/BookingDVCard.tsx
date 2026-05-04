@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-booking-dv";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 
@@ -79,6 +80,8 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   });
   const [expanded, setExpanded] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [zaloModalOpen, setZaloModalOpen] = useState(false);
+  const [zaloText, setZaloText] = useState("");
   const [emailTo, setEmailTo] = useState(row.email_nha_cung_cap || "");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -254,6 +257,42 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     toast.success("Đã mở email client");
   };
 
+  const buildZaloText = () => {
+    const nccName = tenNCC || row.ten_nha_cung_cap || "Quý đối tác";
+    const userName = userProfile?.ho_ten || currentUserName;
+    const phone = userProfile?.so_dien_thoai;
+    const parts: string[] = [
+      `Kính gửi ${nccName},`,
+      "",
+      `Công ty TNHH Du lịch S8 xin đặt dịch vụ cho đoàn ${tenDoan}:`,
+      "",
+      ...dvSorted.map((d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khách)`),
+      ...(ghiChu ? ["", `Ghi chú: ${ghiChu}`] : []),
+      "",
+      "Kính nhờ quý đối tác xác nhận booking trong vòng 24 giờ.",
+      "Trân trọng cảm ơn!",
+      "",
+      userName,
+      ...(phone ? [phone] : []),
+      "",
+      "CÔNG TY TNHH DU LỊCH S8",
+      "MST: 0402021137",
+      "Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam",
+      "Email: s8travel.hddt@gmail.com",
+    ];
+    return parts.join("\n");
+  };
+
+  const handleSendZalo = () => {
+    setZaloText(buildZaloText());
+    setZaloModalOpen(true);
+  };
+
+  const handleConfirmZaloSent = () => {
+    save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
+    setZaloModalOpen(false);
+  };
+
   // ── Status actions ─────────────────────────────────────────────────
   const handleConfirm = () => {
     save({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
@@ -407,7 +446,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                     size="sm"
                     variant="outline"
                     className="h-8 text-xs text-green-600 border-green-300 hover:bg-green-50"
-                    onClick={() => updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates: { booking_status: "cho_xac_nhan" } })}
+                    onClick={handleSendZalo}
                     disabled={updateMut.isPending}
                   >
                     Gửi Zalo
@@ -492,6 +531,27 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         onMailtoFallback={handleMailtoFallback}
         sending={sending}
       />
+      <Dialog open={zaloModalOpen} onOpenChange={setZaloModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nội dung gửi Zalo</DialogTitle>
+          </DialogHeader>
+          <textarea
+            readOnly
+            value={zaloText}
+            className="w-full text-sm font-mono border border-input rounded-md px-3 py-2 bg-muted/30 resize-none focus:outline-none min-h-[320px]"
+            onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
+          />
+          <div className="flex justify-between gap-2 pt-1">
+            <Button variant="outline" onClick={() => { navigator.clipboard.writeText(zaloText); toast.success("Đã sao chép"); }}>
+              Sao chép
+            </Button>
+            <Button onClick={handleConfirmZaloSent} disabled={updateMut.isPending}>
+              Đã gửi
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

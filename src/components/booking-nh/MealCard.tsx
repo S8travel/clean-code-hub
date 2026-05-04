@@ -20,6 +20,7 @@ import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const STATUS_CFG = {
   chua_gui:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -94,6 +95,8 @@ export default function MealCard({
   const [emailSubject, setEmailSubject] = useState("");
   const [emailHtml, setEmailHtml] = useState("");
   const [sending, setSending] = useState(false);
+  const [zaloModalOpen, setZaloModalOpen] = useState(false);
+  const [zaloText, setZaloText] = useState("");
 
   // Set menu đang chọn: ưu tiên booking đã lưu, fallback về điều tour
   const [selectedSetMenuId, setSelectedSetMenuId] = useState<number | null>(
@@ -376,17 +379,58 @@ export default function MealCard({
     toast.success("Đã mở email client");
   };
 
+  const buildZaloText = () => {
+    const buaLabel = buaAn === "trua" ? "Ăn trưa" : "Ăn tối";
+    const userName = userProfile?.ho_ten || currentUserName;
+    const phone = userProfile?.so_dien_thoai;
+    const parts: string[] = [
+      `Kính gửi ${nhaHangTen || "Quý nhà hàng"},`,
+      "",
+      `Công ty TNHH Du lịch S8 xin đặt ${buaLabel.toLowerCase()} cho đoàn ${tenDoan || "—"}:`,
+      "",
+      ...(ngayDate ? [`- Ngày: ${fmtDate(ngayDate)}`] : []),
+      `- Bữa ăn: ${buaLabel}`,
+      ...(soKhach != null ? [`- Số khách: ${soKhach} khách`] : []),
+      ...(soKhachLon ? [`  • Người lớn: ${soKhachLon} khách`] : []),
+      ...(soKhachEm1 ? [`  • TE 6–10 tuổi: ${soKhachEm1} khách`] : []),
+      ...(soKhachEm2 ? [`  • TE dưới 6 tuổi: ${soKhachEm2} khách`] : []),
+      ...(soNoidBo ? [`- Nội bộ: ${soNoidBo} suất`] : []),
+      ...(selectedMenu ? [`- Set menu: ${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}`] : []),
+      ...(monList.length > 0 ? ["", "Danh sách món:", ...monList.map((m, i) => `${i + 1}. ${m}`)] : []),
+      ...(ghiChu ? ["", `Ghi chú: ${ghiChu}`] : []),
+      "",
+      "Kính nhờ quý nhà hàng xác nhận trong vòng 24 giờ.",
+      "Trân trọng cảm ơn!",
+      "",
+      userName,
+      ...(phone ? [phone] : []),
+      "",
+      "CÔNG TY TNHH DU LỊCH S8",
+      "MST: 0402021137",
+      "Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam",
+      "Email: s8travel.hddt@gmail.com",
+    ];
+    return parts.join("\n");
+  };
+
   // Status actions
   const handleSend = () => openEmailModal();
   const handleSendZalo = () => {
+    setZaloText(buildZaloText());
+    setZaloModalOpen(true);
+  };
+  const handleConfirmZaloSent = () => {
+    const now = new Date().toISOString();
     if (booking?.id) {
-      updateMut.mutate({ id: booking.id, doan_id: doanId, booking_status: "da_gui" });
+      updateMut.mutate({ id: booking.id, doan_id: doanId, booking_status: "da_gui", sent_at: now, sent_by: currentUserName });
     } else {
       upsertMut.mutate({
         doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn,
         nha_hang_id: nhaHangId!, mon_an_snapshot: monList, booking_status: "da_gui",
+        sent_at: now, sent_by: currentUserName,
       } as any);
     }
+    setZaloModalOpen(false);
   };
   const handleConfirm = () => {
     saveBooking({ booking_status: "nh_xac_nhan" });
@@ -632,6 +676,27 @@ export default function MealCard({
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
     />
+    <Dialog open={zaloModalOpen} onOpenChange={setZaloModalOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Nội dung gửi Zalo</DialogTitle>
+        </DialogHeader>
+        <textarea
+          readOnly
+          value={zaloText}
+          className="w-full text-sm font-mono border border-input rounded-md px-3 py-2 bg-muted/30 resize-none focus:outline-none min-h-[320px]"
+          onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
+        />
+        <div className="flex justify-between gap-2 pt-1">
+          <Button variant="outline" onClick={() => { navigator.clipboard.writeText(zaloText); toast.success("Đã sao chép"); }}>
+            Sao chép
+          </Button>
+          <Button onClick={handleConfirmZaloSent} disabled={updateMut.isPending || upsertMut.isPending}>
+            Đã gửi
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
