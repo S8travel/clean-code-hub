@@ -112,6 +112,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         <div className="space-y-0">
         {day.items.map((item, idx) => {
           const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
+          const selectedCanhDiem = canhDiemList.find((c) => c.id === item.canh_diem_id);
           return (
             <div key={idx} className="group flex items-center gap-0.5">
               <div className="flex-1 min-w-0 space-y-0.5">
@@ -126,6 +127,14 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   placeholder="Chọn cảnh điểm"
                   className="h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3"
                 />
+                {selectedCanhDiem && (
+                  <DetailLine
+                    item={{
+                      dia_chi: selectedCanhDiem.dia_diem,
+                      so_dien_thoai: selectedCanhDiem.so_dien_thoai,
+                    }}
+                  />
+                )}
                 {noteOpen && (
                   <textarea
                     className="w-full text-[12px] border border-border/40 rounded px-2 py-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"

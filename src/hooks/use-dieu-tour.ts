@@ -11,6 +11,7 @@ export interface CanhDiemItem {
   nguoi_thanh_toan: string | null;
   icon: string | null;
   dia_diem: string | null;
+  so_dien_thoai: string | null;
   email: string | null;
 }
 
@@ -92,7 +93,7 @@ export function useCanhDiem() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("canh_diem")
-        .select("id, ten, loai, co_phi, gia_mac_dinh, nguoi_thanh_toan, icon, dia_diem, email")
+        .select("id, ten, loai, co_phi, gia_mac_dinh, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email")
         .order("ten");
       if (error) throw error;
       return data as CanhDiemItem[];
