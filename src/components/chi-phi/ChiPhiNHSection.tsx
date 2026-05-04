@@ -21,7 +21,8 @@ import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useCancelDNTT, useCreateCanTru, useUpdateDNTT } from "@/hooks/use-dntt";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
-import { exportDNTTNHWordFromData, type NHDocEntry } from "@/lib/export-dntt-nh-word";
+import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
+import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { toast } from "sonner";
 
@@ -112,7 +113,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
   useEffect(() => { extrasMapRef.current = extrasMap; }, [extrasMap]);
 
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
-  const [batchPrinting, setBatchPrinting] = useState(false);
+  const [previewNHData, setPreviewNHData] = useState<NHDocData | null>(null);
 
   const [cancelTarget, setCancelTarget] = useState<{
     dnttId: number; isPaid: boolean; nhName: string;
@@ -603,7 +604,6 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
 
   const handlePrintSelected = async () => {
     if (!nhData || selectedKeys.length === 0) return;
-    setBatchPrinting(true);
     try {
       const entries: NHDocEntry[] = [];
       // Track cấn trừ đã phân bổ cho từng NCC (chỉ hiện 1 lần)
@@ -683,16 +683,13 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
         return;
       }
 
-      await exportDNTTNHWordFromData({
+      setPreviewNHData({
         doan: { ten_doan: tenDoan || String(doanId) },
         entries,
         nguoiDeNghi: currentUserName,
       });
-      toast.success("Đã xuất file Word");
     } catch (err: any) {
-      toast.error("Lỗi xuất file: " + (err?.message || ""));
-    } finally {
-      setBatchPrinting(false);
+      toast.error("Lỗi: " + (err?.message || ""));
     }
   };
 
@@ -732,7 +729,6 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
               size="sm"
               className="h-7 text-xs"
               onClick={handlePrintSelected}
-              disabled={batchPrinting}
             >
               <Printer className="h-3.5 w-3.5 mr-1" />
               In ĐNTT ({selectedKeys.length})
@@ -1612,6 +1608,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DNTTNHPreviewModal
+        open={!!previewNHData}
+        data={previewNHData}
+        onClose={() => setPreviewNHData(null)}
+      />
     </div>
   );
 }

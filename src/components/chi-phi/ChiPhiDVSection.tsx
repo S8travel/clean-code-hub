@@ -17,7 +17,8 @@ import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteCh
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
-import { exportDNTTNHWordFromData, type NHDocEntry } from "@/lib/export-dntt-nh-word";
+import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
+import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -73,7 +74,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
   const adjustMut = useCreateAdjustment();
-  const [batchPrinting, setBatchPrinting] = useState(false);
+  const [previewDVData, setPreviewDVData] = useState<NHDocData | null>(null);
 
   // Inline edit state for DNTT amount
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -387,7 +388,6 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
   const handlePrintSelected = async () => {
     if (selectedIds.length === 0) return;
-    setBatchPrinting(true);
     try {
       const entries: NHDocEntry[] = [];
       const canTruShownByNcc: Record<number, boolean> = {};
@@ -478,16 +478,13 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
         return;
       }
 
-      await exportDNTTNHWordFromData({
+      setPreviewDVData({
         doan: { ten_doan: tenDoan || String(doanId) },
         entries,
         nguoiDeNghi: currentUserName,
       });
-      toast.success("Đã xuất file Word");
     } catch (err: any) {
-      toast.error("Lỗi xuất file: " + (err?.message || ""));
-    } finally {
-      setBatchPrinting(false);
+      toast.error("Lỗi: " + (err?.message || ""));
     }
   };
 
@@ -502,7 +499,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
             <>
-              <Button size="sm" className="h-7 text-xs" onClick={handlePrintSelected} disabled={batchPrinting}>
+              <Button size="sm" className="h-7 text-xs" onClick={handlePrintSelected}>
                 <Printer className="h-3.5 w-3.5 mr-1" />
                 In ĐNTT ({selectedIds.length})
               </Button>
@@ -568,8 +565,13 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                 const daTT = paidDntts.reduce((s, d) => s + d.so_tien, 0);
                 const daDeNghi = pendingDntts.reduce((s, d) => s + d.so_tien, 0);
                 const thanhTien = row.tien_cong_ty;
-                const isDaTT = thanhTien > 0 && daTT >= thanhTien;
-                const conLai = Math.max(0, thanhTien - daTT);
+                const rowExtras = extrasMap[row.id!] || [];
+                const extrasCtTotal = rowExtras
+                  .filter(e => e.nguoi_tt !== "hdv")
+                  .reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+                const totalTienCt = thanhTien + extrasCtTotal;
+                const isDaTT = totalTienCt > 0 && daTT >= totalTienCt;
+                const conLai = Math.max(0, totalTienCt - daTT);
                 const congNoAmount = allDntts.filter(
                   d => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no",
                 ).reduce((s, d) => s + d.so_tien, 0);
@@ -584,7 +586,6 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                 );
                 const shownDntts = [...activeDntts, ...rejectedDntts];
                 const isSelected = row.id != null && selectedIds.includes(row.id);
-                const rowExtras = extrasMap[row.id!] || [];
 
                 return [
                   <tr key={row.id} className={cn("hover:bg-muted/20", isSelected && "bg-primary/5")}>
@@ -796,15 +797,15 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                         {row.thanh_toan_dinh_ky && activeDntts.length === 0 && (
                           <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
                         )}
-                        {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
+                        {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && totalTienCt > 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
-                            onClick={() => openDvModal(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
+                            onClick={() => openDvModal(row.id!, totalTienCt, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
                             ĐNTT
                           </Button>
                         )}
                         {nguoiTt === "cong_ty" && activeDntts.length > 0 && daDeNghi === 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
-                            onClick={() => openDvModal(row.id!, conLai > 0 ? conLai : thanhTien, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
+                            onClick={() => openDvModal(row.id!, conLai > 0 ? conLai : totalTienCt, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
                             {conLai > 0 ? "ĐNTT còn lại" : "ĐNTT bổ sung"}
                           </Button>
                         )}
@@ -1077,6 +1078,12 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DNTTNHPreviewModal
+        open={!!previewDVData}
+        data={previewDVData}
+        onClose={() => setPreviewDVData(null)}
+      />
     </div>
   );
 }
