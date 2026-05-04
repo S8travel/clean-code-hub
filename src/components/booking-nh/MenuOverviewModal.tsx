@@ -228,6 +228,15 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
           <DialogTitle>Menu tổng quan cả đoàn</DialogTitle>
         </DialogHeader>
 
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrint} disabled={daysWithNH.length === 0}>
+            <Printer className="h-4 w-4 mr-1.5" /> In menu
+          </Button>
+          <Button variant="outline" size="sm" onClick={handlePrintXihong} disabled={daysWithNH.length === 0}>
+            <Printer className="h-4 w-4 mr-1.5" /> In kiểu Xihong
+          </Button>
+        </div>
+
         {daysWithNH.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             Chưa có nhà hàng nào được chỉ định trong điều tour.
@@ -327,15 +336,7 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
           </div>
         )}
 
-        <div className="flex justify-between pt-2">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handlePrint} disabled={daysWithNH.length === 0}>
-              <Printer className="h-4 w-4 mr-1.5" /> In menu
-            </Button>
-            <Button variant="outline" size="sm" onClick={handlePrintXihong} disabled={daysWithNH.length === 0}>
-              <Printer className="h-4 w-4 mr-1.5" /> In kiểu Xihong
-            </Button>
-          </div>
+        <div className="flex justify-end pt-2">
           <Button variant="outline" onClick={onClose}>Đóng</Button>
         </div>
       </DialogContent>

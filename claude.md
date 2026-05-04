@@ -114,7 +114,7 @@ khach_san       id, ten, dia_chi, dia_diem, foc_khach, foc_mien
 
 nha_hang        id, ten, dia_chi, dia_diem, foc_khach, foc_mien
                 chiet_khau_phan_tram
-                nguoi_thanh_toan, nha_cung_cap_id, email, website, hinh_anh
+                nguoi_thanh_toan, nha_cung_cap_id, email, so_dien_thoai, website, hinh_anh
 
 nha_hang_set_menu     id, nha_hang_id, ten_set, gia, don_vi, ghi_chu
 nha_hang_set_menu_mon id, set_menu_id, ten_mon, thu_tu
