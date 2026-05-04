@@ -36,6 +36,7 @@ import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
+import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
 
 function TabBadge({ count }: { count: number }) {
   if (count === 0) return null;
@@ -90,6 +91,7 @@ export default function DoanDetail() {
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("dieu-tour");
   const [exportingWord, setExportingWord] = useState(false);
+  const [showWordPreview, setShowWordPreview] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const queryClient = useQueryClient();
 
@@ -242,8 +244,9 @@ export default function DoanDetail() {
     scheduleSave();
   }, [scheduleSave]);
 
-  const handleExportWord = useCallback(async () => {
+  const handleConfirmExportWord = useCallback(async (previewText: string) => {
     if (!doan) return;
+    handleSetGhiChuDieuTour(previewText);
     setExportingWord(true);
     try {
       await exportDieuTourWord({
@@ -268,12 +271,12 @@ export default function DoanDetail() {
         totalKhach: doan.so_khach ?? totalKhach,
         chuThichKhach,
         gifts,
-        ghiChuDieuTour,
+        ghiChuDieuTour: previewText,
       });
     } finally {
       setExportingWord(false);
     }
-  }, [doan, days, canhDiemList, nhaHangList, khachSanList, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, gifts, ghiChuDieuTour]);
+  }, [doan, days, canhDiemList, nhaHangList, khachSanList, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, gifts, handleSetGhiChuDieuTour]);
 
   // Warning badge counts
   const bookingKSBadgeCount = useMemo(() =>
@@ -367,7 +370,7 @@ export default function DoanDetail() {
                 size="sm"
                 variant="outline"
                 className="h-8 text-xs gap-1.5"
-                onClick={handleExportWord}
+                onClick={() => setShowWordPreview(true)}
                 disabled={exportingWord || days.length === 0}
               >
                 <FileDown className="h-3.5 w-3.5" />
@@ -415,6 +418,12 @@ export default function DoanDetail() {
                 className="resize-none text-sm"
               />
             </div>
+            <DieuTourWordPreviewModal
+              open={showWordPreview}
+              initialText={ghiChuDieuTour}
+              onClose={() => setShowWordPreview(false)}
+              onExport={handleConfirmExportWord}
+            />
           </TabsContent>
 
           <TabsContent value="booking-ks" className="mt-4">

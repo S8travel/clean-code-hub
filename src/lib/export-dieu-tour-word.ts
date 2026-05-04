@@ -392,11 +392,14 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
         children: [new TextRun({ text: "Ghi chú: ", bold: true, size: FS, font: "Times New Roman" })],
       })
     );
-    ghiChuParas.push(
-      new Paragraph({
-        children: [new TextRun({ text: ghiChuDieuTour, size: FS, font: "Times New Roman" })],
-      })
-    );
+    for (const line of ghiChuDieuTour.split("\n")) {
+      ghiChuParas.push(
+        new Paragraph({
+          spacing: { before: 0, after: 0 },
+          children: [new TextRun({ text: line, size: FS, font: "Times New Roman" })],
+        })
+      );
+    }
   }
 
   const spacer = new Paragraph({ spacing: { before: 100, after: 0 }, children: [] });
