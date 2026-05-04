@@ -111,6 +111,19 @@ export default function DoanDetail() {
     if (!doan) return;
     const generatedDays = generateDays(doan.ngay_di, doan.ngay_ve);
     const merged = mergeDaysWithDB(generatedDays, dbNgayRows, dbNgayItems);
+    const menuDataByDay = new Map(menuData.map((m) => [m.doan_ngay_id, m]));
+    const mergedWithBookingNh = merged.map((day) => {
+      if (!day.id) return day;
+      const menuDay = menuDataByDay.get(day.id);
+      if (!menuDay) return day;
+      return {
+        ...day,
+        an_trua_nha_hang_id: day.an_trua_nha_hang_id ?? menuDay.an_trua_nha_hang_id,
+        an_toi_nha_hang_id: day.an_toi_nha_hang_id ?? menuDay.an_toi_nha_hang_id,
+        an_trua_set_menu_id: day.an_trua_set_menu_id ?? menuDay.an_trua_set_menu_id,
+        an_toi_set_menu_id: day.an_toi_set_menu_id ?? menuDay.an_toi_set_menu_id,
+      };
+    });
 
     if (!initialized) {
       setBangDon(doan.bang_don || "");
@@ -126,9 +139,9 @@ export default function DoanDetail() {
     }
 
     if (!hasPendingChangesRef.current) {
-      setDays(merged);
+      setDays(mergedWithBookingNh);
     }
-  }, [doan, dbNgayRows, dbNgayItems]);
+  }, [doan, dbNgayRows, dbNgayItems, menuData]);
 
   // Auto-init doan_ngay rows
   useEffect(() => {
