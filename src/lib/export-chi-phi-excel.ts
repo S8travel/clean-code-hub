@@ -3,7 +3,7 @@ import { saveAs } from "file-saver";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
 
-type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note";
+type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note" | "total" | "total_number";
 
 interface SheetCell {
   value: string | number | null | undefined;
@@ -23,6 +23,7 @@ interface ExportChiPhiDoanExcelParams {
   dnttList: DNTTRow[];
   hdvData?: HDVSectionData | null;
   opName?: string;
+  ksData?: { ngayRows: any[]; khachSanMap: Record<number, any> } | null;
 }
 
 const encoder = new TextEncoder();
@@ -103,6 +104,8 @@ const STYLE_IDS: Record<CellStyle, number> = {
   label: 4,
   number: 5,
   note: 6,
+  total: 7,
+  total_number: 8,
 };
 
 function cell(value: SheetCell["value"], style: CellStyle = "text", colSpan = 1): SheetCell {
@@ -371,13 +374,14 @@ function buildStylesXml(): string {
     <font><sz val="11"/><name val="Arial"/><family val="2"/><b/></font>
     <font><sz val="11"/><name val="Arial"/><family val="2"/><i/></font>
   </fonts>
-  <fills count="6">
+  <fills count="7">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF1D4ED8"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF1F2937"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFE5E7EB"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF9FAFB"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFF3CD"/><bgColor indexed="64"/></patternFill></fill>
   </fills>
   <borders count="2">
     <border><left/><right/><top/><bottom/><diagonal/></border>
@@ -392,7 +396,7 @@ function buildStylesXml(): string {
   <cellStyleXfs count="1">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
   </cellStyleXfs>
-  <cellXfs count="7">
+  <cellXfs count="9">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1">
       <alignment vertical="top" wrapText="1"/>
     </xf>
@@ -413,6 +417,12 @@ function buildStylesXml(): string {
     </xf>
     <xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1">
       <alignment vertical="top" wrapText="1"/>
+    </xf>
+    <xf numFmtId="0" fontId="2" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment vertical="center" wrapText="1"/>
+    </xf>
+    <xf numFmtId="164" fontId="2" fillId="6" borderId="1" xfId="0" applyFont="1" applyNumberFormat="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="right" vertical="top"/>
     </xf>
   </cellXfs>
   <cellStyles count="1">
@@ -553,6 +563,262 @@ function createZipBlob(files: Array<{ name: string; content: string }>): Blob {
   return new Blob([...localParts, ...centralParts, endHeader] as BlobPart[], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+}
+
+function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
+  const { doan, chiPhiRows, hdvData, opName, ksData } = params;
+
+  const ngayRowById: Record<number, any> = {};
+  (ksData?.ngayRows || []).forEach((r: any) => { ngayRowById[r.id] = r; });
+
+  const activeRows = chiPhiRows.filter(isActiveChiPhi);
+  const ksRows = activeRows.filter((r) => r.danh_muc === "khach_san");
+  const nhRows = activeRows.filter((r) => r.danh_muc === "nha_hang");
+  const veRows = activeRows.filter((r) => r.danh_muc === "canh_diem");
+  const dvRows = activeRows.filter((r) => !["khach_san", "nha_hang", "canh_diem"].includes(r.danh_muc));
+
+  function ngaySoToDate(ngaySo: number | null): string {
+    if (!ngaySo || ngaySo <= 0 || !doan?.ngay_di) return "—";
+    const d = new Date(doan.ngay_di + "T00:00:00");
+    d.setDate(d.getDate() + ngaySo - 1);
+    return format(d, "dd/MM/yyyy");
+  }
+
+  function parseNH(moTa: string | null): { bua: "trua" | "toi" | null; name: string } {
+    if (!moTa) return { bua: null, name: "—" };
+    if (moTa.startsWith("[trua] ")) return { bua: "trua", name: moTa.slice(7) };
+    if (moTa.startsWith("[toi] ")) return { bua: "toi", name: moTa.slice(6) };
+    const m = moTa.match(/^(.+)\s+\((trưa|tối)\)$/);
+    if (m) return { bua: m[2] === "trưa" ? "trua" : "toi", name: m[1] };
+    return { bua: null, name: moTa };
+  }
+
+  const rows: SheetCell[][] = [];
+
+  // ─── HEADER ───
+  const soKhachText = `${doan?.so_khach_lon ?? 0}+${doan?.so_khach_tl ?? 0}TL`;
+  const quaTang = Array.isArray(doan?.tang_pham)
+    ? (doan.tang_pham as string[]).join(", ")
+    : doan?.tang_pham ? String(doan.tang_pham) : "—";
+  const shopText = doan?.shopping ? "SHOPPING" : "NO SHOPPING";
+
+  rows.push([cell("HÀNH TRÌNH TOUR", "title", 10)]);
+  rows.push([cell("", "text", 10)]);
+  rows.push([
+    cell("Đoàn (MA ĐOÀN)", "label"), cell(doan?.ten_doan || "—", "text", 4),
+    cell("Đón đoàn (BIEN DON DOAN)", "label"), cell(doan?.truong_doan || doan?.bang_don || "—", "text", 4),
+  ]);
+  rows.push([
+    cell("Số khách (SO PAX)", "label"), cell(soKhachText, "text", 4),
+    cell("Ngày (NGAY)", "label"), cell(`${formatDateValue(doan?.ngay_di)} - ${formatDateValue(doan?.ngay_ve)}`, "text", 4),
+  ]);
+  rows.push([
+    cell("Hướng dẫn (HUONG DAN)", "label"), cell(getHdvText(doan, hdvData), "text", 4),
+    cell("Tính chất đoàn (T/C DOAN)", "label"), cell(shopText, "text", 4),
+  ]);
+  rows.push([
+    cell("Nhà xe (NHA XE)", "label"), cell(getXeText(doan), "text", 4),
+    cell("Điều hành xe (DIEU HANH XE)", "label"), cell("—", "text", 4),
+  ]);
+  rows.push([
+    cell("Quà tặng (QUA TANG)", "label"), cell(quaTang, "text", 4),
+    cell("Tính toán (OP)", "label"), cell(opName || "—", "text", 4),
+  ]);
+  rows.push([
+    cell("Chuyến bay đón", "label"), cell(doan?.chuyen_bay_don || "—", "text", 4),
+    cell("Chuyến bay tiễn", "label"), cell(doan?.chuyen_bay_tien || "—", "text", 4),
+  ]);
+  rows.push([cell("", "text", 10)]);
+
+  // ─── KHÁCH SẠN ───
+  rows.push([cell("KHÁCH SẠN 飯店 — Khách sạn không có phòng nội bộ 飯店", "section", 10)]);
+  rows.push([
+    cell("DATE日期", "header"), cell("KHÁCH SẠN 飯店", "header"), cell("LOẠI PHÒNG", "header"),
+    cell("C/I 入境", "header"), cell("C/O 出境", "header"), cell("ROOMS 數量", "header"),
+    cell("FOC 16免1", "header"), cell("PRICE 價格", "header"),
+    cell("HDV TT 導遊付款", "header"), cell("CTY TT 公司付款", "header"),
+  ]);
+
+  let totalHdvKS = 0, totalCtyKS = 0;
+  for (const row of ksRows) {
+    const ngayRow = row.ref_doan_ngay_id ? ngayRowById[row.ref_doan_ngay_id] : null;
+    const ksId = ngayRow?.khach_san_id;
+    const ks = ksId != null ? ksData?.khachSanMap?.[ksId] : null;
+
+    const hotelName = ks?.ten || "—";
+    const ciDateStr = ngayRow?.ngay_date ? formatDateValue(ngayRow.ngay_date) : "—";
+    const coDateRaw = ngayRow?.ngay_date ? new Date(ngayRow.ngay_date + "T00:00:00") : null;
+    if (coDateRaw) coDateRaw.setDate(coDateRaw.getDate() + 1);
+    const coDateStr = coDateRaw ? format(coDateRaw, "dd/MM/yyyy") : "—";
+    const bookingCode = ngayRow?.ks_ma_code || "code đoàn";
+    const focText = ks?.foc_khach && ks?.foc_mien ? `${ks.foc_khach}免${ks.foc_mien}` : "—";
+    const hdvTT = row.tien_hdv || 0;
+    const ctyTT = row.tien_cong_ty || 0;
+    totalHdvKS += hdvTT;
+    totalCtyKS += ctyTT;
+
+    rows.push([
+      cell(ciDateStr),
+      cell(hotelName),
+      cell(row.mo_ta || "—"),
+      cell(ciDateStr),
+      cell(coDateStr),
+      cell(row.so_luong || 0, "number"),
+      cell(focText),
+      cell(row.don_gia || 0, "number"),
+      hdvTT > 0 ? cell(hdvTT, "number") : cell(bookingCode),
+      cell(ctyTT, "number"),
+    ]);
+  }
+  if (ksRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  rows.push([cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"), cell(totalHdvKS, "total_number"), cell(totalCtyKS, "total_number")]);
+  rows.push([cell("", "text", 10)]);
+
+  // ─── NHÀ HÀNG ───
+  rows.push([cell("NHÀ HÀNG 餐廳 — Nhà hàng có nội bộ 餐廳", "section", 10)]);
+  rows.push([
+    cell("DATE日期", "header"),
+    cell("AN TRUA 午餐", "header", 4),
+    cell("AN TOI 晚餐", "header", 4),
+    cell("THANH TOÁN", "header"),
+  ]);
+  rows.push([
+    cell("DATE日期", "header"),
+    cell("餐廳", "header"), cell("數量", "header"), cell("價格", "header"), cell("總計", "header"),
+    cell("餐廳", "header"), cell("數量", "header"), cell("價格", "header"), cell("總計", "header"),
+    cell("總金額", "header"),
+  ]);
+
+  let totalCtyNH = 0, totalHdvNH = 0;
+
+  const nhByNgaySo = new Map<number, ChiPhiRow[]>();
+  for (const row of nhRows) {
+    const key = row.ngay_so ?? 0;
+    if (!nhByNgaySo.has(key)) nhByNgaySo.set(key, []);
+    nhByNgaySo.get(key)!.push(row);
+  }
+  const sortedNgaySo = [...nhByNgaySo.keys()].sort((a, b) => a - b);
+
+  for (const ngaySo of sortedNgaySo) {
+    const dayRows = nhByNgaySo.get(ngaySo)!;
+    const dateStr = ngaySo > 0 ? ngaySoToDate(ngaySo) : "—";
+
+    const truaRows = dayRows.filter((r) => parseNH(r.mo_ta).bua === "trua");
+    const toiRows = dayRows.filter((r) => parseNH(r.mo_ta).bua === "toi");
+    const maxLen = Math.max(truaRows.length, toiRows.length, 1);
+
+    for (let i = 0; i < maxLen; i++) {
+      const trua = truaRows[i] ?? null;
+      const toi = toiRows[i] ?? null;
+
+      const truaName = trua ? parseNH(trua.mo_ta).name : "";
+      const truaTong = trua ? trua.so_luong * trua.don_gia : null;
+      const toiName = toi ? parseNH(toi.mo_ta).name : "";
+      const toiTong = toi ? toi.so_luong * toi.don_gia : null;
+
+      const ctyTotal = (trua?.tien_cong_ty ?? 0) + (toi?.tien_cong_ty ?? 0);
+      totalCtyNH += ctyTotal;
+      totalHdvNH += (trua?.tien_hdv ?? 0) + (toi?.tien_hdv ?? 0);
+
+      rows.push([
+        cell(i === 0 ? dateStr : ""),
+        cell(truaName),
+        trua ? cell(trua.so_luong, "number") : cell(""),
+        trua ? cell(trua.don_gia, "number") : cell(""),
+        truaTong !== null ? cell(truaTong, "number") : cell(""),
+        cell(toiName),
+        toi ? cell(toi.so_luong, "number") : cell(""),
+        toi ? cell(toi.don_gia, "number") : cell(""),
+        toiTong !== null ? cell(toiTong, "number") : cell(""),
+        ctyTotal > 0 ? cell(ctyTotal, "number") : cell(""),
+      ]);
+    }
+  }
+
+  if (nhRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  rows.push([cell("TỔNG SỐ TIỀN TT NHÀ HÀNG", "total", 7), cell("VND", "total"), cell(totalHdvNH, "total_number"), cell(totalCtyNH, "total_number")]);
+  rows.push([cell("", "text", 10)]);
+
+  // ─── VÉ THẮNG CẢNH ───
+  rows.push([cell("VÉ THẮNG CẢNH 景點票", "section", 10)]);
+  rows.push([
+    cell("DATE日期", "header"),
+    cell("DIEM THAM QUAN 景點", "header", 5),
+    cell("SO PAX", "header"),
+    cell("PRICE 價格", "header"),
+    cell("總金額", "header"),
+    cell("THANH TOÁN", "header"),
+  ]);
+
+  let totalHdvVE = 0, totalCtyVE = 0;
+  for (const row of veRows) {
+    const dateStr = ngaySoToDate(row.ngay_so);
+    const hdvAmt = row.tien_hdv || 0;
+    const ctyAmt = row.tien_cong_ty || 0;
+    totalHdvVE += hdvAmt;
+    totalCtyVE += ctyAmt;
+    rows.push([
+      cell(dateStr),
+      cell(row.mo_ta || "—", "text", 5),
+      cell(row.so_luong || 0, "number"),
+      cell(row.don_gia || 0, "number"),
+      cell(hdvAmt, "number"),
+      cell(ctyAmt, "number"),
+    ]);
+  }
+  if (veRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  rows.push([cell("TỔNG SỐ TIỀN TT THẮNG CẢNH", "total", 7), cell("VND", "total"), cell(totalHdvVE, "total_number"), cell(totalCtyVE, "total_number")]);
+  rows.push([cell("", "text", 10)]);
+
+  // ─── DỊCH VỤ KHÁC ───
+  rows.push([cell("DỊCH VỤ KHÁC 其他", "section", 10)]);
+  rows.push([
+    cell("DATE日期", "header"),
+    cell("DICH VU 其他", "header", 5),
+    cell("SO PAX", "header"),
+    cell("PRICE", "header"),
+    cell("總金額", "header"),
+    cell("THANH TOÁN", "header"),
+  ]);
+
+  let totalHdvDV = 0, totalCtyDV = 0;
+  for (const row of dvRows) {
+    const dateStr = ngaySoToDate(row.ngay_so);
+    const hdvAmt = row.tien_hdv || 0;
+    const ctyAmt = row.tien_cong_ty || 0;
+    totalHdvDV += hdvAmt;
+    totalCtyDV += ctyAmt;
+    rows.push([
+      cell(dateStr),
+      cell(row.mo_ta || getDanhMucLabel(row.danh_muc), "text", 5),
+      cell(row.so_luong || 0, "number"),
+      cell(row.don_gia || 0, "number"),
+      cell(hdvAmt, "number"),
+      cell(ctyAmt, "number"),
+    ]);
+  }
+  if (dvRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  rows.push([cell("TỔNG SỐ TIỀN TT", "total", 7), cell("VND", "total"), cell(totalHdvDV, "total_number"), cell(totalCtyDV, "total_number")]);
+  rows.push([cell("", "text", 10)]);
+
+  // ─── SUMMARY ───
+  const totalHdvAll = totalHdvKS + totalHdvNH + totalHdvVE + totalHdvDV;
+  const totalCtyAll = totalCtyKS + totalCtyNH + totalCtyVE + totalCtyDV;
+
+  rows.push([
+    cell("TỔNG HDV CHI VND 總計", "section", 2), cell(totalHdvAll, "total_number", 3),
+    cell("TỔNG THU (VNĐ)", "label"), cell("—", "text", 4),
+  ]);
+  rows.push([
+    cell("TỔNG CTY CHI VND 總計", "section", 2), cell(totalCtyAll, "total_number", 3),
+    cell("TỔNG THU TIỀN ĐOÀN (VNĐ)", "label"), cell("—", "text", 4),
+  ]);
+
+  return {
+    name: "Hanh Trinh",
+    columns: [12, 24, 14, 10, 14, 20, 8, 12, 14, 14],
+    rows,
+  };
 }
 
 function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
@@ -758,6 +1024,7 @@ function buildThanhToanSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 
 export async function exportChiPhiDoanExcel(params: ExportChiPhiDoanExcelParams) {
   const sheets = [
+    buildHanhTrinhSheet(params),
     buildSummarySheet(params),
     buildChiTietSheet(params),
     buildThanhToanSheet(params),

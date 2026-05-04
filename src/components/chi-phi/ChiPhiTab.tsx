@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
-import { useChiPhiList, useDNTTList } from "@/hooks/use-chi-phi";
+import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
 import { useUserRoles } from "@/hooks/use-doan";
 import ChiPhiHeader from "./ChiPhiHeader";
@@ -52,6 +52,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
+  const { data: ksData } = useChiPhiKSData(doanId);
   const { data: userRoles = [] } = useUserRoles();
   const opName = useMemo(() => {
     if (!doan?.assigned_to) return "—";
@@ -108,6 +109,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
         dnttList,
         hdvData,
         opName,
+        ksData,
       });
       toast.success("Đã xuất file Excel");
     } catch (error: any) {
