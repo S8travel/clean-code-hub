@@ -776,7 +776,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 
   const sortedVeRows = [...veRows].sort((a, b) => {
     if ((a.ngay_so ?? 0) !== (b.ngay_so ?? 0)) return (a.ngay_so ?? 0) - (b.ngay_so ?? 0);
-    return (a.ref_doan_ngay_item_id ?? 0) - (b.ref_doan_ngay_item_id ?? 0);
+    return (b.ref_doan_ngay_item_id ?? 0) - (a.ref_doan_ngay_item_id ?? 0);
   });
   let totalHdvVE = 0, totalCtyVE = 0;
   for (const row of sortedVeRows) {
