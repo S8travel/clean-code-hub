@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { exportDieuTourWord } from "@/lib/export-dieu-tour-word";
+import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDoanList } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
 import { useAuth } from "@/hooks/use-auth";
@@ -90,7 +90,6 @@ export default function DoanDetail() {
   const [days, setDays] = useState<DayLocal[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("dieu-tour");
-  const [exportingWord, setExportingWord] = useState(false);
   const [showWordPreview, setShowWordPreview] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const queryClient = useQueryClient();
@@ -244,39 +243,33 @@ export default function DoanDetail() {
     scheduleSave();
   }, [scheduleSave]);
 
-  const handleConfirmExportWord = useCallback(async (previewText: string) => {
-    if (!doan) return;
-    handleSetGhiChuDieuTour(previewText);
-    setExportingWord(true);
-    try {
-      await exportDieuTourWord({
-        days,
-        canhDiemList,
-        nhaHangList,
-        khachSanList,
-        tenDoan: doan.ten_doan,
-        hdv: doan.huong_dan_vien?.ten ?? "",
-        xe: doan.xe ?? null,
-        ngayDi: doan.ngay_di ?? null,
-        ngayVe: doan.ngay_ve ?? null,
-        bangDon,
-        shopping,
-        truongDoan,
-        chuyenBayDon,
-        chuyenBayTien,
-        soKhachLon,
-        soKhachEm1,
-        soKhachEm2,
-        soKhachTl,
-        totalKhach: doan.so_khach ?? totalKhach,
-        chuThichKhach,
-        gifts,
-        ghiChuDieuTour: previewText,
-      });
-    } finally {
-      setExportingWord(false);
-    }
-  }, [doan, days, canhDiemList, nhaHangList, khachSanList, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, gifts, handleSetGhiChuDieuTour]);
+  const dieuTourExportData = useMemo((): DieuTourExportData | null => {
+    if (!doan) return null;
+    return {
+      days,
+      canhDiemList,
+      nhaHangList,
+      khachSanList,
+      tenDoan: doan.ten_doan,
+      hdv: doan.huong_dan_vien?.ten ?? "",
+      xe: doan.xe ?? null,
+      ngayDi: doan.ngay_di ?? null,
+      ngayVe: doan.ngay_ve ?? null,
+      bangDon,
+      shopping,
+      truongDoan,
+      chuyenBayDon,
+      chuyenBayTien,
+      soKhachLon,
+      soKhachEm1,
+      soKhachEm2,
+      soKhachTl,
+      totalKhach: doan.so_khach ?? totalKhach,
+      chuThichKhach,
+      gifts,
+      ghiChuDieuTour,
+    };
+  }, [doan, days, canhDiemList, nhaHangList, khachSanList, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, gifts, ghiChuDieuTour]);
 
   // Warning badge counts
   const bookingKSBadgeCount = useMemo(() =>
@@ -371,10 +364,10 @@ export default function DoanDetail() {
                 variant="outline"
                 className="h-8 text-xs gap-1.5"
                 onClick={() => setShowWordPreview(true)}
-                disabled={exportingWord || days.length === 0}
+                disabled={days.length === 0}
               >
                 <FileDown className="h-3.5 w-3.5" />
-                {exportingWord ? "Đang xuất..." : "Xuất Word"}
+                Xuất Word
               </Button>
             </div>
             <CompanyHeader />
@@ -420,9 +413,9 @@ export default function DoanDetail() {
             </div>
             <DieuTourWordPreviewModal
               open={showWordPreview}
-              initialText={ghiChuDieuTour}
+              data={dieuTourExportData}
               onClose={() => setShowWordPreview(false)}
-              onExport={handleConfirmExportWord}
+              onGhiChuSave={handleSetGhiChuDieuTour}
             />
           </TabsContent>
 

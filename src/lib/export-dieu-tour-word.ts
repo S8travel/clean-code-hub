@@ -137,7 +137,7 @@ function xeLabel(xe: any): string {
   return parts.join(" · ") || "—";
 }
 
-// ─── Main export ─────────────────────────────────────────────────────────────
+// ─── Data interfaces ─────────────────────────────────────────────────────────
 export interface DieuTourExportData {
   days: DayLocal[];
   canhDiemList: CanhDiemItem[];
@@ -163,6 +163,64 @@ export interface DieuTourExportData {
   ghiChuDieuTour: string;
 }
 
+export interface DayExportCell {
+  ngay_date: string;
+  thu: string;
+  chuongTrinh: string;
+  anTrua: string;
+  anToi: string;
+  khachSan: string;
+}
+
+export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
+  const { days, canhDiemList, nhaHangList, khachSanList } = data;
+  const canhDiemMap = new Map(canhDiemList.map((c) => [c.id, c]));
+  const nhaHangMap  = new Map(nhaHangList.map((n) => [n.id, n]));
+  const khachSanMap = new Map(khachSanList.map((k) => [k.id, k]));
+
+  return days.map((day) => {
+    const ctLines: string[] = [];
+    if (day.thanh_pho) ctLines.push(day.thanh_pho);
+    for (const item of day.items) {
+      const cd = canhDiemMap.get(item.canh_diem_id);
+      if (cd) {
+        ctLines.push(`• ${cd.ten}`);
+        if (item.ghi_chu) ctLines.push(`  ${item.ghi_chu}`);
+      }
+    }
+
+    const truaLines: string[] = [];
+    if (day.an_trua_nha_hang_id) {
+      const nh = nhaHangMap.get(day.an_trua_nha_hang_id);
+      if (nh) { truaLines.push(nh.ten); if (nh.dia_chi) truaLines.push(nh.dia_chi); }
+    }
+
+    const toiLines: string[] = [];
+    if (day.an_toi_nha_hang_id) {
+      const nh = nhaHangMap.get(day.an_toi_nha_hang_id);
+      if (nh) { toiLines.push(nh.ten); if (nh.dia_chi) toiLines.push(nh.dia_chi); }
+    }
+
+    const ksLines: string[] = [];
+    if (day.khach_san_id) {
+      const ks = khachSanMap.get(day.khach_san_id);
+      if (ks) { ksLines.push(ks.ten); if (ks.dia_chi) ksLines.push(ks.dia_chi); }
+    }
+    if (day.ks_loai_phong) ksLines.push(day.ks_loai_phong);
+    if (day.ks_ma_code)    ksLines.push(`Code: ${day.ks_ma_code}`);
+
+    return {
+      ngay_date: day.ngay_date,
+      thu: day.thu,
+      chuongTrinh: ctLines.join("\n"),
+      anTrua: truaLines.join("\n"),
+      anToi: toiLines.join("\n"),
+      khachSan: ksLines.join("\n"),
+    };
+  });
+}
+
+// ─── Main export ─────────────────────────────────────────────────────────────
 export async function exportDieuTourWord(data: DieuTourExportData) {
   const {
     days, canhDiemList, nhaHangList, khachSanList,
@@ -423,6 +481,173 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
         ],
       },
     ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, `${tenDoan}_bảng_điều_tour.docx`);
+}
+
+/** Xuất Word từ text cells đã được edit trong preview modal */
+export async function exportDieuTourWordFromCells(
+  data: DieuTourExportData,
+  cells: DayExportCell[],
+  editedGhiChu: string,
+) {
+  const {
+    tenDoan, hdv, xe, ngayDi, ngayVe,
+    bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
+    soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
+    chuThichKhach, gifts,
+  } = data;
+
+  const today = new Date().toLocaleDateString("vi-VN");
+  const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
+
+  // ── Header (same as main export) ─────────────────────────────────────────
+  const headerTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        children: [
+          cell(
+            [
+              p("CÔNG TY TNHH DU LỊCH S8",   { bold: true, size: 20, align: AlignmentType.CENTER }),
+              p("S8 TRAVEL COMPANY",           { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
+              p("MST: 0402021137",             { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
+            ],
+            { width: HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
+          ),
+          cell(
+            [
+              p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", { bold: true, size: 20, align: AlignmentType.CENTER }),
+              p("Độc lập – Tự do – Hạnh phúc",          { bold: true, size: FS, align: AlignmentType.CENTER }),
+              p("———————————————",                        { size: FS_SM, color: "888888", align: AlignmentType.CENTER }),
+              p(`Hà Nội, ngày ${today}`,                 { size: FS_SM, italics: true, color: "555555", align: AlignmentType.CENTER }),
+            ],
+            { width: CONTENT_W - HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
+          ),
+        ],
+      }),
+    ],
+  });
+
+  const titlePara = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 120, after: 120 },
+    children: [new TextRun({ text: "BẢNG ĐIỀU TOUR", bold: true, size: 28, font: "Times New Roman" })],
+  });
+
+  const soKhachRow = pRuns([
+    { text: "NL: ", bold: true }, { text: String(soKhachLon) + "   " },
+    { text: "TE 6-10: ", bold: true }, { text: String(soKhachEm1) + "   " },
+    { text: "TE <6: ", bold: true }, { text: String(soKhachEm2) + "   " },
+    { text: "T/L: ", bold: true }, { text: String(soKhachTl) + "   " },
+    { text: "Tổng: ", bold: true }, { text: String(totalKhach), bold: true, color: "185FA5" },
+  ]);
+
+  const infoRows: TableRow[] = [
+    new TableRow({ children: [
+      cell([p("Code đoàn:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(tenDoan, { bold: true, color: "185FA5" })], { width: VW }),
+      cell([p("Bảng đón:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(bangDon || "—")], { width: VW_R }),
+    ]}),
+    new TableRow({ children: [
+      cell([p("HDV:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(hdv || "—")], { width: VW }),
+      cell([p("Shopping:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(shopStr)], { width: VW_R }),
+    ]}),
+    new TableRow({ children: [
+      cell([p("Xe:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(xeLabel(xe))], { width: VW }),
+      cell([p("T/L:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(truongDoan || "—")], { width: VW_R }),
+    ]}),
+    new TableRow({ children: [
+      cell(
+        [pRuns([{ text: "Ngày đón: ", bold: true }, { text: formatDate(ngayDi) }, { text: chuyenBayDon ? `   ${chuyenBayDon}` : "", color: "444444" }])],
+        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+      ),
+      cell([p("Số khách:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([soKhachRow], { width: VW_R }),
+    ]}),
+    new TableRow({ children: [
+      cell(
+        [pRuns([{ text: "Ngày tiễn: ", bold: true }, { text: formatDate(ngayVe) }, { text: chuyenBayTien ? `   ${chuyenBayTien}` : "", color: "444444" }])],
+        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+      ),
+      cell([p("Chú thích:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(chuThichKhach || "—")], { width: VW_R }),
+    ]}),
+  ];
+  if (gifts.length > 0) {
+    infoRows.push(new TableRow({ children: [
+      cell([p("Quà tặng:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(gifts.join(", "))], { width: VW + LW + VW_R, colSpan: 3 }),
+    ]}));
+  }
+  const infoTable = new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, rows: infoRows });
+
+  // ── Schedule from pre-computed cells ────────────────────────────────────
+  const schedHeaderRow = new TableRow({
+    tableHeader: true,
+    children: [
+      cell([p("Ngày",       { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[0], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Chương trình",{ bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[1], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Ăn trưa",   { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[2], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Ăn tối",    { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[3], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Khách sạn", { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[4], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+    ],
+  });
+
+  function textToParas(text: string): Paragraph[] {
+    const lines = text.split("\n");
+    if (lines.length === 0 || (lines.length === 1 && !lines[0])) return [p("")];
+    return lines.map((line) => p(line));
+  }
+
+  const schedDataRows = cells.map((dc) => new TableRow({
+    children: [
+      cell(
+        [p(formatDateShort(dc.ngay_date), { bold: true, align: AlignmentType.CENTER }),
+         p(dc.thu, { align: AlignmentType.CENTER, color: "555555", size: FS_SM })],
+        { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER }
+      ),
+      cell(textToParas(dc.chuongTrinh), { width: SCHED_COL[1] }),
+      cell(textToParas(dc.anTrua),      { width: SCHED_COL[2] }),
+      cell(textToParas(dc.anToi),       { width: SCHED_COL[3] }),
+      cell(textToParas(dc.khachSan),    { width: SCHED_COL[4] }),
+    ],
+  }));
+
+  const schedTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [schedHeaderRow, ...schedDataRows],
+  });
+
+  // ── Ghi chú ────────────────────────────────────────────────────────────
+  const ghiChuParas: Paragraph[] = [];
+  if (editedGhiChu) {
+    ghiChuParas.push(new Paragraph({
+      spacing: { before: 120, after: 40 },
+      children: [new TextRun({ text: "Ghi chú: ", bold: true, size: FS, font: "Times New Roman" })],
+    }));
+    for (const line of editedGhiChu.split("\n")) {
+      ghiChuParas.push(new Paragraph({
+        spacing: { before: 0, after: 0 },
+        children: [new TextRun({ text: line, size: FS, font: "Times New Roman" })],
+      }));
+    }
+  }
+
+  const spacer = new Paragraph({ spacing: { before: 100, after: 0 }, children: [] });
+
+  const doc = new Document({
+    sections: [{
+      properties: { page: { size: { width: PAGE_W, height: PAGE_H }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } },
+      children: [headerTable, titlePara, infoTable, spacer, schedTable, ...ghiChuParas],
+    }],
   });
 
   const blob = await Packer.toBlob(doc);
