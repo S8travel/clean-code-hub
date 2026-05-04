@@ -4,7 +4,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Printer, Trash2 } from "lucide-react";
-import { exportMenuOverviewWord } from "@/lib/export-menu-word";
+import { exportMenuOverviewWord, exportMenuXihongWord, type MenuWordMeal } from "@/lib/export-menu-word";
+import { externalSupabase } from "@/lib/supabase-external";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
@@ -154,13 +155,70 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
       ngay_so: day.ngay_so,
       ngay_date: day.ngay_date,
       trua: day.an_trua_nha_hang_id
-        ? { ten_nh: day.an_trua_nha_hang_ten ?? "", mon_list: day.booking_trua?.mon_an_snapshot ?? [] }
+        ? { ten_nh: day.an_trua_nha_hang_ten ?? "", mon_list: day.booking_trua?.mon_an_snapshot ?? [], mon_list_zh: [] }
         : null,
       toi: day.an_toi_nha_hang_id
-        ? { ten_nh: day.an_toi_nha_hang_ten ?? "", mon_list: day.booking_toi?.mon_an_snapshot ?? [] }
+        ? { ten_nh: day.an_toi_nha_hang_ten ?? "", mon_list: day.booking_toi?.mon_an_snapshot ?? [], mon_list_zh: [] }
         : null,
     }));
     await exportMenuOverviewWord({ tenDoan: tenDoan ?? "", hdvTen: hdvTen ?? "", soKhach: soKhach ?? 0, days: wordDays });
+  };
+
+  const handlePrintXihong = async () => {
+    // Collect set_menu_ids to fetch Chinese dish names
+    const setMenuIds = new Set<number>();
+    for (const day of daysWithNH) {
+      if (day.booking_trua?.set_menu_id) setMenuIds.add(day.booking_trua.set_menu_id);
+      if (day.booking_toi?.set_menu_id) setMenuIds.add(day.booking_toi.set_menu_id);
+    }
+
+    // Fetch Chinese dish names from nha_hang_set_menu_mon
+    const zhMap: Record<number, Record<string, string>> = {};
+    const ghiChuMap: Record<number, string | null> = {};
+    if (setMenuIds.size > 0) {
+      const ids = [...setMenuIds];
+      const [{ data: monRows }, { data: smRows }] = await Promise.all([
+        externalSupabase
+          .from("nha_hang_set_menu_mon")
+          .select("set_menu_id, ten_mon, ten_mon_trung")
+          .in("set_menu_id", ids),
+        externalSupabase
+          .from("nha_hang_set_menu")
+          .select("id, ghi_chu")
+          .in("id", ids),
+      ]);
+      for (const row of monRows ?? []) {
+        if (!zhMap[row.set_menu_id]) zhMap[row.set_menu_id] = {};
+        zhMap[row.set_menu_id][row.ten_mon] = row.ten_mon_trung ?? "";
+      }
+      for (const sm of smRows ?? []) {
+        ghiChuMap[sm.id] = sm.ghi_chu ?? null;
+      }
+    }
+
+    const buildMeal = (nhId: number | null, nhTen: string | null, booking: BookingNHRow | null): MenuWordMeal | null => {
+      if (!nhId) return null;
+      const lookup = booking?.set_menu_id ? (zhMap[booking.set_menu_id] ?? {}) : {};
+      const monList = booking?.mon_an_snapshot ?? [];
+      return {
+        ten_nh: nhTen ?? "",
+        ten_set: booking?.ten_set_snapshot ?? null,
+        gia: booking?.gia_snapshot ?? null,
+        don_vi: booking?.don_vi_snapshot ?? null,
+        ghi_chu_set: booking?.set_menu_id ? (ghiChuMap[booking.set_menu_id] ?? null) : null,
+        mon_list: monList,
+        mon_list_zh: monList.map((m) => lookup[m] ?? ""),
+      };
+    };
+
+    const wordDays = daysWithNH.map((day) => ({
+      ngay_so: day.ngay_so,
+      ngay_date: day.ngay_date,
+      trua: buildMeal(day.an_trua_nha_hang_id, day.an_trua_nha_hang_ten, day.booking_trua),
+      toi:  buildMeal(day.an_toi_nha_hang_id,  day.an_toi_nha_hang_ten,  day.booking_toi),
+    }));
+
+    await exportMenuXihongWord({ tenDoan: tenDoan ?? "", hdvTen: hdvTen ?? "", soKhach: soKhach ?? 0, days: wordDays });
   };
 
   return (
@@ -270,9 +328,14 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
         )}
 
         <div className="flex justify-between pt-2">
-          <Button variant="outline" size="sm" onClick={handlePrint} disabled={daysWithNH.length === 0}>
-            <Printer className="h-4 w-4 mr-1.5" /> In menu
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={daysWithNH.length === 0}>
+              <Printer className="h-4 w-4 mr-1.5" /> In menu
+            </Button>
+            <Button variant="outline" size="sm" onClick={handlePrintXihong} disabled={daysWithNH.length === 0}>
+              <Printer className="h-4 w-4 mr-1.5" /> In kiểu Xihong
+            </Button>
+          </div>
           <Button variant="outline" onClick={onClose}>Đóng</Button>
         </div>
       </DialogContent>
