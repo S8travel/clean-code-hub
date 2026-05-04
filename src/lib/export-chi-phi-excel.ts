@@ -703,8 +703,24 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     const dayRows = nhByNgaySo.get(ngaySo)!;
     const dateStr = ngaySo > 0 ? ngaySoToDate(ngaySo) : "—";
 
-    const truaRows = dayRows.filter((r) => parseNH(r.mo_ta).bua === "trua");
-    const toiRows = dayRows.filter((r) => parseNH(r.mo_ta).bua === "toi");
+    function mergeNHRows(list: ChiPhiRow[]): ChiPhiRow[] {
+      const grouped = new Map<string, ChiPhiRow>();
+      for (const r of list) {
+        const { name } = parseNH(r.mo_ta);
+        const key = `${name}__${r.don_gia}`;
+        const ex = grouped.get(key);
+        if (ex) {
+          ex.so_luong = (ex.so_luong || 0) + (r.so_luong || 0);
+          ex.tien_cong_ty = (ex.tien_cong_ty || 0) + (r.tien_cong_ty || 0);
+          ex.tien_hdv = (ex.tien_hdv || 0) + (r.tien_hdv || 0);
+        } else {
+          grouped.set(key, { ...r });
+        }
+      }
+      return [...grouped.values()];
+    }
+    const truaRows = mergeNHRows(dayRows.filter((r) => parseNH(r.mo_ta).bua === "trua"));
+    const toiRows = mergeNHRows(dayRows.filter((r) => parseNH(r.mo_ta).bua === "toi"));
     const maxLen = Math.max(truaRows.length, toiRows.length);
 
     const nhHasVal = (r: ChiPhiRow | null) =>
@@ -758,16 +774,21 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     cell("THANH TOÁN", "header"),
   ]);
 
+  const sortedVeRows = [...veRows].sort((a, b) => {
+    if ((a.ngay_so ?? 0) !== (b.ngay_so ?? 0)) return (a.ngay_so ?? 0) - (b.ngay_so ?? 0);
+    return (a.ref_doan_ngay_item_id ?? 0) - (b.ref_doan_ngay_item_id ?? 0);
+  });
   let totalHdvVE = 0, totalCtyVE = 0;
-  for (const row of veRows) {
+  for (const row of sortedVeRows) {
     const dateStr = ngaySoToDate(row.ngay_so);
     const hdvAmt = row.tien_hdv || 0;
     const ctyAmt = row.tien_cong_ty || 0;
     totalHdvVE += hdvAmt;
     totalCtyVE += ctyAmt;
+    const displayName = (row.mo_ta || "—").replace(/^\[[^\]]+\]\s*/, "");
     rows.push([
       cell(dateStr),
-      cell(row.mo_ta || "—", "text", 5),
+      cell(displayName, "text", 5),
       cell(row.so_luong || 0, "number"),
       cell(row.don_gia || 0, "number"),
       cell(hdvAmt, "number"),
@@ -789,16 +810,18 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     cell("THANH TOÁN", "header"),
   ]);
 
+  const sortedDvRows = [...dvRows].sort((a, b) => (a.ngay_so ?? 0) - (b.ngay_so ?? 0));
   let totalHdvDV = 0, totalCtyDV = 0;
-  for (const row of dvRows) {
+  for (const row of sortedDvRows) {
     const dateStr = ngaySoToDate(row.ngay_so);
     const hdvAmt = row.tien_hdv || 0;
     const ctyAmt = row.tien_cong_ty || 0;
     totalHdvDV += hdvAmt;
     totalCtyDV += ctyAmt;
+    const dvDisplayName = (row.mo_ta || getDanhMucLabel(row.danh_muc)).replace(/^\[[^\]]+\]\s*/, "");
     rows.push([
       cell(dateStr),
-      cell(row.mo_ta || getDanhMucLabel(row.danh_muc), "text", 5),
+      cell(dvDisplayName, "text", 5),
       cell(row.so_luong || 0, "number"),
       cell(row.don_gia || 0, "number"),
       cell(hdvAmt, "number"),
