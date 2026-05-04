@@ -21,6 +21,12 @@ function fmtDate(d: string | null) {
   };
 }
 
+const LOAI_TOUR_BADGE: Record<string, { label: string; className: string }> = {
+  inbound:  { label: "Inbound",  className: "bg-blue-100 text-blue-700" },
+  outbound: { label: "Outbound", className: "bg-emerald-100 text-emerald-700" },
+  noi_dia:  { label: "Nội địa",  className: "bg-orange-100 text-orange-700" },
+};
+
 function lookup(obj: any, field = "ten"): string {
   if (!obj) return "—";
   if (typeof obj === "object" && obj[field]) return obj[field];
@@ -190,7 +196,14 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onClone, on
                 >
                   {/* Code Đoàn */}
                   <td className="px-3 py-3">
-                    <span className="font-semibold text-[hsl(var(--brand))]">{g.ten_doan}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-[hsl(var(--brand))]">{g.ten_doan}</span>
+                      {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${LOAI_TOUR_BADGE[g.loai_tour].className}`}>
+                          {LOAI_TOUR_BADGE[g.loai_tour].label}
+                        </span>
+                      )}
+                    </div>
                     {g.ghi_chu_dieu_tour && (
                       <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">{g.ghi_chu_dieu_tour}</p>
                     )}
@@ -392,7 +405,14 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onClone, on
             >
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <span className="font-semibold text-sm text-[hsl(var(--brand))]">{g.ten_doan}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-sm text-[hsl(var(--brand))]">{g.ten_doan}</span>
+                    {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${LOAI_TOUR_BADGE[g.loai_tour].className}`}>
+                        {LOAI_TOUR_BADGE[g.loai_tour].label}
+                      </span>
+                    )}
+                  </div>
                   {g.trang_thai === "huy" && <Badge variant="destructive" className="ml-2 text-[10px] px-1.5 py-0">Đã hủy</Badge>}
                   {g.trang_thai === "hoan_thanh" && <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">Hoàn thành</Badge>}
                 </div>

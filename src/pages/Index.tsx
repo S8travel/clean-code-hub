@@ -31,6 +31,7 @@ import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useLogActivity } from "@/hooks/use-activity-log";
+import { useAuth } from "@/hooks/use-auth";
 
 const PAGE_SIZE = 20;
 
@@ -41,8 +42,17 @@ const TRANG_THAI_OPTIONS = [
   { value: "huy", label: "Đã hủy" },
 ];
 
+const LOAI_TOUR_OPTIONS = [
+  { value: "all", label: "Tất cả tuyến" },
+  { value: "inbound", label: "Inbound" },
+  { value: "outbound", label: "Outbound" },
+  { value: "noi_dia", label: "Nội địa" },
+];
+
 export default function Index() {
-  const { data: groups, isLoading, error } = useDoanList();
+  const { user: currentUser } = useAuth();
+  const vanPhongId = currentUser?.role !== "admin" ? (currentUser?.van_phong_id ?? null) : null;
+  const { data: groups, isLoading, error } = useDoanList(vanPhongId);
   useDoanRealtime();
   const createDoan = useCreateDoan();
   const updateDoan = useUpdateDoan();
@@ -67,6 +77,7 @@ export default function Index() {
   const [agentFilter, setAgentFilter] = useState("all");
   const [diaDiemFilter, setDiaDiemFilter] = useState("all");
   const [trangThaiFilter, setTrangThaiFilter] = useState("all");
+  const [loaiTourFilter, setLoaiTourFilter] = useState("all");
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -78,11 +89,11 @@ export default function Index() {
     return map;
   }, [userRoles]);
 
-  const hasFilters = search || dateFrom || dateTo || agentFilter !== "all" || diaDiemFilter !== "all" || trangThaiFilter !== "all";
+  const hasFilters = search || dateFrom || dateTo || agentFilter !== "all" || diaDiemFilter !== "all" || trangThaiFilter !== "all" || loaiTourFilter !== "all";
 
   const clearFilters = () => {
     setSearch(""); setDateFrom(""); setDateTo("");
-    setAgentFilter("all"); setDiaDiemFilter("all"); setTrangThaiFilter("all");
+    setAgentFilter("all"); setDiaDiemFilter("all"); setTrangThaiFilter("all"); setLoaiTourFilter("all");
     setPage(1);
   };
 
@@ -107,6 +118,7 @@ export default function Index() {
 
       if (agentFilter !== "all" && g.agent_id?.toString() !== agentFilter) return false;
       if (diaDiemFilter !== "all" && g.dia_diem_id?.toString() !== diaDiemFilter) return false;
+      if (loaiTourFilter !== "all" && (g.loai_tour ?? null) !== loaiTourFilter) return false;
 
       if (trangThaiFilter !== "all") {
         if (trangThaiFilter === "dang_chay" && (g.trang_thai === "hoan_thanh" || g.trang_thai === "huy")) return false;
@@ -116,9 +128,9 @@ export default function Index() {
 
       return true;
     });
-  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, userRolesMap]);
+  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, userRolesMap]);
 
-  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -139,7 +151,7 @@ export default function Index() {
         logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         toast.success("Đã cập nhật đoàn");
       } else {
-        const created = await createDoan.mutateAsync({ ...data, shopping: false });
+        const created = await createDoan.mutateAsync({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null });
         // FEATURE_DOAN_PERM_DISABLED: auto-grant khi tạo đoàn mới
         // if (created && data.assigned_to) {
         //   const creatorName = userRolesMap.get(data.assigned_to) || "";
@@ -327,6 +339,17 @@ export default function Index() {
               <SelectItem value="all">Tất cả ĐĐ</SelectItem>
               {diaDiemList?.map((d) => (
                 <SelectItem key={d.id} value={d.id.toString()}>{d.ten}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={loaiTourFilter} onValueChange={setLoaiTourFilter}>
+            <SelectTrigger className="h-9 text-xs rounded-lg w-[130px]">
+              <SelectValue placeholder="Loại tuyến" />
+            </SelectTrigger>
+            <SelectContent>
+              {LOAI_TOUR_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

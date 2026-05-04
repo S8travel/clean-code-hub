@@ -130,7 +130,8 @@ export default function TheodoiPage() {
   const canView = useRoleAtLeast("truong_phong");
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: groups = [], isLoading: loadingDoan } = useDoanList();
+  const vanPhongId = user?.role !== "admin" ? (user?.van_phong_id ?? null) : null;
+  const { data: groups = [], isLoading: loadingDoan } = useDoanList(vanPhongId);
   const { data: td, isLoading: loadingTD } = useTheodoi();
   const { data: suCoLogs = [], isLoading: loadingSuCo } = useDoanLogSuCo();
   const toggleMut = useToggleResolved();

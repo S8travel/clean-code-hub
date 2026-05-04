@@ -12,6 +12,7 @@ export interface UserRoleRow {
   email: string | null;
   so_dien_thoai: string | null;
   bo_phan: BoPhan | null;
+  van_phong_id: number | null;
   ghi_chu: string | null;
   active: boolean;
   password_hash: string | null;

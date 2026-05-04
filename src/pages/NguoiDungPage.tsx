@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Search, Trash2, Save, Users, ShieldAlert, Shield, History } from "lucide-react";
+import { Plus, Search, Trash2, Save, Users, ShieldAlert, Shield, History, Building2, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,10 @@ import {
   type BoPhan,
 } from "@/hooks/use-nguoi-dung";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  useVanPhongList, useCreateVanPhong, useUpdateVanPhong, useDeleteVanPhong,
+  type VanPhongRow,
+} from "@/hooks/use-van-phong";
 import {
   useRolePermissions, useUpsertRolePermissions,
   type Resource, type PermAction, type RolePermission,
@@ -94,6 +98,7 @@ const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   email: "",
   role: "nhan_vien",
   bo_phan: null,
+  van_phong_id: null,
   so_dien_thoai: null,
   ghi_chu: null,
   active: true,
@@ -142,6 +147,9 @@ function NguoiDungContent() {
             <TabsTrigger value="nguoi_dung" className="text-xs gap-1.5">
               <Users className="h-3.5 w-3.5" /> Người dùng
             </TabsTrigger>
+            <TabsTrigger value="van_phong" className="text-xs gap-1.5">
+              <Building2 className="h-3.5 w-3.5" /> Văn phòng
+            </TabsTrigger>
             <TabsTrigger value="phan_quyen" className="text-xs gap-1.5">
               <Shield className="h-3.5 w-3.5" /> Phân quyền
             </TabsTrigger>
@@ -153,6 +161,9 @@ function NguoiDungContent() {
 
         <TabsContent value="nguoi_dung" className="flex-1 overflow-hidden mt-0">
           <NguoiDungTab />
+        </TabsContent>
+        <TabsContent value="van_phong" className="flex-1 overflow-auto mt-0 px-6 py-4">
+          <VanPhongTab />
         </TabsContent>
         <TabsContent value="phan_quyen" className="flex-1 overflow-auto mt-0 px-6 py-4">
           <PhanQuyenTab />
@@ -169,6 +180,7 @@ function NguoiDungContent() {
 
 function NguoiDungTab() {
   const { data: list = [], isLoading } = useNguoiDungList();
+  const { data: vanPhongList } = useVanPhongList();
   const createMut = useCreateNguoiDung();
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
@@ -202,6 +214,7 @@ function NguoiDungTab() {
         email: selected.email,
         role: selected.role,
         bo_phan: selected.bo_phan,
+        van_phong_id: selected.van_phong_id,
         so_dien_thoai: selected.so_dien_thoai,
         ghi_chu: selected.ghi_chu,
         active: selected.active,
@@ -407,6 +420,11 @@ function NguoiDungTab() {
                         {u.bo_phan === "dieu_hanh" ? "Điều hành" : "Kế toán"}
                       </Badge>
                     )}
+                    {u.van_phong_id != null && vanPhongList && (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0 bg-blue-50 border-blue-200 text-blue-700">
+                        {vanPhongList.find((vp) => vp.id === u.van_phong_id)?.ten ?? "VP"}
+                      </Badge>
+                    )}
                   </div>
                 </button>
               ))}
@@ -488,6 +506,24 @@ function NguoiDungTab() {
                     <SelectItem value="none">— Không có —</SelectItem>
                     {BO_PHAN_OPTS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Văn phòng</Label>
+                <Select
+                  value={form.van_phong_id != null ? String(form.van_phong_id) : "none"}
+                  onValueChange={(v) => set("van_phong_id", v === "none" ? null : Number(v))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Chọn văn phòng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Không có —</SelectItem>
+                    {(vanPhongList ?? []).map((vp) => (
+                      <SelectItem key={vp.id} value={String(vp.id)}>{vp.ten}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -626,7 +662,209 @@ function NguoiDungTab() {
   );
 }
 
-// ── Tab 2: Phân quyền ────────────────────────────────────────────────────────
+// ── Tab 2: Văn phòng ─────────────────────────────────────────────────────────
+
+const emptyVpForm = (): Omit<VanPhongRow, "id"> => ({ ten: "", dia_chi: null, ghi_chu: null, active: true });
+
+function VanPhongTab() {
+  const { data: list = [], isLoading } = useVanPhongList();
+  const createMut = useCreateVanPhong();
+  const updateMut = useUpdateVanPhong();
+  const deleteMut = useDeleteVanPhong();
+
+  const [showNew, setShowNew] = useState(false);
+  const [newForm, setNewForm] = useState<Omit<VanPhongRow, "id">>(emptyVpForm());
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Omit<VanPhongRow, "id">>(emptyVpForm());
+  const [deleteTarget, setDeleteTarget] = useState<VanPhongRow | null>(null);
+
+  const handleCreate = async () => {
+    if (!newForm.ten.trim()) return;
+    try {
+      await createMut.mutateAsync({ ...newForm, ten: newForm.ten.trim() });
+      setNewForm(emptyVpForm());
+      setShowNew(false);
+      toast.success("Đã thêm văn phòng");
+    } catch {
+      toast.error("Lỗi khi thêm văn phòng");
+    }
+  };
+
+  const handleStartEdit = (vp: VanPhongRow) => {
+    setEditId(vp.id);
+    setEditForm({ ten: vp.ten, dia_chi: vp.dia_chi, ghi_chu: vp.ghi_chu, active: vp.active });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editId || !editForm.ten.trim()) return;
+    try {
+      await updateMut.mutateAsync({ id: editId, ...editForm, ten: editForm.ten.trim() });
+      setEditId(null);
+      toast.success("Đã lưu");
+    } catch {
+      toast.error("Lỗi khi lưu");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteMut.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+      toast.success("Đã xóa");
+    } catch {
+      toast.error("Lỗi khi xóa");
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Văn phòng đại diện</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Gán văn phòng cho người dùng để lọc dữ liệu đoàn tour theo văn phòng.
+          </p>
+        </div>
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setShowNew(true); setEditId(null); }}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Thêm
+        </Button>
+      </div>
+
+      {showNew && (
+        <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+          <p className="text-xs font-medium">Văn phòng mới</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Tên <span className="text-destructive">*</span></Label>
+              <Input className="h-8 text-sm" placeholder="VD: Văn phòng HCM" autoFocus
+                value={newForm.ten} onChange={(e) => setNewForm((p) => ({ ...p, ten: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Địa chỉ</Label>
+              <Input className="h-8 text-sm" placeholder="Địa chỉ..."
+                value={newForm.dia_chi ?? ""} onChange={(e) => setNewForm((p) => ({ ...p, dia_chi: e.target.value || null }))} />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label className="text-xs">Ghi chú</Label>
+              <Input className="h-8 text-sm" placeholder="Ghi chú..."
+                value={newForm.ghi_chu ?? ""} onChange={(e) => setNewForm((p) => ({ ...p, ghi_chu: e.target.value || null }))} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs" onClick={handleCreate}
+              disabled={!newForm.ten.trim() || createMut.isPending}>
+              {createMut.isPending ? "Đang lưu..." : "Tạo"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs"
+              onClick={() => { setShowNew(false); setNewForm(emptyVpForm()); }}>
+              Hủy
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Đang tải...</p>
+      ) : list.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Chưa có văn phòng nào.</p>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="text-xs bg-muted/40">
+                <TableHead className="py-2">Tên</TableHead>
+                <TableHead className="py-2">Địa chỉ</TableHead>
+                <TableHead className="py-2">Ghi chú</TableHead>
+                <TableHead className="py-2 w-20 text-center">Active</TableHead>
+                <TableHead className="py-2 w-20" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.map((vp) =>
+                editId === vp.id ? (
+                  <TableRow key={vp.id} className="bg-muted/20">
+                    <TableCell className="py-1.5">
+                      <Input className="h-7 text-xs" value={editForm.ten}
+                        onChange={(e) => setEditForm((p) => ({ ...p, ten: e.target.value }))} />
+                    </TableCell>
+                    <TableCell className="py-1.5">
+                      <Input className="h-7 text-xs" value={editForm.dia_chi ?? ""}
+                        onChange={(e) => setEditForm((p) => ({ ...p, dia_chi: e.target.value || null }))} />
+                    </TableCell>
+                    <TableCell className="py-1.5">
+                      <Input className="h-7 text-xs" value={editForm.ghi_chu ?? ""}
+                        onChange={(e) => setEditForm((p) => ({ ...p, ghi_chu: e.target.value || null }))} />
+                    </TableCell>
+                    <TableCell className="py-1.5 text-center">
+                      <Switch checked={editForm.active} onCheckedChange={(v) => setEditForm((p) => ({ ...p, active: v }))} />
+                    </TableCell>
+                    <TableCell className="py-1.5">
+                      <div className="flex gap-1">
+                        <Button size="sm" className="h-7 text-xs" onClick={handleSaveEdit}
+                          disabled={!editForm.ten.trim() || updateMut.isPending}>
+                          <Save className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>
+                          Hủy
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <TableRow key={vp.id} className="text-sm">
+                    <TableCell className="py-2 font-medium">{vp.ten}</TableCell>
+                    <TableCell className="py-2 text-muted-foreground text-xs">{vp.dia_chi ?? "—"}</TableCell>
+                    <TableCell className="py-2 text-muted-foreground text-xs">{vp.ghi_chu ?? "—"}</TableCell>
+                    <TableCell className="py-2 text-center">
+                      <Badge variant={vp.active ? "default" : "secondary"} className="text-[10px] h-4 px-1">
+                        {vp.active ? "Có" : "Tắt"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
+                          onClick={() => handleStartEdit(vp)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(vp)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa văn phòng?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Xóa <strong>{deleteTarget?.ten}</strong>. Người dùng thuộc văn phòng này sẽ không còn được gán văn phòng.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ── Tab 4: Phân quyền ────────────────────────────────────────────────────────
 
 // Matrix state: role → resource → { can_view, can_create, can_edit, can_delete }
 type PermMatrix = Record<string, Record<string, Record<string, boolean>>>;
@@ -772,7 +1010,7 @@ function PhanQuyenTab() {
   );
 }
 
-// ── Tab 3: Nhật ký ───────────────────────────────────────────────────────────
+// ── Tab 5: Nhật ký ───────────────────────────────────────────────────────────
 
 function NhatKyTab() {
   const { data: userList = [] } = useNguoiDungList();

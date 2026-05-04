@@ -26,6 +26,8 @@ export interface Doan {
   ghi_chu_dieu_tour: string | null;
   assigned_to: string | null;
   created_by: string | null;
+  van_phong_id: number | null;
+  loai_tour: "inbound" | "outbound" | "noi_dia" | null;
   created_at?: string;
 }
 
@@ -53,6 +55,8 @@ export interface DoanInsert {
   ghi_chu_dieu_tour?: string | null;
   assigned_to?: string | null;
   created_by?: string | null;
+  van_phong_id?: number | null;
+  loai_tour?: "inbound" | "outbound" | "noi_dia" | null;
   shopping?: boolean | null;
 }
 
@@ -201,12 +205,12 @@ export function useCurrentUserProfile() {
   });
 }
 
-// Doan list
-export function useDoanList() {
+// Doan list — vanPhongId=null → no filter (admin/no office); vanPhongId=number → filter by office
+export function useDoanList(vanPhongId?: number | null) {
   return useQuery({
-    queryKey: ["doan"],
+    queryKey: ["doan", vanPhongId ?? null],
     queryFn: async () => {
-      const { data, error } = await externalSupabase
+      let query = externalSupabase
         .from("doan")
         .select(`
           *,
@@ -215,8 +219,11 @@ export function useDoanList() {
           dia_diem:dia_diem_id(ten),
           huong_dan_vien:huong_dan_vien_id(id, ten),
           xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(ten))
-        `)
-        .order("ngay_di", { ascending: true });
+        `);
+      if (vanPhongId != null) {
+        query = query.or(`van_phong_id.eq.${vanPhongId},van_phong_id.is.null`);
+      }
+      const { data, error } = await query.order("ngay_di", { ascending: true });
       if (error) {
         console.error("useDoanList error:", JSON.stringify(error));
         throw error;

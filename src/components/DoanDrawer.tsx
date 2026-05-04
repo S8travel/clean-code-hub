@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useAgents,
   useDiaDiem,
@@ -21,8 +22,15 @@ import { t, useTranslate } from "@/lib/i18n";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
+const LOAI_TOUR_OPTS = [
+  { value: "inbound", label: "Inbound" },
+  { value: "outbound", label: "Outbound" },
+  { value: "noi_dia", label: "Nội địa" },
+] as const;
+
 const EMPTY_FORM: DoanInsert = {
   ten_doan: "",
+  loai_tour: null,
   agent_id: null,
   dia_diem_id: null,
   huong_dan_vien_id: null,
@@ -74,6 +82,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     if (doan) {
       setForm({
         ten_doan: doan.ten_doan || "",
+        loai_tour: doan.loai_tour ?? null,
         agent_id: doan.agent_id ?? null,
         dia_diem_id: doan.dia_diem_id ?? null,
         huong_dan_vien_id: doan.huong_dan_vien_id ?? null,
@@ -171,6 +180,23 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   placeholder="VD: HAN05BR260411GS"
                   className="rounded-lg"
                 />
+              </Field>
+
+              <Field label="Loại tuyến">
+                <Select
+                  value={form.loai_tour ?? "none"}
+                  onValueChange={(v) => set("loai_tour", v === "none" ? null : v)}
+                >
+                  <SelectTrigger className="rounded-lg h-10">
+                    <SelectValue placeholder="Chọn loại tuyến" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Chưa phân loại —</SelectItem>
+                    {LOAI_TOUR_OPTS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
 
               <div className="grid grid-cols-2 gap-4">

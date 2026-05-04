@@ -27,6 +27,7 @@ doan
   so_khach, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl
   ngay_di, ngay_ve
   trang_thai: 'dang_chay'|'huy'
+  loai_tour: 'inbound'|'outbound'|'noi_dia'|null
   booking_status: 'chua_booking'|...
   bang_don, shopping, truong_doan
   chuyen_bay_don, chuyen_bay_tien
