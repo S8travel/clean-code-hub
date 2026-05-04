@@ -28,12 +28,13 @@ function formatDayDisplay(dateStr: string) {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-function DetailLine({ item }: { item: { dia_chi?: string | null; thong_tin_chung?: string | null } }) {
-  if (!item.dia_chi && !item.thong_tin_chung) return null;
+function DetailLine({ item }: { item: { dia_chi?: string | null; thong_tin_chung?: string | null; so_dien_thoai?: string | null } }) {
+  if (!item.dia_chi && !item.thong_tin_chung && !item.so_dien_thoai) return null;
   return (
     <div className="text-[13px] text-muted-foreground mt-0.5 space-y-0.5">
       {item.dia_chi && <p>{item.dia_chi}</p>}
       {item.thong_tin_chung && <p>{item.thong_tin_chung}</p>}
+      {item.so_dien_thoai && <p>{item.so_dien_thoai}</p>}
     </div>
   );
 }

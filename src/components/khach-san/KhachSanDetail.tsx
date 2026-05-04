@@ -74,7 +74,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
         id: khachSan.id,
         ten: form.ten.trim(),
         ten_zh: form.ten_zh || null,
-        nha_cung_cap_id: Number(form.nha_cung_cap_id),
+        nha_cung_cap_id: form.nha_cung_cap_id ? Number(form.nha_cung_cap_id) : null,
         dia_diem: form.dia_diem || null,
         dia_diem_zh: form.dia_diem_zh || null,
         dia_chi: form.dia_chi || null,

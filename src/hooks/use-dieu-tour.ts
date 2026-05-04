@@ -20,6 +20,7 @@ export interface NhaHangItem {
   dia_chi: string | null;
   thong_tin_chung: string | null;
   nguoi_thanh_toan: string | null;
+  so_dien_thoai: string | null;
 }
 
 export interface KhachSanItem {
@@ -27,6 +28,7 @@ export interface KhachSanItem {
   ten: string;
   dia_chi: string | null;
   thong_tin_chung: string | null;
+  so_dien_thoai: string | null;
 }
 
 // ── Row types ──
@@ -104,7 +106,7 @@ export function useNhaHang() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan")
+        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan, so_dien_thoai")
         .order("ten");
       if (error) throw error;
       return data as NhaHangItem[];
@@ -118,7 +120,7 @@ export function useKhachSan() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("khach_san")
-        .select("id, ten, dia_chi, thong_tin_chung")
+        .select("id, ten, dia_chi, thong_tin_chung, so_dien_thoai")
         .order("ten");
       if (error) throw error;
       return data as KhachSanItem[];

@@ -61,10 +61,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
       toast.warning("Tên cảnh điểm không được để trống");
       return;
     }
-    if (!nhaCungCapId) {
-      toast.warning("Vui lòng chọn nhà cung cấp");
-      return;
-    }
+
     try {
       await updateMut.mutateAsync({
         id: canhDiem.id,
