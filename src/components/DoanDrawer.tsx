@@ -249,10 +249,10 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   <Field label={t("Người lớn")}>
                     <Input type="number" min={0} value={form.so_khach_lon ?? 0} onChange={(e) => set("so_khach_lon", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
-                  <Field label="Trẻ em 6-10">
+                  <Field label="Trẻ em 50%">
                     <Input type="number" min={0} value={form.so_khach_em1 ?? 0} onChange={(e) => set("so_khach_em1", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
-                  <Field label="Trẻ em <6">
+                  <Field label="Trẻ em free">
                     <Input type="number" min={0} value={form.so_khach_em2 ?? 0} onChange={(e) => set("so_khach_em2", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
                   <Field label="T/L">

@@ -284,9 +284,9 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
   const soKhachRow = pRuns([
     { text: "NL: ", bold: true },
     { text: String(soKhachLon) + "   " },
-    { text: "TE 6-10: ", bold: true },
+    { text: "TE 50%: ", bold: true },
     { text: String(soKhachEm1) + "   " },
-    { text: "TE <6: ", bold: true },
+    { text: "TE free: ", bold: true },
     { text: String(soKhachEm2) + "   " },
     { text: "T/L: ", bold: true },
     { text: String(soKhachTl) + "   " },
@@ -539,8 +539,8 @@ export async function exportDieuTourWordFromCells(
 
   const soKhachRow = pRuns([
     { text: "NL: ", bold: true }, { text: String(soKhachLon) + "   " },
-    { text: "TE 6-10: ", bold: true }, { text: String(soKhachEm1) + "   " },
-    { text: "TE <6: ", bold: true }, { text: String(soKhachEm2) + "   " },
+    { text: "TE 50%: ", bold: true }, { text: String(soKhachEm1) + "   " },
+    { text: "TE free: ", bold: true }, { text: String(soKhachEm2) + "   " },
     { text: "T/L: ", bold: true }, { text: String(soKhachTl) + "   " },
     { text: "Tổng: ", bold: true }, { text: String(totalKhach), bold: true, color: "185FA5" },
   ]);

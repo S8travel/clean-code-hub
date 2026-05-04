@@ -124,9 +124,9 @@ export default function DoanInfoSection({
             <div className="flex items-center gap-1.5 flex-wrap">
               <GuestChip label="NL" value={soKhachLon} />
               <span className="text-muted-foreground/40 text-xs">·</span>
-              <GuestChip label="TE 6-10" value={soKhachEm1} />
+              <GuestChip label="TE 50%" value={soKhachEm1} />
               <span className="text-muted-foreground/40 text-xs">·</span>
-              <GuestChip label="TE &lt;6" value={soKhachEm2} />
+              <GuestChip label="TE free" value={soKhachEm2} />
               <span className="text-muted-foreground/40 text-xs">·</span>
               <GuestChip label="T/L" value={soKhachTl} />
               <span className="text-muted-foreground/40 text-xs">·</span>

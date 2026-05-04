@@ -253,8 +253,8 @@ export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onClone, on
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-0 text-[10px] font-medium">
                       <KhachCell label={t("Lớn")} value={lon} />
-                      <KhachCell label="6–10" value={em1} />
-                      <KhachCell label="<6" value={em2} />
+                      <KhachCell label="50%" value={em1} />
+                      <KhachCell label="free" value={em2} />
                       <KhachCell label="T/L" value={tl} />
                       <div className="flex flex-col items-center px-2 py-0.5 bg-[hsl(var(--brand))] text-white rounded-r-md min-w-[36px]">
                         <span className="opacity-80 text-[8px]">Tổng</span>

@@ -17,8 +17,8 @@ export default function GuestCountSection(props: Props) {
       <h3 className="text-sm font-semibold">Số lượng khách</h3>
       <div className="grid grid-cols-5 gap-3">
         <ReadonlyField label={t("Người lớn")} value={props.soKhachLon} />
-        <ReadonlyField label="Trẻ em 6–10" value={props.soKhachEm1} />
-        <ReadonlyField label="Trẻ em <6" value={props.soKhachEm2} />
+        <ReadonlyField label="Trẻ em 50%" value={props.soKhachEm1} />
+        <ReadonlyField label="Trẻ em free" value={props.soKhachEm2} />
         <ReadonlyField label="T/L" value={props.soKhachTl} />
         <ReadonlyField label="Tổng" value={props.totalFromDoan} highlight />
       </div>
