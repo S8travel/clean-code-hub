@@ -46,6 +46,8 @@ export interface DoanNgayRow {
   an_toi_nha_hang_id: number | null;
   an_trua_set_menu_id: number | null;
   an_toi_set_menu_id: number | null;
+  an_trua_ghi_chu: string | null;
+  an_toi_ghi_chu: string | null;
   khach_san_id: number | null;
   ks_ma_code: string | null;
   ks_loai_phong: string | null;
@@ -82,6 +84,8 @@ export interface DayLocal {
   an_toi_nha_hang_id: number | null;
   an_trua_set_menu_id: number | null;
   an_toi_set_menu_id: number | null;
+  an_trua_ghi_chu: string;
+  an_toi_ghi_chu: string;
   khach_san_id: number | null;
   ks_ma_code: string;
   ks_loai_phong: string;
@@ -189,6 +193,8 @@ export function generateDays(ngayDi: string | null, ngayVe: string | null): DayL
       an_toi_nha_hang_id: null,
       an_trua_set_menu_id: null,
       an_toi_set_menu_id: null,
+      an_trua_ghi_chu: "",
+      an_toi_ghi_chu: "",
       khach_san_id: null,
       ks_ma_code: "",
       ks_loai_phong: "",
@@ -238,6 +244,8 @@ export function mergeDaysWithDB(generated: DayLocal[], dbRows: DoanNgayRow[], db
       an_toi_nha_hang_id: dbRow.an_toi_nha_hang_id,
       an_trua_set_menu_id: dbRow.an_trua_set_menu_id ?? null,
       an_toi_set_menu_id: dbRow.an_toi_set_menu_id ?? null,
+      an_trua_ghi_chu: dbRow.an_trua_ghi_chu || "",
+      an_toi_ghi_chu: dbRow.an_toi_ghi_chu || "",
       khach_san_id: dbRow.khach_san_id,
       ks_ma_code: dbRow.ks_ma_code || "",
       ks_loai_phong: dbRow.ks_loai_phong || "",
@@ -331,6 +339,8 @@ export function useSaveDieuTour() {
           an_toi_nha_hang_id: day.an_toi_nha_hang_id,
           an_trua_set_menu_id: day.an_trua_set_menu_id ?? null,
           an_toi_set_menu_id: day.an_toi_set_menu_id ?? null,
+          an_trua_ghi_chu: day.an_trua_ghi_chu || null,
+          an_toi_ghi_chu: day.an_toi_ghi_chu || null,
           khach_san_id: day.khach_san_id,
           ks_ma_code: day.ks_ma_code || null,
           ks_loai_phong: day.ks_loai_phong || null,

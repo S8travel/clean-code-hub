@@ -86,6 +86,8 @@ const TRANG_THAI_LABEL: Record<string, string> = {
   huy: "Đã hủy",
 };
 
+const CURRENCIES = ["VND", "USD", "CNY", "EUR", "JPY", "KRW", "TWD", "THB", "AUD"];
+
 // ── InvoiceDieuTourSection ────────────────────────────────────────────────────
 
 function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
@@ -259,6 +261,7 @@ function InvoiceDoanCard({
 
   const [rawValue, setRawValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [currency, setCurrency] = useState("VND");
 
   useEffect(() => {
     if (!isFocused) {
@@ -268,8 +271,20 @@ function InvoiceDoanCard({
     }
   }, [invoiceData?.so_tien_thu, isFocused]);
 
+  useEffect(() => {
+    setCurrency(invoiceData?.currency ?? "VND");
+  }, [invoiceData?.currency]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRawValue(e.target.value.replace(/[^0-9]/g, ""));
+  };
+
+  const handleCurrencyChange = (val: string) => {
+    setCurrency(val);
+    upsert.mutate(
+      { doan_id: doan.id, currency: val },
+      { onError: () => toast.error("Lỗi lưu") },
+    );
   };
 
   const handleBlur = useCallback(() => {
@@ -278,14 +293,14 @@ function InvoiceDoanCard({
     const prev = invoiceData?.so_tien_thu ?? null;
     if (num !== prev) {
       upsert.mutate(
-        { doan_id: doan.id, so_tien_thu: num },
+        { doan_id: doan.id, so_tien_thu: num, currency },
         {
           onSuccess: () => toast.success("Đã lưu số tiền thu"),
           onError: () => toast.error("Lỗi lưu số tiền thu"),
         },
       );
     }
-  }, [rawValue, invoiceData?.so_tien_thu, doan.id, upsert]);
+  }, [rawValue, currency, invoiceData?.so_tien_thu, doan.id, upsert]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -374,21 +389,33 @@ function InvoiceDoanCard({
         <div className="text-sm font-semibold text-blue-700">{fmtVND(chiPhiThucTe)} đ</div>
       </div>
 
-      {/* Số tiền thu */}
-      <div className="shrink-0 w-44">
+      {/* Số tiền thu + ngoại tệ */}
+      <div className="shrink-0 w-60">
         <div className="text-[10px] text-muted-foreground mb-0.5">Số tiền thu</div>
         {invLoading ? (
           <Skeleton className="h-8 w-full" />
         ) : (
-          <Input
-            className="h-8 text-sm"
-            placeholder="Nhập số tiền..."
-            value={isFocused ? rawValue : rawValue ? fmtVND(Number(rawValue)) : ""}
-            onFocus={() => setIsFocused(true)}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            disabled={upsert.isPending}
-          />
+          <div className="flex gap-1">
+            <Select value={currency} onValueChange={handleCurrencyChange}>
+              <SelectTrigger className="h-8 w-20 text-xs shrink-0 px-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => (
+                  <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              className="h-8 text-sm flex-1 min-w-0"
+              placeholder="Số tiền..."
+              value={isFocused ? rawValue : rawValue ? fmtVND(Number(rawValue)) : ""}
+              onFocus={() => setIsFocused(true)}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              disabled={upsert.isPending}
+            />
+          </div>
         )}
       </div>
 
@@ -485,13 +512,26 @@ export default function InvoicePage() {
     [filteredDoan, chiPhiMap],
   );
 
-  const totalDaThu = useMemo(
-    () => filteredDoan.reduce((s, d) => s + (invoiceSummaryMap?.get(d.id) ?? 0), 0),
+  const totalDaThuVND = useMemo(
+    () =>
+      filteredDoan.reduce((s, d) => {
+        const inv = invoiceSummaryMap?.get(d.id);
+        return inv && (inv.currency === "VND" || !inv.currency) ? s + inv.amount : s;
+      }, 0),
+    [filteredDoan, invoiceSummaryMap],
+  );
+
+  const foreignCurrencyCount = useMemo(
+    () =>
+      filteredDoan.filter((d) => {
+        const inv = invoiceSummaryMap?.get(d.id);
+        return inv && inv.amount > 0 && inv.currency && inv.currency !== "VND";
+      }).length,
     [filteredDoan, invoiceSummaryMap],
   );
 
   const pendingCount = useMemo(
-    () => filteredDoan.filter((d) => !invoiceSummaryMap?.get(d.id)).length,
+    () => filteredDoan.filter((d) => !invoiceSummaryMap?.get(d.id)?.amount).length,
     [filteredDoan, invoiceSummaryMap],
   );
 
@@ -587,8 +627,13 @@ export default function InvoicePage() {
           <span className="font-semibold text-blue-700">{fmtVND(totalCPTT)} đ</span>
         </span>
         <span>
-          Tổng đã thu:{" "}
-          <span className="font-semibold text-green-700">{fmtVND(totalDaThu)} đ</span>
+          Đã thu VND:{" "}
+          <span className="font-semibold text-green-700">{fmtVND(totalDaThuVND)} đ</span>
+          {foreignCurrencyCount > 0 && (
+            <span className="text-muted-foreground text-xs ml-1">
+              (+ {foreignCurrencyCount} ngoại tệ)
+            </span>
+          )}
         </span>
       </div>
 

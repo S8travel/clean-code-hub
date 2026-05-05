@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, MessageSquarePlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -39,6 +40,51 @@ function DetailLine({ item }: { item: { dia_chi?: string | null; thong_tin_chung
   );
 }
 
+
+function MealNote({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(() => !!value);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors mt-0.5 print-hide"
+      >
+        <MessageSquarePlus className="h-3 w-3" />
+        Thêm chú thích
+      </button>
+    );
+  }
+
+  return (
+    <div className="relative mt-1">
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Chú thích bữa ăn..."
+        rows={2}
+        className="text-xs resize-none pr-6 min-h-[40px]"
+        autoFocus={!value}
+      />
+      {!value && (
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="absolute top-1 right-1 text-muted-foreground hover:text-foreground print-hide"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
 
 function SetMenuSelect({
   nhaHangId,
@@ -137,13 +183,20 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 )}
                 {noteOpen && (
                   <textarea
-                    className="w-full text-[12px] border border-border/40 rounded px-2 py-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full text-[12px] border border-border/40 rounded px-2 py-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring overflow-hidden"
                     rows={1}
                     autoFocus={!item.ghi_chu?.trim()}
                     placeholder="Chú thích..."
                     value={item.ghi_chu || ""}
-                    onChange={(e) => updateGhiChu(idx, e.target.value)}
-                    onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                    ref={(el) => {
+                      if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+                    }}
+                    onChange={(e) => {
+                      const t = e.currentTarget;
+                      t.style.height = "auto";
+                      t.style.height = t.scrollHeight + "px";
+                      updateGhiChu(idx, e.target.value);
+                    }}
                     onBlur={() => {
                       if (!item.ghi_chu?.trim()) {
                         setNoteOpenMap((m) => ({ ...m, [idx]: false }));
@@ -204,6 +257,10 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               value={day.an_trua_set_menu_id ?? null}
               onChange={(id) => update({ an_trua_set_menu_id: id })}
             />
+            <MealNote
+              value={day.an_trua_ghi_chu}
+              onChange={(v) => update({ an_trua_ghi_chu: v })}
+            />
           </>
         ) : (
           <SearchableSelect
@@ -234,6 +291,10 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               nhaHangId={selectedNhaToi.id}
               value={day.an_toi_set_menu_id ?? null}
               onChange={(id) => update({ an_toi_set_menu_id: id })}
+            />
+            <MealNote
+              value={day.an_toi_ghi_chu}
+              onChange={(v) => update({ an_toi_ghi_chu: v })}
             />
           </>
         ) : (

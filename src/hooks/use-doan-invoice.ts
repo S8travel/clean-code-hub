@@ -11,6 +11,7 @@ export interface DoanInvoiceRow {
   id: number;
   doan_id: number;
   so_tien_thu: number | null;
+  currency: string;
   invoice_files: InvoiceFile[];
   ghi_chu: string | null;
   updated_at: string;
@@ -77,6 +78,7 @@ export function useUpsertDoanInvoice() {
     mutationFn: async (payload: {
       doan_id: number;
       so_tien_thu?: number | null;
+      currency?: string;
       invoice_files?: InvoiceFile[];
       ghi_chu?: string | null;
     }) => {
@@ -143,12 +145,12 @@ export function useDoanInvoiceSummaryMap(doanIds: number[]) {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("doan_invoice")
-        .select("doan_id, so_tien_thu")
+        .select("doan_id, so_tien_thu, currency")
         .in("doan_id", doanIds);
       if (error) throw error;
-      const map = new Map<number, number>();
+      const map = new Map<number, { amount: number; currency: string }>();
       for (const r of data ?? []) {
-        map.set(r.doan_id, r.so_tien_thu ?? 0);
+        map.set(r.doan_id, { amount: r.so_tien_thu ?? 0, currency: r.currency ?? "VND" });
       }
       return map;
     },

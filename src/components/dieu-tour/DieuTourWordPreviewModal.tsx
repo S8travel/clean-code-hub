@@ -6,6 +6,77 @@ import { FileDown } from "lucide-react";
 import { computeExportCells, exportDieuTourWordFromCells } from "@/lib/export-dieu-tour-word";
 import type { DieuTourExportData, DayExportCell } from "@/lib/export-dieu-tour-word";
 
+function fmtDateInfo(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  const WD = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  return `${d.toLocaleDateString("vi-VN")} (${WD[d.getDay()]})`;
+}
+
+function xeLabelInfo(xe: any): string {
+  if (!xe) return "—";
+  const parts = [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean);
+  return parts.join(" · ") || "—";
+}
+
+function InfoTable({ data }: { data: DieuTourExportData }) {
+  const shopStr = data.shopping === true ? "YES" : data.shopping === false ? "NO" : "—";
+  return (
+    <table className="w-full border-collapse text-xs mb-3">
+      <tbody>
+        <tr>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 w-24 whitespace-nowrap">Code đoàn</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold text-blue-700">{data.tenDoan}</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 w-24 whitespace-nowrap">Bảng đón</td>
+          <td className="border border-gray-300 px-2 py-1">{data.bangDon || "—"}</td>
+        </tr>
+        <tr>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">HDV</td>
+          <td className="border border-gray-300 px-2 py-1">{data.hdv || "—"}</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Shopping</td>
+          <td className="border border-gray-300 px-2 py-1">{shopStr}</td>
+        </tr>
+        <tr>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Xe</td>
+          <td className="border border-gray-300 px-2 py-1">{xeLabelInfo(data.xe)}</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">T/L</td>
+          <td className="border border-gray-300 px-2 py-1">{data.truongDoan || "—"}</td>
+        </tr>
+        <tr>
+          <td colSpan={2} className="border border-gray-300 px-2 py-1 bg-gray-100">
+            <span className="font-semibold">Ngày đón: </span>
+            {fmtDateInfo(data.ngayDi)}
+            {data.chuyenBayDon && <span className="text-gray-500 ml-3">{data.chuyenBayDon}</span>}
+          </td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Số khách</td>
+          <td className="border border-gray-300 px-2 py-1">
+            <span className="font-semibold">NL:</span> {data.soKhachLon}&nbsp;&nbsp;
+            <span className="font-semibold">TE 50%:</span> {data.soKhachEm1}&nbsp;&nbsp;
+            <span className="font-semibold">TE free:</span> {data.soKhachEm2}&nbsp;&nbsp;
+            <span className="font-semibold">T/L:</span> {data.soKhachTl}&nbsp;&nbsp;
+            <span className="font-semibold">Tổng: <span className="text-blue-700">{data.totalKhach}</span></span>
+          </td>
+        </tr>
+        <tr>
+          <td colSpan={2} className="border border-gray-300 px-2 py-1 bg-gray-100">
+            <span className="font-semibold">Ngày tiễn: </span>
+            {fmtDateInfo(data.ngayVe)}
+            {data.chuyenBayTien && <span className="text-gray-500 ml-3">{data.chuyenBayTien}</span>}
+          </td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Chú thích</td>
+          <td className="border border-gray-300 px-2 py-1">{data.chuThichKhach || "—"}</td>
+        </tr>
+        {data.gifts && data.gifts.length > 0 && (
+          <tr>
+            <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Quà tặng</td>
+            <td colSpan={3} className="border border-gray-300 px-2 py-1">{data.gifts.join(", ")}</td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
 interface Props {
   open: boolean;
   data: DieuTourExportData | null;
@@ -71,6 +142,9 @@ export default function DieuTourWordPreviewModal({ open, data, onClose, onGhiChu
         </DialogHeader>
 
         <div className="flex-1 overflow-auto px-4">
+          {/* Thông tin chung */}
+          {data && <InfoTable data={data} />}
+
           {/* Schedule table */}
           <table className="w-full border-collapse text-xs">
             <thead>
