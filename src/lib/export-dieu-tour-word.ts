@@ -192,19 +192,34 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
     const truaLines: string[] = [];
     if (day.an_trua_nha_hang_id) {
       const nh = nhaHangMap.get(day.an_trua_nha_hang_id);
-      if (nh) { truaLines.push(nh.ten); if (nh.dia_chi) truaLines.push(nh.dia_chi); }
+      if (nh) {
+        truaLines.push(nh.ten);
+        if (nh.dia_chi) truaLines.push(nh.dia_chi);
+        if (nh.thong_tin_chung) truaLines.push(nh.thong_tin_chung);
+        if (nh.so_dien_thoai) truaLines.push(nh.so_dien_thoai);
+      }
     }
 
     const toiLines: string[] = [];
     if (day.an_toi_nha_hang_id) {
       const nh = nhaHangMap.get(day.an_toi_nha_hang_id);
-      if (nh) { toiLines.push(nh.ten); if (nh.dia_chi) toiLines.push(nh.dia_chi); }
+      if (nh) {
+        toiLines.push(nh.ten);
+        if (nh.dia_chi) toiLines.push(nh.dia_chi);
+        if (nh.thong_tin_chung) toiLines.push(nh.thong_tin_chung);
+        if (nh.so_dien_thoai) toiLines.push(nh.so_dien_thoai);
+      }
     }
 
     const ksLines: string[] = [];
     if (day.khach_san_id) {
       const ks = khachSanMap.get(day.khach_san_id);
-      if (ks) { ksLines.push(ks.ten); if (ks.dia_chi) ksLines.push(ks.dia_chi); }
+      if (ks) {
+        ksLines.push(ks.ten);
+        if (ks.dia_chi) ksLines.push(ks.dia_chi);
+        if (ks.thong_tin_chung) ksLines.push(ks.thong_tin_chung);
+        if (ks.so_dien_thoai) ksLines.push(ks.so_dien_thoai);
+      }
     }
     if (day.ks_loai_phong) ksLines.push(day.ks_loai_phong);
     if (day.ks_ma_code)    ksLines.push(`Code: ${day.ks_ma_code}`);
