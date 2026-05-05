@@ -502,12 +502,12 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
   saveAs(blob, `${tenDoan}_bảng_điều_tour.docx`);
 }
 
-/** Xuất Word từ text cells đã được edit trong preview modal */
-export async function exportDieuTourWordFromCells(
+/** Build Document object from pre-computed cells — shared by export and blob functions */
+function buildDocFromCells(
   data: DieuTourExportData,
   cells: DayExportCell[],
   editedGhiChu: string,
-) {
+): import("docx").Document {
   const {
     tenDoan, hdv, xe, ngayDi, ngayVe,
     bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
@@ -665,8 +665,18 @@ export async function exportDieuTourWordFromCells(
     }],
   });
 
+  return doc;
+}
+
+/** Xuất Word từ text cells đã được edit trong preview modal */
+export async function exportDieuTourWordFromCells(
+  data: DieuTourExportData,
+  cells: DayExportCell[],
+  editedGhiChu: string,
+) {
+  const doc = buildDocFromCells(data, cells, editedGhiChu);
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `${tenDoan}_bảng_điều_tour.docx`);
+  saveAs(blob, `${data.tenDoan}_bảng_điều_tour.docx`);
 }
 
 /** Trả về Blob thay vì download — dùng để đính kèm email */
@@ -675,145 +685,7 @@ export async function getDieuTourWordBlob(
   cells: DayExportCell[],
   editedGhiChu: string,
 ): Promise<Blob> {
-  const {
-    tenDoan, hdv, xe, ngayDi, ngayVe,
-    bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
-    soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
-    chuThichKhach, gifts,
-  } = data;
-
-  const today = new Date().toLocaleDateString("vi-VN");
-  const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
-
-  const headerTable = new Table({
-    width: { size: CONTENT_W, type: WidthType.DXA },
-    rows: [
-      new TableRow({
-        children: [
-          cell(
-            [
-              p("CÔNG TY TNHH DU LỊCH S8",   { bold: true, size: 20, align: AlignmentType.CENTER }),
-              p("S8 TRAVEL COMPANY",           { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
-              p("MST: 0402021137",             { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
-            ],
-            { width: HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
-          ),
-          cell(
-            [
-              p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", { bold: true, size: 20, align: AlignmentType.CENTER }),
-              p("Độc lập – Tự do – Hạnh phúc",          { bold: true, size: FS, align: AlignmentType.CENTER }),
-              p("———————————————",                        { size: FS_SM, color: "888888", align: AlignmentType.CENTER }),
-              p(`Hà Nội, ngày ${today}`,                 { size: FS_SM, italics: true, color: "555555", align: AlignmentType.CENTER }),
-            ],
-            { width: CONTENT_W - HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
-          ),
-        ],
-      }),
-    ],
-  });
-
-  const titlePara = new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 120, after: 60 },
-    children: [new TextRun({ text: "BẢNG ĐIỀU TOUR", bold: true, size: 24 })],
-  });
-
-  const nhaXeStr = xe ? [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean).join(" · ") : "—";
-  const soKhachStr = [
-    soKhachLon ? `NL: ${soKhachLon}` : "",
-    soKhachEm1 ? `TE 50%: ${soKhachEm1}` : "",
-    soKhachEm2 ? `TE free: ${soKhachEm2}` : "",
-    soKhachTl  ? `T/L: ${soKhachTl}` : "",
-  ].filter(Boolean).join("  ");
-  const shopStrInfo = shopStr;
-
-  function infoRow(l1: string, v1: string, l2: string, v2: string) {
-    return new TableRow({
-      children: [
-        cell([p(l1, { bold: true, size: FS_SM })], { width: LW, shading: HEADER_SHADING, margins: CELL_MARGINS }),
-        cell([p(v1, { size: FS_SM })],              { width: VW, shading: NO_SHADING,     margins: CELL_MARGINS }),
-        cell([p(l2, { bold: true, size: FS_SM })], { width: LW, shading: HEADER_SHADING, margins: CELL_MARGINS }),
-        cell([p(v2, { size: FS_SM })],              { width: VW_R, shading: NO_SHADING,   margins: CELL_MARGINS }),
-      ],
-    });
-  }
-
-  const infoTable = new Table({
-    width: { size: CONTENT_W, type: WidthType.DXA },
-    borders: { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER, insideH: BORDER, insideV: BORDER },
-    rows: [
-      infoRow("Code đoàn", tenDoan,            "Bảng đón",  bangDon || "—"),
-      infoRow("HDV",       hdv || "—",          "Shopping",  shopStrInfo),
-      infoRow("Xe",        nhaXeStr,            "T/L",       truongDoan || "—"),
-      new TableRow({ children: [
-        cell([p(`Ngày đón: ${formatDate(ngayDi)}${chuyenBayDon ? `  ${chuyenBayDon}` : ""}`, { size: FS_SM })],
-          { columnSpan: 2, shading: HEADER_SHADING, margins: CELL_MARGINS }),
-        cell([p("Số khách", { bold: true, size: FS_SM })], { shading: HEADER_SHADING, margins: CELL_MARGINS }),
-        cell([p(soKhachStr || String(totalKhach || 0), { size: FS_SM })], { shading: NO_SHADING, margins: CELL_MARGINS }),
-      ]}),
-      new TableRow({ children: [
-        cell([p(`Ngày tiễn: ${formatDate(ngayVe)}${chuyenBayTien ? `  ${chuyenBayTien}` : ""}`, { size: FS_SM })],
-          { columnSpan: 2, shading: HEADER_SHADING, margins: CELL_MARGINS }),
-        cell([p("Chú thích", { bold: true, size: FS_SM })], { shading: HEADER_SHADING, margins: CELL_MARGINS }),
-        cell([p(chuThichKhach || "—", { size: FS_SM })], { shading: NO_SHADING, margins: CELL_MARGINS }),
-      ]}),
-      ...(gifts && gifts.length > 0 ? [new TableRow({ children: [
-        cell([p("Quà tặng", { bold: true, size: FS_SM })], { shading: HEADER_SHADING, margins: CELL_MARGINS }),
-        cell([p(gifts.join(", "), { size: FS_SM })], { columnSpan: 3, shading: NO_SHADING, margins: CELL_MARGINS }),
-      ]})] : []),
-    ],
-  });
-
-  const schedHeaders = ["Ngày", "Chương trình", "Ăn trưa", "Ăn tối", "Khách sạn"];
-  const schedTable = new Table({
-    width: { size: CONTENT_W, type: WidthType.DXA },
-    borders: { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER, insideH: BORDER, insideV: BORDER },
-    rows: [
-      new TableRow({
-        tableHeader: true,
-        children: schedHeaders.map((h, i) =>
-          cell([p(h, { bold: true, size: FS_H, align: AlignmentType.CENTER })], {
-            width: SCHED_COL[i], shading: HEADER_SHADING, margins: CELL_MARGINS, vertAlign: VerticalAlign.CENTER,
-          })
-        ),
-      }),
-      ...cells.map((dc) => {
-        const d = new Date(dc.ngay_date + "T00:00:00");
-        const dateLabel = `${d.getDate()}/${d.getMonth() + 1}\n${dc.thu}`;
-        return new TableRow({
-          children: [
-            cell([pRuns(dateLabel, { size: FS_SM, align: AlignmentType.CENTER })], {
-              width: SCHED_COL[0], margins: CELL_MARGINS, vertAlign: VerticalAlign.CENTER,
-            }),
-            cell(dc.chuongTrinh.split("\n").map((line) => p(line, { size: FS })), { width: SCHED_COL[1], margins: CELL_MARGINS }),
-            cell(dc.anTrua.split("\n").map((line) => p(line, { size: FS })),     { width: SCHED_COL[2], margins: CELL_MARGINS }),
-            cell(dc.anToi.split("\n").map((line) => p(line, { size: FS })),      { width: SCHED_COL[3], margins: CELL_MARGINS }),
-            cell(dc.khachSan.split("\n").map((line) => p(line, { size: FS })),   { width: SCHED_COL[4], margins: CELL_MARGINS }),
-          ],
-        });
-      }),
-    ],
-  });
-
-  function textToParas(text: string): Paragraph[] {
-    if (!text?.trim()) return [];
-    return text.split("\n").map((line) => p(line.trim() ? line : " ", { size: FS }));
-  }
-
-  const ghiChuParas: Paragraph[] = [];
-  if (editedGhiChu?.trim()) {
-    ghiChuParas.push(new Paragraph({ spacing: { before: 200, after: 60 }, children: [new TextRun({ text: "Ghi chú:", bold: true, size: FS })] }));
-    ghiChuParas.push(...textToParas(editedGhiChu));
-  }
-
-  const spacer2 = new Paragraph({ spacing: { before: 100, after: 0 }, children: [] });
-
-  const doc = new Document({
-    sections: [{
-      properties: { page: { size: { width: PAGE_W, height: PAGE_H }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } },
-      children: [headerTable, titlePara, infoTable, spacer2, schedTable, ...ghiChuParas],
-    }],
-  });
-
+  const doc = buildDocFromCells(data, cells, editedGhiChu);
   return Packer.toBlob(doc);
 }
+
