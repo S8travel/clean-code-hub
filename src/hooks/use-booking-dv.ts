@@ -89,6 +89,7 @@ export async function callSendBookingEmail(params: {
   replyTo?: string;
   messageId?: string;
   inReplyTo?: string;
+  attachments?: Array<{ filename: string; content: string }>;
 }): Promise<string | null> {
   const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
     method: "POST",

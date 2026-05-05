@@ -11,7 +11,8 @@ serve(async (req) => {
   }
 
   try {
-    const { to, cc, subject, html, replyTo, messageId, inReplyTo } = await req.json();
+    const { to, cc, subject, html, replyTo, messageId, inReplyTo, attachments } = await req.json();
+    // attachments?: Array<{ filename: string; content: string }> — content là base64
 
     if (!to || !subject || !html) {
       return new Response(
@@ -46,6 +47,7 @@ serve(async (req) => {
         subject,
         html,
         ...(replyTo ? { reply_to: [replyTo], bcc: [replyTo] } : {}),
+        ...(attachments?.length ? { attachments } : {}),
         ...((messageId || inReplyTo) ? {
           headers: {
             ...(messageId  ? { "Message-ID":  `<${messageId}@email.s8travel.com>` } : {}),

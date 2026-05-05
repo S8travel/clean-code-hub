@@ -450,7 +450,23 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="booking-dv" className="mt-4">
-            <BookingDVTab doanId={doanId} tenDoan={doan.ten_doan} hdvTen={doan.hdv || ""} ngayDi={doan.ngay_di} />
+            <BookingDVTab
+              doanId={doanId}
+              tenDoan={doan.ten_doan}
+              hdvTen={doan.hdv || ""}
+              ngayDi={doan.ngay_di}
+              ngayVe={doan.ngay_ve}
+              chuyenBayDon={doan.chuyen_bay_don}
+              chuyenBayTien={doan.chuyen_bay_tien}
+              hdvName={doan.huong_dan_vien?.ten ?? null}
+              soKhach={doan.so_khach}
+              soKhachLon={soKhachLon}
+              soKhachEm1={soKhachEm1}
+              soKhachEm2={soKhachEm2}
+              soKhachTl={soKhachTl}
+              xe={doan.xe ?? null}
+              dieuTourExportData={dieuTourExportData}
+            />
           </TabsContent>
 
           <TabsContent value="chi-phi" className="mt-4">
