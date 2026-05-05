@@ -1,6 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus } from "@/hooks/use-dntt";
+import { useAuth } from "@/hooks/use-auth";
+import { buildAuditLogger } from "@/hooks/use-activity-log";
+
+const DANH_MUC_LABEL: Record<string, string> = {
+  nha_hang: "nhà hàng",
+  khach_san: "khách sạn",
+  hdv: "HDV",
+  xe: "xe",
+  ve_may_bay: "vé máy bay",
+  phi_visa: "phí visa",
+  tham_quan: "tham quan",
+  mua_sam: "mua sắm",
+  dich_vu: "dịch vụ",
+  khac: "khác",
+};
+
+function fmtVND(n: number) {
+  return n.toLocaleString("vi-VN") + " VND";
+}
 
 export interface ChiPhiRow {
   id: number;
@@ -224,6 +243,7 @@ export function useChiPhiNHData(doanId?: number) {
 
 export function useUpsertChiPhi() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: Partial<ChiPhiRow> & { doan_id: number }) => {
       const { thanh_tien, ...clean } = payload as any;
@@ -243,22 +263,34 @@ export function useUpsertChiPhi() {
         return data;
       }
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", variables.doan_id] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      const isNew = !variables.id;
+      const dm = DANH_MUC_LABEL[variables.danh_muc ?? ""] ?? (variables.danh_muc ?? "");
+      const tien = (variables.tien_cong_ty ?? 0) + (variables.tien_hdv ?? 0);
+      const moTa = isNew
+        ? `Thêm chi phí ${dm}${variables.mo_ta ? ": " + variables.mo_ta : ""} — ${fmtVND(tien)}`
+        : `Cập nhật chi phí ${dm}${variables.mo_ta ? ": " + variables.mo_ta : ""}`;
+      log({ doan_id: variables.doan_id, action: isNew ? "tao" : "sua", table_name: "doan_chi_phi", record_id: (data as any)?.id, mo_ta: moTa });
     },
   });
 }
 
 export function useDeleteChiPhi() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, doanId }: { id: number; doanId: number }) => {
+    mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
       const { error } = await externalSupabase.from("doan_chi_phi").delete().eq("id", id);
       if (error) throw error;
-      return doanId;
+      return { doanId, id, mo_ta, danh_muc };
     },
-    onSuccess: (doanId) => {
+    onSuccess: ({ doanId, id, mo_ta, danh_muc }) => {
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      const dm = DANH_MUC_LABEL[danh_muc ?? ""] ?? (danh_muc ?? "");
+      log({ doan_id: doanId, action: "xoa", table_name: "doan_chi_phi", record_id: id, mo_ta: `Xóa chi phí ${dm}${mo_ta ? ": " + mo_ta : ""}` });
     },
   });
 }
@@ -271,6 +303,7 @@ export interface AllocationRow {
 
 export function useInsertDNTT() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: Record<string, any> & { doan_id: number; allocations?: AllocationRow[] }) => {
       const { allocations, ...dnttPayload } = payload;
@@ -299,10 +332,13 @@ export function useInsertDNTT() {
       await recalcChiPhiStatus(chiPhiIds);
       return data;
     },
-    onSuccess: (_, v) => {
+    onSuccess: (data, v) => {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", v.doan_id] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", v.doan_id] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      const loaiLabel = DANH_MUC_LABEL[v.loai ?? ""] ?? (v.loai ?? "");
+      log({ doan_id: v.doan_id, action: "tao", table_name: "de_nghi_thanh_toan", record_id: (data as any)?.id, mo_ta: `Tạo ĐNTT ${loaiLabel} — ${fmtVND(v.so_tien ?? 0)}` });
     },
   });
 }
@@ -350,6 +386,7 @@ export function useChiPhiAllocations(chiPhiId: number | null | undefined) {
 
 export function useDeleteDNTT() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, doanId }: { id: number; doanId: number; refId?: number | null }) => {
       // Lấy chi_phi_ids trước khi xóa (allocations sẽ bị cascade delete)
@@ -365,16 +402,19 @@ export function useDeleteDNTT() {
       await recalcChiPhiStatus(chiPhiIds);
       return doanId;
     },
-    onSuccess: (doanId) => {
+    onSuccess: (doanId, vars) => {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      log({ doan_id: doanId, action: "xoa", table_name: "de_nghi_thanh_toan", record_id: vars.id, mo_ta: `Xóa ĐNTT #${vars.id}` });
     },
   });
 }
 
 export function useUpdateDNTT() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, doanId, ...rest }: { id: number; doanId: number } & Record<string, any>) => {
       const { error } = await externalSupabase.from("de_nghi_thanh_toan").update(rest).eq("id", id);
@@ -382,9 +422,17 @@ export function useUpdateDNTT() {
 
       return doanId;
     },
-    onSuccess: (doanId) => {
+    onSuccess: (doanId, vars) => {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      let action: "sua" | "duyet" | "tu_choi" | "thanh_toan" = "sua";
+      let moTa = `Cập nhật ĐNTT #${vars.id}`;
+      const v = vars as Record<string, any>;
+      if (v.trang_thai_duyet === "duyet") { action = "duyet"; moTa = `Duyệt ĐNTT #${vars.id}`; }
+      else if (v.trang_thai_duyet === "tu_choi") { action = "tu_choi"; moTa = `Từ chối ĐNTT #${vars.id}`; }
+      else if (v.trang_thai_thanh_toan === "da_thanh_toan") { action = "thanh_toan"; moTa = `Thanh toán ĐNTT #${vars.id}`; }
+      log({ doan_id: doanId, action, table_name: "de_nghi_thanh_toan", record_id: vars.id, mo_ta: moTa });
     },
   });
 }

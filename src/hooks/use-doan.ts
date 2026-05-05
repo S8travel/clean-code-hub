@@ -1,5 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { buildAuditLogger } from "@/hooks/use-activity-log";
 
 export interface Doan {
   id: number;
@@ -300,25 +302,35 @@ export function useRemoveDoanPermission() {
 
 export function useCreateDoan() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (doan: DoanInsert) => {
       const { data, error } = await externalSupabase.from("doan").insert(doan).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["doan"] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      log({ doan_id: (data as any).id, action: "tao", table_name: "doan", record_id: (data as any).id, mo_ta: `Tạo đoàn: ${(data as any).ten_doan}` });
+    },
   });
 }
 
 export function useUpdateDoan() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, ...updates }: DoanInsert & { id: number }) => {
       const { data, error } = await externalSupabase.from("doan").update(updates).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({ queryKey: ["doan"] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      log({ doan_id: vars.id, action: "sua", table_name: "doan", record_id: vars.id, mo_ta: `Cập nhật thông tin đoàn` });
+    },
   });
 }
 

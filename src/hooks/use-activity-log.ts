@@ -17,6 +17,7 @@ export interface ActivityLogRow {
   action: ActivityAction;
   table_name: string;
   record_id: string | null;
+  doan_id: number | null;
   mo_ta: string | null;
   created_at: string;
 }
@@ -25,6 +26,7 @@ export interface LogActivityVars {
   action: ActivityAction;
   table_name: string;
   record_id?: string | number | null;
+  doan_id?: number | null;
   mo_ta: string;
 }
 
@@ -43,16 +45,51 @@ export function useLogActivity() {
   return useMutation({
     mutationFn: async (vars: LogActivityVars) => {
       const { error } = await externalSupabase.from("activity_log").insert({
-        user_id: user?.id ?? null,
+        user_id: user?.user_id ?? null,
         ho_ten: user?.ho_ten ?? null,
         action: vars.action,
         table_name: vars.table_name,
         record_id: vars.record_id != null ? String(vars.record_id) : null,
+        doan_id: vars.doan_id ?? null,
         mo_ta: vars.mo_ta,
       });
       if (error) throw error;
     },
   });
+}
+
+// ── Query log theo đoàn ──
+export function useDoanActivityLog(doanId: number | undefined) {
+  return useQuery({
+    queryKey: ["activity_log", "doan", doanId],
+    enabled: !!doanId,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("activity_log")
+        .select("*")
+        .eq("doan_id", doanId!)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as ActivityLogRow[];
+    },
+    staleTime: 15_000,
+  });
+}
+
+// ── Fire-and-forget audit log (dùng trong onSuccess của mutations) ──
+export function buildAuditLogger(userId: string | null | undefined, hoTen: string | null | undefined) {
+  return (vars: { doan_id: number; action: ActivityAction; table_name: string; record_id?: number | string | null; mo_ta: string }) => {
+    externalSupabase.from("activity_log").insert({
+      user_id: userId ?? null,
+      ho_ten: hoTen ?? null,
+      doan_id: vars.doan_id,
+      action: vars.action,
+      table_name: vars.table_name,
+      record_id: vars.record_id != null ? String(vars.record_id) : null,
+      mo_ta: vars.mo_ta,
+    });
+  };
 }
 
 // ── Hook để đọc log (cho admin) ──

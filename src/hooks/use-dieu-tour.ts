@@ -1,5 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { buildAuditLogger } from "@/hooks/use-activity-log";
 
 // ── Lookup types ──
 export interface CanhDiemItem {
@@ -300,6 +302,7 @@ export function useInitDoanNgay() {
 }
 export function useSaveDieuTour() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: SaveDieuTourPayload) => {
       const { doanId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
@@ -596,13 +599,15 @@ export function useSaveDieuTour() {
         // Otherwise: do nothing, keep existing data
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, payload) => {
       qc.invalidateQueries({ queryKey: ["doan"] });
       qc.invalidateQueries({ queryKey: ["doan_ngay"] });
       qc.invalidateQueries({ queryKey: ["doan_ngay_item"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
       qc.invalidateQueries({ queryKey: ["chi_phi_ks_data"] });
       qc.invalidateQueries({ queryKey: ["doan_booking_ks"] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      log({ doan_id: payload.doanId, action: "sua", table_name: "doan_ngay", record_id: payload.doanId, mo_ta: `Lưu lịch trình điều tour` });
     },
   });
 }
