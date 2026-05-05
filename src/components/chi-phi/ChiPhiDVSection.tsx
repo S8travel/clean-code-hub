@@ -20,6 +20,8 @@ import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
+import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
+import CatalogHoverCard from "./CatalogHoverCard";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -74,6 +76,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
   const adjustMut = useCreateAdjustment();
+  const dvCdMap = useDVCanhDiemMap(doanId);
   const [previewDVData, setPreviewDVData] = useState<NHDocData | null>(null);
 
   // Inline edit state for DNTT amount
@@ -611,7 +614,15 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                     )}
 
                     {/* Dịch vụ */}
-                    <td className="px-3 py-2.5 font-medium">{row.mo_ta || "—"}</td>
+                    <td className="px-3 py-2.5 font-medium">
+                      <CatalogHoverCard info={
+                        row.ref_doan_ngay_item_id && dvCdMap[row.ref_doan_ngay_item_id]
+                          ? { kind: "dv", ten: row.mo_ta || "Dịch vụ", ...dvCdMap[row.ref_doan_ngay_item_id] }
+                          : null
+                      }>
+                        <span>{row.mo_ta || "—"}</span>
+                      </CatalogHoverCard>
+                    </td>
 
                     {/* SL — editable */}
                     <td className="px-2 py-2.5">

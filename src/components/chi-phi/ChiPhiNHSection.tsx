@@ -23,6 +23,7 @@ import { useCurrentUserName } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
+import CatalogHoverCard from "./CatalogHoverCard";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { toast } from "sonner";
 
@@ -870,10 +871,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
 
                 {/* NH name */}
                 <td className="px-3 py-2 font-medium">
-                  <div className="truncate">
-                    {nh?.ten || `NH #${meal.nha_hang_id}`}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <CatalogHoverCard info={nh ? { kind: "nh", ...nh } : null}>
+                      <span className="truncate">{nh?.ten || `NH #${meal.nha_hang_id}`}</span>
+                    </CatalogHoverCard>
                     {nh?.ncc_so_tai_khoan && (
-                      <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">
+                      <span className="text-[10px] text-muted-foreground font-normal shrink-0">
                         STK: {nh.ncc_so_tai_khoan}
                       </span>
                     )}

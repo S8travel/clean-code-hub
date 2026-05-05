@@ -130,3 +130,39 @@ export function useChiPhiNHSection(doanId?: number) {
     },
   });
 }
+
+export interface CanhDiemInfo {
+  id: number;
+  ten: string;
+  loai: string | null;
+  co_phi: boolean | null;
+  gia_mac_dinh: number | null;
+  dia_diem: string | null;
+  so_dien_thoai: string | null;
+  email: string | null;
+  nguoi_thanh_toan: string | null;
+}
+
+// Map: doan_ngay_item_id → CanhDiemInfo
+export function useDVCanhDiemMap(doanId?: number): Record<number, CanhDiemInfo> {
+  const { data } = useQuery({
+    queryKey: ["dv_canh_diem_map", doanId],
+    enabled: !!doanId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("doan_ngay_item")
+        .select("id, canh_diem:canh_diem_id(id, ten, loai, co_phi, gia_mac_dinh, dia_diem, so_dien_thoai, email, nguoi_thanh_toan)")
+        .eq("doan_id", doanId!);
+      if (error) throw error;
+      const map: Record<number, CanhDiemInfo> = {};
+      for (const item of (data ?? []) as any[]) {
+        if (item.id && item.canh_diem) {
+          map[item.id] = item.canh_diem as CanhDiemInfo;
+        }
+      }
+      return map;
+    },
+  });
+  return data ?? {};
+}
