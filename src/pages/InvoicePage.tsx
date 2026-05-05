@@ -330,16 +330,14 @@ function InvoiceDoanCard({
   const files = invoiceData?.invoice_files ?? [];
 
   return (
-    <div className="border rounded-lg bg-white overflow-hidden shadow-sm hover:shadow transition-shadow">
-      {/* Clickable header */}
+    <div className="border rounded-lg bg-white px-3 py-2.5 flex items-center gap-3 hover:bg-muted/10 transition-colors">
+      {/* Tour info — clickable for drawer */}
       <button
-        className="w-full text-left p-3 hover:bg-muted/30 transition-colors"
+        className="flex-1 min-w-0 text-left"
         onClick={onCardClick}
       >
-        <div className="flex items-start justify-between gap-2 mb-1.5">
-          <span className="font-medium text-sm leading-tight flex-1 min-w-0 line-clamp-2">
-            {doan.ten_doan}
-          </span>
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="font-medium text-sm truncate">{doan.ten_doan}</span>
           {doan.trang_thai && (
             <Badge
               variant="outline"
@@ -353,99 +351,89 @@ function InvoiceDoanCard({
             </Badge>
           )}
         </div>
-        <div className="text-xs text-muted-foreground space-y-0.5">
-          <div className="flex items-center gap-1 flex-wrap">
-            <span>{doan.agents?.ten ?? "—"}</span>
-            {doan.dia_diem?.ten && (
-              <>
-                <span className="text-muted-foreground/40">·</span>
-                <MapPin className="h-3 w-3 shrink-0" />
-                <span>{doan.dia_diem.ten}</span>
-              </>
-            )}
-          </div>
-          <div>{fmtDate(doan.ngay_di)} → {fmtDate(doan.ngay_ve)}</div>
-          <div className="flex items-center gap-1">
-            <Users className="h-3 w-3 shrink-0" />
-            <span>{soKhachDisplay}</span>
-          </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+          <span>{doan.agents?.ten ?? "—"}</span>
+          {doan.dia_diem?.ten && (
+            <>
+              <span className="text-muted-foreground/30">·</span>
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span>{doan.dia_diem.ten}</span>
+            </>
+          )}
+          <span className="text-muted-foreground/30">·</span>
+          <span>{fmtDate(doan.ngay_di)} → {fmtDate(doan.ngay_ve)}</span>
+          <span className="text-muted-foreground/30">·</span>
+          <Users className="h-3 w-3 shrink-0" />
+          <span>{soKhachDisplay}</span>
         </div>
       </button>
 
-      {/* Body */}
-      <div className="px-3 pb-3 border-t pt-2.5 space-y-2.5">
-        {/* Chi phí TT */}
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Chi phí TT</span>
-          <span className="font-semibold text-blue-700">{fmtVND(chiPhiThucTe)} đ</span>
-        </div>
+      {/* Chi phí TT */}
+      <div className="shrink-0 text-right w-36">
+        <div className="text-[10px] text-muted-foreground">Chi phí TT</div>
+        <div className="text-sm font-semibold text-blue-700">{fmtVND(chiPhiThucTe)} đ</div>
+      </div>
 
-        {/* Số tiền thu */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground shrink-0 w-24">Số tiền thu</span>
-          <div className="flex-1">
-            {invLoading ? (
-              <Skeleton className="h-8 w-full" />
-            ) : (
-              <Input
-                className="h-8 text-sm"
-                placeholder="Nhập số tiền..."
-                value={isFocused ? rawValue : rawValue ? fmtVND(Number(rawValue)) : ""}
-                onFocus={() => setIsFocused(true)}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                disabled={upsert.isPending}
-              />
-            )}
-          </div>
-        </div>
+      {/* Số tiền thu */}
+      <div className="shrink-0 w-44">
+        <div className="text-[10px] text-muted-foreground mb-0.5">Số tiền thu</div>
+        {invLoading ? (
+          <Skeleton className="h-8 w-full" />
+        ) : (
+          <Input
+            className="h-8 text-sm"
+            placeholder="Nhập số tiền..."
+            value={isFocused ? rawValue : rawValue ? fmtVND(Number(rawValue)) : ""}
+            onFocus={() => setIsFocused(true)}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            disabled={upsert.isPending}
+          />
+        )}
+      </div>
 
-        {/* Files */}
-        <div className="space-y-1">
-          {files.map((f) => (
-            <div
-              key={f.url}
-              className="flex items-center gap-1.5 text-xs bg-muted/50 rounded px-2 py-1"
+      {/* Files + upload */}
+      <div className="shrink-0 flex items-center gap-1 flex-wrap max-w-[200px]">
+        {files.map((f) => (
+          <div
+            key={f.url}
+            className="flex items-center gap-1 text-[11px] bg-muted/60 rounded px-1.5 py-0.5 max-w-[180px]"
+          >
+            <a
+              href={f.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate text-blue-600 hover:underline max-w-[130px]"
             >
-              <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <a
-                href={f.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 min-w-0 truncate text-blue-600 hover:underline"
-              >
-                {f.name}
-              </a>
-              <button
-                onClick={() => handleDeleteFile(f.url)}
-                className="text-muted-foreground hover:text-destructive shrink-0"
-                disabled={deleteFile.isPending}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept="image/*,.pdf"
-              multiple
-              onChange={handleUpload}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={upload.isPending}
+              {f.name}
+            </a>
+            <button
+              onClick={() => handleDeleteFile(f.url)}
+              className="text-muted-foreground hover:text-destructive shrink-0"
+              disabled={deleteFile.isPending}
             >
-              <Upload className="h-3 w-3" />
-              {upload.isPending ? "Đang upload..." : "Upload hoá đơn"}
-            </Button>
+              <X className="h-3 w-3" />
+            </button>
           </div>
-        </div>
+        ))}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept="image/*,.pdf"
+          multiple
+          onChange={handleUpload}
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground shrink-0"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={upload.isPending}
+        >
+          <Upload className="h-3 w-3" />
+          {upload.isPending ? "Đang upload..." : "Upload"}
+        </Button>
       </div>
     </div>
   );
@@ -606,9 +594,9 @@ export default function InvoicePage() {
 
       {/* Loading skeletons */}
       {isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 rounded-lg" />
+            <Skeleton key={i} className="h-14 rounded-lg" />
           ))}
         </div>
       )}
@@ -620,9 +608,9 @@ export default function InvoicePage() {
         </p>
       )}
 
-      {/* Cards grid */}
+      {/* List */}
       {!isLoading && filteredDoan.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="space-y-2">
           {filteredDoan.map((doan) => (
             <InvoiceDoanCard
               key={doan.id}
