@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, differenceInDays, startOfMonth, endOfMonth, parseISO, isToday, isBefore } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
   BriefcaseBusiness, CalendarClock, Users, ClipboardList,
-  AlertCircle, AlertTriangle, Info, ArrowRight, Hotel, Utensils, Package,
+  AlertCircle, AlertTriangle, Info, ArrowRight, Hotel, Utensils, Package, EyeOff,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -209,6 +209,34 @@ export default function MyJobPage() {
 
   const uid = user?.user_id;
 
+  // ── Hủy theo dõi (localStorage, chỉ ảnh hưởng MyJobPage) ──────────────────
+  const hiddenKey = uid ? `myjob_hidden_${uid}` : null;
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(() => {
+    if (!uid) return new Set();
+    try {
+      const raw = localStorage.getItem(`myjob_hidden_${uid}`);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
+
+  // Đồng bộ localStorage khi uid load xong (trường hợp uid chưa có lúc init)
+  useEffect(() => {
+    if (!hiddenKey) return;
+    try {
+      const raw = localStorage.getItem(hiddenKey);
+      if (raw) setHiddenIds(new Set(JSON.parse(raw)));
+    } catch { /* ignore */ }
+  }, [hiddenKey]);
+
+  const hidesDoan = useCallback((doanId: number) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.add(doanId);
+      if (hiddenKey) localStorage.setItem(hiddenKey, JSON.stringify([...next]));
+      return next;
+    });
+  }, [hiddenKey]);
+
   // Team-based scope data
   const { data: myAssignments = [], isLoading: loadingAssignments } = useMyTeamAssignments(uid);
   const { data: allTeamAgents = [], isLoading: loadingTeamAgents } = useAllTeamAgents();
@@ -280,6 +308,7 @@ export default function MyJobPage() {
     if (!myDoan || !td) return [];
     return myDoan
       .filter((g) => {
+        if (hiddenIds.has(g.id)) return false;
         if (trangThai !== "all" && g.trang_thai !== trangThai) return false;
         if (search && !g.ten_doan.toLowerCase().includes(search.toLowerCase())) return false;
         return true;
@@ -512,12 +541,13 @@ export default function MyJobPage() {
                     <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Booking DV</TableHead>
                     <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">ĐNTT</TableHead>
                     <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Thanh toán</TableHead>
+                    <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-10 text-xs text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
                         Không có đoàn nào
                       </TableCell>
                     </TableRow>
@@ -618,6 +648,21 @@ export default function MyJobPage() {
                             return { label: r.mo_ta ?? "—", statusLabel: s.label, statusCls: s.cls };
                           })}
                         />
+                      </TableCell>
+                      <TableCell className="py-1.5 px-1 text-center">
+                        {g.assigned_to === uid && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => hidesDoan(g.id)}
+                                className="text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5 rounded"
+                              >
+                                <EyeOff className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">Hủy theo dõi</TooltipContent>
+                          </Tooltip>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
