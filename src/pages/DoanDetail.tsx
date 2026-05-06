@@ -67,7 +67,7 @@ export default function DoanDetail() {
   const { data: nhaHangList = [] } = useNhaHang();
   const { data: khachSanList = [] } = useKhachSan();
   const { data: allSetMenus = [] } = useAllSetMenus();
-  const { data: dbNgayRows = [], isLoading: isLoadingNgay } = useDoanNgayList(doanId || undefined);
+  const { data: dbNgayRows = [] } = useDoanNgayList(doanId || undefined);
   const { data: dbNgayItems = [] } = useDoanNgayItems(doanId || undefined);
   const saveMutation = useSaveDieuTour();
   const initDoanNgay = useInitDoanNgay();
@@ -259,7 +259,7 @@ export default function DoanDetail() {
   }, [scheduleSave]);
 
   const dieuTourExportData = useMemo((): DieuTourExportData | null => {
-    if (!doan || isLoadingNgay) return null;
+    if (!doan) return null;
     return {
       days,
       canhDiemList,
@@ -286,7 +286,7 @@ export default function DoanDetail() {
       setMenuList: allSetMenus,
       coTinhSuatTLNhaHang,
     };
-  }, [doan, days, isLoadingNgay, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour]);
+  }, [doan, days, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour]);
 
   // Warning badge counts
   const bookingKSBadgeCount = useMemo(() =>

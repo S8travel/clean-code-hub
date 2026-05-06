@@ -2,7 +2,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
-import { Bus, Mail, Check, X, RotateCcw, Paperclip } from "lucide-react";
+import { Bus, Mail, Check, X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
@@ -13,7 +13,7 @@ import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import {
   computeExportCells,
-  getDieuTourWordBlob,
+  type DayExportCell,
   type DieuTourExportData,
 } from "@/lib/export-dieu-tour-word";
 
@@ -47,13 +47,34 @@ function TrackingLine({ active }: { active: boolean }) {
   return <div className={cn("flex-1 h-0.5 mb-5 transition-colors", active ? "bg-primary" : "bg-muted-foreground/20")} />;
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+function buildScheduleHTML(cells: DayExportCell[]): string {
+  if (cells.length === 0) return "";
+  const COL = "border:1px solid #e2e8f0;padding:6px 10px;font-size:13px;vertical-align:top";
+  const HD  = COL + ";background:#f1f5f9;font-weight:600;text-align:center";
+  const toHtml = (text: string) => text ? text.split("\n").join("<br>") : "—";
+
+  const header = `<tr>
+    <th style="${HD}">Ngày</th>
+    <th style="${HD}">Chương trình</th>
+    <th style="${HD}">Ăn trưa</th>
+    <th style="${HD}">Ăn tối</th>
+    <th style="${HD}">Khách sạn</th>
+  </tr>`;
+
+  const rows = cells.map((dc) => {
+    const d = new Date(dc.ngay_date + "T00:00:00");
+    const dateLabel = `${d.getDate()}/${d.getMonth() + 1}<br><span style="color:#64748b;font-size:11px">${dc.thu}</span>`;
+    return `<tr>
+      <td style="${COL};text-align:center;white-space:nowrap">${dateLabel}</td>
+      <td style="${COL}">${toHtml(dc.chuongTrinh)}</td>
+      <td style="${COL}">${toHtml(dc.anTrua)}</td>
+      <td style="${COL}">${toHtml(dc.anToi)}</td>
+      <td style="${COL}">${toHtml(dc.khachSan)}</td>
+    </tr>`;
+  }).join("");
+
+  return `<h3 style="margin:24px 0 8px;font-size:14px;color:#0f172a">Lịch trình</h3>
+<table style="border-collapse:collapse;width:100%;font-size:13px">${header}${rows}</table>`;
 }
 
 interface XeInfo {
@@ -90,7 +111,6 @@ export default function BookingXeCard({
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [sending, setSending] = useState(false);
-  const [attachWord, setAttachWord] = useState(true);
   const [ghiChu, setGhiChu] = useState(booking?.ghi_chu ?? "");
   const [deadline, setDeadline] = useState(() => booking?.deadline ?? getDefaultDeadline(ngayDi ?? "") ?? "");
 
@@ -111,11 +131,13 @@ export default function BookingXeCard({
     const xeStr = xe ? `${xe.ten_xe}${xe.so_cho ? ` (${xe.so_cho} chỗ)` : ""}` : "—";
     const hdvStr = hdvTen || "—";
     const soKhachStr = soKhach ? `${soKhach} khách` : "—";
+    const cells = exportData ? computeExportCells(exportData) : [];
+    const scheduleHtml = buildScheduleHTML(cells);
 
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
-  <div style="max-width:620px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+  <div style="max-width:780px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
     <div style="background:#0f172a;padding:24px 32px;text-align:center">
       <h2 style="margin:0;color:#fff;font-size:18px;letter-spacing:.5px">CÔNG TY TNHH DU LỊCH S8</h2>
       <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY &nbsp;|&nbsp; MST: 0402021137</p>
@@ -131,9 +153,9 @@ export default function BookingXeCard({
         <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0">HDV</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${hdvStr}</td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0">Số khách</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${soKhachStr}</td></tr>
       </table>
+      ${scheduleHtml}
       ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
       <p style="margin-top:20px;color:#475569;font-size:13px">
-        Chi tiết lịch trình vui lòng xem file đính kèm.<br>
         Kính nhờ xác nhận và báo giá trong vòng <strong>24 giờ</strong>. Trân trọng cảm ơn!
       </p>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
@@ -164,25 +186,12 @@ export default function BookingXeCard({
       const isFirst = !booking?.email_thread_id;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
 
-      let attachments: Array<{ filename: string; content: string }> | undefined;
-      if (attachWord && exportData) {
-        try {
-          const cells = computeExportCells(exportData);
-          const blob = await getDieuTourWordBlob(exportData, cells, "");
-          const b64 = await blobToBase64(blob);
-          attachments = [{ filename: `${tenDoan}_bảng_điều_tour.docx`, content: b64 }];
-        } catch {
-          toast.error("Không thể tạo file đính kèm, vẫn gửi email không có file");
-        }
-      }
-
       const emailId = await callSendBookingEmail({
         to: emailTo,
         subject: emailSubject,
         html: emailBody,
         replyTo: currentUserEmail ?? undefined,
         ...(isFirst ? { messageId: newThreadId! } : { inReplyTo: booking?.email_thread_id ?? undefined }),
-        attachments,
       });
 
       const threadId = isFirst ? newThreadId : booking?.email_thread_id;
@@ -311,19 +320,6 @@ export default function BookingXeCard({
             )}
           </div>
 
-          {/* Attach toggle */}
-          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="h-3 w-3 rounded"
-              checked={attachWord}
-              onChange={(e) => setAttachWord(e.target.checked)}
-            />
-            <Paperclip className="h-3 w-3 text-muted-foreground" />
-            <span className="text-[11px] text-muted-foreground">
-              Đính kèm bảng điều tour (.docx){!exportData && " — chưa có dữ liệu"}
-            </span>
-          </label>
         </div>
       </div>
 
