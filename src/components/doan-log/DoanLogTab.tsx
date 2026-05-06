@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, CheckCircle2, Circle, FileText, AlertTriangle, StickyNote, History, Edit2, Trash2, CheckCheck, XCircle, CreditCard, PlusCircle } from "lucide-react";
+import { Plus, CheckCircle2, Circle, FileText, AlertTriangle, StickyNote, History, Edit2, Trash2, CheckCheck, XCircle, CreditCard, PlusCircle, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { useDoanLogList, useCreateDoanLog, useToggleResolved } from "@/hooks/use-doan-log";
+import { useDoanLogList, useCreateDoanLog, useToggleResolved, useDeleteDoanLog, useUpdateDoanLog } from "@/hooks/use-doan-log";
 import { useDoanActivityLog, type ActivityAction } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
 import { useDoanList } from "@/hooks/use-doan";
@@ -43,6 +43,8 @@ export default function DoanLogTab({ doanId }: Props) {
   const { data: doanList = [] } = useDoanList();
   const createMut = useCreateDoanLog();
   const toggleMut = useToggleResolved();
+  const deleteMut = useDeleteDoanLog();
+  const updateMut = useUpdateDoanLog();
 
   const doan = (doanList as any[]).find((d) => d.id === doanId);
 
@@ -50,13 +52,16 @@ export default function DoanLogTab({ doanId }: Props) {
   const [loai, setLoai] = useState<"gia" | "su_co" | "ghi_chu">("gia");
   const [tieuDe, setTieuDe] = useState("");
   const [noiDung, setNoiDung] = useState("");
-  const [soTien, setSoTien] = useState("");
+
+  // edit state
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editTieuDe, setEditTieuDe] = useState("");
+  const [editNoiDung, setEditNoiDung] = useState("");
 
   const resetForm = () => {
     setLoai("gia");
     setTieuDe("");
     setNoiDung("");
-    setSoTien("");
     setShowForm(false);
   };
 
@@ -72,7 +77,7 @@ export default function DoanLogTab({ doanId }: Props) {
         loai,
         tieu_de: tieuDe.trim(),
         noi_dung: noiDung.trim() || undefined,
-        so_tien: loai === "gia" && soTien ? Number(soTien) : null,
+        so_tien: null,
         created_by: user?.user_id ?? undefined,
         created_by_ten: user?.ho_ten ?? undefined,
       });
@@ -83,11 +88,54 @@ export default function DoanLogTab({ doanId }: Props) {
     }
   };
 
-  const handleToggle = async (id: number, currentLoai: string, current: boolean) => {
+  const handleConfirm = async (id: number, currentLoai: string) => {
     try {
-      await toggleMut.mutateAsync({ id, doan_id: doanId, loai: currentLoai, is_resolved: !current });
+      await toggleMut.mutateAsync({
+        id,
+        doan_id: doanId,
+        loai: currentLoai,
+        is_resolved: true,
+        user_id: user?.user_id ?? null,
+        user_ten: user?.ho_ten ?? null,
+      });
     } catch {
       toast.error("Lỗi cập nhật");
+    }
+  };
+
+  const handleDelete = async (id: number, currentLoai: string) => {
+    if (!window.confirm("Xóa phát sinh này?")) return;
+    try {
+      await deleteMut.mutateAsync({ id, doan_id: doanId, loai: currentLoai });
+      toast.success("Đã xóa");
+    } catch {
+      toast.error("Lỗi khi xóa");
+    }
+  };
+
+  const startEdit = (id: number, tieu_de: string, noi_dung: string | null) => {
+    setEditId(id);
+    setEditTieuDe(tieu_de);
+    setEditNoiDung(noi_dung ?? "");
+  };
+
+  const handleUpdate = async (id: number, currentLoai: string) => {
+    if (!editTieuDe.trim()) {
+      toast.warning("Vui lòng nhập tiêu đề");
+      return;
+    }
+    try {
+      await updateMut.mutateAsync({
+        id,
+        doan_id: doanId,
+        loai: currentLoai,
+        tieu_de: editTieuDe.trim(),
+        noi_dung: editNoiDung.trim() || null,
+      });
+      toast.success("Đã cập nhật");
+      setEditId(null);
+    } catch {
+      toast.error("Lỗi khi cập nhật");
     }
   };
 
@@ -140,18 +188,6 @@ export default function DoanLogTab({ doanId }: Props) {
                   placeholder="Tóm tắt phát sinh..."
                 />
               </div>
-              {loai === "gia" && (
-                <div>
-                  <Label className="text-xs">Số tiền (VND)</Label>
-                  <Input
-                    type="number"
-                    value={soTien}
-                    onChange={(e) => setSoTien(e.target.value)}
-                    className="h-8 text-sm mt-1"
-                    placeholder="0"
-                  />
-                </div>
-              )}
               <div>
                 <Label className="text-xs">Nội dung chi tiết</Label>
                 <Textarea
@@ -181,13 +217,11 @@ export default function DoanLogTab({ doanId }: Props) {
             {logs.map((log) => {
               const cfg = LOAI_CONFIG[log.loai];
               const Icon = cfg.icon;
+              const isEditing = editId === log.id;
               return (
                 <div
                   key={log.id}
-                  className={cn(
-                    "border rounded-lg p-3 flex gap-3 items-start",
-                    log.is_resolved && "opacity-50"
-                  )}
+                  className="border rounded-lg p-3 flex gap-3 items-start"
                 >
                   <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", cfg.iconCls)} />
                   <div className="flex-1 min-w-0">
@@ -196,28 +230,78 @@ export default function DoanLogTab({ doanId }: Props) {
                         {cfg.label}
                       </span>
                       {log.is_resolved && (
-                        <Badge variant="outline" className="text-[11px] text-green-700 border-green-300">Đã xử lý</Badge>
+                        <Badge variant="outline" className="text-[11px] text-green-700 border-green-300 gap-1">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Xác nhận bởi {log.resolved_by_ten ?? "—"}
+                          {log.resolved_at && ` · ${format(new Date(log.resolved_at), "dd/MM HH:mm", { locale: vi })}`}
+                        </Badge>
                       )}
                     </div>
-                    <p className="text-sm font-medium mt-1">{log.tieu_de}</p>
-                    {log.so_tien != null && (
-                      <p className="text-sm text-amber-700 font-medium">{log.so_tien.toLocaleString("vi-VN")} VND</p>
+
+                    {isEditing ? (
+                      <div className="mt-2 space-y-2">
+                        <Input
+                          value={editTieuDe}
+                          onChange={(e) => setEditTieuDe(e.target.value)}
+                          className="h-8 text-sm"
+                          placeholder="Tiêu đề..."
+                        />
+                        <Textarea
+                          value={editNoiDung}
+                          onChange={(e) => setEditNoiDung(e.target.value)}
+                          className="text-sm min-h-[60px]"
+                          placeholder="Nội dung chi tiết..."
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" variant="outline" onClick={() => setEditId(null)}>Hủy</Button>
+                          <Button size="sm" onClick={() => handleUpdate(log.id, log.loai)} disabled={updateMut.isPending}>Lưu</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium mt-1">{log.tieu_de}</p>
+                        {log.so_tien != null && (
+                          <p className="text-sm text-amber-700 font-medium">{log.so_tien.toLocaleString("vi-VN")} VND</p>
+                        )}
+                        {log.noi_dung && <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-wrap">{log.noi_dung}</p>}
+                      </>
                     )}
-                    {log.noi_dung && <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-wrap">{log.noi_dung}</p>}
+
                     <p className="text-xs text-muted-foreground mt-1">
                       {log.created_by_ten ?? "—"} · {format(new Date(log.created_at), "dd/MM/yyyy HH:mm", { locale: vi })}
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleToggle(log.id, log.loai, log.is_resolved)}
-                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                    title={log.is_resolved ? "Đánh dấu chưa xử lý" : "Đánh dấu đã xử lý"}
-                  >
-                    {log.is_resolved
-                      ? <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      : <Circle className="h-4 w-4" />
-                    }
-                  </button>
+
+                  <div className="shrink-0 flex items-center gap-1">
+                    {!log.is_resolved && !isEditing && (
+                      <>
+                        <button
+                          onClick={() => startEdit(log.id, log.tieu_de, log.noi_dung)}
+                          className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                          title="Sửa"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(log.id, log.loai)}
+                          className="text-muted-foreground hover:text-red-600 transition-colors p-0.5"
+                          title="Xóa"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleConfirm(log.id, log.loai)}
+                          className="text-muted-foreground hover:text-green-600 transition-colors p-0.5"
+                          title="Xác nhận đã xử lý"
+                        >
+                          <Circle className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                    {log.is_resolved && (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    )}
+                  </div>
                 </div>
               );
             })}

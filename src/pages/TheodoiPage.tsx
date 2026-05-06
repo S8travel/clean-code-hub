@@ -412,7 +412,7 @@ export default function TheodoiPage() {
                   <button
                     onClick={async () => {
                       try {
-                        await toggleMut.mutateAsync({ id: log.id, doan_id: log.doan_id, loai: "su_co", is_resolved: !log.is_resolved });
+                        await toggleMut.mutateAsync({ id: log.id, doan_id: log.doan_id, loai: "su_co", is_resolved: !log.is_resolved, user_id: user?.user_id ?? null, user_ten: user?.ho_ten ?? null });
                       } catch { toast.error("Lỗi cập nhật"); }
                     }}
                     className="shrink-0 text-muted-foreground hover:text-foreground"

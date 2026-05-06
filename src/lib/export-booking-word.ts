@@ -12,10 +12,13 @@ import {
   ShadingType,
   VerticalAlign,
   PageOrientation,
+  type ITableCellBorders,
+  type ITableCellOptions,
 } from "docx";
 import { saveAs } from "file-saver";
 import type { BookingKSDisplay } from "@/hooks/use-booking-ks";
 import type { TauNgayDisplayRow } from "@/hooks/use-booking-tau";
+import { getPreferredRoomInfoForDate } from "@/lib/booking-ks-rooms";
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
@@ -41,8 +44,8 @@ function cell(
     rowSpan?: number;
     columnSpan?: number;
     shading?: typeof GRAY_SHADING;
-    verticalAlign?: any;
-    borders?: any;
+    verticalAlign?: ITableCellOptions["verticalAlign"];
+    borders?: ITableCellBorders;
   } = {}
 ): TableCell {
   return new TableCell({
@@ -88,7 +91,7 @@ function formatDateMD(dateStr: string): string {
 }
 
 type UnifiedEntry =
-  | { kind: "ks"; date: string; bk: BookingKSDisplay }
+  | { kind: "ks"; date: string; bk: BookingKSDisplay; roomInfo: string }
   | { kind: "tau"; date: string; tau: TauNgayDisplayRow };
 
 export async function exportBookingWord(
@@ -101,7 +104,14 @@ export async function exportBookingWord(
   const allEntries: UnifiedEntry[] = [];
   for (const bk of selectedBookings) {
     const dates = bk.ngay_dates.length > 0 ? bk.ngay_dates : [""];
-    for (const d of dates) allEntries.push({ kind: "ks", date: d, bk });
+    for (const d of dates) {
+      allEntries.push({
+        kind: "ks",
+        date: d,
+        bk,
+        roomInfo: getPreferredRoomInfoForDate(bk.ks_final, bk.ks_dat_truoc, bk.ngay_dates, d),
+      });
+    }
   }
   for (const tau of tauRows) {
     allEntries.push({ kind: "tau", date: tau.ngay_date ?? "", tau });
@@ -186,8 +196,7 @@ export async function exportBookingWord(
       }
 
       if (entry.kind === "ks") {
-        const { bk } = entry;
-        const roomInfo = bk.ks_final || bk.ks_dat_truoc || "";
+        const { bk, roomInfo } = entry;
         rowAChildren.push(cell([p(bk.khach_san_ten, { bold: true, size: 26 })], { width: COL_W[3], borders: DETAIL_TOP }));
         rowAChildren.push(cell([p(bk.khach_san_so_dien_thoai || "", { size: 24 })], { width: COL_W[4], rowSpan: 3 }));
         rows.push(new TableRow({ children: rowAChildren }));
@@ -212,17 +221,20 @@ export async function exportBookingWord(
   }
 
   // TOTAL row — hotel bookings only
-  const seenIds = new Set<number>();
-  const allFinals = allEntries
+  const hotelRoomEntries = allEntries
     .filter((e): e is Extract<UnifiedEntry, { kind: "ks" }> => e.kind === "ks")
-    .filter(({ bk }) => { if (seenIds.has(bk.id)) return false; seenIds.add(bk.id); return true; })
-    .map(({ bk }) => bk.ks_final || bk.ks_dat_truoc || "")
-    .filter(Boolean);
+    .filter(({ roomInfo }) => Boolean(roomInfo));
+  const uniqueRoomInfos = new Set(hotelRoomEntries.map(({ roomInfo }) => roomInfo));
+  const totalRoomText = uniqueRoomInfos.size <= 1
+    ? (hotelRoomEntries[0]?.roomInfo || "")
+    : hotelRoomEntries
+      .map(({ date, roomInfo }) => date ? `${formatDateMD(date)}: ${roomInfo}` : roomInfo)
+      .join(", ");
 
   rows.push(new TableRow({
     children: [
       cell([p("TOTAL:", { bold: true, size: 26 })], { width: COL_W[0] + COL_W[1], columnSpan: 2, shading: GRAY_SHADING }),
-      cell([p(allFinals.join(", "), { bold: true, size: 26, color: "FF0000" })], { width: COL_W[2] + COL_W[3] + COL_W[4], columnSpan: 3, shading: GRAY_SHADING }),
+      cell([p(totalRoomText, { bold: true, size: 26, color: "FF0000" })], { width: COL_W[2] + COL_W[3] + COL_W[4], columnSpan: 3, shading: GRAY_SHADING }),
     ],
   }));
 

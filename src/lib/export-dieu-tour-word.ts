@@ -36,7 +36,7 @@ const VW    = HALF - LW;                 // value width = 4253
 const VW_R  = CONTENT_W - HALF - LW;    // right value = 4253
 
 // Schedule table col widths (tổng = CONTENT_W = 11106)
-const SCHED_COL = [580, 3300, 2250, 2250, 2726];
+const SCHED_COL = [580, 2632, 2632, 2631, 2631];
 
 // Font size (half-points): 18 = 9pt, 20 = 10pt, 22 = 11pt
 const FS      = 18; // body
@@ -199,6 +199,7 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
         if (nh.so_dien_thoai) truaLines.push(nh.so_dien_thoai);
       }
     }
+    if (day.an_trua_ghi_chu) truaLines.push(day.an_trua_ghi_chu);
 
     const toiLines: string[] = [];
     if (day.an_toi_nha_hang_id) {
@@ -210,6 +211,7 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
         if (nh.so_dien_thoai) toiLines.push(nh.so_dien_thoai);
       }
     }
+    if (day.an_toi_ghi_chu) toiLines.push(day.an_toi_ghi_chu);
 
     const ksLines: string[] = [];
     if (day.khach_san_id) {
@@ -395,7 +397,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
 
     // Chương trình
     const ctParas: Paragraph[] = [];
-    if (day.thanh_pho) ctParas.push(p(day.thanh_pho, { bold: true }));
+    if (day.thanh_pho) ctParas.push(p(day.thanh_pho, { bold: true, align: AlignmentType.CENTER }));
     for (const item of day.items) {
       const cd = canhDiemMap.get(item.canh_diem_id);
       if (cd) {
@@ -410,10 +412,11 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
     if (day.an_trua_nha_hang_id) {
       const nh = nhaHangMap.get(day.an_trua_nha_hang_id);
       if (nh) {
-        truaParas.push(p(nh.ten, { bold: true }));
+        truaParas.push(p(nh.ten, { bold: true, align: AlignmentType.CENTER }));
         if (nh.dia_chi) truaParas.push(p(nh.dia_chi, { color: "666666", size: FS_SM }));
       }
     }
+    if (day.an_trua_ghi_chu) truaParas.push(p(day.an_trua_ghi_chu, { color: "444444", size: FS_SM }));
     if (truaParas.length === 0) truaParas.push(p(""));
 
     // Ăn tối
@@ -421,10 +424,11 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
     if (day.an_toi_nha_hang_id) {
       const nh = nhaHangMap.get(day.an_toi_nha_hang_id);
       if (nh) {
-        toiParas.push(p(nh.ten, { bold: true }));
+        toiParas.push(p(nh.ten, { bold: true, align: AlignmentType.CENTER }));
         if (nh.dia_chi) toiParas.push(p(nh.dia_chi, { color: "666666", size: FS_SM }));
       }
     }
+    if (day.an_toi_ghi_chu) toiParas.push(p(day.an_toi_ghi_chu, { color: "444444", size: FS_SM }));
     if (toiParas.length === 0) toiParas.push(p(""));
 
     // Khách sạn
@@ -432,7 +436,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
     if (day.khach_san_id) {
       const ks = khachSanMap.get(day.khach_san_id);
       if (ks) {
-        ksParas.push(p(ks.ten, { bold: true }));
+        ksParas.push(p(ks.ten, { bold: true, align: AlignmentType.CENTER }));
         if (ks.dia_chi) ksParas.push(p(ks.dia_chi, { color: "666666", size: FS_SM }));
       }
     }
@@ -622,6 +626,17 @@ function buildDocFromCells(
     return lines.map((line) => p(line));
   }
 
+  // First line bold + centered (city / nh name / ks name), rest plain
+  function textToParasWithHeader(text: string): Paragraph[] {
+    const lines = text.split("\n");
+    if (lines.length === 0 || (lines.length === 1 && !lines[0])) return [p("")];
+    return lines.map((line, i) =>
+      i === 0
+        ? p(line, { bold: true, align: AlignmentType.CENTER })
+        : p(line)
+    );
+  }
+
   const schedDataRows = cells.map((dc) => new TableRow({
     children: [
       cell(
@@ -629,10 +644,10 @@ function buildDocFromCells(
          p(dc.thu, { align: AlignmentType.CENTER, color: "555555", size: FS_SM })],
         { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER }
       ),
-      cell(textToParas(dc.chuongTrinh), { width: SCHED_COL[1] }),
-      cell(textToParas(dc.anTrua),      { width: SCHED_COL[2] }),
-      cell(textToParas(dc.anToi),       { width: SCHED_COL[3] }),
-      cell(textToParas(dc.khachSan),    { width: SCHED_COL[4] }),
+      cell(textToParasWithHeader(dc.chuongTrinh), { width: SCHED_COL[1] }),
+      cell(textToParasWithHeader(dc.anTrua),      { width: SCHED_COL[2] }),
+      cell(textToParasWithHeader(dc.anToi),       { width: SCHED_COL[3] }),
+      cell(textToParasWithHeader(dc.khachSan),    { width: SCHED_COL[4] }),
     ],
   }));
 

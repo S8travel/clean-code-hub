@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   useSendKSBookingEmail,
   syncBookingStatus,
   type BookingKSDisplay,
+  type BookingKSRow,
 } from "@/hooks/use-booking-ks";
 import { useBookingTau } from "@/hooks/use-booking-tau";
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
@@ -27,6 +28,12 @@ import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import TauNgayCard from "@/components/booking-ks/TauNgayCard";
+import {
+  expandRoomValues,
+  getBookingRoomDates,
+  nextDateStr,
+  serializeRoomValues,
+} from "@/lib/booking-ks-rooms";
 
 
 function getOverallStatus(row: BookingKSDisplay) {
@@ -53,41 +60,6 @@ function fmtDate(d: string) {
   } catch {
     return d;
   }
-}
-
-function localDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function groupConsecutiveDates(dates: string[]): Array<{ checkIn: string; checkOut: string; nights: number }> {
-  if (dates.length === 0) return [];
-  const sorted = [...dates].sort();
-  const groups: Array<{ checkIn: string; checkOut: string; nights: number }> = [];
-  let start = sorted[0];
-  let end = sorted[0];
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = new Date(sorted[i - 1] + "T00:00:00");
-    const curr = new Date(sorted[i] + "T00:00:00");
-    const diff = Math.round((curr.getTime() - prev.getTime()) / 86400000);
-    if (diff === 1) {
-      end = sorted[i];
-    } else {
-      const co = new Date(end + "T00:00:00");
-      co.setDate(co.getDate() + 1);
-      const checkOut = localDateStr(co);
-      groups.push({ checkIn: start, checkOut, nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
-      start = sorted[i];
-      end = sorted[i];
-    }
-  }
-  const co = new Date(end + "T00:00:00");
-  co.setDate(co.getDate() + 1);
-  const checkOut = localDateStr(co);
-  groups.push({ checkIn: start, checkOut, nights: Math.round((co.getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) });
-  return groups;
 }
 
 function fmtDatetime(d: string | null) {
@@ -124,7 +96,11 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
   const toggleSelect = (id: number) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
 
@@ -142,8 +118,8 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
       const selected = visibleBookings.filter((b) => selectedIds.has(b.id));
       await exportBookingWord(tenDoan, selected, tauBookings, soKhach);
       toast.success("Đã xuất file Word");
-    } catch (err: any) {
-      toast.error("Lỗi xuất: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Lỗi xuất: " + (err instanceof Error ? err.message : "Vui lòng thử lại"));
     } finally {
       setIsExporting(false);
     }
@@ -151,10 +127,10 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
 
   const updateStatus = async (
     row: BookingKSDisplay,
-    fields: Partial<BookingKSDisplay>
+    fields: Partial<BookingKSRow>
   ) => {
     try {
-      await updateMut.mutateAsync({ id: row.id, fields: fields as any });
+      await updateMut.mutateAsync({ id: row.id, fields });
       await syncBookingStatus(doanId);
     } catch {
       toast.error("Lỗi khi cập nhật");
@@ -297,12 +273,15 @@ function BookingKSCard({
   currentUserName: string;
   updateMut: ReturnType<typeof useUpdateBookingKS>;
   onDelete: () => void;
-  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSDisplay>) => Promise<void>;
+  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSRow>) => Promise<void>;
   selected: boolean;
   onToggleSelect: () => void;
 }) {
-  const [soPhong, setSoPhong] = useState(row.ks_dat_truoc || "");
-  const [soPhongFinal, setSoPhongFinal] = useState(row.ks_final || "");
+  const roomDates = getBookingRoomDates(row.ngay_dates);
+  const roomInputDates = roomDates.length > 0 ? roomDates : [""];
+  const isMultiNightRoom = roomInputDates.length > 1;
+  const [soPhongByNight, setSoPhongByNight] = useState(() => expandRoomValues(row.ks_dat_truoc, roomDates));
+  const [soPhongFinalByNight, setSoPhongFinalByNight] = useState(() => expandRoomValues(row.ks_final, roomDates));
   const [ghiChu, setGhiChu] = useState(row.ks_ghi_chu_booking || "");
   const [deadline, setDeadline] = useState(row.deadline || "");
 
@@ -317,29 +296,47 @@ function BookingKSCard({
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    setSoPhong(row.ks_dat_truoc || "");
-    setSoPhongFinal(row.ks_final || "");
+    setSoPhongByNight(expandRoomValues(row.ks_dat_truoc, row.ngay_dates));
+    setSoPhongFinalByNight(expandRoomValues(row.ks_final, row.ngay_dates));
     setGhiChu(row.ks_ghi_chu_booking || "");
     setDeadline(row.deadline || "");
-  }, [row.id]);
+  }, [row.id, row.ks_dat_truoc, row.ks_final, row.ks_ghi_chu_booking, row.deadline, row.ngay_dates]);
 
-  const buildEmailHtml = () => {
-    const groups = groupConsecutiveDates(row.ngay_dates);
-    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
-    const soPhongHtml = soPhongFinal || soPhong || row.ks_final || row.ks_dat_truoc || "—";
-    const isMulti = groups.length > 1;
-    const dateRows = groups.length === 0
-      ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày ở</td><td style="border:1px solid #e2e8f0;padding:8px 12px">—</td></tr>`
-      : groups.map((g, i) => `
-        ${isMulti ? `<tr><td colspan="2" style="border:1px solid #e2e8f0;padding:6px 12px;background:#eff6ff;font-size:12px;font-weight:600;color:#1d4ed8${i > 0 ? ";border-top:2px solid #bfdbfe" : ""}">📅 Lần ${i + 1}</td></tr>` : ""}
+  const updateRoomValue = (
+    setter: Dispatch<SetStateAction<string[]>>,
+    index: number,
+    value: string
+  ) => {
+    setter((prev) => roomInputDates.map((_, i) => (i === index ? value : prev[i] ?? "")));
+  };
+
+  const datTruocRoomText = serializeRoomValues(soPhongByNight);
+  const finalRoomText = serializeRoomValues(soPhongFinalByNight);
+  const preferredRoomText = finalRoomText || datTruocRoomText || row.ks_final || row.ks_dat_truoc || "";
+
+  const roomRowsHtml = () => {
+    if (roomDates.length === 0) {
+      return `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${preferredRoomText || "—"}</td></tr>`;
+    }
+    const values = expandRoomValues(preferredRoomText, roomDates);
+    return roomDates.map((date, i) => `
+        ${roomDates.length > 1 ? `<tr><td colspan="2" style="border:1px solid #e2e8f0;padding:6px 12px;background:#eff6ff;font-size:12px;font-weight:600;color:#1d4ed8${i > 0 ? ";border-top:2px solid #bfdbfe" : ""}">Đêm ${i + 1}</td></tr>` : ""}
         <tr>
           <td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td>
-          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(g.checkIn)}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(date)}</td>
         </tr>
         <tr>
           <td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td>
-          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(g.checkOut)} (${g.nights} đêm)</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(nextDateStr(date))}</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${values[i] || "—"}</strong></td>
         </tr>`).join("");
+  };
+
+  const buildEmailHtml = () => {
+    const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
@@ -357,9 +354,9 @@ function BookingKSCard({
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
         </tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong></td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${ngayDiStr}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
-        ${dateRows}
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soPhongHtml}</td></tr>
+        ${roomRowsHtml()}
       </table>
       ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
@@ -376,10 +373,8 @@ function BookingKSCard({
   };
 
   const openEmailModal = () => {
-    const groups = groupConsecutiveDates(row.ngay_dates);
-    const totalNights = groups.reduce((s, g) => s + g.nights, 0);
-    const datesStr = groups.length > 0
-      ? groups.map((g) => fmtDate(g.checkIn)).join(", ") + ` (${totalNights} đêm)`
+    const datesStr = roomDates.length > 0
+      ? roomDates.map(fmtDate).join(", ") + ` (${roomDates.length} đêm)`
       : "";
     setEmailTo(normalizeEmails(row.khach_san_email));
     setEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`);
@@ -390,7 +385,25 @@ function BookingKSCard({
   const buildMailtoBody = () => {
     const userPhone = userProfile?.so_dien_thoai || "";
     const userName = userProfile?.ho_ten || currentUserName;
-    return `KÃ­nh gá»­i ${row.khach_san_ten},\n\nCÃ´ng ty TNHH Du lá»‹ch S8 xin Ä‘áº·t phÃ²ng cho Ä‘oÃ n ${tenDoan}:\n- NgÃ y Ä‘i: ${ngayDi ? fmtDate(ngayDi) : "â€”"}\n- Check-in: ${row.ngay_dates.length ? fmtDate([...row.ngay_dates].sort()[0]) : "â€”"}\n- NgÃ y: ${row.ngay_dates.map(fmtDate).join(", ")} (${row.so_dem} Ä‘Ãªm)\n- Sá»‘ phÃ²ng: ${soPhongFinal || soPhong || "â€”"}${ghiChu ? `\n- Ghi chÃº: ${ghiChu}` : ""}\n\nKÃ­nh nhá» xÃ¡c nháº­n trong 24 giá».\n\n${userName}${userPhone ? `\n${userPhone}` : ""}\n\nCÃ”NG TY TNHH DU Lá»ŠCH S8\nMST: 0402021137\nÄ/C: Táº§ng 2, TÃ²a nhÃ  Kim SÆ¡n, Sá»‘ 18 Phan ThÃ nh TÃ i, PhÆ°á»ng HÃ²a CÆ°á»ng, ThÃ nh Phá»‘ ÄÃ  Náºµng, Viá»‡t Nam\nEmail: s8travel.hddt@gmail.com`;
+    const roomLines = roomDates.length > 0
+      ? expandRoomValues(preferredRoomText, roomDates)
+        .map((value, i) => `- Đêm ${i + 1}: ${fmtDate(roomDates[i])} -> ${fmtDate(nextDateStr(roomDates[i]))}, số phòng: ${value || "—"}`)
+        .join("\n")
+      : `- Số phòng: ${preferredRoomText || "—"}`;
+    return `Kính gửi ${row.khach_san_ten},
+
+Công ty TNHH Du lịch S8 xin đặt phòng cho đoàn ${tenDoan}:
+- Ngày đi: ${ngayDi ? fmtDate(ngayDi) : "—"}
+${roomLines}${ghiChu ? `\n- Ghi chú: ${ghiChu}` : ""}
+
+Kính nhờ xác nhận trong 24 giờ.
+
+${userName}${userPhone ? `\n${userPhone}` : ""}
+
+CÔNG TY TNHH DU LỊCH S8
+MST: 0402021137
+Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam
+Email: s8travel.hddt@gmail.com`;
   };
 
   const handleSendViaServer = async () => {
@@ -399,8 +412,8 @@ function BookingKSCard({
       await sendMut.mutateAsync({ bookingId: row.id, loai: "dat_truoc", to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: row.email_thread_id });
       setEmailModalOpen(false);
       toast.success("Đã gửi email đặt phòng");
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi gửi email: " + (err instanceof Error ? err.message : "Vui lòng thử lại"));
     } finally {
       setSending(false);
     }
@@ -414,9 +427,9 @@ function BookingKSCard({
     toast.success("Đã mở email client");
   };
 
-  const save = async (fields: Record<string, any>) => {
+  const save = async (fields: Partial<BookingKSRow>) => {
     try {
-      await updateMut.mutateAsync({ id: row.id, fields: fields as any });
+      await updateMut.mutateAsync({ id: row.id, fields });
     } catch {
       toast.error("Lỗi khi lưu");
     }
@@ -502,26 +515,48 @@ function BookingKSCard({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Số phòng đặt trước</p>
-            <Input
-              value={soPhong}
-              onChange={(e) => setSoPhong(e.target.value)}
-              onBlur={() => save({ ks_dat_truoc: soPhong })}
-              placeholder="VD: 6 TWN, 1 DBL..."
-              className="h-8 text-xs"
-              disabled={isCancelled}
-            />
+            <div className="space-y-1.5">
+              {roomInputDates.map((date, i) => (
+                <div key={date || "single"} className="flex items-center gap-2">
+                  {isMultiNightRoom && (
+                    <span className="w-12 shrink-0 text-[11px] text-muted-foreground">
+                      {fmtDate(date)}
+                    </span>
+                  )}
+                  <Input
+                    value={soPhongByNight[i] ?? ""}
+                    onChange={(e) => updateRoomValue(setSoPhongByNight, i, e.target.value)}
+                    onBlur={() => save({ ks_dat_truoc: serializeRoomValues(soPhongByNight) || null })}
+                    placeholder="VD: 6 TWN, 1 DBL..."
+                    className="h-8 text-xs"
+                    disabled={isCancelled}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           {datTruocConfirmed ? (
             <div>
               <p className="text-xs text-muted-foreground mb-1">Số phòng Final</p>
-              <Input
-                value={soPhongFinal}
-                onChange={(e) => setSoPhongFinal(e.target.value)}
-                onBlur={() => save({ ks_final: soPhongFinal })}
-                placeholder="VD: 5 TWN, 2 DBL..."
-                className="h-8 text-xs"
-                disabled={isCancelled}
-              />
+              <div className="space-y-1.5">
+                {roomInputDates.map((date, i) => (
+                  <div key={date || "single"} className="flex items-center gap-2">
+                    {isMultiNightRoom && (
+                      <span className="w-12 shrink-0 text-[11px] text-muted-foreground">
+                        {fmtDate(date)}
+                      </span>
+                    )}
+                    <Input
+                      value={soPhongFinalByNight[i] ?? ""}
+                      onChange={(e) => updateRoomValue(setSoPhongFinalByNight, i, e.target.value)}
+                      onBlur={() => save({ ks_final: serializeRoomValues(soPhongFinalByNight) || null })}
+                      placeholder="VD: 5 TWN, 2 DBL..."
+                      className="h-8 text-xs"
+                      disabled={isCancelled}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div />
@@ -600,7 +635,7 @@ function DatTruocSection({
   updateStatus,
 }: {
   row: BookingKSDisplay;
-  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSDisplay>) => Promise<void>;
+  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSRow>) => Promise<void>;
 }) {
   const status = row.ks_dat_truoc_status;
 
@@ -660,7 +695,7 @@ function FinalSection({
   datTruocConfirmed,
 }: {
   row: BookingKSDisplay;
-  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSDisplay>) => Promise<void>;
+  updateStatus: (row: BookingKSDisplay, fields: Partial<BookingKSRow>) => Promise<void>;
   datTruocConfirmed: boolean;
 }) {
   const status = row.ks_final_status;

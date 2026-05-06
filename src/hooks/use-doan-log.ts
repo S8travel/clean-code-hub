@@ -12,6 +12,9 @@ export interface DoanLogRow {
   created_by: string | null;
   created_by_ten: string | null;
   created_at: string;
+  resolved_by: string | null;
+  resolved_by_ten: string | null;
+  resolved_at: string | null;
 }
 
 export interface DoanLogGlobal extends DoanLogRow {
@@ -140,10 +143,50 @@ export function useCreateDoanLog() {
 export function useToggleResolved() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, doan_id, loai, is_resolved }: { id: number; doan_id: number; loai: string; is_resolved: boolean }) => {
+    mutationFn: async ({ id, doan_id, loai, is_resolved, user_id, user_ten }: {
+      id: number; doan_id: number; loai: string; is_resolved: boolean;
+      user_id?: string | null; user_ten?: string | null;
+    }) => {
+      const update = is_resolved
+        ? { is_resolved: true, resolved_by: user_id ?? null, resolved_by_ten: user_ten ?? null, resolved_at: new Date().toISOString() }
+        : { is_resolved: false, resolved_by: null, resolved_by_ten: null, resolved_at: null };
+      const { error } = await externalSupabase.from("doan_log").update(update).eq("id", id);
+      if (error) throw error;
+      return { doan_id, loai };
+    },
+    onSuccess: (v) => {
+      qc.invalidateQueries({ queryKey: [QK, v.doan_id] });
+      qc.invalidateQueries({ queryKey: [QK, "global", v.loai] });
+      qc.invalidateQueries({ queryKey: [QK, "ghi_chu"] });
+    },
+  });
+}
+
+export function useDeleteDoanLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, doan_id, loai }: { id: number; doan_id: number; loai: string }) => {
+      const { error } = await externalSupabase.from("doan_log").delete().eq("id", id);
+      if (error) throw error;
+      return { doan_id, loai };
+    },
+    onSuccess: (v) => {
+      qc.invalidateQueries({ queryKey: [QK, v.doan_id] });
+      qc.invalidateQueries({ queryKey: [QK, "global", v.loai] });
+      qc.invalidateQueries({ queryKey: [QK, "ghi_chu"] });
+    },
+  });
+}
+
+export function useUpdateDoanLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, doan_id, loai, tieu_de, noi_dung }: {
+      id: number; doan_id: number; loai: string; tieu_de: string; noi_dung?: string | null;
+    }) => {
       const { error } = await externalSupabase
         .from("doan_log")
-        .update({ is_resolved })
+        .update({ tieu_de, noi_dung: noi_dung ?? null })
         .eq("id", id);
       if (error) throw error;
       return { doan_id, loai };
