@@ -51,7 +51,10 @@ function buildScheduleHTML(cells: DayExportCell[]): string {
   if (cells.length === 0) return "";
   const COL = "border:1px solid #e2e8f0;padding:6px 10px;font-size:13px;vertical-align:top";
   const HD  = COL + ";background:#f1f5f9;font-weight:600;text-align:center";
-  const toHtml = (text: string) => text ? text.split("\n").join("<br>") : "—";
+  const toHtml = (text: string) => {
+    const lines = text.split("\n").filter((l) => !l.startsWith("Set:"));
+    return lines.length ? lines.join("<br>") : "—";
+  };
 
   const header = `<tr>
     <th style="${HD}">Ngày</th>
