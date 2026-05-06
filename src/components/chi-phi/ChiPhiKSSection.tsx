@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { format, getDay } from "date-fns";
-import { Plus, ArrowRight, Ban, Printer, ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Check, X } from "lucide-react";
+import { Plus, ArrowRight, Ban, Printer, ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateAdjustment, useUpdateDNTT } from "@/hooks/use-dntt";
 import type { DNTTRow } from "@/hooks/use-dntt";
@@ -910,11 +910,12 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={cn("h-6 text-[10px] px-2", isKsDinhKy ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
+                    className={cn("h-7 text-xs px-2 gap-1", isKsDinhKy ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
                     onClick={() => handleToggleDinhKy(ksId)}
                     title={isKsDinhKy ? "Đang thanh toán định kỳ — bấm để bỏ" : "Đặt thanh toán định kỳ"}
                   >
-                    {isKsDinhKy ? "⏱ Định kỳ" : "⏱"}
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    {isKsDinhKy && "Định kỳ"}
                   </Button>
                   <button onClick={() => toggleCollapse(ksId)} className="text-muted-foreground hover:text-foreground">
                     {showContent

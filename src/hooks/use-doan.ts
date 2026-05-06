@@ -67,6 +67,12 @@ export interface LookupItem {
   ten: string;
 }
 
+export interface DiaDiemItem {
+  id: number;
+  ten: string;
+  mien: string | null;
+}
+
 export interface AgentItem {
   id: number;
   ten: string;
@@ -104,9 +110,9 @@ export function useDiaDiem() {
   return useQuery({
     queryKey: ["dia_diem"],
     queryFn: async () => {
-      const { data, error } = await externalSupabase.from("dia_diem").select("id, ten").order("ten");
+      const { data, error } = await externalSupabase.from("dia_diem").select("id, ten, mien").order("ten");
       if (error) throw error;
-      return data as LookupItem[];
+      return data as DiaDiemItem[];
     },
   });
 }

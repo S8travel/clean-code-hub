@@ -78,7 +78,7 @@ export default function CanhDiemPage() {
                   <SelectItem value="dich_vu">Dịch vụ</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="flex gap-1">
+<div className="flex gap-1">
                 <SearchableSelect
                   options={nccOptions}
                   value={newNccId}

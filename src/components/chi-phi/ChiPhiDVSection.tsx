@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { format, subDays, parseISO, addDays } from "date-fns";
-import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -440,7 +440,8 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
               .filter(
                 (d) =>
                   d.trang_thai_thanh_toan === "can_tru" &&
-                  d.trang_thai_duyet === "da_duyet" &&
+                  d.trang_thai_duyet !== "da_huy" &&
+                  d.trang_thai_duyet !== "tu_choi" &&
                   d.nha_cung_cap_id === nccId,
               )
               .reduce((s, d) => s + d.so_tien, 0);
@@ -794,20 +795,18 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                           </Button>
                         )}
                         <Button variant="ghost" size="sm"
-                          className={cn("h-6 text-[10px] px-1.5", row.thanh_toan_dinh_ky ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
+                          className={cn("h-7 text-xs px-2 gap-1", row.thanh_toan_dinh_ky ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
                           title={row.thanh_toan_dinh_ky ? "Đang định kỳ — bấm để tắt" : "Đặt thanh toán định kỳ"}
                           disabled={upsertMut.isPending}
                           onClick={() => handleToggleDinhKy(row)}>
-                          ⏱
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          {row.thanh_toan_dinh_ky && "Định kỳ"}
                         </Button>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                           title="Thêm dịch vụ phát sinh"
                           onClick={() => handleExtraAdd(row.id!)}>
                           <Plus className="h-3 w-3" />
                         </Button>
-                        {row.thanh_toan_dinh_ky && activeDntts.length === 0 && (
-                          <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
-                        )}
                         {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && totalTienCt > 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                             onClick={() => openDvModal(row.id!, totalTienCt, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -523,11 +523,12 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                           </Button>
                         )}
                         <Button variant="ghost" size="sm"
-                          className={cn("h-6 text-[10px] px-1.5", row.thanh_toan_dinh_ky ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
+                          className={cn("h-7 text-xs px-2 gap-1", row.thanh_toan_dinh_ky ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
                           title={row.thanh_toan_dinh_ky ? "Đang định kỳ — bấm để tắt" : "Đặt thanh toán định kỳ"}
                           disabled={upsertMut.isPending}
                           onClick={() => handleToggleDinhKy(row)}>
-                          ⏱
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          {row.thanh_toan_dinh_ky && "Định kỳ"}
                         </Button>
                         {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"

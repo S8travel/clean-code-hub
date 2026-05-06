@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { format, getDay, subDays, parseISO } from "date-fns";
-import { Plus, Ban, Printer, Trash2, SlidersHorizontal, Pencil, Check, X } from "lucide-react";
+import { Plus, Ban, Printer, Trash2, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useCreateAdjustment } from "@/hooks/use-dntt";
@@ -651,7 +651,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
             .filter(
               (d) =>
                 d.trang_thai_thanh_toan === "can_tru" &&
-                d.trang_thai_duyet === "da_duyet" &&
+                d.trang_thai_duyet !== "da_huy" &&
+                d.trang_thai_duyet !== "tu_choi" &&
                 d.nha_cung_cap_id === nccId,
             )
             .reduce((s, d) => s + d.so_tien, 0);
@@ -1100,14 +1101,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                       </Button>
                     )}
                     <Button variant="ghost" size="sm"
-                      className={cn("h-6 text-[10px] px-1.5", isMealDinhKy ? "text-indigo-600 hover:text-indigo-700" : "text-muted-foreground hover:text-foreground")}
+                      className={cn("h-7 text-xs px-2 gap-1", isMealDinhKy ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
                       onClick={() => handleToggleDinhKyNH(key)}
                       title={isMealDinhKy ? "Đang định kỳ — bấm để bỏ" : "Đặt thanh toán định kỳ"}>
-                      ⏱
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      {isMealDinhKy && "Định kỳ"}
                     </Button>
-                    {isMealDinhKy && activeDntts.length === 0 && (
-                      <span className="text-[10px] text-indigo-500 italic">Định kỳ</span>
-                    )}
                     {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length === 0 && !!row && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                         onClick={() => {
