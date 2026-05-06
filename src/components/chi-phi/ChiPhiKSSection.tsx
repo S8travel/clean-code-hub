@@ -184,7 +184,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     const canTruRecords = dnttList.filter((d) => {
       if (d.id === dnttId) return false;
       if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-      if (d.trang_thai_thanh_toan !== "can_tru" || d.trang_thai_duyet !== "da_duyet") return false;
+      if (d.trang_thai_thanh_toan !== "can_tru") return false;
       if (d.ref_loai === "can_tru_cong_no" && nccId && d.nha_cung_cap_id === nccId) return true;
       if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
       return false;
