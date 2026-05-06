@@ -15,6 +15,7 @@ export interface NhaHangDetail {
   id: number;
   ten: string;
   dia_chi: string | null;
+  thong_tin_chung: string | null;
   foc_khach: number | null;
   foc_mien: number | null;
   chiet_khau_phan_tram: number | null;
@@ -92,7 +93,7 @@ export function useChiPhiNHSection(doanId?: number) {
       const nhIds = [...new Set(meals.map((m) => m.nha_hang_id))];
       const { data: nhList, error: e2 } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, tai_khoan_thanh_toan, nha_cung_cap_id, tinh_suat_tl")
+        .select("id, ten, dia_chi, thong_tin_chung, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, tai_khoan_thanh_toan, nha_cung_cap_id, tinh_suat_tl")
         .in("id", nhIds);
       if (e2) throw e2;
 
@@ -138,6 +139,7 @@ export interface CanhDiemInfo {
   co_phi: boolean | null;
   gia_mac_dinh: number | null;
   dia_diem: string | null;
+  ghi_chu: string | null;
   so_dien_thoai: string | null;
   email: string | null;
   nguoi_thanh_toan: string | null;
@@ -152,7 +154,7 @@ export function useDVCanhDiemMap(doanId?: number): Record<number, CanhDiemInfo> 
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("doan_ngay_item")
-        .select("id, canh_diem:canh_diem_id(id, ten, loai, co_phi, gia_mac_dinh, dia_diem, so_dien_thoai, email, nguoi_thanh_toan)")
+        .select("id, canh_diem:canh_diem_id(id, ten, loai, co_phi, gia_mac_dinh, dia_diem, ghi_chu, so_dien_thoai, email, nguoi_thanh_toan)")
         .eq("doan_id", doanId!);
       if (error) throw error;
       const map: Record<number, CanhDiemInfo> = {};

@@ -66,6 +66,12 @@ function InfoTable({ data }: { data: DieuTourExportData }) {
           <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Chú thích</td>
           <td className="border border-gray-300 px-2 py-1">{data.chuThichKhach || "—"}</td>
         </tr>
+        <tr>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">T/L ăn NH</td>
+          <td colSpan={3} className="border border-gray-300 px-2 py-1">
+            {data.coTinhSuatTLNhaHang ? "Có tính suất ăn T/L" : "Không tính"}
+          </td>
+        </tr>
         {data.gifts && data.gifts.length > 0 && (
           <tr>
             <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Quà tặng</td>

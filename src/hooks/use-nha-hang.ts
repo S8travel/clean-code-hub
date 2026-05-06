@@ -121,6 +121,20 @@ export function useSetMenus(nhaHangId: number | null) {
   });
 }
 
+export function useAllSetMenus() {
+  return useQuery<SetMenu[]>({
+    queryKey: [QK_SET, "all"],
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("nha_hang_set_menu")
+        .select("*")
+        .order("id", { ascending: true });
+      if (error) throw error;
+      return data as SetMenu[];
+    },
+  });
+}
+
 export function useCreateSetMenu() {
   const qc = useQueryClient();
   return useMutation({

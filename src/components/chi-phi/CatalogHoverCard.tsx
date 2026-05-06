@@ -20,11 +20,11 @@ const NGUOI_TT_LABEL: Record<string, string> = {
   khach: "Khách",
 };
 
-interface NHInfo extends Pick<NhaHangDetail, "ten" | "foc_khach" | "foc_mien" | "chiet_khau_phan_tram" | "dia_chi" | "ten_ncc" | "ncc_so_tai_khoan" | "ncc_ngan_hang" | "nguoi_thanh_toan"> {
+interface NHInfo extends Pick<NhaHangDetail, "ten" | "foc_khach" | "foc_mien" | "chiet_khau_phan_tram" | "thong_tin_chung" | "ten_ncc" | "ncc_so_tai_khoan" | "ncc_ngan_hang" | "nguoi_thanh_toan"> {
   kind: "nh";
 }
 
-interface DVInfo extends Pick<CanhDiemInfo, "ten" | "loai" | "co_phi" | "gia_mac_dinh" | "dia_diem" | "so_dien_thoai" | "email"> {
+interface DVInfo extends Pick<CanhDiemInfo, "ten" | "loai" | "co_phi" | "gia_mac_dinh" | "ghi_chu" | "so_dien_thoai" | "email"> {
   kind: "dv";
 }
 
@@ -55,7 +55,7 @@ function NHCard({ info }: { info: NHInfo }) {
       <div className="border-t pt-1.5 space-y-1">
         <Row label="FOC" value={focText ?? "Không có"} />
         <Row label="Chiết khấu" value={info.chiet_khau_phan_tram ? `${info.chiet_khau_phan_tram}%` : "—"} />
-        <Row label="Địa chỉ" value={info.dia_chi} />
+        <Row label="Thông tin" value={info.thong_tin_chung} />
         <Row label="Người TT" value={info.nguoi_thanh_toan ? (NGUOI_TT_LABEL[info.nguoi_thanh_toan] ?? info.nguoi_thanh_toan) : null} />
         <Row label="Nhà cung cấp" value={info.ten_ncc} />
         {(info.ncc_ngan_hang || info.ncc_so_tai_khoan) && (
@@ -77,7 +77,7 @@ function DVCard({ info }: { info: DVInfo }) {
         <Row label="Loại" value={info.loai ? (LOAI_DV_LABEL[info.loai] ?? info.loai) : null} />
         <Row label="Có phí" value={info.co_phi != null ? (info.co_phi ? "Có" : "Không") : null} />
         <Row label="Giá mặc định" value={info.gia_mac_dinh != null ? fmt(info.gia_mac_dinh) + " VND" : null} />
-        <Row label="Địa điểm" value={info.dia_diem} />
+        <Row label="Ghi chú" value={info.ghi_chu} />
         <Row label="SĐT" value={info.so_dien_thoai} />
         <Row label="Email" value={info.email} />
       </div>

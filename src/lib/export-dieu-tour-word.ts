@@ -14,6 +14,7 @@ import {
 } from "docx";
 import { saveAs } from "file-saver";
 import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
+import type { SetMenu } from "@/hooks/use-nha-hang";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const BORDER     = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
@@ -161,6 +162,8 @@ export interface DieuTourExportData {
   chuThichKhach: string;
   gifts: string[];
   ghiChuDieuTour: string;
+  setMenuList?: SetMenu[];
+  coTinhSuatTLNhaHang?: boolean;
 }
 
 export interface DayExportCell {
@@ -177,6 +180,8 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
   const canhDiemMap = new Map(canhDiemList.map((c) => [c.id, c]));
   const nhaHangMap  = new Map(nhaHangList.map((n) => [n.id, n]));
   const khachSanMap = new Map(khachSanList.map((k) => [k.id, k]));
+  const setMenuMap  = new Map((data.setMenuList ?? []).map((m) => [m.id, m]));
+  const fmtGia = (n: number) => n.toLocaleString("vi-VN");
 
   return days.map((day) => {
     const ctLines: string[] = [];
@@ -198,6 +203,10 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
         if (nh.thong_tin_chung) truaLines.push(nh.thong_tin_chung);
         if (nh.so_dien_thoai) truaLines.push(nh.so_dien_thoai);
       }
+      if (day.an_trua_set_menu_id) {
+        const sm = setMenuMap.get(day.an_trua_set_menu_id);
+        if (sm) truaLines.push(`Set: ${sm.ten_set}${sm.gia ? ` — ${fmtGia(sm.gia)}đ` : ""}`);
+      }
     }
     if (day.an_trua_ghi_chu) truaLines.push(day.an_trua_ghi_chu);
 
@@ -209,6 +218,10 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
         if (nh.dia_chi) toiLines.push(nh.dia_chi);
         if (nh.thong_tin_chung) toiLines.push(nh.thong_tin_chung);
         if (nh.so_dien_thoai) toiLines.push(nh.so_dien_thoai);
+      }
+      if (day.an_toi_set_menu_id) {
+        const sm = setMenuMap.get(day.an_toi_set_menu_id);
+        if (sm) toiLines.push(`Set: ${sm.ten_set}${sm.gia ? ` — ${fmtGia(sm.gia)}đ` : ""}`);
       }
     }
     if (day.an_toi_ghi_chu) toiLines.push(day.an_toi_ghi_chu);

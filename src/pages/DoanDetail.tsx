@@ -24,6 +24,7 @@ import {
   syncDieuTourToBookingDV,
   type DayLocal,
 } from "@/hooks/use-dieu-tour";
+import { useAllSetMenus } from "@/hooks/use-nha-hang";
 import { useBookingKS } from "@/hooks/use-booking-ks";
 import { useBookingNH } from "@/hooks/use-booking-nh";
 import { useChiPhiList } from "@/hooks/use-chi-phi";
@@ -65,7 +66,8 @@ export default function DoanDetail() {
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();
   const { data: khachSanList = [] } = useKhachSan();
-  const { data: dbNgayRows = [] } = useDoanNgayList(doanId || undefined);
+  const { data: allSetMenus = [] } = useAllSetMenus();
+  const { data: dbNgayRows = [], isLoading: isLoadingNgay } = useDoanNgayList(doanId || undefined);
   const { data: dbNgayItems = [] } = useDoanNgayItems(doanId || undefined);
   const saveMutation = useSaveDieuTour();
   const initDoanNgay = useInitDoanNgay();
@@ -257,7 +259,7 @@ export default function DoanDetail() {
   }, [scheduleSave]);
 
   const dieuTourExportData = useMemo((): DieuTourExportData | null => {
-    if (!doan) return null;
+    if (!doan || isLoadingNgay) return null;
     return {
       days,
       canhDiemList,
@@ -281,8 +283,10 @@ export default function DoanDetail() {
       chuThichKhach,
       gifts,
       ghiChuDieuTour,
+      setMenuList: allSetMenus,
+      coTinhSuatTLNhaHang,
     };
-  }, [doan, days, canhDiemList, nhaHangList, khachSanList, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, gifts, ghiChuDieuTour]);
+  }, [doan, days, isLoadingNgay, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour]);
 
   // Warning badge counts
   const bookingKSBadgeCount = useMemo(() =>
