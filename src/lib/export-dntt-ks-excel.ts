@@ -6,11 +6,14 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): void {
   const wb = XLSX.utils.book_new();
 
+  const isDepositExport = items.length > 0 && items[0].la_coc;
+  const hasCanTru = items.some((i) => (i.canTruTotal ?? 0) > 0);
   const headers = [
     "CODE ĐOÀN", "Số khách", "Tên Khách sạn", "CODE KS",
     "Check-in", "Check-out", "Loại Phòng", "Số đêm", "Số Lượng", "FOC",
-    "Đơn giá", "Thành tiền", "Đã TT", "Thanh toán",
-    "STK", "Ngân hàng", "Ghi chú",
+    "Đơn giá", "Thành tiền", isDepositExport ? "Thanh toán trước" : "Đã TT",
+    ...(hasCanTru ? ["Cấn trừ", "Ghi chú cấn trừ"] : []),
+    "Thanh toán", "STK", "Ngân hàng", "Ghi chú",
   ];
 
   const aoa: (string | number)[][] = [
@@ -20,7 +23,7 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
   ];
 
   for (const item of items) {
-    const { doan, ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc, ghiChu } = item;
+    const { doan, ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc, ghiChu, canTruTotal, canTruNote } = item;
     roomEntries.forEach((room, ri) => {
       const rowSoDem = room.so_dem ?? 1;
       const thanhTien = room.don_gia * room.so_luong * rowSoDem;
@@ -29,9 +32,14 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
       const daTT = isFirst
         ? (la_coc ? fmt(soTien) : cocTotal > 0 ? `(${fmt(cocTotal)})` : "—")
         : "";
-      const thanhToanCol = isFirst
-        ? (la_coc ? "—" : fmt(soTien))
-        : "";
+      const thanhToanCol = isFirst ? (la_coc ? "—" : fmt(soTien)) : "";
+
+      const canTruCols = hasCanTru
+        ? [
+            isFirst && (canTruTotal ?? 0) > 0 ? fmt(canTruTotal!) : (isFirst ? "—" : ""),
+            isFirst && (canTruTotal ?? 0) > 0 ? (canTruNote || "—") : (isFirst ? "—" : ""),
+          ]
+        : [];
 
       aoa.push([
         isFirst ? doan.ten_doan : "",
@@ -47,6 +55,7 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
         room.don_gia,
         thanhTien,
         daTT,
+        ...canTruCols,
         thanhToanCol,
         isFirst ? (ncc?.so_tai_khoan || "—") : "",
         isFirst ? (ncc?.ngan_hang || "—") : "",
@@ -71,6 +80,7 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
     { wch: 14 }, // Đơn giá
     { wch: 14 }, // Thành tiền
     { wch: 14 }, // Đã TT
+    ...(hasCanTru ? [{ wch: 14 }, { wch: 30 }] : []), // Cấn trừ, Ghi chú cấn trừ
     { wch: 14 }, // Thanh toán
     { wch: 20 }, // STK
     { wch: 25 }, // Ngân hàng

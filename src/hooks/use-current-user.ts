@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Session } from "@supabase/supabase-js";
 import { externalSupabase } from "@/lib/supabase-external";
 
@@ -62,8 +63,24 @@ export function useCurrentSession() {
   return s;
 }
 
-/** Backwards-compat shim */
 export function useCurrentUserEmail() {
   const { session } = useCurrentSession();
-  return { email: session?.user?.email ?? null };
+  const userId = session?.user?.id ?? null;
+
+  const { data } = useQuery({
+    queryKey: ["current-user-role-email", userId],
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_roles")
+        .select("email")
+        .eq("user_id", userId!)
+        .single();
+      if (error) throw error;
+      return (data as { email: string | null }).email;
+    },
+  });
+
+  return { email: data ?? null };
 }

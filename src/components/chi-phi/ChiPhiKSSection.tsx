@@ -170,23 +170,27 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     const ngayRow = (ksData.ngayRows as any[]).find((r) => r.khach_san_id === ksId);
     const codeKS = ngayRow?.ks_ma_code || "";
 
-    // cocTotal: cọc đã thanh toán (da_tt) + cấn trừ công nợ đã duyệt (can_tru)
+    // cocTotal: chỉ cọc đã thanh toán thực sự (da_tt)
+    // canTruRecords: cấn trừ công nợ đã duyệt — tách riêng để hiển thị cột riêng
     const nccId = ks?.nha_cung_cap_id ?? null;
     const cocTotal = dnttList
       .filter((d) => {
         if (d.id === dnttId) return false;
         if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-        if (!d.la_coc) return false;
-        // Cọc đã thanh toán thực sự cho KS này
-        if (d.trang_thai_thanh_toan === "da_tt" && d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
-        // Cấn trừ công nợ đã duyệt — ref_loai mới hoặc cũ
-        if (d.trang_thai_thanh_toan === "can_tru" && d.trang_thai_duyet === "da_duyet") {
-          if (d.ref_loai === "can_tru_cong_no" && nccId && d.nha_cung_cap_id === nccId) return true;
-          if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
-        }
-        return false;
+        return d.la_coc && d.trang_thai_thanh_toan === "da_tt" && d.ref_loai === "khach_san" && d.ref_id === ksId;
       })
       .reduce((sum, d) => sum + d.so_tien, 0);
+
+    const canTruRecords = dnttList.filter((d) => {
+      if (d.id === dnttId) return false;
+      if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
+      if (d.trang_thai_thanh_toan !== "can_tru" || d.trang_thai_duyet !== "da_duyet") return false;
+      if (d.ref_loai === "can_tru_cong_no" && nccId && d.nha_cung_cap_id === nccId) return true;
+      if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
+      return false;
+    });
+    const canTruTotal = canTruRecords.reduce((sum, d) => sum + d.so_tien, 0);
+    const canTruNote = canTruRecords.map((d) => d.ghi_chu || d.mo_ta || "Cấn trừ công nợ").join("; ");
 
     const focDisplay =
       ks.foc_khach && ks.foc_mien ? `${ks.foc_khach}/${ks.foc_mien}` : "—";
@@ -203,6 +207,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       soDem,
       roomEntries,
       cocTotal,
+      canTruTotal: canTruTotal > 0 ? canTruTotal : undefined,
+      canTruNote: canTruNote || undefined,
       focDisplay,
       soTien: dntt.so_tien,
       la_coc: dntt.la_coc ?? false,

@@ -32,6 +32,10 @@ const CONTENT_W = PAGE_H - MARGIN * 2;
 const COL_FIXED = [1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 1000];
 const COL_W = [...COL_FIXED, CONTENT_W - COL_FIXED.reduce((a, b) => a + b, 0)];
 
+// Columns khi có cấn trừ: ...+ Đã TT, Cấn trừ, Thanh toán, Ngân hàng, Ghi chú
+const COL_CANTRU_FIXED = [1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 900, 1000, 2000];
+const COL_CANTRU_W = [...COL_CANTRU_FIXED, CONTENT_W - COL_CANTRU_FIXED.reduce((a, b) => a + b, 0)];
+
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 function cell(
@@ -79,6 +83,8 @@ export interface EdgeFunctionData {
   soDem: number;
   roomEntries: { name: string; so_luong: number; don_gia: number; so_dem?: number; ci?: string; co?: string }[];
   cocTotal: number;
+  canTruTotal?: number;
+  canTruNote?: string;
   focDisplay: string;
   soTien: number;
   la_coc?: boolean;
@@ -101,20 +107,22 @@ const TABLE_HEADERS = [
   "Đã thanh\ntoán", "Thanh toán", "Thông tin\nNgân hàng",
 ];
 
-function buildHeaderRow(): TableRow {
-  return new TableRow({
-    children: TABLE_HEADERS.map((h, i) =>
-      cell([p(h, { bold: true, size: 14 })], { width: COL_W[i], shading: GRAY })
-    ),
-  });
-}
+const TABLE_HEADERS_CANTRU = [
+  "Tên Khách sạn", "CODE\nKS",
+  "Check\nin", "Check\nout", "Loại Phòng", "Số\nđêm",
+  "Số\nLượng", "FOC", "Đơn giá", "Thành tiền",
+  "Đã thanh\ntoán", "Cấn trừ", "Thanh toán", "Thông tin\nNgân hàng", "Ghi chú",
+];
 
-function buildDataRows(data: EdgeFunctionData): TableRow[] {
+function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[] {
   const { ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
+  const canTruTotal = data.canTruTotal ?? 0;
+  const canTruNote = data.canTruNote ?? "";
   const bankChildren = buildBankChildren(ncc);
+  const useCanTru = !la_coc && (layoutCanTru || canTruTotal > 0);
   const colWidths = la_coc
     ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]]
-    : COL_W;
+    : (useCanTru ? COL_CANTRU_W : COL_W);
 
   const rows: TableRow[] = [];
   const totalRoomRows = roomEntries.length;
@@ -146,6 +154,15 @@ function buildDataRows(data: EdgeFunctionData): TableRow[] {
       if (la_coc) {
         cells.push(cell([p(fmt(soTien), { bold: true, size: 14, color: "FF0000" })], { width: colWidths[10], rowSpan: totalRoomRows }));
         cells.push(cell(bankChildren, { width: colWidths[11], rowSpan: totalRoomRows }));
+      } else if (useCanTru) {
+        const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
+        const canTruText = canTruTotal > 0 ? fmt(canTruTotal) : "—";
+        const noteText = canTruNote || "—";
+        cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[10], rowSpan: totalRoomRows }));
+        cells.push(cell([p(canTruText, { size: 14, color: canTruTotal > 0 ? "FF6600" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
+        cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[12], rowSpan: totalRoomRows }));
+        cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
+        cells.push(cell([p(noteText, { size: 14, alignment: AlignmentType.LEFT })], { width: colWidths[14], rowSpan: totalRoomRows }));
       } else {
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
         cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[10], rowSpan: totalRoomRows }));
@@ -160,12 +177,13 @@ function buildDataRows(data: EdgeFunctionData): TableRow[] {
 }
 
 function buildKSTable(data: EdgeFunctionData): Table {
+  const canTruTotal = data.canTruTotal ?? 0;
   const colWidths = data.la_coc
     ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]]
-    : COL_W;
+    : (canTruTotal > 0 ? COL_CANTRU_W : COL_W);
   const headers = data.la_coc
-    ? [...TABLE_HEADERS.slice(0, 11), TABLE_HEADERS[12]]
-    : TABLE_HEADERS;
+    ? [...TABLE_HEADERS.slice(0, 10), "Thanh toán\ntrước", TABLE_HEADERS[12]]
+    : (canTruTotal > 0 ? TABLE_HEADERS_CANTRU : TABLE_HEADERS);
   const headerRow = new TableRow({
     children: headers.map((h, i) =>
       cell([p(h, { bold: true, size: 14 })], { width: colWidths[i], shading: GRAY })
@@ -179,11 +197,19 @@ function buildKSTable(data: EdgeFunctionData): Table {
 }
 
 function buildKSMergedTable(items: EdgeFunctionData[]): Table {
-  const rows: TableRow[] = [buildHeaderRow()];
+  const hasCanTru = items.some((i) => (i.canTruTotal ?? 0) > 0);
+  const colWidths = hasCanTru ? COL_CANTRU_W : COL_W;
+  const headers = hasCanTru ? TABLE_HEADERS_CANTRU : TABLE_HEADERS;
+  const headerRow = new TableRow({
+    children: headers.map((h, i) =>
+      cell([p(h, { bold: true, size: 14 })], { width: colWidths[i], shading: GRAY })
+    ),
+  });
+  const rows: TableRow[] = [headerRow];
   for (const item of items) {
-    rows.push(...buildDataRows(item));
+    rows.push(...buildDataRows(item, hasCanTru));
   }
-  return new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, columnWidths: COL_W, rows });
+  return new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, columnWidths: colWidths, rows });
 }
 
 function buildGhiChuPara(items: EdgeFunctionData[]): Paragraph | null {
