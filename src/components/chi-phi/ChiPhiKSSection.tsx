@@ -855,6 +855,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         // Orphaned + công nợ → auto-xóa, ẩn luôn khỏi UI
         if (isOrphaned && ksStatus === "cong_no") return null;
 
+        // Hoàn tiền → ẩn khỏi tab chi phí, chỉ lưu trong công nợ
+        if (ksStatus === "hoan_tien") return null;
+
         // KS còn trong điều tour dù đã có cong_no → coi như chi phí mới, không show annotation
         const effectiveKsStatus = (!isOrphaned && ksStatus === "cong_no") ? "chua_de_nghi" : ksStatus;
 

@@ -250,20 +250,6 @@ function buildNHHeader(meal: MenuWordMeal): Paragraph[] {
     spacing: { after: 30 },
     children: [new TextRun({ text: meal.ten_nh, font: "Arial", size: 20, bold: true, color: RED })],
   }));
-  const parts: string[] = [];
-  if (meal.ten_set) parts.push(meal.ten_set);
-  if (meal.gia) {
-    const priceStr = `${meal.gia}${meal.don_vi ?? ""}`;
-    parts.push(meal.ghi_chu_set ? `${priceStr}(${meal.ghi_chu_set})` : priceStr);
-  } else if (meal.ghi_chu_set) {
-    parts.push(`(${meal.ghi_chu_set})`);
-  }
-  if (parts.length > 0) {
-    paras.push(new Paragraph({
-      spacing: { after: 0 },
-      children: [new TextRun({ text: parts.join(" "), font: "Arial", size: 17, color: RED })],
-    }));
-  }
   return paras;
 }
 
