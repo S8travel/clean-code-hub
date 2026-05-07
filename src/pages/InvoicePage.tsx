@@ -13,7 +13,7 @@ import {
   useUploadInvoiceFile,
   useDeleteInvoiceFile,
 } from "@/hooks/use-doan-invoice";
-import { useDoanLogList } from "@/hooks/use-doan-log";
+import { useDoanLogList, useToggleResolved } from "@/hooks/use-doan-log";
 import {
   useCanhDiem,
   useNhaHang,
@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileText, Upload, X, ReceiptText, MapPin, Users, TrendingUp } from "lucide-react";
+import { FileText, Upload, X, ReceiptText, MapPin, Users, TrendingUp, CheckCircle2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── Local types ───────────────────────────────────────────────────────────────
@@ -167,8 +167,10 @@ function InvoiceDrawer({
   open: boolean;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const { data: allLogs = [] } = useDoanLogList(doan?.id);
   const giaLogs = allLogs.filter((l) => l.loai === "gia");
+  const confirmMut = useToggleResolved();
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -194,33 +196,48 @@ function InvoiceDrawer({
                       key={log.id}
                       className={cn(
                         "border rounded p-2.5 text-xs space-y-0.5",
-                        log.is_resolved && "opacity-50",
+                        log.is_resolved ? "bg-muted/30 opacity-70" : "bg-amber-50/50",
                       )}
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium">{log.tieu_de}</span>
-                        {log.is_resolved && (
-                          <Badge
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-0.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium">{log.tieu_de}</span>
+                            {log.is_resolved && (
+                              <Badge variant="outline" className="text-[10px] text-green-700 border-green-300 py-0 gap-0.5">
+                                <CheckCircle2 className="h-3 w-3" />
+                                {log.resolved_by_ten ?? "Đã xác nhận"}
+                              </Badge>
+                            )}
+                          </div>
+                          {log.so_tien != null && (
+                            <p className="font-semibold text-amber-700">{fmtVND(log.so_tien)} VND</p>
+                          )}
+                          {log.noi_dung && (
+                            <p className="text-muted-foreground whitespace-pre-wrap">{log.noi_dung}</p>
+                          )}
+                          <p className="text-muted-foreground">{log.created_by_ten ?? "—"} · {fmtDate(log.created_at)}</p>
+                        </div>
+                        {!log.is_resolved && (
+                          <Button
+                            size="sm"
                             variant="outline"
-                            className="text-[10px] text-green-700 border-green-300 py-0"
+                            className="h-7 text-xs px-2 shrink-0 border-green-300 text-green-700 hover:bg-green-50"
+                            disabled={confirmMut.isPending}
+                            onClick={() => confirmMut.mutate({
+                              id: log.id,
+                              doan_id: doan!.id,
+                              loai: log.loai,
+                              is_resolved: true,
+                              user_id: user?.user_id ?? null,
+                              user_ten: user?.ho_ten ?? null,
+                            })}
                           >
-                            Đã xử lý
-                          </Badge>
+                            <Circle className="h-3 w-3 mr-1" />
+                            Xác nhận
+                          </Button>
                         )}
                       </div>
-                      {log.so_tien != null && (
-                        <p className="font-semibold text-amber-700">
-                          {fmtVND(log.so_tien)} VND
-                        </p>
-                      )}
-                      {log.noi_dung && (
-                        <p className="text-muted-foreground whitespace-pre-wrap">
-                          {log.noi_dung}
-                        </p>
-                      )}
-                      <p className="text-muted-foreground">
-                        {log.created_by_ten ?? "—"} · {fmtDate(log.created_at)}
-                      </p>
                     </div>
                   ))}
                 </div>

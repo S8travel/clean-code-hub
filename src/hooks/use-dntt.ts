@@ -494,10 +494,12 @@ export function useCreateAdjustment() {
       dnttGoc,
       soTienThucTe,
       lyDo,
+      surplusMode = "cong_no",
     }: {
       dnttGoc: DNTTRow;
       soTienThucTe: number;
       lyDo: string;
+      surplusMode?: "cong_no" | "hoan_tien";
     }) => {
       const delta = soTienThucTe - dnttGoc.so_tien;
       if (delta === 0) return null;
@@ -528,7 +530,7 @@ export function useCreateAdjustment() {
           });
         if (error) throw error;
       } else {
-        // Thừa tiền → tạo công nợ trực tiếp
+        // Thừa tiền → công nợ hoặc hoàn tiền
         const { error } = await externalSupabase
           .from("de_nghi_thanh_toan")
           .insert({
@@ -541,9 +543,9 @@ export function useCreateAdjustment() {
             mo_ta: `[Điều chỉnh giảm] ${dnttGoc.mo_ta || ""}`.trim(),
             so_tien: Math.abs(delta),
             trang_thai_duyet: "da_huy",
-            trang_thai_thanh_toan: "cong_no",
+            trang_thai_thanh_toan: surplusMode,
             so_tien_con_lai: null,
-            ghi_chu: `Điều chỉnh giảm từ ĐNTT #${dnttGoc.id}. Lý do: ${lyDo}`,
+            ghi_chu: `Điều chỉnh giảm từ ĐNTT #${dnttGoc.id}. Lý do: ${lyDo}${surplusMode === "hoan_tien" ? " (Hoàn tiền)" : ""}`,
           });
         if (error) throw error;
       }

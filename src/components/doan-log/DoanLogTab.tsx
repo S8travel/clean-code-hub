@@ -289,17 +289,22 @@ export default function DoanLogTab({ doanId }: Props) {
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleConfirm(log.id, log.loai)}
-                          className="text-muted-foreground hover:text-green-600 transition-colors p-0.5"
-                          title="Xác nhận đã xử lý"
-                        >
-                          <Circle className="h-4 w-4" />
-                        </button>
+                        {log.loai !== "gia" && (
+                          <button
+                            onClick={() => handleConfirm(log.id, log.loai)}
+                            className="text-muted-foreground hover:text-green-600 transition-colors p-0.5"
+                            title="Xác nhận đã xử lý"
+                          >
+                            <Circle className="h-4 w-4" />
+                          </button>
+                        )}
                       </>
                     )}
                     {log.is_resolved && (
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    )}
+                    {!log.is_resolved && log.loai === "gia" && (
+                      <span className="text-[10px] text-amber-600 italic">Chờ invoice</span>
                     )}
                   </div>
                 </div>

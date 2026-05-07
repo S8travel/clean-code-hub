@@ -105,6 +105,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const [adjustTarget, setAdjustTarget] = useState<DNTTRowDntt | null>(null);
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
+  const [adjustSurplusMode, setAdjustSurplusMode] = useState<"cong_no" | "hoan_tien">("cong_no");
 
   // Resend dialog (rejected)
   const [resendTarget, setResendTarget] = useState<DNTTRow | null>(null);
@@ -952,7 +953,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       </Dialog>
 
       {/* Adjust Dialog */}
-      <Dialog open={!!adjustTarget} onOpenChange={o => { if (!o) setAdjustTarget(null); }}>
+      <Dialog open={!!adjustTarget} onOpenChange={o => { if (!o) { setAdjustTarget(null); setAdjustSurplusMode("cong_no"); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-sm">Điều chỉnh sau thanh toán</DialogTitle>
@@ -977,15 +978,24 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                 const actual = parseInt(adjustAmount.replace(/\D/g, ""), 10);
                 if (isNaN(actual) || actual === adjustTarget.so_tien) return null;
                 const delta = actual - adjustTarget.so_tien;
+                if (delta > 0) return (
+                  <div className="rounded px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-700">
+                    Thiếu {fmt(delta)} ₫ → tạo ĐNTT bổ sung (chờ duyệt)
+                  </div>
+                );
                 return (
-                  <div className={cn(
-                    "rounded px-3 py-2 text-xs font-medium",
-                    delta > 0 ? "bg-yellow-50 text-yellow-700" : "bg-purple-50 text-purple-700",
-                  )}>
-                    {delta > 0
-                      ? `Thiếu ${fmt(delta)} ₫ → tạo ĐNTT bổ sung (chờ duyệt)`
-                      : `Thừa ${fmt(Math.abs(delta))} ₫ → ghi công nợ NCC`
-                    }
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-purple-700 font-medium">Thừa {fmt(Math.abs(delta))} ₫ — chọn hình thức xử lý:</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setAdjustSurplusMode("cong_no")}
+                        className={cn("flex-1 rounded border px-2 py-1.5 text-xs font-medium transition-colors",
+                          adjustSurplusMode === "cong_no" ? "border-purple-400 bg-purple-50 text-purple-700" : "border-border text-muted-foreground hover:border-muted-foreground"
+                        )}>Ghi công nợ NCC</button>
+                      <button type="button" onClick={() => setAdjustSurplusMode("hoan_tien")}
+                        className={cn("flex-1 rounded border px-2 py-1.5 text-xs font-medium transition-colors",
+                          adjustSurplusMode === "hoan_tien" ? "border-green-400 bg-green-50 text-green-700" : "border-border text-muted-foreground hover:border-muted-foreground"
+                        )}>Hoàn tiền</button>
+                    </div>
                   </div>
                 );
               })()}
@@ -1001,7 +1011,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustTarget(null)}>Đóng</Button>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => { setAdjustTarget(null); setAdjustSurplusMode("cong_no"); }}>Đóng</Button>
             <Button
               size="sm"
               className="text-xs"
@@ -1015,13 +1025,15 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                 const soTienThucTe = parseInt(adjustAmount.replace(/\D/g, ""), 10);
                 if (isNaN(soTienThucTe)) return;
                 adjustMut.mutate(
-                  { dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || "Điều chỉnh số lượng" },
+                  { dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || "Điều chỉnh số lượng", surplusMode: adjustSurplusMode },
                   {
                     onSuccess: (result) => {
                       if (!result) return;
                       if (result.delta > 0) toast.success(`Đã tạo ĐNTT bổ sung ${fmt(result.delta)} ₫`);
+                      else if (adjustSurplusMode === "hoan_tien") toast.success(`Đã ghi hoàn tiền ${fmt(Math.abs(result.delta))} ₫`);
                       else toast.success(`Đã ghi công nợ ${fmt(Math.abs(result.delta))} ₫`);
                       setAdjustTarget(null);
+                      setAdjustSurplusMode("cong_no");
                     },
                     onError: (err: any) => toast.error(err?.message || "Lỗi điều chỉnh"),
                   },
