@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
-import { recalcChiPhiStatus } from "@/hooks/use-dntt";
+import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
+
+export type DNTTRow = DNTTRowFromHook;
 
 const DANH_MUC_LABEL: Record<string, string> = {
   nha_hang: "nhà hàng",
@@ -47,34 +49,6 @@ export interface ChiPhiRow {
   thanh_toan_dinh_ky: boolean;
 }
 
-export interface DNTTRow {
-  id: number;
-  doan_id: number;
-  loai: string;
-  mo_ta: string | null;
-  nha_cung_cap_id: number | null;
-  ten_nha_cung_cap: string | null;
-  so_tai_khoan: string | null;
-  ngan_hang: string | null;
-  so_tien: number;
-  la_coc: boolean;
-  la_thu_hoi: boolean;
-  hdv_id: number | null;
-  ty_le_coc: number | null;
-  trang_thai_duyet: string;
-  trang_thai_thanh_toan: string;
-  ref_loai: string | null;
-  ref_id: number | null;
-  created_at: string;
-  so_tien_con_lai: number | null;
-  ngay_thanh_toan: string | null;
-  ghi_chu: string | null;
-  sent_at: string | null;
-  sent_by: string | null;
-  ngay_can_thanh_toan: string | null;
-  linked_dntt_id: number | null;
-}
-
 // ── Queries ──
 
 export function useChiPhiList(doanId?: number) {
@@ -99,7 +73,7 @@ export function useDNTTList(doanId?: number) {
     enabled: !!doanId,
     queryFn: async () => {
       const { data, error } = await externalSupabase
-        .from("de_nghi_thanh_toan")
+        .from("dntt_with_payment_status")
         .select("*")
         .eq("doan_id", doanId!)
         .order("created_at", { ascending: false });
@@ -382,10 +356,29 @@ export function useChiPhiAllocations(chiPhiId: number | null | undefined) {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("dntt_allocations")
-        .select("id, dntt_id, so_tien, ghi_chu, de_nghi_thanh_toan:dntt_id(so_tien, trang_thai_duyet, trang_thai_thanh_toan, mo_ta)")
+        .select("id, dntt_id, so_tien, ghi_chu, de_nghi_thanh_toan:dntt_id(so_tien, trang_thai_duyet, mo_ta)")
         .eq("chi_phi_id", chiPhiId!);
       if (error) throw error;
-      return data as unknown as {
+
+      // Bổ sung payment_status từ view (1 query phụ)
+      const dnttIds = [...new Set((data || []).map((r: any) => r.dntt_id))];
+      const paidMap: Record<number, { paid_amount: number; payment_status: string }> = {};
+      if (dnttIds.length > 0) {
+        const { data: paidRows } = await externalSupabase
+          .from("dntt_with_payment_status")
+          .select("id, paid_amount, payment_status")
+          .in("id", dnttIds);
+        (paidRows || []).forEach((p: any) => { paidMap[p.id] = p; });
+      }
+
+      return (data || []).map((r: any) => ({
+        ...r,
+        de_nghi_thanh_toan: {
+          ...r.de_nghi_thanh_toan,
+          paid_amount: paidMap[r.dntt_id]?.paid_amount ?? 0,
+          payment_status: paidMap[r.dntt_id]?.payment_status ?? "unpaid",
+        },
+      })) as unknown as {
         id: number;
         dntt_id: number;
         so_tien: number;
@@ -393,8 +386,9 @@ export function useChiPhiAllocations(chiPhiId: number | null | undefined) {
         de_nghi_thanh_toan: {
           so_tien: number;
           trang_thai_duyet: string;
-          trang_thai_thanh_toan: string;
           mo_ta: string | null;
+          paid_amount: number;
+          payment_status: "unpaid" | "partial" | "paid";
         };
       }[];
     },
@@ -448,7 +442,7 @@ export function useUpdateDNTT() {
       const v = vars as Record<string, any>;
       if (v.trang_thai_duyet === "duyet") { action = "duyet"; moTa = `Duyệt ĐNTT #${vars.id}`; }
       else if (v.trang_thai_duyet === "tu_choi") { action = "tu_choi"; moTa = `Từ chối ĐNTT #${vars.id}`; }
-      else if (v.trang_thai_thanh_toan === "da_thanh_toan") { action = "thanh_toan"; moTa = `Thanh toán ĐNTT #${vars.id}`; }
+      else if (v.payment_status === "paid") { action = "thanh_toan"; moTa = `Thanh toán ĐNTT #${vars.id}`; }
       log({ doan_id: doanId, action, table_name: "de_nghi_thanh_toan", record_id: vars.id, mo_ta: moTa });
     },
   });

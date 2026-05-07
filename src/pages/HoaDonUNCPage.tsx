@@ -209,23 +209,14 @@ export default function HoaDonUNCPage() {
   const { data: rows = [], isLoading } = useHoaDonUNCList(filters);
   const { data: doanOpts = [] } = useDoanOptions();
 
-  const { mainRows, canTruMap } = useMemo(() => {
-    const canTruMap: Record<number, HoaDonUNCRow> = {};
-    const linkedIds = new Set<number>();
-    rows.forEach(r => {
-      if (r.ref_loai === "can_tru_cong_no" && r.linked_dntt_id) {
-        canTruMap[r.linked_dntt_id] = r;
-        linkedIds.add(r.id);
-      }
-    });
-    return { mainRows: rows.filter(r => !linkedIds.has(r.id)), canTruMap };
-  }, [rows]);
+  const mainRows = rows;
+  const canTruMap: Record<number, HoaDonUNCRow> = {};
 
   const metrics = useMemo(() => {
-    const chuaTT = mainRows.filter(r => r.trang_thai_thanh_toan === "chua_tt").length;
-    const daTT = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt").length;
-    const thieu_hd = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_hoa_don === "chua_co").length;
-    const thieu_unc = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_unc === "chua_co").length;
+    const chuaTT = mainRows.filter(r => r.payment_status !== "paid").length;
+    const daTT = mainRows.filter(r => r.payment_status === "paid").length;
+    const thieu_hd = mainRows.filter(r => r.payment_status === "paid" && r.trang_thai_hoa_don === "chua_co").length;
+    const thieu_unc = mainRows.filter(r => r.payment_status === "paid" && r.trang_thai_unc === "chua_co").length;
     return { chuaTT, daTT, thieu_hd, thieu_unc };
   }, [mainRows]);
 
@@ -414,7 +405,7 @@ export default function HoaDonUNCPage() {
                       : "—"}
                   </TableCell>
                   <TableCell>
-                    {row.trang_thai_thanh_toan === "da_tt" ? (
+                    {row.payment_status === "paid" ? (
                       <div className="flex flex-col gap-0.5">
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 w-fit">
                           <CreditCard className="h-3 w-3" /> Đã TT

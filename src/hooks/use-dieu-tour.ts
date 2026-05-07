@@ -461,7 +461,7 @@ export function useSaveDieuTour() {
               mo_ta: cd?.ten ?? "",
               don_gia: item.don_gia ?? 0,
               so_luong: item.so_luong ?? soKhach,
-              trang_thai_thanh_toan: "chua_thanh_toan",
+              trang_thai_thanh_toan: "unpaid",
             };
             if (item.nguoi_thanh_toan === "hdv") {
               chiPhiPayload.tien_hdv = (item.don_gia ?? 0) * (item.so_luong ?? soKhach);
@@ -505,8 +505,8 @@ export function useSaveDieuTour() {
                 mo_ta: mealItem
                   ? `${(mealItem as any).ten}${meal.label === "an_trua" ? " (trưa)" : meal.label === "an_toi" ? " (tối)" : ""}`
                   : "",
-                trang_thai_thanh_toan: "chua_thanh_toan",
-              };
+                trang_thai_thanh_toan: "unpaid",
+              } as any;
               const mealNtt = (mealItem as any)?.nguoi_thanh_toan;
               if (mealNtt === "hdv") {
                 chiPayload.tien_hdv = 0;

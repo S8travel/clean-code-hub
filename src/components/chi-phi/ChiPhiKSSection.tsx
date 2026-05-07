@@ -22,7 +22,11 @@ import {
   useDNTTList,
   type ChiPhiRow,
 } from "@/hooks/use-chi-phi";
-import { useCancelDNTT } from "@/hooks/use-dntt";
+import { useCancelDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
+import { usePaymentsByChiPhi, useCreatePayment } from "@/hooks/use-payments";
+import { useCongNoList, appendCanTruLog } from "@/hooks/use-cong-no";
+import { externalSupabase } from "@/lib/supabase-external";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { toast } from "sonner";
@@ -101,6 +105,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const { data: ksData, isLoading: ksLoading } = useChiPhiKSData(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
+  const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
+  const { data: congNoList = [] } = useCongNoList({ doanId });
+  const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
@@ -170,27 +177,29 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     const ngayRow = (ksData.ngayRows as any[]).find((r) => r.khach_san_id === ksId);
     const codeKS = ngayRow?.ks_ma_code || "";
 
-    // cocTotal: chỉ cọc đã thanh toán thực sự (da_tt)
-    // canTruRecords: cấn trừ công nợ đã duyệt — tách riêng để hiển thị cột riêng
+    // cocTotal: cọc đã thanh toán đủ (paid)
     const nccId = ks?.nha_cung_cap_id ?? null;
     const cocTotal = dnttList
       .filter((d) => {
         if (d.id === dnttId) return false;
         if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-        return d.la_coc && d.trang_thai_thanh_toan === "da_tt" && d.ref_loai === "khach_san" && d.ref_id === ksId;
+        return d.la_coc && d.payment_status === "paid" && d.ref_loai === "khach_san" && d.ref_id === ksId;
       })
       .reduce((sum, d) => sum + d.so_tien, 0);
 
-    const canTruRecords = dnttList.filter((d) => {
-      if (d.id === dnttId) return false;
-      if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-      if (d.trang_thai_thanh_toan !== "can_tru") return false;
-      if (d.ref_loai === "can_tru_cong_no" && nccId && d.nha_cung_cap_id === nccId) return true;
-      if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
-      return false;
-    });
-    const canTruTotal = canTruRecords.reduce((sum, d) => sum + d.so_tien, 0);
-    const canTruNote = canTruRecords.map((d) => d.ghi_chu || d.mo_ta || "Cấn trừ công nợ").join("; ");
+    // canTru: tổng can_tru payments của KS này (qua chi phí KS)
+    const ksChiPhiIds = chiPhiRows
+      .filter((cp) => cp.danh_muc === "khach_san" && cp.ref_doan_ngay_id != null)
+      .filter((cp) => {
+        const ng = ksData?.ngayRows.find((r: any) => r.id === cp.ref_doan_ngay_id);
+        return ng?.khach_san_id === ksId;
+      })
+      .map((cp) => cp.id!)
+      .filter(Boolean);
+    const canTruTotal = paymentsList
+      .filter((p) => p.method === "can_tru" && ksChiPhiIds.includes(p.chi_phi_id))
+      .reduce((s, p) => s + p.payment_so_tien, 0);
+    const canTruNote = canTruTotal > 0 ? "Cấn trừ công nợ" : "";
 
     const focDisplay =
       ks.foc_khach && ks.foc_mien ? `${ks.foc_khach}/${ks.foc_mien}` : "—";
@@ -392,12 +401,14 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     const orphanedIds: number[] = ksData.orphanedKsIds || [];
     for (const ksId of orphanedIds) {
       if (autoDeletedKsIdsRef.current.has(ksId)) continue;
+      // Detect "đã chuyển thành công nợ": có DNTT da_huy với paid_amount > 0
+      // (cong_no record được tạo cùng lúc cancel)
       const hasCongNo = dnttList.some(
         (d) =>
           d.ref_loai === "khach_san" &&
           d.ref_id === ksId &&
           d.trang_thai_duyet === "da_huy" &&
-          d.trang_thai_thanh_toan === "cong_no",
+          (d.paid_amount || 0) > 0,
       );
       if (!hasCongNo) continue;
       autoDeletedKsIdsRef.current.add(ksId);
@@ -634,32 +645,36 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     }
   });
 
-  // Can_tru đã áp dụng cho từng KS (để cộng vào daCoc khi mở modal)
+  // Build map ksId → list of chi_phi_id (cho payments lookup)
+  const chiPhiIdsByKs: Record<number, number[]> = {};
+  chiPhiRows.forEach((cp) => {
+    if (cp.danh_muc !== "khach_san" || !cp.id || !cp.ref_doan_ngay_id) return;
+    const ng = ngayRows.find((r: any) => r.id === cp.ref_doan_ngay_id);
+    if (!ng?.khach_san_id) return;
+    (chiPhiIdsByKs[ng.khach_san_id] = chiPhiIdsByKs[ng.khach_san_id] || []).push(cp.id);
+  });
+
+  // Can_tru đã áp dụng cho từng KS — qua payments
   const canTruAmtByKsId: Record<number, number> = {};
   allKsEntries.forEach(([ksIdStr]) => {
     const ksId = Number(ksIdStr);
-    const nccId = khachSanMap[ksId]?.nha_cung_cap_id ?? null;
-    canTruAmtByKsId[ksId] = dnttList
-      .filter((d) => {
-        if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-        if (d.trang_thai_thanh_toan !== "can_tru") return false;
-        if (d.ref_loai === "can_tru_cong_no" && nccId && d.nha_cung_cap_id === nccId) return true;
-        if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
-        return false;
-      })
-      .reduce((s, d) => s + d.so_tien, 0);
+    const cpIds = chiPhiIdsByKs[ksId] || [];
+    canTruAmtByKsId[ksId] = paymentsList
+      .filter((p) => p.method === "can_tru" && cpIds.includes(p.chi_phi_id))
+      .reduce((s, p) => s + p.payment_so_tien, 0);
   });
 
-  // Tổng đã thanh toán thực sự (trang_thai_thanh_toan === "da_tt") per KS
+  // Tổng paid_amount per KS (đã thanh toán đầy đủ qua payments)
   const ttByKs: Record<number, number> = {};
   dnttList.forEach((d) => {
     if (
       d.loai === "khach_san" &&
       d.ref_loai === "khach_san" &&
       d.ref_id &&
-      d.trang_thai_thanh_toan === "da_tt"
+      d.trang_thai_duyet !== "da_huy" &&
+      d.trang_thai_duyet !== "tu_choi"
     ) {
-      ttByKs[d.ref_id] = (ttByKs[d.ref_id] || 0) + d.so_tien;
+      ttByKs[d.ref_id] = (ttByKs[d.ref_id] || 0) + (d.paid_amount || 0);
     }
   });
 
@@ -676,38 +691,40 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     }
   });
 
-  // Tổng công nợ / hoàn tiền (đã hủy dịch vụ) per KS
+  // Tổng công nợ / hoàn tiền per KS — từ bảng cong_no
   const congNoByKs: Record<number, number> = {};
   const hoanTienByKs: Record<number, number> = {};
+  // Build map dntt_id → ksId
+  const dnttKsMap: Record<number, number> = {};
   dnttList.forEach((d) => {
-    if (d.ref_loai === "khach_san" && d.ref_id && d.trang_thai_duyet === "da_huy") {
-      if (d.trang_thai_thanh_toan === "cong_no") {
-        congNoByKs[d.ref_id] = (congNoByKs[d.ref_id] || 0) + d.so_tien;
-      } else if (d.trang_thai_thanh_toan === "hoan_tien") {
-        hoanTienByKs[d.ref_id] = (hoanTienByKs[d.ref_id] || 0) + d.so_tien;
-      }
+    if (d.ref_loai === "khach_san" && d.ref_id) dnttKsMap[d.id] = d.ref_id;
+  });
+  congNoList.forEach((c) => {
+    if (c.dntt_goc_id == null) return;
+    const ksId = dnttKsMap[c.dntt_goc_id];
+    if (!ksId) return;
+    if (c.trang_thai === "con_du") {
+      congNoByKs[ksId] = (congNoByKs[ksId] || 0) + c.so_tien_con_lai;
+    } else if (c.trang_thai === "da_hoan_tien") {
+      hoanTienByKs[ksId] = (hoanTienByKs[ksId] || 0) + c.so_tien_goc;
     }
   });
 
-  // Trạng thái KS tính thẳng từ dnttList — chính xác và cập nhật ngay khi dnttList thay đổi
   const getKsChiPhiStatus = (ksId: number): string => {
     const all = dnttList.filter((d) => d.ref_loai === "khach_san" && d.ref_id === ksId);
     if (all.length === 0) return "chua_de_nghi";
 
-    // Đã hủy dịch vụ với xử lý tiền
-    if (all.some((d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no"))
-      return "cong_no";
-    if (all.some((d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "hoan_tien"))
-      return "hoan_tien";
+    // Đã hủy dịch vụ → check cong_no records
+    const cancelledIds = all.filter((d) => d.trang_thai_duyet === "da_huy").map((d) => d.id);
+    const cancelledCongNos = congNoList.filter((c) => c.dntt_goc_id != null && cancelledIds.includes(c.dntt_goc_id));
+    if (cancelledCongNos.some((c) => c.trang_thai === "con_du")) return "cong_no";
+    if (cancelledCongNos.some((c) => c.trang_thai === "da_hoan_tien")) return "hoan_tien";
 
-    // Các DNTT chưa hủy
     const nonHuy = all.filter((d) => d.trang_thai_duyet !== "da_huy");
     if (nonHuy.length === 0) return "chua_de_nghi";
 
-    // Tất cả đã TT → da_thanh_toan
-    if (nonHuy.every((d) => d.trang_thai_thanh_toan === "da_tt")) return "da_thanh_toan";
+    if (nonHuy.every((d) => d.payment_status === "paid")) return "da_thanh_toan";
 
-    // Có khoản đang xử lý — cho_duyet ưu tiên hơn da_duyet
     if (nonHuy.some((d) => d.trang_thai_duyet === "cho_duyet")) return "cho_duyet";
     if (nonHuy.some((d) => d.trang_thai_duyet === "da_duyet")) return "da_duyet";
     if (nonHuy.some((d) => d.trang_thai_duyet === "tu_choi")) return "tu_choi";
@@ -723,21 +740,19 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     ]),
   ];
 
-  // Map ksId → active DNTT id (for batch print)
-  // Ưu tiên DNTT chưa TT (khoản mới nhất cần in), fallback sang đã TT
   const activeDnttByKs: Record<number, number> = {};
   dnttList.forEach((d) => {
     if (d.ref_loai === "khach_san" && d.ref_id &&
         d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
-        d.trang_thai_thanh_toan !== "da_tt") {
-      activeDnttByKs[d.ref_id] = d.id; // unpaid = ưu tiên
+        d.payment_status !== "paid") {
+      activeDnttByKs[d.ref_id] = d.id;
     }
   });
   dnttList.forEach((d) => {
     if (d.ref_loai === "khach_san" && d.ref_id &&
         d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
         !activeDnttByKs[d.ref_id]) {
-      activeDnttByKs[d.ref_id] = d.id; // fallback: paid
+      activeDnttByKs[d.ref_id] = d.id;
     }
   });
 
@@ -823,41 +838,27 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         // Dùng thucTeByKs nếu có điều chỉnh, ngược lại dùng totalKS từ room pricing
         const thucTeKS = thucTeByKs[ksId] ?? totalKS;
         const daDieuChinh = thucTeByKs[ksId] != null && thucTeByKs[ksId] !== totalKS;
-        // Tính can_tru đã áp dụng cho KS này (qua NCC)
-        const nccIdForKs = ks?.nha_cung_cap_id ?? null;
-        const canTruAmtForKs = dnttList
-          .filter((d) => {
-            if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-            if (d.trang_thai_thanh_toan !== "can_tru") return false;
-            if (d.ref_loai === "can_tru_cong_no" && nccIdForKs && d.nha_cung_cap_id === nccIdForKs) return true;
-            if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
-            return false;
-          })
-          .reduce((sum, d) => sum + d.so_tien, 0);
-        const conLai = thucTeKS - daCoc - canTruAmtForKs;
+        const canTruAmtForKs = canTruAmtByKsId[ksId] || 0;
+        const conLai = thucTeKS - daTT;
         const isDaTT = thucTeKS > 0 && daTT >= thucTeKS;
         const congNoAmount = congNoByKs[ksId] || 0;
         const hoanTienAmount = hoanTienByKs[ksId] || 0;
         const ksStatus = getKsChiPhiStatus(ksId);
         const ksStatusInfo = STATUS_LABEL[ksStatus] ?? STATUS_LABEL.chua_de_nghi;
 
-        // DNTT active: ưu tiên khoản chưa TT (còn lại), fallback sang đã TT (cọc)
         const activeDntt =
           dnttList.find((d) => d.ref_loai === "khach_san" && d.ref_id === ksId &&
             d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
-            d.trang_thai_thanh_toan !== "da_tt") ??
+            d.payment_status !== "paid") ??
           dnttList.find((d) => d.ref_loai === "khach_san" && d.ref_id === ksId &&
             d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi");
 
-        // Tất cả DNTT có thể hủy cho KS này (kể cả nhiều khoản cọc + còn lại)
         const cancellableDntts = dnttList.filter(
           (d) => d.ref_loai === "khach_san" && d.ref_id === ksId &&
-                 d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
-                 (d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet" ||
-                  d.trang_thai_thanh_toan === "da_tt"),
+                 d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
         );
-        const paidDnttsForKs = cancellableDntts.filter((d) => d.trang_thai_thanh_toan === "da_tt");
-        const unpaidDnttsForKs = cancellableDntts.filter((d) => d.trang_thai_thanh_toan !== "da_tt");
+        const paidDnttsForKs = cancellableDntts.filter((d) => d.payment_status === "paid");
+        const unpaidDnttsForKs = cancellableDntts.filter((d) => d.payment_status !== "paid");
         const canCancelKs = cancellableDntts.length > 0;
 
         const byDay: Record<string, LocalKSRow[]> = {};
@@ -1017,14 +1018,13 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 {(() => {
                   const allKsDntts = dnttList.filter(
                     (d) => d.ref_loai === "khach_san" && d.ref_id === ksId &&
-                           d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
-                           d.trang_thai_thanh_toan !== "can_tru" && d.trang_thai_thanh_toan !== "da_can_tru",
+                           d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
                   );
                   if (allKsDntts.length === 0) return null;
                   return (
                     <div className="rounded-md border border-border overflow-hidden">
                       {allKsDntts.map((dntt, i) => {
-                        const isPaid = dntt.trang_thai_thanh_toan === "da_tt";
+                        const isPaid = dntt.payment_status === "paid";
                         const isWaiting = dntt.trang_thai_duyet === "cho_duyet";
                         const isApproved = dntt.trang_thai_duyet === "da_duyet";
                         return (

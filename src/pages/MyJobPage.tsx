@@ -66,9 +66,8 @@ function dnttDuyetLabel(status: string) {
 }
 
 function ttLabel(status: string) {
-  if (status === "da_tt")                                    return { label: "✓ Đã TT",   cls: "text-green-600" };
-  if (status === "can_tru" || status === "da_can_tru")       return { label: "✓ Cấn trừ", cls: "text-teal-600" };
-  if (status === "cong_no")                                  return { label: "Công nợ",   cls: "text-orange-600" };
+  if (status === "paid")    return { label: "✓ Đã TT",   cls: "text-green-600" };
+  if (status === "partial") return { label: "Một phần",  cls: "text-amber-600" };
   return { label: "○ Chưa TT", cls: "text-muted-foreground" };
 }
 
@@ -335,7 +334,7 @@ export default function MyJobPage() {
         const dvXN           = dv.filter((r) => r.booking_status === "da_xac_nhan" || r.booking_status === "khong_dat").length;
         const dntt: DNTTItem[] = filterDNTTByScope(td.dnttList.filter((r) => r.doan_id === id), scope);
         const dnttDuyet      = dntt.filter((r) => r.trang_thai_duyet === "da_duyet").length;
-        const dnttDaTT       = dntt.filter((r) => ["da_tt", "can_tru", "da_can_tru"].includes(r.trang_thai_thanh_toan)).length;
+        const dnttDaTT       = dntt.filter((r) => r.payment_status === "paid").length;
         return { g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT };
       });
   }, [myDoan, td, search, trangThai]);
@@ -659,7 +658,7 @@ export default function MyJobPage() {
                             </StatusBadge>
                           }
                           items={dntt.map((r) => {
-                            const s = ttLabel(r.trang_thai_thanh_toan);
+                            const s = ttLabel((r as any).payment_status ?? "unpaid");
                             return { label: r.mo_ta ?? "—", statusLabel: s.label, statusCls: s.cls };
                           })}
                         />

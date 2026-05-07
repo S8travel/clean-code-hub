@@ -94,18 +94,9 @@ export default function DNTTPage() {
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
 
-  // Group cấn trừ satellite rows with their main rows
-  const { mainRows, canTruMap } = useMemo(() => {
-    const canTruMap: Record<number, DNTTRow> = {};
-    const linkedIds = new Set<number>();
-    rows.forEach(r => {
-      if (r.ref_loai === "can_tru_cong_no" && r.linked_dntt_id) {
-        canTruMap[r.linked_dntt_id] = r;
-        linkedIds.add(r.id);
-      }
-    });
-    return { mainRows: rows.filter(r => !linkedIds.has(r.id)), canTruMap };
-  }, [rows]);
+  // Trong model mới: can_tru là payment record, không còn là DNTT row
+  const mainRows = rows;
+  const canTruMap: Record<number, DNTTRow> = {};
 
   const metrics = useMemo(() => {
     const total = mainRows.length;
@@ -387,13 +378,13 @@ export default function DNTTPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
-                      {row.trang_thai_duyet === "da_duyet" && row.trang_thai_thanh_toan === "chua_tt" && (
+                      {row.trang_thai_duyet === "da_duyet" && row.payment_status === "unpaid" && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Hủy đề nghị"
                           onClick={() => setCancelTarget({ id: row.id, isPaid: false, moTa: row.mo_ta || "ĐNTT" })}>
                           <Ban className="h-4 w-4" />
                         </Button>
                       )}
-                      {row.trang_thai_thanh_toan === "da_tt" && row.trang_thai_duyet !== "da_huy" && (
+                      {row.payment_status === "paid" && row.trang_thai_duyet !== "da_huy" && (
                         <>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" title="Điều chỉnh sau thanh toán"
                             onClick={() => handleAdjustOpen(row)}>

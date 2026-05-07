@@ -12,61 +12,44 @@ import {
 } from "@/components/ui/table";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { cn } from "@/lib/utils";
-import { useDNTTList, useDoanOptions, useChangeCongNoStatus } from "@/hooks/use-dntt";
+import { useDoanOptions } from "@/hooks/use-dntt";
+import { useCongNoList, useUpdateCongNoStatus } from "@/hooks/use-cong-no";
 import { toast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-const loaiLabel: Record<string, { text: string; color: string }> = {
-  khach_san: { text: "KS", color: "bg-blue-100 text-blue-700" },
-  nha_hang: { text: "NH", color: "bg-orange-100 text-orange-700" },
-  dich_vu: { text: "DV", color: "bg-purple-100 text-purple-700" },
-};
-
 const statusBadge: Record<string, { text: string; cls: string }> = {
-  cong_no:    { text: "Công nợ",        cls: "bg-purple-100 text-purple-700" },
-  hoan_tien:  { text: "Hoàn tiền",      cls: "bg-blue-100 text-blue-700" },
-  da_can_tru: { text: "Đã cấn trừ hết", cls: "bg-green-100 text-green-700" },
+  con_du:        { text: "Còn dư",          cls: "bg-purple-100 text-purple-700" },
+  da_can_tru:    { text: "Đã cấn trừ hết",  cls: "bg-green-100 text-green-700" },
+  da_hoan_tien:  { text: "Đã hoàn tiền",    cls: "bg-blue-100 text-blue-700" },
 };
 
 export default function CongNoPage() {
   const navigate = useNavigate();
   const [doanId, setDoanId] = useState<string>("");
-  const [loai, setLoai] = useState("");
-  const [trangThai, setTrangThai] = useState("all"); // "cong_no" | "hoan_tien" | "all"
-  const [canTruFilter, setCanTruFilter] = useState("all"); // "all" | "chua" | "da"
+  const [trangThai, setTrangThai] = useState("all"); // 'all'|'con_du'|'da_can_tru'|'da_hoan_tien'
   const [nccId, setNccId] = useState<string>("");
   const [search, setSearch] = useState("");
 
-  // Fetch tất cả DNTT đã hủy (không lọc trang_thai_tt ở server để lấy cả cong_no + hoan_tien)
   const filters = useMemo(() => ({
     doanId: doanId ? Number(doanId) : null,
-    fromDate: null,
-    toDate: null,
-    trangThaiDuyet: "da_huy",
-    trangThaiTT: null,
-    loai: loai || null,
-  }), [doanId, loai]);
+  }), [doanId]);
 
-  const { data: allRows = [], isLoading } = useDNTTList(filters);
+  const { data: allRows = [], isLoading } = useCongNoList(filters);
   const { data: doanOpts = [] } = useDoanOptions();
-  const changeStatusMut = useChangeCongNoStatus();
+  const changeStatusMut = useUpdateCongNoStatus();
 
   const handleChangeStatus = (id: number, current: string) => {
-    const newStatus = current === "cong_no" ? "hoan_tien" : "cong_no";
-    changeStatusMut.mutate({ id, newStatus }, {
-      onSuccess: () => toast({ title: newStatus === "hoan_tien" ? "Đã chuyển sang Hoàn tiền" : "Đã chuyển sang Công nợ" }),
+    const newStatus = current === "con_du" ? "da_hoan_tien" : "con_du";
+    changeStatusMut.mutate({ id, trangThai: newStatus as any }, {
+      onSuccess: () => toast({ title: newStatus === "da_hoan_tien" ? "Đã chuyển sang Hoàn tiền" : "Đã chuyển sang Công nợ" }),
       onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể đổi trạng thái"), variant: "destructive" }),
     });
   };
 
-  // Build NCC options từ data đã load
   const nccOpts = useMemo(() => {
-    const base = allRows.filter((r) =>
-      r.trang_thai_thanh_toan === "cong_no" || r.trang_thai_thanh_toan === "hoan_tien"
-    );
-    const seen = new Map<string, string>(); // nha_cung_cap_id → ten
-    base.forEach((r) => {
+    const seen = new Map<string, string>();
+    allRows.forEach((r) => {
       if (r.nha_cung_cap_id != null && r.ten_ncc) {
         seen.set(String(r.nha_cung_cap_id), r.ten_ncc);
       }
@@ -74,55 +57,31 @@ export default function CongNoPage() {
     return [...seen.entries()].map(([value, label]) => ({ value, label }));
   }, [allRows]);
 
-  // Lọc client-side: cong_no, hoan_tien, và da_can_tru
   const rows = useMemo(() => {
-    let filtered = allRows.filter((r) =>
-      r.trang_thai_thanh_toan === "cong_no" ||
-      r.trang_thai_thanh_toan === "hoan_tien" ||
-      r.trang_thai_thanh_toan === "da_can_tru"
-    );
-    // Lọc theo loại công nợ / hoàn tiền
-    if (trangThai === "cong_no") {
-      filtered = filtered.filter((r) =>
-        r.trang_thai_thanh_toan === "cong_no" || r.trang_thai_thanh_toan === "da_can_tru"
-      );
-    } else if (trangThai === "hoan_tien") {
-      filtered = filtered.filter((r) => r.trang_thai_thanh_toan === "hoan_tien");
-    }
-    // Lọc trạng thái cấn trừ (chỉ áp dụng cho công nợ)
-    if (canTruFilter === "chua") {
-      filtered = filtered.filter((r) => r.trang_thai_thanh_toan === "cong_no");
-    } else if (canTruFilter === "da") {
-      filtered = filtered.filter((r) => r.trang_thai_thanh_toan === "da_can_tru");
-    }
+    let filtered = allRows;
+    if (trangThai !== "all") filtered = filtered.filter((r) => r.trang_thai === trangThai);
     if (nccId) filtered = filtered.filter((r) => String(r.nha_cung_cap_id) === nccId);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       filtered = filtered.filter(
         (r) =>
           r.ten_doan?.toLowerCase().includes(q) ||
-          r.mo_ta?.toLowerCase().includes(q) ||
+          r.ly_do?.toLowerCase().includes(q) ||
           r.ten_ncc?.toLowerCase().includes(q)
       );
     }
     return filtered;
-  }, [allRows, trangThai, canTruFilter, nccId, search]);
+  }, [allRows, trangThai, nccId, search]);
 
   const metrics = useMemo(() => {
-    const base = allRows.filter((r) =>
-      r.trang_thai_thanh_toan === "cong_no" ||
-      r.trang_thai_thanh_toan === "hoan_tien" ||
-      r.trang_thai_thanh_toan === "da_can_tru"
-    );
-    const congNo = base.filter((r) => r.trang_thai_thanh_toan === "cong_no");
-    const hoanTien = base.filter((r) => r.trang_thai_thanh_toan === "hoan_tien");
-    const daCanTru = base.filter((r) => r.trang_thai_thanh_toan === "da_can_tru");
-    const conLai = (r: any) => r.so_tien_con_lai ?? r.so_tien;
+    const conDu = allRows.filter((r) => r.trang_thai === "con_du");
+    const hoanTien = allRows.filter((r) => r.trang_thai === "da_hoan_tien");
+    const daCanTru = allRows.filter((r) => r.trang_thai === "da_can_tru");
     return {
-      total: base.length,
-      tongCongNo: congNo.reduce((s, r) => s + conLai(r), 0),
-      tongHoanTien: hoanTien.reduce((s, r) => s + conLai(r), 0),
-      demCongNo: congNo.length,
+      total: allRows.length,
+      tongCongNo: conDu.reduce((s, r) => s + r.so_tien_con_lai, 0),
+      tongHoanTien: hoanTien.reduce((s, r) => s + r.so_tien_goc, 0),
+      demCongNo: conDu.length,
       demHoanTien: hoanTien.length,
       demDaCanTru: daCanTru.length,
     };
@@ -135,9 +94,7 @@ export default function CongNoPage() {
 
   const resetFilters = () => {
     setDoanId("");
-    setLoai("");
     setTrangThai("all");
-    setCanTruFilter("all");
     setNccId("");
     setSearch("");
   };
@@ -149,13 +106,12 @@ export default function CongNoPage() {
         Danh sách các khoản đã thanh toán nhưng bị hủy — dùng để cấn trừ vào booking sau.
       </p>
 
-      {/* Metrics */}
       <div className="grid grid-cols-5 gap-4">
         {[
           { label: "Tổng khoản", value: metrics.total, cls: "text-foreground", isMoney: false },
-          { label: "Công nợ chưa CT", value: metrics.demCongNo, cls: "text-purple-600", isMoney: false },
+          { label: "Còn dư", value: metrics.demCongNo, cls: "text-purple-600", isMoney: false },
           { label: "Đã cấn trừ hết", value: metrics.demDaCanTru, cls: "text-green-600", isMoney: false },
-          { label: "Tổng công nợ còn", value: metrics.tongCongNo, cls: "text-purple-600", isMoney: true },
+          { label: "Tổng còn dư", value: metrics.tongCongNo, cls: "text-purple-600", isMoney: true },
           { label: "Tổng hoàn tiền", value: metrics.tongHoanTien, cls: "text-blue-600", isMoney: true },
         ].map((m) => (
           <Card key={m.label}>
@@ -169,7 +125,6 @@ export default function CongNoPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-56">
           <SearchableSelect
@@ -181,23 +136,14 @@ export default function CongNoPage() {
           />
         </div>
         <Select value={trangThai} onValueChange={setTrangThai}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-44">
             <SelectValue placeholder="Trạng thái" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả</SelectItem>
-            <SelectItem value="cong_no">Công nợ</SelectItem>
-            <SelectItem value="hoan_tien">Hoàn tiền</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={canTruFilter} onValueChange={setCanTruFilter}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Cấn trừ" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả cấn trừ</SelectItem>
-            <SelectItem value="chua">Chưa cấn trừ hết</SelectItem>
-            <SelectItem value="da">Đã cấn trừ hết</SelectItem>
+            <SelectItem value="con_du">Còn dư</SelectItem>
+            <SelectItem value="da_can_tru">Đã cấn trừ hết</SelectItem>
+            <SelectItem value="da_hoan_tien">Hoàn tiền</SelectItem>
           </SelectContent>
         </Select>
         <div className="w-56">
@@ -209,22 +155,11 @@ export default function CongNoPage() {
             searchPlaceholder="Tìm nhà cung cấp..."
           />
         </div>
-        <Select value={loai || "all"} onValueChange={(v) => setLoai(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Loại" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả loại</SelectItem>
-            <SelectItem value="khach_san">Khách sạn</SelectItem>
-            <SelectItem value="nha_hang">Nhà hàng</SelectItem>
-            <SelectItem value="dich_vu">Dịch vụ</SelectItem>
-          </SelectContent>
-        </Select>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8 w-56"
-            placeholder="Tìm đoàn, mô tả, NCC..."
+            placeholder="Tìm đoàn, lý do, NCC..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -235,38 +170,35 @@ export default function CongNoPage() {
         </Button>
       </div>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="text-xs">
-                <TableHead className="py-2 px-3 w-[180px]">Đoàn</TableHead>
-                <TableHead className="py-2 px-3 w-[50px]">Loại</TableHead>
-                <TableHead className="py-2 px-3">Mô tả</TableHead>
+                <TableHead className="py-2 px-3 w-[180px]">Đoàn nguồn</TableHead>
+                <TableHead className="py-2 px-3">Lý do</TableHead>
                 <TableHead className="py-2 px-3 w-[160px] text-right">Còn lại / Gốc</TableHead>
-                <TableHead className="py-2 px-3 w-[110px]">Trạng thái</TableHead>
-                <TableHead className="py-2 px-3 w-[160px]">Nhà cung cấp</TableHead>
-                <TableHead className="py-2 px-3 w-[200px]">Ghi chú</TableHead>
+                <TableHead className="py-2 px-3 w-[140px]">Trạng thái</TableHead>
+                <TableHead className="py-2 px-3 w-[180px]">Nhà cung cấp</TableHead>
+                <TableHead className="py-2 px-3 w-[220px]">Ghi chú</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
                     Đang tải...
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
                     Không có khoản công nợ / hoàn tiền nào.
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((row) => {
-                  const loaiInfo = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
-                  const statusInfo = statusBadge[row.trang_thai_thanh_toan] || { text: row.trang_thai_thanh_toan, cls: "bg-muted text-muted-foreground" };
+                  const statusInfo = statusBadge[row.trang_thai] || { text: row.trang_thai, cls: "bg-muted text-muted-foreground" };
                   return (
                     <TableRow key={row.id} className="text-sm">
                       <TableCell className="py-2 px-3">
@@ -274,21 +206,16 @@ export default function CongNoPage() {
                           className="text-left hover:underline text-primary font-medium"
                           onClick={() => row.doan_id && navigate(`/doan/${row.doan_id}`)}
                         >
-                          {row.ten_doan || `Đoàn #${row.doan_id}`}
+                          {row.ten_doan || (row.doan_id ? `Đoàn #${row.doan_id}` : "—")}
                         </button>
                       </TableCell>
-                      <TableCell className="py-2 px-3">
-                        <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", loaiInfo.color)}>
-                          {loaiInfo.text}
-                        </span>
-                      </TableCell>
                       <TableCell className="py-2 px-3 text-muted-foreground">
-                        {row.mo_ta || "—"}
+                        {row.ly_do || "—"}
                       </TableCell>
                       <TableCell className="py-2 px-3 text-right">
-                        <span className="font-semibold">{fmt(row.so_tien_con_lai ?? row.so_tien)} ₫</span>
-                        {row.so_tien_con_lai != null && row.so_tien_con_lai < row.so_tien && (
-                          <div className="text-[10px] text-muted-foreground">gốc {fmt(row.so_tien)} ₫</div>
+                        <span className="font-semibold">{fmt(row.so_tien_con_lai)} ₫</span>
+                        {row.so_tien_con_lai !== row.so_tien_goc && (
+                          <div className="text-[10px] text-muted-foreground">gốc {fmt(row.so_tien_goc)} ₫</div>
                         )}
                       </TableCell>
                       <TableCell className="py-2 px-3">
@@ -296,15 +223,15 @@ export default function CongNoPage() {
                           <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium w-fit", statusInfo.cls)}>
                             {statusInfo.text}
                           </span>
-                          {(row.trang_thai_thanh_toan === "cong_no" || row.trang_thai_thanh_toan === "hoan_tien") && (
+                          {(row.trang_thai === "con_du" || row.trang_thai === "da_hoan_tien") && (
                             <Button
                               variant="outline"
                               size="sm"
                               className="h-6 px-2 text-[10px]"
                               disabled={changeStatusMut.isPending}
-                              onClick={() => handleChangeStatus(row.id, row.trang_thai_thanh_toan)}
+                              onClick={() => handleChangeStatus(row.id, row.trang_thai)}
                             >
-                              {row.trang_thai_thanh_toan === "cong_no" ? "→ Hoàn tiền" : "→ Công nợ"}
+                              {row.trang_thai === "con_du" ? "→ Hoàn tiền" : "→ Công nợ"}
                             </Button>
                           )}
                         </div>

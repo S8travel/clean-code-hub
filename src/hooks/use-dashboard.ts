@@ -26,8 +26,8 @@ export function useDashboardStats() {
           .gte("ngay_di", sixMonthsAgo)
           .order("ngay_di", { ascending: true }),
         externalSupabase
-          .from("de_nghi_thanh_toan")
-          .select("id, so_tien, trang_thai_duyet, trang_thai_thanh_toan, created_at, mo_ta, loai, doan_id")
+          .from("dntt_with_payment_status")
+          .select("id, so_tien, trang_thai_duyet, payment_status, paid_amount, created_at, mo_ta, loai, doan_id")
           .not("trang_thai_duyet", "eq", "da_huy")
           .not("trang_thai_duyet", "eq", "tu_choi")
           .order("created_at", { ascending: false }),
@@ -136,9 +136,9 @@ export function useDashboardStats() {
       // ── ĐNTT stats ────────────────────────────────────────────────────────────
       const pendingApproval = dnttList.filter((d) => d.trang_thai_duyet === "cho_duyet");
       const pendingPayment = dnttList.filter(
-        (d) => d.trang_thai_duyet === "da_duyet" && d.trang_thai_thanh_toan === "chua_tt",
+        (d: any) => d.trang_thai_duyet === "da_duyet" && d.payment_status !== "paid",
       );
-      const recentDNTT = dnttList.filter((d) => d.trang_thai_thanh_toan === "chua_tt").slice(0, 8);
+      const recentDNTT = dnttList.filter((d: any) => d.payment_status !== "paid").slice(0, 8);
 
       // ── Agent breakdown ───────────────────────────────────────────────────────
       const agentNameMap = new Map(agentList.map((a) => [a.id, a.ten]));

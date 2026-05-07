@@ -26,7 +26,8 @@ export interface HDVDNTTRow {
   so_tien: number;
   la_thu_hoi: boolean;
   trang_thai_duyet: string;
-  trang_thai_thanh_toan: string;
+  payment_status: "unpaid" | "partial" | "paid";
+  paid_amount: number;
   ghi_chu: string | null;
   created_at: string;
 }
@@ -122,24 +123,27 @@ export function useChiPhiHDVSection(doanId?: number) {
       }));
       const tongHoTroHDV = hoTroItems.reduce((s, r) => s + r.tien_cong_ty, 0);
 
-      // 4. Load DNTT liên quan HDV
+      // 4. Load DNTT liên quan HDV (qua view có payment_status)
       const { data: dnttRows } = await externalSupabase
-        .from("de_nghi_thanh_toan")
-        .select("id, doan_id, ref_loai, mo_ta, so_tien, la_thu_hoi, trang_thai_duyet, trang_thai_thanh_toan, ghi_chu, created_at")
+        .from("dntt_with_payment_status")
+        .select("id, doan_id, ref_loai, mo_ta, so_tien, trang_thai_duyet, payment_status, paid_amount, ghi_chu, created_at")
         .eq("doan_id", doanId!)
         .in("ref_loai", ["hdv_tam_ung", "hdv_quyet_toan"])
         .order("created_at", { ascending: true });
 
-      const allHdvDntts = (dnttRows || []) as HDVDNTTRow[];
+      const allHdvDntts = (dnttRows || []).map((d: any) => ({
+        ...d,
+        la_thu_hoi: !!(d.ghi_chu || "").includes("[Thu hồi]"),
+      })) as HDVDNTTRow[];
       const tamUngList = allHdvDntts.filter((d) => d.ref_loai === "hdv_tam_ung");
       const quyetToanList = allHdvDntts.filter((d) => d.ref_loai === "hdv_quyet_toan");
 
       const tamUngDaTT = tamUngList
-        .filter((d) => d.trang_thai_thanh_toan === "da_tt" && d.trang_thai_duyet !== "da_huy")
+        .filter((d) => d.payment_status === "paid" && d.trang_thai_duyet !== "da_huy")
         .reduce((s, d) => s + d.so_tien, 0);
 
       const tamUngChuaTT = tamUngList
-        .filter((d) => d.trang_thai_thanh_toan !== "da_tt" && d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
+        .filter((d) => d.payment_status !== "paid" && d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
         .reduce((s, d) => s + d.so_tien, 0);
 
       const soConPhaiTra = tongHdvChi + tongHoTroHDV - tamUngDaTT;
@@ -181,17 +185,16 @@ export function useCreateHDVPayment() {
         .from("de_nghi_thanh_toan")
         .insert({
           doan_id: payload.doanId,
-          hdv_id: payload.hdvId,
           loai: "hdv",
           ref_loai: payload.refLoai,
           ref_id: payload.hdvId,
           mo_ta: payload.moTa,
           so_tien: payload.soTien,
           la_coc: false,
-          la_thu_hoi: payload.laThuHoi,
           trang_thai_duyet: "cho_duyet",
-          trang_thai_thanh_toan: "chua_tt",
-          ghi_chu: payload.ghiChu ?? null,
+          ghi_chu: payload.laThuHoi
+            ? `[Thu hồi] ${payload.ghiChu ?? ""}`.trim()
+            : (payload.ghiChu ?? null),
         })
         .select("id")
         .single();

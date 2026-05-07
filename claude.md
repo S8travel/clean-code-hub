@@ -89,22 +89,43 @@ doan_chi_phi
   nha_cung_cap_id, is_excluded
   thanh_toan_dinh_ky (bool) — TRUE=gộp thanh toán theo NCC định kỳ
 
-de_nghi_thanh_toan    (ĐNTT — kiêm cả vai trò payment request + payment)
+de_nghi_thanh_toan    (ĐNTT — chỉ là REQUEST sau refactor 2026-05)
   id, doan_id (nullable khi loai='dinh_ky'), loai, mo_ta
   nha_cung_cap_id, ten_nha_cung_cap, so_tai_khoan, ngan_hang
-  so_tien, la_coc (bool), la_thu_hoi (bool)
-  hdv_id (nullable — khi thanh toán cho HDV)
-  ty_le_coc, so_tien_con_lai
+  so_tien, la_coc (bool), ty_le_coc
   trang_thai_duyet: 'cho_duyet'|'da_duyet'|'tu_choi'|'da_huy'
-  trang_thai_thanh_toan: 'chua_tt'|'da_tt'|'cong_no'|'da_can_tru'|'can_tru'|'hoan_tien'
-  tao_boi, tao_luc, duyet_boi, duyet_luc, thanh_toan_luc
-  ngay_can_thanh_toan, hoa_don_url, unc_url
-  ref_loai, ref_id   ← liên kết nguồn (khach_san, doan_chi_phi, can_tru_cong_no, dinh_ky)
-  ghi_chu            ← log cấn trừ, điều chỉnh được append vào đây
+  tao_boi, tao_luc, duyet_boi, duyet_luc
+  ngay_can_thanh_toan, hoa_don_url, unc_url, trang_thai_hoa_don, trang_thai_unc
+  ref_loai, ref_id   ← liên kết nguồn (khach_san, doan_chi_phi, dinh_ky)
+  ghi_chu            ← log điều chỉnh, [Thu hồi] cho HDV được append vào đây
+  ← KHÔNG còn: trang_thai_thanh_toan, thanh_toan_luc, linked_dntt_id, so_tien_con_lai
+
+payments              (mới — record actual payment events)
+  id, dntt_id (FK→dntt, ON DELETE CASCADE)
+  method: 'cash'|'can_tru'
+  so_tien (>0), ngay_thanh_toan
+  cong_no_id (FK→cong_no, NULL khi cash, NOT NULL khi can_tru)
+  ghi_chu, tao_boi, tao_luc
+
+cong_no               (mới — debt records từ overpayment / refund)
+  id, doan_id (đoàn nguồn), dntt_goc_id (FK→dntt)
+  nha_cung_cap_id, ten_nha_cung_cap
+  so_tien_goc (>0)
+  trang_thai: 'con_du'|'da_can_tru'|'da_hoan_tien'
+  ly_do, ngay_tao, ghi_chu
+
+dntt_with_payment_status (VIEW)
+  ← de_nghi_thanh_toan + paid_amount, payment_status, thanh_toan_luc
+  paid_amount = SUM(payments.so_tien)
+  payment_status = 'unpaid'|'partial'|'paid'
+
+cong_no_with_status (VIEW)
+  ← cong_no + so_tien_da_dung, so_tien_con_lai
+  so_tien_con_lai = so_tien_goc - SUM(can_tru payments)
 
 dntt_allocations      (ĐNTT → nhiều chi_phi, RLS enabled)
   id, dntt_id, chi_phi_id, so_tien, ghi_chu
-  UNIQUE (dntt_id, chi_phi_id)  ← 1 ĐNTT không phân bổ 2 lần cho cùng 1 chi phí
+  UNIQUE (dntt_id, chi_phi_id)
   ON DELETE CASCADE từ de_nghi_thanh_toan
 ```
 
@@ -192,9 +213,13 @@ src/
 ├── hooks/
 │   ├── use-dieu-tour.ts      # logic save tour (doan_ngay, doan_ngay_item)
 │   ├── use-chi-phi.ts        # ChiPhiRow, DNTTRow, useChiPhiList, useDNTTList (per doan)
-│   ├── use-dntt.ts           # DNTTRow, useDNTTList (global), useApproveDNTT,
+│   ├── use-dntt.ts           # DNTTRow, useDNTTList (view), useApproveDNTT,
 │   │                         # useRejectDNTT, useMarkPaidDNTT, useCancelDNTT,
-│   │                         # useCreateCanTru, useCreateAdjustment, recalcChiPhiStatus
+│   │                         # useCreateAdjustment, recalcChiPhiStatus
+│   ├── use-payments.ts       # PaymentRow, usePaymentsForDNTT, usePaymentsByChiPhi,
+│   │                         # useCreatePayment (cash/can_tru), useDeletePayment
+│   ├── use-cong-no.ts        # CongNoRow, useCongNoList, useCongNoByNCC,
+│   │                         # useUpdateCongNoStatus, appendCanTruLog
 │   ├── use-chi-phi-nh.ts
 │   ├── use-chi-phi-hdv.ts
 │   ├── use-thanh-toan-dinh-ky.ts   # thanh_toan_dinh_ky=true, useCreateBatchDNTT
@@ -322,51 +347,65 @@ n.toLocaleString("vi-VN") + " VND"
 
 ---
 
-## 🔄 Luồng ĐNTT (Đề nghị Thanh Toán)
+## 🔄 Luồng ĐNTT (Đề nghị Thanh Toán) — refactor 2026-05
 
-### Trạng thái ĐNTT
+### Concepts (3 entity tách biệt)
+- **`de_nghi_thanh_toan`** — chỉ là REQUEST. Lifecycle: `cho_duyet → da_duyet → tu_choi/da_huy`.
+- **`payments`** — record mỗi event thanh toán (cash hoặc can_tru). Tạo qua `useCreatePayment`.
+- **`cong_no`** — debt record từ overpayment hoặc cancel-after-paid. Lifecycle: `con_du → da_can_tru` hoặc `da_hoan_tien`.
+
+### Trạng thái dntt — chỉ approval
 ```
-trang_thai_duyet:      cho_duyet → da_duyet → (thanh toán)
-                                 → tu_choi  → (gửi lại → cho_duyet)
-                       bất kỳ   → da_huy
+trang_thai_duyet: cho_duyet → da_duyet → tu_choi (gửi lại → cho_duyet)
+                  bất kỳ   → da_huy
+```
 
-trang_thai_thanh_toan: chua_tt  → da_tt
-                       can_tru            ← cấn trừ công nợ (sau khi da_duyet)
-                       cong_no            ← hủy sau da_tt, ghi nợ NCC
-                       da_can_tru         ← công nợ đã cấn trừ hết
-                       hoan_tien          ← hủy sau da_tt, hoàn tiền (không ghi nợ)
+### Payment status (derived qua view dntt_with_payment_status)
+```
+paid_amount    = SUM(payments.so_tien WHERE dntt_id = X)
+payment_status = 'unpaid'  (paid_amount = 0)
+               | 'partial' (0 < paid_amount < so_tien)
+               | 'paid'    (paid_amount >= so_tien)
 ```
 
 ### Flow chuẩn
 ```
-1. Tạo ĐNTT     → trang_thai_duyet='cho_duyet', trang_thai_thanh_toan='chua_tt'
-2. Duyệt        → trang_thai_duyet='da_duyet'
-3. Thanh toán   → trang_thai_thanh_toan='da_tt', thanh_toan_luc=now()
-4. Sau mỗi bước → gọi recalcChiPhiStatus(chiPhiIds) để cập nhật doan_chi_phi
+1. Tạo ĐNTT     → INSERT dntt {trang_thai_duyet:'cho_duyet'}
+2. Duyệt        → UPDATE dntt SET trang_thai_duyet='da_duyet'
+3. Mark paid    → INSERT payment {method:'cash', so_tien:remaining}
+                  (qua useMarkPaidDNTT/useMarkPaidWithDate)
+4. Sau mỗi bước → gọi recalcChiPhiStatus(chiPhiIds) để update doan_chi_phi
 ```
 
 ### Trạng thái doan_chi_phi (computed)
 ```
 trang_thai_thanh_toan: 'unpaid' | 'partial_paid' | 'paid'
-  ← Tính tự động qua RPC recalc_chi_phi_payment_status(p_chi_phi_ids)
-  ← Dựa trên tổng so_tien trong dntt_allocations của các ĐNTT da_duyet/da_tt
-  ← KHÔNG set thủ công
+  ← Tính qua RPC recalc_chi_phi_payment_status — dùng SUM(payments) thay vì status DNTT
 ```
 
-### Điều chỉnh sau khi da_tt (useCreateAdjustment)
+### Điều chỉnh sau khi đã thanh toán (useCreateAdjustment)
 ```
-delta > 0 (thiếu tiền) → tạo ĐNTT bổ sung [Bổ sung], cho_duyet + chua_tt
-delta < 0 (thừa tiền)  → tạo công nợ [Điều chỉnh giảm], da_huy + cong_no
+delta > 0 (thiếu) → tạo ĐNTT bổ sung [Bổ sung], cho_duyet
+delta < 0 (thừa) → tạo cong_no với so_tien_goc=abs(delta), trang_thai='con_du'/'da_hoan_tien'
 Đồng thời: cập nhật thanh_tien_thuc_te trên doan_chi_phi (pro-rata)
-           append log vào ghi_chu của ĐNTT gốc
 ```
 
-### Cấn trừ công nợ (useCreateCanTru)
+### Cấn trừ công nợ (useCreatePayment với method='can_tru')
 ```
-- Lấy danh sách công nợ NCC (trang_thai_thanh_toan='cong_no', trang_thai_duyet='da_huy')
-- Tạo ĐNTT mới: trang_thai_duyet='da_duyet', trang_thai_thanh_toan='can_tru'
-- Cập nhật công nợ gốc: so_tien_con_lai giảm, hoặc → da_can_tru nếu hết
-- Append log cấn trừ vào ghi_chu của công nợ gốc
+- Lấy cong_no NCC từ view cong_no_with_status (trang_thai='con_du', so_tien_con_lai > 0)
+- INSERT payment {dntt_id, method:'can_tru', so_tien, cong_no_id}
+- Khi cong_no.so_tien_con_lai = 0 → tự động set trang_thai='da_can_tru'
+- Append log cấn trừ vào cong_no.ghi_chu (qua appendCanTruLog)
+```
+
+### Cancel ĐNTT đã có payment (useCancelDNTT mode='cong_no'|'hoan_tien')
+```
+- UPDATE dntt SET trang_thai_duyet='da_huy'
+- Nếu mode='cong_no' và paid_amount > 0:
+  → INSERT cong_no {so_tien_goc=paid_amount, trang_thai='con_du'}
+- Nếu mode='hoan_tien':
+  → INSERT cong_no {trang_thai='da_hoan_tien'} (NCC đã refund cash, không cần cấn trừ)
+- payments giữ nguyên cho audit
 ```
 
 ### Thanh toán định kỳ (thanh_toan_dinh_ky=true)
@@ -407,8 +446,12 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
 ["doan_ngay", doanId]
 ["doan_ngay_item", doanId]
 ["doan_chi_phi", doanId]
-["de_nghi_thanh_toan", doanId]        // ĐNTT per doan (DNTTTab)
-["dntt-list", filters]                // ĐNTT global (DNTTPage, CongNoPage)
+["de_nghi_thanh_toan", doanId]        // ĐNTT per doan (DNTTTab) — query view dntt_with_payment_status
+["dntt-list", filters]                // ĐNTT global — query view
+["payments", dnttId]                  // payments của 1 ĐNTT
+["payments-by-doan", doanId]
+["payments-by-chi-phi", doanId]       // payments per chi_phi (cho can_tru display)
+["cong-no", filters]                  // cong_no list
 ["cong-no-by-ncc", nccId]
 ["dinh_ky_chi_phi", filters]
 ["doan_booking_ks", doanId]
@@ -426,11 +469,14 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
 - Không dùng `<form>` — dùng onClick/onBlur
 - Không insert `thanh_tien` (generated column)
 - Không invalidate `doan_chi_phi` sau blur-save KS/NH (reset UI)
-- Không xóa ĐNTT đã `da_duyet` hoặc `da_tt` — dùng hủy (useCancelDNTT)
+- Không xóa ĐNTT đã `da_duyet` hoặc đã có payment — dùng hủy (useCancelDNTT)
 - Không set `trang_thai_thanh_toan` của `doan_chi_phi` thủ công — dùng RPC `recalc_chi_phi_payment_status`
+- Không INSERT/UPDATE field `trang_thai_thanh_toan`, `linked_dntt_id`, `so_tien_con_lai`, `thanh_toan_luc` trên `de_nghi_thanh_toan` — đã DROP. Dùng `payments` table
+- Đọc `payment_status`, `paid_amount`, `thanh_toan_luc` qua view `dntt_with_payment_status`
 - Không tạo file CSS riêng — Tailwind inline
 - `doan.xe_id` trỏ vào `nha_xe_loai_xe`, KHÔNG phải bảng `xe`
-- Không sửa `so_tien` của ĐNTT đã `da_duyet` hoặc `da_tt` — tạo adjustment thay thế
+- Không sửa `so_tien` của ĐNTT đã `da_duyet` hoặc đã paid — tạo adjustment thay thế
+- 1 nhà hàng / dịch vụ chỉ xuất hiện tối đa 1 lần / tour (1 chi_phi row) — không có 2 bữa cùng NH
 - Thay đổi danh mục (NH, KS, dịch vụ, xe, visa) không được ảnh hưởng đến đoàn hiện có:
   - Giá → luôn snapshot vào tour khi lưu (`don_gia` trong `doan_ngay_item`, `dich_vu_list` JSONB)
   - `nguoi_thanh_toan` → chỉ dùng để ngăn **tạo mới** record; không filter/ẩn record đã tồn tại trong DB

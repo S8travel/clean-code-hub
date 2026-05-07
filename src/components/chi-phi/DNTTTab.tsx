@@ -171,7 +171,7 @@ export default function DNTTTab({ doanId }: Props) {
       <div className="space-y-3">
         {dnttList.map((d) => {
           const selected = selectedIds.includes(d.id);
-          const isPaid = d.trang_thai_thanh_toan === "da_tt";
+          const isPaid = d.payment_status === "paid";
           const isHuy = d.trang_thai_duyet === "da_huy";
           return (
             <Card
@@ -230,10 +230,10 @@ export default function DNTTTab({ doanId }: Props) {
                     <span className="text-muted-foreground">{d.la_coc ? "Cọc:" : "Số tiền:"}</span>{" "}
                     <span className="font-semibold text-primary">{fmt(d.so_tien)} VND</span>
                   </div>
-                  {d.so_tien_con_lai != null && d.so_tien_con_lai > 0 && (
+                  {d.so_tien > (d.paid_amount || 0) && d.payment_status !== "unpaid" && (
                     <div>
                       <span className="text-muted-foreground">Còn lại:</span>{" "}
-                      <span>{fmt(d.so_tien_con_lai)} VND</span>
+                      <span>{fmt(d.so_tien - (d.paid_amount || 0))} VND</span>
                     </div>
                   )}
                 </div>
@@ -276,14 +276,10 @@ export default function DNTTTab({ doanId }: Props) {
 
 function StatusBadge({ d }: { d: any }) {
   if (d.trang_thai_duyet === "da_huy") {
-    if (d.trang_thai_thanh_toan === "cong_no")
-      return <Badge className="text-[10px] bg-purple-100 text-purple-800 border-purple-300">Công nợ</Badge>;
-    if (d.trang_thai_thanh_toan === "hoan_tien")
-      return <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300">Hoàn tiền</Badge>;
     return <Badge variant="secondary" className="text-[10px]">Đã hủy</Badge>;
   }
 
-  if (d.trang_thai_thanh_toan === "da_tt") {
+  if (d.payment_status === "paid") {
     return (
       <div className="text-right">
         <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">Đã thanh toán</Badge>
@@ -314,7 +310,7 @@ function DNTTFooter({ d, onResend, onCancel }: {
   onCancel: (id: number) => void;
 }) {
   if (d.trang_thai_duyet === "da_huy") return null;
-  if (d.trang_thai_thanh_toan === "da_tt") return null;
+  if (d.payment_status === "paid") return null;
 
   switch (d.trang_thai_duyet) {
     case "cho_duyet":

@@ -12,6 +12,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useInsertDNTT } from "@/hooks/use-chi-phi";
 import { externalSupabase } from "@/lib/supabase-external";
+import { recalcChiPhiStatus } from "@/hooks/use-dntt";
+import { appendCanTruLog } from "@/hooks/use-cong-no";
 import type { LocalKSRow } from "./ChiPhiKSSection";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 
@@ -81,67 +83,55 @@ export default function KSDNTTModal({
     }
     setSubmitting(true);
     try {
-      // 1. Tạo DNTT chính (số tiền thực thanh toán sau cấn trừ)
-      let mainDnttId: number | null = null;
-      if (soTien > 0) {
-        // Tính allocations pro-rata theo thanh_tien của từng phòng
-        const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id));
-        const totalThanhTien = allocRows.reduce((s, r) => s + r.thanh_tien, 0);
-        const allocations = allocRows.map((r) => ({
-          chi_phi_id: r.id!,
-          so_tien: totalThanhTien > 0
-            ? Math.round(soTien * (r.thanh_tien / totalThanhTien))
-            : Math.round(soTien / allocRows.length),
-        }));
+      // 1. Tạo 1 ĐNTT cho FULL amount = soTien + canTruAmount
+      const fullAmount = soTien + canTruAmount;
+      const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id));
+      const totalThanhTien = allocRows.reduce((s, r) => s + r.thanh_tien, 0);
+      const allocations = allocRows.map((r) => ({
+        chi_phi_id: r.id!,
+        so_tien: totalThanhTien > 0
+          ? Math.round(fullAmount * (r.thanh_tien / totalThanhTien))
+          : Math.round(fullAmount / allocRows.length),
+      }));
 
-        const payload = {
-          doan_id: doanId,
-          loai: "khach_san",
-          mo_ta: buildMoTa(),
-          nha_cung_cap_id: nccId,
-          ten_nha_cung_cap: nccTen,
-          so_tai_khoan: nccStk,
-          ngan_hang: nccNganHang,
-          so_tien: soTien,
-          la_coc: mode === "deposit",
-          so_tien_con_lai: soTienConLai > 0 ? soTienConLai : 0,
-          trang_thai_duyet: "cho_duyet",
-          trang_thai_thanh_toan: "chua_tt",
-          ref_loai: "khach_san",
-          ref_id: ksId,
-          ghi_chu: ghiChu || null,
-          ngay_can_thanh_toan: ngayCan || null,
-          allocations: allocations.length > 0 ? allocations : undefined,
-        };
-        const mainRecord = await insertDNTT.mutateAsync(payload);
-        mainDnttId = (mainRecord as any)?.id ?? null;
-      }
+      const payload = {
+        doan_id: doanId,
+        loai: "khach_san",
+        mo_ta: buildMoTa(),
+        nha_cung_cap_id: nccId,
+        ten_nha_cung_cap: nccTen,
+        so_tai_khoan: nccStk,
+        ngan_hang: nccNganHang,
+        so_tien: fullAmount,
+        la_coc: mode === "deposit",
+        trang_thai_duyet: "cho_duyet",
+        ref_loai: "khach_san",
+        ref_id: ksId,
+        ghi_chu: ghiChu || null,
+        ngay_can_thanh_toan: ngayCan || null,
+        allocations: allocations.length > 0 ? allocations : undefined,
+      };
+      const mainRecord = await insertDNTT.mutateAsync(payload);
+      const mainDnttId = (mainRecord as any)?.id ?? null;
 
-      // 2. Nếu có cấn trừ: tạo record chờ duyệt — công nợ sẽ được ghi nhận sau khi được duyệt
-      if (canTru && canTruAmount > 0) {
-        await externalSupabase.from("de_nghi_thanh_toan").insert({
-          doan_id: doanId,
-          loai: "khach_san",
-          mo_ta: `Cấn trừ công nợ từ đoàn: ${canTru.tenDoan}`,
-          nha_cung_cap_id: nccId,
-          ten_nha_cung_cap: nccTen,
-          so_tai_khoan: nccStk,
-          ngan_hang: nccNganHang,
+      // 2. Nếu có cấn trừ: insert payment can_tru ngay
+      if (canTru && canTruAmount > 0 && mainDnttId) {
+        const { error: payErr } = await externalSupabase.from("payments").insert({
+          dntt_id: mainDnttId,
+          method: "can_tru",
           so_tien: canTruAmount,
-          la_coc: true,
-          trang_thai_duyet: "cho_duyet",
-          trang_thai_thanh_toan: "can_tru",
-          ref_loai: "can_tru_cong_no",
-          ref_id: canTru.congNoId,
+          cong_no_id: canTru.congNoId,
           ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
-          linked_dntt_id: mainDnttId,
         });
-
+        if (payErr) throw payErr;
+        await appendCanTruLog(canTru.congNoId, canTruAmount, tenDoanMoi);
+        await recalcChiPhiStatus(chiPhiRowIds);
+        onCanTruChange(null);
+        qc.invalidateQueries({ queryKey: ["cong-no"] });
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
-        qc.invalidateQueries({ queryKey: ["dntt-list"] });
+        qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
       }
 
-      // 3. Update trạng thái chi phí
       if (chiPhiRowIds.length > 0) {
         await externalSupabase
           .from("doan_chi_phi")
@@ -150,6 +140,7 @@ export default function KSDNTTModal({
       }
 
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
       toast.success("Đã tạo đề nghị thanh toán");
       onClose();
     } catch (err: any) {

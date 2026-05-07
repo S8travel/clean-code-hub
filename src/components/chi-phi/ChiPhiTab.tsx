@@ -65,41 +65,22 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
       (r) => r.trang_thai_dntt !== "cong_no" && r.trang_thai_dntt !== "hoan_tien",
     );
 
-    // Dự trù = tổng toàn bộ chi phí (công ty + HDV trả) sau FOC/chiết khấu
     const total = activeRows.reduce(
       (s, r) => s + (r.tien_cong_ty || 0) + (r.tien_hdv || 0),
       0,
     );
 
-    // Thực tế: nếu có điều chỉnh (thanh_tien_thuc_te) dùng giá điều chỉnh,
-    // ngược lại bằng dự trù → 2 số bằng nhau khi chưa điều chỉnh
     const thucTe = activeRows.reduce((s, r) => {
       if (r.thanh_tien_thuc_te != null) return s + r.thanh_tien_thuc_te;
       return s + (r.tien_cong_ty || 0) + (r.tien_hdv || 0);
     }, 0);
     const daDieuChinh = thucTe !== total;
 
-    // can_tru (da_duyet) là phương thức thanh toán hợp lệ — đưa vào activeDntts
-    // cong_no/da_can_tru có trang_thai_duyet='da_huy' → tự bị loại bởi điều kiện đầu
-    const activeDntts = dnttList.filter(
-      (d) =>
-        d.trang_thai_duyet !== "da_huy" &&
-        d.trang_thai_duyet !== "tu_choi",
-    );
-    // Đoàn thừa tiền tạo ra cong_no: khoản đó đã chuyển sang đoàn khác
-    // → phải trừ ra khỏi daTT của đoàn nguồn
-    const congNoDeduction = dnttList
-      .filter((d) =>
-        d.trang_thai_duyet === "da_huy" &&
-        (d.trang_thai_thanh_toan === "cong_no" || d.trang_thai_thanh_toan === "da_can_tru"),
-      )
-      .reduce((s, d) => s + d.so_tien, 0);
-    const daTT = Math.max(
-      0,
-      activeDntts
-        .filter((d) => d.trang_thai_thanh_toan === "da_tt" || d.trang_thai_thanh_toan === "can_tru")
-        .reduce((s, d) => s + d.so_tien, 0) - congNoDeduction,
-    );
+    // daTT = tổng paid_amount của các ĐNTT chưa hủy.
+    // payments là payment events thực tế; ĐNTT da_huy → loại bỏ.
+    const daTT = dnttList
+      .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
+      .reduce((s, d) => s + (d.paid_amount || 0), 0);
 
     return { total, thucTe, daDieuChinh, daTT };
   }, [chiPhiRows, dnttList]);

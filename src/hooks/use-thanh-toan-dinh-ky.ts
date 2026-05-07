@@ -120,7 +120,6 @@ export function useCreateBatchDNTT() {
           so_tien: payload.soTien,
           la_coc: false,
           trang_thai_duyet: "cho_duyet",
-          trang_thai_thanh_toan: "chua_tt",
           ref_loai: "dinh_ky",
           ref_id: null,
         })

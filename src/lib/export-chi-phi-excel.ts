@@ -72,12 +72,12 @@ const DNTT_STATUS_LABELS: Record<string, string> = {
 };
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  chua_tt: "Chưa thanh toán",
-  da_tt: "Đã thanh toán",
-  can_tru: "Cấn trừ",
-  da_can_tru: "Đã cấn trừ",
-  cong_no: "Công nợ",
-  hoan_tien: "Hoàn tiền",
+  // doan_chi_phi.trang_thai_thanh_toan
+  unpaid: "Chưa thanh toán",
+  partial_paid: "Một phần",
+  paid: "Đã thanh toán",
+  // de_nghi_thanh_toan view payment_status
+  partial: "Một phần",
 };
 
 const APPROVAL_STATUS_LABELS: Record<string, string> = {
@@ -197,9 +197,7 @@ function isActiveChiPhi(row: ChiPhiRow): boolean {
 function isActiveDntt(row: DNTTRow): boolean {
   return (
     row.trang_thai_duyet !== "da_huy" &&
-    row.trang_thai_duyet !== "tu_choi" &&
-    row.trang_thai_thanh_toan !== "can_tru" &&
-    row.trang_thai_thanh_toan !== "da_can_tru"
+    row.trang_thai_duyet !== "tu_choi"
   );
 }
 
@@ -867,12 +865,8 @@ function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
 
   const activeDntts = dnttList.filter(isActiveDntt);
   const tongDeNghi = activeDntts.reduce((sum, row) => sum + row.so_tien, 0);
-  const daThanhToan = activeDntts
-    .filter((row) => row.trang_thai_thanh_toan === "da_tt")
-    .reduce((sum, row) => sum + row.so_tien, 0);
-  const choThanhToan = activeDntts
-    .filter((row) => row.trang_thai_thanh_toan !== "da_tt")
-    .reduce((sum, row) => sum + row.so_tien, 0);
+  const daThanhToan = activeDntts.reduce((sum, row) => sum + (row.paid_amount || 0), 0);
+  const choThanhToan = activeDntts.reduce((sum, row) => sum + (row.so_tien - (row.paid_amount || 0)), 0);
   const huyTuChoi = dnttList
     .filter((row) => row.trang_thai_duyet === "da_huy" || row.trang_thai_duyet === "tu_choi")
     .reduce((sum, row) => sum + row.so_tien, 0);
@@ -1029,10 +1023,10 @@ function buildThanhToanSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
         cell(row.mo_ta || "—"),
         cell(row.so_tien || 0, "number"),
         cell(getApprovalStatusLabel(row.trang_thai_duyet)),
-        cell(getPaymentStatusLabel(row.trang_thai_thanh_toan)),
-        cell(formatDateValue(row.ngay_thanh_toan)),
+        cell(getPaymentStatusLabel(row.payment_status)),
+        cell(formatDateValue(row.thanh_toan_luc)),
         cell(row.la_coc ? "Có" : "Không"),
-        cell(row.la_thu_hoi ? "Có" : "Không"),
+        cell((row.ghi_chu || "").includes("[Thu hồi]") ? "Có" : "Không"),
         cell(row.ghi_chu || "—"),
       ]),
       [

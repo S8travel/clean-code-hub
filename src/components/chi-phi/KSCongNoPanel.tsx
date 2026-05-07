@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useCongNoByNCC } from "@/hooks/use-dntt";
+import { useCongNoByNCC } from "@/hooks/use-cong-no";
 import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -28,8 +28,8 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange }: Props)
   const options = useMemo(() =>
     congNoList.map((r) => ({
       id: r.id,
-      label: `${r.ten_doan || `#${r.doan_id}`} — ${fmt(r.con_lai)} VND`,
-      conLai: r.con_lai,
+      label: `${r.ten_doan || `#${r.doan_id}`} — ${fmt(r.so_tien_con_lai)} VND`,
+      conLai: r.so_tien_con_lai,
       tenDoan: r.ten_doan || `#${r.doan_id}`,
     })),
   [congNoList]);

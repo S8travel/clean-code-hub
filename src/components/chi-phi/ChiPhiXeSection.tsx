@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-chi-phi";
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
+import { useCongNoList } from "@/hooks/use-cong-no";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -35,6 +36,7 @@ interface Props {
 export default function ChiPhiXeSection({ doanId, xe }: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
+  const { data: congNoList = [] } = useCongNoList({ doanId });
   const insertDNTT = useInsertDNTT();
   const updateDNTT = useUpdateDNTT();
   const upsertMut = useUpsertChiPhi();
@@ -200,11 +202,10 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       so_tien: soTien,
       la_coc: modalMode === "deposit",
       trang_thai_duyet: "cho_duyet",
-      trang_thai_thanh_toan: "chua_tt",
       ref_loai: "doan_chi_phi",
       ref_id: chiPhiId,
-      so_tien_con_lai: modalMode === "deposit" ? thanhTien - soTien : 0,
       ngay_can_thanh_toan: ngayCan || null,
+      allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
     } as any, {
       onSuccess: () => { toast.success("Đã gửi ĐNTT"); setModal(null); },
     });
@@ -219,8 +220,6 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       doanId,
       so_tien: soTien,
       trang_thai_duyet: "cho_duyet",
-      trang_thai_thanh_toan: "chua_tt",
-      so_tien_con_lai: 0,
       duyet_boi: null,
       duyet_luc: null,
       ghi_chu: null,
@@ -305,24 +304,25 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                   (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
                 );
                 const rejectedDntts = allDntts.filter((d) => d.trang_thai_duyet === "tu_choi");
-                const paidDntts = activeDntts.filter((d) => d.trang_thai_thanh_toan === "da_tt");
-                const pendingDntts = activeDntts.filter((d) => d.trang_thai_thanh_toan !== "da_tt");
-                const daTT = paidDntts.reduce((s, d) => s + d.so_tien, 0);
-                const daDeNghi = pendingDntts.reduce((s, d) => s + d.so_tien, 0);
+                const paidDntts = activeDntts.filter((d) => d.payment_status === "paid");
+                const pendingDntts = activeDntts.filter((d) => d.payment_status !== "paid");
+                const daTT = activeDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
+                const daDeNghi = pendingDntts.reduce((s, d) => s + (d.so_tien - (d.paid_amount || 0)), 0);
                 const thanhTien = row.tien_cong_ty;
                 const isDaTT = thanhTien > 0 && daTT >= thanhTien;
                 const conLai = Math.max(0, thanhTien - daTT);
-                const congNoAmount = allDntts
-                  .filter((d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no")
-                  .reduce((s, d) => s + d.so_tien, 0);
-                const hoanTienAmount = allDntts
-                  .filter((d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "hoan_tien")
-                  .reduce((s, d) => s + d.so_tien, 0);
+                const dnttIds = allDntts.map((d) => d.id);
+                const congNoAmount = congNoList
+                  .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "con_du")
+                  .reduce((s, c) => s + c.so_tien_con_lai, 0);
+                const hoanTienAmount = congNoList
+                  .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
+                  .reduce((s, c) => s + c.so_tien_goc, 0);
                 const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
                 const canCancel = activeDntt && (
                   activeDntt.trang_thai_duyet === "cho_duyet" ||
                   activeDntt.trang_thai_duyet === "da_duyet" ||
-                  activeDntt.trang_thai_thanh_toan === "da_tt"
+                  activeDntt.payment_status === "paid"
                 );
                 const shownDntts = [...activeDntts, ...rejectedDntts];
 
@@ -454,13 +454,13 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                       <div className="space-y-1.5 flex flex-col items-center">
                         {activeDntts.map((d) => (
                           <div key={d.id}>
-                            {d.trang_thai_thanh_toan === "da_tt" ? (
+                            {d.payment_status === "paid" ? (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                                Đã TT{d.ngay_thanh_toan ? ` ${new Date(d.ngay_thanh_toan).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}` : ""}
+                                Đã TT{d.thanh_toan_luc ? ` ${new Date(d.thanh_toan_luc).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}` : ""}
                               </span>
                             ) : (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                                Chờ UNC · {fmt(d.so_tien)}
+                                Chờ UNC · {fmt(d.so_tien - (d.paid_amount || 0))}
                               </span>
                             )}
                           </div>
@@ -502,7 +502,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                             title="Hủy ĐNTT"
                             onClick={() => {
                               setCancelMode("hoan_tien");
-                              setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.trang_thai_thanh_toan === "da_tt" });
+                              setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" });
                             }}>
                             <Ban className="h-3 w-3" />
                           </Button>

@@ -19,7 +19,9 @@ import {
   useChiPhiList, useUpsertChiPhi, useDeleteChiPhi, useDNTTList, useInsertDNTT,
 } from "@/hooks/use-chi-phi";
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
-import { useCancelDNTT, useUpdateDNTT } from "@/hooks/use-dntt";
+import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
+import { usePaymentsByChiPhi } from "@/hooks/use-payments";
+import { useCongNoList, appendCanTruLog } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -100,6 +102,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
   const { data: nhData, isLoading } = useChiPhiNHSection(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
+  const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
+  const { data: congNoList = [] } = useCongNoList({ doanId });
   const { data: currentUserName = "" } = useCurrentUserName();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
@@ -324,9 +328,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       const cpDntts = dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === cp.id);
       // Xóa nếu chưa có DNTT nào
       if (cpDntts.length === 0) return true;
-      // Xóa nếu DNTT đã bị hủy thành công nợ
+      // Xóa nếu DNTT đã thanh toán rồi bị hủy (chuyển sang cong_no)
       return cpDntts.some(
-        (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no",
+        (d) => d.trang_thai_duyet === "da_huy" && (d.paid_amount || 0) > 0,
       );
     });
     for (const cp of toDelete) {
@@ -541,30 +545,25 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       const canTruAmount = (canTru && nccId && canTru.soTienCanTru > 0)
         ? Math.min(canTru.soTienCanTru, soTien)
         : 0;
-      const thucThanhToan = soTien - canTruAmount;
 
-      let mainNhId: number | null = null;
-      if (thucThanhToan > 0) {
-        const mainNhRecord = await insertDNTT.mutateAsync({
-          doan_id: doanId,
-          loai: "nha_hang",
-          mo_ta: `${nhName} (${buaLabel}) - Ngày ${row.ngay_so} ${dateLabel}`,
-          nha_cung_cap_id: nccId,
-          ten_nha_cung_cap: nh?.ten_ncc || null,
-          so_tai_khoan: nh?.ncc_so_tai_khoan || null,
-          ngan_hang: nh?.ncc_ngan_hang || null,
-          so_tien: thucThanhToan,
-          la_coc: dnttModalMode === "deposit",
-          so_tien_con_lai: soTienConLai > 0 ? soTienConLai : 0,
-          trang_thai_duyet: "cho_duyet",
-          trang_thai_thanh_toan: "chua_tt",
-          ref_loai: "doan_chi_phi",
-          ref_id: row.id,
-          ngay_can_thanh_toan: dnttNgayCan || null,
-          allocations: [{ chi_phi_id: row.id, so_tien: thucThanhToan }],
-        });
-        mainNhId = (mainNhRecord as any)?.id ?? null;
-      }
+      // Tạo 1 ĐNTT cho FULL amount; can_tru được ghi nhận như 1 payment riêng.
+      const mainNhRecord = await insertDNTT.mutateAsync({
+        doan_id: doanId,
+        loai: "nha_hang",
+        mo_ta: `${nhName} (${buaLabel}) - Ngày ${row.ngay_so} ${dateLabel}`,
+        nha_cung_cap_id: nccId,
+        ten_nha_cung_cap: nh?.ten_ncc || null,
+        so_tai_khoan: nh?.ncc_so_tai_khoan || null,
+        ngan_hang: nh?.ncc_ngan_hang || null,
+        so_tien: soTien,
+        la_coc: dnttModalMode === "deposit",
+        trang_thai_duyet: "cho_duyet",
+        ref_loai: "doan_chi_phi",
+        ref_id: row.id,
+        ngay_can_thanh_toan: dnttNgayCan || null,
+        allocations: [{ chi_phi_id: row.id, so_tien: soTien }],
+      });
+      const mainNhId = (mainNhRecord as any)?.id ?? null;
 
       const allIds = [row.id, ...extras.filter((e) => e.id).map((e) => e.id!)];
       await externalSupabase
@@ -572,40 +571,24 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
         .update({ trang_thai_dntt: "cho_duyet" })
         .in("id", allIds);
 
-      // When full can_tru (thucThanhToan=0), no new ĐNTT was created → mainNhId=null.
-      // Fallback: link to the existing da_tt ĐNTT for this meal so matching works.
-      const linkedId: number | null =
-        mainNhId ??
-        (dnttList.find(
-          (d) =>
-            d.ref_loai === "doan_chi_phi" &&
-            d.ref_id === row.id &&
-            d.trang_thai_thanh_toan === "da_tt" &&
-            d.trang_thai_duyet !== "da_huy" &&
-            d.trang_thai_duyet !== "tu_choi",
-        )?.id ?? null);
-
-      if (canTruAmount > 0 && nccId && canTru) {
-        await externalSupabase.from("de_nghi_thanh_toan").insert({
-          doan_id: doanId,
-          loai: "nha_hang",
-          mo_ta: `Cấn trừ công nợ từ đoàn: ${canTru.tenDoan}`,
-          nha_cung_cap_id: nccId,
-          ten_nha_cung_cap: nh?.ten_ncc || null,
+      if (canTruAmount > 0 && nccId && canTru && mainNhId) {
+        const { error: payErr } = await externalSupabase.from("payments").insert({
+          dntt_id: mainNhId,
+          method: "can_tru",
           so_tien: canTruAmount,
-          la_coc: true,
-          trang_thai_duyet: "cho_duyet",
-          trang_thai_thanh_toan: "can_tru",
-          ref_loai: "can_tru_cong_no",
-          ref_id: canTru.congNoId,
+          cong_no_id: canTru.congNoId,
           ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
-          linked_dntt_id: linkedId,
         });
+        if (payErr) throw payErr;
+        await appendCanTruLog(canTru.congNoId, canTruAmount, tenDoan || `#${doanId}`);
+        await recalcChiPhiStatus(allIds);
         setCanTruByMeal((prev) => ({ ...prev, [key]: null }));
+        qc.invalidateQueries({ queryKey: ["cong-no"] });
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
-        qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
-        qc.invalidateQueries({ queryKey: ["dntt-list"] });
+        qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
       }
+      qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
 
       toast.success("Đã tạo đề nghị thanh toán");
       setDnttModalKey(null);
@@ -667,24 +650,18 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           ? dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId)
           : [];
 
-        // Cọc đã thanh toán thực sự (da_tt)
+        // Cọc đã thanh toán thực sự (paid)
         const soCoc = mealDntts
-          .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.trang_thai_thanh_toan === "da_tt")
+          .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
           .reduce((s, d) => s + d.so_tien, 0);
 
-        // Cấn trừ công nợ đã duyệt (NCC-level, chỉ hiện 1 lần mỗi NCC)
+        // Cấn trừ: tổng can_tru payments của các DNTT thuộc meal này (NCC-level dedupe)
         const nccId = nh.nha_cung_cap_id ?? null;
         let canTruAmount = 0;
-        if (nccId && !canTruShownByNcc[nccId]) {
-          canTruAmount = dnttList
-            .filter(
-              (d) =>
-                d.trang_thai_thanh_toan === "can_tru" &&
-                d.trang_thai_duyet !== "da_huy" &&
-                d.trang_thai_duyet !== "tu_choi" &&
-                d.nha_cung_cap_id === nccId,
-            )
-            .reduce((s, d) => s + d.so_tien, 0);
+        if (nccId && !canTruShownByNcc[nccId] && chiPhiId) {
+          canTruAmount = paymentsList
+            .filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru")
+            .reduce((s, p) => s + p.payment_so_tien, 0);
           if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
         }
 
@@ -851,38 +828,36 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           const activeDntts = allMealDntts.filter(
             (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
           );
-          const paidDntts = activeDntts.filter((d) => d.trang_thai_thanh_toan === "da_tt");
-          const pendingDntts = activeDntts.filter((d) => d.trang_thai_thanh_toan !== "da_tt");
-          const daTT = paidDntts.reduce((s, d) => s + d.so_tien, 0);
-          const daDeNghi = pendingDntts.reduce((s, d) => s + d.so_tien, 0);
-          const activeDnttIds = new Set(activeDntts.map((d) => d.id));
-          const nhNccId = nh?.nha_cung_cap_id ?? null;
-          const canTruAmtForNh = dnttList
-            .filter((d) => {
-              if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-              if (d.trang_thai_thanh_toan !== "can_tru") return false;
-              if (d.linked_dntt_id != null && activeDnttIds.has(d.linked_dntt_id)) return true;
-              // Fallback for legacy DNTTs created before the linked_dntt_id fix
-              if (d.linked_dntt_id == null && nhNccId && d.nha_cung_cap_id === nhNccId && activeDntts.length > 0) return true;
-              return false;
-            })
-            .reduce((s, d) => s + d.so_tien, 0);
+          // daTT = tổng paid_amount của các ĐNTT đang active của meal này
+          const daTT = activeDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
+          // pendingDntts: ĐNTT chưa được thanh toán đủ
+          const paidDntts = activeDntts.filter((d) => d.payment_status === "paid");
+          const pendingDntts = activeDntts.filter((d) => d.payment_status !== "paid");
+          const daDeNghi = pendingDntts.reduce((s, d) => s + (d.so_tien - (d.paid_amount || 0)), 0);
+          // canTruAmtForNh: tổng can_tru payments thuộc về chi_phi này
+          const canTruAmtForNh = row?.id
+            ? paymentsList
+                .filter((p) => p.chi_phi_id === row.id && p.method === "can_tru")
+                .reduce((s, p) => s + p.payment_so_tien, 0)
+            : 0;
           const isDaTT = totalBua > 0 && daTT >= totalBua;
-          const conLai = Math.max(0, totalBua - daTT - canTruAmtForNh);
+          const conLai = Math.max(0, totalBua - daTT);
           // Primary DNTT for cancel: prefer pending over paid
           const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
           const canCancel = activeDntt && (
             activeDntt.trang_thai_duyet === "cho_duyet" ||
             activeDntt.trang_thai_duyet === "da_duyet" ||
-            activeDntt.trang_thai_thanh_toan === "da_tt"
+            activeDntt.payment_status === "paid"
           );
           // Pending badge: show status of first pending DNTT
           const pendingStatusInfo = pendingDntts[0]
             ? STATUS_LABEL[pendingDntts[0].trang_thai_duyet] ?? STATUS_LABEL.cho_duyet
             : null;
-          const hoanTienAmount = allMealDntts.filter(
-            (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "hoan_tien"
-          ).reduce((s, d) => s + d.so_tien, 0);
+          // hoan_tien: cong_no records linked to this meal's DNTTs with trang_thai='da_hoan_tien'
+          const mealDnttIds = allMealDntts.map((d) => d.id);
+          const hoanTienAmount = congNoList
+            .filter((c) => c.dntt_goc_id != null && mealDnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
+            .reduce((s, c) => s + c.so_tien_goc, 0);
 
           return (
             <Fragment key={key}>
@@ -1076,13 +1051,13 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                   <div className="space-y-1">
                     {activeDntts.map(d => (
                       <div key={d.id}>
-                        {d.trang_thai_thanh_toan === "da_tt" ? (
+                        {d.payment_status === "paid" ? (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
-                            Đã TT{(d as any).ngay_thanh_toan ? ` ${format(new Date((d as any).ngay_thanh_toan), "dd/MM")}` : ""}
+                            Đã TT{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
                           </span>
                         ) : (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">
-                            Chờ UNC · {fmt(d.so_tien)}
+                            Chờ UNC · {fmt(d.so_tien - (d.paid_amount || 0))}
                           </span>
                         )}
                       </div>
@@ -1126,7 +1101,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                           setCancelMode("hoan_tien");
                           setCancelTarget({
                             dnttId: activeDntt.id,
-                            isPaid: activeDntt.trang_thai_thanh_toan === "da_tt",
+                            isPaid: activeDntt.payment_status === "paid",
                             nhName: nh?.ten || "Nhà hàng",
                           });
                         }}>
@@ -1155,7 +1130,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                     {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length > 0 && daDeNghi === 0 && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                         onClick={() => {
-                          setDnttAlreadyPaid(daTT + canTruAmtForNh);
+                          setDnttAlreadyPaid(daTT);
                           setDnttModalMode("full");
                           setDnttDepositAmount(0);
                           setDnttBsAmount(0);
@@ -1268,11 +1243,10 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
               if (currentNgayIds.has(cp.ref_doan_ngay_id)) return false;
               if (cp.mo_ta?.startsWith("[trua] ") || cp.mo_ta?.startsWith("[toi] ")) return false;
               const cpDntts = dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === cp.id);
-              // Ẩn nếu chưa có DNTT nào (sẽ bị auto-xóa)
               if (cpDntts.length === 0) return false;
-              // Ẩn nếu tất cả DNTT đã bị hủy thành công nợ (đang auto-xóa)
+              // Ẩn nếu tất cả DNTT đã bị hủy sau khi paid (đang auto-xóa)
               return !cpDntts.every(
-                (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no",
+                (d) => d.trang_thai_duyet === "da_huy" && (d.paid_amount || 0) > 0,
               );
             });
             if (orphanedCps.length === 0) return null;
@@ -1292,16 +1266,16 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                   const cpActiveDntts = cpDntts.filter(
                     (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
                   );
-                  const cpCongNo = cpDntts.filter(
-                    (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no",
-                  ).reduce((s, d) => s + d.so_tien, 0);
-                  const cpHoanTien = cpDntts.filter(
-                    (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "hoan_tien",
-                  ).reduce((s, d) => s + d.so_tien, 0);
-                  const cpPending = cpActiveDntts.find((d) => d.trang_thai_thanh_toan !== "da_tt");
+                  const cpDnttIds = cpDntts.map((d) => d.id);
+                  const cpCongNo = congNoList
+                    .filter((c) => c.dntt_goc_id != null && cpDnttIds.includes(c.dntt_goc_id) && c.trang_thai === "con_du")
+                    .reduce((s, c) => s + c.so_tien_con_lai, 0);
+                  const cpHoanTien = congNoList
+                    .filter((c) => c.dntt_goc_id != null && cpDnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
+                    .reduce((s, c) => s + c.so_tien_goc, 0);
+                  const cpPending = cpActiveDntts.find((d) => d.payment_status !== "paid");
                   const cpPendingInfo = cpPending ? STATUS_LABEL[cpPending.trang_thai_duyet] : null;
-                  const cpDaTT = cpActiveDntts.filter((d) => d.trang_thai_thanh_toan === "da_tt")
-                    .reduce((s, d) => s + d.so_tien, 0);
+                  const cpDaTT = cpActiveDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
                   const cpIsDaTT = cpTotal > 0 && cpDaTT >= cpTotal;
                   return (
                     <tr key={`orphan-${cp.id}`} className="border-t border-border bg-muted/10 opacity-80">
@@ -1342,7 +1316,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                         <div className="space-y-1">
                           {cpActiveDntts.map(d => (
                             <div key={d.id}>
-                              {d.trang_thai_thanh_toan === "da_tt" ? (
+                              {d.payment_status === "paid" ? (
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">Đã TT</span>
                               ) : (
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">Chờ UNC</span>

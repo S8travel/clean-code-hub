@@ -24,12 +24,12 @@ export default function ThanhToanCell({ chiPhiId, dnttList }: Props) {
     <div className="space-y-1 min-w-[100px]">
       {myDntt.map(d => (
         <div key={d.id} className="text-xs">
-          {d.trang_thai_thanh_toan === "da_tt" ? (
+          {d.payment_status === "paid" ? (
             <div>
               <Badge className="text-[10px] px-1.5 py-0 bg-primary">Đã TT</Badge>
-              {d.ngay_thanh_toan && (
+              {d.thanh_toan_luc && (
                 <span className="ml-1 text-muted-foreground">
-                  {format(new Date(d.ngay_thanh_toan), "dd/MM")}
+                  {format(new Date(d.thanh_toan_luc), "dd/MM")}
                 </span>
               )}
             </div>
@@ -38,7 +38,7 @@ export default function ThanhToanCell({ chiPhiId, dnttList }: Props) {
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-yellow-100 text-yellow-800 border-yellow-300">
                 Chờ UNC
               </Badge>
-              <span className="ml-1 font-medium">{fmt(d.so_tien)}</span>
+              <span className="ml-1 font-medium">{fmt(d.so_tien - (d.paid_amount || 0))}</span>
             </div>
           )}
           {d.la_coc && (

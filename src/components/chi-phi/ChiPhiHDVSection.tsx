@@ -370,7 +370,7 @@ function HDVDNTTCard({ d, doanId }: { d: HDVDNTTRow; doanId: number }) {
 
   const isHuy = d.trang_thai_duyet === "da_huy";
   const isTuChoi = d.trang_thai_duyet === "tu_choi";
-  const isDaTT = d.trang_thai_thanh_toan === "da_tt";
+  const isDaTT = d.payment_status === "paid";
   const isDaDuyet = d.trang_thai_duyet === "da_duyet";
   const isChoDuyet = d.trang_thai_duyet === "cho_duyet";
 
@@ -434,7 +434,7 @@ function HDVDNTTCard({ d, doanId }: { d: HDVDNTTRow; doanId: number }) {
 function HDVStatusBadge({ d }: { d: HDVDNTTRow }) {
   if (d.trang_thai_duyet === "da_huy")
     return <Badge variant="secondary" className="text-[10px]">Đã hủy</Badge>;
-  if (d.trang_thai_thanh_toan === "da_tt")
+  if (d.payment_status === "paid")
     return <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">Đã thanh toán</Badge>;
   switch (d.trang_thai_duyet) {
     case "cho_duyet":

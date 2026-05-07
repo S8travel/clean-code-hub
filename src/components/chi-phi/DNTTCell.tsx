@@ -70,10 +70,9 @@ export default function DNTTCell({
       la_coc: laCoc,
       ty_le_coc: tyleCoc || null,
       trang_thai_duyet: "cho_duyet",
-      trang_thai_thanh_toan: "chua_tt",
       ref_loai: "doan_chi_phi",
       ref_id: chiPhiId,
-      so_tien_con_lai: laCoc ? thanhTien - soTien : 0,
+      allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
     } as any, {
       onSuccess: () => toast.success("Đã gửi ĐNTT"),
     });
@@ -98,8 +97,6 @@ export default function DNTTCell({
       doanId,
       so_tien: soTien,
       trang_thai_duyet: "cho_duyet",
-      trang_thai_thanh_toan: "chua_tt",
-      so_tien_con_lai: resendMode === "partial" ? thanhTien - soTien : 0,
       duyet_boi: null,
       duyet_luc: null,
       ghi_chu: null,
@@ -121,7 +118,6 @@ export default function DNTTCell({
       id,
       doanId,
       so_tien: val,
-      so_tien_con_lai: thanhTien - val > 0 ? thanhTien - val : 0,
     } as any, {
       onSuccess: () => {
         toast.success("Đã cập nhật ĐNTT");
