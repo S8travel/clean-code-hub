@@ -198,7 +198,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       })
       .reduce((sum, d) => sum + d.so_tien, 0);
 
-    // canTru: tổng can_tru payments của KS này (qua chi phí KS)
+    // canTru: tổng can_tru payments của ĐNTT đang preview
+    const canTruTotal = canTruByDnttId[dnttId] || 0;
     const ksChiPhiIds = chiPhiRows
       .filter((cp) => cp.danh_muc === "khach_san" && cp.ref_doan_ngay_id != null)
       .filter((cp) => {
@@ -207,9 +208,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       })
       .map((cp) => cp.id!)
       .filter(Boolean);
-    const canTruTotal = paymentsList
-      .filter((p) => p.method === "can_tru" && ksChiPhiIds.includes(p.chi_phi_id))
-      .reduce((s, p) => s + p.payment_so_tien, 0);
+    void ksChiPhiIds; // legacy — không còn dùng vì canTruTotal lấy theo dntt_id
     const canTruNote = canTruTotal > 0 ? "Cấn trừ công nợ" : "";
 
     const focDisplay =

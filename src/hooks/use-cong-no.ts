@@ -89,6 +89,17 @@ export function useUpdateCongNoStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, trangThai }: { id: number; trangThai: CongNoRow["trang_thai"] }) => {
+      // Validate: nếu đã có can_tru payments thì không cho chuyển sang da_hoan_tien
+      if (trangThai === "da_hoan_tien") {
+        const { data: cn } = await externalSupabase
+          .from("cong_no_with_status")
+          .select("so_tien_da_dung")
+          .eq("id", id)
+          .single();
+        if (cn && Number(cn.so_tien_da_dung) > 0) {
+          throw new Error("Không thể chuyển sang Hoàn tiền: đã có khoản cấn trừ trên công nợ này");
+        }
+      }
       const { error } = await externalSupabase
         .from("cong_no")
         .update({ trang_thai: trangThai })

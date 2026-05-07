@@ -223,7 +223,7 @@ export default function CongNoPage() {
                           <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium w-fit", statusInfo.cls)}>
                             {statusInfo.text}
                           </span>
-                          {(row.trang_thai === "con_du" || row.trang_thai === "da_hoan_tien") && (
+                          {((row.trang_thai === "con_du" && row.so_tien_con_lai > 0) || row.trang_thai === "da_hoan_tien") && (
                             <Button
                               variant="outline"
                               size="sm"

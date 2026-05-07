@@ -140,6 +140,48 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
                 </div>
               </div>
 
+              {/* Tóm tắt số tiền — hiển thị cọc / cấn trừ / thực TT */}
+              {(() => {
+                const tongPhong = item.roomEntries.reduce(
+                  (s, r) => s + r.don_gia * r.so_luong * (r.so_dem ?? 1),
+                  0,
+                );
+                const cocTotal = item.cocTotal || 0;
+                const canTruTotal = item.canTruTotal ?? 0;
+                const thucTT = Math.max(0, item.soTien - canTruTotal);
+                const hasExtra = cocTotal > 0 || canTruTotal > 0 || item.la_coc;
+                if (!hasExtra) return null;
+                return (
+                  <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs space-y-1">
+                    {item.la_coc && (
+                      <div className="text-amber-700 font-medium">
+                        ★ ĐNTT này là khoản <span className="font-semibold">cọc</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tổng tiền phòng:</span>
+                      <span className="font-medium">{fmt(tongPhong)} ₫</span>
+                    </div>
+                    {cocTotal > 0 && (
+                      <div className="flex justify-between text-red-600">
+                        <span>Đã cọc trước:</span>
+                        <span>− {fmt(cocTotal)} ₫</span>
+                      </div>
+                    )}
+                    {canTruTotal > 0 && (
+                      <div className="flex justify-between text-amber-600">
+                        <span>Cấn trừ công nợ:</span>
+                        <span>− {fmt(canTruTotal)} ₫</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold">
+                      <span>{item.la_coc ? "Số tiền cọc" : (canTruTotal > 0 ? "Thực thanh toán" : "Số tiền ĐNTT")}:</span>
+                      <span className="text-primary">{fmt(thucTT)} ₫</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Ghi chú per-item */}
               <div className="space-y-1">
                 <label className="text-[11px] text-muted-foreground">Ghi chú</label>
