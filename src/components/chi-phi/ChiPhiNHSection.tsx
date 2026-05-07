@@ -589,6 +589,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           linked_dntt_id: mainNhId,
         });
         setCanTruByMeal((prev) => ({ ...prev, [key]: null }));
+        qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
         qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
         qc.invalidateQueries({ queryKey: ["dntt-list"] });
       }

@@ -100,13 +100,26 @@ export default function DNTTPage() {
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
 
-  const metrics = useMemo(() => {
-    const total = rows.length;
-    const choDuyet = rows.filter(r => r.trang_thai_duyet === "cho_duyet").length;
-    const daDuyetChoTT = rows.filter(r => r.trang_thai_duyet === "da_duyet" && r.trang_thai_thanh_toan === "chua_tt").length;
-    const daTT = rows.filter(r => r.trang_thai_thanh_toan === "da_tt").length;
-    return { total, choDuyet, daDuyetChoTT, daTT };
+  // Group cấn trừ satellite rows with their main rows
+  const { mainRows, canTruMap } = useMemo(() => {
+    const canTruMap: Record<number, DNTTRow> = {};
+    const linkedIds = new Set<number>();
+    rows.forEach(r => {
+      if (r.ref_loai === "can_tru_cong_no" && r.linked_dntt_id) {
+        canTruMap[r.linked_dntt_id] = r;
+        linkedIds.add(r.id);
+      }
+    });
+    return { mainRows: rows.filter(r => !linkedIds.has(r.id)), canTruMap };
   }, [rows]);
+
+  const metrics = useMemo(() => {
+    const total = mainRows.length;
+    const choDuyet = mainRows.filter(r => r.trang_thai_duyet === "cho_duyet").length;
+    const daDuyetChoTT = mainRows.filter(r => r.trang_thai_duyet === "da_duyet" && r.trang_thai_thanh_toan === "chua_tt").length;
+    const daTT = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt").length;
+    return { total, choDuyet, daDuyetChoTT, daTT };
+  }, [mainRows]);
 
   const resetFilters = () => {
     setDoanId("");
@@ -338,10 +351,11 @@ export default function DNTTPage() {
               <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
-            ) : rows.map((row, idx) => {
+            ) : mainRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const db = duyetBadge[row.trang_thai_duyet] || duyetBadge.cho_duyet;
               const tb = ttBadge[row.trang_thai_thanh_toan] || ttBadge.chua_tt;
+              const canTruRow = canTruMap[row.id];
 
               return (
                 <TableRow key={row.id}>
@@ -360,7 +374,15 @@ export default function DNTTPage() {
                   <TableCell className="text-sm">{row.mo_ta}</TableCell>
                   <TableCell className="text-sm">{row.ten_ncc || "—"}</TableCell>
                   <TableCell className="text-right font-medium">
-                    <div>{fmt(row.so_tien)}</div>
+                    {canTruRow ? (
+                      <div className="space-y-0.5 text-xs">
+                        <div className="text-muted-foreground">Tổng: {fmt(row.so_tien + canTruRow.so_tien)}</div>
+                        <div className="text-amber-600">Cấn trừ: −{fmt(canTruRow.so_tien)}</div>
+                        <div className="text-sm font-semibold">Cần TT: {fmt(row.so_tien)}</div>
+                      </div>
+                    ) : (
+                      <div>{fmt(row.so_tien)}</div>
+                    )}
                     {row.la_coc && row.ty_le_coc && (
                       <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
                         Cọc {row.ty_le_coc}%
@@ -375,7 +397,7 @@ export default function DNTTPage() {
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <span className={cn("px-2 py-0.5 rounded text-xs font-medium w-fit", db.cls)}>{db.text}</span>
-                      {row.trang_thai_duyet === "cho_duyet" && !(row.ref_loai === "can_tru_cong_no" && (row as any).linked_dntt_id) && (
+                      {row.trang_thai_duyet === "cho_duyet" && (
                         <div className="flex gap-1 mt-1">
                           <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-green-600" onClick={() => handleApprove(row.id)}>
                             <Check className="h-3 w-3 mr-1" /> Duyệt

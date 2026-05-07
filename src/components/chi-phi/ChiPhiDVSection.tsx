@@ -355,7 +355,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           trang_thai_thanh_toan: "chua_tt",
           ref_loai: "doan_chi_phi",
           ref_id: chiPhiId,
-          so_tien_con_lai: dvModalMode === "deposit" ? thanhTien - soTien : 0,
+          so_tien_con_lai: dvModalMode === "deposit" ? thanhTien - baseAmount : 0,
           ngay_can_thanh_toan: dvNgayCan || null,
           allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
         } as any);
@@ -378,6 +378,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           linked_dntt_id: mainDvId,
         });
         setCanTruByDv((prev) => ({ ...prev, [chiPhiId]: null }));
+        qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
         qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
         qc.invalidateQueries({ queryKey: ["dntt-list"] });
       }
