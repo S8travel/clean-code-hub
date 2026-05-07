@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, RotateCcw } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,8 @@ import {
 } from "@/components/ui/table";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { cn } from "@/lib/utils";
-import { useDNTTList, useDoanOptions, type DNTTRow } from "@/hooks/use-dntt";
+import { useDNTTList, useDoanOptions, useChangeCongNoStatus } from "@/hooks/use-dntt";
+import { toast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -50,6 +50,15 @@ export default function CongNoPage() {
 
   const { data: allRows = [], isLoading } = useDNTTList(filters);
   const { data: doanOpts = [] } = useDoanOptions();
+  const changeStatusMut = useChangeCongNoStatus();
+
+  const handleChangeStatus = (id: number, current: string) => {
+    const newStatus = current === "cong_no" ? "hoan_tien" : "cong_no";
+    changeStatusMut.mutate({ id, newStatus }, {
+      onSuccess: () => toast({ title: newStatus === "hoan_tien" ? "Đã chuyển sang Hoàn tiền" : "Đã chuyển sang Công nợ" }),
+      onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể đổi trạng thái"), variant: "destructive" }),
+    });
+  };
 
   // Build NCC options từ data đã load
   const nccOpts = useMemo(() => {
@@ -283,9 +292,22 @@ export default function CongNoPage() {
                         )}
                       </TableCell>
                       <TableCell className="py-2 px-3">
-                        <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", statusInfo.cls)}>
-                          {statusInfo.text}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium w-fit", statusInfo.cls)}>
+                            {statusInfo.text}
+                          </span>
+                          {(row.trang_thai_thanh_toan === "cong_no" || row.trang_thai_thanh_toan === "hoan_tien") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px]"
+                              disabled={changeStatusMut.isPending}
+                              onClick={() => handleChangeStatus(row.id, row.trang_thai_thanh_toan)}
+                            >
+                              {row.trang_thai_thanh_toan === "cong_no" ? "→ Hoàn tiền" : "→ Công nợ"}
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="py-2 px-3 text-muted-foreground text-xs">
                         {row.ten_ncc || "—"}

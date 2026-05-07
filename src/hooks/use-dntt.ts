@@ -332,6 +332,20 @@ export function useMarkPaidWithDate() {
   });
 }
 
+export function useChangeCongNoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, newStatus }: { id: number; newStatus: "cong_no" | "hoan_tien" }) => {
+      const { error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({ trang_thai_thanh_toan: newStatus })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["dntt-list"] }),
+  });
+}
+
 /**
  * Hủy DNTT với 2 trường hợp:
  * - mode = undefined: hủy trước khi thanh toán (da_duyet + chua_tt) → chi-phi về chua_de_nghi
