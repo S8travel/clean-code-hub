@@ -495,12 +495,17 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                                       const ct = canTruByDnttId[d.id] || 0;
                                       const thucTT = Math.max(0, d.so_tien - ct);
                                       return (
-                                        <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}
-                                          title={ct > 0 ? `Tổng ${fmt(d.so_tien)} − Cấn trừ ${fmt(ct)} = Thực TT ${fmt(thucTT)}` : undefined}>
-                                          {statusInfo.text} · {fmt(d.so_tien)}
-                                          {d.la_coc && <span className="ml-1 opacity-70">·Cọc</span>}
-                                          {ct > 0 && <span className="ml-1 opacity-70">·CT {fmt(ct)}</span>}
-                                        </span>
+                                        <div className="inline-flex flex-col items-start gap-0.5">
+                                          <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                            {statusInfo.text} · {fmt(d.so_tien)}
+                                            {d.la_coc && <span className="ml-1 opacity-70">·Cọc</span>}
+                                          </span>
+                                          {ct > 0 && (
+                                            <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap">
+                                              CT {fmt(ct)} → TT {fmt(thucTT)}
+                                            </span>
+                                          )}
+                                        </div>
                                       );
                                     })()}
                                     {d.trang_thai_duyet === "cho_duyet" && (
