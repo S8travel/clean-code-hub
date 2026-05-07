@@ -79,16 +79,27 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
     }, 0);
     const daDieuChinh = thucTe !== total;
 
+    // can_tru (da_duyet) là phương thức thanh toán hợp lệ — đưa vào activeDntts
+    // cong_no/da_can_tru có trang_thai_duyet='da_huy' → tự bị loại bởi điều kiện đầu
     const activeDntts = dnttList.filter(
       (d) =>
         d.trang_thai_duyet !== "da_huy" &&
-        d.trang_thai_duyet !== "tu_choi" &&
-        d.trang_thai_thanh_toan !== "can_tru" &&
-        d.trang_thai_thanh_toan !== "da_can_tru",
+        d.trang_thai_duyet !== "tu_choi",
     );
-    const daTT = activeDntts
-      .filter((d) => d.trang_thai_thanh_toan === "da_tt")
+    // Đoàn thừa tiền tạo ra cong_no: khoản đó đã chuyển sang đoàn khác
+    // → phải trừ ra khỏi daTT của đoàn nguồn
+    const congNoDeduction = dnttList
+      .filter((d) =>
+        d.trang_thai_duyet === "da_huy" &&
+        (d.trang_thai_thanh_toan === "cong_no" || d.trang_thai_thanh_toan === "da_can_tru"),
+      )
       .reduce((s, d) => s + d.so_tien, 0);
+    const daTT = Math.max(
+      0,
+      activeDntts
+        .filter((d) => d.trang_thai_thanh_toan === "da_tt" || d.trang_thai_thanh_toan === "can_tru")
+        .reduce((s, d) => s + d.so_tien, 0) - congNoDeduction,
+    );
 
     return { total, thucTe, daDieuChinh, daTT };
   }, [chiPhiRows, dnttList]);

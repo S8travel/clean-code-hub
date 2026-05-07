@@ -1138,7 +1138,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                     {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length > 0 && daDeNghi === 0 && (
                       <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                         onClick={() => {
-                          setDnttAlreadyPaid(daTT);
+                          setDnttAlreadyPaid(daTT + canTruAmtForNh);
                           setDnttModalMode("full");
                           setDnttDepositAmount(0);
                           setDnttBsAmount(0);

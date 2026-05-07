@@ -634,6 +634,22 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     }
   });
 
+  // Can_tru đã áp dụng cho từng KS (để cộng vào daCoc khi mở modal)
+  const canTruAmtByKsId: Record<number, number> = {};
+  allKsEntries.forEach(([ksIdStr]) => {
+    const ksId = Number(ksIdStr);
+    const nccId = khachSanMap[ksId]?.nha_cung_cap_id ?? null;
+    canTruAmtByKsId[ksId] = dnttList
+      .filter((d) => {
+        if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
+        if (d.trang_thai_thanh_toan !== "can_tru") return false;
+        if (d.ref_loai === "can_tru_cong_no" && nccId && d.nha_cung_cap_id === nccId) return true;
+        if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
+        return false;
+      })
+      .reduce((s, d) => s + d.so_tien, 0);
+  });
+
   // Tổng đã thanh toán thực sự (trang_thai_thanh_toan === "da_tt") per KS
   const ttByKs: Record<number, number> = {};
   dnttList.forEach((d) => {
@@ -1234,7 +1250,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             );
             return gross - calcFocDeduction(modalRows, modalKs?.foc_khach ?? null, modalKs?.foc_mien ?? null);
           })()}
-          daCoc={cocByKs[modalKsId] || 0}
+          daCoc={(cocByKs[modalKsId] || 0) + (canTruAmtByKsId[modalKsId] || 0)}
           localRows={grouped[modalKsId] || []}
           chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id).map((r) => r.id!)}
           canTru={canTruByKs[modalKsId] ?? null}
