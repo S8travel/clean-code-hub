@@ -731,6 +731,20 @@ export async function syncDieuTourToBookingDV(params: {
     // da_huy: skip silently
   }
 
+  // Cleanup: xóa các booking chua_dat không còn trong điều tour hiện tại
+  const { data: allExisting } = await externalSupabase
+    .from("doan_booking_dv")
+    .select("id, ten_nha_cung_cap, booking_status")
+    .eq("doan_id", doanId);
+
+  if (allExisting) {
+    for (const bk of allExisting) {
+      if (bk.booking_status === "chua_dat" && !groups.has(bk.ten_nha_cung_cap)) {
+        await externalSupabase.from("doan_booking_dv").delete().eq("id", bk.id);
+      }
+    }
+  }
+
   return { synced, warnings };
 }
 
