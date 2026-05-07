@@ -12,7 +12,9 @@ export interface HoaDonUNCRow {
   so_tien: number;
   nha_cung_cap_id: number | null;
   ten_nha_cung_cap: string | null;
+  ngay_can_thanh_toan: string | null;
   thanh_toan_luc: string | null;
+  trang_thai_thanh_toan: string;
   trang_thai_hoa_don: TrangThaiDoc;
   trang_thai_unc: TrangThaiDoc;
   hoa_don_url: string | null;
@@ -22,6 +24,7 @@ export interface HoaDonUNCRow {
 export interface HoaDonUNCFilters {
   doanId?: number | null;
   loai?: string | null;
+  trangThaiTT?: "chua_tt" | "da_tt" | "all";
   trangThaiHoaDon?: TrangThaiDoc | "all";
   trangThaiUNC?: TrangThaiDoc | "all";
 }
@@ -33,14 +36,16 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
       let q = externalSupabase
         .from("de_nghi_thanh_toan")
         .select(
-          "id, doan_id, loai, mo_ta, so_tien, nha_cung_cap_id, ten_nha_cung_cap, thanh_toan_luc, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, doan:doan_id(ten_doan)"
+          "id, doan_id, loai, mo_ta, so_tien, nha_cung_cap_id, ten_nha_cung_cap, ngay_can_thanh_toan, thanh_toan_luc, trang_thai_thanh_toan, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, doan:doan_id(ten_doan)"
         )
-        .eq("trang_thai_thanh_toan", "da_tt")
-        .neq("trang_thai_duyet", "da_huy")
-        .order("thanh_toan_luc", { ascending: false });
+        .eq("trang_thai_duyet", "da_duyet")
+        .not("trang_thai_thanh_toan", "in", "(cong_no,hoan_tien)")
+        .order("ngay_can_thanh_toan", { ascending: true, nullsFirst: false });
 
       if (filters.doanId) q = q.eq("doan_id", filters.doanId);
       if (filters.loai) q = q.eq("loai", filters.loai);
+      if (filters.trangThaiTT && filters.trangThaiTT !== "all")
+        q = q.eq("trang_thai_thanh_toan", filters.trangThaiTT);
       if (filters.trangThaiHoaDon && filters.trangThaiHoaDon !== "all")
         q = q.eq("trang_thai_hoa_don", filters.trangThaiHoaDon);
       if (filters.trangThaiUNC && filters.trangThaiUNC !== "all")
@@ -58,7 +63,9 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
         so_tien: r.so_tien,
         nha_cung_cap_id: r.nha_cung_cap_id,
         ten_nha_cung_cap: r.ten_nha_cung_cap,
+        ngay_can_thanh_toan: r.ngay_can_thanh_toan,
         thanh_toan_luc: r.thanh_toan_luc,
+        trang_thai_thanh_toan: r.trang_thai_thanh_toan ?? "chua_tt",
         trang_thai_hoa_don: r.trang_thai_hoa_don ?? "chua_co",
         trang_thai_unc: r.trang_thai_unc ?? "chua_co",
         hoa_don_url: r.hoa_don_url,

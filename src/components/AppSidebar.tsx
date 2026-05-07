@@ -183,7 +183,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "HỆ THỐNG",
     items: [
-      { title: "Thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, boPhanOnly: "ke_toan" },
+      { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, boPhanOnly: "ke_toan" },
       { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock },
       { title: "Hóa đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc" },
       { title: "Công nợ", url: "/cong-no", icon: Wallet },

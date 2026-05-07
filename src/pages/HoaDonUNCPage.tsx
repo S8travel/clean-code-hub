@@ -4,9 +4,11 @@ import { AccessDenied } from "@/components/PermissionGate";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
-  RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX,
+  RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard, CalendarIcon,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -20,12 +22,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { SearchableSelect } from "@/components/SearchableSelect";
-import { cn } from "@/lib/utils";
 import {
   useHoaDonUNCList, useUpdateDocStatus, useUploadDNTTDoc, useDeleteDNTTDoc,
   type HoaDonUNCRow, type TrangThaiDoc,
 } from "@/hooks/use-hoa-don-unc";
-import { useDoanOptions } from "@/hooks/use-dntt";
+import { useDoanOptions, useMarkPaidWithDate } from "@/hooks/use-dntt";
 import { toast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -190,32 +191,47 @@ export default function HoaDonUNCPage() {
 
   const [doanId, setDoanId] = useState<string>("");
   const [loai, setLoai] = useState<string>("");
+  const [trangThaiTT, setTrangThaiTT] = useState<string>("");
   const [trangThaiHD, setTrangThaiHD] = useState<string>("");
   const [trangThaiUNC, setTrangThaiUNC] = useState<string>("");
+  const [payDateMap, setPayDateMap] = useState<Record<number, Date | undefined>>({});
+
+  const markPaidMut = useMarkPaidWithDate();
 
   const filters = useMemo(() => ({
     doanId: doanId ? Number(doanId) : null,
     loai: loai || null,
+    trangThaiTT: (trangThaiTT || "all") as "chua_tt" | "da_tt" | "all",
     trangThaiHoaDon: (trangThaiHD || "all") as TrangThaiDoc | "all",
     trangThaiUNC: (trangThaiUNC || "all") as TrangThaiDoc | "all",
-  }), [doanId, loai, trangThaiHD, trangThaiUNC]);
+  }), [doanId, loai, trangThaiTT, trangThaiHD, trangThaiUNC]);
 
   const { data: rows = [], isLoading } = useHoaDonUNCList(filters);
   const { data: doanOpts = [] } = useDoanOptions();
 
   const metrics = useMemo(() => {
-    const total = rows.length;
-    const thieu_hd = rows.filter(r => r.trang_thai_hoa_don === "chua_co").length;
-    const thieu_unc = rows.filter(r => r.trang_thai_unc === "chua_co").length;
-    const hoan_chinh = rows.filter(
-      r => r.trang_thai_hoa_don !== "chua_co" && r.trang_thai_unc !== "chua_co"
-    ).length;
-    return { total, thieu_hd, thieu_unc, hoan_chinh };
+    const chuaTT = rows.filter(r => r.trang_thai_thanh_toan === "chua_tt").length;
+    const daTT = rows.filter(r => r.trang_thai_thanh_toan === "da_tt").length;
+    const thieu_hd = rows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_hoa_don === "chua_co").length;
+    const thieu_unc = rows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_unc === "chua_co").length;
+    return { chuaTT, daTT, thieu_hd, thieu_unc };
   }, [rows]);
+
+  const handleMarkPaid = (id: number) => {
+    const date = payDateMap[id] ?? new Date();
+    markPaidMut.mutate(
+      { id, ngayThanhToan: format(date, "yyyy-MM-dd") },
+      {
+        onSuccess: () => toast({ title: "Đã xác nhận thanh toán" }),
+        onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể xác nhận"), variant: "destructive" }),
+      },
+    );
+  };
 
   const resetFilters = () => {
     setDoanId("");
     setLoai("");
+    setTrangThaiTT("");
     setTrangThaiHD("");
     setTrangThaiUNC("");
   };
@@ -232,10 +248,10 @@ export default function HoaDonUNCPage() {
       {/* Metrics */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Tổng đã thanh toán", value: metrics.total, cls: "text-foreground" },
+          { label: "Chờ thanh toán", value: metrics.chuaTT, cls: "text-amber-600" },
+          { label: "Đã thanh toán", value: metrics.daTT, cls: "text-emerald-600" },
           { label: "Thiếu hóa đơn", value: metrics.thieu_hd, cls: "text-red-600" },
           { label: "Thiếu UNC", value: metrics.thieu_unc, cls: "text-orange-600" },
-          { label: "Hoàn chỉnh", value: metrics.hoan_chinh, cls: "text-emerald-600" },
         ].map(m => (
           <Card key={m.label}>
             <CardContent className="p-4">
@@ -301,6 +317,18 @@ export default function HoaDonUNCPage() {
           </Select>
         </div>
 
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">Trạng thái TT</label>
+          <Select value={trangThaiTT} onValueChange={v => setTrangThaiTT(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="chua_tt">Chờ thanh toán</SelectItem>
+              <SelectItem value="da_tt">Đã thanh toán</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <Button variant="ghost" size="sm" onClick={resetFilters}>
           <RotateCcw className="h-4 w-4 mr-1" /> Reset
         </Button>
@@ -317,7 +345,8 @@ export default function HoaDonUNCPage() {
               <TableHead className="min-w-[180px]">Mô tả</TableHead>
               <TableHead className="min-w-[150px]">Nhà cung cấp</TableHead>
               <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
-              <TableHead className="w-[90px]">Ngày TT</TableHead>
+              <TableHead className="w-[100px]">Ngày cần TT</TableHead>
+              <TableHead className="min-w-[180px]">Thanh toán</TableHead>
               <TableHead className="min-w-[160px]">Hóa đơn</TableHead>
               <TableHead className="min-w-[160px]">UNC</TableHead>
             </TableRow>
@@ -325,13 +354,13 @@ export default function HoaDonUNCPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Đang tải...
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Không có dữ liệu
                 </TableCell>
               </TableRow>
@@ -359,9 +388,52 @@ export default function HoaDonUNCPage() {
                     {fmt(row.so_tien)}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {row.thanh_toan_luc
-                      ? format(new Date(row.thanh_toan_luc), "dd/MM/yyyy")
+                    {row.ngay_can_thanh_toan
+                      ? format(new Date(row.ngay_can_thanh_toan), "dd/MM/yyyy")
                       : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {row.trang_thai_thanh_toan === "da_tt" ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 w-fit">
+                          <CreditCard className="h-3 w-3" /> Đã TT
+                        </span>
+                        {row.thanh_toan_luc && (
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(row.thanh_toan_luc), "dd/MM/yyyy")}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs w-[130px] justify-start">
+                              <CalendarIcon className="h-3 w-3 mr-1 shrink-0" />
+                              {payDateMap[row.id]
+                                ? format(payDateMap[row.id]!, "dd/MM/yyyy")
+                                : "Chọn ngày TT"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={payDateMap[row.id]}
+                              onSelect={(d) => setPayDateMap(prev => ({ ...prev, [row.id]: d }))}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Button
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={markPaidMut.isPending}
+                          onClick={() => handleMarkPaid(row.id)}
+                        >
+                          Xác nhận TT
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     <DocCell row={row} loaiDoc="hoa_don" />

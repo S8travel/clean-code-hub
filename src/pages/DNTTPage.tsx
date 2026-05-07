@@ -3,7 +3,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useBoPhan } from "@/hooks/use-permissions";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
-import { Search, RotateCcw, Check, X, Trash2, CreditCard, Ban } from "lucide-react";
+import { RotateCcw, Check, X, Trash2, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,7 +28,7 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useDNTTList, useDoanOptions, useApproveDNTT,
-  useRejectDNTT, useMarkPaidDNTT, useDeleteDNTT, useCancelDNTT,
+  useRejectDNTT, useDeleteDNTT, useCancelDNTT,
   useCreateAdjustment,
   type DNTTRow,
 } from "@/hooks/use-dntt";
@@ -53,10 +53,6 @@ const duyetBadge: Record<string, { text: string; cls: string }> = {
   tu_choi: { text: "Từ chối", cls: "bg-red-100 text-red-700" },
 };
 
-const ttBadge: Record<string, { text: string; cls: string }> = {
-  chua_tt: { text: "Chờ UNC", cls: "bg-muted text-muted-foreground" },
-  da_tt: { text: "Đã TT", cls: "bg-emerald-100 text-emerald-700" },
-};
 
 export default function DNTTPage() {
   const canView = useBoPhan("ke_toan");
@@ -68,7 +64,6 @@ export default function DNTTPage() {
   const [fromDate, setFromDate] = useState<Date | undefined>(startOfMonth(now));
   const [toDate, setToDate] = useState<Date | undefined>(endOfMonth(now));
   const [trangThaiDuyet, setTrangThaiDuyet] = useState("cho_duyet");
-  const [trangThaiTT, setTrangThaiTT] = useState("");
   const [loai, setLoai] = useState("");
 
   const filters = useMemo(() => ({
@@ -76,15 +71,14 @@ export default function DNTTPage() {
     fromDate: fromDate ? format(fromDate, "yyyy-MM-dd") : null,
     toDate: toDate ? format(toDate, "yyyy-MM-dd") : null,
     trangThaiDuyet: trangThaiDuyet || null,
-    trangThaiTT: trangThaiTT || null,
+    trangThaiTT: null,
     loai: loai || null,
-  }), [doanId, fromDate, toDate, trangThaiDuyet, trangThaiTT, loai]);
+  }), [doanId, fromDate, toDate, trangThaiDuyet, loai]);
 
   const { data: rows = [], isLoading } = useDNTTList(filters);
   const { data: doanOpts = [] } = useDoanOptions();
   const approveMut = useApproveDNTT();
   const rejectMut = useRejectDNTT();
-  const markPaidMut = useMarkPaidDNTT();
   const deleteMut = useDeleteDNTT();
   const cancelMut = useCancelDNTT();
 
@@ -116,9 +110,8 @@ export default function DNTTPage() {
   const metrics = useMemo(() => {
     const total = mainRows.length;
     const choDuyet = mainRows.filter(r => r.trang_thai_duyet === "cho_duyet").length;
-    const daDuyetChoTT = mainRows.filter(r => r.trang_thai_duyet === "da_duyet" && r.trang_thai_thanh_toan === "chua_tt").length;
-    const daTT = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt").length;
-    return { total, choDuyet, daDuyetChoTT, daTT };
+    const daDuyet = mainRows.filter(r => r.trang_thai_duyet === "da_duyet").length;
+    return { total, choDuyet, daDuyet };
   }, [mainRows]);
 
   const resetFilters = () => {
@@ -126,7 +119,6 @@ export default function DNTTPage() {
     setFromDate(startOfMonth(now));
     setToDate(endOfMonth(now));
     setTrangThaiDuyet("");
-    setTrangThaiTT("");
     setLoai("");
   };
 
@@ -147,15 +139,6 @@ export default function DNTTPage() {
         logActivity.mutate({ action: "tu_choi", table_name: "de_nghi_thanh_toan", record_id: rejectId, mo_ta: `Từ chối ĐNTT #${rejectId}` });
         setRejectId(null);
         setRejectReason("");
-      },
-    });
-  };
-
-  const handleMarkPaid = (id: number) => {
-    markPaidMut.mutate(id, {
-      onSuccess: () => {
-        toast({ title: "Đã xác nhận thanh toán" });
-        logActivity.mutate({ action: "thanh_toan", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Xác nhận TT ĐNTT #${id}` });
       },
     });
   };
@@ -226,12 +209,11 @@ export default function DNTTPage() {
       <h1 className="text-2xl font-bold">Đề nghị thanh toán</h1>
 
       {/* Metrics */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Tổng ĐNTT", value: metrics.total, cls: "text-foreground" },
           { label: "Chờ duyệt", value: metrics.choDuyet, cls: "text-yellow-600" },
-          { label: "Đã duyệt chờ TT", value: metrics.daDuyetChoTT, cls: "text-blue-600" },
-          { label: "Đã thanh toán", value: metrics.daTT, cls: "text-emerald-600" },
+          { label: "Đã duyệt", value: metrics.daDuyet, cls: "text-blue-600" },
         ].map(m => (
           <Card key={m.label}>
             <CardContent className="p-4">
@@ -299,18 +281,6 @@ export default function DNTTPage() {
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Thanh toán</label>
-          <Select value={trangThaiTT} onValueChange={v => setTrangThaiTT(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[130px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="chua_tt">Chưa TT</SelectItem>
-              <SelectItem value="da_tt">Đã TT</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
           <label className="text-xs text-muted-foreground mb-1 block">Loại</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[130px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
@@ -341,20 +311,18 @@ export default function DNTTPage() {
               <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
               <TableHead className="w-[90px]">Ngày cần TT</TableHead>
               <TableHead className="min-w-[110px]">ĐNTT</TableHead>
-              <TableHead className="min-w-[110px]">Thanh toán</TableHead>
               <TableHead className="w-[90px]">Ngày tạo</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
             ) : mainRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const db = duyetBadge[row.trang_thai_duyet] || duyetBadge.cho_duyet;
-              const tb = ttBadge[row.trang_thai_thanh_toan] || ttBadge.chua_tt;
               const canTruRow = canTruMap[row.id];
 
               return (
@@ -408,35 +376,6 @@ export default function DNTTPage() {
                         </div>
                       )}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    {row.trang_thai_duyet === "da_duyet" ? (
-                      <div className="flex flex-col gap-1">
-                        <span className={cn("px-2 py-0.5 rounded text-xs font-medium w-fit", tb.cls)}>{tb.text}</span>
-                        {row.trang_thai_thanh_toan === "chua_tt" && (
-                          <Button size="sm" variant="outline" className="h-6 px-2 text-xs mt-1" onClick={() => handleMarkPaid(row.id)}>
-                            <CreditCard className="h-3 w-3 mr-1" /> Đã TT
-                          </Button>
-                        )}
-                        {row.trang_thai_thanh_toan === "da_tt" && row.thanh_toan_luc && (
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(row.thanh_toan_luc), "dd/MM/yyyy")}
-                          </span>
-                        )}
-                      </div>
-                    ) : row.trang_thai_duyet === "da_huy" ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="px-2 py-0.5 rounded text-xs font-medium w-fit bg-gray-100 text-gray-500">Đã hủy</span>
-                        {row.trang_thai_thanh_toan === "cong_no" && (
-                          <span className="text-xs text-purple-600">Cấn trừ công nợ</span>
-                        )}
-                        {row.trang_thai_thanh_toan === "hoan_tien" && (
-                          <span className="text-xs text-blue-600">Hoàn tiền</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {format(new Date(row.created_at), "dd/MM/yyyy")}

@@ -294,6 +294,36 @@ export function useMarkPaidDNTT() {
   });
 }
 
+export function useMarkPaidWithDate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ngayThanhToan }: { id: number; ngayThanhToan: string }) => {
+      const { data: dntt, error: fetchErr } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .select("id, doan_id")
+        .eq("id", id)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      const { error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({ trang_thai_thanh_toan: "da_tt", thanh_toan_luc: new Date(ngayThanhToan).toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+
+      const chiPhiIds = await getChiPhiIdsForDNTT(id);
+      await recalcChiPhiStatus(chiPhiIds);
+      return dntt.doan_id as number;
+    },
+    onSuccess: (doanId) => {
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+    },
+  });
+}
+
 /**
  * Hủy DNTT với 2 trường hợp:
  * - mode = undefined: hủy trước khi thanh toán (da_duyet + chua_tt) → chi-phi về chua_de_nghi
