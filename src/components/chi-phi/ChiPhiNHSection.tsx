@@ -572,6 +572,19 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
         .update({ trang_thai_dntt: "cho_duyet" })
         .in("id", allIds);
 
+      // When full can_tru (thucThanhToan=0), no new ĐNTT was created → mainNhId=null.
+      // Fallback: link to the existing da_tt ĐNTT for this meal so matching works.
+      const linkedId: number | null =
+        mainNhId ??
+        (dnttList.find(
+          (d) =>
+            d.ref_loai === "doan_chi_phi" &&
+            d.ref_id === row.id &&
+            d.trang_thai_thanh_toan === "da_tt" &&
+            d.trang_thai_duyet !== "da_huy" &&
+            d.trang_thai_duyet !== "tu_choi",
+        )?.id ?? null);
+
       if (canTruAmount > 0 && nccId && canTru) {
         await externalSupabase.from("de_nghi_thanh_toan").insert({
           doan_id: doanId,
@@ -586,7 +599,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           ref_loai: "can_tru_cong_no",
           ref_id: canTru.congNoId,
           ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
-          linked_dntt_id: mainNhId,
+          linked_dntt_id: linkedId,
         });
         setCanTruByMeal((prev) => ({ ...prev, [key]: null }));
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
@@ -843,11 +856,15 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           const daTT = paidDntts.reduce((s, d) => s + d.so_tien, 0);
           const daDeNghi = pendingDntts.reduce((s, d) => s + d.so_tien, 0);
           const activeDnttIds = new Set(activeDntts.map((d) => d.id));
+          const nhNccId = nh?.nha_cung_cap_id ?? null;
           const canTruAmtForNh = dnttList
             .filter((d) => {
               if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
               if (d.trang_thai_thanh_toan !== "can_tru") return false;
-              return d.linked_dntt_id != null && activeDnttIds.has(d.linked_dntt_id);
+              if (d.linked_dntt_id != null && activeDnttIds.has(d.linked_dntt_id)) return true;
+              // Fallback for legacy DNTTs created before the linked_dntt_id fix
+              if (d.linked_dntt_id == null && nhNccId && d.nha_cung_cap_id === nhNccId && activeDntts.length > 0) return true;
+              return false;
             })
             .reduce((s, d) => s + d.so_tien, 0);
           const isDaTT = totalBua > 0 && daTT >= totalBua;
