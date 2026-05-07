@@ -32,6 +32,8 @@ import {
   useCreateAdjustment,
   type DNTTRow,
 } from "@/hooks/use-dntt";
+import { useQuery } from "@tanstack/react-query";
+import { externalSupabase } from "@/lib/supabase-external";
 import { Textarea } from "@/components/ui/textarea";
 import { SlidersHorizontal } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -97,6 +99,46 @@ export default function DNTTPage() {
   // Trong model mới: can_tru là payment record, không còn là DNTT row
   const mainRows = rows;
   const canTruMap: Record<number, DNTTRow> = {};
+
+  // Load các ĐNTT cọc cùng ref (cùng meal/KS/DV) — để hiển thị "Đã cọc: X" trên dòng còn lại
+  const refPairs = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((r) => {
+      if (r.ref_loai && r.ref_id != null) set.add(`${r.ref_loai}|${r.ref_id}`);
+    });
+    return [...set];
+  }, [rows]);
+
+  const { data: cocDntts = [] } = useQuery({
+    queryKey: ["dntt-coc-siblings", refPairs.join(",")],
+    enabled: refPairs.length > 0,
+    queryFn: async () => {
+      const refLoais = [...new Set(refPairs.map((p) => p.split("|")[0]))];
+      const refIds = [...new Set(refPairs.map((p) => Number(p.split("|")[1])).filter(Number.isFinite))];
+      if (refLoais.length === 0 || refIds.length === 0) return [];
+      const { data } = await externalSupabase
+        .from("dntt_with_payment_status")
+        .select("id, ref_loai, ref_id, so_tien, paid_amount, la_coc, payment_status, trang_thai_duyet")
+        .eq("la_coc", true)
+        .in("ref_loai", refLoais)
+        .in("ref_id", refIds)
+        .not("trang_thai_duyet", "eq", "da_huy")
+        .not("trang_thai_duyet", "eq", "tu_choi");
+      // Lọc đúng cặp (ref_loai, ref_id)
+      const validKeys = new Set(refPairs);
+      return (data || []).filter((d: any) => validKeys.has(`${d.ref_loai}|${d.ref_id}`));
+    },
+  });
+
+  // Map ref → tổng cọc đã thanh toán (paid_amount của cọc DNTTs)
+  const cocByRef = useMemo(() => {
+    const m: Record<string, number> = {};
+    cocDntts.forEach((d: any) => {
+      const k = `${d.ref_loai}|${d.ref_id}`;
+      m[k] = (m[k] || 0) + (d.paid_amount || 0);
+    });
+    return m;
+  }, [cocDntts]);
 
   const metrics = useMemo(() => {
     const total = mainRows.length;
@@ -333,20 +375,28 @@ export default function DNTTPage() {
                   <TableCell className="text-sm">{row.mo_ta}</TableCell>
                   <TableCell className="text-sm">{row.ten_ncc || "—"}</TableCell>
                   <TableCell className="text-right font-medium">
-                    {canTruRow ? (
-                      <div className="space-y-0.5 text-xs">
-                        <div className="text-muted-foreground">Tổng: {fmt(row.so_tien + canTruRow.so_tien)}</div>
-                        <div className="text-amber-600">Cấn trừ: −{fmt(canTruRow.so_tien)}</div>
-                        <div className="text-sm font-semibold">Cần TT: {fmt(row.so_tien)}</div>
-                      </div>
-                    ) : (
-                      <div>{fmt(row.so_tien)}</div>
-                    )}
-                    {row.la_coc && row.ty_le_coc && (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
-                        Cọc {row.ty_le_coc}%
-                      </span>
-                    )}
+                    {(() => {
+                      const refKey = row.ref_loai && row.ref_id != null ? `${row.ref_loai}|${row.ref_id}` : null;
+                      // Tổng paid_amount của các DNTT cọc cùng ref (trừ chính dòng này nếu là cọc)
+                      const cocSibling = refKey
+                        ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
+                        : 0;
+                      return (
+                        <div className="space-y-0.5">
+                          <div>{fmt(row.so_tien)}</div>
+                          {row.la_coc && (
+                            <span className="inline-block text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                              {row.ty_le_coc ? `Cọc ${row.ty_le_coc}%` : "Cọc"}
+                            </span>
+                          )}
+                          {!row.la_coc && cocSibling > 0 && (
+                            <div className="text-[11px] text-muted-foreground font-normal">
+                              Đã cọc: <span className="text-amber-600 font-medium">{fmt(cocSibling)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {row.ngay_can_thanh_toan
