@@ -16,12 +16,14 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
+import { useQueryClient } from "@tanstack/react-query";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
+import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -76,7 +78,9 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
   const adjustMut = useCreateAdjustment();
+  const qc = useQueryClient();
   const dvCdMap = useDVCanhDiemMap(doanId);
+  const [canTruByDv, setCanTruByDv] = useState<Record<number, CanTruSelection | null>>({});
   const [previewDVData, setPreviewDVData] = useState<NHDocData | null>(null);
 
   // Inline edit state for DNTT amount
@@ -326,28 +330,63 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
     setDvNgayCan(ngayCan);
   };
 
-  const handleDvModalSubmit = () => {
+  const handleDvModalSubmit = async () => {
     if (!dvModal) return;
     const { chiPhiId, thanhTien, moTa, nccId } = dvModal;
-    const soTien = dvModalMode === "full" ? thanhTien : dvDepositAmount;
-    if (soTien <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
-    if (dvModalMode === "deposit" && soTien >= thanhTien) { toast.error("Số tiền cọc phải nhỏ hơn tổng tiền"); return; }
-    insertDNTT.mutate({
-      doan_id: doanId,
-      loai: "dich_vu",
-      mo_ta: moTa || tenDoan || "Dịch vụ",
-      nha_cung_cap_id: nccId,
-      so_tien: soTien,
-      la_coc: dvModalMode === "deposit",
-      trang_thai_duyet: "cho_duyet",
-      trang_thai_thanh_toan: "chua_tt",
-      ref_loai: "doan_chi_phi",
-      ref_id: chiPhiId,
-      so_tien_con_lai: dvModalMode === "deposit" ? thanhTien - soTien : 0,
-      ngay_can_thanh_toan: dvNgayCan || null,
-    } as any, {
-      onSuccess: () => { toast.success("Đã gửi ĐNTT"); setDvModal(null); },
-    });
+    const canTru = canTruByDv[chiPhiId];
+    const baseAmount = dvModalMode === "full" ? thanhTien : dvDepositAmount;
+    const canTruAmount = (canTru && nccId && canTru.soTienCanTru > 0)
+      ? Math.min(canTru.soTienCanTru, baseAmount)
+      : 0;
+    const soTien = baseAmount - canTruAmount;
+    if (soTien <= 0 && canTruAmount <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
+    if (dvModalMode === "deposit" && dvDepositAmount >= thanhTien) { toast.error("Số tiền cọc phải nhỏ hơn tổng tiền"); return; }
+    try {
+      let mainDvId: number | null = null;
+      if (soTien > 0) {
+        const mainRecord = await insertDNTT.mutateAsync({
+          doan_id: doanId,
+          loai: "dich_vu",
+          mo_ta: moTa || tenDoan || "Dịch vụ",
+          nha_cung_cap_id: nccId,
+          so_tien: soTien,
+          la_coc: dvModalMode === "deposit",
+          trang_thai_duyet: "cho_duyet",
+          trang_thai_thanh_toan: "chua_tt",
+          ref_loai: "doan_chi_phi",
+          ref_id: chiPhiId,
+          so_tien_con_lai: dvModalMode === "deposit" ? thanhTien - soTien : 0,
+          ngay_can_thanh_toan: dvNgayCan || null,
+          allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
+        } as any);
+        mainDvId = (mainRecord as any)?.id ?? null;
+      }
+
+      if (canTruAmount > 0 && nccId && canTru) {
+        await externalSupabase.from("de_nghi_thanh_toan").insert({
+          doan_id: doanId,
+          loai: "dich_vu",
+          mo_ta: `Cấn trừ công nợ từ đoàn: ${canTru.tenDoan}`,
+          nha_cung_cap_id: nccId,
+          so_tien: canTruAmount,
+          la_coc: true,
+          trang_thai_duyet: "cho_duyet",
+          trang_thai_thanh_toan: "can_tru",
+          ref_loai: "can_tru_cong_no",
+          ref_id: canTru.congNoId,
+          ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
+          linked_dntt_id: mainDvId,
+        });
+        setCanTruByDv((prev) => ({ ...prev, [chiPhiId]: null }));
+        qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+        qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      }
+
+      toast.success("Đã gửi ĐNTT");
+      setDvModal(null);
+    } catch (err: any) {
+      toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
+    }
   };
 
   const handleResendSubmit = () => {
@@ -942,6 +981,12 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                 value={dvNgayCan}
                 onChange={e => setDvNgayCan(e.target.value)} />
             </div>
+            <KSCongNoPanel
+              nccId={dvModal?.nccId ?? undefined}
+              doanId={doanId}
+              value={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? null) : null}
+              onChange={(v) => dvModal && setCanTruByDv((prev) => ({ ...prev, [dvModal.chiPhiId]: v }))}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" className="text-xs" onClick={() => setDvModal(null)}>Hủy</Button>

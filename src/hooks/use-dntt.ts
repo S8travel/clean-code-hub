@@ -281,7 +281,7 @@ export function useCancelDNTT() {
     mutationFn: async ({ id, mode }: { id: number; mode?: "cong_no" | "hoan_tien" }) => {
       const { data: dntt, error: fetchErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .select("id, doan_id, ref_loai, ref_id")
+        .select("id, doan_id, ref_loai, ref_id, nha_cung_cap_id, linked_dntt_id")
         .eq("id", id)
         .single();
       if (fetchErr) throw fetchErr;
@@ -300,6 +300,27 @@ export function useCancelDNTT() {
         .update(updates)
         .eq("id", id);
       if (error) throw error;
+
+      // Tìm record đi kèm qua linked_dntt_id (2 chiều) và hủy cùng
+      let pairedId: number | null = null;
+      if (dntt.linked_dntt_id) {
+        pairedId = dntt.linked_dntt_id;
+      } else {
+        const { data: paired } = await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .select("id")
+          .eq("linked_dntt_id", id)
+          .neq("trang_thai_duyet", "da_huy")
+          .limit(1)
+          .maybeSingle();
+        pairedId = paired?.id ?? null;
+      }
+      if (pairedId) {
+        await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .update({ trang_thai_duyet: "da_huy" })
+          .eq("id", pairedId);
+      }
 
       const chiPhiIds = await getChiPhiIdsForDNTT(id);
       await recalcChiPhiStatus(chiPhiIds);
@@ -424,12 +445,14 @@ export function useCreateCanTru() {
       loai,
       items,
       tenDoanMoi,
+      linkedDnttId,
     }: {
       doanId: number;
       nccId: number;
       loai: string;
       items: CanTruItem[];
       tenDoanMoi: string;
+      linkedDnttId?: number | null;
     }) => {
       const totalCanTru = items.reduce((s, i) => s + i.soTienCanTru, 0);
       const moTa = `Cấn trừ công nợ: ${items.map((i) => i.tenDoan).join(", ")}`;
@@ -446,6 +469,7 @@ export function useCreateCanTru() {
           trang_thai_duyet: "da_duyet",
           trang_thai_thanh_toan: "can_tru",
           la_coc: false,
+          linked_dntt_id: linkedDnttId ?? null,
         })
         .select("id")
         .single();

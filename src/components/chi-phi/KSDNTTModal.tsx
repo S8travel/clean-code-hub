@@ -81,6 +81,7 @@ export default function KSDNTTModal({
     setSubmitting(true);
     try {
       // 1. Tạo DNTT chính (số tiền thực thanh toán sau cấn trừ)
+      let mainDnttId: number | null = null;
       if (soTien > 0) {
         // Tính allocations pro-rata theo thanh_tien của từng phòng
         const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id));
@@ -111,7 +112,8 @@ export default function KSDNTTModal({
           ngay_can_thanh_toan: ngayCan || null,
           allocations: allocations.length > 0 ? allocations : undefined,
         };
-        await insertDNTT.mutateAsync(payload);
+        const mainRecord = await insertDNTT.mutateAsync(payload);
+        mainDnttId = (mainRecord as any)?.id ?? null;
       }
 
       // 2. Nếu có cấn trừ: tạo record chờ duyệt — công nợ sẽ được ghi nhận sau khi được duyệt
@@ -131,6 +133,7 @@ export default function KSDNTTModal({
           ref_loai: "can_tru_cong_no",
           ref_id: canTru.congNoId,
           ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
+          linked_dntt_id: mainDnttId,
         });
 
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, getDay, subDays, parseISO } from "date-fns";
 import { Plus, Ban, Printer, Trash2, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +19,7 @@ import {
   useChiPhiList, useUpsertChiPhi, useDeleteChiPhi, useDNTTList, useInsertDNTT,
 } from "@/hooks/use-chi-phi";
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
-import { useCancelDNTT, useCreateCanTru, useUpdateDNTT } from "@/hooks/use-dntt";
+import { useCancelDNTT, useUpdateDNTT } from "@/hooks/use-dntt";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -103,8 +104,8 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
-  const createCanTru = useCreateCanTru();
   const insertDNTT = useInsertDNTT();
+  const qc = useQueryClient();
 
   const [localRows, setLocalRows] = useState<Record<string, LocalNHRow>>({});
   const [extrasMap, setExtrasMap] = useState<Record<string, LocalNHExtra[]>>({});
@@ -535,24 +536,35 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
         ? format(new Date(row.ngay_date + "T00:00:00"), "dd/MM")
         : "?";
 
-      await insertDNTT.mutateAsync({
-        doan_id: doanId,
-        loai: "nha_hang",
-        mo_ta: `${nhName} (${buaLabel}) - Ngày ${row.ngay_so} ${dateLabel}`,
-        nha_cung_cap_id: nh?.nha_cung_cap_id || null,
-        ten_nha_cung_cap: nh?.ten_ncc || null,
-        so_tai_khoan: nh?.ncc_so_tai_khoan || null,
-        ngan_hang: nh?.ncc_ngan_hang || null,
-        so_tien: soTien,
-        la_coc: dnttModalMode === "deposit",
-        so_tien_con_lai: soTienConLai > 0 ? soTienConLai : 0,
-        trang_thai_duyet: "cho_duyet",
-        trang_thai_thanh_toan: "chua_tt",
-        ref_loai: "doan_chi_phi",
-        ref_id: row.id,
-        ngay_can_thanh_toan: dnttNgayCan || null,
-        allocations: [{ chi_phi_id: row.id, so_tien: soTien }],
-      });
+      const canTru = canTruByMeal[key];
+      const nccId = nh?.nha_cung_cap_id || null;
+      const canTruAmount = (canTru && nccId && canTru.soTienCanTru > 0)
+        ? Math.min(canTru.soTienCanTru, soTien)
+        : 0;
+      const thucThanhToan = soTien - canTruAmount;
+
+      let mainNhId: number | null = null;
+      if (thucThanhToan > 0) {
+        const mainNhRecord = await insertDNTT.mutateAsync({
+          doan_id: doanId,
+          loai: "nha_hang",
+          mo_ta: `${nhName} (${buaLabel}) - Ngày ${row.ngay_so} ${dateLabel}`,
+          nha_cung_cap_id: nccId,
+          ten_nha_cung_cap: nh?.ten_ncc || null,
+          so_tai_khoan: nh?.ncc_so_tai_khoan || null,
+          ngan_hang: nh?.ncc_ngan_hang || null,
+          so_tien: thucThanhToan,
+          la_coc: dnttModalMode === "deposit",
+          so_tien_con_lai: soTienConLai > 0 ? soTienConLai : 0,
+          trang_thai_duyet: "cho_duyet",
+          trang_thai_thanh_toan: "chua_tt",
+          ref_loai: "doan_chi_phi",
+          ref_id: row.id,
+          ngay_can_thanh_toan: dnttNgayCan || null,
+          allocations: [{ chi_phi_id: row.id, so_tien: thucThanhToan }],
+        });
+        mainNhId = (mainNhRecord as any)?.id ?? null;
+      }
 
       const allIds = [row.id, ...extras.filter((e) => e.id).map((e) => e.id!)];
       await externalSupabase
@@ -560,23 +572,25 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
         .update({ trang_thai_dntt: "cho_duyet" })
         .in("id", allIds);
 
-      // Áp dụng cấn trừ nếu có
-      const canTru = canTruByMeal[key];
-      if (canTru && nh?.nha_cung_cap_id && canTru.soTienCanTru > 0) {
-        await createCanTru.mutateAsync({
-          doanId,
-          nccId: nh.nha_cung_cap_id,
+      if (canTruAmount > 0 && nccId && canTru) {
+        await externalSupabase.from("de_nghi_thanh_toan").insert({
+          doan_id: doanId,
           loai: "nha_hang",
-          tenDoanMoi: tenDoan,
-          items: [{
-            congNoId: canTru.congNoId,
-            soTienGoc: canTru.soTienConLai,
-            soTienConLai: canTru.soTienConLai,
-            soTienCanTru: Math.min(canTru.soTienCanTru, soTien),
-            tenDoan: canTru.tenDoan,
-          }],
+          mo_ta: `Cấn trừ công nợ từ đoàn: ${canTru.tenDoan}`,
+          nha_cung_cap_id: nccId,
+          ten_nha_cung_cap: nh?.ten_ncc || null,
+          so_tien: canTruAmount,
+          la_coc: true,
+          trang_thai_duyet: "cho_duyet",
+          trang_thai_thanh_toan: "can_tru",
+          ref_loai: "can_tru_cong_no",
+          ref_id: canTru.congNoId,
+          ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
+          linked_dntt_id: mainNhId,
         });
         setCanTruByMeal((prev) => ({ ...prev, [key]: null }));
+        qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+        qc.invalidateQueries({ queryKey: ["dntt-list"] });
       }
 
       toast.success("Đã tạo đề nghị thanh toán");
