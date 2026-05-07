@@ -842,8 +842,16 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           const pendingDntts = activeDntts.filter((d) => d.trang_thai_thanh_toan !== "da_tt");
           const daTT = paidDntts.reduce((s, d) => s + d.so_tien, 0);
           const daDeNghi = pendingDntts.reduce((s, d) => s + d.so_tien, 0);
+          const activeDnttIds = new Set(activeDntts.map((d) => d.id));
+          const canTruAmtForNh = dnttList
+            .filter((d) => {
+              if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
+              if (d.trang_thai_thanh_toan !== "can_tru") return false;
+              return d.linked_dntt_id != null && activeDnttIds.has(d.linked_dntt_id);
+            })
+            .reduce((s, d) => s + d.so_tien, 0);
           const isDaTT = totalBua > 0 && daTT >= totalBua;
-          const conLai = Math.max(0, totalBua - daTT);
+          const conLai = Math.max(0, totalBua - daTT - canTruAmtForNh);
           // Primary DNTT for cancel: prefer pending over paid
           const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
           const canCancel = activeDntt && (

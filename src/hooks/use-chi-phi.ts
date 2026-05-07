@@ -72,6 +72,7 @@ export interface DNTTRow {
   sent_at: string | null;
   sent_by: string | null;
   ngay_can_thanh_toan: string | null;
+  linked_dntt_id: number | null;
 }
 
 // ── Queries ──

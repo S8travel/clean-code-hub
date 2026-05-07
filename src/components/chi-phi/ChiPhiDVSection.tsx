@@ -615,8 +615,16 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                   .filter(e => e.nguoi_tt !== "hdv")
                   .reduce((s, e) => s + e.so_luong * e.don_gia, 0);
                 const totalTienCt = thanhTien + extrasCtTotal;
+                const activeDnttIds = new Set(activeDntts.map((d) => d.id));
+                const canTruAmtForDv = dnttList
+                  .filter((d) => {
+                    if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
+                    if (d.trang_thai_thanh_toan !== "can_tru") return false;
+                    return d.linked_dntt_id != null && activeDnttIds.has(d.linked_dntt_id);
+                  })
+                  .reduce((s, d) => s + d.so_tien, 0);
                 const isDaTT = totalTienCt > 0 && daTT >= totalTienCt;
-                const conLai = Math.max(0, totalTienCt - daTT);
+                const conLai = Math.max(0, totalTienCt - daTT - canTruAmtForDv);
                 const congNoAmount = allDntts.filter(
                   d => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no",
                 ).reduce((s, d) => s + d.so_tien, 0);

@@ -230,6 +230,7 @@ export function AppSidebar() {
   const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null);
   const { data: invoiceBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "gia");
   const { data: suCoBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "su_co");
+  const { data: giaoViecBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "giao_viec");
 
   const isActive = (url: string) =>
     location.pathname === url || location.pathname.startsWith(url + "/");
@@ -267,7 +268,8 @@ export function AppSidebar() {
                   const badgeCount =
                     item.url === "/lock-phong" ? deadlineAlerts.length :
                     item.url === "/invoice" ? invoiceBadge :
-                    item.url === "/theo-doi" ? suCoBadge : 0;
+                    item.url === "/theo-doi" ? suCoBadge :
+                    item.url === "/my-job" ? giaoViecBadge : 0;
                   if (badgeCount > 0) {
                     return (
                       <SidebarMenuItem key={item.url}>

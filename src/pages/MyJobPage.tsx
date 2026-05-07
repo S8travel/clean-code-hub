@@ -24,6 +24,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMyDeadlines, type DeadlineItem } from "@/hooks/use-my-job";
 import { useMyTeamAssignments, useAllTeamAgents } from "@/hooks/use-teams";
 import { useDoanLogGhiChu, useToggleResolved } from "@/hooks/use-doan-log";
+import { useCongViecList } from "@/hooks/use-cong-viec";
+import GiaoViecTab from "@/components/my-job/GiaoViecTab";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Circle, StickyNote } from "lucide-react";
 
@@ -303,6 +305,11 @@ export default function MyJobPage() {
   const { data: ghiChuLogs = [] } = useDoanLogGhiChu(user?.user_id);
   const toggleResolved = useToggleResolved();
 
+  const { data: congViecTasks = [] } = useCongViecList(uid);
+  const giaoViecPending = congViecTasks.filter(
+    (t) => t.nguoi_nhan === uid && (t.trang_thai === "cho_nhan" || t.trang_thai === "dang_lam"),
+  ).length;
+
   // Rows cho bảng (với booking status)
   const rows = useMemo(() => {
     if (!myDoan || !td) return [];
@@ -453,6 +460,14 @@ export default function MyJobPage() {
               {filteredDeadlines.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
                   {filteredDeadlines.filter((d) => deadlineGroup(d.deadline) !== "later").length || filteredDeadlines.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="giao-viec" className="text-xs">
+              Giao việc
+              {giaoViecPending > 0 && (
+                <span className="ml-1.5 rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
+                  {giaoViecPending}
                 </span>
               )}
             </TabsTrigger>
@@ -811,6 +826,13 @@ export default function MyJobPage() {
                 })}
               </div>
             )}
+          </TabsContent>
+
+          {/* ── Tab Giao việc ─────────────────────────────────────────────── */}
+          <TabsContent value="giao-viec">
+            {uid && user?.ho_ten ? (
+              <GiaoViecTab userId={uid} userName={user.ho_ten} />
+            ) : null}
           </TabsContent>
         </Tabs>
 

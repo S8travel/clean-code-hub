@@ -807,7 +807,18 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         // Dùng thucTeByKs nếu có điều chỉnh, ngược lại dùng totalKS từ room pricing
         const thucTeKS = thucTeByKs[ksId] ?? totalKS;
         const daDieuChinh = thucTeByKs[ksId] != null && thucTeByKs[ksId] !== totalKS;
-        const conLai = thucTeKS - daCoc;
+        // Tính can_tru đã áp dụng cho KS này (qua NCC)
+        const nccIdForKs = ks?.nha_cung_cap_id ?? null;
+        const canTruAmtForKs = dnttList
+          .filter((d) => {
+            if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
+            if (d.trang_thai_thanh_toan !== "can_tru") return false;
+            if (d.ref_loai === "can_tru_cong_no" && nccIdForKs && d.nha_cung_cap_id === nccIdForKs) return true;
+            if (d.ref_loai === "khach_san" && d.ref_id === ksId) return true;
+            return false;
+          })
+          .reduce((sum, d) => sum + d.so_tien, 0);
+        const conLai = thucTeKS - daCoc - canTruAmtForKs;
         const isDaTT = thucTeKS > 0 && daTT >= thucTeKS;
         const congNoAmount = congNoByKs[ksId] || 0;
         const hoanTienAmount = hoanTienByKs[ksId] || 0;
