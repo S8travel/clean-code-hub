@@ -407,8 +407,33 @@ export function useDeleteDNTT() {
         .eq("dntt_id", id);
       const chiPhiIds = (allocBefore || []).map((r: any) => r.chi_phi_id as number);
 
+      // Lấy cong_no IDs bị ảnh hưởng để reset trạng thái
+      const { data: payments } = await externalSupabase
+        .from("payments")
+        .select("cong_no_id")
+        .eq("dntt_id", id)
+        .eq("method", "can_tru");
+      const affectedCongNoIds = [
+        ...new Set((payments || []).map((p: any) => p.cong_no_id).filter((x: any) => x != null)),
+      ] as number[];
+
       const { error } = await externalSupabase.from("de_nghi_thanh_toan").delete().eq("id", id);
       if (error) throw error;
+
+      // Reset cong_no trạng thái về 'con_du' nếu balance khôi phục sau cascade-delete
+      for (const cnId of affectedCongNoIds) {
+        const { data: cnRow } = await externalSupabase
+          .from("cong_no_with_status")
+          .select("so_tien_con_lai, trang_thai")
+          .eq("id", cnId)
+          .single();
+        if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
+          await externalSupabase
+            .from("cong_no")
+            .update({ trang_thai: "con_du" })
+            .eq("id", cnId);
+        }
+      }
 
       await recalcChiPhiStatus(chiPhiIds);
       return doanId;
@@ -417,6 +442,8 @@ export function useDeleteDNTT() {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      qc.invalidateQueries({ queryKey: ["cong-no"] });
+      qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       log({ doan_id: doanId, action: "xoa", table_name: "de_nghi_thanh_toan", record_id: vars.id, mo_ta: `Xóa ĐNTT #${vars.id}` });
     },

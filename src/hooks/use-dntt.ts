@@ -256,9 +256,12 @@ export function useMarkPaidWithDate() {
 
 /**
  * Hủy DNTT:
- * - mode = undefined: hủy trước khi thanh toán → chi-phi về chua_de_nghi
- * - mode = "cong_no": hủy sau khi đã thanh toán → tạo cong_no record (NCC giữ tiền làm credit)
- * - mode = "hoan_tien": hủy sau khi đã thanh toán → tạo cong_no với trang_thai='da_hoan_tien'
+ * - mode = undefined: hủy trước khi thanh toán cash → xóa các can_tru payments để khôi phục cong_no nguồn
+ * - mode = "cong_no": hủy sau khi đã thanh toán cash → tạo cong_no record (NCC giữ tiền làm credit)
+ * - mode = "hoan_tien": hủy sau khi đã thanh toán cash → tạo cong_no với trang_thai='da_hoan_tien'
+ *
+ * Ghi chú: can_tru payments LUÔN bị xóa khi cancel (để khôi phục cong_no nguồn). Chỉ cash
+ * payments mới có thể chuyển thành cong_no/hoan_tien.
  */
 export function useCancelDNTT() {
   const qc = useQueryClient();
@@ -271,7 +274,45 @@ export function useCancelDNTT() {
         .single();
       if (fetchErr) throw fetchErr;
 
-      const paidAmount = await getPaidAmount(id);
+      // Lấy tất cả payments của ĐNTT này
+      const { data: payments } = await externalSupabase
+        .from("payments")
+        .select("id, method, so_tien, cong_no_id")
+        .eq("dntt_id", id);
+      const allPayments = payments || [];
+      const cashPaid = allPayments
+        .filter((p: any) => p.method === "cash")
+        .reduce((s: number, p: any) => s + Number(p.so_tien), 0);
+      const canTruPaymentIds = allPayments
+        .filter((p: any) => p.method === "can_tru")
+        .map((p: any) => p.id);
+      const affectedCongNoIds = [
+        ...new Set(
+          allPayments
+            .filter((p: any) => p.method === "can_tru" && p.cong_no_id != null)
+            .map((p: any) => p.cong_no_id as number),
+        ),
+      ];
+
+      // Xóa can_tru payments → khôi phục balance của cong_no nguồn
+      if (canTruPaymentIds.length > 0) {
+        await externalSupabase.from("payments").delete().in("id", canTruPaymentIds);
+
+        // Reset trạng thái cong_no nguồn về 'con_du' nếu trước đó là 'da_can_tru'
+        for (const cnId of affectedCongNoIds) {
+          const { data: cnRow } = await externalSupabase
+            .from("cong_no_with_status")
+            .select("so_tien_con_lai, trang_thai")
+            .eq("id", cnId)
+            .single();
+          if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
+            await externalSupabase
+              .from("cong_no")
+              .update({ trang_thai: "con_du" })
+              .eq("id", cnId);
+          }
+        }
+      }
 
       const { error } = await externalSupabase
         .from("de_nghi_thanh_toan")
@@ -282,14 +323,14 @@ export function useCancelDNTT() {
         .eq("id", id);
       if (error) throw error;
 
-      // Nếu đã có thanh toán và user chọn mode → tạo cong_no record
-      if (mode && paidAmount > 0 && dntt.nha_cung_cap_id) {
+      // Nếu đã có cash payment và user chọn mode → tạo cong_no record (chỉ phần cash)
+      if (mode && cashPaid > 0 && dntt.nha_cung_cap_id) {
         const { error: cnErr } = await externalSupabase.from("cong_no").insert({
           doan_id: dntt.doan_id,
           dntt_goc_id: id,
           nha_cung_cap_id: dntt.nha_cung_cap_id,
           ten_nha_cung_cap: dntt.ten_nha_cung_cap,
-          so_tien_goc: paidAmount,
+          so_tien_goc: cashPaid,
           trang_thai: mode === "hoan_tien" ? "da_hoan_tien" : "con_du",
           ly_do: `Hủy ĐNTT #${id}: ${dntt.mo_ta || ""}`.trim(),
         });
@@ -366,14 +407,43 @@ export function useDeleteDNTT() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => {
+      // Lấy cong_no IDs bị ảnh hưởng để reset trạng thái sau khi cascade-delete
+      const { data: payments } = await externalSupabase
+        .from("payments")
+        .select("cong_no_id")
+        .eq("dntt_id", id)
+        .eq("method", "can_tru");
+      const affectedCongNoIds = [
+        ...new Set((payments || []).map((p: any) => p.cong_no_id).filter((x: any) => x != null)),
+      ] as number[];
+
       // payments cascade tự động (ON DELETE CASCADE)
       const { error } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .delete()
         .eq("id", id);
       if (error) throw error;
+
+      // Reset cong_no trạng thái về 'con_du' nếu balance khôi phục
+      for (const cnId of affectedCongNoIds) {
+        const { data: cnRow } = await externalSupabase
+          .from("cong_no_with_status")
+          .select("so_tien_con_lai, trang_thai")
+          .eq("id", cnId)
+          .single();
+        if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
+          await externalSupabase
+            .from("cong_no")
+            .update({ trang_thai: "con_du" })
+            .eq("id", cnId);
+        }
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dntt-list"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["cong-no"] });
+      qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
+    },
   });
 }
 
