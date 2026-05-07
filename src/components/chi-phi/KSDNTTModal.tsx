@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useInsertDNTT } from "@/hooks/use-chi-phi";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { LocalKSRow } from "./ChiPhiKSSection";
-import type { CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -32,6 +32,7 @@ interface Props {
   localRows: LocalKSRow[];
   chiPhiRowIds: number[];
   canTru: CanTruSelection | null;
+  onCanTruChange: (v: CanTruSelection | null) => void;
   tenDoanMoi: string;
   serviceDate?: string;
 }
@@ -47,7 +48,7 @@ function defaultNgayCan(serviceDate?: string): string {
 
 export default function KSDNTTModal({
   open, onClose, doanId, ksId, ksName, nccId, nccTen, nccStk, nccNganHang,
-  totalKS, daCoc, localRows, chiPhiRowIds, canTru, tenDoanMoi, serviceDate,
+  totalKS, daCoc, localRows, chiPhiRowIds, canTru, onCanTruChange, tenDoanMoi, serviceDate,
 }: Props) {
   const conLai = totalKS - daCoc;
   const canTruAmount = canTru?.soTienCanTru ?? 0;
@@ -195,6 +196,14 @@ export default function KSDNTTModal({
               </>
             )}
           </div>
+
+          {/* Cấn trừ công nợ */}
+          <KSCongNoPanel
+            nccId={nccId}
+            doanId={doanId}
+            value={canTru}
+            onChange={onCanTruChange}
+          />
 
           {/* Chọn hình thức */}
           {thucThanhToan > 0 && (

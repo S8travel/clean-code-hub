@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import KSRowInput from "./KSRowInput";
 import KSDNTTModal from "./KSDNTTModal";
-import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
 import { exportDNTTKSExcel } from "@/lib/export-dntt-ks-excel";
 import DNTTKSPreviewModal from "./DNTTKSPreviewModal";
 import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
@@ -1140,14 +1140,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                   );
                 })()}
 
-                {/* Cấn trừ + actions */}
+                {/* Actions */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <KSCongNoPanel
-                    nccId={ks?.nha_cung_cap_id}
-                    doanId={doanId}
-                    value={canTruByKs[ksId] ?? null}
-                    onChange={(v) => setCanTruByKs((prev) => ({ ...prev, [ksId]: v }))}
-                  />
                   <div className="flex items-center gap-2 ml-auto">
                     {paidDnttsForKs.length > 0 && (
                       <Button
@@ -1186,8 +1180,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                         Đề nghị TT
                       </Button>
                     )}
-                    {/* Đã có DNTT → luôn cho phép tạo thêm (trừ khi đã hủy dịch vụ) */}
-                    {!isKsDinhKy && effectiveKsStatus !== "chua_de_nghi" && effectiveKsStatus !== "cong_no" && effectiveKsStatus !== "hoan_tien" && (
+                    {/* Đã thanh toán/duyệt → cho phép tạo thêm cho phần còn lại */}
+                    {!isKsDinhKy && effectiveKsStatus !== "chua_de_nghi" && effectiveKsStatus !== "cho_duyet" && effectiveKsStatus !== "cong_no" && effectiveKsStatus !== "hoan_tien" && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1233,6 +1227,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           localRows={grouped[modalKsId] || []}
           chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id).map((r) => r.id!)}
           canTru={canTruByKs[modalKsId] ?? null}
+          onCanTruChange={(v) => setCanTruByKs((prev) => ({ ...prev, [modalKsId]: v }))}
           tenDoanMoi={tenDoan}
           serviceDate={(() => {
             const rows = grouped[modalKsId] || [];
