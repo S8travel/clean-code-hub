@@ -200,13 +200,29 @@ export function useChiPhiNHData(doanId?: number) {
 
       const { data: nhList, error: e2 } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi")
+        .select("id, ten, dia_chi, nha_cung_cap_id, chiet_khau_phan_tram, nguoi_thanh_toan")
         .in("id", [...nhIds]);
       if (e2) throw e2;
 
+      const nccNhIds = [...new Set((nhList || []).filter((n: any) => n.nha_cung_cap_id).map((n: any) => n.nha_cung_cap_id))];
+      const nccNhMap: Record<number, any> = {};
+      if (nccNhIds.length > 0) {
+        const { data: nccList } = await externalSupabase
+          .from("nha_cung_cap")
+          .select("id, ten, so_tai_khoan, ngan_hang")
+          .in("id", nccNhIds);
+        (nccList || []).forEach((n: any) => { nccNhMap[n.id] = n; });
+      }
+
       const nhaHangMap: Record<number, any> = {};
       (nhList || []).forEach((nh: any) => {
-        nhaHangMap[nh.id] = nh;
+        const ncc = nh.nha_cung_cap_id ? nccNhMap[nh.nha_cung_cap_id] : null;
+        nhaHangMap[nh.id] = {
+          ...nh,
+          ten_ncc: ncc?.ten ?? null,
+          ncc_so_tai_khoan: ncc?.so_tai_khoan ?? null,
+          ncc_ngan_hang: ncc?.ngan_hang ?? null,
+        };
       });
 
       const meals: any[] = [];
