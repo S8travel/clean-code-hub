@@ -165,7 +165,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
     const buaStr = row.bua_an === "trua" ? "Trưa" : "Tối";
     setEmailTo(normalizeEmails(row.nha_hang_email));
-    setEmailSubject(`[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}`);
+    setEmailSubject(`[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`);
     setEmailHtml(buildEmailHtml(selectedSetMenu));
     setEmailModalOpen(true);
   };

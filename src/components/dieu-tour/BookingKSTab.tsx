@@ -354,7 +354,6 @@ function BookingKSCard({
           <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
         </tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong></td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày đi</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${ngayDiStr}</td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
         ${roomRowsHtml()}
       </table>
@@ -393,7 +392,6 @@ function BookingKSCard({
     return `Kính gửi ${row.khach_san_ten},
 
 Công ty TNHH Du lịch S8 xin đặt phòng cho đoàn ${tenDoan}:
-- Ngày đi: ${ngayDi ? fmtDate(ngayDi) : "—"}
 ${roomLines}${ghiChu ? `\n- Ghi chú: ${ghiChu}` : ""}
 
 Kính nhờ xác nhận trong 24 giờ.
