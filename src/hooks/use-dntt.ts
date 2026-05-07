@@ -305,11 +305,19 @@ export function useMarkPaidWithDate() {
         .single();
       if (fetchErr) throw fetchErr;
 
+      const iso = new Date(ngayThanhToan).toISOString();
       const { error } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .update({ trang_thai_thanh_toan: "da_tt", thanh_toan_luc: new Date(ngayThanhToan).toISOString() })
+        .update({ trang_thai_thanh_toan: "da_tt", thanh_toan_luc: iso })
         .eq("id", id);
       if (error) throw error;
+
+      // Also mark linked can_tru satellites as paid
+      await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({ trang_thai_thanh_toan: "da_tt", thanh_toan_luc: iso })
+        .eq("linked_dntt_id", id)
+        .eq("ref_loai", "can_tru_cong_no");
 
       const chiPhiIds = await getChiPhiIdsForDNTT(id);
       await recalcChiPhiStatus(chiPhiIds);

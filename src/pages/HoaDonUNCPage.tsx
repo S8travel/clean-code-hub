@@ -209,13 +209,25 @@ export default function HoaDonUNCPage() {
   const { data: rows = [], isLoading } = useHoaDonUNCList(filters);
   const { data: doanOpts = [] } = useDoanOptions();
 
-  const metrics = useMemo(() => {
-    const chuaTT = rows.filter(r => r.trang_thai_thanh_toan === "chua_tt").length;
-    const daTT = rows.filter(r => r.trang_thai_thanh_toan === "da_tt").length;
-    const thieu_hd = rows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_hoa_don === "chua_co").length;
-    const thieu_unc = rows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_unc === "chua_co").length;
-    return { chuaTT, daTT, thieu_hd, thieu_unc };
+  const { mainRows, canTruMap } = useMemo(() => {
+    const canTruMap: Record<number, HoaDonUNCRow> = {};
+    const linkedIds = new Set<number>();
+    rows.forEach(r => {
+      if (r.ref_loai === "can_tru_cong_no" && r.linked_dntt_id) {
+        canTruMap[r.linked_dntt_id] = r;
+        linkedIds.add(r.id);
+      }
+    });
+    return { mainRows: rows.filter(r => !linkedIds.has(r.id)), canTruMap };
   }, [rows]);
+
+  const metrics = useMemo(() => {
+    const chuaTT = mainRows.filter(r => r.trang_thai_thanh_toan === "chua_tt").length;
+    const daTT = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt").length;
+    const thieu_hd = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_hoa_don === "chua_co").length;
+    const thieu_unc = mainRows.filter(r => r.trang_thai_thanh_toan === "da_tt" && r.trang_thai_unc === "chua_co").length;
+    return { chuaTT, daTT, thieu_hd, thieu_unc };
+  }, [mainRows]);
 
   const handleMarkPaid = (id: number) => {
     const date = payDateMap[id] ?? new Date();
@@ -243,7 +255,7 @@ export default function HoaDonUNCPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Hóa đơn & Ủy nhiệm chi</h1>
+      <h1 className="text-2xl font-bold">Thanh Toán, Hóa Đơn & UNC</h1>
 
       {/* Metrics */}
       <div className="grid grid-cols-4 gap-4">
@@ -364,8 +376,9 @@ export default function HoaDonUNCPage() {
                   Không có dữ liệu
                 </TableCell>
               </TableRow>
-            ) : rows.map((row, idx) => {
+            ) : mainRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
+              const canTruRow = canTruMap[row.id];
               return (
                 <TableRow key={row.id}>
                   <TableCell className="text-center text-sm">{idx + 1}</TableCell>
@@ -385,7 +398,15 @@ export default function HoaDonUNCPage() {
                   <TableCell className="text-sm">{row.mo_ta ?? "—"}</TableCell>
                   <TableCell className="text-sm">{row.ten_nha_cung_cap ?? "—"}</TableCell>
                   <TableCell className="text-right text-sm font-medium">
-                    {fmt(row.so_tien)}
+                    {canTruRow ? (
+                      <div className="space-y-0.5 text-xs">
+                        <div className="text-muted-foreground">Tổng: {fmt(row.so_tien + canTruRow.so_tien)}</div>
+                        <div className="text-amber-600">Cấn trừ: −{fmt(canTruRow.so_tien)}</div>
+                        <div className="text-sm font-semibold">Cần TT: {fmt(row.so_tien)}</div>
+                      </div>
+                    ) : (
+                      fmt(row.so_tien)
+                    )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {row.ngay_can_thanh_toan

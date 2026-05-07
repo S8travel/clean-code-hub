@@ -20,7 +20,6 @@ import {
   BriefcaseBusiness,
   CalendarRange,
   FileText,
-  AlertTriangle,
   Calculator,
   Users2,
 } from "lucide-react";
@@ -42,7 +41,6 @@ import {
 } from "@/components/ui/sidebar";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
 import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks/use-permissions";
 import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
 import { useCurrentSession } from "@/hooks/use-current-user";
@@ -185,7 +183,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, boPhanOnly: "ke_toan" },
       { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock },
-      { title: "Hóa đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc" },
+      { title: "Thanh Toán, Hóa Đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc" },
       { title: "Công nợ", url: "/cong-no", icon: Wallet },
       { title: "Người dùng", url: "/quan-ly/nguoi-dung", icon: Users, resource: "nguoi_dung" },
       { title: "Agent", url: "/quan-ly/agent", icon: Bot },
