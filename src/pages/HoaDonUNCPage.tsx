@@ -27,6 +27,8 @@ import {
   type HoaDonUNCRow, type TrangThaiDoc,
 } from "@/hooks/use-hoa-don-unc";
 import { useDoanOptions, useMarkPaidWithDate } from "@/hooks/use-dntt";
+import { useQuery } from "@tanstack/react-query";
+import { externalSupabase } from "@/lib/supabase-external";
 import { toast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -212,6 +214,62 @@ export default function HoaDonUNCPage() {
   const mainRows = rows;
   const canTruMap: Record<number, HoaDonUNCRow> = {};
 
+  // Load can_tru payments per visible DNTT
+  const visibleDnttIds = useMemo(() => mainRows.map((r) => r.id), [mainRows]);
+  const { data: canTruByDntt = {} as Record<number, number> } = useQuery({
+    queryKey: ["hoadon-unc-can-tru", visibleDnttIds.join(",")],
+    enabled: visibleDnttIds.length > 0,
+    queryFn: async () => {
+      const { data } = await externalSupabase
+        .from("payments")
+        .select("dntt_id, so_tien")
+        .eq("method", "can_tru")
+        .in("dntt_id", visibleDnttIds);
+      const m: Record<number, number> = {};
+      (data || []).forEach((p: any) => {
+        m[p.dntt_id] = (m[p.dntt_id] || 0) + Number(p.so_tien);
+      });
+      return m;
+    },
+  });
+
+  // Load các ĐNTT cọc cùng ref (để hiển thị "Đã cọc: X")
+  const refPairs = useMemo(() => {
+    const set = new Set<string>();
+    mainRows.forEach((r) => {
+      if (r.ref_loai && r.ref_id != null) set.add(`${r.ref_loai}|${r.ref_id}`);
+    });
+    return [...set];
+  }, [mainRows]);
+
+  const { data: cocDntts = [] as any[] } = useQuery({
+    queryKey: ["hoadon-unc-coc-siblings", refPairs.join(",")],
+    enabled: refPairs.length > 0,
+    queryFn: async () => {
+      const refLoais = [...new Set(refPairs.map((p) => p.split("|")[0]))];
+      const refIds = [...new Set(refPairs.map((p) => Number(p.split("|")[1])).filter(Number.isFinite))];
+      if (refLoais.length === 0 || refIds.length === 0) return [];
+      const { data } = await externalSupabase
+        .from("dntt_with_payment_status")
+        .select("id, ref_loai, ref_id, paid_amount")
+        .eq("la_coc", true)
+        .in("ref_loai", refLoais)
+        .in("ref_id", refIds)
+        .not("trang_thai_duyet", "eq", "da_huy")
+        .not("trang_thai_duyet", "eq", "tu_choi");
+      const validKeys = new Set(refPairs);
+      return (data || []).filter((d: any) => validKeys.has(`${d.ref_loai}|${d.ref_id}`));
+    },
+  });
+  const cocByRef = useMemo(() => {
+    const m: Record<string, number> = {};
+    cocDntts.forEach((d: any) => {
+      const k = `${d.ref_loai}|${d.ref_id}`;
+      m[k] = (m[k] || 0) + (d.paid_amount || 0);
+    });
+    return m;
+  }, [cocDntts]);
+
   const metrics = useMemo(() => {
     const chuaTT = mainRows.filter(r => r.payment_status !== "paid").length;
     const daTT = mainRows.filter(r => r.payment_status === "paid").length;
@@ -389,15 +447,37 @@ export default function HoaDonUNCPage() {
                   <TableCell className="text-sm">{row.mo_ta ?? "—"}</TableCell>
                   <TableCell className="text-sm">{row.ten_nha_cung_cap ?? "—"}</TableCell>
                   <TableCell className="text-right text-sm font-medium">
-                    {canTruRow ? (
-                      <div className="space-y-0.5 text-xs">
-                        <div className="text-muted-foreground">Tổng: {fmt(row.so_tien + canTruRow.so_tien)}</div>
-                        <div className="text-amber-600">Cấn trừ: −{fmt(canTruRow.so_tien)}</div>
-                        <div className="text-sm font-semibold">Cần TT: {fmt(row.so_tien)}</div>
-                      </div>
-                    ) : (
-                      fmt(row.so_tien)
-                    )}
+                    {(() => {
+                      const ct = canTruByDntt[row.id] || 0;
+                      const thucTT = Math.max(0, row.so_tien - ct);
+                      const refKey = row.ref_loai && row.ref_id != null ? `${row.ref_loai}|${row.ref_id}` : null;
+                      const cocSibling = refKey
+                        ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
+                        : 0;
+                      return (
+                        <div className="space-y-0.5">
+                          {ct > 0 ? (
+                            <div className="text-xs space-y-0.5">
+                              <div className="text-muted-foreground">Tổng: {fmt(row.so_tien)}</div>
+                              <div className="text-amber-600">Cấn trừ: −{fmt(ct)}</div>
+                              <div className="text-sm font-semibold">Thực TT: {fmt(thucTT)}</div>
+                            </div>
+                          ) : (
+                            <div>{fmt(row.so_tien)}</div>
+                          )}
+                          {row.la_coc && (
+                            <span className="inline-block text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                              Cọc
+                            </span>
+                          )}
+                          {!row.la_coc && cocSibling > 0 && (
+                            <div className="text-[11px] text-muted-foreground font-normal">
+                              Đã cọc: <span className="text-amber-600 font-medium">{fmt(cocSibling)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {row.ngay_can_thanh_toan

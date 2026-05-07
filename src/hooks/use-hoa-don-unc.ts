@@ -10,6 +10,8 @@ export interface HoaDonUNCRow {
   loai: string;
   mo_ta: string | null;
   so_tien: number;
+  la_coc: boolean;
+  ref_id: number | null;
   nha_cung_cap_id: number | null;
   ten_nha_cung_cap: string | null;
   ngay_can_thanh_toan: string | null;
@@ -38,7 +40,7 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
       let q = externalSupabase
         .from("dntt_with_payment_status")
         .select(
-          "id, doan_id, loai, mo_ta, so_tien, nha_cung_cap_id, ten_nha_cung_cap, ngay_can_thanh_toan, thanh_toan_luc, payment_status, paid_amount, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, ref_loai, doan:doan_id(ten_doan)"
+          "id, doan_id, loai, mo_ta, so_tien, la_coc, ref_id, nha_cung_cap_id, ten_nha_cung_cap, ngay_can_thanh_toan, thanh_toan_luc, payment_status, paid_amount, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, ref_loai, doan:doan_id(ten_doan)"
         )
         .eq("trang_thai_duyet", "da_duyet")
         .order("ngay_can_thanh_toan", { ascending: true, nullsFirst: false });
@@ -62,6 +64,8 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
         loai: r.loai,
         mo_ta: r.mo_ta,
         so_tien: r.so_tien,
+        la_coc: !!r.la_coc,
+        ref_id: r.ref_id ?? null,
         nha_cung_cap_id: r.nha_cung_cap_id,
         ten_nha_cung_cap: r.ten_nha_cung_cap,
         ngay_can_thanh_toan: r.ngay_can_thanh_toan,
