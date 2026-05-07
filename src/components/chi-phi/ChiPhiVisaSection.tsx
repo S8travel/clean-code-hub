@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock } from "lucide-react";
+import { useState } from "react";
+import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -147,6 +147,10 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
+  // Add extra (phụ phí) inline form
+  const [addExtraForId, setAddExtraForId] = useState<number | null>(null);
+  const [extraFields, setExtraFields] = useState({ mo_ta: "", so_luong: 1, don_gia: 0 });
+
   const visaRows = chiPhiRows.filter((r) => r.danh_muc === "visa");
   const total = visaRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
 
@@ -191,6 +195,36 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       tien_cong_ty: next === "cong_ty" ? total : 0,
       tien_hdv: next === "hdv" ? total : 0,
     } as any);
+  };
+
+  // ── Extra (phụ phí) ───────────────────────────────────────────────────────
+  const openAddExtra = (rowId: number) => {
+    setAddExtraForId(rowId);
+    setExtraFields({ mo_ta: "", so_luong: 1, don_gia: 0 });
+  };
+
+  const handleSaveExtra = () => {
+    if (!addExtraForId) return;
+    const parent = visaRows.find((r) => r.id === addExtraForId);
+    if (!extraFields.mo_ta.trim()) { toast.warning("Nhập mô tả phụ phí"); return; }
+    if (extraFields.don_gia <= 0) { toast.warning("Đơn giá phải lớn hơn 0"); return; }
+    const total = extraFields.so_luong * extraFields.don_gia;
+    upsertMut.mutate({
+      doan_id: doanId,
+      danh_muc: "visa",
+      loai: "visa",
+      mo_ta: extraFields.mo_ta.trim(),
+      don_gia: extraFields.don_gia,
+      so_luong: extraFields.so_luong,
+      tien_cong_ty: total,
+      tien_hdv: 0,
+      nha_cung_cap_id: parent?.nha_cung_cap_id ?? null,
+    } as any, {
+      onSuccess: () => {
+        setAddExtraForId(null);
+        toast.success("Đã thêm phụ phí visa");
+      },
+    });
   };
 
   // ── Định kỳ toggle ────────────────────────────────────────────────────────
@@ -542,6 +576,11 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                             {conLai > 0 ? "ĐNTT còn lại" : "ĐNTT bổ sung"}
                           </Button>
                         )}
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+                          title="Thêm phụ phí"
+                          onClick={() => openAddExtra(row.id)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
                           onClick={() => deleteMut.mutate({ id: row.id, doanId }, { onSuccess: () => toast.success("Đã xóa") })}
                           disabled={deleteMut.isPending}>
@@ -550,6 +589,45 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                       </div>
                     </td>
                   </tr>
+                  {addExtraForId === row.id && (
+                    <tr className="bg-amber-50/60 border-b border-dashed border-amber-200">
+                      <td colSpan={8} className="px-4 py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ Phụ phí</span>
+                          <Input
+                            autoFocus
+                            placeholder="Mô tả (vd: Mất visa, Phí bổ sung)"
+                            className="h-6 text-xs flex-1 min-w-[160px]"
+                            value={extraFields.mo_ta}
+                            onChange={(e) => setExtraFields((p) => ({ ...p, mo_ta: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSaveExtra(); if (e.key === "Escape") setAddExtraForId(null); }}
+                          />
+                          <Input
+                            type="number"
+                            placeholder="SL"
+                            className="h-6 text-xs w-14 text-center"
+                            value={extraFields.so_luong || ""}
+                            onChange={(e) => setExtraFields((p) => ({ ...p, so_luong: Number(e.target.value) || 0 }))}
+                          />
+                          <span className="text-[10px] text-muted-foreground shrink-0">×</span>
+                          <Input
+                            type="number"
+                            placeholder="Đơn giá"
+                            className="h-6 text-xs w-24 text-center"
+                            value={extraFields.don_gia || ""}
+                            onChange={(e) => setExtraFields((p) => ({ ...p, don_gia: Number(e.target.value) || 0 }))}
+                          />
+                          {extraFields.don_gia > 0 && (
+                            <span className="text-xs font-semibold text-primary shrink-0">
+                              = {fmt(extraFields.so_luong * extraFields.don_gia)} ₫
+                            </span>
+                          )}
+                          <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending}>Lưu</Button>
+                          <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setAddExtraForId(null)}>Hủy</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 );
               })}
             </tbody>
