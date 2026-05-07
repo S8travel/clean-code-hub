@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, getDay, subDays, parseISO } from "date-fns";
 import { Plus, Ban, Printer, Trash2, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
@@ -46,12 +46,12 @@ function calcSoKhachThucTe(soKhach: number, focKhach: number | null, focMien: nu
 }
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  cho_duyet:     { text: "Chờ duyệt ĐNTT",  cls: "bg-yellow-100 text-yellow-700" },
-  da_duyet:      { text: "Đã duyệt ĐNTT",   cls: "bg-teal-100 text-teal-700" },
-  da_thanh_toan: { text: "Đã thanh toán",   cls: "bg-emerald-100 text-emerald-700" },
-  hoan_tien:     { text: "Hoàn tiền",       cls: "bg-blue-100 text-blue-700" },
-  cong_no:       { text: "Công nợ",         cls: "bg-purple-100 text-purple-700" },
-  tu_choi:       { text: "Từ chối",         cls: "bg-red-100 text-red-700" },
+  cho_duyet:     { text: "Chờ duyệt",  cls: "bg-yellow-100 text-yellow-700" },
+  da_duyet:      { text: "Đã duyệt",   cls: "bg-teal-100 text-teal-700" },
+  da_thanh_toan: { text: "Đã TT",      cls: "bg-emerald-100 text-emerald-700" },
+  hoan_tien:     { text: "Hoàn tiền",  cls: "bg-blue-100 text-blue-700" },
+  cong_no:       { text: "Công nợ",    cls: "bg-purple-100 text-purple-700" },
+  tu_choi:       { text: "Từ chối",    cls: "bg-red-100 text-red-700" },
 };
 
 // Extra rows are identified by this prefix in mo_ta column
@@ -104,6 +104,19 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
+
+  // Map dntt_id → tổng can_tru (cho hiển thị "Cấn trừ X" trên badge ĐNTT)
+  const canTruByDnttId = useMemo(() => {
+    const seen = new Set<number>();
+    const m: Record<number, number> = {};
+    paymentsList.forEach((p) => {
+      if (p.method !== "can_tru") return;
+      if (seen.has(p.payment_id)) return;
+      seen.add(p.payment_id);
+      m[p.dntt_id] = (m[p.dntt_id] || 0) + p.payment_so_tien;
+    });
+    return m;
+  }, [paymentsList]);
   const { data: currentUserName = "" } = useCurrentUserName();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
@@ -973,17 +986,17 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                 </td>
 
                 {/* Trạng thái ĐNTT */}
-                <td className="px-2 py-1.5 align-top text-center">
+                <td className="px-2 py-1 align-top text-center">
                   {nguoiTtMain === "hdv" ? (
                     <span className="text-[10px] text-muted-foreground">—</span>
                   ) : activeDntts.length === 0 ? (
                     <span className="text-[10px] text-muted-foreground">—</span>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="flex flex-col gap-0.5 items-center">
                       {activeDntts.map(d => {
                         const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
                         return (
-                          <div key={d.id} className="flex items-center gap-1 flex-wrap">
+                          <div key={d.id} className="flex items-center gap-0.5">
                             {editingDnttId === d.id ? (
                               <>
                                 <Input
@@ -1001,9 +1014,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                                     }
                                     if (e.key === "Escape") setEditingDnttId(null);
                                   }}
-                                  className="h-6 w-20 text-xs px-2 py-0"
+                                  className="h-5 w-20 text-[10px] px-1.5 py-0"
                                 />
-                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-emerald-600 hover:text-emerald-700"
+                                <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-emerald-600 hover:text-emerald-700"
                                   disabled={updateDNTT.isPending}
                                   onClick={() => {
                                     const v = parseInt(editAmount.replace(/\D/g, ""), 10);
@@ -1012,26 +1025,32 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                                       setEditingDnttId(null);
                                     }
                                   }}>
-                                  <Check className="h-3 w-3" />
+                                  <Check className="h-2.5 w-2.5" />
                                 </Button>
-                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground"
+                                <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-muted-foreground"
                                   onClick={() => setEditingDnttId(null)}>
-                                  <X className="h-3 w-3" />
+                                  <X className="h-2.5 w-2.5" />
                                 </Button>
                               </>
                             ) : (
                               <>
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusInfo.cls}`}>
-                                  {statusInfo.text} · {fmt(d.so_tien)}
-                                </span>
-                                {d.la_coc && (
-                                  <span className="text-[9px] text-muted-foreground">(Cọc)</span>
-                                )}
+                                {(() => {
+                                  const ct = canTruByDnttId[d.id] || 0;
+                                  const thucTT = Math.max(0, d.so_tien - ct);
+                                  return (
+                                    <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium ${statusInfo.cls} whitespace-nowrap`}
+                                      title={ct > 0 ? `Tổng ${fmt(d.so_tien)} − Cấn trừ ${fmt(ct)} = Thực TT ${fmt(thucTT)}` : undefined}>
+                                      {statusInfo.text} · {fmt(d.so_tien)}
+                                      {d.la_coc && <span className="ml-1 opacity-70">·Cọc</span>}
+                                      {ct > 0 && <span className="ml-1 opacity-70">·CT {fmt(ct)}</span>}
+                                    </span>
+                                  );
+                                })()}
                                 {d.trang_thai_duyet === "cho_duyet" && (
-                                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-blue-500 hover:text-blue-600"
+                                  <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-blue-500 hover:text-blue-600"
                                     title="Sửa số tiền"
                                     onClick={() => { setEditingDnttId(d.id); setEditAmount(String(d.so_tien)); }}>
-                                    <Pencil className="h-3 w-3" />
+                                    <Pencil className="h-2.5 w-2.5" />
                                   </Button>
                                 )}
                               </>
@@ -1044,19 +1063,19 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                 </td>
 
                 {/* Trạng thái Thanh toán */}
-                <td className="px-2 py-1.5 align-top text-center">
+                <td className="px-2 py-1 align-top text-center">
                   {nguoiTtMain === "hdv" ? (
                     <span className="text-[10px] text-muted-foreground">—</span>
                   ) : (
-                  <div className="space-y-1">
+                  <div className="flex flex-col gap-0.5 items-center">
                     {activeDntts.map(d => (
                       <div key={d.id}>
                         {d.payment_status === "paid" ? (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                          <span className="px-1 py-px rounded text-[10px] leading-none font-medium bg-emerald-100 text-emerald-700">
                             Đã TT{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">
+                          <span className="px-1 py-px rounded text-[10px] leading-none font-medium bg-yellow-100 text-yellow-800">
                             Chờ UNC · {fmt(d.so_tien - (d.paid_amount || 0))}
                           </span>
                         )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, getDay } from "date-fns";
 import { Plus, ArrowRight, Ban, Printer, ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -106,6 +106,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
+  const canTruByDnttId = useMemo(() => {
+    const seen = new Set<number>();
+    const m: Record<number, number> = {};
+    paymentsList.forEach((p) => {
+      if (p.method !== "can_tru") return;
+      if (seen.has(p.payment_id)) return;
+      seen.add(p.payment_id);
+      m[p.dntt_id] = (m[p.dntt_id] || 0) + p.payment_so_tien;
+    });
+    return m;
+  }, [paymentsList]);
   const { data: congNoList = [] } = useCongNoList({ doanId });
   const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
@@ -1067,6 +1078,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                               {dntt.la_coc && (
                                 <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">Cọc</span>
                               )}
+                              {(() => {
+                                const ct = canTruByDnttId[dntt.id] || 0;
+                                if (ct <= 0) return null;
+                                const thucTT = Math.max(0, dntt.so_tien - ct);
+                                return (
+                                  <span className="px-1 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px]"
+                                    title={`Tổng ${fmt(dntt.so_tien)} − Cấn trừ ${fmt(ct)} = Thực TT ${fmt(thucTT)}`}>
+                                    CT {fmt(ct)}
+                                  </span>
+                                );
+                              })()}
                               <span className={cn(
                                 "px-1.5 py-0.5 rounded text-[10px] font-medium",
                                 isPaid ? "bg-emerald-100 text-emerald-700"

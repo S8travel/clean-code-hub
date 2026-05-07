@@ -140,6 +140,25 @@ export default function DNTTPage() {
     return m;
   }, [cocDntts]);
 
+  // Load can_tru payments của các DNTT visible — để hiển thị "Cấn trừ" / "Thực TT"
+  const visibleDnttIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const { data: canTruByDntt = {} as Record<number, number> } = useQuery({
+    queryKey: ["dntt-can-tru-payments", visibleDnttIds.join(",")],
+    enabled: visibleDnttIds.length > 0,
+    queryFn: async () => {
+      const { data } = await externalSupabase
+        .from("payments")
+        .select("dntt_id, so_tien")
+        .eq("method", "can_tru")
+        .in("dntt_id", visibleDnttIds);
+      const m: Record<number, number> = {};
+      (data || []).forEach((p: any) => {
+        m[p.dntt_id] = (m[p.dntt_id] || 0) + Number(p.so_tien);
+      });
+      return m;
+    },
+  });
+
   const metrics = useMemo(() => {
     const total = mainRows.length;
     const choDuyet = mainRows.filter(r => r.trang_thai_duyet === "cho_duyet").length;
@@ -377,13 +396,22 @@ export default function DNTTPage() {
                   <TableCell className="text-right font-medium">
                     {(() => {
                       const refKey = row.ref_loai && row.ref_id != null ? `${row.ref_loai}|${row.ref_id}` : null;
-                      // Tổng paid_amount của các DNTT cọc cùng ref (trừ chính dòng này nếu là cọc)
                       const cocSibling = refKey
                         ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
                         : 0;
+                      const canTru = canTruByDntt[row.id] || 0;
+                      const thucTT = Math.max(0, row.so_tien - canTru);
                       return (
                         <div className="space-y-0.5">
-                          <div>{fmt(row.so_tien)}</div>
+                          {canTru > 0 ? (
+                            <div className="text-xs space-y-0.5">
+                              <div className="text-muted-foreground">Tổng: {fmt(row.so_tien)}</div>
+                              <div className="text-amber-600">Cấn trừ: −{fmt(canTru)}</div>
+                              <div className="text-sm font-semibold">Thực TT: {fmt(thucTT)}</div>
+                            </div>
+                          ) : (
+                            <div>{fmt(row.so_tien)}</div>
+                          )}
                           {row.la_coc && (
                             <span className="inline-block text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
                               {row.ty_le_coc ? `Cọc ${row.ty_le_coc}%` : "Cọc"}

@@ -75,6 +75,18 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
+
+  const canTruByDnttId = useMemo(() => {
+    const seen = new Set<number>();
+    const m: Record<number, number> = {};
+    paymentsList.forEach((p) => {
+      if (p.method !== "can_tru") return;
+      if (seen.has(p.payment_id)) return;
+      seen.add(p.payment_id);
+      m[p.dntt_id] = (m[p.dntt_id] || 0) + p.payment_so_tien;
+    });
+    return m;
+  }, [paymentsList]);
   const { data: currentUserName = "" } = useCurrentUserName();
   const insertDNTT = useInsertDNTT();
   const updateDNTT = useUpdateDNTT();
@@ -750,10 +762,18 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                                   </>
                                 ) : (
                                   <>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                                      {statusInfo.text} · {fmt(d.so_tien)}
-                                    </span>
-                                    {d.la_coc && <span className="text-[9px] text-muted-foreground">(Cọc)</span>}
+                                    {(() => {
+                                      const ct = canTruByDnttId[d.id] || 0;
+                                      const thucTT = Math.max(0, d.so_tien - ct);
+                                      return (
+                                        <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}
+                                          title={ct > 0 ? `Tổng ${fmt(d.so_tien)} − Cấn trừ ${fmt(ct)} = Thực TT ${fmt(thucTT)}` : undefined}>
+                                          {statusInfo.text} · {fmt(d.so_tien)}
+                                          {d.la_coc && <span className="ml-1 opacity-70">·Cọc</span>}
+                                          {ct > 0 && <span className="ml-1 opacity-70">·CT {fmt(ct)}</span>}
+                                        </span>
+                                      );
+                                    })()}
                                     {d.trang_thai_duyet === "cho_duyet" && (
                                       <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-blue-500"
                                         onClick={() => { setEditingId(d.id); setEditAmount(String(d.so_tien)); }}>
