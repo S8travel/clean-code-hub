@@ -53,6 +53,7 @@ export interface DNTTRow {
   ghi_chu: string | null;
   ref_loai: string | null;
   ref_id: number | null;
+  linked_dntt_id: number | null;
   ngay_can_thanh_toan: string | null;
   created_at: string;
   // joined
@@ -136,72 +137,96 @@ export function useDoanOptions() {
   });
 }
 
+async function approveDNTTRecord(id: number): Promise<{ doan_id: number; invalidateCongNo: boolean }> {
+  const { data: dntt, error: fetchErr } = await externalSupabase
+    .from("de_nghi_thanh_toan")
+    .select("id, doan_id, ref_loai, ref_id, so_tien, trang_thai_thanh_toan, linked_dntt_id")
+    .eq("id", id)
+    .single();
+  if (fetchErr) throw fetchErr;
+
+  const { error } = await externalSupabase
+    .from("de_nghi_thanh_toan")
+    .update({ trang_thai_duyet: "da_duyet", duyet_luc: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+
+  let invalidateCongNo = false;
+
+  // Nếu đây là ĐNTT cấn trừ công nợ → áp dụng công nợ sau khi duyệt
+  if (
+    dntt.trang_thai_thanh_toan === "can_tru" &&
+    dntt.ref_loai === "can_tru_cong_no" &&
+    dntt.ref_id
+  ) {
+    const congNoId = dntt.ref_id as number;
+    const canTruAmount = dntt.so_tien as number;
+
+    const { data: congNoRow } = await externalSupabase
+      .from("de_nghi_thanh_toan")
+      .select("so_tien, so_tien_con_lai")
+      .eq("id", congNoId)
+      .single();
+
+    if (congNoRow) {
+      const soTienConLai =
+        congNoRow.so_tien_con_lai != null
+          ? congNoRow.so_tien_con_lai
+          : congNoRow.so_tien;
+      const remaining = soTienConLai - canTruAmount;
+      if (remaining <= 0) {
+        await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .update({ trang_thai_thanh_toan: "da_can_tru", so_tien_con_lai: 0 })
+          .eq("id", congNoId);
+      } else {
+        await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .update({ so_tien_con_lai: remaining })
+          .eq("id", congNoId);
+      }
+    }
+
+    const { data: doanRow } = await externalSupabase
+      .from("doan")
+      .select("ten_doan")
+      .eq("id", dntt.doan_id)
+      .single();
+    const tenDoanMoi = doanRow?.ten_doan || `Đoàn #${dntt.doan_id}`;
+    await appendCanTruLog(congNoId, canTruAmount, tenDoanMoi);
+    invalidateCongNo = true;
+  }
+
+  const chiPhiIds = await getChiPhiIdsForDNTT(id);
+  await recalcChiPhiStatus(chiPhiIds);
+  return { doan_id: dntt.doan_id as number, invalidateCongNo };
+}
+
 export function useApproveDNTT() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => {
-      const { data: dntt, error: fetchErr } = await externalSupabase
+      const { doan_id, invalidateCongNo } = await approveDNTTRecord(id);
+
+      // Nếu main ĐNTT có linked cấn trừ record → tự động duyệt luôn
+      const { data: linked } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .select("id, doan_id, ref_loai, ref_id, so_tien, trang_thai_thanh_toan")
-        .eq("id", id)
-        .single();
-      if (fetchErr) throw fetchErr;
+        .select("id")
+        .eq("linked_dntt_id", id)
+        .eq("trang_thai_duyet", "cho_duyet")
+        .eq("trang_thai_thanh_toan", "can_tru")
+        .maybeSingle();
 
-      const { error } = await externalSupabase
-        .from("de_nghi_thanh_toan")
-        .update({ trang_thai_duyet: "da_duyet", duyet_luc: new Date().toISOString() })
-        .eq("id", id);
-      if (error) throw error;
-
-      // Nếu đây là ĐNTT cấn trừ công nợ → áp dụng công nợ sau khi duyệt
-      if (
-        dntt.trang_thai_thanh_toan === "can_tru" &&
-        dntt.ref_loai === "can_tru_cong_no" &&
-        dntt.ref_id
-      ) {
-        const congNoId = dntt.ref_id as number;
-        const canTruAmount = dntt.so_tien as number;
-
-        const { data: congNoRow } = await externalSupabase
-          .from("de_nghi_thanh_toan")
-          .select("so_tien, so_tien_con_lai")
-          .eq("id", congNoId)
-          .single();
-
-        if (congNoRow) {
-          const soTienConLai =
-            congNoRow.so_tien_con_lai != null
-              ? congNoRow.so_tien_con_lai
-              : congNoRow.so_tien;
-          const remaining = soTienConLai - canTruAmount;
-          if (remaining <= 0) {
-            await externalSupabase
-              .from("de_nghi_thanh_toan")
-              .update({ trang_thai_thanh_toan: "da_can_tru", so_tien_con_lai: 0 })
-              .eq("id", congNoId);
-          } else {
-            await externalSupabase
-              .from("de_nghi_thanh_toan")
-              .update({ so_tien_con_lai: remaining })
-              .eq("id", congNoId);
-          }
-        }
-
-        // Lấy tên đoàn mới để ghi log
-        const { data: doanRow } = await externalSupabase
-          .from("doan")
-          .select("ten_doan")
-          .eq("id", dntt.doan_id)
-          .single();
-        const tenDoanMoi = doanRow?.ten_doan || `Đoàn #${dntt.doan_id}`;
-        await appendCanTruLog(congNoId, canTruAmount, tenDoanMoi);
-
-        qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
+      let linkedInvalidateCongNo = false;
+      if (linked) {
+        const result = await approveDNTTRecord(linked.id);
+        linkedInvalidateCongNo = result.invalidateCongNo;
       }
 
-      const chiPhiIds = await getChiPhiIdsForDNTT(id);
-      await recalcChiPhiStatus(chiPhiIds);
-      return dntt.doan_id as number;
+      if (invalidateCongNo || linkedInvalidateCongNo) {
+        qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
+      }
+      return doan_id;
     },
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });

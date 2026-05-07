@@ -854,9 +854,6 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           const pendingStatusInfo = pendingDntts[0]
             ? STATUS_LABEL[pendingDntts[0].trang_thai_duyet] ?? STATUS_LABEL.cho_duyet
             : null;
-          const congNoAmount = allMealDntts.filter(
-            (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "cong_no"
-          ).reduce((s, d) => s + d.so_tien, 0);
           const hoanTienAmount = allMealDntts.filter(
             (d) => d.trang_thai_duyet === "da_huy" && d.trang_thai_thanh_toan === "hoan_tien"
           ).reduce((s, d) => s + d.so_tien, 0);
@@ -1064,17 +1061,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                         )}
                       </div>
                     ))}
-                    {congNoAmount > 0 && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
-                        CN: {fmt(congNoAmount)}
-                      </span>
-                    )}
                     {hoanTienAmount > 0 && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
                         HT: {fmt(hoanTienAmount)}
                       </span>
                     )}
-                    {activeDntts.length === 0 && congNoAmount === 0 && hoanTienAmount === 0 && (
+                    {activeDntts.length === 0 && hoanTienAmount === 0 && (
                       <span className="text-[10px] text-muted-foreground">—</span>
                     )}
                   </div>

@@ -375,7 +375,7 @@ export default function DNTTPage() {
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <span className={cn("px-2 py-0.5 rounded text-xs font-medium w-fit", db.cls)}>{db.text}</span>
-                      {row.trang_thai_duyet === "cho_duyet" && (
+                      {row.trang_thai_duyet === "cho_duyet" && !(row.ref_loai === "can_tru_cong_no" && (row as any).linked_dntt_id) && (
                         <div className="flex gap-1 mt-1">
                           <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-green-600" onClick={() => handleApprove(row.id)}>
                             <Check className="h-3 w-3 mr-1" /> Duyệt
