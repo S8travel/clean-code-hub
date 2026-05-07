@@ -138,3 +138,27 @@ export async function appendCanTruLog(
     .update({ ghi_chu: newGhiChu })
     .eq("id", congNoId);
 }
+
+// Xóa log cấn trừ tương ứng khi rollback (hủy ĐNTT có can_tru)
+// Tìm dòng đầu tiên match "Cấn trừ {soTien}đ → Đoàn {tenDoan}" và xóa
+export async function removeCanTruLog(
+  congNoId: number,
+  soTien: number,
+  tenDoan: string,
+) {
+  const { data } = await externalSupabase
+    .from("cong_no")
+    .select("ghi_chu")
+    .eq("id", congNoId)
+    .single();
+  if (!data?.ghi_chu) return;
+  const target = `Cấn trừ ${soTien.toLocaleString("vi-VN")}đ → Đoàn ${tenDoan}`;
+  const lines = data.ghi_chu.split("\n");
+  const idx = lines.findIndex((l) => l.includes(target));
+  if (idx < 0) return;
+  lines.splice(idx, 1);
+  await externalSupabase
+    .from("cong_no")
+    .update({ ghi_chu: lines.length > 0 ? lines.join("\n") : null })
+    .eq("id", congNoId);
+}

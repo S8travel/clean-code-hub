@@ -283,19 +283,34 @@ export function useCancelDNTT() {
       const cashPaid = allPayments
         .filter((p: any) => p.method === "cash")
         .reduce((s: number, p: any) => s + Number(p.so_tien), 0);
-      const canTruPaymentIds = allPayments
-        .filter((p: any) => p.method === "can_tru")
-        .map((p: any) => p.id);
+      const canTruPayments = allPayments.filter((p: any) => p.method === "can_tru");
+      const canTruPaymentIds = canTruPayments.map((p: any) => p.id);
       const affectedCongNoIds = [
         ...new Set(
-          allPayments
-            .filter((p: any) => p.method === "can_tru" && p.cong_no_id != null)
+          canTruPayments
+            .filter((p: any) => p.cong_no_id != null)
             .map((p: any) => p.cong_no_id as number),
         ),
       ];
 
       // Xóa can_tru payments → khôi phục balance của cong_no nguồn
       if (canTruPaymentIds.length > 0) {
+        // Lấy tên đoàn để xóa log cấn trừ matching
+        let tenDoan = "";
+        if (dntt.doan_id) {
+          const { data: doanRow } = await externalSupabase
+            .from("doan").select("ten_doan").eq("id", dntt.doan_id).single();
+          tenDoan = doanRow?.ten_doan || `#${dntt.doan_id}`;
+        }
+
+        // Xóa log cấn trừ trên cong_no nguồn TRƯỚC khi xóa payment (cần biết so_tien)
+        const { removeCanTruLog } = await import("@/hooks/use-cong-no");
+        for (const p of canTruPayments) {
+          if (p.cong_no_id != null && tenDoan) {
+            await removeCanTruLog(p.cong_no_id as number, Number(p.so_tien), tenDoan);
+          }
+        }
+
         await externalSupabase.from("payments").delete().in("id", canTruPaymentIds);
 
         // Reset trạng thái cong_no nguồn về 'con_du' nếu trước đó là 'da_can_tru'
