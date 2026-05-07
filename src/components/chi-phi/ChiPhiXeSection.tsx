@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -329,7 +329,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                 const nguoiTt = row.tien_hdv > 0 ? "hdv" : "cong_ty";
 
                 return (
-                  <tr key={row.id} className="hover:bg-muted/20">
+                  <React.Fragment key={row.id}>
+                  <tr className="hover:bg-muted/20">
                     {/* Mô tả */}
                     <td className="px-4 py-2.5 font-medium">{row.mo_ta || "—"}</td>
 
@@ -578,6 +579,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                       </td>
                     </tr>
                   )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
