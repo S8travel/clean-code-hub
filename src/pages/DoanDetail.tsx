@@ -35,6 +35,7 @@ import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
 import BookingKSTab from "@/components/dieu-tour/BookingKSTab";
 import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
+import BookingVisaXeTab from "@/components/booking-dv/BookingVisaXeTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
@@ -368,6 +369,7 @@ export default function DoanDetail() {
             <TabsTrigger value="dieu-tour">Điều Tour</TabsTrigger>
             <TabsTrigger value="booking-ks">Booking KS<TabBadge count={bookingKSBadgeCount} /></TabsTrigger>
             <TabsTrigger value="menu">Booking NH<TabBadge count={bookingNHBadgeCount} /></TabsTrigger>
+            <TabsTrigger value="booking-visa-xe">Visa & Xe</TabsTrigger>
             <TabsTrigger value="booking-dv">Booking DV</TabsTrigger>
             <TabsTrigger value="chi-phi">Chi phí<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
             <TabsTrigger value="log">Log</TabsTrigger>
@@ -453,11 +455,10 @@ export default function DoanDetail() {
             />
           </TabsContent>
 
-          <TabsContent value="booking-dv" className="mt-4">
-            <BookingDVTab
+          <TabsContent value="booking-visa-xe" className="mt-4">
+            <BookingVisaXeTab
               doanId={doanId}
               tenDoan={doan.ten_doan}
-              hdvTen={doan.hdv || ""}
               ngayDi={doan.ngay_di}
               ngayVe={doan.ngay_ve}
               chuyenBayDon={doan.chuyen_bay_don}
@@ -470,6 +471,14 @@ export default function DoanDetail() {
               soKhachTl={soKhachTl}
               xe={doan.xe ?? null}
               dieuTourExportData={dieuTourExportData}
+            />
+          </TabsContent>
+
+          <TabsContent value="booking-dv" className="mt-4">
+            <BookingDVTab
+              doanId={doanId}
+              tenDoan={doan.ten_doan}
+              ngayDi={doan.ngay_di}
             />
           </TabsContent>
 
