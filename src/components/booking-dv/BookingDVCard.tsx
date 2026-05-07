@@ -94,6 +94,8 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const [dvList, setDvList] = useState(row.dich_vu_list || []);
   const dvSorted = [...dvList].sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
 
+  const cardTitle = [...new Set(dvList.map((d) => d.ten_dv).filter(Boolean))].join(" · ") || tenNCC || "—";
+
   const save = (updates: Record<string, any>) =>
     updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates });
 
@@ -314,17 +316,19 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         <Building2 className="h-5 w-5 text-muted-foreground shrink-0" />
 
         <div className="flex-1 min-w-0">
-          {isCancelled ? (
-            <p className="text-sm font-semibold line-through text-muted-foreground truncate">{tenNCC || "—"}</p>
-          ) : (
+          <p className={cn("text-sm font-semibold truncate", isCancelled && "line-through text-muted-foreground")}>
+            {cardTitle}
+          </p>
+          <div className="flex items-center gap-1 mt-0.5">
             <input
-              className="text-sm font-semibold bg-transparent border-none outline-none w-full hover:bg-muted/50 focus:bg-background focus:border focus:border-input focus:px-2 rounded transition-all"
+              className="text-xs text-muted-foreground bg-transparent border-none outline-none flex-1 min-w-0 hover:bg-muted/50 focus:bg-background focus:border focus:border-input focus:px-1.5 rounded transition-all"
               value={tenNCC}
               onChange={(e) => setTenNCC(e.target.value)}
               onBlur={() => save({ ten_nha_cung_cap: tenNCC })}
               placeholder="Tên nhà cung cấp..."
+              disabled={isCancelled}
             />
-          )}
+          </div>
           <div className="flex items-center gap-1 mt-0.5">
             <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
             <input
