@@ -407,6 +407,23 @@ export function useDeleteDNTT() {
         .eq("dntt_id", id);
       const chiPhiIds = (allocBefore || []).map((r: any) => r.chi_phi_id as number);
 
+      // Reverse adjustment artifacts: xóa cong_no có dntt_goc_id = id + reset thanh_tien_thuc_te
+      const { data: relatedCongNos } = await externalSupabase
+        .from("cong_no")
+        .select("id")
+        .eq("dntt_goc_id", id);
+      if (relatedCongNos && relatedCongNos.length > 0) {
+        const cnIds = relatedCongNos.map((c: any) => c.id as number);
+        await externalSupabase.from("payments").delete().in("cong_no_id", cnIds);
+        await externalSupabase.from("cong_no").delete().in("id", cnIds);
+      }
+      if (chiPhiIds.length > 0) {
+        await externalSupabase
+          .from("doan_chi_phi")
+          .update({ thanh_tien_thuc_te: null })
+          .in("id", chiPhiIds);
+      }
+
       // Lấy cong_no IDs bị ảnh hưởng để reset trạng thái
       const { data: payments } = await externalSupabase
         .from("payments")

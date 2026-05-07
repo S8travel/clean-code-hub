@@ -274,7 +274,28 @@ export function useCancelDNTT() {
         .single();
       if (fetchErr) throw fetchErr;
 
-      // Lấy tất cả payments của ĐNTT này
+      // 1) Reverse adjustment artifacts: cong_no records do adjustment tạo (dntt_goc_id = id)
+      //    Cũng xóa thanh_tien_thuc_te trên chi_phi linked
+      const { data: relatedCongNos } = await externalSupabase
+        .from("cong_no")
+        .select("id")
+        .eq("dntt_goc_id", id);
+      if (relatedCongNos && relatedCongNos.length > 0) {
+        const cnIds = relatedCongNos.map((c: any) => c.id as number);
+        // Xóa payments tham chiếu các cong_no này (RESTRICT FK)
+        await externalSupabase.from("payments").delete().in("cong_no_id", cnIds);
+        await externalSupabase.from("cong_no").delete().in("id", cnIds);
+      }
+      // Reset thanh_tien_thuc_te trên các chi_phi có allocation với ĐNTT này
+      const allocChiPhiIds = await getChiPhiIdsForDNTT(id);
+      if (allocChiPhiIds.length > 0) {
+        await externalSupabase
+          .from("doan_chi_phi")
+          .update({ thanh_tien_thuc_te: null })
+          .in("id", allocChiPhiIds);
+      }
+
+      // 2) Lấy tất cả payments của ĐNTT này
       const { data: payments } = await externalSupabase
         .from("payments")
         .select("id, method, so_tien, cong_no_id")
@@ -422,7 +443,25 @@ export function useDeleteDNTT() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => {
-      // Lấy cong_no IDs bị ảnh hưởng để reset trạng thái sau khi cascade-delete
+      // 1) Reverse adjustment artifacts: xóa cong_no có dntt_goc_id = id
+      const { data: relatedCongNos } = await externalSupabase
+        .from("cong_no")
+        .select("id")
+        .eq("dntt_goc_id", id);
+      if (relatedCongNos && relatedCongNos.length > 0) {
+        const cnIds = relatedCongNos.map((c: any) => c.id as number);
+        await externalSupabase.from("payments").delete().in("cong_no_id", cnIds);
+        await externalSupabase.from("cong_no").delete().in("id", cnIds);
+      }
+      const allocChiPhiIds = await getChiPhiIdsForDNTT(id);
+      if (allocChiPhiIds.length > 0) {
+        await externalSupabase
+          .from("doan_chi_phi")
+          .update({ thanh_tien_thuc_te: null })
+          .in("id", allocChiPhiIds);
+      }
+
+      // 2) Lấy cong_no IDs bị ảnh hưởng (can_tru source) để reset sau cascade
       const { data: payments } = await externalSupabase
         .from("payments")
         .select("cong_no_id")
@@ -432,14 +471,14 @@ export function useDeleteDNTT() {
         ...new Set((payments || []).map((p: any) => p.cong_no_id).filter((x: any) => x != null)),
       ] as number[];
 
-      // payments cascade tự động (ON DELETE CASCADE)
+      // 3) Xóa DNTT (payments cascade)
       const { error } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .delete()
         .eq("id", id);
       if (error) throw error;
 
-      // Reset cong_no trạng thái về 'con_du' nếu balance khôi phục
+      // 4) Reset cong_no nguồn về 'con_du' nếu balance khôi phục
       for (const cnId of affectedCongNoIds) {
         const { data: cnRow } = await externalSupabase
           .from("cong_no_with_status")
