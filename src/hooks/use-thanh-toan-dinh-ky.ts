@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
-import { recalcChiPhiStatus } from "@/hooks/use-dntt";
+import { recalcChiPhiStatus, type DNTTRow } from "@/hooks/use-dntt";
 
 export interface DinhKyChiPhiRow {
   id: number;
@@ -145,6 +145,71 @@ export function useCreateBatchDNTT() {
       qc.invalidateQueries({ queryKey: ["dinh_ky_chi_phi"] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
+    },
+  });
+}
+
+// ĐNTT định kỳ (loai='dinh_ky') — chưa thanh toán xong, theo NCC
+export function useDinhKyDNTTList(filters?: {
+  nccId?: number | null;
+  includeResolved?: boolean; // default false: ẩn da_huy + tu_choi + paid
+}) {
+  return useQuery({
+    queryKey: ["dinh_ky_dntt_list", filters],
+    queryFn: async (): Promise<DNTTRow[]> => {
+      let q = externalSupabase
+        .from("dntt_with_payment_status")
+        .select(`
+          *,
+          nha_cung_cap:nha_cung_cap_id(ten, so_tai_khoan, ngan_hang)
+        `)
+        .eq("loai", "dinh_ky")
+        .order("created_at", { ascending: false });
+
+      if (filters?.nccId) q = q.eq("nha_cung_cap_id", filters.nccId);
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      let rows = (data || []).map((row: any) => ({
+        ...row,
+        ten_doan: "",
+        ten_ncc: row.nha_cung_cap?.ten || row.ten_nha_cung_cap || "",
+        ncc_so_tai_khoan: row.nha_cung_cap?.so_tai_khoan || row.so_tai_khoan || "",
+        ncc_ngan_hang: row.nha_cung_cap?.ngan_hang || row.ngan_hang || "",
+      })) as DNTTRow[];
+
+      if (!filters?.includeResolved) {
+        rows = rows.filter(
+          (r) =>
+            r.trang_thai_duyet !== "da_huy" &&
+            r.trang_thai_duyet !== "tu_choi" &&
+            r.payment_status !== "paid",
+        );
+      }
+      return rows;
+    },
+  });
+}
+
+// Lấy allocations + chi phí + đoàn cho 1 ĐNTT định kỳ (xem chi tiết)
+export function useDinhKyDNTTAllocations(dnttId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["dinh_ky_dntt_allocations", dnttId],
+    enabled: !!dnttId,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("dntt_allocations")
+        .select(`
+          chi_phi_id, so_tien,
+          chi_phi:chi_phi_id (
+            id, doan_id, danh_muc, mo_ta, thanh_tien,
+            doan:doan_id (id, ten_doan, ngay_di)
+          )
+        `)
+        .eq("dntt_id", dnttId!);
+      if (error) throw error;
+      return (data || []) as any[];
     },
   });
 }
