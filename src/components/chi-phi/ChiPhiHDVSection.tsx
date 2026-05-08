@@ -10,9 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -189,17 +186,6 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
 
 // ── Chi phí công ty hỗ trợ HDV ───────────────────────────────────────────────
 
-const HO_TRO_LOAI: { value: string; label: string }[] = [
-  { value: "cong_tac_phi", label: "Công tác phí" },
-  { value: "tien_ngu_nb", label: "Tiền ngủ nội bộ" },
-  { value: "ho_tro_nuoc", label: "Hỗ trợ nước" },
-  { value: "khac", label: "Khác" },
-];
-
-function getLoaiLabel(loai: string) {
-  return HO_TRO_LOAI.find((l) => l.value === loai)?.label ?? loai;
-}
-
 function HoTroHDVTable({ doanId, hoTroItems }: {
   doanId: number;
   hoTroItems: HDVHoTroItem[];
@@ -207,44 +193,46 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
   const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
-  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
+  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number; mo_ta: string }>>({});
   const [addingRow, setAddingRow] = useState(false);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
 
   const getLocal = (item: HDVHoTroItem) =>
-    editRow[item.id] ?? { so_luong: item.so_luong, don_gia: item.don_gia };
+    editRow[item.id] ?? { so_luong: item.so_luong, don_gia: item.don_gia, mo_ta: item.mo_ta ?? "" };
 
   const handleNumChange = (id: number, field: "so_luong" | "don_gia", val: number) =>
     setEditRow((prev) => {
       const base = hoTroItems.find((r) => r.id === id);
-      const cur = prev[id] ?? { so_luong: base?.so_luong ?? 1, don_gia: base?.don_gia ?? 0 };
+      const cur = prev[id] ?? { so_luong: base?.so_luong ?? 1, don_gia: base?.don_gia ?? 0, mo_ta: base?.mo_ta ?? "" };
       return { ...prev, [id]: { ...cur, [field]: val } };
+    });
+
+  const handleMoTaChange = (id: number, val: string) =>
+    setEditRow((prev) => {
+      const base = hoTroItems.find((r) => r.id === id);
+      const cur = prev[id] ?? { so_luong: base?.so_luong ?? 1, don_gia: base?.don_gia ?? 0, mo_ta: base?.mo_ta ?? "" };
+      return { ...prev, [id]: { ...cur, mo_ta: val } };
     });
 
   const handleSave = (item: HDVHoTroItem) => {
     const local = editRow[item.id];
     if (!local) return;
-    if (local.so_luong === item.so_luong && local.don_gia === item.don_gia) {
+    const itemMoTa = item.mo_ta ?? "";
+    if (local.so_luong === item.so_luong && local.don_gia === item.don_gia && local.mo_ta === itemMoTa) {
       setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
       return;
     }
     upsertMut.mutate({
       id: item.id, doan_id: doanId,
       so_luong: local.so_luong, don_gia: local.don_gia,
+      mo_ta: local.mo_ta || null,
       tien_cong_ty: local.so_luong * local.don_gia,
     } as any, {
       onSuccess: () => {
         setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
         invalidate();
       },
-    });
-  };
-
-  const handleLoaiChange = (item: HDVHoTroItem, newLoai: string) => {
-    const newMoTa = newLoai !== "khac" ? getLoaiLabel(newLoai) : (item.mo_ta ?? "Khác");
-    upsertMut.mutate({ id: item.id, doan_id: doanId, loai: newLoai, mo_ta: newMoTa } as any, {
-      onSuccess: () => invalidate(),
     });
   };
 
@@ -261,8 +249,8 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
       await upsertMut.mutateAsync({
         doan_id: doanId,
         danh_muc: "hdv_ho_tro",
-        loai: "cong_tac_phi",
-        mo_ta: "Công tác phí",
+        loai: "khac",
+        mo_ta: "",
         so_luong: 1,
         don_gia: 0,
         tien_cong_ty: 0,
@@ -306,16 +294,15 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
               return (
                 <tr key={item.id} className="hover:bg-muted/20">
                   <td className="px-3 py-2">
-                    <Select value={item.loai} onValueChange={(v) => handleLoaiChange(item, v)}>
-                      <SelectTrigger className="h-7 text-xs w-44">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {HO_TRO_LOAI.map((l) => (
-                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="text"
+                      value={local.mo_ta}
+                      onChange={(e) => handleMoTaChange(item.id, e.target.value)}
+                      onBlur={() => handleSave(item)}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                      placeholder="VD: Công tác phí, Tiền ngủ, ..."
+                      className="h-7 text-xs"
+                    />
                   </td>
                   <td className="px-4 py-2 text-right">
                     <Input

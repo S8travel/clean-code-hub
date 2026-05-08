@@ -637,12 +637,13 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     cell("HDV TT 導遊付款", "header"), cell("CTY TT 公司付款", "header"),
   ]);
 
-  let totalHdvKS = 0, totalCtyKS = 0;
-  for (const row of ksRows) {
-    const ngayRow = row.ref_doan_ngay_id ? ngayRowById[row.ref_doan_ngay_id] : null;
-    const ksId = ngayRow?.khach_san_id;
-    const ks = ksId != null ? ksData?.khachSanMap?.[ksId] : null;
-
+  // KS: chỉ hiển thị tên KS theo từng ngày (lấy từ doan_ngay), KHÔNG hiển thị chi phí cụ thể
+  const ksNgayRows = (ksData?.ngayRows || []).filter((n: any) => n.khach_san_id);
+  const ksNgaySorted = [...ksNgayRows].sort((a: any, b: any) =>
+    (a.ngay_date || "").localeCompare(b.ngay_date || ""),
+  );
+  for (const ngayRow of ksNgaySorted) {
+    const ks = ksData?.khachSanMap?.[ngayRow.khach_san_id];
     const hotelName = ks?.ten || "—";
     const ciDateStr = ngayRow?.ngay_date ? formatDateValue(ngayRow.ngay_date) : "—";
     const coDateRaw = ngayRow?.ngay_date ? new Date(ngayRow.ngay_date + "T00:00:00") : null;
@@ -650,27 +651,25 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     const coDateStr = coDateRaw ? format(coDateRaw, "dd/MM/yyyy") : "—";
     const bookingCode = ngayRow?.ks_ma_code || "code đoàn";
     const focText = ks?.foc_khach && ks?.foc_mien ? `${ks.foc_khach}免${ks.foc_mien}` : "—";
-    const hdvTT = row.tien_hdv || 0;
-    const ctyTT = row.tien_cong_ty || 0;
-    totalHdvKS += hdvTT;
-    totalCtyKS += ctyTT;
 
     rows.push([
       cell(ciDateStr),
       cell(hotelName),
-      cell(row.mo_ta || "—"),
+      cell(ngayRow?.ks_loai_phong || "—"),
       cell(ciDateStr),
       cell(coDateStr),
-      cell(row.so_luong || 0, "number"),
+      cell(""),       // ROOMS — ẩn chi phí
       cell(focText),
-      cell(row.don_gia || 0, "number"),
-      hdvTT > 0 ? cell(hdvTT, "number") : cell(bookingCode),
-      cell(ctyTT, "number"),
+      cell(""),       // PRICE — ẩn chi phí
+      cell(bookingCode),
+      cell(""),       // CTY TT — ẩn chi phí
     ]);
   }
-  if (ksRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
-  rows.push([cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"), cell(totalHdvKS, "total_number"), cell(totalCtyKS, "total_number")]);
+  if (ksNgaySorted.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  rows.push([cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"), cell(""), cell("")]);
   rows.push([cell("", "text", 10)]);
+  // Bỏ qua KS chi phí: không cộng vào totals
+  void ksRows;
 
   // ─── NHÀ HÀNG ───
   rows.push([cell("NHÀ HÀNG 餐廳 — Nhà hàng có nội bộ 餐廳", "section", 10)]);
@@ -721,16 +720,13 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     const toiRows = mergeNHRows(dayRows.filter((r) => parseNH(r.mo_ta).bua === "toi"));
     const maxLen = Math.max(truaRows.length, toiRows.length);
 
-    const nhHasVal = (r: ChiPhiRow | null) =>
-      !!r && ((r.thanh_tien || 0) > 0 || (r.tien_cong_ty || 0) > 0 || (r.tien_hdv || 0) > 0);
-
     let isFirstKeptRow = true;
     for (let i = 0; i < maxLen; i++) {
       const trua = truaRows[i] ?? null;
       const toi = toiRows[i] ?? null;
 
-      // Bỏ qua sub-row không có giá trị tài chính (tránh hiển thị rows 0 đồng thừa)
-      if (!nhHasVal(trua) && !nhHasVal(toi)) continue;
+      // Hiển thị mọi NH có trong điều tour, kể cả khi chưa nhập giá
+      if (!trua && !toi) continue;
 
       const truaName = trua ? parseNH(trua.mo_ta).name : "";
       const truaTong = trua ? trua.so_luong * trua.don_gia : null;
@@ -744,12 +740,12 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       rows.push([
         cell(isFirstKeptRow ? dateStr : ""),
         cell(truaName),
-        trua ? cell(trua.so_luong, "number") : cell(""),
-        trua ? cell(trua.don_gia, "number") : cell(""),
+        trua ? cell(trua.so_luong || 0, "number") : cell(""),
+        trua ? cell(trua.don_gia || 0, "number") : cell(""),
         truaTong !== null ? cell(truaTong, "number") : cell(""),
         cell(toiName),
-        toi ? cell(toi.so_luong, "number") : cell(""),
-        toi ? cell(toi.don_gia, "number") : cell(""),
+        toi ? cell(toi.so_luong || 0, "number") : cell(""),
+        toi ? cell(toi.don_gia || 0, "number") : cell(""),
         toiTong !== null ? cell(toiTong, "number") : cell(""),
         ctyTotal > 0 ? cell(ctyTotal, "number") : cell(""),
       ]);
