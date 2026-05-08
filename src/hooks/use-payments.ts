@@ -165,6 +165,7 @@ export function useCreatePayment() {
     },
     onSuccess: ({ doanId, congNoId }) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["payments"] });
       qc.invalidateQueries({ queryKey: ["payments-by-doan", doanId] });
       if (doanId) {
@@ -215,6 +216,7 @@ export function useDeletePayment() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["payments"] });
       qc.invalidateQueries({ queryKey: ["cong-no"] });
     },

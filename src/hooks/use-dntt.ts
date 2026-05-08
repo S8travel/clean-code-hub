@@ -156,6 +156,7 @@ export function useApproveDNTT() {
     },
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
     },
@@ -185,6 +186,7 @@ export function useRejectDNTT() {
     },
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
     },
@@ -233,6 +235,7 @@ export function useMarkPaidDNTT() {
     mutationFn: async (id: number) => markPaidImpl(id, new Date().toISOString()),
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
@@ -247,6 +250,7 @@ export function useMarkPaidWithDate() {
       markPaidImpl(id, new Date(ngayThanhToan).toISOString()),
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
@@ -379,6 +383,7 @@ export function useCancelDNTT() {
     },
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
       qc.invalidateQueries({ queryKey: ["cong-no"] });
@@ -433,6 +438,7 @@ export function useUpdateDNTT() {
     },
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
     },
@@ -495,6 +501,7 @@ export function useDeleteDNTT() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["cong-no"] });
       qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
     },
@@ -617,6 +624,7 @@ export function useCreateAdjustment() {
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", vars.dnttGoc.doan_id] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.dnttGoc.doan_id] });
       qc.invalidateQueries({ queryKey: ["cong-no"] });

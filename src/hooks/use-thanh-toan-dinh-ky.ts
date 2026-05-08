@@ -94,6 +94,16 @@ export function useDinhKyChiPhiList(filters?: {
         });
       }
 
+      // Sort: ngày khởi hành đoàn → doan_id → danh_muc → id
+      rows.sort((a, b) => {
+        const dA = a.ngay_kh_di || "9999-12-31";
+        const dB = b.ngay_kh_di || "9999-12-31";
+        if (dA !== dB) return dA.localeCompare(dB);
+        if (a.doan_id !== b.doan_id) return a.doan_id - b.doan_id;
+        if (a.danh_muc !== b.danh_muc) return a.danh_muc.localeCompare(b.danh_muc);
+        return a.id - b.id;
+      });
+
       return rows;
     },
   });
@@ -144,6 +154,7 @@ export function useCreateBatchDNTT() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dinh_ky_chi_phi"] });
+      qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
     },
@@ -151,13 +162,20 @@ export function useCreateBatchDNTT() {
 }
 
 // ĐNTT định kỳ (loai='dinh_ky') — chưa thanh toán xong, theo NCC
+export type DinhKyDNTTRow = DNTTRow & {
+  ngay_di_min?: string | null;
+  ngay_di_max?: string | null;
+};
+
 export function useDinhKyDNTTList(filters?: {
   nccId?: number | null;
+  tuNgay?: string | null;
+  denNgay?: string | null;
   includeResolved?: boolean; // default false: ẩn da_huy + tu_choi + paid
 }) {
   return useQuery({
     queryKey: ["dinh_ky_dntt_list", filters],
-    queryFn: async (): Promise<DNTTRow[]> => {
+    queryFn: async (): Promise<DinhKyDNTTRow[]> => {
       let q = externalSupabase
         .from("dntt_with_payment_status")
         .select(`
@@ -178,7 +196,7 @@ export function useDinhKyDNTTList(filters?: {
         ten_ncc: row.nha_cung_cap?.ten || row.ten_nha_cung_cap || "",
         ncc_so_tai_khoan: row.nha_cung_cap?.so_tai_khoan || row.so_tai_khoan || "",
         ncc_ngan_hang: row.nha_cung_cap?.ngan_hang || row.ngan_hang || "",
-      })) as DNTTRow[];
+      })) as DinhKyDNTTRow[];
 
       if (!filters?.includeResolved) {
         rows = rows.filter(
@@ -188,6 +206,43 @@ export function useDinhKyDNTTList(filters?: {
             r.payment_status !== "paid",
         );
       }
+
+      // Tính range ngày đi của các đoàn được allocate (qua dntt_allocations → chi_phi → doan)
+      // và filter theo range nếu có tuNgay / denNgay
+      if (rows.length > 0) {
+        const dnttIds = rows.map((r) => r.id);
+        const { data: allocs } = await externalSupabase
+          .from("dntt_allocations")
+          .select("dntt_id, chi_phi:chi_phi_id (doan:doan_id (ngay_di))")
+          .in("dntt_id", dnttIds);
+
+        const ngayDiByDntt: Record<number, string[]> = {};
+        (allocs || []).forEach((a: any) => {
+          const ngayDi = a.chi_phi?.doan?.ngay_di;
+          if (!ngayDi) return;
+          (ngayDiByDntt[a.dntt_id] = ngayDiByDntt[a.dntt_id] || []).push(ngayDi);
+        });
+
+        rows = rows.map((r) => {
+          const dates = ngayDiByDntt[r.id] || [];
+          if (dates.length === 0) return { ...r, ngay_di_min: null, ngay_di_max: null };
+          const sorted = [...dates].sort();
+          return { ...r, ngay_di_min: sorted[0], ngay_di_max: sorted[sorted.length - 1] };
+        });
+
+        if (filters?.tuNgay || filters?.denNgay) {
+          rows = rows.filter((r) => {
+            const dates = ngayDiByDntt[r.id] || [];
+            if (dates.length === 0) return true; // ĐNTT chưa có alloc → không filter
+            return dates.some((d) => {
+              if (filters.tuNgay && d < filters.tuNgay) return false;
+              if (filters.denNgay && d > filters.denNgay) return false;
+              return true;
+            });
+          });
+        }
+      }
+
       return rows;
     },
   });

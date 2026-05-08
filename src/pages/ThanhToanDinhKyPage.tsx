@@ -27,6 +27,7 @@ import {
   useDinhKyDNTTList,
   useDinhKyDNTTAllocations,
   type DinhKyChiPhiRow,
+  type DinhKyDNTTRow,
 } from "@/hooks/use-thanh-toan-dinh-ky";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 import { useCreatePayment } from "@/hooks/use-payments";
@@ -150,6 +151,8 @@ export default function ThanhToanDinhKyPage() {
   });
   const { data: dnttList = [] } = useDinhKyDNTTList({
     nccId: filterNcc !== "all" ? Number(filterNcc) : null,
+    tuNgay: effectiveTuNgay,
+    denNgay: effectiveDenNgay,
   });
 
   const createBatch = useCreateBatchDNTT();
@@ -167,7 +170,7 @@ export default function ThanhToanDinhKyPage() {
 
   // Group DNTT by NCC
   const dnttByNcc = useMemo(() => {
-    const map: Record<string, DNTTRow[]> = {};
+    const map: Record<string, DinhKyDNTTRow[]> = {};
     dnttList.forEach((d) => {
       const key = String(d.nha_cung_cap_id ?? "khong_ncc");
       if (!map[key]) map[key] = [];
@@ -663,10 +666,17 @@ export default function ThanhToanDinhKyPage() {
 }
 
 // ── Section 2: list ĐNTT đã tạo của 1 NCC, kèm action mark paid / hủy / xem chi tiết ──
-function DnttSection({ nccDntts }: { nccDntts: DNTTRow[] }) {
+function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
   const [payTarget, setPayTarget] = useState<DNTTRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<DNTTRow | null>(null);
   const [viewTarget, setViewTarget] = useState<DNTTRow | null>(null);
+
+  const fmtRange = (min?: string | null, max?: string | null) => {
+    if (!min && !max) return null;
+    const mm = min ? format(new Date(min + "T00:00:00"), "dd/MM/yy") : "?";
+    const mx = max ? format(new Date(max + "T00:00:00"), "dd/MM/yy") : "?";
+    return min === max ? mm : `${mm} → ${mx}`;
+  };
 
   return (
     <div>
@@ -678,6 +688,7 @@ function DnttSection({ nccDntts }: { nccDntts: DNTTRow[] }) {
           <TableRow className="text-xs">
             <TableHead className="py-1">#</TableHead>
             <TableHead className="py-1">Mô tả</TableHead>
+            <TableHead className="py-1">Phạm vi đoàn</TableHead>
             <TableHead className="py-1">Tạo</TableHead>
             <TableHead className="py-1 text-right">Số tiền</TableHead>
             <TableHead className="py-1 text-right">Đã TT</TableHead>
@@ -694,10 +705,20 @@ function DnttSection({ nccDntts }: { nccDntts: DNTTRow[] }) {
             const canPay = d.trang_thai_duyet === "da_duyet" && conLai > 0;
             const canCancel =
               d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi";
+            const rangeText = fmtRange(d.ngay_di_min, d.ngay_di_max);
             return (
               <TableRow key={d.id} className="text-xs">
                 <TableCell className="py-1.5 font-mono text-muted-foreground">#{d.id}</TableCell>
                 <TableCell className="py-1.5 max-w-[260px] truncate">{d.mo_ta || "—"}</TableCell>
+                <TableCell className="py-1.5 whitespace-nowrap">
+                  {rangeText ? (
+                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium">
+                      📅 {rangeText}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell className="py-1.5 text-muted-foreground whitespace-nowrap">
                   {d.tao_luc ? format(new Date(d.tao_luc), "dd/MM/yyyy") : "—"}
                 </TableCell>
