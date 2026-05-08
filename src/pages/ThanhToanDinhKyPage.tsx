@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -32,23 +31,6 @@ import {
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
-
-const danhMucLabel: Record<string, string> = {
-  khach_san: "Khách sạn",
-  nha_hang: "Nhà hàng",
-  xe: "Xe",
-  dich_vu: "Dịch vụ",
-  bao_hiem: "Bảo hiểm",
-  canh_diem: "Cảnh điểm",
-  phi_visa: "Visa",
-  hdv: "HDV",
-};
-
-const ttLabel: Record<string, { text: string; cls: string }> = {
-  unpaid: { text: "Chưa TT", cls: "bg-muted text-muted-foreground" },
-  partial_paid: { text: "Một phần", cls: "bg-amber-100 text-amber-700" },
-  paid: { text: "Đã TT", cls: "bg-emerald-100 text-emerald-700" },
-};
 
 const duyetLabel: Record<string, { text: string; cls: string }> = {
   cho_duyet: { text: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
@@ -105,19 +87,56 @@ function MonthPicker({
   );
 }
 
+// ── Month helpers ──
+function monthKeyFromDate(d?: string | null): string | null {
+  if (!d) return null;
+  return d.slice(0, 7); // "YYYY-MM"
+}
+function monthLabelFromKey(monthKey: string): string {
+  if (monthKey === "khong_thang") return "Chưa rõ tháng";
+  const [y, m] = monthKey.split("-");
+  return `Tháng ${parseInt(m, 10)}/${y}`;
+}
+
+interface MonthGroup {
+  monthKey: string;
+  monthLabel: string;
+  rows: DinhKyChiPhiRow[];
+  dntts: DinhKyDNTTRow[];
+  totalThanhTien: number;
+  totalDaTT: number;
+  totalConLai: number;
+  doanCount: number;
+}
+
+interface NccGroup {
+  nccKey: string;
+  nccId: number | null;
+  nccTen: string;
+  nccStk: string | null;
+  nccNganHang: string | null;
+  months: MonthGroup[]; // sort theo monthKey ASC
+}
+
+interface DialogContext {
+  nccId: number;
+  nccTen: string;
+  monthKey: string;
+  monthLabel: string;
+  rows: DinhKyChiPhiRow[]; // chi phí của tháng có conLai > 0
+}
+
 export default function ThanhToanDinhKyPage() {
   const [filterNcc, setFilterNcc] = useState<string>("all");
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [tuNgay, setTuNgay] = useState<Date | undefined>();
   const [denNgay, setDenNgay] = useState<Date | undefined>();
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [batchOpen, setBatchOpen] = useState(false);
+  const [dialogCtx, setDialogCtx] = useState<DialogContext | null>(null);
   const [batchMoTa, setBatchMoTa] = useState("");
   const [batchMode, setBatchMode] = useState<"full" | "partial">("full");
   const [batchPaidAmount, setBatchPaidAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
-  const [collapsedNccs, setCollapsedNccs] = useState<Set<string>>(new Set());
 
   // Range tự động tính từ tháng quick picker (override range tự chọn nếu chưa set)
   const effectiveTuNgay = useMemo(() => {
@@ -155,85 +174,141 @@ export default function ThanhToanDinhKyPage() {
 
   const createBatch = useCreateBatchDNTT();
 
-  // Group chi phí by NCC
-  const grouped = useMemo(() => {
-    const map: Record<string, DinhKyChiPhiRow[]> = {};
+  // Group chi phí + DNTT by NCC → tháng (theo doan.ngay_di / dntt.ngay_di_min)
+  const groupedByNccMonth = useMemo<NccGroup[]>(() => {
+    type Bucket = { ncc: Pick<NccGroup, "nccTen" | "nccStk" | "nccNganHang"> & { nccId: number | null }; months: Map<string, MonthGroup> };
+    const map = new Map<string, Bucket>();
+
+    const ensureNcc = (
+      nccKey: string,
+      nccId: number | null,
+      nccTen: string,
+      nccStk: string | null,
+      nccNganHang: string | null,
+    ): Bucket => {
+      const ex = map.get(nccKey);
+      if (ex) return ex;
+      const fresh: Bucket = {
+        ncc: { nccId, nccTen, nccStk, nccNganHang },
+        months: new Map(),
+      };
+      map.set(nccKey, fresh);
+      return fresh;
+    };
+
+    const ensureMonth = (b: Bucket, monthKey: string): MonthGroup => {
+      const ex = b.months.get(monthKey);
+      if (ex) return ex;
+      const fresh: MonthGroup = {
+        monthKey,
+        monthLabel: monthLabelFromKey(monthKey),
+        rows: [],
+        dntts: [],
+        totalThanhTien: 0,
+        totalDaTT: 0,
+        totalConLai: 0,
+        doanCount: 0,
+      };
+      b.months.set(monthKey, fresh);
+      return fresh;
+    };
+
     rows.forEach((r) => {
-      const key = String(r.nha_cung_cap_id ?? "khong_ncc");
-      if (!map[key]) map[key] = [];
-      map[key].push(r);
+      const nccKey = String(r.nha_cung_cap_id ?? "khong_ncc");
+      const monthKey = monthKeyFromDate(r.ngay_kh_di) ?? "khong_thang";
+      const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? "Chưa có NCC", r.ncc_so_tai_khoan, r.ncc_ngan_hang);
+      const mg = ensureMonth(bucket, monthKey);
+      mg.rows.push(r);
+      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      mg.totalThanhTien += tt;
+      mg.totalDaTT += r.so_tien_da_tt;
+      mg.totalConLai += Math.max(0, tt - r.so_tien_da_tt);
     });
-    return map;
-  }, [rows]);
 
-  // Group DNTT by NCC
-  const dnttByNcc = useMemo(() => {
-    const map: Record<string, DinhKyDNTTRow[]> = {};
     dnttList.forEach((d) => {
-      const key = String(d.nha_cung_cap_id ?? "khong_ncc");
-      if (!map[key]) map[key] = [];
-      map[key].push(d);
+      const nccKey = String(d.nha_cung_cap_id ?? "khong_ncc");
+      const minDate = (d as any).ngay_di_min as string | null | undefined;
+      const monthKey = monthKeyFromDate(minDate ?? null) ?? "khong_thang";
+      const bucket = ensureNcc(
+        nccKey,
+        d.nha_cung_cap_id,
+        (d as any).ten_ncc || "Chưa có NCC",
+        (d as any).ncc_so_tai_khoan || null,
+        (d as any).ncc_ngan_hang || null,
+      );
+      ensureMonth(bucket, monthKey).dntts.push(d);
     });
-    return map;
-  }, [dnttList]);
 
-  // Tổng hợp NCC keys (kết hợp từ cả 2 nguồn)
-  const allNccKeys = useMemo(() => {
-    const keys = new Set([...Object.keys(grouped), ...Object.keys(dnttByNcc)]);
-    return [...keys];
-  }, [grouped, dnttByNcc]);
-
-  const selectedRows = rows.filter((r) => selectedIds.includes(r.id));
-  const selectedTotal = selectedRows.reduce((s, r) => {
-    const thanhTien = r.thanh_tien_thuc_te ?? r.thanh_tien;
-    return s + Math.max(0, thanhTien - r.so_tien_da_tt);
-  }, 0);
-
-  const selectedNccIds = [...new Set(selectedRows.map((r) => r.nha_cung_cap_id))];
-  const canCreateBatch = selectedIds.length > 0 && selectedNccIds.length === 1;
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
-
-  const toggleSelectAll = (groupRows: DinhKyChiPhiRow[]) => {
-    const groupIds = groupRows.map((r) => r.id);
-    const allSelected = groupIds.every((id) => selectedIds.includes(id));
-    if (allSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !groupIds.includes(id)));
-    } else {
-      setSelectedIds((prev) => [...new Set([...prev, ...groupIds])]);
-    }
-  };
-
-  const toggleCollapse = (key: string) => {
-    setCollapsedNccs((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
+    const result: NccGroup[] = [];
+    map.forEach((bucket, nccKey) => {
+      const monthsArr = [...bucket.months.values()].map((mg) => ({
+        ...mg,
+        doanCount: new Set(mg.rows.map((r) => r.doan_id)).size,
+      }));
+      monthsArr.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+      result.push({
+        nccKey,
+        nccId: bucket.ncc.nccId,
+        nccTen: bucket.ncc.nccTen,
+        nccStk: bucket.ncc.nccStk,
+        nccNganHang: bucket.ncc.nccNganHang,
+        months: monthsArr,
+      });
     });
-  };
+    result.sort((a, b) => a.nccTen.localeCompare(b.nccTen));
+    return result;
+  }, [rows, dnttList]);
 
-  // Số tiền partial (nếu mode='partial'), parse số nguyên
+  // Số tiền partial (nếu mode='partial'), parse số nguyên — dùng dialogCtx
+  const dialogTotalConLai = useMemo(() => {
+    if (!dialogCtx) return 0;
+    return dialogCtx.rows.reduce((s, r) => {
+      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      return s + Math.max(0, tt - r.so_tien_da_tt);
+    }, 0);
+  }, [dialogCtx]);
+
   const batchPartialNum = Number((batchPaidAmount || "").replace(/\D/g, "")) || 0;
   const batchEffectiveAmount = batchMode === "full"
-    ? selectedTotal
-    : Math.min(batchPartialNum, selectedTotal);
-  const batchPartialValid = batchMode === "full" || (batchPartialNum > 0 && batchPartialNum <= selectedTotal);
+    ? dialogTotalConLai
+    : Math.min(batchPartialNum, dialogTotalConLai);
+  const batchPartialValid = batchMode === "full" || (batchPartialNum > 0 && batchPartialNum <= dialogTotalConLai);
+
+  const openCreateDialogForMonth = (ncc: NccGroup, mg: MonthGroup) => {
+    if (!ncc.nccId) { toast.error("Tháng này không có NCC hợp lệ"); return; }
+    const eligible = mg.rows.filter((r) => {
+      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      return Math.max(0, tt - r.so_tien_da_tt) > 0;
+    });
+    if (eligible.length === 0) { toast.warning("Tháng này không còn chi phí cần thanh toán"); return; }
+    setDialogCtx({
+      nccId: ncc.nccId,
+      nccTen: ncc.nccTen,
+      monthKey: mg.monthKey,
+      monthLabel: mg.monthLabel,
+      rows: eligible,
+    });
+    setBatchMode("full");
+    setBatchPaidAmount("");
+    setBatchMoTa("");
+  };
+
+  const closeCreateDialog = () => {
+    setDialogCtx(null);
+    setBatchMode("full");
+    setBatchPaidAmount("");
+    setBatchMoTa("");
+  };
 
   const handleCreateBatch = async () => {
-    if (!canCreateBatch) return;
+    if (!dialogCtx) return;
     if (!batchPartialValid || batchEffectiveAmount <= 0) {
       toast.error("Số tiền không hợp lệ");
       return;
     }
-    const nccId = selectedNccIds[0];
-    if (!nccId) { toast.error("Chưa có nhà cung cấp cho khoản này"); return; }
 
-    // Pro-rata phân bổ effectiveAmount theo tỉ lệ "còn lại" mỗi chi phí (giống KSDNTTModal)
-    const conLaiByRow = selectedRows.map((r) => ({
+    // Pro-rata phân bổ effectiveAmount theo tỉ lệ "còn lại" mỗi chi phí
+    const conLaiByRow = dialogCtx.rows.map((r) => ({
       id: r.id,
       conLai: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt),
     }));
@@ -244,36 +319,28 @@ export default function ThanhToanDinhKyPage() {
         ? Math.round(batchEffectiveAmount * (x.conLai / totalConLai))
         : Math.round(batchEffectiveAmount / conLaiByRow.length),
     }));
-    // Fix rounding drift: cộng/trừ chênh lệch vào row đầu tiên
+    // Fix rounding drift
     const allocSum = allocations.reduce((s, a) => s + a.so_tien, 0);
     const drift = batchEffectiveAmount - allocSum;
     if (drift !== 0 && allocations.length > 0) {
       allocations = [{ ...allocations[0], so_tien: allocations[0].so_tien + drift }, ...allocations.slice(1)];
     }
 
-    const ncc = nccOptions.find((n) => n.id === nccId);
-    const monthLabel = filterMonth != null && filterYear != null
-      ? `${String(filterMonth).padStart(2, "0")}/${filterYear}`
-      : format(new Date(), "MM/yyyy");
     const cocSuffix = batchMode === "partial" ? " (Cọc)" : "";
-    const defaultMoTa = batchMoTa || `Thanh toán định kỳ – ${ncc?.ten || "NCC"} – ${monthLabel}${cocSuffix}`;
+    const defaultMoTa = batchMoTa || `Thanh toán định kỳ – ${dialogCtx.nccTen} – ${dialogCtx.monthLabel}${cocSuffix}`;
 
     setSubmitting(true);
     try {
       await createBatch.mutateAsync({
-        nccId,
+        nccId: dialogCtx.nccId,
         moTa: defaultMoTa,
-        chiPhiIds: selectedRows.map((r) => r.id),
+        chiPhiIds: dialogCtx.rows.map((r) => r.id),
         allocations,
         soTien: batchEffectiveAmount,
         laCoc: batchMode === "partial",
       });
       toast.success("Đã tạo đề nghị thanh toán định kỳ");
-      setBatchOpen(false);
-      setBatchMoTa("");
-      setBatchMode("full");
-      setBatchPaidAmount("");
-      setSelectedIds([]);
+      closeCreateDialog();
     } catch (err: any) {
       toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
     } finally {
@@ -300,24 +367,6 @@ export default function ThanhToanDinhKyPage() {
             NCC cho nợ → tổng hợp chi phí → tạo ĐNTT gộp → duyệt → thanh toán
           </p>
         </div>
-        {selectedIds.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">
-              Đã chọn {selectedIds.length} khoản · Tổng: <span className="font-semibold text-foreground">{fmt(selectedTotal)} ₫</span>
-            </span>
-            <Button
-              size="sm"
-              disabled={!canCreateBatch}
-              onClick={() => setBatchOpen(true)}
-              title={!canCreateBatch ? "Chỉ chọn cùng 1 nhà cung cấp" : undefined}
-            >
-              Tạo ĐNTT gộp
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
-              Bỏ chọn
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Filters */}
@@ -381,275 +430,166 @@ export default function ThanhToanDinhKyPage() {
         <div className="text-sm text-muted-foreground">Đang tải...</div>
       )}
 
-      {!isLoading && allNccKeys.length === 0 && (
+      {!isLoading && groupedByNccMonth.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
           Không có chi phí định kỳ và ĐNTT nào trong bộ lọc hiện tại
         </div>
       )}
 
-      {/* Per-NCC card: Section 1 (chi phí) + Section 2 (ĐNTT đã tạo) */}
-      {allNccKeys.map((nccKey) => {
-        const groupRows = grouped[nccKey] || [];
-        const nccDntts = dnttByNcc[nccKey] || [];
-        const firstRow = groupRows[0] || nccDntts[0];
-        const nccName = (firstRow as any)?.ten_ncc || "Chưa có NCC";
-        const nccStk = (firstRow as any)?.ncc_so_tai_khoan || (firstRow as any)?.so_tai_khoan;
-        const nccNganHang = (firstRow as any)?.ncc_ngan_hang || (firstRow as any)?.ngan_hang;
-        const groupTotal = groupRows.reduce((s, r) => {
-          const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
-          return s + Math.max(0, tt - r.so_tien_da_tt);
-        }, 0);
-        const groupIds = groupRows.map((r) => r.id);
-        const allSelected = groupIds.length > 0 && groupIds.every((id) => selectedIds.includes(id));
-        const isCollapsed = collapsedNccs.has(nccKey);
-
-        return (
-          <Card key={nccKey}>
-            <CardHeader className="py-3 px-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {groupRows.length > 0 && (
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={() => toggleSelectAll(groupRows)}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => toggleCollapse(nccKey)}
-                    className="flex items-start gap-2 text-left"
-                  >
-                    {isCollapsed ? <ChevronRight className="h-4 w-4 mt-0.5" /> : <ChevronDown className="h-4 w-4 mt-0.5" />}
-                    <div>
-                      <CardTitle className="text-sm font-semibold">{nccName}</CardTitle>
-                      {nccStk && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          STK: {nccStk} · {nccNganHang || "—"}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                </div>
-                <div className="flex items-center gap-3 text-xs">
-                  {groupRows.length > 0 && (
-                    <span className="text-orange-600 font-semibold">
-                      Còn lại: {fmt(groupTotal)} ₫
-                    </span>
-                  )}
-                  {nccDntts.length > 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
-                      {nccDntts.length} ĐNTT đang xử lý
-                    </span>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            {!isCollapsed && (
-              <CardContent className="px-4 pb-3 pt-0 space-y-3">
-                {/* Section 1: Chi phí chờ ĐNTT */}
-                {groupRows.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-1.5">
-                      Chi phí chờ ĐNTT ({groupRows.length})
-                    </h4>
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="text-xs">
-                          <TableHead className="w-8 py-1" />
-                          <TableHead className="py-1">Đoàn</TableHead>
-                          <TableHead className="py-1">Ngày đi</TableHead>
-                          <TableHead className="py-1">Danh mục</TableHead>
-                          <TableHead className="py-1">Mô tả</TableHead>
-                          <TableHead className="py-1 text-right">Thành tiền</TableHead>
-                          <TableHead className="py-1 text-right">Đã TT</TableHead>
-                          <TableHead className="py-1 text-right">Còn lại</TableHead>
-                          <TableHead className="py-1 text-center">Trạng thái</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {groupRows.map((r) => {
-                          const thanhTien = r.thanh_tien_thuc_te ?? r.thanh_tien;
-                          const conLai = Math.max(0, thanhTien - r.so_tien_da_tt);
-                          const tt = ttLabel[r.trang_thai_thanh_toan] ?? ttLabel.unpaid;
-                          return (
-                            <TableRow key={r.id} className={cn("text-xs", selectedIds.includes(r.id) && "bg-primary/5")}>
-                              <TableCell className="py-1.5">
-                                <Checkbox
-                                  checked={selectedIds.includes(r.id)}
-                                  onCheckedChange={() => toggleSelect(r.id)}
-                                  className="h-3.5 w-3.5"
-                                />
-                              </TableCell>
-                              <TableCell className="py-1.5 font-medium">{r.ten_doan || `Đoàn #${r.doan_id}`}</TableCell>
-                              <TableCell className="py-1.5 text-muted-foreground whitespace-nowrap">
-                                {r.ngay_kh_di ? format(new Date(r.ngay_kh_di + "T00:00:00"), "dd/MM/yyyy") : "—"}
-                              </TableCell>
-                              <TableCell className="py-1.5 text-muted-foreground">
-                                {danhMucLabel[r.danh_muc] || r.danh_muc}
-                              </TableCell>
-                              <TableCell className="py-1.5 max-w-[180px] truncate">{r.mo_ta || "—"}</TableCell>
-                              <TableCell className="py-1.5 text-right">{fmt(thanhTien)} ₫</TableCell>
-                              <TableCell className="py-1.5 text-right text-emerald-600">{fmt(r.so_tien_da_tt)} ₫</TableCell>
-                              <TableCell className="py-1.5 text-right font-semibold text-orange-600">{fmt(conLai)} ₫</TableCell>
-                              <TableCell className="py-1.5 text-center">
-                                <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", tt.cls)}>
-                                  {tt.text}
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-
-                {/* Section 2: ĐNTT đã tạo */}
-                {nccDntts.length > 0 && (
-                  <DnttSection nccDntts={nccDntts} />
-                )}
-              </CardContent>
+      {/* Per-NCC card → group by tháng */}
+      {groupedByNccMonth.map((ncc) => (
+        <Card key={ncc.nccKey}>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm font-semibold">{ncc.nccTen}</CardTitle>
+            {ncc.nccStk && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                STK: {ncc.nccStk} · {ncc.nccNganHang || "—"}
+              </p>
             )}
-          </Card>
-        );
-      })}
+          </CardHeader>
+          <CardContent className="px-4 pb-3 pt-0 space-y-2">
+            {ncc.months.map((mg) => (
+              <MonthGroupCard
+                key={mg.monthKey}
+                monthGroup={mg}
+                onCreateDNTT={() => openCreateDialogForMonth(ncc, mg)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      ))}
 
-      {/* Batch DNTT dialog */}
-      <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
+      {/* Dialog tạo ĐNTT theo tháng */}
+      <Dialog open={!!dialogCtx} onOpenChange={(v) => { if (!v) closeCreateDialog(); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Tạo ĐNTT gộp định kỳ</DialogTitle>
+            <DialogTitle>
+              Tạo ĐNTT định kỳ
+              {dialogCtx && <span className="text-xs font-normal text-muted-foreground"> — {dialogCtx.nccTen} · {dialogCtx.monthLabel}</span>}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="rounded-md bg-muted/40 px-4 py-3 space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">NCC</span>
-                <span className="font-medium">
-                  {selectedRows[0]?.ten_ncc || "—"}
-                </span>
+          {dialogCtx && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-md bg-muted/40 px-4 py-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Số khoản</span>
+                  <span className="font-medium">{dialogCtx.rows.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tổng còn lại của tháng</span>
+                  <span className="font-semibold text-orange-600">{fmt(dialogTotalConLai)} ₫</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Chuyển đến</span>
+                  {dialogCtx.rows[0]?.ncc_so_tai_khoan ? (
+                    <span>{dialogCtx.rows[0].ncc_so_tai_khoan} · {dialogCtx.rows[0].ncc_ngan_hang || "—"}</span>
+                  ) : (
+                    <span className="text-amber-700 italic">Chưa có TK — cập nhật trong Quản lý NCC</span>
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Số khoản</span>
-                <span className="font-medium">{selectedRows.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tổng tiền</span>
-                <span className="font-semibold text-orange-600">{fmt(selectedTotal)} ₫</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Chuyển đến</span>
-                {selectedRows[0]?.ncc_so_tai_khoan ? (
-                  <span>{selectedRows[0].ncc_so_tai_khoan} · {selectedRows[0].ncc_ngan_hang || "—"}</span>
-                ) : (
-                  <span className="text-amber-700 italic">Chưa có TK — cập nhật trong Quản lý NCC</span>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Số tiền đề nghị</Label>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => { setBatchMode("full"); setBatchPaidAmount(""); }}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
+                      batchMode === "full"
+                        ? "border-primary bg-primary/5 text-primary font-medium"
+                        : "border-border hover:bg-muted/40",
+                    )}
+                  >
+                    Toàn bộ ({fmt(dialogTotalConLai)} ₫)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchMode("partial")}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
+                      batchMode === "partial"
+                        ? "border-primary bg-primary/5 text-primary font-medium"
+                        : "border-border hover:bg-muted/40",
+                    )}
+                  >
+                    Trả trước 1 phần (cọc)
+                  </button>
+                </div>
+                {batchMode === "partial" && (
+                  <div className="space-y-1">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={batchPaidAmount}
+                      onChange={(e) => setBatchPaidAmount(e.target.value.replace(/\D/g, ""))}
+                      placeholder={`Nhập số tiền cọc (≤ ${fmt(dialogTotalConLai)} ₫)`}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    {batchPaidAmount && !batchPartialValid && (
+                      <p className="text-[11px] text-red-600">
+                        Số tiền phải lớn hơn 0 và ≤ {fmt(dialogTotalConLai)} ₫
+                      </p>
+                    )}
+                    {batchPartialValid && batchPartialNum > 0 && batchPartialNum < dialogTotalConLai && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Phần còn lại {fmt(dialogTotalConLai - batchEffectiveAmount)} ₫ → tạo ĐNTT khác sau
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-sm">Số tiền đề nghị</Label>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => { setBatchMode("full"); setBatchPaidAmount(""); }}
-                  className={cn(
-                    "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
-                    batchMode === "full"
-                      ? "border-primary bg-primary/5 text-primary font-medium"
-                      : "border-border hover:bg-muted/40",
-                  )}
-                >
-                  Toàn bộ ({fmt(selectedTotal)} ₫)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBatchMode("partial")}
-                  className={cn(
-                    "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
-                    batchMode === "partial"
-                      ? "border-primary bg-primary/5 text-primary font-medium"
-                      : "border-border hover:bg-muted/40",
-                  )}
-                >
-                  Trả trước 1 phần (cọc)
-                </button>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Mô tả ĐNTT</Label>
+                <Input
+                  value={batchMoTa}
+                  onChange={(e) => setBatchMoTa(e.target.value)}
+                  placeholder={`Thanh toán định kỳ – ${dialogCtx.nccTen} – ${dialogCtx.monthLabel}${batchMode === "partial" ? " (Cọc)" : ""}`}
+                  className="text-sm"
+                />
               </div>
-              {batchMode === "partial" && (
-                <div className="space-y-1">
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={batchPaidAmount}
-                    onChange={(e) => setBatchPaidAmount(e.target.value.replace(/\D/g, ""))}
-                    placeholder={`Nhập số tiền cọc (≤ ${fmt(selectedTotal)} ₫)`}
-                    className="text-sm"
-                    autoFocus
-                  />
-                  {batchPaidAmount && !batchPartialValid && (
-                    <p className="text-[11px] text-red-600">
-                      Số tiền phải lớn hơn 0 và ≤ {fmt(selectedTotal)} ₫
-                    </p>
-                  )}
-                  {batchPartialValid && batchPartialNum > 0 && batchPartialNum < selectedTotal && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Phần còn lại {fmt(selectedTotal - batchEffectiveAmount)} ₫ → tạo ĐNTT khác sau
-                    </p>
-                  )}
+
+              <div className="max-h-40 overflow-y-auto text-xs space-y-1">
+                {dialogCtx.rows.map((r) => {
+                  const conLai = Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt);
+                  const ratio = dialogTotalConLai > 0 ? conLai / dialogTotalConLai : 0;
+                  const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
+                    ? Math.round(batchEffectiveAmount * ratio)
+                    : conLai;
+                  return (
+                    <div key={r.id} className="flex justify-between text-muted-foreground">
+                      <span className="truncate max-w-[220px]">
+                        {r.ten_doan || `Đoàn #${r.doan_id}`} · {r.mo_ta}
+                      </span>
+                      <span className="ml-2 font-medium text-foreground shrink-0">
+                        {fmt(allocated)} ₫
+                        {batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0 && allocated < conLai && (
+                          <span className="ml-1 text-muted-foreground font-normal">/ {fmt(conLai)}</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {batchMode === "partial" && batchPartialValid && batchPartialNum > 0 && (
+                <div className="rounded-md border border-border px-4 py-2 text-xs space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Đề nghị thanh toán lần này</span>
+                    <span className="font-semibold text-orange-600">{fmt(batchEffectiveAmount)} ₫</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Sau khi tạo, còn lại</span>
+                    <span className="font-medium">{fmt(dialogTotalConLai - batchEffectiveAmount)} ₫</span>
+                  </div>
                 </div>
               )}
             </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm">Mô tả ĐNTT</Label>
-              <Input
-                value={batchMoTa}
-                onChange={(e) => setBatchMoTa(e.target.value)}
-                placeholder={`Thanh toán định kỳ – ${selectedRows[0]?.ten_ncc || "NCC"} – ${
-                  filterMonth != null && filterYear != null
-                    ? `${String(filterMonth).padStart(2, "0")}/${filterYear}`
-                    : format(new Date(), "MM/yyyy")
-                }${batchMode === "partial" ? " (Cọc)" : ""}`}
-                className="text-sm"
-              />
-            </div>
-
-            <div className="max-h-40 overflow-y-auto text-xs space-y-1">
-              {selectedRows.map((r) => {
-                const conLai = Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt);
-                const ratio = selectedTotal > 0 ? conLai / selectedTotal : 0;
-                const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
-                  ? Math.round(batchEffectiveAmount * ratio)
-                  : conLai;
-                return (
-                  <div key={r.id} className="flex justify-between text-muted-foreground">
-                    <span className="truncate max-w-[220px]">
-                      {r.ten_doan || `Đoàn #${r.doan_id}`} · {r.mo_ta}
-                    </span>
-                    <span className="ml-2 font-medium text-foreground shrink-0">
-                      {fmt(allocated)} ₫
-                      {batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0 && allocated < conLai && (
-                        <span className="ml-1 text-muted-foreground font-normal">/ {fmt(conLai)}</span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {batchMode === "partial" && batchPartialValid && batchPartialNum > 0 && (
-              <div className="rounded-md border border-border px-4 py-2 text-xs space-y-0.5">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Đề nghị thanh toán lần này</span>
-                  <span className="font-semibold text-orange-600">{fmt(batchEffectiveAmount)} ₫</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sau khi tạo, còn lại</span>
-                  <span className="font-medium">{fmt(selectedTotal - batchEffectiveAmount)} ₫</span>
-                </div>
-              </div>
-            )}
-          </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBatchOpen(false)}>Hủy</Button>
+            <Button variant="outline" onClick={closeCreateDialog}>Hủy</Button>
             <Button
               onClick={handleCreateBatch}
               disabled={submitting || !batchPartialValid || batchEffectiveAmount <= 0}
@@ -663,9 +603,17 @@ export default function ThanhToanDinhKyPage() {
   );
 }
 
-// ── Section 2: list ĐNTT đã tạo của 1 NCC, kèm action hủy / xem chi tiết ──
-// Mark paid được làm ở sidebar Hóa đơn & UNC, không phải tại đây.
-function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
+// ── Month Group Card: 1 tháng của 1 NCC ──
+// Header: summary tháng + nút Tạo ĐNTT. Expand: list chi phí theo đoàn + list ĐNTT của tháng.
+function MonthGroupCard({
+  monthGroup,
+  onCreateDNTT,
+}: {
+  monthGroup: MonthGroup;
+  onCreateDNTT: () => void;
+}) {
+  const defaultExpanded = monthGroup.totalConLai > 0;
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [cancelTarget, setCancelTarget] = useState<DNTTRow | null>(null);
   const [viewTarget, setViewTarget] = useState<DNTTRow | null>(null);
 
@@ -676,90 +624,155 @@ function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
     return min === max ? mm : `${mm} → ${mx}`;
   };
 
+  const fullyPaid = monthGroup.totalConLai === 0 && monthGroup.totalThanhTien > 0;
+
+  // Group chi phí by đoàn để hiển thị gom
+  const byDoan = useMemo(() => {
+    const map = new Map<number, { ten_doan: string; ngay_di: string | null; rows: DinhKyChiPhiRow[] }>();
+    monthGroup.rows.forEach((r) => {
+      const ex = map.get(r.doan_id);
+      if (ex) ex.rows.push(r);
+      else map.set(r.doan_id, {
+        ten_doan: r.ten_doan ?? `Đoàn #${r.doan_id}`,
+        ngay_di: r.ngay_kh_di,
+        rows: [r],
+      });
+    });
+    return [...map.entries()]
+      .map(([doan_id, v]) => ({ doan_id, ...v }))
+      .sort((a, b) => (a.ngay_di || "").localeCompare(b.ngay_di || ""));
+  }, [monthGroup.rows]);
+
   return (
-    <div>
-      <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-1.5">
-        ĐNTT đang xử lý ({nccDntts.length})
-      </h4>
-      <Table>
-        <TableHeader>
-          <TableRow className="text-xs">
-            <TableHead className="py-1">#</TableHead>
-            <TableHead className="py-1">Mô tả</TableHead>
-            <TableHead className="py-1">Phạm vi đoàn</TableHead>
-            <TableHead className="py-1">Tạo</TableHead>
-            <TableHead className="py-1 text-right">Số tiền</TableHead>
-            <TableHead className="py-1 text-right">Đã TT</TableHead>
-            <TableHead className="py-1 text-center">Duyệt</TableHead>
-            <TableHead className="py-1 text-center">TT</TableHead>
-            <TableHead className="py-1 text-right">Hành động</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {nccDntts.map((d) => {
-            const duyetInfo = duyetLabel[d.trang_thai_duyet] || duyetLabel.cho_duyet;
-            const ttInfo = paymentLabel[d.payment_status] || paymentLabel.unpaid;
-            const canCancel =
-              d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi";
-            const rangeText = fmtRange(d.ngay_di_min, d.ngay_di_max);
-            return (
-              <TableRow key={d.id} className="text-xs">
-                <TableCell className="py-1.5 font-mono text-muted-foreground">#{d.id}</TableCell>
-                <TableCell className="py-1.5 max-w-[260px] truncate">{d.mo_ta || "—"}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">
-                  {rangeText ? (
-                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium">
-                      📅 {rangeText}
+    <div className="rounded-md border border-border">
+      <div className="px-3 py-2 flex items-center justify-between gap-2 hover:bg-muted/30">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+        >
+          {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+          <span className="text-sm font-medium">{monthGroup.monthLabel}</span>
+          <span className="text-xs text-muted-foreground">
+            · {fmt(monthGroup.totalThanhTien)} / Đã TT <span className="text-emerald-600">{fmt(monthGroup.totalDaTT)}</span> /{" "}
+            <span className={fullyPaid ? "text-emerald-600 font-medium" : "text-orange-600 font-medium"}>
+              Còn {fmt(monthGroup.totalConLai)}
+            </span>
+            {monthGroup.rows.length > 0 && (
+              <> · {monthGroup.rows.length} chi phí · {monthGroup.doanCount} đoàn</>
+            )}
+            {fullyPaid && <span className="ml-1">✓</span>}
+          </span>
+        </button>
+        {monthGroup.totalConLai > 0 && (
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={onCreateDNTT}>
+            <Plus className="h-3 w-3" /> Tạo ĐNTT
+          </Button>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10">
+          {/* Chi phí theo từng đoàn */}
+          {byDoan.length > 0 && (
+            <div className="space-y-2">
+              {byDoan.map((d) => (
+                <div key={d.doan_id} className="text-xs">
+                  <div className="font-medium">
+                    {d.ten_doan}
+                    <span className="ml-2 text-muted-foreground font-normal">
+                      ({d.ngay_di ? format(new Date(d.ngay_di + "T00:00:00"), "dd/MM/yyyy") : "—"})
                     </span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground whitespace-nowrap">
-                  {d.tao_luc ? format(new Date(d.tao_luc), "dd/MM/yyyy") : "—"}
-                </TableCell>
-                <TableCell className="py-1.5 text-right">{fmt(d.so_tien)} ₫</TableCell>
-                <TableCell className="py-1.5 text-right text-emerald-600">
-                  {fmt(d.paid_amount || 0)} ₫
-                </TableCell>
-                <TableCell className="py-1.5 text-center">
-                  <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", duyetInfo.cls)}>
-                    {duyetInfo.text}
-                  </span>
-                </TableCell>
-                <TableCell className="py-1.5 text-center">
-                  <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", ttInfo.cls)}>
-                    {ttInfo.text}
-                  </span>
-                </TableCell>
-                <TableCell className="py-1.5 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-1.5"
-                      title="Xem chi tiết"
-                      onClick={() => setViewTarget(d)}
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-1.5 text-red-600 hover:text-red-700"
-                      title="Hủy ĐNTT"
-                      disabled={!canCancel}
-                      onClick={() => setCancelTarget(d)}
-                    >
-                      <Ban className="h-3.5 w-3.5" />
-                    </Button>
                   </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                  <div className="pl-3 space-y-0.5">
+                    {d.rows.map((r) => {
+                      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+                      const conLai = Math.max(0, tt - r.so_tien_da_tt);
+                      const isPaid = conLai === 0;
+                      return (
+                        <div key={r.id} className="flex justify-between text-muted-foreground">
+                          <span className="truncate max-w-[280px]">
+                            • {r.mo_ta || "—"}
+                          </span>
+                          <span className="ml-2 shrink-0">
+                            {fmt(tt)} ₫{" "}
+                            {isPaid ? (
+                              <span className="text-emerald-600 text-[10px]">✓ Đã TT</span>
+                            ) : r.so_tien_da_tt > 0 ? (
+                              <span className="text-amber-600 text-[10px]">Còn {fmt(conLai)}</span>
+                            ) : (
+                              <span className="text-orange-600 text-[10px]">Chưa TT</span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ĐNTT đã tạo của tháng này */}
+          {monthGroup.dntts.length > 0 && (
+            <div>
+              <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-1">
+                ĐNTT của tháng này ({monthGroup.dntts.length})
+              </div>
+              <div className="space-y-1">
+                {monthGroup.dntts.map((d) => {
+                  const duyetInfo = duyetLabel[d.trang_thai_duyet] || duyetLabel.cho_duyet;
+                  const ttInfo = paymentLabel[d.payment_status] || paymentLabel.unpaid;
+                  const canCancel =
+                    d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi";
+                  const rangeText = fmtRange(d.ngay_di_min, d.ngay_di_max);
+                  return (
+                    <div key={d.id} className="flex items-center gap-2 text-xs px-2 py-1 rounded hover:bg-background">
+                      <span className="font-mono text-muted-foreground shrink-0">#{d.id}</span>
+                      <span className="truncate flex-1">
+                        {d.mo_ta || "—"}
+                        {d.la_coc && <span className="ml-1 px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px]">Cọc</span>}
+                      </span>
+                      {rangeText && (
+                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] shrink-0">
+                          📅 {rangeText}
+                        </span>
+                      )}
+                      <span className="font-semibold shrink-0">{fmt(d.so_tien)} ₫</span>
+                      <span className="text-emerald-600 text-[10px] shrink-0">
+                        +{fmt(d.paid_amount || 0)}
+                      </span>
+                      <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0", duyetInfo.cls)}>
+                        {duyetInfo.text}
+                      </span>
+                      <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0", ttInfo.cls)}>
+                        {ttInfo.text}
+                      </span>
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-6 px-1.5 shrink-0"
+                        title="Xem chi tiết"
+                        onClick={() => setViewTarget(d)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-6 px-1.5 text-red-600 hover:text-red-700 shrink-0"
+                        title="Hủy ĐNTT"
+                        disabled={!canCancel}
+                        onClick={() => setCancelTarget(d)}
+                      >
+                        <Ban className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {cancelTarget && (
         <CancelDialog
