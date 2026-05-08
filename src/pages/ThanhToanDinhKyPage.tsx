@@ -115,6 +115,8 @@ export default function ThanhToanDinhKyPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchMoTa, setBatchMoTa] = useState("");
+  const [batchMode, setBatchMode] = useState<"full" | "partial">("full");
+  const [batchPaidAmount, setBatchPaidAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [collapsedNccs, setCollapsedNccs] = useState<Set<string>>(new Set());
 
@@ -213,21 +215,47 @@ export default function ThanhToanDinhKyPage() {
     });
   };
 
+  // Số tiền partial (nếu mode='partial'), parse số nguyên
+  const batchPartialNum = Number((batchPaidAmount || "").replace(/\D/g, "")) || 0;
+  const batchEffectiveAmount = batchMode === "full"
+    ? selectedTotal
+    : Math.min(batchPartialNum, selectedTotal);
+  const batchPartialValid = batchMode === "full" || (batchPartialNum > 0 && batchPartialNum <= selectedTotal);
+
   const handleCreateBatch = async () => {
     if (!canCreateBatch) return;
+    if (!batchPartialValid || batchEffectiveAmount <= 0) {
+      toast.error("Số tiền không hợp lệ");
+      return;
+    }
     const nccId = selectedNccIds[0];
     if (!nccId) { toast.error("Chưa có nhà cung cấp cho khoản này"); return; }
 
-    const allocations = selectedRows.map((r) => ({
-      chi_phi_id: r.id,
-      so_tien: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt),
+    // Pro-rata phân bổ effectiveAmount theo tỉ lệ "còn lại" mỗi chi phí (giống KSDNTTModal)
+    const conLaiByRow = selectedRows.map((r) => ({
+      id: r.id,
+      conLai: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt),
     }));
+    const totalConLai = conLaiByRow.reduce((s, x) => s + x.conLai, 0);
+    let allocations = conLaiByRow.map((x) => ({
+      chi_phi_id: x.id,
+      so_tien: totalConLai > 0
+        ? Math.round(batchEffectiveAmount * (x.conLai / totalConLai))
+        : Math.round(batchEffectiveAmount / conLaiByRow.length),
+    }));
+    // Fix rounding drift: cộng/trừ chênh lệch vào row đầu tiên
+    const allocSum = allocations.reduce((s, a) => s + a.so_tien, 0);
+    const drift = batchEffectiveAmount - allocSum;
+    if (drift !== 0 && allocations.length > 0) {
+      allocations = [{ ...allocations[0], so_tien: allocations[0].so_tien + drift }, ...allocations.slice(1)];
+    }
 
     const ncc = nccOptions.find((n) => n.id === nccId);
     const monthLabel = filterMonth != null && filterYear != null
       ? `${String(filterMonth).padStart(2, "0")}/${filterYear}`
       : format(new Date(), "MM/yyyy");
-    const defaultMoTa = batchMoTa || `Thanh toán định kỳ – ${ncc?.ten || "NCC"} – ${monthLabel}`;
+    const cocSuffix = batchMode === "partial" ? " (Cọc)" : "";
+    const defaultMoTa = batchMoTa || `Thanh toán định kỳ – ${ncc?.ten || "NCC"} – ${monthLabel}${cocSuffix}`;
 
     setSubmitting(true);
     try {
@@ -236,11 +264,14 @@ export default function ThanhToanDinhKyPage() {
         moTa: defaultMoTa,
         chiPhiIds: selectedRows.map((r) => r.id),
         allocations,
-        soTien: selectedTotal,
+        soTien: batchEffectiveAmount,
+        laCoc: batchMode === "partial",
       });
       toast.success("Đã tạo đề nghị thanh toán định kỳ");
       setBatchOpen(false);
       setBatchMoTa("");
+      setBatchMode("full");
+      setBatchPaidAmount("");
       setSelectedIds([]);
     } catch (err: any) {
       toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
@@ -504,10 +535,65 @@ export default function ThanhToanDinhKyPage() {
                 <span className="text-muted-foreground">Tổng tiền</span>
                 <span className="font-semibold text-orange-600">{fmt(selectedTotal)} ₫</span>
               </div>
-              {selectedRows[0]?.ncc_so_tai_khoan && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Chuyển đến</span>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Chuyển đến</span>
+                {selectedRows[0]?.ncc_so_tai_khoan ? (
                   <span>{selectedRows[0].ncc_so_tai_khoan} · {selectedRows[0].ncc_ngan_hang || "—"}</span>
+                ) : (
+                  <span className="text-amber-700 italic">Chưa có TK — cập nhật trong Quản lý NCC</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm">Số tiền đề nghị</Label>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setBatchMode("full"); setBatchPaidAmount(""); }}
+                  className={cn(
+                    "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
+                    batchMode === "full"
+                      ? "border-primary bg-primary/5 text-primary font-medium"
+                      : "border-border hover:bg-muted/40",
+                  )}
+                >
+                  Toàn bộ ({fmt(selectedTotal)} ₫)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchMode("partial")}
+                  className={cn(
+                    "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
+                    batchMode === "partial"
+                      ? "border-primary bg-primary/5 text-primary font-medium"
+                      : "border-border hover:bg-muted/40",
+                  )}
+                >
+                  Trả trước 1 phần (cọc)
+                </button>
+              </div>
+              {batchMode === "partial" && (
+                <div className="space-y-1">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={batchPaidAmount}
+                    onChange={(e) => setBatchPaidAmount(e.target.value.replace(/\D/g, ""))}
+                    placeholder={`Nhập số tiền cọc (≤ ${fmt(selectedTotal)} ₫)`}
+                    className="text-sm"
+                    autoFocus
+                  />
+                  {batchPaidAmount && !batchPartialValid && (
+                    <p className="text-[11px] text-red-600">
+                      Số tiền phải lớn hơn 0 và ≤ {fmt(selectedTotal)} ₫
+                    </p>
+                  )}
+                  {batchPartialValid && batchPartialNum > 0 && batchPartialNum < selectedTotal && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Phần còn lại {fmt(selectedTotal - batchEffectiveAmount)} ₫ → tạo ĐNTT khác sau
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -521,28 +607,53 @@ export default function ThanhToanDinhKyPage() {
                   filterMonth != null && filterYear != null
                     ? `${String(filterMonth).padStart(2, "0")}/${filterYear}`
                     : format(new Date(), "MM/yyyy")
-                }`}
+                }${batchMode === "partial" ? " (Cọc)" : ""}`}
                 className="text-sm"
               />
             </div>
 
             <div className="max-h-40 overflow-y-auto text-xs space-y-1">
-              {selectedRows.map((r) => (
-                <div key={r.id} className="flex justify-between text-muted-foreground">
-                  <span className="truncate max-w-[220px]">
-                    {r.ten_doan || `Đoàn #${r.doan_id}`} · {r.mo_ta}
-                  </span>
-                  <span className="ml-2 font-medium text-foreground shrink-0">
-                    {fmt(Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt))} ₫
-                  </span>
-                </div>
-              ))}
+              {selectedRows.map((r) => {
+                const conLai = Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt);
+                const ratio = selectedTotal > 0 ? conLai / selectedTotal : 0;
+                const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
+                  ? Math.round(batchEffectiveAmount * ratio)
+                  : conLai;
+                return (
+                  <div key={r.id} className="flex justify-between text-muted-foreground">
+                    <span className="truncate max-w-[220px]">
+                      {r.ten_doan || `Đoàn #${r.doan_id}`} · {r.mo_ta}
+                    </span>
+                    <span className="ml-2 font-medium text-foreground shrink-0">
+                      {fmt(allocated)} ₫
+                      {batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0 && allocated < conLai && (
+                        <span className="ml-1 text-muted-foreground font-normal">/ {fmt(conLai)}</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
+            {batchMode === "partial" && batchPartialValid && batchPartialNum > 0 && (
+              <div className="rounded-md border border-border px-4 py-2 text-xs space-y-0.5">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Đề nghị thanh toán lần này</span>
+                  <span className="font-semibold text-orange-600">{fmt(batchEffectiveAmount)} ₫</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Sau khi tạo, còn lại</span>
+                  <span className="font-medium">{fmt(selectedTotal - batchEffectiveAmount)} ₫</span>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBatchOpen(false)}>Hủy</Button>
-            <Button onClick={handleCreateBatch} disabled={submitting}>
-              {submitting ? "Đang tạo..." : "Tạo ĐNTT"}
+            <Button
+              onClick={handleCreateBatch}
+              disabled={submitting || !batchPartialValid || batchEffectiveAmount <= 0}
+            >
+              {submitting ? "Đang tạo..." : `Tạo ĐNTT${batchMode === "partial" ? " cọc" : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -108,6 +108,7 @@ export function useCreateBatchDNTT() {
       chiPhiIds: number[];
       allocations: { chi_phi_id: number; so_tien: number }[];
       soTien: number;
+      laCoc?: boolean;
     }) => {
       // Tạo DNTT gộp — không thuộc 1 đoàn cụ thể → doan_id = null
       const { data: dntt, error } = await externalSupabase
@@ -118,7 +119,7 @@ export function useCreateBatchDNTT() {
           mo_ta: payload.moTa,
           nha_cung_cap_id: payload.nccId,
           so_tien: payload.soTien,
-          la_coc: false,
+          la_coc: payload.laCoc ?? false,
           trang_thai_duyet: "cho_duyet",
           ref_loai: "dinh_ky",
           ref_id: null,
