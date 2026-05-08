@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { BOOKING_CC } from "@/lib/booking-cc";
 
 export interface BookingNHRow {
   id: number;
@@ -228,7 +229,7 @@ export function useSendNHBookingEmail() {
         },
         body: JSON.stringify({
           to: params.to,
-          cc: ["s8travel.hddt@gmail.com", "s8travel.op2@gmail.com"],
+          cc: BOOKING_CC.nh,
           subject: params.subject, html: params.html,
           replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined,
           ...(isFirst ? { messageId: newThreadId } : { inReplyTo: params.emailThreadId }),

@@ -9,6 +9,7 @@ import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { useUpsertBookingXe, type BookingXeRow } from "@/hooks/use-booking-xe";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
+import { BOOKING_CC } from "@/lib/booking-cc";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import {
@@ -191,6 +192,7 @@ export default function BookingXeCard({
 
       const emailId = await callSendBookingEmail({
         to: emailTo,
+        cc: BOOKING_CC.xe,
         subject: emailSubject,
         html: emailBody,
         replyTo: currentUserEmail ?? undefined,

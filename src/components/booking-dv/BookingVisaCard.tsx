@@ -12,6 +12,7 @@ import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { useUpsertBookingVisa, useDeleteBookingVisa, type BookingVisaRow } from "@/hooks/use-booking-visa";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
+import { BOOKING_CC } from "@/lib/booking-cc";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useDonViVisaList, type DonViVisa } from "@/hooks/use-visa";
@@ -184,6 +185,7 @@ export default function BookingVisaCard({
 
       const emailId = await callSendBookingEmail({
         to: emailTo,
+        cc: BOOKING_CC.visa,
         subject: emailSubject,
         html: emailBody,
         replyTo: currentUserEmail ?? undefined,

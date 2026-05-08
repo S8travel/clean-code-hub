@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { BOOKING_CC } from "@/lib/booking-cc";
 
 // ── Types ──
 
@@ -330,6 +331,7 @@ export function useSendLockPhongBatchEmail() {
         },
         body: JSON.stringify({
           to: params.to,
+          cc: BOOKING_CC.ks,
           subject: params.subject,
           html: params.html,
           replyTo: params.replyTo,
@@ -384,6 +386,7 @@ export function useSendLockPhongEmail() {
         },
         body: JSON.stringify({
           to: params.to,
+          cc: BOOKING_CC.ks,
           subject: params.subject,
           html: params.html,
           replyTo:

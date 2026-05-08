@@ -180,12 +180,11 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                         🏨 Day Use
                       </span>
                     )}
-                    <DetailLine
-                      item={{
-                        dia_chi: selectedCanhDiem.dia_diem,
-                        so_dien_thoai: selectedCanhDiem.so_dien_thoai,
-                      }}
-                    />
+                    {selectedCanhDiem.ghi_chu && (
+                      <p className="text-[13px] text-muted-foreground mt-0.5 whitespace-pre-wrap">
+                        {selectedCanhDiem.ghi_chu}
+                      </p>
+                    )}
                   </>
                 )}
                 {noteOpen && (

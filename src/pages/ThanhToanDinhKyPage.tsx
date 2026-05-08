@@ -669,7 +669,7 @@ function DnttSection({ nccDntts }: { nccDntts: DNTTRow[] }) {
   );
 }
 
-// ── Mark paid dialog: cấn trừ + cash ──
+// ── Mark paid dialog: full / partial + cấn trừ + cash ──
 function MarkPaidDialog({
   dntt,
   open,
@@ -682,14 +682,35 @@ function MarkPaidDialog({
   const conLai = Math.max(0, dntt.so_tien - (dntt.paid_amount || 0));
   const [ngayTT, setNgayTT] = useState<Date>(new Date());
   const [selectedCongNoIds, setSelectedCongNoIds] = useState<number[]>([]);
+  const [paidMode, setPaidMode] = useState<"full" | "partial">("full");
+  const [paidAmount, setPaidAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   const { data: congNoList = [] } = useCongNoByNCC(dntt.nha_cung_cap_id);
   const createPayment = useCreatePayment();
 
+  const partialNum = Number((paidAmount || "").replace(/\D/g, "")) || 0;
+  const effectiveAmount = paidMode === "full" ? conLai : Math.min(partialNum, conLai);
+  const partialValid = paidMode === "full" || (partialNum > 0 && partialNum <= conLai);
+
   const congNoSelected = congNoList.filter((c) => selectedCongNoIds.includes(c.id));
-  const totalCanTru = congNoSelected.reduce((s, c) => s + Math.min(c.so_tien_con_lai, conLai), 0);
-  const cashRemaining = Math.max(0, conLai - totalCanTru);
+
+  // Greedy allocate: phân bổ từng cong_no theo thứ tự, không vượt quá effectiveAmount
+  const allocations = useMemo(() => {
+    let remaining = effectiveAmount;
+    const result: { id: number; soTien: number }[] = [];
+    for (const cn of congNoSelected) {
+      const apply = Math.min(cn.so_tien_con_lai, remaining);
+      if (apply <= 0) break;
+      result.push({ id: cn.id, soTien: apply });
+      remaining -= apply;
+    }
+    return { allocs: result, cashRemaining: remaining };
+  }, [congNoSelected, effectiveAmount]);
+  const totalCanTru = allocations.allocs.reduce((s, a) => s + a.soTien, 0);
+  const cashRemaining = allocations.cashRemaining;
+  const allocByCnId: Record<number, number> = {};
+  allocations.allocs.forEach((a) => { allocByCnId[a.id] = a.soTien; });
 
   const toggleCongNo = (id: number) => {
     setSelectedCongNoIds((prev) =>
@@ -697,29 +718,35 @@ function MarkPaidDialog({
     );
   };
 
+  const setPartialFromAmount = (n: number) => {
+    setPaidMode("partial");
+    setPaidAmount(String(n));
+  };
+
   const handleSubmit = async () => {
+    if (!partialValid) {
+      toast.error("Số tiền không hợp lệ");
+      return;
+    }
+    if (effectiveAmount <= 0) return;
     setSubmitting(true);
     try {
-      // 1. Apply cấn trừ payments first
-      let remaining = conLai;
-      for (const cn of congNoSelected) {
-        const apply = Math.min(cn.so_tien_con_lai, remaining);
-        if (apply <= 0) break;
+      // 1. Cấn trừ payments theo allocations đã tính
+      for (const a of allocations.allocs) {
         await createPayment.mutateAsync({
           dnttId: dntt.id,
           method: "can_tru",
-          soTien: apply,
+          soTien: a.soTien,
           ngayThanhToan: format(ngayTT, "yyyy-MM-dd"),
-          congNoId: cn.id,
+          congNoId: a.id,
         });
-        remaining -= apply;
       }
       // 2. Cash phần còn lại
-      if (remaining > 0) {
+      if (cashRemaining > 0) {
         await createPayment.mutateAsync({
           dnttId: dntt.id,
           method: "cash",
-          soTien: remaining,
+          soTien: cashRemaining,
           ngayThanhToan: format(ngayTT, "yyyy-MM-dd"),
         });
       }
@@ -745,7 +772,15 @@ function MarkPaidDialog({
               <span className="font-mono">#{dntt.id}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Cần thanh toán</span>
+              <span className="text-muted-foreground">Tổng ĐNTT</span>
+              <span>{fmt(dntt.so_tien)} ₫</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Đã TT</span>
+              <span className="text-emerald-600">{fmt(dntt.paid_amount || 0)} ₫</span>
+            </div>
+            <div className="flex justify-between border-t border-border pt-1 mt-1">
+              <span className="font-medium">Còn lại</span>
               <span className="font-semibold text-orange-600">{fmt(conLai)} ₫</span>
             </div>
           </div>
@@ -765,19 +800,86 @@ function MarkPaidDialog({
             </Popover>
           </div>
 
+          <div className="space-y-1.5">
+            <Label className="text-sm">Số tiền thanh toán</Label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => { setPaidMode("full"); setPaidAmount(""); }}
+                className={cn(
+                  "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
+                  paidMode === "full"
+                    ? "border-primary bg-primary/5 text-primary font-medium"
+                    : "border-border hover:bg-muted/40",
+                )}
+              >
+                Toàn bộ còn lại ({fmt(conLai)} ₫)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaidMode("partial")}
+                className={cn(
+                  "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
+                  paidMode === "partial"
+                    ? "border-primary bg-primary/5 text-primary font-medium"
+                    : "border-border hover:bg-muted/40",
+                )}
+              >
+                Trả 1 phần
+              </button>
+            </div>
+            {paidMode === "partial" && (
+              <div className="space-y-1">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Nhập số tiền (≤ còn lại)"
+                  className="text-sm"
+                  autoFocus
+                />
+                {paidAmount && !partialValid && (
+                  <p className="text-[11px] text-red-600">
+                    Số tiền phải lớn hơn 0 và ≤ {fmt(conLai)} ₫
+                  </p>
+                )}
+                {partialValid && partialNum > 0 && (
+                  <div className="flex gap-1.5 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setPartialFromAmount(Math.round(conLai / 2))}
+                      className="px-2 py-0.5 rounded border border-border hover:bg-muted/40 text-muted-foreground"
+                    >
+                      50%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPartialFromAmount(conLai)}
+                      className="px-2 py-0.5 rounded border border-border hover:bg-muted/40 text-muted-foreground"
+                    >
+                      Toàn bộ
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {congNoList.length > 0 && (
             <div className="space-y-1.5">
               <Label className="text-sm">Cấn trừ công nợ NCC ({congNoList.length})</Label>
               <div className="border border-border rounded-md max-h-44 overflow-y-auto divide-y divide-border">
                 {congNoList.map((cn) => {
-                  const willApply = Math.min(cn.so_tien_con_lai, Math.max(0, conLai - totalCanTru + (selectedCongNoIds.includes(cn.id) ? Math.min(cn.so_tien_con_lai, conLai) : 0)));
+                  const willApply = allocByCnId[cn.id] || 0;
+                  const isSelected = selectedCongNoIds.includes(cn.id);
                   return (
                     <label
                       key={cn.id}
                       className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-muted/40 cursor-pointer"
                     >
                       <Checkbox
-                        checked={selectedCongNoIds.includes(cn.id)}
+                        checked={isSelected}
                         onCheckedChange={() => toggleCongNo(cn.id)}
                       />
                       <div className="flex-1 min-w-0">
@@ -786,8 +888,11 @@ function MarkPaidDialog({
                         </div>
                         <div className="text-muted-foreground">
                           Còn {fmt(cn.so_tien_con_lai)} ₫
-                          {selectedCongNoIds.includes(cn.id) && willApply > 0 && (
+                          {isSelected && willApply > 0 && (
                             <span className="ml-1 text-amber-700">→ áp dụng {fmt(willApply)} ₫</span>
+                          )}
+                          {isSelected && willApply === 0 && (
+                            <span className="ml-1 text-muted-foreground">→ không còn dư để áp</span>
                           )}
                         </div>
                       </div>
@@ -808,14 +913,23 @@ function MarkPaidDialog({
               <span className="font-semibold">{fmt(cashRemaining)} ₫</span>
             </div>
             <div className="flex justify-between border-t border-border pt-1 mt-1">
-              <span className="font-medium">Tổng</span>
+              <span className="font-medium">Tổng thanh toán lần này</span>
               <span className="font-semibold">{fmt(totalCanTru + cashRemaining)} ₫</span>
             </div>
+            {paidMode === "partial" && partialValid && partialNum > 0 && partialNum < conLai && (
+              <div className="flex justify-between text-orange-600 pt-0.5">
+                <span>Sau khi TT, còn lại</span>
+                <span className="font-semibold">{fmt(conLai - effectiveAmount)} ₫</span>
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Hủy</Button>
-          <Button onClick={handleSubmit} disabled={submitting || conLai <= 0}>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || conLai <= 0 || !partialValid || effectiveAmount <= 0}
+          >
             {submitting ? "Đang lưu..." : "Xác nhận thanh toán"}
           </Button>
         </DialogFooter>

@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { BOOKING_CC } from "@/lib/booking-cc";
 
 export interface DichVuItem {
   ten_dv: string;
@@ -84,6 +85,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export async function callSendBookingEmail(params: {
   to: string;
+  cc?: readonly string[] | string[];
   subject: string;
   html: string;
   replyTo?: string;
@@ -126,7 +128,9 @@ export function useSendBookingEmail() {
       const newThreadId = isFirst ? crypto.randomUUID() : null;
 
       await callSendBookingEmail({
-        to: params.to, subject: params.subject, html: params.html, replyTo: params.replyTo,
+        to: params.to,
+        cc: BOOKING_CC.dv,
+        subject: params.subject, html: params.html, replyTo: params.replyTo,
         ...(isFirst ? { messageId: newThreadId! } : { inReplyTo: params.emailThreadId }),
       });
 

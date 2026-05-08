@@ -206,7 +206,12 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           <Textarea value={taiKhoanThanhToan} onChange={(e) => setTaiKhoanThanhToan(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={2} />
         </div>
         <div className="space-y-1.5 col-span-2">
-          <Label className="text-xs">Ghi chú</Label>
+          <Label className="text-xs flex items-center gap-2">
+            Ghi chú
+            <span className="text-[11px] font-normal text-muted-foreground italic">
+              (nội dung này sẽ hiển thị trong Điều tour, dưới tên cảnh điểm)
+            </span>
+          </Label>
           <Textarea value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={3} />
         </div>
       </div>
