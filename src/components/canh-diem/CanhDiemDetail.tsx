@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import { useUpdateCanhDiem, useDeleteCanhDiem, type CanhDiem } from "@/hooks/use-canh-diem";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
+import { useKhachSanList } from "@/hooks/use-khach-san";
 import { SearchableSelect } from "@/components/SearchableSelect";
 
 interface Props {
@@ -25,7 +26,9 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   const updateMut = useUpdateCanhDiem();
   const deleteMut = useDeleteCanhDiem();
   const { data: nccList } = useNhaCungCapList();
+  const { data: ksList } = useKhachSanList();
   const nccOptions = (nccList ?? []).map((n) => ({ value: String(n.id), label: n.ten }));
+  const ksOptions = (ksList ?? []).map((k) => ({ value: String(k.id), label: k.ten }));
 
   const [ten, setTen] = useState("");
   const [loai, setLoai] = useState("canh_diem");
@@ -39,6 +42,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   const [taiKhoanThanhToan, setTaiKhoanThanhToan] = useState("");
   const [ghiChu, setGhiChu] = useState("");
   const [nhaCungCapId, setNhaCungCapId] = useState("");
+  const [khachSanId, setKhachSanId] = useState("");
   const [delOpen, setDelOpen] = useState(false);
 
   useEffect(() => {
@@ -54,6 +58,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     setTaiKhoanThanhToan(canhDiem.tai_khoan_thanh_toan || "");
     setGhiChu(canhDiem.ghi_chu || "");
     setNhaCungCapId((canhDiem as any).nha_cung_cap_id?.toString() || "");
+    setKhachSanId((canhDiem as any).khach_san_id?.toString() || "");
   }, [canhDiem]);
 
   const handleSave = async () => {
@@ -78,6 +83,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           tai_khoan_thanh_toan: taiKhoanThanhToan || null,
           ghi_chu: ghiChu || null,
           nha_cung_cap_id: nhaCungCapId ? Number(nhaCungCapId) : null,
+          khach_san_id: khachSanId ? Number(khachSanId) : null,
         },
       });
       toast.success("Đã lưu");
@@ -172,6 +178,24 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
             placeholder="Chọn nhà cung cấp"
             className="h-9 text-sm"
           />
+        </div>
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs flex items-center gap-2">
+            Liên kết KS Day Use
+            {khachSanId && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">Day Use</span>
+            )}
+          </Label>
+          <SearchableSelect
+            options={ksOptions}
+            value={khachSanId}
+            onChange={setKhachSanId}
+            placeholder="(Không) — chọn nếu cảnh điểm này là KS day-use"
+            className="h-9 text-sm"
+          />
+          <p className="text-[11px] text-muted-foreground italic">
+            Khi liên kết: cảnh điểm này được điền vào "Chương trình" sẽ tự tạo booking KS và đẩy chi phí vào Section Khách sạn.
+          </p>
         </div>
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs">Email booking</Label>

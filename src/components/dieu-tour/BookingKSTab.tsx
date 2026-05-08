@@ -485,6 +485,11 @@ Email: s8travel.hddt@gmail.com`;
                 📅 {row.ngay_dates.map(fmtDate).join(", ")} ({row.so_dem} đêm)
               </span>
             )}
+            {row.day_use_dates && row.day_use_dates.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
+                Day Use: {row.day_use_dates.map(fmtDate).join(", ")}
+              </span>
+            )}
             {row.khach_san_so_dien_thoai && (
               <span className="flex items-center gap-0.5">
                 <Phone className="h-3 w-3" />

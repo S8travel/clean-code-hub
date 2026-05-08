@@ -15,6 +15,7 @@ export interface CanhDiemItem {
   dia_diem: string | null;
   so_dien_thoai: string | null;
   email: string | null;
+  khach_san_id: number | null;
 }
 
 export interface NhaHangItem {
@@ -99,7 +100,7 @@ export function useCanhDiem() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("canh_diem")
-        .select("id, ten, loai, co_phi, gia_mac_dinh, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email")
+        .select("id, ten, loai, co_phi, gia_mac_dinh, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id")
         .order("ten");
       if (error) throw error;
       return data as CanhDiemItem[];
@@ -451,14 +452,21 @@ export function useSaveDieuTour() {
           for (const item of insertedItems) {
             if (!item.co_phi) continue;
             const cd = canhDiemList.find((c) => c.id === item.canh_diem_id);
+            // Wrapper KS day-use: cảnh điểm có khach_san_id → chi phí rơi vào danh_muc=khach_san
+            const isDayUseWrapper = !!cd?.khach_san_id;
+            const ksWrap = isDayUseWrapper
+              ? khachSanList.find((k) => k.id === cd!.khach_san_id)
+              : null;
             const chiPhiPayload: any = {
               doan_id: doanId,
               ngay_so: day.ngay_so,
               loai: "chi",
-              danh_muc: "canh_diem",
+              danh_muc: isDayUseWrapper ? "khach_san" : "canh_diem",
               ref_doan_ngay_item_id: item.id,
               ref_doan_ngay_id: doanNgayId,
-              mo_ta: cd?.ten ?? "",
+              mo_ta: isDayUseWrapper
+                ? `Day Use (sáng) - ${ksWrap?.ten ?? cd?.ten ?? ""}`
+                : (cd?.ten ?? ""),
               don_gia: item.don_gia ?? 0,
               so_luong: item.so_luong ?? soKhach,
               trang_thai_thanh_toan: "unpaid",
@@ -554,7 +562,18 @@ export function useSaveDieuTour() {
       console.log(`[SaveDieuTour] Saved ${days.length} days for doan ${doanId}`);
 
       // 6. Sync doan_ngay → doan_booking_ks (insert-only + reset cancelled)
-      const allKsIdsInDays = [...new Set(days.map((d) => d.khach_san_id).filter((id): id is number => id != null))];
+      // Bao gồm KS qua đêm (doan_ngay.khach_san_id) và KS day-use (qua wrapper canh_diem.khach_san_id)
+      const dayUseKsIds = days.flatMap((d) =>
+        (d.items ?? [])
+          .map((it) => canhDiemList.find((c) => c.id === it.canh_diem_id)?.khach_san_id)
+          .filter((id): id is number => id != null)
+      );
+      const allKsIdsInDays = [
+        ...new Set([
+          ...days.map((d) => d.khach_san_id).filter((id): id is number => id != null),
+          ...dayUseKsIds,
+        ]),
+      ];
       // Fetch nguoi_thanh_toan to skip "khach" KS (guest pays directly — no booking email needed)
       let khachKsIds = new Set<number>();
       if (allKsIdsInDays.length > 0) {

@@ -31,8 +31,10 @@ export interface BookingKSDisplay extends BookingKSRow {
   khach_san_website: string | null;
   so_dem: number;
   ngay_dates: string[];
+  /** Ngày KS được dùng dạng day-use (qua wrapper canh_diem), tách khỏi ngay_dates qua đêm */
+  day_use_dates: string[];
   ks_ma_codes: string[];
-  /** true if this hotel is still present in doan_ngay */
+  /** true if this hotel is still present in doan_ngay or used as day-use wrapper */
   con_trong_dieu_tour: boolean;
 }
 
@@ -63,14 +65,28 @@ export function useBookingKS(doanId: number | undefined) {
         .order("ngay_date");
       if (e2) throw e2;
 
-      // Group ngay by khach_san_id
-      const grouped = new Map<number, { dates: string[]; codes: string[] }>();
+      // Group ngay by khach_san_id (KS qua đêm)
+      const grouped = new Map<number, { dates: string[]; codes: string[]; dayUseDates: string[] }>();
       for (const r of ngayRows || []) {
         const ksId = r.khach_san_id as number;
-        if (!grouped.has(ksId)) grouped.set(ksId, { dates: [], codes: [] });
+        if (!grouped.has(ksId)) grouped.set(ksId, { dates: [], codes: [], dayUseDates: [] });
         const g = grouped.get(ksId)!;
         if (r.ngay_date) g.dates.push(r.ngay_date);
         if (r.ks_ma_code) g.codes.push(r.ks_ma_code);
+      }
+
+      // 2b. Day-use KS: doan_ngay_item link đến canh_diem có khach_san_id
+      const { data: itemRows, error: e2b } = await externalSupabase
+        .from("doan_ngay_item")
+        .select("doan_ngay_id, canh_diem:canh_diem_id (khach_san_id), doan_ngay:doan_ngay_id (ngay_date)")
+        .eq("doan_id", doanId!);
+      if (e2b) throw e2b;
+      for (const it of (itemRows || []) as any[]) {
+        const ksId = it.canh_diem?.khach_san_id;
+        const date = it.doan_ngay?.ngay_date;
+        if (!ksId || !date) continue;
+        if (!grouped.has(ksId)) grouped.set(ksId, { dates: [], codes: [], dayUseDates: [] });
+        grouped.get(ksId)!.dayUseDates.push(date);
       }
 
       // 3. Fetch khach_san info for all booking rows
@@ -87,7 +103,8 @@ export function useBookingKS(doanId: number | undefined) {
       // (preventing new creation for "khach" KS is handled in use-dieu-tour.ts)
       return (bookings as any[]).map((b): BookingKSDisplay => {
         const ks = ksMap.get(b.khach_san_id) || ({} as any);
-        const g = grouped.get(b.khach_san_id) || { dates: [], codes: [] };
+        const g = grouped.get(b.khach_san_id) || { dates: [], codes: [], dayUseDates: [] };
+        const uniqueDayUse = [...new Set(g.dayUseDates)];
         return {
           ...b,
           khach_san_ten: ks.ten || "—",
@@ -99,6 +116,7 @@ export function useBookingKS(doanId: number | undefined) {
           khach_san_website: ks.website || null,
           so_dem: g.dates.length,
           ngay_dates: g.dates,
+          day_use_dates: uniqueDayUse,
           ks_ma_codes: [...new Set(g.codes.filter(Boolean))],
           con_trong_dieu_tour: grouped.has(b.khach_san_id),
         };

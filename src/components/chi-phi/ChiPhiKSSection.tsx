@@ -93,6 +93,8 @@ export interface LocalKSRow {
   so_dem: number;
   gia_phong: number;
   thanh_tien: number;
+  is_day_use?: boolean;
+  ref_doan_ngay_item_id?: number | null;
 }
 
 interface Props {
@@ -371,7 +373,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     if (!ksData || chiPhiRows.length === 0 && localRows.every((r) => !r.id)) return;
 
     const validKsIds = new Set(Object.keys(ksData.khachSanMap).map(Number));
-    const validNgayIds = new Set((ksData.ngayRows || []).map((r: any) => r.id));
+    const validNgayIds = new Set([
+      ...(ksData.ngayRows || []).map((r: any) => r.id),
+      ...Object.values((ksData as any).dayUseItemMap || {}).map((info: any) => info.doan_ngay_id),
+    ]);
     const validChiPhiIds = new Set(chiPhiRows.map((r) => r.id).filter(Boolean));
 
     setLocalRows((prev) => {
@@ -454,9 +459,31 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     ngayRows.forEach((r: any) => {
       ngayMap[r.id] = r;
     });
+    const dayUseItemMap = (ksData as any).dayUseItemMap || {};
 
     const rows: LocalKSRow[] = ksChiPhi
       .map((cp) => {
+        // Day-use: chi phí link qua doan_ngay_item, KS lấy từ canh_diem wrapper
+        if (cp.ref_doan_ngay_item_id && dayUseItemMap[cp.ref_doan_ngay_item_id]) {
+          const info = dayUseItemMap[cp.ref_doan_ngay_item_id];
+          if (!info.ngay_date) return null;
+          return {
+            id: cp.id,
+            khach_san_id: info.khach_san_id,
+            doan_ngay_id: info.doan_ngay_id,
+            ngay_date: info.ngay_date,
+            loai_phong: cp.mo_ta || "Day Use",
+            so_phong: cp.so_luong || 0,
+            ci: info.ngay_date,
+            co: info.ngay_date,
+            so_dem: 1,
+            gia_phong: cp.don_gia || 0,
+            thanh_tien: (cp.so_luong || 0) * (cp.don_gia || 0),
+            is_day_use: true,
+            ref_doan_ngay_item_id: cp.ref_doan_ngay_item_id,
+          } as LocalKSRow;
+        }
+
         const ngay = ngayMap[cp.ref_doan_ngay_id!];
         // Bỏ qua rows không có ngay hoặc ngay không có khach_san_id hợp lệ
         if (!ngay || !ngay.khach_san_id) return null;
@@ -657,8 +684,16 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
 
   // Build map ksId → list of chi_phi_id (cho payments lookup)
   const chiPhiIdsByKs: Record<number, number[]> = {};
+  const dayUseItemMap = (ksData as any)?.dayUseItemMap || {};
   chiPhiRows.forEach((cp) => {
-    if (cp.danh_muc !== "khach_san" || !cp.id || !cp.ref_doan_ngay_id) return;
+    if (cp.danh_muc !== "khach_san" || !cp.id) return;
+    // Day-use: tra qua doan_ngay_item → canh_diem.khach_san_id
+    if (cp.ref_doan_ngay_item_id && dayUseItemMap[cp.ref_doan_ngay_item_id]) {
+      const ksId = dayUseItemMap[cp.ref_doan_ngay_item_id].khach_san_id;
+      (chiPhiIdsByKs[ksId] = chiPhiIdsByKs[ksId] || []).push(cp.id);
+      return;
+    }
+    if (!cp.ref_doan_ngay_id) return;
     const ng = ngayRows.find((r: any) => r.id === cp.ref_doan_ngay_id);
     if (!ng?.khach_san_id) return;
     (chiPhiIdsByKs[ng.khach_san_id] = chiPhiIdsByKs[ng.khach_san_id] || []).push(cp.id);
@@ -741,12 +776,14 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     return "chua_de_nghi";
   };
 
-  // Danh sách KS từ doan_ngay + orphaned KS từ DNTT (đã xóa khỏi điều tour nhưng còn DNTT)
+  // Danh sách KS từ doan_ngay + orphaned KS từ DNTT + KS day-use (qua wrapper canh_diem)
   const orphanedKsIds = ksData?.orphanedKsIds || [];
+  const dayUseKsIds = (ksData as any)?.dayUseKsIds || [];
   const distinctKsIdsFromNgay = [
     ...new Set([
       ...ngayRows.map((r: any) => r.khach_san_id).filter(Boolean),
       ...orphanedKsIds,
+      ...dayUseKsIds,
     ]),
   ];
 
@@ -887,6 +924,14 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             ngayDateToDoanNgayId[r.ngay_date] = r.id;
           }
         });
+        // Bổ sung mapping từ day-use items (ngày day-use có thể không có khach_san_id qua đêm)
+        Object.values(dayUseItemMap).forEach((info: any) => {
+          if (info.khach_san_id === ksId && info.ngay_date) {
+            ngayDateToNgaySo[info.ngay_date] = info.ngay_so;
+            ngayDateToDoanNgayId[info.ngay_date] = info.doan_ngay_id;
+          }
+        });
+        const isKsDayUse = dayUseKsIds.includes(ksId) && !ngayRows.some((r: any) => r.khach_san_id === ksId);
 
         const isOrphaned = orphanedKsIds.includes(ksId); // không còn trong điều tour
         const isKsDinhKy = dinhKyKsIds.has(ksId);
@@ -920,6 +965,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     onClick={() => toggleCollapse(ksId)}
                   >
                     {ks?.ten || `KS #${ksId}`}
+                    {isKsDayUse && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
+                        Day Use
+                      </span>
+                    )}
                     {ks?.dia_diem && <span className="text-muted-foreground font-normal text-xs">({ks.dia_diem})</span>}
                     {effectiveKsStatus === "cong_no" && congNoAmount > 0 && (
                       <span className="text-purple-600 font-semibold text-xs">

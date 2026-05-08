@@ -174,12 +174,19 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   className="h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3"
                 />
                 {selectedCanhDiem && (
-                  <DetailLine
-                    item={{
-                      dia_chi: selectedCanhDiem.dia_diem,
-                      so_dien_thoai: selectedCanhDiem.so_dien_thoai,
-                    }}
-                  />
+                  <>
+                    {selectedCanhDiem.khach_san_id && (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 mt-0.5">
+                        🏨 Day Use
+                      </span>
+                    )}
+                    <DetailLine
+                      item={{
+                        dia_chi: selectedCanhDiem.dia_diem,
+                        so_dien_thoai: selectedCanhDiem.so_dien_thoai,
+                      }}
+                    />
+                  </>
                 )}
                 {noteOpen && (
                   <textarea

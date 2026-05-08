@@ -85,6 +85,7 @@ export function useDNTTList(doanId?: number) {
 
 // KS data from doan_ngay + khach_san + nha_cung_cap
 // Also includes KS referenced in DNTT records (even if removed from tour schedule)
+// Bổ sung: KS day-use qua wrapper canh_diem.khach_san_id (lấy từ doan_ngay_item)
 export function useChiPhiKSData(doanId?: number) {
   return useQuery({
     queryKey: ["chi_phi_ks_data", doanId],
@@ -106,13 +107,49 @@ export function useChiPhiKSData(doanId?: number) {
         .eq("ref_loai", "khach_san")
         .not("ref_id", "is", null);
 
+      // Day-use KS: doan_ngay_item links đến canh_diem có khach_san_id
+      const { data: itemsWithCanhDiem } = await externalSupabase
+        .from("doan_ngay_item")
+        .select("id, doan_ngay_id, canh_diem_id, don_gia, so_luong, canh_diem:canh_diem_id (id, ten, khach_san_id)")
+        .eq("doan_id", doanId!);
+      const dayUseItems = (itemsWithCanhDiem || []).filter(
+        (it: any) => it.canh_diem?.khach_san_id != null,
+      );
+      // Build map ngày từ doan_ngay (kể cả ngày không có khach_san_id) để tra ngay_date cho item
+      const { data: allNgayRows } = await externalSupabase
+        .from("doan_ngay")
+        .select("id, ngay_so, ngay_date")
+        .eq("doan_id", doanId!);
+      const ngayInfoById: Record<number, { ngay_so: number; ngay_date: string }> = {};
+      (allNgayRows || []).forEach((n: any) => {
+        ngayInfoById[n.id] = { ngay_so: n.ngay_so, ngay_date: n.ngay_date };
+      });
+      // Map item_id → { khach_san_id, ngay_so, ngay_date, doan_ngay_id }
+      const dayUseItemMap: Record<number, { khach_san_id: number; ngay_so: number; ngay_date: string; doan_ngay_id: number; don_gia: number; so_luong: number; canh_diem_ten: string }> = {};
+      const ksIdsFromDayUse = new Set<number>();
+      dayUseItems.forEach((it: any) => {
+        const ng = ngayInfoById[it.doan_ngay_id];
+        if (!ng) return;
+        const ksId = it.canh_diem.khach_san_id as number;
+        ksIdsFromDayUse.add(ksId);
+        dayUseItemMap[it.id] = {
+          khach_san_id: ksId,
+          ngay_so: ng.ngay_so,
+          ngay_date: ng.ngay_date,
+          doan_ngay_id: it.doan_ngay_id,
+          don_gia: it.don_gia ?? 0,
+          so_luong: it.so_luong ?? 0,
+          canh_diem_ten: it.canh_diem.ten ?? "",
+        };
+      });
+
       const ksIdsFromNgay = new Set((ngayRows || []).map((r: any) => r.khach_san_id));
       const ksIdsFromDntt = new Set((dnttRows || []).map((r: any) => r.ref_id));
-      const allKsIds = [...new Set([...ksIdsFromNgay, ...ksIdsFromDntt])];
-      // Track which KS ids are "orphaned" (in DNTT but no longer in tour schedule)
-      const orphanedKsIds = [...ksIdsFromDntt].filter((id) => !ksIdsFromNgay.has(id));
+      const allKsIds = [...new Set([...ksIdsFromNgay, ...ksIdsFromDntt, ...ksIdsFromDayUse])];
+      // Track which KS ids are "orphaned" (in DNTT but no longer in tour schedule + not day-use)
+      const orphanedKsIds = [...ksIdsFromDntt].filter((id) => !ksIdsFromNgay.has(id) && !ksIdsFromDayUse.has(id));
 
-      if (allKsIds.length === 0) return { ngayRows: [], khachSanMap: {}, orphanedKsIds: [] };
+      if (allKsIds.length === 0) return { ngayRows: [], khachSanMap: {}, orphanedKsIds: [], dayUseItemMap: {}, dayUseKsIds: [] };
 
       const { data: ksList, error: e2 } = await externalSupabase
         .from("khach_san")
@@ -148,7 +185,23 @@ export function useChiPhiKSData(doanId?: number) {
       const filteredNgayRows = (ngayRows || []).filter(
         (r: any) => khachSanMap[r.khach_san_id]?.nguoi_thanh_toan !== "khach"
       );
-      return { ngayRows: filteredNgayRows, khachSanMap, orphanedKsIds };
+      // Filter dayUseItemMap: bỏ các item mà KS có nguoi_thanh_toan='khach'
+      const filteredDayUseItemMap: typeof dayUseItemMap = {};
+      Object.entries(dayUseItemMap).forEach(([itemId, info]) => {
+        if (khachSanMap[info.khach_san_id]?.nguoi_thanh_toan !== "khach") {
+          filteredDayUseItemMap[Number(itemId)] = info;
+        }
+      });
+      const filteredDayUseKsIds = [...ksIdsFromDayUse].filter(
+        (id) => khachSanMap[id]?.nguoi_thanh_toan !== "khach"
+      );
+      return {
+        ngayRows: filteredNgayRows,
+        khachSanMap,
+        orphanedKsIds,
+        dayUseItemMap: filteredDayUseItemMap,
+        dayUseKsIds: filteredDayUseKsIds,
+      };
     },
   });
 }
