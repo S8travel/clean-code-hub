@@ -668,8 +668,13 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   if (ksNgaySorted.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
   rows.push([cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"), cell(""), cell("")]);
   rows.push([cell("", "text", 10)]);
-  // Bỏ qua KS chi phí: không cộng vào totals
-  void ksRows;
+
+  // KS chi phí KHÔNG hiển thị chi tiết, nhưng vẫn cộng vào TỔNG HDV / CTY ở SUMMARY cuối sheet
+  let totalHdvKS = 0, totalCtyKS = 0;
+  for (const row of ksRows) {
+    totalHdvKS += row.tien_hdv || 0;
+    totalCtyKS += row.tien_cong_ty || 0;
+  }
 
   // ─── NHÀ HÀNG ───
   rows.push([cell("NHÀ HÀNG 餐廳 — Nhà hàng có nội bộ 餐廳", "section", 10)]);
