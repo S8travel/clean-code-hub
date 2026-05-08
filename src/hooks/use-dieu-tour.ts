@@ -448,25 +448,22 @@ export function useSaveDieuTour() {
         }
 
         // 4. Auto-generate doan_chi_phi for co_phi items
+        // Day-use wrapper (canh_diem.khach_san_id != null): KHÔNG auto-tạo chi phí ở đây
+        // — chi phí KS day-use được quản lý thủ công trong tab Chi phí (giống KS qua đêm)
+        // để tránh overwrite don_gia/so_luong khi user save lại điều tour
         if (insertedItems.length > 0) {
           for (const item of insertedItems) {
             if (!item.co_phi) continue;
             const cd = canhDiemList.find((c) => c.id === item.canh_diem_id);
-            // Wrapper KS day-use: cảnh điểm có khach_san_id → chi phí rơi vào danh_muc=khach_san
-            const isDayUseWrapper = !!cd?.khach_san_id;
-            const ksWrap = isDayUseWrapper
-              ? khachSanList.find((k) => k.id === cd!.khach_san_id)
-              : null;
+            if (cd?.khach_san_id) continue; // Day-use wrapper — managed in Chi phí section
             const chiPhiPayload: any = {
               doan_id: doanId,
               ngay_so: day.ngay_so,
               loai: "chi",
-              danh_muc: isDayUseWrapper ? "khach_san" : "canh_diem",
+              danh_muc: "canh_diem",
               ref_doan_ngay_item_id: item.id,
               ref_doan_ngay_id: doanNgayId,
-              mo_ta: isDayUseWrapper
-                ? `Day Use (sáng) - ${ksWrap?.ten ?? cd?.ten ?? ""}`
-                : (cd?.ten ?? ""),
+              mo_ta: cd?.ten ?? "",
               don_gia: item.don_gia ?? 0,
               so_luong: item.so_luong ?? soKhach,
               trang_thai_thanh_toan: "unpaid",

@@ -592,7 +592,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           loai: "chi",
           danh_muc: "khach_san",
           ref_doan_ngay_id: row.doan_ngay_id,
-          mo_ta: row.loai_phong || "Phòng KS",
+          ref_doan_ngay_item_id: row.ref_doan_ngay_item_id ?? null,
+          mo_ta: row.loai_phong || (row.is_day_use ? "Day Use" : "Phòng KS"),
           don_gia: row.gia_phong,
           so_luong: row.so_phong,
           tien_cong_ty: tienCongTy,
@@ -635,23 +636,31 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     [localRows, doanId, deleteMut],
   );
 
-  const handleAddRow = useCallback((ksId: number, doanNgayId: number, ngayDate: string) => {
+  const handleAddRow = useCallback((
+    ksId: number,
+    doanNgayId: number,
+    ngayDate: string,
+    refItemId?: number,
+  ) => {
     const coDate = new Date(ngayDate);
     coDate.setDate(coDate.getDate() + 1);
     const co = format(coDate, "yyyy-MM-dd");
+    const isDayUse = refItemId != null;
     setLocalRows((prev) => [
       ...prev,
       {
         khach_san_id: ksId,
         doan_ngay_id: doanNgayId,
         ngay_date: ngayDate,
-        loai_phong: "",
+        loai_phong: isDayUse ? "Day Use" : "",
         so_phong: 1,
         ci: ngayDate,
-        co,
+        co: isDayUse ? ngayDate : co,
         so_dem: 1,
         gia_phong: 0,
         thanh_tien: 0,
+        is_day_use: isDayUse || undefined,
+        ref_doan_ngay_item_id: refItemId ?? null,
       },
     ]);
   }, []);
@@ -1066,6 +1075,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                           dateStr={r.ngay_date}
                           ngaySo={r.ngay_so}
                           onAddRow={() => handleAddRow(ksId, r.id, r.ngay_date)}
+                        />
+                      ))}
+                    {Object.entries(dayUseItemMap)
+                      .filter(([, info]: any) => info.khach_san_id === ksId && !byDay[info.ngay_date])
+                      .map(([itemIdStr, info]: any) => (
+                        <EmptyDayHeader
+                          key={`day-use-${itemIdStr}`}
+                          dateStr={info.ngay_date}
+                          ngaySo={info.ngay_so}
+                          isDayUse
+                          onAddRow={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, Number(itemIdStr))}
                         />
                       ))}
                   </TableBody>
@@ -1565,12 +1585,17 @@ function DayGroup({
 }
 
 /* ── Empty day header ── */
-function EmptyDayHeader({ dateStr, ngaySo, onAddRow }: { dateStr: string; ngaySo?: number; onAddRow: () => void }) {
+function EmptyDayHeader({ dateStr, ngaySo, isDayUse, onAddRow }: { dateStr: string; ngaySo?: number; isDayUse?: boolean; onAddRow: () => void }) {
   const label = `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`;
   return (
     <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
       <TableCell colSpan={7} className="py-1 px-2 text-xs font-medium">
         {label}
+        {isDayUse && (
+          <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
+            Day Use
+          </span>
+        )}
       </TableCell>
       <TableCell className="py-1 px-2 text-right">
         <Button variant="ghost" size="sm" className="h-6 text-xs px-1.5" onClick={onAddRow}>
