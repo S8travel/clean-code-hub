@@ -9,7 +9,8 @@
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc --noEmit)",
       "Bash(cmd /c \"dir d:\\\\web crm\\\\s8travel\\\\node_modules\\\\.bin\\\\tsc*\")",
-      "Bash(wc -l /e/S8travel/s8travel/src/hooks/*.ts*)"
+      "Bash(wc -l /e/S8travel/s8travel/src/hooks/*.ts*)",
+      "Bash(echo \"EXIT_CODE=$?\")"
     ]
   }
 }

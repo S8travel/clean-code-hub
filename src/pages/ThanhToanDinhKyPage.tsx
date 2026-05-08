@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, ChevronDown, ChevronRight, Wallet, Ban, Eye } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -30,8 +30,6 @@ import {
   type DinhKyDNTTRow,
 } from "@/hooks/use-thanh-toan-dinh-ky";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
-import { useCreatePayment } from "@/hooks/use-payments";
-import { useCongNoByNCC, type CongNoRow } from "@/hooks/use-cong-no";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -665,9 +663,9 @@ export default function ThanhToanDinhKyPage() {
   );
 }
 
-// ── Section 2: list ĐNTT đã tạo của 1 NCC, kèm action mark paid / hủy / xem chi tiết ──
+// ── Section 2: list ĐNTT đã tạo của 1 NCC, kèm action hủy / xem chi tiết ──
+// Mark paid được làm ở sidebar Hóa đơn & UNC, không phải tại đây.
 function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
-  const [payTarget, setPayTarget] = useState<DNTTRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<DNTTRow | null>(null);
   const [viewTarget, setViewTarget] = useState<DNTTRow | null>(null);
 
@@ -699,10 +697,8 @@ function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
         </TableHeader>
         <TableBody>
           {nccDntts.map((d) => {
-            const conLai = Math.max(0, d.so_tien - (d.paid_amount || 0));
             const duyetInfo = duyetLabel[d.trang_thai_duyet] || duyetLabel.cho_duyet;
             const ttInfo = paymentLabel[d.payment_status] || paymentLabel.unpaid;
-            const canPay = d.trang_thai_duyet === "da_duyet" && conLai > 0;
             const canCancel =
               d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi";
             const rangeText = fmtRange(d.ngay_di_min, d.ngay_di_max);
@@ -748,17 +744,6 @@ function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 text-[11px] px-2 gap-1"
-                      disabled={!canPay}
-                      title={!canPay ? "Cần duyệt trước khi thanh toán" : "Đánh dấu đã thanh toán"}
-                      onClick={() => setPayTarget(d)}
-                    >
-                      <Wallet className="h-3 w-3" />
-                      Mark paid
-                    </Button>
-                    <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 px-1.5 text-red-600 hover:text-red-700"
@@ -776,13 +761,6 @@ function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
         </TableBody>
       </Table>
 
-      {payTarget && (
-        <MarkPaidDialog
-          dntt={payTarget}
-          open={!!payTarget}
-          onClose={() => setPayTarget(null)}
-        />
-      )}
       {cancelTarget && (
         <CancelDialog
           dntt={cancelTarget}
@@ -801,274 +779,6 @@ function DnttSection({ nccDntts }: { nccDntts: DinhKyDNTTRow[] }) {
   );
 }
 
-// ── Mark paid dialog: full / partial + cấn trừ + cash ──
-function MarkPaidDialog({
-  dntt,
-  open,
-  onClose,
-}: {
-  dntt: DNTTRow;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const conLai = Math.max(0, dntt.so_tien - (dntt.paid_amount || 0));
-  const [ngayTT, setNgayTT] = useState<Date>(new Date());
-  const [selectedCongNoIds, setSelectedCongNoIds] = useState<number[]>([]);
-  const [paidMode, setPaidMode] = useState<"full" | "partial">("full");
-  const [paidAmount, setPaidAmount] = useState<string>("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const { data: congNoList = [] } = useCongNoByNCC(dntt.nha_cung_cap_id);
-  const createPayment = useCreatePayment();
-
-  const partialNum = Number((paidAmount || "").replace(/\D/g, "")) || 0;
-  const effectiveAmount = paidMode === "full" ? conLai : Math.min(partialNum, conLai);
-  const partialValid = paidMode === "full" || (partialNum > 0 && partialNum <= conLai);
-
-  const congNoSelected = congNoList.filter((c) => selectedCongNoIds.includes(c.id));
-
-  // Greedy allocate: phân bổ từng cong_no theo thứ tự, không vượt quá effectiveAmount
-  const allocations = useMemo(() => {
-    let remaining = effectiveAmount;
-    const result: { id: number; soTien: number }[] = [];
-    for (const cn of congNoSelected) {
-      const apply = Math.min(cn.so_tien_con_lai, remaining);
-      if (apply <= 0) break;
-      result.push({ id: cn.id, soTien: apply });
-      remaining -= apply;
-    }
-    return { allocs: result, cashRemaining: remaining };
-  }, [congNoSelected, effectiveAmount]);
-  const totalCanTru = allocations.allocs.reduce((s, a) => s + a.soTien, 0);
-  const cashRemaining = allocations.cashRemaining;
-  const allocByCnId: Record<number, number> = {};
-  allocations.allocs.forEach((a) => { allocByCnId[a.id] = a.soTien; });
-
-  const toggleCongNo = (id: number) => {
-    setSelectedCongNoIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
-
-  const setPartialFromAmount = (n: number) => {
-    setPaidMode("partial");
-    setPaidAmount(String(n));
-  };
-
-  const handleSubmit = async () => {
-    if (!partialValid) {
-      toast.error("Số tiền không hợp lệ");
-      return;
-    }
-    if (effectiveAmount <= 0) return;
-    setSubmitting(true);
-    try {
-      // 1. Cấn trừ payments theo allocations đã tính
-      for (const a of allocations.allocs) {
-        await createPayment.mutateAsync({
-          dnttId: dntt.id,
-          method: "can_tru",
-          soTien: a.soTien,
-          ngayThanhToan: format(ngayTT, "yyyy-MM-dd"),
-          congNoId: a.id,
-        });
-      }
-      // 2. Cash phần còn lại
-      if (cashRemaining > 0) {
-        await createPayment.mutateAsync({
-          dnttId: dntt.id,
-          method: "cash",
-          soTien: cashRemaining,
-          ngayThanhToan: format(ngayTT, "yyyy-MM-dd"),
-        });
-      }
-      toast.success("Đã ghi nhận thanh toán");
-      onClose();
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Không thể ghi nhận"));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Đánh dấu đã thanh toán</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-2 text-sm">
-          <div className="rounded-md bg-muted/40 px-4 py-3 space-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">ĐNTT</span>
-              <span className="font-mono">#{dntt.id}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Tổng ĐNTT</span>
-              <span>{fmt(dntt.so_tien)} ₫</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Đã TT</span>
-              <span className="text-emerald-600">{fmt(dntt.paid_amount || 0)} ₫</span>
-            </div>
-            <div className="flex justify-between border-t border-border pt-1 mt-1">
-              <span className="font-medium">Còn lại</span>
-              <span className="font-semibold text-orange-600">{fmt(conLai)} ₫</span>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm">Ngày thanh toán</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="w-full justify-start gap-2">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {format(ngayTT, "dd/MM/yyyy")}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar mode="single" selected={ngayTT} onSelect={(d) => d && setNgayTT(d)} initialFocus />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm">Số tiền thanh toán</Label>
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => { setPaidMode("full"); setPaidAmount(""); }}
-                className={cn(
-                  "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
-                  paidMode === "full"
-                    ? "border-primary bg-primary/5 text-primary font-medium"
-                    : "border-border hover:bg-muted/40",
-                )}
-              >
-                Toàn bộ còn lại ({fmt(conLai)} ₫)
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaidMode("partial")}
-                className={cn(
-                  "flex-1 px-3 py-1.5 rounded-md border text-xs transition-colors",
-                  paidMode === "partial"
-                    ? "border-primary bg-primary/5 text-primary font-medium"
-                    : "border-border hover:bg-muted/40",
-                )}
-              >
-                Trả 1 phần
-              </button>
-            </div>
-            {paidMode === "partial" && (
-              <div className="space-y-1">
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={paidAmount}
-                  onChange={(e) => setPaidAmount(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Nhập số tiền (≤ còn lại)"
-                  className="text-sm"
-                  autoFocus
-                />
-                {paidAmount && !partialValid && (
-                  <p className="text-[11px] text-red-600">
-                    Số tiền phải lớn hơn 0 và ≤ {fmt(conLai)} ₫
-                  </p>
-                )}
-                {partialValid && partialNum > 0 && (
-                  <div className="flex gap-1.5 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => setPartialFromAmount(Math.round(conLai / 2))}
-                      className="px-2 py-0.5 rounded border border-border hover:bg-muted/40 text-muted-foreground"
-                    >
-                      50%
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPartialFromAmount(conLai)}
-                      className="px-2 py-0.5 rounded border border-border hover:bg-muted/40 text-muted-foreground"
-                    >
-                      Toàn bộ
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {congNoList.length > 0 && (
-            <div className="space-y-1.5">
-              <Label className="text-sm">Cấn trừ công nợ NCC ({congNoList.length})</Label>
-              <div className="border border-border rounded-md max-h-44 overflow-y-auto divide-y divide-border">
-                {congNoList.map((cn) => {
-                  const willApply = allocByCnId[cn.id] || 0;
-                  const isSelected = selectedCongNoIds.includes(cn.id);
-                  return (
-                    <label
-                      key={cn.id}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-muted/40 cursor-pointer"
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleCongNo(cn.id)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">
-                          {(cn as any).ten_doan || `Đoàn #${cn.doan_id}`} · {cn.ly_do || cn.ghi_chu || "—"}
-                        </div>
-                        <div className="text-muted-foreground">
-                          Còn {fmt(cn.so_tien_con_lai)} ₫
-                          {isSelected && willApply > 0 && (
-                            <span className="ml-1 text-amber-700">→ áp dụng {fmt(willApply)} ₫</span>
-                          )}
-                          {isSelected && willApply === 0 && (
-                            <span className="ml-1 text-muted-foreground">→ không còn dư để áp</span>
-                          )}
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-md border border-border px-4 py-3 space-y-1 text-xs">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Cấn trừ</span>
-              <span className="text-amber-700">{fmt(totalCanTru)} ₫</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Cash</span>
-              <span className="font-semibold">{fmt(cashRemaining)} ₫</span>
-            </div>
-            <div className="flex justify-between border-t border-border pt-1 mt-1">
-              <span className="font-medium">Tổng thanh toán lần này</span>
-              <span className="font-semibold">{fmt(totalCanTru + cashRemaining)} ₫</span>
-            </div>
-            {paidMode === "partial" && partialValid && partialNum > 0 && partialNum < conLai && (
-              <div className="flex justify-between text-orange-600 pt-0.5">
-                <span>Sau khi TT, còn lại</span>
-                <span className="font-semibold">{fmt(conLai - effectiveAmount)} ₫</span>
-              </div>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Hủy</Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || conLai <= 0 || !partialValid || effectiveAmount <= 0}
-          >
-            {submitting ? "Đang lưu..." : "Xác nhận thanh toán"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ── Cancel dntt dialog ──
 function CancelDialog({

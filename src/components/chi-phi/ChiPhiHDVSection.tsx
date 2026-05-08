@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Plus, Ban, CheckCircle, CreditCard, Trash2 } from "lucide-react";
+import { Plus, Ban, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,6 @@ import {
 import {
   useChiPhiHDVSection,
   useCreateHDVPayment,
-  useApproveDNTT,
-  useMarkPaidDNTT,
   useCancelDNTT,
   type HDVDNTTRow,
   type HDVHoTroItem,
@@ -350,9 +348,7 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function HDVDNTTCard({ d, doanId }: { d: HDVDNTTRow; doanId: number }) {
-  const approveMut = useApproveDNTT();
-  const markPaidMut = useMarkPaidDNTT();
+function HDVDNTTCard({ d }: { d: HDVDNTTRow; doanId: number }) {
   const cancelMut = useCancelDNTT();
 
   const isHuy = d.trang_thai_duyet === "da_huy";
@@ -381,26 +377,6 @@ function HDVDNTTCard({ d, doanId }: { d: HDVDNTTRow; doanId: number }) {
 
         {!isHuy && !isTuChoi && !isDaTT && (
           <>
-            {isChoDuyet && (
-              <Button
-                size="sm" variant="outline"
-                className="h-6 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                onClick={() => approveMut.mutate(d.id, { onSuccess: () => toast.success("Đã duyệt"), onError: (e: any) => toast.error(e?.message) })}
-                disabled={approveMut.isPending}
-              >
-                <CheckCircle className="h-3 w-3 mr-1" /> Duyệt
-              </Button>
-            )}
-            {isDaDuyet && (
-              <Button
-                size="sm" variant="outline"
-                className="h-6 text-xs text-teal-700 border-teal-300 hover:bg-teal-50"
-                onClick={() => markPaidMut.mutate(d.id, { onSuccess: () => toast.success("Đã TT"), onError: (e: any) => toast.error(e?.message) })}
-                disabled={markPaidMut.isPending}
-              >
-                <CreditCard className="h-3 w-3 mr-1" /> Đã TT
-              </Button>
-            )}
             {(isChoDuyet || isDaDuyet) && (
               <Button
                 size="sm" variant="ghost"
