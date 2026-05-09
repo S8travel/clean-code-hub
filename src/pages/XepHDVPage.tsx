@@ -824,9 +824,8 @@ export default function XepHDVPage() {
           // Không lỗi → thêm thẳng qua confirmImport
           confirmImport(reviewData.map((r) => ({ ...r, error: undefined })));
         }
-      } catch (err) {
+      } catch {
         toast.error("Lỗi đọc file Excel");
-        console.error(err);
       }
     };
     reader.readAsArrayBuffer(file);

@@ -218,8 +218,8 @@ export default function DoanDetail() {
               canhDiemList,
               soKhach: totalKhach || doan?.so_khach || 0,
             });
-          } catch (e) {
-            console.error("Sync to Booking DV error:", e);
+          } catch {
+            // Sync booking DV failed silently — chính flow lưu đoàn vẫn pass
           }
         },
         onError: (err: any) => {

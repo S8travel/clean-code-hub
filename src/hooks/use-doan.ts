@@ -245,10 +245,7 @@ export function useDoanList(phanLoaiTour?: string[] | null) {
         query = query.in("thi_truong", phanLoaiTour);
       }
       const { data, error } = await query.order("ngay_di", { ascending: true });
-      if (error) {
-        console.error("useDoanList error:", JSON.stringify(error));
-        throw error;
-      }
+      if (error) throw error;
       return data;
     },
   });

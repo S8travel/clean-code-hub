@@ -361,9 +361,7 @@ export function useSaveDieuTour() {
         let doanNgayId = day.id;
 
         if (doanNgayId) {
-          // Update existing row
-          const { error } = await externalSupabase.from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
-          if (error) console.error(`Error updating doan_ngay id=${doanNgayId}:`, error);
+          await externalSupabase.from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
         } else {
           // Try to find existing row by doan_id + ngay_so first
           const { data: existingRow } = await externalSupabase
@@ -375,11 +373,9 @@ export function useSaveDieuTour() {
 
           if (existingRow) {
             doanNgayId = existingRow.id;
-            const { error } = await externalSupabase.from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
-            if (error) console.error(`Error updating doan_ngay ngay_so=${day.ngay_so}:`, error);
+            await externalSupabase.from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
           } else {
-            const { data, error } = await externalSupabase.from("doan_ngay").insert(ngayPayload).select("id").single();
-            if (error) console.error(`Error inserting doan_ngay ngay_so=${day.ngay_so}:`, error);
+            const { data } = await externalSupabase.from("doan_ngay").insert(ngayPayload).select("id").single();
             if (data) doanNgayId = data.id;
           }
         }
@@ -446,14 +442,10 @@ export function useSaveDieuTour() {
             };
           });
 
-          const { data, error } = await externalSupabase
+          const { data } = await externalSupabase
             .from("doan_ngay_item")
             .upsert(itemPayloads, { onConflict: "doan_ngay_id,canh_diem_id" })
             .select("id, canh_diem_id, co_phi, don_gia, so_luong, nguoi_thanh_toan");
-
-          if (error) {
-            console.error(`Error upserting doan_ngay_item day_id=${doanNgayId}:`, error);
-          }
 
           insertedItems = (data || []) as typeof insertedItems;
         }
@@ -569,8 +561,6 @@ export function useSaveDieuTour() {
           }
         }
       }
-      console.log(`[SaveDieuTour] Saved ${days.length} days for doan ${doanId}`);
-
       // 6. Sync doan_ngay → doan_booking_ks (insert-only + reset cancelled)
       // Bao gồm KS qua đêm (doan_ngay.khach_san_id) và KS day-use (qua wrapper canh_diem.khach_san_id)
       const dayUseKsIds = days.flatMap((d) =>

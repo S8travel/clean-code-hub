@@ -558,7 +558,6 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       if (!row) return;
       // Skip save if row is still empty (no room type and no price)
       if (!row.loai_phong && !row.gia_phong) return;
-      console.log("handleBlurSave row:", idx, "gia_phong:", row.gia_phong, "so_phong:", row.so_phong);
       // Tính FOC per ngày để lưu tien_cong_ty = giá sau khi trừ FOC
       const sameKsDayRows = localRowsRef.current.filter(
         (r) => r.khach_san_id === row.khach_san_id && r.ngay_date === row.ngay_date,
@@ -602,7 +601,6 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         },
         {
           onSuccess: (data) => {
-            console.log("Saved row:", data, "gia_phong:", row.gia_phong);
             if (!row.id && data?.id) {
               setLocalRows((prev) => {
                 const updated = [...prev];
