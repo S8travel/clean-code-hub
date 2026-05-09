@@ -500,7 +500,7 @@ export default function InvoicePage() {
   const [toDate, setToDate] = useState("");
   const [selectedDoan, setSelectedDoan] = useState<DoanWithRel | null>(null);
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
   const endedDoan = useMemo(
     () => (allDoan as DoanWithRel[]).filter((d) => d.ngay_ve && d.ngay_ve < today),

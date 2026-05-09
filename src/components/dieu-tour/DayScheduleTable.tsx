@@ -47,11 +47,18 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
     const lastDay = days[days.length - 1];
     let nextDate: string;
     if (lastDay) {
-      const d = new Date(lastDay.ngay_date + "T00:00:00");
-      d.setDate(d.getDate() + 1);
+      // UTC-safe để tránh timezone-shift
+      const [y, m, dd] = lastDay.ngay_date.split("-").map(Number);
+      const d = new Date(Date.UTC(y, m - 1, dd));
+      d.setUTCDate(d.getUTCDate() + 1);
       nextDate = d.toISOString().split("T")[0];
     } else {
-      nextDate = new Date().toISOString().split("T")[0];
+      // Today's date in local timezone (avoid UTC shift)
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const dd = String(now.getDate()).padStart(2, "0");
+      nextDate = `${y}-${m}-${dd}`;
     }
     setDays([...days, {
       ngay_so: days.length + 1,

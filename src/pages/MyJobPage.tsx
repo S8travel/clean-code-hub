@@ -343,8 +343,8 @@ export default function MyJobPage() {
   const stats = useMemo(() => {
     const now = new Date();
     const in7 = new Date(now); in7.setDate(in7.getDate() + 7);
-    const monthStart = startOfMonth(now).toISOString().slice(0, 10);
-    const monthEnd   = endOfMonth(now).toISOString().slice(0, 10);
+    const monthStart = format(startOfMonth(now), "yyyy-MM-dd");
+    const monthEnd   = format(endOfMonth(now), "yyyy-MM-dd");
 
     const dangChay = myDoan.filter((d) => d.trang_thai === "dang_chay").length;
     const sapKhoiHanh = myDoan.filter((d) => {

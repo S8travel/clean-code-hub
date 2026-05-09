@@ -245,18 +245,20 @@ export function useApplySeriToDoan() {
       if (!seriNgayRows || seriNgayRows.length === 0) return;
 
       const thuMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-      const baseDate = new Date(ngayDi + "T00:00:00");
+      // UTC-safe parse để tránh timezone-shift bug
+      const [bY, bM, bD] = ngayDi.split("-").map(Number);
+      const baseDate = new Date(Date.UTC(bY, bM - 1, bD));
 
       // 2. Insert doan_ngay rows
       const ngayInserts = seriNgayRows.map((sn: any) => {
         const d = new Date(baseDate);
-        d.setDate(d.getDate() + sn.ngay_so - 1);
+        d.setUTCDate(d.getUTCDate() + sn.ngay_so - 1);
         const dateStr = d.toISOString().split("T")[0];
         return {
           doan_id: doanId,
           ngay_so: sn.ngay_so,
           ngay_date: dateStr,
-          thu: thuMap[d.getDay()],
+          thu: thuMap[d.getUTCDay()],
           thanh_pho: sn.thanh_pho,
           an_trua_nha_hang_id: sn.an_trua_nha_hang_id,
           an_trua_set_menu_id: sn.an_trua_set_menu_id,

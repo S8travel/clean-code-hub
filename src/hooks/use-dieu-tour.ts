@@ -182,11 +182,15 @@ export function getWeekday(dateStr: string): string {
 
 export function generateDays(ngayDi: string | null, ngayVe: string | null): DayLocal[] {
   if (!ngayDi || !ngayVe) return [];
+  const parseUTC = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  };
   const days: DayLocal[] = [];
-  const start = new Date(ngayDi);
-  const end = new Date(ngayVe);
+  const start = parseUTC(ngayDi);
+  const end = parseUTC(ngayVe);
   let i = 1;
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
     const dateStr = d.toISOString().split("T")[0];
     days.push({
       ngay_so: i++,
@@ -290,17 +294,21 @@ export function useInitDoanNgay() {
       const { data: existing } = await externalSupabase.from("doan_ngay").select("id").eq("doan_id", doanId).limit(1);
       if (existing && existing.length > 0) return;
       const thuMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-      const start = new Date(ngayDi + "T00:00:00");
-      const end = new Date(ngayVe + "T00:00:00");
+      const parseUTC = (s: string) => {
+        const [y, m, d] = s.split("-").map(Number);
+        return new Date(Date.UTC(y, m - 1, d));
+      };
+      const start = parseUTC(ngayDi);
+      const end = parseUTC(ngayVe);
       const rows = [];
       let i = 1;
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         const dateStr = d.toISOString().split("T")[0];
         rows.push({
           doan_id: doanId,
           ngay_so: i++,
           ngay_date: dateStr,
-          thu: thuMap[d.getDay()],
+          thu: thuMap[d.getUTCDay()],
         });
       }
       if (rows.length > 0) {

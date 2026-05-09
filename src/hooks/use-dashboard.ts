@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { startOfMonth, endOfMonth, subMonths, format, addDays } from "date-fns";
 
-const fmt = (d: Date) => d.toISOString().split("T")[0];
+// Local-aware format để tránh timezone-shift bug ở UTC+7
+const fmt = (d: Date) => format(d, "yyyy-MM-dd");
 
 export function useDashboardStats() {
   return useQuery({
