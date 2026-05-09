@@ -182,6 +182,12 @@ interface MenuItem {
 
 const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
+    label: "KHÁCH HÀNG",
+    items: [
+      { title: "Lead", url: "/leads", icon: Users2 },
+    ],
+  },
+  {
     label: "QUẢN LÝ ĐOÀN",
     items: [
       { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard, resource: "dashboard" },

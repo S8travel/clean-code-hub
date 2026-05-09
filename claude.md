@@ -495,3 +495,52 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
   - `src/pages/Index.tsx` — 2 khối auto-add permission khi create/edit doan, import `useAddDoanPermission`
 - **Để bật lại:** tìm tag `FEATURE_DOAN_PERM_DISABLED` trong 3 files trên, bỏ comment các dòng bị comment và xóa `const canEdit = true`
 - **Không bị ảnh hưởng:** hiển thị OP (cột OP, filter OP, field "Phân cho"), MyJobPage, `use-permissions.ts`
+
+---
+
+## 🆕 Module Lead Management (đang phát triển)
+
+### Mục đích
+Quản lý khách hàng tiềm năng cho thị trường outbound + nội địa.
+Lead = khách chưa chốt thành đoàn. Khi chốt → tạo `doan` và link.
+
+### Phạm vi
+- Tiếp nhận lead từ nhiều nguồn (FB, Zalo, hotline, web, referral)
+- Theo dõi quá trình tư vấn (activity log)
+- Quản lý follow-up & deadline
+- Báo cáo hiệu quả sales theo nguồn/người
+
+### Trạng thái Lead (kanban)
+moi → da_lien_he → dang_tu_van → da_bao_gia 
+    → cho_chot → chot_deal | mat_khach
+
+### Pattern UI bắt buộc
+- Có 2 view: Bảng (List) + Kanban (drag-drop đổi trạng thái)
+- LeadDrawer (Sheet bên phải) chi tiết lead với tabs: 
+  Thông tin / Hoạt động / Báo giá / Việc cần làm
+- Quick actions header: 📞 (tel:) | 💬 Zalo (zalo.me/sdt) | 📧 Email
+- Timeline activities — mọi tương tác PHẢI log
+- Highlight đỏ nếu quá hạn follow-up
+
+### Quy tắc nghiệp vụ
+- Mỗi lead có 1 sales phụ trách (auto-assign round-robin khi tạo mới)
+- Đổi trạng thái → tự tạo activity loại "doi_trang_thai"
+- Mất khách bắt buộc nhập lý do
+- Chốt deal → tạo đoàn → set lead.doan_id
+
+### Tích hợp với module hiện có
+- `leads.sales_phu_trach` → `user_roles.user_id` (chỉ user `bo_phan = 'dieu_hanh'`)
+- `leads.doan_id` → `doan.id` (set khi chốt deal)
+- `leads.nguoi_gioi_thieu_id` → self-reference (referral chain)
+
+### Routes
+/leads                 → trang quản lý lead (list + kanban)
+/leads/:id             → chi tiết lead (hoặc dùng drawer)
+
+### Query Keys
+["leads", filters?]
+["lead", id]
+["lead_activities", leadId]
+["lead_tasks", leadId]
+["my_lead_tasks", userId]
+["lead_nguon"]
