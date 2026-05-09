@@ -77,8 +77,9 @@ export default function LockPhongTheoKSView({ data }: Props) {
   };
 
   const groups = useMemo<KSGroup[]>(() => {
-    // Step 1: gom ksRows theo (khach_san_id, lockPhong.id) — merge stays cùng đoàn ở cùng KS
-    type MergeKey = string; // `${khach_san_id}-${lockPhong.id}`
+    // Step 1: gom ksRows theo (khach_san_id, lockPhong.ten_doan) — merge stays cùng code đoàn ở cùng KS
+    // (kể cả khi 2 stay đó được tạo ở 2 lock_phong record khác nhau)
+    type MergeKey = string;
     const ksMap = new Map<number, {
       khach_san_id: number;
       khach_san_ten: string;
@@ -97,7 +98,8 @@ export default function LockPhongTheoKSView({ data }: Props) {
             mergedMap: new Map(),
           });
         }
-        const key: MergeKey = `${ks.khach_san_id}-${lp.id}`;
+        // Key dùng ten_doan (code đoàn) để gộp các stay cùng code dù khác lock_phong_id
+        const key: MergeKey = `${ks.khach_san_id}::${lp.ten_doan}`;
         const grp = ksMap.get(ks.khach_san_id)!;
         if (!grp.mergedMap.has(key)) {
           grp.mergedMap.set(key, { lockPhong: lp, ksRows: [] });
