@@ -153,6 +153,7 @@ function DoanHotelRows({
 interface CreateRow {
   ten_doan: string;
   check_in: string;
+  so_dem: number;
   cau_hinh_phong: string;
   tinh_trang_phong: string;
   code_ncc: string;
@@ -163,6 +164,7 @@ interface CreateRow {
 const emptyCreateRow = (): CreateRow => ({
   ten_doan: "",
   check_in: "",
+  so_dem: 1,
   cau_hinh_phong: "",
   tinh_trang_phong: "",
   code_ncc: "",
@@ -171,9 +173,13 @@ const emptyCreateRow = (): CreateRow => ({
 });
 
 function addOneDay(yyyymmdd: string): string {
+  return addDaysISO(yyyymmdd, 1);
+}
+
+function addDaysISO(yyyymmdd: string, days: number): string {
   if (!yyyymmdd) return "";
   const d = new Date(yyyymmdd + "T00:00:00");
-  d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -214,6 +220,7 @@ function parseDateCell(v: any): string {
 const TEMPLATE_HEADERS = [
   { key: "ten_doan", label: "Code đoàn" },
   { key: "check_in", label: "Ngày check-in (yyyy-mm-dd hoặc dd/mm/yyyy)" },
+  { key: "so_dem", label: "Số đêm" },
   { key: "cau_hinh_phong", label: "Cấu hình phòng" },
   { key: "tinh_trang_phong", label: "Tình trạng phòng" },
   { key: "code_ncc", label: "Code NCC" },
@@ -223,12 +230,12 @@ const TEMPLATE_HEADERS = [
 function downloadTemplateXlsx() {
   const headerRow = TEMPLATE_HEADERS.map((h) => h.label);
   const sampleRows = [
-    ["TQ250501", "2026-05-18", "6 TWN, 1 DBL", "Còn", "BK20260518-001", "Khách Đài Loan"],
-    ["TQ250502", "25/05/2026", "8 TWN", "Chờ KS xác nhận", "", ""],
+    ["TQ250501", "2026-05-18", 1, "6 TWN, 1 DBL", "Còn", "BK20260518-001", "Khách Đài Loan"],
+    ["TQ250502", "25/05/2026", 2, "8 TWN", "Chờ KS xác nhận", "", ""],
   ];
   const aoa = [headerRow, ...sampleRows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 18 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 30 }];
+  ws["!cols"] = [{ wch: 18 }, { wch: 36 }, { wch: 8 }, { wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 30 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Lock Phong");
   XLSX.writeFile(wb, "lock_phong_mau.xlsx");
@@ -296,14 +303,17 @@ function CreateForm({
         if (!r || r.every((c: any) => c === "" || c == null)) continue;
         const ten_doan = String(r[0] ?? "").trim();
         const check_in = parseDateCell(r[1]);
-        const cau_hinh_phong = String(r[2] ?? "").trim();
-        const tinh_trang_phong = String(r[3] ?? "").trim();
-        const code_ncc = String(r[4] ?? "").trim();
-        const ghi_chu = String(r[5] ?? "").trim();
+        const so_dem_raw = Number(r[2]);
+        const so_dem = Number.isFinite(so_dem_raw) && so_dem_raw > 0 ? Math.floor(so_dem_raw) : 1;
+        const cau_hinh_phong = String(r[3] ?? "").trim();
+        const tinh_trang_phong = String(r[4] ?? "").trim();
+        const code_ncc = String(r[5] ?? "").trim();
+        const ghi_chu = String(r[6] ?? "").trim();
         if (!ten_doan && !check_in && !cau_hinh_phong) continue;
         parsed.push({
           ten_doan,
           check_in,
+          so_dem,
           cau_hinh_phong,
           tinh_trang_phong,
           code_ncc,
@@ -365,7 +375,7 @@ function CreateForm({
           hotels: [{
             khach_san_id: khachSanId,
             check_in: r.check_in,
-            check_out: addOneDay(r.check_in), // auto +1 ngày
+            check_out: addDaysISO(r.check_in, r.so_dem || 1), // auto = check_in + so_dem
             so_phong: r.cau_hinh_phong.trim() || undefined,
             tinh_trang_phong: r.tinh_trang_phong.trim() || undefined,
             code_ncc: r.code_ncc.trim() || undefined,
@@ -461,6 +471,7 @@ function CreateForm({
                 <tr>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[160px]">Code đoàn *</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Ngày check-in *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[80px]">Số đêm *</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[180px]">Cấu hình phòng *</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Tình trạng phòng</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Code NCC</th>
@@ -485,6 +496,15 @@ function CreateForm({
                         type="date"
                         value={r.check_in}
                         onChange={(e) => handleCheckInChange(idx, e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={r.so_dem}
+                        onChange={(e) => updateRow(idx, { so_dem: Math.max(1, Number(e.target.value) || 1) })}
                         className="h-7 text-xs"
                       />
                     </td>
@@ -567,7 +587,7 @@ function CreateForm({
           </div>
 
           <p className="text-[11px] text-muted-foreground italic">
-            Tip: nhập <b>Check-in</b> → <b>Deadline</b> tự fill = check-in − số ngày ở header. Bấm <b>Enter</b> ở Ghi chú để thêm dòng mới. Dùng nút <b>copy</b> để nhân bản dòng. Check-out tự tính = check-in + 1 (chỉnh sau ở Edit form nếu cần).
+            Tip: nhập <b>Check-in</b> → <b>Deadline</b> tự fill = check-in − số ngày ở header. Mặc định <b>Số đêm</b> = 1. Bấm <b>Enter</b> ở Ghi chú để thêm dòng mới. Dùng nút <b>copy</b> để nhân bản dòng. Check-out tự tính = check-in + số đêm.
           </p>
         </div>
 

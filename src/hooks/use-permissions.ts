@@ -89,7 +89,6 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
 
   if (!user) return false;
   if (user.role === "admin") return true;
-  if (resource === "danh_muc") return true; // tạm thời mở cho tất cả
 
   // Specialist: chỉ check user_permissions (per-user override), KHÔNG dùng role matrix
   if (user.role === "specialist") {

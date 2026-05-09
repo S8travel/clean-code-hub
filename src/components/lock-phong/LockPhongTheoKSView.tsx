@@ -190,8 +190,11 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     <tr className="border-b border-border bg-muted/10">
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Tên đoàn</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Seri</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Ngày check-in</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Check-in</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Check-out</th>
+                      <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground w-14">Đêm</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Số phòng</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Code NCC</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground w-[200px]">Trạng thái</th>
                       <th className="px-4 py-2 text-xs font-medium text-muted-foreground" />
                     </tr>
@@ -212,8 +215,13 @@ export default function LockPhongTheoKSView({ data }: Props) {
                             {lockPhong.ten_seri}
                           </td>
                           <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_in)}</td>
+                          <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_out)}</td>
+                          <td className="px-4 py-2.5 text-xs text-center font-medium">{ksRow.so_dem || 0}</td>
                           <td className="px-4 py-2.5 text-xs text-muted-foreground">
                             {ksRow.so_phong || "—"}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono">
+                            {ksRow.code_ncc || "—"}
                           </td>
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-1.5">
