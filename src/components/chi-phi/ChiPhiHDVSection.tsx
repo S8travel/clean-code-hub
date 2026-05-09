@@ -29,12 +29,33 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 interface Props {
   doanId: number;
+  doan?: any;
 }
 
-export default function ChiPhiHDVSection({ doanId }: Props) {
+// Tính "Phải thu HDV" mặc định (giống logic mặc định ChiPhiPhasThuSection)
+function computeHdvPhaiThuVND(doan: any | undefined): number {
+  if (!doan) return 0;
+  const soKhach =
+    (doan.so_khach_lon ?? 0) + (doan.so_khach_em1 ?? 0) +
+    (doan.so_khach_em2 ?? 0) + (doan.so_khach_tl ?? 0) ||
+    doan.so_khach || 0;
+  const soNgay = doan.ngay_di && doan.ngay_ve
+    ? Math.max(1, Math.ceil((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
+    : 0;
+  if (!soKhach || !soNgay) return 0;
+  const coTL = (doan.so_khach_tl ?? 0) > 0;
+  const tipDonGia = coTL ? 150 : 300;
+  const tyGiaStr = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
+  const tyGia = tyGiaStr ? Number(tyGiaStr) : 800;
+  return soKhach * soNgay * tipDonGia * tyGia;
+}
+
+export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
   const [showQuyetToan, setShowQuyetToan] = useState(false);
+
+  const hdvPhaiThuVND = computeHdvPhaiThuVND(doan);
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
@@ -70,7 +91,7 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
               <p className="text-xs text-muted-foreground italic">Chưa chỉ định HDV</p>
             )}
 
-            {(tongHdvChi > 0 || tongHoTroHDV > 0) && (
+            {(tongHdvChi > 0 || tongHoTroHDV > 0 || hdvPhaiThuVND > 0) && (
               <div className="flex gap-4 flex-wrap">
                 {tongHdvChi > 0 && (
                   <div>
@@ -82,6 +103,12 @@ export default function ChiPhiHDVSection({ doanId }: Props) {
                   <div>
                     <p className="text-[11px] text-muted-foreground">Hỗ trợ HDV</p>
                     <p className="text-sm font-semibold text-blue-600">+{fmt(tongHoTroHDV)} ₫</p>
+                  </div>
+                )}
+                {hdvPhaiThuVND > 0 && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Phải thu HDV</p>
+                    <p className="text-sm font-semibold text-amber-600">{fmt(hdvPhaiThuVND)} ₫</p>
                   </div>
                 )}
                 {tamUngDaTT > 0 && (

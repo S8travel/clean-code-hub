@@ -168,7 +168,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
           ngayVe={doan?.ngay_ve ?? null}
         />
 
-        <ChiPhiHDVSection doanId={doanId} />
+        <ChiPhiHDVSection doanId={doanId} doan={doan} />
 
         <ChiPhiPhasThuSection doan={doan} />
       </div>
