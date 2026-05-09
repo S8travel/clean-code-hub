@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -151,19 +151,19 @@ function DoanHotelRows({
 
 interface CreateRow {
   ten_doan: string;
-  ngay_xuat_phat: string;
   check_in: string;
-  check_out: string;
-  so_phong: string;
+  cau_hinh_phong: string;
+  tinh_trang_phong: string;
+  deadline: string;
   ghi_chu: string;
 }
 
-const emptyCreateRow = (carryFrom?: CreateRow): CreateRow => ({
+const emptyCreateRow = (): CreateRow => ({
   ten_doan: "",
-  ngay_xuat_phat: "",
-  check_in: carryFrom?.check_out || "",
-  check_out: "",
-  so_phong: "",
+  check_in: "",
+  cau_hinh_phong: "",
+  tinh_trang_phong: "",
+  deadline: "",
   ghi_chu: "",
 });
 
@@ -171,6 +171,13 @@ function addOneDay(yyyymmdd: string): string {
   if (!yyyymmdd) return "";
   const d = new Date(yyyymmdd + "T00:00:00");
   d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function subDaysISO(yyyymmdd: string, days: number): string {
+  if (!yyyymmdd || !days) return "";
+  const d = new Date(yyyymmdd + "T00:00:00");
+  d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -186,6 +193,7 @@ function CreateForm({
 
   const [khachSanId, setKhachSanId] = useState<number | null>(null);
   const [tenSeri, setTenSeri] = useState("");
+  const [daysToDeadline, setDaysToDeadline] = useState<number>(45);
   const [ghiChuChung, setGhiChuChung] = useState("");
   const [rows, setRows] = useState<CreateRow[]>([emptyCreateRow()]);
   const [submitting, setSubmitting] = useState(false);
@@ -194,28 +202,44 @@ function CreateForm({
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   };
 
-  const handleNgayXPChange = (idx: number, v: string) => {
+  // Khi check-in đổi → tự fill deadline = check_in − daysToDeadline
+  const handleCheckInChange = (idx: number, v: string) => {
     setRows((prev) => prev.map((r, i) => {
       if (i !== idx) return r;
-      const next: CreateRow = { ...r, ngay_xuat_phat: v };
-      // Auto-fill check_in / check_out nếu trống
-      if (v && !r.check_in) next.check_in = v;
-      if (v && !r.check_out) next.check_out = addOneDay(v);
+      const next: CreateRow = { ...r, check_in: v };
+      if (v && daysToDeadline > 0) next.deadline = subDaysISO(v, daysToDeadline);
       return next;
     }));
   };
 
+  // Khi đổi daysToDeadline ở header → áp lại tất cả rows có check-in
+  const handleDaysToDeadlineChange = (n: number) => {
+    setDaysToDeadline(n);
+    setRows((prev) => prev.map((r) => {
+      if (!r.check_in || n <= 0) return r;
+      return { ...r, deadline: subDaysISO(r.check_in, n) };
+    }));
+  };
+
   const handleAddRow = () => {
-    setRows((prev) => [...prev, emptyCreateRow(prev[prev.length - 1])]);
+    setRows((prev) => [...prev, emptyCreateRow()]);
+  };
+
+  const handleDuplicateRow = (idx: number) => {
+    setRows((prev) => {
+      const src = prev[idx];
+      const copy: CreateRow = { ...src };
+      return [...prev.slice(0, idx + 1), copy, ...prev.slice(idx + 1)];
+    });
   };
 
   const handleRemoveRow = (idx: number) => {
     setRows((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
   };
 
-  // Validate
+  // Validate (deadline auto tính, không bắt buộc nhập)
   const validRows = rows.filter(
-    (r) => r.ten_doan.trim() && r.ngay_xuat_phat && r.check_in && r.check_out && r.so_phong.trim(),
+    (r) => r.ten_doan.trim() && r.check_in && r.cau_hinh_phong.trim(),
   );
   const canSubmit = !!khachSanId && validRows.length > 0 && !submitting;
 
@@ -226,26 +250,28 @@ function CreateForm({
       return;
     }
     if (validRows.length === 0) {
-      toast.error("Chưa có dòng đoàn nào hợp lệ");
+      toast.error("Chưa có dòng đoàn nào hợp lệ (cần Code + Check-in + Cấu hình phòng)");
       return;
     }
     setSubmitting(true);
     try {
       for (const r of validRows) {
+        const deadline = r.deadline || subDaysISO(r.check_in, daysToDeadline);
         await createMut.mutateAsync({
           header: {
             ten_seri: tenSeri || "",
             seri_id: null,
             ten_doan: r.ten_doan.trim(),
-            ngay_xuat_phat: r.ngay_xuat_phat,
-            deadline: calcDeadline(r.ngay_xuat_phat),
+            ngay_xuat_phat: r.check_in, // dùng check-in làm ngày XP
+            deadline: deadline || calcDeadline(r.check_in),
             ghi_chu: ghiChuChung || undefined,
           },
           hotels: [{
             khach_san_id: khachSanId,
             check_in: r.check_in,
-            check_out: r.check_out,
-            so_phong: r.so_phong.trim() || undefined,
+            check_out: addOneDay(r.check_in), // auto +1 ngày
+            so_phong: r.cau_hinh_phong.trim() || undefined,
+            tinh_trang_phong: r.tinh_trang_phong.trim() || undefined,
             ghi_chu: r.ghi_chu.trim() || undefined,
           }],
         });
@@ -262,8 +288,8 @@ function CreateForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col flex-1 overflow-hidden">
       <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
-        {/* Top: chọn KS + tên seri */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Top: chọn KS + tên seri + số ngày deadline */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">
               Khách sạn <span className="text-destructive">*</span>
@@ -285,6 +311,19 @@ function CreateForm({
               className="h-9 text-sm"
             />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">
+              Số ngày đến deadline
+              <span className="text-muted-foreground font-normal"> (deadline = check-in − N)</span>
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              value={daysToDeadline}
+              onChange={(e) => handleDaysToDeadlineChange(Number(e.target.value) || 0)}
+              className="h-9 text-sm"
+            />
+          </div>
         </div>
 
         {/* Table list đoàn */}
@@ -302,13 +341,13 @@ function CreateForm({
             <table className="w-full text-xs">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[180px]">Code đoàn *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Ngày XP *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Check-in *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Check-out *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[160px]">Số phòng *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[160px]">Code đoàn *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Ngày check-in *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[180px]">Cấu hình phòng *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Tình trạng phòng</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Deadline</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Ghi chú</th>
-                  <th className="w-8" />
+                  <th className="w-16" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -325,33 +364,34 @@ function CreateForm({
                     <td className="px-1 py-1">
                       <Input
                         type="date"
-                        value={r.ngay_xuat_phat}
-                        onChange={(e) => handleNgayXPChange(idx, e.target.value)}
-                        className="h-7 text-xs"
-                      />
-                    </td>
-                    <td className="px-1 py-1">
-                      <Input
-                        type="date"
                         value={r.check_in}
-                        onChange={(e) => updateRow(idx, { check_in: e.target.value })}
+                        onChange={(e) => handleCheckInChange(idx, e.target.value)}
                         className="h-7 text-xs"
                       />
                     </td>
                     <td className="px-1 py-1">
                       <Input
-                        type="date"
-                        value={r.check_out}
-                        onChange={(e) => updateRow(idx, { check_out: e.target.value })}
-                        className="h-7 text-xs"
-                      />
-                    </td>
-                    <td className="px-1 py-1">
-                      <Input
-                        value={r.so_phong}
-                        onChange={(e) => updateRow(idx, { so_phong: e.target.value })}
+                        value={r.cau_hinh_phong}
+                        onChange={(e) => updateRow(idx, { cau_hinh_phong: e.target.value })}
                         placeholder="6 TWN, 1 DBL"
                         className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        value={r.tinh_trang_phong}
+                        onChange={(e) => updateRow(idx, { tinh_trang_phong: e.target.value })}
+                        placeholder="vd: Còn / Hết"
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        type="date"
+                        value={r.deadline}
+                        onChange={(e) => updateRow(idx, { deadline: e.target.value })}
+                        className="h-7 text-xs"
+                        title="Auto tính từ check-in − số ngày deadline (header)"
                       />
                     </td>
                     <td className="px-1 py-1">
@@ -369,16 +409,29 @@ function CreateForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        disabled={rows.length === 1}
-                        onClick={() => handleRemoveRow(idx)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-blue-600"
+                          title="Sao chép dòng"
+                          onClick={() => handleDuplicateRow(idx)}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          title="Xóa dòng"
+                          disabled={rows.length === 1}
+                          onClick={() => handleRemoveRow(idx)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -387,8 +440,7 @@ function CreateForm({
           </div>
 
           <p className="text-[11px] text-muted-foreground italic">
-            Tip: nhập "Ngày XP" → check-in / check-out tự fill. Bấm Enter ở cột Ghi chú để thêm dòng mới (auto copy check-out → check-in).
-            Deadline tự tính = ngày XP − 45 ngày.
+            Tip: nhập <b>Check-in</b> → <b>Deadline</b> tự fill = check-in − số ngày ở header. Bấm <b>Enter</b> ở Ghi chú để thêm dòng mới. Dùng nút <b>copy</b> để nhân bản dòng. Check-out tự tính = check-in + 1 (chỉnh sau ở Edit form nếu cần).
           </p>
         </div>
 
@@ -623,7 +675,7 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col overflow-hidden p-0">
+      <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] flex flex-col overflow-hidden p-0">
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-border shrink-0">
           <DialogTitle className="text-base">
             {initialData ? "Chỉnh sửa Lock Phòng" : "Thêm Lock Phòng"}

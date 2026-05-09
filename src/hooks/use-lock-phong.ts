@@ -23,6 +23,7 @@ export interface LockPhongKS {
   check_in: string; // "yyyy-MM-dd"
   check_out: string; // "yyyy-MM-dd"
   so_phong: string | null;
+  tinh_trang_phong: string | null;
   ghi_chu: string | null;
   email_status: string; // 'chua_gui' | 'cho_xac_nhan' | 'da_xac_nhan' | 'da_huy'
   email_sent_at: string | null;
@@ -49,6 +50,7 @@ export interface LockPhongKSInput {
   check_in: string;
   check_out: string;
   so_phong?: string;
+  tinh_trang_phong?: string;
   ghi_chu?: string;
 }
 
@@ -162,6 +164,7 @@ export function useCreateLockPhong() {
           check_in: h.check_in,
           check_out: h.check_out,
           so_phong: h.so_phong || null,
+          tinh_trang_phong: h.tinh_trang_phong || null,
           ghi_chu: h.ghi_chu || null,
         }));
         const { error: e2 } = await externalSupabase.from("lock_phong_ks").insert(inserts);
@@ -231,6 +234,7 @@ export function useUpdateLockPhong() {
               check_in: h.check_in,
               check_out: h.check_out,
               so_phong: h.so_phong || null,
+              tinh_trang_phong: h.tinh_trang_phong || null,
               ghi_chu: h.ghi_chu || null,
             })
             .eq("id", h.id);
@@ -243,6 +247,7 @@ export function useUpdateLockPhong() {
             check_in: h.check_in,
             check_out: h.check_out,
             so_phong: h.so_phong || null,
+            tinh_trang_phong: h.tinh_trang_phong || null,
             ghi_chu: h.ghi_chu || null,
           });
           if (error) throw error;
