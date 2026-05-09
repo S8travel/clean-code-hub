@@ -10,6 +10,8 @@ import {
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
 import { useDashboardStats } from "@/hooks/use-dashboard";
+import { useRoleAtLeast } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +83,8 @@ const TOOLTIP_STYLE = {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const canView = useRoleAtLeast("truong_phong");
+  if (!canView) return <AccessDenied />;
   const { data, isLoading } = useDashboardStats();
 
   if (isLoading) {

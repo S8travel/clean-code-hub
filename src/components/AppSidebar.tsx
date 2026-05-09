@@ -155,7 +155,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "QUẢN LÝ ĐOÀN",
     items: [
-      { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard, minRole: "truong_phong" },
       { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness },
       { title: "Danh sách đoàn", titleZh: "團表", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, minRole: "truong_phong" },
