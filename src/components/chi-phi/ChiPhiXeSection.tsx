@@ -168,6 +168,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       tien_cong_ty: total,
       tien_hdv: 0,
       nha_cung_cap_id: parent?.nha_cung_cap_id ?? null,
+      thanh_toan_dinh_ky: true,
     } as any, {
       onSuccess: () => {
         setAddExtraForId(null);
@@ -189,6 +190,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       tien_cong_ty: 0,
       tien_hdv: 0,
       nha_cung_cap_id: xe?.nha_xe?.nha_cung_cap_id ?? null,
+      thanh_toan_dinh_ky: true,
     } as any, {
       onSuccess: () => toast.success("Đã thêm dòng xe"),
     });
