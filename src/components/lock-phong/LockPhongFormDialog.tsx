@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2, Copy } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -42,19 +42,6 @@ const hotelSchema = z.object({
   ghi_chu: z.string().optional(),
 });
 
-const doanSchema = z.object({
-  ten_doan: z.string().min(1, "Bắt buộc"),
-  ngay_xuat_phat: z.string().min(1, "Bắt buộc"),
-  deadline: z.string().optional(),
-  hotels: z.array(hotelSchema).min(1, "Thêm ít nhất 1 KS"),
-});
-
-const createSchema = z.object({
-  ten_seri: z.string().min(1, "Bắt buộc"),
-  ghi_chu: z.string().optional(),
-  doans: z.array(doanSchema).min(1),
-});
-
 const editSchema = z.object({
   ten_seri: z.string().min(1, "Bắt buộc"),
   ten_doan: z.string().min(1, "Bắt buộc"),
@@ -64,11 +51,9 @@ const editSchema = z.object({
   hotels: z.array(hotelSchema).min(1),
 });
 
-type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
 
 const emptyHotel = () => ({ khach_san_id: 0, check_in: "", check_out: "", so_phong: "", ghi_chu: "" });
-const emptyDoan = () => ({ ten_doan: "", ngay_xuat_phat: "", deadline: "", hotels: [emptyHotel()] });
 
 interface Props {
   open: boolean;
@@ -162,7 +147,32 @@ function DoanHotelRows({
   );
 }
 
-// ── Create form ──
+// ── Create form: 1 KS → nhiều đoàn (table inline) ──
+
+interface CreateRow {
+  ten_doan: string;
+  ngay_xuat_phat: string;
+  check_in: string;
+  check_out: string;
+  so_phong: string;
+  ghi_chu: string;
+}
+
+const emptyCreateRow = (carryFrom?: CreateRow): CreateRow => ({
+  ten_doan: "",
+  ngay_xuat_phat: "",
+  check_in: carryFrom?.check_out || "",
+  check_out: "",
+  so_phong: "",
+  ghi_chu: "",
+});
+
+function addOneDay(yyyymmdd: string): string {
+  if (!yyyymmdd) return "";
+  const d = new Date(yyyymmdd + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 function CreateForm({
   onOpenChange,
@@ -174,182 +184,220 @@ function CreateForm({
   const createMut = useCreateLockPhong();
   const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten ?? "" }));
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    setValue,
-    getValues,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateValues>({
-    resolver: zodResolver(createSchema),
-    defaultValues: {
-      ten_seri: "",
-      ghi_chu: "",
-      doans: [emptyDoan()],
-    },
-  });
+  const [khachSanId, setKhachSanId] = useState<number | null>(null);
+  const [tenSeri, setTenSeri] = useState("");
+  const [ghiChuChung, setGhiChuChung] = useState("");
+  const [rows, setRows] = useState<CreateRow[]>([emptyCreateRow()]);
+  const [submitting, setSubmitting] = useState(false);
 
-  const { fields: doanFields, append: appendDoan, remove: removeDoan } = useFieldArray({
-    control,
-    name: "doans",
-  });
-
-  // Copy hotel structure (same hotels + so_phong) from last đoàn, empty dates
-  const addDoanFromLast = () => {
-    const current = getValues("doans");
-    const last = current[current.length - 1];
-    appendDoan({
-      ten_doan: "",
-      ngay_xuat_phat: "",
-      hotels: last.hotels.map((h) => ({
-        khach_san_id: h.khach_san_id,
-        check_in: "",
-        check_out: "",
-        so_phong: h.so_phong || "",
-        ghi_chu: h.ghi_chu || "",
-      })),
-    });
+  const updateRow = (idx: number, patch: Partial<CreateRow>) => {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   };
 
-  const onSubmit = async (values: CreateValues) => {
+  const handleNgayXPChange = (idx: number, v: string) => {
+    setRows((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const next: CreateRow = { ...r, ngay_xuat_phat: v };
+      // Auto-fill check_in / check_out nếu trống
+      if (v && !r.check_in) next.check_in = v;
+      if (v && !r.check_out) next.check_out = addOneDay(v);
+      return next;
+    }));
+  };
+
+  const handleAddRow = () => {
+    setRows((prev) => [...prev, emptyCreateRow(prev[prev.length - 1])]);
+  };
+
+  const handleRemoveRow = (idx: number) => {
+    setRows((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
+  };
+
+  // Validate
+  const validRows = rows.filter(
+    (r) => r.ten_doan.trim() && r.ngay_xuat_phat && r.check_in && r.check_out && r.so_phong.trim(),
+  );
+  const canSubmit = !!khachSanId && validRows.length > 0 && !submitting;
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!khachSanId) {
+      toast.error("Chưa chọn khách sạn");
+      return;
+    }
+    if (validRows.length === 0) {
+      toast.error("Chưa có dòng đoàn nào hợp lệ");
+      return;
+    }
+    setSubmitting(true);
     try {
-      await Promise.all(
-        values.doans.map((d) =>
-          createMut.mutateAsync({
-            header: {
-              ten_seri: values.ten_seri,
-              seri_id: null,
-              ten_doan: d.ten_doan,
-              ngay_xuat_phat: d.ngay_xuat_phat,
-              deadline: d.deadline || (d.ngay_xuat_phat ? calcDeadline(d.ngay_xuat_phat) : null),
-              ghi_chu: values.ghi_chu || undefined,
-            },
-            hotels: d.hotels.map((h) => ({
-              id: h.id,
-              khach_san_id: h.khach_san_id,
-              check_in: h.check_in,
-              check_out: h.check_out,
-              so_phong: h.so_phong || undefined,
-              ghi_chu: h.ghi_chu || undefined,
-            })),
-          })
-        )
-      );
-      toast.success(
-        values.doans.length > 1
-          ? `Đã tạo ${values.doans.length} lock phòng`
-          : "Đã tạo lock phòng"
-      );
+      for (const r of validRows) {
+        await createMut.mutateAsync({
+          header: {
+            ten_seri: tenSeri || "",
+            seri_id: null,
+            ten_doan: r.ten_doan.trim(),
+            ngay_xuat_phat: r.ngay_xuat_phat,
+            deadline: calcDeadline(r.ngay_xuat_phat),
+            ghi_chu: ghiChuChung || undefined,
+          },
+          hotels: [{
+            khach_san_id: khachSanId,
+            check_in: r.check_in,
+            check_out: r.check_out,
+            so_phong: r.so_phong.trim() || undefined,
+            ghi_chu: r.ghi_chu.trim() || undefined,
+          }],
+        });
+      }
+      toast.success(`Đã tạo ${validRows.length} lock phòng`);
       onOpenChange(false);
     } catch (err: any) {
       toast.error("Lỗi: " + (err?.message || "Vui lòng thử lại"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
-      <div className="px-6 py-4 space-y-5 overflow-y-auto flex-1">
-        {/* Tên seri */}
-        <div className="space-y-1">
-          <Label className="text-xs">
-            Tên seri <span className="text-destructive">*</span>
-          </Label>
-          <Input {...register("ten_seri")} placeholder="vd: Trung Quốc 6N5Đ" className="h-9 text-sm" />
-          {errors.ten_seri && <p className="text-xs text-destructive">{errors.ten_seri.message}</p>}
+    <form onSubmit={onSubmit} className="flex flex-col flex-1 overflow-hidden">
+      <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+        {/* Top: chọn KS + tên seri */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">
+              Khách sạn <span className="text-destructive">*</span>
+            </Label>
+            <SearchableSelect
+              options={ksOptions}
+              value={khachSanId ? String(khachSanId) : ""}
+              onChange={(v) => setKhachSanId(v ? Number(v) : null)}
+              placeholder="Chọn khách sạn cần lock..."
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Tên seri (chung)</Label>
+            <Input
+              value={tenSeri}
+              onChange={(e) => setTenSeri(e.target.value)}
+              placeholder="vd: Trung Quốc 6N5Đ"
+              className="h-9 text-sm"
+            />
+          </div>
         </div>
 
-        {/* Danh sách đoàn */}
-        <div className="space-y-3">
+        {/* Table list đoàn */}
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold">
-              Code đoàn <span className="text-destructive">*</span>
+            <Label className="text-xs font-semibold uppercase">
+              Danh sách đoàn ({rows.length})
             </Label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={addDoanFromLast}
-            >
-              <Copy className="h-3 w-3" />
-              Copy & thêm đoàn
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleAddRow}>
+              <Plus className="h-3 w-3" /> Thêm dòng
             </Button>
           </div>
 
-          {doanFields.map((field, dIdx) => (
-            <div key={field.id} className="border border-border rounded-lg overflow-hidden">
-              {/* Đoàn header */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border flex-wrap">
-                <span className="text-xs font-medium text-muted-foreground shrink-0">
-                  Đoàn {dIdx + 1}
-                </span>
-                <Input
-                  {...register(`doans.${dIdx}.ten_doan`)}
-                  placeholder="Code đoàn, vd: TQ250501"
-                  className="h-7 text-xs flex-1 min-w-[120px]"
-                />
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-[11px] text-muted-foreground">Xuất phát</span>
-                  <Input
-                    {...register(`doans.${dIdx}.ngay_xuat_phat`, {
-                      onChange: (e) => {
-                        const v = e.target.value;
-                        if (v) setValue(`doans.${dIdx}.deadline`, calcDeadline(v));
-                      },
-                    })}
-                    type="date"
-                    className="h-7 text-xs w-36"
-                  />
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-[11px] text-muted-foreground">Deadline</span>
-                  <Input
-                    {...register(`doans.${dIdx}.deadline`)}
-                    type="date"
-                    className="h-7 text-xs w-36"
-                    title="Mặc định ngày xuất phát - 45 ngày"
-                  />
-                </div>
-                {doanFields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => removeDoan(dIdx)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
+          <div className="border border-border rounded-md overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/40 border-b border-border">
+                <tr>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[180px]">Code đoàn *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Ngày XP *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Check-in *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Check-out *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[160px]">Số phòng *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Ghi chú</th>
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map((r, idx) => (
+                  <tr key={idx} className="hover:bg-muted/20">
+                    <td className="px-1 py-1">
+                      <Input
+                        value={r.ten_doan}
+                        onChange={(e) => updateRow(idx, { ten_doan: e.target.value })}
+                        placeholder="TQ250501"
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        type="date"
+                        value={r.ngay_xuat_phat}
+                        onChange={(e) => handleNgayXPChange(idx, e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        type="date"
+                        value={r.check_in}
+                        onChange={(e) => updateRow(idx, { check_in: e.target.value })}
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        type="date"
+                        value={r.check_out}
+                        onChange={(e) => updateRow(idx, { check_out: e.target.value })}
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        value={r.so_phong}
+                        onChange={(e) => updateRow(idx, { so_phong: e.target.value })}
+                        placeholder="6 TWN, 1 DBL"
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        value={r.ghi_chu}
+                        onChange={(e) => updateRow(idx, { ghi_chu: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddRow();
+                          }
+                        }}
+                        placeholder="(tuỳ chọn)"
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1 text-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        disabled={rows.length === 1}
+                        onClick={() => handleRemoveRow(idx)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-              {/* Hotel rows */}
-              <div className="px-3 py-2 space-y-1">
-                {/* Column headers */}
-                <div className="grid grid-cols-[180px_1fr_1fr_140px_28px] gap-1.5 mb-1">
-                  <span className="text-[11px] text-muted-foreground">Khách sạn</span>
-                  <span className="text-[11px] text-muted-foreground">Check-in</span>
-                  <span className="text-[11px] text-muted-foreground">Check-out</span>
-                  <span className="text-[11px] text-muted-foreground">Số phòng</span>
-                  <span />
-                </div>
-                <DoanHotelRows
-                  doanIdx={dIdx}
-                  control={control}
-                  register={register}
-                  ksOptions={ksOptions}
-                />
-              </div>
-            </div>
-          ))}
+          <p className="text-[11px] text-muted-foreground italic">
+            Tip: nhập "Ngày XP" → check-in / check-out tự fill. Bấm Enter ở cột Ghi chú để thêm dòng mới (auto copy check-out → check-in).
+            Deadline tự tính = ngày XP − 45 ngày.
+          </p>
         </div>
 
         {/* Ghi chú */}
         <div className="space-y-1">
           <Label className="text-xs">Ghi chú chung</Label>
           <Textarea
-            {...register("ghi_chu")}
+            value={ghiChuChung}
+            onChange={(e) => setGhiChuChung(e.target.value)}
             placeholder="Áp dụng cho tất cả đoàn..."
             rows={2}
             className="text-sm resize-none"
@@ -358,15 +406,16 @@ function CreateForm({
       </div>
 
       <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
-        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+        <div className="flex-1 text-xs text-muted-foreground">
+          {validRows.length > 0
+            ? `Sẽ tạo ${validRows.length} lock phòng`
+            : "Chưa có dòng đoàn nào hợp lệ"}
+        </div>
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
           Hủy
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting
-            ? "Đang tạo..."
-            : doanFields.length > 1
-            ? `Tạo ${doanFields.length} đoàn`
-            : "Tạo mới"}
+        <Button type="submit" disabled={!canSubmit}>
+          {submitting ? "Đang tạo..." : `Tạo Lock${validRows.length > 1 ? ` (${validRows.length})` : ""}`}
         </Button>
       </DialogFooter>
     </form>
