@@ -37,6 +37,8 @@ import {
 } from "@/hooks/use-van-phong";
 import {
   useRolePermissions, useUpsertRolePermissions,
+  useUserPermissions, useUpsertUserPermissions,
+  type UserPermission,
   type Resource, type PermAction, type RolePermission,
 } from "@/hooks/use-permissions";
 import { useActivityLogList, useLogActivity, type ActivityLogFilters, type ActivityAction } from "@/hooks/use-activity-log";
@@ -47,6 +49,7 @@ const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
   { value: "admin", label: "Admin" },
   { value: "giam_doc", label: "Giám đốc" },
   { value: "truong_phong", label: "Trưởng phòng" },
+  { value: "specialist", label: "Specialist (quyền riêng)" },
   { value: "nhan_vien_cao_cap", label: "Nhân viên cao cấp" },
   { value: "nhan_vien", label: "Nhân viên" },
 ];
@@ -60,6 +63,7 @@ const VAI_TRO_LABEL: Record<VaiTro, string> = {
   admin: "Admin",
   giam_doc: "Giám đốc",
   truong_phong: "Trưởng phòng",
+  specialist: "Specialist",
   nhan_vien_cao_cap: "NV Cao cấp",
   nhan_vien: "Nhân viên",
 };
@@ -631,6 +635,10 @@ function NguoiDungTab() {
               </Button>
             </div>
 
+            {form.role === "specialist" && selected.user_id && (
+              <SpecialistPermissionsSection userId={selected.user_id} />
+            )}
+
             <div className="text-[11px] text-muted-foreground border-t pt-3">
               Ngày tạo: {new Date(selected.created_at).toLocaleDateString("vi-VN")}
             </div>
@@ -1131,6 +1139,114 @@ function NhatKyTab() {
           </TableBody>
         </Table>
       </div>
+    </div>
+  );
+}
+
+// ── Specialist: per-user permission editor ──────────────────────────────────
+function SpecialistPermissionsSection({ userId }: { userId: string }) {
+  const { data: existing = [], isLoading } = useUserPermissions(userId);
+  const upsertMut = useUpsertUserPermissions();
+
+  const [matrix, setMatrix] = useState<Record<Resource, { v: boolean; c: boolean; e: boolean; d: boolean }>>(
+    () => Object.fromEntries(
+      RESOURCES.map((r) => [r.value, { v: false, c: false, e: false, d: false }])
+    ) as any
+  );
+  const [dirty, setDirty] = useState(false);
+
+  // Hydrate from existing
+  useEffect(() => {
+    setMatrix(Object.fromEntries(
+      RESOURCES.map((r) => {
+        const row = existing.find((p) => p.resource === r.value);
+        return [r.value, {
+          v: row?.can_view ?? false,
+          c: row?.can_create ?? false,
+          e: row?.can_edit ?? false,
+          d: row?.can_delete ?? false,
+        }];
+      })
+    ) as any);
+    setDirty(false);
+  }, [existing.length, userId]);
+
+  const toggle = (resource: Resource, action: "v" | "c" | "e" | "d") => {
+    setMatrix((prev) => ({
+      ...prev,
+      [resource]: { ...prev[resource], [action]: !prev[resource][action] },
+    }));
+    setDirty(true);
+  };
+
+  const handleSave = async () => {
+    const rows: Omit<UserPermission, "id" | "user_id">[] = RESOURCES.map((r) => ({
+      resource: r.value,
+      can_view: matrix[r.value].v,
+      can_create: matrix[r.value].c,
+      can_edit: matrix[r.value].e,
+      can_delete: matrix[r.value].d,
+    }));
+    try {
+      await upsertMut.mutateAsync({ userId, rows });
+      setDirty(false);
+      toast.success("Đã lưu quyền specialist");
+    } catch (err: any) {
+      toast.error("Lỗi: " + (err?.message || "Không lưu được"));
+    }
+  };
+
+  return (
+    <div className="border border-amber-200 bg-amber-50/40 rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium flex items-center gap-1.5">
+            <Shield className="h-4 w-4 text-amber-600" />
+            Quyền Specialist (per-user)
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            User này không dùng quyền mặc định theo role — chọn từng resource bên dưới.
+          </p>
+        </div>
+        <Button size="sm" className="h-7 text-xs" onClick={handleSave}
+          disabled={!dirty || upsertMut.isPending}>
+          <Save className="h-3 w-3 mr-1" />
+          {upsertMut.isPending ? "Đang lưu..." : "Lưu quyền"}
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <p className="text-xs text-muted-foreground">Đang tải...</p>
+      ) : (
+        <div className="border border-border rounded-md overflow-hidden bg-background">
+          <Table>
+            <TableHeader>
+              <TableRow className="text-xs bg-muted/30">
+                <TableHead className="py-2">Resource</TableHead>
+                <TableHead className="py-2 text-center w-16">Xem</TableHead>
+                <TableHead className="py-2 text-center w-16">Tạo</TableHead>
+                <TableHead className="py-2 text-center w-16">Sửa</TableHead>
+                <TableHead className="py-2 text-center w-16">Xóa</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {RESOURCES.map((r) => (
+                <TableRow key={r.value} className="text-sm">
+                  <TableCell className="py-1.5">{r.label}</TableCell>
+                  {(["v", "c", "e", "d"] as const).map((act) => (
+                    <TableCell key={act} className="py-1.5 text-center">
+                      <Checkbox
+                        checked={matrix[r.value]?.[act] ?? false}
+                        onCheckedChange={() => toggle(r.value, act)}
+                      />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }

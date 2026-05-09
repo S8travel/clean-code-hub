@@ -24,6 +24,16 @@ export interface RolePermission {
   can_delete: boolean;
 }
 
+export interface UserPermission {
+  id: string;
+  user_id: string;
+  resource: Resource;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
 export function useRolePermissions() {
   return useQuery({
     queryKey: ["role_permissions"],
@@ -40,14 +50,45 @@ export function useRolePermissions() {
   });
 }
 
+/** Quyền per-user (chỉ áp dụng cho role=specialist) */
+export function useUserPermissions(userId?: string | null) {
+  return useQuery({
+    queryKey: ["user_permissions", userId],
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_permissions")
+        .select("*")
+        .eq("user_id", userId!);
+      if (error) throw error;
+      return (data || []) as UserPermission[];
+    },
+  });
+}
+
 /** Trả về true/false cho action của current user trên resource */
 export function usePermission(resource: Resource, action: PermAction): boolean {
   const { user } = useAuth();
   const { data: perms = [] } = useRolePermissions();
+  const { data: userPerms = [] } = useUserPermissions(
+    user?.role === "specialist" ? user.user_id : null,
+  );
 
   if (!user) return false;
   if (user.role === "admin") return true;
   if (resource === "danh_muc") return true; // tạm thời mở cho tất cả
+
+  // Specialist: chỉ check user_permissions (per-user override), KHÔNG dùng role matrix
+  if (user.role === "specialist") {
+    const row = userPerms.find((p) => p.resource === resource);
+    if (!row) return false;
+    if (action === "view") return row.can_view;
+    if (action === "create") return row.can_create;
+    if (action === "edit") return row.can_edit;
+    if (action === "delete") return row.can_delete;
+    return false;
+  }
 
   const row = perms.find((p) => p.role === user.role && p.resource === resource);
   if (!row) return false;
@@ -62,9 +103,10 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
 const ROLE_LEVELS: Record<string, number> = {
   nhan_vien: 1,
   nhan_vien_cao_cap: 2,
-  truong_phong: 3,
-  giam_doc: 4,
-  admin: 5,
+  specialist: 3,       // mới — giữa nv_cao_cap và truong_phong
+  truong_phong: 4,
+  giam_doc: 5,
+  admin: 6,
 };
 
 /** Trả về true nếu role của user >= minRole trong hierarchy */
@@ -93,5 +135,29 @@ export function useUpsertRolePermissions() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["role_permissions"] }),
+  });
+}
+
+/** Mutation lưu quyền per-user cho 1 specialist (full upsert / delete missing) */
+export function useUpsertUserPermissions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, rows }: { userId: string; rows: Omit<UserPermission, "id" | "user_id">[] }) => {
+      // Xóa hết rồi insert lại — đơn giản, đảm bảo không còn record cũ thừa
+      const { error: delErr } = await externalSupabase
+        .from("user_permissions")
+        .delete()
+        .eq("user_id", userId);
+      if (delErr) throw delErr;
+      const inserts = rows
+        .filter((r) => r.can_view || r.can_create || r.can_edit || r.can_delete)
+        .map((r) => ({ user_id: userId, ...r }));
+      if (inserts.length === 0) return;
+      const { error } = await externalSupabase.from("user_permissions").insert(inserts);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["user_permissions", vars.userId] });
+    },
   });
 }
