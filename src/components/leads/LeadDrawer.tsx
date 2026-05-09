@@ -255,14 +255,14 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                   </Select>
 
                   <Select
-                    value={lead.assigned_to ?? ""}
-                    onValueChange={(v) => updateLead.mutate({ id: lead.id, assigned_to: v || null })}
+                    value={lead.assigned_to ?? "_none"}
+                    onValueChange={(v) => updateLead.mutate({ id: lead.id, assigned_to: v === "_none" ? null : v })}
                   >
                     <SelectTrigger className="h-7 w-auto text-xs max-w-[140px]">
                       <SelectValue placeholder="Chưa phân công" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="" className="text-xs">— Chưa phân công —</SelectItem>
+                      <SelectItem value="_none" className="text-xs">— Chưa phân công —</SelectItem>
                       {userOptions.map((u) => (
                         <SelectItem key={u.value} value={u.value} className="text-xs">{u.label}</SelectItem>
                       ))}

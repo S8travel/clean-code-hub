@@ -93,12 +93,12 @@ export default function LeadsPage() {
         </div>
 
         {/* Filter: Trạng thái */}
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <Select value={filterStatus || "_all"} onValueChange={(v) => setFilterStatus(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[140px]">
             <SelectValue placeholder="Trạng thái" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">Tất cả trạng thái</SelectItem>
+            <SelectItem value="_all" className="text-xs">Tất cả trạng thái</SelectItem>
             {LEAD_TRANG_THAI_OPTS.map((o) => (
               <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
             ))}
@@ -106,12 +106,12 @@ export default function LeadsPage() {
         </Select>
 
         {/* Filter: Nguồn */}
-        <Select value={filterNguon} onValueChange={setFilterNguon}>
+        <Select value={filterNguon || "_all"} onValueChange={(v) => setFilterNguon(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[120px]">
             <SelectValue placeholder="Nguồn" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">Tất cả nguồn</SelectItem>
+            <SelectItem value="_all" className="text-xs">Tất cả nguồn</SelectItem>
             {LEAD_NGUON_OPTS.map((o) => (
               <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
             ))}
@@ -119,24 +119,24 @@ export default function LeadsPage() {
         </Select>
 
         {/* Filter: Loại tour */}
-        <Select value={filterLoaiTour} onValueChange={setFilterLoaiTour}>
+        <Select value={filterLoaiTour || "_all"} onValueChange={(v) => setFilterLoaiTour(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[120px]">
             <SelectValue placeholder="Loại tour" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">Tất cả</SelectItem>
+            <SelectItem value="_all" className="text-xs">Tất cả</SelectItem>
             <SelectItem value="outbound" className="text-xs">Outbound</SelectItem>
             <SelectItem value="noi_dia" className="text-xs">Nội địa</SelectItem>
           </SelectContent>
         </Select>
 
         {/* Filter: Sales */}
-        <Select value={filterSales} onValueChange={setFilterSales}>
+        <Select value={filterSales || "_all"} onValueChange={(v) => setFilterSales(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[140px]">
             <SelectValue placeholder="Sales phụ trách" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">Tất cả sales</SelectItem>
+            <SelectItem value="_all" className="text-xs">Tất cả sales</SelectItem>
             {userOptions.map((u) => (
               <SelectItem key={u.value} value={u.value} className="text-xs">{u.label}</SelectItem>
             ))}
