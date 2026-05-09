@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { Plus, Search, Trash2, Save, Users, ShieldAlert, Shield, History, Building2, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -68,17 +68,47 @@ const VAI_TRO_LABEL: Record<VaiTro, string> = {
   nhan_vien: "Nhân viên",
 };
 
-const RESOURCES: { value: Resource; label: string }[] = [
-  { value: "doan", label: "Đoàn" },
-  { value: "chi_phi", label: "Chi phí" },
-  { value: "dntt", label: "ĐNTT" },
-  { value: "danh_muc", label: "Danh mục" },
-  { value: "seri", label: "Seri" },
-  { value: "thanh_toan_dk", label: "TT định kỳ" },
-  { value: "cong_no", label: "Công nợ" },
-  { value: "hoa_don_unc", label: "HĐ & UNC" },
-  { value: "nguoi_dung", label: "Người dùng" },
+interface ResourceItem { value: Resource; label: string }
+interface ResourceSection { section: string; items: ResourceItem[] }
+
+const RESOURCE_SECTIONS: ResourceSection[] = [
+  {
+    section: "Quản lý đoàn",
+    items: [
+      { value: "dashboard", label: "Tổng quan" },
+      { value: "my_job", label: "Công việc của tôi" },
+      { value: "doan", label: "Danh sách đoàn" },
+      { value: "theo_doi", label: "Theo dõi" },
+      { value: "xep_hdv", label: "Xếp HDV" },
+      { value: "lock_phong", label: "Lock Phòng" },
+      { value: "invoice", label: "Invoice" },
+      { value: "bao_gia", label: "Báo Giá" },
+      { value: "chi_phi", label: "Chi phí (tab trong đoàn)" },
+    ],
+  },
+  {
+    section: "Danh mục",
+    items: [
+      { value: "danh_muc", label: "Danh mục (NH/KS/Xe/CĐ/HDV/Visa/NCC)" },
+      { value: "seri", label: "Mẫu seri" },
+    ],
+  },
+  {
+    section: "Hệ thống",
+    items: [
+      { value: "dntt", label: "Đề nghị thanh toán" },
+      { value: "thanh_toan_dk", label: "Thanh toán định kỳ" },
+      { value: "hoa_don_unc", label: "Thanh toán, HĐ & UNC" },
+      { value: "cong_no", label: "Công nợ" },
+      { value: "nguoi_dung", label: "Người dùng" },
+      { value: "agent", label: "Agent" },
+      { value: "phan_cong_team", label: "Phân công team" },
+    ],
+  },
 ];
+
+// Backward-compat: flat list
+const RESOURCES: ResourceItem[] = RESOURCE_SECTIONS.flatMap((s) => s.items);
 
 const ACTIONS: { field: keyof Pick<RolePermission, "can_view" | "can_create" | "can_edit" | "can_delete">; label: string }[] = [
   { field: "can_view", label: "Xem" },
@@ -963,20 +993,25 @@ function PhanQuyenTab() {
 
       <div className="border rounded-lg overflow-auto">
         <table className="text-xs w-full">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="border-b bg-muted/40">
-              <th className="text-left px-3 py-2 font-medium sticky left-0 bg-muted/40 w-36">Vai trò</th>
-              {RESOURCES.map((r) => (
-                <th key={r.value} colSpan={4} className="px-2 py-2 font-medium text-center border-l">
-                  {r.label}
+              <th className="text-left px-3 py-2 font-medium sticky left-0 bg-muted/40 w-[260px] z-20">Resource</th>
+              {VAI_TRO_OPTS.map((role) => (
+                <th key={role.value} colSpan={4} className="px-2 py-2 font-medium text-center border-l whitespace-nowrap">
+                  {role.label}
+                  {role.value === "admin" && <span className="ml-1 text-[10px] text-muted-foreground">(tất cả)</span>}
+                  {role.value === "specialist" && <span className="ml-1 text-[10px] text-muted-foreground">(per-user)</span>}
                 </th>
               ))}
             </tr>
             <tr className="border-b bg-muted/20">
-              <th className="sticky left-0 bg-muted/20" />
-              {RESOURCES.map((r) =>
+              <th className="sticky left-0 bg-muted/20 z-20" />
+              {VAI_TRO_OPTS.map((role) =>
                 ACTIONS.map((a) => (
-                  <th key={r.value + a.field} className="px-1 py-1.5 font-normal text-muted-foreground text-center w-10">
+                  <th key={role.value + a.field} className={cn(
+                    "px-1 py-1.5 font-normal text-muted-foreground text-center w-9",
+                    a.field === "can_view" && "border-l",
+                  )}>
                     {a.label}
                   </th>
                 ))
@@ -984,32 +1019,53 @@ function PhanQuyenTab() {
             </tr>
           </thead>
           <tbody>
-            {VAI_TRO_OPTS.map((role, ri) => (
-              <tr key={role.value} className={cn("border-b last:border-0", ri % 2 === 0 ? "" : "bg-muted/10")}>
-                <td className={cn("px-3 py-2 font-medium sticky left-0", ri % 2 === 0 ? "bg-background" : "bg-muted/10")}>
-                  {role.label}
-                  {role.value === "admin" && (
-                    <span className="ml-1.5 text-[10px] text-muted-foreground">(tất cả)</span>
-                  )}
-                </td>
-                {RESOURCES.map((res) =>
-                  ACTIONS.map((act) => {
-                    const checked = role.value === "admin"
-                      ? true
-                      : !!matrix[role.value]?.[res.value]?.[act.field];
-                    return (
-                      <td key={res.value + act.field} className="text-center px-1 py-2">
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggle(role.value, res.value, act.field)}
-                          disabled={role.value === "admin"}
-                          className="h-3.5 w-3.5"
-                        />
-                      </td>
-                    );
-                  })
-                )}
-              </tr>
+            {RESOURCE_SECTIONS.map((section) => (
+              <Fragment key={section.section}>
+                <tr className="border-b bg-blue-50">
+                  <td colSpan={1 + VAI_TRO_OPTS.length * ACTIONS.length}
+                    className="px-3 py-1.5 font-semibold text-[11px] uppercase text-blue-900 sticky left-0 bg-blue-50 z-10">
+                    {section.section}
+                  </td>
+                </tr>
+                {section.items.map((res, ri) => (
+                  <tr key={res.value} className={cn("border-b last:border-0 hover:bg-muted/30", ri % 2 === 0 ? "" : "bg-muted/10")}>
+                    <td className={cn(
+                      "px-3 py-1.5 font-medium sticky left-0",
+                      ri % 2 === 0 ? "bg-background" : "bg-muted/10",
+                    )}>
+                      {res.label}
+                    </td>
+                    {VAI_TRO_OPTS.map((role) =>
+                      ACTIONS.map((act) => {
+                        const isAdmin = role.value === "admin";
+                        const isSpecialist = role.value === "specialist";
+                        const checked = isAdmin
+                          ? true
+                          : isSpecialist
+                            ? false
+                            : !!matrix[role.value]?.[res.value]?.[act.field];
+                        return (
+                          <td key={role.value + act.field} className={cn(
+                            "text-center px-1 py-1.5",
+                            act.field === "can_view" && "border-l",
+                          )}>
+                            {isSpecialist ? (
+                              <span className="text-muted-foreground text-[10px]">—</span>
+                            ) : (
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => toggle(role.value, res.value, act.field)}
+                                disabled={isAdmin}
+                                className="h-3.5 w-3.5"
+                              />
+                            )}
+                          </td>
+                        );
+                      })
+                    )}
+                  </tr>
+                ))}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -1230,18 +1286,27 @@ function SpecialistPermissionsSection({ userId }: { userId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {RESOURCES.map((r) => (
-                <TableRow key={r.value} className="text-sm">
-                  <TableCell className="py-1.5">{r.label}</TableCell>
-                  {(["v", "c", "e", "d"] as const).map((act) => (
-                    <TableCell key={act} className="py-1.5 text-center">
-                      <Checkbox
-                        checked={matrix[r.value]?.[act] ?? false}
-                        onCheckedChange={() => toggle(r.value, act)}
-                      />
+              {RESOURCE_SECTIONS.map((section) => (
+                <Fragment key={section.section}>
+                  <TableRow className="bg-blue-50 hover:bg-blue-50">
+                    <TableCell colSpan={5} className="py-1.5 font-semibold text-[11px] uppercase text-blue-900">
+                      {section.section}
                     </TableCell>
+                  </TableRow>
+                  {section.items.map((r) => (
+                    <TableRow key={r.value} className="text-sm">
+                      <TableCell className="py-1.5">{r.label}</TableCell>
+                      {(["v", "c", "e", "d"] as const).map((act) => (
+                        <TableCell key={act} className="py-1.5 text-center">
+                          <Checkbox
+                            checked={matrix[r.value]?.[act] ?? false}
+                            onCheckedChange={() => toggle(r.value, act)}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
                   ))}
-                </TableRow>
+                </Fragment>
               ))}
             </TableBody>
           </Table>

@@ -4,15 +4,27 @@ import { useAuth } from "@/hooks/use-auth";
 
 export type PermAction = "view" | "create" | "edit" | "delete";
 export type Resource =
+  // Quản lý đoàn
+  | "dashboard"
+  | "my_job"
   | "doan"
+  | "theo_doi"
+  | "xep_hdv"
+  | "lock_phong"
+  | "invoice"
+  | "bao_gia"
   | "chi_phi"
-  | "dntt"
+  // Danh mục
   | "danh_muc"
   | "seri"
+  // Hệ thống
+  | "dntt"
   | "thanh_toan_dk"
-  | "cong_no"
   | "hoa_don_unc"
-  | "nguoi_dung";
+  | "cong_no"
+  | "nguoi_dung"
+  | "agent"
+  | "phan_cong_team";
 
 export interface RolePermission {
   id: number;

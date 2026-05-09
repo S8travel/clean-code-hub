@@ -155,14 +155,14 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "QUẢN LÝ ĐOÀN",
     items: [
-      { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard, minRole: "truong_phong" },
-      { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness },
+      { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard, resource: "dashboard" },
+      { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness, resource: "my_job" },
       { title: "Danh sách đoàn", titleZh: "團表", url: "/doan", icon: List, resource: "doan" },
-      { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, minRole: "truong_phong" },
-      { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, minRole: "giam_doc" },
-      { title: "Lock Phòng", titleZh: "鎖房", url: "/lock-phong", icon: CalendarRange },
-      { title: "Invoice", url: "/invoice", icon: FileText, minRole: "giam_doc" },
-      { title: "Báo Giá", titleZh: "報價", url: "/bao-gia", icon: Calculator },
+      { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, resource: "theo_doi" },
+      { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, resource: "xep_hdv" },
+      { title: "Lock Phòng", titleZh: "鎖房", url: "/lock-phong", icon: CalendarRange, resource: "lock_phong" },
+      { title: "Invoice", url: "/invoice", icon: FileText, resource: "invoice" },
+      { title: "Báo Giá", titleZh: "報價", url: "/bao-gia", icon: Calculator, resource: "bao_gia" },
     ],
   },
   {
@@ -181,13 +181,13 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "HỆ THỐNG",
     items: [
-      { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, boPhanOnly: "ke_toan" },
-      { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock },
+      { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, resource: "dntt", boPhanOnly: "ke_toan" },
+      { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock, resource: "thanh_toan_dk" },
       { title: "Thanh Toán, Hóa Đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc" },
-      { title: "Công nợ", url: "/cong-no", icon: Wallet },
+      { title: "Công nợ", url: "/cong-no", icon: Wallet, resource: "cong_no" },
       { title: "Người dùng", url: "/quan-ly/nguoi-dung", icon: Users, resource: "nguoi_dung" },
-      { title: "Agent", url: "/quan-ly/agent", icon: Bot },
-      { title: "Phân công team", url: "/settings/teams", icon: Users2, minRole: "truong_phong" },
+      { title: "Agent", url: "/quan-ly/agent", icon: Bot, resource: "agent" },
+      { title: "Phân công team", url: "/settings/teams", icon: Users2, resource: "phan_cong_team" },
     ],
   },
 ];
