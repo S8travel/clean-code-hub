@@ -30,12 +30,17 @@ function fmtDate(d: string) {
 }
 
 
+interface MergedEntry {
+  lockPhong: LockPhongDisplay;
+  ksRows: LockPhongKSDisplay[]; // 1 hoặc nhiều stay của cùng đoàn ở cùng KS
+}
+
 interface KSGroup {
   khach_san_id: number;
   khach_san_ten: string;
   khach_san_email: string | null;
   khach_san_dia_diem: string | null;
-  entries: { lockPhong: LockPhongDisplay; ksRow: LockPhongKSDisplay }[];
+  entries: MergedEntry[];
 }
 
 interface Props {
@@ -50,52 +55,76 @@ export default function LockPhongTheoKSView({ data }: Props) {
   } | null>(null);
   const [batchTarget, setBatchTarget] = useState<KSGroupForBatch | null>(null);
   const [thanhDoanTarget, setThanhDoanTarget] = useState<{
-    ksRowId: number;
+    ksRowIds: number[]; // all ksRows của đoàn ở KS này — apply code cho tất cả
     tenDoan: string;
     currentCode: string;
   } | null>(null);
   const updateOutcome = useUpdateLockPhongKSOutcome();
 
-  const handleStatusChange = (ksRow: LockPhongKSDisplay, lpTenDoan: string, value: string) => {
+  const handleStatusChange = (ksRows: LockPhongKSDisplay[], lpTenDoan: string, value: string) => {
     if (value === "cho_xu_ly") {
-      updateOutcome.mutate({ id: ksRow.id, outcome_status: null });
+      for (const r of ksRows) updateOutcome.mutate({ id: r.id, outcome_status: null });
     } else if (value === "da_huy") {
-      updateOutcome.mutate({ id: ksRow.id, outcome_status: "da_huy" });
+      for (const r of ksRows) updateOutcome.mutate({ id: r.id, outcome_status: "da_huy" });
     } else if (value === "thanh_doan") {
-      // Mở dialog yêu cầu code đoàn chính thức
+      // Mở dialog yêu cầu code đoàn chính thức (apply cho tất cả ksRows của đoàn ở KS này)
       setThanhDoanTarget({
-        ksRowId: ksRow.id,
+        ksRowIds: ksRows.map((r) => r.id),
         tenDoan: lpTenDoan,
-        currentCode: ksRow.code_doan_thanh || "",
+        currentCode: ksRows[0].code_doan_thanh || "",
       });
     }
   };
 
   const groups = useMemo<KSGroup[]>(() => {
-    const map = new Map<number, KSGroup>();
+    // Step 1: gom ksRows theo (khach_san_id, lockPhong.id) — merge stays cùng đoàn ở cùng KS
+    type MergeKey = string; // `${khach_san_id}-${lockPhong.id}`
+    const ksMap = new Map<number, {
+      khach_san_id: number;
+      khach_san_ten: string;
+      khach_san_email: string | null;
+      khach_san_dia_diem: string | null;
+      mergedMap: Map<MergeKey, MergedEntry>;
+    }>();
     for (const lp of data) {
       for (const ks of lp.hotels) {
-        if (!map.has(ks.khach_san_id)) {
-          map.set(ks.khach_san_id, {
+        if (!ksMap.has(ks.khach_san_id)) {
+          ksMap.set(ks.khach_san_id, {
             khach_san_id: ks.khach_san_id,
             khach_san_ten: ks.khach_san_ten,
             khach_san_email: ks.khach_san_email,
             khach_san_dia_diem: ks.khach_san_dia_diem,
-            entries: [],
+            mergedMap: new Map(),
           });
         }
-        map.get(ks.khach_san_id)!.entries.push({ lockPhong: lp, ksRow: ks });
+        const key: MergeKey = `${ks.khach_san_id}-${lp.id}`;
+        const grp = ksMap.get(ks.khach_san_id)!;
+        if (!grp.mergedMap.has(key)) {
+          grp.mergedMap.set(key, { lockPhong: lp, ksRows: [] });
+        }
+        grp.mergedMap.get(key)!.ksRows.push(ks);
       }
     }
-    // Sort by hotel name, then sort each group's entries by check_in
-    return Array.from(map.values())
+    // Step 2: sort + finalize
+    return Array.from(ksMap.values())
       .sort((a, b) => a.khach_san_ten.localeCompare(b.khach_san_ten))
-      .map((g) => ({
-        ...g,
-        entries: [...g.entries].sort((a, b) =>
-          a.ksRow.check_in.localeCompare(b.ksRow.check_in)
-        ),
-      }));
+      .map((g) => {
+        const entries: MergedEntry[] = Array.from(g.mergedMap.values())
+          .map((m) => ({
+            lockPhong: m.lockPhong,
+            ksRows: [...m.ksRows].sort((a, b) => a.check_in.localeCompare(b.check_in)),
+          }))
+          .sort((a, b) =>
+            a.ksRows[0].check_in.localeCompare(b.ksRows[0].check_in),
+          );
+        return {
+          khach_san_id: g.khach_san_id,
+          khach_san_ten: g.khach_san_ten,
+          khach_san_email: g.khach_san_email,
+          khach_san_dia_diem: g.khach_san_dia_diem,
+          entries,
+        };
+      });
   }, [data]);
 
   const toggleExpand = (id: number) => {
@@ -168,11 +197,15 @@ export default function LockPhongTheoKSView({ data }: Props) {
                   title="Gửi 1 email gộp cho tất cả đoàn tại khách sạn này"
                   onClick={(e) => {
                     e.stopPropagation();
+                    // Flatten merged entries → 1 entry per ksRow để batch modal vẫn nhận đúng shape
+                    const flatEntries = group.entries.flatMap(({ lockPhong, ksRows }) =>
+                      ksRows.map((ksRow) => ({ lockPhong, ksRow }))
+                    );
                     setBatchTarget({
                       khach_san_id: group.khach_san_id,
                       khach_san_ten: group.khach_san_ten,
                       khach_san_email: group.khach_san_email,
-                      entries: group.entries,
+                      entries: flatEntries,
                     });
                   }}
                 >
@@ -200,74 +233,99 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {group.entries.map(({ lockPhong, ksRow }) => {
-                      const outcomeValue = ksRow.outcome_status ?? "cho_xu_ly";
-                      return (
-                        <tr
-                          key={`${lockPhong.id}-${ksRow.id}`}
-                          className={cn(
-                            "border-b border-border last:border-0 hover:bg-muted/10 transition-colors",
-                            ksRow.outcome_status === "da_huy" && "opacity-50"
-                          )}
-                        >
-                          <td className="px-4 py-2.5 font-medium">{lockPhong.ten_doan}</td>
-                          <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                            {lockPhong.ten_seri}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_in)}</td>
-                          <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_out)}</td>
-                          <td className="px-4 py-2.5 text-xs text-center font-medium">{ksRow.so_dem || 0}</td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                            {ksRow.so_phong || "—"}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono">
-                            {ksRow.code_ncc || "—"}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <Select
-                                value={outcomeValue}
-                                onValueChange={(v) => handleStatusChange(ksRow, lockPhong.ten_doan, v)}
+                    {group.entries.map(({ lockPhong, ksRows }) =>
+                      ksRows.map((ksRow, callIdx) => {
+                        const outcomeValue = ksRow.outcome_status ?? "cho_xu_ly";
+                        const isFirstCall = callIdx === 0;
+                        const callCount = ksRows.length;
+                        return (
+                          <tr
+                            key={`${lockPhong.id}-${ksRow.id}`}
+                            className={cn(
+                              "hover:bg-muted/10 transition-colors",
+                              // Đường border ngăn giữa các đoàn (chỉ ở row cuối cùng của entry)
+                              callIdx === callCount - 1 && "border-b border-border last:border-0",
+                              // Sub-rows của cùng 1 đoàn — bỏ border giữa các call
+                              !isFirstCall && "bg-muted/5",
+                              ksRow.outcome_status === "da_huy" && "opacity-50",
+                            )}
+                          >
+                            {isFirstCall && (
+                              <>
+                                <td
+                                  rowSpan={callCount}
+                                  className="px-4 py-2.5 font-medium align-top border-r border-border/40"
+                                >
+                                  {lockPhong.ten_doan}
+                                  {callCount > 1 && (
+                                    <Badge className="ml-1.5 text-[9px] px-1 py-0 bg-blue-50 text-blue-600 border-blue-200">
+                                      {callCount} call
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td
+                                  rowSpan={callCount}
+                                  className="px-4 py-2.5 text-muted-foreground text-xs align-top border-r border-border/40"
+                                >
+                                  {lockPhong.ten_seri}
+                                </td>
+                              </>
+                            )}
+                            <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_in)}</td>
+                            <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_out)}</td>
+                            <td className="px-4 py-2.5 text-xs text-center font-medium">{ksRow.so_dem || 0}</td>
+                            <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                              {ksRow.so_phong || "—"}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono">
+                              {ksRow.code_ncc || "—"}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <Select
+                                  value={outcomeValue}
+                                  onValueChange={(v) => handleStatusChange([ksRow], lockPhong.ten_doan, v)}
+                                >
+                                  <SelectTrigger className="h-7 w-[140px] text-xs">
+                                    <span>
+                                      {outcomeValue === "cho_xu_ly"
+                                        ? "Chờ xử lý"
+                                        : outcomeValue === "da_huy"
+                                        ? "Đã hủy"
+                                        : "Thành đoàn"}
+                                    </span>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="cho_xu_ly">Chờ xử lý</SelectItem>
+                                    <SelectItem value="da_huy">Đã hủy</SelectItem>
+                                    <SelectItem value="thanh_doan">Thành đoàn</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {ksRow.outcome_status === "thanh_doan" && (
+                                  <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">
+                                    {ksRow.code_doan_thanh || "(chưa code)"}
+                                  </Badge>
+                                )}
+                                {ksRow.outcome_status === "da_huy" && (
+                                  <XIcon className="h-3 w-3 text-red-500" />
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 gap-1 text-xs text-muted-foreground hover:text-foreground px-2"
+                                onClick={() => setEmailTarget({ lockPhong, ksRow })}
                               >
-                                <SelectTrigger className="h-7 w-[140px] text-xs">
-                                  <span>
-                                    {outcomeValue === "cho_xu_ly"
-                                      ? "Chờ xử lý"
-                                      : outcomeValue === "da_huy"
-                                      ? "Đã hủy"
-                                      : "Thành đoàn"}
-                                  </span>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="cho_xu_ly">Chờ xử lý</SelectItem>
-                                  <SelectItem value="da_huy">Đã hủy</SelectItem>
-                                  <SelectItem value="thanh_doan">Thành đoàn</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {ksRow.outcome_status === "thanh_doan" && (
-                                <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">
-                                  {ksRow.code_doan_thanh || "(chưa code)"}
-                                </Badge>
-                              )}
-                              {ksRow.outcome_status === "da_huy" && (
-                                <XIcon className="h-3 w-3 text-red-500" />
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 gap-1 text-xs text-muted-foreground hover:text-foreground px-2"
-                              onClick={() => setEmailTarget({ lockPhong, ksRow })}
-                            >
-                              <Mail className="h-3 w-3" />
-                              Email
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                                <Mail className="h-3 w-3" />
+                                Email
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -303,16 +361,27 @@ export default function LockPhongTheoKSView({ data }: Props) {
             toast.warning("Cần nhập code đoàn chính thức");
             return;
           }
-          updateOutcome.mutate(
-            { id: thanhDoanTarget.ksRowId, outcome_status: "thanh_doan", code_doan_thanh: trimmed },
-            {
-              onSuccess: () => {
-                toast.success(`Đã đánh dấu thành đoàn (${trimmed})`);
-                setThanhDoanTarget(null);
+          // Apply cho tất cả ksRows (đoàn có thể stay nhiều lần ở cùng KS)
+          let pending = thanhDoanTarget.ksRowIds.length;
+          let hadError = false;
+          for (const id of thanhDoanTarget.ksRowIds) {
+            updateOutcome.mutate(
+              { id, outcome_status: "thanh_doan", code_doan_thanh: trimmed },
+              {
+                onSuccess: () => {
+                  pending -= 1;
+                  if (pending === 0 && !hadError) {
+                    toast.success(`Đã đánh dấu thành đoàn (${trimmed})`);
+                    setThanhDoanTarget(null);
+                  }
+                },
+                onError: (e: any) => {
+                  hadError = true;
+                  toast.error("Lỗi: " + (e?.message || ""));
+                },
               },
-              onError: (e: any) => toast.error("Lỗi: " + (e?.message || "")),
-            },
-          );
+            );
+          }
         }}
       />
     </div>
@@ -322,13 +391,14 @@ export default function LockPhongTheoKSView({ data }: Props) {
 function ThanhDoanDialog({
   target, onClose, onSubmit,
 }: {
-  target: { ksRowId: number; tenDoan: string; currentCode: string } | null;
+  target: { ksRowIds: number[]; tenDoan: string; currentCode: string } | null;
   onClose: () => void;
   onSubmit: (code: string) => void;
 }) {
   const [code, setCode] = useState("");
+  const targetKey = target?.ksRowIds.join(",") ?? null;
   // Re-init khi mở target khác
-  useMemo(() => { setCode(target?.currentCode ?? ""); }, [target?.ksRowId]);
+  useMemo(() => { setCode(target?.currentCode ?? ""); }, [targetKey]);
 
   return (
     <Dialog open={!!target} onOpenChange={(v) => { if (!v) onClose(); }}>
