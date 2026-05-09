@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
+import { useDoanListFilters } from "@/hooks/use-doan-list-filters";
 import { Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -70,17 +71,29 @@ export default function Index() {
   const [deletingDoan, setDeletingDoan] = useState<any | null>(null);
   const [cancelingDoan, setCancelingDoan] = useState<any | null>(null);
 
-  // Filters
-  const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [agentFilter, setAgentFilter] = useState("all");
-  const [diaDiemFilter, setDiaDiemFilter] = useState("all");
-  const [trangThaiFilter, setTrangThaiFilter] = useState("all");
-  const [loaiTourFilter, setLoaiTourFilter] = useState("all");
+  // Filters + sort + pagination — persist qua URL params + sessionStorage
+  const filterState = useDoanListFilters();
+  const search = filterState.get("search");
+  const dateFrom = filterState.get("dateFrom");
+  const dateTo = filterState.get("dateTo");
+  const agentFilter = filterState.get("agentFilter");
+  const diaDiemFilter = filterState.get("diaDiemFilter");
+  const trangThaiFilter = filterState.get("trangThaiFilter");
+  const loaiTourFilter = filterState.get("loaiTourFilter");
+  const page = parseInt(filterState.get("page"), 10) || 1;
+  const sortKey = filterState.get("sortKey");
+  const sortDir = filterState.get("sortDir") as "asc" | "desc";
 
-  // Pagination
-  const [page, setPage] = useState(1);
+  // Setter helpers — đổi filter sẽ auto reset page về 1
+  const setSearch = (v: string) => filterState.set({ search: v, page: "1" });
+  const setDateFrom = (v: string) => filterState.set({ dateFrom: v, page: "1" });
+  const setDateTo = (v: string) => filterState.set({ dateTo: v, page: "1" });
+  const setAgentFilter = (v: string) => filterState.set({ agentFilter: v, page: "1" });
+  const setDiaDiemFilter = (v: string) => filterState.set({ diaDiemFilter: v, page: "1" });
+  const setTrangThaiFilter = (v: string) => filterState.set({ trangThaiFilter: v, page: "1" });
+  const setLoaiTourFilter = (v: string) => filterState.set({ loaiTourFilter: v, page: "1" });
+  const setPage = (v: number) => filterState.set({ page: String(v) });
+  const setSort = (k: string, d: "asc" | "desc") => filterState.set({ sortKey: k, sortDir: d });
 
   // Build user_roles map: user_id → ho_ten
   const userRolesMap = useMemo(() => {
@@ -92,9 +105,7 @@ export default function Index() {
   const hasFilters = search || dateFrom || dateTo || agentFilter !== "all" || diaDiemFilter !== "all" || trangThaiFilter !== "all" || loaiTourFilter !== "all";
 
   const clearFilters = () => {
-    setSearch(""); setDateFrom(""); setDateTo("");
-    setAgentFilter("all"); setDiaDiemFilter("all"); setTrangThaiFilter("all"); setLoaiTourFilter("all");
-    setPage(1);
+    filterState.clear();
   };
 
   const filtered = useMemo(() => {
@@ -130,7 +141,7 @@ export default function Index() {
     });
   }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, userRolesMap]);
 
-  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter]);
+  // Page reset đã tích hợp trong setSearch/setDateFrom/... helpers ở trên
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -379,6 +390,9 @@ export default function Index() {
             groups={paged}
             isLoading={isLoading}
             userRolesMap={userRolesMap}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSortChange={setSort}
             onEdit={(doan) => { setEditingDoan(doan); setDrawerOpen(true); }}
             onClone={handleClone}
             onCancel={handleOpenCancel}
@@ -392,7 +406,7 @@ export default function Index() {
             <span>Hiển thị {showFrom}–{showTo} / {filtered.length} đoàn</span>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="sm" className="h-8 text-xs" disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}>
+                onClick={() => setPage(page - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Trước
               </Button>
               {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -409,7 +423,7 @@ export default function Index() {
                   );
                 })}
               <Button variant="outline" size="sm" className="h-8 text-xs" disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}>
+                onClick={() => setPage(page + 1)}>
                 Sau <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
               </Button>
             </div>

@@ -78,25 +78,36 @@ interface Props {
   groups: any[] | undefined;
   isLoading: boolean;
   userRolesMap: Map<string, string>; // user_id → ho_ten
+  sortKey?: string;
+  sortDir?: "asc" | "desc";
+  onSortChange?: (key: string, dir: "asc" | "desc") => void;
   onEdit?: (doan: any) => void;
   onClone?: (doan: any) => void;
   onCancel?: (doan: any) => void;
   onDelete?: (doan: any) => void;
 }
 
-export function DoanTable({ groups, isLoading, userRolesMap, onEdit, onClone, onCancel, onDelete }: Props) {
+export function DoanTable({
+  groups, isLoading, userRolesMap,
+  sortKey: sortKeyProp, sortDir: sortDirProp, onSortChange,
+  onEdit, onClone, onCancel, onDelete,
+}: Props) {
   useTranslate();
   const navigate = useNavigate();
-  const [sortKey, setSortKey] = useState<SortKey>("ngay_di");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  // Controlled (via props) hoặc uncontrolled fallback
+  const [sortKeyState, setSortKeyState] = useState<SortKey>("ngay_di");
+  const [sortDirState, setSortDirState] = useState<SortDir>("asc");
+  const sortKey = (sortKeyProp as SortKey | undefined) ?? sortKeyState;
+  const sortDir = sortDirProp ?? sortDirState;
   // FEATURE_DOAN_PERM_DISABLED: const [permDoan, setPermDoan] = useState<{ id: number; code: string } | null>(null);
 
   const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    const nextDir: SortDir = sortKey === key ? (sortDir === "asc" ? "desc" : "asc") : "asc";
+    if (onSortChange) {
+      onSortChange(key, nextDir);
     } else {
-      setSortKey(key);
-      setSortDir("asc");
+      setSortKeyState(key);
+      setSortDirState(nextDir);
     }
   };
 
