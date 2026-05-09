@@ -213,7 +213,7 @@ export default function TheodoiPage() {
           />
           <Select value={trangThai} onValueChange={setTrangThai}>
             <SelectTrigger className="h-8 text-xs w-36">
-              <SelectValue />
+              <span>{trangThai === "dang_chay" ? "Đang chạy" : trangThai === "huy" ? "Đã hủy" : "Tất cả"}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="dang_chay">Đang chạy</SelectItem>

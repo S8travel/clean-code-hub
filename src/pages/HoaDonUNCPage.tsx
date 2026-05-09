@@ -111,7 +111,7 @@ function DocCell({
         <Select value={status} onValueChange={handleStatusChange} disabled={isPending}>
           <SelectTrigger className={cn("h-6 text-xs px-2 py-0 w-auto gap-1 border-0 shadow-none", cfg.cls)}>
             <Icon className="h-3 w-3 shrink-0" />
-            <SelectValue />
+            <span>{cfg.text}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="chua_co">Chưa có</SelectItem>
@@ -339,7 +339,9 @@ export default function HoaDonUNCPage() {
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Loại</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[130px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-[130px]">
+              <span>{!loai ? "Tất cả" : loai === "khach_san" ? "Khách sạn" : loai === "nha_hang" ? "Nhà hàng" : loai === "dich_vu" ? "Dịch vụ" : loai === "xe" ? "Xe" : loai === "visa" ? "Visa" : "Bảo hiểm"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="khach_san">Khách sạn</SelectItem>
@@ -355,7 +357,9 @@ export default function HoaDonUNCPage() {
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Trạng thái hóa đơn</label>
           <Select value={trangThaiHD} onValueChange={v => setTrangThaiHD(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-[150px]">
+              <span>{!trangThaiHD ? "Tất cả" : trangThaiHD === "chua_co" ? "Chưa có" : trangThaiHD === "da_co" ? "Đã có" : "Không cần"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="chua_co">Chưa có</SelectItem>
@@ -368,7 +372,9 @@ export default function HoaDonUNCPage() {
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Trạng thái UNC</label>
           <Select value={trangThaiUNC} onValueChange={v => setTrangThaiUNC(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-[150px]">
+              <span>{!trangThaiUNC ? "Tất cả" : trangThaiUNC === "chua_co" ? "Chưa có" : trangThaiUNC === "da_co" ? "Đã có" : "Không cần"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="chua_co">Chưa có</SelectItem>
@@ -381,7 +387,9 @@ export default function HoaDonUNCPage() {
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Trạng thái TT</label>
           <Select value={trangThaiTT} onValueChange={v => setTrangThaiTT(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-[150px]">
+              <span>{!trangThaiTT ? "Tất cả" : trangThaiTT === "chua_tt" ? "Chờ thanh toán" : "Đã thanh toán"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="chua_tt">Chờ thanh toán</SelectItem>

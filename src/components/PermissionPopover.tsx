@@ -96,7 +96,7 @@ export function PermissionPopover({ doanId, doanCode, children }: Props) {
           <div className="flex items-center gap-2">
             <Select value={selectedUser} onValueChange={setSelectedUser}>
               <SelectTrigger className="h-8 text-xs flex-1">
-                <SelectValue placeholder="Chọn người..." />
+                <span>{availableUsers.find((u) => u.user_id === selectedUser)?.ho_ten ?? "Chọn người..."}</span>
               </SelectTrigger>
               <SelectContent>
                 {availableUsers.map((u) => (

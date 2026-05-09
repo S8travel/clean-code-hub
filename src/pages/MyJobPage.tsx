@@ -524,7 +524,7 @@ export default function MyJobPage() {
               />
               <Select value={trangThai} onValueChange={setTrangThai}>
                 <SelectTrigger className="h-8 text-xs w-36">
-                  <SelectValue />
+                  <span>{trangThai === "dang_chay" ? "Đang chạy" : trangThai === "hoan_thanh" ? "Hoàn thành" : trangThai === "huy" ? "Đã hủy" : "Tất cả"}</span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="dang_chay">Đang chạy</SelectItem>

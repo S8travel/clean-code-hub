@@ -159,7 +159,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                   />
                   <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)}>
                     <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
-                      <SelectValue />
+                      <span>{tipLoaiTien}</span>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="NDT">NDT</SelectItem>
@@ -231,7 +231,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                       />
                       <Select value={row.loaiTien} onValueChange={(v) => handleLoaiTienChange(row.id, v as LoaiTien)}>
                         <SelectTrigger className="h-6 text-xs px-1.5 w-[56px]">
-                          <SelectValue />
+                          <span>{row.loaiTien}</span>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="NDT">NDT</SelectItem>

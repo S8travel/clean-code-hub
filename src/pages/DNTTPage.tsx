@@ -322,7 +322,9 @@ export default function DNTTPage() {
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Trạng thái duyệt</label>
           <Select value={trangThaiDuyet} onValueChange={v => setTrangThaiDuyet(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-[140px]">
+              <span>{!trangThaiDuyet ? "Tất cả" : trangThaiDuyet === "cho_duyet" ? "Chờ duyệt" : trangThaiDuyet === "da_duyet" ? "Đã duyệt" : "Từ chối"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="cho_duyet">Chờ duyệt</SelectItem>
@@ -335,7 +337,9 @@ export default function DNTTPage() {
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Loại</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[130px]"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-[130px]">
+              <span>{!loai ? "Tất cả" : loai === "khach_san" ? "Khách sạn" : loai === "nha_hang" ? "Nhà hàng" : "Dịch vụ"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="khach_san">Khách sạn</SelectItem>

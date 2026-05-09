@@ -104,7 +104,12 @@ function SetMenuSelect({
       onValueChange={(v) => onChange(v === "none" ? null : Number(v))}
     >
       <SelectTrigger className="h-6 text-[11px] border-dashed print-hide">
-        <SelectValue placeholder="Chọn set menu" />
+        <span>
+          {(() => {
+            const m = value ? menus.find((x) => x.id === value) : null;
+            return m ? `${m.ten_set}${m.gia ? ` — ${fmt(m.gia)}đ` : ""}` : "Chọn set menu";
+          })()}
+        </span>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="none">-- Không chọn --</SelectItem>

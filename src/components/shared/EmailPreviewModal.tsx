@@ -227,7 +227,7 @@ export default function EmailPreviewModal({
               <span className="text-xs text-muted-foreground shrink-0">Chữ ký:</span>
               <Select value={selectedSigId ?? "none"} onValueChange={handleSigChange}>
                 <SelectTrigger className="h-7 text-xs flex-1 max-w-[220px]">
-                  <SelectValue placeholder="Không có chữ ký" />
+                  <span>{!selectedSigId ? "Không có chữ ký" : sigs.find((s) => s.id === selectedSigId)?.name ?? "Không có chữ ký"}</span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Không có chữ ký</SelectItem>

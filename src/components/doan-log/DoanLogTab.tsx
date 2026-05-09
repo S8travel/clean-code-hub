@@ -170,7 +170,7 @@ export default function DoanLogTab({ doanId }: Props) {
                 <Label className="text-xs">Loại phát sinh</Label>
                 <Select value={loai} onValueChange={(v) => setLoai(v as any)}>
                   <SelectTrigger className="h-8 text-sm mt-1">
-                    <SelectValue />
+                    <span>{loai === "gia" ? "Phát sinh giá" : loai === "su_co" ? "Phát sinh sự cố" : "Ghi chú"}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="gia">Phát sinh giá</SelectItem>

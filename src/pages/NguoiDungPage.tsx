@@ -517,7 +517,7 @@ function NguoiDungTab() {
                   onValueChange={(v) => set("role", v as VaiTro)}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
+                    <span>{VAI_TRO_OPTS.find((o) => o.value === form.role)?.label ?? ""}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {VAI_TRO_OPTS.map((o) => (
@@ -534,7 +534,7 @@ function NguoiDungTab() {
                   onValueChange={(v) => set("bo_phan", v === "none" ? null : v as BoPhan)}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Chọn bộ phận" />
+                    <span>{form.bo_phan == null ? "— Không có —" : BO_PHAN_OPTS.find((o) => o.value === form.bo_phan)?.label ?? "Chọn bộ phận"}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Không có —</SelectItem>
@@ -552,7 +552,7 @@ function NguoiDungTab() {
                   onValueChange={(v) => set("van_phong_id", v === "none" ? null : Number(v))}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Chọn văn phòng" />
+                    <span>{form.van_phong_id == null ? "— Không có —" : (vanPhongList ?? []).find((vp) => vp.id === form.van_phong_id)?.ten ?? "Chọn văn phòng"}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Không có —</SelectItem>
@@ -1120,7 +1120,9 @@ function NhatKyTab() {
         <div>
           <label className="text-xs text-muted-foreground block mb-1">Người dùng</label>
           <Select value={userId || "all"} onValueChange={(v) => setUserId(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-44 h-8 text-sm"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-44 h-8 text-sm">
+              <span>{!userId ? "Tất cả" : userList.find((u) => u.user_id === userId)?.ho_ten ?? userList.find((u) => u.user_id === userId)?.email ?? "Tất cả"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               {userList.map((u) => (
@@ -1134,7 +1136,9 @@ function NhatKyTab() {
         <div>
           <label className="text-xs text-muted-foreground block mb-1">Hành động</label>
           <Select value={action || "all"} onValueChange={(v) => setAction(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-36 h-8 text-sm">
+              <span>{!action ? "Tất cả" : action === "tao" ? "Tạo" : action === "sua" ? "Sửa" : action === "xoa" ? "Xóa" : action === "duyet" ? "Duyệt" : action === "tu_choi" ? "Từ chối" : "Thanh toán"}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="tao">Tạo</SelectItem>

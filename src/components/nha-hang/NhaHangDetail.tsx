@@ -201,7 +201,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
           <Label className="text-xs">Người thanh toán</Label>
           <Select value={form.nguoi_thanh_toan} onValueChange={(v) => set("nguoi_thanh_toan", v)}>
             <SelectTrigger className="h-8 text-sm">
-              <SelectValue />
+              <span>{form.nguoi_thanh_toan === "cong_ty" ? "Công ty" : form.nguoi_thanh_toan === "hdv" ? "Hướng dẫn viên" : form.nguoi_thanh_toan === "khach" ? "Khách thanh toán" : ""}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="cong_ty">Công ty</SelectItem>
@@ -214,7 +214,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
           <Label className="text-xs">Loại</Label>
           <Select value={form.loai} onValueChange={(v) => set("loai", v)}>
             <SelectTrigger className="h-8 text-sm">
-              <SelectValue />
+              <span>{form.loai === "nha_hang" ? "Nhà hàng" : form.loai === "tau_ngay" ? "Tàu du lịch ngày" : ""}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="nha_hang">Nhà hàng</SelectItem>

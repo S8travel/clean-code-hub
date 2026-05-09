@@ -249,7 +249,7 @@ function HDVResultCard({
                       onValueChange={(v) => onReassign(idx, v === "none" ? null : Number(v))}
                     >
                       <SelectTrigger className="h-6 text-[11px] w-36 ml-auto">
-                        <SelectValue />
+                        <span>{tour.assigned_hdv_id == null ? "— Chưa xếp —" : allHdvs.find((h) => h.id === tour.assigned_hdv_id)?.ten ?? ""}</span>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">— Chưa xếp —</SelectItem>

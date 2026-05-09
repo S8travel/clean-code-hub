@@ -119,7 +119,9 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
         <div className="space-y-1.5">
           <Label className="text-xs">Loại</Label>
           <Select value={loai} onValueChange={setLoai}>
-            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 text-sm">
+              <span>{loai === "canh_diem" ? "Cảnh điểm" : loai === "dich_vu" ? "Dịch vụ" : ""}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="canh_diem">Cảnh điểm</SelectItem>
               <SelectItem value="dich_vu">Dịch vụ</SelectItem>
@@ -156,7 +158,9 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           <div className="space-y-1.5 col-span-2">
             <Label className="text-xs">Người thanh toán</Label>
             <Select value={nguoiThanhToan} onValueChange={setNguoiThanhToan}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="-- Chọn --" /></SelectTrigger>
+              <SelectTrigger className="h-9 text-sm">
+                <span>{nguoiThanhToan === "cong_ty" ? "Công ty" : nguoiThanhToan === "hdv" ? "Hướng dẫn viên" : "-- Chọn --"}</span>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cong_ty">Công ty</SelectItem>
                 <SelectItem value="hdv">Hướng dẫn viên</SelectItem>

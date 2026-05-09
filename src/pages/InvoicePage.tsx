@@ -415,7 +415,7 @@ function InvoiceDoanCard({
           <div className="flex gap-1">
             <Select value={currency} onValueChange={handleCurrencyChange}>
               <SelectTrigger className="h-8 w-20 text-xs shrink-0 px-2">
-                <SelectValue />
+                <span>{currency}</span>
               </SelectTrigger>
               <SelectContent>
                 {CURRENCIES.map((c) => (
@@ -573,7 +573,7 @@ export default function InvoicePage() {
       <div className="flex flex-wrap items-center gap-2">
         <Select value={agentFilter} onValueChange={setAgentFilter}>
           <SelectTrigger className="w-40 h-8 text-xs">
-            <SelectValue placeholder="Agent" />
+            <span>{agentFilter === "all" ? "Tất cả agent" : agents.find((a) => String(a.id) === agentFilter)?.ten ?? "Agent"}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả agent</SelectItem>
@@ -587,7 +587,7 @@ export default function InvoicePage() {
 
         <Select value={diadiemFilter} onValueChange={setDiadiemFilter}>
           <SelectTrigger className="w-40 h-8 text-xs">
-            <SelectValue placeholder="Địa điểm" />
+            <span>{diadiemFilter === "all" ? "Tất cả địa điểm" : diaDiems.find((d) => String(d.id) === diadiemFilter)?.ten ?? "Địa điểm"}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả địa điểm</SelectItem>

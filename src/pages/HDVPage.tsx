@@ -314,7 +314,7 @@ export default function HDVPage() {
                   onValueChange={(v) => set("gioi_tinh", v || null)}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Chọn giới tính" />
+                    <span>{!form.gioi_tinh ? "Chọn giới tính" : GIOI_TINH_OPTS.find((o) => o.value === form.gioi_tinh)?.label ?? ""}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {GIOI_TINH_OPTS.map((o) => (
@@ -331,7 +331,7 @@ export default function HDVPage() {
                   onValueChange={(v) => set("bac", Number(v))}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
+                    <span>Bậc {form.bac ?? 3}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {BAC_OPTS.map((b) => (

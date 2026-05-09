@@ -137,7 +137,7 @@ export default function CongNoPage() {
         </div>
         <Select value={trangThai} onValueChange={setTrangThai}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Trạng thái" />
+            <span>{trangThai === "all" ? "Tất cả" : trangThai === "con_du" ? "Còn dư" : trangThai === "da_can_tru" ? "Đã cấn trừ hết" : trangThai === "da_hoan_tien" ? "Hoàn tiền" : "Trạng thái"}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả</SelectItem>

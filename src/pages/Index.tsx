@@ -332,7 +332,7 @@ export default function Index() {
 
           <Select value={agentFilter} onValueChange={setAgentFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[140px]">
-              <SelectValue placeholder="Agent" />
+              <span>{agentFilter === "all" ? "Tất cả Agent" : agents?.find((a) => a.id.toString() === agentFilter)?.ten ?? "Agent"}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả Agent</SelectItem>
@@ -344,7 +344,7 @@ export default function Index() {
 
           <Select value={diaDiemFilter} onValueChange={setDiaDiemFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[140px]">
-              <SelectValue placeholder="Địa điểm" />
+              <span>{diaDiemFilter === "all" ? "Tất cả ĐĐ" : diaDiemList?.find((d) => d.id.toString() === diaDiemFilter)?.ten ?? "Địa điểm"}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả ĐĐ</SelectItem>
@@ -356,7 +356,7 @@ export default function Index() {
 
           <Select value={loaiTourFilter} onValueChange={setLoaiTourFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[130px]">
-              <SelectValue placeholder="Loại tuyến" />
+              <span>{LOAI_TOUR_OPTIONS.find((o) => o.value === loaiTourFilter)?.label ?? "Loại tuyến"}</span>
             </SelectTrigger>
             <SelectContent>
               {LOAI_TOUR_OPTIONS.map((o) => (
@@ -367,7 +367,7 @@ export default function Index() {
 
           <Select value={trangThaiFilter} onValueChange={setTrangThaiFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[130px]">
-              <SelectValue placeholder="Trạng thái" />
+              <span>{TRANG_THAI_OPTIONS.find((o) => o.value === trangThaiFilter)?.label ?? "Trạng thái"}</span>
             </SelectTrigger>
             <SelectContent>
               {TRANG_THAI_OPTIONS.map((o) => (

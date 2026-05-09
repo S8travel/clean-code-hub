@@ -156,7 +156,7 @@ export function PermissionDialog({ doanId, doanCode, open, onOpenChange }: Props
             <div className="w-[120px] space-y-1">
               <Select value={selectedQuyen} onValueChange={setSelectedQuyen}>
                 <SelectTrigger className="h-10 rounded-lg text-xs">
-                  <SelectValue />
+                  <span>{selectedQuyen === "view" ? "Xem" : selectedQuyen === "edit" ? "Chỉnh sửa" : ""}</span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="view">Xem</SelectItem>

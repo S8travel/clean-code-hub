@@ -173,7 +173,9 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
         <div>
           <Label className="text-xs">Người thanh toán</Label>
           <Select value={form.nguoi_thanh_toan} onValueChange={(v) => set("nguoi_thanh_toan", v)}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 text-sm">
+              <span>{form.nguoi_thanh_toan === "cong_ty" ? "Công ty" : form.nguoi_thanh_toan === "hdv" ? "Hướng dẫn viên" : form.nguoi_thanh_toan === "khach" ? "Khách thanh toán" : ""}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="cong_ty">Công ty</SelectItem>
               <SelectItem value="hdv">Hướng dẫn viên</SelectItem>

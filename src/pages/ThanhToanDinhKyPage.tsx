@@ -63,7 +63,9 @@ function MonthPicker({
         value={month != null ? String(month) : "all"}
         onValueChange={(v) => onChange(v === "all" ? null : Number(v), year)}
       >
-        <SelectTrigger className="h-8 text-sm w-[110px]"><SelectValue placeholder="Tháng" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-sm w-[110px]">
+          <span>{month == null ? "Tất cả tháng" : `Tháng ${month}`}</span>
+        </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Tất cả tháng</SelectItem>
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
@@ -75,7 +77,9 @@ function MonthPicker({
         value={year != null ? String(year) : "all"}
         onValueChange={(v) => onChange(month, v === "all" ? null : Number(v))}
       >
-        <SelectTrigger className="h-8 text-sm w-[100px]"><SelectValue placeholder="Năm" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-sm w-[100px]">
+          <span>{year == null ? "Tất cả năm" : String(year)}</span>
+        </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Tất cả năm</SelectItem>
           {years.map((y) => (

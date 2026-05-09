@@ -88,7 +88,7 @@ export default function GiaoViecTab({ userId, userName }: Props) {
       <div className="flex items-center gap-2">
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="h-7 text-xs w-32">
-            <SelectValue />
+            <span>{filterStatus === "active" ? "Đang xử lý" : filterStatus === "done" ? "Đã xong" : "Tất cả"}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="active">Đang xử lý</SelectItem>
@@ -98,7 +98,7 @@ export default function GiaoViecTab({ userId, userName }: Props) {
         </Select>
         <Select value={filterPriority} onValueChange={setFilterPriority}>
           <SelectTrigger className="h-7 text-xs w-36">
-            <SelectValue />
+            <span>{filterPriority === "all" ? "Mọi ưu tiên" : filterPriority === "khan_cap" ? "🔴 Khẩn cấp" : filterPriority === "cao" ? "🟠 Cao" : filterPriority === "binh_thuong" ? "🟡 Bình thường" : "🟢 Thấp"}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Mọi ưu tiên</SelectItem>

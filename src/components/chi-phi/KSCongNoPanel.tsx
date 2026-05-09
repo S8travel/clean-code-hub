@@ -70,7 +70,7 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange }: Props)
         onValueChange={handleSelectChange}
       >
         <SelectTrigger className="h-7 text-xs w-[220px]">
-          <SelectValue placeholder="Chọn khoản cấn trừ..." />
+          <span>{!value ? "— Không cấn trừ —" : options.find((o) => o.id === value.congNoId)?.label ?? "Chọn khoản cấn trừ..."}</span>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">— Không cấn trừ —</SelectItem>

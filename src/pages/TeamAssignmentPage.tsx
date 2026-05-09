@@ -176,7 +176,7 @@ function TeamTab({ teamId }: { teamId: number }) {
               onOpenChange={(open) => { if (!open) setAddingAgent(false); }}
             >
               <SelectTrigger className="h-7 w-44 text-xs" autoFocus>
-                <SelectValue placeholder="Chọn agent..." />
+                <span className="text-muted-foreground">Chọn agent...</span>
               </SelectTrigger>
               <SelectContent>
                 {availableAgents.length === 0 ? (
@@ -238,7 +238,7 @@ function TeamTab({ teamId }: { teamId: number }) {
                             onOpenChange={(open) => { if (!open) setAddingTaskType(null); }}
                           >
                             <SelectTrigger className="h-7 w-48 text-xs" autoFocus>
-                              <SelectValue placeholder="Chọn người..." />
+                              <span className="text-muted-foreground">Chọn người...</span>
                             </SelectTrigger>
                             <SelectContent>
                               {usersAvail.length === 0 ? (

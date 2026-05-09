@@ -301,7 +301,7 @@ export default function SeriPage() {
                 onValueChange={(v) => setFormShopping(v === "none" ? "" : v as "yes" | "no")}
               >
                 <SelectTrigger className="mt-1 h-8 text-sm">
-                  <SelectValue placeholder="Chọn..." />
+                  <span>{!formShopping ? "—" : formShopping === "yes" ? "YES" : "NO"}</span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">—</SelectItem>

@@ -99,7 +99,7 @@ export default function DoanInfoSection({
           <Row label="Shopping" editable>
             <Select value={shopping === null ? "" : shopping ? "yes" : "no"} onValueChange={(v) => setShopping(v === "yes" ? true : v === "no" ? false : null)}>
               <SelectTrigger className="h-7 text-sm w-28">
-                <SelectValue placeholder="Chọn" />
+                <span>{shopping === null ? "Chọn" : shopping ? "YES" : "NO"}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="yes">YES</SelectItem>

@@ -96,11 +96,11 @@ function SetMenuCard({
           placeholder="Giá"
         />
         <Select
-          defaultValue={setMenu.don_vi ?? "VND"}
+          value={setMenu.don_vi ?? "VND"}
           onValueChange={(v) => handleBlur("don_vi", v)}
         >
           <SelectTrigger className="h-7 text-xs w-20">
-            <SelectValue />
+            <span>{setMenu.don_vi ?? "VND"}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="VND">VND</SelectItem>

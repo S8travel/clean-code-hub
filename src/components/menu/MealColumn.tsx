@@ -287,7 +287,12 @@ export default function MealColumn({
         disabled={isDisabled}
       >
         <SelectTrigger className="h-8 text-sm">
-          <SelectValue placeholder="-- Chọn set menu --" />
+          <span>
+            {(() => {
+              const s = selectedSetId ? setMenuList.find((x) => x.id === selectedSetId) : null;
+              return s ? `${s.ten_set} · ${s.gia ? `${s.gia.toLocaleString()} ${s.don_vi}` : ""}` : "-- Chọn set menu --";
+            })()}
+          </span>
         </SelectTrigger>
         <SelectContent>
           {setMenuList.map(s => (

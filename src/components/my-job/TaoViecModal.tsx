@@ -113,7 +113,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
               <Label className="text-xs">Người nhận <span className="text-destructive">*</span></Label>
               <Select value={nguoi_nhan} onValueChange={setNguoiNhan}>
                 <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Chọn người nhận..." />
+                  <span>{otherUsers.find((u) => u.user_id === nguoi_nhan)?.ho_ten ?? "Chọn người nhận..."}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {otherUsers.map((u) => (
@@ -128,7 +128,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
               <Label className="text-xs">Độ ưu tiên</Label>
               <Select value={do_uu_tien} onValueChange={setDoUuTien}>
                 <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
+                  <span>{UU_TIEN_OPTIONS.find((o) => o.value === do_uu_tien)?.label ?? ""}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {UU_TIEN_OPTIONS.map((o) => (
@@ -145,7 +145,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
               <Label className="text-xs">Loại việc</Label>
               <Select value={loai_viec} onValueChange={setLoaiViec}>
                 <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
+                  <span>{LOAI_OPTIONS.find((o) => o.value === loai_viec)?.label ?? ""}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {LOAI_OPTIONS.map((o) => (

@@ -72,7 +72,9 @@ export default function CanhDiemPage() {
                 autoFocus
               />
               <Select value={newLoai} onValueChange={setNewLoai}>
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs">
+                  <span>{newLoai === "canh_diem" ? "Cảnh điểm" : newLoai === "dich_vu" ? "Dịch vụ" : ""}</span>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="canh_diem">Cảnh điểm</SelectItem>
                   <SelectItem value="dich_vu">Dịch vụ</SelectItem>

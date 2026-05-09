@@ -188,7 +188,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   onValueChange={(v) => set("loai_tour", v === "none" ? null : v)}
                 >
                   <SelectTrigger className="rounded-lg h-10">
-                    <SelectValue placeholder="Chọn loại tuyến" />
+                    <span>{!form.loai_tour ? "— Chưa phân loại —" : LOAI_TOUR_OPTS.find((o) => o.value === form.loai_tour)?.label ?? "Chọn loại tuyến"}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Chưa phân loại —</SelectItem>

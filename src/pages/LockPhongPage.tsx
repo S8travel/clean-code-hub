@@ -206,7 +206,13 @@ export default function LockPhongPage() {
 
           <Select value={deadlineFilter} onValueChange={(v) => setDeadlineFilter(v as DeadlineFilter)}>
             <SelectTrigger className="h-8 text-sm w-[160px]">
-              <SelectValue placeholder="Deadline" />
+              <span>
+                {deadlineFilter === "all" ? "⏰ Mọi deadline"
+                  : deadlineFilter === "qua_han" ? "🔴 Quá hạn"
+                  : deadlineFilter === "sap_den" ? "🟠 Sắp đến (≤3 ngày)"
+                  : deadlineFilter === "con_xa" ? "🟢 Còn xa"
+                  : "✅ Đã book xong"}
+              </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">⏰ Mọi deadline</SelectItem>
@@ -219,7 +225,13 @@ export default function LockPhongPage() {
 
           <Select value={emailFilter} onValueChange={(v) => setEmailFilter(v as EmailFilter)}>
             <SelectTrigger className="h-8 text-sm w-[170px]">
-              <SelectValue placeholder="Trạng thái email" />
+              <span>
+                {emailFilter === "all" ? "✉️ Mọi trạng thái"
+                  : emailFilter === "chua_gui" ? "Chưa gửi"
+                  : emailFilter === "cho_xac_nhan" ? "Chờ KS xác nhận"
+                  : emailFilter === "da_xac_nhan" ? "KS đã xác nhận"
+                  : "Đã hủy"}
+              </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">✉️ Mọi trạng thái</SelectItem>

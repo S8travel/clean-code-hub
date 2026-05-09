@@ -240,7 +240,7 @@ export default function BookingVisaCard({
               ) : (
                 <Select value={selectedDonViId ? String(selectedDonViId) : "none"} onValueChange={handleDonViChange}>
                   <SelectTrigger className="h-7 text-xs w-full max-w-[280px]">
-                    <SelectValue placeholder="Chọn đơn vị visa..." />
+                    <span>{!selectedDonViId ? "-- Chọn đơn vị --" : donViList.find((d) => d.id === selectedDonViId)?.ten ?? "Chọn đơn vị visa..."}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">-- Chọn đơn vị --</SelectItem>
@@ -268,7 +268,7 @@ export default function BookingVisaCard({
           {donVi && (
             <Select value={String(selectedDonViId)} onValueChange={handleDonViChange}>
               <SelectTrigger className="h-6 text-[11px] border-dashed">
-                <SelectValue placeholder="Đổi đơn vị visa" />
+                <span>{donViList.find((d) => d.id === selectedDonViId)?.ten ?? "Đổi đơn vị visa"}</span>
               </SelectTrigger>
               <SelectContent>
                 {donViList.map((d) => (
