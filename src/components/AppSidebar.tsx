@@ -55,12 +55,25 @@ function isTranslated(): boolean {
 
 function setGTCookie(value: string | null) {
   const host = window.location.hostname;
+  // Domain variants: hostname, .hostname, parent .hostname (drop subdomain)
+  const parts = host.split(".");
+  const parentDomain = parts.length > 2 ? "." + parts.slice(-2).join(".") : null;
+  const domains = [undefined, host, "." + host, parentDomain].filter(Boolean) as (string | undefined)[];
+
   if (value) {
-    document.cookie = `googtrans=${value}; path=/`;
-    document.cookie = `googtrans=${value}; domain=.${host}; path=/`;
+    for (const d of domains) {
+      document.cookie = `googtrans=${value}; path=/${d ? `; domain=${d}` : ""}`;
+    }
   } else {
-    document.cookie = `googtrans=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-    document.cookie = `googtrans=; domain=.${host}; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    // Clear ở mọi domain variant + path
+    for (const d of domains) {
+      document.cookie = `googtrans=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
+    }
+    // Cũng xoá luôn localStorage GT có thể lưu
+    try {
+      localStorage.removeItem("googtrans");
+      sessionStorage.removeItem("googtrans");
+    } catch { /* ignore */ }
   }
 }
 
