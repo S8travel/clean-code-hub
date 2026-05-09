@@ -53,27 +53,48 @@ function isTranslated(): boolean {
   return document.cookie.includes("googtrans=/vi/zh-TW");
 }
 
-function setGTCookie(value: string | null) {
+function getAllDomainVariants(): (string | undefined)[] {
   const host = window.location.hostname;
-  // Domain variants: hostname, .hostname, parent .hostname (drop subdomain)
   const parts = host.split(".");
-  const parentDomain = parts.length > 2 ? "." + parts.slice(-2).join(".") : null;
-  const domains = [undefined, host, "." + host, parentDomain].filter(Boolean) as (string | undefined)[];
+  const variants: (string | undefined)[] = [undefined]; // host-only (no domain attr)
+  // Build every parent domain variant: crm.s8travel.com, .crm.s8travel.com, s8travel.com, .s8travel.com, com, .com
+  for (let i = 0; i < parts.length; i++) {
+    const d = parts.slice(i).join(".");
+    if (!d) continue;
+    variants.push(d);
+    variants.push("." + d);
+  }
+  return variants;
+}
+
+function setGTCookie(value: string | null) {
+  const domains = getAllDomainVariants();
+  const isSecure = window.location.protocol === "https:";
+  const sameSiteAttr = `; SameSite=Lax${isSecure ? "; Secure" : ""}`;
 
   if (value) {
     for (const d of domains) {
-      document.cookie = `googtrans=${value}; path=/${d ? `; domain=${d}` : ""}`;
+      document.cookie = `googtrans=${value}; path=/${d ? `; domain=${d}` : ""}${sameSiteAttr}`;
     }
   } else {
-    // Clear ở mọi domain variant + path
+    console.log("[GT] before clear, cookies:", document.cookie);
+    // Clear googtrans ở MỌI domain variant + nhiều path. KHÔNG kèm SameSite/Secure khi clear (browser một số strict reject)
     for (const d of domains) {
-      document.cookie = `googtrans=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
+      for (const p of ["/", ""]) {
+        document.cookie = `googtrans=; path=${p}; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
+      }
     }
-    // Cũng xoá luôn localStorage GT có thể lưu
+    // Một số biến thể tên Google có thể đặt
+    for (const name of ["googtrans", "GOOGTRANS", "_googtrans"]) {
+      for (const d of domains) {
+        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
+      }
+    }
     try {
       localStorage.removeItem("googtrans");
       sessionStorage.removeItem("googtrans");
     } catch { /* ignore */ }
+    console.log("[GT] after clear, cookies:", document.cookie);
   }
 }
 
@@ -107,17 +128,23 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
   }, []);
 
   const handleTranslate = () => {
+    console.log('[GT] handleTranslate clicked');
     setGTCookie("/vi/zh-TW");
+    console.log('[GT] cookie after setGTCookie=', document.cookie.match(/googtrans=([^;]+)/)?.[1] || '(none)');
+    console.log('[GT] window.google?.translate=', !!(window as any).google?.translate);
+    console.log('[GT] select.goog-te-combo=', !!document.querySelector('select.goog-te-combo'));
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
-      if (triggerGTSelect("zh-TW")) {
+      const ok = triggerGTSelect("zh-TW");
+      console.log(`[GT] poll attempt ${attempts} triggerGTSelect=${ok}`);
+      if (ok) {
         setTranslated(true);
         notifyLanguageChange();
         startZhCorrectionObserver();
         clearInterval(interval);
       } else if (attempts >= 20) {
-        // GT widget not available – fall back to reload
+        console.warn('[GT] poll exhausted, reloading');
         clearInterval(interval);
         window.location.reload();
       }
@@ -125,9 +152,11 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
   };
 
   const handleRestore = () => {
+    console.log("[GT] handleRestore clicked, clearing cookie + reloading");
     setGTCookie(null);
     stopZhCorrectionObserver();
-    window.location.reload();
+    // Delay nhỏ để đảm bảo cookie clear flush trước reload
+    setTimeout(() => window.location.reload(), 100);
   };
 
   return (
