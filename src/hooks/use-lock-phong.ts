@@ -25,6 +25,8 @@ export interface LockPhongKS {
   so_phong: string | null;
   tinh_trang_phong: string | null;
   code_ncc: string | null;
+  outcome_status: string | null; // null | 'da_huy' | 'thanh_doan'
+  code_doan_thanh: string | null;
   ghi_chu: string | null;
   email_status: string; // 'chua_gui' | 'cho_xac_nhan' | 'da_xac_nhan' | 'da_huy'
   email_sent_at: string | null;
@@ -287,6 +289,32 @@ export function useUpdateLockPhongKSEmail() {
       const { error } = await externalSupabase
         .from("lock_phong_ks")
         .update(fields)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+  });
+}
+
+/** Cập nhật outcome (đã hủy / thành đoàn + code đoàn chính thức) */
+export function useUpdateLockPhongKSOutcome() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      outcome_status,
+      code_doan_thanh,
+    }: {
+      id: number;
+      outcome_status: "da_huy" | "thanh_doan" | null;
+      code_doan_thanh?: string | null;
+    }) => {
+      const { error } = await externalSupabase
+        .from("lock_phong_ks")
+        .update({
+          outcome_status,
+          code_doan_thanh: outcome_status === "thanh_doan" ? (code_doan_thanh || null) : null,
+        })
         .eq("id", id);
       if (error) throw error;
     },

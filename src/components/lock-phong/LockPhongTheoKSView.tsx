@@ -1,11 +1,23 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus } from "lucide-react";
+import { ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { type LockPhongDisplay, type LockPhongKSDisplay } from "@/hooks/use-lock-phong";
+import {
+  type LockPhongDisplay, type LockPhongKSDisplay,
+  useUpdateLockPhongKSOutcome,
+} from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
 import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
 
@@ -17,17 +29,6 @@ function fmtDate(d: string) {
   }
 }
 
-function EmailStatusBadge({ status }: { status: string }) {
-  if (status === "da_xac_nhan")
-    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">Đã XN</Badge>;
-  if (status === "cho_xac_nhan")
-    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">Chờ XN</Badge>;
-  if (status === "da_huy")
-    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">Đã hủy</Badge>;
-  return (
-    <Badge className="text-[10px] bg-muted text-muted-foreground border-0">Chưa gửi</Badge>
-  );
-}
 
 interface KSGroup {
   khach_san_id: number;
@@ -48,6 +49,27 @@ export default function LockPhongTheoKSView({ data }: Props) {
     ksRow: LockPhongKSDisplay;
   } | null>(null);
   const [batchTarget, setBatchTarget] = useState<KSGroupForBatch | null>(null);
+  const [thanhDoanTarget, setThanhDoanTarget] = useState<{
+    ksRowId: number;
+    tenDoan: string;
+    currentCode: string;
+  } | null>(null);
+  const updateOutcome = useUpdateLockPhongKSOutcome();
+
+  const handleStatusChange = (ksRow: LockPhongKSDisplay, lpTenDoan: string, value: string) => {
+    if (value === "cho_xu_ly") {
+      updateOutcome.mutate({ id: ksRow.id, outcome_status: null });
+    } else if (value === "da_huy") {
+      updateOutcome.mutate({ id: ksRow.id, outcome_status: "da_huy" });
+    } else if (value === "thanh_doan") {
+      // Mở dialog yêu cầu code đoàn chính thức
+      setThanhDoanTarget({
+        ksRowId: ksRow.id,
+        tenDoan: lpTenDoan,
+        currentCode: ksRow.code_doan_thanh || "",
+      });
+    }
+  };
 
   const groups = useMemo<KSGroup[]>(() => {
     const map = new Map<number, KSGroup>();
@@ -166,71 +188,72 @@ export default function LockPhongTheoKSView({ data }: Props) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/10">
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Tên đoàn
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Seri
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Ngày xuất phát
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Check-in
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Check-out
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Đêm
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Số phòng
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Trạng thái
-                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Tên đoàn</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Seri</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Ngày check-in</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Số phòng</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground w-[200px]">Trạng thái</th>
                       <th className="px-4 py-2 text-xs font-medium text-muted-foreground" />
                     </tr>
                   </thead>
                   <tbody>
-                    {group.entries.map(({ lockPhong, ksRow }) => (
-                      <tr
-                        key={`${lockPhong.id}-${ksRow.id}`}
-                        className={cn(
-                          "border-b border-border last:border-0 hover:bg-muted/10 transition-colors",
-                          ksRow.email_status === "da_huy" && "opacity-50"
-                        )}
-                      >
-                        <td className="px-4 py-2.5 font-medium">{lockPhong.ten_doan}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                          {lockPhong.ten_seri}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs">
-                          {fmtDate(lockPhong.ngay_xuat_phat)}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_in)}</td>
-                        <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_out)}</td>
-                        <td className="px-4 py-2.5 text-xs font-medium">{ksRow.so_dem}</td>
-                        <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                          {ksRow.so_phong || "—"}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <EmailStatusBadge status={ksRow.email_status} />
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 gap-1 text-xs text-muted-foreground hover:text-foreground px-2"
-                            onClick={() => setEmailTarget({ lockPhong, ksRow })}
-                          >
-                            <Mail className="h-3 w-3" />
-                            Email
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {group.entries.map(({ lockPhong, ksRow }) => {
+                      const outcomeValue = ksRow.outcome_status ?? "cho_xu_ly";
+                      return (
+                        <tr
+                          key={`${lockPhong.id}-${ksRow.id}`}
+                          className={cn(
+                            "border-b border-border last:border-0 hover:bg-muted/10 transition-colors",
+                            ksRow.outcome_status === "da_huy" && "opacity-50"
+                          )}
+                        >
+                          <td className="px-4 py-2.5 font-medium">{lockPhong.ten_doan}</td>
+                          <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                            {lockPhong.ten_seri}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_in)}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                            {ksRow.so_phong || "—"}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Select
+                                value={outcomeValue}
+                                onValueChange={(v) => handleStatusChange(ksRow, lockPhong.ten_doan, v)}
+                              >
+                                <SelectTrigger className="h-7 w-[140px] text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cho_xu_ly">Chờ xử lý</SelectItem>
+                                  <SelectItem value="da_huy">Đã hủy</SelectItem>
+                                  <SelectItem value="thanh_doan">Thành đoàn</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {ksRow.outcome_status === "thanh_doan" && (
+                                <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">
+                                  {ksRow.code_doan_thanh || "(chưa code)"}
+                                </Badge>
+                              )}
+                              {ksRow.outcome_status === "da_huy" && (
+                                <XIcon className="h-3 w-3 text-red-500" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 gap-1 text-xs text-muted-foreground hover:text-foreground px-2"
+                              onClick={() => setEmailTarget({ lockPhong, ksRow })}
+                            >
+                              <Mail className="h-3 w-3" />
+                              Email
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -255,6 +278,75 @@ export default function LockPhongTheoKSView({ data }: Props) {
           group={batchTarget}
         />
       )}
+
+      <ThanhDoanDialog
+        target={thanhDoanTarget}
+        onClose={() => setThanhDoanTarget(null)}
+        onSubmit={(code) => {
+          if (!thanhDoanTarget) return;
+          const trimmed = code.trim();
+          if (!trimmed) {
+            toast.warning("Cần nhập code đoàn chính thức");
+            return;
+          }
+          updateOutcome.mutate(
+            { id: thanhDoanTarget.ksRowId, outcome_status: "thanh_doan", code_doan_thanh: trimmed },
+            {
+              onSuccess: () => {
+                toast.success(`Đã đánh dấu thành đoàn (${trimmed})`);
+                setThanhDoanTarget(null);
+              },
+              onError: (e: any) => toast.error("Lỗi: " + (e?.message || "")),
+            },
+          );
+        }}
+      />
     </div>
+  );
+}
+
+function ThanhDoanDialog({
+  target, onClose, onSubmit,
+}: {
+  target: { ksRowId: number; tenDoan: string; currentCode: string } | null;
+  onClose: () => void;
+  onSubmit: (code: string) => void;
+}) {
+  const [code, setCode] = useState("");
+  // Re-init khi mở target khác
+  useMemo(() => { setCode(target?.currentCode ?? ""); }, [target?.ksRowId]);
+
+  return (
+    <Dialog open={!!target} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Đoàn lock thành đoàn chính thức</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2 text-sm">
+          {target && (
+            <p className="text-muted-foreground">
+              Lock: <span className="font-medium text-foreground">{target.tenDoan}</span>
+            </p>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Code đoàn chính thức *</Label>
+            <Input
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="vd: TQ250501-FY"
+              className="h-9 text-sm"
+              onKeyDown={(e) => { if (e.key === "Enter") onSubmit(code); }}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button onClick={() => onSubmit(code)} disabled={!code.trim()}>
+            Xác nhận
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
