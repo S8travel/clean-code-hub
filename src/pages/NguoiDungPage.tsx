@@ -126,6 +126,12 @@ const ACTION_LABEL: Record<string, string> = {
   thanh_toan: "Thanh toán",
 };
 
+const LOAI_TOUR_MANG: { value: string; label: string }[] = [
+  { value: "inbound", label: "Inbound" },
+  { value: "outbound", label: "Outbound" },
+  { value: "noi_dia", label: "Nội địa" },
+];
+
 const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   user_id: "",
   ho_ten: "",
@@ -133,6 +139,7 @@ const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   role: "nhan_vien",
   bo_phan: null,
   van_phong_id: null,
+  phan_loai_tour: null,
   so_dien_thoai: null,
   ghi_chu: null,
   active: true,
@@ -249,6 +256,7 @@ function NguoiDungTab() {
         role: selected.role,
         bo_phan: selected.bo_phan,
         van_phong_id: selected.van_phong_id,
+        phan_loai_tour: selected.phan_loai_tour,
         so_dien_thoai: selected.so_dien_thoai,
         ghi_chu: selected.ghi_chu,
         active: selected.active,
@@ -454,9 +462,9 @@ function NguoiDungTab() {
                         {u.bo_phan === "dieu_hanh" ? "Điều hành" : "Kế toán"}
                       </Badge>
                     )}
-                    {u.van_phong_id != null && vanPhongList && (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0 bg-blue-50 border-blue-200 text-blue-700">
-                        {vanPhongList.find((vp) => vp.id === u.van_phong_id)?.ten ?? "VP"}
+                    {u.phan_loai_tour && u.phan_loai_tour.length > 0 && (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0 bg-green-50 border-green-200 text-green-700">
+                        {u.phan_loai_tour.map((t) => t === "noi_dia" ? "NĐ" : t === "inbound" ? "IB" : "OB").join("+")}
                       </Badge>
                     )}
                   </div>
@@ -561,6 +569,29 @@ function NguoiDungTab() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="col-span-2 space-y-1.5">
+                <Label className="text-xs">Mảng phụ trách</Label>
+                <div className="flex items-center gap-4 py-1.5">
+                  {LOAI_TOUR_MANG.map((opt) => {
+                    const checked = (form.phan_loai_tour ?? []).includes(opt.value);
+                    return (
+                      <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer text-sm">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            const current = form.phan_loai_tour ?? [];
+                            const next = v ? [...current, opt.value] : current.filter((x) => x !== opt.value);
+                            set("phan_loai_tour", next.length > 0 ? next : null);
+                          }}
+                        />
+                        {opt.label}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Để trống = thấy tất cả đoàn (admin/giám đốc)</p>
               </div>
 
               <div className="col-span-2 space-y-1.5">

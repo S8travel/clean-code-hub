@@ -52,8 +52,10 @@ const LOAI_TOUR_OPTIONS = [
 
 export default function Index() {
   const { user: currentUser } = useAuth();
-  const vanPhongId = currentUser?.role !== "admin" ? (currentUser?.van_phong_id ?? null) : null;
-  const { data: groups, isLoading, error } = useDoanList(vanPhongId);
+  const phanLoaiTour = (currentUser?.role !== "admin" && currentUser?.role !== "giam_doc")
+    ? (currentUser?.phan_loai_tour ?? null)
+    : null;
+  const { data: groups, isLoading, error } = useDoanList(phanLoaiTour);
   useDoanRealtime();
   const createDoan = useCreateDoan();
   const updateDoan = useUpdateDoan();

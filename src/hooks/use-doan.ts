@@ -29,6 +29,7 @@ export interface Doan {
   assigned_to: string | null;
   created_by: string | null;
   van_phong_id: number | null;
+  van_phong?: { id: number; ten: string } | null;
   loai_tour: "inbound" | "outbound" | "noi_dia" | null;
   created_at?: string;
 }
@@ -213,10 +214,10 @@ export function useCurrentUserProfile() {
   });
 }
 
-// Doan list — vanPhongId=null → no filter (admin/no office); vanPhongId=number → filter by office
-export function useDoanList(vanPhongId?: number | null) {
+// Doan list — phanLoaiTour=null → no filter (admin/giám đốc); array → filter by loai_tour
+export function useDoanList(phanLoaiTour?: string[] | null) {
   return useQuery({
-    queryKey: ["doan", vanPhongId ?? null],
+    queryKey: ["doan", phanLoaiTour ?? null],
     queryFn: async () => {
       let query = externalSupabase
         .from("doan")
@@ -226,10 +227,11 @@ export function useDoanList(vanPhongId?: number | null) {
           agent_huy:agent_huy_id(id, ten),
           dia_diem:dia_diem_id(ten),
           huong_dan_vien:huong_dan_vien_id(id, ten),
-          xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai))
+          xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai)),
+          van_phong:van_phong_id(id, ten)
         `);
-      if (vanPhongId != null) {
-        query = query.or(`van_phong_id.eq.${vanPhongId},van_phong_id.is.null`);
+      if (phanLoaiTour && phanLoaiTour.length > 0) {
+        query = query.in("loai_tour", phanLoaiTour);
       }
       const { data, error } = await query.order("ngay_di", { ascending: true });
       if (error) {
