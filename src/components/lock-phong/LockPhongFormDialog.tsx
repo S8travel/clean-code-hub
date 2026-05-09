@@ -27,9 +27,7 @@ import {
 // ── Helpers ──
 
 function calcDeadline(ngayXuatPhat: string): string {
-  const d = new Date(ngayXuatPhat + "T00:00:00");
-  d.setDate(d.getDate() - 45);
-  return d.toISOString().slice(0, 10);
+  return subDaysISO(ngayXuatPhat, 45);
 }
 
 // ── Schemas ──
@@ -176,18 +174,19 @@ function addOneDay(yyyymmdd: string): string {
   return addDaysISO(yyyymmdd, 1);
 }
 
+// UTC-safe để tránh timezone-shift bug ở Vietnam (UTC+7)
 function addDaysISO(yyyymmdd: string, days: number): string {
   if (!yyyymmdd) return "";
-  const d = new Date(yyyymmdd + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = yyyymmdd.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function subDaysISO(yyyymmdd: string, days: number): string {
   if (!yyyymmdd || !days) return "";
-  const d = new Date(yyyymmdd + "T00:00:00");
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return addDaysISO(yyyymmdd, -days);
 }
 
 // Parse 1 cell ngày → "yyyy-MM-dd" (chấp nhận Excel serial, ISO, dd/MM/yyyy)
