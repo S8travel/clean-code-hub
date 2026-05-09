@@ -26,9 +26,13 @@ import {
   useAgents,
   useDiaDiem,
   useUserRoles,
+  THI_TRUONG_OPTS,
   // useAddDoanPermission, // FEATURE_DOAN_PERM_DISABLED
 } from "@/hooks/use-doan";
 import type { DoanInsert } from "@/hooks/use-doan";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useLogActivity } from "@/hooks/use-activity-log";
@@ -72,6 +76,7 @@ export default function Index() {
   const [editingDoan, setEditingDoan] = useState<any | null>(null);
   const [deletingDoan, setDeletingDoan] = useState<any | null>(null);
   const [cancelingDoan, setCancelingDoan] = useState<any | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<DoanInsert | null>(null);
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
@@ -164,7 +169,15 @@ export default function Index() {
         logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         toast.success("Đã cập nhật đoàn");
       } else {
-        const created = await createDoan.mutateAsync({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null });
+        const markets = currentUser?.phan_loai_tour ?? null;
+        let thi_truong: string | null = null;
+        if (markets && markets.length === 1) {
+          thi_truong = markets[0];
+        } else if (markets && markets.length > 1) {
+          setPendingCreate({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null });
+          return;
+        }
+        const created = await createDoan.mutateAsync({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null, thi_truong });
         // FEATURE_DOAN_PERM_DISABLED: auto-grant khi tạo đoàn mới
         // if (created && data.assigned_to) {
         //   const creatorName = userRolesMap.get(data.assigned_to) || "";
@@ -457,6 +470,49 @@ export default function Index() {
         onCancel={() => setDeletingDoan(null)}
         isDeleting={deleteDoan.isPending}
       />
+
+      <Dialog open={!!pendingCreate} onOpenChange={(o) => { if (!o) setPendingCreate(null); }}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="text-base">Chọn thị trường</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-1">
+            {(currentUser?.phan_loai_tour ?? []).map((market) => {
+              const opt = THI_TRUONG_OPTS.find((o) => o.value === market);
+              return (
+                <Button
+                  key={market}
+                  variant="outline"
+                  className="justify-start h-10"
+                  disabled={createDoan.isPending}
+                  onClick={async () => {
+                    if (!pendingCreate) return;
+                    try {
+                      const created = await createDoan.mutateAsync({ ...pendingCreate, thi_truong: market });
+                      if (created) {
+                        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${pendingCreate.ten_doan}` });
+                        if (pendingCreate.seri_id && pendingCreate.ngay_di) {
+                          try {
+                            await applySeri.mutateAsync({ doanId: created.id, seriId: pendingCreate.seri_id, ngayDi: pendingCreate.ngay_di });
+                          } catch { /* non-fatal */ }
+                        }
+                      }
+                      setPendingCreate(null);
+                      setDrawerOpen(false);
+                      setEditingDoan(null);
+                      toast.success("✓ Tạo đoàn thành công");
+                    } catch {
+                      toast.error("Có lỗi xảy ra");
+                    }
+                  }}
+                >
+                  {opt ? `${opt.loai_tour === "inbound" ? "Inbound" : opt.loai_tour === "outbound" ? "Outbound" : "Nội địa"} — ${opt.label}` : market}
+                </Button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

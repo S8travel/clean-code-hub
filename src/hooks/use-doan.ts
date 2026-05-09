@@ -31,8 +31,18 @@ export interface Doan {
   van_phong_id: number | null;
   van_phong?: { id: number; ten: string } | null;
   loai_tour: "inbound" | "outbound" | "noi_dia" | null;
+  thi_truong: string | null;
   created_at?: string;
 }
+
+export const THI_TRUONG_OPTS: { value: string; label: string; loai_tour: string }[] = [
+  { value: "ib_trung_quoc", label: "Trung Quốc", loai_tour: "inbound" },
+  { value: "ib_dai_loan",   label: "Đài Loan",   loai_tour: "inbound" },
+  { value: "ob_nhat_ban",   label: "Nhật Bản",   loai_tour: "outbound" },
+  { value: "ob_dai_loan",   label: "Đài Loan",   loai_tour: "outbound" },
+  { value: "ob_thai_lan",   label: "Thái Lan",   loai_tour: "outbound" },
+  { value: "noi_dia",       label: "Nội địa",    loai_tour: "noi_dia" },
+];
 
 export interface DoanInsert {
   ten_doan: string;
@@ -60,6 +70,7 @@ export interface DoanInsert {
   created_by?: string | null;
   van_phong_id?: number | null;
   loai_tour?: "inbound" | "outbound" | "noi_dia" | null;
+  thi_truong?: string | null;
   shopping?: boolean | null;
 }
 
@@ -231,7 +242,7 @@ export function useDoanList(phanLoaiTour?: string[] | null) {
           van_phong:van_phong_id(id, ten)
         `);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
-        query = query.in("loai_tour", phanLoaiTour);
+        query = query.in("thi_truong", phanLoaiTour);
       }
       const { data, error } = await query.order("ngay_di", { ascending: true });
       if (error) {

@@ -31,6 +31,7 @@ const LOAI_TOUR_OPTS = [
 const EMPTY_FORM: DoanInsert = {
   ten_doan: "",
   loai_tour: null,
+  thi_truong: null,
   agent_id: null,
   dia_diem_id: null,
   huong_dan_vien_id: null,
@@ -83,6 +84,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
       setForm({
         ten_doan: doan.ten_doan || "",
         loai_tour: doan.loai_tour ?? null,
+        thi_truong: doan.thi_truong ?? null,
         agent_id: doan.agent_id ?? null,
         dia_diem_id: doan.dia_diem_id ?? null,
         huong_dan_vien_id: doan.huong_dan_vien_id ?? null,

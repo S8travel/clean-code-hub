@@ -30,6 +30,7 @@ import {
   type VaiTro,
   type BoPhan,
 } from "@/hooks/use-nguoi-dung";
+import { THI_TRUONG_OPTS } from "@/hooks/use-doan";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useVanPhongList, useCreateVanPhong, useUpdateVanPhong, useDeleteVanPhong,
@@ -126,10 +127,10 @@ const ACTION_LABEL: Record<string, string> = {
   thanh_toan: "Thanh toán",
 };
 
-const LOAI_TOUR_MANG: { value: string; label: string }[] = [
-  { value: "inbound", label: "Inbound" },
-  { value: "outbound", label: "Outbound" },
-  { value: "noi_dia", label: "Nội địa" },
+const THI_TRUONG_GROUPS = [
+  { label: "Inbound", loai_tour: "inbound" },
+  { label: "Outbound", loai_tour: "outbound" },
+  { label: "Nội địa", loai_tour: "noi_dia" },
 ];
 
 const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
@@ -464,7 +465,7 @@ function NguoiDungTab() {
                     )}
                     {u.phan_loai_tour && u.phan_loai_tour.length > 0 && (
                       <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0 bg-green-50 border-green-200 text-green-700">
-                        {u.phan_loai_tour.map((t) => t === "noi_dia" ? "NĐ" : t === "inbound" ? "IB" : "OB").join("+")}
+                        {u.phan_loai_tour.map((t) => THI_TRUONG_OPTS.find((o) => o.value === t)?.label ?? t).join(", ")}
                       </Badge>
                     )}
                   </div>
@@ -573,21 +574,31 @@ function NguoiDungTab() {
 
               <div className="col-span-2 space-y-1.5">
                 <Label className="text-xs">Mảng phụ trách</Label>
-                <div className="flex items-center gap-4 py-1.5">
-                  {LOAI_TOUR_MANG.map((opt) => {
-                    const checked = (form.phan_loai_tour ?? []).includes(opt.value);
+                <div className="space-y-2 py-1">
+                  {THI_TRUONG_GROUPS.map((group) => {
+                    const opts = THI_TRUONG_OPTS.filter((o) => o.loai_tour === group.loai_tour);
                     return (
-                      <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer text-sm">
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(v) => {
-                            const current = form.phan_loai_tour ?? [];
-                            const next = v ? [...current, opt.value] : current.filter((x) => x !== opt.value);
-                            set("phan_loai_tour", next.length > 0 ? next : null);
-                          }}
-                        />
-                        {opt.label}
-                      </label>
+                      <div key={group.loai_tour} className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-16 shrink-0">{group.label}</span>
+                        <div className="flex items-center gap-3">
+                          {opts.map((opt) => {
+                            const checked = (form.phan_loai_tour ?? []).includes(opt.value);
+                            return (
+                              <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer text-sm">
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => {
+                                    const current = form.phan_loai_tour ?? [];
+                                    const next = v ? [...current, opt.value] : current.filter((x) => x !== opt.value);
+                                    set("phan_loai_tour", next.length > 0 ? next : null);
+                                  }}
+                                />
+                                {opt.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
