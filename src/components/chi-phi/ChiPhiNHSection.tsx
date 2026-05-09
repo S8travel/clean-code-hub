@@ -872,6 +872,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
             .filter((c) => c.dntt_goc_id != null && mealDnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
             .reduce((s, c) => s + c.so_tien_goc, 0);
 
+          // Hoàn tiền → ẩn khỏi tab Chi phí của đoàn, chỉ giữ record ở sidebar Thanh toán/UNC
+          if (hoanTienAmount > 0) return null;
+
           return (
             <Fragment key={key}>
               {/* Main meal row */}

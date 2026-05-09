@@ -382,6 +382,8 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                 const hoanTienAmount = congNoList
                   .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
                   .reduce((s, c) => s + c.so_tien_goc, 0);
+                // Hoàn tiền → ẩn khỏi tab Chi phí của đoàn, chỉ giữ record ở sidebar Thanh toán/UNC
+                if (hoanTienAmount > 0) return null;
                 const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
                 const canCancel = activeDntt && (
                   activeDntt.trang_thai_duyet === "cho_duyet" ||

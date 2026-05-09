@@ -17,6 +17,7 @@ export interface CanhDiemItem {
   email: string | null;
   khach_san_id: number | null;
   ghi_chu: string | null;
+  nha_cung_cap_id: number | null;
 }
 
 export interface NhaHangItem {
@@ -26,6 +27,7 @@ export interface NhaHangItem {
   thong_tin_chung: string | null;
   nguoi_thanh_toan: string | null;
   so_dien_thoai: string | null;
+  nha_cung_cap_id: number | null;
 }
 
 export interface KhachSanItem {
@@ -101,7 +103,7 @@ export function useCanhDiem() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("canh_diem")
-        .select("id, ten, loai, co_phi, gia_mac_dinh, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu")
+        .select("id, ten, loai, co_phi, gia_mac_dinh, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu, nha_cung_cap_id")
         .order("ten");
       if (error) throw error;
       return data as CanhDiemItem[];
@@ -115,7 +117,7 @@ export function useNhaHang() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan, so_dien_thoai")
+        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan, so_dien_thoai, nha_cung_cap_id")
         .order("ten");
       if (error) throw error;
       return data as NhaHangItem[];
@@ -467,6 +469,7 @@ export function useSaveDieuTour() {
               mo_ta: cd?.ten ?? "",
               don_gia: item.don_gia ?? 0,
               so_luong: item.so_luong ?? soKhach,
+              nha_cung_cap_id: cd?.nha_cung_cap_id ?? null,
               trang_thai_thanh_toan: "unpaid",
             };
             if (item.nguoi_thanh_toan === "hdv") {
@@ -511,6 +514,7 @@ export function useSaveDieuTour() {
                 mo_ta: mealItem
                   ? `${(mealItem as any).ten}${meal.label === "an_trua" ? " (trưa)" : meal.label === "an_toi" ? " (tối)" : ""}`
                   : "",
+                nha_cung_cap_id: (mealItem as any)?.nha_cung_cap_id ?? null,
                 trang_thai_thanh_toan: "unpaid",
               } as any;
               const mealNtt = (mealItem as any)?.nguoi_thanh_toan;

@@ -276,6 +276,8 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  // Hoàn tiền → ẩn khỏi tab Chi phí của đoàn, chỉ giữ record ở sidebar Thanh toán/UNC
+  if (hoanTienAmount > 0) return null;
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       {/* Header */}
