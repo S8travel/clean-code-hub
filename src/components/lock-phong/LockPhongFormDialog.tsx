@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2, Copy } from "lucide-react";
+import { Plus, Trash2, Copy, Download, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -181,6 +182,55 @@ function subDaysISO(yyyymmdd: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Parse 1 cell ngày → "yyyy-MM-dd" (chấp nhận Excel serial, ISO, dd/MM/yyyy)
+function parseDateCell(v: any): string {
+  if (v == null || v === "") return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === "number") {
+    // Excel serial date (days from 1900-01-01, with 1900 leap bug)
+    const date = XLSX.SSF.parse_date_code(v);
+    if (date) {
+      const m = String(date.m).padStart(2, "0");
+      const d = String(date.d).padStart(2, "0");
+      return `${date.y}-${m}-${d}`;
+    }
+  }
+  const s = String(v).trim();
+  // ISO yyyy-MM-dd
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // dd/MM/yyyy or d/M/yyyy
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const dd = m[1].padStart(2, "0");
+    const mm = m[2].padStart(2, "0");
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  return "";
+}
+
+// Header keys của file mẫu (lowercase, no diacritic)
+const TEMPLATE_HEADERS = [
+  { key: "ten_doan", label: "Code đoàn" },
+  { key: "check_in", label: "Ngày check-in (yyyy-mm-dd hoặc dd/mm/yyyy)" },
+  { key: "cau_hinh_phong", label: "Cấu hình phòng" },
+  { key: "tinh_trang_phong", label: "Tình trạng phòng" },
+  { key: "ghi_chu", label: "Ghi chú" },
+] as const;
+
+function downloadTemplateXlsx() {
+  const headerRow = TEMPLATE_HEADERS.map((h) => h.label);
+  const sampleRows = [
+    ["TQ250501", "2026-05-18", "6 TWN, 1 DBL", "Còn", "Khách Đài Loan"],
+    ["TQ250502", "25/05/2026", "8 TWN", "Chờ KS xác nhận", ""],
+  ];
+  const aoa = [headerRow, ...sampleRows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 18 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 30 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Lock Phong");
+  XLSX.writeFile(wb, "lock_phong_mau.xlsx");
+}
+
 function CreateForm({
   onOpenChange,
   ksList,
@@ -223,6 +273,47 @@ function CreateForm({
 
   const handleAddRow = () => {
     setRows((prev) => [...prev, emptyCreateRow()]);
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array", cellDates: false });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) { toast.error("File trống"); return; }
+      const aoa = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: "" });
+      if (aoa.length < 2) { toast.error("File cần ít nhất 1 dòng dữ liệu"); return; }
+
+      // Skip header row, parse rows
+      const parsed: CreateRow[] = [];
+      for (let i = 1; i < aoa.length; i++) {
+        const r = aoa[i];
+        if (!r || r.every((c: any) => c === "" || c == null)) continue;
+        const ten_doan = String(r[0] ?? "").trim();
+        const check_in = parseDateCell(r[1]);
+        const cau_hinh_phong = String(r[2] ?? "").trim();
+        const tinh_trang_phong = String(r[3] ?? "").trim();
+        const ghi_chu = String(r[4] ?? "").trim();
+        if (!ten_doan && !check_in && !cau_hinh_phong) continue;
+        parsed.push({
+          ten_doan,
+          check_in,
+          cau_hinh_phong,
+          tinh_trang_phong,
+          deadline: check_in && daysToDeadline > 0 ? subDaysISO(check_in, daysToDeadline) : "",
+          ghi_chu,
+        });
+      }
+      if (parsed.length === 0) { toast.error("Không có dòng dữ liệu hợp lệ"); return; }
+      setRows(parsed);
+      toast.success(`Đã import ${parsed.length} dòng từ file`);
+    } catch (err: any) {
+      toast.error("Lỗi đọc file: " + (err?.message || "không hỗ trợ định dạng"));
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const handleDuplicateRow = (idx: number) => {
@@ -328,13 +419,34 @@ function CreateForm({
 
         {/* Table list đoàn */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <Label className="text-xs font-semibold uppercase">
               Danh sách đoàn ({rows.length})
             </Label>
-            <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleAddRow}>
-              <Plus className="h-3 w-3" /> Thêm dòng
-            </Button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={downloadTemplateXlsx}>
+                <Download className="h-3 w-3" /> Tải file mẫu
+              </Button>
+              <Button
+                type="button" variant="outline" size="sm" className="h-7 text-xs gap-1"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-3 w-3" /> Upload file
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFileUpload(f);
+                }}
+              />
+              <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleAddRow}>
+                <Plus className="h-3 w-3" /> Thêm dòng
+              </Button>
+            </div>
           </div>
 
           <div className="border border-border rounded-md overflow-x-auto">
