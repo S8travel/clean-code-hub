@@ -155,6 +155,7 @@ interface CreateRow {
   check_in: string;
   cau_hinh_phong: string;
   tinh_trang_phong: string;
+  code_ncc: string;
   deadline: string;
   ghi_chu: string;
 }
@@ -164,6 +165,7 @@ const emptyCreateRow = (): CreateRow => ({
   check_in: "",
   cau_hinh_phong: "",
   tinh_trang_phong: "",
+  code_ncc: "",
   deadline: "",
   ghi_chu: "",
 });
@@ -214,18 +216,19 @@ const TEMPLATE_HEADERS = [
   { key: "check_in", label: "Ngày check-in (yyyy-mm-dd hoặc dd/mm/yyyy)" },
   { key: "cau_hinh_phong", label: "Cấu hình phòng" },
   { key: "tinh_trang_phong", label: "Tình trạng phòng" },
+  { key: "code_ncc", label: "Code NCC" },
   { key: "ghi_chu", label: "Ghi chú" },
 ] as const;
 
 function downloadTemplateXlsx() {
   const headerRow = TEMPLATE_HEADERS.map((h) => h.label);
   const sampleRows = [
-    ["TQ250501", "2026-05-18", "6 TWN, 1 DBL", "Còn", "Khách Đài Loan"],
-    ["TQ250502", "25/05/2026", "8 TWN", "Chờ KS xác nhận", ""],
+    ["TQ250501", "2026-05-18", "6 TWN, 1 DBL", "Còn", "BK20260518-001", "Khách Đài Loan"],
+    ["TQ250502", "25/05/2026", "8 TWN", "Chờ KS xác nhận", "", ""],
   ];
   const aoa = [headerRow, ...sampleRows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 18 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 30 }];
+  ws["!cols"] = [{ wch: 18 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 30 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Lock Phong");
   XLSX.writeFile(wb, "lock_phong_mau.xlsx");
@@ -295,13 +298,15 @@ function CreateForm({
         const check_in = parseDateCell(r[1]);
         const cau_hinh_phong = String(r[2] ?? "").trim();
         const tinh_trang_phong = String(r[3] ?? "").trim();
-        const ghi_chu = String(r[4] ?? "").trim();
+        const code_ncc = String(r[4] ?? "").trim();
+        const ghi_chu = String(r[5] ?? "").trim();
         if (!ten_doan && !check_in && !cau_hinh_phong) continue;
         parsed.push({
           ten_doan,
           check_in,
           cau_hinh_phong,
           tinh_trang_phong,
+          code_ncc,
           deadline: check_in && daysToDeadline > 0 ? subDaysISO(check_in, daysToDeadline) : "",
           ghi_chu,
         });
@@ -363,6 +368,7 @@ function CreateForm({
             check_out: addOneDay(r.check_in), // auto +1 ngày
             so_phong: r.cau_hinh_phong.trim() || undefined,
             tinh_trang_phong: r.tinh_trang_phong.trim() || undefined,
+            code_ncc: r.code_ncc.trim() || undefined,
             ghi_chu: r.ghi_chu.trim() || undefined,
           }],
         });
@@ -457,6 +463,7 @@ function CreateForm({
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Ngày check-in *</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[180px]">Cấu hình phòng *</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Tình trạng phòng</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Code NCC</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Deadline</th>
                   <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Ghi chú</th>
                   <th className="w-16" />
@@ -494,6 +501,14 @@ function CreateForm({
                         value={r.tinh_trang_phong}
                         onChange={(e) => updateRow(idx, { tinh_trang_phong: e.target.value })}
                         placeholder="vd: Còn / Hết"
+                        className="h-7 text-xs"
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <Input
+                        value={r.code_ncc}
+                        onChange={(e) => updateRow(idx, { code_ncc: e.target.value })}
+                        placeholder="(NCC cấp)"
                         className="h-7 text-xs"
                       />
                     </td>

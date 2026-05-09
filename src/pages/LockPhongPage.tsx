@@ -12,7 +12,6 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { useLockPhongList, useLockPhongDeadlineAlerts, type LockPhongDisplay } from "@/hooks/use-lock-phong";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import { useCurrentSession } from "@/hooks/use-current-user";
-import LockPhongTheoSeriView from "@/components/lock-phong/LockPhongTheoSeriView";
 import LockPhongTheoKSView from "@/components/lock-phong/LockPhongTheoKSView";
 import LockPhongFormDialog from "@/components/lock-phong/LockPhongFormDialog";
 import { format, parseISO, differenceInDays, addDays } from "date-fns";
@@ -114,17 +113,10 @@ export default function LockPhongPage() {
     setEmailFilter("all");
   };
 
-  const handleEdit = (entry: LockPhongDisplay) => {
-    setEditTarget(entry);
-    setFormOpen(true);
-  };
-
   const handleAddNew = () => {
     setEditTarget(null);
     setFormOpen(true);
   };
-
-  const groupByKs = filterKsId !== "all";
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 space-y-4">
@@ -254,7 +246,7 @@ export default function LockPhongPage() {
       {/* Active filter summary */}
       {hasActiveFilter && (
         <p className="text-xs text-muted-foreground -mt-1">
-          Hiển thị {filtered.length}/{data.length} lock · nhóm theo {groupByKs ? "Khách sạn" : "Seri"}
+          Hiển thị {filtered.length}/{data.length} lock · nhóm theo Khách sạn
         </p>
       )}
 
@@ -281,10 +273,8 @@ export default function LockPhongPage() {
             Xóa lọc
           </Button>
         </div>
-      ) : groupByKs ? (
-        <LockPhongTheoKSView data={filtered} />
       ) : (
-        <LockPhongTheoSeriView data={filtered} onEdit={handleEdit} />
+        <LockPhongTheoKSView data={filtered} />
       )}
 
       <LockPhongFormDialog
