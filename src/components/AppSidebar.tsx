@@ -77,14 +77,11 @@ function setGTCookie(value: string | null) {
       document.cookie = `googtrans=${value}; path=/${d ? `; domain=${d}` : ""}${sameSiteAttr}`;
     }
   } else {
-    console.log("[GT] before clear, cookies:", document.cookie);
-    // Clear googtrans ở MỌI domain variant + nhiều path. KHÔNG kèm SameSite/Secure khi clear (browser một số strict reject)
     for (const d of domains) {
       for (const p of ["/", ""]) {
         document.cookie = `googtrans=; path=${p}; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
       }
     }
-    // Một số biến thể tên Google có thể đặt
     for (const name of ["googtrans", "GOOGTRANS", "_googtrans"]) {
       for (const d of domains) {
         document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
@@ -94,7 +91,6 @@ function setGTCookie(value: string | null) {
       localStorage.removeItem("googtrans");
       sessionStorage.removeItem("googtrans");
     } catch { /* ignore */ }
-    console.log("[GT] after clear, cookies:", document.cookie);
   }
 }
 
@@ -128,23 +124,16 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
   }, []);
 
   const handleTranslate = () => {
-    console.log('[GT] handleTranslate clicked');
     setGTCookie("/vi/zh-TW");
-    console.log('[GT] cookie after setGTCookie=', document.cookie.match(/googtrans=([^;]+)/)?.[1] || '(none)');
-    console.log('[GT] window.google?.translate=', !!(window as any).google?.translate);
-    console.log('[GT] select.goog-te-combo=', !!document.querySelector('select.goog-te-combo'));
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
-      const ok = triggerGTSelect("zh-TW");
-      console.log(`[GT] poll attempt ${attempts} triggerGTSelect=${ok}`);
-      if (ok) {
+      if (triggerGTSelect("zh-TW")) {
         setTranslated(true);
         notifyLanguageChange();
         startZhCorrectionObserver();
         clearInterval(interval);
       } else if (attempts >= 20) {
-        console.warn('[GT] poll exhausted, reloading');
         clearInterval(interval);
         window.location.reload();
       }
@@ -152,10 +141,8 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
   };
 
   const handleRestore = () => {
-    console.log("[GT] handleRestore clicked, clearing cookie + reloading");
     setGTCookie(null);
     stopZhCorrectionObserver();
-    // Delay nhỏ để đảm bảo cookie clear flush trước reload
     setTimeout(() => window.location.reload(), 100);
   };
 

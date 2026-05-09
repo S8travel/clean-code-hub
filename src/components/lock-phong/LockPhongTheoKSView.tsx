@@ -230,7 +230,13 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 onValueChange={(v) => handleStatusChange(ksRow, lockPhong.ten_doan, v)}
                               >
                                 <SelectTrigger className="h-7 w-[140px] text-xs">
-                                  <SelectValue />
+                                  <span>
+                                    {outcomeValue === "cho_xu_ly"
+                                      ? "Chờ xử lý"
+                                      : outcomeValue === "da_huy"
+                                      ? "Đã hủy"
+                                      : "Thành đoàn"}
+                                  </span>
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="cho_xu_ly">Chờ xử lý</SelectItem>

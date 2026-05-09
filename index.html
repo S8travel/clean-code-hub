@@ -55,19 +55,12 @@
     <!-- Google Translate -->
     <div id="google_translate_element" style="position:absolute;left:-9999px;top:0;width:100px;height:30px;overflow:hidden"></div>
     <script>
-      console.log('[GT] inline script run, defining init callback');
       function googleTranslateElementInit() {
-        console.log('[GT] init callback fired, google.translate=', !!(window.google && window.google.translate));
-        try {
-          new google.translate.TranslateElement({
-            pageLanguage: 'vi',
-            includedLanguages: 'zh-TW',
-            autoDisplay: false,
-          }, 'google_translate_element');
-          console.log('[GT] TranslateElement constructed OK');
-        } catch (e) {
-          console.error('[GT] TranslateElement construct ERROR', e);
-        }
+        new google.translate.TranslateElement({
+          pageLanguage: 'vi',
+          includedLanguages: 'zh-TW',
+          autoDisplay: false,
+        }, 'google_translate_element');
       }
       // Loader có retry + fallback endpoint khi mạng VN reset connection đến Google
       (function loadGT() {
@@ -78,20 +71,12 @@
         ];
         var idx = 0;
         function tryNext() {
-          if (idx >= endpoints.length) {
-            console.error('[GT] all endpoints failed');
-            return;
-          }
+          if (idx >= endpoints.length) return;
           var src = endpoints[idx++];
           var s = document.createElement('script');
           s.src = src;
           s.async = true;
-          s.onload = function () {
-            console.log('[GT] external script LOADED:', src);
-          };
           s.onerror = function () {
-            console.warn('[GT] script failed (' + src + '), retry attempt', idx);
-            // Nếu callback chưa được gọi, thử endpoint tiếp
             if (!(window.google && window.google.translate)) {
               setTimeout(tryNext, 800);
             }
@@ -100,13 +85,6 @@
         }
         tryNext();
       })();
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          console.log('[GT] 3s post-load: window.google?.translate=', !!(window.google && window.google.translate));
-          console.log('[GT] 3s post-load: select.goog-te-combo=', !!document.querySelector('select.goog-te-combo'));
-          console.log('[GT] 3s post-load: cookie googtrans=', document.cookie.match(/googtrans=([^;]+)/)?.[1] || '(none)');
-        }, 3000);
-      });
     </script>
   </body>
 </html>
