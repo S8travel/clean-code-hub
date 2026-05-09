@@ -104,6 +104,21 @@ export function useDashboardStats() {
           monthlyMap.set(key, { count: prev.count + 1, khach: prev.khach + guestCount(d) });
         }
       }
+      // ── Hard-coded số liệu lịch sử (chưa nhập lên web) ────────────────────────
+      // Số tổng tháng 1, 2, 3 / 2026 — fallback khi DB chưa có data tháng đó
+      const HISTORICAL: Record<string, { count: number; khach: number }> = {
+        "01/26": { count: 84, khach: 1926 },
+        "02/26": { count: 89, khach: 1633 },
+        "03/26": { count: 79, khach: 1760 },
+      };
+      for (const [key, v] of Object.entries(HISTORICAL)) {
+        if (!monthlyMap.has(key)) continue;
+        const cur = monthlyMap.get(key)!;
+        // Chỉ override khi DB rỗng (tránh ghi đè khi đã nhập data thật)
+        if (cur.count === 0 && cur.khach === 0) {
+          monthlyMap.set(key, v);
+        }
+      }
       const monthlyData = [...monthlyMap.entries()].map(([month, v]) => ({
         month, soDoan: v.count, soKhach: v.khach,
       }));
