@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
+import { proRataInts } from "@/lib/pro-rata";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -311,24 +312,18 @@ export default function ThanhToanDinhKyPage() {
       return;
     }
 
-    // Pro-rata phân bổ effectiveAmount theo tỉ lệ "còn lại" mỗi chi phí
+    // Pro-rata phân bổ effectiveAmount theo tỉ lệ "còn lại" mỗi chi phí.
+    // Largest-remainder method (proRataInts) → SUM(allocs) === batchEffectiveAmount
+    // không cần manual drift fix nữa.
     const conLaiByRow = dialogCtx.rows.map((r) => ({
       id: r.id,
       conLai: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt),
     }));
-    const totalConLai = conLaiByRow.reduce((s, x) => s + x.conLai, 0);
-    let allocations = conLaiByRow.map((x) => ({
+    const allocAmts = proRataInts(batchEffectiveAmount, conLaiByRow.map((x) => x.conLai));
+    const allocations = conLaiByRow.map((x, i) => ({
       chi_phi_id: x.id,
-      so_tien: totalConLai > 0
-        ? Math.round(batchEffectiveAmount * (x.conLai / totalConLai))
-        : Math.round(batchEffectiveAmount / conLaiByRow.length),
+      so_tien: allocAmts[i],
     }));
-    // Fix rounding drift
-    const allocSum = allocations.reduce((s, a) => s + a.so_tien, 0);
-    const drift = batchEffectiveAmount - allocSum;
-    if (drift !== 0 && allocations.length > 0) {
-      allocations = [{ ...allocations[0], so_tien: allocations[0].so_tien + drift }, ...allocations.slice(1)];
-    }
 
     const cocSuffix = batchMode === "partial" ? " (Cọc)" : "";
     const defaultMoTa = batchMoTa || `Thanh toán định kỳ – ${dialogCtx.nccTen} – ${dialogCtx.monthLabel}${cocSuffix}`;
@@ -557,26 +552,28 @@ export default function ThanhToanDinhKyPage() {
               </div>
 
               <div className="max-h-40 overflow-y-auto text-xs space-y-1">
-                {dialogCtx.rows.map((r) => {
-                  const conLai = Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt);
-                  const ratio = dialogTotalConLai > 0 ? conLai / dialogTotalConLai : 0;
+                {(() => {
+                  // Tính alloc preview KHỚP với save logic (proRataInts) — không drift
+                  const conLais = dialogCtx.rows.map((r) =>
+                    Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt)
+                  );
                   const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
-                    ? Math.round(batchEffectiveAmount * ratio)
-                    : conLai;
-                  return (
+                    ? proRataInts(batchEffectiveAmount, conLais)
+                    : conLais;
+                  return dialogCtx.rows.map((r, i) => (
                     <div key={r.id} className="flex justify-between text-muted-foreground">
                       <span className="truncate max-w-[220px]">
                         {r.ten_doan || `Đoàn #${r.doan_id}`} · {r.mo_ta}
                       </span>
                       <span className="ml-2 font-medium text-foreground shrink-0">
-                        {fmt(allocated)} ₫
-                        {batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0 && allocated < conLai && (
-                          <span className="ml-1 text-muted-foreground font-normal">/ {fmt(conLai)}</span>
+                        {fmt(allocated[i])} ₫
+                        {batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0 && allocated[i] < conLais[i] && (
+                          <span className="ml-1 text-muted-foreground font-normal">/ {fmt(conLais[i])}</span>
                         )}
                       </span>
                     </div>
-                  );
-                })}
+                  ));
+                })()}
               </div>
               {batchMode === "partial" && batchPartialValid && batchPartialNum > 0 && (
                 <div className="rounded-md border border-border px-4 py-2 text-xs space-y-0.5">

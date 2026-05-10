@@ -308,11 +308,15 @@ export default function MealCard({
 </body></html>`;
   };
 
-  const openEmailModal = () => {
+  const [emailMode, setEmailMode] = useState<"first" | "update">("first");
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
     const buaLabel = buaAn === "trua" ? "ăn trưa" : "ăn tối";
     const ngayStr = ngayDate ? format(new Date(ngayDate + "T00:00:00"), "dd/MM", { locale: vi }) : "";
     setEmailTo(normalizeEmails(nhaHangEmail));
-    setEmailSubject(`[S8 Travel] Đặt ${buaLabel}${tenDoan ? ` – ${tenDoan}` : ""}${ngayStr ? ` – ${ngayStr}` : ""} – ${nhaHangTen || "Nhà hàng"}`);
+    const baseSubject = `[S8 Travel] Đặt ${buaLabel}${tenDoan ? ` – ${tenDoan}` : ""}${ngayStr ? ` – ${ngayStr}` : ""} – ${nhaHangTen || "Nhà hàng"}`;
+    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
+    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailHtml(buildEmailHtml());
     setEmailModalOpen(true);
   };
@@ -361,9 +365,10 @@ export default function MealCard({
       if (!booking?.id) throw new Error("Chưa có booking ID");
       await sendEmailMut.mutateAsync({
         bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: booking.email_thread_id,
+        mode: emailMode,
       });
       setEmailModalOpen(false);
-      toast.success("Đã gửi email booking");
+      toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
     } catch (err: any) {
       toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
     } finally {
@@ -374,7 +379,12 @@ export default function MealCard({
   const handleMailtoFallback = () => {
     const mailtoBody = buildMailtoBody();
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName });
+    if (emailMode === "update") {
+      // Update mode: chỉ update timestamp, KHÔNG đổi booking_status
+      saveBooking({ sent_at: new Date().toISOString(), sent_by: currentUserName });
+    } else {
+      saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName });
+    }
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
   };
@@ -629,15 +639,31 @@ export default function MealCard({
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleConfirm}>
                       <Check className="h-3 w-3 mr-1" /> Xác nhận
                     </Button>
+                    {booking?.email_thread_id && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                        onClick={() => openEmailModal("update")}
+                        title="Gửi email cập nhật — sẽ thread vào mail booking cũ">
+                        <Send className="h-3 w-3 mr-1" /> Gửi cập nhật
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
                       <X className="h-3 w-3 mr-1" /> Hủy
                     </Button>
                   </>
                 )}
                 {booking?.booking_status === "nh_xac_nhan" && (
-                  <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
-                    <X className="h-3 w-3 mr-1" /> Hủy
-                  </Button>
+                  <>
+                    {booking?.email_thread_id && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                        onClick={() => openEmailModal("update")}
+                        title="Gửi email cập nhật — sẽ thread vào mail booking cũ">
+                        <Send className="h-3 w-3 mr-1" /> Gửi cập nhật
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
+                      <X className="h-3 w-3 mr-1" /> Hủy
+                    </Button>
+                  </>
                 )}
                 {booking?.booking_status === "cho_xac_nhan_huy" && (
                   <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300"
@@ -664,7 +690,9 @@ export default function MealCard({
     <EmailPreviewModal
       open={emailModalOpen}
       onOpenChange={setEmailModalOpen}
-      title={`Gửi email đặt ${buaAn === "trua" ? "ăn trưa" : "ăn tối"}`}
+      title={emailMode === "update"
+        ? `Gửi email cập nhật ${buaAn === "trua" ? "ăn trưa" : "ăn tối"} (thread vào mail cũ)`
+        : `Gửi email đặt ${buaAn === "trua" ? "ăn trưa" : "ăn tối"}`}
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}

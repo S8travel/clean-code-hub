@@ -327,11 +327,25 @@ cong_ty → tien_cong_ty = thanh_tien, tien_hdv = 0
 hdv     → tien_hdv = thanh_tien, tien_cong_ty = 0
 ```
 
-### FOC
+### FOC nhà hàng (theo khách)
 ```
 so_mien    = floor(so_khach / foc_khach) * foc_mien
 thanh_tien = (so_khach - so_mien) * don_gia
 ```
+
+### FOC khách sạn (theo phòng × ĐÊM, KHÔNG nhân so_dem)
+```
+Mỗi LocalKSRow đại diện cho 1 ĐÊM (so_dem hiện luôn = 1).
+Group rows by ngay_date → tính FOC PER NIGHT:
+  dayRooms     = sum(so_phong)             (KHÔNG * so_dem)
+  dayGross     = sum(so_phong * gia_phong) (KHÔNG * so_dem)
+  focPhong     = floor(dayRooms / foc_khach) * foc_mien
+  avgPrice     = dayGross / dayRooms
+  dayFocAmount = focPhong * avgPrice       (= tiền 1 đêm phòng FOC)
+  rowFocDeduction = (rowGross / dayGross) * dayFocAmount
+```
+**LƯU Ý**: `calcFocDeduction` (display) và `handleBlurSave` (DB) PHẢI dùng cùng formula.
+Lệch nhau ở `* so_dem` → user thấy số khác số trong `doan_chi_phi.tien_cong_ty`.
 
 ### KHÔNG insert generated columns
 ```typescript
@@ -344,6 +358,117 @@ await externalSupabase.from("doan_chi_phi").insert(payload);
 ```typescript
 n.toLocaleString("vi-VN") + " VND"
 ```
+
+---
+
+## 🔄 HYBRID Pattern: Điều tour ↔ Chi phí (cảnh điểm + nhà hàng)
+
+`doan_chi_phi.so_luong` và `don_gia` là FIELDS BIDIRECTIONAL với flag `is_overridden`:
+- Default (`is_overridden=false`): cascade từ Điều tour mỗi lần save
+- OP override (`is_overridden=true`): cascade Điều tour BỎ QUA row đó, giữ giá trị OP
+- Reset (↺ button): set `is_overridden=false` → cascade lần sau sync lại
+
+### Workflow nghiệp vụ
+
+1. **Rebooking** (~100% đoàn): OP sửa số khách trong **danh sách đoàn (DoanDrawer)** →
+   save. `useUpdateDoan` cascade tự động:
+   - `doan_ngay_item.so_luong` cho items chưa customized (= old total) → new total
+   - `doan_chi_phi.so_luong` (canh_diem + NH + bao_hiem) cho non-override + non-paid rows
+   - Bao_hiem dùng công thức `newTotal × soNgay` (compute từ ngay_di/ngay_ve)
+   - Reset `thanh_tien_thuc_te = NULL` (adjustment cũ stale theo gross mới)
+   - Recalc status sau cùng
+   - Override row + paid/partial_paid row được GIỮ — cần adjustment riêng nếu cần.
+   - **SKIP extras** (mo_ta `[dvps_<id>] `, `[trua] `, `[toi] `): dịch vụ phát sinh độc lập với tổng khách.
+   - **VẪN cascade `cho_duyet`/`da_duyet`** rows nhưng track qua `committedDnttAffected` counter
+     → caller toast warning user (DNTT cũ chưa khớp số tiền mới, cần sửa DNTT.so_tien hoặc hủy & tạo lại).
+   - UI: row có `cho_duyet`/`da_duyet` DNTT mà `chi_phi total ≠ DNTT committed` → hiện badge
+     "⚠ DNTT lệch X" trên cell TT ĐNTT (DV + NH section).
+   - Toast warning user nếu thucTeClearCount > 0 hoặc committedDnttAffected > 0.
+
+2. **Phát sinh trước thanh toán** (chưa book NCC): OP edit so_luong/đơn giá trực
+   tiếp ở Chi phí section → flag `is_overridden=true` tự set qua `handleRowSave`.
+
+3. **Phát sinh sau thanh toán NCC** (Aggregate-after-edits pattern, DV+NH):
+   - Input bị disable (lock theo `trang_thai_thanh_toan IN ('paid','partial_paid')`)
+   - OP nhấn "Điều chỉnh" (sliders) → modal nhập **SL + đơn giá thực tế** (NH có FOC + chiết khấu)
+     → `useUpdateChiPhiActual` chỉ update chi_phi state (so_luong, don_gia, tien_*,
+     thanh_tien_thuc_te, is_overridden=true). KHÔNG tạo cong_no/DNTT ngay.
+   - OP có thể thêm **extras** (rows phát sinh) qua nút ➕ — handleExtraSave save ngay
+   - Sau khi xong, hệ thống auto-compute **aggregate delta toàn nhóm**:
+     - `group = main row + extras` (extras filter theo prefix mo_ta)
+     - `delta = sumActual_công_ty - sumPaid_công_ty` (CHỈ rows có `tien_cong_ty > 0`,
+       loại HDV-paid rows vì HDV trả cash trên đường, không qua flow ĐNTT)
+     - `sumActual = SUM(thanh_tien_thuc_te ?? tien_cong_ty)`
+     - `sumPaid = SUM(so_tien_da_tt)` (paid amount qua RPC)
+   - Footer mỗi nhóm hiện 1 button:
+     - `delta > 0` (thiếu) → "Thanh toán bổ sung X ₫" (orange) → tạo DNTT bổ sung
+     - `delta < 0` (thừa) → "Ghi nhận công nợ X ₫" (purple) → tạo cong_no
+     - `delta = 0` → ẩn cả 2 (đã cân bằng)
+   - "ĐNTT bổ sung" cũ (trên row) đã REMOVED — replaced bởi aggregate footer button.
+   - Group key:
+     - DV: extras prefix `[dvps_<main.id>] `, ref_doan_ngay_id = main.ref_doan_ngay_id
+     - NH: extras prefix `[trua] ` / `[toi] `, ref_doan_ngay_id = main.ref_doan_ngay_id
+
+4. **Reset**: ↺ button cạnh row → set `is_overridden=false` → cascade lần sau sync.
+
+5. **Khách sạn**: KHÔNG cascade từ Điều tour. KS độc lập, edit SL/giá/FOC tự do trong KS section.
+
+### Implementation pattern
+
+**Cảnh điểm cascade** (`use-dieu-tour.ts`):
+```typescript
+const { data: existing } = await select("id, so_luong, don_gia, is_overridden")
+  .eq("ref_doan_ngay_item_id", item.id).maybeSingle();
+
+if (existing) {
+  if (existing.is_overridden) {
+    // OP-owned → CHỈ master metadata (mo_ta, nha_cung_cap_id, ref)
+    await update(masterFields).eq("id", existing.id);
+  } else {
+    // Default cascade. Nếu so_luong/don_gia đổi → clear thanh_tien_thuc_te
+    // (adjustment cũ tính từ gross cũ, sẽ stale).
+    const soLuongChanged = ...;
+    const updatePayload = { ...masterFields, ...pricingFields };
+    if (soLuongChanged) {
+      updatePayload.thanh_tien_thuc_te = null;
+      counters.thucTeClearCount++;  // toast cho user biết
+    }
+    await update(updatePayload).eq("id", existing.id);
+  }
+} else {
+  await insert({ ...masterFields, ...pricingFields });  // is_overridden = DB default false
+}
+```
+
+**Nhà hàng cascade** (alwaysFields/initialFields split):
+- alwaysFields: `mo_ta, nha_cung_cap_id, ref_doan_ngay_id`... (UPDATE OK)
+- initialFields: `tien_cong_ty=0, tien_hdv=0` (CHỈ INSERT)
+- UPDATE chỉ alwaysFields → KHÔNG reset tien_* (NH section quản lý qua handleSave)
+
+**Pre-check DNTT trước delete chi_phi** (use-dieu-tour cleanup):
+- Fetch `dntt_allocations` cho chi_phi.id. Nếu có → throw error tiếng Việt cụ thể
+  (DNTT id + tên cảnh điểm). User phải hủy DNTT trước.
+
+**Caller toast** (DoanDetail.tsx onSuccess):
+```typescript
+const x = result?.thucTeClearCount ?? 0;
+if (x > 0) {
+  toast.warning(`Đã reset điều chỉnh thanh_tien_thuc_te trên ${x} chi phí
+  do thay đổi số khách/đơn giá.`, { duration: 6000 });
+}
+```
+
+### UI rules
+
+**ChiPhiDVSection / ChiPhiNHSection** (main rows / main meals):
+- Input editable mặc định
+- `is_overridden=true` → 🔒 indicator + ↺ reset button
+- `trang_thai_thanh_toan IN ('paid','partial_paid')` → input disabled, tooltip
+  "Đã có thanh toán — dùng nút Điều chỉnh để track công nợ"
+- User edit → `handleSave` set `is_overridden: true` trong payload
+- Extras (rows tự tạo, ref=null hoặc nằm `extrasMap`): editable luôn, KHÔNG dùng flag
+
+**ChiPhiKSSection**: KHÔNG đổi — KS độc lập, không có flag is_overridden cần thiết.
 
 ---
 
@@ -383,12 +508,42 @@ trang_thai_thanh_toan: 'unpaid' | 'partial_paid' | 'paid'
   ← Tính qua RPC recalc_chi_phi_payment_status — dùng SUM(payments) thay vì status DNTT
 ```
 
-### Điều chỉnh sau khi đã thanh toán (useCreateAdjustment)
+### Điều chỉnh sau khi đã thanh toán
+
+**DV + NH section** (current pattern — "Aggregate-after-edits"):
+- Modal "Điều chỉnh" → `useUpdateChiPhiActual` chỉ update chi_phi state
+  (so_luong, don_gia, tien_*, thanh_tien_thuc_te, is_overridden=true).
+  KHÔNG tạo cong_no/DNTT ngay.
+- Footer per group commit button (tính `delta = sumActual_company - sumPaid_company`):
+  - `delta > 0` → INSERT dntt loai='dich_vu'/'nha_hang', mo_ta='[Bổ sung] ...', cho_duyet
+  - `delta < 0` → INSERT cong_no với so_tien_goc=abs(delta), trang_thai='con_du'
+- Xem section "🔄 Source of Truth Pattern" → workflow #3 cho UX detail.
+
+**KS section + legacy use** (`useCreateAdjustment`):
 ```
+delta = soTienThucTe - currentTotal
+       currentTotal = SUM(chi_phi.so_tien_da_dntt) trên các chi_phi liên kết qua
+                      dntt_allocations của dnttGoc.
+       so_tien_da_dntt là COMMITMENT THẬT (sum allocs từ DNTT không huỷ),
+       computed bởi RPC recalc_chi_phi_payment_status.
+
 delta > 0 (thiếu) → tạo ĐNTT bổ sung [Bổ sung], cho_duyet
 delta < 0 (thừa) → tạo cong_no với so_tien_goc=abs(delta), trang_thai='con_du'/'da_hoan_tien'
-Đồng thời: cập nhật thanh_tien_thuc_te trên doan_chi_phi (pro-rata)
+
+Cập nhật thanh_tien_thuc_te trên doan_chi_phi:
+  newThucTe[i] = proRataInts(soTienThucTe, allocs.map(a => a.so_tien))[i]
+  → SET ABSOLUTE (= pro-rata của soTienThucTe theo alloc proportion)
+  → KHÔNG cộng dồn delta vào base!
 ```
+**LƯU Ý 2 nguồn dữ liệu KHÔNG được nhầm**:
+- `dnttGoc.so_tien` = frozen, chỉ reflect ĐNTT gốc, KHÔNG biết các adjustment sau
+- `chi_phi.thanh_tien` / `thanh_tien_thuc_te` = STATE của chi_phi, có thể bị user edit
+  (đổi so_luong/don_gia) trước khi adjust → KHÔNG dùng làm currentTotal
+- `chi_phi.so_tien_da_dntt` = COMMITMENT (sum allocs DNTT non-cancelled) — DUY NHẤT đúng
+
+**Bug nếu sai**:
+- Multi-adjustment compounding (dùng dnttGoc.so_tien): 1000→1200→1300 ra 1500
+- Edit-then-adjust silent fail (dùng chi_phi.thanh_tien): user giảm so_luong rồi adjust → delta=0 → KHÔNG tạo cong_no
 
 ### Cấn trừ công nợ (useCreatePayment với method='can_tru')
 ```
@@ -476,6 +631,8 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
 - Không tạo file CSS riêng — Tailwind inline
 - `doan.xe_id` trỏ vào `nha_xe_loai_xe`, KHÔNG phải bảng `xe`
 - Không sửa `so_tien` của ĐNTT đã `da_duyet` hoặc đã paid — tạo adjustment thay thế
+- Không tính `delta` điều chỉnh từ `dnttGoc.so_tien` (frozen) HOẶC `chi_phi.thanh_tien` (user edit). Phải dùng `chi_phi.so_tien_da_dntt` (commitment thật, computed bởi RPC). `thanh_tien_thuc_te` set ABSOLUTE qua `proRataInts(soTienThucTe, allocs.so_tien)` — KHÔNG cộng dồn delta
+- Không nhân `so_dem` vào dayGross trong FOC khách sạn — mỗi LocalKSRow = 1 đêm. `calcFocDeduction` (display) và `handleBlurSave` (save) phải cùng công thức
 - 1 nhà hàng / dịch vụ chỉ xuất hiện tối đa 1 lần / tour (1 chi_phi row) — không có 2 bữa cùng NH
 - Thay đổi danh mục (NH, KS, dịch vụ, xe, visa) không được ảnh hưởng đến đoàn hiện có:
   - Giá → luôn snapshot vào tour khi lưu (`don_gia` trong `doan_ngay_item`, `dich_vu_list` JSONB)

@@ -158,7 +158,23 @@ export default function Index() {
   const handleSave = async (data: DoanInsert) => {
     try {
       if (editingDoan) {
-        await updateDoan.mutateAsync({ id: editingDoan.id, ...data });
+        const result = await updateDoan.mutateAsync({ id: editingDoan.id, ...data });
+        // HYBRID: cảnh báo nếu cascade so_khach đã reset adjustment cũ trên N chi phí
+        const x = (result as any)?.thucTeClearCount ?? 0;
+        if (x > 0) {
+          toast.warning(
+            `Đã đồng bộ ${x} chi phí theo số khách mới. Adjustment cũ (nếu có) đã reset.`,
+            { duration: 6000 }
+          );
+        }
+        const aff = (result as any)?.committedDnttAffected ?? 0;
+        if (aff > 0) {
+          toast.warning(
+            `${aff} chi phí có DNTT chờ duyệt/đã duyệt vừa cập nhật theo số khách mới. ` +
+            `DNTT cũ chưa khớp số tiền — vào tab Chi phí sửa DNTT.so_tien hoặc hủy & tạo lại.`,
+            { duration: 10000 }
+          );
+        }
         // FEATURE_DOAN_PERM_DISABLED: auto-grant khi sửa assigned_to
         // if (data.assigned_to && data.assigned_to !== editingDoan.assigned_to) {
         //   const assigneeName = userRolesMap.get(data.assigned_to) || "";

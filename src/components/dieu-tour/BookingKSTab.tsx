@@ -371,12 +371,17 @@ function BookingKSCard({
 </body></html>`;
   };
 
-  const openEmailModal = () => {
+  const [emailMode, setEmailMode] = useState<"first" | "update">("first");
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
     const datesStr = roomDates.length > 0
       ? roomDates.map(fmtDate).join(", ") + ` (${roomDates.length} đêm)`
       : "";
     setEmailTo(normalizeEmails(row.khach_san_email));
-    setEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`);
+    const baseSubject = `[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`;
+    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
+    // Đừng thêm suffix (vd "– Cập nhật") vì sẽ làm normalized subject khác → tạo thread mới.
+    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailHtml(buildEmailHtml());
     setEmailModalOpen(true);
   };
@@ -407,9 +412,18 @@ Email: s8travel.hddt@gmail.com`;
   const handleSendViaServer = async () => {
     setSending(true);
     try {
-      await sendMut.mutateAsync({ bookingId: row.id, loai: "dat_truoc", to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: row.email_thread_id });
+      await sendMut.mutateAsync({
+        bookingId: row.id,
+        loai: emailMode === "update" ? "update" : "dat_truoc",
+        to: emailTo,
+        subject: emailSubject,
+        html: emailHtml,
+        sentBy: currentUserName,
+        replyTo: userProfile?.email || currentUserEmail || undefined,
+        emailThreadId: row.email_thread_id,
+      });
       setEmailModalOpen(false);
-      toast.success("Đã gửi email đặt phòng");
+      toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email đặt phòng");
     } catch (err: unknown) {
       toast.error("Lỗi gửi email: " + (err instanceof Error ? err.message : "Vui lòng thử lại"));
     } finally {
@@ -420,7 +434,12 @@ Email: s8travel.hddt@gmail.com`;
   const handleMailtoFallback = () => {
     const mailtoBody = buildMailtoBody();
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
+    // Update mode: KHÔNG đổi status, chỉ update timestamp.
+    if (emailMode === "update") {
+      updateStatus(row, { ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
+    } else {
+      updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
+    }
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
   };
@@ -592,9 +611,22 @@ Email: s8travel.hddt@gmail.com`;
             size="sm"
             variant="outline"
             className="h-8 text-xs w-full"
-            onClick={openEmailModal}
+            onClick={() => openEmailModal("first")}
           >
             <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi email đặt phòng
+          </Button>
+        )}
+
+        {/* Gửi cập nhật — sau khi đã gửi lần đầu, In-Reply-To threading vào mail cũ */}
+        {!isCancelled && row.ks_dat_truoc_status !== "chua_gui" && row.email_thread_id && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+            onClick={() => openEmailModal("update")}
+            title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+          >
+            <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi cập nhật
           </Button>
         )}
 
@@ -616,7 +648,7 @@ Email: s8travel.hddt@gmail.com`;
     <EmailPreviewModal
       open={emailModalOpen}
       onOpenChange={setEmailModalOpen}
-      title="Gửi email đặt phòng"
+      title={emailMode === "update" ? "Gửi email cập nhật (thread vào mail cũ)" : "Gửi email đặt phòng"}
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}

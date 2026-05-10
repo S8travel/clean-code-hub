@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { isBefore, isToday, startOfDay } from "date-fns";
 import { Users, Plus, Search, List, Columns3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,15 +9,20 @@ import {
 } from "@/components/ui/select";
 import { useLeadsList, LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS, type Lead } from "@/hooks/use-leads";
 import { useUserRoles } from "@/hooks/use-doan";
+import { useAuth } from "@/hooks/use-auth";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { LeadKanban } from "@/components/leads/LeadKanban";
 import { LeadDrawer } from "@/components/leads/LeadDrawer";
 import { LeadFormDrawer } from "@/components/leads/LeadFormDrawer";
+import { LeadStatsWidget, type LeadStatsPreset } from "@/components/leads/LeadStatsWidget";
 
 type ViewMode = "list" | "kanban";
+type FollowUpFilter = "all" | "today" | "overdue";
 
 export default function LeadsPage() {
+  const { user } = useAuth();
   const { data: userRoles = [] } = useUserRoles();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Filters
   const [search, setSearch] = useState("");
@@ -23,14 +30,46 @@ export default function LeadsPage() {
   const [filterSales, setFilterSales] = useState("");
   const [filterNguon, setFilterNguon] = useState("");
   const [filterLoaiTour, setFilterLoaiTour] = useState("");
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>("all");
 
-  const { data: leads = [], isLoading } = useLeadsList({
+  // Read URL params one time on mount (entry from dashboard widget)
+  useEffect(() => {
+    const status     = searchParams.get("status");
+    const assignedTo = searchParams.get("assigned_to");
+    const followUp   = searchParams.get("follow_up");
+
+    if (status) setFilterStatus(status);
+    if (assignedTo === "me" && user?.user_id) setFilterSales(user.user_id);
+    else if (assignedTo) setFilterSales(assignedTo);
+    if (followUp === "today" || followUp === "overdue") setFollowUpFilter(followUp);
+
+    // Clear URL params after consumed
+    if (status || assignedTo || followUp) {
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.user_id]);
+
+  const { data: rawLeads = [], isLoading } = useLeadsList({
     trang_thai: (filterStatus as any) || null,
     assigned_to: filterSales || null,
     nguon: filterNguon || null,
     loai_tour: filterLoaiTour || null,
     search: search.trim() || null,
   });
+
+  // Apply client-side follow-up filter
+  const leads = useMemo(() => {
+    if (followUpFilter === "all") return rawLeads;
+    const today = startOfDay(new Date());
+    return rawLeads.filter((l) => {
+      if (!l.ngay_follow_up_tiep) return false;
+      if (l.trang_thai === "chot_deal" || l.trang_thai === "mat_khach") return false;
+      const d = new Date(l.ngay_follow_up_tiep);
+      if (followUpFilter === "today") return isToday(d);
+      return isBefore(startOfDay(d), today);
+    });
+  }, [rawLeads, followUpFilter]);
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
@@ -63,6 +102,22 @@ export default function LeadsPage() {
     [userRoles]
   );
 
+  // Widget click → áp filter local thay vì navigate
+  const applyStatsPreset = (preset: LeadStatsPreset) => {
+    if (!user?.user_id) return;
+    setFilterSales(user.user_id);
+    if (preset === "moi") {
+      setFilterStatus("moi");
+      setFollowUpFilter("all");
+    } else if (preset === "today") {
+      setFilterStatus("");
+      setFollowUpFilter("today");
+    } else {
+      setFilterStatus("");
+      setFollowUpFilter("overdue");
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Page header */}
@@ -78,6 +133,13 @@ export default function LeadsPage() {
           <Plus className="h-4 w-4" /> Thêm Lead
         </Button>
       </div>
+
+      {/* Stats widget — chỉ cho user bộ phận điều hành */}
+      {user?.bo_phan === "dieu_hanh" && (
+        <div className="shrink-0 px-6 pt-4 pb-1 bg-background">
+          <LeadStatsWidget userId={user.user_id} onSelect={applyStatsPreset} />
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="shrink-0 px-6 py-3 border-b bg-muted/20 flex flex-wrap items-center gap-2">
@@ -142,6 +204,19 @@ export default function LeadsPage() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* Active follow-up chip */}
+        {followUpFilter !== "all" && (
+          <button onClick={() => setFollowUpFilter("all")}
+            className={`flex items-center gap-1 h-8 px-2 rounded-md text-xs font-medium border ${
+              followUpFilter === "overdue"
+                ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+            }`}>
+            {followUpFilter === "overdue" ? "⚠️ Quá hạn follow-up" : "⏰ Follow-up hôm nay"}
+            <span className="ml-1 opacity-60">×</span>
+          </button>
+        )}
 
         {/* View toggle */}
         <div className="flex rounded-lg border overflow-hidden ml-auto">

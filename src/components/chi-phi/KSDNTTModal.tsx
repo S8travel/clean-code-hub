@@ -2,6 +2,7 @@ import { useState } from "react";
 import { format, subDays, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { proRataInts } from "@/lib/pro-rata";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -86,12 +87,11 @@ export default function KSDNTTModal({
       // 1. Tạo 1 ĐNTT cho FULL amount = soTien + canTruAmount
       const fullAmount = soTien + canTruAmount;
       const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id));
-      const totalThanhTien = allocRows.reduce((s, r) => s + r.thanh_tien, 0);
-      const allocations = allocRows.map((r) => ({
+      // Largest-remainder split → SUM(allocations.so_tien) === fullAmount
+      const allocAmts = proRataInts(fullAmount, allocRows.map((r) => r.thanh_tien));
+      const allocations = allocRows.map((r, i) => ({
         chi_phi_id: r.id!,
-        so_tien: totalThanhTien > 0
-          ? Math.round(fullAmount * (r.thanh_tien / totalThanhTien))
-          : Math.round(fullAmount / allocRows.length),
+        so_tien: allocAmts[i],
       }));
 
       const payload = {

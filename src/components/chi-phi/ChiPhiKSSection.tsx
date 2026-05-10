@@ -20,6 +20,7 @@ import {
   useUpsertChiPhi,
   useDeleteChiPhi,
   useDNTTList,
+  useInsertDNTT,
   type ChiPhiRow,
 } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
@@ -33,7 +34,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import KSRowInput from "./KSRowInput";
 import KSDNTTModal from "./KSDNTTModal";
-import { type CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { exportDNTTKSExcel } from "@/lib/export-dntt-ks-excel";
 import DNTTKSPreviewModal from "./DNTTKSPreviewModal";
 import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
@@ -95,6 +96,26 @@ export interface LocalKSRow {
   thanh_tien: number;
   is_day_use?: boolean;
   ref_doan_ngay_item_id?: number | null;
+  foc_khach_snapshot?: number | null;
+  foc_mien_snapshot?: number | null;
+}
+
+// Resolve FOC config: ưu tiên snapshot trên rows, fall back master
+function resolveKSFoc(
+  rows: LocalKSRow[],
+  ksMaster: { foc_khach: number | null; foc_mien: number | null } | undefined | null,
+): { foc_khach: number | null; foc_mien: number | null } {
+  const withSnap = rows.find((r) => r.foc_khach_snapshot != null || r.foc_mien_snapshot != null);
+  if (withSnap) {
+    return {
+      foc_khach: withSnap.foc_khach_snapshot ?? null,
+      foc_mien:  withSnap.foc_mien_snapshot  ?? null,
+    };
+  }
+  return {
+    foc_khach: ksMaster?.foc_khach ?? null,
+    foc_mien:  ksMaster?.foc_mien  ?? null,
+  };
 }
 
 interface Props {
@@ -109,12 +130,12 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const canTruByDnttId = useMemo(() => {
-    const seen = new Set<number>();
+    // payment_so_tien đã pro-rate per-allocation trong usePaymentsByChiPhi
+    // → sum tất cả rows cùng dntt_id = tổng can_tru của DNTT đó.
+    // KHÔNG dedupe theo payment_id (sẽ mất share của các allocs còn lại).
     const m: Record<number, number> = {};
     paymentsList.forEach((p) => {
       if (p.method !== "can_tru") return;
-      if (seen.has(p.payment_id)) return;
-      seen.add(p.payment_id);
       m[p.dntt_id] = (m[p.dntt_id] || 0) + p.payment_so_tien;
     });
     return m;
@@ -124,6 +145,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
+  const insertDNTT = useInsertDNTT();
   const { data: currentUserName = "" } = useCurrentUserName();
 
   // Tracks which cards have been explicitly toggled by user
@@ -289,17 +311,142 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   } | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
-  // Điều chỉnh sau thanh toán
+  // Điều chỉnh sau thanh toán (legacy — vẫn giữ cho compat, button đã ẩn)
   const adjustMut = useCreateAdjustment();
   const [adjustTarget, setAdjustTarget] = useState<DNTTRow | null>(null);
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustSurplusMode, setAdjustSurplusMode] = useState<"cong_no" | "hoan_tien">("cong_no");
 
+  // Aggregate commit dialog (chốt chênh lệch sau OP edit so_phong/gia_phong/FOC)
+  interface AggCommitKSTarget {
+    ksId: number;
+    ksName: string;
+    nccId: number | null;
+    nccName: string | null;
+    chiPhiIds: number[];
+    delta: number;       // < 0 = thừa (cong_no), > 0 = thiếu (DNTT bổ sung)
+    sumActual: number;
+    sumPaid: number;
+    groupCongNoCN: number;
+    groupCongNoHT: number;
+    paidDntt: DNTTRow | null;
+    serviceDate: string | null;
+  }
+  const [aggCommit, setAggCommit] = useState<AggCommitKSTarget | null>(null);
+  const [aggReason, setAggReason] = useState("");
+  const [aggNgayCan, setAggNgayCan] = useState("");
+  const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
+  const [aggCanTru, setAggCanTru] = useState<CanTruSelection | null>(null);
+
   // Sửa ĐNTT chờ duyệt
   const updateDNTT = useUpdateDNTT();
   const [editingDnttId, setEditingDnttId] = useState<number | null>(null);
   const [editAmount, setEditAmount] = useState("");
+
+  // ── Aggregate commit (chênh lệch sau OP edit so_phong/gia_phong/FOC) ────────
+
+  const handleAggCommit = async () => {
+    if (!aggCommit) return;
+    const { ksId, ksName, nccId, nccName, chiPhiIds, delta, paidDntt } = aggCommit;
+    const absDelta = Math.abs(delta);
+    if (!nccId) {
+      toast.error("Khách sạn không có NCC — không thể tạo công nợ/ĐNTT bổ sung");
+      return;
+    }
+    try {
+      if (delta < 0) {
+        // Thừa → tạo cong_no (con_du = NCC giữ credit, hoan_tien = NCC trả cash)
+        const trang_thai = aggSurplusMode === "hoan_tien" ? "da_hoan_tien" : "con_du";
+        const lyDoLabel = aggSurplusMode === "hoan_tien" ? "hoàn tiền" : "công nợ";
+        const { error } = await externalSupabase.from("cong_no").insert({
+          doan_id: doanId,
+          dntt_goc_id: paidDntt?.id ?? null,
+          nha_cung_cap_id: nccId,
+          ten_nha_cung_cap: nccName ?? paidDntt?.ten_nha_cung_cap ?? null,
+          so_tien_goc: absDelta,
+          trang_thai,
+          ly_do: aggReason
+            ? `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}. Lý do: ${aggReason}`
+            : `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}`,
+        });
+        if (error) throw error;
+        if (chiPhiIds.length > 0) await recalcChiPhiStatus(chiPhiIds);
+        toast.success(
+          aggSurplusMode === "hoan_tien"
+            ? `Đã ghi nhận hoàn tiền ${fmt(absDelta)} ₫`
+            : `Đã ghi nhận công nợ ${fmt(absDelta)} ₫`,
+        );
+      } else {
+        // Thiếu → tạo DNTT bổ sung. Allocations pro-rata theo chi_phi.tien_cong_ty hiện tại.
+        const cps = chiPhiRows.filter((cp) => chiPhiIds.includes(cp.id!));
+        const totalCt = cps.reduce((s, c) => s + Number(c.tien_cong_ty ?? 0), 0);
+        const allocs: { chi_phi_id: number; so_tien: number }[] = [];
+        if (totalCt > 0 && cps.length > 0) {
+          let assigned = 0;
+          for (let i = 0; i < cps.length; i++) {
+            const isLast = i === cps.length - 1;
+            const portion = isLast
+              ? absDelta - assigned
+              : Math.round(absDelta * (Number(cps[i].tien_cong_ty ?? 0) / totalCt));
+            if (portion > 0) {
+              allocs.push({ chi_phi_id: cps[i].id!, so_tien: portion });
+              assigned += portion;
+            }
+          }
+        }
+        const newDntt = await insertDNTT.mutateAsync({
+          doan_id: doanId,
+          loai: "khach_san",
+          mo_ta: `[Bổ sung] ${ksName}`.trim(),
+          nha_cung_cap_id: nccId,
+          ten_nha_cung_cap: nccName ?? null,
+          so_tien: absDelta,
+          la_coc: false,
+          trang_thai_duyet: "cho_duyet",
+          ref_loai: "khach_san",
+          ref_id: ksId,
+          ngay_can_thanh_toan: aggNgayCan || null,
+          ghi_chu: aggReason ? `Lý do: ${aggReason}` : null,
+          allocations: allocs.length > 0 ? allocs : undefined,
+        } as any);
+        const newDnttId = (newDntt as any)?.id ?? null;
+
+        const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, absDelta) : 0;
+        if (canTruAmt > 0 && newDnttId && aggCanTru) {
+          const { error: payErr } = await externalSupabase.from("payments").insert({
+            dntt_id: newDnttId,
+            method: "can_tru",
+            so_tien: canTruAmt,
+            cong_no_id: aggCanTru.congNoId,
+            ghi_chu: `Cấn trừ từ đoàn: ${aggCanTru.tenDoan}`,
+          });
+          if (payErr) throw payErr;
+          await appendCanTruLog(aggCanTru.congNoId, canTruAmt, tenDoan || `#${doanId}`);
+          if (chiPhiIds.length > 0) await recalcChiPhiStatus(chiPhiIds);
+        }
+
+        toast.success(
+          canTruAmt > 0
+            ? `Đã tạo ĐNTT bổ sung ${fmt(absDelta)} ₫ (cấn trừ ${fmt(canTruAmt)} ₫, cash còn ${fmt(absDelta - canTruAmt)} ₫)`
+            : `Đã tạo ĐNTT bổ sung ${fmt(absDelta)} ₫`,
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["cong-no"] });
+      qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
+      qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
+      setAggCommit(null);
+      setAggReason("");
+      setAggNgayCan("");
+      setAggSurplusMode("con_du");
+      setAggCanTru(null);
+    } catch (err: any) {
+      toast.error("Lỗi: " + (err?.message || ""));
+    }
+  };
 
   const handleCancelSubmit = async () => {
     if (!cancelTarget) return;
@@ -481,6 +628,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             thanh_tien: (cp.so_luong || 0) * (cp.don_gia || 0),
             is_day_use: true,
             ref_doan_ngay_item_id: cp.ref_doan_ngay_item_id,
+            foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
+            foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
           } as LocalKSRow;
         }
 
@@ -507,6 +656,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           so_dem: 1,
           gia_phong: cp.don_gia || 0,
           thanh_tien: (cp.so_luong || 1) * (cp.don_gia || 0),
+          foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
+          foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
         } as LocalKSRow;
       })
       .filter((r): r is LocalKSRow => r !== null);
@@ -563,18 +714,20 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         (r) => r.khach_san_id === row.khach_san_id && r.ngay_date === row.ngay_date,
       );
       const ksInfo = ksData?.khachSanMap[row.khach_san_id];
-      const focKhach = ksInfo?.foc_khach ?? null;
-      const focMien = ksInfo?.foc_mien ?? null;
+      // Snapshot ưu tiên — KHÔNG dùng master trừ khi chưa có snapshot (lần đầu)
+      const sameKsRows = localRowsRef.current.filter((r) => r.khach_san_id === row.khach_san_id);
+      const { foc_khach: focKhach, foc_mien: focMien } = resolveKSFoc(sameKsRows, ksInfo);
       // Tổng phòng ngày này — chỉ tính FOC nếu đủ ngưỡng trong 1 đêm
       const dayTotalRooms = sameKsDayRows.reduce((s, r2) => s + (r2.so_phong || 0), 0);
       const dayFocPhong = (focKhach && focMien && focKhach > 0 && dayTotalRooms >= focKhach)
         ? Math.floor(dayTotalRooms / focKhach) * focMien
         : 0;
-      const rowGross = row.thanh_tien; // so_phong * gia_phong * so_dem
-      // Tiền FOC ngày này = số phòng miễn * giá bình quân cả ngày
-      // Phân bổ cho row này theo tỉ lệ doanh thu
+      const rowGross = row.thanh_tien; // = so_phong * gia_phong (mỗi row = 1 đêm)
+      // FOC tính theo từng đêm: số phòng miễn × giá bình quân/phòng/đêm.
+      // Phân bổ cho row này theo tỉ lệ doanh thu trong đêm đó.
+      // KHÔNG nhân so_dem ở đây — phải khớp với calcFocDeduction (display).
       const dayGross = sameKsDayRows.reduce(
-        (s, r2) => s + (r2.so_phong || 0) * (r2.gia_phong || 0) * (r2.so_dem || 1), 0,
+        (s, r2) => s + (r2.so_phong || 0) * (r2.gia_phong || 0), 0,
       );
       const avgPrice = dayTotalRooms > 0 ? dayGross / dayTotalRooms : 0;
       const dayFocAmount = dayFocPhong * avgPrice;
@@ -598,6 +751,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           tien_cong_ty: tienCongTy,
           tien_hdv: 0,
           thanh_toan_dinh_ky: dinhKyKsIdsRef.current.has(row.khach_san_id),
+          // Snapshot: lần đầu lấy từ master (focKhach/focMien đã resolve ở trên).
+          // Lần sau giữ snapshot hiện có (resolveKSFoc trả snapshot nếu có).
+          foc_khach_snapshot: focKhach,
+          foc_mien_snapshot:  focMien,
         },
         {
           onSuccess: (data) => {
@@ -746,6 +903,12 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   // Tổng công nợ / hoàn tiền per KS — từ bảng cong_no
   const congNoByKs: Record<number, number> = {};
   const hoanTienByKs: Record<number, number> = {};
+  // groupCongNoTotalByKs = sum so_tien_goc across ALL cong_no states (con_du + da_can_tru + da_hoan_tien).
+  // Dùng để effectiveDelta / effectiveCommitted: trừ phần NCC đã credit/refund khỏi sumPaid/sumCommitted.
+  // Split CN (con_du + da_can_tru) vs HT (da_hoan_tien) cho display modal.
+  const groupCongNoTotalByKs: Record<number, number> = {};
+  const groupCongNoCNByKs: Record<number, number> = {};
+  const groupCongNoHTByKs: Record<number, number> = {};
   // Build map dntt_id → ksId
   const dnttKsMap: Record<number, number> = {};
   dnttList.forEach((d) => {
@@ -755,11 +918,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     if (c.dntt_goc_id == null) return;
     const ksId = dnttKsMap[c.dntt_goc_id];
     if (!ksId) return;
+    const goc = Number(c.so_tien_goc ?? 0);
     if (c.trang_thai === "con_du") {
       congNoByKs[ksId] = (congNoByKs[ksId] || 0) + c.so_tien_con_lai;
+      groupCongNoCNByKs[ksId] = (groupCongNoCNByKs[ksId] || 0) + goc;
+    } else if (c.trang_thai === "da_can_tru") {
+      groupCongNoCNByKs[ksId] = (groupCongNoCNByKs[ksId] || 0) + goc;
     } else if (c.trang_thai === "da_hoan_tien") {
-      hoanTienByKs[ksId] = (hoanTienByKs[ksId] || 0) + c.so_tien_goc;
+      hoanTienByKs[ksId] = (hoanTienByKs[ksId] || 0) + goc;
+      groupCongNoHTByKs[ksId] = (groupCongNoHTByKs[ksId] || 0) + goc;
     }
+    groupCongNoTotalByKs[ksId] = (groupCongNoTotalByKs[ksId] || 0) + goc;
   });
 
   const getKsChiPhiStatus = (ksId: number): string => {
@@ -880,12 +1049,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         const totalKSGross = rows.reduce((sum, r) => {
           return sum + (Number(r.so_phong) || 0) * (Number(r.gia_phong) || 0) * (Number(r.so_dem) || 1);
         }, 0);
-        const focDeduction = calcFocDeduction(rows, ks?.foc_khach ?? null, ks?.foc_mien ?? null);
+        // Resolve FOC từ snapshot (per-tour) thay vì master — tránh master changes
+        // ảnh hưởng đoàn cũ.
+        const ksFoc = resolveKSFoc(rows, ks);
+        const focDeduction = calcFocDeduction(rows, ksFoc.foc_khach, ksFoc.foc_mien);
         const totalKS = totalKSGross - focDeduction;
-
-        const focDisplay = ks?.foc_khach && ks?.foc_mien
-          ? `FOC ${ks.foc_khach}免${ks.foc_mien}`
-          : "";
 
         const daCoc = cocByKs[ksId] || 0;
         const daTT = ttByKs[ksId] || 0;
@@ -914,6 +1082,30 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         const paidDnttsForKs = cancellableDntts.filter((d) => d.payment_status === "paid");
         const unpaidDnttsForKs = cancellableDntts.filter((d) => d.payment_status !== "paid");
         const canCancelKs = cancellableDntts.length > 0;
+
+        // Aggregate-after-edits values cho KS card.
+        // Identical pattern với DV/NH: sumActual (chi phí thực tế), sumPaid (đã TT),
+        // groupCongNoTotal (cong_no đã ghi nhận, mọi state) → effectiveDelta + effectiveCommitted.
+        const sumActual = thucTeKS;
+        const sumPaid = daTT;
+        const sumCommitted = cancellableDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+        const groupCongNoTotal = groupCongNoTotalByKs[ksId] || 0;
+        const aggDelta = sumActual - sumPaid;
+        const effectiveDelta = aggDelta + groupCongNoTotal;
+        const effectiveCommitted = sumCommitted - groupCongNoTotal;
+        const daDeNghi = unpaidDnttsForKs.reduce((s, d) => s + Math.max(0, d.so_tien - (d.paid_amount || 0)), 0);
+        const showAggBtn = daDeNghi === 0 && sumPaid > 0 && effectiveDelta !== 0;
+        const aggPaidDntt = paidDnttsForKs[0] ?? null;
+
+        // Mismatch warning: chi_phi total ≠ DNTT committed (cho_duyet/da_duyet),
+        // sau khi trừ cong_no đã ghi nhận. Trigger khi OP edit room (so_phong/gia_phong/FOC)
+        // sau khi DNTT đã commit nhưng DNTT.so_tien chưa sửa.
+        const hasCommittedDntt = cancellableDntts.some(
+          (d) => d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet",
+        );
+        // Hide badge when footer button shows (redundant — same info conveyed)
+        const dnttMismatch = hasCommittedDntt && sumActual !== effectiveCommitted && !showAggBtn
+          ? sumActual - effectiveCommitted : 0;
 
         const byDay: Record<string, LocalKSRow[]> = {};
         rows.forEach((r) => {
@@ -1002,7 +1194,21 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                       }
                     </span>
                   )}
-                  <span className="text-xs text-muted-foreground">{focDisplay}</span>
+                  {dnttMismatch !== 0 && (
+                    <span
+                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
+                      title={`Số tiền DNTT đã commit (${fmt(sumCommitted)} ₫) khác chi phí thực tế (${fmt(sumActual)} ₫). Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.`}
+                    >
+                      ⚠ DNTT lệch {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
+                    </span>
+                  )}
+                  <KSFocEditor
+                    doanId={doanId}
+                    ksId={ksId}
+                    rowIds={rows.map((r) => r.id).filter((id): id is number => id != null)}
+                    focKhach={ksFoc.foc_khach}
+                    focMien={ksFoc.foc_mien}
+                  />
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1163,7 +1369,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                                   : isApproved ? "bg-teal-100 text-teal-700"
                                   : "bg-muted text-muted-foreground",
                               )}>
-                                {isPaid ? "Đã TT" : isWaiting ? "Chờ duyệt" : isApproved ? "Đã duyệt" : "—"}
+                                {isPaid
+                                  ? `Đã TT${dntt.thanh_toan_luc ? ` ${format(new Date(dntt.thanh_toan_luc), "dd/MM")}` : ""}`
+                                  : isWaiting ? "Chờ duyệt"
+                                  : isApproved ? "Đã duyệt"
+                                  : "—"}
                               </span>
                             </div>
                             <div className="flex items-center gap-1">
@@ -1210,22 +1420,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                                       <Pencil className="h-3 w-3" />
                                     </Button>
                                   )}
-                                  {/* Điều chỉnh chỉ khi DNTT đó đã TT VÀ toàn bộ chi phí KS đã được thanh toán đủ */}
-                                  {isPaid && isDaTT && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 text-[10px] px-2 text-blue-600 hover:text-blue-700"
-                                      onClick={() => {
-                                        setAdjustTarget(dntt as unknown as DNTTRow);
-                                        setAdjustAmount(String(dntt.so_tien));
-                                        setAdjustReason("");
-                                      }}
-                                    >
-                                      <SlidersHorizontal className="h-3 w-3 mr-1" />
-                                      Điều chỉnh
-                                    </Button>
-                                  )}
+                                  {/* Per-DNTT "Điều chỉnh" cũ — REMOVED, replaced by aggregate footer button. */}
                                   {!isPaid && (
                                     <Button
                                       variant="ghost"
@@ -1252,9 +1447,96 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                           </div>
                         );
                       })}
+                      {/* CN / HT badges — hiển thị tổng công nợ + hoàn tiền của KS này */}
+                      {(congNoAmount > 0 || hoanTienAmount > 0) && (
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-muted/10 border-t border-border">
+                          {congNoAmount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
+                              CN: {fmt(congNoAmount)}
+                            </span>
+                          )}
+                          {hoanTienAmount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
+                              HT: {fmt(hoanTienAmount)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
+
+                {/* Aggregate breakdown row — chỉ hiện khi còn chênh lệch sau trừ cong_no */}
+                {showAggBtn && (
+                  <div className={cn(
+                    "rounded px-3 py-1.5 text-[11px] flex items-center justify-between gap-3 flex-wrap",
+                    effectiveDelta > 0 ? "bg-orange-50/70" : "bg-purple-50/70",
+                  )}>
+                    <span className="text-muted-foreground">
+                      Sau điều chỉnh:
+                      <span className="ml-1">Thực tế <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
+                      <span className="mx-1">·</span>
+                      <span>Đã TT <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
+                      {groupCongNoTotal > 0 && (
+                        <>
+                          <span className="mx-1">·</span>
+                          <span>Đã CN/HT <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
+                        </>
+                      )}
+                      <span className="mx-1">·</span>
+                      <span>Còn lệch <span className={cn(
+                        "font-semibold tabular-nums",
+                        effectiveDelta > 0 ? "text-orange-700" : "text-purple-700",
+                      )}>
+                        {effectiveDelta > 0 ? "+" : "−"}{fmt(Math.abs(effectiveDelta))} ₫
+                      </span> ({effectiveDelta > 0 ? "thiếu" : "thừa"})</span>
+                    </span>
+                    {/* Cả delta > 0 (thiếu) và delta < 0 (thừa) đều mở aggregate commit modal.
+                        Modal có KSCongNoPanel cho cấn trừ + RadioGroup cho hoàn tiền/công nợ. */}
+                    <Button
+                      size="sm"
+                      className={cn(
+                        "h-7 text-[11px] px-2.5 text-white",
+                        effectiveDelta > 0
+                          ? "bg-orange-600 hover:bg-orange-700"
+                          : "bg-purple-600 hover:bg-purple-700",
+                      )}
+                      onClick={() => {
+                        setAggCommit({
+                          ksId,
+                          ksName: ks?.ten || `KS #${ksId}`,
+                          nccId: ks?.nha_cung_cap_id ?? null,
+                          nccName: ks?.ten_ncc ?? null,
+                          chiPhiIds: chiPhiIdsByKs[ksId] || [],
+                          delta: effectiveDelta,
+                          sumActual,
+                          sumPaid,
+                          groupCongNoCN: groupCongNoCNByKs[ksId] || 0,
+                          groupCongNoHT: groupCongNoHTByKs[ksId] || 0,
+                          paidDntt: aggPaidDntt,
+                          serviceDate: rows[0]?.ngay_date ?? null,
+                        });
+                        setAggCanTru(null);
+                        setAggReason("");
+                        setAggSurplusMode("con_du");
+                        // Default ngày cần TT cho delta > 0
+                        if (effectiveDelta > 0 && rows[0]?.ngay_date) {
+                          try {
+                            const d = new Date(rows[0].ngay_date + "T00:00:00");
+                            d.setDate(d.getDate() - 1);
+                            setAggNgayCan(d.toISOString().slice(0, 10));
+                          } catch { setAggNgayCan(""); }
+                        } else {
+                          setAggNgayCan("");
+                        }
+                      }}
+                    >
+                      {effectiveDelta > 0
+                        ? `Thanh toán bổ sung ${fmt(effectiveDelta)} ₫`
+                        : `Xử lý chênh lệch thừa ${fmt(Math.abs(effectiveDelta))} ₫`}
+                    </Button>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1284,7 +1566,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     {isKsDinhKy && effectiveKsStatus === "chua_de_nghi" && (
                       <span className="text-[11px] text-indigo-500 italic">Thanh toán định kỳ</span>
                     )}
-                    {/* Chưa có DNTT nào → nút tạo lần đầu */}
+                    {/* Chưa có DNTT nào → nút tạo lần đầu (giữ nguyên) */}
                     {!isKsDinhKy && effectiveKsStatus === "chua_de_nghi" && (
                       <Button
                         variant="outline"
@@ -1296,18 +1578,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                         Đề nghị TT
                       </Button>
                     )}
-                    {/* Đã thanh toán/duyệt → cho phép tạo thêm cho phần còn lại */}
-                    {!isKsDinhKy && effectiveKsStatus !== "chua_de_nghi" && effectiveKsStatus !== "cho_duyet" && effectiveKsStatus !== "cong_no" && effectiveKsStatus !== "hoan_tien" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => { setModalKsId(ksId); setModalOpen(true); }}
-                      >
-                        <ArrowRight className="h-3 w-3 mr-1" />
-                        {conLai > 0 ? `Đề nghị TT còn lại: ${fmt(conLai)} ₫` : "Đề nghị TT bổ sung"}
-                      </Button>
-                    )}
+                    {/* "Đề nghị TT bổ sung / còn lại" cũ — REMOVED, replaced by aggregate breakdown button. */}
                   </div>
                 </div>
               </div>
@@ -1353,7 +1624,163 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         />
       )}
 
-      {/* Adjustment dialog */}
+      {/* Aggregate Commit Dialog — chốt chênh lệch sau OP edit so_phong/gia_phong/FOC */}
+      <Dialog open={!!aggCommit} onOpenChange={o => { if (!o) { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {aggCommit && aggCommit.delta > 0
+                ? "Tạo ĐNTT bổ sung"
+                : aggSurplusMode === "hoan_tien" ? "Ghi nhận hoàn tiền" : "Ghi nhận công nợ"}
+            </DialogTitle>
+          </DialogHeader>
+          {aggCommit && (
+            <div className="space-y-3 py-1 text-sm">
+              <p className="text-xs text-muted-foreground">{aggCommit.ksName}</p>
+              <div className="space-y-1 text-xs border rounded px-2 py-1.5 bg-muted/30">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tổng thực tế (KS):</span>
+                  <span className="font-medium tabular-nums">{fmt(aggCommit.sumActual)} ₫</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Đã thanh toán:</span>
+                  <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid)} ₫</span>
+                </div>
+                {aggCommit.groupCongNoCN > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">(−) Đã ghi nhận công nợ:</span>
+                    <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoCN)} ₫</span>
+                  </div>
+                )}
+                {aggCommit.groupCongNoHT > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">(−) Đã hoàn tiền:</span>
+                    <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoHT)} ₫</span>
+                  </div>
+                )}
+                {(aggCommit.groupCongNoCN > 0 || aggCommit.groupCongNoHT > 0) && (
+                  <div className="flex justify-between border-t pt-1">
+                    <span className="text-muted-foreground">Còn cần thanh toán:</span>
+                    <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid - aggCommit.groupCongNoCN - aggCommit.groupCongNoHT)} ₫</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t pt-1">
+                  <span className="text-muted-foreground">Chênh lệch còn lại:</span>
+                  <span className={cn(
+                    "font-semibold tabular-nums",
+                    aggCommit.delta > 0 ? "text-orange-700" : "text-purple-700",
+                  )}>
+                    {aggCommit.delta > 0 ? "+" : "−"}{fmt(Math.abs(aggCommit.delta))} ₫
+                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                      ({aggCommit.delta > 0 ? "thiếu, cần thanh toán thêm" : "thừa"})
+                    </span>
+                  </span>
+                </div>
+              </div>
+              {aggCommit.nccName && (
+                <div className="text-xs text-muted-foreground">
+                  NCC: <span className="font-medium text-foreground">{aggCommit.nccName}</span>
+                </div>
+              )}
+              {aggCommit.delta > 0 && aggCommit.nccId != null && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Cấn trừ công nợ NCC (optional)</Label>
+                  <KSCongNoPanel
+                    nccId={aggCommit.nccId}
+                    doanId={doanId}
+                    value={aggCanTru}
+                    onChange={(v) => {
+                      if (v && aggCommit) {
+                        const capped = Math.min(v.soTienCanTru, aggCommit.delta);
+                        setAggCanTru({ ...v, soTienCanTru: capped });
+                      } else {
+                        setAggCanTru(v);
+                      }
+                    }}
+                  />
+                  {aggCanTru && aggCanTru.soTienCanTru > 0 && (
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      DNTT sẽ tạo: <span className="font-medium text-foreground">{fmt(aggCommit.delta)} ₫</span>
+                      {" · "}Cấn trừ: <span className="font-medium text-amber-700">{fmt(aggCanTru.soTienCanTru)} ₫</span>
+                      {" · "}Cash còn TT: <span className="font-medium text-foreground">{fmt(aggCommit.delta - aggCanTru.soTienCanTru)} ₫</span>
+                    </p>
+                  )}
+                </div>
+              )}
+              {aggCommit.delta < 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Hình thức xử lý</Label>
+                  <RadioGroup
+                    value={aggSurplusMode}
+                    onValueChange={(v) => setAggSurplusMode(v as "con_du" | "hoan_tien")}
+                    className="space-y-1.5"
+                  >
+                    <div className="flex items-start gap-2">
+                      <RadioGroupItem value="con_du" id="ks-agg-cn" className="mt-0.5" />
+                      <Label htmlFor="ks-agg-cn" className="text-xs cursor-pointer leading-tight">
+                        <span className="font-medium">Ghi nhận công nợ</span>
+                        <p className="text-muted-foreground font-normal">NCC giữ tiền — có thể cấn trừ với DNTT khác cùng NCC</p>
+                      </Label>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <RadioGroupItem value="hoan_tien" id="ks-agg-ht" className="mt-0.5" />
+                      <Label htmlFor="ks-agg-ht" className="text-xs cursor-pointer leading-tight">
+                        <span className="font-medium">Ghi nhận hoàn tiền</span>
+                        <p className="text-muted-foreground font-normal">NCC trả lại tiền cash — không cấn trừ</p>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
+              {aggCommit.delta > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Ngày cần thanh toán</Label>
+                  <Input
+                    type="date"
+                    className="h-8 text-xs"
+                    value={aggNgayCan}
+                    onChange={e => setAggNgayCan(e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Lý do (optional)</Label>
+                <Textarea
+                  className="text-xs min-h-[56px]"
+                  value={aggReason}
+                  onChange={e => setAggReason(e.target.value)}
+                  placeholder={
+                    aggCommit.delta > 0
+                      ? "VD: phụ thu giường phụ..."
+                      : "VD: 1 phòng không sử dụng..."
+                  }
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="text-xs"
+              onClick={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); }}>
+              Đóng
+            </Button>
+            <Button
+              size="sm"
+              className={cn(
+                "text-xs text-white",
+                aggCommit && aggCommit.delta > 0
+                  ? "bg-orange-600 hover:bg-orange-700"
+                  : "bg-purple-600 hover:bg-purple-700",
+              )}
+              disabled={insertDNTT.isPending || !aggCommit}
+              onClick={handleAggCommit}
+            >
+              Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjustment dialog (legacy — vẫn giữ code nhưng button đã ẩn) */}
       <Dialog open={!!adjustTarget} onOpenChange={(o) => { if (!o) { setAdjustTarget(null); setAdjustSurplusMode("cong_no"); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1602,5 +2029,66 @@ function EmptyDayHeader({ dateStr, ngaySo, isDayUse, onAddRow }: { dateStr: stri
         </Button>
       </TableCell>
     </TableRow>
+  );
+}
+
+// ── KS FOC editor ────────────────────────────────────────────
+// Edit FOC snapshot per-tour. Blur-save → update tất cả chi_phi rows của KS này
+// trong đoàn hiện tại. Master không thay đổi.
+function KSFocEditor({
+  doanId, ksId, rowIds, focKhach, focMien,
+}: {
+  doanId: number;
+  ksId: number;
+  rowIds: number[];
+  focKhach: number | null;
+  focMien: number | null;
+}) {
+  const qc = useQueryClient();
+  const [k, setK] = useState(focKhach != null ? String(focKhach) : "");
+  const [m, setM] = useState(focMien != null ? String(focMien) : "");
+
+  // Sync khi prop đổi (load lần đầu)
+  useEffect(() => { setK(focKhach != null ? String(focKhach) : ""); }, [focKhach]);
+  useEffect(() => { setM(focMien != null ? String(focMien) : ""); }, [focMien]);
+
+  const save = async () => {
+    const nextK = k.trim() === "" ? null : Number(k) || null;
+    const nextM = m.trim() === "" ? null : Number(m) || null;
+    if (nextK === focKhach && nextM === focMien) return;
+    if (rowIds.length === 0) return; // không có row nào saved → snapshot sẽ ghi khi save lần đầu
+
+    const { error } = await externalSupabase
+      .from("doan_chi_phi")
+      .update({ foc_khach_snapshot: nextK, foc_mien_snapshot: nextM })
+      .in("id", rowIds);
+    if (error) return;
+    qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+  };
+  void ksId; // ksId reserved cho future filter (multi-KS update qua join)
+
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground" title="FOC: cứ X phòng/đêm miễn Y phòng (per tour)">
+      FOC
+      <input
+        value={k}
+        onChange={(e) => setK(e.target.value)}
+        onBlur={save}
+        type="number"
+        min={0}
+        placeholder="—"
+        className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
+      />
+      <span>免</span>
+      <input
+        value={m}
+        onChange={(e) => setM(e.target.value)}
+        onBlur={save}
+        type="number"
+        min={0}
+        placeholder="—"
+        className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
+      />
+    </span>
   );
 }

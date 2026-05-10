@@ -72,3 +72,66 @@ export function useMarkThongBaoRead() {
     },
   });
 }
+
+// Tổng unread của user (mọi loại) — alias rõ nghĩa cho header bell
+export function useThongBaoTotalUnread(userId: string | null | undefined) {
+  return useThongBaoCount(userId);
+}
+
+// Mark all unread = read (không filter loại)
+export function useMarkAllRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await externalSupabase
+        .from("thong_bao")
+        .update({ is_read: true })
+        .eq("user_id", userId)
+        .eq("is_read", false);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+  });
+}
+
+// Mark single notification = read
+export function useMarkOneRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await externalSupabase
+        .from("thong_bao")
+        .update({ is_read: true })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+  });
+}
+
+// Realtime subscribe: mỗi INSERT vào thong_bao của user → invalidate queries
+export function useRealtimeThongBao(userId: string | null | undefined) {
+  const qc = useQueryClient();
+  useQuery({
+    queryKey: [QK, "realtime_sub", userId],
+    enabled: !!userId,
+    queryFn: () => {
+      const channel = externalSupabase
+        .channel(`thong_bao_user_${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "thong_bao",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => qc.invalidateQueries({ queryKey: [QK] }),
+        )
+        .subscribe();
+      return channel;
+    },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}

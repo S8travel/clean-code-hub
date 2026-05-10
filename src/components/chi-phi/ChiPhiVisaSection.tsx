@@ -119,12 +119,11 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
   const { data: congNoList = [] } = useCongNoList({ doanId });
 
   const canTruByDnttId = useMemo(() => {
-    const seen = new Set<number>();
+    // payment_so_tien đã pro-rate per-allocation trong usePaymentsByChiPhi.
+    // KHÔNG dedupe theo payment_id (sẽ mất share của các allocs còn lại).
     const m: Record<number, number> = {};
     paymentsList.forEach((p) => {
       if (p.method !== "can_tru") return;
-      if (seen.has(p.payment_id)) return;
-      seen.add(p.payment_id);
       m[p.dntt_id] = (m[p.dntt_id] || 0) + p.payment_so_tien;
     });
     return m;

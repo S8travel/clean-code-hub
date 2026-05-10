@@ -320,12 +320,74 @@ export function useInitDoanNgay() {
     },
   });
 }
+// Pre-check trước khi user xóa cảnh điểm khỏi điều tour. Nếu chi_phi liên kết
+// đã có dntt_allocations → KHÔNG xóa được (giữ data integrity). Trả error
+// tiếng Việt cụ thể (DNTT id + tên cảnh điểm) để UI hiện toast & block delete.
+//
+// Logic giống `deleteChiPhiByItemIdSafe` (trong useSaveDieuTour) nhưng KHÔNG
+// throw — caller nhận object { ok, reason } để hiện toast trước khi setState UI.
+export async function checkCanhDiemDeletable(
+  itemId: number,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const { data: cpRow } = await externalSupabase
+    .from("doan_chi_phi")
+    .select("id, mo_ta")
+    .eq("ref_doan_ngay_item_id", itemId)
+    .maybeSingle();
+  if (!cpRow) return { ok: true };
+  const { data: allocs } = await externalSupabase
+    .from("dntt_allocations")
+    .select("dntt_id")
+    .eq("chi_phi_id", cpRow.id)
+    .limit(5);
+  if (allocs && allocs.length > 0) {
+    const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
+      .map((id) => `#${id}`)
+      .join(", ");
+    const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
+    return {
+      ok: false,
+      reason: `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`,
+    };
+  }
+  return { ok: true };
+}
+
 export function useSaveDieuTour() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: SaveDieuTourPayload) => {
       const { doanId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
+
+      // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
+      const counters = { thucTeClearCount: 0 };
+
+      // Pre-check DNTT trước khi delete chi_phi linked với doan_ngay_item.
+      // Nếu chi_phi có dntt_allocations → THROW error tiếng Việt cụ thể (DNTT id + tên cảnh điểm).
+      // User phải hủy/giải phóng allocation trước khi xóa cảnh điểm khỏi tour.
+      const deleteChiPhiByItemIdSafe = async (itemId: number) => {
+        const { data: cpRow } = await externalSupabase
+          .from("doan_chi_phi")
+          .select("id, mo_ta")
+          .eq("ref_doan_ngay_item_id", itemId)
+          .maybeSingle();
+        if (!cpRow) return;
+        const { data: allocs } = await externalSupabase
+          .from("dntt_allocations")
+          .select("dntt_id")
+          .eq("chi_phi_id", cpRow.id)
+          .limit(5);
+        if (allocs && allocs.length > 0) {
+          const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
+            .map((id) => `#${id}`).join(", ");
+          const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
+          throw new Error(
+            `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`
+          );
+        }
+        await externalSupabase.from("doan_chi_phi").delete().eq("id", cpRow.id);
+      };
 
       // 1. Update doan fields
       const so_khach =
@@ -395,9 +457,9 @@ export function useSaveDieuTour() {
 
         if (itemsToDelete && itemsToDelete.length > 0) {
           const idsToDelete = itemsToDelete.map((it: any) => it.id);
-          // Delete referencing doan_chi_phi rows first
+          // Delete referencing doan_chi_phi rows first — pre-check DNTT
           for (const itemId of idsToDelete) {
-            await externalSupabase.from("doan_chi_phi").delete().eq("ref_doan_ngay_item_id", itemId);
+            await deleteChiPhiByItemIdSafe(itemId);
           }
           // Now safe to delete doan_ngay_item
           await externalSupabase.from("doan_ngay_item").delete().in("id", idsToDelete);
@@ -411,7 +473,7 @@ export function useSaveDieuTour() {
             .eq("doan_ngay_id", doanNgayId);
           if (remainingItems && remainingItems.length > 0) {
             for (const ri of remainingItems) {
-              await externalSupabase.from("doan_chi_phi").delete().eq("ref_doan_ngay_item_id", ri.id);
+              await deleteChiPhiByItemIdSafe(ri.id);
             }
             await externalSupabase.from("doan_ngay_item").delete().eq("doan_ngay_id", doanNgayId);
           }
@@ -459,7 +521,12 @@ export function useSaveDieuTour() {
             if (!item.co_phi) continue;
             const cd = canhDiemList.find((c) => c.id === item.canh_diem_id);
             if (cd?.khach_san_id) continue; // Day-use wrapper — managed in Chi phí section
-            const chiPhiPayload: any = {
+            const newSoLuong = item.so_luong ?? soKhach;
+            const newDonGia  = item.don_gia ?? 0;
+            const newTotal   = newDonGia * newSoLuong;
+            const isHdv      = item.nguoi_thanh_toan === "hdv";
+
+            const masterFields: any = {
               doan_id: doanId,
               ngay_so: day.ngay_so,
               loai: "chi",
@@ -467,28 +534,42 @@ export function useSaveDieuTour() {
               ref_doan_ngay_item_id: item.id,
               ref_doan_ngay_id: doanNgayId,
               mo_ta: cd?.ten ?? "",
-              don_gia: item.don_gia ?? 0,
-              so_luong: item.so_luong ?? soKhach,
               nha_cung_cap_id: cd?.nha_cung_cap_id ?? null,
-              trang_thai_thanh_toan: "unpaid",
             };
-            if (item.nguoi_thanh_toan === "hdv") {
-              chiPhiPayload.tien_hdv = (item.don_gia ?? 0) * (item.so_luong ?? soKhach);
-              chiPhiPayload.tien_cong_ty = 0;
-            } else {
-              chiPhiPayload.tien_cong_ty = (item.don_gia ?? 0) * (item.so_luong ?? soKhach);
-              chiPhiPayload.tien_hdv = 0;
-            }
-            // Upsert by ref
+            const pricingFields: any = {
+              don_gia: newDonGia,
+              so_luong: newSoLuong,
+              tien_cong_ty: isHdv ? 0 : newTotal,
+              tien_hdv:     isHdv ? newTotal : 0,
+            };
+
+            // HYBRID 2-way cascade:
+            // - is_overridden=true → CHỈ master metadata (giữ giá trị OP)
+            // - is_overridden=false → cascade full + clear thuc_te nếu so_luong/don_gia đổi
             const { data: existing } = await externalSupabase
               .from("doan_chi_phi")
-              .select("id")
+              .select("id, so_luong, don_gia, is_overridden")
               .eq("ref_doan_ngay_item_id", item.id)
               .maybeSingle();
+
             if (existing) {
-              await externalSupabase.from("doan_chi_phi").update(chiPhiPayload).eq("id", existing.id);
+              if (existing.is_overridden) {
+                await externalSupabase.from("doan_chi_phi")
+                  .update(masterFields).eq("id", existing.id);
+              } else {
+                const soLuongChanged = Number(existing.so_luong) !== newSoLuong
+                                    || Number(existing.don_gia)  !== newDonGia;
+                const updatePayload: any = { ...masterFields, ...pricingFields };
+                if (soLuongChanged) {
+                  updatePayload.thanh_tien_thuc_te = null;
+                  counters.thucTeClearCount++;
+                }
+                await externalSupabase.from("doan_chi_phi")
+                  .update(updatePayload).eq("id", existing.id);
+              }
             } else {
-              await externalSupabase.from("doan_chi_phi").insert(chiPhiPayload);
+              await externalSupabase.from("doan_chi_phi")
+                .insert({ ...masterFields, ...pricingFields });
             }
           }
         }
@@ -505,7 +586,12 @@ export function useSaveDieuTour() {
 
             for (const meal of meals) {
               const mealItem = nhaHangList.find((i) => i.id === meal.id);
-              const chiPayload: any = {
+              // Tách 2 nhóm fields:
+              // - alwaysFields: master metadata, OK update mọi lúc
+              // - initialFields: chỉ INSERT (lần đầu); UPDATE KHÔNG đụng
+              //   để tránh reset tien_cong_ty/hdv (computed bởi NH section
+              //   khi user save thật sự)
+              const alwaysFields: any = {
                 doan_id: doanId,
                 ngay_so: day.ngay_so,
                 loai: "chi",
@@ -515,29 +601,25 @@ export function useSaveDieuTour() {
                   ? `${(mealItem as any).ten}${meal.label === "an_trua" ? " (trưa)" : meal.label === "an_toi" ? " (tối)" : ""}`
                   : "",
                 nha_cung_cap_id: (mealItem as any)?.nha_cung_cap_id ?? null,
-                trang_thai_thanh_toan: "unpaid",
-              } as any;
-              const mealNtt = (mealItem as any)?.nguoi_thanh_toan;
-              if (mealNtt === "hdv") {
-                chiPayload.tien_hdv = 0;
-                chiPayload.tien_cong_ty = 0;
-              } else {
-                chiPayload.tien_cong_ty = 0;
-                chiPayload.tien_hdv = 0;
-              }
+              };
+              const initialFields = { tien_cong_ty: 0, tien_hdv: 0 };
 
-              // Upsert by ref_doan_ngay_id + danh_muc
-              const { data: existing } = await externalSupabase
+              // Upsert: filter mo_ta để phân biệt trưa/tối (cùng doan_ngay).
+              const { data: existingRows } = await externalSupabase
                 .from("doan_chi_phi")
                 .select("id")
                 .eq("doan_id", doanId)
                 .eq("danh_muc", "nha_hang")
                 .eq("ref_doan_ngay_id", doanNgayId)
-                .maybeSingle();
+                .eq("mo_ta", alwaysFields.mo_ta)
+                .limit(1);
+              const existing = existingRows?.[0];
               if (existing) {
-                await externalSupabase.from("doan_chi_phi").update(chiPayload).eq("id", existing.id);
+                // UPDATE: chỉ master metadata. KHÔNG touch tien_cong_ty/hdv
+                // (NH section quản lý qua handleSave khi user thật sự lưu).
+                await externalSupabase.from("doan_chi_phi").update(alwaysFields).eq("id", existing.id);
               } else {
-                await externalSupabase.from("doan_chi_phi").insert(chiPayload);
+                await externalSupabase.from("doan_chi_phi").insert({ ...alwaysFields, ...initialFields });
               }
             }
           }
@@ -627,6 +709,9 @@ export function useSaveDieuTour() {
         }
         // Otherwise: do nothing, keep existing data
       }
+
+      // Trả counters cho caller hiển thị toast warning
+      return counters;
     },
     onSuccess: (_, payload) => {
       qc.invalidateQueries({ queryKey: ["doan"] });
@@ -634,6 +719,7 @@ export function useSaveDieuTour() {
       qc.invalidateQueries({ queryKey: ["doan_ngay_item"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
       qc.invalidateQueries({ queryKey: ["chi_phi_ks_data"] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_nh_section"] });
       qc.invalidateQueries({ queryKey: ["doan_booking_ks"] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       log({ doan_id: payload.doanId, action: "sua", table_name: "doan_ngay", record_id: payload.doanId, mo_ta: `Lưu lịch trình điều tour` });

@@ -45,12 +45,11 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   const { data: congNoList = [] } = useCongNoList({ doanId });
 
   const canTruByDnttId = useMemo(() => {
-    const seen = new Set<number>();
+    // payment_so_tien đã pro-rate per-allocation trong usePaymentsByChiPhi.
+    // KHÔNG dedupe theo payment_id (sẽ mất share của các allocs còn lại).
     const m: Record<number, number> = {};
     paymentsList.forEach((p) => {
       if (p.method !== "can_tru") return;
-      if (seen.has(p.payment_id)) return;
-      seen.add(p.payment_id);
       m[p.dntt_id] = (m[p.dntt_id] || 0) + p.payment_so_tien;
     });
     return m;
@@ -102,8 +101,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
       tien_hdv: 0,
       nha_cung_cap_id: nccId,
       thanh_toan_dinh_ky: true,
-      trang_thai_dntt: "chua_de_nghi",
-      trang_thai_thanh_toan: "unpaid",
+      // KHÔNG set trang_thai_thanh_toan: DB default = 'unpaid', RPC recalc quản lý.
     } as any, {
       onError: () => { autoSaved.current = false; },
     });
@@ -144,10 +142,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         tien_hdv: isHDV ? thanhTien : 0,
         nha_cung_cap_id: nccId,
         thanh_toan_dinh_ky: true,
-        ...(!existing && {
-          trang_thai_dntt: "chua_de_nghi",
-          trang_thai_thanh_toan: "unpaid",
-        }),
+        // KHÔNG set trang_thai_thanh_toan: DB default + RPC recalc quản lý.
       } as any);
       toast.success("Đã lưu bảo hiểm");
     } catch {

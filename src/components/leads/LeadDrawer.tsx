@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Phone, MessageCircle, Mail, Plus, Trash2, Check } from "lucide-react";
+import { X, Phone, MessageCircle, Mail, Plus, Trash2, Check, Trophy } from "lucide-react";
 import { format, isBefore, isToday, startOfDay, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
@@ -15,11 +16,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  useLead, useUpdateLead, useUpdateLeadStatus,
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  useLead, useUpdateLead, useUpdateLeadStatus, useConvertLeadToDoan,
   LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS, LEAD_LOAI_KHACH_OPTS,
   LEAD_PHONG_CACH_OPTS, LEAD_UU_TIEN_OPTS,
   type Lead, type LeadInsert, type LeadTrangThai,
 } from "@/hooks/use-leads";
+import type { DoanInsert } from "@/hooks/use-doan";
 import { useLeadActivities, useCreateActivity, LEAD_ACTIVITY_LOAI_OPTS, LEAD_KET_QUA_OPTS } from "@/hooks/use-lead-activities";
 import { useLeadTasks, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/use-lead-tasks";
 import { useLeadDiemDen, useReplaceDiemDen } from "@/hooks/use-lead-diem-den";
@@ -59,6 +66,7 @@ const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 type Tab = "info" | "activity" | "tasks";
 
 export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: lead, isLoading } = useLead(leadId);
   const { data: activities = [] } = useLeadActivities(leadId);
@@ -73,6 +81,46 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const toggleTask = useToggleTask();
   const deleteTask = useDeleteTask();
   const replaceDiemDen = useReplaceDiemDen();
+  const convertLead = useConvertLeadToDoan();
+
+  const [confirmConvertOpen, setConfirmConvertOpen] = useState(false);
+
+  const handleChotDeal = async () => {
+    if (!lead) return;
+    const firstDiemDen = (lead.diem_den ?? [])[0]?.diem_den ?? "";
+    const tenDoan = `Đoàn ${lead.ho_ten}${firstDiemDen ? " - " + firstDiemDen : ""}`;
+    const ghiChu = `Tạo từ lead #${lead.id}.${lead.yeu_cau_dac_biet ? " " + lead.yeu_cau_dac_biet : ""}`;
+
+    const doanData: DoanInsert = {
+      ten_doan: tenDoan,
+      loai_tour: lead.loai_tour as "outbound" | "noi_dia",
+      so_khach: (lead.so_nguoi_lon ?? 0) + (lead.so_nguoi_em ?? 0),
+      so_khach_lon: lead.so_nguoi_lon ?? 0,
+      so_khach_em1: lead.so_nguoi_em ?? 0,
+      ngay_di: lead.ngay_di_du_kien,
+      ngay_ve: lead.ngay_ve_du_kien,
+      assigned_to: lead.assigned_to,
+      van_phong_id: user?.van_phong_id ?? null,
+      ghi_chu: ghiChu,
+      trang_thai: "dang_chay",
+    };
+
+    try {
+      const newDoan = await convertLead.mutateAsync({
+        leadId: lead.id,
+        doanData,
+        currentUserId: user?.user_id ?? null,
+      });
+      toast.success(`🎉 Đã tạo đoàn #${newDoan.id}`);
+      setConfirmConvertOpen(false);
+      onClose();
+      navigate(`/doan/${newDoan.id}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lỗi khi tạo đoàn");
+    }
+  };
+
+  const canChotDeal = lead && lead.trang_thai !== "chot_deal" && lead.trang_thai !== "mat_khach";
 
   const [activeTab, setActiveTab] = useState<Tab>("info");
 
@@ -227,11 +275,24 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       <Mail className="h-3.5 w-3.5" /> Email
                     </a>
                   )}
-                  {onEdit && (
-                    <Button size="sm" variant="outline" className="h-7 text-xs ml-auto" onClick={() => onEdit(lead)}>
-                      Sửa
-                    </Button>
-                  )}
+                  <div className="ml-auto flex items-center gap-1.5">
+                    {canChotDeal && (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => setConfirmConvertOpen(true)}
+                        disabled={convertLead.isPending}
+                      >
+                        <Trophy className="h-3.5 w-3.5" />
+                        Chốt deal
+                      </Button>
+                    )}
+                    {onEdit && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onEdit(lead)}>
+                        Sửa
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -600,6 +661,29 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
               )}
             </div>
           </motion.div>
+
+          {/* Confirm: Tạo đoàn từ lead */}
+          <AlertDialog open={confirmConvertOpen} onOpenChange={setConfirmConvertOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>🎉 Chốt deal — Tạo đoàn?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Đoàn sẽ được tạo với thông tin từ lead "{lead?.ho_ten}".
+                  Bạn sẽ được chuyển sang trang chi tiết đoàn để bổ sung agent / địa điểm / lịch trình.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={convertLead.isPending}>Hủy</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => { e.preventDefault(); handleChotDeal(); }}
+                  disabled={convertLead.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {convertLead.isPending ? "Đang tạo..." : "Tạo đoàn ngay"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
     </AnimatePresence>

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { getChiPhiIdsForDNTT, recalcChiPhiStatus, type PaymentRow } from "@/hooks/use-dntt";
+import { proRataInts } from "@/lib/pro-rata";
 
 export type { PaymentRow };
 
@@ -84,19 +85,34 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
       activeAllocs.forEach((a: any) => {
         dnttSoTien[a.dntt_id] = a.de_nghi_thanh_toan.so_tien;
       });
-      for (const alloc of activeAllocs) {
-        const dnttPayments = (payments || []).filter((p: any) => p.dntt_id === alloc.dntt_id);
-        const totalDntt = dnttSoTien[alloc.dntt_id] || 1;
-        for (const p of dnttPayments) {
-          const allocShare = (Number(p.so_tien) * Number(alloc.so_tien)) / totalDntt;
+
+      // Group allocs by dntt_id để pro-rata theo từng payment cho khớp 100%
+      // (thay vì Math.round độc lập per-row gây drift khi sum lại).
+      const allocsByDntt = new Map<number, typeof activeAllocs>();
+      activeAllocs.forEach((a: any) => {
+        const list = allocsByDntt.get(a.dntt_id) ?? [];
+        list.push(a);
+        allocsByDntt.set(a.dntt_id, list);
+      });
+
+      for (const p of payments ?? []) {
+        const dnttAllocs = allocsByDntt.get(p.dntt_id);
+        if (!dnttAllocs || dnttAllocs.length === 0) continue;
+        // SUM(shares) === Number(p.so_tien) — guaranteed
+        const shares = proRataInts(
+          Number(p.so_tien),
+          dnttAllocs.map((a: any) => Number(a.so_tien)),
+        );
+        for (let i = 0; i < dnttAllocs.length; i++) {
+          const alloc = dnttAllocs[i];
           result.push({
             chi_phi_id: alloc.chi_phi_id,
-            dntt_id: alloc.dntt_id,
-            dntt_so_tien: totalDntt,
+            dntt_id: p.dntt_id,
+            dntt_so_tien: dnttSoTien[p.dntt_id] || 1,
             alloc_so_tien: Number(alloc.so_tien),
             payment_id: p.id,
             method: p.method,
-            payment_so_tien: Math.round(allocShare),
+            payment_so_tien: shares[i],
             cong_no_id: p.cong_no_id,
             ngay_thanh_toan: p.ngay_thanh_toan,
           });

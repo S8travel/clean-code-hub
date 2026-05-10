@@ -139,7 +139,12 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
     { value: "", label: "— Không chọn —" },
     ...campaigns.map((c) => ({ value: c.id.toString(), label: c.ten })),
   ];
-  const userOptions = userRoles.map((u) => ({ value: u.user_id, label: u.ho_ten }));
+  // Option đầu: assigned_to = "" → onChange convert thành null → trigger
+  // fn_auto_assign_lead chạy round-robin chọn sales ít lead nhất.
+  const userOptions = [
+    { value: "", label: "— Tự động chọn (round-robin) —" },
+    ...userRoles.map((u) => ({ value: u.user_id, label: u.ho_ten })),
+  ];
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>

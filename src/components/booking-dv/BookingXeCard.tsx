@@ -175,10 +175,14 @@ export default function BookingXeCard({
 </body></html>`;
   };
 
-  const openEmailModal = () => {
+  const [emailMode, setEmailMode] = useState<"first" | "update">("first");
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(xe?.nha_xe?.email ?? "");
-    setEmailSubject(`[S8 Travel] Đặt xe – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`);
+    const baseSubject = `[S8 Travel] Đặt xe – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`;
+    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
+    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailBody(buildEmailHTML());
     setEmailModalOpen(true);
   };
@@ -200,13 +204,15 @@ export default function BookingXeCard({
       });
 
       const threadId = isFirst ? newThreadId : booking?.email_thread_id;
-      save({
-        booking_status: "cho_xac_nhan",
+      // mode='update' → KHÔNG đổi booking_status
+      const savePayload: Record<string, any> = {
         sent_at: new Date().toISOString(),
         sent_by: userProfile?.ho_ten ?? "",
         email_thread_id: emailId ?? threadId ?? undefined,
-      });
-      toast.success("Đã gửi email booking xe");
+      };
+      if (emailMode !== "update") savePayload.booking_status = "cho_xac_nhan";
+      save(savePayload);
+      toast.success(emailMode === "update" ? "Đã gửi email cập nhật xe" : "Đã gửi email booking xe");
       setEmailModalOpen(false);
     } catch (err: any) {
       toast.error(err?.message ?? "Lỗi gửi email");
@@ -305,8 +311,17 @@ export default function BookingXeCard({
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={openEmailModal}>
-              <Mail className="h-3 w-3" /> Soạn email
+            <Button
+              size="sm"
+              variant="outline"
+              className={cn(
+                "h-7 text-xs gap-1.5",
+                booking?.email_thread_id && "text-amber-700 border-amber-300 hover:bg-amber-50",
+              )}
+              onClick={() => openEmailModal(booking?.email_thread_id ? "update" : "first")}
+              title={booking?.email_thread_id ? "Gửi cập nhật — sẽ thread vào mail booking cũ" : undefined}
+            >
+              <Mail className="h-3 w-3" /> {booking?.email_thread_id ? "Gửi cập nhật" : "Soạn email"}
             </Button>
             {status === "cho_xac_nhan" && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={handleConfirm}>
@@ -331,7 +346,7 @@ export default function BookingXeCard({
       <EmailPreviewModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
-        title="Gửi email booking xe"
+        title={emailMode === "update" ? "Gửi email cập nhật xe (thread vào mail cũ)" : "Gửi email booking xe"}
         to={emailTo}
         onToChange={setEmailTo}
         subject={emailSubject}

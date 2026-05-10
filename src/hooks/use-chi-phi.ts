@@ -47,6 +47,13 @@ export interface ChiPhiRow {
   so_tien_da_tt: number;
   thanh_tien_thuc_te: number | null;
   thanh_toan_dinh_ky: boolean;
+  // FOC snapshot — chốt config FOC tại thời điểm save để master changes không
+  // thay đổi tính toán cho đoàn cũ. Editable per-tour qua UI ở ChiPhi sections.
+  foc_khach_snapshot: number | null;
+  foc_mien_snapshot: number | null;
+  // HYBRID flag: true = OP đã override SL/đơn giá thủ công ở Chi phí section
+  // → cascade từ Điều tour bỏ qua row này. Reset = set false.
+  is_overridden: boolean;
 }
 
 // ── Queries ──
@@ -284,6 +291,61 @@ export function useChiPhiNHData(doanId?: number) {
 }
 
 // ── Mutations ──
+
+// HYBRID adjust: update chi_phi state ONLY (so_luong, don_gia, tien_*, thanh_tien_thuc_te,
+// is_overridden=true). KHÔNG tạo cong_no/DNTT — defer to aggregate commit button.
+// Caller pass new SL + đơn giá; hook tự compute tien_cong_ty/hdv theo isHdv hiện tại.
+export function useUpdateChiPhiActual() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (args: {
+      id: number;
+      doan_id: number;
+      so_luong: number;
+      don_gia: number;
+      ly_do?: string;
+      // Override total cho NH (FOC + chiết khấu khiến SL × đơn_giá ≠ tổng).
+      // DV không truyền → fallback newTotal = so_luong * don_gia.
+      total_override?: number;
+    }) => {
+      const newTotal = args.total_override ?? args.so_luong * args.don_gia;
+      // Detect isHdv từ row hiện tại
+      const { data: cur } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("tien_hdv")
+        .eq("id", args.id)
+        .single();
+      const isHdv = Number((cur as any)?.tien_hdv ?? 0) > 0;
+      const { data, error } = await externalSupabase
+        .from("doan_chi_phi")
+        .update({
+          so_luong: args.so_luong,
+          don_gia:  args.don_gia,
+          tien_cong_ty: isHdv ? 0 : newTotal,
+          tien_hdv:     isHdv ? newTotal : 0,
+          thanh_tien_thuc_te: newTotal,
+          is_overridden: true,
+        })
+        .eq("id", args.id)
+        .select("id, doan_id")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.doan_id] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      log({
+        doan_id: vars.doan_id,
+        action: "sua",
+        table_name: "doan_chi_phi",
+        record_id: (data as any)?.id,
+        mo_ta: `Điều chỉnh thực tế: SL=${vars.so_luong}, đơn giá=${fmtVND(vars.don_gia)}${vars.ly_do ? ` (${vars.ly_do})` : ""}`,
+      });
+    },
+  });
+}
 
 export function useUpsertChiPhi() {
   const qc = useQueryClient();

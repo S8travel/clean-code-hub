@@ -22,6 +22,7 @@ import {
   FileText,
   Calculator,
   Users2,
+  BarChart3,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -45,6 +46,7 @@ import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks
 import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
 import { useCurrentSession } from "@/hooks/use-current-user";
 import { useThongBaoCount } from "@/hooks/use-thong-bao";
+import { useLeadStats } from "@/hooks/use-lead-stats";
 import { UserSettingsMenu } from "@/components/UserSettingsMenu";
 
 // ── Google Translate button ──
@@ -185,6 +187,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "KHÁCH HÀNG",
     items: [
       { title: "Lead", url: "/leads", icon: Users2 },
+      { title: "Báo cáo Lead", url: "/leads/bao-cao", icon: BarChart3 },
     ],
   },
   {
@@ -266,6 +269,9 @@ export function AppSidebar() {
   const { data: invoiceBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "gia");
   const { data: suCoBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "su_co");
   const { data: giaoViecBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "giao_viec");
+  const { data: leadStats } = useLeadStats(session?.user?.id ?? null);
+  const leadBadge = (leadStats?.lead_moi_today ?? 0) + (leadStats?.follow_up_today ?? 0) + (leadStats?.follow_up_overdue ?? 0);
+  const leadOverdue = (leadStats?.follow_up_overdue ?? 0) > 0;
 
   const isActive = (url: string) =>
     location.pathname === url || location.pathname.startsWith(url + "/");
@@ -304,7 +310,10 @@ export function AppSidebar() {
                     item.url === "/lock-phong" ? deadlineAlerts.length :
                     item.url === "/invoice" ? invoiceBadge :
                     item.url === "/theo-doi" ? suCoBadge :
-                    item.url === "/my-job" ? giaoViecBadge : 0;
+                    item.url === "/my-job" ? giaoViecBadge :
+                    item.url === "/leads" ? leadBadge : 0;
+                  // Lead overdue → đỏ (urgent), còn lại → cam mặc định
+                  const badgeColor = (item.url === "/leads" && leadOverdue) ? "bg-red-500" : "bg-orange-500";
                   if (badgeCount > 0) {
                     return (
                       <SidebarMenuItem key={item.url}>
@@ -318,7 +327,7 @@ export function AppSidebar() {
                             {!collapsed && (
                               <span className="flex-1 flex items-center justify-between">
                                 {item.title}
-                                <span className="ml-1 min-w-[18px] h-[18px] rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                                <span className={`ml-1 min-w-[18px] h-[18px] rounded-full ${badgeColor} text-white text-[10px] font-bold flex items-center justify-center px-1`}>
                                   {badgeCount}
                                 </span>
                               </span>

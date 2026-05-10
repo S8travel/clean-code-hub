@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
+import { proRataInts } from "@/lib/pro-rata";
 
 export interface DNTTRow {
   id: number;
@@ -403,6 +404,17 @@ export function useUpdateDNTT() {
         .single();
       if (fetchErr) throw fetchErr;
 
+      // Safety guard: không cho hạ so_tien xuống dưới paid_amount.
+      // Nếu cho phép, view dntt_with_payment_status sẽ tính paid_amount >= so_tien
+      // → false-positive payment_status='paid' khiến kế toán không thấy ĐNTT cần xử lý.
+      const paidAmount = await getPaidAmount(id);
+      if (soTien < paidAmount) {
+        throw new Error(
+          `Không thể hạ số tiền xuống dưới số đã thanh toán (${paidAmount.toLocaleString("vi-VN")}đ). ` +
+          `Hủy ĐNTT (useCancelDNTT) hoặc tạo ĐNTT bổ sung thay thế.`
+        );
+      }
+
       const { error } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .update({ so_tien: soTien })
@@ -422,13 +434,13 @@ export function useUpdateDNTT() {
           .update({ so_tien: soTien })
           .eq("id", allocList[0].id);
       } else if (allocList.length > 1) {
-        const totalAlloc = allocList.reduce((s: number, a: any) => s + Number(a.so_tien), 0);
-        for (const alloc of allocList) {
-          const newAmt = totalAlloc > 0 ? Math.round(soTien * Number(alloc.so_tien) / totalAlloc) : 0;
+        // Largest-remainder để SUM(allocs) === soTien (no rounding drift)
+        const newAmts = proRataInts(soTien, allocList.map((a: any) => Number(a.so_tien)));
+        for (let i = 0; i < allocList.length; i++) {
           await externalSupabase
             .from("dntt_allocations")
-            .update({ so_tien: newAmt })
-            .eq("id", alloc.id);
+            .update({ so_tien: newAmts[i] })
+            .eq("id", allocList[i].id);
         }
       }
 
@@ -528,7 +540,36 @@ export function useCreateAdjustment() {
       lyDo: string;
       surplusMode?: "cong_no" | "hoan_tien";
     }) => {
-      const delta = soTienThucTe - dnttGoc.so_tien;
+      // Pre-fetch allocations để biết các chi_phi liên quan.
+      // currentTotal phải là COMMITMENT thật (so_tien_da_dntt — sum allocs trên các DNTT
+      // không bị huỷ), KHÔNG dùng chi_phi.thanh_tien (phản ánh state edit của user).
+      // Vì sao quan trọng: nếu OP edit chi_phi (đổi so_luong/don_gia) trước khi adjust,
+      // chi_phi.thanh_tien auto-update theo edit → currentTotal sẽ khớp soTienThucTe
+      // → delta=0 → KHÔNG tạo cong_no/supplementary, dù user vừa giảm so_luong.
+      const { data: allocs } = await externalSupabase
+        .from("dntt_allocations")
+        .select("chi_phi_id, so_tien")
+        .eq("dntt_id", dnttGoc.id);
+
+      let currentTotal = dnttGoc.so_tien;
+
+      if (allocs && allocs.length > 0) {
+        const ids = allocs.map((a: any) => a.chi_phi_id);
+        const { data: cpRows } = await externalSupabase
+          .from("doan_chi_phi")
+          .select("id, so_tien_da_dntt")
+          .in("id", ids);
+        if (cpRows && cpRows.length > 0) {
+          // so_tien_da_dntt: sum allocs từ các DNTT không huỷ (computed bởi recalc RPC)
+          // Phản ánh đúng commitment đã ràng buộc cho chi_phi này.
+          currentTotal = cpRows.reduce(
+            (s: number, r: any) => s + Number(r.so_tien_da_dntt ?? 0),
+            0,
+          );
+        }
+      }
+
+      const delta = soTienThucTe - currentTotal;
       if (delta === 0) return null;
 
       const d = new Date();
@@ -571,35 +612,20 @@ export function useCreateAdjustment() {
         }
       }
 
-      // Cập nhật thanh_tien_thuc_te trên các chi_phi liên quan (pro-rata)
-      const { data: allocs } = await externalSupabase
-        .from("dntt_allocations")
-        .select("chi_phi_id, so_tien")
-        .eq("dntt_id", dnttGoc.id);
-
+      // Set thanh_tien_thuc_te ABSOLUTE (không cộng dồn delta).
+      // = pro-rata soTienThucTe theo alloc proportion. SUM(per-row) === soTienThucTe.
+      // Lý do: nếu cộng dồn (base + delta) và base đã chứa edit của user → sai.
       if (allocs && allocs.length > 0) {
-        const totalAlloc = allocs.reduce((s: number, a: any) => s + Number(a.so_tien), 0);
+        const newThucTeAmts = proRataInts(soTienThucTe, allocs.map((a: any) => Number(a.so_tien)));
         const chiPhiIds: number[] = [];
 
-        for (const alloc of allocs) {
-          const proportion = totalAlloc > 0 ? Number(alloc.so_tien) / totalAlloc : 1 / allocs.length;
-          const deltaForRow = Math.round(delta * proportion);
-
-          const { data: cpRow } = await externalSupabase
+        for (let i = 0; i < allocs.length; i++) {
+          const alloc = allocs[i];
+          await externalSupabase
             .from("doan_chi_phi")
-            .select("thanh_tien, thanh_tien_thuc_te")
-            .eq("id", alloc.chi_phi_id)
-            .single();
-
-          if (cpRow) {
-            const base = cpRow.thanh_tien_thuc_te ?? cpRow.thanh_tien;
-            const newThucTe = base + deltaForRow;
-            await externalSupabase
-              .from("doan_chi_phi")
-              .update({ thanh_tien_thuc_te: newThucTe })
-              .eq("id", alloc.chi_phi_id);
-            chiPhiIds.push(alloc.chi_phi_id);
-          }
+            .update({ thanh_tien_thuc_te: newThucTeAmts[i] })
+            .eq("id", alloc.chi_phi_id);
+          chiPhiIds.push(alloc.chi_phi_id);
         }
 
         await recalcChiPhiStatus(chiPhiIds);

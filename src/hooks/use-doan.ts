@@ -338,12 +338,104 @@ export function useUpdateDoan() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, ...updates }: DoanInsert & { id: number }) => {
+      // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem
+      const { data: oldDoan, error: oldErr } = await externalSupabase
+        .from("doan")
+        .select("so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve")
+        .eq("id", id)
+        .single();
+      if (oldErr) throw oldErr;
+
+      const oldTotal = (oldDoan.so_khach_lon ?? 0) + (oldDoan.so_khach_em1 ?? 0)
+                    + (oldDoan.so_khach_em2 ?? 0) + (oldDoan.so_khach_tl ?? 0);
+
+      // 2. UPDATE doan
       const { data, error } = await externalSupabase.from("doan").update(updates).eq("id", id).select().single();
       if (error) throw error;
-      return data;
+
+      // 3. Detect BẤT KỲ so_khach_* field thay đổi
+      const soKhachKeys = ["so_khach_lon", "so_khach_em1", "so_khach_em2", "so_khach_tl"] as const;
+      const so_khach_changed = soKhachKeys.some(
+        (k) => (updates as any)[k] !== undefined && (updates as any)[k] !== (oldDoan as any)[k]
+      );
+      if (!so_khach_changed) return { ...data, thucTeClearCount: 0, committedDnttAffected: 0 };
+
+      const newTotal = ((data as any).so_khach_lon ?? 0) + ((data as any).so_khach_em1 ?? 0)
+                    + ((data as any).so_khach_em2 ?? 0) + ((data as any).so_khach_tl ?? 0);
+
+      // 4a. Sync doan_ngay_item.so_luong cho items chưa customized (= old total)
+      if (oldTotal > 0 && newTotal !== oldTotal) {
+        await externalSupabase
+          .from("doan_ngay_item")
+          .update({ so_luong: newTotal })
+          .eq("doan_id", id)
+          .eq("so_luong", oldTotal);
+      }
+
+      // 4b. Compute soNgay (bao_hiem dùng so_luong = soKhach × soNgay)
+      let soNgay = 1;
+      const ngayDi = (data as any).ngay_di ?? oldDoan.ngay_di;
+      const ngayVe = (data as any).ngay_ve ?? oldDoan.ngay_ve;
+      if (ngayDi && ngayVe) {
+        const di = new Date(ngayDi);
+        const ve = new Date(ngayVe);
+        const diffMs = ve.getTime() - di.getTime();
+        soNgay = Math.max(1, Math.round(diffMs / 86400000) + 1);
+      }
+
+      // 4c. Cascade chi_phi (canh_diem + NH + bao_hiem). Skip override + paid + extras.
+      // Extras (DV [dvps_X], NH [trua]/[toi]) là dịch vụ thêm độc lập, KHÔNG sync số khách.
+      // Cho_duyet/da_duyet vẫn cascade — caller hiển thị warning toast + UI badge mismatch.
+      const { data: chiPhis } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id, danh_muc, mo_ta, so_luong, don_gia, tien_cong_ty, tien_hdv, is_overridden, trang_thai_thanh_toan, trang_thai_dntt")
+        .eq("doan_id", id)
+        .in("danh_muc", ["canh_diem", "nha_hang", "bao_hiem"]);
+
+      let thucTeClearCount = 0;
+      let committedDnttAffected = 0;
+      const idsToRecalc: number[] = [];
+
+      for (const cp of chiPhis ?? []) {
+        if ((cp as any).is_overridden) continue;
+        const tt = (cp as any).trang_thai_thanh_toan;
+        if (tt === "paid" || tt === "partial_paid") continue;
+
+        // Skip extras — dịch vụ phát sinh độc lập với tổng số khách
+        const moTa = String((cp as any).mo_ta ?? "");
+        if (/^\[dvps_\d+\]\s/.test(moTa)) continue;
+        if (moTa.startsWith("[trua] ") || moTa.startsWith("[toi] ")) continue;
+
+        const newSoLuong = (cp as any).danh_muc === "bao_hiem" ? newTotal * soNgay : newTotal;
+        if (Number((cp as any).so_luong) === newSoLuong) continue;
+
+        // Track rows committed-DNTT bị thay đổi → caller toast warning
+        const td = (cp as any).trang_thai_dntt;
+        if (td === "cho_duyet" || td === "da_duyet") committedDnttAffected++;
+
+        const isHdv = Number((cp as any).tien_hdv) > 0;
+        const newTotalCp = newSoLuong * Number((cp as any).don_gia ?? 0);
+        await externalSupabase.from("doan_chi_phi").update({
+          so_luong: newSoLuong,
+          tien_cong_ty: isHdv ? 0 : newTotalCp,
+          tien_hdv:     isHdv ? newTotalCp : 0,
+          thanh_tien_thuc_te: null,
+        }).eq("id", (cp as any).id);
+        thucTeClearCount++;
+        idsToRecalc.push((cp as any).id);
+      }
+
+      // 4d. Recalc statuses cho rows đã update
+      if (idsToRecalc.length > 0) {
+        await externalSupabase.rpc("recalc_chi_phi_payment_status", { p_chi_phi_ids: idsToRecalc });
+      }
+
+      return { ...data, thucTeClearCount, committedDnttAffected };
     },
-    onSuccess: (data, vars) => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["doan"] });
+      qc.invalidateQueries({ queryKey: ["doan_ngay_item", vars.id] });
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       log({ doan_id: vars.id, action: "sua", table_name: "doan", record_id: vars.id, mo_ta: `Cập nhật thông tin đoàn` });
     },

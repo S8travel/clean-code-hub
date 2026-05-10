@@ -163,13 +163,14 @@ export function useDeleteBookingKS() {
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbHNid29xem1ia256ZHBhZXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MDAzNzcsImV4cCI6MjA4OTI3NjM3N30.RLsKYfH6XZw3Mcmk2fm1R6rKKzrtm0MLrYhtjIT--T0";
 
-// loai: 'dat_truoc' | 'final' | 'huy'
+// loai: 'dat_truoc' | 'final' | 'huy' | 'update'
+// 'update' = gửi cập nhật, KHÔNG đổi status — chỉ update sent_at + sent_by + email_thread_id
 export function useSendKSBookingEmail() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (params: {
       bookingId: number;
-      loai: "dat_truoc" | "final" | "huy";
+      loai: "dat_truoc" | "final" | "huy" | "update";
       to: string;
       subject: string;
       html: string;
@@ -221,13 +222,20 @@ export function useSendKSBookingEmail() {
           ks_final_sent_at: now,
           ks_final_sent_by: params.sentBy,
         };
-      } else {
-        // huy
+      } else if (params.loai === "huy") {
         fields = {
           ...fields,
           ks_final_status: "cho_ks_xac_nhan_huy",
           ks_final_sent_at: now,
           ks_final_sent_by: params.sentBy,
+        };
+      } else {
+        // 'update' — gửi email cập nhật, KHÔNG đổi status. Chỉ update timestamp gần nhất.
+        // (email_thread_id đã set ở fields phía trên — đảm bảo Resend In-Reply-To threading.)
+        fields = {
+          ...fields,
+          ks_dat_truoc_sent_at: now,
+          ks_dat_truoc_sent_by: params.sentBy,
         };
       }
 

@@ -204,12 +204,21 @@ export default function DoanDetail() {
         khachSanList,
       },
       {
-        onSuccess: async () => {
+        onSuccess: async (result) => {
           hasPendingChangesRef.current = false;
           setSaveStatus("saved");
           setTimeout(() => setSaveStatus("idle"), 2000);
           queryClient.invalidateQueries({ queryKey: ["doan_booking_ks", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_booking_dv", doanId] });
+
+          // HYBRID: cảnh báo user nếu cascade Điều tour đã reset adjustment cũ
+          const x = result?.thucTeClearCount ?? 0;
+          if (x > 0) {
+            toast.warning(
+              `Đã reset điều chỉnh thanh_tien_thuc_te trên ${x} chi phí do thay đổi số khách/đơn giá.`,
+              { duration: 6000 }
+            );
+          }
 
           try {
             await syncDieuTourToBookingDV({
@@ -225,6 +234,15 @@ export default function DoanDetail() {
         onError: (err: any) => {
           setSaveStatus("error");
           toast.error(err.message || "Lỗi khi lưu");
+          // Restore-on-error safety net: reset pending flag để init useEffect
+          // (line 144) re-sync `days` từ DB khi data refetch về. Tránh UI bị
+          // stuck ở state đã edit nhưng save fail (vd: xóa cảnh điểm có DNTT).
+          hasPendingChangesRef.current = false;
+          queryClient.invalidateQueries({ queryKey: ["doan", doanId] });
+          queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
+          queryClient.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] });
+          queryClient.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+          setTimeout(() => setSaveStatus("idle"), 3000);
         },
       }
     );

@@ -216,7 +216,12 @@ export function useSendNHBookingEmail() {
       sentBy: string;
       replyTo?: string;
       emailThreadId?: string | null;
+      // mode='update' → giữ nguyên booking_status, chỉ update sent_at + email_thread_id
+      mode?: "first" | "update";
     }) => {
+      // EXPERIMENT: KHÔNG pass messageId/inReplyTo. Resend ghi đè Message-ID nên
+      // In-Reply-To custom invalid → Gmail tạo thread mới. Bỏ → Gmail dựa Subject + From group.
+      // email_thread_id vẫn lưu (= UUID) nhưng chỉ dùng làm flag "đã gửi" để show nút "Gửi cập nhật".
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
 
@@ -232,7 +237,7 @@ export function useSendNHBookingEmail() {
           cc: BOOKING_CC.nh,
           subject: params.subject, html: params.html,
           replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined,
-          ...(isFirst ? { messageId: newThreadId } : { inReplyTo: params.emailThreadId }),
+          // KHÔNG pass messageId / inReplyTo → edge function bỏ qua header threading.
         }),
       });
       if (!res.ok) {
@@ -244,14 +249,17 @@ export function useSendNHBookingEmail() {
 
       const threadId = isFirst ? newThreadId : params.emailThreadId;
 
+      // mode='update' → KHÔNG đổi booking_status, chỉ update sent_at/by + email_thread_id
+      const updatePayload: Record<string, any> = {
+        sent_at: new Date().toISOString(),
+        sent_by: params.sentBy,
+        email_thread_id: threadId,
+      };
+      if (params.mode !== "update") updatePayload.booking_status = "da_gui";
+
       const { error } = await externalSupabase
         .from("doan_booking_nh")
-        .update({
-          booking_status: "da_gui",
-          sent_at: new Date().toISOString(),
-          sent_by: params.sentBy,
-          email_thread_id: threadId,
-        })
+        .update(updatePayload)
         .eq("id", params.bookingId);
       if (error) throw error;
     },

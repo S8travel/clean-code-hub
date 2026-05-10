@@ -9,7 +9,9 @@ import {
 
 import { SearchableSelect } from "@/components/SearchableSelect";
 import type { DayLocal, DayItemLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
+import { checkCanhDiemDeletable } from "@/hooks/use-dieu-tour";
 import { useSetMenus } from "@/hooks/use-nha-hang";
+import { toast } from "sonner";
 
 interface Props {
   day: DayLocal;
@@ -217,7 +219,25 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 )}
               </div>
               <div className="flex flex-col items-center gap-0 shrink-0">
-                <Button type="button" variant="ghost" size="icon" className="h-5 w-6 print-hide" onClick={() => updateItems(day.items.filter((_, i) => i !== idx))}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-6 print-hide"
+                  onClick={async () => {
+                    // Pre-check: cảnh điểm đã save (id exists) + chi_phi có DNTT → block.
+                    // Item mới chưa save (id=undefined) thì gỡ thẳng, không cần query DB.
+                    const target = day.items[idx];
+                    if (target.id) {
+                      const result = await checkCanhDiemDeletable(target.id);
+                      if (!result.ok) {
+                        toast.error(result.reason);
+                        return;
+                      }
+                    }
+                    updateItems(day.items.filter((_, i) => i !== idx));
+                  }}
+                >
                   <X className="h-3 w-3" />
                 </Button>
                 <button
