@@ -418,6 +418,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                       <div className="flex justify-center">
                         <Input
                           type="number"
+                          step="any"
                           value={local.don_gia || ""}
                           onChange={(e) => handleRowChange(row.id, "don_gia", Number(e.target.value) || 0)}
                           onBlur={() => handleRowSave(row)}
@@ -641,6 +642,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                           <span className="text-[10px] text-muted-foreground shrink-0">×</span>
                           <Input
                             type="number"
+                            step="any"
                             placeholder="Đơn giá"
                             className="h-6 text-xs w-24 text-center"
                             value={extraFields.don_gia || ""}

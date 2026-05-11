@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { LocalKSRow } from "./ChiPhiKSSection";
-import { formatThousands, parseThousands } from "@/lib/utils";
+import { formatThousandsDec, parseThousandsDec } from "@/lib/utils";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -23,8 +23,8 @@ export default memo(function KSRowInput({
 }: Props) {
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
-  // gia_phong: hiển thị dạng "850.000" cho dễ đọc; lưu raw digits xuống state.
-  const [localGiaPhong, setLocalGiaPhong] = useState(row.gia_phong ? formatThousands(row.gia_phong) : "");
+  // gia_phong: hỗ trợ decimal — display "850.000" hoặc "850.000,5"; preserve user typing.
+  const [localGiaPhong, setLocalGiaPhong] = useState(row.gia_phong ? formatThousandsDec(row.gia_phong) : "");
 
   const handleLoaiPhongBlur = useCallback(() => {
     onFieldChange(globalIdx, "loai_phong", localLoaiPhong);
@@ -38,13 +38,14 @@ export default memo(function KSRowInput({
   }, [globalIdx, localSoPhong, onFieldChange, onBlurSave]);
 
   const handleGiaPhongBlur = useCallback(() => {
-    const val = parseThousands(localGiaPhong);
+    const val = parseThousandsDec(localGiaPhong);
+    setLocalGiaPhong(formatThousandsDec(val));
     onFieldChange(globalIdx, "gia_phong", val);
     setTimeout(() => onBlurSave(globalIdx), 0);
   }, [globalIdx, localGiaPhong, onFieldChange, onBlurSave]);
 
   const soPhong = Number(localSoPhong) || 0;
-  const giaPhong = parseThousands(localGiaPhong);
+  const giaPhong = parseThousandsDec(localGiaPhong);
   const thanhTien = soPhong * giaPhong * row.so_dem;
 
   return (
@@ -77,9 +78,9 @@ export default memo(function KSRowInput({
       <TableCell className="py-0.5 px-2">
         <Input
           type="text"
-          inputMode="numeric"
+          inputMode="decimal"
           value={localGiaPhong}
-          onChange={(e) => setLocalGiaPhong(formatThousands(e.target.value))}
+          onChange={(e) => setLocalGiaPhong(e.target.value.replace(/[^\d.,]/g, ""))}
           onBlur={handleGiaPhongBlur}
           placeholder="0"
           className="h-6 text-xs w-[90px] text-right"

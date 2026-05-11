@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, parseThousandsDec } from "@/lib/utils";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi, useUpdateChiPhiActual } from "@/hooks/use-chi-phi";
@@ -58,14 +58,29 @@ export interface ChiPhiDVSectionHandle {
 }
 
 // Small inline number input (like NH's NHInput)
-function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false }: {
+function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, decimal = false }: {
   value: number;
   onChange: (v: number) => void;
   onBlur: () => void;
   width?: string;
   /** Hiển thị dấu chấm phân cách hàng nghìn (vd 850.000). */
   money?: boolean;
+  /** Cho phép số thập phân (đơn giá). Chấp nhận "." và "," làm decimal sep. */
+  decimal?: boolean;
 }) {
+  if (decimal) {
+    // Local state cho phép giữ "." và "," trong khi user gõ; parse smart on blur
+    const fmt = (n: number) => (n ? n.toLocaleString("vi-VN", { maximumFractionDigits: 10 }) : "");
+    return (
+      <DVDecimalInput
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        width={width}
+        fmt={fmt}
+      />
+    );
+  }
   if (money) {
     return (
       <Input
@@ -90,6 +105,34 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false }:
       onBlur={onBlur}
       onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
       className={cn("h-6 text-xs px-1.5 py-0 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", width)}
+    />
+  );
+}
+
+// Decimal input — local string state để preserve "." và "," khi gõ
+function DVDecimalInput({ value, onChange, onBlur, width, fmt }: {
+  value: number;
+  onChange: (v: number) => void;
+  onBlur: () => void;
+  width: string;
+  fmt: (n: number) => string;
+}) {
+  const [local, setLocal] = useState(fmt(value));
+  useEffect(() => { setLocal(fmt(value)); }, [value]);
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      value={local}
+      onChange={(e) => setLocal(e.target.value.replace(/[^\d.,]/g, ""))}
+      onBlur={() => {
+        const v = parseThousandsDec(local);
+        setLocal(fmt(v));
+        onChange(v);
+        setTimeout(onBlur, 0);
+      }}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+      className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
     />
   );
 }
@@ -977,6 +1020,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                               onBlur={() => handleRowSave(row)}
                               width="w-[90px]"
                               money
+                              decimal
                             />
                           );
                         })()}
@@ -1142,7 +1186,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                             onClick={() => {
                               setAdjustChiPhi(row);
                               setAdjustSL(String(row.so_luong));
-                              setAdjustDonGia(String(row.don_gia));
+                              setAdjustDonGia(row.don_gia ? row.don_gia.toLocaleString("vi-VN", { maximumFractionDigits: 10 }) : "");
                               setAdjustReason("");
                             }}>
                             <SlidersHorizontal className="h-3 w-3" />
@@ -1219,6 +1263,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                             onBlur={() => handleExtraSave(row.id!, idx)}
                             width="w-[90px]"
                             money
+                            decimal
                           />
                         </div>
                       </td>
@@ -1391,7 +1436,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
           </DialogHeader>
           {adjustChiPhi && (() => {
             const newSL    = parseInt(adjustSL.replace(/\D/g, ""), 10) || 0;
-            const newGia   = parseInt(adjustDonGia.replace(/\D/g, ""), 10) || 0;
+            const newGia   = parseThousandsDec(adjustDonGia);
             const newTotal = newSL * newGia;
             const oldTotal = adjustChiPhi.so_luong * adjustChiPhi.don_gia;
             const changed  = newSL !== adjustChiPhi.so_luong || newGia !== adjustChiPhi.don_gia;
@@ -1418,8 +1463,9 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                     <Label className="text-xs font-medium">Đơn giá thực tế</Label>
                     <Input
                       className="h-8 text-sm tabular-nums"
+                      inputMode="decimal"
                       value={adjustDonGia}
-                      onChange={e => setAdjustDonGia(e.target.value.replace(/\D/g, ""))}
+                      onChange={e => setAdjustDonGia(e.target.value.replace(/[^\d.,]/g, ""))}
                       placeholder="Đơn giá"
                     />
                   </div>
@@ -1456,13 +1502,13 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                 !adjustChiPhi ||
                 !adjustSL || !adjustDonGia ||
                 (parseInt(adjustSL.replace(/\D/g, ""), 10) === adjustChiPhi?.so_luong &&
-                 parseInt(adjustDonGia.replace(/\D/g, ""), 10) === adjustChiPhi?.don_gia)
+                 parseThousandsDec(adjustDonGia) === adjustChiPhi?.don_gia)
               }
               onClick={() => {
                 if (!adjustChiPhi) return;
                 const newSL  = parseInt(adjustSL.replace(/\D/g, ""), 10);
-                const newGia = parseInt(adjustDonGia.replace(/\D/g, ""), 10);
-                if (isNaN(newSL) || isNaN(newGia)) return;
+                const newGia = parseThousandsDec(adjustDonGia);
+                if (isNaN(newSL) || !newGia) return;
                 updateActualMut.mutate(
                   { id: adjustChiPhi.id, doan_id: doanId, so_luong: newSL, don_gia: newGia, ly_do: adjustReason },
                   {

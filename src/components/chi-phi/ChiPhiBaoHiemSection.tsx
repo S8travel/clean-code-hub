@@ -331,6 +331,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                 <div className="flex justify-center">
                   <Input
                     type="number"
+                    step="any"
                     value={donGia || ""}
                     onChange={(e) => setDonGia(Number(e.target.value) || 0)}
                     onBlur={handleSave}

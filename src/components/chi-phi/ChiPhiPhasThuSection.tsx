@@ -153,6 +153,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                 <div className="flex items-center gap-1 justify-center">
                   <Input
                     type="number"
+                    step="any"
                     value={tipDonGia || ""}
                     onChange={(e) => setTipDonGia(Number(e.target.value) || 0)}
                     className="h-6 text-xs px-1.5 py-0 text-center w-[60px]"

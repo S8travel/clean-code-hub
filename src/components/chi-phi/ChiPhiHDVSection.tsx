@@ -342,6 +342,7 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
                   <td className="px-4 py-2 text-right">
                     <Input
                       type="number"
+                      step="any"
                       value={local.don_gia || ""}
                       onChange={(e) => handleNumChange(item.id, "don_gia", Number(e.target.value) || 0)}
                       onBlur={() => handleSave(item)}
