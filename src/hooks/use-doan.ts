@@ -32,6 +32,10 @@ export interface Doan {
   van_phong?: { id: number; ten: string } | null;
   loai_tour: "inbound" | "outbound" | "noi_dia" | null;
   thi_truong: string | null;
+  thu_tip: boolean | null;
+  tip_rate: number | null;
+  tip_so_ngay_override: number | null;
+  tip_lump_sum: number | null;
   created_at?: string;
 }
 

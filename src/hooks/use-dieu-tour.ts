@@ -279,6 +279,10 @@ export interface SaveDieuTourPayload {
     ghi_chu_dieu_tour?: string | null;
     chuyen_bay_don?: string | null;
     chuyen_bay_tien?: string | null;
+    thu_tip?: boolean | null;
+    tip_rate?: number | null;
+    tip_so_ngay_override?: number | null;
+    tip_lump_sum?: number | null;
   };
   days: DayLocal[];
   soKhach: number;
@@ -439,7 +443,16 @@ export async function checkKhachSanDeletable(
     .maybeSingle();
   if (!bookingKs) return { ok: true };
 
-  // Active phase = đã gửi mail nhưng chưa vào luồng hủy (cho_ks_xac_nhan_huy / ks_xac_nhan_huy = OK)
+  // Booking đã vào luồng hủy ở final (kể cả ks_xac_nhan đặt trước trước đó) → allow xóa.
+  // Final là phase quyết định: nếu final đã/đang hủy thì toàn booking coi như cancelled.
+  if (
+    bookingKs.ks_final_status === "cho_ks_xac_nhan_huy" ||
+    bookingKs.ks_final_status === "ks_xac_nhan_huy"
+  ) {
+    return { ok: true };
+  }
+
+  // Active phase = đã gửi mail nhưng chưa vào luồng hủy
   const dtActive = ["cho_ks_xac_nhan", "ks_xac_nhan"].includes(bookingKs.ks_dat_truoc_status || "");
   const finalActive = ["cho_ks_xac_nhan", "ks_xac_nhan_final"].includes(bookingKs.ks_final_status || "");
   if (!dtActive && !finalActive) return { ok: true };

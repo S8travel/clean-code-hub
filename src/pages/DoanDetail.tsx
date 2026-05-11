@@ -32,6 +32,7 @@ import CompanyHeader from "@/components/dieu-tour/CompanyHeader";
 import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
 import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
 import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
+import TipSection from "@/components/dieu-tour/TipSection";
 import BookingKSTab from "@/components/dieu-tour/BookingKSTab";
 import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
@@ -90,6 +91,10 @@ export default function DoanDetail() {
   const [gifts, setGifts] = useState<string[]>([]);
   const [ghiChuDieuTour, setGhiChuDieuTour] = useState("");
   const [coTinhSuatTLNhaHang, setCoTinhSuatTLNhaHang] = useState(false);
+  const [thuTip, setThuTip] = useState(true);
+  const [tipRate, setTipRate] = useState<number | null>(null);
+  const [tipSoNgayOverride, setTipSoNgayOverride] = useState<number | null>(null);
+  const [tipLumpSum, setTipLumpSum] = useState<number | null>(null);
   const [days, setDays] = useState<DayLocal[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("dieu-tour");
@@ -138,6 +143,10 @@ export default function DoanDetail() {
       setGifts(Array.isArray(doan.tang_pham) ? doan.tang_pham : []);
       setGhiChuDieuTour(doan.ghi_chu_dieu_tour || "");
       setCoTinhSuatTLNhaHang(doan.co_tinh_suat_tl_nha_hang ?? false);
+      setThuTip(doan.thu_tip ?? true);
+      setTipRate(doan.tip_rate ?? null);
+      setTipSoNgayOverride(doan.tip_so_ngay_override ?? null);
+      setTipLumpSum(doan.tip_lump_sum ?? null);
       setInitialized(true);
     }
 
@@ -196,6 +205,10 @@ export default function DoanDetail() {
           chu_thich_khach: chuThichKhach || null,
           tang_pham: gifts.length > 0 ? gifts : null,
           ghi_chu_dieu_tour: ghiChuDieuTour || null,
+          thu_tip: thuTip,
+          tip_rate: tipRate,
+          tip_so_ngay_override: tipSoNgayOverride,
+          tip_lump_sum: tipLumpSum,
         },
         days,
         soKhach: totalKhach || doan?.so_khach || 0,
@@ -246,7 +259,7 @@ export default function DoanDetail() {
         },
       }
     );
-  }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
+  }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
 
   // Keep ref updated so timer always calls latest doSave
   doSaveRef.current = doSave;
@@ -271,6 +284,10 @@ export default function DoanDetail() {
   const handleSetCoTinhSuatTLNhaHang = useCallback((v: boolean) => { setCoTinhSuatTLNhaHang(v); scheduleSave(); }, [scheduleSave]);
   const handleSetGifts = useCallback((v: string[]) => { setGifts(v); scheduleSave(); }, [scheduleSave]);
   const handleSetGhiChuDieuTour = useCallback((v: string) => { setGhiChuDieuTour(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetThuTip = useCallback((v: boolean) => { setThuTip(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetTipRate = useCallback((v: number | null) => { setTipRate(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetTipSoNgayOverride = useCallback((v: number | null) => { setTipSoNgayOverride(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetTipLumpSum = useCallback((v: number | null) => { setTipLumpSum(v); scheduleSave(); }, [scheduleSave]);
   const handleSetDays = useCallback((v: DayLocal[]) => {
     hasPendingChangesRef.current = true;
     setDays(v);
@@ -431,6 +448,20 @@ export default function DoanDetail() {
               setCoTinhSuatTLNhaHang={handleSetCoTinhSuatTLNhaHang}
             />
             <GiftTagsSection gifts={gifts} setGifts={handleSetGifts} />
+            <TipSection
+              soKhach={totalKhach || doan?.so_khach || 0}
+              soKhachTl={soKhachTl}
+              ngayDi={doan?.ngay_di ?? null}
+              ngayVe={doan?.ngay_ve ?? null}
+              thuTip={thuTip}
+              tipRate={tipRate}
+              tipSoNgayOverride={tipSoNgayOverride}
+              tipLumpSum={tipLumpSum}
+              onThuTipChange={handleSetThuTip}
+              onTipRateChange={handleSetTipRate}
+              onTipSoNgayOverrideChange={handleSetTipSoNgayOverride}
+              onTipLumpSumChange={handleSetTipLumpSum}
+            />
             <DayScheduleTable
               days={days}
               setDays={handleSetDays}
