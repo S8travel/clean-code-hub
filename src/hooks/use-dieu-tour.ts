@@ -861,6 +861,9 @@ export function useSaveDieuTour() {
       qc.invalidateQueries({ queryKey: ["chi_phi_ks_data"] });
       qc.invalidateQueries({ queryKey: ["chi_phi_nh_section"] });
       qc.invalidateQueries({ queryKey: ["doan_booking_ks"] });
+      qc.invalidateQueries({ queryKey: ["doan_booking_nh"] });
+      qc.invalidateQueries({ queryKey: ["doan_booking_tau"] });
+      qc.invalidateQueries({ queryKey: ["doan_booking_dv"] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       log({ doan_id: payload.doanId, action: "sua", table_name: "doan_ngay", record_id: payload.doanId, mo_ta: `Lưu lịch trình điều tour` });
     },
