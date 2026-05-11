@@ -52,12 +52,30 @@ interface Props {
 }
 
 // Small inline number input (like NH's NHInput)
-function DVInput({ value, onChange, onBlur, width = "w-[60px]" }: {
+function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false }: {
   value: number;
   onChange: (v: number) => void;
   onBlur: () => void;
   width?: string;
+  /** Hiển thị dấu chấm phân cách hàng nghìn (vd 850.000). */
+  money?: boolean;
 }) {
+  if (money) {
+    return (
+      <Input
+        type="text"
+        inputMode="numeric"
+        value={value ? value.toLocaleString("vi-VN") : ""}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, "");
+          onChange(digits ? Number(digits) : 0);
+        }}
+        onBlur={onBlur}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+        className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
+      />
+    );
+  }
   return (
     <Input
       type="number"
@@ -912,6 +930,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                               onChange={v => handleRowChange(row.id, "don_gia", v)}
                               onBlur={() => handleRowSave(row)}
                               width="w-[90px]"
+                              money
                             />
                           );
                         })()}
@@ -1153,6 +1172,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                             onChange={v => handleExtraChange(row.id!, idx, "don_gia", v)}
                             onBlur={() => handleExtraSave(row.id!, idx)}
                             width="w-[90px]"
+                            money
                           />
                         </div>
                       </td>

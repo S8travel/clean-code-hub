@@ -70,6 +70,8 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
       an_toi_nha_hang_id: null,
       an_trua_set_menu_id: null,
       an_toi_set_menu_id: null,
+      an_trua_ghi_chu: "",
+      an_toi_ghi_chu: "",
       khach_san_id: null,
       ks_ma_code: "",
       ks_loai_phong: "",

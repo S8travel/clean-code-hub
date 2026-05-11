@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { LocalKSRow } from "./ChiPhiKSSection";
+import { formatThousands, parseThousands } from "@/lib/utils";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -22,7 +23,8 @@ export default memo(function KSRowInput({
 }: Props) {
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
-  const [localGiaPhong, setLocalGiaPhong] = useState(String(row.gia_phong || ""));
+  // gia_phong: hiển thị dạng "850.000" cho dễ đọc; lưu raw digits xuống state.
+  const [localGiaPhong, setLocalGiaPhong] = useState(row.gia_phong ? formatThousands(row.gia_phong) : "");
 
   const handleLoaiPhongBlur = useCallback(() => {
     onFieldChange(globalIdx, "loai_phong", localLoaiPhong);
@@ -36,13 +38,13 @@ export default memo(function KSRowInput({
   }, [globalIdx, localSoPhong, onFieldChange, onBlurSave]);
 
   const handleGiaPhongBlur = useCallback(() => {
-    const val = Number(localGiaPhong) || 0;
+    const val = parseThousands(localGiaPhong);
     onFieldChange(globalIdx, "gia_phong", val);
     setTimeout(() => onBlurSave(globalIdx), 0);
   }, [globalIdx, localGiaPhong, onFieldChange, onBlurSave]);
 
   const soPhong = Number(localSoPhong) || 0;
-  const giaPhong = Number(localGiaPhong) || 0;
+  const giaPhong = parseThousands(localGiaPhong);
   const thanhTien = soPhong * giaPhong * row.so_dem;
 
   return (
@@ -74,12 +76,13 @@ export default memo(function KSRowInput({
       <TableCell className="py-0.5 px-2 text-xs text-center">{row.so_dem}</TableCell>
       <TableCell className="py-0.5 px-2">
         <Input
-          type="number"
+          type="text"
+          inputMode="numeric"
           value={localGiaPhong}
-          onChange={(e) => setLocalGiaPhong(e.target.value)}
+          onChange={(e) => setLocalGiaPhong(formatThousands(e.target.value))}
           onBlur={handleGiaPhongBlur}
           placeholder="0"
-          className="h-6 text-xs w-[90px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="h-6 text-xs w-[90px] text-right"
         />
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs font-medium">

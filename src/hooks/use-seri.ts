@@ -20,8 +20,10 @@ export interface SeriNgay {
   thanh_pho: string | null;
   an_trua_nha_hang_id: number | null;
   an_trua_set_menu_id: number | null;
+  an_trua_ghi_chu: string | null;
   an_toi_nha_hang_id: number | null;
   an_toi_set_menu_id: number | null;
+  an_toi_ghi_chu: string | null;
   khach_san_id: number | null;
   ks_loai_phong: string | null;
   ks_ma_code: string | null;
@@ -262,8 +264,10 @@ export function useApplySeriToDoan() {
           thanh_pho: sn.thanh_pho,
           an_trua_nha_hang_id: sn.an_trua_nha_hang_id,
           an_trua_set_menu_id: sn.an_trua_set_menu_id,
+          an_trua_ghi_chu: sn.an_trua_ghi_chu,
           an_toi_nha_hang_id: sn.an_toi_nha_hang_id,
           an_toi_set_menu_id: sn.an_toi_set_menu_id,
+          an_toi_ghi_chu: sn.an_toi_ghi_chu,
           khach_san_id: sn.khach_san_id,
           ks_loai_phong: sn.ks_loai_phong,
           ks_ma_code: sn.ks_ma_code,
@@ -347,6 +351,8 @@ export function seriToDayLocals(ngayRows: SeriNgay[], items: SeriNgayItem[]): Da
       an_toi_nha_hang_id: sn.an_toi_nha_hang_id,
       an_trua_set_menu_id: sn.an_trua_set_menu_id,
       an_toi_set_menu_id: sn.an_toi_set_menu_id,
+      an_trua_ghi_chu: sn.an_trua_ghi_chu || "",
+      an_toi_ghi_chu: sn.an_toi_ghi_chu || "",
       khach_san_id: sn.khach_san_id,
       ks_ma_code: sn.ks_ma_code || "",
       ks_loai_phong: sn.ks_loai_phong || "",
@@ -376,8 +382,10 @@ export function useSaveSeri() {
         thanh_pho: d.thanh_pho || null,
         an_trua_nha_hang_id: d.an_trua_nha_hang_id,
         an_trua_set_menu_id: d.an_trua_set_menu_id,
+        an_trua_ghi_chu: d.an_trua_ghi_chu || null,
         an_toi_nha_hang_id: d.an_toi_nha_hang_id,
         an_toi_set_menu_id: d.an_toi_set_menu_id,
+        an_toi_ghi_chu: d.an_toi_ghi_chu || null,
         khach_san_id: d.khach_san_id,
         ks_loai_phong: d.ks_loai_phong || null,
         ks_ma_code: d.ks_ma_code || null,

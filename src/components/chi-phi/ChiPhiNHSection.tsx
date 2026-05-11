@@ -1338,6 +1338,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                             onChange={(v) => handleChange(key, "don_gia", v)}
                             onBlur={() => handleSave(key)}
                             width="w-[84px]"
+                            money
                           />
                           {row.is_overridden && row.id != null && (
                             <button
@@ -1654,6 +1655,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                         onChange={(v) => handleExtraChange(key, idx, "don_gia", v)}
                         onBlur={() => handleExtraSave(key, idx)}
                         width="w-[84px]"
+                        money
                       />
                     </div>
                   </td>
@@ -2343,22 +2345,37 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function NHInput({
-  value, onChange, onBlur, width = "w-[72px]",
+  value, onChange, onBlur, width = "w-[72px]", money = false,
 }: {
   value: number;
   onChange: (v: number) => void;
   onBlur: () => void;
   width?: string;
+  /** Hiển thị dấu chấm phân cách hàng nghìn cho dễ đọc (vd 850.000). */
+  money?: boolean;
 }) {
-  const [local, setLocal] = useState(String(value));
-  useEffect(() => { setLocal(String(value)); }, [value]);
+  const formatVN = (n: number) => (n ? n.toLocaleString("vi-VN") : "");
+  const [local, setLocal] = useState(money ? formatVN(value) : String(value));
+  useEffect(() => { setLocal(money ? formatVN(value) : String(value)); }, [value, money]);
   return (
     <Input
-      type="number"
+      type={money ? "text" : "number"}
+      inputMode="numeric"
       value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => { onChange(Number(local) || 0); setTimeout(onBlur, 0); }}
-      className={`h-7 text-xs ${width} text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+      onChange={(e) => {
+        if (money) {
+          const digits = e.target.value.replace(/\D/g, "");
+          setLocal(digits ? Number(digits).toLocaleString("vi-VN") : "");
+        } else {
+          setLocal(e.target.value);
+        }
+      }}
+      onBlur={() => {
+        const v = money ? Number(local.replace(/\D/g, "")) || 0 : Number(local) || 0;
+        onChange(v);
+        setTimeout(onBlur, 0);
+      }}
+      className={`h-7 text-xs ${width} ${money ? "text-right" : "text-center"} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
     />
   );
 }

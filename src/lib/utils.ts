@@ -6,6 +6,23 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Format số nguyên thành chuỗi có dấu chấm phân cách hàng nghìn (vi-VN).
+ * "850000" → "850.000", "" → "", "abc850def" → "850".
+ * Dùng cho input tiền — display khi không focus và sau khi user nhập.
+ */
+export function formatThousands(s: string | number): string {
+  const digits = String(s).replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("vi-VN");
+}
+
+/** Parse chuỗi có dấu chấm (vi-VN format) hoặc raw digits về number. "850.000" → 850000. */
+export function parseThousands(s: string): number {
+  const digits = s.replace(/\D/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+/**
  * Chuẩn hóa chuỗi email: tách bởi dấu phẩy / chấm phẩy / khoảng trắng / xuống dòng
  * → trả về dạng "a@x.com, b@x.com" để dùng trong trường To của email
  */
