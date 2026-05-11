@@ -21,6 +21,7 @@ import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 
 const STATUS_CFG = {
   chua_gui:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -94,6 +95,7 @@ export default function MealCard({
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailHtml, setEmailHtml] = useState("");
+  const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
   const [zaloModalOpen, setZaloModalOpen] = useState(false);
   const [zaloText, setZaloText] = useState("");
@@ -255,8 +257,29 @@ export default function MealCard({
 
   const handleMonBlur = () => saveBooking({ mon_an_snapshot: monList });
 
-  const buildEmailHtml = () => {
+  const buildEmailHtml = (mode: "first" | "update" = "first", note = "") => {
     const buaLabel = buaAn === "trua" ? "Ăn trưa" : "Ăn tối";
+
+    // Update mode: minimal layout
+    if (mode === "update") {
+      const senderName = userProfile?.ho_ten || currentUserName;
+      const keyFields = buildKeyFieldsList([
+        { label: "Đoàn", value: tenDoan || "—" },
+        { label: "Ngày", value: fmtDate(ngayDate) },
+        { label: "Bữa ăn", value: buaLabel },
+        { label: "Số khách", value: soKhach != null ? `${soKhach} khách` : "—" },
+        { label: "Set menu", value: selectedMenu ? `${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}` : "—" },
+      ]);
+      return buildUpdateEmailHtml({
+        greeting: `Kính gửi ${nhaHangTen || "Quý nhà hàng"},`,
+        intro: `Cập nhật booking ${buaLabel.toLowerCase()} đoàn ${tenDoan || "—"}:`,
+        keyFieldsHtml: keyFields,
+        note,
+        senderName,
+        senderPhone: userProfile?.so_dien_thoai ?? null,
+      });
+    }
+
     const monRows = monList.map((m, i) => `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px">${i + 1}</td><td style="border:1px solid #e2e8f0;padding:6px 12px">${m}</td></tr>`).join("");
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
@@ -311,15 +334,23 @@ export default function MealCard({
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
+    setUpdateNote("");
     const buaLabel = buaAn === "trua" ? "ăn trưa" : "ăn tối";
     const ngayStr = ngayDate ? format(new Date(ngayDate + "T00:00:00"), "dd/MM", { locale: vi }) : "";
     setEmailTo(normalizeEmails(nhaHangEmail));
     const baseSubject = `[S8 Travel] Đặt ${buaLabel}${tenDoan ? ` – ${tenDoan}` : ""}${ngayStr ? ` – ${ngayStr}` : ""} – ${nhaHangTen || "Nhà hàng"}`;
     // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailHtml(buildEmailHtml());
+    setEmailHtml(buildEmailHtml(mode, ""));
     setEmailModalOpen(true);
   };
+
+  // Rebuild HTML khi user nhập lời nhắn (chỉ ở update mode)
+  useEffect(() => {
+    if (!emailModalOpen || emailMode !== "update") return;
+    setEmailHtml(buildEmailHtml("update", updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const buildMailtoBody = () => {
     const buaLabel = buaAn === "trua" ? "Ä‚n trÆ°a" : "Ä‚n tá»‘i";
@@ -703,6 +734,9 @@ export default function MealCard({
       onSendViaServer={handleSendViaServer}
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
+      mode={emailMode}
+      updateNote={updateNote}
+      onUpdateNoteChange={setUpdateNote}
     />
     <Dialog open={zaloModalOpen} onOpenChange={setZaloModalOpen}>
       <DialogContent className="max-w-lg">

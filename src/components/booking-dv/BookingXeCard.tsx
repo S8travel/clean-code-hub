@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { useUpsertBookingXe, type BookingXeRow } from "@/hooks/use-booking-xe";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
@@ -114,6 +115,7 @@ export default function BookingXeCard({
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
   const [ghiChu, setGhiChu] = useState(booking?.ghi_chu ?? "");
   const [deadline, setDeadline] = useState(() => booking?.deadline ?? getDefaultDeadline(ngayDi ?? "") ?? "");
@@ -130,11 +132,33 @@ export default function BookingXeCard({
     if (corrected) save({ deadline: corrected });
   };
 
-  const buildEmailHTML = () => {
+  const buildEmailHTML = (mode: "first" | "update" = "first", note = "") => {
     const nhaXeTen = xe?.nha_xe?.ten ?? "Quý đối tác";
     const xeStr = xe ? `${xe.ten_xe}${xe.so_cho ? ` (${xe.so_cho} chỗ)` : ""}` : "—";
     const hdvStr = hdvTen || "—";
     const soKhachStr = soKhach ? `${soKhach} khách` : "—";
+
+    if (mode === "update") {
+      const senderName = userProfile?.ho_ten || "";
+      const keyFields = buildKeyFieldsList([
+        { label: "Đoàn", value: tenDoan },
+        { label: "Nhà xe", value: nhaXeTen },
+        { label: "Loại xe", value: xeStr },
+        { label: "Ngày đón", value: `${fmtDate(ngayDi)}${chuyenBayDon ? ` · CB ${chuyenBayDon}` : ""}` },
+        { label: "Ngày tiễn", value: `${fmtDate(ngayVe)}${chuyenBayTien ? ` · CB ${chuyenBayTien}` : ""}` },
+        { label: "Số khách", value: soKhachStr },
+        { label: "HDV", value: hdvStr },
+      ]);
+      return buildUpdateEmailHtml({
+        greeting: `Kính gửi ${nhaXeTen},`,
+        intro: `Cập nhật booking đặt xe đoàn ${tenDoan}:`,
+        keyFieldsHtml: keyFields,
+        note,
+        senderName,
+        senderPhone: userProfile?.so_dien_thoai ?? null,
+      });
+    }
+
     const cells = exportData ? computeExportCells(exportData) : [];
     const scheduleHtml = buildScheduleHTML(cells);
 
@@ -178,14 +202,20 @@ export default function BookingXeCard({
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
+    setUpdateNote("");
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(xe?.nha_xe?.email ?? "");
     const baseSubject = `[S8 Travel] Đặt xe – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`;
-    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailBody(buildEmailHTML());
+    setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!emailModalOpen || emailMode !== "update") return;
+    setEmailBody(buildEmailHTML("update", updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const handleSendViaServer = async () => {
     if (!emailTo) { toast.error("Vui lòng nhập email nhà xe"); return; }
@@ -194,13 +224,14 @@ export default function BookingXeCard({
       const isFirst = !booking?.email_thread_id;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
 
+      // KHÔNG pass messageId/inReplyTo: Resend ghi đè Message-ID → In-Reply-To custom invalid
+      // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
       const emailId = await callSendBookingEmail({
         to: emailTo,
         cc: BOOKING_CC.xe,
         subject: emailSubject,
         html: emailBody,
         replyTo: currentUserEmail ?? undefined,
-        ...(isFirst ? { messageId: newThreadId! } : { inReplyTo: booking?.email_thread_id ?? undefined }),
       });
 
       const threadId = isFirst ? newThreadId : booking?.email_thread_id;
@@ -316,12 +347,12 @@ export default function BookingXeCard({
               variant="outline"
               className={cn(
                 "h-7 text-xs gap-1.5",
-                booking?.email_thread_id && "text-amber-700 border-amber-300 hover:bg-amber-50",
+                booking?.sent_at && "text-amber-700 border-amber-300 hover:bg-amber-50",
               )}
-              onClick={() => openEmailModal(booking?.email_thread_id ? "update" : "first")}
-              title={booking?.email_thread_id ? "Gửi cập nhật — sẽ thread vào mail booking cũ" : undefined}
+              onClick={() => openEmailModal(booking?.sent_at ? "update" : "first")}
+              title={booking?.sent_at ? "Gửi cập nhật — sẽ thread vào mail booking cũ" : undefined}
             >
-              <Mail className="h-3 w-3" /> {booking?.email_thread_id ? "Gửi cập nhật" : "Soạn email"}
+              <Mail className="h-3 w-3" /> {booking?.sent_at ? "Gửi cập nhật" : "Soạn email"}
             </Button>
             {status === "cho_xac_nhan" && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={handleConfirm}>
@@ -358,6 +389,9 @@ export default function BookingXeCard({
           window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}`;
         }}
         sending={sending}
+        mode={emailMode}
+        updateNote={updateNote}
+        onUpdateNoteChange={setUpdateNote}
       />
     </>
   );

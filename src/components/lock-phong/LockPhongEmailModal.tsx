@@ -7,6 +7,8 @@ import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { useSendLockPhongEmail, type LockPhongDisplay, type LockPhongKSDisplay } from "@/hooks/use-lock-phong";
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { useEffect } from "react";
 
 function fmtDate(d: string) {
   try {
@@ -81,23 +83,53 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
   const sendMut = useSendLockPhongEmail();
 
   const baseSubject = `[S8 Travel] Lock Phòng – ${lockPhong.ten_doan} – ${ksRow.khach_san_ten}`;
+
+  // Build update HTML (minimal) hoặc first HTML (full)
+  const buildHtml = (forMode: "first" | "update", note: string): string => {
+    const name = userProfile?.ho_ten || currentUserName;
+    const phone = userProfile?.so_dien_thoai ?? null;
+    if (forMode === "update") {
+      const keyFields = buildKeyFieldsList([
+        { label: "Đoàn / Seri", value: `${lockPhong.ten_doan} / ${lockPhong.ten_seri}` },
+        { label: "Khách sạn", value: ksRow.khach_san_ten },
+        { label: "Check-in", value: fmtDate(ksRow.check_in) },
+        { label: "Check-out", value: `${fmtDate(ksRow.check_out)}${ksRow.so_dem ? ` (${ksRow.so_dem} đêm)` : ""}` },
+        { label: "Yêu cầu phòng", value: ksRow.so_phong || "—" },
+      ]);
+      return buildUpdateEmailHtml({
+        greeting: `Kính gửi ${ksRow.khach_san_ten || "Quý khách sạn"},`,
+        intro: `Cập nhật lock phòng đoàn ${lockPhong.ten_doan}:`,
+        keyFieldsHtml: keyFields,
+        note,
+        senderName: name,
+        senderPhone: phone,
+      });
+    }
+    return buildEmailHtml(lockPhong, ksRow, name, phone);
+  };
+
   const [emailTo, setEmailTo] = useState(() => normalizeEmails(ksRow.khach_san_email));
   const [emailSubject, setEmailSubject] = useState(
     () => (mode === "update" ? `Re: ${baseSubject}` : baseSubject),
   );
-  const [emailHtml, setEmailHtml] = useState(() =>
-    buildEmailHtml(lockPhong, ksRow, currentUserName, userProfile?.so_dien_thoai ?? null)
-  );
+  const [emailHtml, setEmailHtml] = useState(() => buildHtml(mode, ""));
+  const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
 
   // Refresh email content when modal opens or data changes
   const refreshEmail = () => {
-    const name = userProfile?.ho_ten || currentUserName;
     setEmailTo(normalizeEmails(ksRow.khach_san_email));
-    // KEEP subject IDENTICAL khi update — Gmail dựa Subject + From để group thread.
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailHtml(buildEmailHtml(lockPhong, ksRow, name, userProfile?.so_dien_thoai ?? null));
+    setUpdateNote("");
+    setEmailHtml(buildHtml(mode, ""));
   };
+
+  // Rebuild HTML when updateNote changes (only update mode)
+  useEffect(() => {
+    if (!open || mode !== "update") return;
+    setEmailHtml(buildHtml("update", updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const handleOpenChange = (v: boolean) => {
     if (v) refreshEmail();
@@ -163,6 +195,9 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
       onSendViaServer={handleSendViaServer}
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
+      mode={mode}
+      updateNote={updateNote}
+      onUpdateNoteChange={setUpdateNote}
     />
   );
 }

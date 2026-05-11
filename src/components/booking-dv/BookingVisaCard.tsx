@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { useUpsertBookingVisa, useDeleteBookingVisa, type BookingVisaRow } from "@/hooks/use-booking-visa";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
@@ -88,6 +89,7 @@ export default function BookingVisaCard({
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
   const [attachWord, setAttachWord] = useState(true);
   const [ghiChu, setGhiChu] = useState(booking.ghi_chu ?? "");
@@ -113,7 +115,7 @@ export default function BookingVisaCard({
     if (corrected) save({ deadline: corrected });
   };
 
-  const buildEmailHTML = () => {
+  const buildEmailHTML = (mode: "first" | "update" = "first", note = "") => {
     const tenNCC = donVi?.ten ?? "Quý đối tác";
     const soKhachParts = [
       soKhachLon   ? `NL: ${soKhachLon}` : "",
@@ -121,6 +123,25 @@ export default function BookingVisaCard({
       soKhachEm2   ? `TE free: ${soKhachEm2}` : "",
       soKhachTl    ? `T/L: ${soKhachTl}` : "",
     ].filter(Boolean).join(" · ");
+
+    if (mode === "update") {
+      const senderName = userProfile?.ho_ten || "";
+      const total = soKhachLon + soKhachEm1 + soKhachEm2 + soKhachTl;
+      const keyFields = buildKeyFieldsList([
+        { label: "Đoàn", value: tenDoan },
+        { label: "Đơn vị visa", value: tenNCC },
+        { label: "Ngày đi", value: fmtDate(ngayDi) },
+        { label: "Số khách", value: total > 0 ? `${total} (${soKhachParts || "—"})` : "—" },
+      ]);
+      return buildUpdateEmailHtml({
+        greeting: `Kính gửi ${tenNCC},`,
+        intro: `Cập nhật booking visa đoàn ${tenDoan}:`,
+        keyFieldsHtml: keyFields,
+        note,
+        senderName,
+        senderPhone: userProfile?.so_dien_thoai ?? null,
+      });
+    }
 
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
@@ -159,14 +180,20 @@ export default function BookingVisaCard({
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
+    setUpdateNote("");
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(donVi?.email ?? "");
     const baseSubject = `[S8 Travel] Xin visa – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`;
-    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailBody(buildEmailHTML());
+    setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!emailModalOpen || emailMode !== "update") return;
+    setEmailBody(buildEmailHTML("update", updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const handleSendViaServer = async () => {
     if (!emailTo) { toast.error("Vui lòng nhập email đơn vị visa"); return; }
@@ -187,13 +214,14 @@ export default function BookingVisaCard({
         }
       }
 
+      // KHÔNG pass messageId/inReplyTo: Resend ghi đè Message-ID → In-Reply-To custom invalid
+      // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
       const emailId = await callSendBookingEmail({
         to: emailTo,
         cc: BOOKING_CC.visa,
         subject: emailSubject,
         html: emailBody,
         replyTo: currentUserEmail ?? undefined,
-        ...(isFirst ? { messageId: newThreadId! } : { inReplyTo: booking.email_thread_id ?? undefined }),
         attachments,
       });
 
@@ -324,12 +352,12 @@ export default function BookingVisaCard({
               variant="outline"
               className={cn(
                 "h-7 text-xs gap-1.5",
-                booking.email_thread_id && "text-amber-700 border-amber-300 hover:bg-amber-50",
+                booking.sent_at && "text-amber-700 border-amber-300 hover:bg-amber-50",
               )}
-              onClick={() => openEmailModal(booking.email_thread_id ? "update" : "first")}
-              title={booking.email_thread_id ? "Gửi cập nhật — sẽ thread vào mail booking cũ" : undefined}
+              onClick={() => openEmailModal(booking.sent_at ? "update" : "first")}
+              title={booking.sent_at ? "Gửi cập nhật — sẽ thread vào mail booking cũ" : undefined}
             >
-              <Mail className="h-3 w-3" /> {booking.email_thread_id ? "Gửi cập nhật" : "Soạn email"}
+              <Mail className="h-3 w-3" /> {booking.sent_at ? "Gửi cập nhật" : "Soạn email"}
             </Button>
             {status === "cho_xac_nhan" && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={handleConfirm}>
@@ -379,6 +407,9 @@ export default function BookingVisaCard({
           window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}`;
         }}
         sending={sending}
+        mode={emailMode}
+        updateNote={updateNote}
+        onUpdateNoteChange={setUpdateNote}
       />
     </>
   );

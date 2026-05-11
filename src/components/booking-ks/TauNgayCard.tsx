@@ -18,6 +18,7 @@ import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 
 function fmtDatetime(d: string | null | undefined) {
   if (!d) return "";
@@ -69,6 +70,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailHtml, setEmailHtml] = useState("");
+  const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -121,12 +123,32 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     }
   };
 
-  const buildEmailHtml = (smId: number | null) => {
+  const buildEmailHtml = (smId: number | null, mode: "first" | "update" = "first", note = "") => {
     const sm = setMenuOptions.find((s) => s.id === smId);
     const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
     const buaStr = row.bua_an === "trua" ? "Bữa trưa" : "Bữa tối";
     const soKhachStr = soKhach ? `${soKhach} khách` : "—";
     const menuStr = sm ? `${sm.ten_set}${sm.gia ? ` – ${sm.gia.toLocaleString("vi-VN")} ${sm.don_vi}` : ""}` : "—";
+
+    if (mode === "update") {
+      const senderName = userProfile?.ho_ten || currentUserName;
+      const keyFields = buildKeyFieldsList([
+        { label: "Đoàn", value: tenDoan || "—" },
+        { label: "Ngày", value: ngayStr },
+        { label: "Bữa", value: buaStr },
+        { label: "Số khách", value: soKhachStr },
+        { label: "Set menu / Buffet", value: menuStr },
+      ]);
+      return buildUpdateEmailHtml({
+        greeting: `Kính gửi ${row.nha_hang_ten || "Quý đối tác"},`,
+        intro: `Cập nhật booking đặt tàu đoàn ${tenDoan}:`,
+        keyFieldsHtml: keyFields,
+        note,
+        senderName,
+        senderPhone: userProfile?.so_dien_thoai ?? null,
+      });
+    }
+
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
@@ -164,15 +186,21 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
 
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
+    setUpdateNote("");
     const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
     const buaStr = row.bua_an === "trua" ? "Trưa" : "Tối";
     setEmailTo(normalizeEmails(row.nha_hang_email));
     const baseSubject = `[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`;
-    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailHtml(buildEmailHtml(selectedSetMenu));
+    setEmailHtml(buildEmailHtml(selectedSetMenu, mode, ""));
     setEmailModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!emailModalOpen || emailMode !== "update") return;
+    setEmailHtml(buildEmailHtml(selectedSetMenu, "update", updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const handleOpenEmail = async () => {
     const ok = await ensureBookingExists();
@@ -323,6 +351,9 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         onSendViaServer={handleSendViaServer}
         onMailtoFallback={handleMailtoFallback}
         sending={sending}
+        mode={emailMode}
+        updateNote={updateNote}
+        onUpdateNoteChange={setUpdateNote}
       />
     </>
   );
@@ -400,7 +431,7 @@ function DatTruocSection({
               ✓ XN lúc: {fmtDatetime(row.dat_truoc_confirm_at)}
             </p>
           )}
-          {row.email_thread_id && (
+          {row.dat_truoc_sent_at && (
             <Button
               size="sm" variant="outline"
               className="h-6 text-[10px] text-amber-700 border-amber-300 hover:bg-amber-50 w-full"

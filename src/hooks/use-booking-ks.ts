@@ -181,6 +181,9 @@ export function useSendKSBookingEmail() {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
 
+      // KHÔNG pass messageId/inReplyTo: Resend ghi đè Message-ID nên In-Reply-To custom invalid
+      // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
+      // email_thread_id vẫn lưu (UUID) làm flag "đã gửi" để show nút "Gửi cập nhật".
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
         headers: {
@@ -193,7 +196,6 @@ export function useSendKSBookingEmail() {
           cc: BOOKING_CC.ks,
           subject: params.subject, html: params.html,
           replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined,
-          ...(isFirst ? { messageId: newThreadId } : { inReplyTo: params.emailThreadId }),
         }),
       });
       if (!res.ok) {

@@ -16,6 +16,7 @@ import {
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 
@@ -81,6 +82,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const [expanded, setExpanded] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
+  const [updateNote, setUpdateNote] = useState("");
   const [zaloModalOpen, setZaloModalOpen] = useState(false);
   const [zaloText, setZaloText] = useState("");
   const [emailTo, setEmailTo] = useState(row.email_nha_cung_cap || "");
@@ -124,8 +126,34 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   };
 
   // ── Email ──────────────────────────────────────────────────────────
-  const buildEmailHTML = () => {
+  const buildEmailHTML = (mode: "first" | "update" = "first", note = "") => {
     const nccName = tenNCC || row.ten_nha_cung_cap || "Quý đối tác";
+
+    if (mode === "update") {
+      const senderName = userProfile?.ho_ten || currentUserName;
+      const firstDate = dvSorted[0]?.ngay_date;
+      const lastDate = dvSorted[dvSorted.length - 1]?.ngay_date;
+      const dateRange = firstDate
+        ? lastDate && lastDate !== firstDate
+          ? `${fmtDay(firstDate)} → ${fmtDay(lastDate)}`
+          : fmtDay(firstDate)
+        : "—";
+      const keyFields = buildKeyFieldsList([
+        { label: "Đoàn", value: tenDoan },
+        { label: "Nhà cung cấp", value: nccName },
+        { label: "Tổng số dịch vụ", value: `${dvSorted.length} mục` },
+        { label: "Phạm vi ngày", value: dateRange },
+      ]);
+      return buildUpdateEmailHtml({
+        greeting: `Kính gửi ${nccName},`,
+        intro: `Cập nhật booking dịch vụ đoàn ${tenDoan}:`,
+        keyFieldsHtml: keyFields,
+        note,
+        senderName,
+        senderPhone: userProfile?.so_dien_thoai ?? null,
+      });
+    }
+
     const serviceRows = dvSorted
       .map(
         (d) => `
@@ -184,15 +212,21 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
 
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
+    setUpdateNote("");
     const ncc = tenNCC || row.ten_nha_cung_cap || "";
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(email || row.email_nha_cung_cap || "");
     const baseSubject = `[S8 Travel] Đặt dịch vụ – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}${ncc ? ` – ${ncc}` : ""}`;
-    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailBody(buildEmailHTML());
+    setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!emailModalOpen || emailMode !== "update") return;
+    setEmailBody(buildEmailHTML("update", updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const handleSendViaServer = async () => {
     if (!emailTo) { toast.error("Vui lòng nhập email nhà cung cấp"); return; }
@@ -475,8 +509,8 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                   </Button>
                 </>
               )}
-              {/* Gửi cập nhật — sau khi đã gửi lần đầu, thread vào mail cũ */}
-              {row.email_thread_id && row.booking_status !== "chua_dat" && row.booking_status !== "khong_dat" && (
+              {/* Gửi cập nhật — sau khi đã gửi lần đầu (server hoặc mailto). Gmail group theo Subject+From. */}
+              {row.sent_at && row.booking_status !== "khong_dat" && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -556,6 +590,9 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         onSendViaServer={handleSendViaServer}
         onMailtoFallback={handleMailtoFallback}
         sending={sending}
+        mode={emailMode}
+        updateNote={updateNote}
+        onUpdateNoteChange={setUpdateNote}
       />
       <Dialog open={zaloModalOpen} onOpenChange={setZaloModalOpen}>
         <DialogContent className="max-w-lg">

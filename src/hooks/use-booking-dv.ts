@@ -129,11 +129,13 @@ export function useSendBookingEmail() {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
 
+      // KHÔNG pass messageId/inReplyTo: Resend ghi đè Message-ID → custom In-Reply-To invalid
+      // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
+      // email_thread_id vẫn lưu (UUID) làm flag "đã gửi" để show nút "Gửi cập nhật".
       await callSendBookingEmail({
         to: params.to,
         cc: BOOKING_CC.dv,
         subject: params.subject, html: params.html, replyTo: params.replyTo,
-        ...(isFirst ? { messageId: newThreadId! } : { inReplyTo: params.emailThreadId }),
       });
 
       const threadId = isFirst ? newThreadId : params.emailThreadId;

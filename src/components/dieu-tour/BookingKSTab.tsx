@@ -27,6 +27,7 @@ import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import TauNgayCard from "@/components/booking-ks/TauNgayCard";
 import {
   expandRoomValues,
@@ -293,6 +294,7 @@ function BookingKSCard({
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailHtml, setEmailHtml] = useState("");
+  const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -335,8 +337,33 @@ function BookingKSCard({
         </tr>`).join("");
   };
 
-  const buildEmailHtml = () => {
+  const buildEmailHtml = (mode: "first" | "update" = "first", note = "") => {
     const ngayDiStr = ngayDi ? fmtDate(ngayDi) : "—";
+
+    if (mode === "update") {
+      const senderName = userProfile?.ho_ten || currentUserName;
+      const firstDate = roomDates[0];
+      const lastDate = roomDates[roomDates.length - 1];
+      const checkInStr = firstDate ? fmtDate(firstDate) : "—";
+      const checkOutStr = lastDate ? fmtDate(nextDateStr(lastDate)) : "—";
+      const soDem = roomDates.length;
+      const keyFields = buildKeyFieldsList([
+        { label: "Đoàn", value: tenDoan || "—" },
+        { label: "Khách sạn", value: row.khach_san_ten || "—" },
+        { label: "Check-in", value: checkInStr },
+        { label: "Check-out", value: `${checkOutStr}${soDem ? ` (${soDem} đêm)` : ""}` },
+        { label: "Số phòng", value: preferredRoomText || "—" },
+      ]);
+      return buildUpdateEmailHtml({
+        greeting: `Kính gửi ${row.khach_san_ten || "Quý khách sạn"},`,
+        intro: `Cập nhật booking đặt phòng đoàn ${tenDoan}:`,
+        keyFieldsHtml: keyFields,
+        note,
+        senderName,
+        senderPhone: userProfile?.so_dien_thoai ?? null,
+      });
+    }
+
     return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
@@ -374,17 +401,22 @@ function BookingKSCard({
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
+    setUpdateNote("");
     const datesStr = roomDates.length > 0
       ? roomDates.map(fmtDate).join(", ") + ` (${roomDates.length} đêm)`
       : "";
     setEmailTo(normalizeEmails(row.khach_san_email));
     const baseSubject = `[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`;
-    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
-    // Đừng thêm suffix (vd "– Cập nhật") vì sẽ làm normalized subject khác → tạo thread mới.
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailHtml(buildEmailHtml());
+    setEmailHtml(buildEmailHtml(mode, ""));
     setEmailModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!emailModalOpen || emailMode !== "update") return;
+    setEmailHtml(buildEmailHtml("update", updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const buildMailtoBody = () => {
     const userPhone = userProfile?.so_dien_thoai || "";
@@ -617,8 +649,8 @@ Email: s8travel.hddt@gmail.com`;
           </Button>
         )}
 
-        {/* Gửi cập nhật — sau khi đã gửi lần đầu, In-Reply-To threading vào mail cũ */}
-        {!isCancelled && row.ks_dat_truoc_status !== "chua_gui" && row.email_thread_id && (
+        {/* Gửi cập nhật — sau khi đã gửi lần đầu (server hoặc mailto). Gmail group theo Subject+From. */}
+        {!isCancelled && row.ks_dat_truoc_sent_at && (
           <Button
             size="sm"
             variant="outline"
@@ -659,6 +691,9 @@ Email: s8travel.hddt@gmail.com`;
       onSendViaServer={handleSendViaServer}
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
+      mode={emailMode}
+      updateNote={updateNote}
+      onUpdateNoteChange={setUpdateNote}
     />
     </>
   );

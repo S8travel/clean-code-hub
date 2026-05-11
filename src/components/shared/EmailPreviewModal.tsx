@@ -42,6 +42,9 @@ interface Props {
   onSendViaServer: () => Promise<void>;
   onMailtoFallback: () => void;
   sending: boolean;
+  mode?: "first" | "update";
+  updateNote?: string;
+  onUpdateNoteChange?: (v: string) => void;
 }
 
 export default function EmailPreviewModal({
@@ -58,6 +61,9 @@ export default function EmailPreviewModal({
   onSendViaServer,
   onMailtoFallback,
   sending,
+  mode = "first",
+  updateNote = "",
+  onUpdateNoteChange,
 }: Props) {
   const editRef = useRef<HTMLDivElement>(null);
   const htmlRef = useRef(html);
@@ -210,6 +216,22 @@ export default function EmailPreviewModal({
               />
             </div>
           </div>
+
+          {/* Lời nhắn cập nhật — chỉ hiện ở mode update */}
+          {mode === "update" && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">
+                Lời nhắn cập nhật{" "}
+                <span className="text-muted-foreground/60 font-normal">(optional — hiện callout vàng đầu mail)</span>
+              </p>
+              <Input
+                value={updateNote}
+                onChange={(e) => onUpdateNoteChange?.(e.target.value)}
+                placeholder="VD: Số khách tăng từ 16 → 18, đổi set menu sang 200k..."
+                className="text-sm h-8"
+              />
+            </div>
+          )}
 
           {/* Editor */}
           <p className="text-xs text-muted-foreground font-medium">Nội dung email</p>

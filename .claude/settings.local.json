@@ -12,7 +12,9 @@
       "Bash(wc -l /e/S8travel/s8travel/src/hooks/*.ts*)",
       "Bash(echo \"EXIT_CODE=$?\")",
       "Bash(npm install *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

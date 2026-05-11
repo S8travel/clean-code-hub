@@ -437,6 +437,7 @@ export default function DoanDetail() {
               canhDiemList={canhDiemList}
               nhaHangList={nhaHangList}
               khachSanList={khachSanList}
+              doanId={doanId}
             />
             <div className="space-y-2">
               <h3 className="text-sm font-semibold">Ghi chú điều tour</h3>

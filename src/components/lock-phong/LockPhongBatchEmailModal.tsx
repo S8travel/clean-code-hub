@@ -17,6 +17,7 @@ import {
 } from "@/hooks/use-lock-phong";
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import { buildUpdateEmailHtml, escapeHtml } from "@/lib/email-update";
 
 function fmtDate(d: string) {
   try {
@@ -132,6 +133,7 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
     () => `[S8 Travel] Lock Phòng – ${group.khach_san_ten}`
   );
   const [emailHtml, setEmailHtml] = useState("");
+  const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
 
   // Reset when modal opens
@@ -142,15 +144,14 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
       );
       setEmailTo(normalizeEmails(group.khach_san_email));
       setEmailSubject(`[S8 Travel] Lock Phòng – ${group.khach_san_ten}`);
+      setUpdateNote("");
       setPreviewOpen(false);
     }
   }, [open, group]);
 
   const selectedEntries = group.entries.filter((e) => selectedIds.has(e.ksRow.id));
-  const existingThreadId = selectedEntries
-    .map((e) => e.ksRow.email_thread_id)
-    .find((id): id is string => !!id);
-  const isUpdate = !!existingThreadId;
+  // Coi là update khi có row nào trong selected đã từng gửi (dù qua server hay mailto).
+  const isUpdate = selectedEntries.some((e) => !!e.ksRow.email_sent_at);
   const baseSubject = `[S8 Travel] Lock Phòng – ${group.khach_san_ten}`;
 
   const toggleEntry = (id: number) => {
@@ -162,18 +163,57 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
     });
   };
 
+  // Build compact HTML cho batch update (table 1 dòng/đoàn).
+  const buildBatchUpdateHtml = (note: string): string => {
+    const name = userProfile?.ho_ten || currentUserName;
+    const phone = userProfile?.so_dien_thoai ?? null;
+    const rows = selectedEntries
+      .map(
+        ({ lockPhong, ksRow }) => `<tr>
+        <td style="border:1px solid #e2e8f0;padding:6px 10px;font-size:13px"><strong>${escapeHtml(lockPhong.ten_doan)}</strong></td>
+        <td style="border:1px solid #e2e8f0;padding:6px 10px;font-size:13px">${escapeHtml(fmtDate(ksRow.check_in))} → ${escapeHtml(fmtDate(ksRow.check_out))}${ksRow.so_dem ? ` (${ksRow.so_dem}đ)` : ""}</td>
+        <td style="border:1px solid #e2e8f0;padding:6px 10px;font-size:13px">${escapeHtml(ksRow.so_phong || "—")}</td>
+      </tr>`,
+      )
+      .join("");
+    const tableHtml = `<table style="border-collapse:collapse;width:100%;margin:8px 0">
+      <tr style="background:#f1f5f9">
+        <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;font-size:13px">Đoàn</th>
+        <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;font-size:13px">Check-in → Check-out</th>
+        <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;font-size:13px">Phòng</th>
+      </tr>
+      ${rows}
+    </table>`;
+    return buildUpdateEmailHtml({
+      greeting: `Kính gửi ${group.khach_san_ten || "Quý khách sạn"},`,
+      intro: `Cập nhật lock phòng (${selectedEntries.length} đoàn):`,
+      keyFieldsHtml: tableHtml,
+      note,
+      senderName: name,
+      senderPhone: phone,
+    });
+  };
+
   const handleOpenPreview = () => {
     if (selectedEntries.length === 0) {
       toast.error("Chọn ít nhất 1 đoàn để gửi");
       return;
     }
     const name = userProfile?.ho_ten || currentUserName;
-    const html = buildBatchHtml(group, selectedEntries, name, userProfile?.so_dien_thoai ?? null);
+    const html = isUpdate
+      ? buildBatchUpdateHtml(updateNote)
+      : buildBatchHtml(group, selectedEntries, name, userProfile?.so_dien_thoai ?? null);
     setEmailHtml(html);
-    // KEEP subject IDENTICAL khi update — Gmail dựa Subject + From để group thread.
     setEmailSubject(isUpdate ? `Re: ${baseSubject}` : baseSubject);
     setPreviewOpen(true);
   };
+
+  // Rebuild khi updateNote đổi (chỉ ở update mode + preview đang mở)
+  useEffect(() => {
+    if (!previewOpen || !isUpdate) return;
+    setEmailHtml(buildBatchUpdateHtml(updateNote));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateNote]);
 
   const handleSendViaServer = async () => {
     setSending(true);
@@ -194,7 +234,7 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
         sentBy,
         replyTo,
         mode: isUpdate ? "update" : "first",
-        inReplyToThreadId: existingThreadId ?? null,
+        inReplyToThreadId: null,
       });
       toast.success(isUpdate ? "Đã gửi email cập nhật gộp" : "Đã gửi email gộp");
       setPreviewOpen(false);
@@ -311,6 +351,9 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
           onSendViaServer={handleSendViaServer}
           onMailtoFallback={handleMailtoFallback}
           sending={sending}
+          mode={isUpdate ? "update" : "first"}
+          updateNote={updateNote}
+          onUpdateNoteChange={setUpdateNote}
         />
       )}
     </>

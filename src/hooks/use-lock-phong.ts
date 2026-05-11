@@ -364,6 +364,8 @@ export function useSendLockPhongBatchEmail() {
       const isUpdate = params.mode === "update" && !!params.inReplyToThreadId;
       const threadId = isUpdate ? params.inReplyToThreadId! : crypto.randomUUID();
 
+      // KHÔNG pass messageId/inReplyTo: Resend ghi đè Message-ID → In-Reply-To custom invalid
+      // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
         headers: {
@@ -377,7 +379,6 @@ export function useSendLockPhongBatchEmail() {
           subject: params.subject,
           html: params.html,
           replyTo: params.replyTo,
-          ...(isUpdate ? { inReplyTo: threadId } : { messageId: threadId }),
         }),
       });
 
@@ -441,6 +442,8 @@ export function useSendLockPhongEmail() {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
 
+      // KHÔNG pass messageId/inReplyTo: Resend ghi đè Message-ID → In-Reply-To custom invalid
+      // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
         headers: {
@@ -457,9 +460,6 @@ export function useSendLockPhongEmail() {
             params.replyTo ||
             (await externalSupabase.auth.getSession()).data.session?.user?.email ||
             undefined,
-          ...(isFirst
-            ? { messageId: newThreadId }
-            : { inReplyTo: params.emailThreadId }),
         }),
       });
 

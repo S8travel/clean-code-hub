@@ -11,9 +11,10 @@ interface Props {
   nhaHangList: NhaHangItem[];
   khachSanList: KhachSanItem[];
   getDayLabel?: (day: DayLocal, index: number) => string;
+  doanId?: number; // truyền xuống DayRow để pre-check khi xóa NH/KS/cảnh điểm
 }
 
-export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel }: Props) {
+export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId }: Props) {
   const canhDiemOptions = useMemo(() =>
     canhDiemList.map((c) => ({
       value: String(c.id),
@@ -103,6 +104,7 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
             nhaHangOptions={nhaHangOptions}
             khachSanOptions={khachSanOptions}
             dayLabel={getDayLabel ? getDayLabel(day, i) : undefined}
+            doanId={doanId}
           />
         ))}
       </div>

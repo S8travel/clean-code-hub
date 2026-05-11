@@ -320,37 +320,142 @@ export function useInitDoanNgay() {
     },
   });
 }
-// Pre-check trước khi user xóa cảnh điểm khỏi điều tour. Nếu chi_phi liên kết
-// đã có dntt_allocations → KHÔNG xóa được (giữ data integrity). Trả error
-// tiếng Việt cụ thể (DNTT id + tên cảnh điểm) để UI hiện toast & block delete.
-//
-// Logic giống `deleteChiPhiByItemIdSafe` (trong useSaveDieuTour) nhưng KHÔNG
-// throw — caller nhận object { ok, reason } để hiện toast trước khi setState UI.
+// Pre-check trước khi user xóa cảnh điểm khỏi điều tour.
+//   1. chi_phi liên kết đã có dntt_allocations → block (data integrity)
+//   2. doan_booking_dv với NCC tương ứng đã gửi mail & chưa hủy → block (tránh lệch state booking)
+// Caller nhận { ok, reason } để hiện toast.
 export async function checkCanhDiemDeletable(
   itemId: number,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+  options?: { doanId: number; canhDiem: CanhDiemItem },
+): Promise<{ ok: boolean; reason?: string }> {
   const { data: cpRow } = await externalSupabase
     .from("doan_chi_phi")
     .select("id, mo_ta")
     .eq("ref_doan_ngay_item_id", itemId)
     .maybeSingle();
-  if (!cpRow) return { ok: true };
-  const { data: allocs } = await externalSupabase
-    .from("dntt_allocations")
-    .select("dntt_id")
-    .eq("chi_phi_id", cpRow.id)
-    .limit(5);
-  if (allocs && allocs.length > 0) {
-    const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
-      .map((id) => `#${id}`)
-      .join(", ");
-    const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
+  if (cpRow) {
+    const { data: allocs } = await externalSupabase
+      .from("dntt_allocations")
+      .select("dntt_id")
+      .eq("chi_phi_id", cpRow.id)
+      .limit(5);
+    if (allocs && allocs.length > 0) {
+      const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
+        .map((id) => `#${id}`)
+        .join(", ");
+      const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
+      return {
+        ok: false,
+        reason: `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`,
+      };
+    }
+  }
+  if (options) {
+    const ncc = options.canhDiem.dia_diem || options.canhDiem.ten;
+    const { data: bookingDv } = await externalSupabase
+      .from("doan_booking_dv")
+      .select("id, booking_status")
+      .eq("doan_id", options.doanId)
+      .eq("ten_nha_cung_cap", ncc)
+      .maybeSingle();
+    if (bookingDv && ["cho_xac_nhan", "da_xac_nhan"].includes(bookingDv.booking_status)) {
+      const statusLabel = bookingDv.booking_status === "da_xac_nhan" ? "đã xác nhận" : "đã gửi mail booking";
+      return {
+        ok: false,
+        reason: `Không thể xóa "${options.canhDiem.ten}" — booking dịch vụ (${ncc}) ${statusLabel}, chưa hủy. Hủy booking trước khi xóa khỏi tour.`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+// Pre-check khi xóa nhà hàng (trưa/tối) khỏi điều tour.
+//   1. chi_phi NH (mo_ta khớp suffix "(trưa)"/"(tối)") có DNTT → block
+//   2. doan_booking_nh đã gửi mail (da_gui/nh_xac_nhan) → block
+export async function checkNhaHangDeletable(
+  doanNgayId: number,
+  nhaHangId: number,
+  buaAn: "trua" | "toi",
+  nhaHangTen: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const buaLabel = buaAn === "trua" ? "trưa" : "tối";
+  const mealSuffix = buaAn === "trua" ? "(trưa)" : "(tối)";
+
+  // 1. chi_phi NH cho bữa này
+  const { data: cpRows } = await externalSupabase
+    .from("doan_chi_phi")
+    .select("id, mo_ta")
+    .eq("ref_doan_ngay_id", doanNgayId)
+    .eq("danh_muc", "nha_hang");
+  const cpRow = (cpRows || []).find((r: any) => typeof r.mo_ta === "string" && r.mo_ta.endsWith(mealSuffix));
+  if (cpRow) {
+    const { data: allocs } = await externalSupabase
+      .from("dntt_allocations")
+      .select("dntt_id")
+      .eq("chi_phi_id", cpRow.id)
+      .limit(5);
+    if (allocs && allocs.length > 0) {
+      const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
+        .map((id) => `#${id}`)
+        .join(", ");
+      return {
+        ok: false,
+        reason: `Không thể xóa "${nhaHangTen} (${buaLabel})" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`,
+      };
+    }
+  }
+
+  // 2. booking_nh — block nếu đã gửi mail và chưa vào luồng hủy
+  const { data: bookingNh } = await externalSupabase
+    .from("doan_booking_nh")
+    .select("id, booking_status")
+    .eq("doan_ngay_id", doanNgayId)
+    .eq("nha_hang_id", nhaHangId)
+    .eq("bua_an", buaAn)
+    .maybeSingle();
+  if (bookingNh && ["da_gui", "nh_xac_nhan"].includes(bookingNh.booking_status)) {
+    const statusLabel = bookingNh.booking_status === "nh_xac_nhan" ? "đã xác nhận" : "đã gửi mail booking";
     return {
       ok: false,
-      reason: `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`,
+      reason: `Không thể xóa "${nhaHangTen} (${buaLabel})" — booking ${statusLabel}, chưa hủy. Hủy booking trước khi xóa khỏi tour.`,
     };
   }
   return { ok: true };
+}
+
+// Pre-check khi xóa khách sạn khỏi điều tour.
+//   doan_booking_ks active (đặt trước/final đã gửi, chưa vào luồng hủy) → block.
+// Chi_phi KS được quản lý thủ công ở Chi phí tab — không link 1-1 từ điều tour, bỏ qua DNTT check.
+export async function checkKhachSanDeletable(
+  doanId: number,
+  khachSanId: number,
+  khachSanTen: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const { data: bookingKs } = await externalSupabase
+    .from("doan_booking_ks")
+    .select("id, ks_dat_truoc_status, ks_final_status")
+    .eq("doan_id", doanId)
+    .eq("khach_san_id", khachSanId)
+    .maybeSingle();
+  if (!bookingKs) return { ok: true };
+
+  // Active phase = đã gửi mail nhưng chưa vào luồng hủy (cho_ks_xac_nhan_huy / ks_xac_nhan_huy = OK)
+  const dtActive = ["cho_ks_xac_nhan", "ks_xac_nhan"].includes(bookingKs.ks_dat_truoc_status || "");
+  const finalActive = ["cho_ks_xac_nhan", "ks_xac_nhan_final"].includes(bookingKs.ks_final_status || "");
+  if (!dtActive && !finalActive) return { ok: true };
+
+  let phase = "đặt trước";
+  let statusLabel = "đã gửi mail booking";
+  if (finalActive) {
+    phase = "final";
+    statusLabel = bookingKs.ks_final_status === "ks_xac_nhan_final" ? "đã xác nhận" : "đã gửi mail booking";
+  } else if (bookingKs.ks_dat_truoc_status === "ks_xac_nhan") {
+    statusLabel = "đã xác nhận";
+  }
+  return {
+    ok: false,
+    reason: `Không thể xóa "${khachSanTen}" — booking ${phase} ${statusLabel}, chưa hủy. Hủy booking trước khi xóa khỏi tour.`,
+  };
 }
 
 export function useSaveDieuTour() {

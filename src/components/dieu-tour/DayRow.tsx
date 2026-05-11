@@ -9,7 +9,7 @@ import {
 
 import { SearchableSelect } from "@/components/SearchableSelect";
 import type { DayLocal, DayItemLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
-import { checkCanhDiemDeletable } from "@/hooks/use-dieu-tour";
+import { checkCanhDiemDeletable, checkNhaHangDeletable, checkKhachSanDeletable } from "@/hooks/use-dieu-tour";
 import { useSetMenus } from "@/hooks/use-nha-hang";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ interface Props {
   nhaHangOptions: { value: string; label: string }[];
   khachSanOptions: { value: string; label: string }[];
   dayLabel?: string;
+  doanId?: number; // optional: SeriPage không có doanId, các check NH/KS sẽ skip
 }
 
 function formatDayDisplay(dateStr: string) {
@@ -125,7 +126,7 @@ function SetMenuSelect({
   );
 }
 
-export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel }: Props) {
+export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId }: Props) {
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
   const [noteOpenMap, setNoteOpenMap] = useState<Record<number, boolean>>({});
@@ -225,13 +226,15 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   size="icon"
                   className="h-5 w-6 print-hide"
                   onClick={async () => {
-                    // Pre-check: cảnh điểm đã save (id exists) + chi_phi có DNTT → block.
+                    // Pre-check: cảnh điểm đã save (id exists) → check DNTT + booking_dv.
                     // Item mới chưa save (id=undefined) thì gỡ thẳng, không cần query DB.
                     const target = day.items[idx];
                     if (target.id) {
-                      const result = await checkCanhDiemDeletable(target.id);
+                      const cd = canhDiemList.find((c) => c.id === target.canh_diem_id);
+                      const options = (doanId && cd) ? { doanId, canhDiem: cd } : undefined;
+                      const result = await checkCanhDiemDeletable(target.id, options);
                       if (!result.ok) {
-                        toast.error(result.reason);
+                        toast.error(result.reason ?? "Không thể xóa");
                         return;
                       }
                     }
@@ -278,7 +281,14 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words">
                 {selectedNhaTrua.ten}
               </div>
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={() => update({ an_trua_nha_hang_id: null, an_trua_set_menu_id: null })}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
+                // Pre-check: nếu đã save (day.id) và có doanId → check DNTT + booking_nh
+                if (doanId && day.id && selectedNhaTrua) {
+                  const result = await checkNhaHangDeletable(day.id, selectedNhaTrua.id, "trua", selectedNhaTrua.ten);
+                  if (!result.ok) { toast.error(result.reason ?? "Không thể xóa"); return; }
+                }
+                update({ an_trua_nha_hang_id: null, an_trua_set_menu_id: null });
+              }}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
@@ -313,7 +323,13 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words">
                 {selectedNhaToi.ten}
               </div>
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={() => update({ an_toi_nha_hang_id: null, an_toi_set_menu_id: null })}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
+                if (doanId && day.id && selectedNhaToi) {
+                  const result = await checkNhaHangDeletable(day.id, selectedNhaToi.id, "toi", selectedNhaToi.ten);
+                  if (!result.ok) { toast.error(result.reason ?? "Không thể xóa"); return; }
+                }
+                update({ an_toi_nha_hang_id: null, an_toi_set_menu_id: null });
+              }}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
@@ -348,7 +364,13 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words">
                 {selectedKS.ten}
               </div>
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={() => update({ khach_san_id: null })}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
+                if (doanId && selectedKS) {
+                  const result = await checkKhachSanDeletable(doanId, selectedKS.id, selectedKS.ten);
+                  if (!result.ok) { toast.error(result.reason ?? "Không thể xóa"); return; }
+                }
+                update({ khach_san_id: null });
+              }}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
