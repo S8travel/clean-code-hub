@@ -73,7 +73,7 @@ const App = () => (
 
               {/* Protected — yêu cầu đăng nhập */}
               <Route element={<ProtectedLayout />}>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to="/my-job" replace />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/doan" element={<Index />} />
                 <Route path="/doan/:id" element={<DoanDetail />} />

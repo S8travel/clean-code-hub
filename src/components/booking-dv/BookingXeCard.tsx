@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useUpsertBookingXe, type BookingXeRow } from "@/hooks/use-booking-xe";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
@@ -122,6 +123,22 @@ export default function BookingXeCard({
 
   const status = booking?.booking_status ?? "chua_dat";
   const statusCfg = STATUS_CFG[status as keyof typeof STATUS_CFG] ?? STATUS_CFG.chua_dat;
+
+  const buildMailFields = () => ({
+    xe_id: xe?.id ?? null,
+    nha_xe_id: xe?.nha_xe?.id ?? null,
+    ten_xe: xe?.ten_xe ?? null,
+    so_cho: xe?.so_cho ?? null,
+    ngay_di: ngayDi,
+    ngay_ve: ngayVe,
+    chuyen_bay_don: chuyenBayDon ?? null,
+    chuyen_bay_tien: chuyenBayTien ?? null,
+    hdv_ten: hdvTen ?? null,
+    so_khach: soKhach ?? null,
+  });
+
+  const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(status);
+  const isDirty = isActive && isMailDirty(booking?.sent_at, booking?.mail_content_hash, buildMailFields());
 
   const save = (updates: Partial<BookingXeRow>) =>
     upsert.mutate({ doan_id: doanId, ...updates });
@@ -240,6 +257,7 @@ export default function BookingXeCard({
         sent_at: new Date().toISOString(),
         sent_by: userProfile?.ho_ten ?? "",
         email_thread_id: emailId ?? threadId ?? undefined,
+        mail_content_hash: hashMailContent(buildMailFields()),
       };
       if (emailMode !== "update") savePayload.booking_status = "cho_xac_nhan";
       save(savePayload);
@@ -300,9 +318,17 @@ export default function BookingXeCard({
               </div>
             </div>
           </div>
-          <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0", statusCfg.cls)}>
-            {statusCfg.label}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isDirty && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                Có thay đổi
+              </span>
+            )}
+            <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium", statusCfg.cls)}>
+              {statusCfg.label}
+            </span>
+          </div>
         </div>
 
         {/* Body */}

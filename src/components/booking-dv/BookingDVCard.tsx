@@ -17,6 +17,7 @@ import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 
@@ -96,6 +97,14 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
 
   const [dvList, setDvList] = useState(row.dich_vu_list || []);
   const dvSorted = [...dvList].sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
+
+  const buildMailFields = () => ({
+    ten_nha_cung_cap: tenNCC || row.ten_nha_cung_cap,
+    dich_vu: dvSorted.map((d) => ({ ten_dv: d.ten_dv, ngay_date: d.ngay_date, so_khach: d.so_khach })),
+  });
+
+  const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(row.booking_status);
+  const isDirty = isActive && isMailDirty(row.sent_at, row.mail_content_hash, buildMailFields());
 
   const cardTitle = [...new Set(dvList.map((d) => d.ten_dv).filter(Boolean))].join(" · ") || tenNCC || "—";
 
@@ -242,6 +251,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
         mode: emailMode,
+        mailContentHash: hashMailContent(buildMailFields()),
       });
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
@@ -293,10 +303,11 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     ].join("\n");
 
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
+    const hash = hashMailContent(buildMailFields());
     if (emailMode === "update") {
-      save({ sent_at: new Date().toISOString(), sent_by: currentUserName });
+      save({ sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash });
     } else {
-      save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
+      save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash });
     }
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
@@ -334,7 +345,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   };
 
   const handleConfirmZaloSent = () => {
-    save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
+    save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hashMailContent(buildMailFields()) });
     setZaloModalOpen(false);
   };
 
@@ -386,6 +397,12 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {isDirty && (
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+              Có thay đổi
+            </span>
+          )}
           <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium", status.cls)}>
             {status.label}
           </span>

@@ -28,6 +28,7 @@ import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import TauNgayCard from "@/components/booking-ks/TauNgayCard";
 import {
   expandRoomValues,
@@ -453,6 +454,7 @@ Email: s8travel.hddt@gmail.com`;
         sentBy: currentUserName,
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
+        mailContentHash: hashMailContent(buildMailFields()),
       });
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email đặt phòng");
@@ -466,11 +468,11 @@ Email: s8travel.hddt@gmail.com`;
   const handleMailtoFallback = () => {
     const mailtoBody = buildMailtoBody();
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    // Update mode: KHÔNG đổi status, chỉ update timestamp.
+    const hash = hashMailContent(buildMailFields());
     if (emailMode === "update") {
-      updateStatus(row, { ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
+      updateStatus(row, { ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName, mail_content_hash: hash });
     } else {
-      updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName });
+      updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName, mail_content_hash: hash });
     }
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
@@ -486,6 +488,19 @@ Email: s8travel.hddt@gmail.com`;
 
   const datTruocConfirmed = row.ks_dat_truoc_status === "ks_xac_nhan";
   const isCancelled = row.ks_final_status === "ks_xac_nhan_huy";
+
+  const buildMailFields = () => ({
+    khach_san_id: row.khach_san_id,
+    check_in_dates: roomDates,
+    so_phong: preferredRoomText || "",
+    ghi_chu: ghiChu,
+  });
+
+  const isActive =
+    !isCancelled &&
+    (["cho_ks_xac_nhan", "ks_xac_nhan"].includes(row.ks_dat_truoc_status) ||
+      ["cho_ks_xac_nhan", "ks_xac_nhan_final"].includes(row.ks_final_status));
+  const isDirty = isActive && isMailDirty(row.ks_dat_truoc_sent_at, row.mail_content_hash, buildMailFields());
   const overall = getOverallStatus(row);
 
   return (
@@ -523,6 +538,12 @@ Email: s8travel.hddt@gmail.com`;
             >
               {overall.label}
             </span>
+            {isDirty && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                Có thay đổi
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-muted-foreground">
             {row.khach_san_dia_diem && (

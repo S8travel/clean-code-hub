@@ -734,17 +734,52 @@ export function useSaveDieuTour() {
         if (!day.id) continue;
         for (const bua of ["trua", "toi"] as const) {
           const nhId = bua === "trua" ? day.an_trua_nha_hang_id : day.an_toi_nha_hang_id;
+          const setMenuId = bua === "trua" ? day.an_trua_set_menu_id : day.an_toi_set_menu_id;
           const { data: existingBkNh } = await externalSupabase
             .from("doan_booking_nh")
-            .select("id, nha_hang_id, booking_status")
+            .select("id, nha_hang_id, booking_status, set_menu_id")
             .eq("doan_ngay_id", day.id)
             .eq("bua_an", bua)
             .maybeSingle();
           if (!existingBkNh) continue;
+          // NH thay đổi → xóa booking chưa gửi
           if (existingBkNh.nha_hang_id !== nhId) {
             if (existingBkNh.booking_status === "chua_gui") {
               await externalSupabase.from("doan_booking_nh").delete().eq("id", existingBkNh.id);
             }
+            continue;
+          }
+          // Cùng NH nhưng set_menu thay đổi → sync set_menu + snapshot fields.
+          // Booking_nh phản ánh "current plan". mail_content_hash giữ snapshot mail đã gửi → dirty badge tự hiện nếu khác.
+          if (setMenuId !== existingBkNh.set_menu_id) {
+            const updates: Record<string, any> = { set_menu_id: setMenuId ?? null };
+            if (setMenuId) {
+              const { data: sm } = await externalSupabase
+                .from("nha_hang_set_menu")
+                .select("ten_set, gia, don_vi")
+                .eq("id", setMenuId)
+                .maybeSingle();
+              if (sm) {
+                updates.ten_set_snapshot = sm.ten_set;
+                updates.gia_snapshot = sm.gia;
+                updates.don_vi_snapshot = sm.don_vi;
+              }
+              // Mon list: chỉ auto-sync khi booking CHƯA gửi (tránh đè user edit trên booking đã gửi)
+              if (existingBkNh.booking_status === "chua_gui") {
+                const { data: mons } = await externalSupabase
+                  .from("nha_hang_set_menu_mon")
+                  .select("ten_mon")
+                  .eq("set_menu_id", setMenuId)
+                  .order("thu_tu", { ascending: true });
+                if (mons) updates.mon_an_snapshot = mons.map((m: any) => m.ten_mon);
+              }
+            } else {
+              updates.ten_set_snapshot = null;
+              updates.gia_snapshot = null;
+              updates.don_vi_snapshot = null;
+              if (existingBkNh.booking_status === "chua_gui") updates.mon_an_snapshot = [];
+            }
+            await externalSupabase.from("doan_booking_nh").update(updates).eq("id", existingBkNh.id);
           }
         }
       }
@@ -925,7 +960,8 @@ export async function syncDieuTourToBookingDV(params: {
       }
       synced += dichVu.length;
     } else if (["cho_xac_nhan", "da_xac_nhan"].includes(existing.booking_status)) {
-      // Only warn if the service list actually changed
+      // Sent booking: update dich_vu_list để booking phản ánh "current plan".
+      // mail_content_hash giữ snapshot mail đã gửi → dirty badge tự hiện nếu khác.
       const oldList = Array.isArray(existing.dich_vu_list) ? existing.dich_vu_list : [];
       const oldKeys = new Set(oldList.map((d: any) => `${d.ten_dv}|${d.ngay_date}`));
       const newKeys = new Set(dichVu.map((d) => `${d.ten_dv}|${d.ngay_date}`));
@@ -933,6 +969,12 @@ export async function syncDieuTourToBookingDV(params: {
         oldKeys.size !== newKeys.size ||
         [...oldKeys].some((k) => !newKeys.has(k)) ||
         [...newKeys].some((k) => !oldKeys.has(k));
+      if (hasChange) {
+        await externalSupabase
+          .from("doan_booking_dv")
+          .update({ dich_vu_list: dichVu, email_nha_cung_cap: email })
+          .eq("id", existing.id);
+      }
 
       if (hasChange) {
         warnings.push({ ncc, services: dichVu.map((d) => d.ten_dv) });

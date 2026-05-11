@@ -19,6 +19,7 @@ import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 
 function fmtDatetime(d: string | null | undefined) {
   if (!d) return "";
@@ -221,6 +222,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
         mode: emailMode,
+        mailContentHash: hashMailContent(buildMailFields()),
       });
       // mode='update' → giữ nguyên dat_truoc_status, không ghi đè dat_truoc_sent_at
       if (emailMode !== "update") {
@@ -257,6 +259,21 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   const datTruocConfirmed = row.dat_truoc_status === "xac_nhan";
   const isCancelled = row.final_status === "xac_nhan_huy";
 
+  const buildMailFields = () => ({
+    ngay_date: row.ngay_date,
+    bua_an: row.bua_an,
+    nha_hang_id: row.nha_hang_id,
+    set_menu_id: selectedSetMenu,
+    set_menu_ten: setMenuOptions.find((s) => s.id === selectedSetMenu)?.ten_set ?? null,
+    so_khach: soKhach ?? null,
+  });
+
+  const isActive =
+    !isCancelled &&
+    (["cho_xac_nhan", "xac_nhan"].includes(row.dat_truoc_status) ||
+      ["cho_xac_nhan", "xac_nhan_final"].includes(row.final_status));
+  const isDirty = isActive && isMailDirty(row.dat_truoc_sent_at, row.mail_content_hash, buildMailFields());
+
   return (
     <>
       <div className={cn(
@@ -275,6 +292,12 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
             <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", overall.cls)}>
               {overall.label}
             </span>
+            {isDirty && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                Có thay đổi
+              </span>
+            )}
           </div>
           {collapsed
             ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />

@@ -34,6 +34,7 @@ export interface LockPhongKS {
   email_confirm_at: string | null;
   email_thread_id: string | null;
   created_at: string;
+  mail_content_hash: string | null;
 }
 
 export interface LockPhongKSDisplay extends LockPhongKS {
@@ -359,6 +360,7 @@ export function useSendLockPhongBatchEmail() {
       replyTo?: string;
       mode?: "first" | "update";
       inReplyToThreadId?: string | null; // thread cũ để reply vào
+      mailContentHashes?: Record<number, string>; // ksId → hash
     }) => {
       if (params.ksIds.length === 0 && (!params.allKsIds || params.allKsIds.length === 0)) return;
       const isUpdate = params.mode === "update" && !!params.inReplyToThreadId;
@@ -391,32 +393,38 @@ export function useSendLockPhongBatchEmail() {
 
       const now = new Date().toISOString();
 
-      // Rows chưa gửi → set full status + thread
-      if (params.ksIds.length > 0) {
+      const hashes = params.mailContentHashes ?? {};
+
+      // Rows chưa gửi → set full status + thread + hash riêng từng row
+      for (const id of params.ksIds) {
+        const patch: Record<string, any> = {
+          email_status: "cho_xac_nhan",
+          email_sent_at: now,
+          email_sent_by: params.sentBy,
+          email_thread_id: threadId,
+        };
+        if (hashes[id]) patch.mail_content_hash = hashes[id];
         const { error } = await externalSupabase
           .from("lock_phong_ks")
-          .update({
-            email_status: "cho_xac_nhan",
-            email_sent_at: now,
-            email_sent_by: params.sentBy,
-            email_thread_id: threadId,
-          })
-          .in("id", params.ksIds);
+          .update(patch)
+          .eq("id", id);
         if (error) throw error;
       }
 
-      // Update mode: rows đã có status nhưng được include lại → update thread/sent_at, giữ status
+      // Update mode: rows đã gửi → chỉ update thread/sent_at + hash, giữ status
       if (isUpdate && params.allKsIds && params.allKsIds.length > 0) {
         const alreadySentIds = params.allKsIds.filter((id) => !params.ksIds.includes(id));
-        if (alreadySentIds.length > 0) {
+        for (const id of alreadySentIds) {
+          const patch: Record<string, any> = {
+            email_sent_at: now,
+            email_sent_by: params.sentBy,
+            email_thread_id: threadId,
+          };
+          if (hashes[id]) patch.mail_content_hash = hashes[id];
           const { error } = await externalSupabase
             .from("lock_phong_ks")
-            .update({
-              email_sent_at: now,
-              email_sent_by: params.sentBy,
-              email_thread_id: threadId,
-            })
-            .in("id", alreadySentIds);
+            .update(patch)
+            .eq("id", id);
           if (error) throw error;
         }
       }
@@ -438,6 +446,7 @@ export function useSendLockPhongEmail() {
       emailThreadId?: string | null;
       // mode='update' → giữ nguyên email_status, chỉ update sent_at/by + email_thread_id
       mode?: "first" | "update";
+      mailContentHash?: string;
     }) => {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
@@ -479,6 +488,7 @@ export function useSendLockPhongEmail() {
         email_thread_id: threadId,
       };
       if (params.mode !== "update") updatePayload.email_status = "cho_xac_nhan";
+      if (params.mailContentHash !== undefined) updatePayload.mail_content_hash = params.mailContentHash;
 
       const { error } = await externalSupabase
         .from("lock_phong_ks")

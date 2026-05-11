@@ -31,7 +31,7 @@ export default function LoginPage() {
       }
       // Cập nhật state ngay — không chờ onAuthStateChange async
       setCurrentSession(data.session);
-      navigate("/dashboard", { replace: true });
+      navigate("/my-job", { replace: true });
     } finally {
       setIsPending(false);
     }

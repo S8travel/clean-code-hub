@@ -18,6 +18,8 @@ import {
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { buildUpdateEmailHtml, escapeHtml } from "@/lib/email-update";
+import { hashMailContent } from "@/lib/mail-content-hash";
+import { isLockPhongDirty } from "./LockPhongCard";
 
 function fmtDate(d: string) {
   try {
@@ -225,6 +227,16 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
         .filter((e) => e.ksRow.email_status === "chua_gui")
         .map((e) => e.ksRow.id);
       const allIds = selectedEntries.map((e) => e.ksRow.id);
+      const hashes: Record<number, string> = {};
+      for (const { ksRow } of selectedEntries) {
+        hashes[ksRow.id] = hashMailContent({
+          khach_san_id: ksRow.khach_san_id,
+          check_in: ksRow.check_in,
+          check_out: ksRow.check_out,
+          so_phong: ksRow.so_phong ?? "",
+          ghi_chu: ksRow.ghi_chu ?? "",
+        });
+      }
       await sendMut.mutateAsync({
         ksIds: idsToMark,
         allKsIds: allIds,
@@ -235,6 +247,7 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
         replyTo,
         mode: isUpdate ? "update" : "first",
         inReplyToThreadId: null,
+        mailContentHashes: hashes,
       });
       toast.success(isUpdate ? "Đã gửi email cập nhật gộp" : "Đã gửi email gộp");
       setPreviewOpen(false);
@@ -296,6 +309,12 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
                       <span className="text-sm font-medium">{lockPhong.ten_doan}</span>
                       <span className="text-xs text-muted-foreground">({lockPhong.ten_seri})</span>
                       <EmailStatusBadge status={ksRow.email_status} />
+                      {isLockPhongDirty(ksRow) && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Có thay đổi
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {fmtDate(ksRow.check_in)} → {fmtDate(ksRow.check_out)} · {ksRow.so_dem} đêm

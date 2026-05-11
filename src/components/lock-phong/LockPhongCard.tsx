@@ -14,6 +14,23 @@ import {
   type LockPhongKSDisplay,
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
+import { isMailDirty } from "@/lib/mail-content-hash";
+
+function buildLockPhongMailFields(hotel: LockPhongKSDisplay) {
+  return {
+    khach_san_id: hotel.khach_san_id,
+    check_in: hotel.check_in,
+    check_out: hotel.check_out,
+    so_phong: hotel.so_phong ?? "",
+    ghi_chu: hotel.ghi_chu ?? "",
+  };
+}
+
+export function isLockPhongDirty(hotel: LockPhongKSDisplay): boolean {
+  const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(hotel.email_status);
+  if (!isActive) return false;
+  return isMailDirty(hotel.email_sent_at, hotel.mail_content_hash, buildLockPhongMailFields(hotel));
+}
 
 function fmtDate(d: string) {
   try {
@@ -107,6 +124,12 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {isLockPhongDirty(hotel) && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+              Có thay đổi
+            </span>
+          )}
           <EmailStatusBadge status={hotel.email_status} />
 
           {/* Actions based on status */}

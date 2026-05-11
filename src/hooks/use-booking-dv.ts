@@ -23,6 +23,7 @@ export interface BookingDVRow {
   created_at: string;
   email_thread_id: string | null;
   deadline: string | null;
+  mail_content_hash: string | null;
 }
 
 export function useBookingDVList(doanId: number | undefined) {
@@ -125,6 +126,7 @@ export function useSendBookingEmail() {
       emailThreadId?: string | null;
       // mode='update' → giữ nguyên booking_status, chỉ update sent_at/by + email_thread_id
       mode?: "first" | "update";
+      mailContentHash?: string;
     }) => {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
@@ -146,6 +148,7 @@ export function useSendBookingEmail() {
         email_thread_id: threadId,
       };
       if (params.mode !== "update") updatePayload.booking_status = "cho_xac_nhan";
+      if (params.mailContentHash !== undefined) updatePayload.mail_content_hash = params.mailContentHash;
 
       const { error: updateErr } = await externalSupabase
         .from("doan_booking_dv")

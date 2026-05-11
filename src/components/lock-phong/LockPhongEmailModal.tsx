@@ -8,6 +8,7 @@ import { useSendLockPhongEmail, type LockPhongDisplay, type LockPhongKSDisplay }
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { hashMailContent } from "@/lib/mail-content-hash";
 import { useEffect } from "react";
 
 function fmtDate(d: string) {
@@ -141,6 +142,13 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
     try {
       const sentBy = userProfile?.ho_ten || currentUserName;
       const replyTo = userProfile?.email || currentUserEmail || undefined;
+      const hash = hashMailContent({
+        khach_san_id: ksRow.khach_san_id,
+        check_in: ksRow.check_in,
+        check_out: ksRow.check_out,
+        so_phong: ksRow.so_phong ?? "",
+        ghi_chu: ksRow.ghi_chu ?? "",
+      });
       await sendMut.mutateAsync({
         lockPhongKsId: ksRow.id,
         to: emailTo,
@@ -150,6 +158,7 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
         replyTo,
         emailThreadId: ksRow.email_thread_id,
         mode,
+        mailContentHash: hash,
       });
       onOpenChange(false);
       toast.success(mode === "update" ? "Đã gửi email cập nhật lock phòng" : "Đã gửi email lock phòng");

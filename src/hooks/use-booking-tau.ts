@@ -28,6 +28,7 @@ export interface TauNgayDisplayRow {
   final_sent_at: string | null;
   final_sent_by: string | null;
   final_confirm_at: string | null;
+  mail_content_hash: string | null;
 }
 
 const QK = "doan_booking_tau";
@@ -109,6 +110,7 @@ export function useBookingTau(doanId: number | undefined) {
             final_sent_at: bkg?.final_sent_at ?? null,
             final_sent_by: bkg?.final_sent_by ?? null,
             final_confirm_at: bkg?.final_confirm_at ?? null,
+            mail_content_hash: bkg?.mail_content_hash ?? null,
           });
         }
       }

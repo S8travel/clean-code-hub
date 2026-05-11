@@ -11,6 +11,7 @@ import {
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useUpsertBookingVisa, useDeleteBookingVisa, type BookingVisaRow } from "@/hooks/use-booking-visa";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
@@ -99,6 +100,20 @@ export default function BookingVisaCard({
   const donVi = donViList.find((d) => d.id === selectedDonViId) ?? null;
   const status = booking.booking_status ?? "chua_dat";
   const statusCfg = STATUS_CFG[status as keyof typeof STATUS_CFG] ?? STATUS_CFG.chua_dat;
+
+  const buildMailFields = () => ({
+    don_vi_visa_id: selectedDonViId,
+    don_vi_ten: donVi?.ten ?? null,
+    ngay_di: ngayDi,
+    so_khach_lon: soKhachLon,
+    so_khach_em1: soKhachEm1,
+    so_khach_em2: soKhachEm2,
+    so_khach_tl: soKhachTl,
+    ghi_chu: ghiChu,
+  });
+
+  const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(status);
+  const isDirty = isActive && isMailDirty(booking.sent_at, booking.mail_content_hash, buildMailFields());
 
   const save = (updates: Partial<BookingVisaRow>) =>
     upsert.mutate({ ...booking, doan_id: doanId, ...updates });
@@ -231,6 +246,7 @@ export default function BookingVisaCard({
         sent_at: new Date().toISOString(),
         sent_by: userProfile?.ho_ten ?? "",
         email_thread_id: emailId ?? threadId ?? undefined,
+        mail_content_hash: hashMailContent(buildMailFields()),
       };
       if (emailMode !== "update") savePayload.booking_status = "cho_xac_nhan";
       save(savePayload);
@@ -287,6 +303,12 @@ export default function BookingVisaCard({
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            {isDirty && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                Có thay đổi
+              </span>
+            )}
             <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium", statusCfg.cls)}>
               {statusCfg.label}
             </span>

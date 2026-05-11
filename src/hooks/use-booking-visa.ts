@@ -13,6 +13,7 @@ export interface BookingVisaRow {
   email_thread_id: string | null;
   deadline: string | null;
   updated_at: string;
+  mail_content_hash: string | null;
 }
 
 const QK = (doanId: number) => ["doan_booking_visa", doanId];

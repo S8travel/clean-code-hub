@@ -247,7 +247,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           ? (soKhachKhongTL ?? soKhachDefault)
           : soKhachDefault;
       // HYBRID: nếu mainCp đã override → giữ nguyên giá trị DB.
-      // Nếu KHÔNG override → sync so_khach từ soKhachForNH (cascade Điều tour).
+      // Nếu KHÔNG override → sync so_khach + don_gia từ Điều tour (mới nhất).
       const overridden = mainCp?.is_overridden === true;
       rows[key] = {
         id: mainCp?.id,
@@ -259,9 +259,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
         so_khach: overridden
           ? (mainCp?.so_luong ?? 0)
           : (soKhachForNH || mainCp?.so_luong || 0),
+        // Non-overridden: ưu tiên meal.gia_set_menu (Điều tour mới nhất), fallback DB.
         don_gia: overridden
           ? (mainCp?.don_gia ?? 0)
-          : ((mainCp?.don_gia != null && mainCp.don_gia > 0) ? mainCp.don_gia : (meal.gia_set_menu ?? 0)),
+          : (meal.gia_set_menu != null && meal.gia_set_menu > 0
+              ? meal.gia_set_menu
+              : (mainCp?.don_gia ?? 0)),
         chiet_khau_phan_tram: nhData.nhaHangMap[meal.nha_hang_id]?.chiet_khau_phan_tram ?? 0,
         nguoi_tt: (mainCp?.tien_hdv ?? 0) > 0 ? "hdv" : (nhData.nhaHangMap[meal.nha_hang_id]?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty"),
         foc_khach_snapshot: mainCp?.foc_khach_snapshot ?? null,
@@ -358,7 +361,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
             : (soKhachForNH || mainCp?.so_luong || 0),
           don_gia: overridden
             ? (mainCp?.don_gia ?? 0)
-            : ((mainCp?.don_gia != null && mainCp.don_gia > 0) ? mainCp.don_gia : (meal.gia_set_menu ?? 0)),
+            : (meal.gia_set_menu != null && meal.gia_set_menu > 0
+                ? meal.gia_set_menu
+                : (mainCp?.don_gia ?? 0)),
           chiet_khau_phan_tram: nh?.chiet_khau_phan_tram ?? 0,
           nguoi_tt: (mainCp?.tien_hdv ?? 0) > 0 ? "hdv" : (nh?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty"),
           foc_khach_snapshot: mainCp?.foc_khach_snapshot ?? null,
@@ -396,25 +401,35 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
     });
   }, [nhData, chiPhiRows, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang]);
 
-  // Khi nhData thay đổi (user vừa chọn set menu ở điều tour), cập nhật
-  // những rows có don_gia = 0 với giá set menu mới
+  // Sync localRows cho rows KHÔNG override khi Điều tour đổi set menu.
+  // NH cascade ở useSaveDieuTour chỉ update master metadata, KHÔNG đụng don_gia
+  // (để tránh đè user edit). Effect này tự detect: meal.gia_set_menu khác → sync.
+  // Override rows giữ nguyên user edit.
   useEffect(() => {
-    if (!nhData) return;
+    if (!nhData || !initializedRef.current) return;
     setLocalRows((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const meal of nhData.meals) {
         const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
-        if (next[key] && next[key].don_gia === 0 && meal.gia_set_menu != null && meal.gia_set_menu > 0) {
-          next[key] = { ...next[key], don_gia: meal.gia_set_menu };
+        const row = next[key];
+        if (!row) continue;
+        if (row.is_overridden) continue; // override → giữ user edit
+        // Ưu tiên meal.gia_set_menu (mới nhất từ Điều tour). Fallback DB don_gia.
+        const dbRow = row.id ? chiPhiRows.find((cp) => cp.id === row.id) : null;
+        const targetDonGia = meal.gia_set_menu ?? dbRow?.don_gia ?? row.don_gia;
+        const targetSoLuong = dbRow?.so_luong ?? row.so_khach;
+        if (targetDonGia !== row.don_gia || targetSoLuong !== row.so_khach) {
+          next[key] = { ...row, don_gia: targetDonGia, so_khach: targetSoLuong };
           changed = true;
         }
       }
       return changed ? next : prev;
     });
-  }, [nhData]);
+  }, [nhData, chiPhiRows]);
 
-  // Khi soKhachDefault load xong (async), cập nhật rows chưa có số khách
+  // Khi soKhachDefault load xong (async), cập nhật rows chưa có số khách.
+  // SKIP overridden rows — user đã chốt giá trị, không được auto-cascade.
   useEffect(() => {
     if (soKhachDefault <= 0) return;
     setLocalRows((prev) => {
@@ -423,6 +438,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       const next = { ...prev };
       for (const key of Object.keys(next)) {
         const row = next[key];
+        if (row.is_overridden) continue; // giữ user edit
         const nh = nhData.nhaHangMap[row.nha_hang_id];
         const target = coTinhSuatTLNhaHang
           ? soKhachDefault
@@ -513,6 +529,14 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
     const ck = row.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
     const thanhTien = ck && ck > 0 ? Math.round(thanhTienTruocCK * (1 - ck / 100)) : thanhTienTruocCK;
     const nguoiTt = nguoiTtOverride ?? row.nguoi_tt ?? (nh?.nguoi_thanh_toan !== "hdv" ? "cong_ty" : "hdv");
+
+    // Optimistic: mark override ngay để UI hiện badge 🔒 + nút ↺ trước khi mutation return.
+    if (!row.is_overridden) {
+      setLocalRows((prev) => ({
+        ...prev,
+        [key]: { ...prev[key], is_overridden: true, nguoi_tt: nguoiTt },
+      }));
+    }
 
     upsertMut.mutate(
       {
@@ -1330,7 +1354,20 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                                   is_overridden: false,
                                   thanh_tien_thuc_te: null,
                                 }).eq("id", row.id!);
+                                // Cập nhật localRows NGAY để UI reflect — query invalidate
+                                // không tự đè localRows (local state independent của chiPhiRows).
+                                setLocalRows((prev) => ({
+                                  ...prev,
+                                  [key]: {
+                                    ...prev[key],
+                                    so_khach: newSoKhach,
+                                    don_gia: newDonGia,
+                                    is_overridden: false,
+                                    nguoi_tt: isHdv ? "hdv" : "cong_ty",
+                                  },
+                                }));
                                 qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+                                qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", doanId] });
                               }}
                               title="Reset override → sync lại từ Điều tour ngay"
                               className="text-muted-foreground hover:text-primary text-[10px]"

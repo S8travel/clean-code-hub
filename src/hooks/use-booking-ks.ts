@@ -20,6 +20,7 @@ export interface BookingKSRow {
   ks_ghi_chu_booking: string | null;
   email_thread_id: string | null;
   deadline: string | null;
+  mail_content_hash: string | null;
 }
 
 export interface BookingKSDisplay extends BookingKSRow {
@@ -177,6 +178,7 @@ export function useSendKSBookingEmail() {
       sentBy: string;
       replyTo?: string;
       emailThreadId?: string | null;
+      mailContentHash?: string;
     }) => {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
@@ -210,6 +212,7 @@ export function useSendKSBookingEmail() {
       // Cập nhật trạng thái tương ứng
       const now = new Date().toISOString();
       let fields: Partial<BookingKSRow> = { email_thread_id: threadId };
+      if (params.mailContentHash !== undefined) fields.mail_content_hash = params.mailContentHash;
       if (params.loai === "dat_truoc") {
         fields = {
           ...fields,

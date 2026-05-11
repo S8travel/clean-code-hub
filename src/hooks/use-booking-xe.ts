@@ -12,6 +12,7 @@ export interface BookingXeRow {
   deadline: string | null;
   ghi_chu: string | null;
   updated_at: string;
+  mail_content_hash: string | null;
 }
 
 const QK = (doanId: number) => ["doan_booking_xe", doanId];
