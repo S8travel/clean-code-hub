@@ -156,7 +156,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                     step="any"
                     value={tipDonGia || ""}
                     onChange={(e) => setTipDonGia(Number(e.target.value) || 0)}
-                    className="h-6 text-xs px-1.5 py-0 text-center w-[60px]"
+                    className="h-6 text-xs px-1.5 py-0 text-center w-[80px]"
                   />
                   <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)}>
                     <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">

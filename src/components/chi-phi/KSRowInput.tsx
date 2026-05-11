@@ -83,7 +83,7 @@ export default memo(function KSRowInput({
           onChange={(e) => setLocalGiaPhong(e.target.value.replace(/[^\d.,]/g, ""))}
           onBlur={handleGiaPhongBlur}
           placeholder="0"
-          className="h-6 text-xs w-[90px] text-right"
+          className="h-6 text-xs w-[112px] text-right"
         />
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs font-medium">

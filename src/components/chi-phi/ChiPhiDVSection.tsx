@@ -815,7 +815,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
             <col style={{ width: "60px" }} />
             <col />
             <col style={{ width: "60px" }} />
-            <col style={{ width: "110px" }} />
+            <col style={{ width: "136px" }} />
             <col style={{ width: "120px" }} />
             <col style={{ width: "76px" }} />
             <col style={{ width: "180px" }} />
@@ -1018,7 +1018,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                               value={local.don_gia}
                               onChange={v => handleRowChange(row.id, "don_gia", v)}
                               onBlur={() => handleRowSave(row)}
-                              width="w-[90px]"
+                              width="w-[112px]"
                               money
                               decimal
                             />
@@ -1261,7 +1261,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                             value={extra.don_gia}
                             onChange={v => handleExtraChange(row.id!, idx, "don_gia", v)}
                             onBlur={() => handleExtraSave(row.id!, idx)}
-                            width="w-[90px]"
+                            width="w-[112px]"
                             money
                             decimal
                           />

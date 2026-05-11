@@ -375,7 +375,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           onChange={(e) => handleRowChange(row.id, "don_gia", Number(e.target.value) || 0)}
                           onBlur={() => handleRowSave(row)}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                          className="h-6 text-xs px-1.5 py-0 text-center w-[90px]"
+                          className="h-6 text-xs px-1.5 py-0 text-center w-[112px]"
                         />
                       </div>
                     </td>
@@ -596,7 +596,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                             type="number"
                             step="any"
                             placeholder="Đơn giá"
-                            className="h-6 text-xs w-24 text-center"
+                            className="h-6 text-xs w-28 text-center"
                             value={extraFields.don_gia || ""}
                             onChange={(e) => setExtraFields((p) => ({ ...p, don_gia: Number(e.target.value) || 0 }))}
                           />

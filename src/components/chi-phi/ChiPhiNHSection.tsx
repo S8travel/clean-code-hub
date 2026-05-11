@@ -1091,7 +1091,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
             <col />
             <col className="w-[56px]" />
             <col className="w-[108px]" />
-            <col className="w-[100px]" />
+            <col className="w-[136px]" />
             <col className="w-[64px]" />
             <col className="w-[110px]" />
             <col className="w-[70px]" />
@@ -1355,7 +1355,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                             value={row.don_gia}
                             onChange={(v) => handleChange(key, "don_gia", v)}
                             onBlur={() => handleSave(key)}
-                            width="w-[84px]"
+                            width="w-[112px]"
                             money
                             decimal
                           />
@@ -1673,7 +1673,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                         value={extra.don_gia}
                         onChange={(v) => handleExtraChange(key, idx, "don_gia", v)}
                         onBlur={() => handleExtraSave(key, idx)}
-                        width="w-[84px]"
+                        width="w-[112px]"
                         money
                         decimal
                       />

@@ -336,7 +336,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                     onChange={(e) => setDonGia(Number(e.target.value) || 0)}
                     onBlur={handleSave}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                    className="h-6 text-xs px-1.5 py-0 text-center w-[90px]"
+                    className="h-6 text-xs px-1.5 py-0 text-center w-[112px]"
                     placeholder="0"
                     disabled={saving}
                   />
