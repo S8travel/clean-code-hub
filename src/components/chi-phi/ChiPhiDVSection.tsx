@@ -4,13 +4,14 @@ import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2, Calend
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { cn, parseThousandsDec } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi, useUpdateChiPhiActual } from "@/hooks/use-chi-phi";
@@ -65,19 +66,16 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, d
   width?: string;
   /** Hiển thị dấu chấm phân cách hàng nghìn (vd 850.000). */
   money?: boolean;
-  /** Cho phép số thập phân (đơn giá). Chấp nhận "." và "," làm decimal sep. */
+  /** Cho phép số thập phân (đơn giá). Focus → raw "1500.5"; blur → "1.500,5". */
   decimal?: boolean;
 }) {
   if (decimal) {
-    // Local state cho phép giữ "." và "," trong khi user gõ; parse smart on blur
-    const fmt = (n: number) => (n ? n.toLocaleString("vi-VN", { maximumFractionDigits: 10 }) : "");
     return (
-      <DVDecimalInput
+      <DecimalInput
         value={value}
         onChange={onChange}
         onBlur={onBlur}
-        width={width}
-        fmt={fmt}
+        className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
       />
     );
   }
@@ -105,34 +103,6 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, d
       onBlur={onBlur}
       onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
       className={cn("h-6 text-xs px-1.5 py-0 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", width)}
-    />
-  );
-}
-
-// Decimal input — local string state để preserve "." và "," khi gõ
-function DVDecimalInput({ value, onChange, onBlur, width, fmt }: {
-  value: number;
-  onChange: (v: number) => void;
-  onBlur: () => void;
-  width: string;
-  fmt: (n: number) => string;
-}) {
-  const [local, setLocal] = useState(fmt(value));
-  useEffect(() => { setLocal(fmt(value)); }, [value]);
-  return (
-    <Input
-      type="text"
-      inputMode="decimal"
-      value={local}
-      onChange={(e) => setLocal(e.target.value.replace(/[^\d.,]/g, ""))}
-      onBlur={() => {
-        const v = parseThousandsDec(local);
-        setLocal(fmt(v));
-        onChange(v);
-        setTimeout(onBlur, 0);
-      }}
-      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-      className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
     />
   );
 }
@@ -1186,7 +1156,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                             onClick={() => {
                               setAdjustChiPhi(row);
                               setAdjustSL(String(row.so_luong));
-                              setAdjustDonGia(row.don_gia ? row.don_gia.toLocaleString("vi-VN", { maximumFractionDigits: 10 }) : "");
+                              setAdjustDonGia(row.don_gia ? String(row.don_gia) : "");
                               setAdjustReason("");
                             }}>
                             <SlidersHorizontal className="h-3 w-3" />
@@ -1436,7 +1406,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
           </DialogHeader>
           {adjustChiPhi && (() => {
             const newSL    = parseInt(adjustSL.replace(/\D/g, ""), 10) || 0;
-            const newGia   = parseThousandsDec(adjustDonGia);
+            const newGia   = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
             const newTotal = newSL * newGia;
             const oldTotal = adjustChiPhi.so_luong * adjustChiPhi.don_gia;
             const changed  = newSL !== adjustChiPhi.so_luong || newGia !== adjustChiPhi.don_gia;
@@ -1465,7 +1435,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                       className="h-8 text-sm tabular-nums"
                       inputMode="decimal"
                       value={adjustDonGia}
-                      onChange={e => setAdjustDonGia(e.target.value.replace(/[^\d.,]/g, ""))}
+                      onChange={(e) => {
+                        let s = e.target.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
+                        const firstDot = s.indexOf(".");
+                        if (firstDot >= 0) {
+                          s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
+                        }
+                        setAdjustDonGia(s);
+                      }}
                       placeholder="Đơn giá"
                     />
                   </div>
@@ -1502,12 +1479,12 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                 !adjustChiPhi ||
                 !adjustSL || !adjustDonGia ||
                 (parseInt(adjustSL.replace(/\D/g, ""), 10) === adjustChiPhi?.so_luong &&
-                 parseThousandsDec(adjustDonGia) === adjustChiPhi?.don_gia)
+                 (parseFloat(adjustDonGia.replace(/\.$/, "")) || 0) === adjustChiPhi?.don_gia)
               }
               onClick={() => {
                 if (!adjustChiPhi) return;
                 const newSL  = parseInt(adjustSL.replace(/\D/g, ""), 10);
-                const newGia = parseThousandsDec(adjustDonGia);
+                const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
                 if (isNaN(newSL) || !newGia) return;
                 updateActualMut.mutate(
                   { id: adjustChiPhi.id, doan_id: doanId, so_luong: newSL, don_gia: newGia, ly_do: adjustReason },

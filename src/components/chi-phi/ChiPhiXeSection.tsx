@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -368,14 +369,11 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                     {/* Đơn giá */}
                     <td className="px-3 py-2.5">
                       <div className="flex justify-center">
-                        <Input
-                          type="number"
-                          step="any"
-                          value={local.don_gia || ""}
-                          onChange={(e) => handleRowChange(row.id, "don_gia", Number(e.target.value) || 0)}
+                        <DecimalInput
+                          value={local.don_gia}
+                          onChange={(v) => handleRowChange(row.id, "don_gia", v)}
                           onBlur={() => handleRowSave(row)}
-                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                          className="h-6 text-xs px-1.5 py-0 text-center w-[112px]"
+                          className="h-6 text-xs px-1.5 py-0 text-right w-[112px]"
                         />
                       </div>
                     </td>
@@ -592,13 +590,11 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                             onChange={(e) => setExtraFields((p) => ({ ...p, so_luong: Number(e.target.value) || 0 }))}
                           />
                           <span className="text-[10px] text-muted-foreground shrink-0">×</span>
-                          <Input
-                            type="number"
-                            step="any"
+                          <DecimalInput
+                            value={extraFields.don_gia}
+                            onChange={(v) => setExtraFields((p) => ({ ...p, don_gia: v }))}
                             placeholder="Đơn giá"
-                            className="h-6 text-xs w-28 text-center"
-                            value={extraFields.don_gia || ""}
-                            onChange={(e) => setExtraFields((p) => ({ ...p, don_gia: Number(e.target.value) || 0 }))}
+                            className="h-6 text-xs w-28 text-right"
                           />
                           {extraFields.don_gia > 0 && (
                             <span className="text-xs font-semibold text-primary shrink-0">

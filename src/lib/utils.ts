@@ -22,53 +22,6 @@ export function parseThousands(s: string): number {
   return digits ? Number(digits) : 0;
 }
 
-/**
- * Format số (có thể decimal) → vi-VN với "." thousand sep + "," decimal sep.
- * 1500.5 → "1.500,5", 1500 → "1.500", 0 → "".
- */
-export function formatThousandsDec(value: number): string {
-  if (!value) return "";
-  return value.toLocaleString("vi-VN", { maximumFractionDigits: 10 });
-}
-
-/**
- * Parse input string có thể chứa "." và "," (cả thousand sep và decimal sep).
- * Heuristic: separator cuối cùng có 1-2 ký tự đứng sau → decimal sep,
- *            các separator khác → thousand sep.
- *            Single separator + 3 ký tự sau → thousand sep (ambiguous case, default VN convention).
- *
- * "1.500"   → 1500 (thousand)        "150,5"   → 150.5 (decimal)
- * "1.500,5" → 1500.5                 "1500.5"  → 1500.5
- * "1,500"   → 1500 (thousand)        "150.5"   → 150.5
- */
-export function parseThousandsDec(s: string): number {
-  if (!s) return 0;
-  const cleaned = s.replace(/[^\d.,]/g, "");
-  if (!cleaned) return 0;
-
-  const lastDot = cleaned.lastIndexOf(".");
-  const lastComma = cleaned.lastIndexOf(",");
-  const lastSep = Math.max(lastDot, lastComma);
-
-  if (lastSep === -1) {
-    return Number(cleaned) || 0;
-  }
-
-  const afterSep = cleaned.slice(lastSep + 1);
-  if (!/^\d+$/.test(afterSep)) {
-    return Number(cleaned.replace(/[.,]/g, "")) || 0;
-  }
-
-  const otherSep = lastDot > lastComma ? lastComma : lastDot;
-  if (afterSep.length === 3 && otherSep === -1) {
-    // Single separator + 3 digits after → thousand sep (default)
-    return Number(cleaned.replace(/[.,]/g, "")) || 0;
-  }
-
-  // Last separator is decimal; others are thousand sep
-  const intPart = cleaned.slice(0, lastSep).replace(/[.,]/g, "") || "0";
-  return parseFloat(`${intPart}.${afterSep}`) || 0;
-}
 
 /**
  * Chuẩn hóa chuỗi email: tách bởi dấu phẩy / chấm phẩy / khoảng trắng / xuống dòng

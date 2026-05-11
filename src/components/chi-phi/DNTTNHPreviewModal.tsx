@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Textarea } from "@/components/ui/textarea";
 import { FileDown } from "lucide-react";
 import { exportDNTTNHWordFromData, type NHDocData, type NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -137,7 +138,7 @@ export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
                               <Input type="number" min={0} value={item.so_luong} onChange={(e) => updateItem(i, j, { so_luong: parseInt(e.target.value) || 0 })} className="h-7 text-xs border-0 px-1 text-center" />
                             </td>
                             <td className="border border-gray-300 p-0.5 w-32">
-                              <Input type="number" step="any" min={0} value={item.don_gia} onChange={(e) => updateItem(i, j, { don_gia: parseFloat(e.target.value) || 0 })} className="h-7 text-xs border-0 px-1 text-right" />
+                              <DecimalInput value={item.don_gia} onChange={(v) => updateItem(i, j, { don_gia: v })} className="h-7 text-xs border-0 px-1 text-right" />
                             </td>
                             <td className="border border-gray-300 px-2 py-1 text-right font-medium whitespace-nowrap w-32">
                               {fmt(item.so_luong * item.don_gia)}

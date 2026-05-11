@@ -2,6 +2,7 @@ import { useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -151,12 +152,10 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
               </td>
               <td className="px-3 py-2 text-center">
                 <div className="flex items-center gap-1 justify-center">
-                  <Input
-                    type="number"
-                    step="any"
-                    value={tipDonGia || ""}
-                    onChange={(e) => setTipDonGia(Number(e.target.value) || 0)}
-                    className="h-6 text-xs px-1.5 py-0 text-center w-[80px]"
+                  <DecimalInput
+                    value={tipDonGia}
+                    onChange={setTipDonGia}
+                    className="h-6 text-xs px-1.5 py-0 text-right w-[80px]"
                   />
                   <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)}>
                     <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">

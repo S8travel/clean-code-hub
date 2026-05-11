@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -340,13 +341,10 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
                     />
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={local.don_gia || ""}
-                      onChange={(e) => handleNumChange(item.id, "don_gia", Number(e.target.value) || 0)}
+                    <DecimalInput
+                      value={local.don_gia}
+                      onChange={(v) => handleNumChange(item.id, "don_gia", v)}
                       onBlur={() => handleSave(item)}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
                       className="h-6 text-xs px-1.5 py-0 text-right w-28 ml-auto"
                     />
                   </td>

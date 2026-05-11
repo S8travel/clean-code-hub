@@ -3,12 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format, getDay, subDays, parseISO } from "date-fns";
 import { Plus, Ban, Printer, Trash2, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { cn, parseThousandsDec } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { DNTTRow } from "@/hooks/use-dntt";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -907,7 +908,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   const handleAdjustSubmit = () => {
     if (!adjustTarget) return;
     const newSK = parseInt(adjustSoKhach.replace(/\D/g, ""), 10);
-    const newGia = parseThousandsDec(adjustDonGia);
+    const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
     if (isNaN(newSK) || !newGia) return;
     const skTT = calcSoKhachThucTe(newSK, adjustTarget.focKhach, adjustTarget.focMien);
     const totalTruocCK = skTT * newGia;
@@ -1581,7 +1582,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                             ckPct: ckPhanTram,
                           });
                           setAdjustSoKhach(String(row.so_khach));
-                          setAdjustDonGia(row.don_gia ? row.don_gia.toLocaleString("vi-VN", { maximumFractionDigits: 10 }) : "");
+                          setAdjustDonGia(row.don_gia ? String(row.don_gia) : "");
                           setAdjustReason("");
                         }}>
                         <SlidersHorizontal className="h-3 w-3" />
@@ -2047,7 +2048,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           </DialogHeader>
           {adjustTarget && (() => {
             const newSK  = parseInt(adjustSoKhach.replace(/\D/g, ""), 10) || 0;
-            const newGia = parseThousandsDec(adjustDonGia);
+            const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
             const skTT = calcSoKhachThucTe(newSK, adjustTarget.focKhach, adjustTarget.focMien);
             const totalTruocCK = skTT * newGia;
             const ckTien = adjustTarget.ckPct > 0 ? Math.round(totalTruocCK * adjustTarget.ckPct / 100) : 0;
@@ -2081,7 +2082,14 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                       className="h-8 text-sm tabular-nums"
                       inputMode="decimal"
                       value={adjustDonGia}
-                      onChange={(e) => setAdjustDonGia(e.target.value.replace(/[^\d.,]/g, ""))}
+                      onChange={(e) => {
+                        let s = e.target.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
+                        const firstDot = s.indexOf(".");
+                        if (firstDot >= 0) {
+                          s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
+                        }
+                        setAdjustDonGia(s);
+                      }}
                       placeholder="Đơn giá"
                     />
                   </div>
@@ -2136,7 +2144,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                 !adjustTarget ||
                 !adjustSoKhach || !adjustDonGia ||
                 (parseInt(adjustSoKhach.replace(/\D/g, ""), 10) === adjustTarget?.chiPhi.so_luong &&
-                 parseThousandsDec(adjustDonGia) === adjustTarget?.chiPhi.don_gia)
+                 (parseFloat(adjustDonGia.replace(/\.$/, "")) || 0) === adjustTarget?.chiPhi.don_gia)
               }
               onClick={handleAdjustSubmit}
             >
@@ -2376,23 +2384,29 @@ function NHInput({
   width?: string;
   /** Hiển thị dấu chấm phân cách hàng nghìn cho dễ đọc (vd 850.000). */
   money?: boolean;
-  /** Cho phép số thập phân (đơn giá). Khi true: chấp nhận "." và "," làm decimal sep. */
+  /** Cho phép số thập phân (đơn giá). Focus → raw "1500.5"; blur → "1.500,5". */
   decimal?: boolean;
 }) {
-  const formatVN = (n: number) => (n ? n.toLocaleString("vi-VN", { maximumFractionDigits: 10 }) : "");
-  const isFmt = money || decimal;
-  const [local, setLocal] = useState(isFmt ? formatVN(value) : String(value));
-  useEffect(() => { setLocal(isFmt ? formatVN(value) : String(value)); }, [value, isFmt]);
+  if (decimal) {
+    return (
+      <DecimalInput
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        className={`h-7 text-xs ${width} text-right`}
+      />
+    );
+  }
+  const formatVN = (n: number) => (n ? n.toLocaleString("vi-VN") : "");
+  const [local, setLocal] = useState(money ? formatVN(value) : String(value));
+  useEffect(() => { setLocal(money ? formatVN(value) : String(value)); }, [value, money]);
   return (
     <Input
-      type={isFmt ? "text" : "number"}
-      inputMode={decimal ? "decimal" : "numeric"}
+      type={money ? "text" : "number"}
+      inputMode="numeric"
       value={local}
       onChange={(e) => {
-        if (decimal) {
-          // Decimal mode: preserve user typing (digits, "." and ",")
-          setLocal(e.target.value.replace(/[^\d.,]/g, ""));
-        } else if (money) {
+        if (money) {
           const digits = e.target.value.replace(/\D/g, "");
           setLocal(digits ? Number(digits).toLocaleString("vi-VN") : "");
         } else {
@@ -2400,19 +2414,11 @@ function NHInput({
         }
       }}
       onBlur={() => {
-        let v: number;
-        if (decimal) {
-          v = parseThousandsDec(local);
-          setLocal(formatVN(v));
-        } else if (money) {
-          v = Number(local.replace(/\D/g, "")) || 0;
-        } else {
-          v = Number(local) || 0;
-        }
+        const v = money ? Number(local.replace(/\D/g, "")) || 0 : Number(local) || 0;
         onChange(v);
         setTimeout(onBlur, 0);
       }}
-      className={`h-7 text-xs ${width} ${isFmt ? "text-right" : "text-center"} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+      className={`h-7 text-xs ${width} ${money ? "text-right" : "text-center"} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
     />
   );
 }

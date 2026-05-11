@@ -1,11 +1,11 @@
-import React, { useState, useCallback, memo } from "react";
+import { useState, useCallback, memo } from "react";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { LocalKSRow } from "./ChiPhiKSSection";
-import { formatThousandsDec, parseThousandsDec } from "@/lib/utils";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -23,8 +23,6 @@ export default memo(function KSRowInput({
 }: Props) {
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
-  // gia_phong: hỗ trợ decimal — display "850.000" hoặc "850.000,5"; preserve user typing.
-  const [localGiaPhong, setLocalGiaPhong] = useState(row.gia_phong ? formatThousandsDec(row.gia_phong) : "");
 
   const handleLoaiPhongBlur = useCallback(() => {
     onFieldChange(globalIdx, "loai_phong", localLoaiPhong);
@@ -37,16 +35,8 @@ export default memo(function KSRowInput({
     setTimeout(() => onBlurSave(globalIdx), 0);
   }, [globalIdx, localSoPhong, onFieldChange, onBlurSave]);
 
-  const handleGiaPhongBlur = useCallback(() => {
-    const val = parseThousandsDec(localGiaPhong);
-    setLocalGiaPhong(formatThousandsDec(val));
-    onFieldChange(globalIdx, "gia_phong", val);
-    setTimeout(() => onBlurSave(globalIdx), 0);
-  }, [globalIdx, localGiaPhong, onFieldChange, onBlurSave]);
-
   const soPhong = Number(localSoPhong) || 0;
-  const giaPhong = parseThousandsDec(localGiaPhong);
-  const thanhTien = soPhong * giaPhong * row.so_dem;
+  const thanhTien = soPhong * row.gia_phong * row.so_dem;
 
   return (
     <TableRow className="text-xs">
@@ -76,12 +66,10 @@ export default memo(function KSRowInput({
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs text-center">{row.so_dem}</TableCell>
       <TableCell className="py-0.5 px-2">
-        <Input
-          type="text"
-          inputMode="decimal"
-          value={localGiaPhong}
-          onChange={(e) => setLocalGiaPhong(e.target.value.replace(/[^\d.,]/g, ""))}
-          onBlur={handleGiaPhongBlur}
+        <DecimalInput
+          value={row.gia_phong}
+          onChange={(v) => onFieldChange(globalIdx, "gia_phong", v)}
+          onBlur={() => onBlurSave(globalIdx)}
           placeholder="0"
           className="h-6 text-xs w-[112px] text-right"
         />

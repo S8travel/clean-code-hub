@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Check, Pencil, X, Ban, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -329,16 +330,13 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
               {/* Giá/người/ngày — editable */}
               <td className="px-3 py-2.5">
                 <div className="flex justify-center">
-                  <Input
-                    type="number"
-                    step="any"
-                    value={donGia || ""}
-                    onChange={(e) => setDonGia(Number(e.target.value) || 0)}
+                  <DecimalInput
+                    value={donGia}
+                    onChange={setDonGia}
                     onBlur={handleSave}
-                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                    className="h-6 text-xs px-1.5 py-0 text-center w-[112px]"
                     placeholder="0"
                     disabled={saving}
+                    className="h-6 text-xs px-1.5 py-0 text-right w-[112px]"
                   />
                 </div>
               </td>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Textarea } from "@/components/ui/textarea";
 import { FileDown } from "lucide-react";
 import { exportDNTTKSWordFromData, exportDNTTKSBatchWordFromData } from "@/lib/export-dntt-ks-word";
@@ -127,7 +128,7 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
                               <Input type="number" min={0} value={room.so_luong} onChange={(e) => updateRoom(i, j, { so_luong: parseInt(e.target.value) || 0 })} className="h-7 text-xs border-0 px-1 text-center" />
                             </td>
                             <td className="border border-gray-300 p-0.5 w-28">
-                              <Input type="number" step="any" min={0} value={room.don_gia} onChange={(e) => updateRoom(i, j, { don_gia: parseFloat(e.target.value) || 0 })} className="h-7 text-xs border-0 px-1 text-right" />
+                              <DecimalInput value={room.don_gia} onChange={(v) => updateRoom(i, j, { don_gia: v })} className="h-7 text-xs border-0 px-1 text-right" />
                             </td>
                             <td className="border border-gray-300 px-2 py-1 text-right font-medium text-[11px] whitespace-nowrap w-28">
                               {fmt(room.don_gia * room.so_luong * soDem)}
