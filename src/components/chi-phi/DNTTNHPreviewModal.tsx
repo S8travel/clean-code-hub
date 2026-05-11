@@ -109,8 +109,12 @@ export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
                     <Input type="number" min={0} value={entry.so_khach} onChange={(e) => updateEntry(i, { so_khach: parseInt(e.target.value) || 0 })} className="text-xs h-8" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] text-muted-foreground">FOC</label>
-                    <Input type="number" min={0} value={entry.foc ?? ""} onChange={(e) => updateEntry(i, { foc: e.target.value === "" ? null : parseInt(e.target.value) || 0 })} className="text-xs h-8" placeholder="—" />
+                    <label className="text-[11px] text-muted-foreground">FOC (mỗi X miễn Y)</label>
+                    <div className="flex items-center gap-1">
+                      <Input type="number" min={0} value={entry.foc_khach ?? ""} onChange={(e) => updateEntry(i, { foc_khach: e.target.value === "" ? null : parseInt(e.target.value) || 0 })} className="text-xs h-8" placeholder="—" />
+                      <span className="text-xs text-muted-foreground">免</span>
+                      <Input type="number" min={0} value={entry.foc ?? ""} onChange={(e) => updateEntry(i, { foc: e.target.value === "" ? null : parseInt(e.target.value) || 0 })} className="text-xs h-8" placeholder="—" />
+                    </div>
                   </div>
                 </div>
 

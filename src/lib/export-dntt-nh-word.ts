@@ -92,7 +92,8 @@ export interface NHDocEntry {
   ngay_date: string;       // "DD/MM/YYYY"
   ten_nh: string;
   so_khach: number;
-  foc: number | null;      // foc_mien (số miễn phí)
+  foc_khach: number | null; // foc_khach (mỗi X khách)
+  foc: number | null;       // foc_mien (miễn Y) — giữ tên `foc` cho backward compat
   items: NHDocItem[];
   ncc: { ten?: string; so_tai_khoan?: string; ngan_hang?: string } | null;
   tai_khoan_thanh_toan: string | null;
@@ -220,11 +221,18 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
         cells.push(cell([p(entry.ngay_date, { size: 14 })], { width: COL_W[1], rowSpan: itemCount }));
         // TÊN NHÀ HÀNG
         cells.push(cell([p(entry.ten_nh, { bold: true, size: 14 })], { width: COL_W[2], rowSpan: itemCount }));
-        // Số khách
-        cells.push(cell([p(String(entry.so_khach), { size: 14 })], { width: COL_W[3], rowSpan: itemCount }));
-        // FOC
-        cells.push(cell([p(entry.foc != null ? String(entry.foc) : "—", { size: 14 })], { width: COL_W[4], rowSpan: itemCount }));
       }
+
+      // Số khách — per row: dòng main = entry.so_khach (raw), dòng phát sinh = item.so_luong
+      const soKhachRow = isFirst ? entry.so_khach : item.so_luong;
+      cells.push(cell([p(String(soKhachRow), { size: 14 })], { width: COL_W[3] }));
+      // FOC — chỉ dòng main hiện FOC (extras không có FOC). Format "X免Y" nếu có cả 2.
+      const focText = isFirst
+        ? (entry.foc_khach && entry.foc != null
+            ? `${entry.foc_khach}免${entry.foc}`
+            : entry.foc != null ? String(entry.foc) : "—")
+        : "—";
+      cells.push(cell([p(focText, { size: 14 })], { width: COL_W[4] }));
 
       // Đơn giá — per item
       cells.push(cell([p(item.don_gia > 0 ? fmt(item.don_gia) : "—", { size: 14 })], { width: COL_W[5] }));

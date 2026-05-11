@@ -84,11 +84,20 @@ export default function TipSection({
               <span className="text-muted-foreground">Đơn giá:</span>
               <Input
                 type="text"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={localRate}
-                onChange={(e) => setLocalRate(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => {
+                  // Cho phép số thập phân: chỉ 1 dấu chấm, các ký tự khác bị loại
+                  let s = e.target.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
+                  const firstDot = s.indexOf(".");
+                  if (firstDot >= 0) {
+                    s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
+                  }
+                  setLocalRate(s);
+                }}
                 onBlur={() => {
-                  const v = localRate ? Number(localRate) : null;
+                  const trimmed = localRate.replace(/\.$/, ""); // bỏ dot lơ lửng
+                  const v = trimmed ? Number(trimmed) : null;
                   if (v !== tipRate) onTipRateChange(v);
                 }}
                 placeholder={String(autoRate)}

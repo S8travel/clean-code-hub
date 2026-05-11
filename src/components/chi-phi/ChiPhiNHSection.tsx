@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useImperativeHandle, forwardRef, Fragment } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, getDay, subDays, parseISO } from "date-fns";
 import { Plus, Ban, Printer, Trash2, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
@@ -120,7 +120,14 @@ interface Props {
   tenDoan?: string;
 }
 
-export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "" }: Props) {
+export interface ChiPhiNHSectionHandle {
+  /** Build entries từ selection hiện tại (undefined nếu không có gì chọn) */
+  buildSelectedEntries: () => NHDocEntry[] | undefined;
+  clearSelection: () => void;
+  getSelectedCount: () => number;
+}
+
+const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "" }, ref) {
   const { data: nhData, isLoading } = useChiPhiNHSection(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -930,14 +937,12 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
 
   // ── Print handler ─────────────────────────────────────────────────────────
 
-  const handlePrintSelected = async () => {
-    if (!nhData || selectedKeys.length === 0) return;
-    try {
-      const entries: NHDocEntry[] = [];
-      // Track cấn trừ đã phân bổ cho từng NCC (chỉ hiện 1 lần)
-      const canTruShownByNcc: Record<number, boolean> = {};
+  const buildSelectedEntries = useCallback((): NHDocEntry[] | undefined => {
+    if (!nhData || selectedKeys.length === 0) return undefined;
+    const entries: NHDocEntry[] = [];
+    const canTruShownByNcc: Record<number, boolean> = {};
 
-      for (const key of selectedKeys) {
+    for (const key of selectedKeys) {
         const row = localRowsRef.current[key];
         if (!row) continue;
         const nh = nhData.nhaHangMap[row.nha_hang_id];
@@ -992,6 +997,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           ngay_date: ngayDisplay,
           ten_nh: nh.ten,
           so_khach: row.so_khach,
+          foc_khach: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_khach : null,
           foc: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_mien : null,
           items,
           ncc: { ten: nh.ten_ncc || undefined, so_tai_khoan: nh.ncc_so_tai_khoan || undefined, ngan_hang: nh.ncc_ngan_hang || undefined },
@@ -1000,13 +1006,18 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
           can_tru: canTruAmount,
           so_tien_con_tt: soTienConTT,
         });
-      }
+    }
 
-      if (entries.length === 0) {
+    return entries;
+  }, [nhData, selectedKeys, dnttList, paymentsList]);
+
+  const handlePrintSelected = () => {
+    try {
+      const entries = buildSelectedEntries();
+      if (!entries || entries.length === 0) {
         toast.error("Không có dữ liệu để xuất");
         return;
       }
-
       setPreviewNHData({
         doan: { ten_doan: tenDoan || String(doanId) },
         entries,
@@ -1016,6 +1027,13 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       toast.error("Lỗi: " + (err?.message || ""));
     }
   };
+
+  // Expose imperative API cho ChiPhiTab (in DNTT gộp NH + DV).
+  useImperativeHandle(ref, () => ({
+    buildSelectedEntries,
+    clearSelection: () => setSelectedKeys([]),
+    getSelectedCount: () => selectedKeys.length,
+  }), [buildSelectedEntries, selectedKeys.length]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2340,7 +2358,9 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       />
     </div>
   );
-}
+});
+
+export default ChiPhiNHSection;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 

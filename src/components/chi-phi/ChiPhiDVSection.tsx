@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle, forwardRef } from "react";
 import { format, subDays, parseISO, addDays } from "date-fns";
 import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,12 @@ interface Props {
   ngayBatDau?: string;
 }
 
+export interface ChiPhiDVSectionHandle {
+  buildSelectedEntries: () => Promise<NHDocEntry[] | undefined>;
+  clearSelection: () => void;
+  getSelectedCount: () => number;
+}
+
 // Small inline number input (like NH's NHInput)
 function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false }: {
   value: number;
@@ -88,7 +94,7 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false }:
   );
 }
 
-export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) {
+const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }, ref) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
@@ -598,26 +604,49 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
 
   // ── Print handler ─────────────────────────────────────────────────────────
 
-  const handlePrintSelected = async () => {
-    if (selectedIds.length === 0) return;
-    try {
-      const entries: NHDocEntry[] = [];
-      const canTruShownByNcc: Record<number, boolean> = {};
+  const buildSelectedEntries = useCallback(async (): Promise<NHDocEntry[] | undefined> => {
+    if (selectedIds.length === 0) return undefined;
+    const entries: NHDocEntry[] = [];
+    const canTruShownByNcc: Record<number, boolean> = {};
 
-      // Fetch tai_khoan_thanh_toan from canh_diem via doan_ngay_item
-      const refItemIds = dvRows
-        .filter((r) => r.id && selectedIds.includes(r.id) && r.ref_doan_ngay_item_id)
-        .map((r) => r.ref_doan_ngay_item_id as number);
-      const tkttMap: Record<number, string | null> = {};
-      if (refItemIds.length > 0) {
-        const { data: ngayItems } = await externalSupabase
-          .from("doan_ngay_item")
-          .select("id, canh_diem:canh_diem_id(tai_khoan_thanh_toan)")
-          .in("id", refItemIds);
-        for (const item of ngayItems ?? []) {
-          tkttMap[item.id] = (item.canh_diem as any)?.tai_khoan_thanh_toan ?? null;
-        }
+    // Fetch tai_khoan_thanh_toan from canh_diem via doan_ngay_item
+    const refItemIds = dvRows
+      .filter((r) => r.id && selectedIds.includes(r.id) && r.ref_doan_ngay_item_id)
+      .map((r) => r.ref_doan_ngay_item_id as number);
+    const tkttMap: Record<number, string | null> = {};
+    if (refItemIds.length > 0) {
+      const { data: ngayItems } = await externalSupabase
+        .from("doan_ngay_item")
+        .select("id, canh_diem:canh_diem_id(tai_khoan_thanh_toan)")
+        .in("id", refItemIds);
+      for (const item of ngayItems ?? []) {
+        tkttMap[item.id] = (item.canh_diem as any)?.tai_khoan_thanh_toan ?? null;
       }
+    }
+
+    // Fetch NCC info (ten, so_tai_khoan, ngan_hang) cho rows chưa có DNTT
+    // — DNTT có sẵn các field này, dùng làm fallback khi row không có DNTT.
+    const nccIds = Array.from(
+      new Set(
+        dvRows
+          .filter((r) => r.id && selectedIds.includes(r.id) && r.nha_cung_cap_id)
+          .map((r) => r.nha_cung_cap_id as number),
+      ),
+    );
+    const nccMap: Record<number, { ten: string; so_tai_khoan?: string; ngan_hang?: string }> = {};
+    if (nccIds.length > 0) {
+      const { data: nccs } = await externalSupabase
+        .from("nha_cung_cap")
+        .select("id, ten, so_tai_khoan, ngan_hang")
+        .in("id", nccIds);
+      for (const ncc of nccs ?? []) {
+        nccMap[ncc.id] = {
+          ten: ncc.ten,
+          so_tai_khoan: ncc.so_tai_khoan ?? undefined,
+          ngan_hang: ncc.ngan_hang ?? undefined,
+        };
+      }
+    }
 
       for (const [day, rows] of sortedDays) {
         for (const row of rows) {
@@ -630,9 +659,8 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           const activeDntts = allDntts.filter(
             (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
           );
-          if (activeDntts.length === 0) continue;
-
-          const activeDntt = activeDntts[0];
+          // Cho phép in cả khi chưa có DNTT — dùng NCC info từ nha_cung_cap fallback.
+          const activeDntt = activeDntts[0] ?? null;
 
           const rowExtras = (extrasMap[row.id!] ?? []).filter((e) => e.nguoi_tt !== "hdv" && e.don_gia > 0);
           const extrasTotal = rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
@@ -654,22 +682,28 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
           const soTienConTT = Math.max(0, thanhTien - soCoc - canTruAmount);
           const ngayDisplay = getDateLabel(day > 0 ? day : null);
 
+          // Resolve NCC: ưu tiên DNTT snapshot, fallback nha_cung_cap master
+          const nccFromDntt = activeDntt?.ten_nha_cung_cap
+            ? {
+                ten: activeDntt.ten_nha_cung_cap,
+                so_tai_khoan: activeDntt.so_tai_khoan || undefined,
+                ngan_hang: activeDntt.ngan_hang || undefined,
+              }
+            : null;
+          const nccFromMaster = nccId ? nccMap[nccId] : undefined;
+          const nccFinal = nccFromDntt ?? nccFromMaster ?? null;
+
           entries.push({
             ngay_date: ngayDisplay,
             ten_nh: row.mo_ta || "Dịch vụ",
             so_khach: row.so_luong,
+            foc_khach: null,
             foc: null,
             items: [
               { so_luong: row.so_luong, don_gia: row.don_gia, ghi_chu: "" },
               ...rowExtras.map((e) => ({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta || "" })),
             ],
-            ncc: activeDntt.ten_nha_cung_cap
-              ? {
-                  ten: activeDntt.ten_nha_cung_cap || undefined,
-                  so_tai_khoan: activeDntt.so_tai_khoan || undefined,
-                  ngan_hang: activeDntt.ngan_hang || undefined,
-                }
-              : null,
+            ncc: nccFinal,
             so_tien_coc: soCoc,
             can_tru: canTruAmount,
             so_tien_con_tt: soTienConTT,
@@ -680,11 +714,16 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
         }
       }
 
-      if (entries.length === 0) {
-        toast.error("Không có dịch vụ nào được chọn có ĐNTT để xuất");
+    return entries;
+  }, [selectedIds, dvRows, dnttList, paymentsList, extrasMap, sortedDays]);
+
+  const handlePrintSelected = async () => {
+    try {
+      const entries = await buildSelectedEntries();
+      if (!entries || entries.length === 0) {
+        toast.error("Không có dịch vụ nào được chọn để xuất");
         return;
       }
-
       setPreviewDVData({
         doan: { ten_doan: tenDoan || String(doanId) },
         entries,
@@ -694,6 +733,13 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       toast.error("Lỗi: " + (err?.message || ""));
     }
   };
+
+  // Expose imperative API cho ChiPhiTab (in DNTT gộp NH + DV).
+  useImperativeHandle(ref, () => ({
+    buildSelectedEntries,
+    clearSelection: () => setSelectedIds([]),
+    getSelectedCount: () => selectedIds.length,
+  }), [buildSelectedEntries, selectedIds.length]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1654,4 +1700,6 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
       />
     </div>
   );
-}
+});
+
+export default ChiPhiDVSection;

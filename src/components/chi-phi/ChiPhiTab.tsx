@@ -1,17 +1,19 @@
-import { useMemo, useState } from "react";
-import { FileSpreadsheet } from "lucide-react";
+import { useMemo, useState, useRef } from "react";
+import { FileSpreadsheet, Printer } from "lucide-react";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
-import { useUserRoles } from "@/hooks/use-doan";
+import { useUserRoles, useCurrentUserName } from "@/hooks/use-doan";
 import ChiPhiHeader from "./ChiPhiHeader";
 import ChiPhiKSSection from "./ChiPhiKSSection";
-import ChiPhiNHSection from "./ChiPhiNHSection";
-import ChiPhiDVSection from "./ChiPhiDVSection";
+import ChiPhiNHSection, { type ChiPhiNHSectionHandle } from "./ChiPhiNHSection";
+import ChiPhiDVSection, { type ChiPhiDVSectionHandle } from "./ChiPhiDVSection";
 import ChiPhiBaoHiemSection from "./ChiPhiBaoHiemSection";
 import ChiPhiXeSection from "./ChiPhiXeSection";
 import ChiPhiVisaSection from "./ChiPhiVisaSection";
 import ChiPhiHDVSection from "./ChiPhiHDVSection";
 import ChiPhiPhasThuSection from "./ChiPhiPhasThuSection";
+import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
+import type { NHDocData } from "@/lib/export-dntt-nh-word";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
@@ -27,6 +29,11 @@ interface Props {
 
 export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) {
   const [exportingExcel, setExportingExcel] = useState(false);
+  // Refs để gộp ĐNTT từ NH + DV
+  const nhSectionRef = useRef<ChiPhiNHSectionHandle>(null);
+  const dvSectionRef = useRef<ChiPhiDVSectionHandle>(null);
+  const [combinedPreview, setCombinedPreview] = useState<NHDocData | null>(null);
+  const { data: currentUserName = "" } = useCurrentUserName();
   const soKhach =
     (doan?.so_khach_lon ?? 0) +
     (doan?.so_khach_em1 ?? 0) +
@@ -87,6 +94,39 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
 
   const hasData = summary.total > 0 || summary.daTT > 0;
 
+  const handlePrintCombined = async () => {
+    try {
+      const nhCount = nhSectionRef.current?.getSelectedCount() ?? 0;
+      const dvCount = dvSectionRef.current?.getSelectedCount() ?? 0;
+      if (nhCount === 0 && dvCount === 0) {
+        toast.error("Chưa chọn nhà hàng / dịch vụ nào để in");
+        return;
+      }
+
+      const nhRaw = nhSectionRef.current?.buildSelectedEntries();
+      const dvRaw = await dvSectionRef.current?.buildSelectedEntries();
+      const nhEntries = nhRaw ?? [];
+      const dvEntries = dvRaw ?? [];
+
+      toast.info(
+        `Đã chọn: NH=${nhCount} (build=${nhEntries.length}) · DV=${dvCount} (build=${dvEntries.length})`,
+      );
+
+      const all = [...nhEntries, ...dvEntries];
+      if (all.length === 0) {
+        toast.error("Không build được entries — kiểm tra console");
+        return;
+      }
+      setCombinedPreview({
+        doan: { ten_doan: doan?.ten_doan || String(doanId) },
+        entries: all,
+        nguoiDeNghi: currentUserName,
+      });
+    } catch (err: any) {
+      toast.error("Lỗi: " + (err?.message || ""));
+    }
+  };
+
   const handleExportExcel = async () => {
     if (chiPhiRows.length === 0 && dnttList.length === 0) {
       toast.error("Chưa có dữ liệu chi phí để xuất Excel");
@@ -113,7 +153,17 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="default"
+          className="h-8 text-xs gap-1.5"
+          onClick={handlePrintCombined}
+          title="In ĐNTT gộp các nhà hàng + dịch vụ đã chọn"
+        >
+          <Printer className="h-3.5 w-3.5" />
+          In ĐNTT gộp NH + DV
+        </Button>
         <Button
           size="sm"
           variant="outline"
@@ -153,9 +203,9 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
       <div className="space-y-6">
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiNHSection doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiDVSection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di} />
+        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di} />
 
         <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
 
@@ -172,6 +222,17 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
 
         <ChiPhiPhasThuSection doan={doan} />
       </div>
+
+      <DNTTNHPreviewModal
+        open={!!combinedPreview}
+        data={combinedPreview}
+        onClose={() => {
+          setCombinedPreview(null);
+          // Sau khi đóng modal (đã xuất hoặc cancel) → clear selection cả 2 section
+          nhSectionRef.current?.clearSelection();
+          dvSectionRef.current?.clearSelection();
+        }}
+      />
     </div>
   );
 }
