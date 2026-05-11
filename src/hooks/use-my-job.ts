@@ -93,11 +93,15 @@ export function useMarkDeadlineDone() {
         type === "ks" ? "doan_booking_ks" :
         type === "nh" ? "doan_booking_nh" :
         "doan_booking_dv";
-      const { error } = await externalSupabase
+      const { data, error } = await externalSupabase
         .from(table)
         .update({ deadline_done_at: new Date().toISOString() })
-        .eq("id", bookingId);
+        .eq("id", bookingId)
+        .select("id, deadline_done_at");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Không update được — kiểm tra quyền hoặc booking đã bị xoá");
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my_deadlines"] });
