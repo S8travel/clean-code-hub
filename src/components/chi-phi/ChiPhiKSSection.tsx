@@ -170,14 +170,23 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     const ks = ksData.khachSanMap[ksId];
     if (!ks) throw new Error("Không tìm thấy thông tin khách sạn");
 
-    // Room entries from localRows for this KS — mỗi đêm 1 dòng
-    const ksRows = localRowsRef.current.filter((r) => r.khach_san_id === ksId);
-
     // Lấy ngày từ ngayRows (nguồn chính xác) theo doan_ngay_id
     const ngayDateMap: Record<number, string> = {};
     (ksData.ngayRows as any[]).forEach((n: any) => {
       ngayDateMap[n.id] = n.ngay_date;
     });
+
+    // Room entries from localRows for this KS — sort theo ngày, sau đó loại phòng
+    // để DNTT hiển thị nhất quán giữa các KS (tránh case 1 KS sort theo ngày, KS khác sort theo loại phòng).
+    const ksRows = localRowsRef.current
+      .filter((r) => r.khach_san_id === ksId)
+      .slice()
+      .sort((a, b) => {
+        const da = ngayDateMap[a.doan_ngay_id] || a.ngay_date || "";
+        const db = ngayDateMap[b.doan_ngay_id] || b.ngay_date || "";
+        if (da !== db) return da.localeCompare(db);
+        return (a.loai_phong || "").localeCompare(b.loai_phong || "");
+      });
 
     const roomEntries: { name: string; so_luong: number; don_gia: number; so_dem: number; ci: string; co: string }[] = ksRows.map((r) => {
       const ngayDate = ngayDateMap[r.doan_ngay_id] || r.ngay_date || r.ci || "";
