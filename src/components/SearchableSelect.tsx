@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ interface Props {
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  /** Mở popover ngay khi mount (Google Sheets-like flow: Enter → row mới → tiếp tục gõ) */
+  autoOpen?: boolean;
 }
 
 export function SearchableSelect({
@@ -39,9 +41,16 @@ export function SearchableSelect({
   searchPlaceholder = "Gõ để tìm...",
   emptyText = "Không tìm thấy",
   className,
+  autoOpen = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Khi parent set autoOpen=true (vd: row vừa được thêm sau Enter chọn dòng cuối) → mở popover.
+  // Effect explicit để robust với StrictMode double-mount + React 18 concurrent rendering.
+  useEffect(() => {
+    if (autoOpen) setOpen(true);
+  }, [autoOpen]);
 
   const selectedLabel = options.find((o) => o.value === value)?.label;
 

@@ -130,6 +130,8 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
   const [noteOpenMap, setNoteOpenMap] = useState<Record<number, boolean>>({});
+  // Google Sheets-like: sau khi chọn cảnh điểm ở dòng cuối → tự thêm dòng mới + auto-open dropdown của nó.
+  const [autoOpenIdx, setAutoOpenIdx] = useState<number | null>(null);
 
   const updateGhiChu = (idx: number, val: string) => {
     const newItems = [...day.items];
@@ -173,9 +175,20 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 <SearchableSelect
                   options={canhDiemOptions}
                   value={item.canh_diem_id ? String(item.canh_diem_id) : ""}
+                  autoOpen={autoOpenIdx === idx}
                   onChange={(v) => {
                     const newItems = [...day.items];
                     newItems[idx] = { ...item, canh_diem_id: v ? Number(v) : 0 };
+                    // Google Sheets-like: chọn ở dòng cuối + có value → thêm dòng mới rỗng + auto-open dòng đó
+                    const isLast = idx === day.items.length - 1;
+                    if (v && isLast) {
+                      newItems.push({ canh_diem_id: 0, thu_tu: newItems.length + 1, ghi_chu: "" });
+                      setAutoOpenIdx(idx + 1);
+                      // KHÔNG clear: effect trong SearchableSelect chỉ fire 1 lần khi autoOpen
+                      // chuyển false→true. Lần select tiếp theo sẽ overwrite autoOpenIdx.
+                    } else {
+                      setAutoOpenIdx(null);
+                    }
                     updateItems(newItems);
                   }}
                   placeholder="Chọn cảnh điểm"

@@ -16,11 +16,13 @@ interface Props {
   thuTip: boolean;
   tipRate: number | null;
   tipSoNgayOverride: number | null;
+  tipSoKhachOverride: number | null;
   tipLumpSum: number | null;
   // Handlers (debounced auto-save via parent)
   onThuTipChange: (v: boolean) => void;
   onTipRateChange: (v: number | null) => void;
   onTipSoNgayOverrideChange: (v: number | null) => void;
+  onTipSoKhachOverrideChange: (v: number | null) => void;
   onTipLumpSumChange: (v: number | null) => void;
 }
 
@@ -39,28 +41,33 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 export default function TipSection({
   soKhach, soKhachTl, ngayDi, ngayVe,
-  thuTip, tipRate, tipSoNgayOverride, tipLumpSum,
-  onThuTipChange, onTipRateChange, onTipSoNgayOverrideChange, onTipLumpSumChange,
+  thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum,
+  onThuTipChange, onTipRateChange, onTipSoNgayOverrideChange, onTipSoKhachOverrideChange, onTipLumpSumChange,
 }: Props) {
   // Auto-suggest values
   const autoRate = soKhachTl > 0 ? 150 : 300;
   const autoSoNgay = ngayDi && ngayVe ? daysBetween(ngayDi, ngayVe) : 0;
+  // T/L không đóng tip → mặc định trừ ra
+  const autoSoKhach = Math.max(0, soKhach - soKhachTl);
 
   // Effective values used for compute
   const effectiveRate = tipRate ?? autoRate;
   const effectiveSoNgay = tipSoNgayOverride ?? autoSoNgay;
-  const autoTotal = soKhach * effectiveSoNgay * effectiveRate;
+  const effectiveSoKhach = tipSoKhachOverride ?? autoSoKhach;
+  const autoTotal = effectiveSoKhach * effectiveSoNgay * effectiveRate;
   const displayTotal = tipLumpSum ?? autoTotal;
   const isOverridden = tipLumpSum != null;
 
   // Local input states (for typing fluidity)
   const [localRate, setLocalRate] = useState(tipRate != null ? String(tipRate) : "");
   const [localSoNgay, setLocalSoNgay] = useState(tipSoNgayOverride != null ? String(tipSoNgayOverride) : "");
+  const [localSoKhach, setLocalSoKhach] = useState(tipSoKhachOverride != null ? String(tipSoKhachOverride) : "");
   const [localLumpSum, setLocalLumpSum] = useState(tipLumpSum != null ? formatThousands(tipLumpSum) : "");
 
   // Sync local when props change (from DB load)
   useEffect(() => { setLocalRate(tipRate != null ? String(tipRate) : ""); }, [tipRate]);
   useEffect(() => { setLocalSoNgay(tipSoNgayOverride != null ? String(tipSoNgayOverride) : ""); }, [tipSoNgayOverride]);
+  useEffect(() => { setLocalSoKhach(tipSoKhachOverride != null ? String(tipSoKhachOverride) : ""); }, [tipSoKhachOverride]);
   useEffect(() => { setLocalLumpSum(tipLumpSum != null ? formatThousands(tipLumpSum) : ""); }, [tipLumpSum]);
 
   return (
@@ -91,6 +98,23 @@ export default function TipSection({
             </div>
 
             <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">Số khách:</span>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={localSoKhach}
+                onChange={(e) => setLocalSoKhach(e.target.value.replace(/\D/g, ""))}
+                onBlur={() => {
+                  const v = localSoKhach ? Number(localSoKhach) : null;
+                  if (v !== tipSoKhachOverride) onTipSoKhachOverrideChange(v);
+                }}
+                placeholder={String(autoSoKhach)}
+                className="h-7 w-14 text-xs text-center"
+                title={`Mặc định = số khách − T/L (${soKhach} − ${soKhachTl} = ${autoSoKhach}). T/L không đóng tip.`}
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs">
               <span className="text-muted-foreground">Số ngày:</span>
               <Input
                 type="text"
@@ -108,7 +132,7 @@ export default function TipSection({
 
             <div className="flex items-center gap-1.5 text-xs ml-auto">
               <span className="text-muted-foreground">
-                {soKhach} khách × {effectiveSoNgay} ngày × {fmt(effectiveRate)} = Tổng:
+                {effectiveSoKhach} khách × {effectiveSoNgay} ngày × {fmt(effectiveRate)} = Tổng:
               </span>
               <Input
                 type="text"

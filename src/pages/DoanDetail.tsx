@@ -94,6 +94,7 @@ export default function DoanDetail() {
   const [thuTip, setThuTip] = useState(true);
   const [tipRate, setTipRate] = useState<number | null>(null);
   const [tipSoNgayOverride, setTipSoNgayOverride] = useState<number | null>(null);
+  const [tipSoKhachOverride, setTipSoKhachOverride] = useState<number | null>(null);
   const [tipLumpSum, setTipLumpSum] = useState<number | null>(null);
   const [days, setDays] = useState<DayLocal[]>([]);
   const [initialized, setInitialized] = useState(false);
@@ -146,6 +147,7 @@ export default function DoanDetail() {
       setThuTip(doan.thu_tip ?? true);
       setTipRate(doan.tip_rate ?? null);
       setTipSoNgayOverride(doan.tip_so_ngay_override ?? null);
+      setTipSoKhachOverride(doan.tip_so_khach_override ?? null);
       setTipLumpSum(doan.tip_lump_sum ?? null);
       setInitialized(true);
     }
@@ -208,6 +210,7 @@ export default function DoanDetail() {
           thu_tip: thuTip,
           tip_rate: tipRate,
           tip_so_ngay_override: tipSoNgayOverride,
+          tip_so_khach_override: tipSoKhachOverride,
           tip_lump_sum: tipLumpSum,
         },
         days,
@@ -259,7 +262,7 @@ export default function DoanDetail() {
         },
       }
     );
-  }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
+  }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
 
   // Keep ref updated so timer always calls latest doSave
   doSaveRef.current = doSave;
@@ -287,6 +290,7 @@ export default function DoanDetail() {
   const handleSetThuTip = useCallback((v: boolean) => { setThuTip(v); scheduleSave(); }, [scheduleSave]);
   const handleSetTipRate = useCallback((v: number | null) => { setTipRate(v); scheduleSave(); }, [scheduleSave]);
   const handleSetTipSoNgayOverride = useCallback((v: number | null) => { setTipSoNgayOverride(v); scheduleSave(); }, [scheduleSave]);
+  const handleSetTipSoKhachOverride = useCallback((v: number | null) => { setTipSoKhachOverride(v); scheduleSave(); }, [scheduleSave]);
   const handleSetTipLumpSum = useCallback((v: number | null) => { setTipLumpSum(v); scheduleSave(); }, [scheduleSave]);
   const handleSetDays = useCallback((v: DayLocal[]) => {
     hasPendingChangesRef.current = true;
@@ -456,10 +460,12 @@ export default function DoanDetail() {
               thuTip={thuTip}
               tipRate={tipRate}
               tipSoNgayOverride={tipSoNgayOverride}
+              tipSoKhachOverride={tipSoKhachOverride}
               tipLumpSum={tipLumpSum}
               onThuTipChange={handleSetThuTip}
               onTipRateChange={handleSetTipRate}
               onTipSoNgayOverrideChange={handleSetTipSoNgayOverride}
+              onTipSoKhachOverrideChange={handleSetTipSoKhachOverride}
               onTipLumpSumChange={handleSetTipLumpSum}
             />
             <DayScheduleTable

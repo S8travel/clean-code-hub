@@ -35,6 +35,7 @@ export interface Doan {
   thu_tip: boolean | null;
   tip_rate: number | null;
   tip_so_ngay_override: number | null;
+  tip_so_khach_override: number | null;
   tip_lump_sum: number | null;
   created_at?: string;
 }
