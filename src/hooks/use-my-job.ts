@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 
 export interface DeadlineItem {
@@ -22,19 +22,22 @@ export function useMyDeadlines(doanIds: number[]) {
           .from("doan_booking_ks")
           .select("id, doan_id, deadline, ks_final_status, khach_san:khach_san_id(ten), doan:doan_id(ten_doan)")
           .in("doan_id", doanIds)
-          .not("deadline", "is", null),
+          .not("deadline", "is", null)
+          .is("deadline_done_at", null),
 
         externalSupabase
           .from("doan_booking_nh")
           .select("id, doan_id, deadline, booking_status, bua_an, nha_hang:nha_hang_id(ten, loai), doan:doan_id(ten_doan)")
           .in("doan_id", doanIds)
-          .not("deadline", "is", null),
+          .not("deadline", "is", null)
+          .is("deadline_done_at", null),
 
         externalSupabase
           .from("doan_booking_dv")
           .select("id, doan_id, deadline, booking_status, ten_nha_cung_cap, doan:doan_id(ten_doan)")
           .in("doan_id", doanIds)
-          .not("deadline", "is", null),
+          .not("deadline", "is", null)
+          .is("deadline_done_at", null),
       ]);
 
       const items: DeadlineItem[] = [];
@@ -78,6 +81,26 @@ export function useMyDeadlines(doanIds: number[]) {
       }
 
       return items.sort((a, b) => a.deadline.localeCompare(b.deadline));
+    },
+  });
+}
+
+export function useMarkDeadlineDone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ type, bookingId }: { type: "ks" | "nh" | "dv"; bookingId: number }) => {
+      const table =
+        type === "ks" ? "doan_booking_ks" :
+        type === "nh" ? "doan_booking_nh" :
+        "doan_booking_dv";
+      const { error } = await externalSupabase
+        .from(table)
+        .update({ deadline_done_at: new Date().toISOString() })
+        .eq("id", bookingId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my_deadlines"] });
     },
   });
 }

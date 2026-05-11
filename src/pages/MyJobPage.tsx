@@ -21,13 +21,15 @@ import {
 import { useDoanList } from "@/hooks/use-doan";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { useAuth } from "@/hooks/use-auth";
-import { useMyDeadlines, type DeadlineItem } from "@/hooks/use-my-job";
+import { useMyDeadlines, useMarkDeadlineDone, type DeadlineItem } from "@/hooks/use-my-job";
 import { useMyTeamAssignments, useAllTeamAgents } from "@/hooks/use-teams";
 import { useDoanLogGhiChu, useToggleResolved } from "@/hooks/use-doan-log";
 import { useCongViecList } from "@/hooks/use-cong-viec";
 import GiaoViecTab from "@/components/my-job/GiaoViecTab";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Circle, StickyNote } from "lucide-react";
+import { CheckCircle2, Circle, StickyNote, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmtDate(d: string | null | undefined) {
@@ -288,6 +290,7 @@ export default function MyJobPage() {
 
   const myDoanIds = useMemo(() => myDoan.map((d: any) => d.id as number), [myDoan]);
   const { data: deadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(myDoanIds);
+  const markDone = useMarkDeadlineDone();
 
   // Lọc deadline theo scope của từng đoàn
   const filteredDeadlines = useMemo(
@@ -794,11 +797,19 @@ export default function MyJobPage() {
                           ? "Hôm nay"
                           : `Còn ${daysLeft} ngày`;
                         return (
-                          <button
+                          <div
                             key={`${item.type}-${item.bookingId}`}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => navigate(`/doan/${item.doanId}`)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                navigate(`/doan/${item.doanId}`);
+                              }
+                            }}
                             className={cn(
-                              "w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left hover:opacity-80 transition-opacity",
+                              "w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left hover:opacity-80 transition-opacity cursor-pointer",
                               gcfg.bg,
                             )}
                           >
@@ -816,8 +827,28 @@ export default function MyJobPage() {
                               </p>
                               <p className="text-[10px] text-muted-foreground">{daysText}</p>
                             </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-[11px] gap-1 shrink-0 bg-white/70"
+                              disabled={markDone.isPending}
+                              title="Đánh dấu deadline này đã xong"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markDone.mutate(
+                                  { type: item.type, bookingId: item.bookingId },
+                                  {
+                                    onSuccess: () => toast.success("Đã đánh dấu xong"),
+                                    onError: (err: any) => toast.error(err?.message || "Lỗi đánh dấu"),
+                                  },
+                                );
+                              }}
+                            >
+                              <Check className="h-3 w-3" />
+                              Đã xong
+                            </Button>
                             <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
