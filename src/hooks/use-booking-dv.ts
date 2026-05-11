@@ -123,6 +123,8 @@ export function useSendBookingEmail() {
       sentBy: string;
       replyTo?: string;
       emailThreadId?: string | null;
+      // mode='update' → giữ nguyên booking_status, chỉ update sent_at/by + email_thread_id
+      mode?: "first" | "update";
     }) => {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
@@ -136,14 +138,16 @@ export function useSendBookingEmail() {
 
       const threadId = isFirst ? newThreadId : params.emailThreadId;
 
+      const updatePayload: Record<string, any> = {
+        sent_at: new Date().toISOString(),
+        sent_by: params.sentBy,
+        email_thread_id: threadId,
+      };
+      if (params.mode !== "update") updatePayload.booking_status = "cho_xac_nhan";
+
       const { error: updateErr } = await externalSupabase
         .from("doan_booking_dv")
-        .update({
-          booking_status: "cho_xac_nhan",
-          sent_at: new Date().toISOString(),
-          sent_by: params.sentBy,
-          email_thread_id: threadId,
-        })
+        .update(updatePayload)
         .eq("id", params.bookingId);
       if (updateErr) throw updateErr;
     },

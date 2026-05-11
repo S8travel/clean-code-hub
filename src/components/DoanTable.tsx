@@ -2,10 +2,16 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, Ban, Copy } from "lucide-react"; // KeyRound: FEATURE_DOAN_PERM_DISABLED
+import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, Ban, Copy, MoreHorizontal } from "lucide-react"; // KeyRound: FEATURE_DOAN_PERM_DISABLED
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 // import { PermissionDialog } from "@/components/PermissionDialog"; // FEATURE_DOAN_PERM_DISABLED
 import type { UserRole } from "@/hooks/use-doan";
 import { t, useTranslate } from "@/lib/i18n";
@@ -21,8 +27,8 @@ function fmtDate(d: string | null) {
   };
 }
 
+// Inbound: ẩn badge (mặc định, đa số đoàn là inbound nên không cần đánh dấu).
 const LOAI_TOUR_BADGE: Record<string, { label: string; className: string }> = {
-  inbound:  { label: "Inbound",  className: "bg-blue-100 text-blue-700" },
   outbound: { label: "Outbound", className: "bg-emerald-100 text-emerald-700" },
   noi_dia:  { label: "Nội địa",  className: "bg-orange-100 text-orange-700" },
 };
@@ -162,6 +168,7 @@ export function DoanTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/40">
+              <Th className="w-[40px] sticky left-0 bg-card">{" "}</Th>
               <Th onClick={() => toggleSort("ten_doan")} className="min-w-[180px]">
                 Code Đoàn <SortIcon col="ten_doan" />
               </Th>
@@ -180,7 +187,6 @@ export function DoanTable({
               </Th>
               <Th className="min-w-[80px]">CB Đến</Th>
               <Th className="min-w-[80px]">CB Đi</Th>
-              <Th className="min-w-[90px] sticky right-0 bg-card">{" "}</Th>
             </tr>
           </thead>
           <tbody>
@@ -205,6 +211,41 @@ export function DoanTable({
                   onClick={() => navigate(`/doan/${g.id}`)}
                   className={`group border-b border-border/40 hover:bg-muted/50 cursor-pointer transition-colors ${rowBg(g)}`}
                 >
+                  {/* Actions menu — đầu row */}
+                  <td className="px-2 py-3 sticky left-0 bg-card" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-60 group-hover:opacity-100 transition-opacity"
+                          title="Thao tác"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-36">
+                        <DropdownMenuItem onClick={() => onEdit?.(g)}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Sửa
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onClone?.(g)}>
+                          <Copy className="h-3.5 w-3.5 mr-2 text-sky-600" /> Nhân bản
+                        </DropdownMenuItem>
+                        {g.trang_thai !== "huy" && (
+                          <DropdownMenuItem onClick={() => onCancel?.(g)}>
+                            <Ban className="h-3.5 w-3.5 mr-2 text-orange-500" /> Hủy đoàn
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => onDelete?.(g)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Xóa vĩnh viễn
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+
                   {/* Code Đoàn */}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -334,61 +375,6 @@ export function DoanTable({
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </td>
-
-                  {/* Actions */}
-                  <td className="px-2 py-3 sticky right-0 bg-card">
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={(e) => { e.stopPropagation(); onEdit?.(g); }}
-                        title="Sửa"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-sky-600 hover:text-sky-700 hover:bg-sky-50"
-                        onClick={(e) => { e.stopPropagation(); onClone?.(g); }}
-                        title="Nhân bản"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      {/* FEATURE_DOAN_PERM_DISABLED
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                        onClick={(e) => { e.stopPropagation(); setPermDoan({ id: g.id, code: g.ten_doan }); }}
-                        title="Phân quyền"
-                      >
-                        <KeyRound className="h-3.5 w-3.5" />
-                      </Button>
-                      */}
-                      {g.trang_thai !== "huy" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50"
-                          onClick={(e) => { e.stopPropagation(); onCancel?.(g); }}
-                          title="Hủy đoàn"
-                        >
-                          <Ban className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => { e.stopPropagation(); onDelete?.(g); }}
-                        title="Xóa vĩnh viễn"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
                 </tr>
               );
             })}
@@ -414,36 +400,45 @@ export function DoanTable({
               onClick={() => navigate(`/doan/${g.id}`)}
               className={`rounded-xl bg-card shadow-card p-4 cursor-pointer active:scale-[0.99] transition-transform ${rowBg(g)}`}
             >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-semibold text-sm text-[hsl(var(--brand))]">{g.ten_doan}</span>
-                    {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${LOAI_TOUR_BADGE[g.loai_tour].className}`}>
-                        {LOAI_TOUR_BADGE[g.loai_tour].label}
-                      </span>
-                    )}
+              <div className="flex items-start justify-between mb-2 gap-2">
+                <div className="flex items-start gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 -ml-1">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-36">
+                      <DropdownMenuItem onClick={() => onEdit?.(g)}>
+                        <Pencil className="h-3.5 w-3.5 mr-2" /> Sửa
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onClone?.(g)}>
+                        <Copy className="h-3.5 w-3.5 mr-2 text-sky-600" /> Nhân bản
+                      </DropdownMenuItem>
+                      {g.trang_thai !== "huy" && (
+                        <DropdownMenuItem onClick={() => onCancel?.(g)}>
+                          <Ban className="h-3.5 w-3.5 mr-2 text-orange-500" /> Hủy đoàn
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => onDelete?.(g)} className="text-destructive focus:text-destructive">
+                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Xóa vĩnh viễn
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-sm text-[hsl(var(--brand))]">{g.ten_doan}</span>
+                      {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${LOAI_TOUR_BADGE[g.loai_tour].className}`}>
+                          {LOAI_TOUR_BADGE[g.loai_tour].label}
+                        </span>
+                      )}
+                    </div>
+                    {g.trang_thai === "huy" && <Badge variant="destructive" className="mt-1 text-[10px] px-1.5 py-0">Đã hủy</Badge>}
+                    {g.trang_thai === "hoan_thanh" && <Badge variant="secondary" className="mt-1 text-[10px] px-1.5 py-0">Hoàn thành</Badge>}
                   </div>
-                  {g.trang_thai === "huy" && <Badge variant="destructive" className="ml-2 text-[10px] px-1.5 py-0">Đã hủy</Badge>}
-                  {g.trang_thai === "hoan_thanh" && <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">Hoàn thành</Badge>}
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-[hsl(var(--brand))]">{total} khách</span>
-                  <Button variant="ghost" size="icon" className="h-7 w-7"
-                    onClick={(e) => { e.stopPropagation(); onEdit?.(g); }}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  {g.trang_thai !== "huy" && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-orange-500"
-                      onClick={(e) => { e.stopPropagation(); onCancel?.(g); }}>
-                      <Ban className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                    onClick={(e) => { e.stopPropagation(); onDelete?.(g); }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                <span className="text-xs font-bold text-[hsl(var(--brand))] shrink-0">{total} khách</span>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                 <span>Đón: {don.date}</span>

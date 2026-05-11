@@ -156,12 +156,19 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
               "h-7 gap-1 text-xs",
               hotel.email_status === "chua_gui"
                 ? "text-primary border-primary/30 hover:bg-primary/5"
+                : hotel.email_thread_id
+                ? "text-amber-700 border-amber-300 hover:bg-amber-50"
                 : "text-muted-foreground"
             )}
             onClick={() => setEmailOpen(true)}
+            title={hotel.email_thread_id ? "Gửi email cập nhật — sẽ thread vào mail cũ" : undefined}
           >
             <Mail className="h-3 w-3" />
-            {hotel.email_status === "chua_gui" ? "Gửi email" : "Gửi lại"}
+            {hotel.email_status === "chua_gui"
+              ? "Gửi email"
+              : hotel.email_thread_id
+              ? "Gửi cập nhật"
+              : "Gửi lại"}
           </Button>
         </div>
       </div>
@@ -172,6 +179,7 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
           onOpenChange={setEmailOpen}
           lockPhong={lockPhong}
           ksRow={hotel}
+          mode={hotel.email_thread_id ? "update" : "first"}
         />
       )}
     </>

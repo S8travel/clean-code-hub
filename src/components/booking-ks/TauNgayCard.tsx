@@ -65,6 +65,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   const [collapsed, setCollapsed] = useState(false);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailHtml, setEmailHtml] = useState("");
@@ -161,11 +162,14 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
 </body></html>`;
   };
 
-  const openEmailModal = () => {
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
     const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
     const buaStr = row.bua_an === "trua" ? "Trưa" : "Tối";
     setEmailTo(normalizeEmails(row.nha_hang_email));
-    setEmailSubject(`[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`);
+    const baseSubject = `[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`;
+    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
+    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailHtml(buildEmailHtml(selectedSetMenu));
     setEmailModalOpen(true);
   };
@@ -188,15 +192,18 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         sentBy: currentUserName,
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
+        mode: emailMode,
       });
-      // Update dat_truoc phase status
-      await save({
-        dat_truoc_status: "cho_xac_nhan",
-        dat_truoc_sent_at: new Date().toISOString(),
-        dat_truoc_sent_by: currentUserName,
-      });
+      // mode='update' → giữ nguyên dat_truoc_status, không ghi đè dat_truoc_sent_at
+      if (emailMode !== "update") {
+        await save({
+          dat_truoc_status: "cho_xac_nhan",
+          dat_truoc_sent_at: new Date().toISOString(),
+          dat_truoc_sent_by: currentUserName,
+        });
+      }
       setEmailModalOpen(false);
-      toast.success("Đã gửi email đặt tàu");
+      toast.success(emailMode === "update" ? "Đã gửi email cập nhật tàu" : "Đã gửi email đặt tàu");
     } catch (err: any) {
       toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
     } finally {
@@ -290,7 +297,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
               <DatTruocSection
                 row={row}
                 onOpenEmail={handleOpenEmail}
-                onResendEmail={openEmailModal}
+                onResendEmail={() => openEmailModal("update")}
                 onUpdateStatus={updateStatus}
               />
               <FinalSection
@@ -306,7 +313,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
       <EmailPreviewModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
-        title="Gửi email đặt tàu"
+        title={emailMode === "update" ? "Gửi email cập nhật tàu (thread vào mail cũ)" : "Gửi email đặt tàu"}
         to={emailTo}
         onToChange={setEmailTo}
         subject={emailSubject}
@@ -375,16 +382,35 @@ function DatTruocSection({
           >
             <Check className="h-3 w-3 mr-1" /> Tàu xác nhận đặt trước
           </Button>
-          <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground w-full" onClick={onResendEmail}>
-            <Mail className="h-3 w-3 mr-1" /> Gửi lại email
+          <Button
+            size="sm" variant="outline"
+            className="h-6 text-[10px] text-amber-700 border-amber-300 hover:bg-amber-50 w-full"
+            onClick={onResendEmail}
+            title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+          >
+            <Mail className="h-3 w-3 mr-1" /> Gửi cập nhật
           </Button>
         </div>
       )}
 
-      {status === "xac_nhan" && row.dat_truoc_confirm_at && (
-        <p className="text-[10px] text-teal-600">
-          ✓ XN lúc: {fmtDatetime(row.dat_truoc_confirm_at)}
-        </p>
+      {status === "xac_nhan" && (
+        <div className="space-y-1.5">
+          {row.dat_truoc_confirm_at && (
+            <p className="text-[10px] text-teal-600">
+              ✓ XN lúc: {fmtDatetime(row.dat_truoc_confirm_at)}
+            </p>
+          )}
+          {row.email_thread_id && (
+            <Button
+              size="sm" variant="outline"
+              className="h-6 text-[10px] text-amber-700 border-amber-300 hover:bg-amber-50 w-full"
+              onClick={onResendEmail}
+              title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+            >
+              <Mail className="h-3 w-3 mr-1" /> Gửi cập nhật
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

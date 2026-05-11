@@ -147,6 +147,11 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
   }, [open, group]);
 
   const selectedEntries = group.entries.filter((e) => selectedIds.has(e.ksRow.id));
+  const existingThreadId = selectedEntries
+    .map((e) => e.ksRow.email_thread_id)
+    .find((id): id is string => !!id);
+  const isUpdate = !!existingThreadId;
+  const baseSubject = `[S8 Travel] Lock Phòng – ${group.khach_san_ten}`;
 
   const toggleEntry = (id: number) => {
     setSelectedIds((prev) => {
@@ -165,6 +170,8 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
     const name = userProfile?.ho_ten || currentUserName;
     const html = buildBatchHtml(group, selectedEntries, name, userProfile?.so_dien_thoai ?? null);
     setEmailHtml(html);
+    // KEEP subject IDENTICAL khi update — Gmail dựa Subject + From để group thread.
+    setEmailSubject(isUpdate ? `Re: ${baseSubject}` : baseSubject);
     setPreviewOpen(true);
   };
 
@@ -177,15 +184,19 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
       const idsToMark = selectedEntries
         .filter((e) => e.ksRow.email_status === "chua_gui")
         .map((e) => e.ksRow.id);
+      const allIds = selectedEntries.map((e) => e.ksRow.id);
       await sendMut.mutateAsync({
         ksIds: idsToMark,
+        allKsIds: allIds,
         to: emailTo,
         subject: emailSubject,
         html: emailHtml,
         sentBy,
         replyTo,
+        mode: isUpdate ? "update" : "first",
+        inReplyToThreadId: existingThreadId ?? null,
       });
-      toast.success("Đã gửi email gộp");
+      toast.success(isUpdate ? "Đã gửi email cập nhật gộp" : "Đã gửi email gộp");
       setPreviewOpen(false);
       onOpenChange(false);
     } catch (err: any) {
@@ -221,7 +232,7 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              Gửi email gộp — {group.khach_san_ten}
+              {isUpdate ? `Gửi cập nhật gộp — ${group.khach_san_ten}` : `Gửi email gộp — ${group.khach_san_ten}`}
             </DialogTitle>
           </DialogHeader>
 
@@ -288,7 +299,9 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
         <EmailPreviewModal
           open={previewOpen}
           onOpenChange={(v) => { if (!v) setPreviewOpen(false); }}
-          title={`Gửi email gộp — ${group.khach_san_ten} (${selectedEntries.length} đoàn)`}
+          title={isUpdate
+            ? `Gửi cập nhật gộp — ${group.khach_san_ten} (${selectedEntries.length} đoàn, thread vào mail cũ)`
+            : `Gửi email gộp — ${group.khach_san_ten} (${selectedEntries.length} đoàn)`}
           to={emailTo}
           onToChange={setEmailTo}
           subject={emailSubject}

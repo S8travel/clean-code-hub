@@ -71,17 +71,19 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   lockPhong: LockPhongDisplay;
   ksRow: LockPhongKSDisplay;
+  mode?: "first" | "update";
 }
 
-export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksRow }: Props) {
+export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksRow, mode = "first" }: Props) {
   const { data: currentUserName = "" } = useCurrentUserName();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
   const sendMut = useSendLockPhongEmail();
 
+  const baseSubject = `[S8 Travel] Lock Phòng – ${lockPhong.ten_doan} – ${ksRow.khach_san_ten}`;
   const [emailTo, setEmailTo] = useState(() => normalizeEmails(ksRow.khach_san_email));
   const [emailSubject, setEmailSubject] = useState(
-    () => `[S8 Travel] Lock Phòng – ${lockPhong.ten_doan} – ${ksRow.khach_san_ten}`
+    () => (mode === "update" ? `Re: ${baseSubject}` : baseSubject),
   );
   const [emailHtml, setEmailHtml] = useState(() =>
     buildEmailHtml(lockPhong, ksRow, currentUserName, userProfile?.so_dien_thoai ?? null)
@@ -92,7 +94,8 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
   const refreshEmail = () => {
     const name = userProfile?.ho_ten || currentUserName;
     setEmailTo(normalizeEmails(ksRow.khach_san_email));
-    setEmailSubject(`[S8 Travel] Lock Phòng – ${lockPhong.ten_doan} – ${ksRow.khach_san_ten}`);
+    // KEEP subject IDENTICAL khi update — Gmail dựa Subject + From để group thread.
+    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailHtml(buildEmailHtml(lockPhong, ksRow, name, userProfile?.so_dien_thoai ?? null));
   };
 
@@ -114,9 +117,10 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
         sentBy,
         replyTo,
         emailThreadId: ksRow.email_thread_id,
+        mode,
       });
       onOpenChange(false);
-      toast.success("Đã gửi email lock phòng");
+      toast.success(mode === "update" ? "Đã gửi email cập nhật lock phòng" : "Đã gửi email lock phòng");
     } catch (err: any) {
       toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
     } finally {
@@ -147,7 +151,9 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
     <EmailPreviewModal
       open={open}
       onOpenChange={handleOpenChange}
-      title={`Gửi email lock phòng – ${ksRow.khach_san_ten}`}
+      title={mode === "update"
+        ? `Gửi cập nhật lock phòng – ${ksRow.khach_san_ten} (thread vào mail cũ)`
+        : `Gửi email lock phòng – ${ksRow.khach_san_ten}`}
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}

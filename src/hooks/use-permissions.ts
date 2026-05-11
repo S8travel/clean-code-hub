@@ -4,6 +4,9 @@ import { useAuth } from "@/hooks/use-auth";
 
 export type PermAction = "view" | "create" | "edit" | "delete";
 export type Resource =
+  // Khách hàng
+  | "lead"
+  | "bao_cao_lead"
   // Quản lý đoàn
   | "dashboard"
   | "my_job"

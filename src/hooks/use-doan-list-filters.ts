@@ -13,7 +13,7 @@ export const DOAN_LIST_DEFAULTS = {
   loaiTourFilter: "all",
   page: "1",
   sortKey: "ngay_di",
-  sortDir: "desc",
+  sortDir: "asc",
 } as const;
 
 export type DoanListFilterKey = keyof typeof DOAN_LIST_DEFAULTS;

@@ -350,15 +350,19 @@ export function useSendLockPhongBatchEmail() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (params: {
-      ksIds: number[];
+      ksIds: number[];           // ids cần update status (chỉ rows đang chua_gui)
+      allKsIds?: number[];       // tất cả rows được include trong mail (kể cả đã sent) — dùng cho update mode để gắn threadId vào row mới
       to: string;
       subject: string;
       html: string;
       sentBy: string;
       replyTo?: string;
+      mode?: "first" | "update";
+      inReplyToThreadId?: string | null; // thread cũ để reply vào
     }) => {
-      if (params.ksIds.length === 0) return;
-      const threadId = crypto.randomUUID();
+      if (params.ksIds.length === 0 && (!params.allKsIds || params.allKsIds.length === 0)) return;
+      const isUpdate = params.mode === "update" && !!params.inReplyToThreadId;
+      const threadId = isUpdate ? params.inReplyToThreadId! : crypto.randomUUID();
 
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
@@ -373,7 +377,7 @@ export function useSendLockPhongBatchEmail() {
           subject: params.subject,
           html: params.html,
           replyTo: params.replyTo,
-          messageId: threadId,
+          ...(isUpdate ? { inReplyTo: threadId } : { messageId: threadId }),
         }),
       });
 
@@ -385,16 +389,36 @@ export function useSendLockPhongBatchEmail() {
       if (data?.error) throw new Error(data.error);
 
       const now = new Date().toISOString();
-      const { error } = await externalSupabase
-        .from("lock_phong_ks")
-        .update({
-          email_status: "cho_xac_nhan",
-          email_sent_at: now,
-          email_sent_by: params.sentBy,
-          email_thread_id: threadId,
-        })
-        .in("id", params.ksIds);
-      if (error) throw error;
+
+      // Rows chưa gửi → set full status + thread
+      if (params.ksIds.length > 0) {
+        const { error } = await externalSupabase
+          .from("lock_phong_ks")
+          .update({
+            email_status: "cho_xac_nhan",
+            email_sent_at: now,
+            email_sent_by: params.sentBy,
+            email_thread_id: threadId,
+          })
+          .in("id", params.ksIds);
+        if (error) throw error;
+      }
+
+      // Update mode: rows đã có status nhưng được include lại → update thread/sent_at, giữ status
+      if (isUpdate && params.allKsIds && params.allKsIds.length > 0) {
+        const alreadySentIds = params.allKsIds.filter((id) => !params.ksIds.includes(id));
+        if (alreadySentIds.length > 0) {
+          const { error } = await externalSupabase
+            .from("lock_phong_ks")
+            .update({
+              email_sent_at: now,
+              email_sent_by: params.sentBy,
+              email_thread_id: threadId,
+            })
+            .in("id", alreadySentIds);
+          if (error) throw error;
+        }
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
   });
@@ -411,6 +435,8 @@ export function useSendLockPhongEmail() {
       sentBy: string;
       replyTo?: string;
       emailThreadId?: string | null;
+      // mode='update' → giữ nguyên email_status, chỉ update sent_at/by + email_thread_id
+      mode?: "first" | "update";
     }) => {
       const isFirst = !params.emailThreadId;
       const newThreadId = isFirst ? crypto.randomUUID() : null;
@@ -447,14 +473,16 @@ export function useSendLockPhongEmail() {
       const threadId = isFirst ? newThreadId : params.emailThreadId;
       const now = new Date().toISOString();
 
+      const updatePayload: Record<string, any> = {
+        email_sent_at: now,
+        email_sent_by: params.sentBy,
+        email_thread_id: threadId,
+      };
+      if (params.mode !== "update") updatePayload.email_status = "cho_xac_nhan";
+
       const { error } = await externalSupabase
         .from("lock_phong_ks")
-        .update({
-          email_status: "cho_xac_nhan",
-          email_sent_at: now,
-          email_sent_by: params.sentBy,
-          email_thread_id: threadId,
-        })
+        .update(updatePayload)
         .eq("id", params.lockPhongKsId);
       if (error) throw error;
     },

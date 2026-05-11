@@ -186,8 +186,8 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "KHÁCH HÀNG",
     items: [
-      { title: "Lead", url: "/leads", icon: Users2 },
-      { title: "Báo cáo Lead", url: "/leads/bao-cao", icon: BarChart3 },
+      { title: "Lead", url: "/leads", icon: Users2, resource: "lead" },
+      { title: "Báo cáo Lead", url: "/leads/bao-cao", icon: BarChart3, resource: "bao_cao_lead" },
     ],
   },
   {
@@ -230,7 +230,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   },
 ];
 
-function MenuItemWrapper({ item, collapsed, isActive }: { item: MenuItem; collapsed: boolean; isActive: boolean }) {
+function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor = "bg-orange-500" }: { item: MenuItem; collapsed: boolean; isActive: boolean; badgeCount?: number; badgeColor?: string }) {
   const allowed = usePermission(item.resource ?? "doan", "view");
   const roleOk = useRoleAtLeast(item.minRole ?? "nhan_vien");
   const boPhanOk = useBoPhan(item.boPhanOnly ?? "");
@@ -251,7 +251,18 @@ function MenuItemWrapper({ item, collapsed, isActive }: { item: MenuItem; collap
           activeClassName="bg-muted text-primary font-medium"
         >
           <item.icon className="h-4 w-4" />
-          {!collapsed && <span className={isZh ? "notranslate" : undefined}>{displayTitle}</span>}
+          {!collapsed && (
+            badgeCount > 0 ? (
+              <span className="flex-1 flex items-center justify-between">
+                <span className={isZh ? "notranslate" : undefined}>{displayTitle}</span>
+                <span className={`ml-1 min-w-[18px] h-[18px] rounded-full ${badgeColor} text-white text-[10px] font-bold flex items-center justify-center px-1`}>
+                  {badgeCount}
+                </span>
+              </span>
+            ) : (
+              <span className={isZh ? "notranslate" : undefined}>{displayTitle}</span>
+            )
+          )}
         </NavLink>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -314,35 +325,14 @@ export function AppSidebar() {
                     item.url === "/leads" ? leadBadge : 0;
                   // Lead overdue → đỏ (urgent), còn lại → cam mặc định
                   const badgeColor = (item.url === "/leads" && leadOverdue) ? "bg-red-500" : "bg-orange-500";
-                  if (badgeCount > 0) {
-                    return (
-                      <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                          <NavLink
-                            to={item.url}
-                            className="hover:bg-muted/50"
-                            activeClassName="bg-muted text-primary font-medium"
-                          >
-                            <item.icon className="h-4 w-4" />
-                            {!collapsed && (
-                              <span className="flex-1 flex items-center justify-between">
-                                {item.title}
-                                <span className={`ml-1 min-w-[18px] h-[18px] rounded-full ${badgeColor} text-white text-[10px] font-bold flex items-center justify-center px-1`}>
-                                  {badgeCount}
-                                </span>
-                              </span>
-                            )}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  }
                   return (
                     <MenuItemWrapper
                       key={item.url}
                       item={item}
                       collapsed={collapsed}
                       isActive={isActive(item.url)}
+                      badgeCount={badgeCount}
+                      badgeColor={badgeColor}
                     />
                   );
                 })}

@@ -80,6 +80,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   });
   const [expanded, setExpanded] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const [zaloModalOpen, setZaloModalOpen] = useState(false);
   const [zaloText, setZaloText] = useState("");
   const [emailTo, setEmailTo] = useState(row.email_nha_cung_cap || "");
@@ -181,11 +182,14 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
 </html>`;
   };
 
-  const openEmailModal = () => {
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
     const ncc = tenNCC || row.ten_nha_cung_cap || "";
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(email || row.email_nha_cung_cap || "");
-    setEmailSubject(`[S8 Travel] Đặt dịch vụ – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}${ncc ? ` – ${ncc}` : ""}`);
+    const baseSubject = `[S8 Travel] Đặt dịch vụ – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}${ncc ? ` – ${ncc}` : ""}`;
+    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
+    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailBody(buildEmailHTML());
     setEmailModalOpen(true);
   };
@@ -203,9 +207,10 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         sentBy: currentUserName,
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
+        mode: emailMode,
       });
       setEmailModalOpen(false);
-      toast.success("Đã gửi email booking");
+      toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
     } catch (err: any) {
       toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
     } finally {
@@ -254,7 +259,11 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     ].join("\n");
 
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
+    if (emailMode === "update") {
+      save({ sent_at: new Date().toISOString(), sent_by: currentUserName });
+    } else {
+      save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName });
+    }
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
   };
@@ -442,7 +451,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
               {/* Gửi email — chỉ lần đầu */}
               {row.booking_status === "chua_dat" && (
                 <>
-                  <Button size="sm" className="h-8 text-xs" onClick={openEmailModal}>
+                  <Button size="sm" className="h-8 text-xs" onClick={() => openEmailModal()}>
                     <Send className="h-3.5 w-3.5 mr-1" />
                     Gửi email
                   </Button>
@@ -465,6 +474,19 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                     Không đặt
                   </Button>
                 </>
+              )}
+              {/* Gửi cập nhật — sau khi đã gửi lần đầu, thread vào mail cũ */}
+              {row.email_thread_id && row.booking_status !== "chua_dat" && row.booking_status !== "khong_dat" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                  onClick={() => openEmailModal("update")}
+                  title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+                >
+                  <Send className="h-3.5 w-3.5 mr-1" />
+                  Gửi cập nhật
+                </Button>
               )}
               {/* Xác nhận */}
               {row.booking_status === "cho_xac_nhan" && (
@@ -523,7 +545,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
       <EmailPreviewModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
-        title="Gửi email đặt dịch vụ"
+        title={emailMode === "update" ? "Gửi email cập nhật dịch vụ (thread vào mail cũ)" : "Gửi email đặt dịch vụ"}
         to={emailTo}
         onToChange={setEmailTo}
         subject={emailSubject}

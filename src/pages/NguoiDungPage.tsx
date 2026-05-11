@@ -74,6 +74,13 @@ interface ResourceSection { section: string; items: ResourceItem[] }
 
 const RESOURCE_SECTIONS: ResourceSection[] = [
   {
+    section: "Khách hàng",
+    items: [
+      { value: "lead", label: "Lead" },
+      { value: "bao_cao_lead", label: "Báo cáo Lead" },
+    ],
+  },
+  {
     section: "Quản lý đoàn",
     items: [
       { value: "dashboard", label: "Tổng quan" },
