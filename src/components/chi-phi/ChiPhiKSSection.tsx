@@ -556,23 +556,32 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     });
   }, [ksData, chiPhiRows, storageKey]);
 
-  // Auto-xóa chi phí KS orphaned đã bị chuyển thành công nợ
+  // Auto-xóa chi phí KS orphaned khi đã được giải quyết hoàn toàn.
+  //   Case 1: User dùng "Hủy dịch vụ" → DNTT da_huy + paid > 0 (cong_no tạo bởi useCancelDNTT)
+  //   Case 2: User dùng "Xử lý chênh lệch thừa" agg modal → DNTT giữ nguyên, cong_no cover full paid
   const autoDeletedKsIdsRef = useRef<Set<number>>(new Set());
   useEffect(() => {
     if (!ksData || dnttList.length === 0) return;
     const orphanedIds: number[] = ksData.orphanedKsIds || [];
     for (const ksId of orphanedIds) {
       if (autoDeletedKsIdsRef.current.has(ksId)) continue;
-      // Detect "đã chuyển thành công nợ": có DNTT da_huy với paid_amount > 0
-      // (cong_no record được tạo cùng lúc cancel)
-      const hasCongNo = dnttList.some(
-        (d) =>
-          d.ref_loai === "khach_san" &&
-          d.ref_id === ksId &&
-          d.trang_thai_duyet === "da_huy" &&
-          (d.paid_amount || 0) > 0,
+
+      const ksDntts = dnttList.filter(
+        (d) => d.ref_loai === "khach_san" && d.ref_id === ksId,
       );
-      if (!hasCongNo) continue;
+      // Case 1: hủy dịch vụ
+      const hasCancelledPaid = ksDntts.some(
+        (d) => d.trang_thai_duyet === "da_huy" && (d.paid_amount || 0) > 0,
+      );
+      // Case 2: agg-settled — cong_no đã cover full sumPaid
+      const sumPaid = ksDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
+      const dnttIdsForKs = new Set(ksDntts.map((d) => d.id));
+      const sumCongNo = congNoList
+        .filter((c) => c.dntt_goc_id != null && dnttIdsForKs.has(c.dntt_goc_id))
+        .reduce((s, c) => s + Number(c.so_tien_goc || 0), 0);
+      const isAggSettled = sumPaid > 0 && sumCongNo >= sumPaid;
+
+      if (!hasCancelledPaid && !isAggSettled) continue;
       autoDeletedKsIdsRef.current.add(ksId);
       const rowsToDelete = localRows.filter((r) => r.khach_san_id === ksId && r.id);
       for (const row of rowsToDelete) {
@@ -580,7 +589,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       }
       setLocalRows((prev) => prev.filter((r) => r.khach_san_id !== ksId));
     }
-  }, [ksData, localRows, dnttList, doanId, deleteMut]);
+  }, [ksData, localRows, dnttList, congNoList, doanId, deleteMut]);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -1541,7 +1550,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 {/* Actions */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 ml-auto">
-                    {paidDnttsForKs.length > 0 && (
+                    {/* Ẩn nếu cong_no đã cover full sumPaid → đã settle qua agg modal.
+                        Click "Hủy dịch vụ" sẽ tạo cong_no thứ 2 trên cùng cash payment → nhân đôi. */}
+                    {paidDnttsForKs.length > 0 && groupCongNoTotal < sumPaid && (
                       <Button
                         variant="ghost"
                         size="sm"

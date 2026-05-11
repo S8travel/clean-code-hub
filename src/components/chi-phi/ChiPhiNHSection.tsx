@@ -485,7 +485,10 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
     }
   }, [localRows, nhData, chiPhiRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-xóa chi phí NH orphaned: (1) đã bị chuyển thành công nợ, hoặc (2) chưa có DNTT nào
+  // Auto-xóa chi phí NH orphaned khi đã giải quyết hoàn toàn:
+  //   (1) Chưa có DNTT nào
+  //   (2) "Hủy dịch vụ": DNTT da_huy + paid > 0 (cong_no tạo bởi useCancelDNTT)
+  //   (3) "Xử lý chênh lệch thừa" agg modal: cong_no đã cover full sumPaid (DNTT giữ active)
   const autoDeletedNhIdsRef = useRef<Set<number>>(new Set());
   useEffect(() => {
     if (!nhData || chiPhiRows.length === 0) return;
@@ -497,18 +500,23 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
       if (cp.mo_ta?.startsWith("[trua] ") || cp.mo_ta?.startsWith("[toi] ")) return false;
       if (!cp.id || autoDeletedNhIdsRef.current.has(cp.id)) return false;
       const cpDntts = dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === cp.id);
-      // Xóa nếu chưa có DNTT nào
+      // Case 1: chưa có DNTT
       if (cpDntts.length === 0) return true;
-      // Xóa nếu DNTT đã thanh toán rồi bị hủy (chuyển sang cong_no)
-      return cpDntts.some(
-        (d) => d.trang_thai_duyet === "da_huy" && (d.paid_amount || 0) > 0,
-      );
+      // Case 2: hủy dịch vụ
+      if (cpDntts.some((d) => d.trang_thai_duyet === "da_huy" && (d.paid_amount || 0) > 0)) return true;
+      // Case 3: agg-settled — cong_no đã cover full sumPaid
+      const sumPaid = cpDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
+      const dnttIds = new Set(cpDntts.map((d) => d.id));
+      const sumCongNo = congNoList
+        .filter((c) => c.dntt_goc_id != null && dnttIds.has(c.dntt_goc_id))
+        .reduce((s, c) => s + Number(c.so_tien_goc || 0), 0);
+      return sumPaid > 0 && sumCongNo >= sumPaid;
     });
     for (const cp of toDelete) {
       autoDeletedNhIdsRef.current.add(cp.id!);
       deleteMut.mutate({ id: cp.id!, doanId });
     }
-  }, [nhData, chiPhiRows, dnttList, doanId, deleteMut]);
+  }, [nhData, chiPhiRows, dnttList, congNoList, doanId, deleteMut]);
 
   // ── Main row handlers ─────────────────────────────────────────────────────
 
@@ -1564,7 +1572,7 @@ export default function ChiPhiNHSection({ doanId, soKhachDefault = 0, soKhachKho
                       onClick={() => addExtra(key)}>
                       <Plus className="h-3 w-3" />
                     </Button>
-                    {nguoiTtMain === "cong_ty" && canCancel && activeDntt && (
+                    {nguoiTtMain === "cong_ty" && canCancel && activeDntt && groupCongNoTotal < sumPaid && (
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                         title="Hủy"
                         onClick={() => {

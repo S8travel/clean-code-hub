@@ -1083,7 +1083,7 @@ export default function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }: Props) 
                             <SlidersHorizontal className="h-3 w-3" />
                           </Button>
                         )}
-                        {nguoiTt === "cong_ty" && canCancel && activeDntt && (
+                        {nguoiTt === "cong_ty" && canCancel && activeDntt && groupCongNoTotal < sumPaid && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             title="Hủy ĐNTT"
                             onClick={() => {
