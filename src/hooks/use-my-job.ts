@@ -89,18 +89,14 @@ export function useMarkDeadlineDone() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ type, bookingId }: { type: "ks" | "nh" | "dv"; bookingId: number }) => {
-      const table =
-        type === "ks" ? "doan_booking_ks" :
-        type === "nh" ? "doan_booking_nh" :
-        "doan_booking_dv";
-      const { data, error } = await externalSupabase
-        .from(table)
-        .update({ deadline_done_at: new Date().toISOString() })
-        .eq("id", bookingId)
-        .select("id, deadline_done_at");
+      // RPC SECURITY DEFINER — tránh trường hợp RLS UPDATE silent fail
+      const { data, error } = await externalSupabase.rpc("mark_deadline_done", {
+        p_type: type,
+        p_booking_id: bookingId,
+      });
       if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error("Không update được — kiểm tra quyền hoặc booking đã bị xoá");
+      if (!data || data === 0) {
+        throw new Error("Không update được — booking có thể đã bị xoá");
       }
     },
     onSuccess: () => {
