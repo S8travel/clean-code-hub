@@ -24,7 +24,7 @@ interface NHInfo extends Pick<NhaHangDetail, "ten" | "foc_khach" | "foc_mien" | 
   kind: "nh";
 }
 
-interface DVInfo extends Pick<CanhDiemInfo, "ten" | "loai" | "co_phi" | "gia_mac_dinh" | "ghi_chu" | "so_dien_thoai" | "email"> {
+interface DVInfo extends Pick<CanhDiemInfo, "ten" | "loai" | "co_phi" | "gia_mac_dinh" | "ghi_chu" | "thong_tin_chung" | "so_dien_thoai" | "email"> {
   kind: "dv";
 }
 
@@ -77,6 +77,7 @@ function DVCard({ info }: { info: DVInfo }) {
         <Row label="Loại" value={info.loai ? (LOAI_DV_LABEL[info.loai] ?? info.loai) : null} />
         <Row label="Có phí" value={info.co_phi != null ? (info.co_phi ? "Có" : "Không") : null} />
         <Row label="Giá mặc định" value={info.gia_mac_dinh != null ? fmt(info.gia_mac_dinh) + " VND" : null} />
+        <Row label="Thông tin" value={info.thong_tin_chung} />
         <Row label="Ghi chú" value={info.ghi_chu} />
         <Row label="SĐT" value={info.so_dien_thoai} />
         <Row label="Email" value={info.email} />

@@ -9,6 +9,7 @@ export interface CanhDiem {
   don_vi: string | null;
   co_phi: boolean | null;
   ghi_chu: string | null;
+  thong_tin_chung: string | null;
   nguoi_thanh_toan: string | null;
   icon: string | null;
   loai: string | null;

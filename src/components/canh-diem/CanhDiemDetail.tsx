@@ -40,6 +40,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   const [nguoiThanhToan, setNguoiThanhToan] = useState("");
   const [email, setEmail] = useState("");
   const [taiKhoanThanhToan, setTaiKhoanThanhToan] = useState("");
+  const [thongTinChung, setThongTinChung] = useState("");
   const [ghiChu, setGhiChu] = useState("");
   const [nhaCungCapId, setNhaCungCapId] = useState("");
   const [khachSanId, setKhachSanId] = useState("");
@@ -56,6 +57,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     setNguoiThanhToan(canhDiem.nguoi_thanh_toan || "");
     setEmail(canhDiem.email || "");
     setTaiKhoanThanhToan(canhDiem.tai_khoan_thanh_toan || "");
+    setThongTinChung((canhDiem as any).thong_tin_chung || "");
     setGhiChu(canhDiem.ghi_chu || "");
     setNhaCungCapId((canhDiem as any).nha_cung_cap_id?.toString() || "");
     setKhachSanId((canhDiem as any).khach_san_id?.toString() || "");
@@ -81,6 +83,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           nguoi_thanh_toan: coPhi ? nguoiThanhToan || null : null,
           email: email || null,
           tai_khoan_thanh_toan: taiKhoanThanhToan || null,
+          thong_tin_chung: thongTinChung || null,
           ghi_chu: ghiChu || null,
           nha_cung_cap_id: nhaCungCapId ? Number(nhaCungCapId) : null,
           khach_san_id: khachSanId ? Number(khachSanId) : null,
@@ -208,6 +211,15 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs">Tài khoản thanh toán</Label>
           <Textarea value={taiKhoanThanhToan} onChange={(e) => setTaiKhoanThanhToan(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={2} />
+        </div>
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs flex items-center gap-2">
+            Thông tin chung
+            <span className="text-[11px] font-normal text-muted-foreground italic">
+              (hiện khi hover ở chi phí — đặt phòng, FOC, lưu ý vận hành...)
+            </span>
+          </Label>
+          <Textarea value={thongTinChung} onChange={(e) => setThongTinChung(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={3} />
         </div>
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs flex items-center gap-2">
