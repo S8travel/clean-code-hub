@@ -387,6 +387,7 @@ export function useCancelDNTT() {
       qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
       qc.invalidateQueries({ queryKey: ["cong-no"] });
       qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
     },
