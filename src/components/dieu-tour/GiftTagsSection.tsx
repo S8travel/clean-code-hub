@@ -3,7 +3,7 @@ import { Check, Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-const DEFAULT_GIFTS = ["Dầu", "Nón", "Nước", "Ảnh", "Sim", "Túi xách", "Mũ lưỡi trai"];
+const DEFAULT_GIFTS = ["Dầu", "Nón", "Nước", "Ảnh", "Sim", "Túi xách", "Mũ lưỡi trai", "Quạt"];
 
 interface Props {
   gifts: string[];

@@ -27,7 +27,7 @@ import {
 import { useAllSetMenus } from "@/hooks/use-nha-hang";
 import { useBookingKS } from "@/hooks/use-booking-ks";
 import { useBookingNH } from "@/hooks/use-booking-nh";
-import { useChiPhiList } from "@/hooks/use-chi-phi";
+import { useChiPhiList, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import CompanyHeader from "@/components/dieu-tour/CompanyHeader";
 import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
 import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
@@ -78,6 +78,8 @@ export default function DoanDetail() {
   const { data: bookingKSList = [] } = useBookingKS(doanId || undefined);
   const { data: menuData = [] } = useBookingNH(doanId || undefined);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId || undefined);
+  const upsertChiPhi = useUpsertChiPhi();
+  const deleteChiPhi = useDeleteChiPhi();
 
   const doan = groups?.find((g: any) => String(g.id) === id);
 
@@ -285,7 +287,44 @@ export default function DoanDetail() {
   const handleSetChuyenBayTien = useCallback((v: string) => { setChuyenBayTien(v); scheduleSave(); }, [scheduleSave]);
   const handleSetChuThichKhach = useCallback((v: string) => { setChuThichKhach(v); scheduleSave(); }, [scheduleSave]);
   const handleSetCoTinhSuatTLNhaHang = useCallback((v: boolean) => { setCoTinhSuatTLNhaHang(v); scheduleSave(); }, [scheduleSave]);
-  const handleSetGifts = useCallback((v: string[]) => { setGifts(v); scheduleSave(); }, [scheduleSave]);
+  // Sim trong tặng phẩm = công ty hỗ trợ HDV (75k/khách).
+  // Insert thành row "hdv_ho_tro" để hiện trong section "CHI PHÍ CÔNG TY HỖ TRỢ HDV".
+  // Không qua DNTT — quyết toán qua flow hdv_quyet_toan.
+  const handleSetGifts = useCallback((next: string[]) => {
+    const SIM_MO_TA = "Sim tặng khách";
+    const SIM_DON_GIA = 75_000;
+    const hadSim = gifts.includes("Sim");
+    const hasSim = next.includes("Sim");
+    setGifts(next);
+    scheduleSave();
+    if (!doanId) return;
+    const invalidateHdv = () =>
+      queryClient.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
+    if (!hadSim && hasSim) {
+      const soKhach = totalKhach || doan?.so_khach || 0;
+      const exists = chiPhiRows.some((c) => c.mo_ta === SIM_MO_TA && c.danh_muc === "hdv_ho_tro");
+      if (!exists && soKhach > 0) {
+        upsertChiPhi.mutate({
+          doan_id: doanId,
+          mo_ta: SIM_MO_TA,
+          danh_muc: "hdv_ho_tro",
+          loai: "khac",
+          so_luong: soKhach,
+          don_gia: SIM_DON_GIA,
+          tien_cong_ty: SIM_DON_GIA * soKhach,
+          tien_hdv: 0,
+        } as any, { onSuccess: invalidateHdv });
+      }
+    } else if (hadSim && !hasSim) {
+      const simRow = chiPhiRows.find((c) => c.mo_ta === SIM_MO_TA && c.danh_muc === "hdv_ho_tro");
+      if (simRow) {
+        deleteChiPhi.mutate(
+          { id: simRow.id, doanId, mo_ta: simRow.mo_ta, danh_muc: simRow.danh_muc },
+          { onSuccess: invalidateHdv },
+        );
+      }
+    }
+  }, [gifts, scheduleSave, doanId, totalKhach, doan?.so_khach, chiPhiRows, upsertChiPhi, deleteChiPhi, queryClient]);
   const handleSetGhiChuDieuTour = useCallback((v: string) => { setGhiChuDieuTour(v); scheduleSave(); }, [scheduleSave]);
   const handleSetThuTip = useCallback((v: boolean) => { setThuTip(v); scheduleSave(); }, [scheduleSave]);
   const handleSetTipRate = useCallback((v: number | null) => { setTipRate(v); scheduleSave(); }, [scheduleSave]);
