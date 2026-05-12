@@ -14,7 +14,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge as UiBadge } from "@/components/ui/badge";
-import { useDoanList } from "@/hooks/use-doan";
+import { useDoanList, useUserRoles } from "@/hooks/use-doan";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { useDoanLogSuCo, useToggleResolved } from "@/hooks/use-doan-log";
 import { useMarkThongBaoRead } from "@/hooks/use-thong-bao";
@@ -131,6 +131,11 @@ export default function TheodoiPage() {
   const navigate = useNavigate();
   const vanPhongId = user?.role !== "admin" ? (user?.van_phong_id ?? null) : null;
   const { data: groups = [], isLoading: loadingDoan } = useDoanList(vanPhongId);
+  const { data: userRoles = [] } = useUserRoles();
+  const userMap = useMemo(
+    () => new Map(userRoles.map((u) => [u.user_id, u.ho_ten])),
+    [userRoles],
+  );
   const { data: td, isLoading: loadingTD } = useTheodoi();
   const { data: suCoLogs = [], isLoading: loadingSuCo } = useDoanLogSuCo();
   const toggleMut = useToggleResolved();
@@ -235,6 +240,7 @@ export default function TheodoiPage() {
               <TableHeader>
                 <TableRow className="bg-[#E6F1FB] text-xs">
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Tên đoàn</TableHead>
+                  <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">OP</TableHead>
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Ngày tạo</TableHead>
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Ngày đi</TableHead>
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Agent</TableHead>
@@ -248,7 +254,7 @@ export default function TheodoiPage() {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-xs text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-xs text-muted-foreground">
                       Không có đoàn nào
                     </TableCell>
                   </TableRow>
@@ -262,6 +268,11 @@ export default function TheodoiPage() {
                       >
                         {g.ten_doan}
                       </button>
+                    </TableCell>
+
+                    {/* OP phụ trách */}
+                    <TableCell className="py-1.5 px-3 text-muted-foreground whitespace-nowrap">
+                      {(g.assigned_to && userMap.get(g.assigned_to)) ?? "—"}
                     </TableCell>
 
                     {/* Ngày tạo */}
