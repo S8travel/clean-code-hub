@@ -45,6 +45,7 @@ export interface SeriNgayItem {
 export function useSeriList() {
   return useQuery({
     queryKey: ["seri_tour"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("seri_tour")

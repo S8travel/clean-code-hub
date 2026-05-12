@@ -115,6 +115,7 @@ export interface DoanPermission {
 export function useAgents() {
   return useQuery({
     queryKey: ["agents"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase.from("agents").select("id, ten").order("ten");
       if (error) throw error;
@@ -126,6 +127,7 @@ export function useAgents() {
 export function useDiaDiem() {
   return useQuery({
     queryKey: ["dia_diem"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase.from("dia_diem").select("id, ten, mien").order("ten");
       if (error) throw error;
@@ -137,6 +139,7 @@ export function useDiaDiem() {
 export function useHuongDanVien() {
   return useQuery({
     queryKey: ["huong_dan_vien"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase.from("huong_dan_vien").select("id, ten").order("ten");
       if (error) throw error;
@@ -148,6 +151,7 @@ export function useHuongDanVien() {
 export function useXeList() {
   return useQuery({
     queryKey: ["xe_list"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data: loaiXe, error: e1 } = await externalSupabase
         .from("nha_xe_loai_xe")
@@ -172,6 +176,7 @@ export function useXeList() {
 export function useTrangThai() {
   return useQuery({
     queryKey: ["trang_thai"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase.from("trang_thai").select("id, ten").order("ten");
       if (error) throw error;
@@ -183,6 +188,7 @@ export function useTrangThai() {
 export function useUserRoles() {
   return useQuery({
     queryKey: ["user_roles"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("user_roles")
@@ -197,6 +203,7 @@ export function useUserRoles() {
 export function useCurrentUserName() {
   return useQuery({
     queryKey: ["current-user-name"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data: auth } = await externalSupabase.auth.getUser();
       if (!auth.user) return "";
@@ -213,6 +220,7 @@ export function useCurrentUserName() {
 export function useCurrentUserProfile() {
   return useQuery({
     queryKey: ["current-user-profile"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data: auth } = await externalSupabase.auth.getUser();
       if (!auth.user) return { ho_ten: "", so_dien_thoai: null as string | null, email: null as string | null };

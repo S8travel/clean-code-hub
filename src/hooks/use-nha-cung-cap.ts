@@ -21,6 +21,7 @@ const QK = "nha_cung_cap_list";
 export function useNhaCungCapList() {
   return useQuery<NhaCungCap[]>({
     queryKey: [QK],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("nha_cung_cap")

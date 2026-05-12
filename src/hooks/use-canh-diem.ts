@@ -26,6 +26,7 @@ const QK = "canh_diem_list";
 export function useCanhDiemList() {
   return useQuery<CanhDiem[]>({
     queryKey: [QK],
+    staleTime: 15 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("canh_diem")

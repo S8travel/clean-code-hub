@@ -21,6 +21,7 @@ export interface HDVRow {
 export function useHDVList() {
   return useQuery({
     queryKey: ["hdv-list"],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("huong_dan_vien")

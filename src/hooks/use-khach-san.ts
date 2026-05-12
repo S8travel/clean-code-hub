@@ -24,6 +24,7 @@ const QK = "khach_san_list";
 export function useKhachSanList() {
   return useQuery<KhachSan[]>({
     queryKey: [QK],
+    staleTime: 15 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("khach_san")

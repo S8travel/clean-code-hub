@@ -53,9 +53,8 @@ export function useBookingNH(doanId: number | undefined) {
   return useQuery({
     queryKey: [QK, doanId],
     enabled: !!doanId,
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<MenuDayData[]> => {
       // 1. Get doan_ngay rows
       const { data: ngayRows, error: e1 } = await externalSupabase

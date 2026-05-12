@@ -48,6 +48,7 @@ const QK_MON = "nha_hang_set_menu_mon";
 export function useNhaHangList() {
   return useQuery({
     queryKey: [QK],
+    staleTime: 15 * 60_000,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("nha_hang")

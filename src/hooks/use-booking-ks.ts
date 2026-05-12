@@ -44,9 +44,8 @@ export interface BookingKSDisplay extends BookingKSRow {
 export function useBookingKS(doanId: number | undefined) {
   return useQuery({
     queryKey: ["doan_booking_ks", doanId],
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     enabled: !!doanId,
     queryFn: async () => {
       // 1. Get ALL booking rows for this doan (never filter by current doan_ngay)
