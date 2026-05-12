@@ -1162,7 +1162,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                             <SlidersHorizontal className="h-3 w-3" />
                           </Button>
                         )}
-                        {nguoiTt === "cong_ty" && canCancel && activeDntt && groupCongNoTotal < sumPaid && (
+                        {nguoiTt === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid) && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             title="Hủy ĐNTT"
                             onClick={() => {

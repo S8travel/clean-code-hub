@@ -1593,7 +1593,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                       onClick={() => addExtra(key)}>
                       <Plus className="h-3 w-3" />
                     </Button>
-                    {nguoiTtMain === "cong_ty" && canCancel && activeDntt && groupCongNoTotal < sumPaid && (
+                    {nguoiTtMain === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid) && (
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                         title="Hủy"
                         onClick={() => {
