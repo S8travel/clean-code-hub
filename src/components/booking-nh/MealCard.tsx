@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-booking-nh";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import { externalSupabase } from "@/lib/supabase-external";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -147,7 +148,9 @@ export default function MealCard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(setMenuMons), selectedSetMenuId]);
 
-  // Sync set menu từ điều tour → DB chỉ khi booking chưa có set_menu_id nào
+  // Sync set menu từ điều tour → DB khi booking chưa có set_menu_id.
+  // Fetch luôn mon_an_snapshot từ catalog cùng lúc để mọi nơi (MealCard, MenuOverviewModal,
+  // export Word) đều thấy món thật trong DB thay vì fallback fetch riêng.
   const dieuTourSynced = useRef(false);
   useEffect(() => {
     if (!setMenuIdFromDieuTour || !booking?.id) return;
@@ -157,13 +160,22 @@ export default function MealCard({
     const menu = setMenuOptions.find((m) => m.id === setMenuIdFromDieuTour);
     if (!menu) return;
     dieuTourSynced.current = true;
-    updateMut.mutate({
-      id: booking.id, doan_id: doanId,
-      set_menu_id: setMenuIdFromDieuTour,
-      ten_set_snapshot: menu.ten_set,
-      gia_snapshot: menu.gia ?? null,
-      don_vi_snapshot: menu.don_vi ?? null,
-    });
+    externalSupabase
+      .from("nha_hang_set_menu_mon")
+      .select("ten_mon")
+      .eq("set_menu_id", setMenuIdFromDieuTour)
+      .order("thu_tu", { ascending: true })
+      .then(({ data }) => {
+        const mons = (data ?? []).map((m: any) => m.ten_mon as string);
+        updateMut.mutate({
+          id: booking.id, doan_id: doanId,
+          set_menu_id: setMenuIdFromDieuTour,
+          ten_set_snapshot: menu.ten_set,
+          gia_snapshot: menu.gia ?? null,
+          don_vi_snapshot: menu.don_vi ?? null,
+          mon_an_snapshot: mons,
+        } as any);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMenuIdFromDieuTour, booking?.id, booking?.set_menu_id, setMenuOptions]);
 
