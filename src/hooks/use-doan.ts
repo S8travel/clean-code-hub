@@ -242,6 +242,7 @@ export function useCurrentUserProfile() {
 export function useDoanList(phanLoaiTour?: string[] | null) {
   return useQuery({
     queryKey: ["doan", phanLoaiTour ?? null],
+    staleTime: 30_000,
     queryFn: async () => {
       let query = externalSupabase
         .from("doan")
