@@ -600,36 +600,36 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     : doan?.tang_pham ? String(doan.tang_pham) : "—";
   const shopText = doan?.shopping ? "SHOPPING" : "NO SHOPPING";
 
-  rows.push([cell("HÀNH TRÌNH TOUR", "title", 10)]);
-  rows.push([cell("", "text", 10)]);
+  rows.push([cell("HÀNH TRÌNH TOUR", "title", 11)]);
+  rows.push([cell("", "text", 11)]);
   rows.push([
     cell("Đoàn (MA ĐOÀN)", "label"), cell(doan?.ten_doan || "—", "text", 4),
-    cell("Đón đoàn (BIEN DON DOAN)", "label"), cell(doan?.truong_doan || doan?.bang_don || "—", "text", 4),
+    cell("Đón đoàn (BIEN DON DOAN)", "label"), cell(doan?.truong_doan || doan?.bang_don || "—", "text", 5),
   ]);
   rows.push([
     cell("Số khách (SO PAX)", "label"), cell(soKhachText, "text", 4),
-    cell("Ngày (NGAY)", "label"), cell(`${formatDateValue(doan?.ngay_di)} - ${formatDateValue(doan?.ngay_ve)}`, "text", 4),
+    cell("Ngày (NGAY)", "label"), cell(`${formatDateValue(doan?.ngay_di)} - ${formatDateValue(doan?.ngay_ve)}`, "text", 5),
   ]);
   rows.push([
     cell("Hướng dẫn (HUONG DAN)", "label"), cell(getHdvText(doan, hdvData), "text", 4),
-    cell("Tính chất đoàn (T/C DOAN)", "label"), cell(shopText, "text", 4),
+    cell("Tính chất đoàn (T/C DOAN)", "label"), cell(shopText, "text", 5),
   ]);
   rows.push([
     cell("Nhà xe (NHA XE)", "label"), cell(getXeText(doan), "text", 4),
-    cell("Điều hành xe (DIEU HANH XE)", "label"), cell("—", "text", 4),
+    cell("Điều hành xe (DIEU HANH XE)", "label"), cell("—", "text", 5),
   ]);
   rows.push([
     cell("Quà tặng (QUA TANG)", "label"), cell(quaTang, "text", 4),
-    cell("Tính toán (OP)", "label"), cell(opName || "—", "text", 4),
+    cell("Tính toán (OP)", "label"), cell(opName || "—", "text", 5),
   ]);
   rows.push([
     cell("Chuyến bay đón", "label"), cell(doan?.chuyen_bay_don || "—", "text", 4),
-    cell("Chuyến bay tiễn", "label"), cell(doan?.chuyen_bay_tien || "—", "text", 4),
+    cell("Chuyến bay tiễn", "label"), cell(doan?.chuyen_bay_tien || "—", "text", 5),
   ]);
-  rows.push([cell("", "text", 10)]);
+  rows.push([cell("", "text", 11)]);
 
   // ─── KHÁCH SẠN ───
-  rows.push([cell("KHÁCH SẠN 飯店 — Khách sạn không có phòng nội bộ 飯店", "section", 10)]);
+  rows.push([cell("KHÁCH SẠN 飯店 — Khách sạn không có phòng nội bộ 飯店", "section", 11)]);
   rows.push([
     cell("DATE日期", "header"), cell("KHÁCH SẠN 飯店", "header"), cell("LOẠI PHÒNG", "header"),
     cell("C/I 入境", "header"), cell("C/O 出境", "header"), cell("ROOMS 數量", "header"),
@@ -665,9 +665,9 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell(""),       // CTY TT — ẩn chi phí
     ]);
   }
-  if (ksNgaySorted.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  if (ksNgaySorted.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 11)]);
   rows.push([cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"), cell(""), cell("")]);
-  rows.push([cell("", "text", 10)]);
+  rows.push([cell("", "text", 11)]);
 
   // KS chi phí KHÔNG hiển thị chi tiết, nhưng vẫn cộng vào TỔNG HDV / CTY ở SUMMARY cuối sheet
   let totalHdvKS = 0, totalCtyKS = 0;
@@ -677,18 +677,19 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   }
 
   // ─── NHÀ HÀNG ───
-  rows.push([cell("NHÀ HÀNG 餐廳 — Nhà hàng có nội bộ 餐廳", "section", 10)]);
+  rows.push([cell("NHÀ HÀNG 餐廳 — Nhà hàng có nội bộ 餐廳", "section", 11)]);
   rows.push([
     cell("DATE日期", "header"),
     cell("AN TRUA 午餐", "header", 4),
     cell("AN TOI 晚餐", "header", 4),
-    cell("THANH TOÁN", "header"),
+    cell("THANH TOÁN 付款", "header", 2),
   ]);
   rows.push([
     cell("DATE日期", "header"),
     cell("餐廳", "header"), cell("數量", "header"), cell("價格", "header"), cell("總計", "header"),
     cell("餐廳", "header"), cell("數量", "header"), cell("價格", "header"), cell("總計", "header"),
-    cell("總金額", "header"),
+    cell("HDV 導遊", "header"),
+    cell("CTY 公司", "header"),
   ]);
 
   let totalCtyNH = 0, totalHdvNH = 0;
@@ -738,9 +739,10 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       const toiName = toi ? parseNH(toi.mo_ta).name : "";
       const toiTong = toi ? toi.so_luong * toi.don_gia : null;
 
+      const hdvTotal = (trua?.tien_hdv ?? 0) + (toi?.tien_hdv ?? 0);
       const ctyTotal = (trua?.tien_cong_ty ?? 0) + (toi?.tien_cong_ty ?? 0);
       totalCtyNH += ctyTotal;
-      totalHdvNH += (trua?.tien_hdv ?? 0) + (toi?.tien_hdv ?? 0);
+      totalHdvNH += hdvTotal;
 
       rows.push([
         cell(isFirstKeptRow ? dateStr : ""),
@@ -752,25 +754,26 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
         toi ? cell(toi.so_luong || 0, "number") : cell(""),
         toi ? cell(toi.don_gia || 0, "number") : cell(""),
         toiTong !== null ? cell(toiTong, "number") : cell(""),
+        hdvTotal > 0 ? cell(hdvTotal, "number") : cell(""),
         ctyTotal > 0 ? cell(ctyTotal, "number") : cell(""),
       ]);
       isFirstKeptRow = false;
     }
   }
 
-  if (nhRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
-  rows.push([cell("TỔNG SỐ TIỀN TT NHÀ HÀNG", "total", 7), cell("VND", "total"), cell(totalHdvNH, "total_number"), cell(totalCtyNH, "total_number")]);
-  rows.push([cell("", "text", 10)]);
+  if (nhRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 11)]);
+  rows.push([cell("TỔNG SỐ TIỀN TT NHÀ HÀNG", "total", 8), cell("VND", "total"), cell(totalHdvNH, "total_number"), cell(totalCtyNH, "total_number")]);
+  rows.push([cell("", "text", 11)]);
 
   // ─── VÉ THẮNG CẢNH ───
-  rows.push([cell("VÉ THẮNG CẢNH 景點票", "section", 10)]);
+  rows.push([cell("VÉ THẮNG CẢNH 景點票", "section", 11)]);
   rows.push([
     cell("DATE日期", "header"),
     cell("DIEM THAM QUAN 景點", "header", 5),
     cell("SO PAX", "header"),
     cell("PRICE 價格", "header"),
-    cell("總金額", "header"),
-    cell("THANH TOÁN", "header"),
+    cell("HDV TT 導遊付款", "header"),
+    cell("CTY TT 公司付款", "header"),
   ]);
 
   const sortedVeRows = [...veRows].sort((a, b) => {
@@ -794,19 +797,19 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell(ctyAmt, "number"),
     ]);
   }
-  if (veRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  if (veRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 11)]);
   rows.push([cell("TỔNG SỐ TIỀN TT THẮNG CẢNH", "total", 7), cell("VND", "total"), cell(totalHdvVE, "total_number"), cell(totalCtyVE, "total_number")]);
-  rows.push([cell("", "text", 10)]);
+  rows.push([cell("", "text", 11)]);
 
   // ─── DỊCH VỤ KHÁC ───
-  rows.push([cell("DỊCH VỤ KHÁC 其他", "section", 10)]);
+  rows.push([cell("DỊCH VỤ KHÁC 其他", "section", 11)]);
   rows.push([
     cell("DATE日期", "header"),
     cell("DICH VU 其他", "header", 5),
     cell("SO PAX", "header"),
     cell("PRICE", "header"),
-    cell("總金額", "header"),
-    cell("THANH TOÁN", "header"),
+    cell("HDV TT 導遊付款", "header"),
+    cell("CTY TT 公司付款", "header"),
   ]);
 
   const sortedDvRows = [...dvRows].sort((a, b) => (a.ngay_so ?? 0) - (b.ngay_so ?? 0));
@@ -827,9 +830,9 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell(ctyAmt, "number"),
     ]);
   }
-  if (dvRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
+  if (dvRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 11)]);
   rows.push([cell("TỔNG SỐ TIỀN TT", "total", 7), cell("VND", "total"), cell(totalHdvDV, "total_number"), cell(totalCtyDV, "total_number")]);
-  rows.push([cell("", "text", 10)]);
+  rows.push([cell("", "text", 11)]);
 
   // ─── SUMMARY ───
   const totalHdvAll = totalHdvKS + totalHdvNH + totalHdvVE + totalHdvDV;
@@ -837,16 +840,16 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 
   rows.push([
     cell("TỔNG HDV CHI VND 總計", "section", 2), cell(totalHdvAll, "total_number", 3),
-    cell("TỔNG THU (VNĐ)", "label"), cell("—", "text", 4),
+    cell("TỔNG THU (VNĐ)", "label"), cell("—", "text", 5),
   ]);
   rows.push([
     cell("TỔNG CTY CHI VND 總計", "section", 2), cell(totalCtyAll, "total_number", 3),
-    cell("TỔNG THU TIỀN ĐOÀN (VNĐ)", "label"), cell("—", "text", 4),
+    cell("TỔNG THU TIỀN ĐOÀN (VNĐ)", "label"), cell("—", "text", 5),
   ]);
 
   return {
     name: "Hanh Trinh",
-    columns: [12, 24, 14, 10, 14, 20, 8, 12, 14, 14],
+    columns: [12, 24, 14, 10, 14, 20, 8, 12, 14, 14, 14],
     rows,
   };
 }
