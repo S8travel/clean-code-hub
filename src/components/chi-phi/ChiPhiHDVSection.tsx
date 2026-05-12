@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Plus, Ban, Trash2 } from "lucide-react";
+import { Plus, Ban, Trash2, Printer } from "lucide-react";
+import HDVPreviewModal from "./HDVPreviewModal";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,8 +56,11 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
   const [showQuyetToan, setShowQuyetToan] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const hdvPhaiThuVND = computeHdvPhaiThuVND(doan);
+  // Net = (chi vendor + HDV ứng hỗ trợ) − tạm ứng đã trả − phải thu (HDV tự thu tip).
+  // > 0: HDV đã chi vượt thu → công ty còn phải trả lại. < 0: HDV thu nhiều hơn chi → HDV trả lại công ty.
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
@@ -71,6 +75,8 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   const tamUngDaTT = data?.tamUngDaTT ?? 0;
   const soConPhaiTra = data?.soConPhaiTra ?? 0;
   const daQuyetToan = data?.daQuyetToan ?? false;
+  // Net thực tế cần thanh toán/trả lại: tính cả khoản HDV tự thu (tip) → HDV đã có tiền sẵn.
+  const netConPhaiTra = soConPhaiTra - hdvPhaiThuVND;
 
   return (
     <div className="space-y-4">
@@ -100,12 +106,6 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
                     <p className="text-sm font-semibold">{fmt(tongHdvChi)} ₫</p>
                   </div>
                 )}
-                {tongHoTroHDV > 0 && (
-                  <div>
-                    <p className="text-[11px] text-muted-foreground">Hỗ trợ HDV</p>
-                    <p className="text-sm font-semibold text-blue-600">+{fmt(tongHoTroHDV)} ₫</p>
-                  </div>
-                )}
                 {hdvPhaiThuVND > 0 && (
                   <div>
                     <p className="text-[11px] text-muted-foreground">Phải thu HDV</p>
@@ -120,13 +120,13 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
                 )}
                 <div>
                   <p className="text-[11px] text-muted-foreground">
-                    {soConPhaiTra > 0 ? "Còn phải trả" : soConPhaiTra < 0 ? "HDV hoàn lại" : "Đã đủ"}
+                    {netConPhaiTra > 0 ? "Công ty còn phải trả" : netConPhaiTra < 0 ? "HDV phải trả lại" : "Đã đủ"}
                   </p>
                   <p className={cn(
                     "text-sm font-semibold",
-                    soConPhaiTra > 0 ? "text-orange-600" : soConPhaiTra < 0 ? "text-blue-600" : "text-emerald-600",
+                    netConPhaiTra > 0 ? "text-orange-600" : netConPhaiTra < 0 ? "text-blue-600" : "text-emerald-600",
                   )}>
-                    {fmt(Math.abs(soConPhaiTra))} ₫
+                    {fmt(Math.abs(netConPhaiTra))} ₫
                   </p>
                 </div>
               </div>
@@ -135,6 +135,9 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
 
           {/* Buttons */}
           <div className="flex gap-2 shrink-0 flex-wrap">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowPreview(true)}>
+              <Printer className="h-3 w-3 mr-1" /> In thống kê
+            </Button>
             {!daQuyetToan && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowTamUng(true)}>
                 <Plus className="h-3 w-3 mr-1" /> Tạm ứng
@@ -201,11 +204,18 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           hdvId={hdv?.id ?? null}
           refLoai="hdv_quyet_toan"
           title="Tạo quyết toán HDV"
-          defaultSoTien={Math.abs(soConPhaiTra)}
-          defaultLaThuHoi={soConPhaiTra < 0}
+          defaultSoTien={Math.abs(netConPhaiTra)}
+          defaultLaThuHoi={netConPhaiTra < 0}
           onClose={() => setShowQuyetToan(false)}
         />
       )}
+      <HDVPreviewModal
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+        doan={doan}
+        data={data ?? null}
+        hdvPhaiThuVND={hdvPhaiThuVND}
+      />
     </div>
   );
 }
