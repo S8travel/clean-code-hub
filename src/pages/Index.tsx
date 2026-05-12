@@ -226,16 +226,21 @@ export default function Index() {
   const checkDoanCancelable = async (doanId: number): Promise<string[]> => {
     const [ks, nh, dv, dntt] = await Promise.all([
       externalSupabase.from("doan_booking_ks").select("ks_dat_truoc_status, ks_final_status").eq("doan_id", doanId),
-      externalSupabase.from("doan_booking_nh").select("id").eq("doan_id", doanId).eq("booking_status", "da_gui"),
+      // NH: gồm cả nh_xac_nhan (đã xác nhận) — chỉ chua_gui/da_huy/cho_xac_nhan_huy/khong_dat mới cho xóa
+      externalSupabase.from("doan_booking_nh").select("id").eq("doan_id", doanId).in("booking_status", ["da_gui", "nh_xac_nhan"]),
       externalSupabase.from("doan_booking_dv").select("id").eq("doan_id", doanId).in("booking_status", ["cho_xac_nhan", "da_xac_nhan"]),
       externalSupabase.from("de_nghi_thanh_toan").select("id").eq("doan_id", doanId).not("trang_thai_duyet", "in", '("tu_choi","da_huy")'),
     ]);
     const errors: string[] = [];
-    const activeKS = (ks.data ?? []).filter(
-      (r: any) =>
-        (r.ks_dat_truoc_status && r.ks_dat_truoc_status !== "ks_xac_nhan_huy") ||
-        (r.ks_final_status && r.ks_final_status !== "ks_xac_nhan_huy"),
-    ).length;
+    // KS: Final là phase quyết định. Nếu Final đã/đang hủy → toàn booking coi như cancelled,
+    // bất kể ks_dat_truoc_status (đặt trước có thể vẫn ở trạng thái ks_xac_nhan trước khi user
+    // chuyển sang Final rồi hủy). Đồng bộ với logic ở use-dieu-tour.checkKhachSanDeletable.
+    const isKsCancelled = (r: any) => {
+      const cancelStates = ["cho_ks_xac_nhan_huy", "ks_xac_nhan_huy"];
+      if (r.ks_final_status) return cancelStates.includes(r.ks_final_status);
+      return cancelStates.includes(r.ks_dat_truoc_status);
+    };
+    const activeKS = (ks.data ?? []).filter((r: any) => !isKsCancelled(r)).length;
     if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn chưa hủy`);
     if ((nh.data ?? []).length > 0) errors.push(`Booking NH: còn ${nh.data!.length} bữa chưa hủy`);
     if ((dv.data ?? []).length > 0) errors.push(`Booking DV: còn ${dv.data!.length} dịch vụ chưa hủy`);
