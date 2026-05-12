@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { normalizeEmails, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import {
   Send, Check, X, RotateCcw, ChevronDown, ChevronUp, Plus, Trash2,
@@ -673,12 +674,10 @@ export default function MealCard({
                 />
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted-foreground whitespace-nowrap">Deadline:</span>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={deadline}
-                    onChange={(e) => handleDeadlineChange(e.target.value)}
-                    onBlur={() => saveBooking({ deadline: deadline || null })}
-                    className="h-7 w-36 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    onChange={(v) => { handleDeadlineChange(v); saveBooking({ deadline: v || null }); }}
+                    className="h-7 w-36 text-xs"
                   />
                 </div>
               </div>

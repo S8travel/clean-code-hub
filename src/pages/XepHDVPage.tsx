@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -367,21 +368,19 @@ function ReviewDialog({
 
                   {/* ngay_di */}
                   <td className="border px-1 py-0.5">
-                    <Input
-                      type="date"
-                      className={cn("h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent", !row.ngay_di && "bg-red-100")}
+                    <DatePicker
+                      className={cn("h-6 text-xs px-1 w-full", !row.ngay_di && "bg-red-100")}
                       value={row.ngay_di}
-                      onChange={(e) => updateRow(idx, { ngay_di: e.target.value })}
+                      onChange={(v) => updateRow(idx, { ngay_di: v })}
                     />
                   </td>
 
                   {/* ngay_ve */}
                   <td className="border px-1 py-0.5">
-                    <Input
-                      type="date"
-                      className={cn("h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent", !row.ngay_ve && "bg-red-100")}
+                    <DatePicker
+                      className={cn("h-6 text-xs px-1 w-full", !row.ngay_ve && "bg-red-100")}
                       value={row.ngay_ve}
-                      onChange={(e) => updateRow(idx, { ngay_ve: e.target.value })}
+                      onChange={(v) => updateRow(idx, { ngay_ve: v })}
                     />
                   </td>
 
@@ -1214,18 +1213,18 @@ export default function XepHDVPage() {
                   <div className="grid grid-cols-2 gap-1.5">
                     <div className="space-y-0.5">
                       <Label className="text-[10px] text-muted-foreground">Từ ngày</Label>
-                      <Input
-                        type="date" className="h-7 text-xs"
+                      <DatePicker
+                        className="h-7 text-xs w-full"
                         value={dbFrom}
-                        onChange={(e) => { setDbFrom(e.target.value); setResult(null); }}
+                        onChange={(v) => { setDbFrom(v); setResult(null); }}
                       />
                     </div>
                     <div className="space-y-0.5">
                       <Label className="text-[10px] text-muted-foreground">Đến ngày</Label>
-                      <Input
-                        type="date" className="h-7 text-xs"
+                      <DatePicker
+                        className="h-7 text-xs w-full"
                         value={dbTo}
-                        onChange={(e) => { setDbTo(e.target.value); setResult(null); }}
+                        onChange={(v) => { setDbTo(v); setResult(null); }}
                       />
                     </div>
                   </div>

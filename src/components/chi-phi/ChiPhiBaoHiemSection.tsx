@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Check, Pencil, X, Ban, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -546,7 +547,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
             )}
             <div className="space-y-1">
               <Label className="text-xs">Ngày cần thanh toán</Label>
-              <Input type="date" className="h-8 text-xs" value={ngayCan} onChange={(e) => setNgayCan(e.target.value)} />
+              <DatePicker className="h-8 text-xs w-full" value={ngayCan} onChange={setNgayCan} />
             </div>
           </div>
           <DialogFooter>

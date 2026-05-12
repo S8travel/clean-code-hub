@@ -30,6 +30,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -601,19 +602,9 @@ export default function InvoicePage() {
 
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Ngày về</span>
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="border rounded px-2 py-1 text-xs h-8"
-          />
+          <DatePicker value={fromDate} onChange={setFromDate} className="h-8 text-xs w-36" />
           <span className="text-xs text-muted-foreground">—</span>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="border rounded px-2 py-1 text-xs h-8"
-          />
+          <DatePicker value={toDate} onChange={setToDate} className="h-8 text-xs w-36" />
         </div>
 
         {hasFilter && (

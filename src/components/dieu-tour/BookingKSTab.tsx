@@ -2,6 +2,7 @@ import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
@@ -520,58 +521,74 @@ Email: s8travel.hddt@gmail.com`;
         </div>
       )}
       {/* Header */}
-      <div className="px-4 py-3 flex items-start justify-between gap-3 border-b border-border bg-muted/20">
+      <div className="px-4 py-3 flex items-start justify-between gap-3 border-b-2 border-sky-200 bg-gradient-to-r from-sky-50 via-sky-50/70 to-blue-50/40">
         <div className="flex items-start gap-2.5 min-w-0 flex-1">
           <Checkbox
             checked={selected}
             onCheckedChange={onToggleSelect}
             className="mt-0.5 shrink-0"
           />
-          <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold">{row.khach_san_ten}</span>
-            <span
-              className={cn(
-                "px-2 py-0.5 rounded-full text-[10px] font-medium",
-                overall.cls
+          <div className="min-w-0 flex-1 space-y-1">
+            {/* Line 1: tên KS + status */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-sky-900">🏨 {row.khach_san_ten}</span>
+              <span
+                className={cn(
+                  "px-2 py-0.5 rounded-full text-[10px] font-medium",
+                  overall.cls
+                )}
+              >
+                {overall.label}
+              </span>
+              {isDirty && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                  Có thay đổi
+                </span>
               )}
-            >
-              {overall.label}
-            </span>
-            {isDirty && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
-                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                Có thay đổi
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-muted-foreground">
-            {row.khach_san_dia_diem && (
-              <span className="flex items-center gap-0.5">
-                <MapPin className="h-3 w-3" />
-                {row.khach_san_dia_diem}
-              </span>
-            )}
-            {row.ngay_dates.length > 0 && (
-              <span>
-                📅 {row.ngay_dates.map(fmtDate).join(", ")} ({row.so_dem} đêm)
-              </span>
-            )}
-            {row.day_use_dates && row.day_use_dates.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
-                Day Use: {row.day_use_dates.map(fmtDate).join(", ")}
-              </span>
-            )}
-            {row.khach_san_so_dien_thoai && (
-              <span className="flex items-center gap-0.5">
-                <Phone className="h-3 w-3" />
-                {row.khach_san_so_dien_thoai}
-              </span>
-            )}
+            </div>
+            {/* Line 2: info chips */}
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              {row.khach_san_dia_diem && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/70 border border-sky-200 text-sky-800">
+                  <MapPin className="h-3 w-3" />
+                  {row.khach_san_dia_diem}
+                </span>
+              )}
+              {row.ngay_dates.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/70 border border-sky-200 text-sky-800">
+                  📅 {row.ngay_dates.map(fmtDate).join(", ")} ({row.so_dem} đêm)
+                </span>
+              )}
+              {row.day_use_dates && row.day_use_dates.length > 0 && (
+                <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-medium">
+                  Day Use: {row.day_use_dates.map(fmtDate).join(", ")}
+                </span>
+              )}
+              {row.khach_san_so_dien_thoai && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/70 border border-sky-200 text-sky-800">
+                  <Phone className="h-3 w-3" />
+                  {row.khach_san_so_dien_thoai}
+                </span>
+              )}
+            </div>
+            {/* Line 3: emails */}
             {row.khach_san_email && (
-              <span className="text-primary/70">{row.khach_san_email}</span>
+              <div className="flex items-start gap-1.5 text-xs">
+                <Mail className="h-3.5 w-3.5 text-sky-600 shrink-0 mt-0.5" />
+                <div className="flex flex-wrap gap-1">
+                  {String(row.khach_san_email)
+                    .split(/[,;]/)
+                    .map((e) => e.trim())
+                    .filter(Boolean)
+                    .map((e, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-white border border-sky-200 text-sky-700 font-mono text-[11px]">
+                        {e}
+                      </span>
+                    ))}
+                </div>
+              </div>
             )}
-          </div>
           </div>
         </div>
         <Button
@@ -649,12 +666,11 @@ Email: s8travel.hddt@gmail.com`;
         </div>
         <div>
           <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
-          <input
-            type="date"
+          <DatePicker
             value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-            onBlur={() => save({ deadline: deadline || null })}
-            className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            onChange={(v) => { setDeadline(v); save({ deadline: v || null }); }}
+            className="h-8 w-44 text-xs"
+            placeholder="dd/mm/yyyy"
           />
         </div>
 

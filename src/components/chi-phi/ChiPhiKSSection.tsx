@@ -29,6 +29,7 @@ import { useCongNoList, appendCanTruLog } from "@/hooks/use-cong-no";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1755,12 +1756,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
               {aggCommit.delta > 0 && (
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">Ngày cần thanh toán</Label>
-                  <Input
-                    type="date"
-                    className="h-8 text-xs"
-                    value={aggNgayCan}
-                    onChange={e => setAggNgayCan(e.target.value)}
-                  />
+                  <DatePicker className="h-8 text-xs w-full" value={aggNgayCan} onChange={setAggNgayCan} />
                 </div>
               )}
               <div className="space-y-1">

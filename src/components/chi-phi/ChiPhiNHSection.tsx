@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import {
@@ -2008,12 +2009,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                 {/* Ngày cần thanh toán */}
                 <div className="space-y-1">
                   <Label className="text-xs">Ngày cần thanh toán</Label>
-                  <Input
-                    type="date"
-                    className="h-8 text-xs"
-                    value={dnttNgayCan}
-                    onChange={(e) => setDnttNgayCan(e.target.value)}
-                  />
+                  <DatePicker className="h-8 text-xs w-full" value={dnttNgayCan} onChange={setDnttNgayCan} />
                 </div>
                 <KSCongNoPanel
                   nccId={nh?.nha_cung_cap_id}
@@ -2265,12 +2261,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
               {aggCommit.delta > 0 && (
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">Ngày cần thanh toán</Label>
-                  <Input
-                    type="date"
-                    className="h-8 text-xs"
-                    value={aggNgayCan}
-                    onChange={e => setAggNgayCan(e.target.value)}
-                  />
+                  <DatePicker className="h-8 text-xs w-full" value={aggNgayCan} onChange={setAggNgayCan} />
                 </div>
               )}
               <div className="space-y-1">

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useCreateCongViec, useUserListForAssign } from "@/hooks/use-cong-viec";
 import { useDoanList } from "@/hooks/use-doan";
 import { toast } from "sonner";
@@ -165,11 +166,10 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Hạn xử lý</Label>
-              <Input
-                type="date"
-                className="h-8 text-xs"
+              <DatePicker
+                className="h-8 text-xs w-full"
                 value={han_xu_ly}
-                onChange={(e) => setHanXuLy(e.target.value)}
+                onChange={setHanXuLy}
               />
             </div>
           </div>

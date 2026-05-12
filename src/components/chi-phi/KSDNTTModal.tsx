@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -236,12 +237,7 @@ export default function KSDNTTModal({
           {/* Ngày cần thanh toán */}
           <div className="space-y-1.5">
             <Label className="text-xs">Ngày cần thanh toán</Label>
-            <Input
-              type="date"
-              className="h-8 text-xs"
-              value={ngayCan}
-              onChange={(e) => setNgayCan(e.target.value)}
-            />
+            <DatePicker className="h-8 text-xs w-full" value={ngayCan} onChange={setNgayCan} />
           </div>
 
           {/* Ghi chú */}

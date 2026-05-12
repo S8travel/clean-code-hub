@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { TravelGroup, TravelGroupInsert } from "@/hooks/use-travel-groups";
@@ -111,20 +112,18 @@ export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-label uppercase text-muted-foreground">Ngày Đi</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={form.ngay_di ?? ""}
-                    onChange={(e) => setForm({ ...form, ngay_di: e.target.value })}
-                    className="rounded-lg tabular-nums"
+                    onChange={(v) => setForm({ ...form, ngay_di: v })}
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-label uppercase text-muted-foreground">Ngày Về</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={form.ngay_ve ?? ""}
-                    onChange={(e) => setForm({ ...form, ngay_ve: e.target.value })}
-                    className="rounded-lg tabular-nums"
+                    onChange={(v) => setForm({ ...form, ngay_ve: v })}
+                    className="w-full"
                   />
                 </div>
               </div>

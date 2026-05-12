@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from "react";
 import { Plus, Search, Trash2, Save, Users, ShieldAlert, Shield, History, Building2, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -1152,21 +1153,11 @@ function NhatKyTab() {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="text-xs text-muted-foreground block mb-1">Từ ngày</label>
-          <Input
-            type="date"
-            className="h-8 text-sm w-36"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-          />
+          <DatePicker className="h-8 text-sm w-36" value={fromDate} onChange={setFromDate} />
         </div>
         <div>
           <label className="text-xs text-muted-foreground block mb-1">Đến ngày</label>
-          <Input
-            type="date"
-            className="h-8 text-sm w-36"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-          />
+          <DatePicker className="h-8 text-sm w-36" value={toDate} onChange={setToDate} />
         </div>
         <div>
           <label className="text-xs text-muted-foreground block mb-1">Người dùng</label>

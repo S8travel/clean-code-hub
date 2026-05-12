@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import {
   Building2, Mail, Send, Check, X, RotateCcw, ChevronDown, ChevronUp, Trash2,
@@ -488,12 +489,10 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
               />
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
-                <input
-                  type="date"
+                <DatePicker
                   value={deadline}
-                  onChange={(e) => handleDeadlineChange(e.target.value)}
-                  onBlur={() => save({ deadline: deadline || null })}
-                  className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  onChange={(v) => { handleDeadlineChange(v); save({ deadline: v || null }); }}
+                  className="h-8 w-44 text-xs"
                 />
               </div>
             </div>

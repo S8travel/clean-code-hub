@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import { Mail, Check, X, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
@@ -334,12 +335,10 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
             {/* Deadline */}
             <div>
               <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
-              <input
-                type="date"
+              <DatePicker
                 value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                onBlur={() => save({ deadline: deadline || null })}
-                className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                onChange={(v) => { setDeadline(v); save({ deadline: v || null }); }}
+                className="h-8 w-44 text-xs"
               />
             </div>
 

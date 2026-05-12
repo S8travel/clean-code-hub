@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -705,9 +706,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
             )}
             <div className="space-y-1">
               <Label className="text-xs">Ngày cần thanh toán</Label>
-              <Input type="date" className="h-8 text-xs"
-                value={ngayCan}
-                onChange={(e) => setNgayCan(e.target.value)} />
+              <DatePicker className="h-8 text-xs w-full" value={ngayCan} onChange={setNgayCan} />
             </div>
           </div>
           <DialogFooter>

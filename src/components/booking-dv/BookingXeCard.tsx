@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Bus, Mail, Check, X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
@@ -346,11 +347,10 @@ export default function BookingXeCard({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Deadline</label>
-              <input
-                type="date"
-                className="w-full mt-0.5 h-7 text-xs border border-border rounded-md px-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              <DatePicker
+                className="w-full mt-0.5 h-7 text-xs"
                 value={deadline}
-                onChange={(e) => handleDeadlineChange(e.target.value)}
+                onChange={(v) => handleDeadlineChange(v)}
               />
             </div>
             <div>

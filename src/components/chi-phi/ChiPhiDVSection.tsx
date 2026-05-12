@@ -4,6 +4,7 @@ import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2, Calend
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -1378,9 +1379,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
             )}
             <div className="space-y-1">
               <Label className="text-xs">Ngày cần thanh toán</Label>
-              <Input type="date" className="h-8 text-xs"
-                value={dvNgayCan}
-                onChange={e => setDvNgayCan(e.target.value)} />
+              <DatePicker className="h-8 text-xs w-full" value={dvNgayCan} onChange={setDvNgayCan} />
             </div>
             <KSCongNoPanel
               nccId={dvModal?.nccId ?? undefined}
@@ -1616,12 +1615,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
               {aggCommit.delta > 0 && (
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">Ngày cần thanh toán</Label>
-                  <Input
-                    type="date"
-                    className="h-8 text-xs"
-                    value={aggNgayCan}
-                    onChange={e => setAggNgayCan(e.target.value)}
-                  />
+                  <DatePicker className="h-8 text-xs w-full" value={aggNgayCan} onChange={setAggNgayCan} />
                 </div>
               )}
               <div className="space-y-1">

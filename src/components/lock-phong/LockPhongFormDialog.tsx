@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -98,18 +99,22 @@ function DoanHotelRows({
           />
           {/* Check-in */}
           <div>
-            <Input
-              {...register(`doans.${doanIdx}.hotels.${hIdx}.check_in`)}
-              type="date"
-              className="h-8 text-xs"
+            <Controller
+              control={control}
+              name={`doans.${doanIdx}.hotels.${hIdx}.check_in`}
+              render={({ field: cf }) => (
+                <DatePicker value={cf.value ?? ""} onChange={cf.onChange} className="h-8 text-xs w-full" />
+              )}
             />
           </div>
           {/* Check-out */}
           <div>
-            <Input
-              {...register(`doans.${doanIdx}.hotels.${hIdx}.check_out`)}
-              type="date"
-              className="h-8 text-xs"
+            <Controller
+              control={control}
+              name={`doans.${doanIdx}.hotels.${hIdx}.check_out`}
+              render={({ field: cf }) => (
+                <DatePicker value={cf.value ?? ""} onChange={cf.onChange} className="h-8 text-xs w-full" />
+              )}
             />
           </div>
           {/* Số phòng */}
@@ -491,11 +496,10 @@ function CreateForm({
                       />
                     </td>
                     <td className="px-1 py-1">
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={r.check_in}
-                        onChange={(e) => handleCheckInChange(idx, e.target.value)}
-                        className="h-7 text-xs"
+                        onChange={(v) => handleCheckInChange(idx, v)}
+                        className="h-7 text-xs w-full"
                       />
                     </td>
                     <td className="px-1 py-1">
@@ -532,12 +536,10 @@ function CreateForm({
                       />
                     </td>
                     <td className="px-1 py-1">
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={r.deadline}
-                        onChange={(e) => updateRow(idx, { deadline: e.target.value })}
-                        className="h-7 text-xs"
-                        title="Auto tính từ check-in − số ngày deadline (header)"
+                        onChange={(v) => updateRow(idx, { deadline: v })}
+                        className="h-7 text-xs w-full"
                       />
                     </td>
                     <td className="px-1 py-1">
@@ -723,21 +725,31 @@ function EditForm({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Ngày xuất phát <span className="text-destructive">*</span></Label>
-            <Input
-              {...register("ngay_xuat_phat", {
-                onChange: (e) => {
-                  const v = e.target.value;
-                  if (v) setValue("deadline", calcDeadline(v));
-                },
-              })}
-              type="date"
-              className="h-9 text-sm"
+            <Controller
+              control={control}
+              name="ngay_xuat_phat"
+              render={({ field: cf }) => (
+                <DatePicker
+                  value={cf.value ?? ""}
+                  onChange={(v) => {
+                    cf.onChange(v);
+                    if (v) setValue("deadline", calcDeadline(v));
+                  }}
+                  className="h-9 text-sm w-full"
+                />
+              )}
             />
             {errors.ngay_xuat_phat && <p className="text-xs text-destructive">{errors.ngay_xuat_phat.message}</p>}
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Deadline <span className="text-muted-foreground">(mặc định -45 ngày)</span></Label>
-            <Input {...register("deadline")} type="date" className="h-9 text-sm" />
+            <Controller
+              control={control}
+              name="deadline"
+              render={({ field: cf }) => (
+                <DatePicker value={cf.value ?? ""} onChange={cf.onChange} className="h-9 text-sm w-full" />
+              )}
+            />
           </div>
         </div>
 
@@ -784,8 +796,20 @@ function EditForm({
                   />
                 )}
               />
-              <Input {...register(`hotels.${hIdx}.check_in`)} type="date" className="h-8 text-xs" />
-              <Input {...register(`hotels.${hIdx}.check_out`)} type="date" className="h-8 text-xs" />
+              <Controller
+                control={control}
+                name={`hotels.${hIdx}.check_in`}
+                render={({ field: cf }) => (
+                  <DatePicker value={cf.value ?? ""} onChange={cf.onChange} className="h-8 text-xs w-full" />
+                )}
+              />
+              <Controller
+                control={control}
+                name={`hotels.${hIdx}.check_out`}
+                render={({ field: cf }) => (
+                  <DatePicker value={cf.value ?? ""} onChange={cf.onChange} className="h-8 text-xs w-full" />
+                )}
+              />
               <Input {...register(`hotels.${hIdx}.so_phong`)} placeholder="6 TWN, 1 DBL" className="h-8 text-xs" />
               <Button
                 type="button"

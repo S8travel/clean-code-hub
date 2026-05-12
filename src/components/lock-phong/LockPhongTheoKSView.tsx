@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -46,17 +47,11 @@ function EditableTextCell({
 function EditableDateCell({
   value, onSave,
 }: { value: string; onSave: (v: string) => void }) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => { setLocal(value); }, [value]);
   return (
-    <input
-      type="date"
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => {
-        if (local && local !== value) onSave(local);
-      }}
-      className="h-7 text-xs border border-input rounded-md px-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+    <DatePicker
+      value={value}
+      onChange={(v) => { if (v && v !== value) onSave(v); }}
+      className="h-7 text-xs px-1.5"
     />
   );
 }
