@@ -297,6 +297,28 @@ export function useUpdateLockPhongKSEmail() {
   });
 }
 
+/** Cập nhật inline các field thông tin của 1 row lock_phong_ks
+ *  (check_in, check_out, so_phong, tinh_trang_phong, code_ncc) */
+export function useUpdateLockPhongKSFields() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      fields,
+    }: {
+      id: number;
+      fields: Partial<Pick<LockPhongKS, "check_in" | "check_out" | "so_phong" | "tinh_trang_phong" | "code_ncc">>;
+    }) => {
+      const { error } = await externalSupabase
+        .from("lock_phong_ks")
+        .update(fields)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+  });
+}
+
 /** Cập nhật outcome (đã hủy / thành đoàn + code đoàn chính thức) */
 export function useUpdateLockPhongKSOutcome() {
   const qc = useQueryClient();

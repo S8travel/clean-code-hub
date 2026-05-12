@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
@@ -16,10 +16,50 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   type LockPhongDisplay, type LockPhongKSDisplay,
-  useUpdateLockPhongKSOutcome,
+  useUpdateLockPhongKSOutcome, useUpdateLockPhongKSFields,
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
 import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
+
+// ── Inline editable cells ─────────────────────────────────────────────────────
+// Pattern blur-save: local state mirror DB value, sync khi data refetch (useEffect),
+// chỉ fire mutation khi value thực sự thay đổi.
+function EditableTextCell({
+  value, onSave, className, placeholder,
+}: { value: string | null; onSave: (v: string | null) => void; className?: string; placeholder?: string }) {
+  const [local, setLocal] = useState(value ?? "");
+  useEffect(() => { setLocal(value ?? ""); }, [value]);
+  return (
+    <Input
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        const next = local.trim() || null;
+        if (next !== (value ?? null)) onSave(next);
+      }}
+      placeholder={placeholder}
+      className={cn("h-7 text-xs px-1.5", className)}
+    />
+  );
+}
+
+function EditableDateCell({
+  value, onSave,
+}: { value: string; onSave: (v: string) => void }) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => { setLocal(value); }, [value]);
+  return (
+    <input
+      type="date"
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        if (local && local !== value) onSave(local);
+      }}
+      className="h-7 text-xs border border-input rounded-md px-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+    />
+  );
+}
 
 function fmtDate(d: string) {
   try {
@@ -60,6 +100,19 @@ export default function LockPhongTheoKSView({ data }: Props) {
     currentCode: string;
   } | null>(null);
   const updateOutcome = useUpdateLockPhongKSOutcome();
+  const updateFields = useUpdateLockPhongKSFields();
+
+  const saveField = (
+    id: number,
+    fields: Parameters<typeof updateFields.mutate>[0]["fields"],
+  ) => {
+    updateFields.mutate(
+      { id, fields },
+      {
+        onError: (e: any) => toast.error("Lỗi cập nhật: " + (e?.message || "")),
+      },
+    );
+  };
 
   const handleStatusChange = (ksRows: LockPhongKSDisplay[], lpTenDoan: string, value: string) => {
     if (value === "cho_xu_ly") {
@@ -273,14 +326,33 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 </td>
                               </>
                             )}
-                            <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_in)}</td>
-                            <td className="px-4 py-2.5 text-xs">{fmtDate(ksRow.check_out)}</td>
-                            <td className="px-4 py-2.5 text-xs text-center font-medium">{ksRow.so_dem || 0}</td>
-                            <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                              {ksRow.so_phong || "—"}
+                            <td className="px-2 py-2 text-xs">
+                              <EditableDateCell
+                                value={ksRow.check_in}
+                                onSave={(v) => saveField(ksRow.id, { check_in: v })}
+                              />
                             </td>
-                            <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono">
-                              {ksRow.code_ncc || "—"}
+                            <td className="px-2 py-2 text-xs">
+                              <EditableDateCell
+                                value={ksRow.check_out}
+                                onSave={(v) => saveField(ksRow.id, { check_out: v })}
+                              />
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-center font-medium">{ksRow.so_dem || 0}</td>
+                            <td className="px-2 py-2 text-xs">
+                              <EditableTextCell
+                                value={ksRow.so_phong}
+                                onSave={(v) => saveField(ksRow.id, { so_phong: v })}
+                                placeholder="—"
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-xs font-mono">
+                              <EditableTextCell
+                                value={ksRow.code_ncc}
+                                onSave={(v) => saveField(ksRow.id, { code_ncc: v })}
+                                placeholder="—"
+                                className="font-mono"
+                              />
                             </td>
                             <td className="px-4 py-2.5">
                               <div className="flex items-center gap-1.5">
