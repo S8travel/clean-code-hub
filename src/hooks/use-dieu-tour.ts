@@ -325,8 +325,25 @@ export function useInitDoanNgay() {
     },
   });
 }
+// Lấy DNTT id còn ACTIVE (loại bỏ da_huy/tu_choi) cho 1 chi_phi.
+// Allocation của DNTT đã hủy vẫn lưu trong DB cho audit nhưng không được phép chặn xóa.
+async function getActiveDnttIdsForChiPhi(chiPhiId: number): Promise<number[]> {
+  const { data: rawAllocs } = await externalSupabase
+    .from("dntt_allocations")
+    .select("dntt_id")
+    .eq("chi_phi_id", chiPhiId);
+  if (!rawAllocs || rawAllocs.length === 0) return [];
+  const dnttIds = [...new Set(rawAllocs.map((a: any) => a.dntt_id as number))];
+  const { data: activeDntts } = await externalSupabase
+    .from("de_nghi_thanh_toan")
+    .select("id")
+    .in("id", dnttIds)
+    .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
+  return (activeDntts ?? []).map((d: any) => d.id as number);
+}
+
 // Pre-check trước khi user xóa cảnh điểm khỏi điều tour.
-//   1. chi_phi liên kết đã có dntt_allocations → block (data integrity)
+//   1. chi_phi liên kết đã có dntt_allocations ACTIVE → block (data integrity)
 //   2. doan_booking_dv với NCC tương ứng đã gửi mail & chưa hủy → block (tránh lệch state booking)
 // Caller nhận { ok, reason } để hiện toast.
 export async function checkCanhDiemDeletable(
@@ -339,15 +356,9 @@ export async function checkCanhDiemDeletable(
     .eq("ref_doan_ngay_item_id", itemId)
     .maybeSingle();
   if (cpRow) {
-    const { data: allocs } = await externalSupabase
-      .from("dntt_allocations")
-      .select("dntt_id")
-      .eq("chi_phi_id", cpRow.id)
-      .limit(5);
-    if (allocs && allocs.length > 0) {
-      const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
-        .map((id) => `#${id}`)
-        .join(", ");
+    const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+    if (activeDnttIds.length > 0) {
+      const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
       const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
       return {
         ok: false,
@@ -394,15 +405,9 @@ export async function checkNhaHangDeletable(
     .eq("danh_muc", "nha_hang");
   const cpRow = (cpRows || []).find((r: any) => typeof r.mo_ta === "string" && r.mo_ta.endsWith(mealSuffix));
   if (cpRow) {
-    const { data: allocs } = await externalSupabase
-      .from("dntt_allocations")
-      .select("dntt_id")
-      .eq("chi_phi_id", cpRow.id)
-      .limit(5);
-    if (allocs && allocs.length > 0) {
-      const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
-        .map((id) => `#${id}`)
-        .join(", ");
+    const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+    if (activeDnttIds.length > 0) {
+      const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
       return {
         ok: false,
         reason: `Không thể xóa "${nhaHangTen} (${buaLabel})" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`,
@@ -492,14 +497,9 @@ export function useSaveDieuTour() {
           .eq("ref_doan_ngay_item_id", itemId)
           .maybeSingle();
         if (!cpRow) return;
-        const { data: allocs } = await externalSupabase
-          .from("dntt_allocations")
-          .select("dntt_id")
-          .eq("chi_phi_id", cpRow.id)
-          .limit(5);
-        if (allocs && allocs.length > 0) {
-          const dnttIds = [...new Set(allocs.map((a: any) => a.dntt_id))]
-            .map((id) => `#${id}`).join(", ");
+        const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+        if (activeDnttIds.length > 0) {
+          const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
           const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
           throw new Error(
             `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`
@@ -518,6 +518,23 @@ export function useSaveDieuTour() {
         .from("doan")
         .update({ ...doanFields, so_khach })
         .eq("id", doanId);
+
+      // Fetch existing doan_ngay để diff log (chỉ log UPDATE, bỏ qua INSERT lần đầu)
+      const { data: existingNgayRows } = await externalSupabase
+        .from("doan_ngay")
+        .select("ngay_so, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, thanh_pho")
+        .eq("doan_id", doanId);
+      const existingByNgaySo = new Map<number, any>(
+        (existingNgayRows ?? []).map((r: any) => [r.ngay_so, r]),
+      );
+      const ksNameMap = new Map(khachSanList.map((k) => [k.id, k.ten]));
+      const nhNameMap = new Map(nhaHangList.map((n) => [n.id, n.ten]));
+      const labelKS = (id: number | null | undefined) =>
+        id ? (ksNameMap.get(id) || `KS #${id}`) : "—";
+      const labelNH = (id: number | null | undefined) =>
+        id ? (nhNameMap.get(id) || `NH #${id}`) : "—";
+      const labelTxt = (v: string | null | undefined) => (v ?? "").trim() || "—";
+      const dieuTourLogs: string[] = [];
 
       // 2. Upsert doan_ngay — use upsert to handle both new and existing rows
       for (let idx = 0; idx < days.length; idx++) {
@@ -558,6 +575,30 @@ export function useSaveDieuTour() {
           } else {
             const { data } = await externalSupabase.from("doan_ngay").insert(ngayPayload).select("id").single();
             if (data) doanNgayId = data.id;
+          }
+        }
+
+        // Diff log: chỉ log khi đã có row cũ (UPDATE), bỏ qua INSERT lần đầu
+        const oldRow = existingByNgaySo.get(day.ngay_so);
+        if (oldRow) {
+          const label = `Ngày ${day.ngay_so}`;
+          if ((oldRow.khach_san_id ?? null) !== (day.khach_san_id ?? null)) {
+            dieuTourLogs.push(`${label}: khách sạn ${labelKS(oldRow.khach_san_id)} → ${labelKS(day.khach_san_id)}`);
+          }
+          if ((oldRow.ks_ma_code ?? "").trim() !== (day.ks_ma_code ?? "").trim()) {
+            dieuTourLogs.push(`${label}: mã code phòng "${labelTxt(oldRow.ks_ma_code)}" → "${labelTxt(day.ks_ma_code)}"`);
+          }
+          if ((oldRow.ks_loai_phong ?? "").trim() !== (day.ks_loai_phong ?? "").trim()) {
+            dieuTourLogs.push(`${label}: loại phòng "${labelTxt(oldRow.ks_loai_phong)}" → "${labelTxt(day.ks_loai_phong)}"`);
+          }
+          if ((oldRow.an_trua_nha_hang_id ?? null) !== (day.an_trua_nha_hang_id ?? null)) {
+            dieuTourLogs.push(`${label}: nhà hàng trưa ${labelNH(oldRow.an_trua_nha_hang_id)} → ${labelNH(day.an_trua_nha_hang_id)}`);
+          }
+          if ((oldRow.an_toi_nha_hang_id ?? null) !== (day.an_toi_nha_hang_id ?? null)) {
+            dieuTourLogs.push(`${label}: nhà hàng tối ${labelNH(oldRow.an_toi_nha_hang_id)} → ${labelNH(day.an_toi_nha_hang_id)}`);
+          }
+          if ((oldRow.thanh_pho ?? "").trim() !== (day.thanh_pho ?? "").trim()) {
+            dieuTourLogs.push(`${label}: thành phố "${labelTxt(oldRow.thanh_pho)}" → "${labelTxt(day.thanh_pho)}"`);
           }
         }
 
@@ -864,10 +905,18 @@ export function useSaveDieuTour() {
         // Otherwise: do nothing, keep existing data
       }
 
+      // Flush log thay đổi điều tour (chỉ những thay đổi thật sự, không log lần insert đầu)
+      if (dieuTourLogs.length > 0) {
+        const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+        for (const moTa of dieuTourLogs) {
+          log({ doan_id: doanId, action: "sua", table_name: "doan_ngay", record_id: doanId, mo_ta: moTa });
+        }
+      }
+
       // Trả counters cho caller hiển thị toast warning
       return counters;
     },
-    onSuccess: (_, payload) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["doan"] });
       qc.invalidateQueries({ queryKey: ["doan_ngay"] });
       qc.invalidateQueries({ queryKey: ["doan_ngay_item"] });
@@ -878,8 +927,6 @@ export function useSaveDieuTour() {
       qc.invalidateQueries({ queryKey: ["doan_booking_nh"] });
       qc.invalidateQueries({ queryKey: ["doan_booking_tau"] });
       qc.invalidateQueries({ queryKey: ["doan_booking_dv"] });
-      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
-      log({ doan_id: payload.doanId, action: "sua", table_name: "doan_ngay", record_id: payload.doanId, mo_ta: `Lưu lịch trình điều tour` });
     },
   });
 }
