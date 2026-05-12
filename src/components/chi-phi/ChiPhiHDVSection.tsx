@@ -219,41 +219,75 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
   const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
-  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number; mo_ta: string }>>({});
+  type EditCell = { so_luong: number; don_gia: number; mo_ta: string; nguoi_tt: "cong_ty" | "hdv" };
+  const [editRow, setEditRow] = useState<Record<number, EditCell>>({});
   const [addingRow, setAddingRow] = useState(false);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
 
-  const getLocal = (item: HDVHoTroItem) =>
-    editRow[item.id] ?? { so_luong: item.so_luong, don_gia: item.don_gia, mo_ta: item.mo_ta ?? "" };
+  // Default người trả: HDV (HDV ứng tiền trước, công ty hoàn lại sau)
+  const resolveNguoiTt = (item: HDVHoTroItem): "cong_ty" | "hdv" =>
+    item.tien_hdv > 0 ? "hdv" : (item.tien_cong_ty > 0 ? "cong_ty" : "hdv");
+
+  const getLocal = (item: HDVHoTroItem): EditCell =>
+    editRow[item.id] ?? {
+      so_luong: item.so_luong,
+      don_gia: item.don_gia,
+      mo_ta: item.mo_ta ?? "",
+      nguoi_tt: resolveNguoiTt(item),
+    };
+
+  const updateLocal = (id: number, patch: Partial<EditCell>) =>
+    setEditRow((prev) => {
+      const base = hoTroItems.find((r) => r.id === id);
+      const cur = prev[id] ?? (base ? {
+        so_luong: base.so_luong, don_gia: base.don_gia,
+        mo_ta: base.mo_ta ?? "", nguoi_tt: resolveNguoiTt(base),
+      } : { so_luong: 1, don_gia: 0, mo_ta: "", nguoi_tt: "hdv" as const });
+      return { ...prev, [id]: { ...cur, ...patch } };
+    });
 
   const handleNumChange = (id: number, field: "so_luong" | "don_gia", val: number) =>
-    setEditRow((prev) => {
-      const base = hoTroItems.find((r) => r.id === id);
-      const cur = prev[id] ?? { so_luong: base?.so_luong ?? 1, don_gia: base?.don_gia ?? 0, mo_ta: base?.mo_ta ?? "" };
-      return { ...prev, [id]: { ...cur, [field]: val } };
-    });
+    updateLocal(id, { [field]: val });
 
-  const handleMoTaChange = (id: number, val: string) =>
-    setEditRow((prev) => {
-      const base = hoTroItems.find((r) => r.id === id);
-      const cur = prev[id] ?? { so_luong: base?.so_luong ?? 1, don_gia: base?.don_gia ?? 0, mo_ta: base?.mo_ta ?? "" };
-      return { ...prev, [id]: { ...cur, mo_ta: val } };
+  const handleMoTaChange = (id: number, val: string) => updateLocal(id, { mo_ta: val });
+
+  const handleToggleNguoiTt = (item: HDVHoTroItem) => {
+    const cur = getLocal(item).nguoi_tt;
+    const next: "cong_ty" | "hdv" = cur === "hdv" ? "cong_ty" : "hdv";
+    const tien = (getLocal(item).so_luong) * (getLocal(item).don_gia);
+    // Save ngay khi toggle để cả số tiền đi đúng cột (tránh user toggle xong quên blur)
+    upsertMut.mutate({
+      id: item.id, doan_id: doanId,
+      tien_cong_ty: next === "cong_ty" ? tien : 0,
+      tien_hdv: next === "hdv" ? tien : 0,
+    } as any, {
+      onSuccess: () => {
+        setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+        invalidate();
+      },
     });
+  };
 
   const handleSave = (item: HDVHoTroItem) => {
     const local = editRow[item.id];
     if (!local) return;
     const itemMoTa = item.mo_ta ?? "";
-    if (local.so_luong === item.so_luong && local.don_gia === item.don_gia && local.mo_ta === itemMoTa) {
+    const curNguoiTt = resolveNguoiTt(item);
+    if (local.so_luong === item.so_luong
+        && local.don_gia === item.don_gia
+        && local.mo_ta === itemMoTa
+        && local.nguoi_tt === curNguoiTt) {
       setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
       return;
     }
+    const tien = local.so_luong * local.don_gia;
     upsertMut.mutate({
       id: item.id, doan_id: doanId,
       so_luong: local.so_luong, don_gia: local.don_gia,
       mo_ta: local.mo_ta || null,
-      tien_cong_ty: local.so_luong * local.don_gia,
+      tien_cong_ty: local.nguoi_tt === "cong_ty" ? tien : 0,
+      tien_hdv: local.nguoi_tt === "hdv" ? tien : 0,
     } as any, {
       onSuccess: () => {
         setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
@@ -294,7 +328,7 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
     <div className="rounded-lg border border-border overflow-hidden">
       <div className="px-4 py-2 bg-sky-50 border-b border-sky-100 flex items-center justify-between">
         <p className="text-xs font-semibold text-sky-800 uppercase tracking-wide">
-          Chi phí công ty hỗ trợ HDV
+          Hướng dẫn viên
         </p>
         <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleAdd} disabled={addingRow}>
           <Plus className="h-3 w-3 mr-1" /> Thêm
@@ -310,6 +344,7 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-24">SL</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Đơn giá</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Thành tiền</th>
+              <th className="text-center px-2 py-2 text-xs font-medium text-muted-foreground w-20">Ai trả</th>
               <th className="w-8" />
             </tr>
           </thead>
@@ -351,6 +386,20 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
                   <td className="px-4 py-2.5 text-right font-medium">
                     {fmt(local.so_luong * local.don_gia)} ₫
                     {isDirty && <span className="ml-1 text-[10px] text-amber-600">*</span>}
+                  </td>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      onClick={() => handleToggleNguoiTt(item)}
+                      disabled={upsertMut.isPending}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+                        local.nguoi_tt === "cong_ty"
+                          ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+                          : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
+                      )}
+                    >
+                      {local.nguoi_tt === "cong_ty" ? "Công ty" : "HDV"}
+                    </button>
                   </td>
                   <td className="px-2 py-2 text-right">
                     <Button

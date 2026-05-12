@@ -39,6 +39,7 @@ export interface HDVHoTroItem {
   so_luong: number;
   don_gia: number;
   tien_cong_ty: number;
+  tien_hdv: number;
 }
 
 export interface HDVSectionData {
@@ -108,7 +109,7 @@ export function useChiPhiHDVSection(doanId?: number) {
       // 3b. Load chi phí hỗ trợ HDV (công ty chi cho HDV)
       const { data: hoTroRows } = await externalSupabase
         .from("doan_chi_phi")
-        .select("id, mo_ta, loai, so_luong, don_gia, tien_cong_ty")
+        .select("id, mo_ta, loai, so_luong, don_gia, tien_cong_ty, tien_hdv")
         .eq("doan_id", doanId!)
         .eq("danh_muc", "hdv_ho_tro")
         .order("created_at", { ascending: true });
@@ -120,8 +121,12 @@ export function useChiPhiHDVSection(doanId?: number) {
         so_luong: r.so_luong ?? 1,
         don_gia: r.don_gia ?? 0,
         tien_cong_ty: r.tien_cong_ty ?? 0,
+        tien_hdv: r.tien_hdv ?? 0,
       }));
-      const tongHoTroHDV = hoTroItems.reduce((s, r) => s + r.tien_cong_ty, 0);
+      // tongHoTroHDV = tổng chi phí section (cả công ty + HDV trả). Số HDV
+      // phải hoàn lại = chỉ phần HDV ứng trước (tien_hdv).
+      const tongHoTroHDV = hoTroItems.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
+      const tongHdvUngHoTro = hoTroItems.reduce((s, r) => s + r.tien_hdv, 0);
 
       // 4. Load DNTT liên quan HDV (qua view có payment_status)
       const { data: dnttRows } = await externalSupabase
@@ -135,8 +140,12 @@ export function useChiPhiHDVSection(doanId?: number) {
         ...d,
         la_thu_hoi: !!(d.ghi_chu || "").includes("[Thu hồi]"),
       })) as HDVDNTTRow[];
-      const tamUngList = allHdvDntts.filter((d) => d.ref_loai === "hdv_tam_ung");
-      const quyetToanList = allHdvDntts.filter((d) => d.ref_loai === "hdv_quyet_toan");
+      // Loại da_huy / tu_choi khỏi list hiển thị — DNTT bị hủy không nên show
+      // trong section HDV nữa (audit qua activity_log).
+      const isActive = (d: HDVDNTTRow) =>
+        d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi";
+      const tamUngList = allHdvDntts.filter((d) => d.ref_loai === "hdv_tam_ung" && isActive(d));
+      const quyetToanList = allHdvDntts.filter((d) => d.ref_loai === "hdv_quyet_toan" && isActive(d));
 
       const tamUngDaTT = tamUngList
         .filter((d) => d.payment_status === "paid" && d.trang_thai_duyet !== "da_huy")
@@ -146,7 +155,8 @@ export function useChiPhiHDVSection(doanId?: number) {
         .filter((d) => d.payment_status !== "paid" && d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
         .reduce((s, d) => s + d.so_tien, 0);
 
-      const soConPhaiTra = tongHdvChi + tongHoTroHDV - tamUngDaTT;
+      // Công ty còn phải trả HDV = HDV chi hộ vendor + HDV ứng cho khoản hỗ trợ - đã tạm ứng
+      const soConPhaiTra = tongHdvChi + tongHdvUngHoTro - tamUngDaTT;
 
       const daQuyetToan = quyetToanList.some(
         (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
