@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  Mail, Send, Pencil, Plus, Trash2,
+  Mail, Send, Pencil, Plus, Trash2, Star,
   Bold, Italic, Underline, Strikethrough,
   AlignLeft, AlignCenter, AlignRight,
   Palette, Link2,
@@ -14,6 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useEmailSignatures, type EmailSignature } from "@/hooks/use-email-signatures";
+import { cn } from "@/lib/utils";
 
 const SIG_HR = `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">`;
 
@@ -103,7 +104,7 @@ export default function EmailPreviewModal({
     if (node) node.innerHTML = extractBody(htmlRef.current);
   }, []);
 
-  const { sigs, upsert, remove } = useEmailSignatures();
+  const { sigs, defaultId, upsert, remove, setDefault } = useEmailSignatures();
 
   const [selectedSigId, setSelectedSigId] = useState<string | null>(null);
   const [sigEditing, setSigEditing] = useState(false);
@@ -125,6 +126,24 @@ export default function EmailPreviewModal({
   useEffect(() => {
     if (!open) { setSigEditing(false); setEditingId(null); }
   }, [open]);
+
+  // Apply chữ ký mặc định khi mở modal (nếu user đã đặt default)
+  useEffect(() => {
+    if (!open) return;
+    if (!defaultId) return;
+    const sig = sigs.find((s) => s.id === defaultId);
+    if (!sig) return;
+    setSelectedSigId(defaultId);
+    // Đợi editor mount xong (callback ref) rồi mới thay đổi nội dung
+    requestAnimationFrame(() => {
+      if (!editRef.current) return;
+      const body = stripSig(editRef.current.innerHTML || "");
+      const next = body + SIG_HR + sig.html;
+      editRef.current.innerHTML = next;
+      onHtmlChange(next);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultId]);
 
   const selectedSig = sigs.find((s) => s.id === selectedSigId) ?? null;
 
@@ -248,16 +267,46 @@ export default function EmailPreviewModal({
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground shrink-0">Chữ ký:</span>
               <Select value={selectedSigId ?? "none"} onValueChange={handleSigChange}>
-                <SelectTrigger className="h-7 text-xs flex-1 max-w-[220px]">
-                  <span>{!selectedSigId ? "Không có chữ ký" : sigs.find((s) => s.id === selectedSigId)?.name ?? "Không có chữ ký"}</span>
+                <SelectTrigger className="h-7 text-xs flex-1 max-w-[260px]">
+                  <span className="inline-flex items-center gap-1">
+                    {!selectedSigId
+                      ? "Không có chữ ký"
+                      : (
+                        <>
+                          {sigs.find((s) => s.id === selectedSigId)?.name ?? "Không có chữ ký"}
+                          {defaultId === selectedSigId && <Star className="h-3 w-3 text-amber-500 fill-amber-400" />}
+                        </>
+                      )}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Không có chữ ký</SelectItem>
                   {sigs.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      <span className="inline-flex items-center gap-1">
+                        {s.name}
+                        {defaultId === s.id && <Star className="h-3 w-3 text-amber-500 fill-amber-400" />}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedSig && !sigEditing && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  title={defaultId === selectedSig.id ? "Bỏ mặc định" : "Đặt làm mặc định"}
+                  onClick={() => setDefault(defaultId === selectedSig.id ? null : selectedSig.id)}
+                >
+                  <Star className={cn(
+                    "h-3.5 w-3.5",
+                    defaultId === selectedSig.id
+                      ? "text-amber-500 fill-amber-400"
+                      : "text-muted-foreground",
+                  )} />
+                </Button>
+              )}
               {selectedSig && !sigEditing && (
                 <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => startEditSig(selectedSig)}>
                   <Pencil className="h-3.5 w-3.5" />

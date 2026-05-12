@@ -8,9 +8,14 @@ export interface EmailSignature {
 }
 
 const STORAGE_KEY = "s8_email_signatures";
+const DEFAULT_KEY = "s8_email_signatures_default_id";
 
 function load(): EmailSignature[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
+}
+
+function loadDefaultId(): string | null {
+  try { return localStorage.getItem(DEFAULT_KEY) || null; } catch { return null; }
 }
 
 function persist(sigs: EmailSignature[]) {
@@ -21,36 +26,57 @@ function persist(sigs: EmailSignature[]) {
   }
 }
 
+function persistDefault(id: string | null) {
+  try {
+    if (id) localStorage.setItem(DEFAULT_KEY, id);
+    else localStorage.removeItem(DEFAULT_KEY);
+  } catch { /* noop */ }
+}
+
 // Module-level singleton — shared across all hook instances
 let _sigs: EmailSignature[] = load();
-const _listeners = new Set<(sigs: EmailSignature[]) => void>();
+let _defaultId: string | null = loadDefaultId();
+type Listener = (sigs: EmailSignature[], defaultId: string | null) => void;
+const _listeners = new Set<Listener>();
 
-function notifyAll(next: EmailSignature[]) {
-  _sigs = next;
-  _listeners.forEach((fn) => fn(next));
+function notifyAll() {
+  _listeners.forEach((fn) => fn(_sigs, _defaultId));
 }
 
 export function useEmailSignatures() {
   const [sigs, setSigs] = useState<EmailSignature[]>(() => _sigs);
+  const [defaultId, setDefaultIdState] = useState<string | null>(() => _defaultId);
 
   useEffect(() => {
-    _listeners.add(setSigs);
-    return () => { _listeners.delete(setSigs); };
+    const listener: Listener = (s, d) => { setSigs(s); setDefaultIdState(d); };
+    _listeners.add(listener);
+    return () => { _listeners.delete(listener); };
   }, []);
 
   const upsert = useCallback((sig: EmailSignature) => {
-    const next = _sigs.some((s) => s.id === sig.id)
+    _sigs = _sigs.some((s) => s.id === sig.id)
       ? _sigs.map((s) => (s.id === sig.id ? sig : s))
       : [..._sigs, sig];
-    persist(next);
-    notifyAll(next);
+    persist(_sigs);
+    notifyAll();
   }, []);
 
   const remove = useCallback((id: string) => {
-    const next = _sigs.filter((s) => s.id !== id);
-    persist(next);
-    notifyAll(next);
+    _sigs = _sigs.filter((s) => s.id !== id);
+    persist(_sigs);
+    // Nếu xoá chữ ký đang mặc định → bỏ default
+    if (_defaultId === id) {
+      _defaultId = null;
+      persistDefault(null);
+    }
+    notifyAll();
   }, []);
 
-  return { sigs, upsert, remove };
+  const setDefault = useCallback((id: string | null) => {
+    _defaultId = id;
+    persistDefault(id);
+    notifyAll();
+  }, []);
+
+  return { sigs, defaultId, upsert, remove, setDefault };
 }
