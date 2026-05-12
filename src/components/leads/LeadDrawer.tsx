@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Phone, MessageCircle, Mail, Plus, Trash2, Check, Trophy } from "lucide-react";
+import { X, Phone, MessageCircle, Mail, Facebook, Plus, Trash2, Check, Trophy } from "lucide-react";
 import { format, isBefore, isToday, startOfDay, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
@@ -132,6 +132,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
         ho_ten: lead.ho_ten ?? "",
         so_dien_thoai: lead.so_dien_thoai ?? "",
         email: lead.email ?? "",
+        facebook_url: lead.facebook_url ?? "",
         ten_to_chuc: lead.ten_to_chuc ?? "",
         chuc_vu: lead.chuc_vu ?? "",
         so_nguoi_lon: lead.so_nguoi_lon ?? 1,
@@ -268,6 +269,13 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       <MessageCircle className="h-3.5 w-3.5" /> Zalo
                     </a>
                   )}
+                  {lead.facebook_url && (
+                    <a href={lead.facebook_url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-medium transition-colors"
+                      onClick={(e) => e.stopPropagation()}>
+                      <Facebook className="h-3.5 w-3.5" /> Facebook
+                    </a>
+                  )}
                   {lead.email && (
                     <a href={`mailto:${lead.email}`}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-medium transition-colors"
@@ -376,6 +384,11 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                           onBlur={() => saveField("email", local.email)} />
                       </Field>
                     </div>
+                    <Field label="Facebook">
+                      <Input value={local.facebook_url ?? ""} onChange={(e) => setL("facebook_url", e.target.value)}
+                        onBlur={() => saveField("facebook_url", local.facebook_url)}
+                        placeholder="https://facebook.com/... hoặc https://m.me/..." />
+                    </Field>
                     <Field label="Nguồn">
                       <SearchableSelect options={LEAD_NGUON_OPTS} value={lead.nguon ?? ""}
                         onChange={(v) => updateLead.mutate({ id: lead.id, nguon: v })} placeholder="Chọn nguồn" />

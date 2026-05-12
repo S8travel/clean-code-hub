@@ -16,6 +16,7 @@ export interface Lead {
   ho_ten: string;
   so_dien_thoai: string | null;
   email: string | null;
+  facebook_url: string | null;
   nguon: string;
   campaign_id: number | null;
   loai_tour: string;
@@ -52,6 +53,7 @@ export interface LeadInsert {
   ho_ten: string;
   so_dien_thoai?: string | null;
   email?: string | null;
+  facebook_url?: string | null;
   nguon: string;
   campaign_id?: number | null;
   loai_tour: string;

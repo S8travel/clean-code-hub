@@ -28,7 +28,7 @@ interface Props {
 }
 
 const EMPTY: LeadInsert = {
-  ho_ten: "", so_dien_thoai: "", email: "",
+  ho_ten: "", so_dien_thoai: "", email: "", facebook_url: "",
   nguon: "", loai_tour: "outbound", loai_khach: null,
   ten_to_chuc: "", chuc_vu: "",
   so_nguoi_lon: 1, so_nguoi_em: 0,
@@ -67,6 +67,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
         ho_ten: lead.ho_ten ?? "",
         so_dien_thoai: lead.so_dien_thoai ?? "",
         email: lead.email ?? "",
+        facebook_url: lead.facebook_url ?? "",
         nguon: lead.nguon ?? "",
         campaign_id: lead.campaign_id,
         loai_tour: lead.loai_tour ?? "outbound",
@@ -182,6 +183,10 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
               <Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} placeholder="abc@gmail.com" />
             </Field>
           </div>
+          <Field label="Facebook">
+            <Input value={form.facebook_url ?? ""} onChange={(e) => set("facebook_url", e.target.value)}
+              placeholder="https://facebook.com/... hoặc https://m.me/..." />
+          </Field>
 
           {/* B2B */}
           {isB2B && (
