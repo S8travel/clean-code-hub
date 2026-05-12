@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,18 +39,21 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
 
   const [tieu_de, setTieuDe] = useState("");
   const [mo_ta, setMoTa] = useState("");
-  const [nguoi_nhan, setNguoiNhan] = useState("");
+  const [nguoi_nhan, setNguoiNhan] = useState(userId);
   const [doan_id, setDoanId] = useState<string>("");
   const [loai_viec, setLoaiViec] = useState("khac");
   const [do_uu_tien, setDoUuTien] = useState("binh_thuong");
   const [han_xu_ly, setHanXuLy] = useState("");
   const [doanSearch, setDoanSearch] = useState("");
 
+  // Reset người nhận về chính user mỗi lần mở modal (default: tự giao cho bản thân)
+  useEffect(() => {
+    if (open) setNguoiNhan(userId);
+  }, [open, userId]);
+
   const filteredDoan = (allDoan as any[])
     .filter((d) => !doanSearch || d.ten_doan?.toLowerCase().includes(doanSearch.toLowerCase()))
     .slice(0, 20);
-
-  const otherUsers = users.filter((u) => u.user_id !== userId);
 
   const handleSubmit = async () => {
     if (!tieu_de.trim()) { toast.error("Vui lòng nhập tiêu đề công việc"); return; }
@@ -82,7 +85,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
   };
 
   const handleClose = () => {
-    setTieuDe(""); setMoTa(""); setNguoiNhan(""); setDoanId("");
+    setTieuDe(""); setMoTa(""); setNguoiNhan(userId); setDoanId("");
     setLoaiViec("khac"); setDoUuTien("binh_thuong"); setHanXuLy(""); setDoanSearch("");
     onClose();
   };
@@ -113,12 +116,18 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
               <Label className="text-xs">Người nhận <span className="text-destructive">*</span></Label>
               <Select value={nguoi_nhan} onValueChange={setNguoiNhan}>
                 <SelectTrigger className="h-8 text-xs">
-                  <span>{otherUsers.find((u) => u.user_id === nguoi_nhan)?.ho_ten ?? "Chọn người nhận..."}</span>
+                  <span>
+                    {(() => {
+                      const u = users.find((u) => u.user_id === nguoi_nhan);
+                      if (!u) return "Chọn người nhận...";
+                      return u.user_id === userId ? `${u.ho_ten} (bản thân)` : u.ho_ten;
+                    })()}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
-                  {otherUsers.map((u) => (
+                  {users.map((u) => (
                     <SelectItem key={u.user_id} value={u.user_id} className="text-xs">
-                      {u.ho_ten}
+                      {u.user_id === userId ? `${u.ho_ten} (bản thân)` : u.ho_ten}
                     </SelectItem>
                   ))}
                 </SelectContent>
