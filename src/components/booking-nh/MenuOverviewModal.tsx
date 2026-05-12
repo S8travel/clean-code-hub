@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -35,6 +35,22 @@ function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, onUpdate
   const updateMut = useUpdateBookingNH();
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
   const [newMon, setNewMon] = useState("");
+
+  // Fallback: snapshot rỗng nhưng đã có set menu → lấy món từ catalog để hiển thị.
+  // Pattern khớp với MealColumn — user có thể edit, save sẽ persist lại snapshot.
+  useEffect(() => {
+    if (!booking?.set_menu_id) return;
+    if ((booking?.mon_an_snapshot?.length ?? 0) > 0) return;
+    externalSupabase
+      .from("nha_hang_set_menu_mon")
+      .select("ten_mon")
+      .eq("set_menu_id", booking.set_menu_id)
+      .order("thu_tu", { ascending: true })
+      .then(({ data }) => {
+        const mons = (data ?? []).map((m: any) => m.ten_mon as string);
+        if (mons.length > 0) setMonList(mons);
+      });
+  }, [booking?.set_menu_id]);
 
   if (!nhaHangId) {
     return <span className="text-xs text-muted-foreground/40 italic">Không có nhà hàng</span>;
