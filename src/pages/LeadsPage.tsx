@@ -134,8 +134,8 @@ export default function LeadsPage() {
         </Button>
       </div>
 
-      {/* Stats widget — chỉ cho user bộ phận điều hành */}
-      {user?.bo_phan === "dieu_hanh" && (
+      {/* Stats widget — chỉ cho user bộ phận sales */}
+      {user?.bo_phan === "sales" && (
         <div className="shrink-0 px-6 pt-4 pb-1 bg-background">
           <LeadStatsWidget userId={user.user_id} onSelect={applyStatsPreset} />
         </div>

@@ -58,6 +58,7 @@ const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
 const BO_PHAN_OPTS: { value: BoPhan; label: string }[] = [
   { value: "dieu_hanh", label: "Điều hành" },
   { value: "ke_toan", label: "Kế toán" },
+  { value: "sales", label: "Sales" },
 ];
 
 const VAI_TRO_LABEL: Record<VaiTro, string> = {
@@ -467,7 +468,7 @@ function NguoiDungTab() {
                     </p>
                     {u.bo_phan && (
                       <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0">
-                        {u.bo_phan === "dieu_hanh" ? "Điều hành" : "Kế toán"}
+                        {BO_PHAN_OPTS.find((o) => o.value === u.bo_phan)?.label ?? u.bo_phan}
                       </Badge>
                     )}
                     {u.phan_loai_tour && u.phan_loai_tour.length > 0 && (

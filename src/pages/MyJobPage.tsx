@@ -149,6 +149,7 @@ const ROLE_LABELS: Record<string, string> = {
 const BO_PHAN_LABELS: Record<string, string> = {
   dieu_hanh: "Điều hành",
   ke_toan: "Kế toán",
+  sales: "Sales",
 };
 
 // ── Todo item type ────────────────────────────────────────────────────────────
