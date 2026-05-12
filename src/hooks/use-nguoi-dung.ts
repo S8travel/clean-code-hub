@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 
 export type VaiTro = "admin" | "giam_doc" | "truong_phong" | "specialist" | "nhan_vien_cao_cap" | "nhan_vien";
-export type BoPhan = "dieu_hanh" | "ke_toan" | "sales";
+export type BoPhan = "dieu_hanh" | "ke_toan" | "sales" | "cong_tac_vien";
 
 export interface UserRoleRow {
   id: string;

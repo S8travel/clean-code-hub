@@ -59,6 +59,7 @@ const BO_PHAN_OPTS: { value: BoPhan; label: string }[] = [
   { value: "dieu_hanh", label: "Điều hành" },
   { value: "ke_toan", label: "Kế toán" },
   { value: "sales", label: "Sales" },
+  { value: "cong_tac_vien", label: "Cộng tác viên" },
 ];
 
 const VAI_TRO_LABEL: Record<VaiTro, string> = {

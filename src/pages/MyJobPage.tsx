@@ -150,6 +150,7 @@ const BO_PHAN_LABELS: Record<string, string> = {
   dieu_hanh: "Điều hành",
   ke_toan: "Kế toán",
   sales: "Sales",
+  cong_tac_vien: "Cộng tác viên",
 };
 
 // ── Todo item type ────────────────────────────────────────────────────────────
