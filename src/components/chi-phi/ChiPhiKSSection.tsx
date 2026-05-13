@@ -700,6 +700,32 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     }
   }, [ksData, chiPhiRows, localRows.length]);
 
+  // Sync foc_*_snapshot từ chiPhiRows về localRows mỗi khi DB refetch.
+  // Cần thiết vì init useEffect trên CHỈ chạy khi localRows.length === 0;
+  // sau khi user sửa FOC qua KSFocEditor → invalidate → chiPhiRows refresh,
+  // nhưng localRows không tự sync foc → UI vẫn hiện giá trị cũ.
+  useEffect(() => {
+    if (chiPhiRows.length === 0) return;
+    const cpMap = new Map<number, typeof chiPhiRows[number]>();
+    chiPhiRows.forEach((cp) => { if (cp.id != null) cpMap.set(cp.id, cp); });
+    setLocalRows((prev) => {
+      let changed = false;
+      const next = prev.map((row) => {
+        if (row.id == null) return row;
+        const cp = cpMap.get(row.id);
+        if (!cp) return row;
+        const newK = cp.foc_khach_snapshot ?? null;
+        const newM = cp.foc_mien_snapshot ?? null;
+        if ((row.foc_khach_snapshot ?? null) === newK && (row.foc_mien_snapshot ?? null) === newM) {
+          return row;
+        }
+        changed = true;
+        return { ...row, foc_khach_snapshot: newK, foc_mien_snapshot: newM };
+      });
+      return changed ? next : prev;
+    });
+  }, [chiPhiRows]);
+
   const handleToggleDinhKy = useCallback((ksId: number) => {
     setDinhKyKsIds((prev) => {
       const next = new Set(prev);
@@ -2071,16 +2097,30 @@ function KSFocEditor({
   useEffect(() => { setM(focMien != null ? String(focMien) : ""); }, [focMien]);
 
   const save = async () => {
-    const nextK = k.trim() === "" ? null : Number(k) || null;
-    const nextM = m.trim() === "" ? null : Number(m) || null;
+    // Parse: chuỗi rỗng → null; số hợp lệ (kể cả 0) → number
+    const parseNum = (s: string): number | null => {
+      const t = s.trim();
+      if (t === "") return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : null;
+    };
+    const nextK = parseNum(k);
+    const nextM = parseNum(m);
     if (nextK === focKhach && nextM === focMien) return;
-    if (rowIds.length === 0) return; // không có row nào saved → snapshot sẽ ghi khi save lần đầu
+    if (rowIds.length === 0) {
+      toast.error("Chưa có chi phí nào để lưu FOC. Nhập giá phòng + blur trước.");
+      return;
+    }
 
     const { error } = await externalSupabase
       .from("doan_chi_phi")
       .update({ foc_khach_snapshot: nextK, foc_mien_snapshot: nextM })
       .in("id", rowIds);
-    if (error) return;
+    if (error) {
+      toast.error("Lỗi lưu FOC: " + error.message);
+      return;
+    }
+    toast.success("Đã lưu FOC cho khách sạn này");
     qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
   };
   void ksId; // ksId reserved cho future filter (multi-KS update qua join)
