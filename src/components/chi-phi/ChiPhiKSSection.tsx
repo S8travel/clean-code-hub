@@ -251,8 +251,14 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     return {
       doan: { ten_doan: tenDoan || String(doanId), so_khach: soKhach },
       ks: { ten: ks.ten, foc_khach: ks.foc_khach ?? null, foc_mien: ks.foc_mien ?? null },
-      ncc: ks.tai_khoan_thanh_toan
-        ? { so_tai_khoan: ks.tai_khoan_thanh_toan }
+      // Ưu tiên NCC linked (structured: ten + so_tai_khoan + ngan_hang).
+      // Fallback ks.tai_khoan_thanh_toan (freeform blob) cho KS chưa link NCC.
+      ncc: (ks.ten_ncc || ks.ncc_so_tai_khoan || ks.ncc_ngan_hang || ks.tai_khoan_thanh_toan)
+        ? {
+            ten: ks.ten_ncc ?? undefined,
+            so_tai_khoan: ks.ncc_so_tai_khoan ?? ks.tai_khoan_thanh_toan ?? undefined,
+            ngan_hang: ks.ncc_ngan_hang ?? undefined,
+          }
         : null,
       checkIn,
       checkOut,
