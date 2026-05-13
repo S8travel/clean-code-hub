@@ -166,9 +166,21 @@ export function useUpsertBookingNH() {
         .select()
         .single();
       if (error) throw error;
+
+      // Sync set_menu_id sang doan_ngay (tránh cascade Điều tour kéo cũ về)
+      if ("set_menu_id" in row) {
+        const col = row.bua_an === "trua" ? "an_trua_set_menu_id" : "an_toi_set_menu_id";
+        await externalSupabase
+          .from("doan_ngay")
+          .update({ [col]: row.set_menu_id ?? null })
+          .eq("id", row.doan_ngay_id);
+      }
       return data;
     },
-    onSuccess: (_, v) => qc.invalidateQueries({ queryKey: [QK, v.doan_id] }),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: [QK, v.doan_id] });
+      qc.invalidateQueries({ queryKey: ["doan_ngay", v.doan_id] });
+    },
   });
 }
 
@@ -181,8 +193,28 @@ export function useUpdateBookingNH() {
         .update(fields)
         .eq("id", id);
       if (error) throw error;
+
+      // Khi set_menu_id thay đổi → cascade sang doan_ngay.an_{bua}_set_menu_id
+      // để tránh save Điều tour sau đó kéo giá trị cũ về (xem use-dieu-tour:893).
+      if ("set_menu_id" in fields) {
+        const { data: bk } = await externalSupabase
+          .from("doan_booking_nh")
+          .select("doan_ngay_id, bua_an")
+          .eq("id", id)
+          .maybeSingle();
+        if (bk?.doan_ngay_id && bk.bua_an) {
+          const col = bk.bua_an === "trua" ? "an_trua_set_menu_id" : "an_toi_set_menu_id";
+          await externalSupabase
+            .from("doan_ngay")
+            .update({ [col]: fields.set_menu_id ?? null })
+            .eq("id", bk.doan_ngay_id);
+        }
+      }
     },
-    onSuccess: (_, v) => qc.invalidateQueries({ queryKey: [QK, v.doan_id] }),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: [QK, v.doan_id] });
+      qc.invalidateQueries({ queryKey: ["doan_ngay", v.doan_id] });
+    },
   });
 }
 
