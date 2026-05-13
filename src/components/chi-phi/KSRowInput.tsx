@@ -12,13 +12,15 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 interface Props {
   row: LocalKSRow;
   globalIdx: number;
+  // FOC pro-rata tính từ parent — trừ vào "Thành tiền" hiển thị NET.
+  rowFocDeduction?: number;
   onFieldChange: (idx: number, field: string, value: any) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
 }
 
 export default memo(function KSRowInput({
-  row, globalIdx,
+  row, globalIdx, rowFocDeduction = 0,
   onFieldChange, onBlurSave, onDelete,
 }: Props) {
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
@@ -36,7 +38,9 @@ export default memo(function KSRowInput({
   }, [globalIdx, localSoPhong, onFieldChange, onBlurSave]);
 
   const soPhong = Number(localSoPhong) || 0;
-  const thanhTien = soPhong * row.gia_phong * row.so_dem;
+  const thanhTienGross = soPhong * row.gia_phong * row.so_dem;
+  // Hiển thị NET (đã trừ FOC pro-rata) — khớp với subtotal card + lưu tien_cong_ty
+  const thanhTien = Math.max(0, thanhTienGross - rowFocDeduction);
 
   return (
     <TableRow className="text-xs">

@@ -81,7 +81,7 @@ export interface EdgeFunctionData {
   checkOut: string;
   codeKS: string;
   soDem: number;
-  roomEntries: { name: string; so_luong: number; don_gia: number; so_dem?: number; ci?: string; co?: string }[];
+  roomEntries: { name: string; so_luong: number; don_gia: number; so_dem?: number; ci?: string; co?: string; foc_count?: number }[];
   cocTotal: number;
   canTruTotal?: number;
   canTruNote?: string;
@@ -154,9 +154,10 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
     cells.push(cell([p(String(rowSoDem), { size: 14 })], { width: colWidths[5] }));
     cells.push(cell([p(String(room.so_luong), { size: 14 })], { width: colWidths[6] }));
 
-    if (isFirst) {
-      cells.push(cell([p(focDisplay, { size: 14 })], { width: colWidths[7], rowSpan: totalRoomRows }));
-    }
+    // Cột FOC: số phòng được miễn cho row đó (pro-rata theo gross trong ngày)
+    const focText = (room.foc_count ?? 0) > 0 ? String(room.foc_count) : "—";
+    cells.push(cell([p(focText, { size: 14 })], { width: colWidths[7] }));
+    void focDisplay; // legacy — không còn dùng cho cell, vẫn cần cho compatibility
 
     cells.push(cell([p(fmt(room.don_gia), { size: 14 })], { width: colWidths[8] }));
     cells.push(cell([p(fmt(thanhTien), { bold: true, size: 14 })], { width: colWidths[9] }));

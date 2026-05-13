@@ -51,7 +51,7 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
         room.name,
         rowSoDem,
         room.so_luong,
-        isFirst ? focDisplay : "",
+        (room.foc_count ?? 0) > 0 ? room.foc_count! : "",
         room.don_gia,
         thanhTien,
         daTT,
@@ -61,6 +61,7 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
         isFirst ? (ncc?.ngan_hang || "—") : "",
         isFirst ? (ghiChu || "") : "",
       ]);
+      void focDisplay; // legacy — replaced by per-row foc_count
     });
   }
 

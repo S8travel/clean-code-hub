@@ -42,6 +42,29 @@ import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
+// FOC per row: trả về tiền miễn + số phòng miễn cho row đó (pro-rata theo gross).
+// Helper dùng chung cho UI (hiển thị NET Thành tiền) + save (tien_cong_ty) + export.
+function calcRowFocBreakdown(
+  row: LocalKSRow,
+  sameKsDayRows: LocalKSRow[],
+  focKhach: number | null,
+  focMien: number | null,
+): { rowFocDeduction: number; rowFocCount: number } {
+  if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
+  const dayTotalRooms = sameKsDayRows.reduce((s, r) => s + (r.so_phong || 0), 0);
+  if (dayTotalRooms < focKhach) return { rowFocDeduction: 0, rowFocCount: 0 };
+  const dayFocPhong = Math.floor(dayTotalRooms / focKhach) * focMien;
+  const dayGross = sameKsDayRows.reduce((s, r) => s + (r.so_phong || 0) * (r.gia_phong || 0), 0);
+  const avgPrice = dayTotalRooms > 0 ? dayGross / dayTotalRooms : 0;
+  const dayFocAmount = dayFocPhong * avgPrice;
+  const rowGross = (row.so_phong || 0) * (row.gia_phong || 0);
+  if (dayGross <= 0 || dayFocAmount <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
+  const rowFocDeduction = Math.round((rowGross / dayGross) * dayFocAmount);
+  const pricePerRoom = row.gia_phong || avgPrice || 0;
+  const rowFocCount = pricePerRoom > 0 ? Math.round(rowFocDeduction / pricePerRoom) : 0;
+  return { rowFocDeduction, rowFocCount };
+}
+
 // Tính giá trị FOC được miễn cho 1 KS (theo từng ngày)
 // focKhach: cứ X phòng thì focMien phòng được miễn
 // Tính tổng tiền FOC được miễn cho 1 KS (theo từng đêm riêng biệt)
@@ -189,13 +212,24 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         return (a.loai_phong || "").localeCompare(b.loai_phong || "");
       });
 
-    const roomEntries: { name: string; so_luong: number; don_gia: number; so_dem: number; ci: string; co: string }[] = ksRows.map((r) => {
+    // FOC config + pro-rata foc_count per row (theo cùng công thức UI + handleBlurSave)
+    const ksFocCfg = resolveKSFoc(ksRows, ks);
+    const rowsByDayKey = new Map<string, LocalKSRow[]>();
+    ksRows.forEach((r) => {
+      const k = r.ngay_date || "";
+      if (!rowsByDayKey.has(k)) rowsByDayKey.set(k, []);
+      rowsByDayKey.get(k)!.push(r);
+    });
+
+    const roomEntries: { name: string; so_luong: number; don_gia: number; so_dem: number; ci: string; co: string; foc_count: number }[] = ksRows.map((r) => {
       const ngayDate = ngayDateMap[r.doan_ngay_id] || r.ngay_date || r.ci || "";
       const coDate = ngayDate ? new Date(ngayDate + "T00:00:00") : null;
       if (coDate) coDate.setDate(coDate.getDate() + 1);
       const coStr = coDate
         ? `${coDate.getDate()}/${coDate.getMonth() + 1}/${coDate.getFullYear()}`
         : "";
+      const sameDay = rowsByDayKey.get(r.ngay_date || "") || [];
+      const { rowFocCount } = calcRowFocBreakdown(r, sameDay, ksFocCfg.foc_khach, ksFocCfg.foc_mien);
       return {
         name: r.loai_phong || "Phòng KS",
         so_luong: r.so_phong,
@@ -203,9 +237,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         so_dem: r.so_dem,
         ci: fmtDateDisplay(ngayDate),
         co: coStr,
+        foc_count: rowFocCount,
       };
     });
-    if (roomEntries.length === 0) roomEntries.push({ name: "—", so_luong: 1, don_gia: 0, so_dem: 1, ci: "", co: "" });
+    if (roomEntries.length === 0) roomEntries.push({ name: "—", so_luong: 1, don_gia: 0, so_dem: 1, ci: "", co: "", foc_count: 0 });
 
     // Dates (overall range)
     const ngayDates = ksRows.map((r) => ngayDateMap[r.doan_ngay_id] || r.ngay_date || r.ci || "").filter(Boolean).sort();
@@ -764,23 +799,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       // Snapshot ưu tiên — KHÔNG dùng master trừ khi chưa có snapshot (lần đầu)
       const sameKsRows = localRowsRef.current.filter((r) => r.khach_san_id === row.khach_san_id);
       const { foc_khach: focKhach, foc_mien: focMien } = resolveKSFoc(sameKsRows, ksInfo);
-      // Tổng phòng ngày này — chỉ tính FOC nếu đủ ngưỡng trong 1 đêm
-      const dayTotalRooms = sameKsDayRows.reduce((s, r2) => s + (r2.so_phong || 0), 0);
-      const dayFocPhong = (focKhach && focMien && focKhach > 0 && dayTotalRooms >= focKhach)
-        ? Math.floor(dayTotalRooms / focKhach) * focMien
-        : 0;
-      const rowGross = row.thanh_tien; // = so_phong * gia_phong (mỗi row = 1 đêm)
-      // FOC tính theo từng đêm: số phòng miễn × giá bình quân/phòng/đêm.
-      // Phân bổ cho row này theo tỉ lệ doanh thu trong đêm đó.
-      // KHÔNG nhân so_dem ở đây — phải khớp với calcFocDeduction (display).
-      const dayGross = sameKsDayRows.reduce(
-        (s, r2) => s + (r2.so_phong || 0) * (r2.gia_phong || 0), 0,
-      );
-      const avgPrice = dayTotalRooms > 0 ? dayGross / dayTotalRooms : 0;
-      const dayFocAmount = dayFocPhong * avgPrice;
-      const rowFocDeduction = dayGross > 0 && dayFocAmount > 0
-        ? Math.round((rowGross / dayGross) * dayFocAmount)
-        : 0;
+      // Dùng helper chung — đảm bảo UI Thành tiền NET, save tien_cong_ty, export foc_count
+      // dùng CÙNG công thức pro-rata.
+      const rowGross = (row.so_phong || 0) * (row.gia_phong || 0); // mỗi row = 1 đêm
+      const { rowFocDeduction } = calcRowFocBreakdown(row, sameKsDayRows, focKhach, focMien);
       const tienCongTy = rowGross - rowFocDeduction;
 
       upsertMut.mutate(
@@ -1311,6 +1333,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                           ngaySo={ngaySo}
                           dayRows={dayRows}
                           localRows={localRows}
+                          focKhach={ksFoc.foc_khach}
+                          focMien={ksFoc.foc_mien}
                           onFieldChange={handleFieldChange}
                           onBlurSave={handleBlurSave}
                           onDelete={handleDelete}
@@ -2004,6 +2028,8 @@ function DayGroup({
   ngaySo,
   dayRows,
   localRows,
+  focKhach,
+  focMien,
   onFieldChange,
   onBlurSave,
   onDelete,
@@ -2013,6 +2039,8 @@ function DayGroup({
   ngaySo?: number;
   dayRows: LocalKSRow[];
   localRows: LocalKSRow[];
+  focKhach: number | null;
+  focMien: number | null;
   onFieldChange: (idx: number, field: string, value: any) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
@@ -2038,11 +2066,13 @@ function DayGroup({
       </TableRow>
       {dayRows.map((row) => {
         const globalIdx = localRows.indexOf(row);
+        const { rowFocDeduction } = calcRowFocBreakdown(row, dayRows, focKhach, focMien);
         return (
           <KSRowInput
             key={`${row.doan_ngay_id}-${globalIdx}`}
             row={row}
             globalIdx={globalIdx}
+            rowFocDeduction={rowFocDeduction}
             onFieldChange={onFieldChange}
             onBlurSave={onBlurSave}
             onDelete={onDelete}
