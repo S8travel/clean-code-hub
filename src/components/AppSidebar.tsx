@@ -48,6 +48,7 @@ import { useCurrentSession } from "@/hooks/use-current-user";
 import { useThongBaoCount } from "@/hooks/use-thong-bao";
 import { useLeadStats } from "@/hooks/use-lead-stats";
 import { UserSettingsMenu } from "@/components/UserSettingsMenu";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // ── Google Translate button ──
 
@@ -276,7 +277,9 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { session } = useCurrentSession();
-  const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null);
+  // Điều hành / admin: thấy alert deadline của TẤT CẢ lock phòng.
+  const includeAllAlerts = user?.bo_phan === "dieu_hanh" || user?.role === "admin";
+  const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null, { includeAll: includeAllAlerts });
   const { data: invoiceBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "gia");
   const { data: suCoBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "su_co");
   const { data: giaoViecBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "giao_viec");
@@ -349,10 +352,14 @@ export function AppSidebar() {
               <p className="text-xs font-medium truncate">{user?.ho_ten ?? user?.email}</p>
               <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
             </div>
-            <UserSettingsMenu user={user} onLogout={handleLogout} />
+            <div className="flex items-center gap-0.5 shrink-0">
+              <NotificationBell userId={session?.user?.id ?? null} />
+              <UserSettingsMenu user={user} onLogout={handleLogout} />
+            </div>
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-1">
+            <NotificationBell userId={session?.user?.id ?? null} />
             <UserSettingsMenu user={user} onLogout={handleLogout} collapsed />
           </div>
         )}

@@ -8,20 +8,31 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { useLockPhongList, useLockPhongDeadlineAlerts, type LockPhongDisplay } from "@/hooks/use-lock-phong";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import { useCurrentSession } from "@/hooks/use-current-user";
+import { useAuth } from "@/hooks/use-auth";
 import LockPhongTheoKSView from "@/components/lock-phong/LockPhongTheoKSView";
+import LockPhongTheoDeadlineView from "@/components/lock-phong/LockPhongTheoDeadlineView";
 import LockPhongFormDialog from "@/components/lock-phong/LockPhongFormDialog";
 import { format, parseISO, differenceInDays, addDays } from "date-fns";
 
 type DeadlineFilter = "all" | "qua_han" | "sap_den" | "con_xa" | "da_book";
-type EmailFilter = "all" | "chua_gui" | "cho_xac_nhan" | "da_xac_nhan" | "da_huy";
+type OutcomeStatus = "cho_xu_ly" | "thanh_doan" | "da_huy";
+type ViewMode = "theo_ks" | "theo_deadline";
+
+const OUTCOME_OPTIONS: { value: OutcomeStatus; label: string }[] = [
+  { value: "cho_xu_ly",  label: "Chờ xử lý" },
+  { value: "thanh_doan", label: "Thành đoàn" },
+  { value: "da_huy",     label: "Đã hủy" },
+];
 
 export default function LockPhongPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<LockPhongDisplay | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("theo_ks");
 
   // Filters
   const [search, setSearch] = useState("");
@@ -29,12 +40,24 @@ export default function LockPhongPage() {
   const [checkInFrom, setCheckInFrom] = useState<Date | undefined>();
   const [checkInTo, setCheckInTo] = useState<Date | undefined>();
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>("all");
-  const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
+  // Outcome status: default chỉ "Chờ xử lý" + "Thành đoàn" — ẩn "Đã hủy"
+  const [outcomeFilter, setOutcomeFilter] = useState<Set<OutcomeStatus>>(
+    () => new Set<OutcomeStatus>(["cho_xu_ly", "thanh_doan"]),
+  );
+  const toggleOutcome = (v: OutcomeStatus) =>
+    setOutcomeFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(v)) next.delete(v); else next.add(v);
+      return next;
+    });
 
   const { session } = useCurrentSession();
+  const { user } = useAuth();
+  // Điều hành / admin: thấy alert deadline của TẤT CẢ lock phòng (không chỉ do mình tạo).
+  const includeAll = user?.bo_phan === "dieu_hanh" || user?.role === "admin";
   const { data = [], isLoading } = useLockPhongList();
   const { data: ksList = [] } = useKhachSanList();
-  const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null);
+  const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null, { includeAll });
 
   const ksOptions = useMemo(
     () => [
@@ -88,21 +111,30 @@ export default function LockPhongPage() {
           return false;
         }
       }
-      // Email status
-      if (emailFilter !== "all" && !lp.hotels?.some((h) => h.email_status === emailFilter)) {
-        return false;
+      // Outcome status (cột Trạng thái) — match nếu BẤT KỲ ks row nào có outcome_status nằm trong set.
+      // null trong DB = "cho_xu_ly".
+      if (outcomeFilter.size === 0) return false; // user uncheck hết → ẩn
+      if (outcomeFilter.size < 3) {
+        const matched = lp.hotels?.some((h) => {
+          const status: OutcomeStatus = (h.outcome_status as OutcomeStatus | null) ?? "cho_xu_ly";
+          return outcomeFilter.has(status);
+        });
+        if (!matched) return false;
       }
       return true;
     });
-  }, [data, search, filterKsId, checkInFrom, checkInTo, deadlineFilter, emailFilter]);
+  }, [data, search, filterKsId, checkInFrom, checkInTo, deadlineFilter, outcomeFilter]);
 
+  // Default outcome filter = ["cho_xu_ly", "thanh_doan"] (ẩn da_huy)
+  const isOutcomeDefault =
+    outcomeFilter.size === 2 && outcomeFilter.has("cho_xu_ly") && outcomeFilter.has("thanh_doan");
   const hasActiveFilter =
     !!search ||
     filterKsId !== "all" ||
     !!checkInFrom ||
     !!checkInTo ||
     deadlineFilter !== "all" ||
-    emailFilter !== "all";
+    !isOutcomeDefault;
 
   const clearFilters = () => {
     setSearch("");
@@ -110,7 +142,7 @@ export default function LockPhongPage() {
     setCheckInFrom(undefined);
     setCheckInTo(undefined);
     setDeadlineFilter("all");
-    setEmailFilter("all");
+    setOutcomeFilter(new Set<OutcomeStatus>(["cho_xu_ly", "thanh_doan"]));
   };
 
   const handleAddNew = () => {
@@ -119,7 +151,7 @@ export default function LockPhongPage() {
   };
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+    <div className="mx-auto px-4 sm:px-6 py-6 space-y-4 max-w-[1500px]">
       {/* Deadline alerts */}
       {deadlineAlerts.length > 0 && (
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-3">
@@ -223,24 +255,21 @@ export default function LockPhongPage() {
             </SelectContent>
           </Select>
 
-          <Select value={emailFilter} onValueChange={(v) => setEmailFilter(v as EmailFilter)}>
-            <SelectTrigger className="h-8 text-sm w-[170px]">
-              <span>
-                {emailFilter === "all" ? "✉️ Mọi trạng thái"
-                  : emailFilter === "chua_gui" ? "Chưa gửi"
-                  : emailFilter === "cho_xac_nhan" ? "Chờ KS xác nhận"
-                  : emailFilter === "da_xac_nhan" ? "KS đã xác nhận"
-                  : "Đã hủy"}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">✉️ Mọi trạng thái</SelectItem>
-              <SelectItem value="chua_gui">Chưa gửi</SelectItem>
-              <SelectItem value="cho_xac_nhan">Chờ KS xác nhận</SelectItem>
-              <SelectItem value="da_xac_nhan">KS đã xác nhận</SelectItem>
-              <SelectItem value="da_huy">Đã hủy</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="inline-flex items-center gap-3 h-8 px-2.5 rounded-md border border-border bg-background">
+            {OUTCOME_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+              >
+                <Checkbox
+                  checked={outcomeFilter.has(opt.value)}
+                  onCheckedChange={() => toggleOutcome(opt.value)}
+                  className="h-3.5 w-3.5"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
 
           {hasActiveFilter && (
             <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearFilters}>
@@ -255,12 +284,34 @@ export default function LockPhongPage() {
         </Button>
       </div>
 
-      {/* Active filter summary */}
-      {hasActiveFilter && (
-        <p className="text-xs text-muted-foreground -mt-1">
-          Hiển thị {filtered.length}/{data.length} lock · nhóm theo Khách sạn
-        </p>
-      )}
+      {/* View toggle */}
+      <div className="flex items-center justify-between gap-3 -mt-1">
+        <div className="inline-flex rounded-md border border-border bg-card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setViewMode("theo_ks")}
+            className={`px-3 py-1 text-xs transition-colors ${
+              viewMode === "theo_ks" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
+            }`}
+          >
+            Theo khách sạn
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("theo_deadline")}
+            className={`px-3 py-1 text-xs border-l border-border transition-colors ${
+              viewMode === "theo_deadline" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
+            }`}
+          >
+            Theo deadline
+          </button>
+        </div>
+        {hasActiveFilter && (
+          <p className="text-xs text-muted-foreground">
+            Hiển thị {filtered.length}/{data.length} lock
+          </p>
+        )}
+      </div>
 
       {/* Content */}
       {isLoading ? (
@@ -285,6 +336,8 @@ export default function LockPhongPage() {
             Xóa lọc
           </Button>
         </div>
+      ) : viewMode === "theo_deadline" ? (
+        <LockPhongTheoDeadlineView data={filtered} />
       ) : (
         <LockPhongTheoKSView data={filtered} />
       )}

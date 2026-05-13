@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
+import { format, parseISO, differenceInDays } from "date-fns";
 import { vi } from "date-fns/locale";
 import { ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   type LockPhongDisplay, type LockPhongKSDisplay,
   useUpdateLockPhongKSOutcome, useUpdateLockPhongKSFields,
+  useUpdateLockPhongDeadline,
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
 import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
@@ -64,6 +65,25 @@ function fmtDate(d: string) {
   }
 }
 
+// Deadline display với màu + countdown (giống deadline view)
+function deadlineDisplay(deadline: string | null) {
+  if (!deadline) return { text: "—", cls: "text-muted-foreground", subtext: "" };
+  try {
+    const dl = parseISO(deadline);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = differenceInDays(dl, today);
+    const dateStr = format(dl, "dd/MM/yyyy", { locale: vi });
+    if (diff < 0) return { text: dateStr, cls: "text-red-700 font-semibold", subtext: `Quá hạn ${Math.abs(diff)} ngày` };
+    if (diff === 0) return { text: dateStr, cls: "text-orange-700 font-semibold", subtext: "Hôm nay" };
+    if (diff <= 3) return { text: dateStr, cls: "text-orange-600 font-medium", subtext: `Còn ${diff} ngày` };
+    if (diff <= 7) return { text: dateStr, cls: "text-amber-600", subtext: `Còn ${diff} ngày` };
+    return { text: dateStr, cls: "text-foreground", subtext: `Còn ${diff} ngày` };
+  } catch {
+    return { text: deadline, cls: "text-muted-foreground", subtext: "" };
+  }
+}
+
 
 interface MergedEntry {
   lockPhong: LockPhongDisplay;
@@ -96,6 +116,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
   } | null>(null);
   const updateOutcome = useUpdateLockPhongKSOutcome();
   const updateFields = useUpdateLockPhongKSFields();
+  const updateDeadline = useUpdateLockPhongDeadline();
 
   const saveField = (
     id: number,
@@ -273,6 +294,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     <tr className="border-b border-border bg-muted/10">
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Tên đoàn</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Seri</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">Deadline</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Check-in</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Check-out</th>
                       <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground w-14">Đêm</th>
@@ -319,6 +341,32 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 >
                                   {lockPhong.ten_seri}
                                 </td>
+                                {(() => {
+                                  const dl = deadlineDisplay(lockPhong.deadline);
+                                  return (
+                                    <td
+                                      rowSpan={callCount}
+                                      className="px-3 py-2.5 align-top border-r border-border/40"
+                                    >
+                                      <DatePicker
+                                        value={lockPhong.deadline ?? ""}
+                                        onChange={(v) => {
+                                          const next = v || null;
+                                          if (next !== (lockPhong.deadline ?? null)) {
+                                            updateDeadline.mutate(
+                                              { id: lockPhong.id, deadline: next },
+                                              { onError: (e: any) => toast.error("Lỗi sửa deadline: " + (e?.message || "")) },
+                                            );
+                                          }
+                                        }}
+                                        className={cn("h-7 text-xs px-1.5", dl.cls)}
+                                      />
+                                      {dl.subtext && (
+                                        <div className="text-[10px] text-muted-foreground mt-0.5">{dl.subtext}</div>
+                                      )}
+                                    </td>
+                                  );
+                                })()}
                               </>
                             )}
                             <td className="px-2 py-2 text-xs">

@@ -347,8 +347,31 @@ export function useUpdateLockPhongKSOutcome() {
 
 // ── Deadline alerts ──
 
-/** Returns locks belonging to currentUserId with deadline within the next `withinDays` days */
-export function useLockPhongDeadlineAlerts(currentUserId: string | null, withinDays = 3) {
+/** Update chỉ deadline của lock_phong (cho inline edit trong KS view). */
+export function useUpdateLockPhongDeadline() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, deadline }: { id: number; deadline: string | null }) => {
+      const { error } = await externalSupabase
+        .from("lock_phong")
+        .update({ deadline })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+  });
+}
+
+/**
+ * Returns locks with deadline within the next `withinDays` days.
+ * - Default: chỉ lock do `currentUserId` tạo (created_by match).
+ * - `opts.includeAll = true`: bỏ filter creator → thấy tất cả (dùng cho điều hành/admin).
+ */
+export function useLockPhongDeadlineAlerts(
+  currentUserId: string | null,
+  opts: { withinDays?: number; includeAll?: boolean } = {},
+) {
+  const { withinDays = 3, includeAll = false } = opts;
   const { data = [] } = useLockPhongList();
   if (!currentUserId) return [];
   const today = new Date();
@@ -356,7 +379,7 @@ export function useLockPhongDeadlineAlerts(currentUserId: string | null, withinD
   const limit = new Date(today);
   limit.setDate(limit.getDate() + withinDays);
   return data.filter((lp) => {
-    if (lp.created_by !== currentUserId) return false;
+    if (!includeAll && lp.created_by !== currentUserId) return false;
     if (!lp.deadline) return false;
     const dl = new Date(lp.deadline + "T00:00:00");
     return dl >= today && dl <= limit;
