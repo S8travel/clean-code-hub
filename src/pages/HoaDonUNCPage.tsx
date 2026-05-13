@@ -63,9 +63,28 @@ function noDiacritics(s: string): string {
     .replace(/Đ/g, "D");
 }
 
+// Bỏ prefix "{từ khoá} " ở đầu chuỗi nếu có (tránh trùng lặp khi data có sẵn keyword)
+function stripPrefix(s: string, prefix: string): string {
+  const trimmed = (s || "").trim();
+  const p = prefix.toLowerCase();
+  return trimmed.toLowerCase().startsWith(p) ? trimmed.slice(prefix.length).trim() : trimmed;
+}
+
+// Tách tên NCC nếu có dạng "{KS|NH|...} XXX - {Company}" — lấy phần Company
+const NCC_PREFIX_RE = /^(ks|nh|hotel|khach\s*san|nha\s*hang|dv|dich\s*vu|xe|visa)\s/i;
+function cleanNccName(raw: string | null | undefined): string {
+  const s = (raw || "").trim();
+  if (!s) return "";
+  const parts = s.split(" - ");
+  if (parts.length >= 2 && NCC_PREFIX_RE.test(parts[0].trim())) {
+    return parts.slice(1).join(" - ").trim();
+  }
+  return s;
+}
+
 // Build "S8 tt {NCC} - {loai} {tên dịch vụ} {ngày} doan {tên đoàn}" — không dấu
 function buildPaymentContent(row: HoaDonUNCRow): string {
-  const ncc = row.ten_nha_cung_cap || "";
+  const ncc = cleanNccName(row.ten_nha_cung_cap);
   const loaiShort = LOAI_SHORT[row.loai] || row.loai;
   const moTa = row.mo_ta || "";
 
@@ -104,10 +123,12 @@ function buildPaymentContent(row: HoaDonUNCRow): string {
     }
   }
 
-  const doan = row.ten_doan || "";
-  const codeNcc = row.code_ncc?.trim() || "";
+  // Bỏ "doan " prefix nếu ten_doan đã chứa sẵn (tránh "doan doan XXX")
+  const doan = stripPrefix(row.ten_doan || "", "doan ");
+  // Bỏ "code " prefix nếu code_ncc đã chứa sẵn (tránh "code code XXX")
+  const codeNcc = stripPrefix(row.code_ncc || "", "code ");
   // Nếu code NCC trùng với code đoàn → bỏ qua (tránh trùng lặp với "doan XXX")
-  const showCode = codeNcc && codeNcc.toLowerCase() !== doan.trim().toLowerCase();
+  const showCode = codeNcc && codeNcc.toLowerCase() !== doan.toLowerCase();
   const parts: string[] = [`S8 tt ${ncc}`.trim()];
   const svPart = [loaiShort, tenDichVu].filter(Boolean).join(" ").trim();
   if (svPart) parts.push(`- ${svPart}`);
