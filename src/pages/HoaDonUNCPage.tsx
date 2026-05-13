@@ -43,6 +43,77 @@ const loaiLabel: Record<string, { text: string; color: string }> = {
   bao_hiem: { text: "BH", color: "bg-rose-100 text-rose-700" },
 };
 
+// Loại viết tắt cho nội dung thanh toán (chữ thường, copy vào UNC)
+const LOAI_SHORT: Record<string, string> = {
+  khach_san: "ks",
+  nha_hang: "nh",
+  dich_vu: "dv",
+  xe: "xe",
+  visa: "visa",
+  bao_hiem: "bh",
+  hdv: "hdv",
+  dinh_ky: "dk",
+};
+
+// Bỏ dấu tiếng Việt — ngân hàng yêu cầu nội dung không dấu
+function noDiacritics(s: string): string {
+  return s.normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+// Build "S8 tt {NCC} - {loai} {tên dịch vụ} {ngày} doan {tên đoàn}" — không dấu
+function buildPaymentContent(row: HoaDonUNCRow): string {
+  const ncc = row.ten_nha_cung_cap || "";
+  const loaiShort = LOAI_SHORT[row.loai] || row.loai;
+  const moTa = row.mo_ta || "";
+
+  // Tên dịch vụ: phần trước " - " hoặc " (" đầu tiên
+  let tenDichVu = moTa.split(" - ")[0] || moTa;
+  // Bỏ ghi chú "(trưa)/(tối)" trong tên NH nếu có
+  tenDichVu = tenDichVu.replace(/\s*\([^)]*\)\s*$/, "").trim();
+
+  // Trích ngày dd/MM hoặc dd/M từ mo_ta. Hỗ trợ "(20/05)", "(20/5)", "20/05"
+  const dates: { d: number; mo: number }[] = [];
+  const re = /(\d{1,2})\/(\d{1,2})(?!\d)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(moTa))) {
+    const d = +m[1];
+    const mo = +m[2];
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) dates.push({ d, mo });
+  }
+  dates.sort((a, b) => a.mo - b.mo || a.d - b.d);
+
+  let dateRange = "";
+  if (dates.length === 1) {
+    dateRange = `${dates[0].d}/${dates[0].mo}`;
+  } else if (dates.length >= 2) {
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    if (row.loai === "khach_san") {
+      // Check-out = đêm cuối + 1 (vd: ngủ 19,20,21 → check-out 22)
+      const year = new Date().getFullYear();
+      const co = new Date(year, last.mo - 1, last.d);
+      co.setDate(co.getDate() + 1);
+      dateRange = `${first.d}/${first.mo}-${co.getDate()}/${co.getMonth() + 1}`;
+    } else {
+      dateRange = first.d === last.d && first.mo === last.mo
+        ? `${first.d}/${first.mo}`
+        : `${first.d}/${first.mo}-${last.d}/${last.mo}`;
+    }
+  }
+
+  const doan = row.ten_doan || "";
+  const parts: string[] = [`S8 tt ${ncc}`.trim()];
+  const svPart = [loaiShort, tenDichVu].filter(Boolean).join(" ").trim();
+  if (svPart) parts.push(`- ${svPart}`);
+  if (dateRange) parts.push(dateRange);
+  if (doan) parts.push(`doan ${doan}`);
+
+  return noDiacritics(parts.join(" "));
+}
+
 const docStatusConfig: Record<TrangThaiDoc, { text: string; icon: React.ElementType; cls: string }> = {
   chua_co: { text: "Chưa có", icon: FileX, cls: "bg-red-50 text-red-600 border border-red-200" },
   da_co: { text: "Đã có", icon: FileCheck, cls: "bg-green-50 text-green-700 border border-green-200" },
@@ -428,7 +499,7 @@ export default function HoaDonUNCPage() {
               <TableHead className="min-w-[130px]">Đoàn</TableHead>
               <TableHead className="w-[60px]">Loại</TableHead>
               <TableHead className="min-w-[180px]">Mô tả</TableHead>
-              <TableHead className="min-w-[150px]">Nhà cung cấp</TableHead>
+              <TableHead className="min-w-[280px]">Nội dung thanh toán</TableHead>
               <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
               <TableHead className="w-[100px]">Ngày cần TT</TableHead>
               <TableHead className="min-w-[180px]">Thanh toán</TableHead>
@@ -469,7 +540,20 @@ export default function HoaDonUNCPage() {
                     </span>
                   </TableCell>
                   <TableCell className="text-sm">{row.mo_ta ?? "—"}</TableCell>
-                  <TableCell className="text-sm">{row.ten_nha_cung_cap ?? "—"}</TableCell>
+                  <TableCell className="text-xs font-mono">
+                    <button
+                      type="button"
+                      className="text-left hover:bg-muted/50 px-1 -mx-1 rounded transition"
+                      onClick={() => {
+                        const content = buildPaymentContent(row);
+                        navigator.clipboard.writeText(content);
+                        toast({ title: "Đã sao chép nội dung TT" });
+                      }}
+                      title="Click để sao chép"
+                    >
+                      {buildPaymentContent(row)}
+                    </button>
+                  </TableCell>
                   <TableCell className="text-right text-sm font-medium">
                     {(() => {
                       const ct = canTruByDntt[row.id] || 0;
