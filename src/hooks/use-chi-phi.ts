@@ -53,6 +53,9 @@ export interface ChiPhiRow {
   foc_mien_snapshot: number | null;
   // Chiết khấu NH snapshot — lock per-tour tương tự FOC.
   chiet_khau_phan_tram_snapshot: number | null;
+  // KS chi phí: phân biệt loại row để tính FOC riêng.
+  // 'phong' (mặc định) | 'dich_vu_an' | 'dich_vu_ve' | 'dich_vu_khac' | null (non-KS).
+  loai_row: string | null;
   // HYBRID flag: true = OP đã override SL/đơn giá thủ công ở Chi phí section
   // → cascade từ Điều tour bỏ qua row này. Reset = set false.
   is_overridden: boolean;

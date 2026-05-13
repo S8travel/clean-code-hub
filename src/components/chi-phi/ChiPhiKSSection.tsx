@@ -106,11 +106,15 @@ const dayLabel = (dateStr: string) => {
   return dayNames[getDay(d)];
 };
 
+export type KSLoaiRow = "phong" | "dich_vu_an" | "dich_vu_ve" | "dich_vu_khac";
+
 export interface LocalKSRow {
   id?: number;
   khach_san_id: number;
   doan_ngay_id: number;
   ngay_date: string;
+  // Cho row 'phong': loai_phong = tên loại phòng (TWN/DBL/SGL).
+  // Cho row dịch vụ: loai_phong = tên dịch vụ (text tự do).
   loai_phong: string;
   so_phong: number;
   ci: string;
@@ -122,6 +126,7 @@ export interface LocalKSRow {
   ref_doan_ngay_item_id?: number | null;
   foc_khach_snapshot?: number | null;
   foc_mien_snapshot?: number | null;
+  loai_row?: KSLoaiRow;  // default 'phong' nếu không set
 }
 
 // Resolve FOC config: ưu tiên snapshot trên rows, fall back master
@@ -686,6 +691,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             ref_doan_ngay_item_id: cp.ref_doan_ngay_item_id,
             foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
             foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
+            loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
           } as LocalKSRow;
         }
 
@@ -714,6 +720,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           thanh_tien: (cp.so_luong || 1) * (cp.don_gia || 0),
           foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
           foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
+          loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
         } as LocalKSRow;
       })
       .filter((r): r is LocalKSRow => r !== null);
@@ -824,7 +831,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           // Lần sau giữ snapshot hiện có (resolveKSFoc trả snapshot nếu có).
           foc_khach_snapshot: focKhach,
           foc_mien_snapshot:  focMien,
-        },
+          loai_row: row.loai_row ?? "phong",
+        } as any,
         {
           onSuccess: (data) => {
             if (!row.id && data?.id) {
