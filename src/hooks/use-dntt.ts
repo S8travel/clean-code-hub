@@ -98,6 +98,9 @@ export function useDNTTList(filters: Filters) {
           doan:doan_id(ten_doan),
           nha_cung_cap:nha_cung_cap_id(ten, so_tai_khoan, ngan_hang)
         `)
+        // Ngày cần TT ASC (sớm nhất lên đầu), NULL xuống cuối.
+        // Tiebreak created_at DESC cho cùng deadline.
+        .order("ngay_can_thanh_toan", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
 
       if (filters.doanId) q = q.eq("doan_id", filters.doanId);
