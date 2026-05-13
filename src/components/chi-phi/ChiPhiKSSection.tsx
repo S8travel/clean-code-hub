@@ -1686,7 +1686,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             const gross = modalRows.reduce(
               (s, r) => s + (Number(r.so_phong) || 0) * (Number(r.gia_phong) || 0) * (Number(r.so_dem) || 1), 0,
             );
-            return gross - calcFocDeduction(modalRows, modalKs?.foc_khach ?? null, modalKs?.foc_mien ?? null);
+            // Dùng FOC snapshot per tour (giống display card) — không lấy master trực tiếp
+            const modalFoc = resolveKSFoc(modalRows, modalKs);
+            return gross - calcFocDeduction(modalRows, modalFoc.foc_khach, modalFoc.foc_mien);
           })()}
           daCoc={(cocByKs[modalKsId] || 0) + (canTruAmtByKsId[modalKsId] || 0)}
           localRows={grouped[modalKsId] || []}
