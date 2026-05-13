@@ -18,6 +18,24 @@ export interface HDVInfo {
   ngan_hang: string | null;
 }
 
+// Chi tiết quyết toán theo form S8 (BM02.1-20/2024/QT-S8)
+export interface QuyetToanData {
+  tam_ung?: number;
+  thu_trach_nhiem?: number;
+  thu_tip?: { so_khach?: number; don_gia_nt?: number; ty_gia?: number };
+  thu_dau_khach?: { so_khach?: number; don_gia?: number };
+  thu_quy_vp?: { so_luong?: number; don_gia?: number };
+  thu_ban_op?: number;
+  thu_khac?: number;
+  tong_hdv_chi?: number;       // snapshot tongHdvChi tại lúc tạo
+  ma_doan?: string;
+  ten_hdv?: string;
+  so_khach_doan?: number;
+  so_ngay_doan?: number;
+  ten_nguoi_de_nghi?: string;  // = HDV name (snapshot)
+  bo_phan_nguoi_de_nghi?: string;
+}
+
 export interface HDVDNTTRow {
   id: number;
   doan_id: number | null;
@@ -30,6 +48,7 @@ export interface HDVDNTTRow {
   paid_amount: number;
   ghi_chu: string | null;
   created_at: string;
+  quyet_toan_data: QuyetToanData | null;
 }
 
 export interface HDVHoTroItem {
@@ -131,7 +150,7 @@ export function useChiPhiHDVSection(doanId?: number) {
       // 4. Load DNTT liên quan HDV (qua view có payment_status)
       const { data: dnttRows } = await externalSupabase
         .from("dntt_with_payment_status")
-        .select("id, doan_id, ref_loai, mo_ta, so_tien, trang_thai_duyet, payment_status, paid_amount, ghi_chu, created_at")
+        .select("id, doan_id, ref_loai, mo_ta, so_tien, trang_thai_duyet, payment_status, paid_amount, ghi_chu, created_at, quyet_toan_data")
         .eq("doan_id", doanId!)
         .in("ref_loai", ["hdv_tam_ung", "hdv_quyet_toan"])
         .order("created_at", { ascending: true });
@@ -139,6 +158,7 @@ export function useChiPhiHDVSection(doanId?: number) {
       const allHdvDntts = (dnttRows || []).map((d: any) => ({
         ...d,
         la_thu_hoi: !!(d.ghi_chu || "").includes("[Thu hồi]"),
+        quyet_toan_data: d.quyet_toan_data ?? null,
       })) as HDVDNTTRow[];
       // Loại da_huy / tu_choi khỏi list hiển thị — DNTT bị hủy không nên show
       // trong section HDV nữa (audit qua activity_log).
@@ -190,6 +210,7 @@ export function useCreateHDVPayment() {
       laThuHoi: boolean;
       moTa: string;
       ghiChu?: string;
+      quyetToanData?: QuyetToanData | null;
     }) => {
       const { data, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
@@ -205,6 +226,7 @@ export function useCreateHDVPayment() {
           ghi_chu: payload.laThuHoi
             ? `[Thu hồi] ${payload.ghiChu ?? ""}`.trim()
             : (payload.ghiChu ?? null),
+          quyet_toan_data: payload.quyetToanData ?? null,
         })
         .select("id")
         .single();
