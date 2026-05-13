@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Plus, Ban, Trash2, Printer, FileText } from "lucide-react";
+import { Plus, Ban, Trash2, Printer, FileText, FileDown } from "lucide-react";
 import HDVPreviewModal from "./HDVPreviewModal";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -210,7 +210,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           defaultLaThuHoi={netConPhaiTra < 0}
           doan={doan}
           tongHdvChi={tongHdvChi}
-          hdvName={hdv?.ten ?? ""}
+          hdv={hdv}
           onClose={() => setShowQuyetToan(false)}
         />
       )}
@@ -234,8 +234,6 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
   const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
-  type EditCell = { so_luong: number; don_gia: number; mo_ta: string; nguoi_tt: "cong_ty" | "hdv" };
-  const [editRow, setEditRow] = useState<Record<number, EditCell>>({});
   const [addingRow, setAddingRow] = useState(false);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
@@ -244,75 +242,34 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
   const resolveNguoiTt = (item: HDVHoTroItem): "cong_ty" | "hdv" =>
     item.tien_hdv > 0 ? "hdv" : (item.tien_cong_ty > 0 ? "cong_ty" : "hdv");
 
-  const getLocal = (item: HDVHoTroItem): EditCell =>
-    editRow[item.id] ?? {
-      so_luong: item.so_luong,
-      don_gia: item.don_gia,
-      mo_ta: item.mo_ta ?? "",
-      nguoi_tt: resolveNguoiTt(item),
-    };
-
-  const updateLocal = (id: number, patch: Partial<EditCell>) =>
-    setEditRow((prev) => {
-      const base = hoTroItems.find((r) => r.id === id);
-      const cur = prev[id] ?? (base ? {
-        so_luong: base.so_luong, don_gia: base.don_gia,
-        mo_ta: base.mo_ta ?? "", nguoi_tt: resolveNguoiTt(base),
-      } : { so_luong: 1, don_gia: 0, mo_ta: "", nguoi_tt: "hdv" as const });
-      return { ...prev, [id]: { ...cur, ...patch } };
-    });
-
-  const handleNumChange = (id: number, field: "so_luong" | "don_gia", val: number) =>
-    updateLocal(id, { [field]: val });
-
-  const handleMoTaChange = (id: number, val: string) => updateLocal(id, { mo_ta: val });
-
-  const handleToggleNguoiTt = (item: HDVHoTroItem) => {
-    const cur = getLocal(item).nguoi_tt;
-    const next: "cong_ty" | "hdv" = cur === "hdv" ? "cong_ty" : "hdv";
-    const tien = (getLocal(item).so_luong) * (getLocal(item).don_gia);
-    // Save ngay khi toggle để cả số tiền đi đúng cột (tránh user toggle xong quên blur)
-    upsertMut.mutate({
-      id: item.id, doan_id: doanId,
-      tien_cong_ty: next === "cong_ty" ? tien : 0,
-      tien_hdv: next === "hdv" ? tien : 0,
-    } as any, {
-      onSuccess: () => {
-        setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
-        invalidate();
-      },
-    });
-  };
-
-  const handleSave = (item: HDVHoTroItem) => {
-    const local = editRow[item.id];
-    if (!local) return;
+  // Save handler — row component pass full payload sync via ref → đảm bảo
+  // value mới nhất, không bị stale closure khi user blur xong chuyển tab.
+  const handleSaveRow = (
+    id: number,
+    payload: { mo_ta: string; so_luong: number; don_gia: number; nguoi_tt: "cong_ty" | "hdv" },
+  ) => {
+    const item = hoTroItems.find((r) => r.id === id);
+    if (!item) return;
     const itemMoTa = item.mo_ta ?? "";
     const curNguoiTt = resolveNguoiTt(item);
-    if (local.so_luong === item.so_luong
-        && local.don_gia === item.don_gia
-        && local.mo_ta === itemMoTa
-        && local.nguoi_tt === curNguoiTt) {
-      setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
-      return;
+    if (payload.so_luong === item.so_luong
+        && payload.don_gia === item.don_gia
+        && payload.mo_ta === itemMoTa
+        && payload.nguoi_tt === curNguoiTt) {
+      return; // no change
     }
-    const tien = local.so_luong * local.don_gia;
+    const tien = payload.so_luong * payload.don_gia;
     upsertMut.mutate({
-      id: item.id, doan_id: doanId,
-      so_luong: local.so_luong, don_gia: local.don_gia,
-      mo_ta: local.mo_ta || null,
-      tien_cong_ty: local.nguoi_tt === "cong_ty" ? tien : 0,
-      tien_hdv: local.nguoi_tt === "hdv" ? tien : 0,
-    } as any, {
-      onSuccess: () => {
-        setEditRow((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
-        invalidate();
-      },
-    });
+      id, doan_id: doanId,
+      so_luong: payload.so_luong, don_gia: payload.don_gia,
+      mo_ta: payload.mo_ta || null,
+      tien_cong_ty: payload.nguoi_tt === "cong_ty" ? tien : 0,
+      tien_hdv: payload.nguoi_tt === "hdv" ? tien : 0,
+    } as any, { onSuccess: () => invalidate() });
   };
 
-  const handleDelete = (item: HDVHoTroItem) => {
-    deleteMut.mutate({ id: item.id, doanId }, {
+  const handleDelete = (id: number) => {
+    deleteMut.mutate({ id, doanId }, {
       onSuccess: () => { invalidate(); toast.success("Đã xóa"); },
       onError: (e: any) => toast.error(e?.message || "Lỗi xóa"),
     });
@@ -364,75 +321,156 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {hoTroItems.map((item) => {
-              const local = getLocal(item);
-              const isDirty = editRow[item.id] !== undefined;
-              return (
-                <tr key={item.id} className="hover:bg-muted/20">
-                  <td className="px-3 py-2">
-                    <Input
-                      type="text"
-                      value={local.mo_ta}
-                      onChange={(e) => handleMoTaChange(item.id, e.target.value)}
-                      onBlur={() => handleSave(item)}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                      placeholder="VD: Công tác phí, Tiền ngủ, ..."
-                      className="h-7 text-xs"
-                    />
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <Input
-                      type="number"
-                      value={local.so_luong || ""}
-                      onChange={(e) => handleNumChange(item.id, "so_luong", Number(e.target.value) || 0)}
-                      onBlur={() => handleSave(item)}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                      className="h-6 text-xs px-1.5 py-0 text-center w-16 ml-auto"
-                    />
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <DecimalInput
-                      value={local.don_gia}
-                      onChange={(v) => handleNumChange(item.id, "don_gia", v)}
-                      onBlur={() => handleSave(item)}
-                      className="h-6 text-xs px-1.5 py-0 text-right w-28 ml-auto"
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-medium">
-                    {fmt(local.so_luong * local.don_gia)} ₫
-                    {isDirty && <span className="ml-1 text-[10px] text-amber-600">*</span>}
-                  </td>
-                  <td className="px-2 py-2 text-center">
-                    <button
-                      onClick={() => handleToggleNguoiTt(item)}
-                      disabled={upsertMut.isPending}
-                      className={cn(
-                        "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
-                        local.nguoi_tt === "cong_ty"
-                          ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
-                          : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
-                      )}
-                    >
-                      {local.nguoi_tt === "cong_ty" ? "Công ty" : "HDV"}
-                    </button>
-                  </td>
-                  <td className="px-2 py-2 text-right">
-                    <Button
-                      size="icon" variant="ghost"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(item)}
-                      disabled={deleteMut.isPending}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
+            {hoTroItems.map((item) => (
+              <HDVHoTroRow
+                key={item.id}
+                item={item}
+                pending={upsertMut.isPending || deleteMut.isPending}
+                onSave={handleSaveRow}
+                onDelete={handleDelete}
+              />
+            ))}
           </tbody>
         </table>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Row hỗ trợ HDV — local state với ref mirror.
+// Lift state vào row giúp keystroke không re-render bảng. Ref mirror đảm bảo
+// triggerSave (gọi qua setTimeout từ DecimalInput.onBlur) đọc value mới nhất,
+// không bị stale closure khi user blur xong chuyển tab.
+function HDVHoTroRow({
+  item, pending, onSave, onDelete,
+}: {
+  item: HDVHoTroItem;
+  pending: boolean;
+  onSave: (
+    id: number,
+    payload: { mo_ta: string; so_luong: number; don_gia: number; nguoi_tt: "cong_ty" | "hdv" },
+  ) => void;
+  onDelete: (id: number) => void;
+}) {
+  const initialNguoiTt = (it: HDVHoTroItem): "cong_ty" | "hdv" =>
+    it.tien_hdv > 0 ? "hdv" : it.tien_cong_ty > 0 ? "cong_ty" : "hdv";
+
+  const [moTa, setMoTaState] = useState(item.mo_ta ?? "");
+  const [soLuong, setSoLuongState] = useState(item.so_luong);
+  const [donGia, setDonGiaState] = useState(item.don_gia);
+  const [nguoiTt, setNguoiTtState] = useState<"cong_ty" | "hdv">(initialNguoiTt(item));
+
+  // Ref mirror — sync update để triggerSave luôn đọc giá trị mới nhất.
+  const stateRef = useRef({ moTa, soLuong, donGia, nguoiTt });
+
+  const setMoTa = (v: string) => { stateRef.current.moTa = v; setMoTaState(v); };
+  const setSoLuong = (v: number) => { stateRef.current.soLuong = v; setSoLuongState(v); };
+  const setDonGia = (v: number) => { stateRef.current.donGia = v; setDonGiaState(v); };
+  const setNguoiTt = (v: "cong_ty" | "hdv") => { stateRef.current.nguoiTt = v; setNguoiTtState(v); };
+
+  // Re-sync khi item.id đổi (row bị thay) hoặc external update từ refetch.
+  // Dùng JSON.stringify để chỉ sync khi data thực sự khác — tránh đè edit chưa save.
+  const externalKey = `${item.id}|${item.mo_ta ?? ""}|${item.so_luong}|${item.don_gia}|${item.tien_cong_ty}|${item.tien_hdv}`;
+  const lastSyncedKeyRef = useRef(externalKey);
+  useEffect(() => {
+    if (lastSyncedKeyRef.current !== externalKey) {
+      lastSyncedKeyRef.current = externalKey;
+      const newNguoi = initialNguoiTt(item);
+      stateRef.current = {
+        moTa: item.mo_ta ?? "",
+        soLuong: item.so_luong,
+        donGia: item.don_gia,
+        nguoiTt: newNguoi,
+      };
+      setMoTaState(item.mo_ta ?? "");
+      setSoLuongState(item.so_luong);
+      setDonGiaState(item.don_gia);
+      setNguoiTtState(newNguoi);
+    }
+  }, [externalKey, item]);
+
+  const triggerSave = () => {
+    const s = stateRef.current;
+    onSave(item.id, { mo_ta: s.moTa, so_luong: s.soLuong, don_gia: s.donGia, nguoi_tt: s.nguoiTt });
+  };
+
+  const handleToggleNguoiTt = () => {
+    const next: "cong_ty" | "hdv" = stateRef.current.nguoiTt === "hdv" ? "cong_ty" : "hdv";
+    setNguoiTt(next);
+    triggerSave();
+  };
+
+  const itemMoTa = item.mo_ta ?? "";
+  const curNguoiTt = initialNguoiTt(item);
+  const isDirty =
+    soLuong !== item.so_luong ||
+    donGia !== item.don_gia ||
+    moTa !== itemMoTa ||
+    nguoiTt !== curNguoiTt;
+  const thanhTien = soLuong * donGia;
+
+  return (
+    <tr className="hover:bg-muted/20">
+      <td className="px-3 py-2">
+        <Input
+          type="text"
+          value={moTa}
+          onChange={(e) => setMoTa(e.target.value)}
+          onBlur={triggerSave}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+          placeholder="VD: Công tác phí, Tiền ngủ, ..."
+          className="h-7 text-xs"
+        />
+      </td>
+      <td className="px-4 py-2 text-right">
+        <Input
+          type="number"
+          value={soLuong || ""}
+          onChange={(e) => setSoLuong(Number(e.target.value) || 0)}
+          onBlur={triggerSave}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+          className="h-6 text-xs px-1.5 py-0 text-center w-16 ml-auto"
+        />
+      </td>
+      <td className="px-4 py-2 text-right">
+        <DecimalInput
+          value={donGia}
+          onChange={setDonGia}
+          onBlur={triggerSave}
+          className="h-6 text-xs px-1.5 py-0 text-right w-28 ml-auto"
+        />
+      </td>
+      <td className="px-4 py-2.5 text-right font-medium">
+        {fmt(thanhTien)} ₫
+        {isDirty && <span className="ml-1 text-[10px] text-amber-600">*</span>}
+      </td>
+      <td className="px-2 py-2 text-center">
+        <button
+          onClick={handleToggleNguoiTt}
+          disabled={pending}
+          className={cn(
+            "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+            nguoiTt === "cong_ty"
+              ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
+              : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200",
+          )}
+        >
+          {nguoiTt === "cong_ty" ? "Công ty" : "HDV"}
+        </button>
+      </td>
+      <td className="px-2 py-2 text-right">
+        <Button
+          size="icon" variant="ghost"
+          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+          onClick={() => onDelete(item.id)}
+          disabled={pending}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </td>
+    </tr>
   );
 }
 
@@ -539,15 +577,16 @@ interface CreateModalProps {
   // Quyết toán context — chỉ dùng cho hdv_quyet_toan
   doan?: any;
   tongHdvChi?: number;
-  hdvName?: string;
+  hdv?: HDVInfo | null;  // full info để in file (cần STK + ngân hàng)
   onClose: () => void;
 }
 
 function CreateHDVPaymentModal({
   doanId, hdvId, refLoai, title, defaultSoTien, defaultLaThuHoi,
-  doan, tongHdvChi, hdvName,
+  doan, tongHdvChi, hdv,
   onClose,
 }: CreateModalProps) {
+  const hdvName = hdv?.ten ?? "";
   const createMut = useCreateHDVPayment();
   const isQT = refLoai === "hdv_quyet_toan";
 
@@ -596,33 +635,56 @@ function CreateHDVPaymentModal({
   const tongThu = tamUng + thuTrachNhiem + thuTipVnd + thuDauKhachVnd + thuQuyVpVnd + thuBanOp + thuKhac;
   const conPhaiThanhToan = tongHdvChiVal - tongThu;
 
+  // Auto-sync ĐNTT với |conPhaiThanhToan| trong QT mode. Mỗi khi quyết toán field
+  // đổi (tongHdvChi/tip/đầu khách/...), soTien + laThuHoi tự cập nhật. User vẫn
+  // có thể sửa ĐNTT tay — override stick cho tới khi field QT đổi tiếp.
+  useEffect(() => {
+    if (!isQT) return;
+    setSoTien(Math.abs(conPhaiThanhToan));
+    setLaThuHoi(conPhaiThanhToan < 0);
+  }, [conPhaiThanhToan, isQT]);
+
+  const buildQuyetToanData = () => ({
+    tam_ung: tamUng,
+    thu_trach_nhiem: thuTrachNhiem,
+    thu_tip: { so_khach: tipSoKhach, don_gia_nt: tipDonGia, ty_gia: tipTyGia },
+    thu_dau_khach: { so_khach: dauKhachSoKhach, don_gia: dauKhachDonGia },
+    thu_quy_vp: { so_luong: quyVpSoLuong, don_gia: quyVpDonGia },
+    thu_ban_op: thuBanOp,
+    thu_khac: thuKhac,
+    tong_hdv_chi: tongHdvChiVal,
+    ma_doan: doan?.ten_doan ?? "",
+    ten_hdv: hdvName,
+    so_khach_doan: soKhachDefault,
+    so_ngay_doan: soNgayDefault,
+    ten_nguoi_de_nghi: hdvName,
+  });
+
   const handleSubmit = async () => {
     if (soTien <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
     try {
-      const quyetToanData = isQT ? {
-        tam_ung: tamUng,
-        thu_trach_nhiem: thuTrachNhiem,
-        thu_tip: { so_khach: tipSoKhach, don_gia_nt: tipDonGia, ty_gia: tipTyGia },
-        thu_dau_khach: { so_khach: dauKhachSoKhach, don_gia: dauKhachDonGia },
-        thu_quy_vp: { so_luong: quyVpSoLuong, don_gia: quyVpDonGia },
-        thu_ban_op: thuBanOp,
-        thu_khac: thuKhac,
-        tong_hdv_chi: tongHdvChiVal,
-        ma_doan: doan?.ten_doan ?? "",
-        ten_hdv: hdvName ?? "",
-        so_khach_doan: soKhachDefault,
-        so_ngay_doan: soNgayDefault,
-        ten_nguoi_de_nghi: hdvName ?? "",
-      } : null;
       await createMut.mutateAsync({
         doanId, hdvId, refLoai, soTien, laThuHoi, moTa,
         ghiChu: ghiChu || undefined,
-        quyetToanData,
+        quyetToanData: isQT ? buildQuyetToanData() : null,
       });
       toast.success("Đã tạo đề nghị thanh toán");
       onClose();
     } catch (e: any) {
       toast.error(e?.message || "Lỗi tạo đề nghị TT");
+    }
+  };
+
+  const handleExport = () => {
+    if (!isQT) return;
+    try {
+      exportHDVQuyetToanExcel({
+        data: buildQuyetToanData(),
+        hdv: hdv ?? null,
+      });
+      toast.success("Đã xuất file Excel");
+    } catch (e: any) {
+      toast.error("Lỗi xuất Excel: " + (e?.message || ""));
     }
   };
 
@@ -756,17 +818,9 @@ function CreateHDVPaymentModal({
                     {conPhaiThanhToan < 0 ? "-" : ""}{fmt(Math.abs(conPhaiThanhToan))} ₫
                   </span>
                 </div>
-                <Button
-                  type="button"
-                  size="sm" variant="outline"
-                  className="w-full h-7 text-xs mt-1"
-                  onClick={() => {
-                    setSoTien(Math.abs(conPhaiThanhToan));
-                    setLaThuHoi(conPhaiThanhToan < 0);
-                  }}
-                >
-                  Áp dụng vào Số tiền ĐNTT
-                </Button>
+                <p className="text-[10px] text-muted-foreground italic">
+                  Số tiền ĐNTT bên dưới tự đồng bộ với giá trị này.
+                </p>
               </div>
             </div>
           )}
@@ -801,6 +855,12 @@ function CreateHDVPaymentModal({
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={onClose}>Hủy</Button>
+            {isQT && (
+              <Button variant="outline" size="sm" onClick={handleExport} className="gap-1">
+                <FileDown className="h-3.5 w-3.5" />
+                In file Excel
+              </Button>
+            )}
             <Button size="sm" onClick={handleSubmit} disabled={createMut.isPending}>
               {createMut.isPending ? "Đang tạo..." : "Tạo"}
             </Button>
