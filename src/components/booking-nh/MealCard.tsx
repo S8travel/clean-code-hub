@@ -123,9 +123,15 @@ export default function MealCard({
     setSelectedSetMenuId(booking?.set_menu_id ?? setMenuIdFromDieuTour ?? null);
   }, [booking?.id, booking?.set_menu_id, JSON.stringify(booking?.mon_an_snapshot)]);
 
-  // Khi set menu thay đổi và món load xong → tự fill danh sách món (nếu booking chưa gửi)
+  // Khi user THỰC SỰ đổi set menu (selectedSetMenuId !== booking.set_menu_id) →
+  // tự fill danh sách món từ catalog + save. KHÔNG chạy khi initial mount sync
+  // (lúc đó hai giá trị bằng nhau) — tránh đè user edits mon_an_snapshot mỗi
+  // lần remount tab.
   useEffect(() => {
     if (setMenuMons.length === 0) return;
+    // Skip nếu set menu chưa đổi so với booking đã lưu — user chỉ vừa mở lại tab,
+    // không có hành động đổi set, giữ nguyên mons cũ từ DB.
+    if (booking && selectedSetMenuId === booking.set_menu_id) return;
     const canOverwrite = !booking || booking.booking_status === "chua_gui";
     if (!canOverwrite) return;
     setMonList(setMenuMons);
