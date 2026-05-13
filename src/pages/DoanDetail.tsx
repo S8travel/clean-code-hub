@@ -39,6 +39,7 @@ import BookingDVTab from "@/components/booking-dv/BookingDVTab";
 import BookingVisaXeTab from "@/components/booking-dv/BookingVisaXeTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
+import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
 
 function TabBadge({ count }: { count: number }) {
@@ -480,6 +481,7 @@ export default function DoanDetail() {
             <TabsTrigger value="booking-visa-xe">Visa & Xe</TabsTrigger>
             <TabsTrigger value="booking-dv">Booking DV</TabsTrigger>
             <TabsTrigger value="chi-phi">Chi phí<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
+            <TabsTrigger value="tai-lieu">Tài liệu</TabsTrigger>
             <TabsTrigger value="log">Log</TabsTrigger>
           </TabsList>
 
@@ -609,6 +611,10 @@ export default function DoanDetail() {
 
           <TabsContent value="chi-phi" className="mt-4">
             <ChiPhiTab doanId={doanId} doan={doan} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} />
+          </TabsContent>
+
+          <TabsContent value="tai-lieu" className="mt-4">
+            <DoanTaiLieuTab doanId={doanId} />
           </TabsContent>
 
           <TabsContent value="log" className="mt-4">

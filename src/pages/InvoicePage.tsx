@@ -13,6 +13,7 @@ import {
   useUploadInvoiceFile,
   useDeleteInvoiceFile,
 } from "@/hooks/use-doan-invoice";
+import { useDoanTaiLieuByDoanIds, type DoanTaiLieuRow, type DoanTaiLieuLoai } from "@/hooks/use-doan-tai-lieu";
 import { useDoanLogList, useToggleResolved } from "@/hooks/use-doan-log";
 import {
   useCanhDiem,
@@ -260,15 +261,54 @@ function InvoiceDrawer({
   );
 }
 
+// Chip nhỏ hiển thị trạng thái + link tài liệu (BG/HĐ). Có file → click mở tab mới;
+// chưa có file → xám, vô hiệu hóa.
+function TaiLieuChip({
+  taiLieu, label, title, cls,
+}: {
+  taiLieu: DoanTaiLieuRow | null;
+  label: string;
+  title: string;
+  cls: string;
+}) {
+  if (!taiLieu) {
+    return (
+      <span
+        className="text-[10px] shrink-0 rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground/60"
+        title={`${title} — chưa có`}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={taiLieu.file_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        "text-[10px] shrink-0 rounded px-1.5 py-0.5 font-medium transition-colors cursor-pointer",
+        cls,
+      )}
+      title={`${title} — ${taiLieu.file_name || "Mở file"}`}
+    >
+      {label}
+    </a>
+  );
+}
+
 // ── InvoiceDoanCard ───────────────────────────────────────────────────────────
 
 function InvoiceDoanCard({
   doan,
   chiPhiThucTe,
+  taiLieu,
   onCardClick,
 }: {
   doan: DoanWithRel;
   chiPhiThucTe: number;
+  taiLieu: Partial<Record<DoanTaiLieuLoai, DoanTaiLieuRow>> | null;
   onCardClick: () => void;
 }) {
   const { data: invoiceData, isLoading: invLoading } = useDoanInvoiceData(doan.id);
@@ -383,6 +423,9 @@ function InvoiceDoanCard({
               {TRANG_THAI_LABEL[doan.trang_thai] ?? doan.trang_thai}
             </Badge>
           )}
+          {/* Báo giá + Hợp đồng — auto-link từ tab Tài liệu trong DoanDetail */}
+          <TaiLieuChip taiLieu={taiLieu?.bao_gia ?? null}  label="BG" title="Báo giá"  cls="bg-blue-100 text-blue-700 hover:bg-blue-200" />
+          <TaiLieuChip taiLieu={taiLieu?.hop_dong ?? null} label="HĐ" title="Hợp đồng" cls="bg-emerald-100 text-emerald-700 hover:bg-emerald-200" />
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span>{doan.agents?.ten ?? "—"}</span>
@@ -512,6 +555,7 @@ export default function InvoicePage() {
 
   const { data: chiPhiMap } = useChiPhiSummaryMap(endedDoanIds);
   const { data: invoiceSummaryMap } = useDoanInvoiceSummaryMap(endedDoanIds);
+  const { data: taiLieuMap } = useDoanTaiLieuByDoanIds(endedDoanIds);
 
   const filteredDoan = useMemo(
     () =>
@@ -669,6 +713,7 @@ export default function InvoicePage() {
               key={doan.id}
               doan={doan}
               chiPhiThucTe={chiPhiMap?.get(doan.id)?.thucTe ?? 0}
+              taiLieu={taiLieuMap?.get(doan.id) ?? null}
               onCardClick={() => setSelectedDoan(doan)}
             />
           ))}
