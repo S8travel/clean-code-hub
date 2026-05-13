@@ -613,8 +613,8 @@ function MonthGroupCard({
   monthGroup: MonthGroup;
   onCreateDNTT: () => void;
 }) {
-  const defaultExpanded = monthGroup.totalConLai > 0;
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  // Default thu gọn để dễ scan summary; user click để mở.
+  const [expanded, setExpanded] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DNTTRow | null>(null);
   const [viewTarget, setViewTarget] = useState<DNTTRow | null>(null);
 
