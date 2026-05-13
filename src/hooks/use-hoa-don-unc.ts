@@ -23,6 +23,7 @@ export interface HoaDonUNCRow {
   hoa_don_url: string | null;
   unc_url: string | null;
   ref_loai: string | null;
+  code_ncc: string | null;  // KS: ks_ma_code from doan_ngay; khác: null
 }
 
 export interface HoaDonUNCFilters {
@@ -57,27 +58,52 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
       const { data, error } = await q;
       if (error) throw error;
 
-      return (data || []).map((r: any) => ({
-        id: r.id,
-        doan_id: r.doan_id,
-        ten_doan: r.doan?.ten_doan ?? null,
-        loai: r.loai,
-        mo_ta: r.mo_ta,
-        so_tien: r.so_tien,
-        la_coc: !!r.la_coc,
-        ref_id: r.ref_id ?? null,
-        nha_cung_cap_id: r.nha_cung_cap_id,
-        ten_nha_cung_cap: r.ten_nha_cung_cap,
-        ngay_can_thanh_toan: r.ngay_can_thanh_toan,
-        thanh_toan_luc: r.thanh_toan_luc,
-        payment_status: r.payment_status ?? "unpaid",
-        paid_amount: r.paid_amount ?? 0,
-        trang_thai_hoa_don: r.trang_thai_hoa_don ?? "chua_co",
-        trang_thai_unc: r.trang_thai_unc ?? "chua_co",
-        hoa_don_url: r.hoa_don_url,
-        unc_url: r.unc_url,
-        ref_loai: r.ref_loai ?? null,
-      }));
+      // Enrich KS rows với ks_ma_code từ doan_ngay (1 code chung cho cả KS trong đoàn)
+      const ksRefs = (data || [])
+        .filter((r: any) => r.loai === "khach_san" && r.doan_id && r.ref_id)
+        .map((r: any) => ({ doan_id: r.doan_id as number, khach_san_id: r.ref_id as number }));
+      const codeMap = new Map<string, string>(); // key = `${doan_id}|${khach_san_id}`
+      if (ksRefs.length > 0) {
+        const doanIds = [...new Set(ksRefs.map((x) => x.doan_id))];
+        const ksIds = [...new Set(ksRefs.map((x) => x.khach_san_id))];
+        const { data: ngayCodes } = await externalSupabase
+          .from("doan_ngay")
+          .select("doan_id, khach_san_id, ks_ma_code")
+          .in("doan_id", doanIds)
+          .in("khach_san_id", ksIds)
+          .not("ks_ma_code", "is", null);
+        (ngayCodes || []).forEach((n: any) => {
+          const key = `${n.doan_id}|${n.khach_san_id}`;
+          if (!codeMap.has(key) && n.ks_ma_code) codeMap.set(key, n.ks_ma_code);
+        });
+      }
+
+      return (data || []).map((r: any) => {
+        const codeKey = r.loai === "khach_san" && r.doan_id && r.ref_id
+          ? `${r.doan_id}|${r.ref_id}` : null;
+        return {
+          id: r.id,
+          doan_id: r.doan_id,
+          ten_doan: r.doan?.ten_doan ?? null,
+          loai: r.loai,
+          mo_ta: r.mo_ta,
+          so_tien: r.so_tien,
+          la_coc: !!r.la_coc,
+          ref_id: r.ref_id ?? null,
+          nha_cung_cap_id: r.nha_cung_cap_id,
+          ten_nha_cung_cap: r.ten_nha_cung_cap,
+          ngay_can_thanh_toan: r.ngay_can_thanh_toan,
+          thanh_toan_luc: r.thanh_toan_luc,
+          payment_status: r.payment_status ?? "unpaid",
+          paid_amount: r.paid_amount ?? 0,
+          trang_thai_hoa_don: r.trang_thai_hoa_don ?? "chua_co",
+          trang_thai_unc: r.trang_thai_unc ?? "chua_co",
+          hoa_don_url: r.hoa_don_url,
+          unc_url: r.unc_url,
+          ref_loai: r.ref_loai ?? null,
+          code_ncc: codeKey ? (codeMap.get(codeKey) ?? null) : null,
+        };
+      });
     },
   });
 }

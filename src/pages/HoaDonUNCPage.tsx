@@ -105,10 +105,12 @@ function buildPaymentContent(row: HoaDonUNCRow): string {
   }
 
   const doan = row.ten_doan || "";
+  const codeNcc = row.code_ncc?.trim() || "";
   const parts: string[] = [`S8 tt ${ncc}`.trim()];
   const svPart = [loaiShort, tenDichVu].filter(Boolean).join(" ").trim();
   if (svPart) parts.push(`- ${svPart}`);
   if (dateRange) parts.push(dateRange);
+  if (codeNcc) parts.push(`code ${codeNcc}`);
   if (doan) parts.push(`doan ${doan}`);
 
   return noDiacritics(parts.join(" "));
