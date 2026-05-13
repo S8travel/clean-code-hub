@@ -125,9 +125,12 @@ function buildPaymentContent(row: HoaDonUNCRow): string {
 
   // Bỏ "doan " prefix nếu ten_doan đã chứa sẵn (tránh "doan doan XXX")
   const doan = stripPrefix(row.ten_doan || "", "doan ");
+  // Sentinel "code doan" / "code đoàn" → OP báo dùng tên đoàn làm code → bỏ qua insert
+  const rawCode = noDiacritics((row.code_ncc || "").trim()).toLowerCase();
+  const codeIsDoanSentinel = rawCode === "code doan" || rawCode === "doan";
   // Bỏ "code " prefix nếu code_ncc đã chứa sẵn (tránh "code code XXX")
-  const codeNcc = stripPrefix(row.code_ncc || "", "code ");
-  // Nếu code NCC trùng với code đoàn → bỏ qua (tránh trùng lặp với "doan XXX")
+  const codeNcc = codeIsDoanSentinel ? "" : stripPrefix(row.code_ncc || "", "code ");
+  // Nếu code NCC trùng với tên đoàn → bỏ qua (tránh trùng lặp với "doan XXX")
   const showCode = codeNcc && codeNcc.toLowerCase() !== doan.toLowerCase();
   const parts: string[] = [`S8 tt ${ncc}`.trim()];
   const svPart = [loaiShort, tenDichVu].filter(Boolean).join(" ").trim();
