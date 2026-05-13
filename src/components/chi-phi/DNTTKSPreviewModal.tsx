@@ -102,7 +102,7 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
                   <table className="w-full border-collapse text-xs">
                     <thead>
                       <tr className="bg-gray-100">
-                        {["Check in", "Check out", "Loại phòng", "Số đêm", "Số lượng", "Đơn giá", "Thành tiền"].map((h) => (
+                        {["Check in", "Check out", "Loại phòng", "Số đêm", "Số lượng", "FOC", "Đơn giá", "Thành tiền"].map((h) => (
                           <th key={h} className="border border-gray-300 px-2 py-1 text-center font-semibold whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -110,6 +110,8 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
                     <tbody>
                       {item.roomEntries.map((room, j) => {
                         const soDem = room.so_dem ?? 1;
+                        const focCount = Math.max(0, room.foc_count ?? 0);
+                        const billedQty = Math.max(0, room.so_luong - focCount);
                         return (
                           <tr key={j}>
                             <td className="border border-gray-300 p-0.5">
@@ -127,11 +129,23 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
                             <td className="border border-gray-300 p-0.5 w-16">
                               <Input type="number" min={0} value={room.so_luong} onChange={(e) => updateRoom(i, j, { so_luong: parseInt(e.target.value) || 0 })} className="h-7 text-xs border-0 px-1 text-center" />
                             </td>
+                            <td className="border border-gray-300 p-0.5 w-14">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={focCount}
+                                onChange={(e) => updateRoom(i, j, { foc_count: Math.max(0, parseInt(e.target.value) || 0) })}
+                                className="h-7 text-xs border-0 px-1 text-center"
+                              />
+                            </td>
                             <td className="border border-gray-300 p-0.5 w-28">
                               <DecimalInput value={room.don_gia} onChange={(v) => updateRoom(i, j, { don_gia: v })} className="h-7 text-xs border-0 px-1 text-right" />
                             </td>
-                            <td className="border border-gray-300 px-2 py-1 text-right font-medium text-[11px] whitespace-nowrap w-28">
-                              {fmt(room.don_gia * room.so_luong * soDem)}
+                            <td
+                              className="border border-gray-300 px-2 py-1 text-right font-medium text-[11px] whitespace-nowrap w-28"
+                              title={focCount > 0 ? `${room.so_luong} − ${focCount} FOC = ${billedQty}` : undefined}
+                            >
+                              {fmt(room.don_gia * billedQty * soDem)}
                             </td>
                           </tr>
                         );
@@ -143,10 +157,11 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
 
               {/* Tóm tắt số tiền — hiển thị cọc / cấn trừ / thực TT */}
               {(() => {
-                const tongPhong = item.roomEntries.reduce(
-                  (s, r) => s + r.don_gia * r.so_luong * (r.so_dem ?? 1),
-                  0,
-                );
+                const tongPhong = item.roomEntries.reduce((s, r) => {
+                  const foc = Math.max(0, r.foc_count ?? 0);
+                  const billed = Math.max(0, r.so_luong - foc);
+                  return s + r.don_gia * billed * (r.so_dem ?? 1);
+                }, 0);
                 const cocTotal = item.cocTotal || 0;
                 const canTruTotal = item.canTruTotal ?? 0;
                 const thucTT = Math.max(0, item.soTien - canTruTotal);

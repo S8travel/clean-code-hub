@@ -139,7 +139,9 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
   const totalRoomRows = roomEntries.length;
   roomEntries.forEach((room, ri) => {
     const rowSoDem = room.so_dem ?? 1;
-    const thanhTien = room.don_gia * room.so_luong * rowSoDem;
+    const focCount = Math.max(0, room.foc_count ?? 0);
+    const billedQty = Math.max(0, room.so_luong - focCount);
+    const thanhTien = room.don_gia * billedQty * rowSoDem;
     const isFirst = ri === 0;
     const cells: TableCell[] = [];
 

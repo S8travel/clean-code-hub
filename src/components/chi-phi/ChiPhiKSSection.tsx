@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 import { format, getDay } from "date-fns";
 import { Plus, ArrowRight, Ban, Printer, ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,7 @@ import { useCurrentUserName } from "@/hooks/use-doan";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import KSRowInput from "./KSRowInput";
+import KSServiceRowInput from "./KSServiceRowInput";
 import KSDNTTModal from "./KSDNTTModal";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { exportDNTTKSExcel } from "@/lib/export-dntt-ks-excel";
@@ -42,8 +43,14 @@ import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
+// Row 'phong' (hoặc legacy không có loai_row) tính vào FOC; service rows thì không.
+export function isKSRoomRow(r: LocalKSRow): boolean {
+  return !r.loai_row || r.loai_row === "phong";
+}
+
 // FOC per row: trả về tiền miễn + số phòng miễn cho row đó (pro-rata theo gross).
 // Helper dùng chung cho UI (hiển thị NET Thành tiền) + save (tien_cong_ty) + export.
+// Filter service rows ra khỏi ngưỡng + tổng day-gross — service không hưởng FOC.
 function calcRowFocBreakdown(
   row: LocalKSRow,
   sameKsDayRows: LocalKSRow[],
@@ -51,10 +58,12 @@ function calcRowFocBreakdown(
   focMien: number | null,
 ): { rowFocDeduction: number; rowFocCount: number } {
   if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
-  const dayTotalRooms = sameKsDayRows.reduce((s, r) => s + (r.so_phong || 0), 0);
+  if (!isKSRoomRow(row)) return { rowFocDeduction: 0, rowFocCount: 0 };
+  const roomDayRows = sameKsDayRows.filter(isKSRoomRow);
+  const dayTotalRooms = roomDayRows.reduce((s, r) => s + (r.so_phong || 0), 0);
   if (dayTotalRooms < focKhach) return { rowFocDeduction: 0, rowFocCount: 0 };
   const dayFocPhong = Math.floor(dayTotalRooms / focKhach) * focMien;
-  const dayGross = sameKsDayRows.reduce((s, r) => s + (r.so_phong || 0) * (r.gia_phong || 0), 0);
+  const dayGross = roomDayRows.reduce((s, r) => s + (r.so_phong || 0) * (r.gia_phong || 0), 0);
   const avgPrice = dayTotalRooms > 0 ? dayGross / dayTotalRooms : 0;
   const dayFocAmount = dayFocPhong * avgPrice;
   const rowGross = (row.so_phong || 0) * (row.gia_phong || 0);
@@ -65,14 +74,36 @@ function calcRowFocBreakdown(
   return { rowFocDeduction, rowFocCount };
 }
 
-// Tính giá trị FOC được miễn cho 1 KS (theo từng ngày)
-// focKhach: cứ X phòng thì focMien phòng được miễn
-// Tính tổng tiền FOC được miễn cho 1 KS (theo từng đêm riêng biệt)
-// Chỉ tính FOC nếu tổng phòng trong 1 đêm đạt đủ ngưỡng focKhach
+// Tổng KS = rooms_gross + services_net - foc_on_rooms.
+// Service rows trừ foc_count manual; rooms tính FOC pro-rata per-day.
+function calcTotalKS(
+  rows: LocalKSRow[],
+  focKhach: number | null,
+  focMien: number | null,
+): number {
+  let roomsGross = 0;
+  let servicesNet = 0;
+  rows.forEach((r) => {
+    if (isKSRoomRow(r)) {
+      roomsGross += (Number(r.so_phong) || 0) * (Number(r.gia_phong) || 0) * (Number(r.so_dem) || 1);
+    } else {
+      const focCount = Math.max(0, Number(r.foc_count) || 0);
+      const billed = Math.max(0, (Number(r.so_phong) || 0) - focCount);
+      servicesNet += billed * (Number(r.gia_phong) || 0);
+    }
+  });
+  return roomsGross + servicesNet - calcFocDeduction(rows, focKhach, focMien);
+}
+
+// Tính giá trị FOC được miễn cho 1 KS (theo từng ngày).
+// Chỉ tính trên room rows (loai_row='phong'); service rows không hưởng FOC.
 function calcFocDeduction(rows: LocalKSRow[], focKhach: number | null, focMien: number | null): number {
   if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) return 0;
   const byDay: Record<string, LocalKSRow[]> = {};
-  rows.forEach((r) => { const k = r.ngay_date || ""; (byDay[k] = byDay[k] || []).push(r); });
+  rows.filter(isKSRoomRow).forEach((r) => {
+    const k = r.ngay_date || "";
+    (byDay[k] = byDay[k] || []).push(r);
+  });
   let deduction = 0;
   Object.values(byDay).forEach((dayRows) => {
     const dayRooms = dayRows.reduce((s, r) => s + (r.so_phong || 0), 0);
@@ -127,6 +158,7 @@ export interface LocalKSRow {
   foc_khach_snapshot?: number | null;
   foc_mien_snapshot?: number | null;
   loai_row?: KSLoaiRow;  // default 'phong' nếu không set
+  foc_count?: number;    // dùng cho service rows (OP tự điền)
 }
 
 // Resolve FOC config: ưu tiên snapshot trên rows, fall back master
@@ -234,15 +266,18 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         ? `${coDate.getDate()}/${coDate.getMonth() + 1}/${coDate.getFullYear()}`
         : "";
       const sameDay = rowsByDayKey.get(r.ngay_date || "") || [];
-      const { rowFocCount } = calcRowFocBreakdown(r, sameDay, ksFocCfg.foc_khach, ksFocCfg.foc_mien);
+      // Rooms: FOC pro-rata. Services: foc_count manual của row.
+      const focCount = isKSRoomRow(r)
+        ? calcRowFocBreakdown(r, sameDay, ksFocCfg.foc_khach, ksFocCfg.foc_mien).rowFocCount
+        : Math.max(0, Number(r.foc_count) || 0);
       return {
-        name: r.loai_phong || "Phòng KS",
+        name: r.loai_phong || (isKSRoomRow(r) ? "Phòng KS" : "Dịch vụ KS"),
         so_luong: r.so_phong,
         don_gia: r.gia_phong,
         so_dem: r.so_dem,
         ci: fmtDateDisplay(ngayDate),
         co: coStr,
-        foc_count: rowFocCount,
+        foc_count: focCount,
       };
     });
     if (roomEntries.length === 0) roomEntries.push({ name: "—", so_luong: 1, don_gia: 0, so_dem: 1, ci: "", co: "", foc_count: 0 });
@@ -692,6 +727,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
             foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
             loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
+            foc_count: Number(cp.foc_count ?? 0),
           } as LocalKSRow;
         }
 
@@ -721,6 +757,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
           foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
           loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
+          foc_count: Number(cp.foc_count ?? 0),
         } as LocalKSRow;
       })
       .filter((r): r is LocalKSRow => r !== null);
@@ -786,7 +823,15 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     setLocalRows((prev) => {
       const updated = [...prev];
       const row = { ...updated[idx], [field]: value };
-      row.thanh_tien = row.so_phong * row.gia_phong * row.so_dem;
+      // Service rows: so_dem=1, trừ foc_count manual; rooms giữ công thức cũ.
+      const isRoom = isKSRoomRow(row);
+      if (isRoom) {
+        row.thanh_tien = row.so_phong * row.gia_phong * row.so_dem;
+      } else {
+        const focCount = Math.max(0, Number(row.foc_count) || 0);
+        const billed = Math.max(0, (Number(row.so_phong) || 0) - focCount);
+        row.thanh_tien = billed * (Number(row.gia_phong) || 0);
+      }
       updated[idx] = row;
       return updated;
     });
@@ -798,6 +843,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       if (!row) return;
       // Skip save if row is still empty (no room type and no price)
       if (!row.loai_phong && !row.gia_phong) return;
+      const isRoom = isKSRoomRow(row);
       // Tính FOC per ngày để lưu tien_cong_ty = giá sau khi trừ FOC
       const sameKsDayRows = localRowsRef.current.filter(
         (r) => r.khach_san_id === row.khach_san_id && r.ngay_date === row.ngay_date,
@@ -806,11 +852,18 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       // Snapshot ưu tiên — KHÔNG dùng master trừ khi chưa có snapshot (lần đầu)
       const sameKsRows = localRowsRef.current.filter((r) => r.khach_san_id === row.khach_san_id);
       const { foc_khach: focKhach, foc_mien: focMien } = resolveKSFoc(sameKsRows, ksInfo);
-      // Dùng helper chung — đảm bảo UI Thành tiền NET, save tien_cong_ty, export foc_count
-      // dùng CÙNG công thức pro-rata.
-      const rowGross = (row.so_phong || 0) * (row.gia_phong || 0); // mỗi row = 1 đêm
-      const { rowFocDeduction } = calcRowFocBreakdown(row, sameKsDayRows, focKhach, focMien);
-      const tienCongTy = rowGross - rowFocDeduction;
+
+      // Rooms: pro-rata FOC per-day. Services: manual foc_count trừ trực tiếp SL.
+      let tienCongTy: number;
+      const focCountManual = Math.max(0, Number(row.foc_count) || 0);
+      if (isRoom) {
+        const rowGross = (row.so_phong || 0) * (row.gia_phong || 0); // mỗi row = 1 đêm
+        const { rowFocDeduction } = calcRowFocBreakdown(row, sameKsDayRows, focKhach, focMien);
+        tienCongTy = rowGross - rowFocDeduction;
+      } else {
+        const billed = Math.max(0, (row.so_phong || 0) - focCountManual);
+        tienCongTy = billed * (row.gia_phong || 0);
+      }
 
       upsertMut.mutate(
         {
@@ -821,7 +874,13 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           danh_muc: "khach_san",
           ref_doan_ngay_id: row.doan_ngay_id,
           ref_doan_ngay_item_id: row.ref_doan_ngay_item_id ?? null,
-          mo_ta: row.loai_phong || (row.is_day_use ? "Day Use" : "Phòng KS"),
+          mo_ta:
+            row.loai_phong ||
+            (row.is_day_use
+              ? "Day Use"
+              : isRoom
+                ? "Phòng KS"
+                : "Dịch vụ KS"),
           don_gia: row.gia_phong,
           so_luong: row.so_phong,
           tien_cong_ty: tienCongTy,
@@ -832,6 +891,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           foc_khach_snapshot: focKhach,
           foc_mien_snapshot:  focMien,
           loai_row: row.loai_row ?? "phong",
+          foc_count: isRoom ? 0 : focCountManual,
         } as any,
         {
           onSuccess: (data) => {
@@ -873,26 +933,29 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     doanNgayId: number,
     ngayDate: string,
     refItemId?: number,
+    loaiRow: KSLoaiRow = "phong",
   ) => {
     const coDate = new Date(ngayDate);
     coDate.setDate(coDate.getDate() + 1);
     const co = format(coDate, "yyyy-MM-dd");
     const isDayUse = refItemId != null;
+    const isService = loaiRow !== "phong";
     setLocalRows((prev) => [
       ...prev,
       {
         khach_san_id: ksId,
         doan_ngay_id: doanNgayId,
         ngay_date: ngayDate,
-        loai_phong: isDayUse ? "Day Use" : "",
+        loai_phong: isService ? "" : (isDayUse ? "Day Use" : ""),
         so_phong: 1,
         ci: ngayDate,
-        co: isDayUse ? ngayDate : co,
+        co: isService || isDayUse ? ngayDate : co,
         so_dem: 1,
         gia_phong: 0,
         thanh_tien: 0,
-        is_day_use: isDayUse || undefined,
-        ref_doan_ngay_item_id: refItemId ?? null,
+        is_day_use: !isService && isDayUse ? true : undefined,
+        ref_doan_ngay_item_id: !isService ? (refItemId ?? null) : null,
+        loai_row: loaiRow,
       },
     ]);
   }, []);
@@ -1123,14 +1186,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       {distinctKsIdsFromNgay.map((ksId) => {
         const ks = khachSanMap[ksId];
         const rows = grouped[ksId] || [];
-        const totalKSGross = rows.reduce((sum, r) => {
-          return sum + (Number(r.so_phong) || 0) * (Number(r.gia_phong) || 0) * (Number(r.so_dem) || 1);
-        }, 0);
         // Resolve FOC từ snapshot (per-tour) thay vì master — tránh master changes
         // ảnh hưởng đoàn cũ.
         const ksFoc = resolveKSFoc(rows, ks);
-        const focDeduction = calcFocDeduction(rows, ksFoc.foc_khach, ksFoc.foc_mien);
-        const totalKS = totalKSGross - focDeduction;
+        // totalKS = rooms NET (pro-rata FOC) + services NET (manual foc_count).
+        const totalKS = calcTotalKS(rows, ksFoc.foc_khach, ksFoc.foc_mien);
 
         const daCoc = cocByKs[ksId] || 0;
         const daTT = ttByKs[ksId] || 0;
@@ -1184,13 +1244,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         const dnttMismatch = hasCommittedDntt && sumActual !== effectiveCommitted && !showAggBtn
           ? sumActual - effectiveCommitted : 0;
 
-        const byDay: Record<string, LocalKSRow[]> = {};
+        const roomsByDay: Record<string, LocalKSRow[]> = {};
+        const servicesByDay: Record<string, LocalKSRow[]> = {};
         rows.forEach((r) => {
           const key = r.ngay_date || "unknown";
-          if (!byDay[key]) byDay[key] = [];
-          byDay[key].push(r);
+          const bucket = isKSRoomRow(r) ? roomsByDay : servicesByDay;
+          if (!bucket[key]) bucket[key] = [];
+          bucket[key].push(r);
         });
-        const dayEntries = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
+        const roomDayEntries = Object.entries(roomsByDay).sort(([a], [b]) => a.localeCompare(b));
+        const serviceDayEntries = Object.entries(servicesByDay).sort(([a], [b]) => a.localeCompare(b));
+        const hasAnyServices = serviceDayEntries.length > 0;
 
         const ngayDateToNgaySo: Record<string, number> = {};
         const ngayDateToDoanNgayId: Record<string, number> = {};
@@ -1322,6 +1386,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 </p>
               )}
               {!isOrphaned && <div className="overflow-x-auto">
+                <div className="flex items-center gap-2 px-1 py-0.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">🛏️ Phòng</span>
+                </div>
                 <Table>
                   <TableHeader>
                     <TableRow className="text-xs">
@@ -1336,7 +1403,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dayEntries.map(([dateStr, dayRows]) => {
+                    {roomDayEntries.map(([dateStr, dayRows]) => {
                       const ngaySo = ngayDateToNgaySo[dateStr];
                       const doanNgayId = ngayDateToDoanNgayId[dateStr] || dayRows[0]?.doan_ngay_id;
                       return (
@@ -1351,33 +1418,52 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                           onFieldChange={handleFieldChange}
                           onBlurSave={handleBlurSave}
                           onDelete={handleDelete}
-                          onAddRow={() => handleAddRow(ksId, doanNgayId, dateStr)}
+                          onAddRoom={() => handleAddRow(ksId, doanNgayId, dateStr)}
+                          onAddService={() => handleAddRow(ksId, doanNgayId, dateStr, undefined, "dich_vu_khac")}
                         />
                       );
                     })}
                     {ngayRows
-                      .filter((r: any) => r.khach_san_id === ksId && !byDay[r.ngay_date])
+                      .filter((r: any) => r.khach_san_id === ksId && !roomsByDay[r.ngay_date])
                       .map((r: any) => (
                         <EmptyDayHeader
                           key={r.ngay_date}
                           dateStr={r.ngay_date}
                           ngaySo={r.ngay_so}
-                          onAddRow={() => handleAddRow(ksId, r.id, r.ngay_date)}
+                          onAddRoom={() => handleAddRow(ksId, r.id, r.ngay_date)}
+                          onAddService={() => handleAddRow(ksId, r.id, r.ngay_date, undefined, "dich_vu_khac")}
                         />
                       ))}
                     {Object.entries(dayUseItemMap)
-                      .filter(([, info]: any) => info.khach_san_id === ksId && !byDay[info.ngay_date])
+                      .filter(([, info]: any) => info.khach_san_id === ksId && !roomsByDay[info.ngay_date])
                       .map(([itemIdStr, info]: any) => (
                         <EmptyDayHeader
                           key={`day-use-${itemIdStr}`}
                           dateStr={info.ngay_date}
                           ngaySo={info.ngay_so}
                           isDayUse
-                          onAddRow={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, Number(itemIdStr))}
+                          onAddRoom={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, Number(itemIdStr))}
+                          onAddService={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, undefined, "dich_vu_khac")}
                         />
                       ))}
                   </TableBody>
                 </Table>
+
+                {/* ── Dịch vụ KS sub-section — chỉ render khi đã có service rows ── */}
+                {hasAnyServices && (
+                  <KSServicesSection
+                    serviceDayEntries={serviceDayEntries}
+                    ngayDateToNgaySo={ngayDateToNgaySo}
+                    ngayDateToDoanNgayId={ngayDateToDoanNgayId}
+                    localRows={localRows}
+                    onAddMore={(doanNgayId, ngayDate) =>
+                      handleAddRow(ksId, doanNgayId, ngayDate, undefined, "dich_vu_khac")
+                    }
+                    onFieldChange={handleFieldChange}
+                    onBlurSave={handleBlurSave}
+                    onDelete={handleDelete}
+                  />
+                )}
               </div>}
 
               {/* ── Thanh toán section ── */}
@@ -1691,12 +1777,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           totalKS={(() => {
             const modalRows = grouped[modalKsId] || [];
             const modalKs = khachSanMap[modalKsId];
-            const gross = modalRows.reduce(
-              (s, r) => s + (Number(r.so_phong) || 0) * (Number(r.gia_phong) || 0) * (Number(r.so_dem) || 1), 0,
-            );
             // Dùng FOC snapshot per tour (giống display card) — không lấy master trực tiếp
             const modalFoc = resolveKSFoc(modalRows, modalKs);
-            return gross - calcFocDeduction(modalRows, modalFoc.foc_khach, modalFoc.foc_mien);
+            return calcTotalKS(modalRows, modalFoc.foc_khach, modalFoc.foc_mien);
           })()}
           daCoc={(cocByKs[modalKsId] || 0) + (canTruAmtByKsId[modalKsId] || 0)}
           localRows={grouped[modalKsId] || []}
@@ -2048,7 +2131,8 @@ function DayGroup({
   onFieldChange,
   onBlurSave,
   onDelete,
-  onAddRow,
+  onAddRoom,
+  onAddService,
 }: {
   dateStr: string;
   ngaySo?: number;
@@ -2059,7 +2143,8 @@ function DayGroup({
   onFieldChange: (idx: number, field: string, value: any) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
-  onAddRow: () => void;
+  onAddRoom: () => void;
+  onAddService: () => void;
 }) {
   const label =
     dateStr !== "unknown"
@@ -2073,10 +2158,7 @@ function DayGroup({
           {label}
         </TableCell>
         <TableCell className="py-1 px-2 text-right">
-          <Button variant="ghost" size="sm" className="h-6 text-xs px-1.5" onClick={onAddRow}>
-            <Plus className="h-3 w-3 mr-0.5" />
-            Thêm
-          </Button>
+          <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />
         </TableCell>
       </TableRow>
       {dayRows.map((row) => {
@@ -2099,7 +2181,15 @@ function DayGroup({
 }
 
 /* ── Empty day header ── */
-function EmptyDayHeader({ dateStr, ngaySo, isDayUse, onAddRow }: { dateStr: string; ngaySo?: number; isDayUse?: boolean; onAddRow: () => void }) {
+function EmptyDayHeader({
+  dateStr, ngaySo, isDayUse, onAddRoom, onAddService,
+}: {
+  dateStr: string;
+  ngaySo?: number;
+  isDayUse?: boolean;
+  onAddRoom: () => void;
+  onAddService: () => void;
+}) {
   const label = `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`;
   return (
     <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
@@ -2112,12 +2202,30 @@ function EmptyDayHeader({ dateStr, ngaySo, isDayUse, onAddRow }: { dateStr: stri
         )}
       </TableCell>
       <TableCell className="py-1 px-2 text-right">
-        <Button variant="ghost" size="sm" className="h-6 text-xs px-1.5" onClick={onAddRow}>
-          <Plus className="h-3 w-3 mr-0.5" />
-          Thêm
-        </Button>
+        <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />
       </TableCell>
     </TableRow>
+  );
+}
+
+/* ── Add buttons cụm (Phòng + Dịch vụ) cho header ngày ── */
+function DayAddButtons({ onAddRoom, onAddService }: { onAddRoom: () => void; onAddService: () => void }) {
+  return (
+    <div className="inline-flex items-center gap-0.5 whitespace-nowrap">
+      <Button variant="ghost" size="sm" className="h-6 text-xs px-1.5" onClick={onAddRoom}>
+        <Plus className="h-3 w-3 mr-0.5" />
+        Phòng
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+        onClick={onAddService}
+      >
+        <Plus className="h-3 w-3 mr-0.5" />
+        Dịch vụ
+      </Button>
+    </div>
   );
 }
 
@@ -2239,5 +2347,95 @@ function KSCodeEditor({
         className="w-24 h-6 px-1.5 text-xs border rounded bg-background"
       />
     </span>
+  );
+}
+
+// ── Dịch vụ KS sub-section ──
+// Render flat table với group rows theo ngày. Nút "+ Thêm DV" trong mỗi day group
+// cho phép thêm thêm dịch vụ cùng ngày. Nút "+ Dịch vụ" cho ngày mới nằm ở day
+// header của Phòng table phía trên.
+function KSServicesSection({
+  serviceDayEntries,
+  ngayDateToNgaySo,
+  ngayDateToDoanNgayId,
+  localRows,
+  onAddMore,
+  onFieldChange,
+  onBlurSave,
+  onDelete,
+}: {
+  serviceDayEntries: [string, LocalKSRow[]][];
+  ngayDateToNgaySo: Record<string, number>;
+  ngayDateToDoanNgayId: Record<string, number>;
+  localRows: LocalKSRow[];
+  onAddMore: (doanNgayId: number, ngayDate: string) => void;
+  onFieldChange: (idx: number, field: string, value: any) => void;
+  onBlurSave: (idx: number) => void;
+  onDelete: (idx: number) => void;
+}) {
+  return (
+    <div className="mt-3 border-t border-border pt-2">
+      <div className="flex items-center gap-2 px-1 py-0.5 mb-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          🍽️ Dịch vụ KS
+        </span>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow className="text-xs">
+            <TableHead className="w-[180px] h-auto py-1 px-2">Tên dịch vụ</TableHead>
+            <TableHead className="w-[80px] h-auto py-1 px-2">Loại</TableHead>
+            <TableHead className="w-[60px] h-auto py-1 px-2">SL</TableHead>
+            <TableHead className="w-[60px] h-auto py-1 px-2">FOC</TableHead>
+            <TableHead className="w-[110px] h-auto py-1 px-2">Đơn giá</TableHead>
+            <TableHead className="w-[110px] h-auto py-1 px-2">Thành tiền</TableHead>
+            <TableHead className="w-[32px] h-auto py-1 px-2" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {serviceDayEntries.map(([dateStr, dayRows]) => {
+            const ngaySo = ngayDateToNgaySo[dateStr];
+            const doanNgayId = ngayDateToDoanNgayId[dateStr] ?? dayRows[0]?.doan_ngay_id;
+            const label =
+              dateStr !== "unknown"
+                ? `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`
+                : "Không xác định";
+            return (
+              <Fragment key={dateStr}>
+                <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
+                  <TableCell colSpan={6} className="py-1 px-2 text-xs font-medium">
+                    {label}
+                  </TableCell>
+                  <TableCell className="py-1 px-2 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                      onClick={() => onAddMore(doanNgayId, dateStr)}
+                    >
+                      <Plus className="h-3 w-3 mr-0.5" />
+                      Thêm
+                    </Button>
+                  </TableCell>
+                </TableRow>
+                {dayRows.map((row) => {
+                  const globalIdx = localRows.indexOf(row);
+                  return (
+                    <KSServiceRowInput
+                      key={`svc-${row.doan_ngay_id}-${globalIdx}`}
+                      row={row}
+                      globalIdx={globalIdx}
+                      onFieldChange={onFieldChange}
+                      onBlurSave={onBlurSave}
+                      onDelete={onDelete}
+                    />
+                  );
+                })}
+              </Fragment>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

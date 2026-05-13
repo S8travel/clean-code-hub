@@ -56,6 +56,9 @@ export interface ChiPhiRow {
   // KS chi phí: phân biệt loại row để tính FOC riêng.
   // 'phong' (mặc định) | 'dich_vu_an' | 'dich_vu_ve' | 'dich_vu_khac' | null (non-KS).
   loai_row: string | null;
+  // FOC count per-row, OP tự nhập cho service KS rows (manual).
+  // Rooms KS không dùng (vẫn pro-rata per-day qua foc_*_snapshot).
+  foc_count: number;
   // HYBRID flag: true = OP đã override SL/đơn giá thủ công ở Chi phí section
   // → cascade từ Điều tour bỏ qua row này. Reset = set false.
   is_overridden: boolean;

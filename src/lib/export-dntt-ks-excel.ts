@@ -26,7 +26,9 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
     const { doan, ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc, ghiChu, canTruTotal, canTruNote } = item;
     roomEntries.forEach((room, ri) => {
       const rowSoDem = room.so_dem ?? 1;
-      const thanhTien = room.don_gia * room.so_luong * rowSoDem;
+      const focCount = Math.max(0, room.foc_count ?? 0);
+      const billedQty = Math.max(0, room.so_luong - focCount);
+      const thanhTien = room.don_gia * billedQty * rowSoDem;
       const isFirst = ri === 0;
 
       const daTT = isFirst
