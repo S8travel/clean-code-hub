@@ -82,6 +82,7 @@ export interface LocalNHRow {
   nguoi_tt?: "cong_ty" | "hdv";
   foc_khach_snapshot?: number | null;
   foc_mien_snapshot?: number | null;
+  chiet_khau_phan_tram_snapshot?: number | null;
   is_overridden?: boolean;
   trang_thai_thanh_toan?: string;
 }
@@ -102,6 +103,17 @@ function resolveNHFoc(
     foc_khach: nh?.foc_khach ?? null,
     foc_mien:  nh?.foc_mien  ?? null,
   };
+}
+
+// Resolve chiết khấu: snapshot > master. Lock per-tour.
+function resolveNHChietKhau(
+  row: { chiet_khau_phan_tram_snapshot?: number | null } | null | undefined,
+  nh: { chiet_khau_phan_tram: number | null } | null | undefined,
+): number {
+  if (row && row.chiet_khau_phan_tram_snapshot != null) {
+    return row.chiet_khau_phan_tram_snapshot;
+  }
+  return nh?.chiet_khau_phan_tram ?? 0;
 }
 
 interface LocalNHExtra {
@@ -274,10 +286,11 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           : (meal.gia_set_menu != null && meal.gia_set_menu > 0
               ? meal.gia_set_menu
               : (mainCp?.don_gia ?? 0)),
-        chiet_khau_phan_tram: nhData.nhaHangMap[meal.nha_hang_id]?.chiet_khau_phan_tram ?? 0,
+        chiet_khau_phan_tram: resolveNHChietKhau(mainCp, nhData.nhaHangMap[meal.nha_hang_id]),
         nguoi_tt: (mainCp?.tien_hdv ?? 0) > 0 ? "hdv" : (nhData.nhaHangMap[meal.nha_hang_id]?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty"),
         foc_khach_snapshot: mainCp?.foc_khach_snapshot ?? null,
         foc_mien_snapshot:  mainCp?.foc_mien_snapshot  ?? null,
+        chiet_khau_phan_tram_snapshot: mainCp?.chiet_khau_phan_tram_snapshot ?? null,
         is_overridden: overridden,
         trang_thai_thanh_toan: mainCp?.trang_thai_thanh_toan ?? "unpaid",
       };
@@ -373,10 +386,11 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
             : (meal.gia_set_menu != null && meal.gia_set_menu > 0
                 ? meal.gia_set_menu
                 : (mainCp?.don_gia ?? 0)),
-          chiet_khau_phan_tram: nh?.chiet_khau_phan_tram ?? 0,
+          chiet_khau_phan_tram: resolveNHChietKhau(mainCp, nh),
           nguoi_tt: (mainCp?.tien_hdv ?? 0) > 0 ? "hdv" : (nh?.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty"),
           foc_khach_snapshot: mainCp?.foc_khach_snapshot ?? null,
           foc_mien_snapshot:  mainCp?.foc_mien_snapshot  ?? null,
+          chiet_khau_phan_tram_snapshot: mainCp?.chiet_khau_phan_tram_snapshot ?? null,
           is_overridden: overridden,
           trang_thai_thanh_toan: mainCp?.trang_thai_thanh_toan ?? "unpaid",
         };
@@ -569,9 +583,10 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
         tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
         thanh_toan_dinh_ky: dinhKyKeysRef.current.has(key),
-        // Snapshot FOC: lần đầu auto từ master, lần sau giữ snapshot hiện có.
+        // Snapshot FOC + chiết khấu: lần đầu auto từ master, lần sau giữ snapshot hiện có.
         foc_khach_snapshot: focResolved.foc_khach,
         foc_mien_snapshot:  focResolved.foc_mien,
+        chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
         // HYBRID: user save NH section = override → cascade Điều tour bỏ qua
         is_overridden: true,
       },
@@ -708,6 +723,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? Math.round(skTT0 * row.don_gia * (1 - (row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? 0) / 100)) : 0,
           foc_khach_snapshot: focResolved0.foc_khach,
           foc_mien_snapshot:  focResolved0.foc_mien,
+          chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
         });
         if (saved?.id) {
           setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: saved.id } }));

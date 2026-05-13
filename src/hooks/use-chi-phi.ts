@@ -51,6 +51,8 @@ export interface ChiPhiRow {
   // thay đổi tính toán cho đoàn cũ. Editable per-tour qua UI ở ChiPhi sections.
   foc_khach_snapshot: number | null;
   foc_mien_snapshot: number | null;
+  // Chiết khấu NH snapshot — lock per-tour tương tự FOC.
+  chiet_khau_phan_tram_snapshot: number | null;
   // HYBRID flag: true = OP đã override SL/đơn giá thủ công ở Chi phí section
   // → cascade từ Điều tour bỏ qua row này. Reset = set false.
   is_overridden: boolean;

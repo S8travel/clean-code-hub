@@ -75,19 +75,41 @@ export function useChiPhiNHSection(doanId?: number) {
 
       if (meals.length === 0) return { meals: [], nhaHangMap: {} };
 
-      // 2b. Load set menu prices
-      const smIds = [...new Set(meals.filter((m) => m.set_menu_id).map((m) => m.set_menu_id!))];
-      if (smIds.length > 0) {
+      // 2b. Ưu tiên đọc gia_snapshot từ doan_booking_nh (lock per tour).
+      //     Master nha_hang_set_menu.gia chỉ dùng fallback cho slot chưa có booking.
+      const { data: bkList } = await externalSupabase
+        .from("doan_booking_nh")
+        .select("doan_ngay_id, bua_an, gia_snapshot")
+        .eq("doan_id", doanId!);
+      const bkMap = new Map<string, number | null>();
+      (bkList || []).forEach((b: any) => {
+        bkMap.set(`${b.doan_ngay_id}_${b.bua_an}`, b.gia_snapshot);
+      });
+
+      // Fallback master cho meals chưa có booking_nh row (vd: cascade chưa chạy)
+      const needMasterFallback = meals.filter((m) => {
+        if (!m.set_menu_id) return false;
+        const snap = bkMap.get(`${m.doan_ngay_id}_${m.bua_an}`);
+        return snap == null; // null hoặc undefined (chưa có row booking)
+      });
+      const fallbackSmIds = [...new Set(needMasterFallback.map((m) => m.set_menu_id!))];
+      const smMap: Record<number, number | null> = {};
+      if (fallbackSmIds.length > 0) {
         const { data: smList } = await externalSupabase
           .from("nha_hang_set_menu")
           .select("id, gia")
-          .in("id", smIds);
-        const smMap: Record<number, number | null> = {};
+          .in("id", fallbackSmIds);
         (smList || []).forEach((s: any) => { smMap[s.id] = s.gia; });
-        meals.forEach((m) => {
-          if (m.set_menu_id != null) m.gia_set_menu = smMap[m.set_menu_id] ?? null;
-        });
       }
+
+      meals.forEach((m) => {
+        const snap = bkMap.get(`${m.doan_ngay_id}_${m.bua_an}`);
+        if (snap != null) {
+          m.gia_set_menu = snap;
+        } else if (m.set_menu_id != null) {
+          m.gia_set_menu = smMap[m.set_menu_id] ?? null;
+        }
+      });
 
       // 3. Load nha_hang info (gồm foc)
       const nhIds = [...new Set(meals.map((m) => m.nha_hang_id))];

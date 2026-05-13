@@ -641,6 +641,37 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
 
 ---
 
+## 🔒 Snapshot bắt buộc cho mọi giá tính chi phí
+
+**Rule cứng**: MỌI giá / hệ số ảnh hưởng tính tiền chi phí phải snapshot 1 lần vào DB
+của tour ngay khi tạo. Master danh mục đổi sau KHÔNG được ảnh hưởng đoàn cũ.
+
+| Loại | Snapshot vào | Resolve helper |
+|---|---|---|
+| Giá cảnh điểm | `doan_ngay_item.don_gia` (INSERT only, KHÔNG overwrite khi cascade) | (đọc trực tiếp từ `doan_ngay_item`) |
+| Giá set menu NH | `doan_booking_nh.gia_snapshot` + `ten_set_snapshot` + `mon_an_snapshot` | `useChiPhiNHSection` đọc booking, KHÔNG đọc `nha_hang_set_menu` |
+| Giá dịch vụ | `doan_booking_dv.dich_vu_list` JSONB (đã có giá) | (JSONB là source of truth) |
+| Giá phòng KS | `doan_ks_dem.gia_phong` (user nhập tay) | — |
+| FOC khách sạn | `doan_chi_phi.foc_khach_snapshot` + `foc_mien_snapshot` | `resolveKSFoc(rows, ksMaster)` |
+| FOC nhà hàng | `doan_chi_phi.foc_khach_snapshot` + `foc_mien_snapshot` | `resolveNHFoc(row, nhMaster)` |
+| Chiết khấu nhà hàng | `doan_chi_phi.chiet_khau_phan_tram_snapshot` | `resolveNHChietKhau(row, nhMaster)` |
+| Tip HDV | `doan.tip_rate`, `tip_so_ngay_override`, `tip_so_khach_override`, `tip_lump_sum` | — |
+
+**Rule khi code**:
+- Mọi INSERT/UPDATE `doan_chi_phi` cho `danh_muc IN ('khach_san', 'nha_hang')` PHẢI
+  truyền `foc_*_snapshot` (+ `chiet_khau_phan_tram_snapshot` cho NH).
+- Cascade từ điều tour (`use-dieu-tour.ts`) khi INSERT chi_phi cũng PHẢI snap. UPDATE
+  KHÔNG được đụng các trường snapshot (giữ giá trị lock per tour).
+- `doan_ngay_item.don_gia`: chỉ snap master `canh_diem.gia_mac_dinh` khi INSERT row mới.
+  Khi UPDATE (save lại điều tour với canh_diem đã có) → KHÔNG overwrite `don_gia`.
+- Display / compute chi phí KHÔNG được đọc trực tiếp `khach_san.foc_*`, `nha_hang.foc_*`,
+  `nha_hang.chiet_khau_phan_tram`, `nha_hang_set_menu.gia` cho chi phí đã tạo. Phải dùng
+  helper resolve hoặc đọc từ booking snapshot.
+- Khi thêm field giá/hệ số mới vào master danh mục: cân nhắc thêm cột snapshot tương ứng
+  vào `doan_chi_phi` (hoặc booking table) + helper resolve.
+
+---
+
 ## 🔒 Tính năng tạm tắt
 
 ### Per-tour permission (doan_permissions) — tắt từ 2026-04-24

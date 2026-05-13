@@ -37,6 +37,7 @@ const BaoGiaPage           = lazy(() => import("./pages/BaoGiaPage.tsx"));
 const TeamAssignmentPage   = lazy(() => import("./pages/TeamAssignmentPage.tsx"));
 const LeadsPage            = lazy(() => import("./pages/LeadsPage.tsx"));
 const LeadReportPage       = lazy(() => import("./pages/LeadReportPage.tsx"));
+const LeadFormPublicPage   = lazy(() => import("./pages/LeadFormPublicPage.tsx"));
 const NotFound             = lazy(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient({
@@ -70,6 +71,7 @@ const App = () => (
             <Routes>
               {/* Public */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/lead-form" element={<LeadFormPublicPage />} />
 
               {/* Protected — yêu cầu đăng nhập */}
               <Route element={<ProtectedLayout />}>

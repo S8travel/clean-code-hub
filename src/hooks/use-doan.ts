@@ -445,6 +445,56 @@ export function useUpdateDoan() {
         }
       }
 
+      // 5. Cascade ngay_di/ngay_ve → doan_ngay.ngay_date (theo ngay_so)
+      // Khi user sửa lại ngày bắt đầu/kết thúc tour, doan_ngay rows phải shift theo.
+      // doan_booking_nh, doan_chi_phi đều join qua doan_ngay → tự cập nhật.
+      const ngayDiChanged = updates.ngay_di !== undefined && updates.ngay_di !== oldDoan.ngay_di;
+      const ngayVeChanged = updates.ngay_ve !== undefined && updates.ngay_ve !== oldDoan.ngay_ve;
+      if (ngayDiChanged || ngayVeChanged) {
+        const newNgayDi = (data as any).ngay_di as string | null;
+        const newNgayVe = (data as any).ngay_ve as string | null;
+        if (newNgayDi && newNgayVe) {
+          const thuMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+          const parseUTC = (s: string) => {
+            const [y, m, d] = s.split("-").map(Number);
+            return new Date(Date.UTC(y, m - 1, d));
+          };
+          const start = parseUTC(newNgayDi);
+          const end = parseUTC(newNgayVe);
+          const newNumDays = Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+
+          const { data: existingNgay } = await externalSupabase
+            .from("doan_ngay")
+            .select("id, ngay_so")
+            .eq("doan_id", id)
+            .order("ngay_so", { ascending: true });
+          const existingMap = new Map<number, number>(
+            (existingNgay || []).map((r: any) => [r.ngay_so, r.id])
+          );
+
+          // Update từng ngay_so có trong newRange → ngay_date + thu mới
+          for (let i = 1; i <= newNumDays; i++) {
+            const d = new Date(start);
+            d.setUTCDate(d.getUTCDate() + (i - 1));
+            const dateStr = d.toISOString().split("T")[0];
+            const thuStr = thuMap[d.getUTCDay()];
+            const existingId = existingMap.get(i);
+            if (existingId) {
+              await externalSupabase
+                .from("doan_ngay")
+                .update({ ngay_date: dateStr, thu: thuStr })
+                .eq("id", existingId);
+            } else {
+              await externalSupabase
+                .from("doan_ngay")
+                .insert({ doan_id: id, ngay_so: i, ngay_date: dateStr, thu: thuStr });
+            }
+          }
+          // Rows vượt newNumDays (tour ngắn lại) → giữ lại, không tự xóa
+          // (có thể còn booking/chi phí đính kèm). User cần xóa thủ công nếu cần.
+        }
+      }
+
       // Diff log per field — bỏ qua field undefined (không update)
       const diffLogs: string[] = [];
       const labelTxt = (v: any) => (v == null || v === "") ? "—" : String(v);
@@ -506,8 +556,13 @@ export function useUpdateDoan() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["doan"] });
+      qc.invalidateQueries({ queryKey: ["doan_ngay", vars.id] });
       qc.invalidateQueries({ queryKey: ["doan_ngay_item", vars.id] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.id] });
+      qc.invalidateQueries({ queryKey: ["doan_booking_nh", vars.id] });
+      qc.invalidateQueries({ queryKey: ["doan_booking_ks", vars.id] });
+      qc.invalidateQueries({ queryKey: ["doan_booking_dv", vars.id] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", vars.id] });
     },
   });
 }

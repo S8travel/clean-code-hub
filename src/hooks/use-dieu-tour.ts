@@ -28,6 +28,9 @@ export interface NhaHangItem {
   nguoi_thanh_toan: string | null;
   so_dien_thoai: string | null;
   nha_cung_cap_id: number | null;
+  foc_khach: number | null;
+  foc_mien: number | null;
+  chiet_khau_phan_tram: number | null;
 }
 
 export interface KhachSanItem {
@@ -36,6 +39,8 @@ export interface KhachSanItem {
   dia_chi: string | null;
   thong_tin_chung: string | null;
   so_dien_thoai: string | null;
+  foc_khach: number | null;
+  foc_mien: number | null;
 }
 
 // ── Row types ──
@@ -117,7 +122,7 @@ export function useNhaHang() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan, so_dien_thoai, nha_cung_cap_id")
+        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan, so_dien_thoai, nha_cung_cap_id, foc_khach, foc_mien, chiet_khau_phan_tram")
         .order("ten");
       if (error) throw error;
       return data as NhaHangItem[];
@@ -131,7 +136,7 @@ export function useKhachSan() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("khach_san")
-        .select("id, ten, dia_chi, thong_tin_chung, so_dien_thoai")
+        .select("id, ten, dia_chi, thong_tin_chung, so_dien_thoai, foc_khach, foc_mien")
         .order("ten");
       if (error) throw error;
       return data as KhachSanItem[];
@@ -715,27 +720,51 @@ export function useSaveDieuTour() {
         }> = [];
 
         if (validItems.length > 0) {
-          const itemPayloads = validItems.map((it, idx) => {
+          // Snapshot rule: don_gia (giá cảnh điểm) chỉ snap KHI INSERT lần đầu;
+          // master canh_diem.gia_mac_dinh đổi sau KHÔNG được overwrite.
+          // → tách insert (snap master) vs update (giữ snapshot cũ).
+          const { data: existingRows } = await externalSupabase
+            .from("doan_ngay_item")
+            .select("id, canh_diem_id, don_gia, co_phi, so_luong, nguoi_thanh_toan")
+            .eq("doan_ngay_id", doanNgayId);
+          const existingMap = new Map((existingRows || []).map((r: any) => [r.canh_diem_id, r]));
+
+          for (let idx = 0; idx < validItems.length; idx++) {
+            const it = validItems[idx];
             const cd = canhDiemList.find((c) => c.id === it.canh_diem_id);
-            return {
-              doan_ngay_id: doanNgayId,
-              doan_id: doanId,
-              canh_diem_id: it.canh_diem_id,
+            const existing = existingMap.get(it.canh_diem_id);
+            const commonFields: any = {
               thu_tu: idx + 1,
               co_phi: cd?.co_phi ?? false,
-              don_gia: cd?.gia_mac_dinh ?? 0,
               so_luong: soKhach,
               nguoi_thanh_toan: cd?.nguoi_thanh_toan ?? null,
               ghi_chu: it.ghi_chu || null,
             };
-          });
-
-          const { data } = await externalSupabase
-            .from("doan_ngay_item")
-            .upsert(itemPayloads, { onConflict: "doan_ngay_id,canh_diem_id" })
-            .select("id, canh_diem_id, co_phi, don_gia, so_luong, nguoi_thanh_toan");
-
-          insertedItems = (data || []) as typeof insertedItems;
+            if (existing) {
+              // UPDATE: KHÔNG đụng don_gia (snapshot lock per tour)
+              const { data } = await externalSupabase
+                .from("doan_ngay_item")
+                .update(commonFields)
+                .eq("id", existing.id)
+                .select("id, canh_diem_id, co_phi, don_gia, so_luong, nguoi_thanh_toan")
+                .single();
+              if (data) insertedItems.push(data as any);
+            } else {
+              // INSERT: snap master canh_diem.gia_mac_dinh tại thời điểm tạo
+              const { data } = await externalSupabase
+                .from("doan_ngay_item")
+                .insert({
+                  doan_ngay_id: doanNgayId,
+                  doan_id: doanId,
+                  canh_diem_id: it.canh_diem_id,
+                  don_gia: cd?.gia_mac_dinh ?? 0,
+                  ...commonFields,
+                })
+                .select("id, canh_diem_id, co_phi, don_gia, so_luong, nguoi_thanh_toan")
+                .single();
+              if (data) insertedItems.push(data as any);
+            }
+          }
         }
 
         // Diff log cảnh điểm — chỉ log khi ngày đã tồn tại (UPDATE).
@@ -846,7 +875,15 @@ export function useSaveDieuTour() {
                   : "",
                 nha_cung_cap_id: (mealItem as any)?.nha_cung_cap_id ?? null,
               };
-              const initialFields = { tien_cong_ty: 0, tien_hdv: 0 };
+              // initialFields: chỉ INSERT (lần đầu), KHÔNG update.
+              // Snapshot FOC + chiết khấu master tại lúc cascade insert — lock per tour.
+              const initialFields = {
+                tien_cong_ty: 0,
+                tien_hdv: 0,
+                foc_khach_snapshot: (mealItem as any)?.foc_khach ?? null,
+                foc_mien_snapshot:  (mealItem as any)?.foc_mien  ?? null,
+                chiet_khau_phan_tram_snapshot: (mealItem as any)?.chiet_khau_phan_tram ?? null,
+              };
 
               // Upsert: filter mo_ta để phân biệt trưa/tối (cùng doan_ngay).
               const { data: existingRows } = await externalSupabase
@@ -881,9 +918,9 @@ export function useSaveDieuTour() {
             .eq("bua_an", bua)
             .maybeSingle();
           if (!existingBkNh) continue;
-          // NH thay đổi → xóa booking chưa gửi
+          // NH thay đổi → xóa booking chưa gửi / đã hủy (không cam kết với NCC)
           if (existingBkNh.nha_hang_id !== nhId) {
-            if (existingBkNh.booking_status === "chua_gui") {
+            if (["chua_gui", "khong_dat"].includes(existingBkNh.booking_status)) {
               await externalSupabase.from("doan_booking_nh").delete().eq("id", existingBkNh.id);
             }
             continue;

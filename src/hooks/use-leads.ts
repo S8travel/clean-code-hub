@@ -99,6 +99,7 @@ export const LEAD_TRANG_THAI_OPTS: { value: LeadTrangThai; label: string; color:
 ];
 
 export const LEAD_NGUON_OPTS: { value: string; label: string }[] = [
+  { value: "web_form",          label: "Form web public" },
   { value: "facebook_ads",      label: "Facebook Ads" },
   { value: "zalo_oa",           label: "Zalo OA" },
   { value: "website",           label: "Website" },

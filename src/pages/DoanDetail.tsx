@@ -109,6 +109,10 @@ export default function DoanDetail() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doSaveRef = useRef<(() => void) | null>(null);
   const hasPendingChangesRef = useRef(false);
+  // Track doan đã apply menu-fallback (chỉ cho legacy data lần đầu load).
+  // Sau lần đầu, tin DB hoàn toàn — nếu không, user xóa NH ở điều tour
+  // sẽ bị "phục hồi" từ booking NH cũ qua menuData.
+  const menuFallbackAppliedRef = useRef<Set<number>>(new Set());
 
   const soKhachLon = doan?.so_khach_lon ?? 0;
   const soKhachEm1 = doan?.so_khach_em1 ?? 0;
@@ -122,19 +126,29 @@ export default function DoanDetail() {
     if (!doan) return;
     const generatedDays = generateDays(doan.ngay_di, doan.ngay_ve);
     const merged = mergeDaysWithDB(generatedDays, dbNgayRows, dbNgayItems);
-    const menuDataByDay = new Map(menuData.map((m) => [m.doan_ngay_id, m]));
-    const mergedWithBookingNh = merged.map((day) => {
-      if (!day.id) return day;
-      const menuDay = menuDataByDay.get(day.id);
-      if (!menuDay) return day;
-      return {
-        ...day,
-        an_trua_nha_hang_id: day.an_trua_nha_hang_id ?? menuDay.an_trua_nha_hang_id,
-        an_toi_nha_hang_id: day.an_toi_nha_hang_id ?? menuDay.an_toi_nha_hang_id,
-        an_trua_set_menu_id: day.an_trua_set_menu_id ?? menuDay.an_trua_set_menu_id,
-        an_toi_set_menu_id: day.an_toi_set_menu_id ?? menuDay.an_toi_set_menu_id,
-      };
-    });
+
+    // Menu-fallback chỉ chạy LẦN ĐẦU per doan (legacy data: doan_ngay null
+    // nhưng booking NH có row). Sau đó tin DB — nếu không, user xóa NH khỏi
+    // điều tour sẽ bị "phục hồi" từ menuData (orphan recovered từ booking).
+    const applyMenuFallback =
+      doanId != null && !menuFallbackAppliedRef.current.has(doanId) && menuData.length > 0;
+    let mergedWithBookingNh = merged;
+    if (applyMenuFallback) {
+      const menuDataByDay = new Map(menuData.map((m) => [m.doan_ngay_id, m]));
+      mergedWithBookingNh = merged.map((day) => {
+        if (!day.id) return day;
+        const menuDay = menuDataByDay.get(day.id);
+        if (!menuDay) return day;
+        return {
+          ...day,
+          an_trua_nha_hang_id: day.an_trua_nha_hang_id ?? menuDay.an_trua_nha_hang_id,
+          an_toi_nha_hang_id: day.an_toi_nha_hang_id ?? menuDay.an_toi_nha_hang_id,
+          an_trua_set_menu_id: day.an_trua_set_menu_id ?? menuDay.an_trua_set_menu_id,
+          an_toi_set_menu_id: day.an_toi_set_menu_id ?? menuDay.an_toi_set_menu_id,
+        };
+      });
+      menuFallbackAppliedRef.current.add(doanId);
+    }
 
     if (!initialized) {
       setBangDon(doan.bang_don || "");
@@ -158,6 +172,18 @@ export default function DoanDetail() {
       setDays(mergedWithBookingNh);
     }
   }, [doan, dbNgayRows, dbNgayItems, menuData]);
+
+  // Sync chuyen_bay_don/tien từ doan khi DoanDrawer sửa (chỉ 2 field này bị
+  // duplicate trong local state; các field khác như HDV, xe, số khách... đọc
+  // doan trực tiếp nên tự cập nhật theo refetch).
+  useEffect(() => {
+    if (!initialized || !doan) return;
+    setChuyenBayDon(doan.chuyen_bay_don || "");
+  }, [doan?.chuyen_bay_don, initialized]);
+  useEffect(() => {
+    if (!initialized || !doan) return;
+    setChuyenBayTien(doan.chuyen_bay_tien || "");
+  }, [doan?.chuyen_bay_tien, initialized]);
 
   // Auto-init doan_ngay rows
   useEffect(() => {
@@ -226,6 +252,8 @@ export default function DoanDetail() {
           hasPendingChangesRef.current = false;
           setSaveStatus("saved");
           setTimeout(() => setSaveStatus("idle"), 2000);
+          queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
+          queryClient.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_booking_ks", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_booking_dv", doanId] });
 
@@ -364,8 +392,10 @@ export default function DoanDetail() {
       ghiChuDieuTour,
       setMenuList: allSetMenus,
       coTinhSuatTLNhaHang,
+      thuTip,
+      tipRate,
     };
-  }, [doan, days, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour]);
+  }, [doan, days, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour, thuTip, tipRate]);
 
   // Warning badge counts
   const bookingKSBadgeCount = useMemo(() =>

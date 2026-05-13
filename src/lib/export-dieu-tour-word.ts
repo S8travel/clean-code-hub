@@ -164,6 +164,8 @@ export interface DieuTourExportData {
   ghiChuDieuTour: string;
   setMenuList?: SetMenu[];
   coTinhSuatTLNhaHang?: boolean;
+  thuTip?: boolean;
+  tipRate?: number | null;
 }
 
 export interface DayExportCell {
@@ -248,7 +250,15 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
     bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
     soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
     chuThichKhach, gifts, ghiChuDieuTour,
+    thuTip, tipRate,
   } = data;
+
+  // Tip — auto rate: 150 NT nếu có T/L, ngược lại 300 NT (theo TipSection)
+  const autoTipRate = soKhachTl > 0 ? 150 : 300;
+  const effectiveTipRate = tipRate ?? autoTipRate;
+  const tipText = thuTip
+    ? `Có – ${effectiveTipRate.toLocaleString("vi-VN")} NT/khách/ngày`
+    : "Không";
 
   const canhDiemMap = new Map(canhDiemList.map((c) => [c.id, c]));
   const nhaHangMap  = new Map(nhaHangList.map((n) => [n.id, n]));
@@ -373,6 +383,14 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
       ]})
     );
   }
+
+  // Row Tip — luôn hiển thị
+  infoRows.push(
+    new TableRow({ children: [
+      cell([p("Tip:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(tipText)], { width: VW + LW + VW_R, colSpan: 3 }),
+    ]})
+  );
 
   const infoTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
@@ -519,8 +537,14 @@ function buildDocFromCells(
     tenDoan, hdv, xe, ngayDi, ngayVe,
     bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
     soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
-    chuThichKhach, gifts,
+    chuThichKhach, gifts, thuTip, tipRate,
   } = data;
+
+  const autoTipRate = soKhachTl > 0 ? 150 : 300;
+  const effectiveTipRate = tipRate ?? autoTipRate;
+  const tipText = thuTip
+    ? `Có – ${effectiveTipRate.toLocaleString("vi-VN")} NT/khách/ngày`
+    : "Không";
 
   const today = new Date().toLocaleDateString("vi-VN");
   const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
@@ -609,6 +633,10 @@ function buildDocFromCells(
       cell([p(gifts.join(", "))], { width: VW + LW + VW_R, colSpan: 3 }),
     ]}));
   }
+  infoRows.push(new TableRow({ children: [
+    cell([p("Tip:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+    cell([p(tipText)], { width: VW + LW + VW_R, colSpan: 3 }),
+  ]}));
   const infoTable = new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, rows: infoRows });
 
   // ── Schedule from pre-computed cells ────────────────────────────────────

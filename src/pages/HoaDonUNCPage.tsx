@@ -26,6 +26,7 @@ import {
   useHoaDonUNCList, useUpdateDocStatus, useUploadDNTTDoc, useDeleteDNTTDoc,
   type HoaDonUNCRow, type TrangThaiDoc,
 } from "@/hooks/use-hoa-don-unc";
+import UncEmailModal from "@/components/hoa-don-unc/UncEmailModal";
 import { useDoanOptions, useMarkPaidWithDate } from "@/hooks/use-dntt";
 import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
@@ -68,6 +69,7 @@ function DocCell({
   const Icon = cfg.icon;
 
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [emailRow, setEmailRow] = useState<HoaDonUNCRow | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -75,7 +77,12 @@ function DocCell({
     uploadMut.mutate(
       { id: row.id, file, loaiDoc },
       {
-        onSuccess: () => toast({ title: `Đã tải lên ${loaiDoc === "hoa_don" ? "hóa đơn" : "UNC"}` }),
+        onSuccess: (publicUrl) => {
+          toast({ title: `Đã tải lên ${loaiDoc === "hoa_don" ? "hóa đơn" : "UNC"}` });
+          if (loaiDoc === "unc") {
+            setEmailRow({ ...row, unc_url: publicUrl, trang_thai_unc: "da_co" });
+          }
+        },
         onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể tải lên"), variant: "destructive" }),
       },
     );
@@ -181,6 +188,15 @@ function DocCell({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* UNC email modal — chỉ mở sau khi upload UNC thành công */}
+      {emailRow && (
+        <UncEmailModal
+          row={emailRow}
+          open={!!emailRow}
+          onClose={() => setEmailRow(null)}
+        />
+      )}
     </div>
   );
 }
