@@ -672,6 +672,37 @@ của tour ngay khi tạo. Master danh mục đổi sau KHÔNG được ảnh h�
 
 ---
 
+## 📋 Migration rules — Supabase Data API grants
+
+Từ **30/10/2026**, Supabase enforce: bảng mới trong schema `public` KHÔNG còn auto-expose
+qua Data API (supabase-js / PostgREST / GraphQL). Phải GRANT thủ công, nếu không sẽ
+bị error `42501` khi truy vấn.
+
+**`ALTER TABLE` (cột mới, index, RPC, trigger): KHÔNG cần grant** — bảng giữ nguyên grants cũ.
+**`CREATE TABLE` mới: BẮT BUỘC kèm GRANT + RLS**.
+
+Template chuẩn cho migration tạo bảng mới:
+```sql
+CREATE TABLE public.ten_bang (
+  id bigserial PRIMARY KEY,
+  ...
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.ten_bang TO authenticated, service_role;
+GRANT SELECT ON public.ten_bang TO anon;
+GRANT USAGE, SELECT ON SEQUENCE public.ten_bang_id_seq TO authenticated, service_role;
+
+ALTER TABLE public.ten_bang ENABLE ROW LEVEL SECURITY;
+
+-- Policy mặc định (điều chỉnh theo nghiệp vụ):
+CREATE POLICY "auth_all" ON public.ten_bang
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+Áp dụng tương tự cho VIEW (GRANT SELECT) và FUNCTION/RPC (GRANT EXECUTE).
+
+---
+
 ## 🔒 Tính năng tạm tắt
 
 ### Per-tour permission (doan_permissions) — tắt từ 2026-04-24
