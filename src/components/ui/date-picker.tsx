@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { format, parse, isValid } from "date-fns";
 import { vi } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
+import type { Matcher } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -13,6 +14,22 @@ interface DatePickerProps {
   placeholder?: string;
   className?: string;
   align?: "start" | "center" | "end";
+  /** Optional controlled open state — pass both to make it external-controlled. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Custom DayPicker modifiers (e.g. to highlight related dates). */
+  modifiers?: Record<string, Matcher | Matcher[]>;
+  modifiersClassNames?: Record<string, string>;
+  /** Month to focus when no value (YYYY-MM-DD). */
+  defaultMonth?: string;
+  /** Content rendered under the calendar (e.g. legend for highlighted days). */
+  footer?: ReactNode;
+}
+
+function parseISODate(s?: string): Date | undefined {
+  if (!s) return undefined;
+  const d = parse(s, "yyyy-MM-dd", new Date());
+  return isValid(d) ? d : undefined;
 }
 
 export function DatePicker({
@@ -21,11 +38,23 @@ export function DatePicker({
   placeholder = "Chọn ngày",
   className,
   align = "start",
+  open: openProp,
+  onOpenChange,
+  modifiers,
+  modifiersClassNames,
+  defaultMonth,
+  footer,
 }: DatePickerProps) {
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : openInternal;
+  const setOpen = (v: boolean) => {
+    if (!isControlled) setOpenInternal(v);
+    onOpenChange?.(v);
+  };
 
-  const date = value ? parse(value, "yyyy-MM-dd", new Date()) : undefined;
-  const validDate = date && isValid(date) ? date : undefined;
+  const validDate = parseISODate(value);
+  const fallbackMonth = parseISODate(defaultMonth);
 
   const handleSelect = (d: Date | undefined) => {
     onChange(d ? format(d, "yyyy-MM-dd") : "");
@@ -54,10 +83,17 @@ export function DatePicker({
           mode="single"
           selected={validDate}
           onSelect={handleSelect}
-          defaultMonth={validDate}
+          defaultMonth={validDate ?? fallbackMonth}
           locale={vi}
           initialFocus
+          modifiers={modifiers}
+          modifiersClassNames={modifiersClassNames}
         />
+        {footer && (
+          <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            {footer}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

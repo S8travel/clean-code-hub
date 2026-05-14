@@ -20,7 +20,11 @@ import {
 } from "@/hooks/use-doan";
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
-import { useSeriList } from "@/hooks/use-seri";
+import { useSeriList, checkSeriApplyConflict } from "@/hooks/use-seri";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { t, useTranslate } from "@/lib/i18n";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
@@ -64,6 +68,10 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   useTranslate();
   const [form, setForm] = useState<DoanInsert>({ ...EMPTY_FORM });
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [ngayVeOpen, setNgayVeOpen] = useState(false);
+  const [originalSeriId, setOriginalSeriId] = useState<number | null>(null);
+  const [conflictLines, setConflictLines] = useState<string[] | null>(null);
+  const [checkingConflict, setCheckingConflict] = useState(false);
 
   const { data: agents } = useAgents();
   const createAgentMut = useCreateAgent();
@@ -95,6 +103,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         dia_diem_id: doan.dia_diem_id ?? null,
         huong_dan_vien_id: doan.huong_dan_vien_id ?? null,
         xe_id: doan.xe_id ?? null,
+        seri_id: doan.seri_id ?? null,
         chuyen_bay_don: doan.chuyen_bay_don || "",
         chuyen_bay_tien: doan.chuyen_bay_tien || "",
         so_khach_lon: doan.so_khach_lon ?? 0,
@@ -106,12 +115,15 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         assigned_to: doan.assigned_to || null,
         ghi_chu: doan.ghi_chu || "",
       });
+      setOriginalSeriId(doan.seri_id ?? null);
     } else {
       setForm({ ...EMPTY_FORM, assigned_to: null, seri_id: null });
+      setOriginalSeriId(null);
     }
+    setConflictLines(null);
   }, [doan, open, currentUserId]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: DoanInsert = {
       ...form,
@@ -120,6 +132,22 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     };
     if (!doan) {
       payload.created_by = currentUserId;
+    }
+    // Edit mode + seri_id mới khác seri cũ → pre-flight check conflict
+    if (doan && form.seri_id && form.seri_id !== originalSeriId) {
+      setCheckingConflict(true);
+      try {
+        const res = await checkSeriApplyConflict(doan.id);
+        if (res.hasConflict) {
+          setConflictLines(res.lines);
+          return; // block save
+        }
+      } catch (err: any) {
+        toast.error("Lỗi kiểm tra conflict: " + (err?.message || ""));
+        return;
+      } finally {
+        setCheckingConflict(false);
+      }
     }
     onSave(payload);
   };
@@ -224,10 +252,39 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Ngày Đón *">
-                  <DatePicker value={form.ngay_di ?? ""} onChange={(v) => set("ngay_di", v)} className="w-full rounded-lg h-10" />
+                  <DatePicker
+                    value={form.ngay_di ?? ""}
+                    onChange={(v) => {
+                      set("ngay_di", v);
+                      // Auto-mở Ngày Tiễn nếu chưa chọn hoặc đang trước Ngày Đón
+                      if (v && (!form.ngay_ve || form.ngay_ve < v)) {
+                        setTimeout(() => setNgayVeOpen(true), 80);
+                      }
+                    }}
+                    className="w-full rounded-lg h-10"
+                  />
                 </Field>
                 <Field label="Ngày Tiễn *">
-                  <DatePicker value={form.ngay_ve ?? ""} onChange={(v) => set("ngay_ve", v)} className="w-full rounded-lg h-10" />
+                  <DatePicker
+                    value={form.ngay_ve ?? ""}
+                    onChange={(v) => set("ngay_ve", v)}
+                    open={ngayVeOpen}
+                    onOpenChange={setNgayVeOpen}
+                    defaultMonth={form.ngay_di || undefined}
+                    modifiers={form.ngay_di ? { ngayDon: [new Date(form.ngay_di + "T00:00:00")] } : undefined}
+                    modifiersClassNames={{
+                      ngayDon: "bg-blue-100 text-blue-700 font-bold ring-1 ring-blue-300 rounded-md",
+                    }}
+                    footer={
+                      form.ngay_di ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block h-3 w-3 rounded-sm bg-blue-100 ring-1 ring-blue-300" />
+                          <span>Ngày đón: <strong className="text-foreground">{form.ngay_di.split("-").reverse().join("/")}</strong></span>
+                        </div>
+                      ) : null
+                    }
+                    className="w-full rounded-lg h-10"
+                  />
                 </Field>
               </div>
 
@@ -279,21 +336,27 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 />
               </Field>
 
-              {!doan && (
-                <Field label="Mẫu seri (áp dụng chương trình)">
-                  <SearchableSelect
-                    options={seriOptions}
-                    value={form.seri_id?.toString() || ""}
-                    onChange={(v) => set("seri_id", v ? parseInt(v) : null)}
-                    placeholder="Chọn seri (tuỳ chọn)"
-                  />
-                  {form.seri_id && (
+              <Field label="Mẫu seri (áp dụng chương trình)">
+                <SearchableSelect
+                  options={seriOptions}
+                  value={form.seri_id?.toString() || ""}
+                  onChange={(v) => set("seri_id", v ? parseInt(v) : null)}
+                  placeholder="Chọn seri (tuỳ chọn)"
+                />
+                {doan ? (
+                  form.seri_id && form.seri_id !== originalSeriId ? (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Sẽ áp dụng seri mới khi cập nhật — chỉ thành công nếu đoàn chưa có lịch trình / booking / chi phí.
+                    </p>
+                  ) : null
+                ) : (
+                  form.seri_id && (
                     <p className="text-xs text-muted-foreground mt-1">
                       Lịch trình sẽ được tự động điền sau khi tạo đoàn
                     </p>
-                  )}
-                </Field>
-              )}
+                  )
+                )}
+              </Field>
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Chuyến Bay Đến">
@@ -348,10 +411,10 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
               <div className="pt-4">
                 <Button
                   type="submit"
-                  disabled={isSaving || !form.ten_doan.trim() || !form.ngay_di || !form.ngay_ve || !form.dia_diem_id || !form.agent_id}
+                  disabled={isSaving || checkingConflict || !form.ten_doan.trim() || !form.ngay_di || !form.ngay_ve || !form.dia_diem_id || !form.agent_id}
                   className="w-full active:scale-[0.98] transition-transform"
                 >
-                  {isSaving ? "Đang lưu..." : doan ? "Cập Nhật" : "Thêm Đoàn"}
+                  {checkingConflict ? "Đang kiểm tra..." : isSaving ? "Đang lưu..." : doan ? "Cập Nhật" : "Thêm Đoàn"}
                 </Button>
               </div>
             </form>
@@ -381,6 +444,31 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={!!conflictLines} onOpenChange={(o) => { if (!o) setConflictLines(null); }}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Không thể áp dụng seri mới</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>Đoàn đã có dữ liệu trùng với seri:</p>
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-xs whitespace-pre-wrap">
+                {(conflictLines ?? []).join("\n")}
+              </div>
+              <p className="text-muted-foreground">
+                Vui lòng xóa các mục trên (hoặc bỏ chọn seri) trước khi cập nhật.
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setConflictLines(null)}>Đóng</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { set("seri_id", originalSeriId); setConflictLines(null); }}>
+            Bỏ chọn seri mới
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

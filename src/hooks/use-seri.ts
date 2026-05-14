@@ -224,6 +224,78 @@ export function useDeleteSeriNgayItem() {
   });
 }
 
+// ── Conflict check trước khi áp dụng seri cho đoàn đã có lịch trình ──
+
+export interface SeriApplyConflict {
+  hasConflict: boolean;
+  /** Các dòng mô tả conflict, dùng cho dialog hiển thị cho user. */
+  lines: string[];
+}
+
+/** Check một đoàn đã có lịch trình / booking / chi phí gì chưa
+ *  trước khi áp dụng seri mới.
+ *
+ *  Seri sau refactor KHÔNG carry KS (cột KS bị lock ở SeriPage), nên KS-only
+ *  data trong đoàn (booking KS, chi phí KS, doan_ngay chỉ có KS) KHÔNG bị coi
+ *  là conflict — applySeri sẽ preserve KS fields. */
+export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyConflict> {
+  const [ngayRes, itemRes, nhRes, dvRes, cpRes] = await Promise.all([
+    externalSupabase
+      .from("doan_ngay")
+      .select("id, ngay_so, ngay_date, thanh_pho, an_trua_nha_hang_id, an_toi_nha_hang_id")
+      .eq("doan_id", doanId)
+      .order("ngay_so"),
+    externalSupabase.from("doan_ngay_item").select("doan_ngay_id").eq("doan_id", doanId),
+    externalSupabase.from("doan_booking_nh").select("id", { count: "exact", head: true }).eq("doan_id", doanId),
+    externalSupabase.from("doan_booking_dv").select("id", { count: "exact", head: true }).eq("doan_id", doanId),
+    // Chi phí KS không tính (KS độc lập với seri)
+    externalSupabase
+      .from("doan_chi_phi")
+      .select("id", { count: "exact", head: true })
+      .eq("doan_id", doanId)
+      .neq("danh_muc", "khach_san"),
+  ]);
+
+  const lines: string[] = [];
+  const ngayRows = ngayRes.data ?? [];
+  const items = itemRes.data ?? [];
+  const nhCount = nhRes.count ?? 0;
+  const dvCount = dvRes.count ?? 0;
+  const cpCount = cpRes.count ?? 0;
+
+  // Items count per doan_ngay_id
+  const itemCountByNgayId = new Map<number, number>();
+  for (const it of items as any[]) {
+    itemCountByNgayId.set(it.doan_ngay_id, (itemCountByNgayId.get(it.doan_ngay_id) ?? 0) + 1);
+  }
+
+  // Ngày conflict: có NH (trưa/tối) hoặc có items. KS-only thì OK.
+  type ConflictNgay = typeof ngayRows[number] & { itemCount: number };
+  const conflictNgay: ConflictNgay[] = [];
+  for (const r of ngayRows) {
+    const itemCount = itemCountByNgayId.get(r.id) ?? 0;
+    const hasNH = r.an_trua_nha_hang_id !== null || r.an_toi_nha_hang_id !== null;
+    if (hasNH || itemCount > 0) conflictNgay.push({ ...r, itemCount });
+  }
+
+  if (conflictNgay.length > 0) {
+    lines.push(`Lịch trình đã có ${conflictNgay.length} ngày trùng với seri:`);
+    for (const r of conflictNgay) {
+      const parts: string[] = [];
+      if (r.thanh_pho) parts.push(r.thanh_pho);
+      if (r.an_trua_nha_hang_id) parts.push("ăn trưa");
+      if (r.an_toi_nha_hang_id) parts.push("ăn tối");
+      if (r.itemCount > 0) parts.push(`${r.itemCount} cảnh điểm`);
+      lines.push(`  • Ngày ${r.ngay_so} (${r.ngay_date}) — ${parts.join(", ")}`);
+    }
+  }
+  if (nhCount > 0) lines.push(`${nhCount} booking nhà hàng`);
+  if (dvCount > 0) lines.push(`${dvCount} booking dịch vụ`);
+  if (cpCount > 0) lines.push(`${cpCount} chi phí (NH / cảnh điểm / dịch vụ)`);
+
+  return { hasConflict: lines.length > 0, lines };
+}
+
 // ── Apply seri to doan ──
 
 export function useApplySeriToDoan() {
@@ -252,14 +324,23 @@ export function useApplySeriToDoan() {
       const [bY, bM, bD] = ngayDi.split("-").map(Number);
       const baseDate = new Date(Date.UTC(bY, bM - 1, bD));
 
-      // 2. Insert doan_ngay rows
-      const ngayInserts = seriNgayRows.map((sn: any) => {
+      // 2. UPSERT doan_ngay per ngay_so — preserve KS fields nếu doan đã book KS
+      //    (seri không carry KS, KS độc lập với seri).
+      const { data: existingNgay, error: eExist } = await externalSupabase
+        .from("doan_ngay")
+        .select("id, ngay_so")
+        .eq("doan_id", doanId);
+      if (eExist) throw eExist;
+      const existingByNgaySo = new Map<number, number>(
+        (existingNgay ?? []).map((r: any) => [r.ngay_so, r.id]),
+      );
+
+      const ngaySoToDoanNgayId = new Map<number, number>();
+      for (const sn of seriNgayRows) {
         const d = new Date(baseDate);
         d.setUTCDate(d.getUTCDate() + sn.ngay_so - 1);
         const dateStr = d.toISOString().split("T")[0];
-        return {
-          doan_id: doanId,
-          ngay_so: sn.ngay_so,
+        const seriFields = {
           ngay_date: dateStr,
           thu: thuMap[d.getUTCDay()],
           thanh_pho: sn.thanh_pho,
@@ -269,17 +350,27 @@ export function useApplySeriToDoan() {
           an_toi_nha_hang_id: sn.an_toi_nha_hang_id,
           an_toi_set_menu_id: sn.an_toi_set_menu_id,
           an_toi_ghi_chu: sn.an_toi_ghi_chu,
-          khach_san_id: sn.khach_san_id,
-          ks_loai_phong: sn.ks_loai_phong,
-          ks_ma_code: sn.ks_ma_code,
         };
-      });
-
-      const { data: insertedNgay, error: e2 } = await externalSupabase
-        .from("doan_ngay")
-        .insert(ngayInserts)
-        .select("id, ngay_so");
-      if (e2) throw e2;
+        const existingId = existingByNgaySo.get(sn.ngay_so);
+        if (existingId) {
+          // UPDATE — preserve khach_san_id / ks_loai_phong / ks_ma_code
+          const { error } = await externalSupabase
+            .from("doan_ngay")
+            .update(seriFields)
+            .eq("id", existingId);
+          if (error) throw error;
+          ngaySoToDoanNgayId.set(sn.ngay_so, existingId);
+        } else {
+          // INSERT new
+          const { data: inserted, error } = await externalSupabase
+            .from("doan_ngay")
+            .insert({ doan_id: doanId, ngay_so: sn.ngay_so, ...seriFields })
+            .select("id")
+            .single();
+          if (error) throw error;
+          ngaySoToDoanNgayId.set(sn.ngay_so, inserted.id);
+        }
+      }
 
       // 3. Fetch seri items
       const seriNgayIds = seriNgayRows.map((r: any) => r.id);
@@ -290,12 +381,9 @@ export function useApplySeriToDoan() {
       if (e3) throw e3;
       if (!seriItems || seriItems.length === 0) return;
 
-      // Map seri_ngay.id → ngay_so → doan_ngay.id
+      // Map seri_ngay.id → ngay_so. ngaySoToDoanNgayId đã build ở trên.
       const seriNgayToNgaySo = new Map<number, number>(
         seriNgayRows.map((r: any) => [r.id, r.ngay_so])
-      );
-      const ngaySoToDoanNgayId = new Map<number, number>(
-        (insertedNgay ?? []).map((r: any) => [r.ngay_so, r.id])
       );
 
       const itemInserts = seriItems

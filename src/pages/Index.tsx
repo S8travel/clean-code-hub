@@ -186,6 +186,20 @@ export default function Index() {
         //   } catch { /* ignore if permission already exists */ }
         // }
         logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
+        // Áp dụng seri mới nếu user vừa chọn seri khác. DoanDrawer đã pre-check conflict,
+        // nên ở đây chắc chắn đoàn không có lịch trình / booking / chi phí.
+        if (data.seri_id && data.seri_id !== editingDoan.seri_id && data.ngay_di) {
+          try {
+            await applySeri.mutateAsync({
+              doanId: editingDoan.id,
+              seriId: data.seri_id,
+              ngayDi: data.ngay_di,
+            });
+            toast.success("Đã áp dụng seri mới");
+          } catch (err: any) {
+            toast.error("Lỗi áp dụng seri: " + (err?.message || ""));
+          }
+        }
         toast.success("Đã cập nhật đoàn");
       } else {
         const markets = currentUser?.phan_loai_tour ?? null;
@@ -235,16 +249,22 @@ export default function Index() {
       externalSupabase.from("de_nghi_thanh_toan").select("id").eq("doan_id", doanId).not("trang_thai_duyet", "in", '("tu_choi","da_huy")'),
     ]);
     const errors: string[] = [];
-    // KS: Final là phase quyết định. Nếu Final đã/đang hủy → toàn booking coi như cancelled,
-    // bất kể ks_dat_truoc_status (đặt trước có thể vẫn ở trạng thái ks_xac_nhan trước khi user
-    // chuyển sang Final rồi hủy). Đồng bộ với logic ở use-dieu-tour.checkKhachSanDeletable.
+    // KS: chỉ block nếu booking đã được GỬI (status != chua_gui) và chưa hủy.
+    //   - `chua_gui` = chưa gửi mail → không có cam kết bên ngoài → cho xóa.
+    //   - cancelled = đã hủy → cho xóa.
+    //   - Final là phase quyết định: nếu Final đã/đang hủy → toàn booking coi như cancelled,
+    //     bất kể ks_dat_truoc_status (đặt trước có thể vẫn ở ks_xac_nhan trước khi user
+    //     chuyển sang Final rồi hủy). Đồng bộ với use-dieu-tour.checkKhachSanDeletable.
     const isKsCancelled = (r: any) => {
       const cancelStates = ["cho_ks_xac_nhan_huy", "ks_xac_nhan_huy"];
       if (r.ks_final_status) return cancelStates.includes(r.ks_final_status);
       return cancelStates.includes(r.ks_dat_truoc_status);
     };
-    const activeKS = (ks.data ?? []).filter((r: any) => !isKsCancelled(r)).length;
-    if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn chưa hủy`);
+    const isKsSent = (r: any) =>
+      (r.ks_dat_truoc_status && r.ks_dat_truoc_status !== "chua_gui") ||
+      (r.ks_final_status && r.ks_final_status !== "chua_gui");
+    const activeKS = (ks.data ?? []).filter((r: any) => !isKsCancelled(r) && isKsSent(r)).length;
+    if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn đã gửi mail chưa hủy`);
     if ((nh.data ?? []).length > 0) errors.push(`Booking NH: còn ${nh.data!.length} bữa chưa hủy`);
     if ((dv.data ?? []).length > 0) errors.push(`Booking DV: còn ${dv.data!.length} dịch vụ chưa hủy`);
     if ((dntt.data ?? []).length > 0) errors.push(`ĐNTT: còn ${dntt.data!.length} phiếu chưa hủy`);
