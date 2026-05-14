@@ -22,7 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
-import { CheckCircle2, Circle, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Circle, AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 function fmtDate(d: string | null | undefined) {
@@ -144,6 +144,33 @@ export default function TheodoiPage() {
   const [activeTab, setActiveTab] = useState("theo-doi");
   const [search, setSearch] = useState("");
   const [trangThai, setTrangThai] = useState("dang_chay");
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
+  const [departFrom, setDepartFrom] = useState("");
+  const [departTo, setDepartTo] = useState("");
+  const [opFilter, setOpFilter] = useState("all"); // "all" | "none" | userId
+  const [sortBy, setSortBy] = useState<"created_at" | "ngay_di" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 30;
+
+  const toggleSort = (col: "created_at" | "ngay_di") => {
+    if (sortBy !== col) { setSortBy(col); setSortDir("asc"); }
+    else if (sortDir === "asc") setSortDir("desc");
+    else { setSortBy(null); setSortDir("asc"); }
+  };
+
+  const opOptions = useMemo(() => {
+    const ids = new Set<string>();
+    (groups as any[] | undefined)?.forEach((g) => { if (g.assigned_to) ids.add(g.assigned_to); });
+    return Array.from(ids)
+      .map((id) => ({ id, ten: userMap.get(id) ?? "—" }))
+      .sort((a, b) => a.ten.localeCompare(b.ten, "vi"));
+  }, [groups, userMap]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, trangThai, createdFrom, createdTo, departFrom, departTo, opFilter, sortBy, sortDir]);
 
   useEffect(() => {
     if (activeTab === "su-co" && user?.user_id) {
@@ -161,6 +188,21 @@ export default function TheodoiPage() {
       .filter((g) => {
         if (trangThai !== "all" && g.trang_thai !== trangThai) return false;
         if (search && !g.ten_doan.toLowerCase().includes(search.toLowerCase())) return false;
+        if (createdFrom || createdTo) {
+          const c = (g.created_at ?? "").slice(0, 10);
+          if (createdFrom && c < createdFrom) return false;
+          if (createdTo && c > createdTo) return false;
+        }
+        if (departFrom || departTo) {
+          const d = g.ngay_di ?? "";
+          if (departFrom && d < departFrom) return false;
+          if (departTo && d > departTo) return false;
+        }
+        if (opFilter === "none") {
+          if (g.assigned_to) return false;
+        } else if (opFilter !== "all") {
+          if (g.assigned_to !== opFilter) return false;
+        }
         return true;
       })
       .map((g) => {
@@ -181,7 +223,23 @@ export default function TheodoiPage() {
 
         return { g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT };
       });
-  }, [groups, td, search, trangThai]);
+  }, [groups, td, search, trangThai, createdFrom, createdTo, departFrom, departTo, opFilter]);
+
+  const sortedRows = useMemo(() => {
+    if (!sortBy) return rows;
+    const arr = [...rows];
+    arr.sort((a, b) => {
+      const av = sortBy === "created_at" ? (a.g.created_at ?? "") : (a.g.ngay_di ?? "");
+      const bv = sortBy === "created_at" ? (b.g.created_at ?? "") : (b.g.ngay_di ?? "");
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [rows, sortBy, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   if (!canView) return <AccessDenied />;
 
@@ -209,24 +267,60 @@ export default function TheodoiPage() {
           <TabsContent value="theo-doi" className="mt-4 space-y-4">
 
         {/* Filters */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Input
-            placeholder="Tìm tên đoàn..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-8 text-xs w-48"
-          />
-          <Select value={trangThai} onValueChange={setTrangThai}>
-            <SelectTrigger className="h-8 text-xs w-36">
-              <span>{trangThai === "dang_chay" ? "Đang chạy" : trangThai === "huy" ? "Đã hủy" : "Tất cả"}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="dang_chay">Đang chạy</SelectItem>
-              <SelectItem value="huy">Đã hủy</SelectItem>
-              <SelectItem value="all">Tất cả</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground">{rows.length} đoàn</span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input
+              placeholder="Tìm tên đoàn..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-xs w-48"
+            />
+            <Select value={trangThai} onValueChange={setTrangThai}>
+              <SelectTrigger className="h-8 text-xs w-36">
+                <span>{trangThai === "dang_chay" ? "Đang chạy" : trangThai === "huy" ? "Đã hủy" : "Tất cả"}</span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="dang_chay">Đang chạy</SelectItem>
+                <SelectItem value="huy">Đã hủy</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={opFilter} onValueChange={setOpFilter}>
+              <SelectTrigger className="h-8 text-xs w-44">
+                <span>
+                  {opFilter === "all" ? "Tất cả OP"
+                    : opFilter === "none" ? "Chưa giao OP"
+                    : (opOptions.find((o) => o.id === opFilter)?.ten ?? "OP")}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả OP</SelectItem>
+                <SelectItem value="none">Chưa giao OP</SelectItem>
+                {opOptions.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>{o.ten}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">{sortedRows.length} đoàn</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <span className="text-muted-foreground">Ngày tạo:</span>
+            <Input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} className="h-8 text-xs w-36" />
+            <span className="text-muted-foreground">→</span>
+            <Input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} className="h-8 text-xs w-36" />
+            <span className="text-muted-foreground ml-2">Ngày đi:</span>
+            <Input type="date" value={departFrom} onChange={(e) => setDepartFrom(e.target.value)} className="h-8 text-xs w-36" />
+            <span className="text-muted-foreground">→</span>
+            <Input type="date" value={departTo} onChange={(e) => setDepartTo(e.target.value)} className="h-8 text-xs w-36" />
+            {(createdFrom || createdTo || departFrom || departTo) && (
+              <button
+                onClick={() => { setCreatedFrom(""); setCreatedTo(""); setDepartFrom(""); setDepartTo(""); }}
+                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground border rounded"
+              >
+                Xóa filter ngày
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Table */}
@@ -241,8 +335,28 @@ export default function TheodoiPage() {
                 <TableRow className="bg-[#E6F1FB] text-xs">
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Tên đoàn</TableHead>
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">OP</TableHead>
-                  <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Ngày tạo</TableHead>
-                  <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Ngày đi</TableHead>
+                  <TableHead
+                    className="text-xs font-semibold py-2 px-3 whitespace-nowrap cursor-pointer hover:bg-blue-100 select-none"
+                    onClick={() => toggleSort("created_at")}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Ngày tạo
+                      {sortBy === "created_at"
+                        ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+                        : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                    </span>
+                  </TableHead>
+                  <TableHead
+                    className="text-xs font-semibold py-2 px-3 whitespace-nowrap cursor-pointer hover:bg-blue-100 select-none"
+                    onClick={() => toggleSort("ngay_di")}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Ngày đi
+                      {sortBy === "ngay_di"
+                        ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+                        : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                    </span>
+                  </TableHead>
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Agent</TableHead>
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Booking KS</TableHead>
                   <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Booking NH</TableHead>
@@ -252,13 +366,13 @@ export default function TheodoiPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.length === 0 ? (
+                {pageRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-8 text-xs text-muted-foreground">
                       Không có đoàn nào
                     </TableCell>
                   </TableRow>
-                ) : rows.map(({ g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT }) => (
+                ) : pageRows.map(({ g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT }) => (
                   <TableRow key={g.id} className="text-xs hover:bg-muted/30">
                     {/* Tên đoàn */}
                     <TableCell className="py-1.5 px-3 whitespace-nowrap">
@@ -383,6 +497,34 @@ export default function TheodoiPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!isLoading && sortedRows.length > 0 && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedRows.length)} / {sortedRows.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+              >
+                <ChevronLeft className="h-3 w-3" />
+                Trước
+              </button>
+              <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+              >
+                Sau
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         )}
           </TabsContent>
