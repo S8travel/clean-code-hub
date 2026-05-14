@@ -8,6 +8,14 @@ import { AlertCircle } from "lucide-react";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
+// Khoản dư cũ chưa link doan (data legacy import) lưu mã đoàn vào ghi_chu
+// theo format "Đoàn: <ma>". Extract ra để hiển thị thân thiện.
+function extractDoanFromGhiChu(ghi_chu: string | null | undefined): string | null {
+  if (!ghi_chu) return null;
+  const m = ghi_chu.match(/Đoàn[:：]\s*(.+)/i);
+  return m ? m[1].trim() : null;
+}
+
 export interface CanTruSelection {
   congNoId: number;
   soTienConLai: number;
@@ -26,12 +34,18 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange }: Props)
   const { data: congNoList = [], isLoading } = useCongNoByNCC(nccId);
 
   const options = useMemo(() =>
-    congNoList.map((r) => ({
-      id: r.id,
-      label: `${r.ten_doan || `#${r.doan_id}`} — ${fmt(r.so_tien_con_lai)} VND`,
-      conLai: r.so_tien_con_lai,
-      tenDoan: r.ten_doan || `#${r.doan_id}`,
-    })),
+    congNoList.map((r) => {
+      const tenDoan =
+        r.ten_doan ||
+        extractDoanFromGhiChu(r.ghi_chu) ||
+        (r.doan_id ? `#${r.doan_id}` : "Khoản dư");
+      return {
+        id: r.id,
+        label: `${tenDoan} — ${fmt(r.so_tien_con_lai)} VND`,
+        conLai: r.so_tien_con_lai,
+        tenDoan,
+      };
+    }),
   [congNoList]);
 
   if (!nccId || isLoading || options.length === 0) return null;
