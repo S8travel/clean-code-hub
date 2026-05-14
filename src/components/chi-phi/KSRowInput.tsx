@@ -17,11 +17,13 @@ interface Props {
   onFieldChange: (idx: number, field: string, value: any) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
+  /** Khoá input khi KS đã có DNTT paid — chỉ chỉnh được qua "Điều chỉnh" modal. */
+  disabled?: boolean;
 }
 
 export default memo(function KSRowInput({
   row, globalIdx, rowFocDeduction = 0,
-  onFieldChange, onBlurSave, onDelete,
+  onFieldChange, onBlurSave, onDelete, disabled = false,
 }: Props) {
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
@@ -45,22 +47,34 @@ export default memo(function KSRowInput({
   return (
     <TableRow className="text-xs">
       <TableCell className="py-0.5 px-2">
-        <Input
-          value={localLoaiPhong}
-          onChange={(e) => setLocalLoaiPhong(e.target.value)}
-          onBlur={handleLoaiPhongBlur}
-          className="h-6 text-xs"
-          placeholder="Twin/Double..."
-        />
+        {disabled ? (
+          <span className="text-xs font-medium" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+            {localLoaiPhong || "—"}
+          </span>
+        ) : (
+          <Input
+            value={localLoaiPhong}
+            onChange={(e) => setLocalLoaiPhong(e.target.value)}
+            onBlur={handleLoaiPhongBlur}
+            className="h-6 text-xs"
+            placeholder="Twin/Double..."
+          />
+        )}
       </TableCell>
       <TableCell className="py-0.5 px-2">
-        <Input
-          type="number"
-          value={localSoPhong}
-          onChange={(e) => setLocalSoPhong(e.target.value)}
-          onBlur={handleSoPhongBlur}
-          className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-        />
+        {disabled ? (
+          <span className="text-xs text-center block tabular-nums" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+            {localSoPhong || 0}
+          </span>
+        ) : (
+          <Input
+            type="number"
+            value={localSoPhong}
+            onChange={(e) => setLocalSoPhong(e.target.value)}
+            onBlur={handleSoPhongBlur}
+            className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        )}
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs">
         {row.ci ? format(new Date(row.ci), "dd/MM/yyyy") : "—"}
@@ -70,26 +84,34 @@ export default memo(function KSRowInput({
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs text-center">{row.so_dem}</TableCell>
       <TableCell className="py-0.5 px-2">
-        <DecimalInput
-          value={row.gia_phong}
-          onChange={(v) => onFieldChange(globalIdx, "gia_phong", v)}
-          onBlur={() => onBlurSave(globalIdx)}
-          placeholder="0"
-          className="h-6 text-xs w-[112px] text-right"
-        />
+        {disabled ? (
+          <span className="text-xs text-right block tabular-nums" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+            {fmt(row.gia_phong || 0)}
+          </span>
+        ) : (
+          <DecimalInput
+            value={row.gia_phong}
+            onChange={(v) => onFieldChange(globalIdx, "gia_phong", v)}
+            onBlur={() => onBlurSave(globalIdx)}
+            placeholder="0"
+            className="h-6 text-xs w-[112px] text-right"
+          />
+        )}
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs font-medium">
         {fmt(thanhTien)}
       </TableCell>
       <TableCell className="py-0.5 px-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={() => onDelete(globalIdx)}
-        >
-          <Trash2 className="h-3 w-3 text-destructive" />
-        </Button>
+        {!disabled && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => onDelete(globalIdx)}
+          >
+            <Trash2 className="h-3 w-3 text-destructive" />
+          </Button>
+        )}
       </TableCell>
     </TableRow>
   );

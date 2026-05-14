@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import KSRowInput from "./KSRowInput";
 import KSServiceRowInput from "./KSServiceRowInput";
 import KSDNTTModal from "./KSDNTTModal";
+import KSAdjustModal from "./KSAdjustModal";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { exportDNTTKSExcel } from "@/lib/export-dntt-ks-excel";
 import DNTTKSPreviewModal from "./DNTTKSPreviewModal";
@@ -421,6 +422,15 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     serviceDate: string | null;
   }
   const [aggCommit, setAggCommit] = useState<AggCommitKSTarget | null>(null);
+  // "Điều chỉnh" modal — mở per-booking khi KS đã có DNTT paid (mới, khác adjustTarget legacy ở trên).
+  const [ksAdjustTarget, setKsAdjustTarget] = useState<{
+    ksId: number;
+    ksName: string;
+    rows: LocalKSRow[];
+    focKhach: number | null;
+    focMien: number | null;
+    sumPaid: number;
+  } | null>(null);
   const [aggReason, setAggReason] = useState("");
   const [aggNgayCan, setAggNgayCan] = useState("");
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
@@ -1219,6 +1229,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         const paidDnttsForKs = cancellableDntts.filter((d) => d.payment_status === "paid");
         const unpaidDnttsForKs = cancellableDntts.filter((d) => d.payment_status !== "paid");
         const canCancelKs = cancellableDntts.length > 0;
+        // KS có DNTT đã paid (KHÔNG phải cọc) → lock input. User sửa qua "Điều chỉnh" modal.
+        // Cọc-only thì vẫn cho edit bình thường vì chưa quyết toán chính thức.
+        const isKsLocked = paidDnttsForKs.some((d) => !d.la_coc);
 
         // Aggregate-after-edits values cho KS card.
         // Identical pattern với DV/NH: sumActual (chi phí thực tế), sumPaid (đã TT),
@@ -1420,6 +1433,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                           onDelete={handleDelete}
                           onAddRoom={() => handleAddRow(ksId, doanNgayId, dateStr)}
                           onAddService={() => handleAddRow(ksId, doanNgayId, dateStr, undefined, "dich_vu_khac")}
+                          disabled={isKsLocked}
                         />
                       );
                     })}
@@ -1462,6 +1476,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     onFieldChange={handleFieldChange}
                     onBlurSave={handleBlurSave}
                     onDelete={handleDelete}
+                    disabled={isKsLocked}
                   />
                 )}
               </div>}
@@ -1711,6 +1726,29 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 {/* Actions */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 ml-auto">
+                    {/* Điều chỉnh — chỉ hiện khi đã có DNTT paid (giống NH/DV pattern).
+                        Mở modal cho phép sửa so_phong/gia_phong nhiều row trong booking. */}
+                    {isKsLocked && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        title="Điều chỉnh số phòng / giá phòng thực tế sau thanh toán"
+                        onClick={() => {
+                          setKsAdjustTarget({
+                            ksId,
+                            ksName: ks?.ten || `KS #${ksId}`,
+                            rows,
+                            focKhach: ksFoc.foc_khach,
+                            focMien: ksFoc.foc_mien,
+                            sumPaid,
+                          });
+                        }}
+                      >
+                        <SlidersHorizontal className="h-3 w-3 mr-1" />
+                        Điều chỉnh
+                      </Button>
+                    )}
                     {/* Ẩn nếu cong_no đã cover full sumPaid → đã settle qua agg modal.
                         Click "Hủy dịch vụ" sẽ tạo cong_no thứ 2 trên cùng cash payment → nhân đôi. */}
                     {paidDnttsForKs.length > 0 && groupCongNoTotal < sumPaid && (
@@ -1758,6 +1796,20 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           </Card>
         );
       })}
+
+      {/* "Điều chỉnh" modal — per-booking, sửa so_phong/gia_phong nhiều row sau khi paid */}
+      {ksAdjustTarget && (
+        <KSAdjustModal
+          open={true}
+          onClose={() => setKsAdjustTarget(null)}
+          doanId={doanId}
+          ksName={ksAdjustTarget.ksName}
+          rows={ksAdjustTarget.rows}
+          focKhach={ksAdjustTarget.focKhach}
+          focMien={ksAdjustTarget.focMien}
+          sumPaid={ksAdjustTarget.sumPaid}
+        />
+      )}
 
       {/* ĐNTT Modal */}
       {modalOpen && modalKsId != null && (
@@ -2133,6 +2185,7 @@ function DayGroup({
   onDelete,
   onAddRoom,
   onAddService,
+  disabled = false,
 }: {
   dateStr: string;
   ngaySo?: number;
@@ -2145,6 +2198,7 @@ function DayGroup({
   onDelete: (idx: number) => void;
   onAddRoom: () => void;
   onAddService: () => void;
+  disabled?: boolean;
 }) {
   const label =
     dateStr !== "unknown"
@@ -2158,7 +2212,7 @@ function DayGroup({
           {label}
         </TableCell>
         <TableCell className="py-1 px-2 text-right">
-          <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />
+          {!disabled && <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />}
         </TableCell>
       </TableRow>
       {dayRows.map((row) => {
@@ -2173,6 +2227,7 @@ function DayGroup({
             onFieldChange={onFieldChange}
             onBlurSave={onBlurSave}
             onDelete={onDelete}
+            disabled={disabled}
           />
         );
       })}
@@ -2363,6 +2418,7 @@ function KSServicesSection({
   onFieldChange,
   onBlurSave,
   onDelete,
+  disabled = false,
 }: {
   serviceDayEntries: [string, LocalKSRow[]][];
   ngayDateToNgaySo: Record<string, number>;
@@ -2372,6 +2428,7 @@ function KSServicesSection({
   onFieldChange: (idx: number, field: string, value: any) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="mt-3 border-t border-border pt-2">
@@ -2407,15 +2464,17 @@ function KSServicesSection({
                     {label}
                   </TableCell>
                   <TableCell className="py-1 px-2 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
-                      onClick={() => onAddMore(doanNgayId, dateStr)}
-                    >
-                      <Plus className="h-3 w-3 mr-0.5" />
-                      Thêm
-                    </Button>
+                    {!disabled && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                        onClick={() => onAddMore(doanNgayId, dateStr)}
+                      >
+                        <Plus className="h-3 w-3 mr-0.5" />
+                        Thêm
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
                 {dayRows.map((row) => {
@@ -2428,6 +2487,7 @@ function KSServicesSection({
                       onFieldChange={onFieldChange}
                       onBlurSave={onBlurSave}
                       onDelete={onDelete}
+                      disabled={disabled}
                     />
                   );
                 })}
