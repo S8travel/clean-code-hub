@@ -320,7 +320,13 @@ function BookingKSCard({
 
   const roomRowsHtml = () => {
     if (roomDates.length === 0) {
-      return `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${preferredRoomText || "—"}</td></tr>`;
+      // KS day-use: không qua đêm → fallback hiển thị ngày sử dụng từ day_use_dates
+      // (link qua wrapper canh_diem). Không có thì để "—".
+      const dayUseDates = row.day_use_dates ?? [];
+      const dayUseRow = dayUseDates.length > 0
+        ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày sử dụng (Day Use)</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${dayUseDates.map(fmtDate).join(", ")}</strong></td></tr>`
+        : "";
+      return `${dayUseRow}<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng / Số bộ</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${preferredRoomText || "—"}</td></tr>`;
     }
     const values = expandRoomValues(preferredRoomText, roomDates);
     return roomDates.map((date, i) => `
@@ -423,11 +429,14 @@ function BookingKSCard({
   const buildMailtoBody = () => {
     const userPhone = userProfile?.so_dien_thoai || "";
     const userName = userProfile?.ho_ten || currentUserName;
+    const dayUseDates = row.day_use_dates ?? [];
     const roomLines = roomDates.length > 0
       ? expandRoomValues(preferredRoomText, roomDates)
         .map((value, i) => `- Đêm ${i + 1}: ${fmtDate(roomDates[i])} -> ${fmtDate(nextDateStr(roomDates[i]))}, số phòng: ${value || "—"}`)
         .join("\n")
-      : `- Số phòng: ${preferredRoomText || "—"}`;
+      : (dayUseDates.length > 0
+          ? `- Ngày sử dụng (Day Use): ${dayUseDates.map(fmtDate).join(", ")}\n- Số phòng / Số bộ: ${preferredRoomText || "—"}`
+          : `- Số phòng: ${preferredRoomText || "—"}`);
     return `Kính gửi ${row.khach_san_ten},
 
 Công ty TNHH Du lịch S8 xin đặt phòng cho đoàn ${tenDoan}:
