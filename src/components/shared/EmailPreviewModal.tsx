@@ -104,6 +104,19 @@ export default function EmailPreviewModal({
     if (node) node.innerHTML = extractBody(htmlRef.current);
   }, []);
 
+  // Sync html prop → editor.innerHTML khi parent set giá trị mới (vd: useEffect
+  // build body sau khi async data load xong, hoặc reset). KHÔNG sync khi user
+  // đang focus (đang gõ): innerHTML qua typing đã được parent capture qua
+  // onInput → html prop = editor.innerHTML → check equality cũng skip.
+  useEffect(() => {
+    const node = editRef.current;
+    if (!node) return;
+    const externalBody = extractBody(html);
+    if (node.innerHTML === externalBody) return;
+    if (document.activeElement === node) return;
+    node.innerHTML = externalBody;
+  }, [html]);
+
   const { sigs, defaultId, upsert, remove, setDefault } = useEmailSignatures();
 
   const [selectedSigId, setSelectedSigId] = useState<string | null>(null);
