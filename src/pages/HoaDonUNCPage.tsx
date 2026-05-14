@@ -1,10 +1,11 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
   RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard, CalendarIcon,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -23,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import {
-  useHoaDonUNCList, useUpdateDocStatus, useUploadDNTTDoc, useDeleteDNTTDoc,
+  useHoaDonUNCList, useHoaDonUNCSummary, useUpdateDocStatus, useUploadDNTTDoc, useDeleteDNTTDoc,
   type HoaDonUNCRow, type TrangThaiDoc,
 } from "@/hooks/use-hoa-don-unc";
 import UncEmailModal from "@/components/hoa-don-unc/UncEmailModal";
@@ -324,10 +325,19 @@ export default function HoaDonUNCPage() {
   }), [doanId, loai, trangThaiTT, trangThaiHD, trangThaiUNC]);
 
   const { data: rows = [], isLoading } = useHoaDonUNCList(filters);
+  const { data: summary } = useHoaDonUNCSummary();
   const { data: doanOpts = [] } = useDoanOptions();
 
   const mainRows = rows;
   const canTruMap: Record<number, HoaDonUNCRow> = {};
+
+  // Pagination — 20 row/trang, reset về 1 khi filter đổi
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [doanId, loai, trangThaiTT, trangThaiHD, trangThaiUNC]);
+  const totalPages = Math.max(1, Math.ceil(mainRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = mainRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // Load can_tru payments per visible DNTT
   const visibleDnttIds = useMemo(() => mainRows.map((r) => r.id), [mainRows]);
@@ -385,13 +395,13 @@ export default function HoaDonUNCPage() {
     return m;
   }, [cocDntts]);
 
-  const metrics = useMemo(() => {
-    const chuaTT = mainRows.filter(r => r.payment_status !== "paid").length;
-    const daTT = mainRows.filter(r => r.payment_status === "paid").length;
-    const thieu_hd = mainRows.filter(r => r.payment_status === "paid" && r.trang_thai_hoa_don === "chua_co").length;
-    const thieu_unc = mainRows.filter(r => r.payment_status === "paid" && r.trang_thai_unc === "chua_co").length;
-    return { chuaTT, daTT, thieu_hd, thieu_unc };
-  }, [mainRows]);
+  // Metric cards luôn hiển thị tổng toàn DB, không phụ thuộc filter của list bên dưới.
+  const metrics = {
+    chuaTT: summary?.chuaTT ?? 0,
+    daTT: summary?.daTT ?? 0,
+    thieu_hd: summary?.thieu_hd ?? 0,
+    thieu_unc: summary?.thieu_unc ?? 0,
+  };
 
   const handleMarkPaid = (id: number) => {
     const date = payDateMap[id] ?? new Date();
@@ -548,12 +558,12 @@ export default function HoaDonUNCPage() {
                   Không có dữ liệu
                 </TableCell>
               </TableRow>
-            ) : mainRows.map((row, idx) => {
+            ) : pageRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const canTruRow = canTruMap[row.id];
               return (
                 <TableRow key={row.id}>
-                  <TableCell className="text-center text-sm">{idx + 1}</TableCell>
+                  <TableCell className="text-center text-sm">{(currentPage - 1) * PAGE_SIZE + idx + 1}</TableCell>
                   <TableCell>
                     <button
                       className="text-primary hover:underline text-left text-sm font-medium"
@@ -590,16 +600,24 @@ export default function HoaDonUNCPage() {
                       const cocSibling = refKey
                         ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
                         : 0;
+                      const isThuHoi = (row.ghi_chu || "").includes("[Thu hồi]");
+                      const sign = isThuHoi ? "-" : "";
+                      const amountCls = isThuHoi ? "text-blue-600" : "";
                       return (
                         <div className="space-y-0.5">
                           {ct > 0 ? (
                             <div className="text-xs space-y-0.5">
-                              <div className="text-muted-foreground">Tổng: {fmt(row.so_tien)}</div>
+                              <div className="text-muted-foreground">Tổng: <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
                               <div className="text-amber-600">Cấn trừ: −{fmt(ct)}</div>
-                              <div className="text-sm font-semibold">Thực TT: {fmt(thucTT)}</div>
+                              <div className={cn("text-sm font-semibold", amountCls)}>Thực TT: {sign}{fmt(thucTT)}</div>
                             </div>
                           ) : (
-                            <div>{fmt(row.so_tien)}</div>
+                            <div className={amountCls}>{sign}{fmt(row.so_tien)}</div>
+                          )}
+                          {isThuHoi && (
+                            <span className="inline-block text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                              Thu hồi
+                            </span>
                           )}
                           {row.la_coc && (
                             <span className="inline-block text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
@@ -675,6 +693,34 @@ export default function HoaDonUNCPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {!isLoading && mainRows.length > 0 && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">
+            Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, mainRows.length)} / {mainRows.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              <ChevronLeft className="h-3 w-3" />
+              Trước
+            </button>
+            <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              Sau
+              <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

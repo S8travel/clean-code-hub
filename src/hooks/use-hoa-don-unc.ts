@@ -24,6 +24,7 @@ export interface HoaDonUNCRow {
   unc_url: string | null;
   ref_loai: string | null;
   code_ncc: string | null;  // KS: ks_ma_code from doan_ngay; khác: null
+  ghi_chu: string | null;
 }
 
 export interface HoaDonUNCFilters {
@@ -41,7 +42,7 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
       let q = externalSupabase
         .from("dntt_with_payment_status")
         .select(
-          "id, doan_id, loai, mo_ta, so_tien, la_coc, ref_id, nha_cung_cap_id, ten_nha_cung_cap, ngay_can_thanh_toan, thanh_toan_luc, payment_status, paid_amount, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, ref_loai, doan:doan_id(ten_doan)"
+          "id, doan_id, loai, mo_ta, so_tien, la_coc, ref_id, nha_cung_cap_id, ten_nha_cung_cap, ngay_can_thanh_toan, thanh_toan_luc, payment_status, paid_amount, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, ref_loai, ghi_chu, doan:doan_id(ten_doan)"
         )
         .eq("trang_thai_duyet", "da_duyet")
         .order("ngay_can_thanh_toan", { ascending: true, nullsFirst: false });
@@ -102,8 +103,37 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
           unc_url: r.unc_url,
           ref_loai: r.ref_loai ?? null,
           code_ncc: codeKey ? (codeMap.get(codeKey) ?? null) : null,
+          ghi_chu: r.ghi_chu ?? null,
         };
       });
+    },
+  });
+}
+
+// Tổng toàn DB cho metric cards — không phụ thuộc filter người dùng.
+// Scope mặc định = trang_thai_duyet='da_duyet' (giống điều kiện cố định của page).
+export function useHoaDonUNCSummary() {
+  return useQuery({
+    // Prefix-share với "hoa-don-unc" → tự động refetch khi list invalidated.
+    queryKey: ["hoa-don-unc", "summary"],
+    queryFn: async () => {
+      const base = () =>
+        externalSupabase
+          .from("dntt_with_payment_status")
+          .select("id", { count: "exact", head: true })
+          .eq("trang_thai_duyet", "da_duyet");
+      const [chuaTT, daTT, thieuHD, thieuUNC] = await Promise.all([
+        base().neq("payment_status", "paid"),
+        base().eq("payment_status", "paid"),
+        base().eq("payment_status", "paid").eq("trang_thai_hoa_don", "chua_co"),
+        base().eq("payment_status", "paid").eq("trang_thai_unc", "chua_co"),
+      ]);
+      return {
+        chuaTT: chuaTT.count ?? 0,
+        daTT: daTT.count ?? 0,
+        thieu_hd: thieuHD.count ?? 0,
+        thieu_unc: thieuUNC.count ?? 0,
+      };
     },
   });
 }
