@@ -75,17 +75,26 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
 
   const existing = chiPhiRows.find((r) => r.danh_muc === "bao_hiem");
   const [donGia, setDonGia] = useState<number>(0);
+  // SL có thể edit thủ công — default = soKhach × soNgay nhưng user override được.
+  const [soLuong, setSoLuong] = useState<number>(0);
   const [saving, setSaving] = useState(false);
   const autoSaved = useRef(false);
 
   useEffect(() => {
     if (existing) {
       setDonGia(existing.don_gia ?? 0);
+      setSoLuong(existing.so_luong ?? 0);
       autoSaved.current = true;
     } else if (giaMacDinh) {
       setDonGia(giaMacDinh);
     }
   }, [existing?.id, giaMacDinh]);
+
+  // Khi chưa có record + soKhach/soNgay đổi → seed soLuong = soKhach × soNgay.
+  useEffect(() => {
+    if (existing) return;
+    setSoLuong(soKhach * soNgay);
+  }, [existing, soKhach, soNgay]);
 
   // Auto-save với giá mặc định khi chưa có record và đủ dữ liệu
   useEffect(() => {
@@ -109,7 +118,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
     });
   }, [chiPhiLoading, existing, giaMacDinh, soKhach, soNgay]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const thanhTien = soKhach * soNgay * donGia;
+  const thanhTien = soLuong * donGia;
 
   const nguoiTt = (existing?.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty";
 
@@ -125,8 +134,8 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   };
 
   const handleSave = async () => {
-    if (!soKhach || !soNgay) {
-      toast.warning("Đoàn chưa có số khách hoặc ngày đi/về");
+    if (!soLuong) {
+      toast.warning("Số lượng phải lớn hơn 0");
       return;
     }
     setSaving(true);
@@ -139,7 +148,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         loai: "bao_hiem",
         mo_ta: baoHiemCD ? `Bảo hiểm - ${baoHiemCD.ten}` : "Bảo hiểm",
         don_gia: donGia,
-        so_luong: soKhach * soNgay,
+        so_luong: soLuong,
         tien_cong_ty: isHDV ? 0 : thanhTien,
         tien_hdv: isHDV ? thanhTien : 0,
         nha_cung_cap_id: nccId,
@@ -323,9 +332,19 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                 </div>
               </td>
 
-              {/* SL (computed) */}
-              <td className="px-2 py-2.5 text-center text-muted-foreground">
-                {soKhach * soNgay}
+              {/* SL — editable, default = soKhach × soNgay */}
+              <td className="px-2 py-2.5">
+                <div className="flex justify-center">
+                  <Input
+                    type="number"
+                    value={soLuong || ""}
+                    onChange={(e) => setSoLuong(Number(e.target.value) || 0)}
+                    onBlur={handleSave}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                    disabled={saving}
+                    className="h-6 text-xs px-1.5 py-0 text-center w-[64px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
               </td>
 
               {/* Giá/người/ngày — editable */}
