@@ -32,11 +32,42 @@ export interface DNTTRow {
   paid_amount: number;
   payment_status: "unpaid" | "partial" | "paid";
   thanh_toan_luc: string | null;
+  // 3-level approval
+  tp_dh_duyet_boi: string | null;  // uuid
+  tp_dh_duyet_luc: string | null;
+  kttt_duyet_boi: string | null;
+  kttt_duyet_luc: string | null;
+  ktt_duyet_boi: string | null;
+  ktt_duyet_luc: string | null;
+  // Reject track (cấp nào reject, ai, khi nào)
+  tu_choi_boi: string | null;
+  tu_choi_luc: string | null;
+  tu_choi_cap: number | null;
   // Joined
   ten_doan?: string;
   ten_ncc?: string;
   ncc_so_tai_khoan?: string;
   ncc_ngan_hang?: string;
+}
+
+export type ApprovalLevel = 1 | 2 | 3;
+export const APPROVAL_LEVEL_LABEL: Record<ApprovalLevel, string> = {
+  1: "Trưởng phòng Điều hành",
+  2: "Kế toán Thanh toán",
+  3: "Kế toán Trưởng",
+};
+
+// Có quyền duyệt cấp X không. admin/giam_doc override mọi cấp.
+export function canApproveLevel(
+  user: { role?: string | null; bo_phan?: string | null } | null | undefined,
+  level: ApprovalLevel,
+): boolean {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "giam_doc") return true;
+  if (level === 1) return user.role === "truong_phong" && user.bo_phan === "dieu_hanh";
+  if (level === 2) return user.role === "nhan_vien_cao_cap" && user.bo_phan === "ke_toan";
+  if (level === 3) return user.role === "truong_phong" && user.bo_phan === "ke_toan";
+  return false;
 }
 
 export interface PaymentRow {
@@ -160,25 +191,59 @@ export function useDoanOptions() {
   });
 }
 
+// Approve theo cấp (1=TP ĐH, 2=KTTT, 3=KTT). Cấp 3 → set trang_thai_duyet='da_duyet'.
+// Cấp 1, 2 chỉ stamp <prefix>_duyet_boi/luc, status vẫn 'cho_duyet'.
+// Sequential gate (cấp X chỉ được duyệt khi cấp X-1 đã duyệt) check ở UI.
 export function useApproveDNTT() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async ({ id, level, userId }: {
+      id: number;
+      level: ApprovalLevel;
+      userId: string;
+    }) => {
       const { data: dntt, error: fetchErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .select("id, doan_id")
+        .select("id, doan_id, tp_dh_duyet_luc, kttt_duyet_luc, ktt_duyet_luc")
         .eq("id", id)
         .single();
       if (fetchErr) throw fetchErr;
 
+      // Sanity check: cấp X-1 phải đã duyệt
+      if (level === 2 && !dntt.tp_dh_duyet_luc) {
+        throw new Error("Cấp Trưởng phòng Điều hành chưa duyệt");
+      }
+      if (level === 3 && !dntt.kttt_duyet_luc) {
+        throw new Error("Cấp Kế toán Thanh toán chưa duyệt");
+      }
+
+      const now = new Date().toISOString();
+      const update: Record<string, any> = {};
+      if (level === 1) {
+        update.tp_dh_duyet_boi = userId;
+        update.tp_dh_duyet_luc = now;
+      } else if (level === 2) {
+        update.kttt_duyet_boi = userId;
+        update.kttt_duyet_luc = now;
+      } else {
+        update.ktt_duyet_boi = userId;
+        update.ktt_duyet_luc = now;
+        update.trang_thai_duyet = "da_duyet";
+        update.duyet_boi = userId;
+        update.duyet_luc = now;
+      }
+
       const { error } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .update({ trang_thai_duyet: "da_duyet", duyet_luc: new Date().toISOString() })
+        .update(update)
         .eq("id", id);
       if (error) throw error;
 
-      const chiPhiIds = await getChiPhiIdsForDNTT(id);
-      await recalcChiPhiStatus(chiPhiIds);
+      // Chỉ recalc chi phí khi cấp 3 hoàn tất (mới chính thức được tính paid_amount commitment)
+      if (level === 3) {
+        const chiPhiIds = await getChiPhiIdsForDNTT(id);
+        await recalcChiPhiStatus(chiPhiIds);
+      }
       return dntt.doan_id as number;
     },
     onSuccess: (doanId) => {
@@ -190,10 +255,15 @@ export function useApproveDNTT() {
   });
 }
 
+// Từ chối: track ai/khi nào/cấp nào reject. Cấp đã duyệt trước đó GIỮ NGUYÊN
+// để UI vẫn show "✓ Tên + thời gian" cho cấp đã pass — chỉ cấp bị reject hiện
+// "✗ Từ chối + Tên + thời gian", các cấp sau hiện "—".
 export function useRejectDNTT() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ghiChu }: { id: number; ghiChu: string }) => {
+    mutationFn: async ({ id, ghiChu, level, userId }: {
+      id: number; ghiChu: string; level: ApprovalLevel; userId: string;
+    }) => {
       const { data: dntt, error: fetchErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .select("id, doan_id")
@@ -203,7 +273,13 @@ export function useRejectDNTT() {
 
       const { error } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .update({ trang_thai_duyet: "tu_choi", ghi_chu: ghiChu })
+        .update({
+          trang_thai_duyet: "tu_choi",
+          ghi_chu: ghiChu,
+          tu_choi_boi: userId,
+          tu_choi_luc: new Date().toISOString(),
+          tu_choi_cap: level,
+        })
         .eq("id", id);
       if (error) throw error;
 

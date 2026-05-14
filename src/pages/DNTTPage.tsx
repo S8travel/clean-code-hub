@@ -30,8 +30,11 @@ import {
   useDNTTList, useDNTTSummary, useDoanOptions, useApproveDNTT,
   useRejectDNTT, useDeleteDNTT, useCancelDNTT,
   useCreateAdjustment,
-  type DNTTRow,
+  canApproveLevel,
+  type DNTTRow, type ApprovalLevel,
 } from "@/hooks/use-dntt";
+import { useAuth } from "@/hooks/use-auth";
+import { useUserRoles } from "@/hooks/use-doan";
 import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,13 +52,94 @@ const loaiLabel: Record<string, { text: string; color: string }> = {
   dich_vu: { text: "DV", color: "bg-purple-100 text-purple-700" },
 };
 
-const duyetBadge: Record<string, { text: string; cls: string }> = {
-  cho_duyet: { text: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
-  da_duyet: { text: "Đã duyệt", cls: "bg-green-100 text-green-700" },
-  tu_choi: { text: "Từ chối", cls: "bg-red-100 text-red-700" },
-  da_huy: { text: "Đã hủy", cls: "bg-gray-100 text-gray-600" },
-};
 
+
+// Cell duyệt 1 cấp — sequential gate ở UI: cấp X chỉ enable khi cấp X-1 đã duyệt.
+// Hiển thị tên người duyệt + thời gian khi đã duyệt; nút Duyệt/Từ chối khi đang chờ.
+function ApprovalCell({
+  row, level, user, userMap, onApprove, onReject,
+}: {
+  row: DNTTRow;
+  level: ApprovalLevel;
+  user: { user_id?: string; role?: string | null; bo_phan?: string | null } | null | undefined;
+  userMap: Map<string, string>;
+  onApprove: (id: number, level: ApprovalLevel) => void;
+  onReject: (id: number, level: ApprovalLevel) => void;
+}) {
+  const fields = level === 1
+    ? { boi: row.tp_dh_duyet_boi, luc: row.tp_dh_duyet_luc, prevLuc: null as string | null }
+    : level === 2
+    ? { boi: row.kttt_duyet_boi, luc: row.kttt_duyet_luc, prevLuc: row.tp_dh_duyet_luc }
+    : { boi: row.ktt_duyet_boi,  luc: row.ktt_duyet_luc,  prevLuc: row.kttt_duyet_luc };
+
+  // Đã duyệt → hiện tên + thời gian (giữ nguyên kể cả khi sau đó bị reject ở cấp khác)
+  if (fields.luc) {
+    const ten = fields.boi ? (userMap.get(fields.boi) ?? "—") : "—";
+    return (
+      <TableCell className="text-xs">
+        <div className="text-emerald-700 font-medium leading-tight">✓ {ten}</div>
+        <div className="text-muted-foreground">{format(new Date(fields.luc), "dd/MM HH:mm")}</div>
+      </TableCell>
+    );
+  }
+
+  // ĐNTT bị từ chối — chỉ ô của cấp đã reject mới hiện info, các cấp khác hiện "—"
+  if (row.trang_thai_duyet === "tu_choi") {
+    if (row.tu_choi_cap === level) {
+      const ten = row.tu_choi_boi ? (userMap.get(row.tu_choi_boi) ?? "—") : "—";
+      return (
+        <TableCell className="text-xs">
+          <div className="text-red-600 font-medium leading-tight">✗ Từ chối · {ten}</div>
+          {row.tu_choi_luc && (
+            <div className="text-muted-foreground">{format(new Date(row.tu_choi_luc), "dd/MM HH:mm")}</div>
+          )}
+        </TableCell>
+      );
+    }
+    // Legacy: ĐNTT cũ tu_choi không có tu_choi_cap → hiện ở cấp đầu chưa duyệt
+    if (row.tu_choi_cap == null && level === 1) {
+      return <TableCell className="text-xs text-red-600 italic">Từ chối</TableCell>;
+    }
+    return <TableCell className="text-xs text-muted-foreground">—</TableCell>;
+  }
+
+  if (row.trang_thai_duyet === "da_huy") {
+    return <TableCell className="text-xs text-muted-foreground">—</TableCell>;
+  }
+
+  // Bị chặn vì cấp trước chưa duyệt
+  const blocked = level > 1 && !fields.prevLuc;
+  if (blocked) {
+    return <TableCell className="text-xs text-muted-foreground italic">Chờ cấp trước</TableCell>;
+  }
+
+  // Cấp đang chờ — kiểm tra quyền
+  const canApprove = canApproveLevel(user, level);
+  if (!canApprove) {
+    return <TableCell className="text-xs text-muted-foreground">Chờ duyệt</TableCell>;
+  }
+
+  return (
+    <TableCell>
+      <div className="flex flex-col gap-1">
+        <Button
+          size="sm" variant="outline"
+          className="h-6 px-2 text-xs text-green-600"
+          onClick={() => onApprove(row.id, level)}
+        >
+          <Check className="h-3 w-3 mr-1" /> Duyệt
+        </Button>
+        <Button
+          size="sm" variant="outline"
+          className="h-6 px-2 text-xs text-red-600"
+          onClick={() => onReject(row.id, level)}
+        >
+          <X className="h-3 w-3 mr-1" /> Từ chối
+        </Button>
+      </div>
+    </TableCell>
+  );
+}
 
 export default function DNTTPage() {
   const canView = useBoPhan("ke_toan");
@@ -81,6 +165,12 @@ export default function DNTTPage() {
   const { data: rows = [], isLoading } = useDNTTList(filters);
   const { data: summary } = useDNTTSummary();
   const { data: doanOpts = [] } = useDoanOptions();
+  const { user } = useAuth();
+  const { data: userRoles = [] } = useUserRoles();
+  const userMap = useMemo(
+    () => new Map((userRoles as any[]).map((u) => [u.user_id as string, (u.ho_ten as string) ?? ""])),
+    [userRoles],
+  );
   const approveMut = useApproveDNTT();
   const rejectMut = useRejectDNTT();
   const deleteMut = useDeleteDNTT();
@@ -90,6 +180,7 @@ export default function DNTTPage() {
   const logActivity = useLogActivity();
 
   const [rejectId, setRejectId] = useState<number | null>(null);
+  const [rejectLevel, setRejectLevel] = useState<ApprovalLevel | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{ id: number; isPaid: boolean; moTa: string } | null>(null);
@@ -184,22 +275,32 @@ export default function DNTTPage() {
     setLoai("");
   };
 
-  const handleApprove = (id: number) => {
-    approveMut.mutate(id, {
+  const handleApprove = (id: number, level: ApprovalLevel) => {
+    if (!user?.user_id) {
+      toast({ title: "Chưa đăng nhập", variant: "destructive" });
+      return;
+    }
+    approveMut.mutate({ id, level, userId: user.user_id }, {
       onSuccess: () => {
-        toast({ title: "Đã duyệt ĐNTT" });
-        logActivity.mutate({ action: "duyet", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Duyệt ĐNTT #${id}` });
+        toast({ title: level === 3 ? "Đã duyệt cuối — ĐNTT chuyển sang đã duyệt" : `Đã duyệt cấp ${level}` });
+        logActivity.mutate({ action: "duyet", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Duyệt cấp ${level} ĐNTT #${id}` });
       },
+      onError: (e: any) => toast({ title: e?.message || "Lỗi duyệt", variant: "destructive" }),
     });
   };
 
   const handleRejectSubmit = () => {
-    if (!rejectId) return;
-    rejectMut.mutate({ id: rejectId, ghiChu: rejectReason }, {
+    if (!rejectId || !rejectLevel) return;
+    if (!user?.user_id) {
+      toast({ title: "Chưa đăng nhập", variant: "destructive" });
+      return;
+    }
+    rejectMut.mutate({ id: rejectId, ghiChu: rejectReason, level: rejectLevel, userId: user.user_id }, {
       onSuccess: () => {
         toast({ title: "Đã từ chối ĐNTT" });
-        logActivity.mutate({ action: "tu_choi", table_name: "de_nghi_thanh_toan", record_id: rejectId, mo_ta: `Từ chối ĐNTT #${rejectId}` });
+        logActivity.mutate({ action: "tu_choi", table_name: "de_nghi_thanh_toan", record_id: rejectId, mo_ta: `Từ chối cấp ${rejectLevel} ĐNTT #${rejectId}` });
         setRejectId(null);
+        setRejectLevel(null);
         setRejectReason("");
       },
     });
@@ -373,22 +474,22 @@ export default function DNTTPage() {
               <TableHead className="min-w-[120px]">Mã đoàn</TableHead>
               <TableHead className="w-[60px]">Loại</TableHead>
               <TableHead className="min-w-[180px]">Mô tả</TableHead>
-              <TableHead className="min-w-[150px]">Nhà cung cấp</TableHead>
               <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
               <TableHead className="w-[90px]">Ngày cần TT</TableHead>
-              <TableHead className="min-w-[110px]">ĐNTT</TableHead>
+              <TableHead className="min-w-[140px]">TP Điều hành</TableHead>
+              <TableHead className="min-w-[140px]">Kế toán TT</TableHead>
+              <TableHead className="min-w-[140px]">Kế toán trưởng</TableHead>
               <TableHead className="w-[90px]">Ngày tạo</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
             ) : pageRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
-              const db = duyetBadge[row.trang_thai_duyet] || duyetBadge.cho_duyet;
               const canTruRow = canTruMap[row.id];
 
               return (
@@ -406,7 +507,6 @@ export default function DNTTPage() {
                     <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lt.color)}>{lt.text}</span>
                   </TableCell>
                   <TableCell className="text-sm">{row.mo_ta}</TableCell>
-                  <TableCell className="text-sm">{row.ten_ncc || "—"}</TableCell>
                   <TableCell className="text-right font-medium">
                     {(() => {
                       const refKey = row.ref_loai && row.ref_id != null ? `${row.ref_loai}|${row.ref_id}` : null;
@@ -453,21 +553,15 @@ export default function DNTTPage() {
                       ? format(new Date(row.ngay_can_thanh_toan), "dd/MM/yyyy")
                       : "—"}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <span className={cn("px-2 py-0.5 rounded text-xs font-medium w-fit", db.cls)}>{db.text}</span>
-                      {row.trang_thai_duyet === "cho_duyet" && (
-                        <div className="flex gap-1 mt-1">
-                          <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-green-600" onClick={() => handleApprove(row.id)}>
-                            <Check className="h-3 w-3 mr-1" /> Duyệt
-                          </Button>
-                          <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-red-600" onClick={() => { setRejectId(row.id); setRejectReason(""); }}>
-                            <X className="h-3 w-3 mr-1" /> Từ chối
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
+                  {([1, 2, 3] as ApprovalLevel[]).map((lv) => (
+                    <ApprovalCell
+                      key={lv}
+                      row={row} level={lv}
+                      user={user} userMap={userMap}
+                      onApprove={handleApprove}
+                      onReject={(id, l) => { setRejectId(id); setRejectLevel(l); setRejectReason(""); }}
+                    />
+                  ))}
                   <TableCell className="text-xs text-muted-foreground">
                     {format(new Date(row.created_at), "dd/MM/yyyy")}
                   </TableCell>
@@ -534,7 +628,7 @@ export default function DNTTPage() {
       )}
 
       {/* Reject dialog */}
-      <Dialog open={rejectId !== null} onOpenChange={o => { if (!o) setRejectId(null); }}>
+      <Dialog open={rejectId !== null} onOpenChange={o => { if (!o) { setRejectId(null); setRejectLevel(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Từ chối ĐNTT</DialogTitle></DialogHeader>
           <div>
@@ -547,7 +641,7 @@ export default function DNTTPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectId(null)}>Hủy</Button>
+            <Button variant="outline" onClick={() => { setRejectId(null); setRejectLevel(null); }}>Hủy</Button>
             <Button variant="destructive" onClick={handleRejectSubmit} disabled={!rejectReason.trim()}>
               Xác nhận từ chối
             </Button>
