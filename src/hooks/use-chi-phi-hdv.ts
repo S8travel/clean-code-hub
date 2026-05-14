@@ -211,6 +211,7 @@ export function useCreateHDVPayment() {
       moTa: string;
       ghiChu?: string;
       quyetToanData?: QuyetToanData | null;
+      ngayCanThanhToan?: string | null;
     }) => {
       const { data, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
@@ -227,6 +228,7 @@ export function useCreateHDVPayment() {
             ? `[Thu hồi] ${payload.ghiChu ?? ""}`.trim()
             : (payload.ghiChu ?? null),
           quyet_toan_data: payload.quyetToanData ?? null,
+          ngay_can_thanh_toan: payload.ngayCanThanhToan ?? null,
         })
         .select("id")
         .single();

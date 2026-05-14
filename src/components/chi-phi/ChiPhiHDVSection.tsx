@@ -613,6 +613,7 @@ function CreateHDVPaymentModal({
   );
   const [ghiChu, setGhiChu] = useState("");
   const [laThuHoi, setLaThuHoi] = useState(defaultLaThuHoi ?? false);
+  const [ngayCanTT, setNgayCanTT] = useState("");
 
   // Quyết toán state (7 fields theo form S8 BM02.1-20)
   const [tamUng, setTamUng] = useState(0);
@@ -667,6 +668,7 @@ function CreateHDVPaymentModal({
         doanId, hdvId, refLoai, soTien, laThuHoi, moTa,
         ghiChu: ghiChu || undefined,
         quyetToanData: isQT ? buildQuyetToanData() : null,
+        ngayCanThanhToan: ngayCanTT || null,
       });
       toast.success("Đã tạo đề nghị thanh toán");
       onClose();
@@ -839,12 +841,21 @@ function CreateHDVPaymentModal({
             {soTien > 0 && <p className="text-[11px] text-muted-foreground">{fmt(soTien)} ₫</p>}
           </div>
           {isQT && (
-            <div className="flex items-center gap-2">
-              <Checkbox id="la-thu-hoi" checked={laThuHoi} onCheckedChange={(v) => setLaThuHoi(!!v)} />
-              <Label htmlFor="la-thu-hoi" className="text-xs cursor-pointer">
-                HDV hoàn lại tiền (thu hồi tạm ứng thừa)
-              </Label>
-            </div>
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Ngày cần thanh toán</Label>
+                <Input
+                  className="h-8 text-sm" type="date"
+                  value={ngayCanTT} onChange={(e) => setNgayCanTT(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="la-thu-hoi" checked={laThuHoi} onCheckedChange={(v) => setLaThuHoi(!!v)} />
+                <Label htmlFor="la-thu-hoi" className="text-xs cursor-pointer">
+                  HDV hoàn lại tiền (thu hồi tạm ứng thừa)
+                </Label>
+              </div>
+            </>
           )}
           <div className="space-y-1.5">
             <Label className="text-xs">Ghi chú</Label>
