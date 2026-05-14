@@ -124,6 +124,29 @@ export function useDNTTList(filters: Filters) {
   });
 }
 
+// Tổng số ĐNTT toàn DB — không phụ thuộc filter của list. Dùng cho metric cards.
+export function useDNTTSummary() {
+  return useQuery({
+    // Prefix-share với "dntt-list" → tự động refetch khi list invalidated.
+    queryKey: ["dntt-list", "summary"],
+    queryFn: async () => {
+      const base = () =>
+        externalSupabase.from("de_nghi_thanh_toan").select("id", { count: "exact", head: true });
+      // Tổng KHÔNG tính ĐNTT đã hủy (cũng không tính từ chối thì user ko yêu cầu — giữ).
+      const [total, choDuyet, daDuyet] = await Promise.all([
+        base().neq("trang_thai_duyet", "da_huy"),
+        base().eq("trang_thai_duyet", "cho_duyet"),
+        base().eq("trang_thai_duyet", "da_duyet"),
+      ]);
+      return {
+        total: total.count ?? 0,
+        choDuyet: choDuyet.count ?? 0,
+        daDuyet: daDuyet.count ?? 0,
+      };
+    },
+  });
+}
+
 export function useDoanOptions() {
   return useQuery({
     queryKey: ["doan-options-dntt"],

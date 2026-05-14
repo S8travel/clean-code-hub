@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useBoPhan } from "@/hooks/use-permissions";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
-import { RotateCcw, Check, X, Trash2, Ban } from "lucide-react";
+import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,7 +27,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  useDNTTList, useDoanOptions, useApproveDNTT,
+  useDNTTList, useDNTTSummary, useDoanOptions, useApproveDNTT,
   useRejectDNTT, useDeleteDNTT, useCancelDNTT,
   useCreateAdjustment,
   type DNTTRow,
@@ -53,6 +53,7 @@ const duyetBadge: Record<string, { text: string; cls: string }> = {
   cho_duyet: { text: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
   da_duyet: { text: "Đã duyệt", cls: "bg-green-100 text-green-700" },
   tu_choi: { text: "Từ chối", cls: "bg-red-100 text-red-700" },
+  da_huy: { text: "Đã hủy", cls: "bg-gray-100 text-gray-600" },
 };
 
 
@@ -78,6 +79,7 @@ export default function DNTTPage() {
   }), [doanId, fromDate, toDate, trangThaiDuyet, loai]);
 
   const { data: rows = [], isLoading } = useDNTTList(filters);
+  const { data: summary } = useDNTTSummary();
   const { data: doanOpts = [] } = useDoanOptions();
   const approveMut = useApproveDNTT();
   const rejectMut = useRejectDNTT();
@@ -98,6 +100,14 @@ export default function DNTTPage() {
 
   // Trong model mới: can_tru là payment record, không còn là DNTT row
   const mainRows = rows;
+
+  // Pagination — 20 row/trang, reset về 1 khi filter đổi
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [doanId, fromDate, toDate, trangThaiDuyet, loai]);
+  const totalPages = Math.max(1, Math.ceil(mainRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = mainRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const canTruMap: Record<number, DNTTRow> = {};
 
   // Load các ĐNTT cọc cùng ref (cùng meal/KS/DV) — để hiển thị "Đã cọc: X" trên dòng còn lại
@@ -159,12 +169,12 @@ export default function DNTTPage() {
     },
   });
 
-  const metrics = useMemo(() => {
-    const total = mainRows.length;
-    const choDuyet = mainRows.filter(r => r.trang_thai_duyet === "cho_duyet").length;
-    const daDuyet = mainRows.filter(r => r.trang_thai_duyet === "da_duyet").length;
-    return { total, choDuyet, daDuyet };
-  }, [mainRows]);
+  // Metric cards luôn hiển thị tổng toàn DB, không phụ thuộc filter của list bên dưới.
+  const metrics = {
+    total: summary?.total ?? 0,
+    choDuyet: summary?.choDuyet ?? 0,
+    daDuyet: summary?.daDuyet ?? 0,
+  };
 
   const resetFilters = () => {
     setDoanId("");
@@ -376,14 +386,14 @@ export default function DNTTPage() {
               <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
-            ) : mainRows.map((row, idx) => {
+            ) : pageRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const db = duyetBadge[row.trang_thai_duyet] || duyetBadge.cho_duyet;
               const canTruRow = canTruMap[row.id];
 
               return (
                 <TableRow key={row.id}>
-                  <TableCell className="text-center">{idx + 1}</TableCell>
+                  <TableCell className="text-center">{(currentPage - 1) * PAGE_SIZE + idx + 1}</TableCell>
                   <TableCell>
                     <button
                       className="text-primary hover:underline text-left font-medium"
@@ -405,16 +415,24 @@ export default function DNTTPage() {
                         : 0;
                       const canTru = canTruByDntt[row.id] || 0;
                       const thucTT = Math.max(0, row.so_tien - canTru);
+                      const isThuHoi = (row.ghi_chu || "").includes("[Thu hồi]");
+                      const sign = isThuHoi ? "-" : "";
+                      const amountCls = isThuHoi ? "text-blue-600" : "";
                       return (
                         <div className="space-y-0.5">
                           {canTru > 0 ? (
                             <div className="text-xs space-y-0.5">
-                              <div className="text-muted-foreground">Tổng: {fmt(row.so_tien)}</div>
+                              <div className="text-muted-foreground">Tổng: <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
                               <div className="text-amber-600">Cấn trừ: −{fmt(canTru)}</div>
-                              <div className="text-sm font-semibold">Thực TT: {fmt(thucTT)}</div>
+                              <div className={cn("text-sm font-semibold", amountCls)}>Thực TT: {sign}{fmt(thucTT)}</div>
                             </div>
                           ) : (
-                            <div>{fmt(row.so_tien)}</div>
+                            <div className={amountCls}>{sign}{fmt(row.so_tien)}</div>
+                          )}
+                          {isThuHoi && (
+                            <span className="inline-block text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                              Thu hồi
+                            </span>
                           )}
                           {row.la_coc && (
                             <span className="inline-block text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
@@ -486,6 +504,34 @@ export default function DNTTPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {!isLoading && mainRows.length > 0 && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">
+            Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, mainRows.length)} / {mainRows.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              <ChevronLeft className="h-3 w-3" />
+              Trước
+            </button>
+            <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+            >
+              Sau
+              <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Reject dialog */}
       <Dialog open={rejectId !== null} onOpenChange={o => { if (!o) setRejectId(null); }}>
