@@ -103,7 +103,10 @@ export async function exportBookingWord(
   // Build unified entry list
   const allEntries: UnifiedEntry[] = [];
   for (const bk of selectedBookings) {
-    const dates = bk.ngay_dates.length > 0 ? bk.ngay_dates : [""];
+    // Gồm cả ngày qua đêm (ngay_dates) và ngày day-use (golf, spa…) để export
+    // không bỏ sót ngày + địa điểm cho KS dạng day-use qua wrapper canh_diem.
+    const merged = [...new Set([...bk.ngay_dates, ...bk.day_use_dates])].sort();
+    const dates = merged.length > 0 ? merged : [""];
     for (const d of dates) {
       allEntries.push({
         kind: "ks",
