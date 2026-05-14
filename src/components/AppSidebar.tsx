@@ -220,7 +220,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "HỆ THỐNG",
     items: [
-      { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, resource: "dntt", boPhanOnly: "ke_toan" },
+      { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, resource: "dntt", boPhanOnly: "ke_toan", minRole: "giam_doc" },
       { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock, resource: "thanh_toan_dk" },
       { title: "Thanh Toán, Hóa Đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc" },
       { title: "Công nợ", url: "/cong-no", icon: Wallet, resource: "cong_no" },
@@ -237,8 +237,14 @@ function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor
   const boPhanOk = useBoPhan(item.boPhanOnly ?? "");
 
   if (item.resource && !allowed) return null;
-  if (item.minRole && !roleOk) return null;
-  if (item.boPhanOnly && !boPhanOk) return null;
+  // Khi có cả minRole và boPhanOnly → semantic OR (match bộ phận HOẶC đạt minRole).
+  // Khi chỉ có một → AND như cũ.
+  if (item.minRole && item.boPhanOnly) {
+    if (!roleOk && !boPhanOk) return null;
+  } else {
+    if (item.minRole && !roleOk) return null;
+    if (item.boPhanOnly && !boPhanOk) return null;
+  }
 
   const isZh = item.titleZh && document.cookie.includes("googtrans=/vi/zh-TW");
   const displayTitle = isZh ? item.titleZh! : item.title;
