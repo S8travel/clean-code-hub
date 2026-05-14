@@ -11,9 +11,7 @@ import NhaCungCapDetail from "@/components/nha-cung-cap/NhaCungCapDetail";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
-export default function NhaCungCapPage() {
-  const canView = usePermission("danh_muc", "view");
-  if (!canView) return <AccessDenied />;
+function NhaCungCapPageContent() {
   const { data: list, isLoading } = useNhaCungCapList();
   const createMut = useCreateNhaCungCap();
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -122,4 +120,10 @@ export default function NhaCungCapPage() {
       </div>
     </div>
   );
+}
+
+export default function NhaCungCapPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
+  return <NhaCungCapPageContent />;
 }

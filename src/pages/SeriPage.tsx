@@ -113,6 +113,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
             nhaHangList={nhaHangList}
             khachSanList={khachSanList}
             getDayLabel={(day) => `Ngày ${day.ngay_so}`}
+            lockKhachSan
           />
         )}
       </div>
@@ -121,10 +122,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
 }
 
 // ── Main page ──
-export default function SeriPage() {
-  const canView = usePermission("seri", "view");
-  if (!canView) return <AccessDenied />;
-
+function SeriPageContent() {
   const { data: seriList = [], isLoading } = useSeriList();
   const createSeri = useCreateSeri();
   const updateSeri = useUpdateSeri();
@@ -353,4 +351,10 @@ export default function SeriPage() {
       </AlertDialog>
     </div>
   );
+}
+
+export default function SeriPage() {
+  const canView = usePermission("seri", "view");
+  if (!canView) return <AccessDenied />;
+  return <SeriPageContent />;
 }

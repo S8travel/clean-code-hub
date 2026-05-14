@@ -4,12 +4,10 @@ import { AccessDenied } from "@/components/PermissionGate";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
-  RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard, CalendarIcon,
-  ChevronLeft, ChevronRight, Loader2, ScanText,
+  RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard,
+  ChevronLeft, ChevronRight, Loader2, ScanText, Share2,
 } from "lucide-react";
 import { ocrInvoiceAmount, isAmountMatch } from "@/lib/ocr-invoice";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +33,11 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { toast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
+
+// Danh sách nguồn thanh toán (tài khoản công ty). Thêm option ở đây để xuất hiện trong dropdown.
+const PAYMENT_SOURCES: string[] = [
+  "Vietin-111600925668",
+];
 
 const loaiLabel: Record<string, { text: string; color: string }> = {
   khach_san: { text: "KS", color: "bg-blue-100 text-blue-700" },
@@ -368,10 +371,7 @@ function DocCell({
   );
 }
 
-export default function HoaDonUNCPage() {
-  const canView = usePermission("hoa_don_unc", "view");
-  if (!canView) return <AccessDenied />;
-
+function HoaDonUNCPageContent() {
   const navigate = useNavigate();
 
   const [doanId, setDoanId] = useState<string>("");
@@ -379,7 +379,7 @@ export default function HoaDonUNCPage() {
   const [trangThaiTT, setTrangThaiTT] = useState<string>("");
   const [trangThaiHD, setTrangThaiHD] = useState<string>("");
   const [trangThaiUNC, setTrangThaiUNC] = useState<string>("");
-  const [payDateMap, setPayDateMap] = useState<Record<number, Date | undefined>>({});
+  const [nguonMap, setNguonMap] = useState<Record<number, string>>({});
 
   const markPaidMut = useMarkPaidWithDate();
 
@@ -421,6 +421,26 @@ export default function HoaDonUNCPage() {
       (data || []).forEach((p: any) => {
         m[p.dntt_id] = (m[p.dntt_id] || 0) + Number(p.so_tien);
       });
+      return m;
+    },
+  });
+
+  // Load nguồn TT (cash payment có nguon != null) per visible DNTT.
+  // Key share prefix với "hoa-don-unc" để tự refetch khi mutation invalidate.
+  const { data: nguonByDntt = {} as Record<number, string> } = useQuery({
+    queryKey: ["hoa-don-unc", "nguon", visibleDnttIds.join(",")],
+    enabled: visibleDnttIds.length > 0,
+    queryFn: async () => {
+      const { data } = await externalSupabase
+        .from("payments")
+        .select("dntt_id, nguon, ngay_thanh_toan")
+        .eq("method", "cash")
+        .in("dntt_id", visibleDnttIds)
+        .not("nguon", "is", null)
+        .order("ngay_thanh_toan", { ascending: false });
+      const m: Record<number, string> = {};
+      // Lấy nguồn của payment mới nhất per dntt_id
+      (data || []).forEach((p: any) => { if (!m[p.dntt_id] && p.nguon) m[p.dntt_id] = p.nguon; });
       return m;
     },
   });
@@ -470,12 +490,11 @@ export default function HoaDonUNCPage() {
     thieu_unc: summary?.thieu_unc ?? 0,
   };
 
-  const handleMarkPaid = (id: number) => {
-    const date = payDateMap[id] ?? new Date();
+  const handleMarkPaid = (id: number, nguon?: string) => {
     markPaidMut.mutate(
-      { id, ngayThanhToan: format(date, "yyyy-MM-dd") },
+      { id, ngayThanhToan: format(new Date(), "yyyy-MM-dd"), nguon: nguon ?? null },
       {
-        onSuccess: () => toast({ title: "Đã xác nhận thanh toán" }),
+        onSuccess: () => toast({ title: nguon ? `Đã xác nhận TT — ${nguon}` : "Đã xác nhận thanh toán" }),
         onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể xác nhận"), variant: "destructive" }),
       },
     );
@@ -489,6 +508,28 @@ export default function HoaDonUNCPage() {
     setTrangThaiUNC("");
   };
 
+  // Sync sang Google Sheet — gọi edge function sync-dntt-to-sheet
+  const [syncing, setSyncing] = useState(false);
+  const handleSyncSheet = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await externalSupabase.functions.invoke("sync-dntt-to-sheet");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const n = data?.synced ?? 0;
+      toast({
+        title: n > 0 ? `Đã đồng bộ ${n} DNTT sang Sheet` : "Không có DNTT mới cần sync",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Lỗi đồng bộ Sheet: " + (err?.message || "Vui lòng thử lại"),
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const doanSelectOpts = (doanOpts as any[]).map((d: any) => ({
     value: String(d.id),
     label: d.ten_doan,
@@ -496,7 +537,20 @@ export default function HoaDonUNCPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Thanh Toán, Hóa Đơn & UNC</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-2xl font-bold">Thanh Toán, Hóa Đơn & UNC</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncSheet}
+          disabled={syncing}
+          className="gap-1.5"
+          title="Đồng bộ các DNTT đã thanh toán nhưng chưa export sang Google Sheet"
+        >
+          {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+          {syncing ? "Đang đồng bộ..." : "Đồng bộ Sheet"}
+        </Button>
+      </div>
 
       {/* Metrics */}
       <div className="grid grid-cols-4 gap-4">
@@ -716,32 +770,32 @@ export default function HoaDonUNCPage() {
                             {format(new Date(row.thanh_toan_luc), "dd/MM/yyyy")}
                           </span>
                         )}
+                        {nguonByDntt[row.id] && (
+                          <span className="text-xs font-medium text-blue-700">
+                            {nguonByDntt[row.id]}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col gap-1">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs w-[130px] justify-start">
-                              <CalendarIcon className="h-3 w-3 mr-1 shrink-0" />
-                              {payDateMap[row.id]
-                                ? format(payDateMap[row.id]!, "dd/MM/yyyy")
-                                : "Chọn ngày TT"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={payDateMap[row.id]}
-                              onSelect={(d) => setPayDateMap(prev => ({ ...prev, [row.id]: d }))}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <Select
+                          value={nguonMap[row.id] ?? ""}
+                          onValueChange={(v) => setNguonMap(prev => ({ ...prev, [row.id]: v }))}
+                        >
+                          <SelectTrigger className="h-7 px-2 text-xs w-[160px]">
+                            <span>{nguonMap[row.id] || "Chọn nguồn"}</span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PAYMENT_SOURCES.map((src) => (
+                              <SelectItem key={src} value={src}>{src}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Button
                           size="sm"
                           className="h-7 px-2 text-xs"
-                          disabled={markPaidMut.isPending}
-                          onClick={() => handleMarkPaid(row.id)}
+                          disabled={markPaidMut.isPending || !nguonMap[row.id]}
+                          onClick={() => handleMarkPaid(row.id, nguonMap[row.id])}
                         >
                           Xác nhận TT
                         </Button>
@@ -790,4 +844,10 @@ export default function HoaDonUNCPage() {
       )}
     </div>
   );
+}
+
+export default function HoaDonUNCPage() {
+  const canView = usePermission("hoa_don_unc", "view");
+  if (!canView) return <AccessDenied />;
+  return <HoaDonUNCPageContent />;
 }

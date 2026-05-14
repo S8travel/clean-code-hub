@@ -17,9 +17,7 @@ import {
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
-export default function NhaXePage() {
-  const canView = usePermission("danh_muc", "view");
-  if (!canView) return <AccessDenied />;
+function NhaXePageContent() {
   const { data: list, isLoading } = useNhaXeList();
   const { data: nccList } = useNhaCungCapList();
   const createMut = useCreateNhaXe();
@@ -170,4 +168,10 @@ export default function NhaXePage() {
       </Dialog>
     </div>
   );
+}
+
+export default function NhaXePage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
+  return <NhaXePageContent />;
 }

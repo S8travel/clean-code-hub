@@ -17,9 +17,7 @@ import CanhDiemDetail from "@/components/canh-diem/CanhDiemDetail";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
-export default function CanhDiemPage() {
-  const canView = usePermission("danh_muc", "view");
-  if (!canView) return <AccessDenied />;
+function CanhDiemPageContent() {
   const { data: list, isLoading } = useCanhDiemList();
   const createMut = useCreateCanhDiem();
   const { data: nccList } = useNhaCungCapList();
@@ -163,4 +161,11 @@ export default function CanhDiemPage() {
       </div>
     </div>
   );
+}
+
+
+export default function CanhDiemPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
+  return <CanhDiemPageContent />;
 }

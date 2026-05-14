@@ -51,10 +51,7 @@ const emptyForm = (): Omit<HDVRow, "id"> => ({
   bac: 3,
 });
 
-export default function HDVPage() {
-  const canView = usePermission("danh_muc", "view");
-  if (!canView) return <AccessDenied />;
-
+function HDVPageContent() {
   const { data: list = [], isLoading } = useHDVList();
   const { data: agents = [] } = useAgents();
   const { data: diaDiemList = [] } = useDiaDiem();
@@ -522,4 +519,10 @@ export default function HDVPage() {
       </AlertDialog>
     </div>
   );
+}
+
+export default function HDVPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
+  return <HDVPageContent />;
 }

@@ -17,9 +17,7 @@ import {
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
-export default function KhachSanPage() {
-  const canView = usePermission("danh_muc", "view");
-  if (!canView) return <AccessDenied />;
+function KhachSanPageContent() {
   const { data: list, isLoading } = useKhachSanList();
   const { data: nccList } = useNhaCungCapList();
   const createMut = useCreateKhachSan();
@@ -165,4 +163,10 @@ export default function KhachSanPage() {
       </Dialog>
     </div>
   );
+}
+
+export default function KhachSanPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
+  return <KhachSanPageContent />;
 }

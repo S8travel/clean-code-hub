@@ -82,9 +82,7 @@ const TOOLTIP_STYLE = {
 };
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function DashboardPage() {
-  const canView = useRoleAtLeast("truong_phong");
-  if (!canView) return <AccessDenied />;
+function DashboardPageContent() {
   const { data, isLoading } = useDashboardStats();
 
   if (isLoading) {
@@ -521,4 +519,10 @@ export default function DashboardPage() {
 
     </div>
   );
+}
+
+export default function DashboardPage() {
+  const canView = useRoleAtLeast("truong_phong");
+  if (!canView) return <AccessDenied />;
+  return <DashboardPageContent />;
 }

@@ -151,11 +151,7 @@ function ApprovalCell({
   );
 }
 
-export default function DNTTPage() {
-  // Mở cho bộ phận kế toán + toàn bộ giám đốc trở lên (giam_doc, admin)
-  const canView = useBoPhan("ke_toan") || useRoleAtLeast("giam_doc");
-  if (!canView) return <AccessDenied />;
-
+function DNTTPageContent() {
   const navigate = useNavigate();
   const now = new Date();
   const [doanId, setDoanId] = useState<string>("");
@@ -783,4 +779,11 @@ export default function DNTTPage() {
       </Dialog>
     </div>
   );
+}
+
+export default function DNTTPage() {
+  // Mở cho bộ phận kế toán + toàn bộ giám đốc trở lên (giam_doc, admin)
+  const canView = useBoPhan("ke_toan") || useRoleAtLeast("giam_doc");
+  if (!canView) return <AccessDenied />;
+  return <DNTTPageContent />;
 }

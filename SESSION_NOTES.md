@@ -3,8 +3,50 @@
 > Mục đích: Onboard Claude session mới (vd ở máy công ty hôm sau) nhanh.
 > Đọc file này **TRƯỚC** khi bắt đầu task mới. CLAUDE.md cho ngữ cảnh kỹ thuật, file này cho ngữ cảnh quyết định gần đây.
 
-**Cập nhật lần cuối**: 2026-05-10 (chiều)
+**Cập nhật lần cuối**: 2026-05-15
 **User**: Nguyen — nghiệp vụ điều hành, biết sơ kế toán, **không phải dev** → giải thích bằng ngôn ngữ nghiệp vụ, tránh code-heavy.
+
+---
+
+## 🚧 TODO — việc cần Nguyen làm (sang 2026-05-16)
+
+### Setup Google Sheets sync cho page Hóa đơn UNC
+
+Code + cron đã deploy xong. Còn 4 bước thủ công phía user:
+
+**A. GCP Console** (https://console.cloud.google.com):
+1. Tạo project mới (vd `s8-crm-sheets`)
+2. **APIs & Services → Library** → search "Google Sheets API" → **Enable**
+3. **APIs & Services → Credentials → Create Credentials → Service account**
+   - Name: `crm-sheet-writer` (tùy)
+   - Bấm **Done** (không cần grant role)
+4. Click service account → tab **Keys → Add Key → Create new key → JSON** → tải file `.json`
+5. Copy **service account email** (dạng `crm-sheet-writer@<project>.iam.gserviceaccount.com`)
+
+**B. Google Sheet đích**:
+1. Tạo Sheet mới (vd `S8 — DNTT đã thanh toán`)
+2. **Share** → paste service account email → quyền **Editor** → Send
+3. Lấy **Spreadsheet ID** từ URL: `docs.google.com/spreadsheets/d/[SPREADSHEET ID]/edit`
+
+**C. Supabase Dashboard** (https://supabase.com/dashboard/project/lflsbwoqzmbknzdpaequ/functions):
+1. Click function `sync-dntt-to-sheet` → **Secrets**
+2. Add 3 secrets:
+   - `GCP_SA_JSON` = paste TOÀN BỘ nội dung file JSON tải ở bước A.4
+   - `SHEET_ID` = Spreadsheet ID (bước B.3)
+   - `SHEET_TAB` = `Sheet1` (hoặc tên tab đã đặt)
+
+**D. Test**:
+- Vào page Hóa đơn UNC → click nút "Đồng bộ Sheet" góc phải header
+- Sheet sẽ tự ghi header + các DNTT paid chưa export
+
+**Đã có sẵn (Nguyen không cần đụng)**:
+- DB: cột `de_nghi_thanh_toan.exported_to_sheet_at` + index partial + RPC `get_dntt_pending_export()`
+- Edge function: `sync-dntt-to-sheet` (JWT-sign service account → Sheets API append → mark exported)
+- UI: nút "Đồng bộ Sheet" trên [HoaDonUNCPage](src/pages/HoaDonUNCPage.tsx) header
+- Cron: pg_cron job `sync-dntt-to-sheet-30min` (`*/30 * * * *`, gọi qua pg_net)
+
+**Sửa cột Sheet sau này**: edit `SHEET_HEADER` + map row trong [supabase/functions/sync-dntt-to-sheet/index.ts](supabase/functions/sync-dntt-to-sheet/index.ts) → deploy lại qua Supabase Dashboard hoặc CLI.
+**Tắt cron**: `SELECT cron.unschedule('sync-dntt-to-sheet-30min');`
 
 ---
 

@@ -640,10 +640,7 @@ function ScheduleGrid({
 }
 
 // ─── Main page ────────────────────────────────────────────────────
-export default function XepHDVPage() {
-  const canView = useRoleAtLeast("giam_doc");
-  if (!canView) return <AccessDenied />;
-
+function XepHDVPageContent() {
   const id = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1762,4 +1759,10 @@ export default function XepHDVPage() {
       )}
     </div>
   );
+}
+
+export default function XepHDVPage() {
+  const canView = useRoleAtLeast("giam_doc");
+  if (!canView) return <AccessDenied />;
+  return <XepHDVPageContent />;
 }

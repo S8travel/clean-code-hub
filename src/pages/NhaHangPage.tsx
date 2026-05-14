@@ -13,9 +13,7 @@ import NhaHangDetail from "@/components/nha-hang/NhaHangDetail";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 
-export default function NhaHangPage() {
-  const canView = usePermission("danh_muc", "view");
-  if (!canView) return <AccessDenied />;
+function NhaHangPageContent() {
   const { data: list, isLoading } = useNhaHangList();
   const createMut = useCreateNhaHang();
   const { data: nccList } = useNhaCungCapList();
@@ -138,4 +136,10 @@ export default function NhaHangPage() {
       </div>
     </div>
   );
+}
+
+export default function NhaHangPage() {
+  const canView = usePermission("danh_muc", "view");
+  if (!canView) return <AccessDenied />;
+  return <NhaHangPageContent />;
 }
