@@ -352,7 +352,7 @@ export function useRejectDNTT() {
 }
 
 // Mark paid: tạo payment cash cho phần chưa thanh toán (so_tien - paid_amount)
-async function markPaidImpl(id: number, ngayISO: string): Promise<number> {
+async function markPaidImpl(id: number, ngayISO: string, nguon?: string | null): Promise<number> {
   const { data: dntt, error: fetchErr } = await externalSupabase
     .from("de_nghi_thanh_toan")
     .select("id, doan_id, so_tien, trang_thai_duyet")
@@ -378,6 +378,7 @@ async function markPaidImpl(id: number, ngayISO: string): Promise<number> {
         method: "cash",
         so_tien: remaining,
         ngay_thanh_toan: ngayISO,
+        nguon: nguon ?? null,
       });
     if (payErr) throw payErr;
   }
@@ -404,8 +405,8 @@ export function useMarkPaidDNTT() {
 export function useMarkPaidWithDate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ngayThanhToan }: { id: number; ngayThanhToan: string }) =>
-      markPaidImpl(id, new Date(ngayThanhToan).toISOString()),
+    mutationFn: async ({ id, ngayThanhToan, nguon }: { id: number; ngayThanhToan: string; nguon?: string | null }) =>
+      markPaidImpl(id, new Date(ngayThanhToan).toISOString(), nguon ?? null),
     onSuccess: (doanId) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
       qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
