@@ -274,7 +274,7 @@ function TaiLieuChip({
   if (!taiLieu) {
     return (
       <span
-        className="text-[10px] shrink-0 rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground/60"
+        className="text-xs shrink-0 rounded px-2 py-1 bg-muted/60 text-muted-foreground/60"
         title={`${title} — chưa có`}
       >
         {label}
@@ -288,7 +288,7 @@ function TaiLieuChip({
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        "text-[10px] shrink-0 rounded px-1.5 py-0.5 font-medium transition-colors cursor-pointer",
+        "text-xs shrink-0 rounded px-2 py-1 font-medium transition-colors cursor-pointer",
         cls,
       )}
       title={`${title} — ${taiLieu.file_name || "Mở file"}`}
@@ -424,8 +424,8 @@ function InvoiceDoanCard({
             </Badge>
           )}
           {/* Báo giá + Hợp đồng — auto-link từ tab Tài liệu trong DoanDetail */}
-          <TaiLieuChip taiLieu={taiLieu?.bao_gia ?? null}  label="BG" title="Báo giá"  cls="bg-blue-100 text-blue-700 hover:bg-blue-200" />
-          <TaiLieuChip taiLieu={taiLieu?.hop_dong ?? null} label="HĐ" title="Hợp đồng" cls="bg-emerald-100 text-emerald-700 hover:bg-emerald-200" />
+          <TaiLieuChip taiLieu={taiLieu?.bao_gia ?? null}  label="Báo giá"  title="Báo giá"  cls="bg-blue-100 text-blue-700 hover:bg-blue-200" />
+          <TaiLieuChip taiLieu={taiLieu?.hop_dong ?? null} label="Hợp đồng" title="Hợp đồng" cls="bg-emerald-100 text-emerald-700 hover:bg-emerald-200" />
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span>{doan.agents?.ten ?? "—"}</span>
