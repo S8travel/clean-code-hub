@@ -318,6 +318,25 @@ function BookingKSCard({
   const finalRoomText = serializeRoomValues(soPhongFinalByNight);
   const preferredRoomText = finalRoomText || datTruocRoomText || row.ks_final || row.ks_dat_truoc || "";
 
+  // Gộp các đêm liên tiếp có cùng số phòng → 1 block check-in/check-out.
+  // Đêm không liên tiếp HOẶC số phòng khác → tách block riêng.
+  type NightGroup = { startDate: string; endDate: string; soDem: number; value: string };
+  const groupConsecutiveNights = (dates: string[], values: string[]): NightGroup[] => {
+    const groups: NightGroup[] = [];
+    for (let i = 0; i < dates.length; i++) {
+      const date = dates[i];
+      const value = values[i] ?? "";
+      const last = groups[groups.length - 1];
+      if (last && last.value === value && nextDateStr(last.endDate) === date) {
+        last.endDate = date;
+        last.soDem += 1;
+      } else {
+        groups.push({ startDate: date, endDate: date, soDem: 1, value });
+      }
+    }
+    return groups;
+  };
+
   const roomRowsHtml = () => {
     if (roomDates.length === 0) {
       // KS day-use: không qua đêm → fallback hiển thị ngày sử dụng từ day_use_dates
@@ -329,20 +348,27 @@ function BookingKSCard({
       return `${dayUseRow}<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng / Số bộ</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${preferredRoomText || "—"}</td></tr>`;
     }
     const values = expandRoomValues(preferredRoomText, roomDates);
-    return roomDates.map((date, i) => `
-        ${roomDates.length > 1 ? `<tr><td colspan="2" style="border:1px solid #e2e8f0;padding:6px 12px;background:#eff6ff;font-size:12px;font-weight:600;color:#1d4ed8${i > 0 ? ";border-top:2px solid #bfdbfe" : ""}">Đêm ${i + 1}</td></tr>` : ""}
+    const groups = groupConsecutiveNights(roomDates, values);
+    return groups.map((g, i) => {
+      const checkOut = nextDateStr(g.endDate);
+      const groupLabel = groups.length > 1
+        ? `<tr><td colspan="2" style="border:1px solid #e2e8f0;padding:6px 12px;background:#eff6ff;font-size:12px;font-weight:600;color:#1d4ed8${i > 0 ? ";border-top:2px solid #bfdbfe" : ""}">Lượt ${i + 1} (${g.soDem} đêm)</td></tr>`
+        : "";
+      return `
+        ${groupLabel}
         <tr>
           <td style="border:1px solid #e2e8f0;padding:8px 12px">Check-in</td>
-          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(date)}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(g.startDate)}</td>
         </tr>
         <tr>
           <td style="border:1px solid #e2e8f0;padding:8px 12px">Check-out</td>
-          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(nextDateStr(date))}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(checkOut)}${groups.length === 1 && g.soDem > 1 ? ` (${g.soDem} đêm)` : ""}</td>
         </tr>
         <tr>
           <td style="border:1px solid #e2e8f0;padding:8px 12px">Số phòng</td>
-          <td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${values[i] || "—"}</strong></td>
-        </tr>`).join("");
+          <td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${g.value || "—"}</strong></td>
+        </tr>`;
+    }).join("");
   };
 
   const buildEmailHtml = (mode: "first" | "update" = "first", note = "") => {
@@ -431,8 +457,12 @@ function BookingKSCard({
     const userName = userProfile?.ho_ten || currentUserName;
     const dayUseDates = row.day_use_dates ?? [];
     const roomLines = roomDates.length > 0
-      ? expandRoomValues(preferredRoomText, roomDates)
-        .map((value, i) => `- Đêm ${i + 1}: ${fmtDate(roomDates[i])} -> ${fmtDate(nextDateStr(roomDates[i]))}, số phòng: ${value || "—"}`)
+      ? groupConsecutiveNights(roomDates, expandRoomValues(preferredRoomText, roomDates))
+        .map((g, i, arr) => {
+          const co = fmtDate(nextDateStr(g.endDate));
+          const prefix = arr.length > 1 ? `- Lượt ${i + 1} (${g.soDem} đêm): ` : "- ";
+          return `${prefix}${fmtDate(g.startDate)} -> ${co}, số phòng: ${g.value || "—"}`;
+        })
         .join("\n")
       : (dayUseDates.length > 0
           ? `- Ngày sử dụng (Day Use): ${dayUseDates.map(fmtDate).join(", ")}\n- Số phòng / Số bộ: ${preferredRoomText || "—"}`
