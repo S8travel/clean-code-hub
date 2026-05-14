@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -10,6 +12,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useAgents,
+  useCreateAgent,
   useDiaDiem,
   useHuongDanVien,
   useXeList,
@@ -63,6 +66,9 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const { data: agents } = useAgents();
+  const createAgentMut = useCreateAgent();
+  const [addAgentOpen, setAddAgentOpen] = useState(false);
+  const [newAgentName, setNewAgentName] = useState("");
   const { data: diaDiem } = useDiaDiem();
   const { data: hdv } = useHuongDanVien();
   const { data: xeList } = useXeList();
@@ -145,7 +151,22 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   const userOptions = useMemo(() =>
     (userRoles ?? []).map((u) => ({ value: u.user_id, label: u.ho_ten })), [userRoles]);
 
+  const handleCreateAgent = async () => {
+    const name = newAgentName.trim();
+    if (!name) return;
+    try {
+      const created = await createAgentMut.mutateAsync(name);
+      set("agent_id", created.id);
+      setAddAgentOpen(false);
+      setNewAgentName("");
+      toast.success(`Đã thêm Agent "${created.ten}"`);
+    } catch (e: any) {
+      toast.error(e?.message || "Lỗi thêm Agent");
+    }
+  };
+
   return (
+    <>
     <AnimatePresence>
       {open && (
         <>
@@ -220,12 +241,24 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
               </Field>
 
               <Field label="Agent *">
-                <SearchableSelect
-                  options={agentOptions}
-                  value={form.agent_id?.toString() || ""}
-                  onChange={(v) => set("agent_id", v ? parseInt(v) : null)}
-                  placeholder="Chọn Agent"
-                />
+                <div className="flex items-center gap-1">
+                  <div className="flex-1 min-w-0">
+                    <SearchableSelect
+                      options={agentOptions}
+                      value={form.agent_id?.toString() || ""}
+                      onChange={(v) => set("agent_id", v ? parseInt(v) : null)}
+                      placeholder="Chọn Agent"
+                    />
+                  </div>
+                  <Button
+                    type="button" variant="outline" size="icon"
+                    className="h-9 w-9 shrink-0"
+                    title="Thêm Agent mới"
+                    onClick={() => { setNewAgentName(""); setAddAgentOpen(true); }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </Field>
 
               <Field label="Hướng Dẫn Viên">
@@ -326,6 +359,29 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         </>
       )}
     </AnimatePresence>
+
+    <Dialog open={addAgentOpen} onOpenChange={(o) => !o && setAddAgentOpen(false)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Thêm Agent mới</DialogTitle></DialogHeader>
+        <div className="space-y-2 pt-2">
+          <Label className="text-xs">Tên Agent</Label>
+          <Input
+            value={newAgentName}
+            autoFocus
+            placeholder="VD: Aurora Travel"
+            onChange={(e) => setNewAgentName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateAgent(); } }}
+          />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setAddAgentOpen(false)}>Hủy</Button>
+          <Button type="button" onClick={handleCreateAgent} disabled={!newAgentName.trim() || createAgentMut.isPending}>
+            {createAgentMut.isPending ? "Đang lưu..." : "Lưu"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
