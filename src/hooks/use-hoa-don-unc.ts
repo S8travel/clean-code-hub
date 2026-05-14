@@ -29,7 +29,7 @@ export interface HoaDonUNCRow {
 export interface HoaDonUNCFilters {
   doanId?: number | null;
   loai?: string | null;
-  trangThaiTT?: "unpaid" | "partial" | "paid" | "all";
+  trangThaiTT?: "chua_tt" | "da_tt" | "all";
   trangThaiHoaDon?: TrangThaiDoc | "all";
   trangThaiUNC?: TrangThaiDoc | "all";
 }
@@ -48,8 +48,8 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
 
       if (filters.doanId) q = q.eq("doan_id", filters.doanId);
       if (filters.loai) q = q.eq("loai", filters.loai);
-      if (filters.trangThaiTT && filters.trangThaiTT !== "all")
-        q = q.eq("payment_status", filters.trangThaiTT);
+      if (filters.trangThaiTT === "da_tt") q = q.eq("payment_status", "paid");
+      else if (filters.trangThaiTT === "chua_tt") q = q.neq("payment_status", "paid");
       if (filters.trangThaiHoaDon && filters.trangThaiHoaDon !== "all")
         q = q.eq("trang_thai_hoa_don", filters.trangThaiHoaDon);
       if (filters.trangThaiUNC && filters.trangThaiUNC !== "all")
