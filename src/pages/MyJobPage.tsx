@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useDoanList } from "@/hooks/use-doan";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
+import { useDNTTNeedingApproval } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
 import { useMyDeadlines, useMarkDeadlineDone, type DeadlineItem } from "@/hooks/use-my-job";
 import { useMyTeamAssignments, useAllTeamAgents } from "@/hooks/use-teams";
@@ -159,6 +160,7 @@ type TodoItem = {
   label: string;
   doanName: string;
   doanId: number;
+  url?: string;  // override target nav (vd ĐNTT page thay vì doan detail)
 };
 
 // ── Deadline helpers ──────────────────────────────────────────────────────────
@@ -314,6 +316,8 @@ export default function MyJobPage() {
     (t) => t.nguoi_nhan === uid && (t.trang_thai === "cho_nhan" || t.trang_thai === "dang_lam"),
   ).length;
 
+  const { data: dnttNeedApproval = [] } = useDNTTNeedingApproval(uid);
+
   // Rows cho bảng (với booking status)
   const rows = useMemo(() => {
     if (!myDoan || !td) return [];
@@ -427,10 +431,21 @@ export default function MyJobPage() {
       }
     }
 
+    // ĐNTT cần user duyệt — HIGH priority (blocking finance flow).
+    for (const d of dnttNeedApproval) {
+      items.push({
+        priority: "high",
+        label: `ĐNTT cần duyệt cấp ${d.cap}: ${d.mo_ta ?? "—"} (${d.so_tien.toLocaleString("vi-VN")} ₫)`,
+        doanName: d.ten_doan,
+        doanId: d.doan_id ?? 0,
+        url: "/de-nghi-thanh-toan",
+      });
+    }
+
     // Sắp xếp: high → medium → low
     const order = { high: 0, medium: 1, low: 2 };
-    return items.sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 10);
-  }, [myDoan, td, myDoanScopeMap]);
+    return items.sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 20);
+  }, [myDoan, td, myDoanScopeMap, dnttNeedApproval]);
 
   const priorityConfig = {
     high:   { icon: AlertCircle,   cls: "text-red-600",    bg: "bg-red-50 border-red-100" },
@@ -744,7 +759,7 @@ export default function MyJobPage() {
                 return (
                   <button
                     key={i}
-                    onClick={() => navigate(`/doan/${item.doanId}`)}
+                    onClick={() => navigate(item.url ?? `/doan/${item.doanId}`)}
                     className={cn(
                       "w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left hover:opacity-80 transition-opacity",
                       cfg.bg,

@@ -155,6 +155,63 @@ export function useDNTTList(filters: Filters) {
   });
 }
 
+// Mapping cấp → user_id phải duyệt (đồng bộ với trigger notify_dntt_approval_user
+// trong DB). Đổi user → phải đổi cả 2 chỗ.
+export const APPROVAL_NOTIFY_USER_BY_LEVEL: Record<ApprovalLevel, string> = {
+  1: "882d2911-5084-479c-a452-45b226045c6e", // Võ Thị Minh Xuân
+  2: "f3a0420f-84a5-41d7-b83c-4aaee353d41c", // Trần Thị Ánh Hồng
+  3: "0f9c9c0f-d949-4e04-85cf-185f924afcaf", // Nguyễn Chí Linh
+};
+
+export interface DNTTApprovalItem {
+  id: number;
+  doan_id: number | null;
+  ten_doan: string;
+  mo_ta: string | null;
+  so_tien: number;
+  cap: ApprovalLevel;
+  created_at: string;
+}
+
+// List DNTT đang chờ user hiện tại duyệt (theo mapping cấp → user).
+export function useDNTTNeedingApproval(currentUserId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["dntt-needing-approval", currentUserId],
+    enabled: !!currentUserId,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<DNTTApprovalItem[]> => {
+      const myLevels = (Object.entries(APPROVAL_NOTIFY_USER_BY_LEVEL) as [string, string][])
+        .filter(([, uid]) => uid === currentUserId)
+        .map(([l]) => Number(l) as ApprovalLevel);
+      if (myLevels.length === 0) return [];
+
+      const { data, error } = await externalSupabase
+        .from("dntt_with_payment_status")
+        .select("id, doan_id, mo_ta, so_tien, tp_dh_duyet_luc, kttt_duyet_luc, ktt_duyet_luc, created_at, doan:doan_id(ten_doan)")
+        .eq("trang_thai_duyet", "cho_duyet")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      return (data || [])
+        .filter((d: any) => {
+          if (myLevels.includes(1) && !d.tp_dh_duyet_luc) return true;
+          if (myLevels.includes(2) && d.tp_dh_duyet_luc && !d.kttt_duyet_luc) return true;
+          if (myLevels.includes(3) && d.kttt_duyet_luc && !d.ktt_duyet_luc) return true;
+          return false;
+        })
+        .map((d: any): DNTTApprovalItem => ({
+          id: d.id,
+          doan_id: d.doan_id,
+          ten_doan: d.doan?.ten_doan ?? "—",
+          mo_ta: d.mo_ta,
+          so_tien: d.so_tien,
+          cap: (!d.tp_dh_duyet_luc ? 1 : !d.kttt_duyet_luc ? 2 : 3) as ApprovalLevel,
+          created_at: d.created_at,
+        }));
+    },
+  });
+}
+
 // Tổng số ĐNTT toàn DB — không phụ thuộc filter của list. Dùng cho metric cards.
 export function useDNTTSummary() {
   return useQuery({

@@ -13,6 +13,7 @@ export interface ThongBaoRow {
   is_read: boolean;
   created_at: string;
   cong_viec_id: number | null;
+  dntt_id: number | null;
 }
 
 const QK = "thong_bao";
