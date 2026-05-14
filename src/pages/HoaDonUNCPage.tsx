@@ -5,8 +5,9 @@ import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
   RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard, CalendarIcon,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Loader2, ScanText,
 } from "lucide-react";
+import { ocrInvoiceAmount, isAmountMatch } from "@/lib/ocr-invoice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -170,6 +171,39 @@ function DocCell({
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailRow, setEmailRow] = useState<HoaDonUNCRow | null>(null);
+  // OCR result chỉ áp dụng cho hóa đơn — gợi ý số tiền có lệch không.
+  const [ocrState, setOcrState] = useState<
+    | { status: "idle" }
+    | { status: "running" }
+    | { status: "done"; detected: number | null; matched: boolean }
+    | { status: "error" }
+  >({ status: "idle" });
+
+  const runOcr = async (file: File) => {
+    if (loaiDoc !== "hoa_don") return;
+    if (file.type === "application/pdf") return; // Tesseract.js không parse PDF native
+    setOcrState({ status: "running" });
+    try {
+      const result = await ocrInvoiceAmount(file);
+      // Log để debug khi OCR fail — mở DevTools (F12) → Console.
+      // eslint-disable-next-line no-console
+      console.log("[OCR HÓA ĐƠN #" + row.id + "]", {
+        detected: result.detected,
+        candidates: result.candidates,
+        expected: row.so_tien,
+      });
+      // rawText log riêng để hiện full không bị truncate. Copy bằng:
+      // (right-click block → Copy string contents)
+      // eslint-disable-next-line no-console
+      console.log("[OCR RAWTEXT #" + row.id + "]\n" + result.rawText);
+      const matched = isAmountMatch(result.detected, row.so_tien);
+      setOcrState({ status: "done", detected: result.detected, matched });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[OCR ERROR]", err);
+      setOcrState({ status: "error" });
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -182,6 +216,8 @@ function DocCell({
           if (loaiDoc === "unc") {
             setEmailRow({ ...row, unc_url: publicUrl, trang_thai_unc: "da_co" });
           }
+          // Chạy OCR sau khi upload xong (background, không block toast).
+          runOcr(file);
         },
         onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể tải lên"), variant: "destructive" }),
       },
@@ -272,6 +308,37 @@ function DocCell({
           </>
         ) : null}
       </div>
+
+      {/* OCR badge — chỉ cho hóa đơn, hint khớp số tiền */}
+      {loaiDoc === "hoa_don" && ocrState.status !== "idle" && (
+        <div className="text-[10px] leading-tight">
+          {ocrState.status === "running" && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Đang quét hóa đơn...
+            </span>
+          )}
+          {ocrState.status === "error" && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground" title="Tesseract lỗi — kiểm tra thủ công">
+              <ScanText className="h-3 w-3" /> Không quét được
+            </span>
+          )}
+          {ocrState.status === "done" && ocrState.detected == null && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground" title="OCR không nhận ra số tiền — kiểm tra thủ công">
+              <ScanText className="h-3 w-3" /> Không đoán được số tiền
+            </span>
+          )}
+          {ocrState.status === "done" && ocrState.detected != null && ocrState.matched && (
+            <span className="inline-flex items-center gap-1 text-emerald-600 font-medium" title={`Đoán: ${ocrState.detected.toLocaleString("vi-VN")} ₫`}>
+              ✓ Khớp số tiền
+            </span>
+          )}
+          {ocrState.status === "done" && ocrState.detected != null && !ocrState.matched && (
+            <span className="inline-flex items-center gap-1 text-amber-600 font-medium" title={`Hóa đơn: ${ocrState.detected.toLocaleString("vi-VN")} ₫ vs ĐNTT: ${row.so_tien.toLocaleString("vi-VN")} ₫`}>
+              ⚠ Lệch {Math.abs(ocrState.detected - row.so_tien).toLocaleString("vi-VN")} ₫
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Delete confirm */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
