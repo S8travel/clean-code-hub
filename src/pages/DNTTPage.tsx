@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { useBoPhan } from "@/hooks/use-permissions";
+import { useBoPhan, useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
 import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight } from "lucide-react";
@@ -142,7 +142,8 @@ function ApprovalCell({
 }
 
 export default function DNTTPage() {
-  const canView = useBoPhan("ke_toan");
+  // Mở cho bộ phận kế toán + toàn bộ giám đốc trở lên (giam_doc, admin)
+  const canView = useBoPhan("ke_toan") || useRoleAtLeast("giam_doc");
   if (!canView) return <AccessDenied />;
 
   const navigate = useNavigate();
