@@ -146,6 +146,7 @@ export function useSendBookingEmail() {
         sent_at: new Date().toISOString(),
         sent_by: params.sentBy,
         email_thread_id: threadId,
+        email_subject: params.subject,
       };
       if (params.mode !== "update") updatePayload.booking_status = "cho_xac_nhan";
       if (params.mailContentHash !== undefined) updatePayload.mail_content_hash = params.mailContentHash;

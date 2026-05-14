@@ -287,6 +287,7 @@ export function useSendNHBookingEmail() {
         sent_at: new Date().toISOString(),
         sent_by: params.sentBy,
         email_thread_id: threadId,
+        email_subject: params.subject,
       };
       if (params.mode !== "update") updatePayload.booking_status = "da_gui";
       if (params.mailContentHash !== undefined) updatePayload.mail_content_hash = params.mailContentHash;

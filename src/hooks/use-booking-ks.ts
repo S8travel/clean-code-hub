@@ -212,6 +212,11 @@ export function useSendKSBookingEmail() {
       const now = new Date().toISOString();
       let fields: Partial<BookingKSRow> = { email_thread_id: threadId };
       if (params.mailContentHash !== undefined) fields.mail_content_hash = params.mailContentHash;
+      // Lưu subject để mail UNC sau này có thể vào cùng thread (Gmail group by subject).
+      // Chỉ lưu cho 'final'/'dat_truoc' (mail chính). 'huy'/'update' sẽ vào cùng thread cũ.
+      if (params.loai === "final" || params.loai === "dat_truoc") {
+        (fields as any).email_subject = params.subject;
+      }
       if (params.loai === "dat_truoc") {
         fields = {
           ...fields,
