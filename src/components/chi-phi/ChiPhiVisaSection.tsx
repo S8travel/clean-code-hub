@@ -15,6 +15,19 @@ import { toast } from "sonner";
 import {
   useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi,
 } from "@/hooks/use-chi-phi";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+
+const CURRENCIES = ["USD", "RMB", "NT"] as const;
+type Currency = (typeof CURRENCIES)[number];
+
+// Quy đổi raw → VND: SL × ĐG × tỷ giá × (1 - CK%/100). VND-only đoàn (USD ty_gia=1) cũng OK.
+function computeVnd(soLuong: number, donGiaRaw: number, tyGia: number, ckPct: number): number {
+  const gross = donGiaRaw * (tyGia || 0);
+  const afterCk = gross * (1 - (ckPct || 0) / 100);
+  return Math.round(soLuong * afterCk);
+}
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
@@ -46,6 +59,12 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
   const { data: loaiVisaList = [] } = useLoaiVisaList(donViId ? Number(donViId) : null);
   const upsertMut = useUpsertChiPhi();
 
+  // Currency-related fields — user nhập tay khi thêm
+  const [currency, setCurrency] = useState<Currency>("USD");
+  const [donGiaRaw, setDonGiaRaw] = useState(0);
+  const [tyGia, setTyGia] = useState(0);
+  const [ckPct, setCkPct] = useState(0);
+
   const donViOptions = donViList.map((d) => ({ value: String(d.id), label: d.ten }));
   const loaiOptions = loaiVisaList.map((l) => ({
     value: String(l.id),
@@ -54,6 +73,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
 
   const selectedLoai = loaiVisaList.find((l) => String(l.id) === loaiVisaId);
   const selectedDonVi = donViList.find((d) => String(d.id) === donViId);
+  const previewVnd = computeVnd(1, donGiaRaw, tyGia, ckPct);
 
   const handleAdd = async () => {
     if (!loaiVisaId) { toast.warning("Vui lòng chọn loại visa"); return; }
@@ -69,11 +89,16 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
       danh_muc: "visa",
       loai: "visa",
       mo_ta: moTa,
-      don_gia: selectedLoai?.gia ?? 0,
+      don_gia: previewVnd,            // VND đã quy đổi
+      don_gia_raw: donGiaRaw || null, // raw ngoại tệ — source of truth UI
       so_luong: 1,
-      tien_cong_ty: selectedLoai?.gia ?? 0,
+      tien_cong_ty: previewVnd,
       tien_hdv: 0,
       nha_cung_cap_id: selectedDonVi?.nha_cung_cap_id ?? null,
+      tien_te_loai: currency,
+      ty_gia: tyGia || null,
+      chiet_khau_pct: ckPct || null,
+      thanh_toan_dinh_ky: true,       // Visa mặc định thanh toán định kỳ
     } as any, {
       onSuccess: () => { toast.success("Đã thêm visa"); onAdded(); },
     });
@@ -101,6 +126,36 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
             placeholder="Chọn loại visa"
             className="h-7 text-xs"
           />
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        <div>
+          <Label className="text-xs">Đơn giá ({currency})</Label>
+          <div className="flex gap-1">
+            <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
+              <SelectTrigger className="h-7 text-xs w-[68px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <DecimalInput value={donGiaRaw} onChange={setDonGiaRaw} className="h-7 text-xs flex-1 text-right" />
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs">Tỷ giá (1 {currency} = ? VND)</Label>
+          <DecimalInput value={tyGia} onChange={setTyGia} className="h-7 text-xs text-right" />
+        </div>
+        <div>
+          <Label className="text-xs">Chiết khấu %</Label>
+          <DecimalInput value={ckPct} onChange={setCkPct} className="h-7 text-xs text-right" />
+        </div>
+        <div>
+          <Label className="text-xs">Thành tiền (VND)</Label>
+          <div className="h-7 text-xs flex items-center justify-end font-semibold text-primary">
+            {fmt(previewVnd)} ₫
+          </div>
         </div>
       </div>
       <div className="flex justify-end gap-2">
@@ -171,33 +226,59 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
   const visaRows = chiPhiRows.filter((r) => r.danh_muc === "visa");
   const total = visaRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
 
-  // ── Inline row edit (so_luong, don_gia) ──────────────────────────────────
-  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
+  // ── Inline row edit (raw fields cho currency-aware compute) ───────────────
+  // Lưu raw don_gia (theo tien_te_loai) + ty_gia + ck%. Khi save, compute VND
+  // và lưu vào don_gia / tien_cong_ty (consistent với section khác).
+  type RowEdit = { so_luong: number; don_gia_raw: number; tien_te_loai: Currency; ty_gia: number; chiet_khau_pct: number };
+  const [editRow, setEditRow] = useState<Record<number, RowEdit>>({});
 
-  const getRowEdit = (row: typeof visaRows[0]) =>
-    editRow[row.id] ?? { so_luong: row.so_luong, don_gia: row.don_gia };
+  // Init edit state từ row. don_gia_raw từ DB cột riêng (không reverse-engineer
+  // VND để tránh mất giá trị khi tỷ giá chưa nhập). Visa cũ chưa có don_gia_raw
+  // → fallback dùng don_gia (giả định bản cũ lưu trực tiếp giá USD/VND-1:1).
+  const initialEdit = (row: typeof visaRows[0]): RowEdit => ({
+    so_luong: row.so_luong,
+    don_gia_raw: row.don_gia_raw ?? row.don_gia ?? 0,
+    tien_te_loai: (row.tien_te_loai as Currency) || "USD",
+    ty_gia: row.ty_gia ?? 0,
+    chiet_khau_pct: row.chiet_khau_pct ?? 0,
+  });
 
-  const handleRowChange = (id: number, field: "so_luong" | "don_gia", val: number) => {
+  const getRowEdit = (row: typeof visaRows[0]): RowEdit =>
+    editRow[row.id] ?? initialEdit(row);
+
+  const handleRowChange = (id: number, patch: Partial<RowEdit>) => {
     setEditRow((prev) => {
       const base = visaRows.find((r) => r.id === id);
-      const existing = prev[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
-      return { ...prev, [id]: { ...existing, [field]: val } };
+      const existing = prev[id] ?? (base ? initialEdit(base) : { so_luong: 0, don_gia_raw: 0, tien_te_loai: "USD" as Currency, ty_gia: 0, chiet_khau_pct: 0 });
+      return { ...prev, [id]: { ...existing, ...patch } };
     });
   };
 
   const handleRowSave = (row: typeof visaRows[0]) => {
     const local = editRow[row.id];
     if (!local) return;
-    if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
-    const total = local.so_luong * local.don_gia;
+    const initial = initialEdit(row);
+    const unchanged =
+      local.so_luong === initial.so_luong &&
+      local.don_gia_raw === initial.don_gia_raw &&
+      local.tien_te_loai === initial.tien_te_loai &&
+      local.ty_gia === initial.ty_gia &&
+      local.chiet_khau_pct === initial.chiet_khau_pct;
+    if (unchanged) return;
+    const donGiaVnd = computeVnd(1, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
+    const total = local.so_luong * donGiaVnd;
     const isHDV = row.tien_hdv > 0;
     upsertMut.mutate({
       id: row.id,
       doan_id: doanId,
       so_luong: local.so_luong,
-      don_gia: local.don_gia,
+      don_gia: donGiaVnd,
+      don_gia_raw: local.don_gia_raw || null,
       tien_cong_ty: isHDV ? 0 : total,
       tien_hdv: isHDV ? total : 0,
+      tien_te_loai: local.tien_te_loai,
+      ty_gia: local.ty_gia || null,
+      chiet_khau_pct: local.chiet_khau_pct || null,
     } as any, {
       onSuccess: () => setEditRow((prev) => { const next = { ...prev }; delete next[row.id]; return next; }),
     });
@@ -236,6 +317,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       tien_cong_ty: total,
       tien_hdv: 0,
       nha_cung_cap_id: parent?.nha_cung_cap_id ?? null,
+      thanh_toan_dinh_ky: true,       // Visa mặc định thanh toán định kỳ
     } as any, {
       onSuccess: () => {
         setAddExtraForId(null);
@@ -338,7 +420,9 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
             <colgroup>
               <col />
               <col style={{ width: "60px" }} />
-              <col style={{ width: "110px" }} />
+              <col style={{ width: "180px" }} />
+              <col style={{ width: "100px" }} />
+              <col style={{ width: "70px" }} />
               <col style={{ width: "120px" }} />
               <col style={{ width: "76px" }} />
               <col style={{ width: "180px" }} />
@@ -350,6 +434,8 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                 <th className="text-left px-4 py-2.5">Loại visa</th>
                 <th className="text-center px-2 py-2.5">SL</th>
                 <th className="text-center px-3 py-2.5">Đơn giá</th>
+                <th className="text-center px-2 py-2.5">Tỷ giá</th>
+                <th className="text-center px-2 py-2.5">CK %</th>
                 <th className="text-right px-3 py-2.5">Thành tiền</th>
                 <th className="text-center px-2 py-2.5">Nguồn</th>
                 <th className="text-center px-3 py-2.5">TT ĐNTT</th>
@@ -360,7 +446,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
             <tbody className="divide-y divide-border">
               {visaRows.map((row) => {
                 const local = getRowEdit(row);
-                const thanhTienLocal = local.so_luong * local.don_gia;
+                const thanhTienLocal = computeVnd(local.so_luong, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
 
                 const allDntts = dnttList.filter(
                   (d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id,
@@ -407,27 +493,65 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                         <Input
                           type="number"
                           value={local.so_luong || ""}
-                          onChange={(e) => handleRowChange(row.id, "so_luong", Number(e.target.value) || 0)}
+                          onChange={(e) => handleRowChange(row.id, { so_luong: Number(e.target.value) || 0 })}
                           onBlur={() => handleRowSave(row)}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                          className="h-6 text-xs px-1.5 py-0 text-center w-[44px]"
+                          className="h-6 text-xs px-1.5 py-0 text-center w-[44px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </div>
                     </td>
 
-                    {/* Đơn giá */}
+                    {/* Đơn giá + dropdown loại tiền */}
                     <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-1 justify-center">
+                        <Select
+                          value={local.tien_te_loai}
+                          onValueChange={(v) => { handleRowChange(row.id, { tien_te_loai: v as Currency }); handleRowSave({ ...row, tien_te_loai: v }); }}
+                        >
+                          <SelectTrigger className="h-6 text-[10px] px-1.5 py-0 w-[58px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <DecimalInput
+                          value={local.don_gia_raw}
+                          onChange={(v) => handleRowChange(row.id, { don_gia_raw: v })}
+                          onBlur={() => handleRowSave(row)}
+                          className="h-6 text-xs px-1.5 py-0 text-right w-[100px]"
+                        />
+                      </div>
+                    </td>
+
+                    {/* Tỷ giá */}
+                    <td className="px-2 py-2.5">
                       <div className="flex justify-center">
                         <DecimalInput
-                          value={local.don_gia}
-                          onChange={(v) => handleRowChange(row.id, "don_gia", v)}
+                          value={local.ty_gia}
+                          onChange={(v) => handleRowChange(row.id, { ty_gia: v })}
                           onBlur={() => handleRowSave(row)}
-                          className="h-6 text-xs px-1.5 py-0 text-right w-[112px]"
+                          className="h-6 text-xs px-1.5 py-0 text-right w-[88px]"
                         />
                       </div>
                     </td>
 
-                    {/* Thành tiền */}
+                    {/* Chiết khấu % */}
+                    <td className="px-2 py-2.5">
+                      <div className="flex justify-center">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={local.chiet_khau_pct || ""}
+                          onChange={(e) => handleRowChange(row.id, { chiet_khau_pct: Number(e.target.value) || 0 })}
+                          onBlur={() => handleRowSave(row)}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                          className="h-6 text-xs px-1.5 py-0 text-center w-[72px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                      </div>
+                    </td>
+
+                    {/* Thành tiền (VND) */}
                     <td className="px-3 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
                       {fmt(thanhTienLocal)} ₫
                     </td>
@@ -620,7 +744,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                   </tr>
                   {addExtraForId === row.id && (
                     <tr className="bg-amber-50/60 border-b border-dashed border-amber-200">
-                      <td colSpan={8} className="px-4 py-2">
+                      <td colSpan={10} className="px-4 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ Phụ phí</span>
                           <Input

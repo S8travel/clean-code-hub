@@ -62,6 +62,13 @@ export interface ChiPhiRow {
   // HYBRID flag: true = OP đã override SL/đơn giá thủ công ở Chi phí section
   // → cascade từ Điều tour bỏ qua row này. Reset = set false.
   is_overridden: boolean;
+  // Visa: ngoại tệ + tỷ giá + chiết khấu (nhập tay). don_gia / tien_cong_ty
+  // trong DB lưu giá trị VND đã quy đổi để consistent với section khác.
+  // don_gia_raw lưu giá trị raw (USD/RMB/NT) — source of truth cho UI edit.
+  tien_te_loai: string | null;     // 'USD' | 'RMB' | 'NT' | null
+  ty_gia: number | null;
+  chiet_khau_pct: number | null;
+  don_gia_raw: number | null;
 }
 
 // ── Queries ──
