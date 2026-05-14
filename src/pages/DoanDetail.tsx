@@ -443,47 +443,52 @@ export default function DoanDetail() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6 print-hide">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/doan")}>
-              <ArrowLeft className="h-4 w-4 mr-1.5" /> Danh sách đoàn
-            </Button>
-            <span className="text-muted-foreground">/</span>
-            <span className="font-semibold">{doan.ten_doan}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {!canEdit && (
-              <span className="text-xs text-muted-foreground border rounded px-2 py-1">Chỉ xem</span>
-            )}
-            {canEdit && saveStatus !== "idle" && (
-              <span className={cn(
-                "text-xs px-2 py-1 rounded",
-                saveStatus === "saving" && "text-muted-foreground",
-                saveStatus === "saved" && "text-green-600",
-                saveStatus === "error" && "text-red-600"
-              )}>
-                {saveStatus === "saving" && "Đang lưu..."}
-                {saveStatus === "saved" && "✓ Đã lưu"}
-                {saveStatus === "error" && "Lỗi lưu"}
-              </span>
-            )}
+      <Tabs defaultValue="dieu-tour" value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {/* Sticky bar: header + tabs — luôn thấy khi scroll xuống */}
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border print-hide">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-2 space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/doan")}>
+                  <ArrowLeft className="h-4 w-4 mr-1.5" /> Danh sách đoàn
+                </Button>
+                <span className="text-muted-foreground">/</span>
+                <span className="font-semibold">{doan.ten_doan}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {!canEdit && (
+                  <span className="text-xs text-muted-foreground border rounded px-2 py-1">Chỉ xem</span>
+                )}
+                {canEdit && saveStatus !== "idle" && (
+                  <span className={cn(
+                    "text-xs px-2 py-1 rounded",
+                    saveStatus === "saving" && "text-muted-foreground",
+                    saveStatus === "saved" && "text-green-600",
+                    saveStatus === "error" && "text-red-600"
+                  )}>
+                    {saveStatus === "saving" && "Đang lưu..."}
+                    {saveStatus === "saved" && "✓ Đã lưu"}
+                    {saveStatus === "error" && "Lỗi lưu"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <TabsList>
+              <TabsTrigger value="dieu-tour">Điều Tour</TabsTrigger>
+              <TabsTrigger value="booking-ks">Booking KS<TabBadge count={bookingKSBadgeCount} /></TabsTrigger>
+              <TabsTrigger value="menu">Booking NH<TabBadge count={bookingNHBadgeCount} /></TabsTrigger>
+              <TabsTrigger value="booking-visa-xe">Visa & Xe</TabsTrigger>
+              <TabsTrigger value="booking-dv">Booking DV</TabsTrigger>
+              <TabsTrigger value="chi-phi">Chi phí<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
+              <TabsTrigger value="tai-lieu">Tài liệu</TabsTrigger>
+              <TabsTrigger value="log">Log</TabsTrigger>
+            </TabsList>
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="dieu-tour" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="print-hide">
-            <TabsTrigger value="dieu-tour">Điều Tour</TabsTrigger>
-            <TabsTrigger value="booking-ks">Booking KS<TabBadge count={bookingKSBadgeCount} /></TabsTrigger>
-            <TabsTrigger value="menu">Booking NH<TabBadge count={bookingNHBadgeCount} /></TabsTrigger>
-            <TabsTrigger value="booking-visa-xe">Visa & Xe</TabsTrigger>
-            <TabsTrigger value="booking-dv">Booking DV</TabsTrigger>
-            <TabsTrigger value="chi-phi">Chi phí<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
-            <TabsTrigger value="tai-lieu">Tài liệu</TabsTrigger>
-            <TabsTrigger value="log">Log</TabsTrigger>
-          </TabsList>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
 
           <fieldset disabled={!canEdit} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
           <TabsContent value="dieu-tour" className="mt-4 space-y-6">
@@ -621,8 +626,8 @@ export default function DoanDetail() {
             <DoanLogTab doanId={doanId} />
           </TabsContent>
           </fieldset>
-        </Tabs>
-      </div>
+        </div>
+      </Tabs>
     </div>
   );
 }
