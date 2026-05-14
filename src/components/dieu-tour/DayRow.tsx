@@ -278,7 +278,11 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         </div>
         <button
           type="button"
-          onClick={() => updateItems([...day.items, { canh_diem_id: 0, thu_tu: day.items.length + 1, ghi_chu: "" }])}
+          onClick={() => {
+            const newIdx = day.items.length;
+            updateItems([...day.items, { canh_diem_id: 0, thu_tu: newIdx + 1, ghi_chu: "" }]);
+            setAutoOpenIdx(newIdx);  // auto-mở SearchableSelect của row mới
+          }}
           className="w-full py-1.5 border border-dashed border-border rounded-md text-xs text-muted-foreground hover:border-foreground transition-colors print-hide"
         >
           <Plus className="inline h-3 w-3 mr-1" /> Thêm cảnh điểm / dịch vụ
