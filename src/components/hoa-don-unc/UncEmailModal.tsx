@@ -20,11 +20,26 @@ interface Props {
 interface EmailTarget {
   email: string;
   threadId: string | null;
+  /** Subject của email booking gốc — dùng để mail UNC vào cùng thread Gmail. */
+  bookingSubject: string | null;
   source: "booking" | "ncc" | "none";
 }
 
 function fmtVnd(n: number): string {
   return (n ?? 0).toLocaleString("vi-VN") + " VND";
+}
+
+// DB email field có thể có nhiều email cách nhau bằng newline, dấu chấm phẩy,
+// hoặc Chinese fullwidth comma — UI Input 1 dòng làm chúng dán liền nhau →
+// Resend reject. Normalize về dạng "a@x.com, b@y.com".
+function normalizeEmailList(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/[\n\r;，；]+/g, ",")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 function fmtDate(s: string | null | undefined): string {
@@ -53,7 +68,7 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
     if (loai === "dich_vu" && doan_id && ten_nha_cung_cap) {
       const { data } = await externalSupabase
         .from("doan_booking_dv")
-        .select("email_nha_cung_cap, email_thread_id, sent_at")
+        .select("email_nha_cung_cap, email_thread_id, email_subject, sent_at")
         .eq("doan_id", doan_id)
         .eq("ten_nha_cung_cap", ten_nha_cung_cap)
         .not("sent_at", "is", null)
@@ -61,34 +76,34 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         .limit(1)
         .maybeSingle();
       if (data?.email_nha_cung_cap)
-        return { email: data.email_nha_cung_cap, threadId: data.email_thread_id ?? null, source: "booking" };
+        return { email: normalizeEmailList(data.email_nha_cung_cap), threadId: data.email_thread_id ?? null, bookingSubject: data.email_subject ?? null, source: "booking" };
     }
 
     if (loai === "khach_san" && doan_id && nha_cung_cap_id) {
       // KS: 1 đoàn có thể có nhiều khách sạn; match theo nha_cung_cap_id của KS
       const { data } = await externalSupabase
         .from("doan_booking_ks")
-        .select("email_thread_id, ks_final_sent_at, khach_san:khach_san_id(email, nha_cung_cap_id)")
+        .select("email_thread_id, email_subject, ks_final_sent_at, khach_san:khach_san_id(email, nha_cung_cap_id)")
         .eq("doan_id", doan_id)
         .order("ks_final_sent_at", { ascending: false, nullsFirst: false });
       const match = (data || []).find(
         (bk: any) => bk?.khach_san?.nha_cung_cap_id === nha_cung_cap_id && bk?.khach_san?.email,
       );
       if (match?.khach_san?.email)
-        return { email: match.khach_san.email, threadId: match.email_thread_id ?? null, source: "booking" };
+        return { email: normalizeEmailList(match.khach_san.email), threadId: match.email_thread_id ?? null, bookingSubject: (match as any).email_subject ?? null, source: "booking" };
     }
 
     if (loai === "nha_hang" && doan_id && nha_cung_cap_id) {
       const { data } = await externalSupabase
         .from("doan_booking_nh")
-        .select("email_thread_id, final_sent_at, nha_hang:nha_hang_id(email, nha_cung_cap_id)")
+        .select("email_thread_id, email_subject, final_sent_at, nha_hang:nha_hang_id(email, nha_cung_cap_id)")
         .eq("doan_id", doan_id)
         .order("final_sent_at", { ascending: false, nullsFirst: false });
       const match = (data || []).find(
         (bk: any) => bk?.nha_hang?.nha_cung_cap_id === nha_cung_cap_id && bk?.nha_hang?.email,
       );
       if (match?.nha_hang?.email)
-        return { email: match.nha_hang.email, threadId: match.email_thread_id ?? null, source: "booking" };
+        return { email: normalizeEmailList(match.nha_hang.email), threadId: match.email_thread_id ?? null, bookingSubject: (match as any).email_subject ?? null, source: "booking" };
     }
   } catch {
     // Bỏ qua, dùng fallback NCC
@@ -101,9 +116,9 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
       .select("email")
       .eq("id", nha_cung_cap_id)
       .maybeSingle();
-    if (ncc?.email) return { email: ncc.email, threadId: null, source: "ncc" };
+    if (ncc?.email) return { email: normalizeEmailList(ncc.email), threadId: null, bookingSubject: null, source: "ncc" };
   }
-  return { email: "", threadId: null, source: "none" };
+  return { email: "", threadId: null, bookingSubject: null, source: "none" };
 }
 
 async function fetchAsBase64(url: string, ncc: string | null, id: number) {
@@ -143,9 +158,12 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
     const ncc = row.ten_nha_cung_cap || "Quý đối tác";
     const doan = row.ten_doan ? `<br>• Đoàn: <strong>${row.ten_doan}</strong>` : "";
     const ngayTT = fmtDate(row.ngay_can_thanh_toan);
+    const heading = row.ten_doan
+      ? `S8 Travel xin gửi ủy nhiệm chi cho đoàn <strong>${row.ten_doan}</strong>:`
+      : `S8 Travel xin gửi ủy nhiệm chi cho khoản thanh toán sau:`;
     return `<html><body style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;line-height:1.6">
 <p>Kính gửi ${ncc},</p>
-<p>S8 Travel xin gửi ủy nhiệm chi cho khoản thanh toán sau:</p>
+<p>${heading}</p>
 <div style="background:#f8fafc;border-left:3px solid #0a3d7c;padding:12px 16px;margin:12px 0">
   • Nội dung: <strong>${row.mo_ta ?? ""}</strong><br>
   • Số tiền: <strong style="color:#dc2626">${fmtVnd(row.so_tien)}</strong><br>
@@ -153,6 +171,12 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
 </div>
 <p>File ủy nhiệm chi được đính kèm trong email này. Nếu cần đối chiếu hoặc làm rõ vui lòng phản hồi email giúp S8.</p>
 <p>Trân trọng,<br><strong>${userProfile?.ho_ten || "S8 Travel"}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}</p>
+<div style="margin-top:20px;padding:12px 16px;border-top:1px solid #e2e8f0;font-size:13px;color:#374151;line-height:1.6">
+  <p style="margin:0 0 6px 0"><strong>THÔNG TIN XUẤT HÓA ĐƠN</strong></p>
+  CÔNG TY TNHH DU LỊCH S8 &nbsp;&nbsp;&nbsp; MST: 0402021137<br>
+  Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam<br>
+  Email: s8travel.hddt@gmail.com
+</div>
 </body></html>`;
   };
 
@@ -160,14 +184,25 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     setEmailTo(target?.email ?? "");
-    const baseSubject = `[S8 Travel] Ủy nhiệm chi – ${row.ten_doan || row.mo_ta || ""} – ${row.ten_nha_cung_cap || ""}`.replace(/\s+/g, " ").trim();
-    setEmailSubject(target?.threadId ? `Re: ${baseSubject}` : baseSubject);
+    // Subject ưu tiên = subject email booking gốc → Gmail group cùng thread
+    // (group theo subject + sender + recipient sau khi strip Re:/Fwd:).
+    // Booking cũ chưa lưu subject (legacy) → fallback subject UNC riêng.
+    let nextSubject: string;
+    if (target?.bookingSubject) {
+      const stripped = target.bookingSubject.replace(/^\s*(re:|fwd:)\s*/i, "").trim();
+      nextSubject = `Re: ${stripped}`;
+    } else {
+      const baseSubject = `[S8 Travel] Ủy nhiệm chi – ${row.ten_doan || row.mo_ta || ""} – ${row.ten_nha_cung_cap || ""}`.replace(/\s+/g, " ").trim();
+      nextSubject = baseSubject;
+    }
+    setEmailSubject(nextSubject);
     setEmailBody(buildBody());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, target?.email, target?.threadId, row.id]);
+  }, [open, target?.email, target?.threadId, target?.bookingSubject, row.id]);
 
   const handleSendViaServer = async () => {
-    if (!emailTo.trim()) {
+    const cleanTo = normalizeEmailList(emailTo);
+    if (!cleanTo) {
       toast.error("Vui lòng nhập email người nhận");
       return;
     }
@@ -179,7 +214,7 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
     try {
       const attachment = await fetchAsBase64(row.unc_url, row.ten_nha_cung_cap, row.id);
       await callSendBookingEmail({
-        to:       emailTo.trim(),
+        to:       cleanTo,
         cc:       ccForLoai(row.loai),
         subject:  emailSubject,
         html:     emailBody,
