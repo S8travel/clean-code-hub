@@ -62,7 +62,7 @@ function ccForLoai(loai: string): readonly string[] {
 }
 
 async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
-  const { doan_id, nha_cung_cap_id, loai, ten_nha_cung_cap } = row;
+  const { doan_id, nha_cung_cap_id, loai, ten_nha_cung_cap, ref_id } = row;
 
   try {
     if (loai === "dich_vu" && doan_id && ten_nha_cung_cap) {
@@ -79,16 +79,23 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         return { email: normalizeEmailList(data.email_nha_cung_cap), threadId: data.email_thread_id ?? null, bookingSubject: data.email_subject ?? null, source: "booking" };
     }
 
-    if (loai === "khach_san" && doan_id && nha_cung_cap_id) {
-      // KS: 1 đoàn có thể có nhiều khách sạn; match theo nha_cung_cap_id của KS
-      const { data } = await externalSupabase
+    if (loai === "khach_san" && doan_id) {
+      // KS: match qua khach_san_id (DNTT.ref_id) — chính xác hơn nha_cung_cap_id
+      // (DNTT có thể không snap nha_cung_cap_id). Fallback nha_cung_cap_id nếu thiếu ref_id.
+      const ksId = ref_id ?? null;
+      let q = externalSupabase
         .from("doan_booking_ks")
-        .select("email_thread_id, email_subject, ks_final_sent_at, khach_san:khach_san_id(email, nha_cung_cap_id)")
+        .select("khach_san_id, email_thread_id, email_subject, ks_final_sent_at, khach_san:khach_san_id(email, nha_cung_cap_id)")
         .eq("doan_id", doan_id)
         .order("ks_final_sent_at", { ascending: false, nullsFirst: false });
-      const match = (data || []).find(
-        (bk: any) => bk?.khach_san?.nha_cung_cap_id === nha_cung_cap_id && bk?.khach_san?.email,
-      );
+      if (ksId != null) q = q.eq("khach_san_id", ksId);
+      const { data } = await q;
+      const match = (data || []).find((bk: any) => {
+        if (!bk?.khach_san?.email) return false;
+        if (ksId != null) return true;
+        if (nha_cung_cap_id != null) return bk?.khach_san?.nha_cung_cap_id === nha_cung_cap_id;
+        return false;
+      });
       if (match?.khach_san?.email)
         return { email: normalizeEmailList(match.khach_san.email), threadId: match.email_thread_id ?? null, bookingSubject: (match as any).email_subject ?? null, source: "booking" };
     }
