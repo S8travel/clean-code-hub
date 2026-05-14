@@ -14,7 +14,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 // import { PermissionDialog } from "@/components/PermissionDialog"; // FEATURE_DOAN_PERM_DISABLED
 import type { UserRole } from "@/hooks/use-doan";
+import { useDoanQuyetToanPaidSet } from "@/hooks/use-doan";
+import { computeDoanStatus, type DoanStatus } from "@/lib/doan-status";
 import { t, useTranslate } from "@/lib/i18n";
+
+const STATUS_BADGE: Record<Exclude<DoanStatus, "dang_chay">, { label: string; cls: string; variant?: "destructive" | "secondary" }> = {
+  hoan_thanh:    { label: "Hoàn thành",   cls: "", variant: "secondary" },
+  da_quyet_toan: { label: "Đã quyết toán", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  huy:           { label: "Đã hủy",        cls: "", variant: "destructive" },
+};
+
+function StatusBadge({ status }: { status: DoanStatus }) {
+  if (status === "dang_chay") return null;
+  const cfg = STATUS_BADGE[status];
+  if (cfg.variant) return <Badge variant={cfg.variant} className="mt-1 text-[10px] px-1.5 py-0">{cfg.label}</Badge>;
+  return <Badge className={`mt-1 text-[10px] px-1.5 py-0 ${cfg.cls}`}>{cfg.label}</Badge>;
+}
 
 /* ── helpers ── */
 
@@ -100,6 +115,7 @@ export function DoanTable({
 }: Props) {
   useTranslate();
   const navigate = useNavigate();
+  const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   // Controlled (via props) hoặc uncontrolled fallback
   const [sortKeyState, setSortKeyState] = useState<SortKey>("ngay_di");
   const [sortDirState, setSortDirState] = useState<SortDir>("asc");
@@ -151,8 +167,9 @@ export function DoanTable({
   };
 
   const rowBg = (g: any) => {
-    if (g.trang_thai === "huy") return "bg-[rgba(226,75,74,0.05)]";
-    if (g.trang_thai === "hoan_thanh") return "bg-muted/30";
+    const status = computeDoanStatus(g, qtPaidSet ?? null);
+    if (status === "huy") return "bg-[rgba(226,75,74,0.05)]";
+    if (status === "hoan_thanh" || status === "da_quyet_toan") return "bg-muted/30";
     return "";
   };
 
@@ -259,12 +276,7 @@ export function DoanTable({
                     {g.ghi_chu_dieu_tour && (
                       <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">{g.ghi_chu_dieu_tour}</p>
                     )}
-                    {g.trang_thai === "huy" && (
-                      <Badge variant="destructive" className="mt-1 text-[10px] px-1.5 py-0">Đã hủy</Badge>
-                    )}
-                    {g.trang_thai === "hoan_thanh" && (
-                      <Badge variant="secondary" className="mt-1 text-[10px] px-1.5 py-0">Hoàn thành</Badge>
-                    )}
+                    <StatusBadge status={computeDoanStatus(g, qtPaidSet ?? null)} />
                   </td>
 
                   {/* HDV */}
@@ -434,8 +446,7 @@ export function DoanTable({
                         </span>
                       )}
                     </div>
-                    {g.trang_thai === "huy" && <Badge variant="destructive" className="mt-1 text-[10px] px-1.5 py-0">Đã hủy</Badge>}
-                    {g.trang_thai === "hoan_thanh" && <Badge variant="secondary" className="mt-1 text-[10px] px-1.5 py-0">Hoàn thành</Badge>}
+                    <StatusBadge status={computeDoanStatus(g, qtPaidSet ?? null)} />
                   </div>
                 </div>
                 <span className="text-xs font-bold text-[hsl(var(--brand))] shrink-0">{total} khách</span>

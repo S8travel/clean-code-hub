@@ -26,9 +26,11 @@ import {
   useAgents,
   useDiaDiem,
   useUserRoles,
+  useDoanQuyetToanPaidSet,
   THI_TRUONG_OPTS,
   // useAddDoanPermission, // FEATURE_DOAN_PERM_DISABLED
 } from "@/hooks/use-doan";
+import { computeDoanStatus, type DoanStatus } from "@/lib/doan-status";
 import type { DoanInsert } from "@/hooks/use-doan";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -44,6 +46,7 @@ const TRANG_THAI_OPTIONS = [
   { value: "all", label: "Tất cả" },
   { value: "dang_chay", label: "Đang chạy" },
   { value: "hoan_thanh", label: "Hoàn thành" },
+  { value: "da_quyet_toan", label: "Đã quyết toán" },
   { value: "huy", label: "Đã hủy" },
 ];
 
@@ -60,6 +63,7 @@ export default function Index() {
     ? (currentUser?.phan_loai_tour ?? null)
     : null;
   const { data: groups, isLoading, error } = useDoanList(phanLoaiTour);
+  const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   useDoanRealtime();
   const createDoan = useCreateDoan();
   const updateDoan = useUpdateDoan();
@@ -139,14 +143,13 @@ export default function Index() {
       if (loaiTourFilter !== "all" && (g.loai_tour ?? null) !== loaiTourFilter) return false;
 
       if (trangThaiFilter !== "all") {
-        if (trangThaiFilter === "dang_chay" && (g.trang_thai === "hoan_thanh" || g.trang_thai === "huy")) return false;
-        if (trangThaiFilter === "hoan_thanh" && g.trang_thai !== "hoan_thanh") return false;
-        if (trangThaiFilter === "huy" && g.trang_thai !== "huy") return false;
+        const status = computeDoanStatus(g, qtPaidSet ?? null);
+        if (status !== (trangThaiFilter as DoanStatus)) return false;
       }
 
       return true;
     });
-  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, userRolesMap]);
+  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, userRolesMap, qtPaidSet]);
 
   // Page reset đã tích hợp trong setSearch/setDateFrom/... helpers ở trên
 

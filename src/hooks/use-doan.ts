@@ -124,6 +124,24 @@ export function useAgents() {
   });
 }
 
+export function useCreateAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ten: string) => {
+      const trimmed = ten.trim();
+      if (!trimmed) throw new Error("Tên agent không được trống");
+      const { data, error } = await externalSupabase
+        .from("agents")
+        .insert({ ten: trimmed })
+        .select("id, ten")
+        .single();
+      if (error) throw error;
+      return data as AgentItem;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
+  });
+}
+
 export function useDiaDiem() {
   return useQuery({
     queryKey: ["dia_diem"],
@@ -181,6 +199,25 @@ export function useTrangThai() {
       const { data, error } = await externalSupabase.from("trang_thai").select("id, ten").order("ten");
       if (error) throw error;
       return data as LookupItem[];
+    },
+  });
+}
+
+// Set doan_id của các đoàn đã có DNTT QT HDV thanh toán xong → dùng cho
+// trạng thái "Đã quyết toán" (computed). Loại DNTT đã hủy.
+export function useDoanQuyetToanPaidSet() {
+  return useQuery({
+    queryKey: ["doan-qt-paid-set"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("dntt_with_payment_status")
+        .select("doan_id")
+        .eq("ref_loai", "hdv_quyet_toan")
+        .eq("payment_status", "paid")
+        .neq("trang_thai_duyet", "da_huy");
+      if (error) throw error;
+      return new Set((data ?? []).map((d: any) => d.doan_id as number).filter((x): x is number => x != null));
     },
   });
 }
