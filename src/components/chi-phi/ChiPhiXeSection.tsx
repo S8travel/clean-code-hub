@@ -303,7 +303,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                 <th className="text-center px-2 py-2.5">SL</th>
                 <th className="text-center px-3 py-2.5">Đơn giá</th>
                 <th className="text-right px-3 py-2.5">Thành tiền</th>
-                <th className="text-center px-2 py-2.5">Ai trả</th>
+                <th className="text-center px-2 py-2.5">Nguồn</th>
                 <th className="text-center px-3 py-2.5">TT ĐNTT</th>
                 <th className="text-center px-3 py-2.5">TT Thanh toán</th>
                 <th className="px-2 py-2.5" />

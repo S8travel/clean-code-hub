@@ -325,7 +325,7 @@ export function exportHDVStatsExcel({ doan, data, hdvPhaiThuVND }: ExportParams)
       cell("SL", "header"),
       cell("Đơn giá", "header"),
       cell("Thành tiền", "header"),
-      cell("Ai trả", "header"),
+      cell("Nguồn", "header"),
     ]);
     let sum = 0;
     for (const r of data.hoTroItems) {

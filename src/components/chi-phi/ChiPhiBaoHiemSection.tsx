@@ -307,7 +307,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
               <th className="text-center px-2 py-2.5">SL</th>
               <th className="text-center px-3 py-2.5">Giá/người/ngày</th>
               <th className="text-right px-3 py-2.5">Thành tiền</th>
-              <th className="text-center px-2 py-2.5">Ai trả</th>
+              <th className="text-center px-2 py-2.5">Nguồn</th>
               <th className="text-center px-3 py-2.5">TT ĐNTT</th>
               <th className="text-center px-3 py-2.5">TT Thanh toán</th>
               <th className="px-2 py-2.5" />

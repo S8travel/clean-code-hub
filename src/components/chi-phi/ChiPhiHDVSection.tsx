@@ -316,7 +316,7 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-24">SL</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Đơn giá</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Thành tiền</th>
-              <th className="text-center px-2 py-2 text-xs font-medium text-muted-foreground w-20">Ai trả</th>
+              <th className="text-center px-2 py-2 text-xs font-medium text-muted-foreground w-20">Nguồn</th>
               <th className="w-8" />
             </tr>
           </thead>

@@ -140,7 +140,7 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
                     <Th className="text-center">SL</Th>
                     <Th className="text-right">Đơn giá</Th>
                     <Th className="text-right">Thành tiền</Th>
-                    <Th className="text-center">Ai trả</Th>
+                    <Th className="text-center">Nguồn</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
