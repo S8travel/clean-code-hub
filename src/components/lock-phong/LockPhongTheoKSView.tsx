@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,10 +18,21 @@ import { cn } from "@/lib/utils";
 import {
   type LockPhongDisplay, type LockPhongKSDisplay,
   useUpdateLockPhongKSOutcome, useUpdateLockPhongKSFields,
-  useUpdateLockPhongDeadline,
+  useUpdateLockPhongDeadline, useUpdateLockPhongKSEmail,
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
 import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
+import { isLockPhongDirty } from "./LockPhongCard";
+
+function EmailStatusBadge({ status }: { status: string }) {
+  if (status === "da_xac_nhan")
+    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">Đã xác nhận</Badge>;
+  if (status === "cho_xac_nhan")
+    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">Chờ xác nhận</Badge>;
+  if (status === "da_huy")
+    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">Đã hủy</Badge>;
+  return <Badge className="text-[10px] bg-muted text-muted-foreground border-0">Chưa gửi</Badge>;
+}
 
 // ── Inline editable cells ─────────────────────────────────────────────────────
 // Pattern blur-save: local state mirror DB value, sync khi data refetch (useEffect),
@@ -117,6 +128,37 @@ export default function LockPhongTheoKSView({ data }: Props) {
   const updateOutcome = useUpdateLockPhongKSOutcome();
   const updateFields = useUpdateLockPhongKSFields();
   const updateDeadline = useUpdateLockPhongDeadline();
+  const updateEmail = useUpdateLockPhongKSEmail();
+  const [confirmingKsId, setConfirmingKsId] = useState<number | null>(null);
+
+  const handleConfirmAll = async (
+    khachSanId: number,
+    khachSanTen: string,
+    pendingIds: number[],
+  ) => {
+    if (pendingIds.length === 0) return;
+    const ok = window.confirm(
+      `Xác nhận lock phòng cho ${pendingIds.length} đoàn tại ${khachSanTen}?`,
+    );
+    if (!ok) return;
+    setConfirmingKsId(khachSanId);
+    try {
+      const confirmAt = new Date().toISOString();
+      await Promise.all(
+        pendingIds.map((id) =>
+          updateEmail.mutateAsync({
+            id,
+            fields: { email_status: "da_xac_nhan", email_confirm_at: confirmAt },
+          }),
+        ),
+      );
+      toast.success(`Đã xác nhận ${pendingIds.length} đoàn`);
+    } catch (e: any) {
+      toast.error("Lỗi xác nhận: " + (e?.message || ""));
+    } finally {
+      setConfirmingKsId(null);
+    }
+  };
 
   const saveField = (
     id: number,
@@ -259,31 +301,55 @@ export default function LockPhongTheoKSView({ data }: Props) {
                 )}
               </button>
 
-              {/* Batch email button */}
-              <div className="px-3 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1.5 text-xs"
-                  title="Gửi 1 email gộp cho tất cả đoàn tại khách sạn này"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Flatten merged entries → 1 entry per ksRow để batch modal vẫn nhận đúng shape
-                    const flatEntries = group.entries.flatMap(({ lockPhong, ksRows }) =>
-                      ksRows.map((ksRow) => ({ lockPhong, ksRow }))
-                    );
-                    setBatchTarget({
-                      khach_san_id: group.khach_san_id,
-                      khach_san_ten: group.khach_san_ten,
-                      khach_san_email: group.khach_san_email,
-                      entries: flatEntries,
-                    });
-                  }}
-                >
-                  <MailPlus className="h-3.5 w-3.5" />
-                  Gửi gộp
-                </Button>
-              </div>
+              {/* Batch action buttons */}
+              {(() => {
+                const pendingIds = group.entries.flatMap(({ ksRows }) =>
+                  ksRows.filter((r) => r.email_status === "cho_xac_nhan").map((r) => r.id),
+                );
+                const isConfirming = confirmingKsId === group.khach_san_id;
+                return (
+                  <div className="px-3 shrink-0 flex items-center gap-2">
+                    {pendingIds.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs text-teal-700 border-teal-300 hover:bg-teal-50"
+                        title={`Xác nhận lock phòng cho ${pendingIds.length} đoàn đang chờ xác nhận`}
+                        disabled={isConfirming}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConfirmAll(group.khach_san_id, group.khach_san_ten, pendingIds);
+                        }}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {isConfirming ? "Đang xác nhận..." : `Xác nhận all (${pendingIds.length})`}
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      title="Gửi 1 email gộp cho tất cả đoàn tại khách sạn này"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Flatten merged entries → 1 entry per ksRow để batch modal vẫn nhận đúng shape
+                        const flatEntries = group.entries.flatMap(({ lockPhong, ksRows }) =>
+                          ksRows.map((ksRow) => ({ lockPhong, ksRow }))
+                        );
+                        setBatchTarget({
+                          khach_san_id: group.khach_san_id,
+                          khach_san_ten: group.khach_san_ten,
+                          khach_san_email: group.khach_san_email,
+                          entries: flatEntries,
+                        });
+                      }}
+                    >
+                      <MailPlus className="h-3.5 w-3.5" />
+                      Gửi gộp
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Entries table */}
@@ -292,16 +358,17 @@ export default function LockPhongTheoKSView({ data }: Props) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/10">
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Tên đoàn</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Seri</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">Deadline</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Check-in</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Check-out</th>
-                      <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground w-14">Đêm</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Số phòng</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Code NCC</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground w-[200px]">Trạng thái</th>
-                      <th className="px-4 py-2 text-xs font-medium text-muted-foreground" />
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Tên đoàn</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Seri</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground w-[130px]">Deadline</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Check-in</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Check-out</th>
+                      <th className="px-4 py-1.5 text-center text-xs font-medium text-muted-foreground w-14">Đêm</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Số phòng</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Code NCC</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground w-[200px]">Trạng thái</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground w-[130px]">TT mail</th>
+                      <th className="px-4 py-1.5 text-xs font-medium text-muted-foreground" />
                     </tr>
                   </thead>
                   <tbody>
@@ -326,7 +393,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                               <>
                                 <td
                                   rowSpan={callCount}
-                                  className="px-4 py-2.5 font-medium align-top border-r border-border/40"
+                                  className="px-4 py-1 font-medium align-top border-r border-border/40"
                                 >
                                   {lockPhong.ten_doan}
                                   {callCount > 1 && (
@@ -337,7 +404,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 </td>
                                 <td
                                   rowSpan={callCount}
-                                  className="px-4 py-2.5 text-muted-foreground text-xs align-top border-r border-border/40"
+                                  className="px-4 py-1 text-muted-foreground text-xs align-top border-r border-border/40"
                                 >
                                   {lockPhong.ten_seri}
                                 </td>
@@ -346,7 +413,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                   return (
                                     <td
                                       rowSpan={callCount}
-                                      className="px-3 py-2.5 align-top border-r border-border/40"
+                                      className="px-3 py-1 align-top border-r border-border/40"
                                     >
                                       <DatePicker
                                         value={lockPhong.deadline ?? ""}
@@ -369,27 +436,27 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 })()}
                               </>
                             )}
-                            <td className="px-2 py-2 text-xs">
+                            <td className="px-2 py-1 text-xs">
                               <EditableDateCell
                                 value={ksRow.check_in}
                                 onSave={(v) => saveField(ksRow.id, { check_in: v })}
                               />
                             </td>
-                            <td className="px-2 py-2 text-xs">
+                            <td className="px-2 py-1 text-xs">
                               <EditableDateCell
                                 value={ksRow.check_out}
                                 onSave={(v) => saveField(ksRow.id, { check_out: v })}
                               />
                             </td>
-                            <td className="px-4 py-2.5 text-xs text-center font-medium">{ksRow.so_dem || 0}</td>
-                            <td className="px-2 py-2 text-xs">
+                            <td className="px-4 py-1 text-xs text-center font-medium">{ksRow.so_dem || 0}</td>
+                            <td className="px-2 py-1 text-xs">
                               <EditableTextCell
                                 value={ksRow.so_phong}
                                 onSave={(v) => saveField(ksRow.id, { so_phong: v })}
                                 placeholder="—"
                               />
                             </td>
-                            <td className="px-2 py-2 text-xs font-mono">
+                            <td className="px-2 py-1 text-xs font-mono">
                               <EditableTextCell
                                 value={ksRow.code_ncc}
                                 onSave={(v) => saveField(ksRow.id, { code_ncc: v })}
@@ -397,7 +464,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 className="font-mono"
                               />
                             </td>
-                            <td className="px-4 py-2.5">
+                            <td className="px-4 py-1">
                               <div className="flex items-center gap-1.5">
                                 <Select
                                   value={outcomeValue}
@@ -428,7 +495,21 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-2.5">
+                            <td className="px-3 py-1">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <EmailStatusBadge status={ksRow.email_status} />
+                                {isLockPhongDirty(ksRow) && (
+                                  <span
+                                    className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1"
+                                    title="Có thay đổi sau khi gửi mail"
+                                  >
+                                    <span className="w-1 h-1 rounded-full bg-orange-500" />
+                                    Đổi
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-1">
                               <Button
                                 variant="ghost"
                                 size="sm"

@@ -61,14 +61,14 @@ function buildBatchHtml(
     .map(
       ({ lockPhong, ksRow }) => `
       <tr>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px">${lockPhong.ten_doan}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px;color:#64748b">${lockPhong.ten_seri}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(lockPhong.ngay_xuat_phat)}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(ksRow.check_in)}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(ksRow.check_out)}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px;text-align:center"><strong>${ksRow.so_dem}</strong></td>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px">${ksRow.so_phong || "—"}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px 12px;color:#64748b">${ksRow.ghi_chu || lockPhong.ghi_chu || ""}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;white-space:nowrap">${lockPhong.ten_doan}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;color:#64748b;white-space:nowrap">${lockPhong.ten_seri}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;white-space:nowrap">${fmtDate(lockPhong.ngay_xuat_phat)}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;white-space:nowrap">${fmtDate(ksRow.check_in)}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;white-space:nowrap">${fmtDate(ksRow.check_out)}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;text-align:center"><strong>${ksRow.so_dem}</strong></td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;white-space:nowrap">${ksRow.so_phong || "—"}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 10px;color:#64748b">${ksRow.ghi_chu || lockPhong.ghi_chu || ""}</td>
       </tr>`
     )
     .join("");
@@ -76,7 +76,7 @@ function buildBatchHtml(
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
-  <div style="max-width:780px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+  <div style="max-width:960px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
     <div style="background:#0f172a;padding:24px 32px;text-align:center">
       <h2 style="margin:0;color:#fff;font-size:18px">CÔNG TY TNHH DU LỊCH S8</h2>
       <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY | MST: 0402021137</p>
@@ -85,16 +85,16 @@ function buildBatchHtml(
       <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${group.khach_san_ten}</strong>,</p>
       <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin lock phòng trước cho các đoàn sau:</p>
       <div style="overflow-x:auto">
-        <table style="border-collapse:collapse;width:100%;font-size:13px">
+        <table style="border-collapse:collapse;width:100%;font-size:13px;line-height:1.3">
           <tr style="background:#f1f5f9">
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Tên đoàn</th>
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Seri</th>
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Ngày xuất phát</th>
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Check-in</th>
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Check-out</th>
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:center">Đêm</th>
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Yêu cầu phòng</th>
-            <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Ghi chú</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;white-space:nowrap">Tên đoàn</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;white-space:nowrap">Seri</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;white-space:nowrap">Ngày xuất phát</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;white-space:nowrap">Check-in</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;white-space:nowrap">Check-out</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;white-space:nowrap">Đêm</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;white-space:nowrap">Yêu cầu phòng</th>
+            <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left">Ghi chú</th>
           </tr>
           ${rows}
         </table>
@@ -282,18 +282,18 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
     <>
       {/* Step 1: Select entries */}
       <Dialog open={open && !previewOpen} onOpenChange={(v) => { if (!v) onOpenChange(false); }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="text-sm">
               {isUpdate ? `Gửi cập nhật gộp — ${group.khach_san_ten}` : `Gửi email gộp — ${group.khach_san_ten}`}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-2 py-1">
+          <div className="space-y-2 py-1 flex-1 min-h-0 flex flex-col">
             <p className="text-xs text-muted-foreground">
               Chọn các đoàn muốn đưa vào email. Mặc định chọn các đoàn chưa gửi.
             </p>
-            <div className="border border-border rounded-lg divide-y divide-border overflow-hidden">
+            <div className="border border-border rounded-lg divide-y divide-border overflow-y-auto flex-1 min-h-0">
               {group.entries.map(({ lockPhong, ksRow }) => (
                 <label
                   key={ksRow.id}
