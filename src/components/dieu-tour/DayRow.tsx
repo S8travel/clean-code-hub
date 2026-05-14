@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, X, MessageSquarePlus } from "lucide-react";
+import { Lock, Plus, X, MessageSquarePlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,7 @@ interface Props {
   khachSanOptions: { value: string; label: string }[];
   dayLabel?: string;
   doanId?: number; // optional: SeriPage không có doanId, các check NH/KS sẽ skip
+  lockKhachSan?: boolean; // mẫu seri: khoá cột khách sạn
 }
 
 function formatDayDisplay(dateStr: string) {
@@ -126,7 +127,7 @@ function SetMenuSelect({
   );
 }
 
-export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId }: Props) {
+export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId, lockKhachSan }: Props) {
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
   const [noteOpenMap, setNoteOpenMap] = useState<Record<number, boolean>>({});
@@ -375,7 +376,12 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       {/* KHÁCH SẠN */}
       <div className="p-2 border-r border-border space-y-1 min-w-0 break-words">
         <span className="text-[11px] text-muted-foreground">🏨 Khách sạn</span>
-        {selectedKS ? (
+        {lockKhachSan ? (
+          <div className="flex items-center gap-1.5 px-2 py-2 rounded-md bg-muted/40 text-[12px] text-muted-foreground italic">
+            <Lock className="h-3 w-3" />
+            Đã khoá ở mẫu seri
+          </div>
+        ) : selectedKS ? (
           <>
             <div className="flex items-center gap-1">
               <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words">
@@ -402,22 +408,26 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
             className="h-7 text-xs"
           />
         )}
-        <textarea
-          className="w-full min-h-[24px] text-[13px] border border-border rounded-md px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-          value={day.ks_ma_code}
-          onChange={(e) => update({ ks_ma_code: e.target.value })}
-          placeholder="Mã code đặt phòng"
-          rows={1}
-          onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
-        />
-        <textarea
-          className="w-full min-h-[24px] text-[13px] border border-border rounded-md px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-          value={day.ks_loai_phong}
-          onChange={(e) => update({ ks_loai_phong: e.target.value })}
-          placeholder="Loại phòng: 2 TWN, 1 DBL..."
-          rows={1}
-          onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
-        />
+        {!lockKhachSan && (
+          <>
+            <textarea
+              className="w-full min-h-[24px] text-[13px] border border-border rounded-md px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              value={day.ks_ma_code}
+              onChange={(e) => update({ ks_ma_code: e.target.value })}
+              placeholder="Mã code đặt phòng"
+              rows={1}
+              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+            />
+            <textarea
+              className="w-full min-h-[24px] text-[13px] border border-border rounded-md px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              value={day.ks_loai_phong}
+              onChange={(e) => update({ ks_loai_phong: e.target.value })}
+              placeholder="Loại phòng: 2 TWN, 1 DBL..."
+              rows={1}
+              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+            />
+          </>
+        )}
       </div>
 
       {/* XÓA */}

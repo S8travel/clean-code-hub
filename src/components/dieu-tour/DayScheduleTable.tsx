@@ -12,9 +12,11 @@ interface Props {
   khachSanList: KhachSanItem[];
   getDayLabel?: (day: DayLocal, index: number) => string;
   doanId?: number; // truyền xuống DayRow để pre-check khi xóa NH/KS/cảnh điểm
+  /** Khoá cột Khách sạn (ẩn select + chú thích) — dùng cho mẫu seri. */
+  lockKhachSan?: boolean;
 }
 
-export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId }: Props) {
+export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId, lockKhachSan }: Props) {
   const canhDiemOptions = useMemo(() =>
     canhDiemList.map((c) => ({
       value: String(c.id),
@@ -107,6 +109,7 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
             khachSanOptions={khachSanOptions}
             dayLabel={getDayLabel ? getDayLabel(day, i) : undefined}
             doanId={doanId}
+            lockKhachSan={lockKhachSan}
           />
         ))}
       </div>
