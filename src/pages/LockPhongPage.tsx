@@ -158,7 +158,7 @@ export default function LockPhongPage() {
           <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-orange-700">
-              {deadlineAlerts.length} lock phòng sắp đến deadline
+              {deadlineAlerts.length} lock phòng cần xử lý (sắp đến deadline / quá hạn)
             </p>
             <ul className="mt-1 space-y-0.5">
               {deadlineAlerts.map((lp) => {

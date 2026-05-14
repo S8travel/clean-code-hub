@@ -382,7 +382,16 @@ export function useLockPhongDeadlineAlerts(
     if (!includeAll && lp.created_by !== currentUserId) return false;
     if (!lp.deadline) return false;
     const dl = new Date(lp.deadline + "T00:00:00");
-    return dl >= today && dl <= limit;
+    // Alert khi: deadline đã quá hạn HOẶC còn ≤ withinDays ngày. Bỏ chặn dl >= today
+    // để các lock chưa xử lý outcome vẫn được nhắc kể cả đã quá hạn.
+    if (dl > limit) return false;
+    // Ẩn alert khi mọi KS trong group đã có outcome (đoàn đã hủy hoặc đã thành đoàn).
+    const hotels = lp.hotels ?? [];
+    if (
+      hotels.length > 0 &&
+      hotels.every((h) => h.outcome_status === "da_huy" || h.outcome_status === "thanh_doan")
+    ) return false;
+    return true;
   });
 }
 
