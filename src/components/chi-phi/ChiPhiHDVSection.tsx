@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import { Plus, Ban, Trash2, Printer, FileText, FileDown } from "lucide-react";
 import HDVPreviewModal from "./HDVPreviewModal";
 import { toast } from "sonner";
@@ -613,7 +613,8 @@ function CreateHDVPaymentModal({
   );
   const [ghiChu, setGhiChu] = useState("");
   const [laThuHoi, setLaThuHoi] = useState(defaultLaThuHoi ?? false);
-  const [ngayCanTT, setNgayCanTT] = useState("");
+  // Default = hôm nay + 2 ngày; null sort xuống cuối list ĐNTT page → user dễ bỏ sót.
+  const [ngayCanTT, setNgayCanTT] = useState(format(addDays(new Date(), 2), "yyyy-MM-dd"));
 
   // Quyết toán state (7 fields theo form S8 BM02.1-20)
   const [tamUng, setTamUng] = useState(0);
