@@ -72,6 +72,20 @@ function ApprovalCell({
     ? { boi: row.kttt_duyet_boi, luc: row.kttt_duyet_luc, prevLuc: row.tp_dh_duyet_luc }
     : { boi: row.ktt_duyet_boi,  luc: row.ktt_duyet_luc,  prevLuc: row.kttt_duyet_luc };
 
+  // Hủy ƯU TIÊN trước check "đã duyệt" — vì ĐNTT da_huy có thể đã duyệt full
+  // trước đó (ktt_duyet_luc != null) nhưng giờ đã bị hủy → cần show "Đã hủy".
+  if (row.trang_thai_duyet === "da_huy") {
+    const ten = row.huy_boi ? (userMap.get(row.huy_boi) ?? "—") : null;
+    return (
+      <TableCell className="text-xs">
+        <div className="text-gray-600 font-medium leading-tight">✗ Đã hủy{ten ? ` · ${ten}` : ""}</div>
+        {row.huy_luc && (
+          <div className="text-muted-foreground">{format(new Date(row.huy_luc), "dd/MM HH:mm")}</div>
+        )}
+      </TableCell>
+    );
+  }
+
   // Đã duyệt → hiện tên + thời gian (giữ nguyên kể cả khi sau đó bị reject ở cấp khác)
   if (fields.luc) {
     const ten = fields.boi ? (userMap.get(fields.boi) ?? "—") : "—";
@@ -100,10 +114,6 @@ function ApprovalCell({
     if (row.tu_choi_cap == null && level === 1) {
       return <TableCell className="text-xs text-red-600 italic">Từ chối</TableCell>;
     }
-    return <TableCell className="text-xs text-muted-foreground">—</TableCell>;
-  }
-
-  if (row.trang_thai_duyet === "da_huy") {
     return <TableCell className="text-xs text-muted-foreground">—</TableCell>;
   }
 
@@ -310,7 +320,7 @@ export default function DNTTPage() {
   const handleCancelSubmit = () => {
     if (!cancelTarget) return;
     cancelMut.mutate(
-      { id: cancelTarget.id, mode: cancelTarget.isPaid ? cancelMode : undefined },
+      { id: cancelTarget.id, mode: cancelTarget.isPaid ? cancelMode : undefined, userId: user?.user_id ?? null },
       {
         onSuccess: () => {
           toast({ title: cancelTarget.isPaid ? "Đã hủy khoản thanh toán" : "Đã hủy đề nghị" });
@@ -477,8 +487,6 @@ export default function DNTTPage() {
               <TableHead className="min-w-[180px]">Mô tả</TableHead>
               <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
               <TableHead className="w-[90px]">Ngày cần TT</TableHead>
-              <TableHead className="min-w-[140px]">TP Điều hành</TableHead>
-              <TableHead className="min-w-[140px]">Kế toán TT</TableHead>
               <TableHead className="min-w-[140px]">Kế toán trưởng</TableHead>
               <TableHead className="w-[90px]">Ngày tạo</TableHead>
               <TableHead className="w-[50px]"></TableHead>
@@ -486,9 +494,9 @@ export default function DNTTPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
             ) : pageRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const canTruRow = canTruMap[row.id];
@@ -554,7 +562,8 @@ export default function DNTTPage() {
                       ? format(new Date(row.ngay_can_thanh_toan), "dd/MM/yyyy")
                       : "—"}
                   </TableCell>
-                  {([1, 2, 3] as ApprovalLevel[]).map((lv) => (
+                  {/* Cấp 1 (TP ĐH) + cấp 2 (Kế toán TT) tạm ẩn — DB trigger auto-stamp khi INSERT */}
+                  {([3] as ApprovalLevel[]).map((lv) => (
                     <ApprovalCell
                       key={lv}
                       row={row} level={lv}

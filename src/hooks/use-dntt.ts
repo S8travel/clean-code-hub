@@ -43,6 +43,9 @@ export interface DNTTRow {
   tu_choi_boi: string | null;
   tu_choi_luc: string | null;
   tu_choi_cap: number | null;
+  // Hủy track (ai hủy, khi nào)
+  huy_boi: string | null;
+  huy_luc: string | null;
   // Joined
   ten_doan?: string;
   ten_ncc?: string;
@@ -266,13 +269,8 @@ export function useApproveDNTT() {
         .single();
       if (fetchErr) throw fetchErr;
 
-      // Sanity check: cấp X-1 phải đã duyệt
-      if (level === 2 && !dntt.tp_dh_duyet_luc) {
-        throw new Error("Cấp Trưởng phòng Điều hành chưa duyệt");
-      }
-      if (level === 3 && !dntt.kttt_duyet_luc) {
-        throw new Error("Cấp Kế toán Thanh toán chưa duyệt");
-      }
+      // Sanity check: cấp X-1 phải đã duyệt.
+      // (Cấp 1 + cấp 2 hiện auto-pass bởi DB trigger trg_auto_pass_dntt_level_1 — bỏ qua check.)
 
       const now = new Date().toISOString();
       const update: Record<string, any> = {};
@@ -430,7 +428,7 @@ export function useMarkPaidWithDate() {
 export function useCancelDNTT() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, mode }: { id: number; mode?: "cong_no" | "hoan_tien" }) => {
+    mutationFn: async ({ id, mode, userId }: { id: number; mode?: "cong_no" | "hoan_tien"; userId?: string | null }) => {
       const { data: dntt, error: fetchErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .select("id, doan_id, ref_loai, ref_id, nha_cung_cap_id, ten_nha_cung_cap, loai, mo_ta")
@@ -519,6 +517,8 @@ export function useCancelDNTT() {
         .update({
           trang_thai_duyet: "da_huy",
           ghi_chu: mode === "cong_no" ? "Cấn trừ công nợ" : mode === "hoan_tien" ? "Hoàn lại tiền" : null,
+          huy_boi: userId ?? null,
+          huy_luc: new Date().toISOString(),
         })
         .eq("id", id);
       if (error) throw error;
