@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
-import { startOfMonth, endOfMonth, subMonths, format, addDays } from "date-fns";
+import { startOfMonth, endOfMonth, subMonths, addMonths, format, addDays } from "date-fns";
 
 // Local-aware format để tránh timezone-shift bug ở UTC+7
 const fmt = (d: Date) => format(d, "yyyy-MM-dd");
@@ -91,10 +91,13 @@ export function useDashboardStats() {
         { name: "Đã hủy", value: doanList.filter((d) => d.trang_thai === "huy").length, color: "#f43f5e" },
       ].filter((s) => s.value > 0);
 
-      // ── Monthly chart (6 tháng) ───────────────────────────────────────────────
+      // ── Monthly chart (12 tháng: 6 trước + tháng hiện tại + 5 sau) ───────────
+      // Future months để OP thấy xu hướng booking sắp tới (nhân viên kế toán dự
+      // dòng tiền). Past 6 tháng cover lịch sử gần.
       const monthlyMap = new Map<string, { count: number; khach: number }>();
-      for (let i = 5; i >= 0; i--) {
-        const key = format(subMonths(today, i), "MM/yy");
+      for (let i = -6; i <= 5; i++) {
+        const dt = i < 0 ? subMonths(today, -i) : addMonths(today, i);
+        const key = format(dt, "MM/yy");
         monthlyMap.set(key, { count: 0, khach: 0 });
       }
       for (const d of doanList) {

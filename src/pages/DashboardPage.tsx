@@ -182,22 +182,27 @@ export default function DashboardPage() {
         <SectionTitle>Hoạt động kinh doanh</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-          {/* Bar chart: Đoàn & khách 6 tháng */}
+          {/* Bar chart: Đoàn & khách 12 tháng (6 trước + 6 sau) */}
           <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
             <p className="text-sm font-semibold mb-1">Xu hướng đoàn & khách</p>
-            <p className="text-xs text-muted-foreground mb-4">6 tháng gần nhất</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={data.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={3}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE}
-                  formatter={(v: number, name: string) => [v.toLocaleString(), name === "soDoan" ? "Số đoàn" : "Số khách"]} />
-                <Bar yAxisId="l" dataKey="soDoan" name="soDoan" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                <Bar yAxisId="r" dataKey="soKhach" name="soKhach" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={36} />
-              </BarChart>
-            </ResponsiveContainer>
+            <p className="text-xs text-muted-foreground mb-4">12 tháng (6 trước + 6 sau · vuốt ngang trên mobile)</p>
+            {/* Mobile: scroll ngang vì 12 cột chật chội. Desktop fill 100%. */}
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="min-w-[760px] sm:min-w-0">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={3}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE}
+                      formatter={(v: number, name: string) => [v.toLocaleString(), name === "soDoan" ? "Số đoàn" : "Số khách"]} />
+                    <Bar yAxisId="l" dataKey="soDoan" name="soDoan" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar yAxisId="r" dataKey="soKhach" name="soKhach" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
             <div className="flex items-center gap-4 justify-center mt-2">
               <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /><span className="text-xs text-muted-foreground">Số đoàn</span></div>
               <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-500 inline-block" /><span className="text-xs text-muted-foreground">Số khách</span></div>
