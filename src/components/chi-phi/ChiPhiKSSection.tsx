@@ -1037,17 +1037,19 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     }
   });
 
-  // Chi phí thực tế per KS (sau điều chỉnh, tính từ doan_chi_phi)
+  // Chi phí thực tế per KS (sau điều chỉnh, tính từ doan_chi_phi).
+  // PHẢI sum tất cả row của KS: row đã adjust dùng thanh_tien_thuc_te,
+  // row chưa adjust dùng tien_cong_ty (FOC đã apply khi save). Trước đây
+  // chỉ sum row có thanh_tien_thuc_te != null → row chưa adjust bị coi = 0
+  // → delta sai (vd: 7 TWN edit, 1 SGL untouched → SGL bị bỏ ra khỏi sum).
   const thucTeByKs: Record<number, number> = {};
   chiPhiRows.forEach((r) => {
-    if (r.danh_muc === "khach_san" && r.thanh_tien_thuc_te != null) {
-      // Lấy khach_san_id từ localRows theo ref_doan_ngay_id
-      const localRow = localRows.find((lr) => lr.id === r.id);
-      if (localRow) {
-        thucTeByKs[localRow.khach_san_id] =
-          (thucTeByKs[localRow.khach_san_id] || 0) + r.thanh_tien_thuc_te;
-      }
-    }
+    if (r.danh_muc !== "khach_san") return;
+    const localRow = localRows.find((lr) => lr.id === r.id);
+    if (!localRow?.khach_san_id) return;
+    const value = r.thanh_tien_thuc_te ?? r.tien_cong_ty ?? 0;
+    thucTeByKs[localRow.khach_san_id] =
+      (thucTeByKs[localRow.khach_san_id] || 0) + value;
   });
 
   // Tổng công nợ / hoàn tiền per KS — từ bảng cong_no
