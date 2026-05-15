@@ -183,7 +183,7 @@ async function batchUpdateRows(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        valueInputOption: "USER_ENTERED",
+        valueInputOption: "RAW",
         data: updates,
       }),
     },
@@ -204,7 +204,7 @@ async function appendRows(
   if (rows.length === 0) return;
   const range = `${tabName}!A:${LAST_COL}`;
   const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
       headers: {
