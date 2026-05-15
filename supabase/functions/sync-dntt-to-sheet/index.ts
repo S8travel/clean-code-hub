@@ -1,7 +1,11 @@
-// Edge function: đồng bộ DNTT đã thanh toán sang Google Sheet (append-only).
+// Edge function: đồng bộ DNTT đã duyệt sang Google Sheet.
 // Trigger: cron 30' hoặc manual từ HoaDonUNCPage.
 // Auth: service account JSON (lưu trong env GCP_SA_JSON), spreadsheet_id qua env SHEET_ID,
 //       tab name qua env SHEET_TAB (mặc định "Sheet1").
+//
+// Hành vi: full re-sync. Mỗi DNTT (da_duyet) = 1 row duy nhất, identified by ID cột A.
+// - DNTT chưa có trong sheet → append vào cuối
+// - DNTT đã có → update tại đúng row (cập nhật trạng thái, ngày TT, nguồn, sync lúc)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -11,19 +15,21 @@ const corsHeaders = {
 };
 
 const SHEET_HEADER = [
-  "ID DNTT",
-  "Đoàn",
-  "Loại",
-  "Mô tả",
-  "Nhà cung cấp",
-  "Số tiền",
-  "Ngày cần TT",
-  "Ngày thanh toán",
-  "Nguồn TT",
-  "Hóa đơn URL",
-  "UNC URL",
-  "Sync lúc",
+  "ID DNTT",         // A
+  "Đoàn",            // B
+  "Loại",            // C
+  "Mô tả",           // D
+  "Nhà cung cấp",    // E
+  "Số tiền",         // F
+  "Ngày cần TT",     // G
+  "Ngày thanh toán", // H
+  "Nguồn TT",        // I
+  "Hóa đơn URL",     // J
+  "UNC URL",         // K
+  "Sync lúc",        // L
+  "Trạng thái",      // M (mới — append cuối để không shift cột cũ)
 ];
+const LAST_COL = "M"; // = column thứ 13
 
 /** Convert PEM private key string → ArrayBuffer for crypto.subtle.importKey */
 function pemToArrayBuffer(pem: string): ArrayBuffer {
@@ -96,13 +102,13 @@ async function getAccessToken(saJson: { client_email: string; private_key: strin
   return tokenData.access_token as string;
 }
 
-/** Kiểm tra sheet đã có header chưa; nếu chưa → ghi vào A1. */
+/** Đảm bảo row 1 = SHEET_HEADER. Rewrite nếu length hoặc nội dung khác. */
 async function ensureHeader(
   accessToken: string,
   spreadsheetId: string,
   tabName: string,
 ): Promise<void> {
-  const range = `${tabName}!A1:L1`;
+  const range = `${tabName}!A1:Z1`;
   const getRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -113,11 +119,14 @@ async function ensureHeader(
   }
   const data = await getRes.json();
   const existing = (data.values?.[0] ?? []) as string[];
-  if (existing.length > 0 && existing[0] === SHEET_HEADER[0]) return; // đã có
+  const matches =
+    existing.length === SHEET_HEADER.length &&
+    SHEET_HEADER.every((h, i) => existing[i] === h);
+  if (matches) return;
 
-  // Ghi header (UPDATE A1 row)
+  const putRange = `${tabName}!A1:${LAST_COL}1`;
   const putRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(putRange)}?valueInputOption=RAW`,
     {
       method: "PUT",
       headers: {
@@ -133,15 +142,67 @@ async function ensureHeader(
   }
 }
 
-/** Append rows vào sheet. Trả số row đã ghi. */
+/** Đọc cột A từ row 2 trở đi → map id (number) → rowIndex (1-based) trong sheet. */
+async function readExistingIdRowMap(
+  accessToken: string,
+  spreadsheetId: string,
+  tabName: string,
+): Promise<Map<number, number>> {
+  const range = `${tabName}!A2:A`;
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Sheet GET ids failed: ${err}`);
+  }
+  const data = await res.json();
+  const rows = (data.values ?? []) as string[][];
+  const map = new Map<number, number>();
+  rows.forEach((r, i) => {
+    const id = Number(r?.[0]);
+    if (Number.isFinite(id)) map.set(id, i + 2); // row 1 = header → data từ row 2
+  });
+  return map;
+}
+
+/** Batch update nhiều range cùng lúc qua values:batchUpdate. */
+async function batchUpdateRows(
+  accessToken: string,
+  spreadsheetId: string,
+  updates: { range: string; values: any[][] }[],
+): Promise<void> {
+  if (updates.length === 0) return;
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        valueInputOption: "USER_ENTERED",
+        data: updates,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Sheet batchUpdate failed: ${err}`);
+  }
+}
+
+/** Append rows vào cuối sheet. */
 async function appendRows(
   accessToken: string,
   spreadsheetId: string,
   tabName: string,
   rows: any[][],
-): Promise<number> {
-  if (rows.length === 0) return 0;
-  const range = `${tabName}!A:L`;
+): Promise<void> {
+  if (rows.length === 0) return;
+  const range = `${tabName}!A:${LAST_COL}`;
   const res = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
@@ -157,7 +218,6 @@ async function appendRows(
     const err = await res.text();
     throw new Error(`Sheet append failed: ${err}`);
   }
-  return rows.length;
 }
 
 const LOAI_LABEL: Record<string, string> = {
@@ -171,6 +231,12 @@ const LOAI_LABEL: Record<string, string> = {
   dinh_ky: "Định kỳ",
 };
 
+const STATUS_LABEL: Record<string, string> = {
+  unpaid: "Chưa TT",
+  partial: "Một phần",
+  paid: "Đã TT",
+};
+
 function fmtDate(s: string | null): string {
   if (!s) return "";
   try {
@@ -181,6 +247,24 @@ function fmtDate(s: string | null): string {
   } catch {
     return s;
   }
+}
+
+function buildRow(r: any, syncedAtStr: string): any[] {
+  return [
+    r.id,
+    r.ten_doan ?? "",
+    LOAI_LABEL[r.loai] ?? r.loai,
+    r.mo_ta ?? "",
+    r.ten_nha_cung_cap ?? "",
+    Number(r.so_tien) || 0,
+    fmtDate(r.ngay_can_thanh_toan),
+    fmtDate(r.thanh_toan_luc),
+    r.nguon ?? "",
+    r.hoa_don_url ?? "",
+    r.unc_url ?? "",
+    syncedAtStr,
+    STATUS_LABEL[r.payment_status] ?? r.payment_status ?? "",
+  ];
 }
 
 serve(async (req) => {
@@ -214,51 +298,65 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // 1. Lấy DNTT đã paid + chưa export
+    // 1. Lấy tất cả DNTT da_duyet (paid + partial + unpaid)
     const { data: rows, error: rpcErr } = await supabase.rpc("get_dntt_pending_export");
     if (rpcErr) throw rpcErr;
     const pending = (rows ?? []) as any[];
 
     if (pending.length === 0) {
       return new Response(
-        JSON.stringify({ ok: true, synced: 0, message: "Không có DNTT mới cần sync" }),
+        JSON.stringify({ ok: true, updated: 0, inserted: 0, message: "Không có DNTT đã duyệt nào" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // 2. Auth + đảm bảo header
+    // 2. Auth + ensure header
     const accessToken = await getAccessToken(saJson);
     await ensureHeader(accessToken, SHEET_ID, SHEET_TAB);
 
-    // 3. Build rows
+    // 3. Read existing IDs trong sheet → map id → rowIndex
+    const idRowMap = await readExistingIdRowMap(accessToken, SHEET_ID, SHEET_TAB);
+
+    // 4. Partition pending → toUpdate vs toInsert
     const syncedAt = new Date().toISOString();
-    const sheetRows = pending.map((r) => [
-      r.id,
-      r.ten_doan ?? "",
-      LOAI_LABEL[r.loai] ?? r.loai,
-      r.mo_ta ?? "",
-      r.ten_nha_cung_cap ?? "",
-      Number(r.so_tien) || 0,
-      fmtDate(r.ngay_can_thanh_toan),
-      fmtDate(r.thanh_toan_luc),
-      r.nguon ?? "",
-      r.hoa_don_url ?? "",
-      r.unc_url ?? "",
-      fmtDate(syncedAt),
-    ]);
+    const syncedAtStr = fmtDate(syncedAt);
+    const toUpdate: { range: string; values: any[][] }[] = [];
+    const toInsert: any[][] = [];
+    const allIds: number[] = [];
+    for (const r of pending) {
+      allIds.push(r.id);
+      const rowValues = buildRow(r, syncedAtStr);
+      const existingRowIdx = idRowMap.get(r.id);
+      if (existingRowIdx) {
+        toUpdate.push({
+          range: `${SHEET_TAB}!A${existingRowIdx}:${LAST_COL}${existingRowIdx}`,
+          values: [rowValues],
+        });
+      } else {
+        toInsert.push(rowValues);
+      }
+    }
 
-    const appended = await appendRows(accessToken, SHEET_ID, SHEET_TAB, sheetRows);
+    // 5. Apply batch update + append
+    await batchUpdateRows(accessToken, SHEET_ID, toUpdate);
+    await appendRows(accessToken, SHEET_ID, SHEET_TAB, toInsert);
 
-    // 4. Mark exported
-    const ids = pending.map((r) => r.id);
-    const { error: updErr } = await supabase
-      .from("de_nghi_thanh_toan")
-      .update({ exported_to_sheet_at: syncedAt })
-      .in("id", ids);
-    if (updErr) throw updErr;
+    // 6. Mark exported (cập nhật mọi lần sync để theo dõi)
+    if (allIds.length > 0) {
+      const { error: updErr } = await supabase
+        .from("de_nghi_thanh_toan")
+        .update({ exported_to_sheet_at: syncedAt })
+        .in("id", allIds);
+      if (updErr) throw updErr;
+    }
 
     return new Response(
-      JSON.stringify({ ok: true, synced: appended, ids }),
+      JSON.stringify({
+        ok: true,
+        total: pending.length,
+        updated: toUpdate.length,
+        inserted: toInsert.length,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: any) {
