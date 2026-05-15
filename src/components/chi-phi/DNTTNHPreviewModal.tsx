@@ -18,9 +18,18 @@ interface Props {
 type EditableItem = { so_luong: number; don_gia: number; ghi_chu: string };
 type EditableEntry = Omit<NHDocEntry, "items"> & { items: EditableItem[] };
 
+function computeCkAmount(entry: EditableEntry): number {
+  const ckPct = entry.chiet_khau_phan_tram ?? 0;
+  if (ckPct <= 0) return 0;
+  const main = entry.items[0];
+  if (!main) return 0;
+  return Math.round(main.so_luong * main.don_gia * ckPct / 100);
+}
+
 function computeConTT(entry: EditableEntry): number {
   const total = entry.items.reduce((s, i) => s + i.so_luong * i.don_gia, 0);
-  return Math.max(0, total - entry.so_tien_coc - entry.can_tru);
+  const ck = computeCkAmount(entry);
+  return Math.max(0, total - ck - entry.so_tien_coc - entry.can_tru);
 }
 
 export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
@@ -45,8 +54,8 @@ export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
       prev.map((e, idx) => {
         if (idx !== i) return e;
         const updated = { ...e, ...patch };
-        // auto-recalc so_tien_con_tt when items/coc/can_tru change
-        if ("items" in patch || "so_tien_coc" in patch || "can_tru" in patch) {
+        // auto-recalc so_tien_con_tt when items/coc/can_tru/CK change
+        if ("items" in patch || "so_tien_coc" in patch || "can_tru" in patch || "chiet_khau_phan_tram" in patch) {
           updated.so_tien_con_tt = computeConTT(updated);
         }
         return updated;
@@ -91,6 +100,8 @@ export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
         <div className="flex-1 overflow-auto px-5 space-y-5">
           {editEntries.map((entry, i) => {
             const itemsTotal = entry.items.reduce((s, it) => s + it.so_luong * it.don_gia, 0);
+            const ckAmount = computeCkAmount(entry);
+            const totalSauCk = itemsTotal - ckAmount;
             return (
               <div key={i} className="border rounded-lg p-3 space-y-3">
                 <p className="text-xs font-semibold text-blue-700">{entry.ten_nh}</p>
@@ -119,38 +130,62 @@ export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
                   </div>
                 </div>
 
-                {/* Items table */}
+                {/* Items table — cột CK% áp main row */}
                 <div className="space-y-1">
                   <label className="text-[11px] text-muted-foreground">Bảng chi tiết</label>
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-xs">
                       <thead>
                         <tr className="bg-gray-100">
-                          {["Số lượng", "Đơn giá", "Thành tiền", "Ghi chú"].map((h) => (
+                          {["Số lượng", "Đơn giá", "CK %", "Thành tiền", "Ghi chú"].map((h) => (
                             <th key={h} className="border border-gray-300 px-2 py-1 text-center font-semibold whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {entry.items.map((item, j) => (
-                          <tr key={j}>
-                            <td className="border border-gray-300 p-0.5 w-20">
-                              <Input type="number" min={0} value={item.so_luong} onChange={(e) => updateItem(i, j, { so_luong: parseInt(e.target.value) || 0 })} className="h-7 text-xs border-0 px-1 text-center" />
-                            </td>
-                            <td className="border border-gray-300 p-0.5 w-32">
-                              <DecimalInput value={item.don_gia} onChange={(v) => updateItem(i, j, { don_gia: v })} className="h-7 text-xs border-0 px-1 text-right" />
-                            </td>
-                            <td className="border border-gray-300 px-2 py-1 text-right font-medium whitespace-nowrap w-32">
-                              {fmt(item.so_luong * item.don_gia)}
-                            </td>
-                            <td className="border border-gray-300 p-0.5">
-                              <Input value={item.ghi_chu} onChange={(e) => updateItem(i, j, { ghi_chu: e.target.value })} className="h-7 text-xs border-0 px-1" placeholder="Ghi chú..." />
-                            </td>
-                          </tr>
-                        ))}
+                        {entry.items.map((item, j) => {
+                          const gross = item.so_luong * item.don_gia;
+                          // CK chỉ áp dòng đầu (j === 0)
+                          const ckRow = j === 0 && (entry.chiet_khau_phan_tram ?? 0) > 0
+                            ? Math.round(gross * (entry.chiet_khau_phan_tram ?? 0) / 100)
+                            : 0;
+                          const net = gross - ckRow;
+                          return (
+                            <tr key={j}>
+                              <td className="border border-gray-300 p-0.5 w-20">
+                                <Input type="number" min={0} value={item.so_luong} onChange={(e) => updateItem(i, j, { so_luong: parseInt(e.target.value) || 0 })} className="h-7 text-xs border-0 px-1 text-center" />
+                              </td>
+                              <td className="border border-gray-300 p-0.5 w-32">
+                                <DecimalInput value={item.don_gia} onChange={(v) => updateItem(i, j, { don_gia: v })} className="h-7 text-xs border-0 px-1 text-right" />
+                              </td>
+                              <td className="border border-gray-300 p-0.5 w-20">
+                                {j === 0 ? (
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step={0.5}
+                                    value={entry.chiet_khau_phan_tram ?? 0}
+                                    onChange={(e) => updateEntry(i, { chiet_khau_phan_tram: parseFloat(e.target.value) || 0 })}
+                                    className="h-7 text-xs border-0 px-1 text-center"
+                                    placeholder="0"
+                                  />
+                                ) : (
+                                  <div className="text-center text-muted-foreground">—</div>
+                                )}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-1 text-right font-medium whitespace-nowrap w-32">
+                                {fmt(net)}
+                              </td>
+                              <td className="border border-gray-300 p-0.5">
+                                <Input value={item.ghi_chu} onChange={(e) => updateItem(i, j, { ghi_chu: e.target.value })} className="h-7 text-xs border-0 px-1" placeholder="Ghi chú..." />
+                              </td>
+                            </tr>
+                          );
+                        })}
                         <tr className="bg-gray-50 font-semibold">
-                          <td colSpan={2} className="border border-gray-300 px-2 py-1 text-right text-[11px]">Tổng</td>
-                          <td className="border border-gray-300 px-2 py-1 text-right text-[11px]">{fmt(itemsTotal)}</td>
+                          <td colSpan={3} className="border border-gray-300 px-2 py-1 text-right text-[11px]">Tổng (đã trừ CK)</td>
+                          <td className="border border-gray-300 px-2 py-1 text-right text-[11px]">{fmt(totalSauCk)}</td>
                           <td className="border border-gray-300" />
                         </tr>
                       </tbody>

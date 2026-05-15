@@ -28,8 +28,8 @@ const PAGE_H = 11906;
 const MARGIN = 720;
 const CONTENT_W = PAGE_W - MARGIN * 2; // 15398
 
-// 12 columns — total = 15398
-const COL_W = [1400, 1050, 2200, 700, 560, 1200, 1400, 1050, 900, 1250, 2200, 1488];
+// 13 columns — total = 15398. Idx 6 = CK% (mới, áp main row).
+const COL_W = [1400, 1050, 2000, 700, 560, 1100, 600, 1300, 1050, 900, 1250, 2000, 1488];
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -95,6 +95,8 @@ export interface NHDocEntry {
   foc_khach: number | null; // foc_khach (mỗi X khách)
   foc: number | null;       // foc_mien (miễn Y) — giữ tên `foc` cho backward compat
   items: NHDocItem[];
+  /** % chiết khấu áp lên MAIN row (items[0]). Extras không trừ CK. 0 = không CK. */
+  chiet_khau_phan_tram?: number;
   ncc: { ten?: string; so_tai_khoan?: string; ngan_hang?: string } | null;
   tai_khoan_thanh_toan: string | null;
   so_tien_coc: number;
@@ -163,10 +165,10 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   // ── 4. Data table ─────────────────────────────────────────────────────────
   const rows: TableRow[] = [];
 
-  // Header row
+  // Header row — 13 cột (thêm "CK %" trước "Thành tiền")
   const headers = [
     "CODE\nĐOÀN", "NGÀY", "TÊN NHÀ HÀNG\n/ DỊCH VỤ", "Số\nkhách",
-    "FOC", "Đơn giá\n(gồm VAT)", "Thành\ntiền", "Số tiền\ncọc",
+    "FOC", "Đơn giá\n(gồm VAT)", "CK %", "Thành\ntiền", "Số tiền\ncọc",
     "Cấn\ntrừ", "Số tiền còn\nthanh toán", "Tài khoản\nthanh toán", "Ghi chú",
   ];
   rows.push(
@@ -182,6 +184,8 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   let firstEntry = true;
 
   for (const entry of entries) {
+    // CK% áp main row (items[0]). Thành tiền main = gross - ckAmount.
+    const ckPct = entry.chiet_khau_phan_tram ?? 0;
     const itemCount = Math.max(entry.items.length, 1);
     const items = entry.items.length > 0 ? entry.items : [{ so_luong: 0, don_gia: 0, ghi_chu: "" }];
 
@@ -203,7 +207,12 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
     for (let ri = 0; ri < items.length; ri++) {
       const item = items[ri];
       const isFirst = ri === 0;
-      const thanhTien = item.so_luong * item.don_gia;
+      const grossThanhTien = item.so_luong * item.don_gia;
+      // CK chỉ áp main row (items[0]). Extras KHÔNG trừ CK.
+      const ckAmountRow = isFirst && ckPct > 0
+        ? Math.round(grossThanhTien * ckPct / 100)
+        : 0;
+      const thanhTien = grossThanhTien - ckAmountRow;
       const cells: TableCell[] = [];
 
       // CODE ĐOÀN — only on very first row, spans all rows
@@ -236,34 +245,37 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
 
       // Đơn giá — per item
       cells.push(cell([p(item.don_gia > 0 ? fmt(item.don_gia) : "—", { size: 14 })], { width: COL_W[5] }));
-      // Thành tiền — per item
-      cells.push(cell([p(thanhTien > 0 ? fmt(thanhTien) : "—", { bold: true, size: 14 })], { width: COL_W[6] }));
+      // CK % — chỉ main row hiện %, extras "—"
+      const ckText = isFirst && ckPct > 0 ? `${ckPct}%` : "—";
+      cells.push(cell([p(ckText, { size: 14, color: isFirst && ckPct > 0 ? "CC0000" : undefined })], { width: COL_W[6] }));
+      // Thành tiền — main đã trừ CK, extras gross
+      cells.push(cell([p(thanhTien > 0 ? fmt(thanhTien) : "—", { bold: true, size: 14 })], { width: COL_W[7] }));
 
       if (isFirst) {
         // Số tiền cọc
         cells.push(
           cell([p(entry.so_tien_coc > 0 ? fmt(entry.so_tien_coc) : "—", { size: 14, color: entry.so_tien_coc > 0 ? "FF6600" : undefined })], {
-            width: COL_W[7], rowSpan: itemCount,
+            width: COL_W[8], rowSpan: itemCount,
           }),
         );
         // Cấn trừ
         cells.push(
           cell([p(entry.can_tru > 0 ? fmt(entry.can_tru) : "—", { size: 14, color: entry.can_tru > 0 ? "FF6600" : undefined })], {
-            width: COL_W[8], rowSpan: itemCount,
+            width: COL_W[9], rowSpan: itemCount,
           }),
         );
         // Số tiền còn TT
         cells.push(
           cell([p(entry.so_tien_con_tt > 0 ? fmt(entry.so_tien_con_tt) : "—", { bold: true, size: 14, color: "CC0000" })], {
-            width: COL_W[9], rowSpan: itemCount,
+            width: COL_W[10], rowSpan: itemCount,
           }),
         );
         // Tài khoản thanh toán
-        cells.push(cell(bankChildren, { width: COL_W[10], rowSpan: itemCount }));
+        cells.push(cell(bankChildren, { width: COL_W[11], rowSpan: itemCount }));
       }
 
-      // Ghi chú — per item
-      cells.push(cell([p(item.ghi_chu || "—", { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[11] }));
+      // Ghi chú — per item (cột cuối — idx 12)
+      cells.push(cell([p(item.ghi_chu || "—", { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[12] }));
 
       rows.push(new TableRow({ children: cells }));
     }

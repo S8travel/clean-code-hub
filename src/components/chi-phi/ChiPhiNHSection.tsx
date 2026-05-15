@@ -1004,7 +1004,13 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
         }
 
-        const totalEntry = items.reduce((s, i) => s + i.so_luong * i.don_gia, 0);
+        // Chiết khấu chỉ áp main row (items[0]). Resolve theo pattern row override → nh master.
+        const ckPct = row.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
+        const mainItem = items[0];
+        const ckAmount = ckPct > 0 && mainItem
+          ? Math.round(mainItem.so_luong * mainItem.don_gia * ckPct / 100)
+          : 0;
+        const totalEntry = items.reduce((s, i) => s + i.so_luong * i.don_gia, 0) - ckAmount;
         const soTienConTT = Math.max(0, totalEntry - soCoc - canTruAmount);
 
         // Format ngay_date
@@ -1018,6 +1024,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           foc_khach: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_khach : null,
           foc: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_mien : null,
           items,
+          chiet_khau_phan_tram: ckPct,
           ncc: { ten: nh.ten_ncc || undefined, so_tai_khoan: nh.ncc_so_tai_khoan || undefined, ngan_hang: nh.ncc_ngan_hang || undefined },
           tai_khoan_thanh_toan: nh.tai_khoan_thanh_toan || null,
           so_tien_coc: soCoc,
