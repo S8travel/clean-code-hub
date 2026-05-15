@@ -69,7 +69,11 @@ serve(async (req) => {
         subject,
         html,
         text: (typeof text === "string" && text.trim()) ? text : htmlToText(html),
-        ...(replyTo ? { reply_to: [replyTo], bcc: [replyTo] } : {}),
+        // Reply-To = địa chỉ DOMAIN (forward về hộp chung) — tránh
+        // FREEMAIL_FORGED_REPLYTO (-2.5đ spam) do Reply-To gmail + From domain.
+        // bcc giữ = replyTo (gmail OP) để OP vẫn nhận bản copy mail đã gửi.
+        reply_to: [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"],
+        ...(replyTo ? { bcc: [replyTo] } : {}),
         ...(attachments?.length ? { attachments } : {}),
         ...((messageId || inReplyTo) ? {
           headers: {
