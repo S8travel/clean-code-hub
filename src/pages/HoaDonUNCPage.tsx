@@ -339,16 +339,18 @@ function DocCell({
               <Upload className="h-3 w-3 mr-1" />
               {isPending ? "Đang tải..." : "Tải lên"}
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-6 w-6"
-              title="Paste ảnh từ clipboard (Ctrl+C ảnh rồi bấm)"
-              onClick={handlePasteFromClipboard}
-              disabled={isPending}
-            >
-              <ClipboardPaste className="h-3 w-3" />
-            </Button>
+            {loaiDoc === "unc" && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6"
+                title="Paste ảnh từ clipboard (Ctrl+C ảnh rồi bấm)"
+                onClick={handlePasteFromClipboard}
+                disabled={isPending}
+              >
+                <ClipboardPaste className="h-3 w-3" />
+              </Button>
+            )}
           </>
         ) : null}
       </div>
