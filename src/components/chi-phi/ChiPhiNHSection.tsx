@@ -2441,16 +2441,28 @@ function NHFocEditor({
   focMien: number | null;
 }) {
   const qc = useQueryClient();
-  const [k, setK] = useState(focKhach != null ? String(focKhach) : "");
-  const [m, setM] = useState(focMien != null ? String(focMien) : "");
+  // Hiển thị "" cho cả null và 0 → giữ placeholder "—" thống nhất khi không có FOC.
+  const display = (n: number | null) => (n != null && n > 0 ? String(n) : "");
+  const [k, setK] = useState(display(focKhach));
+  const [m, setM] = useState(display(focMien));
 
-  useEffect(() => { setK(focKhach != null ? String(focKhach) : ""); }, [focKhach]);
-  useEffect(() => { setM(focMien != null ? String(focMien) : ""); }, [focMien]);
+  useEffect(() => { setK(display(focKhach)); }, [focKhach]);
+  useEffect(() => { setM(display(focMien)); }, [focMien]);
 
   const save = async () => {
-    const nextK = k.trim() === "" ? null : Number(k) || null;
-    const nextM = m.trim() === "" ? null : Number(m) || null;
-    if (nextK === focKhach && nextM === focMien) return;
+    // User clear ô → lưu 0 (KHÔNG null) để resolveNHFoc trust snapshot, KHÔNG
+    // fallback về master (master có thể còn FOC, gây -1 dù user đã clear).
+    const parse = (s: string): number => {
+      const t = s.trim();
+      if (t === "") return 0;
+      const n = Number(t);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    };
+    const nextK = parse(k);
+    const nextM = parse(m);
+    const curK = focKhach ?? 0;
+    const curM = focMien ?? 0;
+    if (nextK === curK && nextM === curM) return;
     const { error } = await externalSupabase
       .from("doan_chi_phi")
       .update({ foc_khach_snapshot: nextK, foc_mien_snapshot: nextM })
