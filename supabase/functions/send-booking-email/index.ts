@@ -26,6 +26,18 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+// Email trong DB có thể cách nhau bằng dấu phẩy, chấm phẩy, xuống dòng,
+// hoặc dấu phẩy/chấm phẩy tiếng Trung (，；). Split tất cả + lọc entry
+// không có "@" (rác) → tránh Resend 422 Invalid `to` field.
+function parseEmailList(input: unknown): string[] {
+  if (Array.isArray(input)) return input.flatMap((v) => parseEmailList(v));
+  if (typeof input !== "string") return [];
+  return input
+    .split(/[,;\n\r，；]+/)
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && e.includes("@"));
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -43,10 +55,13 @@ serve(async (req) => {
       );
     }
 
-    // to có thể là string đơn, string cách nhau bằng dấu phẩy, hoặc string[]
-    const toList: string[] = Array.isArray(to)
-      ? to
-      : String(to).split(",").map((e: string) => e.trim()).filter(Boolean);
+    const toList = parseEmailList(to);
+    if (toList.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Email người nhận không hợp lệ (rỗng hoặc sai định dạng)" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) {
@@ -65,7 +80,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: "S8 Travel <booking@email.s8travel.com>",
         to: toList,
-        ...(cc?.length ? { cc: Array.isArray(cc) ? cc : String(cc).split(",").map((e: string) => e.trim()).filter(Boolean) } : {}),
+        ...((() => { const ccList = parseEmailList(cc); return ccList.length ? { cc: ccList } : {}; })()),
         subject,
         html,
         text: (typeof text === "string" && text.trim()) ? text : htmlToText(html),
@@ -73,7 +88,10 @@ serve(async (req) => {
         // (chịu -2.75đ spam FREEMAIL_FORGED_REPLYTO). Khi tạo được
         // booking@s8travel.com forward về hộp chung → đổi reply_to sang
         // [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"], bcc giữ replyTo.
-        ...(replyTo ? { reply_to: [replyTo], bcc: [replyTo] } : {}),
+        ...((() => {
+          const rt = parseEmailList(replyTo);
+          return rt.length ? { reply_to: rt, bcc: rt } : {};
+        })()),
         ...(attachments?.length ? { attachments } : {}),
         ...((messageId || inReplyTo) ? {
           headers: {
