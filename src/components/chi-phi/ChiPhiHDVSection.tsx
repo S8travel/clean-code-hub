@@ -609,7 +609,9 @@ function CreateHDVPaymentModal({
   // Common state
   const [soTien, setSoTien] = useState(defaultSoTien ?? 0);
   const [moTa, setMoTa] = useState(
-    isQT ? "Quyết toán hướng dẫn viên" : "Tạm ứng cho hướng dẫn viên",
+    isQT
+      ? `Quyết toán HDV ${hdvName} ${soKhachDefault}p ${soNgayDefault}`.replace(/\s+/g, " ").trim()
+      : "Tạm ứng cho hướng dẫn viên",
   );
   const [ghiChu, setGhiChu] = useState("");
   const [laThuHoi, setLaThuHoi] = useState(defaultLaThuHoi ?? false);
