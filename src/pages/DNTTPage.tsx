@@ -208,41 +208,46 @@ function DNTTPageContent() {
   const pageRows = mainRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const canTruMap: Record<number, DNTTRow> = {};
 
-  // Load các ĐNTT cọc cùng ref (cùng meal/KS/DV) — để hiển thị "Đã cọc: X" trên dòng còn lại
-  const refPairs = useMemo(() => {
+  // Load các ĐNTT cọc cùng (doan_id, ref) — để hiển thị "Đã cọc: X" trên dòng còn lại.
+  // Phải filter cả doan_id: 1 KS có thể được nhiều đoàn cọc → không cross-đoàn.
+  const refTriples = useMemo(() => {
     const set = new Set<string>();
     rows.forEach((r) => {
-      if (r.ref_loai && r.ref_id != null) set.add(`${r.ref_loai}|${r.ref_id}`);
+      if (r.doan_id != null && r.ref_loai && r.ref_id != null) {
+        set.add(`${r.doan_id}|${r.ref_loai}|${r.ref_id}`);
+      }
     });
     return [...set];
   }, [rows]);
 
   const { data: cocDntts = [] } = useQuery({
-    queryKey: ["dntt-coc-siblings", refPairs.join(",")],
-    enabled: refPairs.length > 0,
+    queryKey: ["dntt-coc-siblings", refTriples.join(",")],
+    enabled: refTriples.length > 0,
     queryFn: async () => {
-      const refLoais = [...new Set(refPairs.map((p) => p.split("|")[0]))];
-      const refIds = [...new Set(refPairs.map((p) => Number(p.split("|")[1])).filter(Number.isFinite))];
-      if (refLoais.length === 0 || refIds.length === 0) return [];
+      const doanIds = [...new Set(refTriples.map((p) => Number(p.split("|")[0])).filter(Number.isFinite))];
+      const refLoais = [...new Set(refTriples.map((p) => p.split("|")[1]))];
+      const refIds = [...new Set(refTriples.map((p) => Number(p.split("|")[2])).filter(Number.isFinite))];
+      if (doanIds.length === 0 || refLoais.length === 0 || refIds.length === 0) return [];
       const { data } = await externalSupabase
         .from("dntt_with_payment_status")
-        .select("id, ref_loai, ref_id, so_tien, paid_amount, la_coc, payment_status, trang_thai_duyet")
+        .select("id, doan_id, ref_loai, ref_id, so_tien, paid_amount, la_coc, payment_status, trang_thai_duyet")
         .eq("la_coc", true)
+        .in("doan_id", doanIds)
         .in("ref_loai", refLoais)
         .in("ref_id", refIds)
         .not("trang_thai_duyet", "eq", "da_huy")
         .not("trang_thai_duyet", "eq", "tu_choi");
-      // Lọc đúng cặp (ref_loai, ref_id)
-      const validKeys = new Set(refPairs);
-      return (data || []).filter((d: any) => validKeys.has(`${d.ref_loai}|${d.ref_id}`));
+      // Lọc đúng cặp (doan_id, ref_loai, ref_id) — tránh cross-product
+      const validKeys = new Set(refTriples);
+      return (data || []).filter((d: any) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`));
     },
   });
 
-  // Map ref → tổng cọc đã thanh toán (paid_amount của cọc DNTTs)
+  // Map (doan_id|ref) → tổng cọc đã thanh toán (paid_amount của cọc DNTTs)
   const cocByRef = useMemo(() => {
     const m: Record<string, number> = {};
     cocDntts.forEach((d: any) => {
-      const k = `${d.ref_loai}|${d.ref_id}`;
+      const k = `${d.doan_id}|${d.ref_loai}|${d.ref_id}`;
       m[k] = (m[k] || 0) + (d.paid_amount || 0);
     });
     return m;
@@ -515,7 +520,9 @@ function DNTTPageContent() {
                   <TableCell className="text-sm">{row.mo_ta}</TableCell>
                   <TableCell className="text-right font-medium">
                     {(() => {
-                      const refKey = row.ref_loai && row.ref_id != null ? `${row.ref_loai}|${row.ref_id}` : null;
+                      const refKey = row.doan_id != null && row.ref_loai && row.ref_id != null
+                        ? `${row.doan_id}|${row.ref_loai}|${row.ref_id}`
+                        : null;
                       const cocSibling = refKey
                         ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
                         : 0;

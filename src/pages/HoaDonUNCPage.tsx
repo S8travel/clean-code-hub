@@ -448,38 +448,43 @@ function HoaDonUNCPageContent() {
     },
   });
 
-  // Load các ĐNTT cọc cùng ref (để hiển thị "Đã cọc: X")
-  const refPairs = useMemo(() => {
+  // Load các ĐNTT cọc cùng (doan_id, ref) — để hiển thị "Đã cọc: X".
+  // Phải filter cả doan_id: 1 KS có thể được nhiều đoàn cọc → không cross-đoàn.
+  const refTriples = useMemo(() => {
     const set = new Set<string>();
     mainRows.forEach((r) => {
-      if (r.ref_loai && r.ref_id != null) set.add(`${r.ref_loai}|${r.ref_id}`);
+      if (r.doan_id != null && r.ref_loai && r.ref_id != null) {
+        set.add(`${r.doan_id}|${r.ref_loai}|${r.ref_id}`);
+      }
     });
     return [...set];
   }, [mainRows]);
 
   const { data: cocDntts = [] as any[] } = useQuery({
-    queryKey: ["hoadon-unc-coc-siblings", refPairs.join(",")],
-    enabled: refPairs.length > 0,
+    queryKey: ["hoadon-unc-coc-siblings", refTriples.join(",")],
+    enabled: refTriples.length > 0,
     queryFn: async () => {
-      const refLoais = [...new Set(refPairs.map((p) => p.split("|")[0]))];
-      const refIds = [...new Set(refPairs.map((p) => Number(p.split("|")[1])).filter(Number.isFinite))];
-      if (refLoais.length === 0 || refIds.length === 0) return [];
+      const doanIds = [...new Set(refTriples.map((p) => Number(p.split("|")[0])).filter(Number.isFinite))];
+      const refLoais = [...new Set(refTriples.map((p) => p.split("|")[1]))];
+      const refIds = [...new Set(refTriples.map((p) => Number(p.split("|")[2])).filter(Number.isFinite))];
+      if (doanIds.length === 0 || refLoais.length === 0 || refIds.length === 0) return [];
       const { data } = await externalSupabase
         .from("dntt_with_payment_status")
-        .select("id, ref_loai, ref_id, paid_amount")
+        .select("id, doan_id, ref_loai, ref_id, paid_amount")
         .eq("la_coc", true)
+        .in("doan_id", doanIds)
         .in("ref_loai", refLoais)
         .in("ref_id", refIds)
         .not("trang_thai_duyet", "eq", "da_huy")
         .not("trang_thai_duyet", "eq", "tu_choi");
-      const validKeys = new Set(refPairs);
-      return (data || []).filter((d: any) => validKeys.has(`${d.ref_loai}|${d.ref_id}`));
+      const validKeys = new Set(refTriples);
+      return (data || []).filter((d: any) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`));
     },
   });
   const cocByRef = useMemo(() => {
     const m: Record<string, number> = {};
     cocDntts.forEach((d: any) => {
-      const k = `${d.ref_loai}|${d.ref_id}`;
+      const k = `${d.doan_id}|${d.ref_loai}|${d.ref_id}`;
       m[k] = (m[k] || 0) + (d.paid_amount || 0);
     });
     return m;
@@ -720,7 +725,9 @@ function HoaDonUNCPageContent() {
                     {(() => {
                       const ct = canTruByDntt[row.id] || 0;
                       const thucTT = Math.max(0, row.so_tien - ct);
-                      const refKey = row.ref_loai && row.ref_id != null ? `${row.ref_loai}|${row.ref_id}` : null;
+                      const refKey = row.doan_id != null && row.ref_loai && row.ref_id != null
+                        ? `${row.doan_id}|${row.ref_loai}|${row.ref_id}`
+                        : null;
                       const cocSibling = refKey
                         ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
                         : 0;
