@@ -87,13 +87,13 @@ export default function KSDNTTModal({
     try {
       // 1. Tạo 1 ĐNTT cho FULL amount = soTien + canTruAmount
       const fullAmount = soTien + canTruAmount;
-      const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id));
+      // Bỏ row thanh_tien <= 0 (FOC row) — dntt_allocations CHECK so_tien > 0.
+      const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id) && (r.thanh_tien ?? 0) > 0);
       // Largest-remainder split → SUM(allocations.so_tien) === fullAmount
       const allocAmts = proRataInts(fullAmount, allocRows.map((r) => r.thanh_tien));
-      const allocations = allocRows.map((r, i) => ({
-        chi_phi_id: r.id!,
-        so_tien: allocAmts[i],
-      }));
+      const allocations = allocRows
+        .map((r, i) => ({ chi_phi_id: r.id!, so_tien: allocAmts[i] }))
+        .filter((a) => a.so_tien > 0);
 
       const payload = {
         doan_id: doanId,
