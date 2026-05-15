@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
   RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard,
-  ChevronLeft, ChevronRight, Loader2, ScanText, Share2, ClipboardPaste,
+  ChevronLeft, ChevronRight, Loader2, ScanText, Share2, ClipboardPaste, Mail,
 } from "lucide-react";
 import { ocrInvoiceAmount, isAmountMatch } from "@/lib/ocr-invoice";
 import { cn } from "@/lib/utils";
@@ -313,6 +313,17 @@ function DocCell({
             >
               <Eye className="h-3 w-3 mr-1" /> Xem
             </Button>
+            {loaiDoc === "unc" && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6 text-sky-600"
+                title="Gửi mail UNC cho NCC"
+                onClick={() => onUncUploaded?.(row, url!)}
+              >
+                <Mail className="h-3 w-3" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
