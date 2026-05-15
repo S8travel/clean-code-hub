@@ -159,9 +159,13 @@ const docStatusConfig: Record<TrangThaiDoc, { text: string; icon: React.ElementT
 function DocCell({
   row,
   loaiDoc,
+  onUncUploaded,
 }: {
   row: HoaDonUNCRow;
   loaiDoc: "hoa_don" | "unc";
+  /** Callback khi upload UNC OK → page mở email modal. State giữ ở page-level
+   *  để không mất khi list refetch (invalidate) remount DocCell. */
+  onUncUploaded?: (row: HoaDonUNCRow, publicUrl: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadMut = useUploadDNTTDoc();
@@ -176,7 +180,6 @@ function DocCell({
   const Icon = cfg.icon;
 
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [emailRow, setEmailRow] = useState<HoaDonUNCRow | null>(null);
   // OCR result chỉ áp dụng cho hóa đơn — gợi ý số tiền có lệch không.
   const [ocrState, setOcrState] = useState<
     | { status: "idle" }
@@ -218,7 +221,7 @@ function DocCell({
         onSuccess: (publicUrl) => {
           toast({ title: `Đã tải lên ${loaiDoc === "hoa_don" ? "hóa đơn" : "UNC"}` });
           if (loaiDoc === "unc") {
-            setEmailRow({ ...row, unc_url: publicUrl, trang_thai_unc: "da_co" });
+            onUncUploaded?.(row, publicUrl);
           }
           // Chạy OCR sau khi upload xong (background, không block toast).
           runOcr(file);
@@ -401,15 +404,6 @@ function DocCell({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* UNC email modal — chỉ mở sau khi upload UNC thành công */}
-      {emailRow && (
-        <UncEmailModal
-          row={emailRow}
-          open={!!emailRow}
-          onClose={() => setEmailRow(null)}
-        />
-      )}
     </div>
   );
 }
@@ -423,6 +417,9 @@ function HoaDonUNCPageContent() {
   const [trangThaiHD, setTrangThaiHD] = useState<string>("");
   const [trangThaiUNC, setTrangThaiUNC] = useState<string>("");
   const [nguonMap, setNguonMap] = useState<Record<number, string>>({});
+  // Email modal sau khi upload UNC — state ở page-level để không mất khi
+  // list refetch (invalidate ["hoa-don-unc"]) làm DocCell remount.
+  const [uncEmailRow, setUncEmailRow] = useState<HoaDonUNCRow | null>(null);
 
   const markPaidMut = useMarkPaidWithDate();
 
@@ -856,7 +853,13 @@ function HoaDonUNCPageContent() {
                     <DocCell row={row} loaiDoc="hoa_don" />
                   </TableCell>
                   <TableCell>
-                    <DocCell row={row} loaiDoc="unc" />
+                    <DocCell
+                      row={row}
+                      loaiDoc="unc"
+                      onUncUploaded={(r, url) =>
+                        setUncEmailRow({ ...r, unc_url: url, trang_thai_unc: "da_co" })
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               );
@@ -891,6 +894,15 @@ function HoaDonUNCPageContent() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* UNC email modal — page-level, mở sau khi upload UNC thành công */}
+      {uncEmailRow && (
+        <UncEmailModal
+          row={uncEmailRow}
+          open={!!uncEmailRow}
+          onClose={() => setUncEmailRow(null)}
+        />
       )}
     </div>
   );
