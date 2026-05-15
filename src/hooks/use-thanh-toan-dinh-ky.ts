@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow } from "@/hooks/use-dntt";
+import { useAuth } from "@/hooks/use-auth";
 
 export interface DinhKyChiPhiRow {
   id: number;
@@ -111,6 +112,7 @@ export function useDinhKyChiPhiList(filters?: {
 
 export function useCreateBatchDNTT() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: {
       nccId: number;
@@ -133,6 +135,7 @@ export function useCreateBatchDNTT() {
           trang_thai_duyet: "cho_duyet",
           ref_loai: "dinh_ky",
           ref_id: null,
+          tao_boi: user?.user_id ?? null,
         })
         .select("id")
         .single();

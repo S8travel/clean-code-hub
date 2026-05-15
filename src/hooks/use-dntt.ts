@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { proRataInts } from "@/lib/pro-rata";
+import { useAuth } from "@/hooks/use-auth";
 
 export interface DNTTRow {
   id: number;
@@ -51,6 +52,7 @@ export interface DNTTRow {
   ten_ncc?: string;
   ncc_so_tai_khoan?: string;
   ncc_ngan_hang?: string;
+  tao_boi_ho_ten?: string | null;
 }
 
 export type ApprovalLevel = 1 | 2 | 3;
@@ -147,12 +149,27 @@ export function useDNTTList(filters: Filters) {
       const { data, error } = await q;
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
+      const rows = data || [];
+      // Resolve tao_boi (uuid → ho_ten) qua user_roles
+      const taoBoiIds = [...new Set(rows.map((r: any) => r.tao_boi).filter(Boolean))] as string[];
+      const taoBoiMap = new Map<string, string>();
+      if (taoBoiIds.length > 0) {
+        const { data: users } = await externalSupabase
+          .from("user_roles")
+          .select("user_id, ho_ten")
+          .in("user_id", taoBoiIds);
+        (users || []).forEach((u: any) => {
+          if (u.user_id && u.ho_ten) taoBoiMap.set(u.user_id, u.ho_ten);
+        });
+      }
+
+      return rows.map((row: any) => ({
         ...row,
         ten_doan: row.doan?.ten_doan || "",
         ten_ncc: row.nha_cung_cap?.ten || row.ten_nha_cung_cap || "",
         ncc_so_tai_khoan: row.nha_cung_cap?.so_tai_khoan || row.so_tai_khoan || "",
         ncc_ngan_hang: row.nha_cung_cap?.ngan_hang || row.ngan_hang || "",
+        tao_boi_ho_ten: row.tao_boi ? (taoBoiMap.get(row.tao_boi) ?? null) : null,
       })) as DNTTRow[];
     },
   });
@@ -689,6 +706,7 @@ export function useDeleteDNTT() {
  */
 export function useCreateAdjustment() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({
       dnttGoc,
@@ -755,6 +773,7 @@ export function useCreateAdjustment() {
             so_tien: delta,
             trang_thai_duyet: "cho_duyet",
             ghi_chu: `Điều chỉnh bổ sung từ ĐNTT #${dnttGoc.id}. Lý do: ${lyDo}`,
+            tao_boi: user?.user_id ?? null,
           });
         if (error) throw error;
       } else {

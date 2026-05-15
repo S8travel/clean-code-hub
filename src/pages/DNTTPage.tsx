@@ -483,6 +483,7 @@ function DNTTPageContent() {
               <TableHead className="min-w-[180px]">Mô tả</TableHead>
               <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
               <TableHead className="w-[90px]">Ngày cần TT</TableHead>
+              <TableHead className="min-w-[140px]">Đề nghị</TableHead>
               <TableHead className="min-w-[140px]">Kế toán trưởng</TableHead>
               <TableHead className="w-[90px]">Ngày tạo</TableHead>
               <TableHead className="w-[50px]"></TableHead>
@@ -490,9 +491,9 @@ function DNTTPageContent() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
             ) : pageRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const canTruRow = canTruMap[row.id];
@@ -557,6 +558,20 @@ function DNTTPageContent() {
                     {row.ngay_can_thanh_toan
                       ? format(new Date(row.ngay_can_thanh_toan), "dd/MM/yyyy")
                       : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {row.tao_boi_ho_ten || row.tao_luc ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">{row.tao_boi_ho_ten || "—"}</span>
+                        {row.tao_luc && (
+                          <span className="text-muted-foreground">
+                            {format(new Date(row.tao_luc), "HH:mm dd/MM")}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   {/* Cấp 1 (TP ĐH) + cấp 2 (Kế toán TT) tạm ẩn — DB trigger auto-stamp khi INSERT */}
                   {([3] as ApprovalLevel[]).map((lv) => (

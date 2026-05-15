@@ -430,7 +430,7 @@ export function useInsertDNTT() {
       const { allocations, ...dnttPayload } = payload;
       const { data, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .insert(dnttPayload)
+        .insert({ ...dnttPayload, tao_boi: user?.user_id ?? null })
         .select("id")
         .single();
       if (error) throw error;

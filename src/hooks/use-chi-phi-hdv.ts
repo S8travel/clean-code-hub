@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useApproveDNTT, useMarkPaidDNTT, useCancelDNTT } from "@/hooks/use-dntt";
+import { useAuth } from "@/hooks/use-auth";
 
 export interface HDVChiPhiItem {
   id: number;
@@ -201,6 +202,7 @@ export function useChiPhiHDVSection(doanId?: number) {
 
 export function useCreateHDVPayment() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: {
       doanId: number;
@@ -229,6 +231,7 @@ export function useCreateHDVPayment() {
             : (payload.ghiChu ?? null),
           quyet_toan_data: payload.quyetToanData ?? null,
           ngay_can_thanh_toan: payload.ngayCanThanhToan ?? null,
+          tao_boi: user?.user_id ?? null,
         })
         .select("id")
         .single();
