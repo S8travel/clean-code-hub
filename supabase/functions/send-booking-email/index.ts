@@ -80,18 +80,20 @@ serve(async (req) => {
       body: JSON.stringify({
         from: "S8 Travel <booking@email.s8travel.com>",
         to: toList,
-        ...((() => { const ccList = parseEmailList(cc); return ccList.length ? { cc: ccList } : {}; })()),
+        // CC = mail nội bộ S8 (BOOKING_CC) + gmail OP → OP hiện trong luồng,
+        // NCC Reply All là OP + các mail S8 khác đều nhận. Dedupe, loại trùng to.
+        ...((() => {
+          const ccList = [...new Set([...parseEmailList(cc), ...parseEmailList(replyTo)])]
+            .filter((e) => !toList.includes(e));
+          return ccList.length ? { cc: ccList } : {};
+        })()),
         subject,
         html,
         text: (typeof text === "string" && text.trim()) ? text : htmlToText(html),
         // Reply-To = địa chỉ DOMAIN (ImprovMX forward booking@s8travel.com →
         // hộp chung) → tránh FREEMAIL_FORGED_REPLYTO (-2.75đ spam) do
-        // Reply-To gmail + From domain. bcc = gmail OP để OP vẫn nhận bản copy.
+        // Reply-To gmail + From domain. OP đã ở CC nên vẫn trong luồng.
         reply_to: [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"],
-        ...((() => {
-          const rt = parseEmailList(replyTo);
-          return rt.length ? { bcc: rt } : {};
-        })()),
         ...(attachments?.length ? { attachments } : {}),
         ...((messageId || inReplyTo) ? {
           headers: {
