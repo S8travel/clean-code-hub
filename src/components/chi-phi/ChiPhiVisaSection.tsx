@@ -492,8 +492,9 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                       <div className="flex justify-center">
                         <Input
                           type="number"
-                          value={local.so_luong || ""}
-                          onChange={(e) => handleRowChange(row.id, { so_luong: Number(e.target.value) || 0 })}
+                          min={0}
+                          value={local.so_luong ?? ""}
+                          onChange={(e) => handleRowChange(row.id, { so_luong: e.target.value === "" ? 0 : Number(e.target.value) })}
                           onBlur={() => handleRowSave(row)}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
                           className="h-6 text-xs px-1.5 py-0 text-center w-[44px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -757,10 +758,11 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                           />
                           <Input
                             type="number"
+                            min={0}
                             placeholder="SL"
                             className="h-6 text-xs w-14 text-center"
-                            value={extraFields.so_luong || ""}
-                            onChange={(e) => setExtraFields((p) => ({ ...p, so_luong: Number(e.target.value) || 0 }))}
+                            value={extraFields.so_luong ?? ""}
+                            onChange={(e) => setExtraFields((p) => ({ ...p, so_luong: e.target.value === "" ? 0 : Number(e.target.value) }))}
                           />
                           <span className="text-[10px] text-muted-foreground shrink-0">×</span>
                           <DecimalInput

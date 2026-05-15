@@ -85,7 +85,7 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, d
       <Input
         type="text"
         inputMode="numeric"
-        value={value ? value.toLocaleString("vi-VN") : ""}
+        value={value != null ? value.toLocaleString("vi-VN") : ""}
         onChange={(e) => {
           const digits = e.target.value.replace(/\D/g, "");
           onChange(digits ? Number(digits) : 0);
@@ -99,8 +99,9 @@ function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, d
   return (
     <Input
       type="number"
-      value={value || ""}
-      onChange={e => onChange(Number(e.target.value) || 0)}
+      min={0}
+      value={value ?? ""}
+      onChange={e => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
       onBlur={onBlur}
       onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
       className={cn("h-6 text-xs px-1.5 py-0 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", width)}
