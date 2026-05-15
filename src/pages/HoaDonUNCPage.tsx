@@ -36,7 +36,10 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 // Danh sách nguồn thanh toán (tài khoản công ty). Thêm option ở đây để xuất hiện trong dropdown.
 const PAYMENT_SOURCES: string[] = [
-  "Vietin-111600925668",
+  "MB-6612388123 (Cá nhân)",
+  "TECH-1231236868 (Công ty)",
+  "VTB-111600925668 (Công ty)",
+  "TCB-1902 0186 4550 12 (Cá nhân)",
 ];
 
 const loaiLabel: Record<string, { text: string; color: string }> = {
