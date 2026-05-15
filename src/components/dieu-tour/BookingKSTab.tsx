@@ -24,6 +24,7 @@ import {
   type BookingKSRow,
 } from "@/hooks/use-booking-ks";
 import { useBookingTau } from "@/hooks/use-booking-tau";
+import { useHdvByDoanId, formatHdvForEmail } from "@/hooks/use-hdv";
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
@@ -84,6 +85,7 @@ interface Props {
 export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props) {
   const { data: bookings, isLoading } = useBookingKS(doanId);
   const { data: tauBookings = [] } = useBookingTau(doanId);
+  const { data: doanHdv } = useHdvByDoanId(doanId);
   const updateMut = useUpdateBookingKS();
   const deleteMut = useDeleteBookingKS();
   const { data: currentUserName = "" } = useCurrentUserName();
@@ -387,6 +389,7 @@ function BookingKSCard({
         { label: "Check-in", value: checkInStr },
         { label: "Check-out", value: `${checkOutStr}${soDem ? ` (${soDem} đêm)` : ""}` },
         { label: "Số phòng", value: preferredRoomText || "—" },
+        { label: "HDV", value: formatHdvForEmail(doanHdv) },
       ]);
       return buildUpdateEmailHtml({
         greeting: `Kính gửi ${row.khach_san_ten || "Quý khách sạn"},`,
@@ -416,6 +419,7 @@ function BookingKSCard({
         </tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Mã đoàn</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan}</strong></td></tr>
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Khách sạn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${row.khach_san_ten}</td></tr>
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">HDV</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${formatHdvForEmail(doanHdv)}</td></tr>
         ${roomRowsHtml()}
       </table>
       ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}

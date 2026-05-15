@@ -21,6 +21,7 @@ import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import { useHdvByDoanId, formatHdvForEmail } from "@/hooks/use-hdv";
 
 const STATUS_CFG = {
   chua_dat:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -72,6 +73,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const sendEmailMut = useSendBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
+  const { data: doanHdv } = useHdvByDoanId(row.doan_id);
 
   const [tenNCC, setTenNCC] = useState(row.ten_nha_cung_cap || "");
   const [email, setEmail] = useState(row.email_nha_cung_cap || "");
@@ -153,6 +155,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         { label: "Nhà cung cấp", value: nccName },
         { label: "Tổng số dịch vụ", value: `${dvSorted.length} mục` },
         { label: "Phạm vi ngày", value: dateRange },
+        { label: "HDV", value: formatHdvForEmail(doanHdv) },
       ]);
       return buildUpdateEmailHtml({
         greeting: `Kính gửi ${nccName},`,
@@ -188,6 +191,8 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     <div style="padding:28px 32px">
       <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${nccName}</strong>,</p>
       <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt dịch vụ cho đoàn <strong>${tenDoan}</strong>:</p>
+
+      <p style="margin:0 0 12px;font-size:14px;color:#475569"><strong>HDV:</strong> ${formatHdvForEmail(doanHdv)}</p>
 
       <table style="border-collapse:collapse;width:100%;font-size:14px">
         <thead>

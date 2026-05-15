@@ -19,6 +19,7 @@ import {
 } from "@/hooks/use-booking-nh";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import { useHdvByDoanId, formatHdvForEmail } from "@/hooks/use-hdv";
 import { externalSupabase } from "@/lib/supabase-external";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
@@ -92,6 +93,7 @@ export default function MealCard({
   const sendEmailMut = useSendNHBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
+  const { data: doanHdv } = useHdvByDoanId(doanId);
   const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -311,6 +313,7 @@ export default function MealCard({
         { label: "Bữa ăn", value: buaLabel },
         { label: "Số khách", value: soKhach != null ? `${soKhach} khách` : "—" },
         { label: "Set menu", value: selectedMenu ? `${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}` : "—" },
+        { label: "HDV", value: formatHdvForEmail(doanHdv) },
       ]);
       return buildUpdateEmailHtml({
         greeting: `Kính gửi ${nhaHangTen || "Quý nhà hàng"},`,
@@ -348,6 +351,7 @@ export default function MealCard({
         ${soKhachEm2 ? `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px 6px 24px;color:#64748b;font-size:13px">TE dưới 6 tuổi</td><td style="border:1px solid #e2e8f0;padding:6px 12px;color:#64748b;font-size:13px">${soKhachEm2} khách</td></tr>` : ""}
         ${soNoidBo ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Nội bộ</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soNoidBo} suất (${soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"})</td></tr>` : ""}
         ${selectedMenu ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Set menu</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}</td></tr>` : ""}
+        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">HDV</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${formatHdvForEmail(doanHdv)}</td></tr>
       </table>
       ${monList.length > 0 ? `
       <p style="font-weight:600;margin:0 0 8px">Danh sách món:</p>

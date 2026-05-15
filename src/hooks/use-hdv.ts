@@ -18,6 +18,39 @@ export interface HDVRow {
   bac: number;  // 1–5, bậc ưu tiên xếp (1 cao nhất)
 }
 
+/** Lấy HDV (ten + so_dien_thoai) đã gắn cho 1 đoàn. Trả null nếu doan chưa có HDV. */
+export function useHdvByDoanId(doanId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["hdv-by-doan", doanId],
+    enabled: !!doanId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: doan, error: e1 } = await externalSupabase
+        .from("doan")
+        .select("huong_dan_vien_id")
+        .eq("id", doanId!)
+        .maybeSingle();
+      if (e1) throw e1;
+      const hdvId = doan?.huong_dan_vien_id;
+      if (!hdvId) return null;
+      const { data, error } = await externalSupabase
+        .from("huong_dan_vien")
+        .select("id, ten, so_dien_thoai")
+        .eq("id", hdvId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: number; ten: string; so_dien_thoai: string | null } | null;
+    },
+  });
+}
+
+/** Format HDV cho email: "Tên — SĐT" | "Tên" | "Bổ sung sau". */
+export function formatHdvForEmail(hdv: { ten: string; so_dien_thoai: string | null } | null | undefined): string {
+  if (!hdv?.ten) return "Bổ sung sau";
+  const sdt = hdv.so_dien_thoai?.trim();
+  return sdt ? `${hdv.ten} — ${sdt}` : hdv.ten;
+}
+
 export function useHDVList() {
   return useQuery({
     queryKey: ["hdv-list"],
