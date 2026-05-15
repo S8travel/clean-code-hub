@@ -428,9 +428,12 @@ export function useInsertDNTT() {
   return useMutation({
     mutationFn: async (payload: Record<string, any> & { doan_id: number; allocations?: AllocationRow[] }) => {
       const { allocations, ...dnttPayload } = payload;
+      // Lấy user_id trực tiếp từ auth (tránh race với useAuth state)
+      const { data: authData } = await externalSupabase.auth.getUser();
+      const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
       const { data, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .insert({ ...dnttPayload, tao_boi: user?.user_id ?? null })
+        .insert({ ...dnttPayload, tao_boi: taoBoi })
         .select("id")
         .single();
       if (error) throw error;

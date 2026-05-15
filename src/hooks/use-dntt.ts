@@ -760,6 +760,8 @@ export function useCreateAdjustment() {
 
       if (delta > 0) {
         // Thiếu tiền → tạo ĐNTT bổ sung chờ duyệt
+        const { data: authData } = await externalSupabase.auth.getUser();
+        const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
         const { error } = await externalSupabase
           .from("de_nghi_thanh_toan")
           .insert({
@@ -773,7 +775,7 @@ export function useCreateAdjustment() {
             so_tien: delta,
             trang_thai_duyet: "cho_duyet",
             ghi_chu: `Điều chỉnh bổ sung từ ĐNTT #${dnttGoc.id}. Lý do: ${lyDo}`,
-            tao_boi: user?.user_id ?? null,
+            tao_boi: taoBoi,
           });
         if (error) throw error;
       } else {

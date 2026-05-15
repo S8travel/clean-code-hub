@@ -215,6 +215,8 @@ export function useCreateHDVPayment() {
       quyetToanData?: QuyetToanData | null;
       ngayCanThanhToan?: string | null;
     }) => {
+      const { data: authData } = await externalSupabase.auth.getUser();
+      const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
       const { data, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .insert({
@@ -231,7 +233,7 @@ export function useCreateHDVPayment() {
             : (payload.ghiChu ?? null),
           quyet_toan_data: payload.quyetToanData ?? null,
           ngay_can_thanh_toan: payload.ngayCanThanhToan ?? null,
-          tao_boi: user?.user_id ?? null,
+          tao_boi: taoBoi,
         })
         .select("id")
         .single();

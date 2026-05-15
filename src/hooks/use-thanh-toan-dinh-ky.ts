@@ -123,6 +123,8 @@ export function useCreateBatchDNTT() {
       laCoc?: boolean;
     }) => {
       // Tạo DNTT gộp — không thuộc 1 đoàn cụ thể → doan_id = null
+      const { data: authData } = await externalSupabase.auth.getUser();
+      const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
       const { data: dntt, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .insert({
@@ -135,7 +137,7 @@ export function useCreateBatchDNTT() {
           trang_thai_duyet: "cho_duyet",
           ref_loai: "dinh_ky",
           ref_id: null,
-          tao_boi: user?.user_id ?? null,
+          tao_boi: taoBoi,
         })
         .select("id")
         .single();
