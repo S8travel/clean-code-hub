@@ -69,11 +69,11 @@ serve(async (req) => {
         subject,
         html,
         text: (typeof text === "string" && text.trim()) ? text : htmlToText(html),
-        // Reply-To = địa chỉ DOMAIN (forward về hộp chung) — tránh
-        // FREEMAIL_FORGED_REPLYTO (-2.5đ spam) do Reply-To gmail + From domain.
-        // bcc giữ = replyTo (gmail OP) để OP vẫn nhận bản copy mail đã gửi.
-        reply_to: [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"],
-        ...(replyTo ? { bcc: [replyTo] } : {}),
+        // TODO: chưa có forwarder domain → tạm dùng Reply-To = gmail OP như cũ
+        // (chịu -2.75đ spam FREEMAIL_FORGED_REPLYTO). Khi tạo được
+        // booking@s8travel.com forward về hộp chung → đổi reply_to sang
+        // [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"], bcc giữ replyTo.
+        ...(replyTo ? { reply_to: [replyTo], bcc: [replyTo] } : {}),
         ...(attachments?.length ? { attachments } : {}),
         ...((messageId || inReplyTo) ? {
           headers: {
