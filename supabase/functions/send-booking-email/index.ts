@@ -38,6 +38,16 @@ function parseEmailList(input: unknown): string[] {
     .filter((e) => e.length > 0 && e.includes("@"));
 }
 
+// Reply-To = Gmail OP gửi mail (frontend truyền qua `replyTo`) → NCC bấm Reply
+// về THẲNG hộp OP đã gửi. Không cần forwarding/alias/DNS.
+// Đánh đổi: Gmail ở Reply-To + From là domain → SpamAssassin
+// FREEMAIL_FORGED_REPLYTO (-2.5đ, mail-tester ~7.3). Chấp nhận tạm — auth
+// (SPF/DKIM/DMARC qua Resend) vẫn chuẩn nên thực tế phần lớn vẫn vào inbox.
+// Thiếu replyTo → fallback booking@s8travel.com.
+function opReplyTo(raw: unknown): string {
+  return parseEmailList(raw)[0] || Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -90,10 +100,7 @@ serve(async (req) => {
         subject,
         html,
         text: (typeof text === "string" && text.trim()) ? text : htmlToText(html),
-        // Reply-To = địa chỉ DOMAIN (ImprovMX forward booking@s8travel.com →
-        // hộp chung) → tránh FREEMAIL_FORGED_REPLYTO (-2.75đ spam) do
-        // Reply-To gmail + From domain. OP đã ở CC nên vẫn trong luồng.
-        reply_to: [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"],
+        reply_to: [opReplyTo(replyTo)],
         ...(attachments?.length ? { attachments } : {}),
         ...((messageId || inReplyTo) ? {
           headers: {
