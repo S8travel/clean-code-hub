@@ -190,6 +190,7 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
       const cd = canhDiemMap.get(item.canh_diem_id);
       if (cd) {
         ctLines.push(`• ${cd.ten}`);
+        if (cd.ghi_chu) ctLines.push(`  ${cd.ghi_chu}`);
         if (item.ghi_chu) ctLines.push(`  ${item.ghi_chu}`);
       }
     }
@@ -423,6 +424,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
       const cd = canhDiemMap.get(item.canh_diem_id);
       if (cd) {
         ctParas.push(p(`• ${cd.ten}`));
+        if (cd.ghi_chu) ctParas.push(p(`  ${cd.ghi_chu}`, { color: "666666", size: FS_SM }));
         if (item.ghi_chu) ctParas.push(p(`  ${item.ghi_chu}`, { color: "666666", size: FS_SM }));
       }
     }
