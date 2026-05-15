@@ -85,7 +85,6 @@ interface Props {
 export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props) {
   const { data: bookings, isLoading } = useBookingKS(doanId);
   const { data: tauBookings = [] } = useBookingTau(doanId);
-  const { data: doanHdv } = useHdvByDoanId(doanId);
   const updateMut = useUpdateBookingKS();
   const deleteMut = useDeleteBookingKS();
   const { data: currentUserName = "" } = useCurrentUserName();
@@ -294,6 +293,7 @@ function BookingKSCard({
   const sendMut = useSendKSBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
+  const { data: doanHdv } = useHdvByDoanId(doanId);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
