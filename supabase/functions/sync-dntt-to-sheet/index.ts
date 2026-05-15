@@ -191,9 +191,9 @@ serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const GCP_SA_JSON = Deno.env.get("GCP_SA_JSON");
-    const SHEET_ID = Deno.env.get("SHEET_ID");
-    const SHEET_TAB = Deno.env.get("SHEET_TAB") || "Sheet1";
+    const GCP_SA_JSON = Deno.env.get("GCP_SA_JSON")?.trim();
+    const SHEET_ID = Deno.env.get("SHEET_ID")?.trim();
+    const SHEET_TAB = (Deno.env.get("SHEET_TAB")?.trim()) || "Sheet1";
 
     if (!GCP_SA_JSON || !SHEET_ID) {
       return new Response(
