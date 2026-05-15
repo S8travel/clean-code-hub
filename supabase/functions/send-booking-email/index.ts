@@ -84,13 +84,13 @@ serve(async (req) => {
         subject,
         html,
         text: (typeof text === "string" && text.trim()) ? text : htmlToText(html),
-        // TODO: chưa có forwarder domain → tạm dùng Reply-To = gmail OP như cũ
-        // (chịu -2.75đ spam FREEMAIL_FORGED_REPLYTO). Khi tạo được
-        // booking@s8travel.com forward về hộp chung → đổi reply_to sang
-        // [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"], bcc giữ replyTo.
+        // Reply-To = địa chỉ DOMAIN (ImprovMX forward booking@s8travel.com →
+        // hộp chung) → tránh FREEMAIL_FORGED_REPLYTO (-2.75đ spam) do
+        // Reply-To gmail + From domain. bcc = gmail OP để OP vẫn nhận bản copy.
+        reply_to: [Deno.env.get("REPLY_TO_ADDRESS") || "booking@s8travel.com"],
         ...((() => {
           const rt = parseEmailList(replyTo);
-          return rt.length ? { reply_to: rt, bcc: rt } : {};
+          return rt.length ? { bcc: rt } : {};
         })()),
         ...(attachments?.length ? { attachments } : {}),
         ...((messageId || inReplyTo) ? {
