@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
   RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard,
-  ChevronLeft, ChevronRight, Loader2, ScanText, Share2,
+  ChevronLeft, ChevronRight, Loader2, ScanText, Share2, ClipboardPaste,
 } from "lucide-react";
 import { ocrInvoiceAmount, isAmountMatch } from "@/lib/ocr-invoice";
 import { cn } from "@/lib/utils";
@@ -211,9 +211,7 @@ function DocCell({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const doUpload = (file: File) => {
     uploadMut.mutate(
       { id: row.id, file, loaiDoc },
       {
@@ -228,7 +226,37 @@ function DocCell({
         onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể tải lên"), variant: "destructive" }),
       },
     );
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    doUpload(file);
     e.target.value = "";
+  };
+
+  // Đọc ảnh từ clipboard (Ctrl+C ảnh / screenshot) → upload trực tiếp.
+  // navigator.clipboard.read() cần HTTPS + permission (lần đầu trình duyệt hỏi).
+  const handlePasteFromClipboard = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imgType = item.types.find((t) => t.startsWith("image/"));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          const ext = imgType.split("/")[1] || "png";
+          const file = new File([blob], `paste-${Date.now()}.${ext}`, { type: imgType });
+          doUpload(file);
+          return;
+        }
+      }
+      toast({ title: "Clipboard không có ảnh — hãy chụp/copy ảnh trước", variant: "destructive" });
+    } catch {
+      toast({
+        title: "Không đọc được clipboard. Cấp quyền clipboard cho trang rồi thử lại.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteConfirm = () => {
@@ -310,6 +338,16 @@ function DocCell({
             >
               <Upload className="h-3 w-3 mr-1" />
               {isPending ? "Đang tải..." : "Tải lên"}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-6 w-6"
+              title="Paste ảnh từ clipboard (Ctrl+C ảnh rồi bấm)"
+              onClick={handlePasteFromClipboard}
+              disabled={isPending}
+            >
+              <ClipboardPaste className="h-3 w-3" />
             </Button>
           </>
         ) : null}
