@@ -84,6 +84,9 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
   return (
     <div className="space-y-0">
       <h3 className="text-sm font-semibold mb-2">Lịch trình ngày</h3>
+      {/* Mobile: vuốt ngang thay vì bóp cột; desktop & print giữ nguyên */}
+      <div className="overflow-x-auto print:overflow-visible">
+      <div className="min-w-[820px] print:min-w-0">
       {/* Header */}
       <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border border-border rounded-t-lg bg-muted/50 text-xs font-medium text-muted-foreground">
         <div className="p-2 border-r border-border">Ngày</div>
@@ -121,6 +124,8 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
       >
         <Plus className="inline h-4 w-4 mr-1" /> Thêm ngày
       </button>
+      </div>
+      </div>
     </div>
   );
 }

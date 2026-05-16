@@ -56,7 +56,7 @@ export default function DoanInfoSection({
         <Badge variant="outline" className="text-xs border-blue-400 text-blue-600 bg-blue-50">🔗 Từ bảng doan · Chỉ đọc</Badge>
         <Badge variant="outline" className="text-xs border-orange-400 text-orange-600 bg-orange-50">✏️ Tự điền</Badge>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-border">
+      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
         {/* Left: readonly + chuyến bay inline */}
         <div className="p-4 space-y-2 text-sm">
           <Row label="Code đoàn">
