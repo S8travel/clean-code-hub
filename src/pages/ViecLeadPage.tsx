@@ -52,7 +52,7 @@ export default function ViecLeadPage() {
       <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b bg-background">
         <div className="flex items-center gap-2">
           <Target className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold">Việc hôm nay</h1>
+          <h1 className="text-xl font-bold">Lead cần xử lý</h1>
           {!isLoading && (
             <span className="text-sm text-muted-foreground ml-1">({rows.length})</span>
           )}
