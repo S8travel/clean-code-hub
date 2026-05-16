@@ -63,7 +63,7 @@ function p(
   return new Paragraph({
     alignment: (opts.alignment ?? AlignmentType.LEFT) as any,
     children: [
-      new TextRun({
+      new TextRun({ noProof: true,
         text,
         font: "Arial",
         size: opts.size ?? 18,
@@ -117,8 +117,8 @@ export async function exportMenuOverviewWord(data: MenuWordData) {
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 80 },
     children: [
-      new TextRun({ text: "MENU ĐOÀN: ", font: "Arial", size: 28, bold: true }),
-      new TextRun({ text: tenDoan, font: "Arial", size: 28, bold: true, color: "1A56DB" }),
+      new TextRun({ noProof: true, text: "MENU ĐOÀN: ", font: "Arial", size: 28, bold: true }),
+      new TextRun({ noProof: true, text: tenDoan, font: "Arial", size: 28, bold: true, color: "1A56DB" }),
     ],
   });
 
@@ -126,9 +126,9 @@ export async function exportMenuOverviewWord(data: MenuWordData) {
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 200 },
     children: [
-      new TextRun({ text: `HDV: ${hdvTen || "—"}`, font: "Arial", size: 20 }),
-      new TextRun({ text: "     |     ", font: "Arial", size: 20, color: "888888" }),
-      new TextRun({ text: `Số khách: ${soKhach}`, font: "Arial", size: 20 }),
+      new TextRun({ noProof: true, text: `HDV: ${hdvTen || "—"}`, font: "Arial", size: 20 }),
+      new TextRun({ noProof: true, text: "     |     ", font: "Arial", size: 20, color: "888888" }),
+      new TextRun({ noProof: true, text: `Số khách: ${soKhach}`, font: "Arial", size: 20 }),
     ],
   });
 
@@ -154,7 +154,7 @@ export async function exportMenuOverviewWord(data: MenuWordData) {
     const ngayLines: Paragraph[] = [
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: `Ngày ${day.ngay_so}`, font: "Arial", size: 16, bold: true })],
+        children: [new TextRun({ noProof: true, text: `Ngày ${day.ngay_so}`, font: "Arial", size: 16, bold: true })],
       }),
     ];
     if (day.ngay_date) {
@@ -162,11 +162,11 @@ export async function exportMenuOverviewWord(data: MenuWordData) {
         const d = new Date(day.ngay_date + "T00:00:00");
         ngayLines.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: format(d, "dd/MM", { locale: vi }), font: "Arial", size: 14, color: "666666" })],
+          children: [new TextRun({ noProof: true, text: format(d, "dd/MM", { locale: vi }), font: "Arial", size: 14, color: "666666" })],
         }));
         ngayLines.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: `(${format(d, "EEE", { locale: vi })})`, font: "Arial", size: 14, color: "666666" })],
+          children: [new TextRun({ noProof: true, text: `(${format(d, "EEE", { locale: vi })})`, font: "Arial", size: 14, color: "666666" })],
         }));
       } catch { /* ignore */ }
     }
@@ -178,14 +178,14 @@ export async function exportMenuOverviewWord(data: MenuWordData) {
       const children: Paragraph[] = [
         new Paragraph({
           spacing: { after: 60 },
-          children: [new TextRun({ text: meal.ten_nh, font: "Arial", size: 17, bold: true, color: "1A3A6A" })],
+          children: [new TextRun({ noProof: true, text: meal.ten_nh, font: "Arial", size: 17, bold: true, color: "1A3A6A" })],
         }),
         ...meal.mon_list.map((mon, i) =>
           new Paragraph({
             spacing: { after: 20 },
             children: [
-              new TextRun({ text: `${i + 1}. `, font: "Arial", size: 16, color: "666666" }),
-              new TextRun({ text: mon, font: "Arial", size: 16 }),
+              new TextRun({ noProof: true, text: `${i + 1}. `, font: "Arial", size: 16, color: "666666" }),
+              new TextRun({ noProof: true, text: mon, font: "Arial", size: 16 }),
             ],
           })
         ),
@@ -248,7 +248,7 @@ function buildNHHeader(meal: MenuWordMeal): Paragraph[] {
   const paras: Paragraph[] = [];
   paras.push(new Paragraph({
     spacing: { after: 30 },
-    children: [new TextRun({ text: meal.ten_nh, font: "Arial", size: 20, bold: true, color: RED })],
+    children: [new TextRun({ noProof: true, text: meal.ten_nh, font: "Arial", size: 20, bold: true, color: RED })],
   }));
   return paras;
 }
@@ -260,8 +260,8 @@ export async function exportMenuXihongWord(data: MenuWordData) {
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 80 },
     children: [
-      new TextRun({ text: "THỰC ĐƠN ĐOÀN: ", font: "Arial", size: 28, bold: true }),
-      new TextRun({ text: tenDoan, font: "Arial", size: 28, bold: true, color: "1A56DB" }),
+      new TextRun({ noProof: true, text: "THỰC ĐƠN ĐOÀN: ", font: "Arial", size: 28, bold: true }),
+      new TextRun({ noProof: true, text: tenDoan, font: "Arial", size: 28, bold: true, color: "1A56DB" }),
     ],
   });
 
@@ -269,9 +269,9 @@ export async function exportMenuXihongWord(data: MenuWordData) {
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 160 },
     children: [
-      new TextRun({ text: `HDV: ${hdvTen || "—"}`, font: "Arial", size: 20 }),
-      new TextRun({ text: "     |     ", font: "Arial", size: 20, color: "888888" }),
-      new TextRun({ text: `Số khách: ${soKhach}`, font: "Arial", size: 20 }),
+      new TextRun({ noProof: true, text: `HDV: ${hdvTen || "—"}`, font: "Arial", size: 20 }),
+      new TextRun({ noProof: true, text: "     |     ", font: "Arial", size: 20, color: "888888" }),
+      new TextRun({ noProof: true, text: `Số khách: ${soKhach}`, font: "Arial", size: 20 }),
     ],
   });
 
@@ -315,7 +315,7 @@ export async function exportMenuXihongWord(data: MenuWordData) {
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { after: 30 },
-        children: [new TextRun({ text: `Ngày ${day.ngay_so}`, font: "Arial", size: 17, bold: true })],
+        children: [new TextRun({ noProof: true, text: `Ngày ${day.ngay_so}`, font: "Arial", size: 17, bold: true })],
       }),
     ];
     if (day.ngay_date) {
@@ -323,7 +323,7 @@ export async function exportMenuXihongWord(data: MenuWordData) {
         const d = new Date(day.ngay_date + "T00:00:00");
         ngayParas.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({
+          children: [new TextRun({ noProof: true,
             text: format(d, "dd/MM (EEE)", { locale: vi }),
             font: "Arial", size: 15, color: "555555",
           })],
@@ -365,8 +365,8 @@ export async function exportMenuXihongWord(data: MenuWordData) {
           ? new Paragraph({
               spacing: { after: 0 },
               children: [
-                new TextRun({ text: `${num}. `, font: "Arial", size: 16, color: "777777" }),
-                new TextRun({ text: vn, font: "Arial", size: 16 }),
+                new TextRun({ noProof: true, text: `${num}. `, font: "Arial", size: 16, color: "777777" }),
+                new TextRun({ noProof: true, text: vn, font: "Arial", size: 16 }),
               ],
             })
           : p("", { size: 14 });
@@ -375,7 +375,7 @@ export async function exportMenuXihongWord(data: MenuWordData) {
         zh
           ? new Paragraph({
               spacing: { after: 0 },
-              children: [new TextRun({ text: zh, font: "Arial", size: 16, color: "333333" })],
+              children: [new TextRun({ noProof: true, text: zh, font: "Arial", size: 16, color: "333333" })],
             })
           : p("", { size: 14 });
 

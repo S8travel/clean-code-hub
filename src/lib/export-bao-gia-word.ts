@@ -84,7 +84,7 @@ function p(
   return new Paragraph({
     alignment: opts.align ?? AlignmentType.LEFT,
     children: [
-      new TextRun({
+      new TextRun({ noProof: true,
         text,
         bold:    opts.bold,
         size:    opts.size ?? 20,
@@ -103,7 +103,7 @@ const spacer = () => new Paragraph({ spacing: { before: 160, after: 0 }, childre
 const sectionLabel = (text: string) =>
   new Paragraph({
     spacing: { before: 180, after: 80 },
-    children: [new TextRun({ text, bold: true, size: 22, font: "Times New Roman", color: "185FA5" })],
+    children: [new TextRun({ noProof: true, text, bold: true, size: 22, font: "Times New Roman", color: "185FA5" })],
   });
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -184,14 +184,14 @@ function buildManualDoc(
   const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 200, after: 100 },
-    children: [new TextRun({ text: "BẢNG BÁO GIÁ TOUR", bold: true, size: 32, font: "Times New Roman" })],
+    children: [new TextRun({ noProof: true, text: "BẢNG BÁO GIÁ TOUR", bold: true, size: 32, font: "Times New Roman" })],
   });
   const subTitlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 200 },
     children: [
-      new TextRun({ text: ketQua.ten_chuong_trinh, bold: true, size: 24, color: "185FA5", font: "Times New Roman" }),
-      new TextRun({ text: `  •  ${ketQua.so_ngay} ngày`, size: 20, color: "555555", font: "Times New Roman" }),
+      new TextRun({ noProof: true, text: ketQua.ten_chuong_trinh, bold: true, size: 24, color: "185FA5", font: "Times New Roman" }),
+      new TextRun({ noProof: true, text: `  •  ${ketQua.so_ngay} ngày`, size: 20, color: "555555", font: "Times New Roman" }),
     ],
   });
 
@@ -202,8 +202,8 @@ function buildManualDoc(
         [
           new Paragraph({
             children: [
-              new TextRun({ text: "S8 Travel ", bold: true, size: 22, color: "C00000", font: "Times New Roman" }),
-              new TextRun({ text: "報價：", bold: true, size: 22, color: "C00000", font: "Times New Roman" }),
+              new TextRun({ noProof: true, text: "S8 Travel ", bold: true, size: 22, color: "C00000", font: "Times New Roman" }),
+              new TextRun({ noProof: true, text: "報價：", bold: true, size: 22, color: "C00000", font: "Times New Roman" }),
             ],
           }),
         ],
@@ -469,15 +469,15 @@ function buildAutoDoc(
   const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 200, after: 100 },
-    children: [new TextRun({ text: "BẢNG BÁO GIÁ TOUR", bold: true, size: 32, font: "Times New Roman" })],
+    children: [new TextRun({ noProof: true, text: "BẢNG BÁO GIÁ TOUR", bold: true, size: 32, font: "Times New Roman" })],
   });
 
   const subTitlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 200 },
     children: [
-      new TextRun({ text: ketQua.ten_chuong_trinh, bold: true, size: 24, color: "185FA5", font: "Times New Roman" }),
-      new TextRun({ text: `  •  ${ketQua.so_ngay} ngày`, size: 20, color: "555555", font: "Times New Roman" }),
+      new TextRun({ noProof: true, text: ketQua.ten_chuong_trinh, bold: true, size: 24, color: "185FA5", font: "Times New Roman" }),
+      new TextRun({ noProof: true, text: `  •  ${ketQua.so_ngay} ngày`, size: 20, color: "555555", font: "Times New Roman" }),
     ],
   });
 

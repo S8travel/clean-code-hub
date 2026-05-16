@@ -70,7 +70,7 @@ function p(
   return new Paragraph({
     alignment: opts.alignment ?? AlignmentType.CENTER,
     children: [
-      new TextRun({
+      new TextRun({ noProof: true,
         text,
         font: "Arial",
         size: opts.size ?? 16,
@@ -147,19 +147,19 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 200, after: 80 },
-    children: [new TextRun({ text: "GIẤY ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })],
+    children: [new TextRun({ noProof: true, text: "GIẤY ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })],
   });
 
   // ── 3. Kính gửi + Lý do ──────────────────────────────────────────────────
   const kinhGuiPara = new Paragraph({
     alignment: AlignmentType.LEFT,
     spacing: { before: 60, after: 40 },
-    children: [new TextRun({ text: "Kính gửi: Giám đốc công ty TNHH du lịch S8 Travel", font: "Arial", size: 20, bold: true })],
+    children: [new TextRun({ noProof: true, text: "Kính gửi: Giám đốc công ty TNHH du lịch S8 Travel", font: "Arial", size: 20, bold: true })],
   });
   const lyDoPara = new Paragraph({
     alignment: AlignmentType.LEFT,
     spacing: { before: 40, after: 120 },
-    children: [new TextRun({ text: "Lý do thanh toán: Thanh toán tiền dịch vụ", font: "Arial", size: 20 })],
+    children: [new TextRun({ noProof: true, text: "Lý do thanh toán: Thanh toán tiền dịch vụ", font: "Arial", size: 20 })],
   });
 
   // ── 4. Data table ─────────────────────────────────────────────────────────

@@ -73,7 +73,7 @@ function p(
   return new Paragraph({
     alignment: opts.alignment ?? AlignmentType.CENTER,
     children: [
-      new TextRun({
+      new TextRun({ noProof: true,
         text,
         font: "Arial",
         size: opts.size ?? 24,
@@ -191,7 +191,7 @@ export async function exportBookingWord(
         rowAChildren.push(cell(
           [new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: date ? formatDateMD(date) : "", font: "Arial", size: 24 })],
+            children: [new TextRun({ noProof: true, text: date ? formatDateMD(date) : "", font: "Arial", size: 24 })],
           })],
           { width: COL_W[1], rowSpan: groupRowCount }
         ));
@@ -266,18 +266,18 @@ export async function exportBookingWord(
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 100 },
-          children: [new TextRun({ text: "S8 TRAVEL LTD.  雙發旅遊", font: "Arial", size: 28, bold: true })],
+          children: [new TextRun({ noProof: true, text: "S8 TRAVEL LTD.  雙發旅遊", font: "Arial", size: 28, bold: true })],
         }),
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 200 },
-          children: [new TextRun({ text: "訂房確認單", font: "Arial", size: 40, bold: true })],
+          children: [new TextRun({ noProof: true, text: "訂房確認單", font: "Arial", size: 40, bold: true })],
         }),
         table,
         new Paragraph({
           alignment: AlignmentType.LEFT,
           spacing: { before: 200 },
-          children: [new TextRun({
+          children: [new TextRun({ noProof: true,
             text: "飯店一經FINAL（包含給名單及正確房數）後取消，請注意各飯店的不同產生不同取消費用，屆時請見諒！！",
             font: "Arial",
             size: 20,

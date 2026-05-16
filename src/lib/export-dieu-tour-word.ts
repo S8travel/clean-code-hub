@@ -92,6 +92,7 @@ function p(
         color: opts.color ?? "000000",
         italics: opts.italics,
         font: "Times New Roman",
+        noProof: true, // tắt soát chính tả Word (text tiếng Việt khỏi gạch chân đỏ)
       }),
     ],
   });
@@ -113,6 +114,7 @@ function pRuns(
           size: r.size ?? FS,
           italics: r.italics,
           font: "Times New Roman",
+          noProof: true, // tắt soát chính tả Word
         })
     ),
   });

@@ -61,7 +61,7 @@ function p(
   return new Paragraph({
     alignment: opts.alignment ?? AlignmentType.CENTER,
     children: [
-      new TextRun({
+      new TextRun({ noProof: true,
         text,
         font: "Arial",
         size: opts.size ?? 16,
@@ -241,7 +241,7 @@ function buildGhiChuPara(items: EdgeFunctionData[]): Paragraph | null {
   return new Paragraph({
     alignment: AlignmentType.LEFT,
     spacing: { before: 200, after: 80 },
-    children: [new TextRun({ text: `Ghi chú: ${lines.join(" | ")}`, font: "Arial", size: 18, italics: true })],
+    children: [new TextRun({ noProof: true, text: `Ghi chú: ${lines.join(" | ")}`, font: "Arial", size: 18, italics: true })],
   });
 }
 
@@ -333,9 +333,9 @@ export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
 
   const doc = buildDoc(
     buildHeaderTable(),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
-    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
-    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ text: lyDoText, font: "Arial", size: 20 })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ noProof: true, text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ noProof: true, text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ noProof: true, text: lyDoText, font: "Arial", size: 20 })] }),
     buildKSTable(data),
     buildGhiChuPara([data]),
     buildSignatureTable(nguoiDeNghi),
@@ -354,9 +354,9 @@ export async function exportDNTTKSBatchWordFromData(
 
   const doc = buildDoc(
     buildHeaderTable(),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
-    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
-    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ text: items[0]?.lyDoText ?? `Đề nghị thanh toán tiền khách sạn cho đoàn ${tenDoan}`, font: "Arial", size: 20 })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ noProof: true, text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ noProof: true, text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
+    new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ noProof: true, text: items[0]?.lyDoText ?? `Đề nghị thanh toán tiền khách sạn cho đoàn ${tenDoan}`, font: "Arial", size: 20 })] }),
     buildKSMergedTable(items),
     buildGhiChuPara(items),
     buildSignatureTable(nguoiDeNghi),
