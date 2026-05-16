@@ -25,6 +25,8 @@ export interface HoaDonUNCRow {
   ref_loai: string | null;
   code_ncc: string | null;  // KS: ks_ma_code from doan_ngay; khác: null
   ghi_chu: string | null;
+  hoa_don_so_tien: number | null; // số tiền hóa đơn nhập tay (thay upload)
+  tao_boi: string | null;         // OP tạo DNTT — nhận cảnh báo lệch hóa đơn
 }
 
 export interface HoaDonUNCFilters {
@@ -42,7 +44,7 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
       let q = externalSupabase
         .from("dntt_with_payment_status")
         .select(
-          "id, doan_id, loai, mo_ta, so_tien, la_coc, ref_id, nha_cung_cap_id, ten_nha_cung_cap, ngay_can_thanh_toan, thanh_toan_luc, payment_status, paid_amount, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, ref_loai, ghi_chu, doan:doan_id(ten_doan)"
+          "id, doan_id, loai, mo_ta, so_tien, la_coc, ref_id, nha_cung_cap_id, ten_nha_cung_cap, ngay_can_thanh_toan, thanh_toan_luc, payment_status, paid_amount, trang_thai_hoa_don, trang_thai_unc, hoa_don_url, unc_url, ref_loai, ghi_chu, hoa_don_so_tien, tao_boi, doan:doan_id(ten_doan)"
         )
         .eq("trang_thai_duyet", "da_duyet")
         .order("ngay_can_thanh_toan", { ascending: true, nullsFirst: false });
@@ -104,6 +106,8 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
           ref_loai: r.ref_loai ?? null,
           code_ncc: codeKey ? (codeMap.get(codeKey) ?? null) : null,
           ghi_chu: r.ghi_chu ?? null,
+          hoa_don_so_tien: r.hoa_don_so_tien != null ? Number(r.hoa_don_so_tien) : null,
+          tao_boi: r.tao_boi ?? null,
         };
       });
     },
@@ -196,6 +200,115 @@ export function useUploadDNTTDoc() {
       return urlData.publicUrl;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
+  });
+}
+
+// Nhập số tiền hóa đơn (thay upload ảnh). Sau khi lưu, so sánh với
+// so_tien của DNTT — lệch BẤT KỲ đồng nào → tạo "việc cần xử lý" ưu tiên
+// CAO + thông báo chuông cho OP tạo DNTT (tao_boi), fallback OP phụ trách
+// đoàn (doan.assigned_to). Dedupe theo marker [HĐ#id] để không spam khi
+// kế toán sửa số nhiều lần.
+export function useSaveHoaDonSoTien() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      id: number;
+      hoaDonSoTien: number | null;
+      dnttSoTien: number;
+      doanId: number | null;
+      taoBoi: string | null;
+      tenDoan: string | null;
+      nguoiGiao: string;        // user_id kế toán đang nhập
+    }): Promise<{ mismatch: boolean; notified: boolean }> => {
+      const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN") + " ₫";
+      const hd = p.hoaDonSoTien;
+
+      const { error: updErr } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({
+          hoa_don_so_tien: hd,
+          trang_thai_hoa_don: hd != null ? "da_co" : "chua_co",
+        })
+        .eq("id", p.id);
+      if (updErr) throw updErr;
+
+      if (hd == null) return { mismatch: false, notified: false };
+      const lech = Math.round(hd) - Math.round(p.dnttSoTien);
+      if (lech === 0) return { mismatch: false, notified: false };
+
+      // Người giao = kế toán đang nhập. Đọc auth trực tiếp để tránh
+      // race (useAuth chưa resolve khi click nhanh) — giống fix tao_boi.
+      let nguoiGiao = p.nguoiGiao;
+      if (!nguoiGiao) {
+        const { data: au } = await externalSupabase.auth.getUser();
+        nguoiGiao = au?.user?.id ?? "";
+      }
+
+      // Người nhận: OP tạo DNTT → fallback OP phụ trách đoàn
+      let recipient = p.taoBoi;
+      if (!recipient && p.doanId) {
+        const { data: d } = await externalSupabase
+          .from("doan")
+          .select("assigned_to")
+          .eq("id", p.doanId)
+          .maybeSingle();
+        recipient = (d as any)?.assigned_to ?? null;
+      }
+      if (!recipient) return { mismatch: true, notified: false };
+
+      // Dedupe: đã có việc đang mở cho HĐ này chưa
+      const marker = `[HĐ#${p.id}]`;
+      const { data: existed } = await externalSupabase
+        .from("cong_viec")
+        .select("id")
+        .eq("nguoi_nhan", recipient)
+        .ilike("mo_ta", `%${marker}%`)
+        .neq("trang_thai", "hoan_thanh")
+        .limit(1);
+      if (existed && existed.length > 0) return { mismatch: true, notified: true };
+
+      const tieuDe = `Hóa đơn lệch số tiền — ĐNTT #${p.id}`;
+      const moTa = `${marker} Hóa đơn nhập ${fmt(hd)} ≠ số tiền ĐNTT ${fmt(p.dnttSoTien)} ` +
+        `(lệch ${lech > 0 ? "+" : ""}${fmt(lech)})${p.tenDoan ? ` · Đoàn ${p.tenDoan}` : ""}. ` +
+        `Kiểm tra & xử lý.`;
+
+      const { data: cv, error: cvErr } = await externalSupabase
+        .from("cong_viec")
+        .insert({
+          tieu_de: tieuDe,
+          mo_ta: moTa,
+          doan_id: p.doanId || null,
+          nguoi_giao: nguoiGiao || null,
+          nguoi_nhan: recipient,
+          loai_viec: "thanh_toan",
+          do_uu_tien: "cao",
+          han_xu_ly: null,
+          trang_thai: "cho_nhan",
+        })
+        .select("id")
+        .single();
+      if (cvErr) throw cvErr;
+
+      await externalSupabase.from("thong_bao").insert({
+        user_id: recipient,
+        cong_viec_id: cv.id,
+        dntt_id: p.id,
+        loai: "giao_viec",
+        tieu_de: `⚠ Hóa đơn lệch — ĐNTT #${p.id}`,
+        noi_dung: `HĐ ${fmt(hd)} ≠ ĐNTT ${fmt(p.dnttSoTien)} (lệch ${lech > 0 ? "+" : ""}${fmt(lech)})` +
+          `${p.tenDoan ? ` · ${p.tenDoan}` : ""}`,
+        is_read: false,
+      });
+
+      return { mismatch: true, notified: true };
+    },
+    onSuccess: (res, v) => {
+      qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
+      if (res.notified) {
+        qc.invalidateQueries({ queryKey: ["cong_viec"] });
+        qc.invalidateQueries({ queryKey: ["thong_bao"] });
+      }
+    },
   });
 }
 

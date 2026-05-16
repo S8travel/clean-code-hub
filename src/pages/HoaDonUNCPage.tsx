@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import {
   RotateCcw, Upload, Eye, Trash2, FileText, FileCheck, FileX, CreditCard,
   ChevronLeft, ChevronRight, Loader2, ScanText, Share2, ClipboardPaste, Mail,
+  Pencil, Check,
 } from "lucide-react";
 import { ocrInvoiceAmount, isAmountMatch } from "@/lib/ocr-invoice";
 import { cn } from "@/lib/utils";
@@ -24,8 +25,11 @@ import {
 import { SearchableSelect } from "@/components/SearchableSelect";
 import {
   useHoaDonUNCList, useHoaDonUNCSummary, useUpdateDocStatus, useUploadDNTTDoc, useDeleteDNTTDoc,
+  useSaveHoaDonSoTien,
   type HoaDonUNCRow, type TrangThaiDoc,
 } from "@/hooks/use-hoa-don-unc";
+import { useAuth } from "@/hooks/use-auth";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import UncEmailModal from "@/components/hoa-don-unc/UncEmailModal";
 import { useDoanOptions, useMarkPaidWithDate } from "@/hooks/use-dntt";
 import { useQuery } from "@tanstack/react-query";
@@ -415,6 +419,122 @@ function DocCell({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// Cột "Hóa đơn": nhập SỐ TIỀN hóa đơn (thay upload ảnh). Lưu xong so với
+// so_tien của DNTT — lệch bất kỳ → tạo việc ưu tiên cao + chuông cho OP.
+function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
+  const { user } = useAuth();
+  const saveMut = useSaveHoaDonSoTien();
+  const entered = (row.hoa_don_so_tien ?? 0) > 0;
+  // Có số rồi → chế độ xem (khoá), bấm Sửa mới nhập lại. Chưa có → nhập luôn.
+  const [editing, setEditing] = useState(!entered);
+  const [val, setVal] = useState<number>(row.hoa_don_so_tien ?? 0);
+
+  useEffect(() => {
+    setVal(row.hoa_don_so_tien ?? 0);
+    setEditing((row.hoa_don_so_tien ?? 0) <= 0);
+  }, [row.hoa_don_so_tien]);
+
+  const lech = entered ? Math.round(row.hoa_don_so_tien!) - Math.round(row.so_tien) : 0;
+
+  const handleConfirm = () => {
+    const next = val > 0 ? val : null;
+    if (next == null) {
+      toast({ title: "Nhập số tiền hóa đơn trước khi xác nhận", variant: "destructive" });
+      return;
+    }
+    if (next === (row.hoa_don_so_tien ?? null)) {
+      setEditing(false);
+      return;
+    }
+    saveMut.mutate(
+      {
+        id: row.id,
+        hoaDonSoTien: next,
+        dnttSoTien: row.so_tien,
+        doanId: row.doan_id,
+        taoBoi: row.tao_boi,
+        tenDoan: row.ten_doan,
+        nguoiGiao: user?.user_id ?? "",
+      },
+      {
+        onSuccess: (res) => {
+          setEditing(false);
+          if (res.mismatch && res.notified) {
+            toast({ title: "⚠ Hóa đơn lệch — đã báo OP + tạo việc ưu tiên cao", variant: "destructive" });
+          } else if (res.mismatch) {
+            toast({ title: "⚠ Hóa đơn lệch số tiền (chưa xác định OP để báo)", variant: "destructive" });
+          } else {
+            toast({ title: "Đã lưu số tiền hóa đơn" });
+          }
+        },
+        onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không lưu được"), variant: "destructive" }),
+      },
+    );
+  };
+
+  // Chế độ xem (đã có số, không edit) — hiển thị số + badge + nút Sửa
+  if (!editing) {
+    return (
+      <div className="flex flex-col gap-1 min-w-[150px]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium tabular-nums">
+            {Math.round(row.hoa_don_so_tien ?? 0).toLocaleString("vi-VN")} ₫
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-blue-500"
+            title="Sửa số tiền hóa đơn"
+            onClick={() => { setVal(row.hoa_don_so_tien ?? 0); setEditing(true); }}
+          >
+            <Pencil className="h-3 w-3" />
+          </Button>
+        </div>
+        {lech === 0 ? (
+          <span className="text-[10px] text-emerald-600 font-medium">✓ Khớp số tiền DNTT</span>
+        ) : (
+          <span
+            className="text-[10px] text-red-600 font-medium"
+            title={`HĐ ${Math.round(row.hoa_don_so_tien!).toLocaleString("vi-VN")} ₫ vs DNTT ${Math.round(row.so_tien).toLocaleString("vi-VN")} ₫`}
+          >
+            ⚠ Lệch {lech > 0 ? "+" : ""}{lech.toLocaleString("vi-VN")} ₫
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Chế độ nhập — input + nút Xác nhận
+  return (
+    <div className="flex flex-col gap-1 min-w-[150px]">
+      <div className="flex items-center gap-1">
+        <DecimalInput
+          value={val}
+          onChange={(v) => setVal(v ?? 0)}
+          placeholder="Nhập số tiền HĐ"
+          className="h-7 text-xs flex-1 text-right"
+        />
+        <Button
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          title="Xác nhận số tiền hóa đơn"
+          disabled={saveMut.isPending}
+          onClick={handleConfirm}
+        >
+          {saveMut.isPending
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <Check className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+      {!entered ? (
+        <span className="text-[10px] text-muted-foreground">Chưa nhập hóa đơn</span>
+      ) : (
+        <span className="text-[10px] text-muted-foreground">Đang sửa — bấm Xác nhận để lưu</span>
+      )}
     </div>
   );
 }
@@ -861,7 +981,7 @@ function HoaDonUNCPageContent() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <DocCell row={row} loaiDoc="hoa_don" />
+                    <HoaDonAmountCell row={row} />
                   </TableCell>
                   <TableCell>
                     <DocCell
