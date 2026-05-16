@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { DoanInsert } from "@/hooks/use-doan";
+import { syncNextAction } from "@/hooks/use-lead-next-action";
 
 export type LeadTrangThai =
   | "moi"
@@ -195,7 +196,12 @@ export function useCreateLead() {
       if (error) throw error;
       return data as Lead;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+    onSuccess: async (created) => {
+      await syncNextAction(created.id).catch(() => {});
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["lead_next_action", created.id] });
+      qc.invalidateQueries({ queryKey: ["my_next_actions"] });
+    },
   });
 }
 
@@ -253,10 +259,13 @@ export function useUpdateLeadStatus() {
       });
       if (error) throw error;
     },
-    onSuccess: (_, vars) => {
+    onSuccess: async (_, vars) => {
+      await syncNextAction(vars.id).catch(() => {});
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["lead", vars.id] });
       qc.invalidateQueries({ queryKey: ["lead_activities", vars.id] });
+      qc.invalidateQueries({ queryKey: ["lead_next_action", vars.id] });
+      qc.invalidateQueries({ queryKey: ["my_next_actions"] });
     },
   });
 }
@@ -300,10 +309,13 @@ export function useConvertLeadToDoan() {
 
       return doan as { id: number };
     },
-    onSuccess: (_, vars) => {
+    onSuccess: async (_, vars) => {
+      await syncNextAction(vars.leadId).catch(() => {});
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["lead", vars.leadId] });
       qc.invalidateQueries({ queryKey: ["lead_activities", vars.leadId] });
+      qc.invalidateQueries({ queryKey: ["lead_next_action", vars.leadId] });
+      qc.invalidateQueries({ queryKey: ["my_next_actions"] });
       qc.invalidateQueries({ queryKey: ["doan"] });
     },
   });
