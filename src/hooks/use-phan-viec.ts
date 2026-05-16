@@ -2,6 +2,11 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Bộ đầu việc phân cho đoàn (rows cong_viec với loai_viec prefix pv_)
+// "Người giao" cho việc auto khi tạo đoàn = Hệ thống.
+// cong_viec.nguoi_giao KHÔNG có FK → dùng UUID sentinel an toàn.
+// Hiển thị "Hệ thống" xử lý ở use-cong-viec (không cần auth.users).
+export const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
+
 export type PvKey = "pv_ks" | "pv_nh_dv" | "pv_xe" | "pv_visa" | "pv_ve_mb";
 
 export const PHAN_VIEC_ITEMS: { key: PvKey; label: string }[] = [
@@ -134,7 +139,7 @@ export function useCreatePhanViec() {
             tieu_de: `[${LABEL[a.key]}] ${doan.ten_doan}`,
             mo_ta: `Phụ trách ${LABEL[a.key]} cho đoàn ${doan.ten_doan}`,
             doan_id: doan.id,
-            nguoi_giao: p.creatorId,
+            nguoi_giao: SYSTEM_USER_ID,
             nguoi_nhan: a.assignedTo,
             loai_viec: a.key,
             do_uu_tien: "binh_thuong",
@@ -173,7 +178,7 @@ export function useCreatePhanViec() {
               tieu_de: `Đoàn ${doan.ten_doan}: cần phân người`,
               mo_ta: `Đầu việc chưa có người: ${missLabels}. Vui lòng phân người phụ trách.`,
               doan_id: doan.id,
-              nguoi_giao: p.creatorId,
+              nguoi_giao: SYSTEM_USER_ID,
               nguoi_nhan: d.user_id,
               loai_viec: "pv_phancong",
               do_uu_tien: "cao",

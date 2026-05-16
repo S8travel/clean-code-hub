@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
+import { SYSTEM_USER_ID } from "@/hooks/use-phan-viec";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export function useCongViecList(userId: string | null | undefined) {
 
       return tasks.map((t: any): CongViecRow => ({
         ...t,
-        ten_nguoi_giao: nameMap[t.nguoi_giao] ?? null,
+        ten_nguoi_giao: t.nguoi_giao === SYSTEM_USER_ID ? "Hệ thống" : (nameMap[t.nguoi_giao] ?? null),
         ten_nguoi_nhan: nameMap[t.nguoi_nhan] ?? null,
         ten_doan: t.doan_id ? (doanNameMap[t.doan_id] ?? null) : null,
         comment_count: countMap[t.id] ?? 0,

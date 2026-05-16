@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { externalSupabase } from "@/lib/supabase-external";
 import { useUserListForAssign } from "@/hooks/use-cong-viec";
 import {
   defaultPhanViec, useDefaultAssignees, type PvKey,
@@ -31,7 +32,10 @@ interface Props {
   info: PhanViecInfo | null;
   creatorId: string;
   submitting: boolean;
-  onConfirm: (assignments: { key: PvKey; assignedTo: string | null }[]) => Promise<void>;
+  onConfirm: (
+    assignments: { key: PvKey; assignedTo: string | null }[],
+    fileChuongTrinh: string | null,
+  ) => Promise<void>;
 }
 
 interface RowState { key: PvKey; label: string; checked: boolean; assignedTo: string }
@@ -40,6 +44,8 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
   const { data: users = [] } = useUserListForAssign();
   const { data: defaults } = useDefaultAssignees();
   const [rows, setRows] = useState<RowState[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (open && info) {
@@ -51,6 +57,7 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
           return { key: d.key, label: d.label, checked: d.checked, assignedTo };
         }),
       );
+      setFile(null);
     }
   }, [open, info, creatorId, defaults]);
 
@@ -64,7 +71,18 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
       .filter((r) => r.checked)
       .map((r) => ({ key: r.key, assignedTo: r.assignedTo || null }));
     if (assignments.length === 0) { toast.error("Chọn ít nhất 1 đầu việc"); return; }
-    await onConfirm(assignments);
+    let fileUrl: string | null = null;
+    if (file) {
+      setUploading(true);
+      const safe = file.name.replace(/[^\w.\-]+/g, "_");
+      const path = `${Date.now()}-${safe}`;
+      const { error: upErr } = await externalSupabase.storage
+        .from("doan-files").upload(path, file, { upsert: false });
+      setUploading(false);
+      if (upErr) { toast.error("Lỗi tải file: " + upErr.message); return; }
+      fileUrl = externalSupabase.storage.from("doan-files").getPublicUrl(path).data.publicUrl;
+    }
+    await onConfirm(assignments, fileUrl);
   };
 
   const dateStr = info.ngayDi
@@ -137,9 +155,30 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
           ))}
         </div>
 
+        {/* File chương trình (tuỳ chọn) */}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">
+            File chương trình (tuỳ chọn — doc / pdf / ảnh)
+          </Label>
+          {file ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
+              <span className="truncate">{file.name}</span>
+              <button type="button" className="text-muted-foreground hover:text-destructive shrink-0"
+                onClick={() => setFile(null)}>✕</button>
+            </div>
+          ) : (
+            <input
+              type="file"
+              accept=".doc,.docx,.pdf,image/*"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-muted/70"
+            />
+          )}
+        </div>
+
         <DialogFooter>
-          <Button size="sm" onClick={submit} disabled={submitting}>
-            {submitting ? "Đang tạo đoàn..." : "Xác nhận phân việc & tạo đoàn"}
+          <Button size="sm" onClick={submit} disabled={submitting || uploading}>
+            {uploading ? "Đang tải file..." : submitting ? "Đang tạo đoàn..." : "Xác nhận phân việc & tạo đoàn"}
           </Button>
         </DialogFooter>
       </DialogContent>

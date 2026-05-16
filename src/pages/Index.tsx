@@ -248,9 +248,12 @@ export default function Index() {
   };
 
   // Xác nhận phân việc → MỚI tạo đoàn → seri/log → phân việc + thông báo
-  const confirmPhanViec = async (assignments: { key: PvKey; assignedTo: string | null }[]) => {
+  const confirmPhanViec = async (
+    assignments: { key: PvKey; assignedTo: string | null }[],
+    fileChuongTrinh: string | null,
+  ) => {
     if (!pendingPhanViec) return;
-    const p = pendingPhanViec.payload;
+    const p = { ...pendingPhanViec.payload, file_chuong_trinh: fileChuongTrinh } as any;
     try {
       const created = await createDoan.mutateAsync(p);
       if (created) {
