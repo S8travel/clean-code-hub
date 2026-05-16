@@ -22,11 +22,15 @@ import {
 const CURRENCIES = ["USD", "RMB", "NT"] as const;
 type Currency = (typeof CURRENCIES)[number];
 
-// Quy đổi raw → VND: SL × ĐG × tỷ giá × (1 - CK%/100). VND-only đoàn (USD ty_gia=1) cũng OK.
-function computeVnd(soLuong: number, donGiaRaw: number, tyGia: number, ckPct: number): number {
-  const gross = donGiaRaw * (tyGia || 0);
-  const afterCk = gross * (1 - (ckPct || 0) / 100);
-  return Math.round(soLuong * afterCk);
+// Quy đổi raw → VND: SL × max(0, ĐG×tỷ_giá − CK_VND). Chiết khấu là số VND
+// trừ TRÊN MỖI ĐƠN VỊ (rồi nhân số lượng), KHÔNG phải % và KHÔNG phải trừ
+// 1 lần. VND-only đoàn (USD ty_gia=1) cũng OK. `ckVnd` lưu ở cột
+// chiet_khau_pct (numeric) — tên cột giữ nguyên, ngữ nghĩa đổi sang VND/đơn vị
+// (chỉ visa dùng cột này, không đụng nơi khác).
+function computeVnd(soLuong: number, donGiaRaw: number, tyGia: number, ckVnd: number): number {
+  const grossPerUnit = donGiaRaw * (tyGia || 0);
+  const netPerUnit = Math.max(0, grossPerUnit - (ckVnd || 0));
+  return Math.round(soLuong * netPerUnit);
 }
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
@@ -63,7 +67,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
   const [currency, setCurrency] = useState<Currency>("USD");
   const [donGiaRaw, setDonGiaRaw] = useState(0);
   const [tyGia, setTyGia] = useState(0);
-  const [ckPct, setCkPct] = useState(0);
+  const [ckVnd, setCkVnd] = useState(0);
 
   const donViOptions = donViList.map((d) => ({ value: String(d.id), label: d.ten }));
   const loaiOptions = loaiVisaList.map((l) => ({
@@ -73,7 +77,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
 
   const selectedLoai = loaiVisaList.find((l) => String(l.id) === loaiVisaId);
   const selectedDonVi = donViList.find((d) => String(d.id) === donViId);
-  const previewVnd = computeVnd(1, donGiaRaw, tyGia, ckPct);
+  const previewVnd = computeVnd(1, donGiaRaw, tyGia, ckVnd);
 
   const handleAdd = async () => {
     if (!loaiVisaId) { toast.warning("Vui lòng chọn loại visa"); return; }
@@ -97,7 +101,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
       nha_cung_cap_id: selectedDonVi?.nha_cung_cap_id ?? null,
       tien_te_loai: currency,
       ty_gia: tyGia || null,
-      chiet_khau_pct: ckPct || null,
+      chiet_khau_pct: ckVnd || null, // cột giữ tên cũ, giá trị nay là VND
       thanh_toan_dinh_ky: true,       // Visa mặc định thanh toán định kỳ
     } as any, {
       onSuccess: () => { toast.success("Đã thêm visa"); onAdded(); },
@@ -148,8 +152,8 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
           <DecimalInput value={tyGia} onChange={setTyGia} className="h-7 text-xs text-right" />
         </div>
         <div>
-          <Label className="text-xs">Chiết khấu %</Label>
-          <DecimalInput value={ckPct} onChange={setCkPct} className="h-7 text-xs text-right" />
+          <Label className="text-xs">Chiết khấu (VND)</Label>
+          <DecimalInput value={ckVnd} onChange={setCkVnd} className="h-7 text-xs text-right" />
         </div>
         <div>
           <Label className="text-xs">Thành tiền (VND)</Label>
@@ -265,6 +269,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       local.ty_gia === initial.ty_gia &&
       local.chiet_khau_pct === initial.chiet_khau_pct;
     if (unchanged) return;
+    // CK VND trừ trên mỗi đơn vị → don_gia = net 1 đơn vị, total = SL × don_gia.
     const donGiaVnd = computeVnd(1, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
     const total = local.so_luong * donGiaVnd;
     const isHDV = row.tien_hdv > 0;
@@ -435,7 +440,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                 <th className="text-center px-2 py-2.5">SL</th>
                 <th className="text-center px-3 py-2.5">Đơn giá</th>
                 <th className="text-center px-2 py-2.5">Tỷ giá</th>
-                <th className="text-center px-2 py-2.5">CK %</th>
+                <th className="text-center px-2 py-2.5">CK (VND)</th>
                 <th className="text-right px-3 py-2.5">Thành tiền</th>
                 <th className="text-center px-2 py-2.5">Nguồn</th>
                 <th className="text-center px-3 py-2.5">TT ĐNTT</th>
@@ -537,12 +542,13 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                       </div>
                     </td>
 
-                    {/* Chiết khấu % */}
+                    {/* Chiết khấu (VND) — cột chiet_khau_pct giữ tên, giá trị là VND */}
                     <td className="px-2 py-2.5">
                       <div className="flex justify-center">
                         <Input
                           type="number"
-                          step="0.01"
+                          min={0}
+                          step="any"
                           value={local.chiet_khau_pct || ""}
                           onChange={(e) => handleRowChange(row.id, { chiet_khau_pct: Number(e.target.value) || 0 })}
                           onBlur={() => handleRowSave(row)}
