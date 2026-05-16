@@ -1037,19 +1037,14 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     }
   });
 
-  // Chi phí thực tế per KS (sau điều chỉnh, tính từ doan_chi_phi).
-  // PHẢI sum tất cả row của KS: row đã adjust dùng thanh_tien_thuc_te,
-  // row chưa adjust dùng tien_cong_ty (FOC đã apply khi save). Trước đây
-  // chỉ sum row có thanh_tien_thuc_te != null → row chưa adjust bị coi = 0
-  // → delta sai (vd: 7 TWN edit, 1 SGL untouched → SGL bị bỏ ra khỏi sum).
-  const thucTeByKs: Record<number, number> = {};
+  // Map chi_phi.id → thanh_tien_thuc_te (chỉ row đã điều chỉnh sau TT).
+  // KS tính thựcTế qua delta trên totalKS (xem per-KS), KHÔNG sum tien_cong_ty
+  // (với KS tien_cong_ty là GROSS chưa trừ FOC → sum sai, hiện gạch nhầm).
+  const thucTeOverrideById = new Map<number, number>();
   chiPhiRows.forEach((r) => {
-    if (r.danh_muc !== "khach_san") return;
-    const localRow = localRows.find((lr) => lr.id === r.id);
-    if (!localRow?.khach_san_id) return;
-    const value = r.thanh_tien_thuc_te ?? r.tien_cong_ty ?? 0;
-    thucTeByKs[localRow.khach_san_id] =
-      (thucTeByKs[localRow.khach_san_id] || 0) + value;
+    if (r.danh_muc === "khach_san" && r.thanh_tien_thuc_te != null) {
+      thucTeOverrideById.set(r.id, Number(r.thanh_tien_thuc_te));
+    }
   });
 
   // Tổng công nợ / hoàn tiền per KS — từ bảng cong_no
@@ -1206,9 +1201,27 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
 
         const daCoc = cocByKs[ksId] || 0;
         const daTT = ttByKs[ksId] || 0;
-        // Dùng thucTeByKs nếu có điều chỉnh, ngược lại dùng totalKS từ room pricing
-        const thucTeKS = thucTeByKs[ksId] ?? totalKS;
-        const daDieuChinh = thucTeByKs[ksId] != null && thucTeByKs[ksId] !== totalKS;
+        // Thực tế KS = totalKS (đã NET trừ FOC) + Σ delta của row ĐÃ điều chỉnh.
+        // Row chưa điều chỉnh giữ nguyên net trong totalKS → KHÔNG gạch nhầm
+        // (tránh bug: KS không adjust vẫn hiện gạch vì tien_cong_ty là gross).
+        const adjustDelta = rows.reduce((sum, r) => {
+          if (r.id == null || !thucTeOverrideById.has(r.id)) return sum;
+          const override = thucTeOverrideById.get(r.id)!;
+          let rowNet: number;
+          if (isKSRoomRow(r)) {
+            const sameDay = rows.filter((x) => x.ngay_date === r.ngay_date);
+            const { rowFocDeduction } = calcRowFocBreakdown(r, sameDay, ksFoc.foc_khach, ksFoc.foc_mien);
+            const rowGross = (Number(r.so_phong) || 0) * (Number(r.gia_phong) || 0) * (Number(r.so_dem) || 1);
+            rowNet = rowGross - rowFocDeduction;
+          } else {
+            const focCount = Math.max(0, Number(r.foc_count) || 0);
+            const billed = Math.max(0, (Number(r.so_phong) || 0) - focCount);
+            rowNet = billed * (Number(r.gia_phong) || 0);
+          }
+          return sum + (override - rowNet);
+        }, 0);
+        const thucTeKS = totalKS + adjustDelta;
+        const daDieuChinh = adjustDelta !== 0;
         const canTruAmtForKs = canTruAmtByKsId[ksId] || 0;
         const conLai = thucTeKS - daTT;
         const isDaTT = thucTeKS > 0 && daTT >= thucTeKS;
@@ -1562,6 +1575,15 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                                   : isApproved ? "Đã duyệt"
                                   : "—"}
                               </span>
+                              {dntt.ngay_can_thanh_toan && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 text-[10px] font-medium"
+                                  title="Ngày cần thanh toán"
+                                >
+                                  <CalendarClock className="h-3 w-3" />
+                                  {format(new Date(dntt.ngay_can_thanh_toan), "dd/MM/yyyy")}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1">
                               {/* Sửa số tiền khi chờ duyệt */}
@@ -2344,6 +2366,7 @@ function KSFocEditor({
         onBlur={save}
         type="number"
         min={0}
+        step="any"
         placeholder="—"
         className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
       />
@@ -2354,6 +2377,7 @@ function KSFocEditor({
         onBlur={save}
         type="number"
         min={0}
+        step="any"
         placeholder="—"
         className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
       />
