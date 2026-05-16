@@ -19,8 +19,8 @@ const STATUS_COLOR: Record<string, string> = {
   dang_tu_van:  "bg-amber-100 text-amber-700",
   da_bao_gia:   "bg-violet-100 text-violet-700",
   cho_chot:     "bg-orange-100 text-orange-700",
-  chot_deal:    "bg-green-100 text-green-700",
-  mat_khach:    "bg-gray-100 text-gray-600",
+  chot_deal:    "bg-success/10 text-success",
+  mat_khach:    "bg-muted text-muted-foreground",
 };
 
 const NGUON_COLOR: Record<string, string> = {

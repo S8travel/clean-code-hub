@@ -48,6 +48,13 @@ body {
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
+    /* Semantic — đã hoàn thành / cần xử lý (Phase 2) */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 20 60% 12%;
+
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 213 78% 45%;

@@ -32,8 +32,8 @@ interface Props {
 
 // Column colors for terminal states
 const COLUMN_BG: Partial<Record<LeadTrangThai, string>> = {
-  chot_deal: "bg-green-50/60",
-  mat_khach: "bg-gray-50/80",
+  chot_deal: "bg-success/5",
+  mat_khach: "bg-muted/40",
 };
 
 // ── Draggable card ──────────────────────────────────────────
