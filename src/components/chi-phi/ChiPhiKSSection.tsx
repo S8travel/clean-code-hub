@@ -71,7 +71,12 @@ function calcRowFocBreakdown(
   if (dayGross <= 0 || dayFocAmount <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
   const rowFocDeduction = Math.round((rowGross / dayGross) * dayFocAmount);
   const pricePerRoom = row.gia_phong || avgPrice || 0;
-  const rowFocCount = pricePerRoom > 0 ? Math.round(rowFocDeduction / pricePerRoom) : 0;
+  // KHÔNG làm tròn về integer: foc_mien thập phân (vd 0.5) → foc_count phải
+  // giữ 0.5 (Math.round(0.5)=1 sẽ in sai + billed lệch nửa phòng). Làm tròn 2dp
+  // chỉ để khử nhiễu float. Chỉ dùng cho hiển thị bản in ĐNTT KS.
+  const rowFocCount = pricePerRoom > 0
+    ? Math.round((rowFocDeduction / pricePerRoom) * 100) / 100
+    : 0;
   return { rowFocDeduction, rowFocCount };
 }
 

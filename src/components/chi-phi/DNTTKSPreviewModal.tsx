@@ -133,8 +133,9 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
                               <Input
                                 type="number"
                                 min={0}
+                                step="any"
                                 value={focCount}
-                                onChange={(e) => updateRoom(i, j, { foc_count: Math.max(0, parseInt(e.target.value) || 0) })}
+                                onChange={(e) => updateRoom(i, j, { foc_count: Math.max(0, Number(e.target.value) || 0) })}
                                 className="h-7 text-xs border-0 px-1 text-center"
                               />
                             </td>
