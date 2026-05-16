@@ -37,6 +37,7 @@ const BaoGiaPage           = lazy(() => import("./pages/BaoGiaPage.tsx"));
 const TeamAssignmentPage   = lazy(() => import("./pages/TeamAssignmentPage.tsx"));
 const LeadsPage            = lazy(() => import("./pages/LeadsPage.tsx"));
 const LeadReportPage       = lazy(() => import("./pages/LeadReportPage.tsx"));
+const ViecLeadPage         = lazy(() => import("./pages/ViecLeadPage.tsx"));
 const LeadFormPublicPage   = lazy(() => import("./pages/LeadFormPublicPage.tsx"));
 const NotFound             = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -100,6 +101,7 @@ const App = () => (
                 <Route path="/bao-gia" element={<BaoGiaPage />} />
                 <Route path="/settings/teams" element={<TeamAssignmentPage />} />
                 <Route path="/leads" element={<LeadsPage />} />
+                <Route path="/viec-lead" element={<ViecLeadPage />} />
                 <Route path="/leads/bao-cao" element={<LeadReportPage />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

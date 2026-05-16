@@ -23,6 +23,7 @@ import {
   Calculator,
   Users2,
   BarChart3,
+  Target,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -47,6 +48,7 @@ import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
 import { useCurrentSession } from "@/hooks/use-current-user";
 import { useThongBaoCount } from "@/hooks/use-thong-bao";
 import { useLeadStats } from "@/hooks/use-lead-stats";
+import { useMyOverdueCount } from "@/hooks/use-lead-next-action";
 import { UserSettingsMenu } from "@/components/UserSettingsMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -188,6 +190,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "KHÁCH HÀNG",
     items: [
       { title: "Lead", url: "/leads", icon: Users2, resource: "lead" },
+      { title: "Việc hôm nay", url: "/viec-lead", icon: Target, resource: "lead" },
       { title: "Báo cáo Lead", url: "/leads/bao-cao", icon: BarChart3, resource: "bao_cao_lead" },
     ],
   },
@@ -290,6 +293,7 @@ export function AppSidebar() {
   const { data: suCoBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "su_co");
   const { data: giaoViecBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "giao_viec");
   const { data: leadStats } = useLeadStats(session?.user?.id ?? null);
+  const { data: viecLeadBadge = 0 } = useMyOverdueCount(session?.user?.id ?? null);
   const leadBadge = (leadStats?.lead_moi_today ?? 0) + (leadStats?.follow_up_today ?? 0) + (leadStats?.follow_up_overdue ?? 0);
   const leadOverdue = (leadStats?.follow_up_overdue ?? 0) > 0;
 
@@ -331,9 +335,12 @@ export function AppSidebar() {
                     item.url === "/invoice" ? invoiceBadge :
                     item.url === "/theo-doi" ? suCoBadge :
                     item.url === "/my-job" ? giaoViecBadge :
+                    item.url === "/viec-lead" ? viecLeadBadge :
                     item.url === "/leads" ? leadBadge : 0;
-                  // Lead overdue → đỏ (urgent), còn lại → cam mặc định
-                  const badgeColor = (item.url === "/leads" && leadOverdue) ? "bg-red-500" : "bg-orange-500";
+                  // Quá hạn → đỏ (urgent), còn lại → cam mặc định
+                  const badgeColor =
+                    ((item.url === "/leads" && leadOverdue) || item.url === "/viec-lead")
+                      ? "bg-red-500" : "bg-orange-500";
                   return (
                     <MenuItemWrapper
                       key={item.url}
