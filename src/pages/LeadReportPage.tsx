@@ -18,6 +18,11 @@ import {
 } from "@/hooks/use-lead-reports";
 import { LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS } from "@/hooks/use-leads";
 import { useVanPhongList } from "@/hooks/use-van-phong";
+import { useTemplateStats } from "@/hooks/use-lead-template";
+
+const TPL_CHANNEL_LABEL: Record<string, string> = {
+  email: "Email", zalo: "Zalo", call_script: "Kịch bản gọi",
+};
 
 const FUNNEL_ORDER = ["moi", "da_lien_he", "dang_tu_van", "da_bao_gia", "cho_chot", "chot_deal"];
 const PIE_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6"];
@@ -43,6 +48,7 @@ export default function LeadReportPage() {
   const { data: byNguon = [] } = useLeadByNguon(filter);
   const { data: bySales = [] } = useLeadBySales(filter);
   const { data: lyDoMat = [] } = useLeadLyDoMat(filter);
+  const { data: tplStats = [] } = useTemplateStats();
 
   // Funnel chart data — order theo flow
   const funnelData = useMemo(() => {
@@ -247,6 +253,44 @@ export default function LeadReportPage() {
               </div>
             </div>
           )}
+        </Section>
+
+        {/* E. Hiệu quả template */}
+        <Section title="📨 Template đã dùng">
+          <p className="text-[11px] text-muted-foreground -mt-1">
+            Xếp theo số lần dùng. Cột “Conversion %” sẽ có số khi tích luỹ đủ
+            dữ liệu chốt deal từ template (hiện để “—”).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-[#E6F1FB]">
+                <tr>
+                  <th className="py-1.5 px-2 text-left">Template</th>
+                  <th className="py-1.5 px-2 text-left">Kênh</th>
+                  <th className="py-1.5 px-2 text-right">Số lần dùng</th>
+                  <th className="py-1.5 px-2 text-right">Conversion %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tplStats.map((t) => (
+                  <tr key={t.id} className="border-b border-border/40">
+                    <td className="py-1.5 px-2 font-medium">
+                      {t.ten}
+                      {!t.active && <span className="ml-1 text-[10px] text-muted-foreground">(tắt)</span>}
+                    </td>
+                    <td className="py-1.5 px-2">{TPL_CHANNEL_LABEL[t.channel] ?? t.channel}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums font-medium">{t.used_count}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
+                      {t.conversion_rate != null ? `${Number(t.conversion_rate).toFixed(1)}%` : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {tplStats.length === 0 && (
+                  <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">Chưa có template</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Section>
       </div>
     </div>
