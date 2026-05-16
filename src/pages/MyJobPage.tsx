@@ -26,6 +26,7 @@ import { useMyDeadlines, useMarkDeadlineDone, type DeadlineItem } from "@/hooks/
 import { useMyTeamAssignments, useAllTeamAgents } from "@/hooks/use-teams";
 import { useDoanLogGhiChu, useToggleResolved } from "@/hooks/use-doan-log";
 import { useCongViecList } from "@/hooks/use-cong-viec";
+import { useMyPhanViecScope } from "@/hooks/use-phan-viec";
 import GiaoViecTab from "@/components/my-job/GiaoViecTab";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Circle, StickyNote, Check } from "lucide-react";
@@ -292,20 +293,15 @@ export default function MyJobPage() {
     return map;
   }, [myDoan, myAgentTaskMap, uid]);
 
-  const myDoanIds = useMemo(() => myDoan.map((d: any) => d.id as number), [myDoan]);
-  const { data: deadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(myDoanIds);
+  // Deadline theo PHÂN VIỆC (cong_viec pv_*): pv_ks → KS · pv_nh_dv → NH + DV
+  const { data: pvScope } = useMyPhanViecScope(uid);
+  const pvDoanIds = useMemo(() => (pvScope ? [...pvScope.keys()] : []), [pvScope]);
+  const { data: pvDeadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(pvDoanIds);
   const markDone = useMarkDeadlineDone();
 
-  // Lọc deadline theo scope của từng đoàn
   const filteredDeadlines = useMemo(
-    () =>
-      deadlines.filter((item) => {
-        const scope = myDoanScopeMap.get(item.doanId);
-        if (!scope || scope.size === 0) return false;
-        if (scope.has("all")) return true;
-        return scope.has(item.type); // "ks" | "nh" | "dv"
-      }),
-    [deadlines, myDoanScopeMap],
+    () => pvDeadlines.filter((item) => pvScope?.get(item.doanId)?.has(item.type) ?? false),
+    [pvDeadlines, pvScope],
   );
 
   const { data: ghiChuLogs = [] } = useDoanLogGhiChu(user?.user_id);

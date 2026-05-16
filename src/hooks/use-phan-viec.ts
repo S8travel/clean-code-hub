@@ -141,6 +141,34 @@ export function useDoanPhanViecMatrix(doanIds: number[]) {
   });
 }
 
+// Scope deadline theo phân việc của user hiện tại:
+// pv_ks → xem deadline KS; pv_nh_dv → xem deadline NH + DV
+export function useMyPhanViecScope(uid: string | null | undefined) {
+  return useQuery({
+    queryKey: ["my_phan_viec_scope", uid],
+    enabled: !!uid,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("cong_viec")
+        .select("doan_id, loai_viec")
+        .eq("nguoi_nhan", uid!)
+        .in("loai_viec", ["pv_ks", "pv_nh_dv"])
+        .neq("trang_thai", "huy");
+      if (error) throw error;
+      const m = new Map<number, Set<"ks" | "nh" | "dv">>();
+      for (const r of (data ?? []) as any[]) {
+        if (r.doan_id == null) continue;
+        if (!m.has(r.doan_id)) m.set(r.doan_id, new Set());
+        const s = m.get(r.doan_id)!;
+        if (r.loai_viec === "pv_ks") s.add("ks");
+        else if (r.loai_viec === "pv_nh_dv") { s.add("nh"); s.add("dv"); }
+      }
+      return m;
+    },
+  });
+}
+
 // Gán / đổi người 1 đầu việc từ trang Theo dõi
 export function useAssignPvItem() {
   const qc = useQueryClient();
