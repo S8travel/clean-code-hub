@@ -90,10 +90,7 @@ function DuChiPill({
     tone === "danger"  ? "border-destructive/30 bg-destructive/5"
     : tone === "warning" ? "border-warning/40 bg-warning/10"
     : "border-border bg-muted/30";
-  const amountCls =
-    tone === "danger" ? "text-destructive"
-    : tone === "warning" ? "text-foreground"
-    : "text-foreground";
+  const amountCls = tone === "danger" ? "text-destructive" : "text-foreground";
   return (
     <div className={cn("flex-1 min-w-[140px] rounded-lg border p-3", styles)}>
       <div className="flex items-center gap-1.5">
@@ -136,7 +133,7 @@ function DashboardPageContent() {
   const today = format(new Date(), "EEEE, dd/MM/yyyy", { locale: vi });
   const doanGrowth = growthPct(data.thisMonthDoanCount, data.lastMonthDoanCount);
   const khachGrowth = growthPct(data.thisMonthGuests, data.lastMonthGuests);
-  const mienMaxKhach = Math.max(1, ...data.topMien.map((m) => m.soKhach));
+  const mLabels = data.monthLabels;
 
   return (
     <div className="p-5 space-y-6 max-w-[1400px] mx-auto">
@@ -232,7 +229,105 @@ function DashboardPageContent() {
         )}
       </div>
 
-      {/* ── Tier 2: Cần theo dõi ── */}
+      {/* ── Tier 2: Thống kê đoàn (tháng này + tháng sau) ── */}
+      <div>
+        <SectionTitle>Thống kê đoàn — tháng này &amp; tháng sau</SectionTitle>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Theo Agent */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-border bg-muted/30">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Theo Agent — số đoàn &amp; lượng khách
+              </p>
+            </div>
+            {data.topAgents.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu 2 tháng này</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-[10px] uppercase text-muted-foreground tracking-wider">
+                    <tr>
+                      <th rowSpan={2} className="text-left font-semibold px-4 py-2 align-bottom">Agent</th>
+                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng này · {mLabels.tm}</th>
+                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng sau · {mLabels.nm}</th>
+                    </tr>
+                    <tr>
+                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
+                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
+                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
+                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {data.topAgents.map((a) => (
+                      <tr key={a.name} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-2 font-medium truncate max-w-[140px]">{a.name}</td>
+                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{a.tmDoan || "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{a.tmKhach ? a.tmKhach.toLocaleString() : "—"}</td>
+                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{a.nmDoan || "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{a.nmKhach ? a.nmKhach.toLocaleString() : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Theo Miền */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-border bg-muted/30">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Theo Miền — số đoàn &amp; lượng khách
+              </p>
+            </div>
+            {data.topMien.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu 2 tháng này</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-[10px] uppercase text-muted-foreground tracking-wider">
+                    <tr>
+                      <th rowSpan={2} className="text-left font-semibold px-4 py-2 align-bottom">Miền</th>
+                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng này · {mLabels.tm}</th>
+                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng sau · {mLabels.nm}</th>
+                    </tr>
+                    <tr>
+                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
+                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
+                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
+                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {data.topMien.map((m) => (
+                      <tr key={m.name} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-2 font-medium">{m.name}</td>
+                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{m.tmDoan || "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{m.tmKhach ? m.tmKhach.toLocaleString() : "—"}</td>
+                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{m.nmDoan || "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{m.nmKhach ? m.nmKhach.toLocaleString() : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                      <td className="px-4 py-2">Tổng</td>
+                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">{data.mienTotal.tmDoan}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[hsl(var(--brand))]">{data.mienTotal.tmKhach.toLocaleString()}</td>
+                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">{data.mienTotal.nmDoan}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[hsl(var(--brand))]">{data.mienTotal.nmKhach.toLocaleString()}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tier 3: Cần theo dõi ── */}
       <div>
         <SectionTitle>Cần theo dõi</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -330,85 +425,6 @@ function DashboardPageContent() {
                         </span>
                       </div>
                     </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Tier 3: Thống kê vận hành (6 tháng) ── */}
-      <div>
-        <SectionTitle>Thống kê vận hành (6 tháng)</SectionTitle>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          {/* Theo Agent — bảng đoàn + khách */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-border bg-muted/30">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Theo Agent — số đoàn & lượng khách
-              </p>
-            </div>
-            {data.topAgents.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu</div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[10px] uppercase text-muted-foreground tracking-wider">
-                    <th className="text-left font-semibold px-4 py-2">Agent</th>
-                    <th className="text-right font-semibold px-4 py-2">Số đoàn</th>
-                    <th className="text-right font-semibold px-4 py-2">Số khách</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {data.topAgents.map((a) => (
-                    <tr key={a.name} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-2 font-medium truncate max-w-[160px]">{a.name}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{a.soDoan.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">
-                        {a.soKhach.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Theo Miền — đoàn + khách + tỉ trọng */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Theo Miền — số đoàn & lượng khách
-              </p>
-              <span className="text-[11px] text-muted-foreground">
-                {data.mienTongDoan} đoàn · {data.mienTongKhach.toLocaleString()} khách
-              </span>
-            </div>
-            {data.topMien.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu</div>
-            ) : (
-              <div className="p-4 space-y-3">
-                {data.topMien.map((m) => {
-                  const pctKhach = data.mienTongKhach > 0 ? Math.round((m.soKhach / data.mienTongKhach) * 100) : 0;
-                  return (
-                    <div key={m.name}>
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="font-medium">{m.name}</span>
-                        <span className="text-muted-foreground">
-                          <span className="font-semibold text-foreground">{m.soDoan}</span> đoàn ·{" "}
-                          <span className="font-semibold text-[hsl(var(--brand))]">{m.soKhach.toLocaleString()}</span> khách
-                          <span className="ml-1 text-xs">({pctKhach}%)</span>
-                        </span>
-                      </div>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-[hsl(var(--brand))]"
-                          style={{ width: `${Math.round((m.soKhach / mienMaxKhach) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
                   );
                 })}
               </div>

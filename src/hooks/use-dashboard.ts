@@ -14,6 +14,12 @@ export function useDashboardStats() {
       const todayStr = fmt(today);
       const monthStart = fmt(startOfMonth(today));
       const monthEnd = fmt(endOfMonth(today));
+      const nextMonthStart = fmt(startOfMonth(addMonths(today, 1)));
+      const nextMonthEnd = fmt(endOfMonth(addMonths(today, 1)));
+      const monthLabels = {
+        tm: format(today, "MM/yyyy"),
+        nm: format(addMonths(today, 1), "MM/yyyy"),
+      };
       const next14 = fmt(addDays(today, 14));
       const next7 = fmt(addDays(today, 7));
       const sixMonthsAgo = fmt(startOfMonth(subMonths(today, 5)));
@@ -165,15 +171,29 @@ export function useDashboardStats() {
       const recentDNTT = dnttList.filter((d: any) => d.payment_status !== "paid").slice(0, 8);
 
       // ── Agent breakdown ───────────────────────────────────────────────────────
+      // Tháng này / tháng sau (theo ngay_di)
+      const inThisMonth = (d: any) => d.ngay_di && d.ngay_di >= monthStart && d.ngay_di <= monthEnd;
+      const inNextMonth = (d: any) => d.ngay_di && d.ngay_di >= nextMonthStart && d.ngay_di <= nextMonthEnd;
+
       const agentNameMap = new Map(agentList.map((a) => [a.id, a.ten]));
-      const agentMap = new Map<number, { name: string; soDoan: number; soKhach: number }>();
+      const agentMap = new Map<number, { name: string; tmDoan: number; tmKhach: number; nmDoan: number; nmKhach: number }>();
       for (const d of doanList) {
         if (!d.agent_id || d.trang_thai === "huy") continue;
-        const prev = agentMap.get(d.agent_id) ?? { name: agentNameMap.get(d.agent_id) || "—", soDoan: 0, soKhach: 0 };
-        agentMap.set(d.agent_id, { ...prev, soDoan: prev.soDoan + 1, soKhach: prev.soKhach + guestCount(d) });
+        const isTm = inThisMonth(d);
+        const isNm = inNextMonth(d);
+        if (!isTm && !isNm) continue;
+        const g = guestCount(d);
+        const prev = agentMap.get(d.agent_id) ?? { name: agentNameMap.get(d.agent_id) || "—", tmDoan: 0, tmKhach: 0, nmDoan: 0, nmKhach: 0 };
+        agentMap.set(d.agent_id, {
+          ...prev,
+          tmDoan: prev.tmDoan + (isTm ? 1 : 0),
+          tmKhach: prev.tmKhach + (isTm ? g : 0),
+          nmDoan: prev.nmDoan + (isNm ? 1 : 0),
+          nmKhach: prev.nmKhach + (isNm ? g : 0),
+        });
       }
       const topAgents = [...agentMap.values()]
-        .sort((a, b) => b.soKhach - a.soKhach)
+        .sort((a, b) => (b.tmKhach + b.nmKhach) - (a.tmKhach + a.nmKhach))
         .slice(0, 8);
 
       // ── Địa điểm breakdown ────────────────────────────────────────────────────
@@ -189,21 +209,38 @@ export function useDashboardStats() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 8);
 
-      // ── Miền breakdown (dia_diem.mien) ───────────────────────────────────────
-      const mienMap = new Map<string, { name: string; soDoan: number; soKhach: number }>();
+      // ── Miền breakdown (dia_diem.mien) — tháng này + tháng sau ───────────────
+      const mienMap = new Map<string, { name: string; tmDoan: number; tmKhach: number; nmDoan: number; nmKhach: number }>();
       for (const d of doanList) {
         if (!d.dia_diem_id || d.trang_thai === "huy") continue;
+        const isTm = inThisMonth(d);
+        const isNm = inNextMonth(d);
+        if (!isTm && !isNm) continue;
+        const g = guestCount(d);
         const mien = ddMienMap.get(d.dia_diem_id) || "Khác";
-        const prev = mienMap.get(mien) ?? { name: mien, soDoan: 0, soKhach: 0 };
-        mienMap.set(mien, { ...prev, soDoan: prev.soDoan + 1, soKhach: prev.soKhach + guestCount(d) });
+        const prev = mienMap.get(mien) ?? { name: mien, tmDoan: 0, tmKhach: 0, nmDoan: 0, nmKhach: 0 };
+        mienMap.set(mien, {
+          ...prev,
+          tmDoan: prev.tmDoan + (isTm ? 1 : 0),
+          tmKhach: prev.tmKhach + (isTm ? g : 0),
+          nmDoan: prev.nmDoan + (isNm ? 1 : 0),
+          nmKhach: prev.nmKhach + (isNm ? g : 0),
+        });
       }
       // Thứ tự cố định Bắc → Trung → Nam → Khác
       const MIEN_ORDER = ["Bắc", "Trung", "Nam", "Khác"];
       const topMien = [...mienMap.values()].sort(
         (a, b) => MIEN_ORDER.indexOf(a.name) - MIEN_ORDER.indexOf(b.name),
       );
-      const mienTongDoan = topMien.reduce((s, m) => s + m.soDoan, 0);
-      const mienTongKhach = topMien.reduce((s, m) => s + m.soKhach, 0);
+      const mienTotal = topMien.reduce(
+        (acc, m) => ({
+          tmDoan: acc.tmDoan + m.tmDoan,
+          tmKhach: acc.tmKhach + m.tmKhach,
+          nmDoan: acc.nmDoan + m.nmDoan,
+          nmKhach: acc.nmKhach + m.nmKhach,
+        }),
+        { tmDoan: 0, tmKhach: 0, nmDoan: 0, nmKhach: 0 },
+      );
 
       // ── Công nợ phải trả NCC (còn dư) ────────────────────────────────────────
       const congNoNCCAmount = congNoList.reduce((s, c) => s + Number(c.so_tien_con_lai || 0), 0);
@@ -268,8 +305,8 @@ export function useDashboardStats() {
         topAgents,
         topDiaDiem,
         topMien,
-        mienTongDoan,
-        mienTongKhach,
+        mienTotal,
+        monthLabels,
         // Dòng tiền
         congNoNCCAmount,
         congNoNCCCount,
