@@ -107,7 +107,7 @@ function SetMenuSelect({
       value={value ? String(value) : "none"}
       onValueChange={(v) => onChange(v === "none" ? null : Number(v))}
     >
-      <SelectTrigger className="h-6 text-[11px] border-dashed print-hide">
+      <SelectTrigger className={`h-6 text-[11px] border-dashed print-hide${value ? " bg-amber-50 text-amber-800 font-medium border-amber-200" : ""}`}>
         <span>
           {(() => {
             const m = value ? menus.find((x) => x.id === value) : null;
@@ -161,7 +161,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       {/* CHƯƠNG TRÌNH */}
       <div className="p-1.5 border-r border-border space-y-1 min-w-0" style={{ wordBreak: 'break-word' }}>
         <Input
-          className="h-7 text-[13px] font-medium"
+          className={`h-7 text-[13px] font-medium text-center ${day.thanh_pho?.trim() ? "bg-rose-50 text-rose-800 border-rose-200" : ""}`}
           value={day.thanh_pho}
           onChange={(e) => update({ thanh_pho: e.target.value })}
           placeholder="Thành phố..."
@@ -193,7 +193,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                     updateItems(newItems);
                   }}
                   placeholder="Chọn cảnh điểm"
-                  className="h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3"
+                  className={`h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3${item.canh_diem_id ? " bg-blue-50 text-blue-900 font-medium" : ""}`}
                 />
                 {selectedCanhDiem && (
                   <>
@@ -296,7 +296,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {selectedNhaTrua ? (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words">
+              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
                 {selectedNhaTrua.ten}
               </div>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
@@ -338,7 +338,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {selectedNhaToi ? (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words">
+              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
                 {selectedNhaToi.ten}
               </div>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
@@ -384,7 +384,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         ) : selectedKS ? (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words">
+              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
                 {selectedKS.ten}
               </div>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
@@ -411,7 +411,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {!lockKhachSan && (
           <>
             <textarea
-              className="w-full min-h-[24px] text-[13px] border border-border rounded-md px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              className={`w-full min-h-[24px] text-[13px] border rounded-md px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring ${day.ks_ma_code?.trim() ? "bg-violet-50 text-violet-800 border-violet-200" : "bg-background border-border"}`}
               value={day.ks_ma_code}
               onChange={(e) => update({ ks_ma_code: e.target.value })}
               placeholder="Mã code đặt phòng"
@@ -419,7 +419,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
             />
             <textarea
-              className="w-full min-h-[24px] text-[13px] border border-border rounded-md px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              className={`w-full min-h-[24px] text-[13px] border rounded-md px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring ${day.ks_loai_phong?.trim() ? "bg-violet-50 text-violet-800 border-violet-200" : "bg-background border-border"}`}
               value={day.ks_loai_phong}
               onChange={(e) => update({ ks_loai_phong: e.target.value })}
               placeholder="Loại phòng: 2 TWN, 1 DBL..."
