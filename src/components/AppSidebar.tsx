@@ -254,8 +254,8 @@ function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor
       <SidebarMenuButton asChild isActive={isActive} tooltip={displayTitle}>
         <NavLink
           to={item.url}
-          className="hover:bg-muted/50"
-          activeClassName="bg-muted text-primary font-medium"
+          className="transition-colors"
+          activeClassName="font-medium"
         >
           <item.icon className="h-4 w-4" />
           {!collapsed && (
@@ -311,7 +311,7 @@ export function AppSidebar() {
             className="h-8 w-8 shrink-0 object-contain"
           />
           {!collapsed && (
-            <span className="font-bold text-sm text-[#0a3d7c] truncate flex-1">
+            <span className="font-bold text-sm text-primary truncate flex-1">
               S8 TRAVEL
             </span>
           )}
