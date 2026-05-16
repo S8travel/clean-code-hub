@@ -116,12 +116,12 @@ function DashboardPageContent() {
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
         <Skeleton className="h-32 rounded-xl" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Skeleton className="h-64 rounded-xl" />
-          <Skeleton className="h-64 rounded-xl" />
-        </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Skeleton className="h-64 rounded-xl lg:col-span-2" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Skeleton className="h-64 rounded-xl" />
           <Skeleton className="h-64 rounded-xl" />
         </div>
       </div>
@@ -196,7 +196,7 @@ function DashboardPageContent() {
         />
       </div>
 
-      {/* ── Tier 1b: Dự chi theo tuần ── */}
+      {/* ── Dự chi theo tuần ── */}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -229,7 +229,76 @@ function DashboardPageContent() {
         )}
       </div>
 
-      {/* ── Tier 2: Thống kê đoàn (tháng này + tháng sau) ── */}
+      {/* ── Xu hướng kinh doanh ── */}
+      <div>
+        <SectionTitle>Xu hướng kinh doanh</SectionTitle>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* Bar chart: Đoàn & khách 12 tháng */}
+          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold mb-1">Xu hướng đoàn & khách</p>
+            <p className="text-xs text-muted-foreground mb-4">12 tháng (6 trước + 6 sau · vuốt ngang trên mobile)</p>
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="min-w-[760px] sm:min-w-0">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={3}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE}
+                      formatter={(v: number, name: string) => [v.toLocaleString(), name === "soDoan" ? "Số đoàn" : "Số khách"]} />
+                    <Bar yAxisId="l" dataKey="soDoan" name="soDoan" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar yAxisId="r" dataKey="soKhach" name="soKhach" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 justify-center mt-2">
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /><span className="text-xs text-muted-foreground">Số đoàn</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-500 inline-block" /><span className="text-xs text-muted-foreground">Số khách</span></div>
+            </div>
+          </div>
+
+          {/* Donut: Trạng thái đoàn */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold mb-1">Trạng thái đoàn</p>
+            <p className="text-xs text-muted-foreground mb-3">6 tháng gần nhất</p>
+            {data.statusBreakdown.length === 0 ? (
+              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie data={data.statusBreakdown} cx="50%" cy="50%"
+                      innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value">
+                      {data.statusBreakdown.map((s) => <Cell key={s.name} fill={s.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v + " đoàn"]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-2">
+                  {data.statusBreakdown.map((s) => {
+                    const total = data.statusBreakdown.reduce((acc, x) => acc + x.value, 0);
+                    const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                    return (
+                      <div key={s.name} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: s.color }} />
+                          <span className="text-muted-foreground">{s.name}</span>
+                        </div>
+                        <span className="font-semibold">{s.value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Thống kê đoàn (tháng này + tháng sau) ── */}
       <div>
         <SectionTitle>Thống kê đoàn — tháng này &amp; tháng sau</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -327,7 +396,7 @@ function DashboardPageContent() {
         </div>
       </div>
 
-      {/* ── Tier 3: Cần theo dõi ── */}
+      {/* ── Cần theo dõi ── */}
       <div>
         <SectionTitle>Cần theo dõi</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -428,75 +497,6 @@ function DashboardPageContent() {
                   );
                 })}
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Xu hướng kinh doanh ── */}
-      <div>
-        <SectionTitle>Xu hướng kinh doanh</SectionTitle>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* Bar chart: Đoàn & khách 12 tháng */}
-          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Xu hướng đoàn & khách</p>
-            <p className="text-xs text-muted-foreground mb-4">12 tháng (6 trước + 6 sau · vuốt ngang trên mobile)</p>
-            <div className="overflow-x-auto -mx-1 px-1">
-              <div className="min-w-[760px] sm:min-w-0">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={3}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE}
-                      formatter={(v: number, name: string) => [v.toLocaleString(), name === "soDoan" ? "Số đoàn" : "Số khách"]} />
-                    <Bar yAxisId="l" dataKey="soDoan" name="soDoan" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                    <Bar yAxisId="r" dataKey="soKhach" name="soKhach" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 justify-center mt-2">
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /><span className="text-xs text-muted-foreground">Số đoàn</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-500 inline-block" /><span className="text-xs text-muted-foreground">Số khách</span></div>
-            </div>
-          </div>
-
-          {/* Donut: Trạng thái đoàn */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Trạng thái đoàn</p>
-            <p className="text-xs text-muted-foreground mb-3">6 tháng gần nhất</p>
-            {data.statusBreakdown.length === 0 ? (
-              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={data.statusBreakdown} cx="50%" cy="50%"
-                      innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value">
-                      {data.statusBreakdown.map((s) => <Cell key={s.name} fill={s.color} />)}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v + " đoàn"]} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2 mt-2">
-                  {data.statusBreakdown.map((s) => {
-                    const total = data.statusBreakdown.reduce((acc, x) => acc + x.value, 0);
-                    const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
-                    return (
-                      <div key={s.name} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: s.color }} />
-                          <span className="text-muted-foreground">{s.name}</span>
-                        </div>
-                        <span className="font-semibold">{s.value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
             )}
           </div>
         </div>
