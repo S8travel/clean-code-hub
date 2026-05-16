@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { format, isBefore, isToday, startOfDay, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
-import { Target, Phone, MessageCircle, Mail, Check, Clock, SkipForward } from "lucide-react";
+import { Target, Phone, MessageCircle, Mail, Check, Clock, SkipForward, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,8 @@ import {
   CHANNEL_LABEL, CHANNEL_ICON, PRIORITY_LABEL, OUTCOME_OPTS, TERMINAL_STAGES,
   type LnaOutcome,
 } from "@/lib/lead-next-action";
+import { templateChannelOf } from "@/lib/lead-template";
+import { LeadTemplateModal } from "@/components/leads/LeadTemplateModal";
 
 interface Props {
   lead: {
@@ -53,6 +55,7 @@ export function LeadNextActionBox({ lead, currentUserId }: Props) {
   }, [isLoading, action, eligible, lead.id]);
 
   const [outcomeOpen, setOutcomeOpen] = useState(false);
+  const [tplOpen, setTplOpen] = useState(false);
   const [outcome, setOutcome] = useState<LnaOutcome>("rep_interested");
   const [note, setNote] = useState("");
   const [durationMin, setDurationMin] = useState("");
@@ -167,6 +170,12 @@ export function LeadNextActionBox({ lead, currentUserId }: Props) {
               Mở {CHANNEL_LABEL[action.channel]}
             </a>
           )}
+          {templateChannelOf(action.channel) && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+              onClick={() => setTplOpen(true)}>
+              <FileText className="h-3.5 w-3.5" /> Soạn từ mẫu
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
             onClick={() => setOutcomeOpen(true)}>
             <Check className="h-3.5 w-3.5" /> Đã làm
@@ -250,6 +259,14 @@ export function LeadNextActionBox({ lead, currentUserId }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LeadTemplateModal
+        open={tplOpen}
+        onClose={() => setTplOpen(false)}
+        leadId={lead.id}
+        actionId={action.id}
+        actionChannel={action.channel}
+      />
     </>
   );
 }
