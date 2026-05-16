@@ -4,6 +4,7 @@ import { vi } from "date-fns/locale";
 import {
   TrendingUp, TrendingDown, Users, CreditCard, AlertCircle,
   ArrowRight, Banknote, CheckCircle2, CalendarCheck, Activity,
+  Wallet, CalendarClock,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -41,7 +42,7 @@ function KpiCard({
   icon: React.ElementType; color: string; growth?: number | null; href?: string;
 }) {
   const inner = (
-    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2 hover:shadow-md transition-shadow">
+    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2 hover:shadow-md transition-shadow h-full">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <div className={cn("p-1.5 rounded-lg", color)}>
@@ -81,6 +82,31 @@ const TOOLTIP_STYLE = {
   borderRadius: 8,
 };
 
+// Dự chi theo tuần — pill cho mỗi mốc thời gian
+function DuChiPill({
+  label, count, tien, tone,
+}: { label: string; count: number; tien: number; tone: "danger" | "warning" | "normal" }) {
+  const styles =
+    tone === "danger"  ? "border-destructive/30 bg-destructive/5"
+    : tone === "warning" ? "border-warning/40 bg-warning/10"
+    : "border-border bg-muted/30";
+  const amountCls =
+    tone === "danger" ? "text-destructive"
+    : tone === "warning" ? "text-foreground"
+    : "text-foreground";
+  return (
+    <div className={cn("flex-1 min-w-[140px] rounded-lg border p-3", styles)}>
+      <div className="flex items-center gap-1.5">
+        <span className={cn("w-2 h-2 rounded-full inline-block shrink-0",
+          tone === "danger" ? "bg-destructive" : tone === "warning" ? "bg-warning" : "bg-muted-foreground/50")} />
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      </div>
+      <p className={cn("text-lg font-bold mt-1.5 leading-none", amountCls)}>{fmtM(tien)} ₫</p>
+      <p className="text-[11px] text-muted-foreground mt-1">{count} ĐNTT</p>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 function DashboardPageContent() {
   const { data, isLoading } = useDashboardStats();
@@ -92,17 +118,14 @@ function DashboardPageContent() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Skeleton className="h-64 rounded-xl lg:col-span-2" />
-          <Skeleton className="h-64 rounded-xl" />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Skeleton className="h-64 rounded-xl lg:col-span-2" />
-          <Skeleton className="h-64 rounded-xl" />
-        </div>
+        <Skeleton className="h-32 rounded-xl" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Skeleton className="h-56 rounded-xl" />
-          <Skeleton className="h-56 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Skeleton className="h-64 rounded-xl lg:col-span-2" />
+          <Skeleton className="h-64 rounded-xl" />
         </div>
       </div>
     );
@@ -113,6 +136,7 @@ function DashboardPageContent() {
   const today = format(new Date(), "EEEE, dd/MM/yyyy", { locale: vi });
   const doanGrowth = growthPct(data.thisMonthDoanCount, data.lastMonthDoanCount);
   const khachGrowth = growthPct(data.thisMonthGuests, data.lastMonthGuests);
+  const mienMaxKhach = Math.max(1, ...data.topMien.map((m) => m.soKhach));
 
   return (
     <div className="p-5 space-y-6 max-w-[1400px] mx-auto">
@@ -130,7 +154,7 @@ function DashboardPageContent() {
         </div>
       </div>
 
-      {/* ── Section 1: KPI Cards ── */}
+      {/* ── Tier 1: KPI ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard
           label="Đoàn đang chạy"
@@ -166,219 +190,49 @@ function DashboardPageContent() {
           href="/de-nghi-thanh-toan"
         />
         <KpiCard
-          label="Chưa thanh toán"
-          value={data.pendingPaymentCount}
-          sub={fmtM(data.pendingPaymentAmount) + " ₫"}
-          icon={CreditCard}
-          color="bg-violet-500"
-          href="/de-nghi-thanh-toan"
+          label="Công nợ phải trả NCC"
+          value={fmtM(data.congNoNCCAmount) + " ₫"}
+          sub={`${data.congNoNCCCount} khoản còn dư`}
+          icon={Wallet}
+          color="bg-rose-500"
+          href="/cong-no"
         />
       </div>
 
-      {/* ── Section 2: Xu hướng đoàn + Trạng thái ── */}
-      <div>
-        <SectionTitle>Hoạt động kinh doanh</SectionTitle>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* Bar chart: Đoàn & khách 12 tháng (6 trước + 6 sau) */}
-          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Xu hướng đoàn & khách</p>
-            <p className="text-xs text-muted-foreground mb-4">12 tháng (6 trước + 6 sau · vuốt ngang trên mobile)</p>
-            {/* Mobile: scroll ngang vì 12 cột chật chội. Desktop fill 100%. */}
-            <div className="overflow-x-auto -mx-1 px-1">
-              <div className="min-w-[760px] sm:min-w-0">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={3}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE}
-                      formatter={(v: number, name: string) => [v.toLocaleString(), name === "soDoan" ? "Số đoàn" : "Số khách"]} />
-                    <Bar yAxisId="l" dataKey="soDoan" name="soDoan" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                    <Bar yAxisId="r" dataKey="soKhach" name="soKhach" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 justify-center mt-2">
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /><span className="text-xs text-muted-foreground">Số đoàn</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-500 inline-block" /><span className="text-xs text-muted-foreground">Số khách</span></div>
-            </div>
+      {/* ── Tier 1b: Dự chi theo tuần ── */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-muted-foreground" />
+            <p className="text-sm font-semibold">Dự chi theo tuần</p>
+            <span className="text-xs text-muted-foreground">
+              ĐNTT chưa trả (gồm chờ duyệt) · theo ngày cần thanh toán
+            </span>
           </div>
-
-          {/* Donut: Trạng thái đoàn */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Trạng thái đoàn</p>
-            <p className="text-xs text-muted-foreground mb-3">6 tháng gần nhất</p>
-            {data.statusBreakdown.length === 0 ? (
-              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={data.statusBreakdown} cx="50%" cy="50%"
-                      innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value">
-                      {data.statusBreakdown.map((s) => <Cell key={s.name} fill={s.color} />)}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v + " đoàn"]} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2 mt-2">
-                  {data.statusBreakdown.map((s) => {
-                    const total = data.statusBreakdown.reduce((acc, x) => acc + x.value, 0);
-                    const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
-                    return (
-                      <div key={s.name} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: s.color }} />
-                          <span className="text-muted-foreground">{s.name}</span>
-                        </div>
-                        <span className="font-semibold">{s.value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
+          <Link to="/de-nghi-thanh-toan" className="text-xs text-primary hover:underline flex items-center gap-1">
+            Chi tiết <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
+        {data.duChiTuan.length === 0 ? (
+          <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
+            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            Không có khoản dự chi
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {data.duChiTuan.map((b) => (
+                <DuChiPill key={b.key} label={b.label} count={b.count} tien={b.tien} tone={b.tone} />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Tổng dự chi: <span className="font-semibold text-foreground">{fmtFull(data.duChiTong)}</span>
+            </p>
+          </>
+        )}
       </div>
 
-      {/* ── Section 3: Chi phí ── */}
-      <div>
-        <SectionTitle>Chi phí & tài chính</SectionTitle>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* Area chart: Chi phí 6 tháng */}
-          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Xu hướng chi phí</p>
-            <p className="text-xs text-muted-foreground mb-4">6 tháng gần nhất (đơn vị: triệu ₫)</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={data.monthlyCostData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gKS" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
-                  </linearGradient>
-                  <linearGradient id="gNH" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} />
-                  </linearGradient>
-                  <linearGradient id="gDV" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE}
-                  formatter={(v: number, name: string) => [fmtFull(v),
-                    name === "ks" ? "Khách sạn" : name === "nh" ? "Nhà hàng" : "Dịch vụ"]} />
-                <Area type="monotone" dataKey="ks" name="ks" stroke="#6366f1" strokeWidth={2} fill="url(#gKS)" />
-                <Area type="monotone" dataKey="nh" name="nh" stroke="#f59e0b" strokeWidth={2} fill="url(#gNH)" />
-                <Area type="monotone" dataKey="dv" name="dv" stroke="#10b981" strokeWidth={2} fill="url(#gDV)" />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="flex items-center gap-4 justify-center mt-2">
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" /><span className="text-xs text-muted-foreground">Khách sạn</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-500 inline-block" /><span className="text-xs text-muted-foreground">Nhà hàng</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" /><span className="text-xs text-muted-foreground">Dịch vụ</span></div>
-            </div>
-          </div>
-
-          {/* Donut + breakdown: Chi phí tháng này */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Cơ cấu chi phí tháng</p>
-            <p className="text-xs text-muted-foreground mb-3">Tổng: <span className="font-semibold text-foreground">{fmtM(data.tongChiPhiThang)} ₫</span></p>
-            {data.tongChiPhiThang === 0 ? (
-              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có chi phí</div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height={150}>
-                  <PieChart>
-                    <Pie data={data.chiPieParts.filter((p) => p.value > 0)}
-                      cx="50%" cy="50%" innerRadius={45} outerRadius={68}
-                      paddingAngle={3} dataKey="value">
-                      {data.chiPieParts.filter((p) => p.value > 0).map((p) => <Cell key={p.name} fill={p.color} />)}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtFull(v)]} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2 mt-2">
-                  {data.chiPieParts.filter((p) => p.value > 0).map((p) => {
-                    const pct = data.tongChiPhiThang > 0 ? Math.round((p.value / data.tongChiPhiThang) * 100) : 0;
-                    return (
-                      <div key={p.name} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
-                          <span className="text-muted-foreground">{p.name}</span>
-                        </div>
-                        <span className="font-medium">{fmtM(p.value)} ₫ <span className="text-muted-foreground">({pct}%)</span></span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section 4: Agent + Địa điểm ── */}
-      <div>
-        <SectionTitle>Hiệu suất vận hành (6 tháng)</SectionTitle>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          {/* Agent ranking */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Đoàn theo Agent</p>
-            <p className="text-xs text-muted-foreground mb-4">Xếp hạng theo số khách</p>
-            {data.topAgents.length === 0 ? (
-              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={Math.max(160, data.topAgents.length * 36)}>
-                <BarChart data={data.topAgents} layout="vertical"
-                  margin={{ top: 0, right: 48, left: 8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis type="category" dataKey="name" width={70}
-                    tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE}
-                    formatter={(v: number, name: string) => [v.toLocaleString(), name === "soKhach" ? "Khách" : "Đoàn"]} />
-                  <Bar dataKey="soKhach" name="soKhach" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={22}
-                    label={{ position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          {/* Địa điểm breakdown */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Đoàn theo Địa điểm</p>
-            <p className="text-xs text-muted-foreground mb-4">Số đoàn theo từng điểm đến</p>
-            {data.topDiaDiem.length === 0 ? (
-              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={Math.max(160, data.topDiaDiem.length * 36)}>
-                <BarChart data={data.topDiaDiem} layout="vertical"
-                  margin={{ top: 0, right: 48, left: 8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis type="category" dataKey="name" width={70}
-                    tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v + " đoàn"]} />
-                  <Bar dataKey="count" name="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} maxBarSize={22}
-                    label={{ position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section 5: Sắp khởi hành + ĐNTT ── */}
+      {/* ── Tier 2: Cần theo dõi ── */}
       <div>
         <SectionTitle>Cần theo dõi</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -484,7 +338,260 @@ function DashboardPageContent() {
         </div>
       </div>
 
-      {/* ── Section 6: Đoàn đang chạy ── */}
+      {/* ── Tier 3: Thống kê vận hành (6 tháng) ── */}
+      <div>
+        <SectionTitle>Thống kê vận hành (6 tháng)</SectionTitle>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Theo Agent — bảng đoàn + khách */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-border bg-muted/30">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Theo Agent — số đoàn & lượng khách
+              </p>
+            </div>
+            {data.topAgents.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[10px] uppercase text-muted-foreground tracking-wider">
+                    <th className="text-left font-semibold px-4 py-2">Agent</th>
+                    <th className="text-right font-semibold px-4 py-2">Số đoàn</th>
+                    <th className="text-right font-semibold px-4 py-2">Số khách</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {data.topAgents.map((a) => (
+                    <tr key={a.name} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2 font-medium truncate max-w-[160px]">{a.name}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{a.soDoan.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">
+                        {a.soKhach.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Theo Miền — đoàn + khách + tỉ trọng */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Theo Miền — số đoàn & lượng khách
+              </p>
+              <span className="text-[11px] text-muted-foreground">
+                {data.mienTongDoan} đoàn · {data.mienTongKhach.toLocaleString()} khách
+              </span>
+            </div>
+            {data.topMien.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <div className="p-4 space-y-3">
+                {data.topMien.map((m) => {
+                  const pctKhach = data.mienTongKhach > 0 ? Math.round((m.soKhach / data.mienTongKhach) * 100) : 0;
+                  return (
+                    <div key={m.name}>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="font-medium">{m.name}</span>
+                        <span className="text-muted-foreground">
+                          <span className="font-semibold text-foreground">{m.soDoan}</span> đoàn ·{" "}
+                          <span className="font-semibold text-[hsl(var(--brand))]">{m.soKhach.toLocaleString()}</span> khách
+                          <span className="ml-1 text-xs">({pctKhach}%)</span>
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[hsl(var(--brand))]"
+                          style={{ width: `${Math.round((m.soKhach / mienMaxKhach) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Xu hướng kinh doanh ── */}
+      <div>
+        <SectionTitle>Xu hướng kinh doanh</SectionTitle>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* Bar chart: Đoàn & khách 12 tháng */}
+          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold mb-1">Xu hướng đoàn & khách</p>
+            <p className="text-xs text-muted-foreground mb-4">12 tháng (6 trước + 6 sau · vuốt ngang trên mobile)</p>
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="min-w-[760px] sm:min-w-0">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={3}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE}
+                      formatter={(v: number, name: string) => [v.toLocaleString(), name === "soDoan" ? "Số đoàn" : "Số khách"]} />
+                    <Bar yAxisId="l" dataKey="soDoan" name="soDoan" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar yAxisId="r" dataKey="soKhach" name="soKhach" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 justify-center mt-2">
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /><span className="text-xs text-muted-foreground">Số đoàn</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-500 inline-block" /><span className="text-xs text-muted-foreground">Số khách</span></div>
+            </div>
+          </div>
+
+          {/* Donut: Trạng thái đoàn */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold mb-1">Trạng thái đoàn</p>
+            <p className="text-xs text-muted-foreground mb-3">6 tháng gần nhất</p>
+            {data.statusBreakdown.length === 0 ? (
+              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie data={data.statusBreakdown} cx="50%" cy="50%"
+                      innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value">
+                      {data.statusBreakdown.map((s) => <Cell key={s.name} fill={s.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v + " đoàn"]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-2">
+                  {data.statusBreakdown.map((s) => {
+                    const total = data.statusBreakdown.reduce((acc, x) => acc + x.value, 0);
+                    const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                    return (
+                      <div key={s.name} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: s.color }} />
+                          <span className="text-muted-foreground">{s.name}</span>
+                        </div>
+                        <span className="font-semibold">{s.value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Chi phí & tài chính ── */}
+      <div>
+        <SectionTitle>Chi phí & tài chính</SectionTitle>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* Area chart: Chi phí 6 tháng */}
+          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold mb-1">Xu hướng chi phí</p>
+            <p className="text-xs text-muted-foreground mb-4">6 tháng gần nhất (đơn vị: triệu ₫)</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={data.monthlyCostData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gKS" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                  </linearGradient>
+                  <linearGradient id="gNH" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} />
+                  </linearGradient>
+                  <linearGradient id="gDV" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE}
+                  formatter={(v: number, name: string) => [fmtFull(v),
+                    name === "ks" ? "Khách sạn" : name === "nh" ? "Nhà hàng" : "Dịch vụ"]} />
+                <Area type="monotone" dataKey="ks" name="ks" stroke="#6366f1" strokeWidth={2} fill="url(#gKS)" />
+                <Area type="monotone" dataKey="nh" name="nh" stroke="#f59e0b" strokeWidth={2} fill="url(#gNH)" />
+                <Area type="monotone" dataKey="dv" name="dv" stroke="#10b981" strokeWidth={2} fill="url(#gDV)" />
+              </AreaChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-4 justify-center mt-2">
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" /><span className="text-xs text-muted-foreground">Khách sạn</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-500 inline-block" /><span className="text-xs text-muted-foreground">Nhà hàng</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" /><span className="text-xs text-muted-foreground">Dịch vụ</span></div>
+            </div>
+          </div>
+
+          {/* Donut + breakdown: Chi phí tháng này */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold mb-1">Cơ cấu chi phí tháng</p>
+            <p className="text-xs text-muted-foreground mb-3">Tổng: <span className="font-semibold text-foreground">{fmtM(data.tongChiPhiThang)} ₫</span></p>
+            {data.tongChiPhiThang === 0 ? (
+              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có chi phí</div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie data={data.chiPieParts.filter((p) => p.value > 0)}
+                      cx="50%" cy="50%" innerRadius={45} outerRadius={68}
+                      paddingAngle={3} dataKey="value">
+                      {data.chiPieParts.filter((p) => p.value > 0).map((p) => <Cell key={p.name} fill={p.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtFull(v)]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-2">
+                  {data.chiPieParts.filter((p) => p.value > 0).map((p) => {
+                    const pct = data.tongChiPhiThang > 0 ? Math.round((p.value / data.tongChiPhiThang) * 100) : 0;
+                    return (
+                      <div key={p.name} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
+                          <span className="text-muted-foreground">{p.name}</span>
+                        </div>
+                        <span className="font-medium">{fmtM(p.value)} ₫ <span className="text-muted-foreground">({pct}%)</span></span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Địa điểm ── */}
+      <div>
+        <SectionTitle>Đoàn theo địa điểm (6 tháng)</SectionTitle>
+        <div className="rounded-xl border border-border bg-card p-4">
+          {data.topDiaDiem.length === 0 ? (
+            <div className="flex items-center justify-center h-[160px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(160, data.topDiaDiem.length * 36)}>
+              <BarChart data={data.topDiaDiem} layout="vertical"
+                margin={{ top: 0, right: 48, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis type="category" dataKey="name" width={70}
+                  tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE}
+                  formatter={(v: number, name: string) => [v.toLocaleString(), name === "soKhach" ? "Khách" : "Đoàn"]} />
+                <Bar dataKey="count" name="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} maxBarSize={22}
+                  label={{ position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* ── Đoàn đang chạy hôm nay ── */}
       {data.activeDoan.length > 0 && (
         <div>
           <SectionTitle>Đang hoạt động hôm nay</SectionTitle>

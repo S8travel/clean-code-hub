@@ -20,7 +20,7 @@ export function useDashboardStats() {
       const lastMonthStart = fmt(startOfMonth(subMonths(today, 1)));
       const lastMonthEnd = fmt(endOfMonth(subMonths(today, 1)));
 
-      const [doanRes, dnttRes, cpThangRes, agentRes, diaDiemRes, cp6Res] = await Promise.all([
+      const [doanRes, dnttRes, cpThangRes, agentRes, diaDiemRes, cp6Res, congNoRes] = await Promise.all([
         externalSupabase
           .from("doan")
           .select("id, ten_doan, ngay_di, ngay_ve, so_khach, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, trang_thai, agent_id, dia_diem_id")
@@ -28,7 +28,7 @@ export function useDashboardStats() {
           .order("ngay_di", { ascending: true }),
         externalSupabase
           .from("dntt_with_payment_status")
-          .select("id, so_tien, trang_thai_duyet, payment_status, paid_amount, created_at, mo_ta, loai, doan_id")
+          .select("id, so_tien, trang_thai_duyet, payment_status, paid_amount, created_at, mo_ta, loai, doan_id, ngay_can_thanh_toan")
           .not("trang_thai_duyet", "eq", "da_huy")
           .not("trang_thai_duyet", "eq", "tu_choi")
           .order("created_at", { ascending: false }),
@@ -40,13 +40,17 @@ export function useDashboardStats() {
           .not("trang_thai_dntt", "eq", "cong_no")
           .not("trang_thai_dntt", "eq", "hoan_tien"),
         externalSupabase.from("agents").select("id, ten"),
-        externalSupabase.from("dia_diem").select("id, ten"),
+        externalSupabase.from("dia_diem").select("id, ten, mien"),
         externalSupabase
           .from("doan_chi_phi")
           .select("tien_cong_ty, danh_muc, created_at")
           .gte("created_at", sixMonthsAgo + "T00:00:00")
           .not("trang_thai_dntt", "eq", "cong_no")
           .not("trang_thai_dntt", "eq", "hoan_tien"),
+        externalSupabase
+          .from("cong_no_with_status")
+          .select("so_tien_con_lai, trang_thai")
+          .eq("trang_thai", "con_du"),
       ]);
 
       const doanList = doanRes.data || [];
@@ -55,6 +59,7 @@ export function useDashboardStats() {
       const agentList = agentRes.data || [];
       const diaDiemList = diaDiemRes.data || [];
       const cp6List = cp6Res.data || [];
+      const congNoList = congNoRes.data || [];
 
       const guestCount = (d: any) =>
         (d.so_khach_lon || 0) + (d.so_khach_em1 || 0) + (d.so_khach_em2 || 0) + (d.so_khach_tl || 0) || d.so_khach || 0;
@@ -173,15 +178,78 @@ export function useDashboardStats() {
 
       // ── Địa điểm breakdown ────────────────────────────────────────────────────
       const ddNameMap = new Map(diaDiemList.map((d) => [d.id, d.ten]));
-      const ddMap = new Map<number, { name: string; count: number }>();
+      const ddMienMap = new Map(diaDiemList.map((d) => [d.id, d.mien]));
+      const ddMap = new Map<number, { name: string; count: number; soKhach: number }>();
       for (const d of doanList) {
         if (!d.dia_diem_id || d.trang_thai === "huy") continue;
-        const prev = ddMap.get(d.dia_diem_id) ?? { name: ddNameMap.get(d.dia_diem_id) || "—", count: 0 };
-        ddMap.set(d.dia_diem_id, { ...prev, count: prev.count + 1 });
+        const prev = ddMap.get(d.dia_diem_id) ?? { name: ddNameMap.get(d.dia_diem_id) || "—", count: 0, soKhach: 0 };
+        ddMap.set(d.dia_diem_id, { ...prev, count: prev.count + 1, soKhach: prev.soKhach + guestCount(d) });
       }
       const topDiaDiem = [...ddMap.values()]
         .sort((a, b) => b.count - a.count)
         .slice(0, 8);
+
+      // ── Miền breakdown (dia_diem.mien) ───────────────────────────────────────
+      const mienMap = new Map<string, { name: string; soDoan: number; soKhach: number }>();
+      for (const d of doanList) {
+        if (!d.dia_diem_id || d.trang_thai === "huy") continue;
+        const mien = ddMienMap.get(d.dia_diem_id) || "Khác";
+        const prev = mienMap.get(mien) ?? { name: mien, soDoan: 0, soKhach: 0 };
+        mienMap.set(mien, { ...prev, soDoan: prev.soDoan + 1, soKhach: prev.soKhach + guestCount(d) });
+      }
+      // Thứ tự cố định Bắc → Trung → Nam → Khác
+      const MIEN_ORDER = ["Bắc", "Trung", "Nam", "Khác"];
+      const topMien = [...mienMap.values()].sort(
+        (a, b) => MIEN_ORDER.indexOf(a.name) - MIEN_ORDER.indexOf(b.name),
+      );
+      const mienTongDoan = topMien.reduce((s, m) => s + m.soDoan, 0);
+      const mienTongKhach = topMien.reduce((s, m) => s + m.soKhach, 0);
+
+      // ── Công nợ phải trả NCC (còn dư) ────────────────────────────────────────
+      const congNoNCCAmount = congNoList.reduce((s, c) => s + Number(c.so_tien_con_lai || 0), 0);
+      const congNoNCCCount = congNoList.length;
+
+      // ── Dự chi theo tuần (ĐNTT chưa trả & chưa hủy, theo ngay_can_thanh_toan) ─
+      const duChiBuckets: { key: string; label: string; tone: "danger" | "warning" | "normal" }[] = [
+        { key: "qua_han",  label: "Quá hạn",          tone: "danger" },
+        { key: "tuan_nay", label: "Tuần này (≤7n)",   tone: "warning" },
+        { key: "tuan_toi", label: "Tuần tới (8–14n)", tone: "normal" },
+        { key: "t3",       label: "15–21 ngày",       tone: "normal" },
+        { key: "t4",       label: "22–28 ngày",       tone: "normal" },
+        { key: "sau",      label: "> 28 ngày",        tone: "normal" },
+        { key: "chua",     label: "Chưa định ngày",   tone: "normal" },
+      ];
+      const duChiAgg = new Map<string, { count: number; tien: number }>();
+      for (const b of duChiBuckets) duChiAgg.set(b.key, { count: 0, tien: 0 });
+      const msDay = 86400000;
+      const todayMid = new Date(todayStr + "T00:00:00").getTime();
+      for (const d of dnttList as any[]) {
+        if (d.trang_thai_duyet !== "cho_duyet" && d.trang_thai_duyet !== "da_duyet") continue;
+        if (d.payment_status === "paid") continue;
+        const con = Number(d.so_tien || 0) - Number(d.paid_amount || 0);
+        if (con <= 0) continue;
+        let key: string;
+        if (!d.ngay_can_thanh_toan) {
+          key = "chua";
+        } else {
+          const diff = Math.floor(
+            (new Date(d.ngay_can_thanh_toan + "T00:00:00").getTime() - todayMid) / msDay,
+          );
+          key = diff < 0 ? "qua_han"
+            : diff < 7 ? "tuan_nay"
+            : diff < 14 ? "tuan_toi"
+            : diff < 21 ? "t3"
+            : diff < 28 ? "t4"
+            : "sau";
+        }
+        const cur = duChiAgg.get(key)!;
+        cur.count += 1;
+        cur.tien += con;
+      }
+      const duChiTuan = duChiBuckets
+        .map((b) => ({ ...b, ...duChiAgg.get(b.key)! }))
+        .filter((b) => b.count > 0);
+      const duChiTong = duChiTuan.reduce((s, b) => s + b.tien, 0);
 
       return {
         // Core
@@ -199,6 +267,14 @@ export function useDashboardStats() {
         statusBreakdown,
         topAgents,
         topDiaDiem,
+        topMien,
+        mienTongDoan,
+        mienTongKhach,
+        // Dòng tiền
+        congNoNCCAmount,
+        congNoNCCCount,
+        duChiTuan,
+        duChiTong,
         // ĐNTT
         pendingApprovalCount: pendingApproval.length,
         pendingApprovalAmount: pendingApproval.reduce((s, d) => s + d.so_tien, 0),
