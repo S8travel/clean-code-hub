@@ -97,6 +97,103 @@ export function useDefaultAssignees() {
   });
 }
 
+// Ma trận phân việc theo đoàn (5 đầu việc) cho trang Theo dõi
+export interface PvCell { user_id: string; ten: string; trang_thai: string }
+
+export function useDoanPhanViecMatrix(doanIds: number[]) {
+  const sorted = [...new Set(doanIds)].sort((a, b) => a - b);
+  return useQuery({
+    queryKey: ["doan_phan_viec_matrix", sorted.join(",")],
+    enabled: sorted.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("cong_viec")
+        .select("doan_id, loai_viec, nguoi_nhan, trang_thai, created_at")
+        .in("loai_viec", ["pv_ks", "pv_nh_dv", "pv_xe", "pv_visa", "pv_ve_mb"])
+        .in("doan_id", sorted)
+        .neq("trang_thai", "huy")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const latest = new Map<string, { nguoi_nhan: string; trang_thai: string }>();
+      for (const r of (data ?? []) as any[]) {
+        const k = `${r.doan_id}|${r.loai_viec}`;
+        if (!latest.has(k)) latest.set(k, { nguoi_nhan: r.nguoi_nhan, trang_thai: r.trang_thai });
+      }
+      const uids = [...new Set([...latest.values()].map((v) => v.nguoi_nhan))];
+      const nameMap = new Map<string, string>();
+      if (uids.length) {
+        const { data: u } = await externalSupabase
+          .from("user_roles").select("user_id, ho_ten").in("user_id", uids);
+        (u ?? []).forEach((x: any) => nameMap.set(x.user_id, x.ho_ten ?? x.user_id));
+      }
+      const out = new Map<number, Partial<Record<PvKey, PvCell>>>();
+      latest.forEach((v, k) => {
+        const [did, lv] = k.split("|");
+        const d = Number(did);
+        if (!out.has(d)) out.set(d, {});
+        out.get(d)![lv as PvKey] = {
+          user_id: v.nguoi_nhan, ten: nameMap.get(v.nguoi_nhan) ?? "—", trang_thai: v.trang_thai,
+        };
+      });
+      return out;
+    },
+  });
+}
+
+// Gán / đổi người 1 đầu việc từ trang Theo dõi
+export function useAssignPvItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      doanId: number; doanTen: string; ngayDi: string | null;
+      key: PvKey; userId: string;
+    }) => {
+      const { data: ex } = await externalSupabase
+        .from("cong_viec")
+        .select("id, nguoi_nhan")
+        .eq("doan_id", p.doanId).eq("loai_viec", p.key)
+        .in("trang_thai", ["cho_nhan", "dang_lam"])
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (ex && (ex as any).nguoi_nhan === p.userId) return;
+      if (ex) {
+        await externalSupabase.from("cong_viec")
+          .update({ trang_thai: "huy", updated_at: new Date().toISOString() })
+          .eq("id", (ex as any).id);
+        await externalSupabase.from("thong_bao").insert({
+          user_id: (ex as any).nguoi_nhan, doan_id: p.doanId, doan_ten: p.doanTen,
+          loai: "giao_viec",
+          tieu_de: `Đoàn ${p.doanTen}: việc ${LABEL[p.key]} đã chuyển người khác`,
+          noi_dung: "Bạn không còn phụ trách việc này.", is_read: false,
+        });
+      }
+      const { data: cv, error } = await externalSupabase
+        .from("cong_viec")
+        .insert({
+          tieu_de: `[${LABEL[p.key]}] ${p.doanTen}`,
+          mo_ta: `Phụ trách ${LABEL[p.key]} cho đoàn ${p.doanTen}`,
+          doan_id: p.doanId, nguoi_giao: SYSTEM_USER_ID, nguoi_nhan: p.userId,
+          loai_viec: p.key, do_uu_tien: "binh_thuong",
+          han_xu_ly: p.ngayDi || null, trang_thai: "cho_nhan",
+        })
+        .select("id").single();
+      if (error) throw error;
+      await externalSupabase.from("thong_bao").insert({
+        user_id: p.userId, cong_viec_id: cv.id, doan_id: p.doanId, doan_ten: p.doanTen,
+        loai: "giao_viec",
+        tieu_de: `Đoàn ${p.doanTen}: bạn phụ trách ${LABEL[p.key]}`,
+        noi_dung: "Giao tự động bởi Hệ thống", is_read: false,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["doan_phan_viec_matrix"] });
+      qc.invalidateQueries({ queryKey: ["doan_op_map"] });
+      qc.invalidateQueries({ queryKey: ["cong_viec"] });
+      qc.invalidateQueries({ queryKey: ["thong_bao"] });
+    },
+  });
+}
+
 interface CreatePhanViecInput {
   doan: { id: number; ten_doan: string; loai_tour: string | null; ngay_di: string | null };
   creatorId: string;

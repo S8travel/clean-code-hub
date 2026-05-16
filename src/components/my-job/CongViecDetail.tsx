@@ -23,6 +23,13 @@ const LOAI_LABEL: Record<string, string> = {
   booking_ks: "Booking KS", booking_nh: "Booking NH",
   visa: "Visa", thanh_toan: "Thanh toán",
   lien_he: "Liên hệ / Xác nhận", khac: "Khác",
+  pv_ks: "Phụ trách Khách sạn", pv_nh_dv: "Phụ trách Nhà hàng & DV",
+  pv_xe: "Phụ trách Xe", pv_visa: "Phụ trách Visa",
+  pv_ve_mb: "Phụ trách Vé máy bay", pv_phancong: "Phân công người phụ trách",
+};
+const PV_TT_LABEL: Record<string, string> = {
+  cho_nhan: "Chờ xác nhận", dang_lam: "Đã nhận",
+  hoan_thanh: "Đã nhận", tu_choi: "Từ chối",
 };
 
 const TRANG_THAI_CFG: Record<string, { label: string; cls: string }> = {
@@ -69,7 +76,9 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
 
   const isRecipient = task.nguoi_nhan === userId;
   const isAssigner = task.nguoi_giao === userId;
+  const isPv = task.loai_viec.startsWith("pv_");
   const ttCfg = TRANG_THAI_CFG[task.trang_thai] ?? { label: task.trang_thai, cls: "text-muted-foreground" };
+  const ttLabel = isPv ? (PV_TT_LABEL[task.trang_thai] ?? ttCfg.label) : ttCfg.label;
 
   const handleUpdateStatus = async (newStatus: "dang_lam" | "hoan_thanh" | "tu_choi") => {
     const needsNote = newStatus === "hoan_thanh" || newStatus === "tu_choi";
@@ -121,7 +130,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
         <SheetHeader className="px-4 pt-4 pb-3 border-b">
           <div className="flex items-start gap-2 pr-6">
             <SheetTitle className="text-sm font-semibold leading-snug flex-1">{task.tieu_de}</SheetTitle>
-            <span className={cn("text-xs font-semibold shrink-0 mt-0.5", ttCfg.cls)}>{ttCfg.label}</span>
+            <span className={cn("text-xs font-semibold shrink-0 mt-0.5", ttCfg.cls)}>{ttLabel}</span>
           </div>
         </SheetHeader>
 
@@ -155,8 +164,51 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
             </div>
           )}
 
+          {/* Phân việc đoàn (pv_*) — chỉ Xác nhận / Không nhận + lý do */}
+          {isPv && isRecipient && task.trang_thai === "cho_nhan" && (
+            <div className="space-y-2">
+              {!actionMode && (
+                <div className="flex gap-2">
+                  <Button size="sm" className="text-xs flex-1"
+                    disabled={updateStatus.isPending}
+                    onClick={() => handleUpdateStatus("dang_lam")}>
+                    {updateStatus.isPending ? "..." : "Xác nhận"}
+                  </Button>
+                  <Button size="sm" variant="outline"
+                    className="text-xs flex-1 text-red-600 border-red-300 hover:bg-red-50"
+                    onClick={() => setActionMode("tu_choi")}>
+                    Không nhận
+                  </Button>
+                </div>
+              )}
+              {actionMode === "tu_choi" && (
+                <div className="space-y-2 rounded-md border p-3">
+                  <p className="font-medium text-xs">Lý do không nhận *</p>
+                  <Textarea
+                    className="text-xs min-h-[72px]"
+                    placeholder="Vì sao bạn không nhận việc này..."
+                    value={ghiChu}
+                    onChange={(e) => setGhiChu(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" className="text-xs flex-1 bg-red-600 hover:bg-red-700"
+                      disabled={updateStatus.isPending}
+                      onClick={() => handleUpdateStatus("tu_choi")}>
+                      {updateStatus.isPending ? "Đang lưu..." : "Xác nhận không nhận"}
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs"
+                      onClick={() => { setActionMode(null); setGhiChu(""); }}>
+                      Hủy
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Recipient actions */}
-          {isRecipient && task.trang_thai === "cho_nhan" && (
+          {!isPv && isRecipient && task.trang_thai === "cho_nhan" && (
             <Button
               size="sm"
               className="text-xs w-full"
@@ -167,7 +219,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
             </Button>
           )}
 
-          {isRecipient && task.trang_thai === "dang_lam" && (
+          {!isPv && isRecipient && task.trang_thai === "dang_lam" && (
             <div className="space-y-2">
               {!actionMode && (
                 <div className="flex gap-2">
@@ -215,7 +267,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
           )}
 
           {/* Assigner force-close */}
-          {isAssigner && task.trang_thai !== "hoan_thanh" && task.trang_thai !== "tu_choi" && (
+          {!isPv && isAssigner && task.trang_thai !== "hoan_thanh" && task.trang_thai !== "tu_choi" && (
             <div className="space-y-2">
               {!actionMode && (
                 <Button
