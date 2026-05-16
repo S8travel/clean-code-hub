@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { DoanTable } from "@/components/DoanTable";
 import { DoanDrawer } from "@/components/DoanDrawer";
+import { PhanViecModal } from "@/components/doan/PhanViecModal";
+import { useDoanOpMap } from "@/hooks/use-phan-viec";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import {
   useDoanList,
@@ -75,12 +77,16 @@ export default function Index() {
   const { data: agents } = useAgents();
   const { data: diaDiemList } = useDiaDiem();
   const { data: userRoles } = useUserRoles();
+  const { data: doanOpMap } = useDoanOpMap((groups ?? []).map((g: any) => g.id));
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDoan, setEditingDoan] = useState<any | null>(null);
   const [deletingDoan, setDeletingDoan] = useState<any | null>(null);
   const [cancelingDoan, setCancelingDoan] = useState<any | null>(null);
   const [pendingCreate, setPendingCreate] = useState<DoanInsert | null>(null);
+  const [phanViecDoan, setPhanViecDoan] = useState<
+    { id: number; ten_doan: string; loai_tour: string | null; ngay_di: string | null } | null
+  >(null);
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
@@ -124,7 +130,7 @@ export default function Index() {
     return groups.filter((g: any) => {
       if (search) {
         const q = search.toLowerCase();
-        const opName = g.assigned_to ? userRolesMap.get(g.assigned_to) || "" : "";
+        const opName = doanOpMap?.get(g.id)?.ten || "";
         const match =
           g.ten_doan?.toLowerCase().includes(q) ||
           g.huong_dan_vien?.ten?.toLowerCase().includes(q) ||
@@ -149,7 +155,7 @@ export default function Index() {
 
       return true;
     });
-  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, userRolesMap, qtPaidSet]);
+  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, doanOpMap, qtPaidSet]);
 
   // Page reset đã tích hợp trong setSearch/setDateFrom/... helpers ở trên
 
@@ -231,6 +237,10 @@ export default function Index() {
             });
           } catch { /* seri apply failure non-fatal */ }
         }
+        if (created) setPhanViecDoan({
+          id: created.id, ten_doan: data.ten_doan,
+          loai_tour: (data as any).loai_tour ?? null, ngay_di: data.ngay_di ?? null,
+        });
         toast.success("✓ Tạo đoàn thành công");
       }
       setDrawerOpen(false);
@@ -541,6 +551,11 @@ export default function Index() {
                           } catch { /* non-fatal */ }
                         }
                       }
+                      if (created) setPhanViecDoan({
+                        id: created.id, ten_doan: pendingCreate.ten_doan,
+                        loai_tour: (pendingCreate as any).loai_tour ?? null,
+                        ngay_di: pendingCreate.ngay_di ?? null,
+                      });
                       setPendingCreate(null);
                       setDrawerOpen(false);
                       setEditingDoan(null);
@@ -557,6 +572,16 @@ export default function Index() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <PhanViecModal
+        open={!!phanViecDoan}
+        onClose={() => setPhanViecDoan(null)}
+        doan={phanViecDoan}
+        creator={{
+          id: currentUser?.user_id ?? "",
+          name: currentUser?.ho_ten ?? currentUser?.email ?? "",
+        }}
+      />
     </div>
   );
 }

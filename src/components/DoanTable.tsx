@@ -15,6 +15,7 @@ import {
 // import { PermissionDialog } from "@/components/PermissionDialog"; // FEATURE_DOAN_PERM_DISABLED
 import type { UserRole } from "@/hooks/use-doan";
 import { useDoanQuyetToanPaidSet } from "@/hooks/use-doan";
+import { useDoanOpMap } from "@/hooks/use-phan-viec";
 import { computeDoanStatus, type DoanStatus } from "@/lib/doan-status";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -116,6 +117,7 @@ export function DoanTable({
   useTranslate();
   const navigate = useNavigate();
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
+  const { data: opMap } = useDoanOpMap((groups ?? []).map((g: any) => g.id));
   // Controlled (via props) hoặc uncontrolled fallback
   const [sortKeyState, setSortKeyState] = useState<SortKey>("ngay_di");
   const [sortDirState, setSortDirState] = useState<SortDir>("asc");
@@ -173,9 +175,9 @@ export function DoanTable({
     return "";
   };
 
+  // OP = người phụ trách Nhà hàng & DV (pv_nh_dv), không còn = assigned_to
   const getOpName = (g: any): string | null => {
-    if (!g.assigned_to) return null;
-    return userRolesMap.get(g.assigned_to) || "—";
+    return opMap?.get(g.id)?.ten ?? null;
   };
 
   return (
