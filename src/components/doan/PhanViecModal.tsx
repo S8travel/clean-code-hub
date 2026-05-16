@@ -12,74 +12,99 @@ import {
 } from "@/components/ui/select";
 import { useUserListForAssign } from "@/hooks/use-cong-viec";
 import {
-  defaultPhanViec, useCreatePhanViec, type PvKey,
+  defaultPhanViec, useDefaultAssignees, type PvKey,
 } from "@/hooks/use-phan-viec";
+
+export interface PhanViecInfo {
+  code: string;
+  agent: string;
+  diaDiem: string;
+  soKhach: number | null;
+  ngayDi: string | null;
+  ngayVe: string | null;
+  loaiTour: string | null;
+}
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  doan: { id: number; ten_doan: string; loai_tour: string | null; ngay_di: string | null } | null;
-  creator: { id: string; name: string };
+  info: PhanViecInfo | null;
+  creatorId: string;
+  submitting: boolean;
+  onConfirm: (assignments: { key: PvKey; assignedTo: string | null }[]) => Promise<void>;
 }
 
 interface RowState { key: PvKey; label: string; checked: boolean; assignedTo: string }
 
-export function PhanViecModal({ open, onClose, doan, creator }: Props) {
+export function PhanViecModal({ open, onClose, info, creatorId, submitting, onConfirm }: Props) {
   const { data: users = [] } = useUserListForAssign();
-  const createPv = useCreatePhanViec();
+  const { data: defaults } = useDefaultAssignees();
   const [rows, setRows] = useState<RowState[]>([]);
 
   useEffect(() => {
-    if (open && doan) {
+    if (open && info) {
       setRows(
-        defaultPhanViec(doan.loai_tour).map((d) => ({
-          key: d.key,
-          label: d.label,
-          checked: d.checked,
-          // KS mặc định = người tạo đoàn
-          assignedTo: d.key === "pv_ks" ? creator.id : "",
-        })),
+        defaultPhanViec(info.loaiTour).map((d) => {
+          let assignedTo = "";
+          if (d.key === "pv_ks") assignedTo = creatorId;            // KS = người tạo
+          else if (defaults?.[d.key]) assignedTo = defaults[d.key]!.user_id; // config
+          return { key: d.key, label: d.label, checked: d.checked, assignedTo };
+        }),
       );
     }
-  }, [open, doan, creator.id]);
+  }, [open, info, creatorId, defaults]);
 
-  if (!doan) return null;
+  if (!info) return null;
 
   const setRow = (key: PvKey, patch: Partial<RowState>) =>
     setRows((p) => p.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 
-  const submit = () => {
+  const submit = async () => {
     const assignments = rows
       .filter((r) => r.checked)
       .map((r) => ({ key: r.key, assignedTo: r.assignedTo || null }));
     if (assignments.length === 0) { toast.error("Chọn ít nhất 1 đầu việc"); return; }
-    createPv.mutate(
-      { doan, creatorId: creator.id, creatorName: creator.name, assignments },
-      {
-        onSuccess: (r) => {
-          toast.success(
-            `Đã phân việc đoàn ${doan.ten_doan}` +
-            (r.missingCount > 0 ? ` · ${r.missingCount} mục thiếu người → đã báo điều phối` : ""),
-          );
-          onClose();
-        },
-        onError: (e: any) => toast.error(e?.message ?? "Lỗi phân việc"),
-      },
-    );
+    await onConfirm(assignments);
   };
+
+  const dateStr = info.ngayDi
+    ? `${info.ngayDi}${info.ngayVe ? ` → ${info.ngayVe}` : ""}`
+    : "—";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm flex items-center gap-2">
-            <Users className="h-4 w-4" /> Phân việc — {doan.ten_doan}
+            <Users className="h-4 w-4" /> Phân việc đoàn
           </DialogTitle>
         </DialogHeader>
 
-        <p className="text-xs text-muted-foreground -mt-1">
-          Người được chọn sẽ nhận thông báo. Mục để trống → báo điều phối phân người.
-          Giám đốc nhận thông tin đoàn.
+        {/* Thông tin cơ bản đoàn */}
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs space-y-0.5">
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Code</span>
+            <span className="font-semibold">{info.code}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Agent</span><span>{info.agent}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Địa điểm</span><span>{info.diaDiem}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Số khách</span>
+            <span>{info.soKhach ?? "—"}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Ngày đi → về</span>
+            <span className="tabular-nums">{dateStr}</span>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Người được chọn nhận thông báo (giao bởi Hệ thống). Mục để trống →
+          báo điều phối phân người. Giám đốc nhận thông tin đoàn.
         </p>
 
         <div className="space-y-2 py-1">
@@ -113,9 +138,8 @@ export function PhanViecModal({ open, onClose, doan, creator }: Props) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose}>Bỏ qua</Button>
-          <Button size="sm" onClick={submit} disabled={createPv.isPending}>
-            {createPv.isPending ? "Đang phân..." : "Xác nhận phân việc"}
+          <Button size="sm" onClick={submit} disabled={submitting}>
+            {submitting ? "Đang tạo đoàn..." : "Xác nhận phân việc & tạo đoàn"}
           </Button>
         </DialogFooter>
       </DialogContent>

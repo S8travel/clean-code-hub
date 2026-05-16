@@ -16,7 +16,7 @@ import {
 import { DoanTable } from "@/components/DoanTable";
 import { DoanDrawer } from "@/components/DoanDrawer";
 import { PhanViecModal } from "@/components/doan/PhanViecModal";
-import { useDoanOpMap } from "@/hooks/use-phan-viec";
+import { useDoanOpMap, useCreatePhanViec, type PvKey } from "@/hooks/use-phan-viec";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import {
   useDoanList,
@@ -84,9 +84,10 @@ export default function Index() {
   const [deletingDoan, setDeletingDoan] = useState<any | null>(null);
   const [cancelingDoan, setCancelingDoan] = useState<any | null>(null);
   const [pendingCreate, setPendingCreate] = useState<DoanInsert | null>(null);
-  const [phanViecDoan, setPhanViecDoan] = useState<
-    { id: number; ten_doan: string; loai_tour: string | null; ngay_di: string | null } | null
+  const [pendingPhanViec, setPendingPhanViec] = useState<
+    { payload: DoanInsert; info: { code: string; agent: string; diaDiem: string; soKhach: number | null; ngayDi: string | null; ngayVe: string | null; loaiTour: string | null } } | null
   >(null);
+  const createPhanViec = useCreatePhanViec();
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
@@ -209,44 +210,66 @@ export default function Index() {
         toast.success("Đã cập nhật đoàn");
       } else {
         const markets = currentUser?.phan_loai_tour ?? null;
-        let thi_truong: string | null = null;
-        if (markets && markets.length === 1) {
-          thi_truong = markets[0];
-        } else if (markets && markets.length > 1) {
+        if (markets && markets.length > 1) {
           setPendingCreate({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null });
           return;
         }
-        const created = await createDoan.mutateAsync({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null, thi_truong });
-        // FEATURE_DOAN_PERM_DISABLED: auto-grant khi tạo đoàn mới
-        // if (created && data.assigned_to) {
-        //   const creatorName = userRolesMap.get(data.assigned_to) || "";
-        //   try {
-        //     await addPerm.mutateAsync({ doan_id: created.id, user_id: data.assigned_to, ho_ten: creatorName, quyen: "admin" });
-        //   } catch { /* ignore if permission already exists */ }
-        // }
-        if (created) {
-          logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${data.ten_doan}` });
-        }
-        // Apply seri if selected
-        if (created && data.seri_id && data.ngay_di) {
-          try {
-            await applySeri.mutateAsync({
-              doanId: created.id,
-              seriId: data.seri_id,
-              ngayDi: data.ngay_di,
-            });
-          } catch { /* seri apply failure non-fatal */ }
-        }
-        if (created) setPhanViecDoan({
-          id: created.id, ten_doan: data.ten_doan,
-          loai_tour: (data as any).loai_tour ?? null, ngay_di: data.ngay_di ?? null,
-        });
-        toast.success("✓ Tạo đoàn thành công");
+        const thi_truong = markets && markets.length === 1 ? markets[0] : null;
+        // KHÔNG tạo đoàn ngay — chỉ tạo sau khi xác nhận phân việc
+        setDrawerOpen(false);
+        setEditingDoan(null);
+        openPhanViec({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null, thi_truong });
+        return;
       }
       setDrawerOpen(false);
       setEditingDoan(null);
     } catch {
       toast.error("Có lỗi xảy ra");
+    }
+  };
+
+  // Mở modal phân việc (chưa tạo đoàn) — đoàn chỉ tạo khi xác nhận
+  const openPhanViec = (payload: DoanInsert) => {
+    const agent = (agents ?? []).find((a: any) => a.id === payload.agent_id)?.ten ?? "—";
+    const diaDiem = (diaDiemList ?? []).find((d: any) => d.id === payload.dia_diem_id)?.ten ?? "—";
+    const soKhach =
+      (payload.so_khach_lon ?? 0) + (payload.so_khach_em1 ?? 0) +
+      (payload.so_khach_em2 ?? 0) + (payload.so_khach_tl ?? 0) ||
+      (payload as any).so_khach || null;
+    setPendingPhanViec({
+      payload,
+      info: {
+        code: payload.ten_doan, agent, diaDiem, soKhach,
+        ngayDi: payload.ngay_di ?? null,
+        ngayVe: (payload as any).ngay_ve ?? null,
+        loaiTour: (payload as any).loai_tour ?? null,
+      },
+    });
+  };
+
+  // Xác nhận phân việc → MỚI tạo đoàn → seri/log → phân việc + thông báo
+  const confirmPhanViec = async (assignments: { key: PvKey; assignedTo: string | null }[]) => {
+    if (!pendingPhanViec) return;
+    const p = pendingPhanViec.payload;
+    try {
+      const created = await createDoan.mutateAsync(p);
+      if (created) {
+        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${p.ten_doan}` });
+        if (p.seri_id && p.ngay_di) {
+          try { await applySeri.mutateAsync({ doanId: created.id, seriId: p.seri_id, ngayDi: p.ngay_di }); }
+          catch { /* non-fatal */ }
+        }
+        await createPhanViec.mutateAsync({
+          doan: { id: created.id, ten_doan: p.ten_doan, loai_tour: (p as any).loai_tour ?? null, ngay_di: p.ngay_di ?? null },
+          creatorId: currentUser?.user_id ?? "",
+          creatorName: currentUser?.ho_ten ?? "",
+          assignments,
+        });
+        toast.success(`✓ Tạo đoàn & phân việc: ${p.ten_doan}`);
+      }
+      setPendingPhanViec(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lỗi tạo đoàn / phân việc");
     }
   };
 
@@ -539,30 +562,13 @@ export default function Index() {
                   variant="outline"
                   className="justify-start h-10"
                   disabled={createDoan.isPending}
-                  onClick={async () => {
+                  onClick={() => {
                     if (!pendingCreate) return;
-                    try {
-                      const created = await createDoan.mutateAsync({ ...pendingCreate, thi_truong: market });
-                      if (created) {
-                        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${pendingCreate.ten_doan}` });
-                        if (pendingCreate.seri_id && pendingCreate.ngay_di) {
-                          try {
-                            await applySeri.mutateAsync({ doanId: created.id, seriId: pendingCreate.seri_id, ngayDi: pendingCreate.ngay_di });
-                          } catch { /* non-fatal */ }
-                        }
-                      }
-                      if (created) setPhanViecDoan({
-                        id: created.id, ten_doan: pendingCreate.ten_doan,
-                        loai_tour: (pendingCreate as any).loai_tour ?? null,
-                        ngay_di: pendingCreate.ngay_di ?? null,
-                      });
-                      setPendingCreate(null);
-                      setDrawerOpen(false);
-                      setEditingDoan(null);
-                      toast.success("✓ Tạo đoàn thành công");
-                    } catch {
-                      toast.error("Có lỗi xảy ra");
-                    }
+                    const payload = { ...pendingCreate, thi_truong: market };
+                    setPendingCreate(null);
+                    setDrawerOpen(false);
+                    setEditingDoan(null);
+                    openPhanViec(payload);
                   }}
                 >
                   {opt ? `${opt.loai_tour === "inbound" ? "Inbound" : opt.loai_tour === "outbound" ? "Outbound" : "Nội địa"} — ${opt.label}` : market}
@@ -574,13 +580,12 @@ export default function Index() {
       </Dialog>
 
       <PhanViecModal
-        open={!!phanViecDoan}
-        onClose={() => setPhanViecDoan(null)}
-        doan={phanViecDoan}
-        creator={{
-          id: currentUser?.user_id ?? "",
-          name: currentUser?.ho_ten ?? currentUser?.email ?? "",
-        }}
+        open={!!pendingPhanViec}
+        onClose={() => setPendingPhanViec(null)}
+        info={pendingPhanViec?.info ?? null}
+        creatorId={currentUser?.user_id ?? ""}
+        submitting={createDoan.isPending || createPhanViec.isPending}
+        onConfirm={confirmPhanViec}
       />
     </div>
   );

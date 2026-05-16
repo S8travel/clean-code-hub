@@ -69,6 +69,29 @@ export function useDoanOpMap(doanIds: number[]) {
   });
 }
 
+// Người mặc định phụ trách theo cấu hình (user_roles.pv_default_for)
+export function useDefaultAssignees() {
+  return useQuery({
+    queryKey: ["pv_default_assignees"],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_roles")
+        .select("user_id, ho_ten, pv_default_for")
+        .eq("active", true)
+        .in("pv_default_for", ["pv_xe", "pv_visa", "pv_ve_mb"]);
+      if (error) throw error;
+      const map: Partial<Record<PvKey, { user_id: string; ten: string }>> = {};
+      for (const r of (data ?? []) as any[]) {
+        if (!map[r.pv_default_for as PvKey]) {
+          map[r.pv_default_for as PvKey] = { user_id: r.user_id, ten: r.ho_ten ?? r.user_id };
+        }
+      }
+      return map;
+    },
+  });
+}
+
 interface CreatePhanViecInput {
   doan: { id: number; ten_doan: string; loai_tour: string | null; ngay_di: string | null };
   creatorId: string;
@@ -128,7 +151,7 @@ export function useCreatePhanViec() {
           doan_ten: doan.ten_doan,
           loai: "giao_viec",
           tieu_de: `Đoàn ${doan.ten_doan}: bạn phụ trách ${LABEL[a.key]}`,
-          noi_dung: `Giao bởi: ${p.creatorName}`,
+          noi_dung: `Giao tự động bởi Hệ thống (tạo đoàn ${doan.ten_doan})`,
           is_read: false,
         });
       }
@@ -167,7 +190,7 @@ export function useCreatePhanViec() {
             doan_ten: doan.ten_doan,
             loai: "giao_viec",
             tieu_de: `Đoàn ${doan.ten_doan}: cần phân người (${missLabels})`,
-            noi_dung: `Giao bởi: ${p.creatorName}`,
+            noi_dung: `Giao tự động bởi Hệ thống (tạo đoàn ${doan.ten_doan})`,
             is_read: false,
           });
         }
