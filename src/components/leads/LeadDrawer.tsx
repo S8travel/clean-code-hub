@@ -32,6 +32,7 @@ import { useLeadTasks, useCreateTask, useToggleTask, useDeleteTask } from "@/hoo
 import { useLeadDiemDen, useReplaceDiemDen } from "@/hooks/use-lead-diem-den";
 import { useUserRoles } from "@/hooks/use-doan";
 import { useAuth } from "@/hooks/use-auth";
+import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
 
 interface Props {
   leadId: number | null;
@@ -349,6 +350,21 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                 </div>
               )}
             </div>
+
+            {/* Next-Action Box */}
+            {lead && (
+              <LeadNextActionBox
+                lead={{
+                  id: lead.id,
+                  ho_ten: lead.ho_ten,
+                  so_dien_thoai: lead.so_dien_thoai,
+                  email: lead.email,
+                  trang_thai: lead.trang_thai,
+                  do_not_contact: (lead as any).do_not_contact,
+                }}
+                currentUserId={user?.user_id}
+              />
+            )}
 
             {/* Tabs */}
             <div className="shrink-0 flex border-b">
