@@ -296,7 +296,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {selectedNhaTrua ? (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
+              <div className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
                 {selectedNhaTrua.ten}
               </div>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
@@ -338,7 +338,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {selectedNhaToi ? (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
+              <div className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
                 {selectedNhaToi.ten}
               </div>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
@@ -384,7 +384,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         ) : selectedKS ? (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
+              <div className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
                 {selectedKS.ten}
               </div>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
