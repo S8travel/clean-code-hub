@@ -353,7 +353,7 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-[1680px] mx-auto px-4 sm:px-6 py-6">
 
         {/* TOOLBAR */}
         <div className="flex items-center justify-between mb-5">

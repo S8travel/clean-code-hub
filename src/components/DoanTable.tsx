@@ -229,7 +229,7 @@ export function DoanTable({
                   className={`group border-b border-border/40 hover:bg-muted/50 cursor-pointer transition-colors ${rowBg(g)}`}
                 >
                   {/* Actions menu — đầu row */}
-                  <td className="px-2 py-3 sticky left-0 bg-card" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-2 py-2 sticky left-0 bg-card" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -264,7 +264,7 @@ export function DoanTable({
                   </td>
 
                   {/* Code Đoàn */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-semibold text-[hsl(var(--brand))]">{g.ten_doan}</span>
                       {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
@@ -280,7 +280,7 @@ export function DoanTable({
                   </td>
 
                   {/* HDV */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     {hdvName !== "—" ? (
                       <div className="flex items-center gap-2">
                         <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold ${avatarBg(hdvName)}`}>
@@ -294,7 +294,7 @@ export function DoanTable({
                   </td>
 
                   {/* Agent */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     <span className="text-xs">{agentName}</span>
                     {agentHuyName && (
                       <p className="text-[10px] text-destructive/80 mt-0.5">Hủy bởi: {agentHuyName}</p>
@@ -302,7 +302,7 @@ export function DoanTable({
                   </td>
 
                   {/* OP */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     {op ? (
                       <div className="flex items-center gap-2">
                         <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold ${avatarBg(op)}`}>
@@ -316,7 +316,7 @@ export function DoanTable({
                   </td>
 
                   {/* Địa Điểm */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     {diaDiem !== "—" ? (
                       <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${badgeColor(diaDiem)}`}>
                         {diaDiem}
@@ -327,7 +327,7 @@ export function DoanTable({
                   </td>
 
                   {/* Số Khách grid */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     <div className="flex items-center gap-0 text-[10px] font-medium">
                       <KhachCell label={t("Lớn")} value={lon} />
                       <KhachCell label="50%" value={em1} />
@@ -341,7 +341,7 @@ export function DoanTable({
                   </td>
 
                   {/* Loại Xe */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     {xe ? (
                       <span className="text-[10px] bg-muted px-2 py-1 rounded-md">{xe}</span>
                     ) : (
@@ -350,7 +350,7 @@ export function DoanTable({
                   </td>
 
                   {/* Ghi Chú */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     {g.ghi_chu ? (
                       <span className="text-xs text-muted-foreground truncate block max-w-[150px]" title={g.ghi_chu}>{g.ghi_chu}</span>
                     ) : (
@@ -359,19 +359,19 @@ export function DoanTable({
                   </td>
 
                   {/* Ngày Đón */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     <span className="tabular-nums text-xs">{don.date}</span>
                     {don.day && <p className="text-[10px] text-muted-foreground capitalize">{don.day}</p>}
                   </td>
 
                   {/* Ngày Tiễn */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     <span className="tabular-nums text-xs">{tien.date}</span>
                     {tien.day && <p className="text-[10px] text-muted-foreground capitalize">{tien.day}</p>}
                   </td>
 
                   {/* CB Đến */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     {g.chuyen_bay_don ? (
                       <code className="text-xs text-[hsl(var(--brand))] font-mono">{g.chuyen_bay_don}</code>
                     ) : (
@@ -380,7 +380,7 @@ export function DoanTable({
                   </td>
 
                   {/* CB Đi */}
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2">
                     {g.chuyen_bay_tien ? (
                       <code className="text-xs text-[hsl(var(--brand))] font-mono">{g.chuyen_bay_tien}</code>
                     ) : (
@@ -482,7 +482,7 @@ function Th({ children, onClick, className = "" }: { children: React.ReactNode; 
   return (
     <th
       onClick={onClick}
-      className={`px-3 py-2.5 text-left text-[10px] uppercase font-semibold text-muted-foreground tracking-wider whitespace-nowrap ${onClick ? "cursor-pointer select-none hover:text-foreground" : ""} ${className}`}
+      className={`px-2 py-2 text-left text-[10px] uppercase font-semibold text-muted-foreground tracking-wider whitespace-nowrap ${onClick ? "cursor-pointer select-none hover:text-foreground" : ""} ${className}`}
     >
       <span className="inline-flex items-center gap-1">{children}</span>
     </th>

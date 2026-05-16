@@ -308,7 +308,7 @@ export function AppSidebar() {
           <img
             src="/logo.jpg"
             alt="S8 Travel"
-            className="h-8 w-8 shrink-0 object-contain"
+            className="h-11 w-11 shrink-0 object-contain"
           />
           {!collapsed && (
             <span className="font-bold text-sm text-primary truncate flex-1">
