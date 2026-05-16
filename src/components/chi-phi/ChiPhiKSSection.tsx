@@ -1343,7 +1343,6 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                         Day Use
                       </span>
                     )}
-                    {ks?.dia_diem && <span className="text-muted-foreground font-normal text-xs">({ks.dia_diem})</span>}
                     {effectiveKsStatus === "cong_no" && congNoAmount > 0 && (
                       <span className="text-purple-600 font-semibold text-xs">
                         — Công nợ: {fmt(congNoAmount)} VND

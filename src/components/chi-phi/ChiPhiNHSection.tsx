@@ -1108,8 +1108,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full border-collapse text-xs">
+      <div className="rounded-lg border border-border overflow-x-auto print:overflow-visible">
+        <table className="w-full border-collapse text-xs min-w-[820px] print:min-w-0">
           <colgroup>
             <col className="w-[28px]" />
             <col className="w-[64px]" />
