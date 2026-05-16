@@ -22,7 +22,7 @@ import { useDoanList } from "@/hooks/use-doan";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { useDNTTNeedingApproval } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
-import { useMyDeadlines, useMarkDeadlineDone, type DeadlineItem } from "@/hooks/use-my-job";
+import { useMyDeadlines, useMyCreatedBookingDeadlines, useMarkDeadlineDone, type DeadlineItem } from "@/hooks/use-my-job";
 import { useMyTeamAssignments, useAllTeamAgents } from "@/hooks/use-teams";
 import { useDoanLogGhiChu, useToggleResolved } from "@/hooks/use-doan-log";
 import { useCongViecList } from "@/hooks/use-cong-viec";
@@ -296,13 +296,24 @@ export default function MyJobPage() {
   // Deadline theo PHÂN VIỆC (cong_viec pv_*): pv_ks → KS · pv_nh_dv → NH + DV
   const { data: pvScope } = useMyPhanViecScope(uid);
   const pvDoanIds = useMemo(() => (pvScope ? [...pvScope.keys()] : []), [pvScope]);
-  const { data: pvDeadlines = [], isLoading: loadingDeadlines } = useMyDeadlines(pvDoanIds);
+  const { data: pvDeadlines = [], isLoading: loadingPvDl } = useMyDeadlines(pvDoanIds);
+  const { data: createdDeadlines = [], isLoading: loadingCreatedDl } =
+    useMyCreatedBookingDeadlines(user?.ho_ten);
+  const loadingDeadlines = loadingPvDl || loadingCreatedDl;
   const markDone = useMarkDeadlineDone();
 
-  const filteredDeadlines = useMemo(
-    () => pvDeadlines.filter((item) => pvScope?.get(item.doanId)?.has(item.type) ?? false),
-    [pvDeadlines, pvScope],
-  );
+  // Union: deadline mình phụ trách (phân việc) + booking mình gửi/tạo.
+  // Dedupe theo type+bookingId → hiện 1 lần.
+  const filteredDeadlines = useMemo(() => {
+    const pvPart = pvDeadlines.filter(
+      (item) => pvScope?.get(item.doanId)?.has(item.type) ?? false,
+    );
+    const map = new Map<string, DeadlineItem>();
+    for (const it of [...pvPart, ...createdDeadlines]) {
+      map.set(`${it.type}-${it.bookingId}`, it);
+    }
+    return [...map.values()].sort((a, b) => a.deadline.localeCompare(b.deadline));
+  }, [pvDeadlines, pvScope, createdDeadlines]);
 
   const { data: ghiChuLogs = [] } = useDoanLogGhiChu(user?.user_id);
   const toggleResolved = useToggleResolved();
