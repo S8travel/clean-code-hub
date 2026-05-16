@@ -53,7 +53,7 @@ export function useDoanOpMap(doanIds: number[]) {
         .select("doan_id, nguoi_nhan, created_at")
         .eq("loai_viec", "pv_nh_dv")
         .in("doan_id", sorted)
-        .neq("trang_thai", "huy")
+        .not("trang_thai", "in", "(huy,khong_can)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       const byDoan = new Map<number, string>();
@@ -141,6 +141,44 @@ export function useDoanPhanViecMatrix(doanIds: number[]) {
   });
 }
 
+// Đánh dấu 1 đầu việc "Không cần" → loại khỏi theo dõi/thông báo sau.
+// nguoi_nhan = Hệ thống (rời khỏi MyJob người cũ), trang_thai='khong_can'.
+export function useSetPvKhongCan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey }) => {
+      const { data: ex } = await externalSupabase
+        .from("cong_viec")
+        .select("id")
+        .eq("doan_id", p.doanId).eq("loai_viec", p.key)
+        .not("trang_thai", "in", "(huy,khong_can)")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (ex) {
+        await externalSupabase.from("cong_viec")
+          .update({
+            trang_thai: "khong_can",
+            nguoi_nhan: SYSTEM_USER_ID,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", (ex as any).id);
+      } else {
+        await externalSupabase.from("cong_viec").insert({
+          tieu_de: `[${LABEL[p.key]}] ${p.doanTen} — Không cần`,
+          mo_ta: `${LABEL[p.key]} không cần cho đoàn ${p.doanTen}`,
+          doan_id: p.doanId, nguoi_giao: SYSTEM_USER_ID, nguoi_nhan: SYSTEM_USER_ID,
+          loai_viec: p.key, do_uu_tien: "thap",
+          han_xu_ly: p.ngayDi || null, trang_thai: "khong_can",
+        });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["doan_phan_viec_matrix"] });
+      qc.invalidateQueries({ queryKey: ["doan_op_map"] });
+      qc.invalidateQueries({ queryKey: ["cong_viec"] });
+    },
+  });
+}
+
 // Scope deadline theo phân việc của user hiện tại:
 // pv_ks → xem deadline KS; pv_nh_dv → xem deadline NH + DV
 export function useMyPhanViecScope(uid: string | null | undefined) {
@@ -154,7 +192,7 @@ export function useMyPhanViecScope(uid: string | null | undefined) {
         .select("doan_id, loai_viec")
         .eq("nguoi_nhan", uid!)
         .in("loai_viec", ["pv_ks", "pv_nh_dv"])
-        .neq("trang_thai", "huy");
+        .not("trang_thai", "in", "(huy,khong_can)");
       if (error) throw error;
       const m = new Map<number, Set<"ks" | "nh" | "dv">>();
       for (const r of (data ?? []) as any[]) {

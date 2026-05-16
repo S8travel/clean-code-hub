@@ -14,7 +14,7 @@ import { useMarkThongBaoRead } from "@/hooks/use-thong-bao";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserListForAssign } from "@/hooks/use-cong-viec";
 import {
-  useDoanPhanViecMatrix, useAssignPvItem, PHAN_VIEC_ITEMS,
+  useDoanPhanViecMatrix, useAssignPvItem, useSetPvKhongCan, PHAN_VIEC_ITEMS,
   type PvKey, type PvCell,
 } from "@/hooks/use-phan-viec";
 import { cn } from "@/lib/utils";
@@ -38,32 +38,37 @@ const STT_CLS: Record<string, string> = {
   dang_lam:   "text-green-600",
   hoan_thanh: "text-green-600",
   tu_choi:    "text-muted-foreground line-through",
+  khong_can:  "text-black font-medium",
 };
+const KC = "__khong_can__";
 
 // ── Ô phân việc (gán / đổi người) ───────────────────────────────────────────
 function PvAssignCell({
-  doanId, doanTen, ngayDi, pvKey, cell, users, onAssign, pending,
+  doanId, doanTen, ngayDi, pvKey, cell, users, onAssign, onKhongCan, pending,
 }: {
   doanId: number; doanTen: string; ngayDi: string | null;
   pvKey: PvKey; cell: PvCell | undefined;
   users: { user_id: string; ho_ten: string }[];
   onAssign: (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey; userId: string }) => void;
+  onKhongCan: (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey }) => void;
   pending: boolean;
 }) {
+  const isKC = cell?.trang_thai === "khong_can";
   const cls = cell ? (STT_CLS[cell.trang_thai] ?? "text-foreground") : "text-muted-foreground";
+  const label = !cell ? "Chưa phân" : isKC ? "Không cần" : cell.ten;
+  const value = isKC ? KC : (cell?.user_id ?? "_none");
   return (
     <Select
-      value={cell?.user_id ?? "_none"}
+      value={value}
       disabled={pending}
       onValueChange={(v) => {
         if (v === "_none") return;
+        if (v === KC) { onKhongCan({ doanId, doanTen, ngayDi, key: pvKey }); return; }
         onAssign({ doanId, doanTen, ngayDi, key: pvKey, userId: v });
       }}
     >
       <SelectTrigger className="h-7 text-xs border-dashed px-2 min-w-[110px] justify-center">
-        <span className={cn("truncate", cls)}>
-          {cell ? cell.ten : "Chưa phân"}
-        </span>
+        <span className={cn("truncate", cls)}>{label}</span>
       </SelectTrigger>
       <SelectContent>
         {users.map((u) => (
@@ -71,6 +76,7 @@ function PvAssignCell({
             {u.ho_ten}
           </SelectItem>
         ))}
+        <SelectItem value={KC} className="text-xs font-medium">⊘ Không cần</SelectItem>
       </SelectContent>
     </Select>
   );
@@ -90,6 +96,7 @@ export default function TheodoiPage() {
   );
   const { data: pvMatrix } = useDoanPhanViecMatrix(allDoanIds);
   const assignMut = useAssignPvItem();
+  const setKcMut = useSetPvKhongCan();
   const { data: suCoLogs = [], isLoading: loadingSuCo } = useDoanLogSuCo();
   const toggleMut = useToggleResolved();
   const markRead = useMarkThongBaoRead();
@@ -164,6 +171,13 @@ export default function TheodoiPage() {
     assignMut.mutate(p, {
       onSuccess: () => toast.success("Đã phân việc — đã thông báo người nhận"),
       onError: (e: any) => toast.error(e?.message ?? "Lỗi phân việc"),
+    });
+  };
+
+  const onKhongCan = (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey }) => {
+    setKcMut.mutate(p, {
+      onSuccess: () => toast.success("Đã đánh dấu Không cần — sẽ không theo dõi/thông báo"),
+      onError: (e: any) => toast.error(e?.message ?? "Lỗi"),
     });
   };
 
@@ -313,7 +327,8 @@ export default function TheodoiPage() {
                               cell={cells[it.key]}
                               users={assignUsers}
                               onAssign={onAssign}
-                              pending={assignMut.isPending}
+                              onKhongCan={onKhongCan}
+                              pending={assignMut.isPending || setKcMut.isPending}
                             />
                           </TableCell>
                         ))}
