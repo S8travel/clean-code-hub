@@ -308,11 +308,12 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
 
   // ── 3. Info table — layout khớp với UI ──────────────────────────────────
   //
-  // Cột trái: Code đoàn, HDV, Xe, Ngày đón+CB, Ngày tiễn+CB
-  // Cột phải: Bảng đón, Shopping, T/L, Số khách compact, Chú thích
-  //
   // Cấu trúc 4 cột: [label-L | value-L | label-R | value-R]
-  // Rows 4-5 (date+flight): colSpan=2 cho nửa trái
+  // Row 1-3: Code/Bảng đón · HDV/Shopping · Xe/T-L
+  // Row 4  : Ngày đón (label tách ô) | Quà tặng
+  // Row 5  : Ngày tiễn (label tách ô) | Tip
+  // Row 6  : Số khách  (value trải full-width, colSpan=3)
+  // Row 7  : Chú thích (value trải full-width, giữ xuống dòng như hệ thống)
 
   const soKhachRow = pRuns([
     { text: "NL: ", bold: true },
@@ -349,51 +350,46 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
       cell([p("T/L:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell([p(truongDoan || "—")], { width: VW_R }),
     ]}),
-    // Row 4: Ngày đón + CB đón (colSpan=2) | Số khách compact
+    // Row 4: Ngày đón (label tách ô) | Quà tặng
     new TableRow({ children: [
+      cell([p("Ngày đón:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell(
         [pRuns([
-          { text: "Ngày đón: ", bold: true },
           { text: formatDate(ngayDi) },
           { text: chuyenBayDon ? `   ${chuyenBayDon}` : "", color: "444444" },
         ])],
-        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+        { width: VW }
       ),
-      cell([p("Số khách:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([soKhachRow], { width: VW_R }),
+      cell([p("Quà tặng:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(gifts.length > 0 ? gifts.join(", ") : "—")], { width: VW_R }),
     ]}),
-    // Row 5: Ngày tiễn + CB tiễn (colSpan=2) | Chú thích
+    // Row 5: Ngày tiễn (label tách ô) | Tip
     new TableRow({ children: [
+      cell([p("Ngày tiễn:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell(
         [pRuns([
-          { text: "Ngày tiễn: ", bold: true },
           { text: formatDate(ngayVe) },
           { text: chuyenBayTien ? `   ${chuyenBayTien}` : "", color: "444444" },
         ])],
-        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+        { width: VW }
       ),
+      cell([p("Tip:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(tipText)], { width: VW_R }),
+    ]}),
+    // Row 6: Số khách — value trải full-width
+    new TableRow({ children: [
+      cell([p("Số khách:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([soKhachRow], { width: VW + LW + VW_R, colSpan: 3 }),
+    ]}),
+    // Row 7: Chú thích — giữ nguyên xuống dòng như bản hệ thống
+    new TableRow({ children: [
       cell([p("Chú thích:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([p(chuThichKhach || "—")], { width: VW_R }),
+      cell(
+        (chuThichKhach || "—").split("\n").map((line) => p(line)),
+        { width: VW + LW + VW_R, colSpan: 3 }
+      ),
     ]}),
   ];
-
-  // Row quà tặng (nếu có)
-  if (gifts.length > 0) {
-    infoRows.push(
-      new TableRow({ children: [
-        cell([p("Quà tặng:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-        cell([p(gifts.join(", "))], { width: VW + LW + VW_R, colSpan: 3 }),
-      ]})
-    );
-  }
-
-  // Row Tip — luôn hiển thị
-  infoRows.push(
-    new TableRow({ children: [
-      cell([p("Tip:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([p(tipText)], { width: VW + LW + VW_R, colSpan: 3 }),
-    ]})
-  );
 
   const infoTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
@@ -615,32 +611,35 @@ function buildDocFromCells(
       cell([p(truongDoan || "—")], { width: VW_R }),
     ]}),
     new TableRow({ children: [
+      cell([p("Ngày đón:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell(
-        [pRuns([{ text: "Ngày đón: ", bold: true }, { text: formatDate(ngayDi) }, { text: chuyenBayDon ? `   ${chuyenBayDon}` : "", color: "444444" }])],
-        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+        [pRuns([{ text: formatDate(ngayDi) }, { text: chuyenBayDon ? `   ${chuyenBayDon}` : "", color: "444444" }])],
+        { width: VW }
       ),
-      cell([p("Số khách:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([soKhachRow], { width: VW_R }),
+      cell([p("Quà tặng:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(gifts.length > 0 ? gifts.join(", ") : "—")], { width: VW_R }),
     ]}),
     new TableRow({ children: [
+      cell([p("Ngày tiễn:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell(
-        [pRuns([{ text: "Ngày tiễn: ", bold: true }, { text: formatDate(ngayVe) }, { text: chuyenBayTien ? `   ${chuyenBayTien}` : "", color: "444444" }])],
-        { width: HALF, colSpan: 2, shading: HEADER_SHADING }
+        [pRuns([{ text: formatDate(ngayVe) }, { text: chuyenBayTien ? `   ${chuyenBayTien}` : "", color: "444444" }])],
+        { width: VW }
       ),
+      cell([p("Tip:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([p(tipText)], { width: VW_R }),
+    ]}),
+    new TableRow({ children: [
+      cell([p("Số khách:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell([soKhachRow], { width: VW + LW + VW_R, colSpan: 3 }),
+    ]}),
+    new TableRow({ children: [
       cell([p("Chú thích:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([p(chuThichKhach || "—")], { width: VW_R }),
+      cell(
+        (chuThichKhach || "—").split("\n").map((line) => p(line)),
+        { width: VW + LW + VW_R, colSpan: 3 }
+      ),
     ]}),
   ];
-  if (gifts.length > 0) {
-    infoRows.push(new TableRow({ children: [
-      cell([p("Quà tặng:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([p(gifts.join(", "))], { width: VW + LW + VW_R, colSpan: 3 }),
-    ]}));
-  }
-  infoRows.push(new TableRow({ children: [
-    cell([p("Tip:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-    cell([p(tipText)], { width: VW + LW + VW_R, colSpan: 3 }),
-  ]}));
   const infoTable = new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, rows: infoRows });
 
   // ── Schedule from pre-computed cells ────────────────────────────────────

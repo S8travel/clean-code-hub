@@ -21,6 +21,11 @@ function xeLabelInfo(xe: any): string {
 
 function InfoTable({ data }: { data: DieuTourExportData }) {
   const shopStr = data.shopping === true ? "YES" : data.shopping === false ? "NO" : "—";
+  // Tip — cùng công thức với export Word (150 NT nếu có T/L, ngược lại 300 NT)
+  const effTipRate = data.tipRate ?? (data.soKhachTl > 0 ? 150 : 300);
+  const tipText = data.thuTip
+    ? `Có – ${effTipRate.toLocaleString("vi-VN")} NT/khách/ngày`
+    : "Không";
   return (
     <table className="w-full border-collapse text-xs mb-3">
       <tbody>
@@ -43,13 +48,28 @@ function InfoTable({ data }: { data: DieuTourExportData }) {
           <td className="border border-gray-300 px-2 py-1">{data.truongDoan || "—"}</td>
         </tr>
         <tr>
-          <td colSpan={2} className="border border-gray-300 px-2 py-1 bg-gray-100">
-            <span className="font-semibold">Ngày đón: </span>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Ngày đón</td>
+          <td className="border border-gray-300 px-2 py-1">
             {fmtDateInfo(data.ngayDi)}
             {data.chuyenBayDon && <span className="text-gray-500 ml-3">{data.chuyenBayDon}</span>}
           </td>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Số khách</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Quà tặng</td>
           <td className="border border-gray-300 px-2 py-1">
+            {data.gifts && data.gifts.length > 0 ? data.gifts.join(", ") : "—"}
+          </td>
+        </tr>
+        <tr>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Ngày tiễn</td>
+          <td className="border border-gray-300 px-2 py-1">
+            {fmtDateInfo(data.ngayVe)}
+            {data.chuyenBayTien && <span className="text-gray-500 ml-3">{data.chuyenBayTien}</span>}
+          </td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Tip</td>
+          <td className="border border-gray-300 px-2 py-1">{tipText}</td>
+        </tr>
+        <tr>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Số khách</td>
+          <td colSpan={3} className="border border-gray-300 px-2 py-1">
             <span className="font-semibold">NL:</span> {data.soKhachLon}&nbsp;&nbsp;
             <span className="font-semibold">TE 50%:</span> {data.soKhachEm1}&nbsp;&nbsp;
             <span className="font-semibold">TE free:</span> {data.soKhachEm2}&nbsp;&nbsp;
@@ -58,13 +78,8 @@ function InfoTable({ data }: { data: DieuTourExportData }) {
           </td>
         </tr>
         <tr>
-          <td colSpan={2} className="border border-gray-300 px-2 py-1 bg-gray-100">
-            <span className="font-semibold">Ngày tiễn: </span>
-            {fmtDateInfo(data.ngayVe)}
-            {data.chuyenBayTien && <span className="text-gray-500 ml-3">{data.chuyenBayTien}</span>}
-          </td>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Chú thích</td>
-          <td className="border border-gray-300 px-2 py-1">{data.chuThichKhach || "—"}</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap align-top">Chú thích</td>
+          <td colSpan={3} className="border border-gray-300 px-2 py-1 whitespace-pre-line">{data.chuThichKhach || "—"}</td>
         </tr>
         <tr>
           <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">T/L ăn NH</td>
@@ -72,12 +87,6 @@ function InfoTable({ data }: { data: DieuTourExportData }) {
             {data.coTinhSuatTLNhaHang ? "Có tính suất ăn T/L" : "Không tính"}
           </td>
         </tr>
-        {data.gifts && data.gifts.length > 0 && (
-          <tr>
-            <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Quà tặng</td>
-            <td colSpan={3} className="border border-gray-300 px-2 py-1">{data.gifts.join(", ")}</td>
-          </tr>
-        )}
       </tbody>
     </table>
   );
