@@ -1326,8 +1326,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         return (
           <Card key={ksId} className={`border-border transition-colors ${selectedKsIds.includes(ksId) ? "border-primary/50 bg-primary/5" : ""}`}>
             <CardHeader className="py-1 px-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium flex items-center gap-2 flex-wrap">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="text-sm font-medium flex items-center gap-2 flex-wrap min-w-0">
                   <Checkbox
                     checked={selectedKsIds.includes(ksId)}
                     onCheckedChange={() => toggleSelectKs(ksId)}
@@ -1337,7 +1337,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     className="flex items-center gap-2 flex-wrap text-left"
                     onClick={() => toggleCollapse(ksId)}
                   >
-                    {ks?.ten || `KS #${ksId}`}
+                    <span className="whitespace-nowrap">{ks?.ten || `KS #${ksId}`}</span>
                     {isKsDayUse && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
                         Day Use
@@ -1355,7 +1355,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     )}
                   </button>
                 </CardTitle>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
                   {isKsDinhKy && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700">Định kỳ</span>
                   )}
