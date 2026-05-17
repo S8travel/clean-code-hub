@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO, differenceInDays, addDays, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Check, ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronLeft, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,6 +130,8 @@ export default function LockPhongTheoKSView({ data }: Props) {
   const updateDeadline = useUpdateLockPhongDeadline();
   const updateEmail = useUpdateLockPhongKSEmail();
   const [confirmingKsId, setConfirmingKsId] = useState<number | null>(null);
+  const [lpPage, setLpPage] = useState(1);
+  const [lpPageSize, setLpPageSize] = useState(5);
 
   const handleConfirmAll = async (
     khachSanId: number,
@@ -260,9 +262,13 @@ export default function LockPhongTheoKSView({ data }: Props) {
     );
   }
 
+  const lpTotalPages = Math.max(1, Math.ceil(groups.length / lpPageSize));
+  const lpCur = Math.min(lpPage, lpTotalPages);
+  const pageGroups = groups.slice((lpCur - 1) * lpPageSize, lpCur * lpPageSize);
+
   return (
     <div className="space-y-3">
-      {groups.map((group) => {
+      {pageGroups.map((group) => {
         const isOpen = expandedIds.has(group.khach_san_id);
         const allRows = group.entries.flatMap((e) =>
           e.ksRows.map((r) => ({ r, lp: e.lockPhong })),
@@ -583,6 +589,35 @@ export default function LockPhongTheoKSView({ data }: Props) {
           </div>
         );
       })}
+
+      {groups.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 flex-wrap gap-2">
+          <span>
+            Hiển thị {(lpCur - 1) * lpPageSize + 1}–{Math.min(lpCur * lpPageSize, groups.length)} / {groups.length} khách sạn
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 text-xs"
+              disabled={lpCur <= 1} onClick={() => setLpPage(lpCur - 1)}>
+              <ChevronLeft className="h-3 w-3 mr-0.5" /> Trước
+            </Button>
+            <span className="px-2">Trang {lpCur}/{lpTotalPages}</span>
+            <Button variant="outline" size="sm" className="h-7 text-xs"
+              disabled={lpCur >= lpTotalPages} onClick={() => setLpPage(lpCur + 1)}>
+              Sau <ChevronRight className="h-3 w-3 ml-0.5" />
+            </Button>
+          </div>
+          <Select value={String(lpPageSize)} onValueChange={(v) => { setLpPageSize(Number(v)); setLpPage(1); }}>
+            <SelectTrigger className="h-7 text-xs w-[140px]">
+              <span>Hiển thị {lpPageSize}/trang</span>
+            </SelectTrigger>
+            <SelectContent>
+              {[5, 10, 20, 50].map((n) => (
+                <SelectItem key={n} value={String(n)}>{n} khách sạn / trang</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {emailTarget && (
         <LockPhongEmailModal

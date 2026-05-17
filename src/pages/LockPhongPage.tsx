@@ -48,46 +48,7 @@ function lpCat(lp: LockPhongDisplay, today: string, today3: string) {
   return { confirmed, hasChuaGui, quaHan, sapDen, choXuLy };
 }
 
-// Donut bằng CSS conic-gradient (không cần thư viện chart)
-function StatusDonut({
-  segments, total,
-}: { segments: { label: string; value: number; color: string }[]; total: number }) {
-  let acc = 0;
-  const stops = segments
-    .filter((s) => s.value > 0)
-    .map((s) => {
-      const from = total > 0 ? (acc / total) * 360 : 0;
-      acc += s.value;
-      const to = total > 0 ? (acc / total) * 360 : 0;
-      return `${s.color} ${from}deg ${to}deg`;
-    })
-    .join(", ");
-  return (
-    <div className="flex items-center gap-4">
-      <div
-        className="relative h-28 w-28 rounded-full shrink-0"
-        style={{ background: stops ? `conic-gradient(${stops})` : "hsl(var(--muted))" }}
-      >
-        <div className="absolute inset-[14px] rounded-full bg-card flex flex-col items-center justify-center">
-          <span className="text-xl font-bold leading-none">{total}</span>
-          <span className="text-[10px] text-muted-foreground">Tổng</span>
-        </div>
-      </div>
-      <div className="space-y-1.5 text-xs flex-1 min-w-0">
-        {segments.map((s) => (
-          <div key={s.label} className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
-            <span className="flex-1 truncate text-muted-foreground">{s.label}</span>
-            <span className="font-semibold">{s.value}</span>
-            <span className="text-muted-foreground w-9 text-right">
-              {total > 0 ? Math.round((s.value / total) * 100) : 0}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// (Đã bỏ "Tổng quan Lock Phòng" / donut theo yêu cầu)
 
 export default function LockPhongPage() {
   const [formOpen, setFormOpen] = useState(false);
@@ -132,7 +93,6 @@ export default function LockPhongPage() {
   // Thống kê tổng (theo toàn bộ data, không phụ thuộc tab/filter)
   const stats = useMemo(() => {
     let total = data.length, quaHan = 0, sapDen = 0, chuaGui = 0, daXN = 0, choXuLy = 0;
-    let dQua = 0, dSap = 0, dXN = 0, dCho = 0; // donut partition
     for (const lp of data) {
       const c = lpCat(lp, todayStr, today3Str);
       if (c.quaHan) quaHan++;
@@ -140,20 +100,10 @@ export default function LockPhongPage() {
       if (c.hasChuaGui) chuaGui++;
       if (c.confirmed) daXN++;
       if (c.choXuLy) choXuLy++;
-      if (c.confirmed) dXN++;
-      else if (c.quaHan) dQua++;
-      else if (c.sapDen) dSap++;
-      else dCho++;
     }
     return {
       total, quaHan, sapDen, chuaGui, daXN, choXuLy,
       canXuLy: deadlineAlerts.length,
-      donut: [
-        { label: "Đã xác nhận", value: dXN, color: "#16a34a" },
-        { label: "Chờ xác nhận", value: dCho, color: "#f97316" },
-        { label: "Sắp đến hạn", value: dSap, color: "#f59e0b" },
-        { label: "Quá hạn", value: dQua, color: "#ef4444" },
-      ],
     };
   }, [data, todayStr, today3Str, deadlineAlerts.length]);
 
@@ -341,9 +291,8 @@ export default function LockPhongPage() {
         </Button>
       </div>
 
-      {/* Body: list + sidebar */}
-      <div className="grid lg:grid-cols-[1fr_300px] gap-4 items-start">
-        <div className="space-y-4 min-w-0">
+      {/* Body (full width) */}
+      <div className="space-y-4">
           {/* Toolbar — bộ lọc chi tiết */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
@@ -472,19 +421,6 @@ export default function LockPhongPage() {
           ) : (
             <LockPhongTheoKSView data={filtered} />
           )}
-        </div>
-
-        {/* Sidebar */}
-        <aside className="space-y-4 lg:sticky lg:top-4">
-          <div className="rounded-xl border bg-card p-4">
-            <h3 className="text-sm font-semibold mb-3">Tổng quan Lock Phòng</h3>
-            {isLoading ? (
-              <Skeleton className="h-28 w-full rounded-xl" />
-            ) : (
-              <StatusDonut segments={stats.donut} total={stats.total} />
-            )}
-          </div>
-        </aside>
       </div>
 
       <LockPhongFormDialog
