@@ -88,7 +88,7 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
       <div className="overflow-x-auto print:overflow-visible">
       <div className="min-w-[820px] print:min-w-0">
       {/* Header */}
-      <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border border-gray-300 rounded-t-lg bg-muted/50 text-sm font-bold text-foreground">
+      <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border border-gray-300 rounded-t-lg bg-white text-sm font-bold text-foreground">
         <div className="p-2 border-r border-gray-300 text-center">Ngày</div>
         <div className="p-2 border-r border-gray-300 text-center">Chương trình</div>
         <div className="p-2 border-r border-gray-300 text-center">Ăn trưa</div>

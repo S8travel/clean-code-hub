@@ -147,7 +147,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
   return (
     <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border-b border-gray-300 min-h-[100px] print-avoid-break">
       {/* NGÀY */}
-      <div className="p-1.5 bg-muted/40 border-r border-gray-300 flex flex-col items-center justify-start pt-3">
+      <div className="p-1.5 bg-white border-r border-gray-300 flex flex-col items-center justify-start pt-3">
         {dayLabel ? (
           <span className="text-[12px] font-bold leading-tight text-center">{dayLabel}</span>
         ) : (
