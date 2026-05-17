@@ -122,7 +122,7 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
 
         <p className="text-xs text-muted-foreground">
           Người được chọn nhận thông báo (giao bởi Hệ thống). Mục để trống →
-          Admin phụ trách. Giám đốc nhận thông tin đoàn.
+          báo điều phối phân người. Giám đốc nhận thông tin đoàn.
         </p>
 
         <div className="space-y-2 py-1">
@@ -140,10 +140,10 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
                 disabled={!r.checked}
               >
                 <SelectTrigger className="h-8 text-xs flex-1">
-                  <SelectValue placeholder="— Admin phụ trách —" />
+                  <SelectValue placeholder="— Chưa phân —" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none" className="text-xs">— Admin phụ trách —</SelectItem>
+                  <SelectItem value="_none" className="text-xs">— Chưa phân —</SelectItem>
                   {users.map((u) => (
                     <SelectItem key={u.user_id} value={u.user_id} className="text-xs">
                       {u.ho_ten}

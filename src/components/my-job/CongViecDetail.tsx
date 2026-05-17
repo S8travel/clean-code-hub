@@ -13,6 +13,7 @@ import {
   useCreateCongViecComment,
   type CongViecRow,
 } from "@/hooks/use-cong-viec";
+import { PhanViecEditModal } from "@/components/doan/PhanViecEditModal";
 
 const UU_TIEN_LABEL: Record<string, string> = {
   khan_cap: "🔴 Khẩn cấp", cao: "🟠 Cao",
@@ -64,6 +65,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
   const [ghiChu, setGhiChu] = useState("");
   const [commentText, setCommentText] = useState("");
   const [actionMode, setActionMode] = useState<"hoan_thanh" | "tu_choi" | null>(null);
+  const [pvEditOpen, setPvEditOpen] = useState(false);
 
   const handleClose = () => {
     setActionMode(null);
@@ -77,6 +79,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
   const isRecipient = task.nguoi_nhan === userId;
   const isAssigner = task.nguoi_giao === userId;
   const isPv = task.loai_viec.startsWith("pv_");
+  const isPhanCong = task.loai_viec === "pv_phancong";
   const ttCfg = TRANG_THAI_CFG[task.trang_thai] ?? { label: task.trang_thai, cls: "text-muted-foreground" };
   const ttLabel = isPv ? (PV_TT_LABEL[task.trang_thai] ?? ttCfg.label) : ttCfg.label;
 
@@ -124,6 +127,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
   };
 
   return (
+    <>
     <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
         {/* Header */}
@@ -165,7 +169,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
           )}
 
           {/* Phân việc đoàn (pv_*) — chỉ Xác nhận / Không nhận + lý do */}
-          {isPv && isRecipient && task.trang_thai === "cho_nhan" && (
+          {isPv && !isPhanCong && isRecipient && task.trang_thai === "cho_nhan" && (
             <div className="space-y-2">
               {!actionMode && (
                 <div className="flex gap-2">
@@ -207,6 +211,13 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
             </div>
           )}
 
+          {/* Điều phối: pv_phancong → mở modal phân việc (trạng thái hiện tại) */}
+          {isPhanCong && isRecipient && (task.trang_thai === "cho_nhan" || task.trang_thai === "dang_lam") && (
+            <Button size="sm" className="text-xs w-full" onClick={() => setPvEditOpen(true)}>
+              Mở phân việc
+            </Button>
+          )}
+
           {/* Recipient actions */}
           {!isPv && isRecipient && task.trang_thai === "cho_nhan" && (
             <Button
@@ -219,7 +230,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
             </Button>
           )}
 
-          {isRecipient && task.trang_thai === "dang_lam" && (
+          {isRecipient && !isPhanCong && task.trang_thai === "dang_lam" && (
             <div className="space-y-2">
               {!actionMode && (
                 <div className="flex gap-2">
@@ -355,5 +366,12 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
         </div>
       </SheetContent>
     </Sheet>
+    <PhanViecEditModal
+      open={pvEditOpen}
+      onClose={() => setPvEditOpen(false)}
+      doanId={task.doan_id}
+      onDone={handleClose}
+    />
+    </>
   );
 }

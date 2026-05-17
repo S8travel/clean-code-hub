@@ -215,6 +215,30 @@ export function useAssignPvItem() {
       doanId: number; doanTen: string; ngayDi: string | null;
       key: PvKey; userId: string;
     }) => {
+      // Gán cho ADMIN = đánh dấu "Không cần" (admin không làm việc điều hành)
+      const { data: tgt } = await externalSupabase
+        .from("user_roles").select("role").eq("user_id", p.userId).maybeSingle();
+      if ((tgt as any)?.role === "admin") {
+        const { data: exKC } = await externalSupabase
+          .from("cong_viec").select("id")
+          .eq("doan_id", p.doanId).eq("loai_viec", p.key)
+          .not("trang_thai", "in", "(huy,khong_can)")
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (exKC) {
+          await externalSupabase.from("cong_viec")
+            .update({ trang_thai: "khong_can", nguoi_nhan: SYSTEM_USER_ID, updated_at: new Date().toISOString() })
+            .eq("id", (exKC as any).id);
+        } else {
+          await externalSupabase.from("cong_viec").insert({
+            tieu_de: `[${LABEL[p.key]}] ${p.doanTen} — Không cần`,
+            mo_ta: `${LABEL[p.key]} không cần cho đoàn ${p.doanTen} (admin)`,
+            doan_id: p.doanId, nguoi_giao: SYSTEM_USER_ID, nguoi_nhan: SYSTEM_USER_ID,
+            loai_viec: p.key, do_uu_tien: "thap",
+            han_xu_ly: p.ngayDi || null, trang_thai: "khong_can",
+          });
+        }
+        return;
+      }
       const { data: ex } = await externalSupabase
         .from("cong_viec")
         .select("id, nguoi_nhan")
@@ -282,7 +306,14 @@ export function useCreatePhanViec() {
         .neq("trang_thai", "huy");
       const done = new Set((existing ?? []).map((r: any) => r.loai_viec));
 
-      const assigned = p.assignments.filter((a) => a.assignedTo && !done.has(a.key));
+      // Admin được giao việc pv → coi là "Không cần" (admin không làm việc điều hành,
+      // không nag điều phối, không thông báo). KHÔNG để thành "Chưa phân".
+      const { data: admins } = await externalSupabase
+        .from("user_roles").select("user_id").eq("role", "admin");
+      const adminSet = new Set((admins ?? []).map((r: any) => r.user_id));
+
+      const assigned = p.assignments.filter((a) => a.assignedTo && !adminSet.has(a.assignedTo!) && !done.has(a.key));
+      const adminAssigned = p.assignments.filter((a) => a.assignedTo && adminSet.has(a.assignedTo!) && !done.has(a.key));
       const missing = p.assignments.filter((a) => !a.assignedTo && !done.has(a.key));
 
       // Tên người được giao (cho summary giám đốc)
@@ -324,16 +355,76 @@ export function useCreatePhanViec() {
         });
       }
 
-      // 2) Mục thiếu người → KHÔNG tạo việc/điều-phối. Ô trống = Admin phụ trách
-      //    (mặc định ngầm, không ghi DB để tránh rác cong_viec). Theo dõi/audit
-      //    hiển thị ô trống = "Admin".
+      // 1b) Mục giao cho ADMIN → tạo dạng "Không cần" (đen, loại khỏi theo dõi/
+      //     thông báo, KHÔNG nag điều phối, KHÔNG để "Chưa phân").
+      for (const a of adminAssigned) {
+        await externalSupabase.from("cong_viec").insert({
+          tieu_de: `[${LABEL[a.key]}] ${doan.ten_doan} — Không cần`,
+          mo_ta: `${LABEL[a.key]} không cần cho đoàn ${doan.ten_doan} (admin)`,
+          doan_id: doan.id,
+          nguoi_giao: SYSTEM_USER_ID,
+          nguoi_nhan: SYSTEM_USER_ID,
+          loai_viec: a.key,
+          do_uu_tien: "thap",
+          han_xu_ly: doan.ngay_di || null,
+          trang_thai: "khong_can",
+        });
+      }
+
+      // 2) Mục thiếu người → giao điều-phối (la_dieu_phoi; fallback giám đốc).
+      //    Idempotent: nếu đã có pv_phancong đang mở cho đoàn thì không tạo trùng.
+      if (missing.length) {
+        const { data: pcExist } = await externalSupabase
+          .from("cong_viec").select("id")
+          .eq("doan_id", doan.id).eq("loai_viec", "pv_phancong")
+          .in("trang_thai", ["cho_nhan", "dang_lam"]).limit(1);
+        if (!pcExist || pcExist.length === 0) {
+          let { data: dp } = await externalSupabase
+            .from("user_roles").select("user_id").eq("active", true).eq("la_dieu_phoi", true);
+          if (!dp || dp.length === 0) {
+            const { data: gd } = await externalSupabase
+              .from("user_roles").select("user_id").eq("active", true).eq("role", "giam_doc");
+            dp = gd ?? [];
+          }
+          const missLabels = missing.map((a) => LABEL[a.key]).join(", ");
+          for (const d of dp) {
+            const { data: cv, error } = await externalSupabase
+              .from("cong_viec")
+              .insert({
+                tieu_de: `Đoàn ${doan.ten_doan}: cần phân người`,
+                mo_ta: `Đầu việc chưa có người: ${missLabels}. Vui lòng phân người phụ trách.`,
+                doan_id: doan.id,
+                nguoi_giao: SYSTEM_USER_ID,
+                nguoi_nhan: d.user_id,
+                loai_viec: "pv_phancong",
+                do_uu_tien: "cao",
+                han_xu_ly: doan.ngay_di || null,
+                trang_thai: "cho_nhan",
+              })
+              .select("id")
+              .single();
+            if (error) throw error;
+            await externalSupabase.from("thong_bao").insert({
+              user_id: d.user_id,
+              cong_viec_id: cv.id,
+              doan_id: doan.id,
+              doan_ten: doan.ten_doan,
+              loai: "giao_viec",
+              tieu_de: `Đoàn ${doan.ten_doan}: cần phân người (${missLabels})`,
+              noi_dung: `Giao tự động bởi Hệ thống (tạo đoàn ${doan.ten_doan})`,
+              is_read: false,
+            });
+          }
+        }
+      }
 
       // 3) Giám đốc → thông báo thông tin đoàn + ai phụ trách gì (không tạo việc)
       const { data: directors } = await externalSupabase
         .from("user_roles").select("user_id").eq("active", true).eq("role", "giam_doc");
       const summary = [
         ...assigned.map((a) => `${LABEL[a.key]}: ${nameMap.get(a.assignedTo!) ?? "?"}`),
-        ...(missing.length ? [`Admin phụ trách: ${missing.map((a) => LABEL[a.key]).join(", ")}`] : []),
+        ...adminAssigned.map((a) => `${LABEL[a.key]}: Không cần`),
+        ...(missing.length ? [`⚠ Thiếu người: ${missing.map((a) => LABEL[a.key]).join(", ")}`] : []),
       ].join(" · ");
       for (const g of directors ?? []) {
         await externalSupabase.from("thong_bao").insert({
@@ -353,6 +444,26 @@ export function useCreatePhanViec() {
       qc.invalidateQueries({ queryKey: ["cong_viec"] });
       qc.invalidateQueries({ queryKey: ["thong_bao"] });
       qc.invalidateQueries({ queryKey: ["doan_op_map"] });
+    },
+  });
+}
+
+// Đóng task pv_phancong của 1 đoàn (điều phối đã phân xong)
+export function useResolvePhanCong() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (doanId: number) => {
+      await externalSupabase
+        .from("cong_viec")
+        .update({ trang_thai: "hoan_thanh", updated_at: new Date().toISOString() })
+        .eq("doan_id", doanId)
+        .eq("loai_viec", "pv_phancong")
+        .in("trang_thai", ["cho_nhan", "dang_lam"]);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cong_viec"] });
+      qc.invalidateQueries({ queryKey: ["thong_bao"] });
+      qc.invalidateQueries({ queryKey: ["doan_phan_viec_matrix"] });
     },
   });
 }
