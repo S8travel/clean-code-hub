@@ -24,6 +24,7 @@ const LOAI_LABEL: Record<string, string> = {
   booking_ks: "Booking KS", booking_nh: "Booking NH",
   visa: "Visa", thanh_toan: "Thanh toán",
   lien_he: "Liên hệ / Xác nhận", khac: "Khác",
+  huy_doan: "Huỷ đoàn — huỷ dịch vụ đã đặt",
   pv_ks: "Phụ trách Khách sạn", pv_nh_dv: "Phụ trách Nhà hàng & DV",
   pv_xe: "Phụ trách Xe", pv_visa: "Phụ trách Visa",
   pv_ve_mb: "Phụ trách Vé máy bay", pv_phancong: "Phân công người phụ trách",

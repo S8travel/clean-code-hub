@@ -24,6 +24,8 @@ const LOAI_LABEL: Record<string, string> = {
   thanh_toan: "Thanh toán",
   lien_he:    "Liên hệ",
   khac:       "Khác",
+  huy_doan:   "Huỷ đoàn",
+  pv_phancong: "Phân công",
 };
 
 interface Props {
