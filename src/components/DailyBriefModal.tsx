@@ -160,7 +160,7 @@ export function DailyBriefModal() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && close()}>
-      <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-br from-sky-100 via-blue-50 to-white px-6 pt-6 pb-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -208,18 +208,19 @@ export function DailyBriefModal() {
               <button
                 key={s.key}
                 onClick={() => go(s.to)}
-                className="flex items-center gap-3 rounded-xl border bg-card px-3 py-3 text-left hover:shadow-md transition-shadow"
+                className="flex items-center gap-3 rounded-xl border bg-card px-4 py-4 text-left hover:shadow-md transition-shadow"
               >
-                <div className={cn("h-10 w-10 rounded-xl grid place-items-center text-white shrink-0", s.tile)}>
-                  <s.icon className="h-5 w-5" />
+                <div className={cn("h-12 w-12 rounded-xl grid place-items-center text-white shrink-0", s.tile)}>
+                  <s.icon className="h-6 w-6" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] text-muted-foreground truncate">{s.label}</p>
-                  <p className="text-sm font-bold">
-                    {s.count} <span className="text-[11px] font-normal text-muted-foreground">{s.unit}</span>
+                  <p className="text-xs text-muted-foreground leading-snug">{s.label}</p>
+                  <p className="text-xl font-bold leading-tight mt-1">
+                    {s.count}{" "}
+                    <span className="text-xs font-normal text-muted-foreground">{s.unit}</span>
                   </p>
                 </div>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             ))}
           </div>
@@ -247,8 +248,8 @@ export function DailyBriefModal() {
                         !
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold truncate">{a.title}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">{a.sub}</p>
+                        <p className="text-sm font-semibold leading-snug">{a.title}</p>
+                        <p className="text-xs text-muted-foreground leading-snug">{a.sub}</p>
                       </div>
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     </button>
@@ -264,7 +265,7 @@ export function DailyBriefModal() {
               </h3>
               <ul className="space-y-2">
                 {tips.map((tip, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-foreground/80">
+                  <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
                     <span className="text-blue-500 mt-0.5">•</span>
                     <span>{tip}</span>
                   </li>
