@@ -10,7 +10,7 @@ import { vi } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle, Clock, ClipboardList, Eye, CalendarDays,
-  ChevronRight, Bot, Rocket,
+  ChevronRight, Bot, Rocket, CreditCard, Wallet, Receipt,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCongViecList } from "@/hooks/use-cong-viec";
@@ -21,6 +21,7 @@ import {
   useMyDeadlines, useMyCreatedBookingDeadlines, type DeadlineItem,
 } from "@/hooks/use-my-job";
 import { useMyPhanViecScope } from "@/hooks/use-phan-viec";
+import { useKeToanBrief } from "@/hooks/use-ke-toan-brief";
 
 function todayStr() {
   const d = new Date();
@@ -30,6 +31,9 @@ function addDaysStr(n: number) {
   const d = new Date();
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, "0")}-${`${d.getDate()}`.padStart(2, "0")}`;
+}
+function fmtVND(n: number) {
+  return (n || 0).toLocaleString("vi-VN") + " đ";
 }
 function greet() {
   const h = new Date().getHours();
@@ -73,6 +77,8 @@ export function DailyBriefModal() {
   const { data: unread = 0 } = useThongBaoCount(uid);
   const { data: dnttList = [] } = useDNTTNeedingApproval(uid);
   const { data: leadOverdue = 0 } = useMyOverdueCount(uid);
+  const isKeToan = user?.bo_phan === "ke_toan";
+  const { data: kt } = useKeToanBrief(uid, !!uid);
 
   const deadlines = useMemo(() => {
     const seen = new Set<string>();
@@ -152,6 +158,57 @@ export function DailyBriefModal() {
     return t.slice(0, 4);
   }, [m, leadOverdue, dnttList]);
 
+  // ── Biến thể KẾ TOÁN ────────────────────────────────────────────────────────
+  const dnttTotal = useMemo(
+    () => dnttList.reduce((s, d) => s + (Number(d.so_tien) || 0), 0),
+    [dnttList],
+  );
+  const ktCards: StatCard[] = useMemo(() => ([
+    { key: "ktduyet", label: "Chờ tôi duyệt", count: dnttList.length, unit: "ĐNTT",
+      icon: CreditCard, tile: "bg-orange-500", to: "/de-nghi-thanh-toan" },
+    { key: "ktchi", label: "Đã duyệt — cần chi", count: kt?.choChi ?? 0, unit: "ĐNTT",
+      icon: Wallet, tile: "bg-blue-500", to: "/de-nghi-thanh-toan" },
+    { key: "kthan", label: "Đến hạn / quá hạn TT", count: kt?.dueSoon ?? 0, unit: "ĐNTT",
+      icon: AlertTriangle, tile: "bg-rose-500", to: "/de-nghi-thanh-toan" },
+    { key: "ktcongno", label: "Công nợ còn dư", count: kt?.congNoCount ?? 0, unit: "khoản",
+      icon: Receipt, tile: "bg-emerald-500", to: "/cong-no" },
+  ]), [dnttList, kt]);
+
+  const ktAttention = useMemo(() => {
+    const out: { tone: string; title: string; sub: string; to: string }[] = [];
+    if (dnttList.length > 0)
+      out.push({ tone: "bg-orange-500", title: `${dnttList.length} ĐNTT chờ bạn duyệt`,
+        sub: `Tổng ${fmtVND(dnttTotal)}`, to: "/de-nghi-thanh-toan" });
+    if ((kt?.overdue ?? 0) > 0)
+      out.push({ tone: "bg-red-500", title: `${kt!.overdue} ĐNTT quá hạn thanh toán`,
+        sub: "Cần chi gấp", to: "/de-nghi-thanh-toan" });
+    if ((kt?.hoaDonThieu ?? 0) > 0)
+      out.push({ tone: "bg-amber-500", title: `${kt!.hoaDonThieu} khoản đã chi thiếu hóa đơn/UNC`,
+        sub: "Bổ sung chứng từ", to: "/hoa-don-unc" });
+    if ((kt?.congNoCount ?? 0) > 0)
+      out.push({ tone: "bg-emerald-600", title: `${kt!.congNoCount} công nợ còn dư`,
+        sub: fmtVND(kt!.congNoSum), to: "/cong-no" });
+    if (unread > 0)
+      out.push({ tone: "bg-violet-500", title: `${unread} thông báo chưa đọc`,
+        sub: "Xem trong Việc của tôi", to: "/my-job" });
+    return out;
+  }, [dnttList, dnttTotal, kt, unread]);
+
+  const ktTips = useMemo(() => {
+    const t: string[] = [];
+    if ((kt?.overdue ?? 0) > 0) t.push(`Ưu tiên chi ${kt!.overdue} ĐNTT đã quá hạn thanh toán.`);
+    if (dnttList.length > 0) t.push(`Duyệt ${dnttList.length} ĐNTT đang chờ để kế toán kịp chi.`);
+    if ((kt?.dueSoon ?? 0) > 0) t.push(`Có ${kt!.dueSoon} khoản đến hạn trong 3 ngày — chuẩn bị chi.`);
+    if ((kt?.hoaDonThieu ?? 0) > 0) t.push(`Thu thập hóa đơn/UNC cho ${kt!.hoaDonThieu} khoản đã chi.`);
+    if ((kt?.congNoCount ?? 0) > 0) t.push(`Cấn trừ/hoàn ${kt!.congNoCount} công nợ còn dư.`);
+    if (t.length === 0) t.push("Sổ sách gọn gàng — không có khoản nào gấp! 🎯");
+    return t.slice(0, 4);
+  }, [kt, dnttList]);
+
+  const cards = isKeToan ? ktCards : statCards;
+  const attn = isKeToan ? ktAttention : attention;
+  const tipList = isKeToan ? ktTips : tips;
+
   if (!uid) return null;
 
   const persist = () => { if (dontShow && dayKey) localStorage.setItem(dayKey, "1"); };
@@ -178,7 +235,9 @@ export function DailyBriefModal() {
                   <CalendarDays className="h-3.5 w-3.5 text-primary" />
                   <span className="capitalize">{format(new Date(), "EEEE, dd/MM/yyyy", { locale: vi })}</span>
                 </div>
-                <div className="text-muted-foreground mt-0.5">{m.total} việc hôm nay</div>
+                <div className="text-muted-foreground mt-0.5">
+                  {isKeToan ? `${dnttList.length} ĐNTT chờ duyệt` : `${m.total} việc hôm nay`}
+                </div>
               </div>
               <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm">
                 <div className="h-8 w-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-bold">
@@ -194,9 +253,21 @@ export function DailyBriefModal() {
             </div>
           </div>
           <p className="text-sm mt-4">
-            Hôm nay bạn có{" "}
-            <span className="text-xl font-bold text-blue-600">{m.total}</span>{" "}
-            công việc cần xử lý
+            {isKeToan ? (
+              <>
+                Tổng cần chi tuần này:{" "}
+                <span className="text-xl font-bold text-blue-600">{fmtVND(kt?.totalWeek ?? 0)}</span>
+                {dnttList.length > 0 && (
+                  <span className="text-muted-foreground"> · {dnttList.length} ĐNTT chờ bạn duyệt</span>
+                )}
+              </>
+            ) : (
+              <>
+                Hôm nay bạn có{" "}
+                <span className="text-xl font-bold text-blue-600">{m.total}</span>{" "}
+                công việc cần xử lý
+              </>
+            )}
           </p>
         </div>
 
@@ -204,7 +275,7 @@ export function DailyBriefModal() {
         <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
           {/* Stat cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {statCards.map((s) => (
+            {cards.map((s) => (
               <button
                 key={s.key}
                 onClick={() => go(s.to)}
@@ -231,14 +302,14 @@ export function DailyBriefModal() {
               <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
                 <AlertTriangle className="h-4 w-4 text-amber-500" /> Việc cần chú ý
               </h3>
-              {attention.length === 0 ? (
+              {attn.length === 0 ? (
                 <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-6 text-center">
                   <p className="text-sm text-green-700 font-medium">Không có việc gấp 🎉</p>
                   <p className="text-xs text-green-600 mt-0.5">Mọi thứ trong tầm kiểm soát</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {attention.map((a, i) => (
+                  {attn.map((a, i) => (
                     <button
                       key={i}
                       onClick={() => go(a.to)}
@@ -264,7 +335,7 @@ export function DailyBriefModal() {
                 <Bot className="h-4 w-4 text-blue-500" /> Gợi ý cho bạn
               </h3>
               <ul className="space-y-2">
-                {tips.map((tip, i) => (
+                {tipList.map((tip, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
                     <span className="text-blue-500 mt-0.5">•</span>
                     <span>{tip}</span>
