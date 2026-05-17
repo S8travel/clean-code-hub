@@ -213,7 +213,7 @@ export function DoanTable({
       </div>
 
       <div className="overflow-x-auto">
-      <div className="space-y-2.5 min-w-[1488px]">
+      <div className="space-y-2.5 min-w-[1548px]">
       {sorted.map((g) => {
         const st = richStatus(g, qtPaidSet ?? null);
         const StIcon = st.icon;
@@ -241,7 +241,7 @@ export function DoanTable({
               g.trang_thai === "huy" && "opacity-70",
             )}
           >
-            <div className="grid grid-cols-[300px_210px_120px_170px_260px_160px_minmax(180px,1fr)_88px] items-stretch divide-x divide-gray-200">
+            <div className="grid grid-cols-[300px_210px_120px_170px_260px_220px_minmax(180px,1fr)_88px] items-stretch divide-x divide-gray-200">
               {/* 1. Trạng thái + Mã đoàn (giữ nguyên) */}
               <div className="flex items-center gap-3 px-4 py-3 min-w-0">
                 <div className="flex flex-col items-center w-14 shrink-0 text-center">
