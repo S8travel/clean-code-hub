@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useDoanListFilters } from "@/hooks/use-doan-list-filters";
-import { Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, X, ChevronLeft, ChevronRight, CalendarClock, Bus, Activity, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +88,9 @@ export default function Index() {
     { payload: DoanInsert; info: { code: string; agent: string; diaDiem: string; soKhach: number | null; ngayDi: string | null; ngayVe: string | null; loaiTour: string | null } } | null
   >(null);
   const createPhanViec = useCreatePhanViec();
+  const [quickTab, setQuickTab] = useState<
+    "all" | "dang_chay" | "sap_khoi_hanh" | "dang_dien_ra" | "hoan_thanh" | "huy"
+  >("all");
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
@@ -124,7 +127,37 @@ export default function Index() {
 
   const clearFilters = () => {
     filterState.clear();
+    setQuickTab("all");
   };
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const today3Str = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  const curYM = todayStr.slice(0, 7);
+  const gCat = (g: any) => {
+    const status = computeDoanStatus(g, qtPaidSet ?? null);
+    const di = g.ngay_di as string | null;
+    const ve = g.ngay_ve as string | null;
+    const sapKhoiHanh = status === "dang_chay" && !!di && di >= todayStr && di <= today3Str;
+    const dangDienRa = status === "dang_chay" && !!di && !!ve && di <= todayStr && ve >= todayStr;
+    const hoanThanhThang =
+      (status === "hoan_thanh" || status === "da_quyet_toan") && !!ve && ve.slice(0, 7) === curYM;
+    return { status, sapKhoiHanh, dangDienRa, hoanThanhThang };
+  };
+  const stats = useMemo(() => {
+    const s = { total: 0, dangChay: 0, sapKhoiHanh: 0, dangDienRa: 0, hoanThanh: 0, hoanThanhThang: 0, huy: 0 };
+    for (const g of groups ?? []) {
+      s.total++;
+      const c = gCat(g);
+      if (c.status === "dang_chay") s.dangChay++;
+      if (c.status === "huy") s.huy++;
+      if (c.status === "hoan_thanh" || c.status === "da_quyet_toan") s.hoanThanh++;
+      if (c.sapKhoiHanh) s.sapKhoiHanh++;
+      if (c.dangDienRa) s.dangDienRa++;
+      if (c.hoanThanhThang) s.hoanThanhThang++;
+    }
+    return s;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, qtPaidSet, todayStr, today3Str, curYM]);
 
   const filtered = useMemo(() => {
     if (!groups) return [];
@@ -154,9 +187,19 @@ export default function Index() {
         if (status !== (trangThaiFilter as DoanStatus)) return false;
       }
 
+      if (quickTab !== "all") {
+        const c = gCat(g);
+        if (quickTab === "dang_chay" && c.status !== "dang_chay") return false;
+        if (quickTab === "huy" && c.status !== "huy") return false;
+        if (quickTab === "hoan_thanh" && c.status !== "hoan_thanh" && c.status !== "da_quyet_toan") return false;
+        if (quickTab === "sap_khoi_hanh" && !c.sapKhoiHanh) return false;
+        if (quickTab === "dang_dien_ra" && !c.dangDienRa) return false;
+      }
+
       return true;
     });
-  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, doanOpMap, qtPaidSet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, doanOpMap, qtPaidSet, quickTab]);
 
   // Page reset đã tích hợp trong setSearch/setDateFrom/... helpers ở trên
 
@@ -402,6 +445,53 @@ export default function Index() {
             <Plus className="h-4 w-4 mr-1.5" />
             Tạo đoàn mới
           </Button>
+        </div>
+
+        {/* DASHBOARD: thẻ thống kê */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {([
+            { key: "sap_khoi_hanh", label: "Sắp khởi hành", sub: "trong 3 ngày tới", n: stats.sapKhoiHanh, icon: CalendarClock, tile: "bg-amber-500" },
+            { key: "dang_dien_ra", label: "Đang diễn ra", sub: "đang trong hành trình", n: stats.dangDienRa, icon: Bus, tile: "bg-blue-500" },
+            { key: "dang_chay", label: "Đang chạy", sub: "tổng đoàn hoạt động", n: stats.dangChay, icon: Activity, tile: "bg-emerald-500" },
+            { key: "hoan_thanh", label: "Hoàn thành", sub: "trong tháng này", n: stats.hoanThanhThang, icon: CheckCircle2, tile: "bg-teal-500" },
+          ] as const).map((c) => (
+            <button
+              key={c.key}
+              onClick={() => { setQuickTab((t) => (t === c.key ? "all" : c.key)); setPage(1); }}
+              className={`flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-left transition-shadow hover:shadow-md ${quickTab === c.key ? "ring-2 ring-primary/50" : ""}`}
+            >
+              <div className={`h-10 w-10 rounded-xl grid place-items-center text-white shrink-0 ${c.tile}`}>
+                <c.icon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl font-bold leading-tight">{c.n}</p>
+                <p className="text-[11px] text-muted-foreground leading-snug">{c.label} · {c.sub}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* DASHBOARD: tabs lọc nhanh */}
+        <div className="flex items-center gap-1.5 flex-wrap mb-4">
+          {([
+            { key: "all", label: "Tất cả", n: stats.total },
+            { key: "dang_chay", label: "Đang chạy", n: stats.dangChay },
+            { key: "sap_khoi_hanh", label: "Sắp khởi hành", n: stats.sapKhoiHanh },
+            { key: "dang_dien_ra", label: "Đang diễn ra", n: stats.dangDienRa },
+            { key: "hoan_thanh", label: "Hoàn thành", n: stats.hoanThanh },
+            { key: "huy", label: "Đã huỷ", n: stats.huy },
+          ] as const).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => { setQuickTab(t.key); setPage(1); }}
+              className={`h-8 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-colors ${quickTab === t.key ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted/50 border-border"}`}
+            >
+              {t.label}
+              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold ${quickTab === t.key ? "bg-white/25" : "bg-muted"}`}>
+                {t.n}
+              </span>
+            </button>
+          ))}
         </div>
 
         {error && (
