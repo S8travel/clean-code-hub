@@ -552,8 +552,8 @@ export default function DoanDetail() {
               khachSanList={khachSanList}
               doanId={doanId}
             />
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold">Ghi chú điều tour</h3>
+            <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5">📝 Ghi chú điều tour</h3>
               <Textarea
                 value={ghiChuDieuTour}
                 onChange={(e) => handleSetGhiChuDieuTour(e.target.value)}
