@@ -133,6 +133,8 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
   const [noteOpenMap, setNoteOpenMap] = useState<Record<number, boolean>>({});
   // Google Sheets-like: sau khi chọn cảnh điểm ở dòng cuối → tự thêm dòng mới + auto-open dropdown của nó.
   const [autoOpenIdx, setAutoOpenIdx] = useState<number | null>(null);
+  // Ô đang ở chế độ đổi NH/KS (sau khi đã qua guard check)
+  const [editSel, setEditSel] = useState<null | "trua" | "toi" | "ks">(null);
 
   const updateGhiChu = (idx: number, val: string) => {
     const newItems = [...day.items];
@@ -293,11 +295,38 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       {/* ĂN TRƯA */}
       <div className="p-1.5 border-r border-gray-300 space-y-1 min-w-0 break-words">
         {selectedNhaTrua ? (
+          editSel === "trua" ? (
+            <div className="flex items-center gap-1">
+              <SearchableSelect
+                options={nhaHangOptions}
+                value={String(selectedNhaTrua.id)}
+                autoOpen
+                onChange={(v) => {
+                  const nid = v ? Number(v) : null;
+                  if (nid !== selectedNhaTrua.id) update({ an_trua_nha_hang_id: nid, an_trua_set_menu_id: null });
+                  setEditSel(null);
+                }}
+                placeholder="Chọn nhà hàng khác"
+                className="h-7 text-xs flex-1"
+              />
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="Giữ nguyên" onClick={() => setEditSel(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
+              <button type="button" title="Bấm để đổi nhà hàng"
+                className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
+                onClick={async () => {
+                  if (doanId && day.id && selectedNhaTrua) {
+                    const result = await checkNhaHangDeletable(day.id, selectedNhaTrua.id, "trua", selectedNhaTrua.ten);
+                    if (!result.ok) { toast.error(result.reason ?? "Không thể đổi"); return; }
+                  }
+                  setEditSel("trua");
+                }}>
                 {selectedNhaTrua.ten}
-              </div>
+              </button>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
                 // Pre-check: nếu đã save (day.id) và có doanId → check DNTT + booking_nh
                 if (doanId && day.id && selectedNhaTrua) {
@@ -320,6 +349,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               onChange={(v) => update({ an_trua_ghi_chu: v })}
             />
           </>
+          )
         ) : (
           <SearchableSelect
             options={nhaHangOptions}
@@ -334,11 +364,38 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       {/* ĂN TỐI */}
       <div className="p-1.5 border-r border-gray-300 space-y-1 min-w-0 break-words">
         {selectedNhaToi ? (
+          editSel === "toi" ? (
+            <div className="flex items-center gap-1">
+              <SearchableSelect
+                options={nhaHangOptions}
+                value={String(selectedNhaToi.id)}
+                autoOpen
+                onChange={(v) => {
+                  const nid = v ? Number(v) : null;
+                  if (nid !== selectedNhaToi.id) update({ an_toi_nha_hang_id: nid, an_toi_set_menu_id: null });
+                  setEditSel(null);
+                }}
+                placeholder="Chọn nhà hàng khác"
+                className="h-7 text-xs flex-1"
+              />
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="Giữ nguyên" onClick={() => setEditSel(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
+              <button type="button" title="Bấm để đổi nhà hàng"
+                className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
+                onClick={async () => {
+                  if (doanId && day.id && selectedNhaToi) {
+                    const result = await checkNhaHangDeletable(day.id, selectedNhaToi.id, "toi", selectedNhaToi.ten);
+                    if (!result.ok) { toast.error(result.reason ?? "Không thể đổi"); return; }
+                  }
+                  setEditSel("toi");
+                }}>
                 {selectedNhaToi.ten}
-              </div>
+              </button>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
                 if (doanId && day.id && selectedNhaToi) {
                   const result = await checkNhaHangDeletable(day.id, selectedNhaToi.id, "toi", selectedNhaToi.ten);
@@ -360,6 +417,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               onChange={(v) => update({ an_toi_ghi_chu: v })}
             />
           </>
+          )
         ) : (
           <SearchableSelect
             options={nhaHangOptions}
@@ -379,11 +437,38 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
             Đã khoá ở mẫu seri
           </div>
         ) : selectedKS ? (
+          editSel === "ks" ? (
+            <div className="flex items-center gap-1">
+              <SearchableSelect
+                options={khachSanOptions}
+                value={String(selectedKS.id)}
+                autoOpen
+                onChange={(v) => {
+                  const nid = v ? Number(v) : null;
+                  if (nid !== selectedKS.id) update({ khach_san_id: nid });
+                  setEditSel(null);
+                }}
+                placeholder="Chọn khách sạn khác"
+                className="h-7 text-xs flex-1"
+              />
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="Giữ nguyên" onClick={() => setEditSel(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
           <>
             <div className="flex items-center gap-1">
-              <div className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center">
+              <button type="button" title="Bấm để đổi khách sạn"
+                className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
+                onClick={async () => {
+                  if (doanId && selectedKS) {
+                    const result = await checkKhachSanDeletable(doanId, selectedKS.id, selectedKS.ten);
+                    if (!result.ok) { toast.error(result.reason ?? "Không thể đổi"); return; }
+                  }
+                  setEditSel("ks");
+                }}>
                 {selectedKS.ten}
-              </div>
+              </button>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
                 if (doanId && selectedKS) {
                   const result = await checkKhachSanDeletable(doanId, selectedKS.id, selectedKS.ten);
@@ -396,6 +481,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
             </div>
             <DetailLine item={selectedKS} />
           </>
+          )
         ) : (
           <SearchableSelect
             options={khachSanOptions}
