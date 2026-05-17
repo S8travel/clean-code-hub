@@ -477,24 +477,32 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                   return (
                                     <td
                                       rowSpan={callCount}
-                                      className="px-3 py-1 align-top border-r border-border/40"
+                                      className="px-3 py-1 align-middle border-r border-border/40 text-center"
                                     >
-                                      <DatePicker
-                                        value={lockPhong.deadline ?? ""}
-                                        onChange={(v) => {
-                                          const next = v || null;
-                                          if (next !== (lockPhong.deadline ?? null)) {
-                                            updateDeadline.mutate(
-                                              { id: lockPhong.id, deadline: next },
-                                              { onError: (e: any) => toast.error("Lỗi sửa deadline: " + (e?.message || "")) },
-                                            );
-                                          }
-                                        }}
-                                        className={cn("h-7 text-xs px-1.5", dl.cls)}
-                                      />
-                                      {dl.subtext && (
-                                        <div className="text-[10px] text-muted-foreground mt-0.5">{dl.subtext}</div>
-                                      )}
+                                      <div className={cn(
+                                        "inline-flex flex-col items-center gap-0.5 rounded-md border px-2 py-1",
+                                        dl.cls.includes("red") ? "border-red-200 bg-red-50"
+                                          : dl.cls.includes("orange") ? "border-orange-200 bg-orange-50"
+                                          : dl.cls.includes("green") ? "border-green-200 bg-green-50"
+                                          : "border-border bg-muted/30",
+                                      )}>
+                                        <DatePicker
+                                          value={lockPhong.deadline ?? ""}
+                                          onChange={(v) => {
+                                            const next = v || null;
+                                            if (next !== (lockPhong.deadline ?? null)) {
+                                              updateDeadline.mutate(
+                                                { id: lockPhong.id, deadline: next },
+                                                { onError: (e: any) => toast.error("Lỗi sửa deadline: " + (e?.message || "")) },
+                                              );
+                                            }
+                                          }}
+                                          className={cn("h-6 text-xs px-1 border-0 bg-transparent text-center font-medium", dl.cls)}
+                                        />
+                                        {dl.subtext && (
+                                          <div className="text-[10px] text-muted-foreground">{dl.subtext}</div>
+                                        )}
+                                      </div>
                                     </td>
                                   );
                                 })()}
