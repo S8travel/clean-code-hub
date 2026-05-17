@@ -263,7 +263,7 @@ export function useAssignPvItem() {
           tieu_de: `[${LABEL[p.key]}] ${p.doanTen}`,
           mo_ta: `Phụ trách ${LABEL[p.key]} cho đoàn ${p.doanTen}`,
           doan_id: p.doanId, nguoi_giao: SYSTEM_USER_ID, nguoi_nhan: p.userId,
-          loai_viec: p.key, do_uu_tien: "binh_thuong",
+          loai_viec: p.key, do_uu_tien: p.key === "pv_ks" ? "cao" : "binh_thuong",
           han_xu_ly: p.ngayDi || null, trang_thai: "cho_nhan",
         })
         .select("id").single();
@@ -336,7 +336,7 @@ export function useCreatePhanViec() {
             nguoi_giao: SYSTEM_USER_ID,
             nguoi_nhan: a.assignedTo,
             loai_viec: a.key,
-            do_uu_tien: "binh_thuong",
+            do_uu_tien: a.key === "pv_ks" ? "cao" : "binh_thuong",
             han_xu_ly: doan.ngay_di || null,
             trang_thai: "cho_nhan",
           })
