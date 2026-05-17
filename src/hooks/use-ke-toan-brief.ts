@@ -7,6 +7,7 @@ export interface KeToanBrief {
   overdue: number;      // quá hạn TT (< today)
   totalWeek: number;    // tổng cần chi trong 7 ngày (so_tien - paid_amount)
   hoaDonThieu: number;  // đã chi nhưng thiếu hóa đơn/UNC
+  chuaCoHoaDon: number; // ĐNTT đã duyệt chưa có hóa đơn (bất kể đã chi hay chưa)
   congNoCount: number;
   congNoSum: number;
   topDue: { ten: string; so_tien: number; ngay: string | null }[];
@@ -49,6 +50,7 @@ export function useKeToanBrief(uid: string | null, enabled: boolean) {
       const hoaDonThieu = dntt.filter(
         (d) => d.payment_status === "paid" && (!d.hoa_don_url || !d.unc_url),
       ).length;
+      const chuaCoHoaDon = dntt.filter((d) => !d.hoa_don_url).length;
       const congNo = cn.filter((c) => Number(c.so_tien_con_lai) > 0);
       const topDue = [...dueSoon]
         .sort((a, b) => (a.ngay_can_thanh_toan || "~").localeCompare(b.ngay_can_thanh_toan || "~"))
@@ -65,6 +67,7 @@ export function useKeToanBrief(uid: string | null, enabled: boolean) {
         overdue: overdue.length,
         totalWeek,
         hoaDonThieu,
+        chuaCoHoaDon,
         congNoCount: congNo.length,
         congNoSum: congNo.reduce((s, c) => s + (Number(c.so_tien_con_lai) || 0), 0),
         topDue,

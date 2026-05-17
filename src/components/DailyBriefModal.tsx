@@ -179,9 +179,15 @@ export function DailyBriefModal() {
     if (dnttList.length > 0)
       out.push({ tone: "bg-orange-500", title: `${dnttList.length} ĐNTT chờ bạn duyệt`,
         sub: `Tổng ${fmtVND(dnttTotal)}`, to: "/de-nghi-thanh-toan" });
+    if ((kt?.choChi ?? 0) > 0)
+      out.push({ tone: "bg-blue-500", title: `${kt!.choChi} ĐNTT cần thanh toán`,
+        sub: "Đã duyệt, chưa chi", to: "/de-nghi-thanh-toan" });
     if ((kt?.overdue ?? 0) > 0)
       out.push({ tone: "bg-red-500", title: `${kt!.overdue} ĐNTT quá hạn thanh toán`,
         sub: "Cần chi gấp", to: "/de-nghi-thanh-toan" });
+    if ((kt?.chuaCoHoaDon ?? 0) > 0)
+      out.push({ tone: "bg-amber-600", title: `${kt!.chuaCoHoaDon} ĐNTT chưa có hóa đơn`,
+        sub: "Cần thu hóa đơn", to: "/hoa-don-unc" });
     if ((kt?.hoaDonThieu ?? 0) > 0)
       out.push({ tone: "bg-amber-500", title: `${kt!.hoaDonThieu} khoản đã chi thiếu hóa đơn/UNC`,
         sub: "Bổ sung chứng từ", to: "/hoa-don-unc" });
@@ -199,6 +205,7 @@ export function DailyBriefModal() {
     if ((kt?.overdue ?? 0) > 0) t.push(`Ưu tiên chi ${kt!.overdue} ĐNTT đã quá hạn thanh toán.`);
     if (dnttList.length > 0) t.push(`Duyệt ${dnttList.length} ĐNTT đang chờ để kế toán kịp chi.`);
     if ((kt?.dueSoon ?? 0) > 0) t.push(`Có ${kt!.dueSoon} khoản đến hạn trong 3 ngày — chuẩn bị chi.`);
+    if ((kt?.chuaCoHoaDon ?? 0) > 0) t.push(`Còn ${kt!.chuaCoHoaDon} ĐNTT chưa có hóa đơn — thu chứng từ.`);
     if ((kt?.hoaDonThieu ?? 0) > 0) t.push(`Thu thập hóa đơn/UNC cho ${kt!.hoaDonThieu} khoản đã chi.`);
     if ((kt?.congNoCount ?? 0) > 0) t.push(`Cấn trừ/hoàn ${kt!.congNoCount} công nợ còn dư.`);
     if (t.length === 0) t.push("Sổ sách gọn gàng — không có khoản nào gấp! 🎯");
