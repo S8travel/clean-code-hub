@@ -266,15 +266,19 @@ export default function MyJobPage() {
     return map;
   }, [myAssignments, allTeamAgents]);
 
-  // Đoàn của tôi: thuộc team tôi phụ trách HOẶC mình là OP được gắn tên trên đoàn
+  // Phạm vi phân việc (cong_viec pv_*): pv_ks→KS · pv_nh_dv→NH+DV
+  const { data: pvScope } = useMyPhanViecScope(uid);
+
+  // Đoàn của tôi: team tôi phụ trách HOẶC là OP (assigned_to) HOẶC được phân việc (pv_*)
   const myDoan = useMemo(
     () =>
       (allDoan as any[]).filter(
         (d) =>
           (d.agent_id && myAgentTaskMap.has(d.agent_id)) ||
-          d.assigned_to === uid,
+          d.assigned_to === uid ||
+          (pvScope?.has(d.id) ?? false),
       ),
-    [allDoan, myAgentTaskMap, uid],
+    [allDoan, myAgentTaskMap, uid, pvScope],
   );
 
   // doanId → scope: gộp từ team assignment + scope OP (nh, dv)
@@ -291,13 +295,14 @@ export default function MyJobPage() {
         scope.add("nh");
         scope.add("dv");
       }
+      // Scope từ phân việc pv_*: pv_ks→ks · pv_nh_dv→nh,dv
+      const pv = pvScope?.get(d.id);
+      if (pv) for (const s of pv) scope.add(s);
       map.set(d.id, scope);
     }
     return map;
-  }, [myDoan, myAgentTaskMap, uid]);
+  }, [myDoan, myAgentTaskMap, uid, pvScope]);
 
-  // Deadline theo PHÂN VIỆC (cong_viec pv_*): pv_ks → KS · pv_nh_dv → NH + DV
-  const { data: pvScope } = useMyPhanViecScope(uid);
   const pvDoanIds = useMemo(() => (pvScope ? [...pvScope.keys()] : []), [pvScope]);
   const { data: pvDeadlines = [], isLoading: loadingPvDl } = useMyDeadlines(pvDoanIds);
   const { data: createdDeadlines = [], isLoading: loadingCreatedDl } =
