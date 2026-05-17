@@ -89,7 +89,7 @@ export default function Index() {
   >(null);
   const createPhanViec = useCreatePhanViec();
   const [quickTab, setQuickTab] = useState<
-    "all" | "dang_chay" | "sap_khoi_hanh" | "dang_dien_ra" | "hoan_thanh" | "huy"
+    "all" | "dang_chay" | "sap_khoi_hanh" | "dang_dien_ra" | "hoan_thanh" | "da_quyet_toan" | "huy"
   >("all");
   const [pageSize, setPageSize] = useState(5);
 
@@ -145,13 +145,14 @@ export default function Index() {
     return { status, sapKhoiHanh, dangDienRa, hoanThanhThang };
   };
   const stats = useMemo(() => {
-    const s = { total: 0, dangChay: 0, sapKhoiHanh: 0, dangDienRa: 0, hoanThanh: 0, hoanThanhThang: 0, huy: 0 };
+    const s = { total: 0, dangChay: 0, sapKhoiHanh: 0, dangDienRa: 0, hoanThanh: 0, daQuyetToan: 0, hoanThanhThang: 0, huy: 0 };
     for (const g of groups ?? []) {
       s.total++;
       const c = gCat(g);
       if (c.status === "dang_chay") s.dangChay++;
       if (c.status === "huy") s.huy++;
-      if (c.status === "hoan_thanh" || c.status === "da_quyet_toan") s.hoanThanh++;
+      if (c.status === "hoan_thanh") s.hoanThanh++;
+      if (c.status === "da_quyet_toan") s.daQuyetToan++;
       if (c.sapKhoiHanh) s.sapKhoiHanh++;
       if (c.dangDienRa) s.dangDienRa++;
       if (c.hoanThanhThang) s.hoanThanhThang++;
@@ -192,7 +193,8 @@ export default function Index() {
         const c = gCat(g);
         if (quickTab === "dang_chay" && c.status !== "dang_chay") return false;
         if (quickTab === "huy" && c.status !== "huy") return false;
-        if (quickTab === "hoan_thanh" && c.status !== "hoan_thanh" && c.status !== "da_quyet_toan") return false;
+        if (quickTab === "hoan_thanh" && c.status !== "hoan_thanh") return false;
+        if (quickTab === "da_quyet_toan" && c.status !== "da_quyet_toan") return false;
         if (quickTab === "sap_khoi_hanh" && !c.sapKhoiHanh) return false;
         if (quickTab === "dang_dien_ra" && !c.dangDienRa) return false;
       }
@@ -480,6 +482,7 @@ export default function Index() {
             { key: "sap_khoi_hanh", label: "Sắp khởi hành", n: stats.sapKhoiHanh },
             { key: "dang_dien_ra", label: "Đang diễn ra", n: stats.dangDienRa },
             { key: "hoan_thanh", label: "Hoàn thành", n: stats.hoanThanh },
+            { key: "da_quyet_toan", label: "Đã quyết toán", n: stats.daQuyetToan },
             { key: "huy", label: "Đã huỷ", n: stats.huy },
           ] as const).map((t) => (
             <button
