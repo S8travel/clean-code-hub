@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { AppLayout } from "./AppLayout";
+import { DailyBriefModal } from "./DailyBriefModal";
 
 export function ProtectedLayout() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -19,6 +20,7 @@ export function ProtectedLayout() {
 
   return (
     <AppLayout>
+      <DailyBriefModal />
       <Outlet />
     </AppLayout>
   );
