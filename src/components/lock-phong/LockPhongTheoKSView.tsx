@@ -132,6 +132,8 @@ export default function LockPhongTheoKSView({ data }: Props) {
   const [confirmingKsId, setConfirmingKsId] = useState<number | null>(null);
   const [lpPage, setLpPage] = useState(1);
   const [lpPageSize, setLpPageSize] = useState(5);
+  // Phân trang nội bộ từng card khách sạn (số đoàn) — 5/trang
+  const [entryPage, setEntryPage] = useState<Record<number, number>>({});
 
   const handleConfirmAll = async (
     khachSanId: number,
@@ -270,6 +272,10 @@ export default function LockPhongTheoKSView({ data }: Props) {
     <div className="space-y-3">
       {pageGroups.map((group) => {
         const isOpen = expandedIds.has(group.khach_san_id);
+        const ePageSize = 5;
+        const eTotalPages = Math.max(1, Math.ceil(group.entries.length / ePageSize));
+        const eCur = Math.min(entryPage[group.khach_san_id] ?? 1, eTotalPages);
+        const pageEntries = group.entries.slice((eCur - 1) * ePageSize, eCur * ePageSize);
         const allRows = group.entries.flatMap((e) =>
           e.ksRows.map((r) => ({ r, lp: e.lockPhong })),
         );
@@ -430,7 +436,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {group.entries.map(({ lockPhong, ksRows }) =>
+                    {pageEntries.map(({ lockPhong, ksRows }) =>
                       ksRows.map((ksRow, callIdx) => {
                         const outcomeValue = ksRow.outcome_status ?? "cho_xu_ly";
                         const isFirstCall = callIdx === 0;
@@ -584,6 +590,26 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     )}
                   </tbody>
                 </table>
+                {group.entries.length > ePageSize && (
+                  <div className="flex items-center justify-between text-xs text-muted-foreground px-4 py-2 border-t border-border">
+                    <span>
+                      Hiển thị {(eCur - 1) * ePageSize + 1}–{Math.min(eCur * ePageSize, group.entries.length)} / {group.entries.length} đoàn
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" className="h-6 text-xs px-2"
+                        disabled={eCur <= 1}
+                        onClick={() => setEntryPage((m) => ({ ...m, [group.khach_san_id]: eCur - 1 }))}>
+                        <ChevronLeft className="h-3 w-3 mr-0.5" /> Trước
+                      </Button>
+                      <span className="px-2">Trang {eCur}/{eTotalPages}</span>
+                      <Button variant="outline" size="sm" className="h-6 text-xs px-2"
+                        disabled={eCur >= eTotalPages}
+                        onClick={() => setEntryPage((m) => ({ ...m, [group.khach_san_id]: eCur + 1 }))}>
+                        Sau <ChevronRight className="h-3 w-3 ml-0.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
