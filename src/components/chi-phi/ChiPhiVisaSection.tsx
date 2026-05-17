@@ -109,7 +109,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
   };
 
   return (
-    <div className="px-4 py-3 border-t border-border bg-muted/10 space-y-2">
+    <div className="rounded-lg border border-border bg-card p-4 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label className="text-xs">Đơn vị visa</Label>

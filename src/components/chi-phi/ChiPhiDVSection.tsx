@@ -761,7 +761,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const allSelected = selectedIds.length === dvRows.length && dvRows.length > 0;
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
         <p className="text-sm font-semibold text-purple-900">🎫 Dịch vụ</p>
         <div className="flex items-center gap-2">

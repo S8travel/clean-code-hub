@@ -1135,7 +1135,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const ksWithDnttSelected = selectedKsIds.filter((id) => activeDnttByKs[id]).length;
 
   return (
-    <div className="space-y-2">
+    <div className="rounded-lg border border-border bg-card p-3 space-y-2">
       <h3 className="text-sm font-semibold flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-900 px-3 py-1.5 rounded-md">
         🏨 Khách sạn
         <Badge variant="secondary" className="text-xs">

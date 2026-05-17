@@ -1083,7 +1083,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   const allSelected = selectedKeys.length === meals.length && meals.length > 0;
 
   return (
-    <div className="space-y-3">
+    <div className="rounded-lg border border-border bg-card p-3 space-y-3">
       {/* Header + toolbar */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-2 bg-orange-50 border border-orange-100 text-orange-900 px-3 py-1.5 rounded-md">

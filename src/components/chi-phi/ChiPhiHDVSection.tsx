@@ -83,7 +83,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   return (
     <div className="space-y-4">
       {/* ── Top card: HDV info + tóm tắt + tạm ứng/quyết toán ── */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
         {/* HDV info + summary */}
         <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4 flex-wrap">
