@@ -39,6 +39,12 @@ function lookup(obj: any, field = "ten"): string {
   return "—";
 }
 
+function xeLabel(xe: any): string | null {
+  if (!xe) return null;
+  const parts = [xe.nha_xe?.ten ?? "", xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
 const PALETTE = [
   "bg-blue-100 text-blue-700", "bg-emerald-100 text-emerald-700",
   "bg-amber-100 text-amber-700", "bg-purple-100 text-purple-700",
@@ -213,6 +219,8 @@ export function DoanTable({
         const tien = fmtDate(g.ngay_ve);
         const hdvName = lookup(g.huong_dan_vien, "ten");
         const agentName = g.agents?.ten || "—";
+        const agentHuy = g.agent_huy?.ten as string | undefined;
+        const xe = xeLabel(g.xe);
         const diaDiem = lookup(g.dia_diem, "ten");
         const lon = g.so_khach_lon ?? 0;
         const em1 = g.so_khach_em1 ?? 0;
@@ -264,7 +272,26 @@ export function DoanTable({
                 </span>
               </div>
 
-              {/* Guests */}
+              {/* 2. HDV / OP */}
+              <div className="min-w-[150px] space-y-1.5">
+                {hdvName !== "—"
+                  ? <Avatar name={hdvName} label="HDV" />
+                  : <p className="text-xs text-muted-foreground">HDV: —</p>}
+                {op
+                  ? <Avatar name={op} label="OP" />
+                  : <p className="text-xs text-muted-foreground">OP: chưa phân</p>}
+              </div>
+
+              {/* 3. Agent */}
+              <div className="min-w-[110px]">
+                <p className="text-[10px] text-muted-foreground">Agent</p>
+                <p className="text-xs">{agentName}</p>
+                {agentHuy && (
+                  <p className="text-[10px] text-destructive/80 mt-0.5">Hủy bởi: {agentHuy}</p>
+                )}
+              </div>
+
+              {/* 4. Số lượng khách */}
               <div className="min-w-[150px]">
                 <div className="flex items-center gap-1.5 text-xs">
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -278,8 +305,8 @@ export function DoanTable({
                 </div>
               </div>
 
-              {/* Dates + flight */}
-              <div className="min-w-[180px] text-xs space-y-0.5">
+              {/* 6. Thời gian + chuyến bay (đón & tiễn) */}
+              <div className="min-w-[190px] text-xs space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="tabular-nums">{don.date} – {tien.date}</span>
@@ -291,23 +318,34 @@ export function DoanTable({
                 )}
                 {g.chuyen_bay_don && (
                   <div className="flex items-center gap-1.5 pt-0.5">
-                    <Plane className="h-3.5 w-3.5 text-[hsl(var(--brand))] shrink-0" />
+                    <Plane className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span className="text-[10px] text-muted-foreground">Đón</span>
                     <code className="text-[11px] text-[hsl(var(--brand))] font-mono truncate">{g.chuyen_bay_don}</code>
+                  </div>
+                )}
+                {g.chuyen_bay_tien && (
+                  <div className="flex items-center gap-1.5">
+                    <Plane className="h-3.5 w-3.5 text-orange-500 shrink-0 rotate-90" />
+                    <span className="text-[10px] text-muted-foreground">Tiễn</span>
+                    <code className="text-[11px] text-[hsl(var(--brand))] font-mono truncate">{g.chuyen_bay_tien}</code>
                   </div>
                 )}
               </div>
 
-              {/* HDV / OP */}
-              <div className="min-w-[150px] space-y-1.5">
-                {hdvName !== "—"
-                  ? <Avatar name={hdvName} label="HDV" />
-                  : <p className="text-xs text-muted-foreground">HDV: —</p>}
-                {op
-                  ? <Avatar name={op} label="OP" />
-                  : <p className="text-xs text-muted-foreground">OP: chưa phân</p>}
-                {agentName !== "—" && (
-                  <p className="text-[10px] text-muted-foreground">Agent: {agentName}</p>
-                )}
+              {/* 7. Loại xe */}
+              <div className="min-w-[120px] max-w-[180px]">
+                <p className="text-[10px] text-muted-foreground">Loại xe</p>
+                {xe
+                  ? <p className="text-xs leading-snug" title={xe}>{xe}</p>
+                  : <span className="text-xs text-muted-foreground">—</span>}
+              </div>
+
+              {/* 8. Chú thích */}
+              <div className="min-w-[140px] max-w-[220px]">
+                <p className="text-[10px] text-muted-foreground">Chú thích</p>
+                {g.ghi_chu
+                  ? <p className="text-xs line-clamp-3 leading-snug" title={g.ghi_chu}>{g.ghi_chu}</p>
+                  : <span className="text-xs text-muted-foreground">—</span>}
               </div>
 
               {/* Actions */}
