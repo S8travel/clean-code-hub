@@ -358,14 +358,22 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 )}
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Chuyến Bay Đến">
-                  <Input value={form.chuyen_bay_don ?? ""} onChange={(e) => set("chuyen_bay_don", e.target.value)} placeholder="VD: BR397" className="rounded-lg" />
-                </Field>
-                <Field label="Chuyến Bay Tiễn">
-                  <Input value={form.chuyen_bay_tien ?? ""} onChange={(e) => set("chuyen_bay_tien", e.target.value)} placeholder="VD: BR398" className="rounded-lg" />
-                </Field>
-              </div>
+              <Field label="Chuyến Bay Đến">
+                <Input
+                  value={form.chuyen_bay_don ?? ""}
+                  onChange={(e) => set("chuyen_bay_don", e.target.value)}
+                  placeholder="Số hiệu + giờ — VD: BR397 19:00 - 20:55"
+                  className="rounded-lg"
+                />
+              </Field>
+              <Field label="Chuyến Bay Tiễn">
+                <Input
+                  value={form.chuyen_bay_tien ?? ""}
+                  onChange={(e) => set("chuyen_bay_tien", e.target.value)}
+                  placeholder="Số hiệu + giờ — VD: BR398 14:25 - 18:00"
+                  className="rounded-lg"
+                />
+              </Field>
 
               <div className="space-y-2 rounded-lg bg-card border border-border/60 p-3">
                 <Label className="text-xs uppercase text-foreground font-bold">Số Khách</Label>
@@ -388,15 +396,6 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   <span className="text-sm font-bold text-primary tabular-nums">{total}</span>
                 </div>
               </div>
-
-              <Field label="Phân cho *">
-                <SearchableSelect
-                  options={userOptions}
-                  value={form.assigned_to || ""}
-                  onChange={(v) => set("assigned_to", v || null)}
-                  placeholder="Chọn người phụ trách"
-                />
-              </Field>
 
               <Field label="Ghi Chú">
                 <Textarea
