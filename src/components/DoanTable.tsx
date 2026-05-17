@@ -194,9 +194,9 @@ export function DoanTable({
   ];
 
   return (
-    <div className="p-3 space-y-2.5">
+    <div className="p-3">
       {/* Sort bar */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground px-1 mb-2.5">
         <span>Sắp xếp:</span>
         {SORTS.map((s) => (
           <button
@@ -212,6 +212,8 @@ export function DoanTable({
         ))}
       </div>
 
+      <div className="overflow-x-auto">
+      <div className="space-y-2.5 min-w-[1386px]">
       {sorted.map((g) => {
         const st = richStatus(g, qtPaidSet ?? null);
         const StIcon = st.icon;
@@ -239,41 +241,37 @@ export function DoanTable({
               g.trang_thai === "huy" && "opacity-70",
             )}
           >
-            <div className="flex items-stretch gap-4 p-4 flex-wrap">
-              {/* Status tile */}
-              <div className="flex flex-col items-center justify-center w-16 shrink-0 text-center">
-                <div className={cn("h-11 w-11 rounded-xl grid place-items-center text-white", st.tile)}>
-                  <StIcon className="h-5 w-5" />
+            <div className="grid grid-cols-[300px_160px_120px_170px_210px_150px_180px_96px] items-stretch divide-x divide-gray-200">
+              {/* 1. Trạng thái + Mã đoàn (giữ nguyên) */}
+              <div className="flex items-center gap-3 px-4 py-3 min-w-0">
+                <div className="flex flex-col items-center w-14 shrink-0 text-center">
+                  <div className={cn("h-11 w-11 rounded-xl grid place-items-center text-white", st.tile)}>
+                    <StIcon className="h-5 w-5" />
+                  </div>
+                  <span className={cn("text-[10px] mt-1 leading-tight font-medium", st.text)}>{st.label}</span>
                 </div>
-                <span className={cn("text-[10px] mt-1 leading-tight font-medium", st.text)}>{st.label}</span>
-              </div>
-
-              {/* Code + meta */}
-              <div className="min-w-[190px] flex-1">
-                <p className="text-[10px] text-muted-foreground">Mã đoàn</p>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-semibold text-sm text-[hsl(var(--brand))]">{g.ten_doan}</span>
-                  {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
-                    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", LOAI_TOUR_BADGE[g.loai_tour].className)}>
-                      {LOAI_TOUR_BADGE[g.loai_tour].label}
-                    </span>
-                  )}
+                <div className="min-w-0">
+                  <p className="text-[10px] text-muted-foreground">Mã đoàn</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-sm text-[hsl(var(--brand))] truncate">{g.ten_doan}</span>
+                    {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
+                      <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", LOAI_TOUR_BADGE[g.loai_tour].className)}>
+                        {LOAI_TOUR_BADGE[g.loai_tour].label}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {diaDiem !== "—" && (
+                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", badgeColor(diaDiem))}>{diaDiem}</span>
+                    )}
+                    {nights && <span className="text-[11px] text-muted-foreground">{nights}</span>}
+                  </div>
+                  <span className={cn("inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-muted", st.text)}>{st.chip}</span>
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  {diaDiem !== "—" && (
-                    <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", badgeColor(diaDiem))}>
-                      {diaDiem}
-                    </span>
-                  )}
-                  {nights && <span className="text-[11px] text-muted-foreground">{nights}</span>}
-                </div>
-                <span className={cn("inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-muted", st.text)}>
-                  {st.chip}
-                </span>
               </div>
 
               {/* 2. HDV / OP */}
-              <div className="min-w-[150px] space-y-1.5">
+              <div className="px-3 py-3 flex flex-col justify-center gap-1.5 min-w-0">
                 {hdvName !== "—"
                   ? <Avatar name={hdvName} label="HDV" />
                   : <p className="text-xs text-muted-foreground">HDV: —</p>}
@@ -283,16 +281,16 @@ export function DoanTable({
               </div>
 
               {/* 3. Agent */}
-              <div className="min-w-[110px]">
+              <div className="px-3 py-3 flex flex-col justify-center min-w-0">
                 <p className="text-[10px] text-muted-foreground">Agent</p>
-                <p className="text-xs">{agentName}</p>
+                <p className="text-xs truncate" title={agentName}>{agentName}</p>
                 {agentHuy && (
-                  <p className="text-[10px] text-destructive/80 mt-0.5">Hủy bởi: {agentHuy}</p>
+                  <p className="text-[10px] text-destructive/80 mt-0.5 truncate">Hủy bởi: {agentHuy}</p>
                 )}
               </div>
 
               {/* 4. Số lượng khách */}
-              <div className="min-w-[150px]">
+              <div className="px-3 py-3 flex flex-col justify-center min-w-0">
                 <div className="flex items-center gap-1.5 text-xs">
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="font-bold text-sm">{total}</span> khách
@@ -306,7 +304,7 @@ export function DoanTable({
               </div>
 
               {/* 6. Thời gian + chuyến bay (đón & tiễn) */}
-              <div className="min-w-[190px] text-xs space-y-0.5">
+              <div className="px-3 py-3 flex flex-col justify-center min-w-0 text-xs space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="tabular-nums">{don.date} – {tien.date}</span>
@@ -333,15 +331,15 @@ export function DoanTable({
               </div>
 
               {/* 7. Loại xe */}
-              <div className="min-w-[120px] max-w-[180px]">
+              <div className="px-3 py-3 flex flex-col justify-center min-w-0">
                 <p className="text-[10px] text-muted-foreground">Loại xe</p>
                 {xe
-                  ? <p className="text-xs leading-snug" title={xe}>{xe}</p>
+                  ? <p className="text-xs leading-snug line-clamp-2" title={xe}>{xe}</p>
                   : <span className="text-xs text-muted-foreground">—</span>}
               </div>
 
               {/* 8. Chú thích */}
-              <div className="min-w-[140px] max-w-[220px]">
+              <div className="px-3 py-3 flex flex-col justify-center min-w-0">
                 <p className="text-[10px] text-muted-foreground">Chú thích</p>
                 {g.ghi_chu
                   ? <p className="text-xs line-clamp-3 leading-snug" title={g.ghi_chu}>{g.ghi_chu}</p>
@@ -349,7 +347,7 @@ export function DoanTable({
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <div className="px-1 py-3 flex items-center justify-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                 <Button
                   variant="ghost" size="icon" className="h-8 w-8"
                   title="Xem chi tiết"
@@ -388,6 +386,8 @@ export function DoanTable({
           </div>
         );
       })}
+      </div>
+      </div>
     </div>
   );
 }
