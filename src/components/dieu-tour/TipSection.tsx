@@ -71,7 +71,7 @@ export default function TipSection({
   useEffect(() => { setLocalLumpSum(tipLumpSum != null ? formatThousands(tipLumpSum) : ""); }, [tipLumpSum]);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="pt-3 border-t border-border">
       <div className="flex items-center gap-3 flex-wrap">
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <Checkbox checked={thuTip} onCheckedChange={(v) => onThuTipChange(!!v)} />

@@ -37,7 +37,7 @@ export default function GiftTagsSection({ gifts, setGifts }: Props) {
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+    <div className="space-y-2">
       <h3 className="text-sm font-semibold flex items-center gap-1.5">🎁 Tặng phẩm</h3>
       <div className="flex flex-wrap gap-2">
         {allTags.map((tag) => {

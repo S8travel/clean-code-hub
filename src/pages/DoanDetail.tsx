@@ -527,6 +527,7 @@ export default function DoanDetail() {
               coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
               setCoTinhSuatTLNhaHang={handleSetCoTinhSuatTLNhaHang}
             />
+            <div className="rounded-lg border border-border bg-card p-3 space-y-3">
             <GiftTagsSection gifts={gifts} setGifts={handleSetGifts} />
             <TipSection
               soKhach={totalKhach || doan?.so_khach || 0}
@@ -544,6 +545,7 @@ export default function DoanDetail() {
               onTipSoKhachOverrideChange={handleSetTipSoKhachOverride}
               onTipLumpSumChange={handleSetTipLumpSum}
             />
+            </div>
             <DayScheduleTable
               days={days}
               setDays={handleSetDays}

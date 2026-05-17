@@ -82,8 +82,8 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
   };
 
   return (
-    <div className="space-y-0">
-      <h3 className="text-sm font-semibold mb-2">Lịch trình ngày</h3>
+    <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">📅 Lịch trình ngày</h3>
       {/* Mobile: vuốt ngang thay vì bóp cột; desktop & print giữ nguyên */}
       <div className="overflow-x-auto print:overflow-visible">
       <div className="min-w-[820px] print:min-w-0">
