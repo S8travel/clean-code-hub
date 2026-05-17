@@ -5,6 +5,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle, Clock, ClipboardList, Eye, Bell,
@@ -25,6 +27,13 @@ function todayStr() {
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
   const day = `${d.getDate()}`.padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
+}
+function greet() {
+  const h = new Date().getHours();
+  if (h < 11) return "Chào buổi sáng";
+  if (h < 13) return "Chào buổi trưa";
+  if (h < 18) return "Chào buổi chiều";
+  return "Chào buổi tối";
 }
 function addDaysStr(n: number) {
   const d = new Date();
@@ -50,9 +59,9 @@ export function DailyBriefModal() {
   const uid = user?.user_id ?? null;
   const hoTen = user?.ho_ten ?? null;
 
-  const dayKey = uid ? `db_brief_${uid}_${todayStr()}` : null;
+  const dayKey = uid ? `db_brief_v2_${uid}_${todayStr()}` : null;
   const [open, setOpen] = useState(false);
-  const [dontShow, setDontShow] = useState(true);
+  const [dontShow, setDontShow] = useState(false);
   const decided = useRef(false);
 
   useEffect(() => {
@@ -194,12 +203,15 @@ export function DailyBriefModal() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && close()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-sm flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            Chào {hoTen?.split(" ").slice(-1)[0] || "bạn"} — việc hôm nay
+          <DialogTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            {greet()}, {hoTen || "bạn"}!
           </DialogTitle>
+          <p className="text-xs text-muted-foreground capitalize">
+            {format(new Date(), "EEEE, dd/MM/yyyy", { locale: vi })} — tổng quan công việc của bạn hôm nay
+          </p>
         </DialogHeader>
 
         {sections.length === 0 ? (
@@ -208,7 +220,7 @@ export function DailyBriefModal() {
             <p className="text-xs text-green-600 mt-0.5">Mọi thứ đang trong tầm kiểm soát</p>
           </div>
         ) : (
-          <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
+          <div className="grid sm:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
             {sections.map((s) => (
               <button
                 key={s.key}
