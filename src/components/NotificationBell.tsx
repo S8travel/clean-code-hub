@@ -1,6 +1,14 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, BellRing, BellOff } from "lucide-react";
+import { toast } from "sonner";
+import {
+  desktopNotifSupported,
+  desktopNotifEnabled,
+  enableDesktopNotif,
+  disableDesktopNotif,
+  desktopNotifPermission,
+} from "@/lib/desktop-notify";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
@@ -84,15 +92,41 @@ export function NotificationBell({ userId }: Props) {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [tab,  setTab]  = useState("all");
-
-  // Realtime subscribe (one-shot per user)
-  useRealtimeThongBao(userId);
+  const [desktopOn, setDesktopOn] = useState(() => desktopNotifEnabled());
 
   const { data: unread = 0 } = useThongBaoTotalUnread(userId);
   const { data: list = [] }  = useThongBaoList(userId);
 
   const markAll = useMarkAllRead();
   const markOne = useMarkOneRead();
+
+  // Realtime subscribe (one-shot per user) + popup desktop khi click thì điều hướng
+  useRealtimeThongBao(userId, (tb) => {
+    if (!tb.is_read) markOne.mutate(tb.id);
+    const url = targetUrl(tb);
+    if (url) nav(url);
+  });
+
+  const toggleDesktop = async () => {
+    if (desktopOn) {
+      disableDesktopNotif();
+      setDesktopOn(false);
+      toast.success("Đã tắt thông báo desktop");
+      return;
+    }
+    if (!desktopNotifSupported()) {
+      toast.error("Trình duyệt không hỗ trợ thông báo desktop");
+      return;
+    }
+    if (desktopNotifPermission() === "denied") {
+      toast.error("Trình duyệt đã chặn quyền thông báo — hãy mở lại trong cài đặt trình duyệt cho trang này");
+      return;
+    }
+    const ok = await enableDesktopNotif();
+    setDesktopOn(ok);
+    if (ok) toast.success("Đã bật thông báo desktop");
+    else toast.error("Chưa cấp quyền thông báo");
+  };
 
   // Filter theo tab + lấy 15 cái mới nhất
   const filtered = useMemo(() => {
@@ -136,14 +170,30 @@ export function NotificationBell({ userId }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">Thông báo</h3>
-          <button
-            onClick={handleMarkAll}
-            disabled={unread === 0 || markAll.isPending}
-            className="text-xs flex items-center gap-1 text-muted-foreground hover:text-primary disabled:opacity-50 transition-colors"
-          >
-            <CheckCheck className="h-3.5 w-3.5" />
-            Đã đọc tất cả
-          </button>
+          <div className="flex items-center gap-2">
+            {desktopNotifSupported() && (
+              <button
+                onClick={toggleDesktop}
+                title={desktopOn ? "Tắt thông báo desktop" : "Bật thông báo desktop"}
+                className={cn(
+                  "flex items-center justify-center h-6 w-6 rounded transition-colors",
+                  desktopOn
+                    ? "text-primary hover:bg-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                )}
+              >
+                {desktopOn ? <BellRing className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+              </button>
+            )}
+            <button
+              onClick={handleMarkAll}
+              disabled={unread === 0 || markAll.isPending}
+              className="text-xs flex items-center gap-1 text-muted-foreground hover:text-primary disabled:opacity-50 transition-colors"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Đã đọc tất cả
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}

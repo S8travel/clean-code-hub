@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useApplySeriToDoan } from "@/hooks/use-seri";
+import { useUploadDoanTaiLieu } from "@/hooks/use-doan-tai-lieu";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -68,6 +69,7 @@ export default function Index() {
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   useDoanRealtime();
   const createDoan = useCreateDoan();
+  const uploadTaiLieu = useUploadDoanTaiLieu();
   const updateDoan = useUpdateDoan();
   const deleteDoan = useDeleteDoan();
   const cancelDoan = useCancelDoan();
@@ -296,14 +298,27 @@ export default function Index() {
   // Xác nhận phân việc → MỚI tạo đoàn → seri/log → phân việc + thông báo
   const confirmPhanViec = async (
     assignments: { key: PvKey; assignedTo: string | null }[],
-    fileChuongTrinh: string | null,
+    baoGiaFile: File | null,
   ) => {
     if (!pendingPhanViec) return;
-    const p = { ...pendingPhanViec.payload, file_chuong_trinh: fileChuongTrinh } as any;
+    const p = { ...pendingPhanViec.payload } as any;
     try {
       const created = await createDoan.mutateAsync(p);
       if (created) {
         logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${p.ten_doan}` });
+        if (baoGiaFile) {
+          // Lưu báo giá vào Tài liệu của đoàn (mục Báo giá) — liên kết với tab Tài liệu DoanDetail
+          try {
+            await uploadTaiLieu.mutateAsync({
+              doanId: created.id,
+              loai: "bao_gia",
+              file: baoGiaFile,
+              uploadedBy: currentUser?.user_id ?? null,
+            });
+          } catch (upErr: any) {
+            toast.warning("Đoàn đã tạo nhưng tải báo giá thất bại: " + (upErr?.message ?? ""));
+          }
+        }
         if (p.seri_id && p.ngay_di) {
           try { await applySeri.mutateAsync({ doanId: created.id, seriId: p.seri_id, ngayDi: p.ngay_di }); }
           catch { /* non-fatal */ }
@@ -694,7 +709,7 @@ export default function Index() {
         onClose={() => setPendingPhanViec(null)}
         info={pendingPhanViec?.info ?? null}
         creatorId={currentUser?.user_id ?? ""}
-        submitting={createDoan.isPending || createPhanViec.isPending}
+        submitting={createDoan.isPending || uploadTaiLieu.isPending || createPhanViec.isPending}
         onConfirm={confirmPhanViec}
       />
     </div>

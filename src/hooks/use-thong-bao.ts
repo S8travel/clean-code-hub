@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { showDesktopNotif } from "@/lib/desktop-notify";
 
 export interface ThongBaoRow {
   id: number;
@@ -110,9 +112,19 @@ export function useMarkOneRead() {
   });
 }
 
-// Realtime subscribe: mỗi INSERT vào thong_bao của user → invalidate queries
-export function useRealtimeThongBao(userId: string | null | undefined) {
+// Realtime subscribe: mỗi INSERT vào thong_bao của user →
+//  - invalidate queries (chuông in-app cập nhật ngay)
+//  - bắn popup desktop (Tier 1, chỉ khi user đã bật & không focus app)
+// onClickNotif: callback khi user click vào popup desktop (điều hướng).
+export function useRealtimeThongBao(
+  userId: string | null | undefined,
+  onClickNotif?: (row: ThongBaoRow) => void,
+) {
   const qc = useQueryClient();
+  // Ref để channel callback (đăng ký 1 lần) luôn gọi handler mới nhất.
+  const cbRef = useRef(onClickNotif);
+  useEffect(() => { cbRef.current = onClickNotif; }, [onClickNotif]);
+
   useQuery({
     queryKey: [QK, "realtime_sub", userId],
     enabled: !!userId,
@@ -127,7 +139,16 @@ export function useRealtimeThongBao(userId: string | null | undefined) {
             table: "thong_bao",
             filter: `user_id=eq.${userId}`,
           },
-          () => qc.invalidateQueries({ queryKey: [QK] }),
+          (payload) => {
+            qc.invalidateQueries({ queryKey: [QK] });
+            const row = payload.new as ThongBaoRow | undefined;
+            if (row?.id) {
+              showDesktopNotif(
+                { id: row.id, title: row.tieu_de, body: row.noi_dung },
+                () => cbRef.current?.(row),
+              );
+            }
+          },
         )
         .subscribe();
       return channel;

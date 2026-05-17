@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { externalSupabase } from "@/lib/supabase-external";
 import { useUserListForAssign } from "@/hooks/use-cong-viec";
 import {
   defaultPhanViec, useDefaultAssignees, type PvKey,
@@ -34,7 +33,7 @@ interface Props {
   submitting: boolean;
   onConfirm: (
     assignments: { key: PvKey; assignedTo: string | null }[],
-    fileChuongTrinh: string | null,
+    baoGiaFile: File | null,
   ) => Promise<void>;
 }
 
@@ -45,7 +44,6 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
   const { data: defaults } = useDefaultAssignees();
   const [rows, setRows] = useState<RowState[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (open && info) {
@@ -71,18 +69,7 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
       .filter((r) => r.checked)
       .map((r) => ({ key: r.key, assignedTo: r.assignedTo || null }));
     if (assignments.length === 0) { toast.error("Chọn ít nhất 1 đầu việc"); return; }
-    let fileUrl: string | null = null;
-    if (file) {
-      setUploading(true);
-      const safe = file.name.replace(/[^\w.\-]+/g, "_");
-      const path = `${Date.now()}-${safe}`;
-      const { error: upErr } = await externalSupabase.storage
-        .from("doan-files").upload(path, file, { upsert: false });
-      setUploading(false);
-      if (upErr) { toast.error("Lỗi tải file: " + upErr.message); return; }
-      fileUrl = externalSupabase.storage.from("doan-files").getPublicUrl(path).data.publicUrl;
-    }
-    await onConfirm(assignments, fileUrl);
+    await onConfirm(assignments, file);
   };
 
   const dateStr = info.ngayDi
@@ -155,10 +142,10 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
           ))}
         </div>
 
-        {/* File chương trình (tuỳ chọn) */}
+        {/* Gắn báo giá (tuỳ chọn) — lưu vào Tài liệu của đoàn (mục Báo giá) */}
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">
-            File chương trình (tuỳ chọn — doc / pdf / ảnh)
+            Gắn báo giá (tuỳ chọn — pdf / doc / ảnh)
           </Label>
           {file ? (
             <div className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
@@ -169,16 +156,19 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
           ) : (
             <input
               type="file"
-              accept=".doc,.docx,.pdf,image/*"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               className="block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-muted/70"
             />
           )}
+          <p className="text-[11px] text-muted-foreground">
+            File sẽ hiển thị trong tab <span className="font-medium">Tài liệu</span> của đoàn (mục Báo giá).
+          </p>
         </div>
 
         <DialogFooter>
-          <Button size="sm" onClick={submit} disabled={submitting || uploading}>
-            {uploading ? "Đang tải file..." : submitting ? "Đang tạo đoàn..." : "Xác nhận phân việc & tạo đoàn"}
+          <Button size="sm" onClick={submit} disabled={submitting}>
+            {submitting ? "Đang tạo đoàn..." : "Xác nhận phân việc & tạo đoàn"}
           </Button>
         </DialogFooter>
       </DialogContent>

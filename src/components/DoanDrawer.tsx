@@ -177,7 +177,8 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     seriList.map((s) => ({ value: s.id.toString(), label: s.ten_seri })), [seriList]);
 
   const userOptions = useMemo(() =>
-    (userRoles ?? []).map((u) => ({ value: u.user_id, label: u.ho_ten })), [userRoles]);
+    [{ value: "", label: "— Chưa phân —" },
+     ...(userRoles ?? []).map((u) => ({ value: u.user_id, label: u.ho_ten }))], [userRoles]);
 
   const handleCreateAgent = async () => {
     const name = newAgentName.trim();
@@ -396,6 +397,15 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   <span className="text-sm font-bold text-primary tabular-nums">{total}</span>
                 </div>
               </div>
+
+              <Field label="OP phụ trách">
+                <SearchableSelect
+                  options={userOptions}
+                  value={form.assigned_to ?? ""}
+                  onChange={(v) => set("assigned_to", v || null)}
+                  placeholder="Chọn OP phụ trách"
+                />
+              </Field>
 
               <Field label="Ghi Chú">
                 <Textarea
