@@ -42,7 +42,7 @@ import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
 const TRANG_THAI_OPTIONS = [
   { value: "all", label: "Tất cả" },
@@ -91,7 +91,7 @@ export default function Index() {
   const [quickTab, setQuickTab] = useState<
     "all" | "dang_chay" | "sap_khoi_hanh" | "dang_dien_ra" | "hoan_thanh" | "huy"
   >("all");
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(5);
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
