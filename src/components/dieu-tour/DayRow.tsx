@@ -145,9 +145,9 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
   const selectedKS = khachSanList.find((k) => k.id === day.khach_san_id);
 
   return (
-    <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border-b border-border min-h-[100px] print-avoid-break">
+    <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border-b border-gray-300 min-h-[100px] print-avoid-break">
       {/* NGÀY */}
-      <div className="p-1.5 bg-muted/40 border-r border-border flex flex-col items-center justify-start pt-3">
+      <div className="p-1.5 bg-muted/40 border-r border-gray-300 flex flex-col items-center justify-start pt-3">
         {dayLabel ? (
           <span className="text-[12px] font-bold leading-tight text-center">{dayLabel}</span>
         ) : (
@@ -159,7 +159,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       </div>
 
       {/* CHƯƠNG TRÌNH */}
-      <div className="p-1.5 border-r border-border space-y-1 min-w-0" style={{ wordBreak: 'break-word' }}>
+      <div className="p-1.5 border-r border-gray-300 space-y-1 min-w-0" style={{ wordBreak: 'break-word' }}>
         <Input
           className={`h-7 text-[13px] font-medium text-center ${day.thanh_pho?.trim() ? "bg-rose-50 text-rose-800 border-rose-200" : ""}`}
           value={day.thanh_pho}
@@ -291,8 +291,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       </div>
 
       {/* ĂN TRƯA */}
-      <div className="p-2 border-r border-border space-y-1 min-w-0 break-words">
-        <span className="text-[11px] text-muted-foreground">🍽 Ăn trưa</span>
+      <div className="p-1.5 border-r border-gray-300 space-y-1 min-w-0 break-words">
         {selectedNhaTrua ? (
           <>
             <div className="flex items-center gap-1">
@@ -333,8 +332,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       </div>
 
       {/* ĂN TỐI */}
-      <div className="p-2 border-r border-border space-y-1 min-w-0 break-words">
-        <span className="text-[11px] text-muted-foreground">🍽 Ăn tối</span>
+      <div className="p-1.5 border-r border-gray-300 space-y-1 min-w-0 break-words">
         {selectedNhaToi ? (
           <>
             <div className="flex items-center gap-1">
@@ -374,8 +372,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
       </div>
 
       {/* KHÁCH SẠN */}
-      <div className="p-2 border-r border-border space-y-1 min-w-0 break-words">
-        <span className="text-[11px] text-muted-foreground">🏨 Khách sạn</span>
+      <div className="p-1.5 border-r border-gray-300 space-y-1 min-w-0 break-words">
         {lockKhachSan ? (
           <div className="flex items-center gap-1.5 px-2 py-2 rounded-md bg-muted/40 text-[12px] text-muted-foreground italic">
             <Lock className="h-3 w-3" />

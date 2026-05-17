@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { usePermission } from "@/hooks/use-permissions";
+import { usePermission, useBoPhan } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
@@ -1041,6 +1041,7 @@ function HoaDonUNCPageContent() {
 
 export default function HoaDonUNCPage() {
   const canView = usePermission("hoa_don_unc", "view");
-  if (!canView) return <AccessDenied />;
+  const isKeToan = useBoPhan("ke_toan"); // điều hành/sales không được xem trang này
+  if (!canView || !isKeToan) return <AccessDenied />;
   return <HoaDonUNCPageContent />;
 }

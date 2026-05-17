@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { useDoanList } from "@/hooks/use-doan";
 import { useDoanLogSuCo, useToggleResolved } from "@/hooks/use-doan-log";
@@ -17,6 +18,7 @@ import {
   useDoanPhanViecMatrix, useAssignPvItem, useSetPvKhongCan, PHAN_VIEC_ITEMS,
   type PvKey, type PvCell,
 } from "@/hooks/use-phan-viec";
+import { useTheodoi, type KSItem, type NHItem, type DVItem } from "@/hooks/use-theo-doi";
 import { cn } from "@/lib/utils";
 import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
@@ -30,6 +32,65 @@ function fmtDate(d: string | null | undefined) {
 function fmtDatetime(d: string | null | undefined) {
   if (!d) return "—";
   try { return format(new Date(d), "dd/MM/yy", { locale: vi }); } catch { return d; }
+}
+
+// ── Booking status (giữ nguyên hiển thị cũ) ─────────────────────────────────
+function ksOverallStatus(dt: string, fn: string) {
+  if (fn === "ks_xac_nhan_huy")      return { label: "✗ Đã hủy",           cls: "text-red-600" };
+  if (fn === "cho_ks_xac_nhan_huy")  return { label: "⏳ Chờ XN hủy",      cls: "text-orange-600" };
+  if (fn === "ks_xac_nhan_final")    return { label: "✓ Final",             cls: "text-purple-600" };
+  if (fn === "cho_ks_xac_nhan")      return { label: "⏳ Chờ XN Final",     cls: "text-green-600" };
+  if (dt === "ks_xac_nhan")          return { label: "✓ Đặt trước XN",      cls: "text-teal-600" };
+  if (dt === "cho_ks_xac_nhan")      return { label: "⏳ Chờ XN đặt trước", cls: "text-blue-600" };
+  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+}
+function nhStatusLabel(status: string) {
+  if (status === "da_gui") return { label: "✓ Đã gửi", cls: "text-green-600" };
+  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+}
+function dvStatusLabel(status: string) {
+  if (status === "da_xac_nhan") return { label: "✓ Đã XN", cls: "text-green-600" };
+  if (status === "cho_xac_nhan") return { label: "⏳ Chờ XN", cls: "text-amber-600" };
+  if (status === "da_huy") return { label: "✗ Đã hủy", cls: "text-red-600" };
+  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+}
+
+function Badge({ done, total, children }: { done: number; total: number; children: ReactNode }) {
+  if (total === 0) return <span className="text-[11px] text-muted-foreground/50">—</span>;
+  const pct = done / total;
+  const cls = pct === 1
+    ? "bg-green-100 text-green-700"
+    : pct > 0 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground";
+  return (
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium cursor-default", cls)}>
+      {children}
+    </span>
+  );
+}
+
+function InfoTooltip({ trigger, items }: {
+  trigger: ReactNode;
+  items: { label: string; sub?: string; statusLabel: string; statusCls: string }[];
+}) {
+  if (items.length === 0) return <>{trigger}</>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-default">{trigger}</span>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-xs p-2 text-xs space-y-1">
+        {items.map((it, i) => (
+          <div key={i} className="flex items-start justify-between gap-3">
+            <span className="text-left leading-tight">
+              {it.label}
+              {it.sub && <span className="text-muted-foreground ml-1">({it.sub})</span>}
+            </span>
+            <span className={cn("shrink-0 font-medium", it.statusCls)}>{it.statusLabel}</span>
+          </div>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 // Màu tên theo trạng thái nhận việc: chưa xác nhận = vàng, đã nhận = xanh, từ chối = xám
@@ -97,6 +158,7 @@ export default function TheodoiPage() {
   const { data: pvMatrix } = useDoanPhanViecMatrix(allDoanIds);
   const assignMut = useAssignPvItem();
   const setKcMut = useSetPvKhongCan();
+  const { data: td } = useTheodoi();
   const { data: suCoLogs = [], isLoading: loadingSuCo } = useDoanLogSuCo();
   const toggleMut = useToggleResolved();
   const markRead = useMarkThongBaoRead();
@@ -108,10 +170,10 @@ export default function TheodoiPage() {
   const [createdTo, setCreatedTo] = useState("");
   const [departFrom, setDepartFrom] = useState("");
   const [departTo, setDepartTo] = useState("");
-  const [sortBy, setSortBy] = useState<"created_at" | "ngay_di" | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<"created_at" | "ngay_di" | null>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 30;
+  const PAGE_SIZE = 15;
 
   const toggleSort = (col: "created_at" | "ngay_di") => {
     if (sortBy !== col) { setSortBy(col); setSortDir("asc"); }
@@ -161,6 +223,17 @@ export default function TheodoiPage() {
     return arr;
   }, [rows, sortBy, sortDir]);
 
+  // Gom booking theo đoàn để hiển thị badge trạng thái (như trước rewrite)
+  const grp = useMemo(() => {
+    const ks = new Map<number, KSItem[]>();
+    const nh = new Map<number, NHItem[]>();
+    const dv = new Map<number, DVItem[]>();
+    for (const r of td?.ksList ?? []) { const a = ks.get(r.doan_id); if (a) a.push(r); else ks.set(r.doan_id, [r]); }
+    for (const r of td?.nhList ?? []) { const a = nh.get(r.doan_id); if (a) a.push(r); else nh.set(r.doan_id, [r]); }
+    for (const r of td?.dvList ?? []) { const a = dv.get(r.doan_id); if (a) a.push(r); else dv.set(r.doan_id, [r]); }
+    return { ks, nh, dv };
+  }, [td]);
+
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageRows = sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -182,6 +255,7 @@ export default function TheodoiPage() {
   };
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-4">
       <div>
         <h1 className="text-lg font-semibold">Theo dõi</h1>
@@ -248,6 +322,34 @@ export default function TheodoiPage() {
             </p>
           </div>
 
+          {/* Pagination (trên bảng) */}
+          {!loadingDoan && sortedRows.length > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedRows.length)} / {sortedRows.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                  Trước
+                </button>
+                <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+                >
+                  Sau
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Table */}
           {loadingDoan ? (
             <div className="space-y-2">
@@ -296,10 +398,16 @@ export default function TheodoiPage() {
                         Không có đoàn nào
                       </TableCell>
                     </TableRow>
-                  ) : pageRows.map(({ g }) => {
+                  ) : pageRows.map(({ g }, idx) => {
                     const cells = pvMatrix?.get(g.id) ?? {};
+                    const ks = grp.ks.get(g.id) ?? [];
+                    const ksFinal = ks.filter((r) => r.ks_final_status === "ks_xac_nhan_final").length;
+                    const nh = grp.nh.get(g.id) ?? [];
+                    const nhSent = nh.filter((r) => r.booking_status === "da_gui").length;
+                    const dv = grp.dv.get(g.id) ?? [];
+                    const dvXN = dv.filter((r) => r.booking_status === "da_xac_nhan").length;
                     return (
-                      <TableRow key={g.id} className="text-xs hover:bg-muted/30">
+                      <TableRow key={g.id} className={cn("text-xs hover:bg-blue-50/70", idx % 2 === 1 && "bg-slate-100")}>
                         <TableCell className="py-1.5 px-3 whitespace-nowrap">
                           <button
                             onClick={() => navigate(`/doan/${g.id}`)}
@@ -318,18 +426,47 @@ export default function TheodoiPage() {
                           {g.agents?.ten ?? "—"}
                         </TableCell>
                         {PHAN_VIEC_ITEMS.map((it) => (
-                          <TableCell key={it.key} className="py-1.5 px-2 text-center">
-                            <PvAssignCell
-                              doanId={g.id}
-                              doanTen={g.ten_doan}
-                              ngayDi={g.ngay_di ?? null}
-                              pvKey={it.key}
-                              cell={cells[it.key]}
-                              users={assignUsers}
-                              onAssign={onAssign}
-                              onKhongCan={onKhongCan}
-                              pending={assignMut.isPending || setKcMut.isPending}
-                            />
+                          <TableCell key={it.key} className="py-1.5 px-2 text-center align-top">
+                            <div className="flex flex-col items-center gap-1">
+                              <PvAssignCell
+                                doanId={g.id}
+                                doanTen={g.ten_doan}
+                                ngayDi={g.ngay_di ?? null}
+                                pvKey={it.key}
+                                cell={cells[it.key]}
+                                users={assignUsers}
+                                onAssign={onAssign}
+                                onKhongCan={onKhongCan}
+                                pending={assignMut.isPending || setKcMut.isPending}
+                              />
+                              {it.key === "pv_ks" && (
+                                <InfoTooltip
+                                  trigger={<Badge done={ksFinal} total={ks.length}>{ksFinal}/{ks.length} Final</Badge>}
+                                  items={ks.map((r) => {
+                                    const s = ksOverallStatus(r.ks_dat_truoc_status, r.ks_final_status);
+                                    return { label: r.khach_san_ten, statusLabel: s.label, statusCls: s.cls };
+                                  })}
+                                />
+                              )}
+                              {it.key === "pv_nh_dv" && (
+                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                  <InfoTooltip
+                                    trigger={<Badge done={nhSent} total={nh.length}>NH {nhSent}/{nh.length} gửi</Badge>}
+                                    items={nh.map((r) => {
+                                      const s = nhStatusLabel(r.booking_status);
+                                      return { label: r.nha_hang_ten ?? "—", sub: r.bua_an === "trua" ? "Trưa" : "Tối", statusLabel: s.label, statusCls: s.cls };
+                                    })}
+                                  />
+                                  <InfoTooltip
+                                    trigger={<Badge done={dvXN} total={dv.length}>DV {dvXN}/{dv.length} XN</Badge>}
+                                    items={dv.map((r) => {
+                                      const s = dvStatusLabel(r.booking_status);
+                                      return { label: r.ten_nha_cung_cap, statusLabel: s.label, statusCls: s.cls };
+                                    })}
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                         ))}
                       </TableRow>
@@ -340,33 +477,6 @@ export default function TheodoiPage() {
             </div>
           )}
 
-          {/* Pagination */}
-          {!loadingDoan && sortedRows.length > 0 && (
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">
-                Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedRows.length)} / {sortedRows.length}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
-                >
-                  <ChevronLeft className="h-3 w-3" />
-                  Trước
-                </button>
-                <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
-                >
-                  Sau
-                  <ChevronRight className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          )}
         </TabsContent>
 
         <TabsContent value="su-co" className="mt-4">
@@ -421,5 +531,6 @@ export default function TheodoiPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </TooltipProvider>
   );
 }

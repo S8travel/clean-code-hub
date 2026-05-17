@@ -275,9 +275,6 @@ export function DoanTable({
                         </span>
                       )}
                     </div>
-                    {g.ghi_chu_dieu_tour && (
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">{g.ghi_chu_dieu_tour}</p>
-                    )}
                     <StatusBadge status={computeDoanStatus(g, qtPaidSet ?? null)} />
                   </td>
 

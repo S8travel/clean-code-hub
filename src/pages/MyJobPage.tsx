@@ -5,6 +5,7 @@ import { vi } from "date-fns/locale";
 import {
   BriefcaseBusiness, CalendarClock, Users, ClipboardList,
   AlertCircle, AlertTriangle, Info, ArrowRight, Hotel, Utensils, Package, EyeOff,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -214,6 +215,8 @@ export default function MyJobPage() {
 
   const [search, setSearch] = useState("");
   const [trangThai, setTrangThai] = useState("dang_chay");
+  const [page, setPage] = useState(1);
+  const [todoPage, setTodoPage] = useState(1);
 
   const uid = user?.user_id;
 
@@ -355,6 +358,13 @@ export default function MyJobPage() {
       });
   }, [myDoan, td, search, trangThai]);
 
+  // Phân trang "Đoàn được phân công" — 10 dòng/trang
+  const DOAN_PAGE_SIZE = 10;
+  const totalDoanPages = Math.max(1, Math.ceil(rows.length / DOAN_PAGE_SIZE));
+  const currentDoanPage = Math.min(page, totalDoanPages);
+  const pageRows = rows.slice((currentDoanPage - 1) * DOAN_PAGE_SIZE, currentDoanPage * DOAN_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, trangThai]);
+
   // KPI stats
   const stats = useMemo(() => {
     const now = new Date();
@@ -451,8 +461,14 @@ export default function MyJobPage() {
 
     // Sắp xếp: high → medium → low
     const order = { high: 0, medium: 1, low: 2 };
-    return items.sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 20);
+    return items.sort((a, b) => order[a.priority] - order[b.priority]);
   }, [myDoan, td, myDoanScopeMap, dnttNeedApproval]);
+
+  // Phân trang "Việc cần xử lý" — 10 dòng/trang
+  const TODO_PAGE_SIZE = 10;
+  const totalTodoPages = Math.max(1, Math.ceil(todos.length / TODO_PAGE_SIZE));
+  const currentTodoPage = Math.min(todoPage, totalTodoPages);
+  const pageTodos = todos.slice((currentTodoPage - 1) * TODO_PAGE_SIZE, currentTodoPage * TODO_PAGE_SIZE);
 
   const priorityConfig = {
     high:   { icon: AlertCircle,   cls: "text-red-600",    bg: "bg-red-50 border-red-100" },
@@ -564,6 +580,33 @@ export default function MyJobPage() {
             </div>
           </div>
 
+          {!isLoading && rows.length > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                Hiển thị {(currentDoanPage - 1) * DOAN_PAGE_SIZE + 1}–{Math.min(currentDoanPage * DOAN_PAGE_SIZE, rows.length)} / {rows.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentDoanPage <= 1}
+                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                  Trước
+                </button>
+                <span className="px-2 text-muted-foreground">Trang {currentDoanPage} / {totalDoanPages}</span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalDoanPages, p + 1))}
+                  disabled={currentDoanPage >= totalDoanPages}
+                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+                >
+                  Sau
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-2">
               {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
@@ -592,7 +635,7 @@ export default function MyJobPage() {
                         Không có đoàn nào
                       </TableCell>
                     </TableRow>
-                  ) : rows.map(({ g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT }) => (
+                  ) : pageRows.map(({ g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT }) => (
                     <TableRow key={g.id} className="text-xs hover:bg-muted/30">
                       <TableCell className="py-1.5 px-3 whitespace-nowrap">
                         <button
@@ -749,6 +792,32 @@ export default function MyJobPage() {
         {/* Section: Việc cần xử lý */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold">Việc cần xử lý</h2>
+          {!isLoading && todos.length > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                Hiển thị {(currentTodoPage - 1) * TODO_PAGE_SIZE + 1}–{Math.min(currentTodoPage * TODO_PAGE_SIZE, todos.length)} / {todos.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setTodoPage((p) => Math.max(1, p - 1))}
+                  disabled={currentTodoPage <= 1}
+                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                  Trước
+                </button>
+                <span className="px-2 text-muted-foreground">Trang {currentTodoPage} / {totalTodoPages}</span>
+                <button
+                  onClick={() => setTodoPage((p) => Math.min(totalTodoPages, p + 1))}
+                  disabled={currentTodoPage >= totalTodoPages}
+                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
+                >
+                  Sau
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          )}
           {isLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
@@ -760,7 +829,7 @@ export default function MyJobPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {todos.map((item, i) => {
+              {pageTodos.map((item, i) => {
                 const cfg = priorityConfig[item.priority];
                 const PIcon = cfg.icon;
                 return (

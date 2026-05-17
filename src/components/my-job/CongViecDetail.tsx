@@ -29,7 +29,7 @@ const LOAI_LABEL: Record<string, string> = {
 };
 const PV_TT_LABEL: Record<string, string> = {
   cho_nhan: "Chờ xác nhận", dang_lam: "Đã nhận",
-  hoan_thanh: "Đã nhận", tu_choi: "Từ chối",
+  hoan_thanh: "Hoàn thành", tu_choi: "Từ chối",
 };
 
 const TRANG_THAI_CFG: Record<string, { label: string; cls: string }> = {
@@ -219,7 +219,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
             </Button>
           )}
 
-          {!isPv && isRecipient && task.trang_thai === "dang_lam" && (
+          {isRecipient && task.trang_thai === "dang_lam" && (
             <div className="space-y-2">
               {!actionMode && (
                 <div className="flex gap-2">

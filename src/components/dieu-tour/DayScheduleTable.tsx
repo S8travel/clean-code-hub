@@ -88,16 +88,16 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
       <div className="overflow-x-auto print:overflow-visible">
       <div className="min-w-[820px] print:min-w-0">
       {/* Header */}
-      <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border border-border rounded-t-lg bg-muted/50 text-xs font-medium text-muted-foreground">
-        <div className="p-2 border-r border-border">Ngày</div>
-        <div className="p-2 border-r border-border">Chương trình</div>
-        <div className="p-2 border-r border-border">Ăn trưa</div>
-        <div className="p-2 border-r border-border">Ăn tối</div>
-        <div className="p-2 print:border-r-0">Khách sạn</div>
+      <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border border-gray-300 rounded-t-lg bg-muted/50 text-sm font-bold text-foreground">
+        <div className="p-2 border-r border-gray-300 text-center">Ngày</div>
+        <div className="p-2 border-r border-gray-300 text-center">Chương trình</div>
+        <div className="p-2 border-r border-gray-300 text-center">Ăn trưa</div>
+        <div className="p-2 border-r border-gray-300 text-center">Ăn tối</div>
+        <div className="p-2 print:border-r-0 text-center">Khách sạn</div>
         <div className="p-2 print-hide"></div>
       </div>
       {/* Rows */}
-      <div className="border-x border-border">
+      <div className="border-x border-gray-300">
         {days.map((day, i) => (
           <DayRow
             key={i}

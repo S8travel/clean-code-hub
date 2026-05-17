@@ -225,7 +225,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, resource: "dntt", boPhanOnly: "ke_toan", minRole: "giam_doc" },
       { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock, resource: "thanh_toan_dk" },
-      { title: "Thanh Toán, Hóa Đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc" },
+      { title: "Thanh Toán, Hóa Đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc", boPhanOnly: "ke_toan" },
       { title: "Công nợ", url: "/cong-no", icon: Wallet, resource: "cong_no" },
       { title: "Người dùng", url: "/quan-ly/nguoi-dung", icon: Users, resource: "nguoi_dung" },
       { title: "Agent", url: "/quan-ly/agent", icon: Bot, resource: "agent" },
