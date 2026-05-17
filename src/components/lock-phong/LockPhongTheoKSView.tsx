@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { format, parseISO, differenceInDays } from "date-fns";
+import { format, parseISO, differenceInDays, addDays, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { Check, ChevronDown, ChevronRight, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -240,6 +240,9 @@ export default function LockPhongTheoKSView({ data }: Props) {
       });
   }, [data]);
 
+  const TODAY = format(new Date(), "yyyy-MM-dd");
+  const TODAY3 = format(addDays(new Date(), 3), "yyyy-MM-dd");
+
   const toggleExpand = (id: number) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -261,95 +264,144 @@ export default function LockPhongTheoKSView({ data }: Props) {
     <div className="space-y-3">
       {groups.map((group) => {
         const isOpen = expandedIds.has(group.khach_san_id);
+        const allRows = group.entries.flatMap((e) =>
+          e.ksRows.map((r) => ({ r, lp: e.lockPhong })),
+        );
+        const total = allRows.length;
+        const daXN = allRows.filter((x) => x.r.email_status === "da_xac_nhan").length;
+        const choXN = allRows.filter((x) => x.r.email_status === "cho_xac_nhan").length;
+        const sapDen = allRows.filter(
+          (x) => x.lp.deadline && x.lp.deadline >= TODAY && x.lp.deadline <= TODAY3 && x.r.email_status !== "da_xac_nhan",
+        ).length;
+        const quaHan = allRows.filter(
+          (x) => x.lp.deadline && x.lp.deadline < TODAY && x.r.email_status !== "da_xac_nhan",
+        ).length;
+        const pct = total ? Math.round((daXN / total) * 100) : 0;
+        const earliestDl = allRows
+          .map((x) => x.lp.deadline)
+          .filter((d): d is string => !!d)
+          .sort()[0] ?? null;
+        const dl = deadlineDisplay(earliestDl);
+        const lastMailAt = allRows
+          .map((x) => x.r.email_sent_at)
+          .filter((d): d is string => !!d)
+          .sort()
+          .slice(-1)[0] ?? null;
+        const lastMailRel = lastMailAt
+          ? formatDistanceToNow(new Date(lastMailAt), { addSuffix: true, locale: vi })
+          : "Chưa gửi";
+        const hotelStatus =
+          quaHan > 0 ? { l: "Quá hạn", c: "bg-red-100 text-red-700" }
+          : sapDen > 0 ? { l: "Sắp đến hạn", c: "bg-amber-100 text-amber-700" }
+          : total > 0 && daXN === total ? { l: "Đã xác nhận", c: "bg-emerald-100 text-emerald-700" }
+          : { l: "Chờ xử lý", c: "bg-blue-100 text-blue-700" };
+        const pendingIds = group.entries.flatMap(({ ksRows }) =>
+          ksRows.filter((r) => r.email_status === "cho_xac_nhan").map((r) => r.id),
+        );
+        const isConfirming = confirmingKsId === group.khach_san_id;
         return (
           <div
             key={group.khach_san_id}
             className="rounded-xl border border-border bg-card overflow-hidden"
           >
-            {/* Hotel header — clickable to expand/collapse */}
-            <div className="flex items-center bg-muted/20 border-b border-border">
+            {/* Hotel summary header */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-muted/10 border-b border-border">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary grid place-items-center text-sm font-bold shrink-0">
+                {group.khach_san_ten.slice(0, 1).toUpperCase()}
+              </div>
               <button
                 type="button"
-                className="flex-1 min-w-0 px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
+                className="min-w-0 flex-1 text-left"
                 onClick={() => toggleExpand(group.khach_san_id)}
               >
-                <Hotel className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm">{group.khach_san_ten}</span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {group.entries.length} đoàn
-                    </Badge>
-                    {group.khach_san_dia_diem && (
-                      <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {group.khach_san_dia_diem}
-                      </span>
-                    )}
-                    {group.khach_san_email && (
-                      <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                        <Mail className="h-3 w-3" />
-                        {group.khach_san_email}
-                      </span>
-                    )}
-                  </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm">{group.khach_san_ten}</span>
+                  <Badge className={cn("text-[10px] border-0", hotelStatus.c)}>{hotelStatus.l}</Badge>
+                  <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                    <Hotel className="h-3 w-3" />{group.entries.length} đoàn
+                  </span>
+                  {group.khach_san_dia_diem && (
+                    <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                      <MapPin className="h-3 w-3" />{group.khach_san_dia_diem}
+                    </span>
+                  )}
                 </div>
-                {isOpen ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                )}
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="h-1.5 w-32 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">{pct}% đã xác nhận</span>
+                </div>
               </button>
 
-              {/* Batch action buttons */}
-              {(() => {
-                const pendingIds = group.entries.flatMap(({ ksRows }) =>
-                  ksRows.filter((r) => r.email_status === "cho_xac_nhan").map((r) => r.id),
-                );
-                const isConfirming = confirmingKsId === group.khach_san_id;
-                return (
-                  <div className="px-3 shrink-0 flex items-center gap-2">
-                    {pendingIds.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1.5 text-xs text-teal-700 border-teal-300 hover:bg-teal-50"
-                        title={`Xác nhận lock phòng cho ${pendingIds.length} đoàn đang chờ xác nhận`}
-                        disabled={isConfirming}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleConfirmAll(group.khach_san_id, group.khach_san_ten, pendingIds);
-                        }}
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                        {isConfirming ? "Đang xác nhận..." : `Xác nhận all (${pendingIds.length})`}
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 gap-1.5 text-xs"
-                      title="Gửi 1 email gộp cho tất cả đoàn tại khách sạn này"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Flatten merged entries → 1 entry per ksRow để batch modal vẫn nhận đúng shape
-                        const flatEntries = group.entries.flatMap(({ lockPhong, ksRows }) =>
-                          ksRows.map((ksRow) => ({ lockPhong, ksRow }))
-                        );
-                        setBatchTarget({
-                          khach_san_id: group.khach_san_id,
-                          khach_san_ten: group.khach_san_ten,
-                          khach_san_email: group.khach_san_email,
-                          entries: flatEntries,
-                        });
-                      }}
-                    >
-                      <MailPlus className="h-3.5 w-3.5" />
-                      Gửi gộp
-                    </Button>
+              <div className="hidden md:flex items-center gap-4 shrink-0 text-center">
+                {[
+                  { n: daXN, l: "Đã xác nhận", c: "text-emerald-600" },
+                  { n: choXN, l: "Chờ xác nhận", c: "text-blue-600" },
+                  { n: sapDen, l: "Sắp đến hạn", c: "text-amber-600" },
+                  { n: quaHan, l: "Quá hạn", c: "text-red-600" },
+                ].map((x) => (
+                  <div key={x.l} className="w-16">
+                    <div className={cn("text-base font-bold", x.c)}>{x.n}</div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">{x.l}</div>
                   </div>
-                );
-              })()}
+                ))}
+              </div>
+
+              <div className="hidden xl:block shrink-0 w-44 text-xs border-l border-border pl-3">
+                <div className="text-[10px] text-muted-foreground">Deadline sớm nhất</div>
+                <div className={dl.cls}>{dl.text}</div>
+                {dl.subtext && <div className="text-[10px] text-muted-foreground">{dl.subtext}</div>}
+                <div className="text-[10px] text-muted-foreground mt-0.5">Last mail: {lastMailRel}</div>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-2">
+                {pendingIds.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-teal-700 border-teal-300 hover:bg-teal-50"
+                    title={`Xác nhận lock phòng cho ${pendingIds.length} đoàn đang chờ xác nhận`}
+                    disabled={isConfirming}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleConfirmAll(group.khach_san_id, group.khach_san_ten, pendingIds);
+                    }}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {isConfirming ? "Đang xác nhận..." : `Xác nhận all (${pendingIds.length})`}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  title="Gửi 1 email gộp cho tất cả đoàn tại khách sạn này"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const flatEntries = group.entries.flatMap(({ lockPhong, ksRows }) =>
+                      ksRows.map((ksRow) => ({ lockPhong, ksRow }))
+                    );
+                    setBatchTarget({
+                      khach_san_id: group.khach_san_id,
+                      khach_san_ten: group.khach_san_ten,
+                      khach_san_email: group.khach_san_email,
+                      entries: flatEntries,
+                    });
+                  }}
+                >
+                  <MailPlus className="h-3.5 w-3.5" />
+                  Gửi gộp
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(group.khach_san_id)}
+                  className="h-7 w-7 grid place-items-center rounded hover:bg-muted/50 text-muted-foreground"
+                  title={isOpen ? "Thu gọn" : "Mở chi tiết"}
+                >
+                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {/* Entries table */}
