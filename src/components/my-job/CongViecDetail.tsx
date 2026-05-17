@@ -32,6 +32,7 @@ const LOAI_LABEL: Record<string, string> = {
 const PV_TT_LABEL: Record<string, string> = {
   cho_nhan: "Chờ xác nhận", dang_lam: "Đã nhận",
   hoan_thanh: "Hoàn thành", tu_choi: "Từ chối",
+  huy: "Đã huỷ", khong_can: "Không cần",
 };
 
 const TRANG_THAI_CFG: Record<string, { label: string; cls: string }> = {
@@ -39,6 +40,8 @@ const TRANG_THAI_CFG: Record<string, { label: string; cls: string }> = {
   dang_lam:   { label: "Đang làm",   cls: "text-amber-600" },
   hoan_thanh: { label: "Hoàn thành", cls: "text-green-600" },
   tu_choi:    { label: "Từ chối",    cls: "text-red-600" },
+  huy:        { label: "Đã huỷ",     cls: "text-muted-foreground line-through" },
+  khong_can:  { label: "Không cần",  cls: "text-muted-foreground" },
 };
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -217,6 +220,13 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
             <Button size="sm" className="text-xs w-full" onClick={() => setPvEditOpen(true)}>
               Mở phân việc
             </Button>
+          )}
+          {isPhanCong && task.trang_thai !== "cho_nhan" && task.trang_thai !== "dang_lam" && (
+            <p className="text-xs text-muted-foreground italic rounded-md bg-muted/40 px-3 py-2">
+              {task.trang_thai === "huy"
+                ? "Đoàn đã huỷ — không cần phân việc nữa."
+                : "Phân công đã xử lý xong."}
+            </p>
           )}
 
           {/* Recipient actions */}
