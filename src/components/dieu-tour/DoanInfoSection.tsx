@@ -2,6 +2,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import {
+  ShieldCheck, User, UserCheck, Bus, CalendarDays,
+  ClipboardList, ShoppingBag, Users, Utensils, StickyNote,
+} from "lucide-react";
 
 function formatDate(d: string | null) {
   if (!d) return "—";
@@ -57,18 +61,18 @@ export default function DoanInfoSection({
       <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
         {/* Left: readonly + chuyến bay inline */}
         <div className="p-4 space-y-2 text-sm">
-          <Row label="Code đoàn">
+          <Row label="Code đoàn" icon={ShieldCheck}>
             <span className="font-bold" style={{ color: "#185FA5" }}>{doan.ten_doan}</span>
           </Row>
-          <Row label="HDV">
+          <Row label="HDV" icon={User}>
             <span>{doan.huong_dan_vien?.ten ?? "—"}</span>
           </Row>
-          <Row label="Xe">
+          <Row label="Xe" icon={Bus}>
             <span>{xeLabel(doan.xe)}</span>
           </Row>
           {/* Ngày đón + chuyến bay đón inline */}
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground w-24 shrink-0">Ngày đón:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><CalendarDays className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Ngày đón:</span>
             <span className="shrink-0">{formatDate(doan.ngay_di)}</span>
             <Input
               className="h-7 text-sm flex-1 min-w-0"
@@ -79,7 +83,7 @@ export default function DoanInfoSection({
           </div>
           {/* Ngày tiễn + chuyến bay tiễn inline */}
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground w-24 shrink-0">Ngày tiễn:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><CalendarDays className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Ngày tiễn:</span>
             <span className="shrink-0">{formatDate(doan.ngay_ve)}</span>
             <Input
               className="h-7 text-sm flex-1 min-w-0"
@@ -91,10 +95,10 @@ export default function DoanInfoSection({
         </div>
         {/* Right: editable + compact guest count */}
         <div className="p-4 space-y-2 text-sm">
-          <Row label="Bảng đón" editable>
+          <Row label="Bảng đón" icon={ClipboardList} editable>
             <Input className="h-7 text-sm" value={bangDon} onChange={(e) => setBangDon(e.target.value)} placeholder="Nhập bảng đón..." />
           </Row>
-          <Row label="Shopping" editable>
+          <Row label="Shopping" icon={ShoppingBag} editable>
             <Select value={shopping === null ? "" : shopping ? "yes" : "no"} onValueChange={(v) => setShopping(v === "yes" ? true : v === "no" ? false : null)}>
               <SelectTrigger className="h-7 text-sm w-28">
                 <span>{shopping === null ? "Chọn" : shopping ? "YES" : "NO"}</span>
@@ -105,10 +109,10 @@ export default function DoanInfoSection({
               </SelectContent>
             </Select>
           </Row>
-          <Row label="T/L" editable>
+          <Row label="T/L" icon={UserCheck} editable>
             <Input className="h-7 text-sm" value={truongDoan} onChange={(e) => setTruongDoan(e.target.value)} placeholder="Tên trưởng đoàn..." />
           </Row>
-          <Row label="T/L ăn NH" editable>
+          <Row label="T/L ăn NH" icon={Utensils} editable>
             <div className="flex items-center gap-2">
               <Switch checked={coTinhSuatTLNhaHang} onCheckedChange={setCoTinhSuatTLNhaHang} />
               <span className="text-xs text-muted-foreground">
@@ -118,7 +122,7 @@ export default function DoanInfoSection({
           </Row>
           {/* Compact guest count */}
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground w-24 shrink-0">Số khách:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><Users className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Số khách:</span>
             <div className="flex items-center gap-1.5 flex-wrap">
               <GuestChip label="NL" value={soKhachLon} />
               <span className="text-muted-foreground/40 text-xs">·</span>
@@ -133,7 +137,7 @@ export default function DoanInfoSection({
           </div>
           {/* Chú thích khách */}
           <div className="flex items-start gap-2 pt-0.5">
-            <span className="text-muted-foreground w-24 shrink-0 pt-1.5">Chú thích:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0 pt-1.5"><StickyNote className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Chú thích:</span>
             <textarea
               value={chuThichKhach}
               onChange={(e) => setChuThichKhach(e.target.value)}
@@ -148,10 +152,20 @@ export default function DoanInfoSection({
   );
 }
 
-function Row({ label, children, editable }: { label: string; children: React.ReactNode; editable?: boolean }) {
+function Row({
+  label, icon: Icon, children,
+}: {
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+  editable?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-muted-foreground w-24 shrink-0">{label}:</span>
+      <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0">
+        {Icon && <Icon className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />}
+        {label}:
+      </span>
       {children}
     </div>
   );
