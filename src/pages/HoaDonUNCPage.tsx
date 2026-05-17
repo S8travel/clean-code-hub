@@ -862,12 +862,7 @@ function HoaDonUNCPageContent() {
                 <TableRow key={row.id}>
                   <TableCell className="text-center text-sm">{(currentPage - 1) * PAGE_SIZE + idx + 1}</TableCell>
                   <TableCell>
-                    <button
-                      className="text-primary hover:underline text-left text-sm font-medium"
-                      onClick={() => navigate(`/doan/${row.doan_id}`)}
-                    >
-                      {row.ten_doan ?? "—"}
-                    </button>
+                    <span className="text-sm font-medium">{row.ten_doan ?? "—"}</span>
                   </TableCell>
                   <TableCell>
                     <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lt.color)}>
