@@ -1,14 +1,18 @@
 import { useMemo, useState } from "react";
-import { Plus, Lock, AlertTriangle, Search, X, CalendarIcon } from "lucide-react";
+import {
+  Plus, Lock, AlertTriangle, Search, X, CalendarIcon,
+  Clock, Mail, CheckCircle2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { useLockPhongList, useLockPhongDeadlineAlerts, type LockPhongDisplay } from "@/hooks/use-lock-phong";
 import { useKhachSanList } from "@/hooks/use-khach-san";
@@ -17,11 +21,12 @@ import { useAuth } from "@/hooks/use-auth";
 import LockPhongTheoKSView from "@/components/lock-phong/LockPhongTheoKSView";
 import LockPhongTheoDeadlineView from "@/components/lock-phong/LockPhongTheoDeadlineView";
 import LockPhongFormDialog from "@/components/lock-phong/LockPhongFormDialog";
-import { format, parseISO, differenceInDays, addDays } from "date-fns";
+import { format, addDays } from "date-fns";
 
 type DeadlineFilter = "all" | "qua_han" | "sap_den" | "con_xa" | "da_book";
 type OutcomeStatus = "cho_xu_ly" | "thanh_doan" | "da_huy";
 type ViewMode = "theo_ks" | "theo_deadline";
+type Tab = "all" | "can_xu_ly" | "qua_han" | "sap_den" | "chua_gui" | "cho_xu_ly" | "da_xac_nhan";
 
 const OUTCOME_OPTIONS: { value: OutcomeStatus; label: string }[] = [
   { value: "cho_xu_ly",  label: "Chờ xử lý" },
@@ -29,10 +34,66 @@ const OUTCOME_OPTIONS: { value: OutcomeStatus; label: string }[] = [
   { value: "da_huy",     label: "Đã hủy" },
 ];
 
+// Phân loại 1 lock_phong theo trạng thái booking/deadline
+function lpCat(lp: LockPhongDisplay, today: string, today3: string) {
+  const hotels = lp.hotels ?? [];
+  const confirmed = hotels.length > 0 && hotels.every((h) => h.email_status === "da_xac_nhan");
+  const hasChuaGui = hotels.some((h) => h.email_status === "chua_gui");
+  const dl = lp.deadline;
+  const quaHan = !!dl && dl < today && !confirmed;
+  const sapDen = !!dl && dl >= today && dl <= today3 && !confirmed;
+  const choXuLy =
+    !confirmed &&
+    hotels.some((h) => (h.outcome_status ?? null) === null && h.email_status !== "da_xac_nhan");
+  return { confirmed, hasChuaGui, quaHan, sapDen, choXuLy };
+}
+
+// Donut bằng CSS conic-gradient (không cần thư viện chart)
+function StatusDonut({
+  segments, total,
+}: { segments: { label: string; value: number; color: string }[]; total: number }) {
+  let acc = 0;
+  const stops = segments
+    .filter((s) => s.value > 0)
+    .map((s) => {
+      const from = total > 0 ? (acc / total) * 360 : 0;
+      acc += s.value;
+      const to = total > 0 ? (acc / total) * 360 : 0;
+      return `${s.color} ${from}deg ${to}deg`;
+    })
+    .join(", ");
+  return (
+    <div className="flex items-center gap-4">
+      <div
+        className="relative h-28 w-28 rounded-full shrink-0"
+        style={{ background: stops ? `conic-gradient(${stops})` : "hsl(var(--muted))" }}
+      >
+        <div className="absolute inset-[14px] rounded-full bg-card flex flex-col items-center justify-center">
+          <span className="text-xl font-bold leading-none">{total}</span>
+          <span className="text-[10px] text-muted-foreground">Tổng</span>
+        </div>
+      </div>
+      <div className="space-y-1.5 text-xs flex-1 min-w-0">
+        {segments.map((s) => (
+          <div key={s.label} className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+            <span className="flex-1 truncate text-muted-foreground">{s.label}</span>
+            <span className="font-semibold">{s.value}</span>
+            <span className="text-muted-foreground w-9 text-right">
+              {total > 0 ? Math.round((s.value / total) * 100) : 0}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function LockPhongPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<LockPhongDisplay | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("theo_ks");
+  const [tab, setTab] = useState<Tab>("all");
 
   // Filters
   const [search, setSearch] = useState("");
@@ -40,7 +101,6 @@ export default function LockPhongPage() {
   const [checkInFrom, setCheckInFrom] = useState<Date | undefined>();
   const [checkInTo, setCheckInTo] = useState<Date | undefined>();
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>("all");
-  // Outcome status: default chỉ "Chờ xử lý" + "Thành đoàn" — ẩn "Đã hủy"
   const [outcomeFilter, setOutcomeFilter] = useState<Set<OutcomeStatus>>(
     () => new Set<OutcomeStatus>(["cho_xu_ly", "thanh_doan"]),
   );
@@ -53,7 +113,6 @@ export default function LockPhongPage() {
 
   const { session } = useCurrentSession();
   const { user } = useAuth();
-  // Điều hành / admin: thấy alert deadline của TẤT CẢ lock phòng (không chỉ do mình tạo).
   const includeAll = user?.bo_phan === "dieu_hanh" || user?.role === "admin";
   const { data = [], isLoading } = useLockPhongList();
   const { data: ksList = [] } = useKhachSanList();
@@ -67,24 +126,50 @@ export default function LockPhongPage() {
     [ksList],
   );
 
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const today3Str = format(addDays(new Date(), 3), "yyyy-MM-dd");
+
+  // Thống kê tổng (theo toàn bộ data, không phụ thuộc tab/filter)
+  const stats = useMemo(() => {
+    let total = data.length, quaHan = 0, sapDen = 0, chuaGui = 0, daXN = 0, choXuLy = 0;
+    let dQua = 0, dSap = 0, dXN = 0, dCho = 0; // donut partition
+    for (const lp of data) {
+      const c = lpCat(lp, todayStr, today3Str);
+      if (c.quaHan) quaHan++;
+      if (c.sapDen) sapDen++;
+      if (c.hasChuaGui) chuaGui++;
+      if (c.confirmed) daXN++;
+      if (c.choXuLy) choXuLy++;
+      if (c.confirmed) dXN++;
+      else if (c.quaHan) dQua++;
+      else if (c.sapDen) dSap++;
+      else dCho++;
+    }
+    return {
+      total, quaHan, sapDen, chuaGui, daXN, choXuLy,
+      canXuLy: deadlineAlerts.length,
+      donut: [
+        { label: "Đã xác nhận", value: dXN, color: "#16a34a" },
+        { label: "Chờ xác nhận", value: dCho, color: "#f97316" },
+        { label: "Sắp đến hạn", value: dSap, color: "#f59e0b" },
+        { label: "Quá hạn", value: dQua, color: "#ef4444" },
+      ],
+    };
+  }, [data, todayStr, today3Str, deadlineAlerts.length]);
+
   const filtered = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const today3 = format(addDays(new Date(), 3), "yyyy-MM-dd");
     const ciFrom = checkInFrom ? format(checkInFrom, "yyyy-MM-dd") : null;
     const ciTo = checkInTo ? format(checkInTo, "yyyy-MM-dd") : null;
 
     return data.filter((lp) => {
-      // Search
       if (search) {
         const q = search.toLowerCase();
         const m = lp.ten_doan?.toLowerCase().includes(q) || lp.ten_seri?.toLowerCase().includes(q);
         if (!m) return false;
       }
-      // KS
       if (filterKsId !== "all" && !lp.hotels?.some((h) => String(h.khach_san_id) === filterKsId)) {
         return false;
       }
-      // Check-in range
       if (ciFrom || ciTo) {
         const matchCi = lp.hotels?.some((h) => {
           if (!h.check_in) return false;
@@ -94,7 +179,6 @@ export default function LockPhongPage() {
         });
         if (!matchCi) return false;
       }
-      // Deadline
       if (deadlineFilter !== "all") {
         if (deadlineFilter === "da_book") {
           const allConfirmed =
@@ -103,17 +187,14 @@ export default function LockPhongPage() {
           if (!allConfirmed) return false;
         } else if (lp.deadline) {
           const dl = lp.deadline;
-          if (deadlineFilter === "qua_han" && dl >= today) return false;
-          if (deadlineFilter === "sap_den" && (dl < today || dl > today3)) return false;
-          if (deadlineFilter === "con_xa" && dl <= today3) return false;
+          if (deadlineFilter === "qua_han" && dl >= todayStr) return false;
+          if (deadlineFilter === "sap_den" && (dl < todayStr || dl > today3Str)) return false;
+          if (deadlineFilter === "con_xa" && dl <= today3Str) return false;
         } else {
-          // Không có deadline → bỏ qua khi user filter theo deadline
           return false;
         }
       }
-      // Outcome status (cột Trạng thái) — match nếu BẤT KỲ ks row nào có outcome_status nằm trong set.
-      // null trong DB = "cho_xu_ly".
-      if (outcomeFilter.size === 0) return false; // user uncheck hết → ẩn
+      if (outcomeFilter.size === 0) return false;
       if (outcomeFilter.size < 3) {
         const matched = lp.hotels?.some((h) => {
           const status: OutcomeStatus = (h.outcome_status as OutcomeStatus | null) ?? "cho_xu_ly";
@@ -121,20 +202,25 @@ export default function LockPhongPage() {
         });
         if (!matched) return false;
       }
+      // Tab nhanh (5 thẻ / hàng tab)
+      if (tab !== "all") {
+        const c = lpCat(lp, todayStr, today3Str);
+        if (tab === "can_xu_ly" && !(c.quaHan || c.sapDen)) return false;
+        if (tab === "qua_han" && !c.quaHan) return false;
+        if (tab === "sap_den" && !c.sapDen) return false;
+        if (tab === "chua_gui" && !c.hasChuaGui) return false;
+        if (tab === "cho_xu_ly" && !c.choXuLy) return false;
+        if (tab === "da_xac_nhan" && !c.confirmed) return false;
+      }
       return true;
     });
-  }, [data, search, filterKsId, checkInFrom, checkInTo, deadlineFilter, outcomeFilter]);
+  }, [data, search, filterKsId, checkInFrom, checkInTo, deadlineFilter, outcomeFilter, tab, todayStr, today3Str]);
 
-  // Default outcome filter = ["cho_xu_ly", "thanh_doan"] (ẩn da_huy)
   const isOutcomeDefault =
     outcomeFilter.size === 2 && outcomeFilter.has("cho_xu_ly") && outcomeFilter.has("thanh_doan");
   const hasActiveFilter =
-    !!search ||
-    filterKsId !== "all" ||
-    !!checkInFrom ||
-    !!checkInTo ||
-    deadlineFilter !== "all" ||
-    !isOutcomeDefault;
+    !!search || filterKsId !== "all" || !!checkInFrom || !!checkInTo ||
+    deadlineFilter !== "all" || !isOutcomeDefault || tab !== "all";
 
   const clearFilters = () => {
     setSearch("");
@@ -143,6 +229,7 @@ export default function LockPhongPage() {
     setCheckInTo(undefined);
     setDeadlineFilter("all");
     setOutcomeFilter(new Set<OutcomeStatus>(["cho_xu_ly", "thanh_doan"]));
+    setTab("all");
   };
 
   const handleAddNew = () => {
@@ -150,36 +237,41 @@ export default function LockPhongPage() {
     setFormOpen(true);
   };
 
-  return (
-    <div className="mx-auto px-4 sm:px-6 py-6 space-y-4 max-w-[1500px]">
-      {/* Deadline alerts */}
-      {deadlineAlerts.length > 0 && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-3">
-          <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-orange-700">
-              {deadlineAlerts.length} lock phòng cần xử lý (sắp đến deadline / quá hạn)
-            </p>
-            <ul className="mt-1 space-y-0.5">
-              {deadlineAlerts.map((lp) => {
-                const dl = parseISO(lp.deadline!);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const diff = differenceInDays(dl, today);
-                return (
-                  <li key={lp.id} className="text-xs text-orange-600">
-                    <span className="font-medium">{lp.ten_doan}</span>
-                    {" — deadline "}
-                    <span className="font-medium">{format(dl, "dd/MM/yyyy")}</span>
-                    {diff === 0 ? " (hôm nay)" : diff < 0 ? ` (quá hạn ${Math.abs(diff)} ngày)` : ` (còn ${diff} ngày)`}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
-      )}
+  const statCards = [
+    {
+      key: "can_xu_ly" as Tab, label: "Lock phòng cần xử lý", count: stats.canXuLy,
+      sub: "sắp đến deadline / quá hạn", icon: AlertTriangle,
+      tile: "bg-orange-500", wrap: "bg-orange-50 border-orange-200", alert: true,
+    },
+    {
+      key: "qua_han" as Tab, label: "Quá hạn", count: stats.quaHan, sub: "đoàn",
+      icon: AlertTriangle, tile: "bg-red-500", wrap: "bg-card border-border", alert: false,
+    },
+    {
+      key: "sap_den" as Tab, label: "Sắp đến hạn", count: stats.sapDen, sub: "đoàn (≤3 ngày)",
+      icon: Clock, tile: "bg-amber-500", wrap: "bg-card border-border", alert: false,
+    },
+    {
+      key: "chua_gui" as Tab, label: "Chưa gửi mail", count: stats.chuaGui, sub: "đoàn",
+      icon: Mail, tile: "bg-blue-500", wrap: "bg-card border-border", alert: false,
+    },
+    {
+      key: "da_xac_nhan" as Tab, label: "Đã xác nhận", count: stats.daXN, sub: "đoàn",
+      icon: CheckCircle2, tile: "bg-emerald-500", wrap: "bg-card border-border", alert: false,
+    },
+  ];
 
+  const tabs: { key: Tab; label: string; count: number; cls: string }[] = [
+    { key: "all", label: "Tất cả", count: stats.total, cls: "text-foreground" },
+    { key: "qua_han", label: "Quá hạn", count: stats.quaHan, cls: "text-red-600" },
+    { key: "sap_den", label: "Sắp đến hạn", count: stats.sapDen, cls: "text-amber-600" },
+    { key: "chua_gui", label: "Chưa gửi mail", count: stats.chuaGui, cls: "text-blue-600" },
+    { key: "cho_xu_ly", label: "Chờ xử lý", count: stats.choXuLy, cls: "text-orange-600" },
+    { key: "da_xac_nhan", label: "Đã xác nhận", count: stats.daXN, cls: "text-emerald-600" },
+  ];
+
+  return (
+    <div className="mx-auto px-4 sm:px-6 py-6 space-y-4 max-w-[1600px]">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2">
@@ -187,160 +279,213 @@ export default function LockPhongPage() {
           <h1 className="text-xl font-semibold">Lock Phòng</h1>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Đặt phòng trước theo seri, trước khi booking chính thức
+          Quản lý giữ phòng khách sạn theo seri, theo deadline
         </p>
       </div>
 
-      {/* Toolbar — filter bar */}
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {statCards.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => setTab((t) => (t === s.key ? "all" : s.key))}
+            className={cn(
+              "flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-shadow hover:shadow-md",
+              s.wrap,
+              tab === s.key && "ring-2 ring-primary/50",
+            )}
+          >
+            <div className={cn("h-10 w-10 rounded-xl grid place-items-center text-white shrink-0", s.tile)}>
+              <s.icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground leading-snug">{s.label}</p>
+              <p className="text-xl font-bold leading-tight">
+                {s.count}{" "}
+                <span className="text-[11px] font-normal text-muted-foreground">{s.sub}</span>
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Tabs + add */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap flex-1">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Code đoàn / seri..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 text-sm pl-7 w-48"
-            />
-          </div>
-
-          <SearchableSelect
-            options={ksOptions}
-            value={filterKsId}
-            onChange={setFilterKsId}
-            placeholder="Tất cả khách sạn"
-            className="w-56 h-8 text-sm"
-          />
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-                <CalendarIcon className="h-3.5 w-3.5" />
-                {checkInFrom ? format(checkInFrom, "dd/MM/yyyy") : "C/I từ"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={checkInFrom} onSelect={setCheckInFrom} initialFocus />
-            </PopoverContent>
-          </Popover>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-                <CalendarIcon className="h-3.5 w-3.5" />
-                {checkInTo ? format(checkInTo, "dd/MM/yyyy") : "C/I đến"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={checkInTo} onSelect={setCheckInTo} initialFocus />
-            </PopoverContent>
-          </Popover>
-
-          <Select value={deadlineFilter} onValueChange={(v) => setDeadlineFilter(v as DeadlineFilter)}>
-            <SelectTrigger className="h-8 text-sm w-[160px]">
-              <span>
-                {deadlineFilter === "all" ? "⏰ Mọi deadline"
-                  : deadlineFilter === "qua_han" ? "🔴 Quá hạn"
-                  : deadlineFilter === "sap_den" ? "🟠 Sắp đến (≤3 ngày)"
-                  : deadlineFilter === "con_xa" ? "🟢 Còn xa"
-                  : "✅ Đã book xong"}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">⏰ Mọi deadline</SelectItem>
-              <SelectItem value="qua_han">🔴 Quá hạn</SelectItem>
-              <SelectItem value="sap_den">🟠 Sắp đến (≤3 ngày)</SelectItem>
-              <SelectItem value="con_xa">🟢 Còn xa</SelectItem>
-              <SelectItem value="da_book">✅ Đã book xong</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <div className="inline-flex items-center gap-3 h-8 px-2.5 rounded-md border border-border bg-background">
-            {OUTCOME_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "h-8 px-3 rounded-full text-xs font-medium border transition-colors inline-flex items-center gap-1.5",
+                tab === t.key
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card hover:bg-muted/50 border-border",
+              )}
+            >
+              {t.label}
+              <span
+                className={cn(
+                  "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold",
+                  tab === t.key ? "bg-white/25" : cn("bg-muted", t.cls),
+                )}
               >
-                <Checkbox
-                  checked={outcomeFilter.has(opt.value)}
-                  onCheckedChange={() => toggleOutcome(opt.value)}
-                  className="h-3.5 w-3.5"
-                />
-                {opt.label}
-              </label>
-            ))}
-          </div>
-
-          {hasActiveFilter && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearFilters}>
-              <X className="h-3 w-3" /> Xóa lọc
-            </Button>
-          )}
+                {t.count}
+              </span>
+            </button>
+          ))}
         </div>
-
         <Button size="sm" className="gap-1.5 h-8 text-xs shrink-0" onClick={handleAddNew}>
           <Plus className="h-3.5 w-3.5" />
           Thêm Lock Phòng
         </Button>
       </div>
 
-      {/* View toggle */}
-      <div className="flex items-center justify-between gap-3 -mt-1">
-        <div className="inline-flex rounded-md border border-border bg-card overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setViewMode("theo_ks")}
-            className={`px-3 py-1 text-xs transition-colors ${
-              viewMode === "theo_ks" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
-            }`}
-          >
-            Theo khách sạn
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("theo_deadline")}
-            className={`px-3 py-1 text-xs border-l border-border transition-colors ${
-              viewMode === "theo_deadline" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
-            }`}
-          >
-            Theo deadline
-          </button>
-        </div>
-        {hasActiveFilter && (
-          <p className="text-xs text-muted-foreground">
-            Hiển thị {filtered.length}/{data.length} lock
-          </p>
-        )}
-      </div>
+      {/* Body: list + sidebar */}
+      <div className="grid lg:grid-cols-[1fr_300px] gap-4 items-start">
+        <div className="space-y-4 min-w-0">
+          {/* Toolbar — bộ lọc chi tiết */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Code đoàn / seri..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 text-sm pl-7 w-48"
+              />
+            </div>
+            <SearchableSelect
+              options={ksOptions}
+              value={filterKsId}
+              onChange={setFilterKsId}
+              placeholder="Tất cả khách sạn"
+              className="w-56 h-8 text-sm"
+            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {checkInFrom ? format(checkInFrom, "dd/MM/yyyy") : "C/I từ"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={checkInFrom} onSelect={setCheckInFrom} initialFocus />
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {checkInTo ? format(checkInTo, "dd/MM/yyyy") : "C/I đến"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={checkInTo} onSelect={setCheckInTo} initialFocus />
+              </PopoverContent>
+            </Popover>
+            <Select value={deadlineFilter} onValueChange={(v) => setDeadlineFilter(v as DeadlineFilter)}>
+              <SelectTrigger className="h-8 text-sm w-[160px]">
+                <span>
+                  {deadlineFilter === "all" ? "⏰ Mọi deadline"
+                    : deadlineFilter === "qua_han" ? "🔴 Quá hạn"
+                    : deadlineFilter === "sap_den" ? "🟠 Sắp đến (≤3 ngày)"
+                    : deadlineFilter === "con_xa" ? "🟢 Còn xa"
+                    : "✅ Đã book xong"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">⏰ Mọi deadline</SelectItem>
+                <SelectItem value="qua_han">🔴 Quá hạn</SelectItem>
+                <SelectItem value="sap_den">🟠 Sắp đến (≤3 ngày)</SelectItem>
+                <SelectItem value="con_xa">🟢 Còn xa</SelectItem>
+                <SelectItem value="da_book">✅ Đã book xong</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="inline-flex items-center gap-3 h-8 px-2.5 rounded-md border border-border bg-background">
+              {OUTCOME_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+                >
+                  <Checkbox
+                    checked={outcomeFilter.has(opt.value)}
+                    onCheckedChange={() => toggleOutcome(opt.value)}
+                    className="h-3.5 w-3.5"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <div className="inline-flex rounded-md border border-border bg-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setViewMode("theo_ks")}
+                className={`px-3 py-1 text-xs h-8 transition-colors ${
+                  viewMode === "theo_ks" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
+                }`}
+              >
+                Theo khách sạn
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("theo_deadline")}
+                className={`px-3 py-1 text-xs h-8 border-l border-border transition-colors ${
+                  viewMode === "theo_deadline" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
+                }`}
+              >
+                Theo deadline
+              </button>
+            </div>
+            {hasActiveFilter && (
+              <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearFilters}>
+                <X className="h-3 w-3" /> Xóa lọc ({filtered.length}/{data.length})
+              </Button>
+            )}
+          </div>
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
+          {/* Content */}
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : data.length === 0 ? (
+            <div className="py-16 text-center space-y-2">
+              <Lock className="h-8 w-8 text-muted-foreground mx-auto" />
+              <p className="text-sm text-muted-foreground">Chưa có lock phòng nào</p>
+              <Button variant="outline" size="sm" className="gap-1.5 mt-2" onClick={handleAddNew}>
+                <Plus className="h-3.5 w-3.5" />
+                Tạo lock phòng đầu tiên
+              </Button>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-16 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">Không có lock phòng nào khớp bộ lọc</p>
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                Xóa lọc
+              </Button>
+            </div>
+          ) : viewMode === "theo_deadline" ? (
+            <LockPhongTheoDeadlineView data={filtered} />
+          ) : (
+            <LockPhongTheoKSView data={filtered} />
+          )}
         </div>
-      ) : data.length === 0 ? (
-        <div className="py-16 text-center space-y-2">
-          <Lock className="h-8 w-8 text-muted-foreground mx-auto" />
-          <p className="text-sm text-muted-foreground">Chưa có lock phòng nào</p>
-          <Button variant="outline" size="sm" className="gap-1.5 mt-2" onClick={handleAddNew}>
-            <Plus className="h-3.5 w-3.5" />
-            Tạo lock phòng đầu tiên
-          </Button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="py-16 text-center space-y-2">
-          <p className="text-sm text-muted-foreground">Không có lock phòng nào khớp bộ lọc</p>
-          <Button variant="outline" size="sm" onClick={clearFilters}>
-            Xóa lọc
-          </Button>
-        </div>
-      ) : viewMode === "theo_deadline" ? (
-        <LockPhongTheoDeadlineView data={filtered} />
-      ) : (
-        <LockPhongTheoKSView data={filtered} />
-      )}
+
+        {/* Sidebar */}
+        <aside className="space-y-4 lg:sticky lg:top-4">
+          <div className="rounded-xl border bg-card p-4">
+            <h3 className="text-sm font-semibold mb-3">Tổng quan Lock Phòng</h3>
+            {isLoading ? (
+              <Skeleton className="h-28 w-full rounded-xl" />
+            ) : (
+              <StatusDonut segments={stats.donut} total={stats.total} />
+            )}
+          </div>
+        </aside>
+      </div>
 
       <LockPhongFormDialog
         open={formOpen}
