@@ -50,7 +50,10 @@ export default function DoanInfoSection({
   coTinhSuatTLNhaHang, setCoTinhSuatTLNhaHang,
 }: Props) {
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden bg-card">
+      <div className="px-4 py-2.5 border-b border-border">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5">📋 Thông tin đoàn</h3>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
         {/* Left: readonly + chuyến bay inline */}
         <div className="p-4 space-y-2 text-sm">
