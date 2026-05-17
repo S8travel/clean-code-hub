@@ -400,7 +400,7 @@ function DNTTPageContent() {
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">{m.label}</p>
               <p className={cn("text-2xl font-bold", m.cls)}>{m.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{m.sub}</p>
+              <p className={cn("text-sm font-bold mt-0.5", m.cls)}>{m.sub}</p>
             </CardContent>
           </Card>
         ))}
