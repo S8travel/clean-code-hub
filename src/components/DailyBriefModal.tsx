@@ -56,7 +56,8 @@ export function DailyBriefModal() {
   const navigate = useNavigate();
   const uid = user?.user_id ?? null;
   const hoTen = user?.ho_ten ?? null;
-  const firstName = hoTen?.trim().split(/\s+/)[0] || "bạn";
+  // Tên gọi = chữ cuối trong họ và tên (vd "Nguyễn Vũ" → "Vũ")
+  const firstName = hoTen?.trim().split(/\s+/).filter(Boolean).slice(-1)[0] || "bạn";
 
   const dayKey = uid ? `db_brief_v2_${uid}_${todayStr()}` : null;
   const [open, setOpen] = useState(false);
