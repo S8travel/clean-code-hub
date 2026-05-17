@@ -4,7 +4,7 @@ import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
   ArrowUpDown, ArrowUp, ArrowDown, Pencil, Trash2, Ban, Copy, MoreHorizontal,
-  Eye, Plane, Bus, CheckCircle2, Users, CalendarDays,
+  Plane, Bus, CheckCircle2, Users, CalendarDays,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -347,14 +347,7 @@ export function DoanTable({
               </div>
 
               {/* Actions */}
-              <div className="px-1 py-3 flex items-center justify-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="ghost" size="icon" className="h-8 w-8"
-                  title="Xem chi tiết"
-                  onClick={() => navigate(`/doan/${g.id}`)}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
+              <div className="px-1 py-3 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Thao tác">
