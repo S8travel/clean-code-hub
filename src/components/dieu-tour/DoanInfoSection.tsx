@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -52,10 +51,6 @@ export default function DoanInfoSection({
 }: Props) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-4 px-4 py-2 bg-muted/30 border-b border-border">
-        <Badge variant="outline" className="text-xs border-blue-400 text-blue-600 bg-blue-50">🔗 Từ bảng doan · Chỉ đọc</Badge>
-        <Badge variant="outline" className="text-xs border-orange-400 text-orange-600 bg-orange-50">✏️ Tự điền</Badge>
-      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
         {/* Left: readonly + chuyến bay inline */}
         <div className="p-4 space-y-2 text-sm">
