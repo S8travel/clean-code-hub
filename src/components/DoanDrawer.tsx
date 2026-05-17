@@ -222,7 +222,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 bg-muted/40">
               <Field label="Tên Đoàn / Code Đoàn *">
                 <Input
                   required
@@ -367,19 +367,19 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 </Field>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs uppercase text-muted-foreground font-medium">Số Khách</Label>
+              <div className="space-y-2 rounded-lg bg-card border border-border/60 p-3">
+                <Label className="text-xs uppercase text-foreground font-bold">Số Khách</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label={t("Người lớn")}>
+                  <Field bare label={t("Người lớn")}>
                     <Input type="number" min={0} value={form.so_khach_lon ?? 0} onChange={(e) => set("so_khach_lon", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
-                  <Field label="Trẻ em 50%">
+                  <Field bare label="Trẻ em 50%">
                     <Input type="number" min={0} value={form.so_khach_em1 ?? 0} onChange={(e) => set("so_khach_em1", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
-                  <Field label="Trẻ em free">
+                  <Field bare label="Trẻ em free">
                     <Input type="number" min={0} value={form.so_khach_em2 ?? 0} onChange={(e) => set("so_khach_em2", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
-                  <Field label="T/L">
+                  <Field bare label="T/L">
                     <Input type="number" min={0} value={form.so_khach_tl ?? 0} onChange={(e) => set("so_khach_tl", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
                 </div>
@@ -473,11 +473,11 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, bare }: { label: string; children: React.ReactNode; bare?: boolean }) {
   const isZh = document.cookie.includes("googtrans=/vi/zh-TW");
   return (
-    <div className="space-y-1.5">
-      <Label className={`text-xs uppercase text-muted-foreground font-medium${isZh ? " notranslate" : ""}`}>{label}</Label>
+    <div className={bare ? "space-y-1.5" : "space-y-1.5 rounded-lg bg-card border border-border/60 p-3"}>
+      <Label className={`text-xs uppercase text-foreground font-bold${isZh ? " notranslate" : ""}`}>{label}</Label>
       {children}
     </div>
   );
