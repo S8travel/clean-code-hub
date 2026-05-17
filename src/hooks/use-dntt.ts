@@ -238,19 +238,40 @@ export function useDNTTSummary() {
     // Prefix-share với "dntt-list" → tự động refetch khi list invalidated.
     queryKey: ["dntt-list", "summary"],
     queryFn: async () => {
-      const base = () =>
-        externalSupabase.from("de_nghi_thanh_toan").select("id", { count: "exact", head: true });
-      // Tổng KHÔNG tính ĐNTT đã hủy (cũng không tính từ chối thì user ko yêu cầu — giữ).
-      const [total, choDuyet, daDuyet] = await Promise.all([
-        base().neq("trang_thai_duyet", "da_huy"),
-        base().eq("trang_thai_duyet", "cho_duyet"),
-        base().eq("trang_thai_duyet", "da_duyet"),
-      ]);
-      return {
-        total: total.count ?? 0,
-        choDuyet: choDuyet.count ?? 0,
-        daDuyet: daDuyet.count ?? 0,
-      };
+      const now = new Date();
+      const t0 = new Date(now); t0.setHours(0, 0, 0, 0);
+      const in7 = new Date(t0); in7.setDate(in7.getDate() + 7);
+      const ago7 = new Date(now); ago7.setDate(ago7.getDate() - 7);
+      const ymd = (d: Date) =>
+        `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, "0")}-${`${d.getDate()}`.padStart(2, "0")}`;
+      const t0s = ymd(t0);
+      const t7s = ymd(in7);
+      const ago7iso = ago7.toISOString();
+
+      // KHÔNG tính ĐNTT đã hủy. Lấy luôn so_tien để cộng tiền (số lượng ĐNTT ít, fetch nhẹ).
+      const { data, error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .select("so_tien, trang_thai_duyet, ngay_can_thanh_toan, duyet_luc")
+        .neq("trang_thai_duyet", "da_huy");
+      if (error) throw error;
+
+      let total = 0, choDuyet = 0, daDuyet = 0;
+      let tongTien = 0, choDuyet7dTien = 0, daDuyet7dTien = 0;
+      for (const r of (data ?? []) as any[]) {
+        const st = Number(r.so_tien) || 0;
+        total++;
+        tongTien += st;
+        if (r.trang_thai_duyet === "cho_duyet") {
+          choDuyet++;
+          if (r.ngay_can_thanh_toan && r.ngay_can_thanh_toan >= t0s && r.ngay_can_thanh_toan <= t7s) {
+            choDuyet7dTien += st;
+          }
+        } else if (r.trang_thai_duyet === "da_duyet") {
+          daDuyet++;
+          if (r.duyet_luc && String(r.duyet_luc) >= ago7iso) daDuyet7dTien += st;
+        }
+      }
+      return { total, choDuyet, daDuyet, tongTien, choDuyet7dTien, daDuyet7dTien };
     },
   });
 }

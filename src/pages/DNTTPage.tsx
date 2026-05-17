@@ -277,6 +277,9 @@ function DNTTPageContent() {
     total: summary?.total ?? 0,
     choDuyet: summary?.choDuyet ?? 0,
     daDuyet: summary?.daDuyet ?? 0,
+    tongTien: summary?.tongTien ?? 0,
+    choDuyet7dTien: summary?.choDuyet7dTien ?? 0,
+    daDuyet7dTien: summary?.daDuyet7dTien ?? 0,
   };
 
   const resetFilters = () => {
@@ -386,14 +389,18 @@ function DNTTPageContent() {
       {/* Metrics */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Tổng ĐNTT", value: metrics.total, cls: "text-foreground" },
-          { label: "Chờ duyệt", value: metrics.choDuyet, cls: "text-yellow-600" },
-          { label: "Đã duyệt", value: metrics.daDuyet, cls: "text-blue-600" },
+          { label: "Tổng ĐNTT", value: metrics.total, cls: "text-foreground",
+            sub: `${fmt(metrics.tongTien)} đ` },
+          { label: "Chờ duyệt", value: metrics.choDuyet, cls: "text-yellow-600",
+            sub: `7 ngày tới: ${fmt(metrics.choDuyet7dTien)} đ` },
+          { label: "Đã duyệt", value: metrics.daDuyet, cls: "text-blue-600",
+            sub: `7 ngày qua: ${fmt(metrics.daDuyet7dTien)} đ` },
         ].map(m => (
           <Card key={m.label}>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">{m.label}</p>
               <p className={cn("text-2xl font-bold", m.cls)}>{m.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{m.sub}</p>
             </CardContent>
           </Card>
         ))}
