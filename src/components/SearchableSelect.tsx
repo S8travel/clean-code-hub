@@ -31,6 +31,8 @@ interface Props {
   className?: string;
   /** Mở popover ngay khi mount (Google Sheets-like flow: Enter → row mới → tiếp tục gõ) */
   autoOpen?: boolean;
+  /** Gọi khi popover đóng (kể cả đóng mà không chọn) — để parent thoát chế độ chọn */
+  onClose?: () => void;
 }
 
 export function SearchableSelect({
@@ -42,6 +44,7 @@ export function SearchableSelect({
   emptyText = "Không tìm thấy",
   className,
   autoOpen = false,
+  onClose,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -60,7 +63,7 @@ export function SearchableSelect({
 
   const handleOpenChange = (v: boolean) => {
     setOpen(v);
-    if (!v) setSearch("");
+    if (!v) { setSearch(""); onClose?.(); }
   };
 
   return (

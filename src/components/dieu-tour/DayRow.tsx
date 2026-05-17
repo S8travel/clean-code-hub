@@ -301,6 +301,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 options={nhaHangOptions}
                 value={String(selectedNhaTrua.id)}
                 autoOpen
+                onClose={() => setEditSel(null)}
                 onChange={(v) => {
                   const nid = v ? Number(v) : null;
                   if (nid !== selectedNhaTrua.id) update({ an_trua_nha_hang_id: nid, an_trua_set_menu_id: null });
@@ -370,6 +371,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 options={nhaHangOptions}
                 value={String(selectedNhaToi.id)}
                 autoOpen
+                onClose={() => setEditSel(null)}
                 onChange={(v) => {
                   const nid = v ? Number(v) : null;
                   if (nid !== selectedNhaToi.id) update({ an_toi_nha_hang_id: nid, an_toi_set_menu_id: null });
@@ -443,6 +445,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 options={khachSanOptions}
                 value={String(selectedKS.id)}
                 autoOpen
+                onClose={() => setEditSel(null)}
                 onChange={(v) => {
                   const nid = v ? Number(v) : null;
                   if (nid !== selectedKS.id) update({ khach_san_id: nid });
