@@ -55,7 +55,7 @@ function PvAssignCell({
 }) {
   const isKC = cell?.trang_thai === "khong_can";
   const cls = cell ? (STT_CLS[cell.trang_thai] ?? "text-foreground") : "text-muted-foreground";
-  const label = !cell ? "Chưa phân" : isKC ? "Không cần" : cell.ten;
+  const label = !cell ? "Admin" : isKC ? "Không cần" : cell.ten;
   const value = isKC ? KC : (cell?.user_id ?? "_none");
   return (
     <Select

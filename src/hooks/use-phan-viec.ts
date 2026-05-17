@@ -32,8 +32,8 @@ export function defaultPhanViec(loaiTour: string | null | undefined): PvDefault[
     pv_visa:  { v: true, c: false },
     pv_ve_mb: { v: true, c: false },
   };
+  // Vé máy bay LUÔN hiện, KHÔNG tick sẵn (cần thì mới tick) — kể cả inbound
   if (loaiTour === "outbound") m.pv_visa = { v: true, c: true };
-  else if (loaiTour === "inbound") m.pv_ve_mb = { v: false, c: false };
   else if (loaiTour === "noi_dia") m.pv_visa = { v: false, c: false };
   return PHAN_VIEC_ITEMS.filter((i) => m[i.key].v).map((i) => ({
     ...i, checked: m[i.key].c,
@@ -324,52 +324,16 @@ export function useCreatePhanViec() {
         });
       }
 
-      // 2) Mục thiếu người → giao điều-phối (la_dieu_phoi; fallback giám đốc)
-      if (missing.length) {
-        let { data: dp } = await externalSupabase
-          .from("user_roles").select("user_id").eq("active", true).eq("la_dieu_phoi", true);
-        if (!dp || dp.length === 0) {
-          const { data: gd } = await externalSupabase
-            .from("user_roles").select("user_id").eq("active", true).eq("role", "giam_doc");
-          dp = gd ?? [];
-        }
-        const missLabels = missing.map((a) => LABEL[a.key]).join(", ");
-        for (const d of dp) {
-          const { data: cv, error } = await externalSupabase
-            .from("cong_viec")
-            .insert({
-              tieu_de: `Đoàn ${doan.ten_doan}: cần phân người`,
-              mo_ta: `Đầu việc chưa có người: ${missLabels}. Vui lòng phân người phụ trách.`,
-              doan_id: doan.id,
-              nguoi_giao: SYSTEM_USER_ID,
-              nguoi_nhan: d.user_id,
-              loai_viec: "pv_phancong",
-              do_uu_tien: "cao",
-              han_xu_ly: doan.ngay_di || null,
-              trang_thai: "cho_nhan",
-            })
-            .select("id")
-            .single();
-          if (error) throw error;
-          await externalSupabase.from("thong_bao").insert({
-            user_id: d.user_id,
-            cong_viec_id: cv.id,
-            doan_id: doan.id,
-            doan_ten: doan.ten_doan,
-            loai: "giao_viec",
-            tieu_de: `Đoàn ${doan.ten_doan}: cần phân người (${missLabels})`,
-            noi_dung: `Giao tự động bởi Hệ thống (tạo đoàn ${doan.ten_doan})`,
-            is_read: false,
-          });
-        }
-      }
+      // 2) Mục thiếu người → KHÔNG tạo việc/điều-phối. Ô trống = Admin phụ trách
+      //    (mặc định ngầm, không ghi DB để tránh rác cong_viec). Theo dõi/audit
+      //    hiển thị ô trống = "Admin".
 
       // 3) Giám đốc → thông báo thông tin đoàn + ai phụ trách gì (không tạo việc)
       const { data: directors } = await externalSupabase
         .from("user_roles").select("user_id").eq("active", true).eq("role", "giam_doc");
       const summary = [
         ...assigned.map((a) => `${LABEL[a.key]}: ${nameMap.get(a.assignedTo!) ?? "?"}`),
-        ...(missing.length ? [`⚠ Thiếu người: ${missing.map((a) => LABEL[a.key]).join(", ")}`] : []),
+        ...(missing.length ? [`Admin phụ trách: ${missing.map((a) => LABEL[a.key]).join(", ")}`] : []),
       ].join(" · ");
       for (const g of directors ?? []) {
         await externalSupabase.from("thong_bao").insert({

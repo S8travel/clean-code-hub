@@ -11,6 +11,15 @@ export interface DeadlineItem {
   status: string;
 }
 
+// Đoàn đã huỷ → không còn deadline cần đuổi NCC
+const isDoanHuy = (row: any) => (row.doan as any)?.trang_thai === "huy";
+// Chỉ booking ĐÃ GỬI mới có deadline thật. Chưa gửi / không đặt → bỏ qua.
+const ksSent = (r: any) =>
+  r.ks_final_status !== "chua_gui" || r.ks_dat_truoc_status !== "chua_gui";
+const nhSent = (r: any) =>
+  r.booking_status !== "chua_gui" && r.booking_status !== "khong_dat";
+const dvSent = (r: any) => r.booking_status !== "chua_dat";
+
 export function useMyDeadlines(doanIds: number[]) {
   return useQuery<DeadlineItem[]>({
     queryKey: ["my_deadlines", doanIds],
@@ -20,21 +29,21 @@ export function useMyDeadlines(doanIds: number[]) {
       const [ksRes, nhRes, dvRes] = await Promise.all([
         externalSupabase
           .from("doan_booking_ks")
-          .select("id, doan_id, deadline, ks_final_status, khach_san:khach_san_id(ten), doan:doan_id(ten_doan)")
+          .select("id, doan_id, deadline, ks_final_status, ks_dat_truoc_status, khach_san:khach_san_id(ten), doan:doan_id(ten_doan, trang_thai)")
           .in("doan_id", doanIds)
           .not("deadline", "is", null)
           .is("deadline_done_at", null),
 
         externalSupabase
           .from("doan_booking_nh")
-          .select("id, doan_id, deadline, booking_status, bua_an, nha_hang:nha_hang_id(ten, loai), doan:doan_id(ten_doan)")
+          .select("id, doan_id, deadline, booking_status, bua_an, nha_hang:nha_hang_id(ten, loai), doan:doan_id(ten_doan, trang_thai)")
           .in("doan_id", doanIds)
           .not("deadline", "is", null)
           .is("deadline_done_at", null),
 
         externalSupabase
           .from("doan_booking_dv")
-          .select("id, doan_id, deadline, booking_status, ten_nha_cung_cap, doan:doan_id(ten_doan)")
+          .select("id, doan_id, deadline, booking_status, ten_nha_cung_cap, doan:doan_id(ten_doan, trang_thai)")
           .in("doan_id", doanIds)
           .not("deadline", "is", null)
           .is("deadline_done_at", null),
@@ -43,6 +52,7 @@ export function useMyDeadlines(doanIds: number[]) {
       const items: DeadlineItem[] = [];
 
       for (const row of ksRes.data ?? []) {
+        if (isDoanHuy(row) || !ksSent(row)) continue;
         items.push({
           type: "ks",
           bookingId: row.id,
@@ -55,6 +65,7 @@ export function useMyDeadlines(doanIds: number[]) {
       }
 
       for (const row of nhRes.data ?? []) {
+        if (isDoanHuy(row) || !nhSent(row)) continue;
         const buaLabel = row.bua_an === "trua" ? "Trưa" : "Tối";
         const loai = (row.nha_hang as any)?.loai ?? "nha_hang";
         items.push({
@@ -69,6 +80,7 @@ export function useMyDeadlines(doanIds: number[]) {
       }
 
       for (const row of dvRes.data ?? []) {
+        if (isDoanHuy(row) || !dvSent(row)) continue;
         items.push({
           type: "dv",
           bookingId: row.id,
@@ -98,19 +110,20 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
       const [ksRes, nhRes, dvRes] = await Promise.all([
         externalSupabase
           .from("doan_booking_ks")
-          .select("id, doan_id, deadline, ks_final_status, ks_final_sent_by, ks_dat_truoc_sent_by, khach_san:khach_san_id(ten), doan:doan_id(ten_doan)")
+          .select("id, doan_id, deadline, ks_final_status, ks_dat_truoc_status, ks_final_sent_by, ks_dat_truoc_sent_by, khach_san:khach_san_id(ten), doan:doan_id(ten_doan, trang_thai)")
           .not("deadline", "is", null).is("deadline_done_at", null),
         externalSupabase
           .from("doan_booking_nh")
-          .select("id, doan_id, deadline, booking_status, bua_an, sent_by, dat_truoc_sent_by, final_sent_by, nha_hang:nha_hang_id(ten, loai), doan:doan_id(ten_doan)")
+          .select("id, doan_id, deadline, booking_status, bua_an, sent_by, dat_truoc_sent_by, final_sent_by, nha_hang:nha_hang_id(ten, loai), doan:doan_id(ten_doan, trang_thai)")
           .not("deadline", "is", null).is("deadline_done_at", null),
         externalSupabase
           .from("doan_booking_dv")
-          .select("id, doan_id, deadline, booking_status, sent_by, ten_nha_cung_cap, doan:doan_id(ten_doan)")
+          .select("id, doan_id, deadline, booking_status, sent_by, ten_nha_cung_cap, doan:doan_id(ten_doan, trang_thai)")
           .not("deadline", "is", null).is("deadline_done_at", null),
       ]);
       const items: DeadlineItem[] = [];
       for (const row of ksRes.data ?? []) {
+        if (isDoanHuy(row) || !ksSent(row)) continue;
         if (![row.ks_final_sent_by, row.ks_dat_truoc_sent_by].some((v) => norm(v) === me)) continue;
         items.push({
           type: "ks", bookingId: row.id, doanId: row.doan_id,
@@ -120,6 +133,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         });
       }
       for (const row of nhRes.data ?? []) {
+        if (isDoanHuy(row) || !nhSent(row)) continue;
         if (![row.sent_by, row.dat_truoc_sent_by, row.final_sent_by].some((v) => norm(v) === me)) continue;
         const buaLabel = row.bua_an === "trua" ? "Trưa" : "Tối";
         const loai = (row.nha_hang as any)?.loai ?? "nha_hang";
@@ -131,6 +145,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         });
       }
       for (const row of dvRes.data ?? []) {
+        if (isDoanHuy(row) || !dvSent(row)) continue;
         if (norm(row.sent_by) !== me) continue;
         items.push({
           type: "dv", bookingId: row.id, doanId: row.doan_id,
