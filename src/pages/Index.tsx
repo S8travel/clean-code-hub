@@ -42,7 +42,7 @@ import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const TRANG_THAI_OPTIONS = [
   { value: "all", label: "Tất cả" },
@@ -91,6 +91,7 @@ export default function Index() {
   const [quickTab, setQuickTab] = useState<
     "all" | "dang_chay" | "sap_khoi_hanh" | "dang_dien_ra" | "hoan_thanh" | "huy"
   >("all");
+  const [pageSize, setPageSize] = useState(10);
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
@@ -203,10 +204,10 @@ export default function Index() {
 
   // Page reset đã tích hợp trong setSearch/setDateFrom/... helpers ở trên
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const showFrom = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const showTo = Math.min(page * PAGE_SIZE, filtered.length);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const showFrom = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const showTo = Math.min(page * pageSize, filtered.length);
 
   const handleSave = async (data: DoanInsert) => {
     try {
@@ -612,6 +613,19 @@ export default function Index() {
                 Sau <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
               </Button>
             </div>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+            >
+              <SelectTrigger className="h-8 text-xs w-[130px]">
+                <span>Hiển thị {pageSize}/trang</span>
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n} đoàn / trang</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
