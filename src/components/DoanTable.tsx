@@ -338,9 +338,9 @@ export function DoanTable({
                   : <span className="text-xs text-muted-foreground">—</span>}
               </div>
 
-              {/* 8. Chú thích */}
+              {/* 8. Yêu cầu đặc biệt */}
               <div className="px-3 py-3 flex flex-col justify-center min-w-0">
-                <p className="text-[10px] text-muted-foreground">Chú thích</p>
+                <p className="text-[10px] text-muted-foreground">Yêu cầu đặc biệt</p>
                 {g.ghi_chu
                   ? <p className="text-xs line-clamp-3 leading-snug" title={g.ghi_chu}>{g.ghi_chu}</p>
                   : <span className="text-xs text-muted-foreground">—</span>}
