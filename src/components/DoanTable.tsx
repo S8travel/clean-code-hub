@@ -119,7 +119,7 @@ function Avatar({ name, label }: { name: string; label: string }) {
       </div>
       <div className="min-w-0">
         <p className="text-[10px] text-muted-foreground leading-none">{label}</p>
-        <p className="text-xs truncate leading-tight">{name}</p>
+        <p className="text-xs leading-tight break-words">{name}</p>
       </div>
     </div>
   );
@@ -213,7 +213,7 @@ export function DoanTable({
       </div>
 
       <div className="overflow-x-auto">
-      <div className="space-y-2.5 min-w-[1386px]">
+      <div className="space-y-2.5 min-w-[1488px]">
       {sorted.map((g) => {
         const st = richStatus(g, qtPaidSet ?? null);
         const StIcon = st.icon;
@@ -241,7 +241,7 @@ export function DoanTable({
               g.trang_thai === "huy" && "opacity-70",
             )}
           >
-            <div className="grid grid-cols-[300px_160px_120px_170px_210px_150px_180px_96px] items-stretch divide-x divide-gray-200">
+            <div className="grid grid-cols-[300px_210px_120px_170px_260px_160px_minmax(180px,1fr)_88px] items-stretch divide-x divide-gray-200">
               {/* 1. Trạng thái + Mã đoàn (giữ nguyên) */}
               <div className="flex items-center gap-3 px-4 py-3 min-w-0">
                 <div className="flex flex-col items-center w-14 shrink-0 text-center">
@@ -318,14 +318,14 @@ export function DoanTable({
                   <div className="flex items-center gap-1.5 pt-0.5">
                     <Plane className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                     <span className="text-[10px] text-muted-foreground">Đón</span>
-                    <code className="text-[11px] text-[hsl(var(--brand))] font-mono truncate">{g.chuyen_bay_don}</code>
+                    <code className="text-[11px] text-[hsl(var(--brand))] font-mono break-all">{g.chuyen_bay_don}</code>
                   </div>
                 )}
                 {g.chuyen_bay_tien && (
                   <div className="flex items-center gap-1.5">
                     <Plane className="h-3.5 w-3.5 text-orange-500 shrink-0 rotate-90" />
                     <span className="text-[10px] text-muted-foreground">Tiễn</span>
-                    <code className="text-[11px] text-[hsl(var(--brand))] font-mono truncate">{g.chuyen_bay_tien}</code>
+                    <code className="text-[11px] text-[hsl(var(--brand))] font-mono break-all">{g.chuyen_bay_tien}</code>
                   </div>
                 )}
               </div>
