@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDoanList } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
+import { useDoanList, useDoanDetailRealtime } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
 import { useAuth } from "@/hooks/use-auth";
 import {
   useCanhDiem,
@@ -55,6 +55,10 @@ export default function DoanDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const doanId = Number(id);
+
+  // Realtime: máy khác đổi đoan/doan_ngay/doan_ngay_item → tự refetch
+  // (an toàn nhờ chốt hasPendingChangesRef ở local state điều tour).
+  useDoanDetailRealtime(doanId);
 
   const { data: groups, isLoading } = useDoanList();
   const { user: currentUser } = useAuth();

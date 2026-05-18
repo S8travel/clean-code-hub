@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -320,6 +321,38 @@ export function useDoanRealtime() {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
+}
+
+// Realtime cho TRANG CHI TIẾT đoàn: nghe doan + doan_ngay + doan_ngay_item
+// của 1 đoàn từ máy khác → invalidate query tương ứng. An toàn vì local
+// state điều tour có chốt hasPendingChangesRef (chỉ merge lại khi không
+// đang nhập dở) — khác Chi phí KS/NH (sticky sessionStorage).
+export function useDoanDetailRealtime(doanId: number | null | undefined) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!doanId || Number.isNaN(doanId)) return;
+    const channel = externalSupabase
+      .channel(`doan_detail_${doanId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "doan", filter: `id=eq.${doanId}` },
+        () => qc.invalidateQueries({ queryKey: ["doan"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "doan_ngay", filter: `doan_id=eq.${doanId}` },
+        () => qc.invalidateQueries({ queryKey: ["doan_ngay", doanId] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "doan_ngay_item", filter: `doan_id=eq.${doanId}` },
+        () => qc.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] }),
+      )
+      .subscribe();
+    return () => {
+      externalSupabase.removeChannel(channel);
+    };
+  }, [doanId, qc]);
 }
 
 // Doan permissions
