@@ -407,11 +407,11 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 />
               </Field>
 
-              <Field label="Ghi Chú">
+              <Field label="Yêu cầu đặc biệt">
                 <Textarea
                   value={form.ghi_chu ?? ""}
                   onChange={(e) => set("ghi_chu", e.target.value)}
-                  placeholder="Ghi chú..."
+                  placeholder="Ví dụ: yêu cầu xe lms, chỉ định HDV, 招待團..."
                   rows={3}
                   className="rounded-lg resize-none"
                 />
