@@ -36,6 +36,7 @@ const ICON_BY_LOAI: Record<string, string> = {
   deadline_booking:          "🔥",
   // Công việc
   giao_viec:                 "💼",
+  thong_tin_doan:            "🔄",
   dntt_can_duyet:            "✅",
   // Tiền / Invoice
   gia:                       "💰",
@@ -52,8 +53,8 @@ const ICON_BY_LOAI: Record<string, string> = {
 const TAB_FILTER: Record<string, (loai: string) => boolean> = {
   all:       () => true,
   deadline:  (l) => l.startsWith("deadline") || l === "lead_qua_han" || l === "lead_follow_up_today",
-  cong_viec: (l) => l === "giao_viec" || l === "dntt_can_duyet",
-  khac:      (l) => !l.startsWith("deadline") && l !== "giao_viec" && l !== "dntt_can_duyet" && l !== "lead_qua_han" && l !== "lead_follow_up_today",
+  cong_viec: (l) => l === "giao_viec" || l === "dntt_can_duyet" || l === "thong_tin_doan",
+  khac:      (l) => !l.startsWith("deadline") && l !== "giao_viec" && l !== "dntt_can_duyet" && l !== "thong_tin_doan" && l !== "lead_qua_han" && l !== "lead_follow_up_today",
 };
 
 function iconFor(loai: string) {
@@ -81,10 +82,15 @@ function targetUrl(tb: ThongBaoRow): string | null {
   const { loai, doan_id, cong_viec_id } = tb;
   if (loai.startsWith("deadline") && doan_id) return `/doan/${doan_id}`;
   if (loai === "giao_viec" && cong_viec_id)   return `/my-job?cong_viec=${cong_viec_id}`;
+  // Hủy đoàn: trigger tạo thong_bao loai='giao_viec' KHÔNG kèm cong_viec_id
+  // (task tạo riêng) → fallback về trang đoàn để OP thấy & đi hủy dịch vụ.
+  if (loai === "giao_viec" && doan_id)        return `/doan/${doan_id}`;
   if (loai === "dntt_can_duyet")              return `/de-nghi-thanh-toan`;
   if (loai === "su_co" && doan_id)            return `/doan/${doan_id}?tab=log`;
   if (loai.startsWith("lead_"))               return `/leads`;
   if (loai === "gia" && doan_id)              return `/doan/${doan_id}`;
+  // Đổi số khách/ngày/địa điểm (trigger fn_doan_phanviec_events)
+  if (loai === "thong_tin_doan" && doan_id)   return `/doan/${doan_id}`;
   return null;
 }
 
@@ -137,11 +143,14 @@ export function NotificationBell({ userId }: Props) {
   const grouped = useMemo(() => groupByTime(filtered), [filtered]);
 
   const handleItemClick = (tb: ThongBaoRow) => {
-    if (!tb.is_read) markOne.mutate(tb.id);
     const url = targetUrl(tb);
+    if (!tb.is_read) markOne.mutate(tb.id);
     if (url) {
       setOpen(false);
       nav(url);
+    } else {
+      // Không có trang liên kết → báo rõ thay vì im lặng (tránh cảm giác "click hỏng")
+      toast("Thông báo chỉ để xem — không có trang chi tiết");
     }
   };
 
