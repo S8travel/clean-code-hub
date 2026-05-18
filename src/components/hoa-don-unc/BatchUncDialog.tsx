@@ -47,6 +47,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const [ocrProg, setOcrProg] = useState<{ running: boolean; done: number; total: number }>(
     { running: false, done: 0, total: 0 },
   );
+  // Chẩn đoán OCR theo từng file (idx → số tiền đọc được / lỗi).
+  const [ocrInfo, setOcrInfo] = useState<Record<number, { amount: number | null; err?: string }>>({});
 
   // Refs cho vòng OCR (đăng ký 1 lần) đọc state mới nhất.
   const manualRef = useRef<Set<number>>(new Set());      // rowId user tự chọn → không auto đè
@@ -90,7 +92,10 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     // 2) Mã đoàn xuất hiện trong ảnh + số tiền khớp
     pick((r, fi) => {
       const o = ocr[fi]; if (!o || !r.ten_doan) return false;
-      const code = normCode(r.ten_doan);
+      // CHỈ lấy token mã đoàn đầu (trước dấu cách / "(") — ten_doan có thể
+      // kèm mô tả "(4 ngày…)" / "Test" mà nội dung UNC không có.
+      const codeTok = r.ten_doan.trim().split(/[\s(]/)[0];
+      const code = normCode(codeTok);
       return code.length >= 4 && normCode(o.text).includes(code)
         && o.amount != null && isAmountMatch(o.amount, r.so_tien);
     }, "code");
@@ -113,9 +118,12 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     for (let i = 0; i < fs.length; i++) {
       if (runRef.current !== myRun) return; // đã chọn lại / đóng
       try {
-        ocrRef.current[i] = await ocrUncSlip(fs[i]);
-      } catch {
+        const res = await ocrUncSlip(fs[i]);
+        ocrRef.current[i] = res;
+        setOcrInfo((p) => ({ ...p, [i]: { amount: res.amount } }));
+      } catch (e: any) {
         ocrRef.current[i] = { amount: null, text: "" };
+        setOcrInfo((p) => ({ ...p, [i]: { amount: null, err: String(e?.message || e) } }));
       }
       if (runRef.current !== myRun) return;
       setOcrProg({ running: true, done: i + 1, total: fs.length });
@@ -133,8 +141,19 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     assignRef.current = {};
     filesRef.current = fs;
     setFiles(fs);
+    setOcrInfo({});
     recompute();          // ghép nhanh theo tên file ngay
     runOcr(fs, myRun);    // rồi OCR refine nền
+  };
+
+  const rerunOcr = () => {
+    const fs = filesRef.current;
+    if (fs.length === 0) return;
+    const myRun = ++runRef.current;
+    ocrRef.current = {};
+    setOcrInfo({});
+    recompute();
+    runOcr(fs, myRun);
   };
 
   const setRowFile = (rowId: number, fileIdx: number | undefined) => {
@@ -184,6 +203,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     setAssign({});
     setReasons({});
     setOcrProg({ running: false, done: 0, total: 0 });
+    setOcrInfo({});
     manualRef.current = new Set();
     ocrRef.current = {};
     assignRef.current = {};
@@ -248,6 +268,41 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
               <ScanText className="h-3.5 w-3.5 animate-pulse" />
               Đang đọc ảnh {ocrProg.done}/{ocrProg.total}… (có thể chỉnh tay trong lúc chờ)
+            </div>
+          )}
+
+          {/* Chẩn đoán OCR theo từng file */}
+          {files.length > 0 && (
+            <div className="border rounded-lg px-2 py-1.5 space-y-0.5 text-[11px] bg-muted/20">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-muted-foreground">OCR đọc ảnh</span>
+                {!ocrProg.running && (
+                  <button
+                    type="button"
+                    onClick={rerunOcr}
+                    className="inline-flex items-center gap-1 text-blue-700 hover:underline"
+                  >
+                    <ScanText className="h-3 w-3" /> Đọc lại OCR
+                  </button>
+                )}
+              </div>
+              {files.map((f, i) => {
+                const info = ocrInfo[i];
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <span className="truncate max-w-[360px] text-muted-foreground">{f.name}</span>
+                    <span className="shrink-0">
+                      {info === undefined
+                        ? <span className="text-muted-foreground">{ocrProg.running ? "đang đọc…" : "—"}</span>
+                        : info.err
+                          ? <span className="text-red-600">OCR lỗi: {info.err.slice(0, 40)}</span>
+                          : info.amount != null
+                            ? <span className="text-emerald-700 tabular-nums">đọc được {fmt(info.amount)} ₫</span>
+                            : <span className="text-amber-600">không đọc được số tiền</span>}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 

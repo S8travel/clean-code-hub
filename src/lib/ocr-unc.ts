@@ -16,9 +16,12 @@ const MIN_AMOUNT = 1000;
 const MAX_AMOUNT = 10_000_000_000;
 
 // Số đứng ngay trước "VND"/"VNĐ"/"đồng" → là tiền (loại STK, mã GD, SĐT).
-const MONEY_RE = /(\d[\d.,\s]*\d|\d)\s*(?:VN[DĐ]|VND|đồng|dong)/gi;
-// Fallback: số có separator nghìn (không bắt chuỗi liền 4+ digit = STK).
-const SEP_NUMBER_RE = /\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d{1,2})?/g;
+// KHÔNG cho khoảng trắng TRONG số (tránh dính "7" của "Nhanh 24/7" vào
+// "10,000,000" → 710,000,000). Chỉ chấp nhận cụm nghìn . hoặc , hoặc số
+// liền ≥4 chữ số. Lookbehind chặn bắt giữa chừng 1 số dài.
+const MONEY_RE = /(?<![\d.,])(\d{1,3}(?:[.,]\d{3})+|\d{4,12})\s*(?:VN[DĐ]|VND|đồng|dong)/gi;
+// Fallback: số có separator nghìn (không bắt chuỗi liền = STK; không có \s).
+const SEP_NUMBER_RE = /(?<![\d.,])\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?/g;
 
 /** Chuẩn hoá để so khớp mã đoàn: HOA, bỏ mọi ký tự không phải chữ/số. */
 export function normCode(s: string): string {
@@ -31,6 +34,9 @@ export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
   const { data } = await Tesseract.recognize(file, "vie+eng");
   const raw = (data.text || "").slice(0, 4000);
   const text = normalizeOcrDigits(raw);
+  // Log để soi khi OCR sai — mở DevTools (F12) → Console.
+  // eslint-disable-next-line no-console
+  console.log(`[OCR UNC] ${file.name}\n` + raw);
 
   // 1) Số cạnh "VND"/"đồng" → loại 0 (phí giao dịch), lấy lớn nhất.
   const moneyNums: number[] = [];
