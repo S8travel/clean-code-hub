@@ -440,10 +440,33 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         if (row.is_overridden) continue; // override → giữ user edit
         // Ưu tiên meal.gia_set_menu (mới nhất từ Điều tour). Fallback DB don_gia.
         const dbRow = row.id ? chiPhiRows.find((cp) => cp.id === row.id) : null;
+        const nh = nhData.nhaHangMap[meal.nha_hang_id];
         const targetDonGia = meal.gia_set_menu ?? dbRow?.don_gia ?? row.don_gia;
         const targetSoLuong = dbRow?.so_luong ?? row.so_khach;
-        if (targetDonGia !== row.don_gia || targetSoLuong !== row.so_khach) {
-          next[key] = { ...row, don_gia: targetDonGia, so_khach: targetSoLuong };
+        // FOC + chiết khấu: lấy từ snapshot CỦA TOUR (dbRow = doan_chi_phi),
+        // KHÔNG đọc master. resolveNHChietKhau chỉ fallback master khi
+        // snapshot null (legacy) — đúng hành vi init.
+        const targetFocK = dbRow ? (dbRow.foc_khach_snapshot ?? null) : (row.foc_khach_snapshot ?? null);
+        const targetFocM = dbRow ? (dbRow.foc_mien_snapshot ?? null) : (row.foc_mien_snapshot ?? null);
+        const targetCkSnap = dbRow ? (dbRow.chiet_khau_phan_tram_snapshot ?? null) : (row.chiet_khau_phan_tram_snapshot ?? null);
+        const targetCk = resolveNHChietKhau({ chiet_khau_phan_tram_snapshot: targetCkSnap }, nh);
+        if (
+          targetDonGia !== row.don_gia ||
+          targetSoLuong !== row.so_khach ||
+          targetFocK !== (row.foc_khach_snapshot ?? null) ||
+          targetFocM !== (row.foc_mien_snapshot ?? null) ||
+          targetCkSnap !== (row.chiet_khau_phan_tram_snapshot ?? null) ||
+          targetCk !== row.chiet_khau_phan_tram
+        ) {
+          next[key] = {
+            ...row,
+            don_gia: targetDonGia,
+            so_khach: targetSoLuong,
+            foc_khach_snapshot: targetFocK,
+            foc_mien_snapshot: targetFocM,
+            chiet_khau_phan_tram_snapshot: targetCkSnap,
+            chiet_khau_phan_tram: targetCk,
+          };
           changed = true;
         }
       }

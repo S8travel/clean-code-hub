@@ -80,7 +80,18 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   const [saving, setSaving] = useState(false);
   const autoSaved = useRef(false);
 
+  // Re-sync từ DB (snapshot tour) khi giá trị existing đổi — kể cả CÙNG id
+  // (vd máy khác sửa don_gia/so_luong). externalKey theo VALUE; bỏ qua khi
+  // user đang gõ dở (dirtyRef) để không reset.
+  const externalKey = existing
+    ? `${existing.id}|${existing.don_gia ?? 0}|${existing.so_luong ?? 0}`
+    : `none|${giaMacDinh ?? 0}`;
+  const lastSyncedKeyRef = useRef<string | null>(null);
+  const dirtyRef = useRef(false);
   useEffect(() => {
+    if (lastSyncedKeyRef.current === externalKey) return;
+    if (dirtyRef.current) return; // đang gõ dở → không đè
+    lastSyncedKeyRef.current = externalKey;
     if (existing) {
       setDonGia(existing.don_gia ?? 0);
       setSoLuong(existing.so_luong ?? 0);
@@ -88,7 +99,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
     } else if (giaMacDinh) {
       setDonGia(giaMacDinh);
     }
-  }, [existing?.id, giaMacDinh]);
+  }, [externalKey, existing, giaMacDinh]);
 
   // Khi chưa có record + soKhach/soNgay đổi → seed soLuong = soKhach × soNgay.
   useEffect(() => {
@@ -155,6 +166,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         thanh_toan_dinh_ky: true,
         // KHÔNG set trang_thai_thanh_toan: DB default + RPC recalc quản lý.
       } as any);
+      dirtyRef.current = false; // đã lưu → cho phép reconcile tiếp
       toast.success("Đã lưu bảo hiểm");
     } catch {
       toast.error("Lỗi khi lưu bảo hiểm");
@@ -338,7 +350,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                   <Input
                     type="number"
                     value={soLuong || ""}
-                    onChange={(e) => setSoLuong(Number(e.target.value) || 0)}
+                    onChange={(e) => { dirtyRef.current = true; setSoLuong(Number(e.target.value) || 0); }}
                     onBlur={handleSave}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
                     disabled={saving}
@@ -352,7 +364,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                 <div className="flex justify-center">
                   <DecimalInput
                     value={donGia}
-                    onChange={setDonGia}
+                    onChange={(v) => { dirtyRef.current = true; setDonGia(v); }}
                     onBlur={handleSave}
                     placeholder="0"
                     disabled={saving}
