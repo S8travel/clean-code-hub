@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,19 @@ export default memo(function KSServiceRowInput({
   const [localTen, setLocalTen] = useState(row.loai_phong);
   const [localSL, setLocalSL] = useState(String(row.so_phong));
   const [localFoc, setLocalFoc] = useState(String(row.foc_count ?? 0));
+
+  // Re-sync state nội bộ khi prop đổi do reconcile (DB/máy khác). Prop chỉ
+  // đổi sau blur (onFieldChange) hoặc reconcile → không đè lúc đang gõ.
+  const externalKey = `${row.id ?? "new"}|${row.loai_phong}|${row.so_phong}|${row.foc_count ?? 0}`;
+  const lastSyncedKeyRef = useRef(externalKey);
+  useEffect(() => {
+    if (lastSyncedKeyRef.current !== externalKey) {
+      lastSyncedKeyRef.current = externalKey;
+      setLocalTen(row.loai_phong);
+      setLocalSL(String(row.so_phong));
+      setLocalFoc(String(row.foc_count ?? 0));
+    }
+  }, [externalKey, row]);
 
   const handleTenBlur = useCallback(() => {
     onFieldChange(globalIdx, "loai_phong", localTen);

@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,18 @@ export default memo(function KSRowInput({
 }: Props) {
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
+
+  // Re-sync khi prop đổi do reconcile (DB/máy khác). Prop chỉ đổi sau blur
+  // hoặc reconcile → không đè lúc đang gõ.
+  const externalKey = `${row.id ?? "new"}|${row.loai_phong}|${row.so_phong}`;
+  const lastSyncedKeyRef = useRef(externalKey);
+  useEffect(() => {
+    if (lastSyncedKeyRef.current !== externalKey) {
+      lastSyncedKeyRef.current = externalKey;
+      setLocalLoaiPhong(row.loai_phong);
+      setLocalSoPhong(String(row.so_phong));
+    }
+  }, [externalKey, row]);
 
   const handleLoaiPhongBlur = useCallback(() => {
     onFieldChange(globalIdx, "loai_phong", localLoaiPhong);
