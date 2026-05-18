@@ -115,17 +115,30 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         return { email: normalizeEmailList(match.khach_san.email), threadId: match.email_thread_id ?? null, bookingSubject: (match as any).email_subject ?? null, source: "booking" };
     }
 
-    if (loai === "nha_hang" && doan_id && nha_cung_cap_id) {
+    if (loai === "nha_hang" && doan_id) {
+      // NH lắm khi KHÔNG gán nha_cung_cap_id (NH mới / chưa map danh mục) →
+      // ghép booking↔UNC theo nha_cung_cap_id sẽ trượt → mail UNC tạo thread
+      // mới. Ghép thêm theo TÊN nhà hàng trong mô tả (giống cách DV làm).
       const { data } = await externalSupabase
         .from("doan_booking_nh")
-        .select("email_thread_id, email_subject, final_sent_at, nha_hang:nha_hang_id(email, nha_cung_cap_id)")
-        .eq("doan_id", doan_id)
-        .order("final_sent_at", { ascending: false, nullsFirst: false });
-      const match = (data || []).find(
-        (bk: any) => bk?.nha_hang?.nha_cung_cap_id === nha_cung_cap_id && bk?.nha_hang?.email,
+        .select("email_thread_id, email_subject, final_sent_at, sent_at, nha_hang:nha_hang_id(ten, email, nha_cung_cap_id)")
+        .eq("doan_id", doan_id);
+      // Chỉ booking đã gửi (có email_subject) + có email → mới thread được.
+      const sent = (data || []).filter(
+        (bk: any) => bk?.email_subject && bk?.nha_hang?.email,
       );
-      if (match?.nha_hang?.email)
-        return { email: normalizeEmailList(match.nha_hang.email), threadId: match.email_thread_id ?? null, bookingSubject: (match as any).email_subject ?? null, source: "booking" };
+      const ts = (bk: any) =>
+        new Date(bk.final_sent_at || bk.sent_at || 0).getTime();
+      sent.sort((a: any, b: any) => ts(b) - ts(a)); // gửi mới nhất trước
+      const moTaLow = (row.mo_ta || "").toLowerCase();
+      const match =
+        (nha_cung_cap_id != null &&
+          sent.find((bk: any) => bk?.nha_hang?.nha_cung_cap_id === nha_cung_cap_id)) ||
+        sent.find(
+          (bk: any) => bk?.nha_hang?.ten && moTaLow.includes(bk.nha_hang.ten.toLowerCase()),
+        );
+      if (match && match.nha_hang?.email)
+        return { email: normalizeEmailList(match.nha_hang.email), threadId: match.email_thread_id ?? null, bookingSubject: match.email_subject ?? null, source: "booking" };
     }
   } catch {
     // Bỏ qua, dùng fallback NCC
