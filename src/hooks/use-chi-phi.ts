@@ -3,6 +3,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
+import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
 
 export type DNTTRow = DNTTRowFromHook;
 
@@ -349,6 +350,7 @@ export function useUpdateChiPhiActual() {
       return data;
     },
     onSuccess: (data, vars) => {
+      markChiPhiSavedLocally(vars.doan_id);
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.doan_id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       log({
@@ -385,6 +387,7 @@ export function useUpsertChiPhi() {
       }
     },
     onSuccess: (data, variables) => {
+      markChiPhiSavedLocally(variables.doan_id);
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", variables.doan_id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       const isNew = !variables.id;
@@ -408,6 +411,7 @@ export function useDeleteChiPhi() {
       return { doanId, id, mo_ta, danh_muc };
     },
     onSuccess: ({ doanId, id, mo_ta, danh_muc }) => {
+      markChiPhiSavedLocally(doanId);
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       const dm = DANH_MUC_LABEL[danh_muc ?? ""] ?? (danh_muc ?? "");
