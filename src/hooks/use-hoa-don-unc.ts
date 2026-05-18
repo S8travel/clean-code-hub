@@ -312,6 +312,42 @@ export function useSaveHoaDonSoTien() {
   });
 }
 
+// Gắn UNC hàng loạt cho 1 đoàn: mỗi file ↔ 1 ĐNTT (1:1, không dùng chung).
+// Upload song song, mỗi ĐNTT set unc_url riêng + trang_thai_unc='da_co'.
+// Trả về { ok, failed, errors } để UI báo tổng kết 1 lần.
+export function useBatchUploadUNC() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      pairs: { id: number; file: File }[],
+    ): Promise<{ ok: number; failed: number; errors: string[] }> => {
+      const results = await Promise.allSettled(
+        pairs.map(async ({ id, file }) => {
+          const ext = file.name.split(".").pop() ?? "bin";
+          const path = `${id}/unc/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+          const { error: upErr } = await externalSupabase.storage
+            .from("dntt-documents")
+            .upload(path, file, { upsert: true });
+          if (upErr) throw new Error(`ĐNTT #${id}: ${upErr.message}`);
+          const { data: urlData } = externalSupabase.storage
+            .from("dntt-documents")
+            .getPublicUrl(path);
+          const { error: updErr } = await externalSupabase
+            .from("de_nghi_thanh_toan")
+            .update({ unc_url: urlData.publicUrl, trang_thai_unc: "da_co" })
+            .eq("id", id);
+          if (updErr) throw new Error(`ĐNTT #${id}: ${updErr.message}`);
+        }),
+      );
+      const errors = results
+        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+        .map((r) => String(r.reason?.message ?? r.reason));
+      return { ok: results.length - errors.length, failed: errors.length, errors };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
+  });
+}
+
 export function useDeleteDNTTDoc() {
   const qc = useQueryClient();
   return useMutation({

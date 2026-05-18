@@ -31,6 +31,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import UncEmailModal from "@/components/hoa-don-unc/UncEmailModal";
+import BatchUncDialog from "@/components/hoa-don-unc/BatchUncDialog";
 import { useDoanOptions, useMarkPaidWithDate } from "@/hooks/use-dntt";
 import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
@@ -551,6 +552,7 @@ function HoaDonUNCPageContent() {
   // Email modal sau khi upload UNC — state ở page-level để không mất khi
   // list refetch (invalidate ["hoa-don-unc"]) làm DocCell remount.
   const [uncEmailRow, setUncEmailRow] = useState<HoaDonUNCRow | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
 
   const markPaidMut = useMarkPaidWithDate();
 
@@ -711,6 +713,24 @@ function HoaDonUNCPageContent() {
     label: d.ten_doan,
   }));
 
+  // Gắn UNC nhanh: tất cả ĐNTT chưa có UNC theo bộ lọc hiện tại (mọi đoàn).
+  // Nếu đang chọn 1 đoàn thì danh sách đã lọc sẵn → tự thu về đoàn đó.
+  const batchRows = useMemo(
+    () => mainRows.filter((r) => r.trang_thai_unc === "chua_co"),
+    [mainRows],
+  );
+  const batchScopeLabel = doanId
+    ? (doanSelectOpts.find((o) => o.value === doanId)?.label ?? "")
+    : `Tất cả (${new Set(batchRows.map((r) => r.doan_id)).size} đoàn)`;
+
+  const openBatch = () => {
+    if (batchRows.length === 0) {
+      toast({ title: "Không còn ĐNTT nào thiếu UNC (theo bộ lọc hiện tại)" });
+      return;
+    }
+    setBatchOpen(true);
+  };
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -822,6 +842,16 @@ function HoaDonUNCPageContent() {
 
         <Button variant="ghost" size="sm" onClick={resetFilters}>
           <RotateCcw className="h-4 w-4 mr-1" /> Reset
+        </Button>
+
+        <Button
+          size="sm"
+          className="gap-1.5"
+          onClick={openBatch}
+          title="Gắn UNC hàng loạt cho mọi ĐNTT chưa có UNC (theo bộ lọc hiện tại)"
+        >
+          <Upload className="h-4 w-4" />
+          Gắn UNC nhanh{batchRows.length > 0 ? ` (${batchRows.length})` : ""}
         </Button>
       </div>
 
@@ -1030,6 +1060,13 @@ function HoaDonUNCPageContent() {
           onClose={() => setUncEmailRow(null)}
         />
       )}
+
+      <BatchUncDialog
+        open={batchOpen}
+        onClose={() => setBatchOpen(false)}
+        doanLabel={batchScopeLabel}
+        rows={batchRows}
+      />
     </div>
   );
 }
