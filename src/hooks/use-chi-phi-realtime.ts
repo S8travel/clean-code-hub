@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { getLastChiPhiLocalSave } from "@/lib/chi-phi-sync-bus";
 
@@ -7,16 +8,16 @@ import { getLastChiPhiLocalSave } from "@/lib/chi-phi-sync-bus";
 const SUPPRESS_MS = 6000;
 
 /**
- * Lắng nghe thay đổi doan_chi_phi của 1 đoàn từ máy KHÁC.
- * Trả về `stale=true` khi có thay đổi không phải do client này vừa lưu
- * (so với mốc markChiPhiSavedLocally). KHÔNG tự refetch — caller hiện
- * banner để user chủ động "Tải lại" (tránh reset người đang nhập dở).
+ * Lắng nghe thay đổi doan_chi_phi của 1 đoàn từ máy/tab KHÁC → invalidate
+ * query chi phí để các section reconcile lại từ DB (snapshot CỦA TOUR).
+ * Bỏ qua echo của chính client (markChiPhiSavedLocally, suppress 6s) để
+ * không tự refetch ngay sau khi mình vừa lưu. Reconcile trong section có
+ * dirty-guard nên tab passive tự tươi mà KHÔNG reset người đang gõ.
  */
 export function useChiPhiChangeSignal(doanId: number | null | undefined) {
-  const [stale, setStale] = useState(false);
-
+  const qc = useQueryClient();
   useEffect(() => {
-    if (!doanId) return;
+    if (!doanId || Number.isNaN(doanId)) return;
     const channel = externalSupabase
       .channel(`doan_chi_phi_${doanId}`)
       .on(
@@ -28,9 +29,13 @@ export function useChiPhiChangeSignal(doanId: number | null | undefined) {
           filter: `doan_id=eq.${doanId}`,
         },
         () => {
-          // Echo của chính mình (vừa blur-save) → bỏ qua.
-          if (Date.now() - getLastChiPhiLocalSave(doanId) > SUPPRESS_MS) {
-            setStale(true);
+          // Echo của chính mình (vừa blur-save) → bỏ qua, tránh refetch thừa.
+          if (Date.now() - getLastChiPhiLocalSave(doanId) <= SUPPRESS_MS) return;
+          for (const k of [
+            "doan_chi_phi", "chi_phi_ks_data", "chi_phi_nh_data",
+            "chi_phi_nh_section", "chi_phi_hdv_section",
+          ]) {
+            qc.invalidateQueries({ queryKey: [k, doanId] });
           }
         },
       )
@@ -38,7 +43,5 @@ export function useChiPhiChangeSignal(doanId: number | null | undefined) {
     return () => {
       externalSupabase.removeChannel(channel);
     };
-  }, [doanId]);
-
-  return { stale, reset: () => setStale(false) };
+  }, [doanId, qc]);
 }

@@ -1,6 +1,5 @@
 import { useMemo, useState, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, Printer } from "lucide-react";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
@@ -31,28 +30,9 @@ interface Props {
 
 export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) {
   const [exportingExcel, setExportingExcel] = useState(false);
-  const qc = useQueryClient();
-  // Tín hiệu chi phí bị máy khác đổi → banner "Tải lại" (không tự ghi đè).
-  const { stale, reset: resetStale } = useChiPhiChangeSignal(doanId);
-  // Bump key để remount toàn bộ section khi user chủ động Tải lại
-  // (KS/NH ôm local state + sessionStorage, chỉ nạp lại khi mount mới).
-  const [reloadKey, setReloadKey] = useState(0);
-
-  const handleReloadChiPhi = () => {
-    try {
-      sessionStorage.removeItem(`chi_phi_ks_rows_${doanId}`);
-    } catch {
-      /* sessionStorage có thể bị chặn — bỏ qua */
-    }
-    for (const k of [
-      "doan_chi_phi", "chi_phi_ks_data", "chi_phi_nh_data", "chi_phi_nh_section",
-      "chi_phi_hdv_section", "de_nghi_thanh_toan", "payments-by-chi-phi",
-    ]) {
-      qc.invalidateQueries({ queryKey: [k, doanId] });
-    }
-    setReloadKey((k) => k + 1);
-    resetStale();
-  };
+  // Máy/tab khác đổi chi phí → invalidate query → section reconcile lại
+  // từ DB (snapshot tour), không reset người đang gõ. Không cần banner.
+  useChiPhiChangeSignal(doanId);
 
   // Refs để gộp ĐNTT từ NH + DV
   const nhSectionRef = useRef<ChiPhiNHSectionHandle>(null);
@@ -225,24 +205,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
         </div>
       )}
 
-      {stale && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5">
-          <p className="text-xs text-amber-800">
-            Chi phí đoàn này vừa được cập nhật ở máy khác — số đang hiển thị có thể đã cũ.
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1.5 border-amber-400 text-amber-800 hover:bg-amber-100 shrink-0"
-            onClick={handleReloadChiPhi}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Tải lại
-          </Button>
-        </div>
-      )}
-
-      <div className="space-y-6" key={reloadKey}>
+      <div className="space-y-6">
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
         <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />

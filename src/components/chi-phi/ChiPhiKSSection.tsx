@@ -185,6 +185,62 @@ function resolveKSFoc(
   };
 }
 
+// Dựng 1 LocalKSRow từ 1 doan_chi_phi (snapshot CỦA TOUR). Logic GIỮ
+// NGUYÊN hệt init cũ — KHÔNG đọc danh mục. null nếu thiếu ngày/KS hợp lệ.
+function buildKSRowFromCp(
+  cp: any,
+  ngayMap: Record<number, any>,
+  dayUseItemMap: Record<number, any>,
+): LocalKSRow | null {
+  if (cp.ref_doan_ngay_item_id && dayUseItemMap[cp.ref_doan_ngay_item_id]) {
+    const info = dayUseItemMap[cp.ref_doan_ngay_item_id];
+    if (!info.ngay_date) return null;
+    return {
+      id: cp.id,
+      khach_san_id: info.khach_san_id,
+      doan_ngay_id: info.doan_ngay_id,
+      ngay_date: info.ngay_date,
+      loai_phong: cp.mo_ta || "Day Use",
+      so_phong: cp.so_luong ?? 0,
+      ci: info.ngay_date,
+      co: info.ngay_date,
+      so_dem: 1,
+      gia_phong: cp.don_gia ?? 0,
+      thanh_tien: (cp.so_luong ?? 0) * (cp.don_gia ?? 0),
+      is_day_use: true,
+      ref_doan_ngay_item_id: cp.ref_doan_ngay_item_id,
+      foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
+      foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
+      loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
+      foc_count: Number(cp.foc_count ?? 0),
+    } as LocalKSRow;
+  }
+  const ngay = ngayMap[cp.ref_doan_ngay_id!];
+  if (!ngay || !ngay.khach_san_id) return null;
+  const ci = ngay?.ngay_date || "";
+  if (!ci) return null;
+  const coDate = new Date(ci);
+  coDate.setDate(coDate.getDate() + 1);
+  const co = format(coDate, "yyyy-MM-dd");
+  return {
+    id: cp.id,
+    khach_san_id: ngay.khach_san_id,
+    doan_ngay_id: cp.ref_doan_ngay_id || 0,
+    ngay_date: ci,
+    loai_phong: cp.mo_ta || "",
+    so_phong: cp.so_luong ?? 1,
+    ci,
+    co,
+    so_dem: 1,
+    gia_phong: cp.don_gia ?? 0,
+    thanh_tien: (cp.so_luong ?? 1) * (cp.don_gia ?? 0),
+    foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
+    foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
+    loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
+    foc_count: Number(cp.foc_count ?? 0),
+  } as LocalKSRow;
+}
+
 interface Props {
   doanId: number;
   soKhach?: number;
@@ -705,120 +761,85 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const dinhKyKsIdsRef = useRef<Set<number>>(new Set());
   useEffect(() => { dinhKyKsIdsRef.current = dinhKyKsIds; }, [dinhKyKsIds]);
 
-  // Only load from DB if no cached data exists
+  // Dòng đang sửa dở (có id) — reconcile bỏ qua để không đè cái user đang gõ.
+  const dirtyRowIdsRef = useRef<Set<number>>(new Set());
+  // dinhKyKsIds chỉ init 1 lần từ DB (không clobber toggle của user).
+  const dinhKyInitRef = useRef(false);
+
+  // RECONCILE — nguồn sự thật cho dòng ĐÃ LƯU = chiPhiRows (doan_chi_phi =
+  // snapshot CỦA TOUR). KHÔNG đọc danh mục. Mỗi lần chiPhiRows/ksData đổi
+  // (mount / realtime invalidate) → dựng lại dòng đã lưu từ DB; overlay:
+  //   - dòng đang sửa dở (dirty)            → giữ bản local
+  //   - dòng chưa lưu (id == null)          → giữ bản local
+  //   - dòng vừa lưu mà chiPhiRows lag      → giữ bản local
+  // ⇒ bảng số luôn khớp DB như badge (không trễ/không F5), không reset
+  //   người đang nhập. localRows chỉ còn buffer dirty + dòng chưa lưu.
   useEffect(() => {
-    if (!ksData || localRows.length > 0) return;
+    if (!ksData) return;
     const ksChiPhi = chiPhiRows.filter((c) => c.danh_muc === "khach_san");
-
-    if (ksChiPhi.length === 0) return;
-
-    const { ngayRows } = ksData;
     const ngayMap: Record<number, any> = {};
-    ngayRows.forEach((r: any) => {
-      ngayMap[r.id] = r;
-    });
+    (ksData.ngayRows || []).forEach((r: any) => { ngayMap[r.id] = r; });
     const dayUseItemMap = (ksData as any).dayUseItemMap || {};
 
-    const rows: LocalKSRow[] = ksChiPhi
-      .map((cp) => {
-        // Day-use: chi phí link qua doan_ngay_item, KS lấy từ canh_diem wrapper
-        if (cp.ref_doan_ngay_item_id && dayUseItemMap[cp.ref_doan_ngay_item_id]) {
-          const info = dayUseItemMap[cp.ref_doan_ngay_item_id];
-          if (!info.ngay_date) return null;
-          return {
-            id: cp.id,
-            khach_san_id: info.khach_san_id,
-            doan_ngay_id: info.doan_ngay_id,
-            ngay_date: info.ngay_date,
-            loai_phong: cp.mo_ta || "Day Use",
-            so_phong: cp.so_luong || 0,
-            ci: info.ngay_date,
-            co: info.ngay_date,
-            so_dem: 1,
-            gia_phong: cp.don_gia || 0,
-            thanh_tien: (cp.so_luong || 0) * (cp.don_gia || 0),
-            is_day_use: true,
-            ref_doan_ngay_item_id: cp.ref_doan_ngay_item_id,
-            foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
-            foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
-            loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
-            foc_count: Number(cp.foc_count ?? 0),
-          } as LocalKSRow;
-        }
-
-        const ngay = ngayMap[cp.ref_doan_ngay_id!];
-        // Bỏ qua rows không có ngay hoặc ngay không có khach_san_id hợp lệ
-        if (!ngay || !ngay.khach_san_id) return null;
-
-        const ci = ngay?.ngay_date || "";
-        if (!ci) return null; // bỏ qua nếu không có ngày
-
-        const coDate = new Date(ci);
-        coDate.setDate(coDate.getDate() + 1);
-        const co = format(coDate, "yyyy-MM-dd");
-
-        return {
-          id: cp.id,
-          khach_san_id: ngay.khach_san_id,
-          doan_ngay_id: cp.ref_doan_ngay_id || 0,
-          ngay_date: ci,
-          loai_phong: cp.mo_ta || "",
-          so_phong: cp.so_luong || 1,
-          ci,
-          co,
-          so_dem: 1,
-          gia_phong: cp.don_gia || 0,
-          thanh_tien: (cp.so_luong || 1) * (cp.don_gia || 0),
-          foc_khach_snapshot: cp.foc_khach_snapshot ?? null,
-          foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
-          loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
-          foc_count: Number(cp.foc_count ?? 0),
-        } as LocalKSRow;
-      })
-      .filter((r): r is LocalKSRow => r !== null);
-
-    if (rows.length > 0) setLocalRows(rows);
-
-    // Khởi tạo dinhKyKsIds từ DB
-    const dkIds = new Set<number>(
-      ksChiPhi
-        .filter((cp) => cp.thanh_toan_dinh_ky)
-        .map((cp) => {
-          const ngay = ngayMap[cp.ref_doan_ngay_id!];
-          return ngay?.khach_san_id as number;
-        })
-        .filter(Boolean),
-    );
-    if (dkIds.size > 0) {
-      setDinhKyKsIds(dkIds);
+    // dinhKyKsIds: init 1 lần từ DB
+    if (!dinhKyInitRef.current && ksChiPhi.length > 0) {
+      dinhKyInitRef.current = true;
+      const dkIds = new Set<number>(
+        ksChiPhi
+          .filter((cp) => cp.thanh_toan_dinh_ky)
+          .map((cp) => ngayMap[cp.ref_doan_ngay_id!]?.khach_san_id as number)
+          .filter(Boolean),
+      );
+      if (dkIds.size > 0) setDinhKyKsIds(dkIds);
     }
-  }, [ksData, chiPhiRows, localRows.length]);
 
-  // Sync foc_*_snapshot từ chiPhiRows về localRows mỗi khi DB refetch.
-  // Cần thiết vì init useEffect trên CHỈ chạy khi localRows.length === 0;
-  // sau khi user sửa FOC qua KSFocEditor → invalidate → chiPhiRows refresh,
-  // nhưng localRows không tự sync foc → UI vẫn hiện giá trị cũ.
-  useEffect(() => {
-    if (chiPhiRows.length === 0) return;
-    const cpMap = new Map<number, typeof chiPhiRows[number]>();
-    chiPhiRows.forEach((cp) => { if (cp.id != null) cpMap.set(cp.id, cp); });
     setLocalRows((prev) => {
-      let changed = false;
-      const next = prev.map((row) => {
-        if (row.id == null) return row;
-        const cp = cpMap.get(row.id);
-        if (!cp) return row;
-        const newK = cp.foc_khach_snapshot ?? null;
-        const newM = cp.foc_mien_snapshot ?? null;
-        if ((row.foc_khach_snapshot ?? null) === newK && (row.foc_mien_snapshot ?? null) === newM) {
-          return row;
+      const dbRows = ksChiPhi
+        .map((cp) => buildKSRowFromCp(cp, ngayMap, dayUseItemMap))
+        .filter((r): r is LocalKSRow => r !== null);
+      const dbById = new Map<number, LocalKSRow>();
+      dbRows.forEach((r) => { if (r.id != null) dbById.set(r.id, r); });
+      const prevById = new Map<number, LocalKSRow>();
+      prev.forEach((r) => { if (r.id != null) prevById.set(r.id, r); });
+
+      const merged: LocalKSRow[] = [];
+      // 1. Dòng đã lưu: lấy từ DB; dirty → giữ bản local đang gõ.
+      for (const dbRow of dbRows) {
+        if (dbRow.id != null && dirtyRowIdsRef.current.has(dbRow.id)) {
+          merged.push(prevById.get(dbRow.id) ?? dbRow);
+        } else {
+          merged.push(dbRow);
         }
-        changed = true;
-        return { ...row, foc_khach_snapshot: newK, foc_mien_snapshot: newM };
-      });
-      return changed ? next : prev;
+      }
+      // 2. Dòng local có id nhưng chưa thấy trong DB (vừa lưu, chiPhiRows
+      //    chưa refetch kịp) → giữ để không nhấp nháy/mất.
+      for (const p of prev) if (p.id != null && !dbById.has(p.id)) merged.push(p);
+      // 3. Dòng chưa lưu (id == null) → giữ nguyên.
+      for (const p of prev) if (p.id == null) merged.push(p);
+
+      // So sánh nông tránh set thừa (loop với persist effect).
+      if (merged.length === prev.length) {
+        let same = true;
+        for (let i = 0; i < merged.length; i++) {
+          const a = merged[i], b = prev[i];
+          if (
+            a.id !== b.id ||
+            a.so_phong !== b.so_phong ||
+            a.gia_phong !== b.gia_phong ||
+            a.loai_phong !== b.loai_phong ||
+            (a.foc_khach_snapshot ?? null) !== (b.foc_khach_snapshot ?? null) ||
+            (a.foc_mien_snapshot ?? null) !== (b.foc_mien_snapshot ?? null) ||
+            Number(a.foc_count ?? 0) !== Number(b.foc_count ?? 0) ||
+            (a.loai_row ?? "phong") !== (b.loai_row ?? "phong") ||
+            a.thanh_tien !== b.thanh_tien ||
+            a.ngay_date !== b.ngay_date
+          ) { same = false; break; }
+        }
+        if (same) return prev;
+      }
+      return merged;
     });
-  }, [chiPhiRows]);
+  }, [chiPhiRows, ksData]);
 
   const handleToggleDinhKy = useCallback((ksId: number) => {
     setDinhKyKsIds((prev) => {
@@ -835,6 +856,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   }, [doanId, upsertMut]);
 
   const handleFieldChange = useCallback((idx: number, field: string, value: any) => {
+    const editId = localRowsRef.current[idx]?.id;
+    if (editId != null) dirtyRowIdsRef.current.add(editId);
     setLocalRows((prev) => {
       const updated = [...prev];
       const row = { ...updated[idx], [field]: value };
@@ -910,6 +933,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         } as any,
         {
           onSuccess: (data) => {
+            const savedId = row.id ?? data?.id;
+            if (savedId != null) dirtyRowIdsRef.current.delete(savedId);
             if (!row.id && data?.id) {
               setLocalRows((prev) => {
                 const updated = [...prev];
