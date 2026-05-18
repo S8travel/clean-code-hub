@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
-import { notifyLanguageChange, startZhCorrectionObserver, stopZhCorrectionObserver } from "@/lib/i18n";
+import { t, useTranslate, notifyLanguageChange, startZhCorrectionObserver, stopZhCorrectionObserver } from "@/lib/i18n";
 import {
   Sidebar,
   SidebarContent,
@@ -176,8 +176,7 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
 }
 
 interface MenuItem {
-  title: string;
-  titleZh?: string;     // override khi đang dịch sang zh-TW
+  title: string;        // = key i18n (zh-TW.json). Bản dịch ở src/locales/zh-TW.json
   url: string;
   icon: React.ElementType;
   resource?: Resource;  // undefined = luôn hiển thị
@@ -199,12 +198,12 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard, resource: "dashboard" },
       { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness, resource: "my_job" },
-      { title: "Danh sách đoàn", titleZh: "團表", url: "/doan", icon: List, resource: "doan" },
+      { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, resource: "theo_doi" },
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, resource: "xep_hdv" },
-      { title: "Lock Phòng", titleZh: "鎖房", url: "/lock-phong", icon: CalendarRange, resource: "lock_phong" },
+      { title: "Lock Phòng", url: "/lock-phong", icon: CalendarRange, resource: "lock_phong" },
       { title: "Invoice", url: "/invoice", icon: FileText, resource: "invoice" },
-      { title: "Báo Giá", titleZh: "報價", url: "/bao-gia", icon: Calculator, resource: "bao_gia" },
+      { title: "Báo Giá", url: "/bao-gia", icon: Calculator, resource: "bao_gia" },
     ],
   },
   {
@@ -249,8 +248,7 @@ function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor
     if (item.boPhanOnly && !boPhanOk) return null;
   }
 
-  const isZh = item.titleZh && document.cookie.includes("googtrans=/vi/zh-TW");
-  const displayTitle = isZh ? item.titleZh! : item.title;
+  const displayTitle = t(item.title);
 
   return (
     <SidebarMenuItem>
@@ -264,13 +262,13 @@ function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor
           {!collapsed && (
             badgeCount > 0 ? (
               <span className="flex-1 flex items-center justify-between">
-                <span className={isZh ? "notranslate" : undefined}>{displayTitle}</span>
+                <span className="notranslate">{displayTitle}</span>
                 <span className={`ml-1 min-w-[18px] h-[18px] rounded-full ${badgeColor} text-white text-[10px] font-bold flex items-center justify-center px-1`}>
                   {badgeCount}
                 </span>
               </span>
             ) : (
-              <span className={isZh ? "notranslate" : undefined}>{displayTitle}</span>
+              <span className="notranslate">{displayTitle}</span>
             )
           )}
         </NavLink>
@@ -280,6 +278,7 @@ function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor
 }
 
 export function AppSidebar() {
+  useTranslate(); // re-render khi đổi ngôn ngữ (toggle 🇹🇼)
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
@@ -326,7 +325,7 @@ export function AppSidebar() {
       <SidebarContent>
         {menuGroups.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="notranslate">{t(group.label)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {

@@ -1,9 +1,16 @@
 import { useEffect, useReducer } from "react";
+import i18next from "i18next";
+import { initReactI18next } from "react-i18next";
+import zhTW from "@/locales/zh-TW.json";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bảng dịch cứng: dùng cho các component gọi t()
-// Key = tiếng Việt gốc, Value = tiếng Trung đúng
+// i18n: react-i18next, KEY = chuỗi tiếng Việt gốc (natural key).
+// Bản dịch zh-TW nằm ở src/locales/zh-TW.json (sửa value để chỉnh).
+// GT (Google Translate) GIỮ làm fallback TẠM trong lúc di trú: chuỗi đã t()
+// dùng bản chuẩn từ i18next; chuỗi CHƯA wrap thì GT vẫn dịch như cũ.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ZH_OVERRIDES cũ — gộp vào resource zh-TW để giữ tương thích hành vi cũ.
 const ZH_OVERRIDES: Record<string, string> = {
   "Lock Phòng": "鎖房",
   "Danh sách đoàn": "團表",
@@ -12,35 +19,48 @@ const ZH_OVERRIDES: Record<string, string> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bảng sửa sau khi Google Translate dịch xong
-// Key = chữ Google Translate dịch ra (sai), Value = chữ đúng cần thay vào
-// Ví dụ: nếu GT dịch "Khách sạn" thành "旅館" nhưng bạn muốn "酒店":
-//   "旅館": "酒店",
+// Bảng sửa SAU khi Google Translate dịch (fallback tạm). Key = chữ GT dịch
+// sai, Value = chữ đúng. MutationObserver quét text node thay lại.
 // ─────────────────────────────────────────────────────────────────────────────
 export const ZH_CORRECTIONS: Record<string, string> = {
-  // Thêm cặp sửa lỗi của bạn vào đây:
-  // "bản dịch sai của GT": "bản dịch đúng bạn muốn",
-   "更衣室": "鎖房",
-   "參與者名單": "團表",
-   "大的": "大人",
-   "全部的": "總",
-    "集團管理": "團體管理",
-    "S8 旅行": "雙發旅行社",
-    "S8旅行社": "雙發旅行社",
-    "S8旅遊有限公司": "雙發旅遊有限公司",
-    "城市青年聯盟": "成團",
+  "更衣室": "鎖房",
+  "參與者名單": "團表",
+  "大的": "大人",
+  "全部的": "總",
+  "集團管理": "團體管理",
+  "S8 旅行": "雙發旅行社",
+  "S8旅行社": "雙發旅行社",
+  "S8旅遊有限公司": "雙發旅遊有限公司",
+  "城市青年聯盟": "成團",
 };
 
 export function isZhTW(): boolean {
-  return document.cookie.includes("googtrans=/vi/zh-TW");
+  return typeof document !== "undefined" && document.cookie.includes("googtrans=/vi/zh-TW");
 }
 
-/** Dùng trong component gọi t() để bypass Google Translate */
+// ── Khởi tạo i18next (1 lần) ────────────────────────────────────────────────
+if (!i18next.isInitialized) {
+  void i18next.use(initReactI18next).init({
+    resources: {
+      "zh-TW": { translation: { ...ZH_OVERRIDES, ...(zhTW as Record<string, string>) } },
+    },
+    lng: isZhTW() ? "zh-TW" : "vi",
+    fallbackLng: "vi",
+    keySeparator: false,   // key có "." vẫn là 1 key phẳng
+    nsSeparator: false,    // key có ":" vẫn là 1 key phẳng
+    interpolation: { escapeValue: false },
+    returnEmptyString: false,
+  });
+}
+
+/**
+ * Giữ API cũ: đang ở zh-TW → trả bản dịch (hoặc nguyên VN nếu chưa có trong
+ * zh-TW.json); ngược lại trả nguyên tiếng Việt.
+ */
 export function t(vi: string): string {
-  if (isZhTW() && ZH_OVERRIDES[vi] !== undefined) {
-    return ZH_OVERRIDES[vi];
-  }
-  return vi;
+  if (!isZhTW()) return vi;
+  const tr = i18next.t(vi, { defaultValue: vi }) as string;
+  return tr || vi;
 }
 
 /** Quét toàn bộ text nodes trong DOM và áp dụng ZH_CORRECTIONS */
@@ -75,7 +95,6 @@ let correctionObserver: MutationObserver | null = null;
  */
 export function startZhCorrectionObserver() {
   if (correctionObserver) return;
-  // Áp lần đầu ngay sau khi GT dịch xong (GT thường xong trong 1–2s)
   setTimeout(() => applyCorrectionsToNode(document.body), 1500);
   setTimeout(() => applyCorrectionsToNode(document.body), 3000);
 
@@ -103,14 +122,27 @@ export function stopZhCorrectionObserver() {
 
 const LANG_CHANGE_EVENT = "app:languagechange";
 
+/**
+ * Đồng bộ i18next theo trạng thái GT cookie (single source = cookie) rồi
+ * báo các component re-render. Toggle ở AppSidebar đã gọi hàm này sẵn.
+ */
 export function notifyLanguageChange() {
+  const lng = isZhTW() ? "zh-TW" : "vi";
+  if (i18next.language !== lng) void i18next.changeLanguage(lng);
   window.dispatchEvent(new Event(LANG_CHANGE_EVENT));
 }
 
 export function useTranslate() {
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
   useEffect(() => {
-    window.addEventListener(LANG_CHANGE_EVENT, forceUpdate);
-    return () => window.removeEventListener(LANG_CHANGE_EVENT, forceUpdate);
+    const onChange = () => forceUpdate();
+    window.addEventListener(LANG_CHANGE_EVENT, onChange);
+    i18next.on("languageChanged", onChange);
+    return () => {
+      window.removeEventListener(LANG_CHANGE_EVENT, onChange);
+      i18next.off("languageChanged", onChange);
+    };
   }, []);
 }
+
+export default i18next;
