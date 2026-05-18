@@ -14,10 +14,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/SearchableSelect";
-import { useLockPhongList, useLockPhongDeadlineAlerts, type LockPhongDisplay } from "@/hooks/use-lock-phong";
+import { useLockPhongList, type LockPhongDisplay } from "@/hooks/use-lock-phong";
 import { useKhachSanList } from "@/hooks/use-khach-san";
-import { useCurrentSession } from "@/hooks/use-current-user";
-import { useAuth } from "@/hooks/use-auth";
 import LockPhongTheoKSView from "@/components/lock-phong/LockPhongTheoKSView";
 import LockPhongTheoDeadlineView from "@/components/lock-phong/LockPhongTheoDeadlineView";
 import LockPhongFormDialog from "@/components/lock-phong/LockPhongFormDialog";
@@ -35,17 +33,33 @@ const OUTCOME_OPTIONS: { value: OutcomeStatus; label: string }[] = [
 ];
 
 // Phân loại 1 lock_phong theo trạng thái booking/deadline
-function lpCat(lp: LockPhongDisplay, today: string, today3: string) {
+function lpCat(lp: LockPhongDisplay, today: string, today3: string, today7: string) {
   const hotels = lp.hotels ?? [];
+  // Đã hủy / thành đoàn (mọi KS) → coi như xong, KHÔNG tính vào thẻ nào.
+  const resolved =
+    hotels.length > 0 &&
+    hotels.every((h) => h.outcome_status === "da_huy" || h.outcome_status === "thanh_doan");
+  if (resolved) {
+    return {
+      resolved: true, confirmed: false, hasChuaGui: false,
+      quaHan: false, sapDen: false, choXuLy: false, canXuLy: false,
+    };
+  }
   const confirmed = hotels.length > 0 && hotels.every((h) => h.email_status === "da_xac_nhan");
   const hasChuaGui = hotels.some((h) => h.email_status === "chua_gui");
   const dl = lp.deadline;
-  const quaHan = !!dl && dl < today && !confirmed;
-  const sapDen = !!dl && dl >= today && dl <= today3 && !confirmed;
-  const choXuLy =
-    !confirmed &&
-    hotels.some((h) => (h.outcome_status ?? null) === null && h.email_status !== "da_xac_nhan");
-  return { confirmed, hasChuaGui, quaHan, sapDen, choXuLy };
+  // Báo theo deadline KHÔNG phụ thuộc xác nhận email: KS xác nhận giữ phòng
+  // không có nghĩa OP đã xong — vẫn phải thành đoàn/hủy trước hạn lock. Chỉ
+  // khi resolved (mọi KS đã hủy/thành đoàn — đã return ở trên) mới thôi báo.
+  const quaHan = !!dl && dl < today;
+  // Sắp đến hạn = cửa sổ 3–7 ngày (≤3 ngày + quá hạn nằm ở thẻ "Cần xử lý").
+  const sapDen = !!dl && dl >= today3 && dl <= today7;
+  // Cần xử lý = quá hạn HOẶC ≤3 ngày tới.
+  const canXuLy = !!dl && dl <= today3;
+  // Chờ xử lý = mọi lock CHƯA chốt outcome. Tới được nhánh này nghĩa là chưa
+  // resolved (chưa phải mọi KS đã hủy/thành đoàn) → đều coi là "chưa chốt".
+  const choXuLy = true;
+  return { resolved: false, confirmed, hasChuaGui, quaHan, sapDen, choXuLy, canXuLy };
 }
 
 // (Đã bỏ "Tổng quan Lock Phòng" / donut theo yêu cầu)
@@ -72,12 +86,8 @@ export default function LockPhongPage() {
       return next;
     });
 
-  const { session } = useCurrentSession();
-  const { user } = useAuth();
-  const includeAll = user?.bo_phan === "dieu_hanh" || user?.role === "admin";
   const { data = [], isLoading } = useLockPhongList();
   const { data: ksList = [] } = useKhachSanList();
-  const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null, { includeAll });
 
   const ksOptions = useMemo(
     () => [
@@ -89,23 +99,22 @@ export default function LockPhongPage() {
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const today3Str = format(addDays(new Date(), 3), "yyyy-MM-dd");
+  const today7Str = format(addDays(new Date(), 7), "yyyy-MM-dd");
 
   // Thống kê tổng (theo toàn bộ data, không phụ thuộc tab/filter)
   const stats = useMemo(() => {
-    let total = data.length, quaHan = 0, sapDen = 0, chuaGui = 0, daXN = 0, choXuLy = 0;
+    let total = data.length, quaHan = 0, sapDen = 0, chuaGui = 0, daXN = 0, choXuLy = 0, canXuLy = 0;
     for (const lp of data) {
-      const c = lpCat(lp, todayStr, today3Str);
+      const c = lpCat(lp, todayStr, today3Str, today7Str);
       if (c.quaHan) quaHan++;
       if (c.sapDen) sapDen++;
       if (c.hasChuaGui) chuaGui++;
       if (c.confirmed) daXN++;
       if (c.choXuLy) choXuLy++;
+      if (c.canXuLy) canXuLy++;
     }
-    return {
-      total, quaHan, sapDen, chuaGui, daXN, choXuLy,
-      canXuLy: deadlineAlerts.length,
-    };
-  }, [data, todayStr, today3Str, deadlineAlerts.length]);
+    return { total, quaHan, sapDen, chuaGui, daXN, choXuLy, canXuLy };
+  }, [data, todayStr, today3Str, today7Str]);
 
   const filtered = useMemo(() => {
     const ciFrom = checkInFrom ? format(checkInFrom, "yyyy-MM-dd") : null;
@@ -138,8 +147,8 @@ export default function LockPhongPage() {
         } else if (lp.deadline) {
           const dl = lp.deadline;
           if (deadlineFilter === "qua_han" && dl >= todayStr) return false;
-          if (deadlineFilter === "sap_den" && (dl < todayStr || dl > today3Str)) return false;
-          if (deadlineFilter === "con_xa" && dl <= today3Str) return false;
+          if (deadlineFilter === "sap_den" && (dl < today3Str || dl > today7Str)) return false;
+          if (deadlineFilter === "con_xa" && dl <= today7Str) return false;
         } else {
           return false;
         }
@@ -154,8 +163,8 @@ export default function LockPhongPage() {
       }
       // Tab nhanh (5 thẻ / hàng tab)
       if (tab !== "all") {
-        const c = lpCat(lp, todayStr, today3Str);
-        if (tab === "can_xu_ly" && !(c.quaHan || c.sapDen)) return false;
+        const c = lpCat(lp, todayStr, today3Str, today7Str);
+        if (tab === "can_xu_ly" && !c.canXuLy) return false;
         if (tab === "qua_han" && !c.quaHan) return false;
         if (tab === "sap_den" && !c.sapDen) return false;
         if (tab === "chua_gui" && !c.hasChuaGui) return false;
@@ -164,7 +173,7 @@ export default function LockPhongPage() {
       }
       return true;
     });
-  }, [data, search, filterKsId, checkInFrom, checkInTo, deadlineFilter, outcomeFilter, tab, todayStr, today3Str]);
+  }, [data, search, filterKsId, checkInFrom, checkInTo, deadlineFilter, outcomeFilter, tab, todayStr, today3Str, today7Str]);
 
   const isOutcomeDefault =
     outcomeFilter.size === 2 && outcomeFilter.has("cho_xu_ly") && outcomeFilter.has("thanh_doan");
@@ -198,7 +207,7 @@ export default function LockPhongPage() {
       icon: AlertTriangle, tile: "bg-red-500", wrap: "bg-card border-border", alert: false,
     },
     {
-      key: "sap_den" as Tab, label: "Sắp đến hạn", count: stats.sapDen, sub: "đoàn (≤3 ngày)",
+      key: "sap_den" as Tab, label: "Sắp đến hạn", count: stats.sapDen, sub: "đoàn (3–7 ngày)",
       icon: Clock, tile: "bg-amber-500", wrap: "bg-card border-border", alert: false,
     },
     {
@@ -338,7 +347,7 @@ export default function LockPhongPage() {
                 <span>
                   {deadlineFilter === "all" ? "⏰ Mọi deadline"
                     : deadlineFilter === "qua_han" ? "🔴 Quá hạn"
-                    : deadlineFilter === "sap_den" ? "🟠 Sắp đến (≤3 ngày)"
+                    : deadlineFilter === "sap_den" ? "🟠 Sắp đến (3–7 ngày)"
                     : deadlineFilter === "con_xa" ? "🟢 Còn xa"
                     : "✅ Đã book xong"}
                 </span>
@@ -346,7 +355,7 @@ export default function LockPhongPage() {
               <SelectContent>
                 <SelectItem value="all">⏰ Mọi deadline</SelectItem>
                 <SelectItem value="qua_han">🔴 Quá hạn</SelectItem>
-                <SelectItem value="sap_den">🟠 Sắp đến (≤3 ngày)</SelectItem>
+                <SelectItem value="sap_den">🟠 Sắp đến (3–7 ngày)</SelectItem>
                 <SelectItem value="con_xa">🟢 Còn xa</SelectItem>
                 <SelectItem value="da_book">✅ Đã book xong</SelectItem>
               </SelectContent>
