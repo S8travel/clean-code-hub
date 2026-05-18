@@ -107,7 +107,7 @@ export default function DoanDetail() {
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("dieu-tour");
   const [showWordPreview, setShowWordPreview] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
   const queryClient = useQueryClient();
 
   // Auto-save refs
@@ -256,7 +256,7 @@ export default function DoanDetail() {
         onSuccess: async (result) => {
           hasPendingChangesRef.current = false;
           setSaveStatus("saved");
-          setTimeout(() => setSaveStatus("idle"), 2000);
+          setTimeout(() => setSaveStatus("idle"), 800);
           queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_booking_ks", doanId] });
@@ -304,6 +304,7 @@ export default function DoanDetail() {
 
   const scheduleSave = useCallback(() => {
     if (!canEdit || !doanId) return;
+    setSaveStatus("pending");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
@@ -467,10 +468,12 @@ export default function DoanDetail() {
                 {canEdit && saveStatus !== "idle" && (
                   <span className={cn(
                     "text-xs px-2 py-1 rounded",
+                    saveStatus === "pending" && "text-muted-foreground/70",
                     saveStatus === "saving" && "text-muted-foreground",
                     saveStatus === "saved" && "text-green-600",
                     saveStatus === "error" && "text-red-600"
                   )}>
+                    {saveStatus === "pending" && "Chờ lưu…"}
                     {saveStatus === "saving" && "Đang lưu..."}
                     {saveStatus === "saved" && "✓ Đã lưu"}
                     {saveStatus === "error" && "Lỗi lưu"}
