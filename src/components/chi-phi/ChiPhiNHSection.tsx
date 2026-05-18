@@ -1293,8 +1293,12 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           const hasCommittedDntt = activeDntts.some((d) =>
             d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet",
           );
-          // Hide badge when footer button shows (redundant — same info conveyed)
-          const dnttMismatch = hasCommittedDntt && sumActual !== effectiveCommitted && !showAggBtn
+          // Hide badge when footer button shows (redundant — same info conveyed).
+          // sumActual === 0 nghĩa là chi_phi.tien_cong_ty CHƯA được persist (NH
+          // tính tiền từ snapshot booking, ghi tien_cong_ty lazily) — KHÔNG phải
+          // "tổng thực = 0". So 0 với committed sẽ ra lệch −full giả trên mọi
+          // dòng NH chưa lưu tay → chỉ cảnh báo khi có số chi_phi thật để so.
+          const dnttMismatch = hasCommittedDntt && sumActual > 0 && sumActual !== effectiveCommitted && !showAggBtn
             ? sumActual - effectiveCommitted : 0;
 
           return (
