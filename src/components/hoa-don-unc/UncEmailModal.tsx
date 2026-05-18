@@ -156,6 +156,21 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
     queryFn: () => resolveBookingEmail(row),
   });
 
+  // Số tiền đã cấn trừ vào công nợ của ĐNTT này → UNC thực chuyển khoản
+  // chỉ còn (so_tien − cấn trừ). Phải nêu rõ trong mail tránh NCC hiểu lầm.
+  const { data: canTruAmount = 0 } = useQuery({
+    queryKey: ["unc-email-cantru", row.id],
+    enabled: open,
+    queryFn: async () => {
+      const { data } = await externalSupabase
+        .from("payments")
+        .select("so_tien")
+        .eq("dntt_id", row.id)
+        .eq("method", "can_tru");
+      return (data || []).reduce((s: number, p: any) => s + Number(p.so_tien ?? 0), 0);
+    },
+  });
+
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -165,6 +180,16 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
     const ncc = row.ten_nha_cung_cap || "Quý đối tác";
     const doan = row.ten_doan ? `<br>• Đoàn: <strong>${row.ten_doan}</strong>` : "";
     const ngayTT = fmtDate(row.ngay_can_thanh_toan);
+    const hasCanTru = canTruAmount > 0;
+    const thucChuyen = Math.max(0, (row.so_tien ?? 0) - canTruAmount);
+    const amountLines = hasCanTru
+      ? `• Tổng tiền cần thanh toán: <strong>${fmtVnd(row.so_tien)}</strong><br>
+  • Cấn trừ công nợ: <strong style="color:#0a3d7c">− ${fmtVnd(canTruAmount)}</strong><br>
+  • Số tiền chuyển khoản (theo UNC đính kèm): <strong style="color:#dc2626">${fmtVnd(thucChuyen)}</strong><br>`
+      : `• Số tiền: <strong style="color:#dc2626">${fmtVnd(row.so_tien)}</strong><br>`;
+    const canTruNote = hasCanTru
+      ? `<p>Lưu ý: trong tổng tiền trên, <strong>${fmtVnd(canTruAmount)}</strong> đã được cấn trừ vào công nợ giữa hai bên. Số tiền S8 thực chuyển khoản theo ủy nhiệm chi đính kèm là <strong>${fmtVnd(thucChuyen)}</strong>.</p>`
+      : "";
     const heading = row.ten_doan
       ? `S8 Travel xin gửi ủy nhiệm chi cho đoàn <strong>${row.ten_doan}</strong>:`
       : `S8 Travel xin gửi ủy nhiệm chi cho khoản thanh toán sau:`;
@@ -173,9 +198,10 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
 <p>${heading}</p>
 <div style="background:#f8fafc;border-left:3px solid #0a3d7c;padding:12px 16px;margin:12px 0">
   • Nội dung: <strong>${row.mo_ta ?? ""}</strong><br>
-  • Số tiền: <strong style="color:#dc2626">${fmtVnd(row.so_tien)}</strong><br>
+  ${amountLines}
   • Ngày thanh toán: <strong>${ngayTT}</strong>${doan}
 </div>
+${canTruNote}
 <p>File ủy nhiệm chi được đính kèm trong email này. Nếu cần đối chiếu hoặc làm rõ vui lòng phản hồi email giúp S8.</p>
 <p>Trân trọng,<br><strong>${userProfile?.ho_ten || "S8 Travel"}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}</p>
 <div style="margin-top:20px;padding:12px 16px;border-top:1px solid #e2e8f0;font-size:13px;color:#374151;line-height:1.6">
@@ -205,7 +231,7 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
     setEmailSubject(nextSubject);
     setEmailBody(buildBody());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, target?.email, target?.threadId, target?.bookingSubject, row.id]);
+  }, [open, target?.email, target?.threadId, target?.bookingSubject, row.id, canTruAmount]);
 
   const handleSendViaServer = async () => {
     const cleanTo = normalizeEmailList(emailTo);
