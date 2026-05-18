@@ -42,6 +42,21 @@ function normalizeEmailList(s: string | null | undefined): string {
     .join(", ");
 }
 
+// Chọn email từ danh mục khi NCC có nhiều record (nhiều NH/KS cùng 1 NCC):
+// ưu tiên record có tên xuất hiện trong mô tả chi phí, không thì lấy record
+// đầu tiên có email.
+function pickCatalogEmail(
+  rows: Array<{ ten: string | null; email: string | null }> | null | undefined,
+  moTa: string | null | undefined,
+): string | null {
+  const list = (rows || []).filter((r) => r?.email);
+  if (list.length === 0) return null;
+  if (list.length === 1) return list[0].email!;
+  const m = (moTa || "").toLowerCase();
+  const byName = list.find((r) => r.ten && m.includes(r.ten.toLowerCase()));
+  return (byName ?? list[0]).email!;
+}
+
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—";
   try {
@@ -116,7 +131,33 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
     // Bỏ qua, dùng fallback NCC
   }
 
-  // Fallback: nha_cung_cap.email
+  // Fallback 1: email từ danh mục NH/KS theo nha_cung_cap_id — cho chi phí
+  // KHÔNG qua booking (vd "Tàu ngày", NH/KS phát sinh thêm tay). nha_cung_cap
+  // thường để trống email; email thật nằm ở record NH/KS trong danh mục.
+  try {
+    if (loai === "nha_hang" && nha_cung_cap_id) {
+      const { data } = await externalSupabase
+        .from("nha_hang")
+        .select("ten, email")
+        .eq("nha_cung_cap_id", nha_cung_cap_id)
+        .not("email", "is", null);
+      const email = pickCatalogEmail(data as any, row.mo_ta);
+      if (email) return { email: normalizeEmailList(email), threadId: null, bookingSubject: null, source: "ncc" };
+    }
+    if (loai === "khach_san" && nha_cung_cap_id) {
+      const { data } = await externalSupabase
+        .from("khach_san")
+        .select("ten, email")
+        .eq("nha_cung_cap_id", nha_cung_cap_id)
+        .not("email", "is", null);
+      const email = pickCatalogEmail(data as any, row.mo_ta);
+      if (email) return { email: normalizeEmailList(email), threadId: null, bookingSubject: null, source: "ncc" };
+    }
+  } catch {
+    // bỏ qua, xuống fallback NCC
+  }
+
+  // Fallback 2: nha_cung_cap.email
   if (nha_cung_cap_id) {
     const { data: ncc } = await externalSupabase
       .from("nha_cung_cap")
