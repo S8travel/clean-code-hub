@@ -28,7 +28,7 @@ const LOOSE_NUMBER_RE = /\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d{1,2})?|\d{4,10}/g;
 
 // Normalize lỗi OCR phổ biến trên đoạn số (O→0, I/l→1, S→5, B→8) — chỉ áp
 // dụng trong context có nhiều digits xung quanh để tránh phá text bình thường.
-function normalizeOcrDigits(text: string): string {
+export function normalizeOcrDigits(text: string): string {
   return text.replace(/(?:[\dOoIlSBb][.,\sOoIlSBb]?){4,}/g, (chunk) =>
     chunk
       .replace(/[Oo]/g, "0")
@@ -63,7 +63,7 @@ function noDiacritics(s: string): string {
  *   - Nếu chỉ 1 loại + lặp 3 chữ số mỗi nhóm → là thousands separator.
  *   - Nếu chỉ 1 dấu "." hoặc "," + theo sau ≤ 2 chữ số → có thể là decimal.
  */
-function parseVNNumber(raw: string): number | null {
+export function parseVNNumber(raw: string): number | null {
   const s = raw.replace(/\s+/g, "");
   if (!/[\d]/.test(s)) return null;
 
