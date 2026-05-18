@@ -219,7 +219,19 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
 
   const buildBody = (): string => {
     const ncc = row.ten_nha_cung_cap || "Quý đối tác";
-    const doan = row.ten_doan ? `<br>• Đoàn: <strong>${row.ten_doan}</strong>` : "";
+    // KS: kèm code khách sạn (ks_ma_code) ngay cạnh code đoàn. Bỏ qua nếu
+    // trống / trùng tên đoàn / là sentinel "code doan".
+    const codeKsRaw = (row.loai === "khach_san" ? row.code_ncc : null)?.trim() || "";
+    const codeKsLow = codeKsRaw.toLowerCase();
+    const showCodeKs =
+      !!codeKsRaw &&
+      codeKsLow !== "code doan" &&
+      codeKsLow !== "doan" &&
+      codeKsLow !== (row.ten_doan || "").toLowerCase();
+    const codeKs = showCodeKs ? ` · Code KS: <strong>${codeKsRaw}</strong>` : "";
+    const doan = row.ten_doan
+      ? `<br>• Đoàn: <strong>${row.ten_doan}</strong>${codeKs}`
+      : (showCodeKs ? `<br>• Code KS: <strong>${codeKsRaw}</strong>` : "");
     const ngayTT = fmtDate(row.ngay_can_thanh_toan);
     const hasCanTru = canTruAmount > 0;
     const thucChuyen = Math.max(0, (row.so_tien ?? 0) - canTruAmount);
