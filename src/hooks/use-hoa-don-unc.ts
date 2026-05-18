@@ -81,7 +81,7 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
         });
       }
 
-      return (data || []).map((r: any) => {
+      const mapped: HoaDonUNCRow[] = (data || []).map((r: any) => {
         const codeKey = r.loai === "khach_san" && r.doan_id && r.ref_id
           ? `${r.doan_id}|${r.ref_id}` : null;
         return {
@@ -110,6 +110,25 @@ export function useHoaDonUNCList(filters: HoaDonUNCFilters = {}) {
           tao_boi: r.tao_boi ?? null,
         };
       });
+
+      // Sắp xếp: CHƯA thanh toán lên trước, theo "Ngày cần TT" gần nhất
+      // (quá hạn/đến hạn sớm nhất ở đầu), null xuống cuối. Các dòng ĐÃ
+      // thanh toán xếp sau, theo ngày thanh toán mới nhất trước.
+      const t = (s: string | null) => (s ? new Date(s).getTime() : null);
+      mapped.sort((a, b) => {
+        const aPaid = a.payment_status === "paid";
+        const bPaid = b.payment_status === "paid";
+        if (aPaid !== bPaid) return aPaid ? 1 : -1;
+        if (!aPaid) {
+          const av = t(a.ngay_can_thanh_toan) ?? Infinity;
+          const bv = t(b.ngay_can_thanh_toan) ?? Infinity;
+          return av - bv; // hạn gần nhất / quá hạn lên đầu
+        }
+        const av = t(a.thanh_toan_luc) ?? -Infinity;
+        const bv = t(b.thanh_toan_luc) ?? -Infinity;
+        return bv - av; // thanh toán gần nhất lên đầu
+      });
+      return mapped;
     },
   });
 }
