@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { proRataInts } from "@/lib/pro-rata";
 import { useAuth } from "@/hooks/use-auth";
+import { isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 
 export interface DNTTRow {
   id: number;
@@ -833,13 +834,17 @@ export function useCreateAdjustment() {
       } else {
         // Thừa tiền → tạo cong_no
         if (dnttGoc.nha_cung_cap_id) {
+          const cnTrangThai = surplusMode === "hoan_tien" ? "da_hoan_tien" : "con_du";
+          const fromPrepaid =
+            cnTrangThai === "con_du" && (await isDnttPaidFromPrepaid(dnttGoc.id));
           const { error } = await externalSupabase.from("cong_no").insert({
             doan_id: dnttGoc.doan_id,
             dntt_goc_id: dnttGoc.id,
             nha_cung_cap_id: dnttGoc.nha_cung_cap_id,
             ten_nha_cung_cap: dnttGoc.ten_nha_cung_cap,
             so_tien_goc: Math.abs(delta),
-            trang_thai: surplusMode === "hoan_tien" ? "da_hoan_tien" : "con_du",
+            trang_thai: cnTrangThai,
+            loai: fromPrepaid ? "tra_truoc" : "phat_sinh",
             ly_do: `Điều chỉnh giảm ĐNTT #${dnttGoc.id}. Lý do: ${lyDo}`,
           });
           if (error) throw error;

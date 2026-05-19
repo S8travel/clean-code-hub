@@ -14,10 +14,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useInsertDNTT } from "@/hooks/use-chi-phi";
 import { externalSupabase } from "@/lib/supabase-external";
-import { recalcChiPhiStatus } from "@/hooks/use-dntt";
-import { appendCanTruLog } from "@/hooks/use-cong-no";
+import { createCanTruPayments } from "@/hooks/use-payments";
 import type { LocalKSRow } from "./ChiPhiKSSection";
-import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -35,8 +35,8 @@ interface Props {
   daCoc: number;
   localRows: LocalKSRow[];
   chiPhiRowIds: number[];
-  canTru: CanTruSelection | null;
-  onCanTruChange: (v: CanTruSelection | null) => void;
+  canTru: CanTruSelection[];
+  onCanTruChange: (v: CanTruSelection[]) => void;
   tenDoanMoi: string;
   serviceDate?: string;
 }
@@ -55,7 +55,7 @@ export default function KSDNTTModal({
   totalKS, daCoc, localRows, chiPhiRowIds, canTru, onCanTruChange, tenDoanMoi, serviceDate,
 }: Props) {
   const conLai = totalKS - daCoc;
-  const canTruAmount = canTru?.soTienCanTru ?? 0;
+  const canTruAmount = canTru.reduce((s, x) => s + x.soTienCanTru, 0);
   const thucThanhToan = Math.max(conLai - canTruAmount, 0);
 
   const [mode, setMode] = useState<"full" | "deposit">("full");
@@ -115,19 +115,24 @@ export default function KSDNTTModal({
       const mainRecord = await insertDNTT.mutateAsync(payload);
       const mainDnttId = (mainRecord as any)?.id ?? null;
 
-      // 2. Nếu có cấn trừ: insert payment can_tru ngay
-      if (canTru && canTruAmount > 0 && mainDnttId) {
-        const { error: payErr } = await externalSupabase.from("payments").insert({
-          dntt_id: mainDnttId,
-          method: "can_tru",
-          so_tien: canTruAmount,
-          cong_no_id: canTru.congNoId,
-          ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
+      // 2. Nếu có cấn trừ: tạo các payment can_tru (gộp nhiều cong_no cùng NCC)
+      if (canTruAmount > 0 && mainDnttId) {
+        let ctRemain = conLai;
+        const items: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
+        for (const s of canTru) {
+          if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
+          const amt = Math.min(s.soTienCanTru, ctRemain);
+          if (amt <= 0) continue;
+          items.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
+          ctRemain -= amt;
+        }
+        await createCanTruPayments({
+          dnttId: mainDnttId,
+          consumingDoanLog: tenDoanMoi,
+          items,
+          recalcChiPhiIds: chiPhiRowIds,
         });
-        if (payErr) throw payErr;
-        await appendCanTruLog(canTru.congNoId, canTruAmount, tenDoanMoi);
-        await recalcChiPhiStatus(chiPhiRowIds);
-        onCanTruChange(null);
+        onCanTruChange([]);
         qc.invalidateQueries({ queryKey: ["cong-no"] });
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
         qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
@@ -175,10 +180,10 @@ export default function KSDNTTModal({
               <span>Còn lại:</span>
               <span className="font-semibold">{fmt(conLai)} VND</span>
             </div>
-            {canTru && canTruAmount > 0 && (
+            {canTruAmount > 0 && (
               <>
                 <div className="flex justify-between text-amber-600">
-                  <span>Cấn trừ (từ đoàn {canTru.tenDoan}):</span>
+                  <span>Cấn trừ ({canTru.length} khoản):</span>
                   <span className="font-semibold">− {fmt(canTruAmount)} VND</span>
                 </div>
                 <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
@@ -190,9 +195,8 @@ export default function KSDNTTModal({
           </div>
 
           {/* Cấn trừ công nợ */}
-          <KSCongNoPanel
+          <KSCongNoMultiPanel
             nccId={nccId}
-            doanId={doanId}
             maxAmount={mode === "deposit" ? depositAmount || 0 : conLai}
             value={canTru}
             onChange={onCanTruChange}

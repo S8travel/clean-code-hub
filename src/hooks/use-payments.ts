@@ -1,7 +1,52 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { getChiPhiIdsForDNTT, recalcChiPhiStatus, type PaymentRow } from "@/hooks/use-dntt";
+import { appendCanTruLog } from "@/hooks/use-cong-no";
 import { proRataInts } from "@/lib/pro-rata";
+
+/**
+ * Tạo NHIỀU payment can_tru cho 1 ĐNTT (cấn trừ nhiều cong_no cùng NCC 1 lúc).
+ * Mỗi entry = 1 cong_no. Bỏ entry soTien<=0. Sau mỗi insert: appendCanTruLog +
+ * tự set cong_no='da_can_tru' nếu cạn. Cuối cùng recalc chi_phi 1 lần.
+ * Trả tổng đã cấn trừ. (qc.invalidate để caller tự gọi.)
+ */
+export async function createCanTruPayments(opts: {
+  dnttId: number;
+  consumingDoanLog: string;
+  items: { congNoId: number; soTien: number; sourceTenDoan: string }[];
+  recalcChiPhiIds?: number[];
+}): Promise<number> {
+  let total = 0;
+  for (const it of opts.items) {
+    if (!it.congNoId || it.soTien <= 0) continue;
+    const { error } = await externalSupabase.from("payments").insert({
+      dntt_id: opts.dnttId,
+      method: "can_tru",
+      so_tien: it.soTien,
+      cong_no_id: it.congNoId,
+      ghi_chu: `Cấn trừ từ đoàn: ${it.sourceTenDoan}`,
+    });
+    if (error) throw error;
+    await appendCanTruLog(it.congNoId, it.soTien, opts.consumingDoanLog);
+    const { data: cn } = await externalSupabase
+      .from("cong_no_with_status")
+      .select("so_tien_con_lai")
+      .eq("id", it.congNoId)
+      .single();
+    if (cn && Number(cn.so_tien_con_lai) <= 0) {
+      await externalSupabase
+        .from("cong_no")
+        .update({ trang_thai: "da_can_tru" })
+        .eq("id", it.congNoId);
+    }
+    total += it.soTien;
+  }
+  if (total > 0) {
+    const ids = opts.recalcChiPhiIds ?? (await getChiPhiIdsForDNTT(opts.dnttId));
+    await recalcChiPhiStatus(ids);
+  }
+  return total;
+}
 
 export type { PaymentRow };
 

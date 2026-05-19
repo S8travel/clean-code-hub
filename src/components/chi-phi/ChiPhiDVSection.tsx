@@ -18,8 +18,8 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi, useUpdateChiPhiActual } from "@/hooks/use-chi-phi";
 import type { DNTTRow, ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment, recalcChiPhiStatus } from "@/hooks/use-dntt";
-import { usePaymentsByChiPhi } from "@/hooks/use-payments";
-import { useCongNoList, appendCanTruLog } from "@/hooks/use-cong-no";
+import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
+import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -28,6 +28,7 @@ import { useCurrentUserName } from "@/hooks/use-doan";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -135,7 +136,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const updateActualMut = useUpdateChiPhiActual();
   const qc = useQueryClient();
   const dvCdMap = useDVCanhDiemMap(doanId);
-  const [canTruByDv, setCanTruByDv] = useState<Record<number, CanTruSelection | null>>({});
+  const [canTruByDv, setCanTruByDv] = useState<Record<number, CanTruSelection[]>>({});
   const [previewDVData, setPreviewDVData] = useState<NHDocData | null>(null);
 
   // Inline edit state for DNTT amount
@@ -443,16 +444,25 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const handleDvModalSubmit = async () => {
     if (!dvModal) return;
     const { chiPhiId, thanhTien, moTa, nccId } = dvModal;
-    const canTru = canTruByDv[chiPhiId];
+    const sels = canTruByDv[chiPhiId] ?? [];
     const baseAmount = dvModalMode === "full" ? thanhTien : dvDepositAmount;
-    const canTruAmount = (canTru && nccId && canTru.soTienCanTru > 0)
-      ? Math.min(canTru.soTienCanTru, baseAmount)
-      : 0;
-    const soTien = baseAmount - canTruAmount;
-    if (soTien <= 0 && canTruAmount <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
+    // Gộp nhiều cấn trừ cùng NCC — clamp tổng ≤ baseAmount
+    const canTruItems: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
+    let ctRemain = baseAmount;
+    if (nccId) {
+      for (const s of sels) {
+        if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
+        const amt = Math.min(s.soTienCanTru, ctRemain);
+        if (amt <= 0) continue;
+        canTruItems.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
+        ctRemain -= amt;
+      }
+    }
+    const canTruAmount = canTruItems.reduce((a, b) => a + b.soTien, 0);
+    const fullAmount = baseAmount;
+    if (fullAmount <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
     if (dvModalMode === "deposit" && dvDepositAmount >= thanhTien) { toast.error("Số tiền cọc phải nhỏ hơn tổng tiền"); return; }
     try {
-      const fullAmount = soTien + canTruAmount;
       const mainRecord = await insertDNTT.mutateAsync({
         doan_id: doanId,
         loai: "dich_vu",
@@ -468,18 +478,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
       } as any);
       const mainDvId = (mainRecord as any)?.id ?? null;
 
-      if (canTruAmount > 0 && nccId && canTru && mainDvId) {
-        const { error: payErr } = await externalSupabase.from("payments").insert({
-          dntt_id: mainDvId,
-          method: "can_tru",
-          so_tien: canTruAmount,
-          cong_no_id: canTru.congNoId,
-          ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
+      if (canTruAmount > 0 && nccId && mainDvId) {
+        await createCanTruPayments({
+          dnttId: mainDvId,
+          consumingDoanLog: tenDoan || `#${doanId}`,
+          items: canTruItems,
+          recalcChiPhiIds: [chiPhiId],
         });
-        if (payErr) throw payErr;
-        await appendCanTruLog(canTru.congNoId, canTruAmount, tenDoan || `#${doanId}`);
-        await recalcChiPhiStatus([chiPhiId]);
-        setCanTruByDv((prev) => ({ ...prev, [chiPhiId]: null }));
+        setCanTruByDv((prev) => ({ ...prev, [chiPhiId]: [] }));
         qc.invalidateQueries({ queryKey: ["cong-no"] });
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
         qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
@@ -545,6 +551,9 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         // Thừa → tạo cong_no (con_du = NCC giữ credit, hoan_tien = NCC trả cash)
         const trang_thai = aggSurplusMode === "hoan_tien" ? "da_hoan_tien" : "con_du";
         const lyDoLabel = aggSurplusMode === "hoan_tien" ? "hoàn tiền" : "công nợ";
+        // Thừa của ĐNTT đã trả bằng cấn trừ quỹ trả trước → quay lại pool trả trước
+        const fromPrepaid =
+          trang_thai === "con_du" && (await isDnttPaidFromPrepaid(paidDntt?.id));
         const { error } = await externalSupabase.from("cong_no").insert({
           doan_id: doanId,
           dntt_goc_id: paidDntt?.id ?? null,
@@ -552,6 +561,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
           ten_nha_cung_cap: paidDntt?.ten_nha_cung_cap ?? null,
           so_tien_goc: absDelta,
           trang_thai,
+          loai: fromPrepaid ? "tra_truoc" : "phat_sinh",
           ly_do: aggReason
             ? `Điều chỉnh giảm chi phí (${mainRow.mo_ta || ""}) — ${lyDoLabel}. Lý do: ${aggReason}`
             : `Điều chỉnh giảm chi phí (${mainRow.mo_ta || ""}) — ${lyDoLabel}`,
@@ -1382,15 +1392,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
               <Label className="text-xs">Ngày cần thanh toán</Label>
               <DatePicker className="h-8 text-xs w-full" value={dvNgayCan} onChange={setDvNgayCan} />
             </div>
-            <KSCongNoPanel
+            <KSCongNoMultiPanel
               nccId={dvModal?.nccId ?? undefined}
-              doanId={doanId}
               maxAmount={
                 dvModalMode === "deposit"
                   ? dvDepositAmount || 0
                   : dvModal?.thanhTien ?? 0
               }
-              value={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? null) : null}
+              value={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? []) : []}
               onChange={(v) => dvModal && setCanTruByDv((prev) => ({ ...prev, [dvModal.chiPhiId]: v }))}
             />
           </div>

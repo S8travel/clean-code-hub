@@ -25,7 +25,7 @@ import {
 } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, useCreatePayment } from "@/hooks/use-payments";
-import { useCongNoList, appendCanTruLog } from "@/hooks/use-cong-no";
+import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -517,6 +517,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         // Thừa → tạo cong_no (con_du = NCC giữ credit, hoan_tien = NCC trả cash)
         const trang_thai = aggSurplusMode === "hoan_tien" ? "da_hoan_tien" : "con_du";
         const lyDoLabel = aggSurplusMode === "hoan_tien" ? "hoàn tiền" : "công nợ";
+        const fromPrepaid =
+          trang_thai === "con_du" && (await isDnttPaidFromPrepaid(paidDntt?.id));
         const { error } = await externalSupabase.from("cong_no").insert({
           doan_id: doanId,
           dntt_goc_id: paidDntt?.id ?? null,
@@ -524,6 +526,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           ten_nha_cung_cap: nccName ?? paidDntt?.ten_nha_cung_cap ?? null,
           so_tien_goc: absDelta,
           trang_thai,
+          loai: fromPrepaid ? "tra_truoc" : "phat_sinh",
           ly_do: aggReason
             ? `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}. Lý do: ${aggReason}`
             : `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}`,
@@ -754,7 +757,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const [modalKsId, setModalKsId] = useState<number | null>(null);
 
   // Cấn trừ selection per ksId (controlled by KSCongNoPanel)
-  const [canTruByKs, setCanTruByKs] = useState<Record<number, CanTruSelection | null>>({});
+  const [canTruByKs, setCanTruByKs] = useState<Record<number, CanTruSelection[]>>({});
 
   // Định kỳ: track per ksId
   const [dinhKyKsIds, setDinhKyKsIds] = useState<Set<number>>(new Set());
@@ -1889,7 +1892,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           daCoc={(cocByKs[modalKsId] || 0) + (canTruAmtByKsId[modalKsId] || 0)}
           localRows={grouped[modalKsId] || []}
           chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id).map((r) => r.id!)}
-          canTru={canTruByKs[modalKsId] ?? null}
+          canTru={canTruByKs[modalKsId] ?? []}
           onCanTruChange={(v) => setCanTruByKs((prev) => ({ ...prev, [modalKsId]: v }))}
           tenDoanMoi={tenDoan}
           serviceDate={(() => {

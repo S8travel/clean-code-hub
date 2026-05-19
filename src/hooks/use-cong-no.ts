@@ -114,6 +114,23 @@ export function useUpdateCongNoStatus() {
   });
 }
 
+// True nếu ĐNTT này từng được trả bằng cấn trừ (can_tru) vào 1 quỹ trả trước
+// (cong_no.loai='tra_truoc'). Dùng để: khi điều chỉnh GIẢM chi phí → khoản
+// thừa được đánh dấu loai='tra_truoc' (quay lại pool trả trước), thay vì
+// thành công nợ phát sinh rời rạc.
+export async function isDnttPaidFromPrepaid(
+  dnttId: number | null | undefined,
+): Promise<boolean> {
+  if (!dnttId) return false;
+  const { data, error } = await externalSupabase
+    .from("payments")
+    .select("id, cong_no:cong_no_id(loai)")
+    .eq("dntt_id", dnttId)
+    .eq("method", "can_tru");
+  if (error) return false;
+  return (data ?? []).some((p: any) => p.cong_no?.loai === "tra_truoc");
+}
+
 // Pha 1 — Lập quỹ trả trước: tạo ĐNTT loai='tra_truoc' (doan_id=null).
 // Duyệt + chi cash qua DNTTPage như ĐNTT thường → markPaidImpl tự sinh
 // cong_no con_du loai='tra_truoc' khi trả đủ (xem use-dntt.ts).

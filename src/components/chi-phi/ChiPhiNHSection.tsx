@@ -22,14 +22,15 @@ import {
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
-import { usePaymentsByChiPhi } from "@/hooks/use-payments";
-import { useCongNoList, appendCanTruLog } from "@/hooks/use-cong-no";
+import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
+import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import CatalogHoverCard from "./CatalogHoverCard";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import { toast } from "sonner";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -231,7 +232,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   const [dnttBsAmount, setDnttBsAmount] = useState(0); // bổ sung: nhập tự do khi đã TT đủ
   const [dnttNgayCan, setDnttNgayCan] = useState(""); // ngày cần thanh toán
   const [dnttSubmitting, setDnttSubmitting] = useState(false);
-  const [canTruByMeal, setCanTruByMeal] = useState<Record<string, CanTruSelection | null>>({});
+  const [canTruByMeal, setCanTruByMeal] = useState<Record<string, CanTruSelection[]>>({});
 
   // Định kỳ per meal key
   const [dinhKyKeys, setDinhKyKeys] = useState<Set<string>>(new Set());
@@ -785,11 +786,21 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         ? format(new Date(row.ngay_date + "T00:00:00"), "dd/MM")
         : "?";
 
-      const canTru = canTruByMeal[key];
+      const sels = canTruByMeal[key] ?? [];
       const nccId = nh?.nha_cung_cap_id || null;
-      const canTruAmount = (canTru && nccId && canTru.soTienCanTru > 0)
-        ? Math.min(canTru.soTienCanTru, soTien)
-        : 0;
+      // Gộp nhiều cấn trừ cùng NCC — clamp tổng ≤ soTien (số tiền ĐNTT)
+      const canTruItems: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
+      let ctRemain = soTien;
+      if (nccId) {
+        for (const s of sels) {
+          if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
+          const amt = Math.min(s.soTienCanTru, ctRemain);
+          if (amt <= 0) continue;
+          canTruItems.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
+          ctRemain -= amt;
+        }
+      }
+      const canTruAmount = canTruItems.reduce((a, b) => a + b.soTien, 0);
 
       // Tạo 1 ĐNTT cho FULL amount; can_tru được ghi nhận như 1 payment riêng.
       const mainNhRecord = await insertDNTT.mutateAsync({
@@ -816,18 +827,14 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         .update({ trang_thai_dntt: "cho_duyet" })
         .in("id", allIds);
 
-      if (canTruAmount > 0 && nccId && canTru && mainNhId) {
-        const { error: payErr } = await externalSupabase.from("payments").insert({
-          dntt_id: mainNhId,
-          method: "can_tru",
-          so_tien: canTruAmount,
-          cong_no_id: canTru.congNoId,
-          ghi_chu: `Cấn trừ từ đoàn: ${canTru.tenDoan}`,
+      if (canTruAmount > 0 && nccId && mainNhId) {
+        await createCanTruPayments({
+          dnttId: mainNhId,
+          consumingDoanLog: tenDoan || `#${doanId}`,
+          items: canTruItems,
+          recalcChiPhiIds: allIds,
         });
-        if (payErr) throw payErr;
-        await appendCanTruLog(canTru.congNoId, canTruAmount, tenDoan || `#${doanId}`);
-        await recalcChiPhiStatus(allIds);
-        setCanTruByMeal((prev) => ({ ...prev, [key]: null }));
+        setCanTruByMeal((prev) => ({ ...prev, [key]: [] }));
         qc.invalidateQueries({ queryKey: ["cong-no"] });
         qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
         qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
@@ -873,6 +880,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         // Thừa → tạo cong_no (con_du = NCC giữ credit, hoan_tien = NCC trả cash)
         const trang_thai = aggSurplusMode === "hoan_tien" ? "da_hoan_tien" : "con_du";
         const lyDoLabel = aggSurplusMode === "hoan_tien" ? "hoàn tiền" : "công nợ";
+        const fromPrepaid =
+          trang_thai === "con_du" && (await isDnttPaidFromPrepaid(paidDntt?.id));
         const { error } = await externalSupabase.from("cong_no").insert({
           doan_id: doanId,
           dntt_goc_id: paidDntt?.id ?? null,
@@ -880,6 +889,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           ten_nha_cung_cap: nccName ?? paidDntt?.ten_nha_cung_cap ?? null,
           so_tien_goc: absDelta,
           trang_thai,
+          loai: fromPrepaid ? "tra_truoc" : "phat_sinh",
           ly_do: aggReason
             ? `Điều chỉnh giảm bữa ăn (${nhName}) — ${lyDoLabel}. Lý do: ${aggReason}`
             : `Điều chỉnh giảm bữa ăn (${nhName}) — ${lyDoLabel}`,
@@ -2061,9 +2071,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                   <Label className="text-xs">Ngày cần thanh toán</Label>
                   <DatePicker className="h-8 text-xs w-full" value={dnttNgayCan} onChange={setDnttNgayCan} />
                 </div>
-                <KSCongNoPanel
+                <KSCongNoMultiPanel
                   nccId={nh?.nha_cung_cap_id}
-                  doanId={doanId}
                   maxAmount={
                     isBSMode
                       ? dnttBsAmount || 0
@@ -2071,7 +2080,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                         ? dnttDepositAmount || 0
                         : effectiveTotalBua
                   }
-                  value={canTruByMeal[dnttModalKey] ?? null}
+                  value={canTruByMeal[dnttModalKey] ?? []}
                   onChange={(v) => setCanTruByMeal((prev) => ({ ...prev, [dnttModalKey]: v }))}
                 />
               </div>
