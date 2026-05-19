@@ -18,10 +18,12 @@ interface Props {
   onDelete: (idx: number) => void;
   /** Khoá input khi KS đã có DNTT paid. */
   disabled?: boolean;
+  /** Toggle nguồn (Công ty ↔ HDV) cho dòng dịch vụ đã lưu. */
+  onToggleNguoiTt?: (idx: number) => void;
 }
 
 export default memo(function KSServiceRowInput({
-  row, globalIdx, onFieldChange, onBlurSave, onDelete, disabled = false,
+  row, globalIdx, onFieldChange, onBlurSave, onDelete, disabled = false, onToggleNguoiTt,
 }: Props) {
   const [localTen, setLocalTen] = useState(row.loai_phong);
   const [localSL, setLocalSL] = useState(String(row.so_phong));
@@ -142,7 +144,25 @@ export default memo(function KSServiceRowInput({
         )}
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs font-medium" title={foc > 0 ? `${sl} − ${foc} FOC = ${billed}` : undefined}>
-        {fmt(thanhTien)}
+        <div className="flex flex-col items-start gap-0.5">
+          <span>{fmt(thanhTien)}</span>
+          {onToggleNguoiTt && row.id != null && (
+            <button
+              onClick={() => !disabled && onToggleNguoiTt(globalIdx)}
+              disabled={disabled}
+              title={row.is_hdv ? "HDV trả — bấm để chuyển Công ty" : "Công ty trả — bấm để chuyển HDV (HDV trả tiền mặt, không vào ĐNTT)"}
+              className={
+                "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors " +
+                (disabled ? "cursor-default opacity-70 " : "cursor-pointer ") +
+                (row.is_hdv
+                  ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"
+                  : "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100")
+              }
+            >
+              {row.is_hdv ? "HDV" : "Công ty"}
+            </button>
+          )}
+        </div>
       </TableCell>
       <TableCell className="py-0.5 px-2">
         {!disabled && (

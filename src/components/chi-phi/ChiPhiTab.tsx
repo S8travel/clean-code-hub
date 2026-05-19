@@ -82,6 +82,11 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
       0,
     );
 
+    // Công ty thanh toán: tổng phần công ty trả (tien_cong_ty) — đã gồm
+    // KS / NH / cảnh điểm / bảo hiểm / xe / visa. Row HDV trả (tien_hdv) loại
+    // tự nhiên vì tien_cong_ty = 0.
+    const congTy = activeRows.reduce((s, r) => s + (r.tien_cong_ty || 0), 0);
+
     const thucTe = activeRows.reduce((s, r) => {
       if (r.thanh_tien_thuc_te != null) return s + r.thanh_tien_thuc_te;
       return s + (r.tien_cong_ty || 0) + (r.tien_hdv || 0);
@@ -94,7 +99,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
       .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
       .reduce((s, d) => s + (d.paid_amount || 0), 0);
 
-    return { total, thucTe, daDieuChinh, daTT };
+    return { total, thucTe, daDieuChinh, daTT, congTy };
   }, [chiPhiRows, dnttList]);
 
   const hasData = summary.total > 0 || summary.daTT > 0;
@@ -186,7 +191,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
       {/* ── Summary bar ── */}
       {hasData && (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="grid grid-cols-3 divide-x divide-border">
+          <div className="grid grid-cols-4 divide-x divide-border">
             <div className="px-4 py-3">
               <p className="text-[11px] text-muted-foreground mb-0.5">Chi phí dự trù</p>
               <p className="text-sm font-semibold text-foreground">{fmt(summary.total)} ₫</p>
@@ -196,6 +201,10 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
               <p className={cn("text-sm font-semibold", summary.daDieuChinh ? "text-blue-600" : "text-foreground")}>
                 {fmt(summary.thucTe)} ₫
               </p>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-[11px] text-muted-foreground mb-0.5">Công ty thanh toán</p>
+              <p className="text-sm font-semibold text-blue-600">{fmt(summary.congTy)} ₫</p>
             </div>
             <div className="px-4 py-3">
               <p className="text-[11px] text-muted-foreground mb-0.5">Tiền đã thanh toán</p>

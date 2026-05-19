@@ -165,6 +165,7 @@ export interface LocalKSRow {
   foc_mien_snapshot?: number | null;
   loai_row?: KSLoaiRow;  // default 'phong' nếu không set
   foc_count?: number;    // dùng cho service rows (OP tự điền)
+  is_hdv?: boolean;      // dòng dịch vụ HDV trả (tien_hdv>0) — ngoài tổng KS/ĐNTT
 }
 
 // Resolve FOC config: ưu tiên snapshot trên rows, fall back master
@@ -213,6 +214,7 @@ function buildKSRowFromCp(
       foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
       loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
       foc_count: Number(cp.foc_count ?? 0),
+      is_hdv: (cp.tien_hdv ?? 0) > 0,
     } as LocalKSRow;
   }
   const ngay = ngayMap[cp.ref_doan_ngay_id!];
@@ -238,6 +240,7 @@ function buildKSRowFromCp(
     foc_mien_snapshot:  cp.foc_mien_snapshot  ?? null,
     loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
     foc_count: Number(cp.foc_count ?? 0),
+    is_hdv: (cp.tien_hdv ?? 0) > 0,
   } as LocalKSRow;
 }
 
@@ -250,6 +253,8 @@ interface Props {
 export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: Props) {
   const { data: ksData, isLoading: ksLoading } = useChiPhiKSData(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const chiPhiRowsRef = useRef(chiPhiRows);
+  useEffect(() => { chiPhiRowsRef.current = chiPhiRows; }, [chiPhiRows]);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const canTruByDnttId = useMemo(() => {
@@ -764,6 +769,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const dinhKyKsIdsRef = useRef<Set<number>>(new Set());
   useEffect(() => { dinhKyKsIdsRef.current = dinhKyKsIds; }, [dinhKyKsIds]);
 
+  // Nguồn thanh toán per DÒNG dịch vụ KS: row.is_hdv (derive từ chi_phi
+  // tien_hdv>0, dựng trong buildKSRowFromCp). HDV → tien_hdv, loại khỏi tổng
+  // KS + ĐNTT + "Công ty thanh toán". Chỉ dòng dịch vụ (non-room) — phòng FOC
+  // luôn Công ty (không đụng FOC math).
+
   // Dòng đang sửa dở (có id) — reconcile bỏ qua để không đè cái user đang gõ.
   const dirtyRowIdsRef = useRef<Set<number>>(new Set());
   // dinhKyKsIds chỉ init 1 lần từ DB (không clobber toggle của user).
@@ -843,6 +853,27 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       return merged;
     });
   }, [chiPhiRows, ksData]);
+
+  // Toggle nguồn 1 DÒNG dịch vụ KS (Công ty ↔ HDV): flip tien_cong_ty ↔
+  // tien_hdv của đúng dòng đó, giữ nguyên số tiền. Dòng dịch vụ KHÔNG nằm
+  // trong pool FOC phòng → không ảnh hưởng dòng khác.
+  const handleToggleRowNguoiTt = useCallback((globalIdx: number) => {
+    const row = localRowsRef.current[globalIdx];
+    if (!row?.id) return;
+    const toHdv = !row.is_hdv;
+    const cp = chiPhiRowsRef.current.find((c) => c.id === row.id);
+    const net = cp ? (cp.tien_cong_ty || 0) + (cp.tien_hdv || 0) : (row.thanh_tien || 0);
+    // Optimistic: cập nhật badge ngay, reconcile sẽ xác nhận từ DB
+    setLocalRows((prev) =>
+      prev.map((r) => (r.id === row.id ? { ...r, is_hdv: toHdv } : r)),
+    );
+    upsertMut.mutate({
+      id: row.id,
+      doan_id: doanId,
+      tien_cong_ty: toHdv ? 0 : net,
+      tien_hdv: toHdv ? net : 0,
+    } as any);
+  }, [doanId, upsertMut]);
 
   const handleToggleDinhKy = useCallback((ksId: number) => {
     setDinhKyKsIds((prev) => {
@@ -924,8 +955,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 : "Dịch vụ KS"),
           don_gia: row.gia_phong,
           so_luong: row.so_phong,
-          tien_cong_ty: tienCongTy,
-          tien_hdv: 0,
+          // Chỉ dòng dịch vụ (non-room) mới được HDV trả. Phòng FOC luôn Công ty.
+          tien_cong_ty: (!isRoom && row.is_hdv) ? 0 : tienCongTy,
+          tien_hdv: (!isRoom && row.is_hdv) ? tienCongTy : 0,
           thanh_toan_dinh_ky: dinhKyKsIdsRef.current.has(row.khach_san_id),
           // Snapshot: lần đầu lấy từ master (focKhach/focMien đã resolve ở trên).
           // Lần sau giữ snapshot hiện có (resolveKSFoc trả snapshot nếu có).
@@ -1229,15 +1261,18 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         // Resolve FOC từ snapshot (per-tour) thay vì master — tránh master changes
         // ảnh hưởng đoàn cũ.
         const ksFoc = resolveKSFoc(rows, ks);
+        // Dòng dịch vụ HDV trả → ngoài chi phí công ty: loại khỏi tổng KS +
+        // thực tế + ĐNTT. Hiển thị bảng vẫn render đủ rows (badge per dòng).
+        const congTyRows = rows.filter((r) => !r.is_hdv);
         // totalKS = rooms NET (pro-rata FOC) + services NET (manual foc_count).
-        const totalKS = calcTotalKS(rows, ksFoc.foc_khach, ksFoc.foc_mien);
+        const totalKS = calcTotalKS(congTyRows, ksFoc.foc_khach, ksFoc.foc_mien);
 
         const daCoc = cocByKs[ksId] || 0;
         const daTT = ttByKs[ksId] || 0;
         // Thực tế KS = totalKS (đã NET trừ FOC) + Σ delta của row ĐÃ điều chỉnh.
         // Row chưa điều chỉnh giữ nguyên net trong totalKS → KHÔNG gạch nhầm
         // (tránh bug: KS không adjust vẫn hiện gạch vì tien_cong_ty là gross).
-        const adjustDelta = rows.reduce((sum, r) => {
+        const adjustDelta = congTyRows.reduce((sum, r) => {
           if (r.id == null || !thucTeOverrideById.has(r.id)) return sum;
           const override = thucTeOverrideById.get(r.id)!;
           let rowNet: number;
@@ -1523,6 +1558,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     onFieldChange={handleFieldChange}
                     onBlurSave={handleBlurSave}
                     onDelete={handleDelete}
+                    onToggleNguoiTt={handleToggleRowNguoiTt}
                     disabled={isKsLocked}
                   />
                 )}
@@ -1883,15 +1919,16 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           nccStk={khachSanMap[modalKsId]?.ncc_so_tai_khoan || null}
           nccNganHang={khachSanMap[modalKsId]?.ncc_ngan_hang || null}
           totalKS={(() => {
-            const modalRows = grouped[modalKsId] || [];
+            // Loại dòng dịch vụ HDV trả khỏi ĐNTT (công ty không trả phần này)
+            const modalRows = (grouped[modalKsId] || []).filter((r) => !r.is_hdv);
             const modalKs = khachSanMap[modalKsId];
             // Dùng FOC snapshot per tour (giống display card) — không lấy master trực tiếp
             const modalFoc = resolveKSFoc(modalRows, modalKs);
             return calcTotalKS(modalRows, modalFoc.foc_khach, modalFoc.foc_mien);
           })()}
           daCoc={(cocByKs[modalKsId] || 0) + (canTruAmtByKsId[modalKsId] || 0)}
-          localRows={grouped[modalKsId] || []}
-          chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id).map((r) => r.id!)}
+          localRows={(grouped[modalKsId] || []).filter((r) => !r.is_hdv)}
+          chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id && !r.is_hdv).map((r) => r.id!)}
           canTru={canTruByKs[modalKsId] ?? []}
           onCanTruChange={(v) => setCanTruByKs((prev) => ({ ...prev, [modalKsId]: v }))}
           tenDoanMoi={tenDoan}
@@ -2476,6 +2513,7 @@ function KSServicesSection({
   onFieldChange,
   onBlurSave,
   onDelete,
+  onToggleNguoiTt,
   disabled = false,
 }: {
   serviceDayEntries: [string, LocalKSRow[]][];
@@ -2486,6 +2524,7 @@ function KSServicesSection({
   onFieldChange: (idx: number, field: string, value: any) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
+  onToggleNguoiTt?: (idx: number) => void;
   disabled?: boolean;
 }) {
   return (
@@ -2545,6 +2584,7 @@ function KSServicesSection({
                       onFieldChange={onFieldChange}
                       onBlurSave={onBlurSave}
                       onDelete={onDelete}
+                      onToggleNguoiTt={onToggleNguoiTt}
                       disabled={disabled}
                     />
                   );
