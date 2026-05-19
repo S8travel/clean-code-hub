@@ -76,8 +76,9 @@ function fmtDate(d: string) {
   }
 }
 
-// Deadline display với màu + countdown (giống deadline view)
-function deadlineDisplay(deadline: string | null) {
+// Deadline display với màu + countdown (giống deadline view).
+// outcome thanh_doan/da_huy → đã chốt: ngày mờ + gạch ngang, KHÔNG báo quá hạn.
+function deadlineDisplay(deadline: string | null, outcome?: string | null) {
   if (!deadline) return { text: "—", cls: "text-muted-foreground", subtext: "" };
   try {
     const dl = parseISO(deadline);
@@ -85,6 +86,13 @@ function deadlineDisplay(deadline: string | null) {
     today.setHours(0, 0, 0, 0);
     const diff = differenceInDays(dl, today);
     const dateStr = format(dl, "dd/MM/yyyy", { locale: vi });
+    if (outcome === "thanh_doan" || outcome === "da_huy") {
+      return {
+        text: dateStr,
+        cls: "text-muted-foreground line-through",
+        subtext: outcome === "thanh_doan" ? "Đã thành đoàn" : "Đã hủy",
+      };
+    }
     if (diff < 0) return { text: dateStr, cls: "text-red-700 font-semibold", subtext: `Quá hạn ${Math.abs(diff)} ngày` };
     if (diff === 0) return { text: dateStr, cls: "text-orange-700 font-semibold", subtext: "Hôm nay" };
     if (diff <= 3) return { text: dateStr, cls: "text-orange-600 font-medium", subtext: `Còn ${diff} ngày` };
@@ -473,7 +481,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                   {lockPhong.ten_seri}
                                 </td>
                                 {(() => {
-                                  const dl = deadlineDisplay(lockPhong.deadline);
+                                  const dl = deadlineDisplay(lockPhong.deadline, ksRow.outcome_status);
                                   return (
                                     <td
                                       rowSpan={callCount}

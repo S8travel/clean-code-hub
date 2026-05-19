@@ -53,8 +53,10 @@ function EditableDateCell({
   );
 }
 
-// Format deadline với màu + countdown
-function deadlineDisplay(deadline: string | null) {
+// Format deadline với màu + countdown.
+// outcome thanh_doan/da_huy → đã chốt, deadline hết ý nghĩa: hiện ngày mờ +
+// gạch ngang, KHÔNG báo "Quá hạn"/đếm ngược (tránh hiểu nhầm còn phải xử lý).
+function deadlineDisplay(deadline: string | null, outcome?: string | null) {
   if (!deadline) return { text: "—", cls: "text-muted-foreground", subtext: "" };
   try {
     const dl = parseISO(deadline);
@@ -62,6 +64,13 @@ function deadlineDisplay(deadline: string | null) {
     today.setHours(0, 0, 0, 0);
     const diff = differenceInDays(dl, today);
     const dateStr = format(dl, "dd/MM/yyyy", { locale: vi });
+    if (outcome === "thanh_doan" || outcome === "da_huy") {
+      return {
+        text: dateStr,
+        cls: "text-muted-foreground line-through",
+        subtext: outcome === "thanh_doan" ? "Đã thành đoàn" : "Đã hủy",
+      };
+    }
     if (diff < 0) {
       return {
         text: dateStr,
@@ -131,11 +140,14 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
   };
 
   // Flatten + sort by deadline ASC (NULL xuống cuối). Tiebreak theo check_in.
-  // Lưu ý: filter outcome (chờ xử lý / thành đoàn / đã hủy) do page-level
-  // outcomeFilter điều khiển — không hardcode ở đây nữa.
+  // "Theo deadline" = danh sách cần xử lý theo hạn → dòng đã THÀNH ĐOÀN không
+  // còn deadline để theo, ẩn hẳn (không chỉ làm mờ). Đã hủy vẫn để
+  // page-level outcomeFilter điều khiển.
   const rows = useMemo<FlatRow[]>(() => {
     const flat = data.flatMap((lp) =>
-      lp.hotels.map((ksRow) => ({ lockPhong: lp, ksRow })),
+      lp.hotels
+        .filter((ksRow) => ksRow.outcome_status !== "thanh_doan")
+        .map((ksRow) => ({ lockPhong: lp, ksRow })),
     );
     return flat.sort((a, b) => {
       const da = a.lockPhong.deadline || "9999-12-31";
@@ -185,7 +197,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
           </thead>
           <tbody>
             {pageRows.map(({ lockPhong, ksRow }) => {
-              const dl = deadlineDisplay(lockPhong.deadline);
+              const dl = deadlineDisplay(lockPhong.deadline, ksRow.outcome_status);
               const outcomeValue = ksRow.outcome_status ?? "cho_xu_ly";
               return (
                 <tr
