@@ -32,6 +32,7 @@ export const ZH_CORRECTIONS: Record<string, string> = {
   "S8旅行社": "雙發旅行社",
   "S8旅遊有限公司": "雙發旅遊有限公司",
   "城市青年聯盟": "成團",
+  "程式碼": "團號",
 };
 
 export function isZhTW(): boolean {

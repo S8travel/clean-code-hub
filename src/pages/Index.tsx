@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { t, useTranslate } from "@/lib/i18n";
 import { useDoanListFilters } from "@/hooks/use-doan-list-filters";
 import { Plus, Search, X, ChevronLeft, ChevronRight, CalendarClock, Bus, Activity, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -61,6 +62,7 @@ const LOAI_TOUR_OPTIONS = [
 ];
 
 export default function Index() {
+  useTranslate(); // re-render khi đổi ngôn ngữ
   const { user: currentUser } = useAuth();
   const phanLoaiTour = (currentUser?.role !== "admin" && currentUser?.role !== "giam_doc")
     ? (currentUser?.phan_loai_tour ?? null)
@@ -455,13 +457,13 @@ export default function Index() {
         {/* TOOLBAR */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            <h1 className="text-base font-semibold">Quản lý đoàn</h1>
+            <h1 className="text-base font-semibold notranslate">{t("Quản lý đoàn")}</h1>
             <Badge variant="secondary" className="text-xs tabular-nums">{filtered.length}</Badge>
           </div>
           <Button onClick={openNew} className="active:scale-[0.98] transition-transform shrink-0"
             style={{ backgroundColor: "hsl(213, 78%, 37%)" }}>
             <Plus className="h-4 w-4 mr-1.5" />
-            Tạo đoàn mới
+            {t("Tạo đoàn mới")}
           </Button>
         </div>
 
@@ -483,7 +485,7 @@ export default function Index() {
               </div>
               <div className="min-w-0">
                 <p className="text-xl font-bold leading-tight">{c.n}</p>
-                <p className="text-[11px] text-muted-foreground leading-snug">{c.label} · {c.sub}</p>
+                <p className="text-[11px] text-muted-foreground leading-snug">{t(c.label)} · {t(c.sub)}</p>
               </div>
             </button>
           ))}
@@ -499,15 +501,15 @@ export default function Index() {
             { key: "hoan_thanh", label: "Hoàn thành", n: stats.hoanThanh },
             { key: "da_quyet_toan", label: "Đã quyết toán", n: stats.daQuyetToan },
             { key: "huy", label: "Đã huỷ", n: stats.huy },
-          ] as const).map((t) => (
+          ] as const).map((tab) => (
             <button
-              key={t.key}
-              onClick={() => { setQuickTab(t.key); setPage(1); }}
-              className={`h-8 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-colors ${quickTab === t.key ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted/50 border-border"}`}
+              key={tab.key}
+              onClick={() => { setQuickTab(tab.key); setPage(1); }}
+              className={`h-8 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-colors ${quickTab === tab.key ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted/50 border-border"}`}
             >
-              {t.label}
-              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold ${quickTab === t.key ? "bg-white/25" : "bg-muted"}`}>
-                {t.n}
+              {t(tab.label)}
+              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold ${quickTab === tab.key ? "bg-white/25" : "bg-muted"}`}>
+                {tab.n}
               </span>
             </button>
           ))}
@@ -515,7 +517,7 @@ export default function Index() {
 
         {error && (
           <div className="mb-4 rounded-lg bg-destructive/5 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-            Không thể tải dữ liệu. Kiểm tra kết nối và thử lại.
+            {t("Không thể tải dữ liệu. Kiểm tra kết nối và thử lại.")}
           </div>
         )}
 
@@ -524,22 +526,22 @@ export default function Index() {
           <div className="relative min-w-[200px] flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm code, HDV, agent, OP..."
+              placeholder={t("Tìm code, HDV, agent, OP...")}
               className="pl-9 h-9 text-sm rounded-lg" />
           </div>
 
           <div className="flex items-center gap-1.5">
-            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder="Từ ngày" className="h-9 text-xs rounded-lg w-[145px]" align="start" />
+            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder={t("Từ ngày")} className="h-9 text-xs rounded-lg w-[145px]" align="start" />
             <span className="text-muted-foreground text-xs">→</span>
-            <DatePicker value={dateTo} onChange={setDateTo} placeholder="Đến ngày" className="h-9 text-xs rounded-lg w-[145px]" align="start" />
+            <DatePicker value={dateTo} onChange={setDateTo} placeholder={t("Đến ngày")} className="h-9 text-xs rounded-lg w-[145px]" align="start" />
           </div>
 
           <Select value={agentFilter} onValueChange={setAgentFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[140px]">
-              <span>{agentFilter === "all" ? "Tất cả Agent" : agents?.find((a) => a.id.toString() === agentFilter)?.ten ?? "Agent"}</span>
+              <span>{agentFilter === "all" ? t("Tất cả Agent") : agents?.find((a) => a.id.toString() === agentFilter)?.ten ?? "Agent"}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả Agent</SelectItem>
+              <SelectItem value="all">{t("Tất cả Agent")}</SelectItem>
               {agents?.map((a) => (
                 <SelectItem key={a.id} value={a.id.toString()}>{a.ten}</SelectItem>
               ))}
@@ -548,10 +550,10 @@ export default function Index() {
 
           <Select value={diaDiemFilter} onValueChange={setDiaDiemFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[140px]">
-              <span>{diaDiemFilter === "all" ? "Tất cả ĐĐ" : diaDiemList?.find((d) => d.id.toString() === diaDiemFilter)?.ten ?? "Địa điểm"}</span>
+              <span>{diaDiemFilter === "all" ? t("Tất cả ĐĐ") : diaDiemList?.find((d) => d.id.toString() === diaDiemFilter)?.ten ?? "Địa điểm"}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả ĐĐ</SelectItem>
+              <SelectItem value="all">{t("Tất cả ĐĐ")}</SelectItem>
               {diaDiemList?.map((d) => (
                 <SelectItem key={d.id} value={d.id.toString()}>{d.ten}</SelectItem>
               ))}
@@ -560,22 +562,22 @@ export default function Index() {
 
           <Select value={loaiTourFilter} onValueChange={setLoaiTourFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[130px]">
-              <span>{LOAI_TOUR_OPTIONS.find((o) => o.value === loaiTourFilter)?.label ?? "Loại tuyến"}</span>
+              <span>{t(LOAI_TOUR_OPTIONS.find((o) => o.value === loaiTourFilter)?.label ?? "Loại tuyến")}</span>
             </SelectTrigger>
             <SelectContent>
               {LOAI_TOUR_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
 
           <Select value={trangThaiFilter} onValueChange={setTrangThaiFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[130px]">
-              <span>{TRANG_THAI_OPTIONS.find((o) => o.value === trangThaiFilter)?.label ?? "Trạng thái"}</span>
+              <span>{t(TRANG_THAI_OPTIONS.find((o) => o.value === trangThaiFilter)?.label ?? "Trạng thái")}</span>
             </SelectTrigger>
             <SelectContent>
               {TRANG_THAI_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -583,7 +585,7 @@ export default function Index() {
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-xs text-muted-foreground hover:text-foreground">
               <X className="h-3.5 w-3.5 mr-1" />
-              Xoá lọc
+              {t("Xoá lọc")}
             </Button>
           )}
         </div>
@@ -607,11 +609,11 @@ export default function Index() {
         {/* PAGINATION */}
         {filtered.length > 0 && (
           <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
-            <span>Hiển thị {showFrom}–{showTo} / {filtered.length} đoàn</span>
+            <span>{t("Hiển thị")} {showFrom}–{showTo} / {filtered.length} {t("đoàn")}</span>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="sm" className="h-8 text-xs" disabled={page <= 1}
                 onClick={() => setPage(page - 1)}>
-                <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Trước
+                <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> {t("Trước")}
               </Button>
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
@@ -628,7 +630,7 @@ export default function Index() {
                 })}
               <Button variant="outline" size="sm" className="h-8 text-xs" disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}>
-                Sau <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                {t("Sau")} <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
               </Button>
             </div>
             <Select
@@ -636,11 +638,11 @@ export default function Index() {
               onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}
             >
               <SelectTrigger className="h-8 text-xs w-[130px]">
-                <span>Hiển thị {pageSize}/trang</span>
+                <span>{t("Hiển thị")} {pageSize}/{t("trang")}</span>
               </SelectTrigger>
               <SelectContent>
                 {PAGE_SIZE_OPTIONS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>{n} đoàn / trang</SelectItem>
+                  <SelectItem key={n} value={String(n)}>{n} {t("đoàn / trang")}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -676,7 +678,7 @@ export default function Index() {
       <Dialog open={!!pendingCreate} onOpenChange={(o) => { if (!o) setPendingCreate(null); }}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle className="text-base">Chọn thị trường</DialogTitle>
+            <DialogTitle className="text-base">{t("Chọn thị trường")}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-1">
             {(currentUser?.phan_loai_tour ?? []).map((market) => {

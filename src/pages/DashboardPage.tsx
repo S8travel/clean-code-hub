@@ -10,6 +10,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
+import { t, useTranslate } from "@/lib/i18n";
 import { useDashboardStats } from "@/hooks/use-dashboard";
 import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
@@ -106,6 +107,7 @@ function DuChiPill({
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 function DashboardPageContent() {
+  useTranslate(); // re-render khi đổi ngôn ngữ
   const { data, isLoading } = useDashboardStats();
 
   if (isLoading) {
@@ -141,7 +143,7 @@ function DashboardPageContent() {
       {/* ── Header ── */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Tổng quan</h1>
+          <h1 className="text-xl font-bold tracking-tight notranslate">{t("Tổng quan")}</h1>
           <p className="text-sm text-muted-foreground capitalize mt-0.5">{today}</p>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
@@ -154,15 +156,15 @@ function DashboardPageContent() {
       {/* ── Tier 1: KPI ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard
-          label="Đoàn đang chạy"
+          label={t("Đoàn đang chạy")}
           value={data.activeDoanCount}
-          sub="hôm nay"
+          sub={t("hôm nay")}
           icon={Activity}
           color="bg-emerald-500"
           href="/doan"
         />
         <KpiCard
-          label="Đoàn tháng này"
+          label={t("Đoàn tháng này")}
           value={data.thisMonthDoanCount}
           sub={`${data.thisMonthGuests.toLocaleString()} khách`}
           icon={CalendarCheck}
@@ -171,7 +173,7 @@ function DashboardPageContent() {
           href="/doan"
         />
         <KpiCard
-          label="Tổng khách tháng"
+          label={t("Tổng khách tháng")}
           value={data.thisMonthGuests.toLocaleString()}
           sub={`tháng trước: ${data.lastMonthGuests.toLocaleString()}`}
           icon={Users}
@@ -179,7 +181,7 @@ function DashboardPageContent() {
           growth={khachGrowth}
         />
         <KpiCard
-          label="Chờ duyệt ĐNTT"
+          label={t("Chờ duyệt ĐNTT")}
           value={data.pendingApprovalCount}
           sub={fmtM(data.pendingApprovalAmount) + " ₫"}
           icon={AlertCircle}
@@ -187,7 +189,7 @@ function DashboardPageContent() {
           href="/de-nghi-thanh-toan"
         />
         <KpiCard
-          label="Công nợ phải trả NCC"
+          label={t("Công nợ phải trả NCC")}
           value={fmtM(data.congNoNCCAmount) + " ₫"}
           sub={`${data.congNoNCCCount} khoản còn dư`}
           icon={Wallet}
@@ -201,19 +203,19 @@ function DashboardPageContent() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <CalendarClock className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-semibold">Dự chi theo tuần</p>
+            <p className="text-sm font-semibold">{t("Dự chi theo tuần")}</p>
             <span className="text-xs text-muted-foreground">
-              ĐNTT chưa trả (gồm chờ duyệt) · theo ngày cần thanh toán
+              {t("ĐNTT chưa trả (gồm chờ duyệt) · theo ngày cần thanh toán")}
             </span>
           </div>
           <Link to="/de-nghi-thanh-toan" className="text-xs text-primary hover:underline flex items-center gap-1">
-            Chi tiết <ArrowRight className="h-3 w-3" />
+            {t("Chi tiết")} <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
         {data.duChiTuan.length === 0 ? (
           <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-            Không có khoản dự chi
+            {t("Không có khoản dự chi")}
           </div>
         ) : (
           <>
@@ -231,13 +233,13 @@ function DashboardPageContent() {
 
       {/* ── Xu hướng kinh doanh ── */}
       <div>
-        <SectionTitle>Xu hướng kinh doanh</SectionTitle>
+        <SectionTitle>{t("Xu hướng kinh doanh")}</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* Bar chart: Đoàn & khách 12 tháng */}
           <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Xu hướng đoàn & khách</p>
-            <p className="text-xs text-muted-foreground mb-4">12 tháng (6 trước + 6 sau · vuốt ngang trên mobile)</p>
+            <p className="text-sm font-semibold mb-1">{t("Xu hướng đoàn & khách")}</p>
+            <p className="text-xs text-muted-foreground mb-4">{t("12 tháng (6 trước + 6 sau · vuốt ngang trên mobile)")}</p>
             <div className="overflow-x-auto -mx-1 px-1">
               <div className="min-w-[760px] sm:min-w-0">
                 <ResponsiveContainer width="100%" height={200}>
@@ -262,10 +264,10 @@ function DashboardPageContent() {
 
           {/* Donut: Trạng thái đoàn */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Trạng thái đoàn</p>
-            <p className="text-xs text-muted-foreground mb-3">6 tháng gần nhất</p>
+            <p className="text-sm font-semibold mb-1">{t("Trạng thái đoàn")}</p>
+            <p className="text-xs text-muted-foreground mb-3">{t("6 tháng gần nhất")}</p>
             {data.statusBreakdown.length === 0 ? (
-              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">{t("Chưa có dữ liệu")}</div>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={160}>
@@ -300,18 +302,18 @@ function DashboardPageContent() {
 
       {/* ── Thống kê đoàn (tháng này + tháng sau) ── */}
       <div>
-        <SectionTitle>Thống kê đoàn — tháng này &amp; tháng sau</SectionTitle>
+        <SectionTitle>{t("Thống kê đoàn — tháng này & tháng sau")}</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Theo Agent */}
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border bg-muted/30">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Theo Agent — số đoàn &amp; lượng khách
+                {t("Theo Agent — số đoàn & lượng khách")}
               </p>
             </div>
             {data.topAgents.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu 2 tháng này</div>
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu 2 tháng này")}</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -348,11 +350,11 @@ function DashboardPageContent() {
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border bg-muted/30">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Theo Miền — số đoàn &amp; lượng khách
+                {t("Theo Miền — số đoàn & lượng khách")}
               </p>
             </div>
             {data.topMien.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu 2 tháng này</div>
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu 2 tháng này")}</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -398,23 +400,23 @@ function DashboardPageContent() {
 
       {/* ── Cần theo dõi ── */}
       <div>
-        <SectionTitle>Cần theo dõi</SectionTitle>
+        <SectionTitle>{t("Cần theo dõi")}</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Upcoming 7 ngày */}
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Sắp khởi hành — 7 ngày tới
+                {t("Sắp khởi hành — 7 ngày tới")}
               </p>
               <Link to="/doan" className="text-xs text-primary hover:underline flex items-center gap-1">
-                Xem tất cả <ArrowRight className="h-3 w-3" />
+                {t("Xem tất cả")} <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
             {data.upcomingDoan.length === 0 ? (
               <div className="px-4 py-10 text-center">
                 <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Không có đoàn sắp khởi hành</p>
+                <p className="text-sm text-muted-foreground">{t("Không có đoàn sắp khởi hành")}</p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -445,7 +447,7 @@ function DashboardPageContent() {
                           daysLeft <= 2 ? "bg-red-100 text-red-600"
                           : daysLeft <= 5 ? "bg-amber-100 text-amber-700"
                           : "bg-muted text-muted-foreground")}>
-                          {daysLeft === 0 ? "Hôm nay" : daysLeft === 1 ? "Ngày mai" : `${daysLeft} ngày`}
+                          {daysLeft === 0 ? t("Hôm nay") : daysLeft === 1 ? t("Ngày mai") : `${daysLeft} ${t("ngày")}`}
                         </span>
                       )}
                     </Link>
@@ -459,16 +461,16 @@ function DashboardPageContent() {
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                ĐNTT chờ xử lý
+                {t("ĐNTT chờ xử lý")}
               </p>
               <Link to="/de-nghi-thanh-toan" className="text-xs text-primary hover:underline flex items-center gap-1">
-                Xem tất cả <ArrowRight className="h-3 w-3" />
+                {t("Xem tất cả")} <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
             {data.recentDNTT.length === 0 ? (
               <div className="px-4 py-10 text-center">
                 <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Tất cả đã xử lý</p>
+                <p className="text-sm text-muted-foreground">{t("Tất cả đã xử lý")}</p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -490,7 +492,7 @@ function DashboardPageContent() {
                         <p className="text-sm font-semibold">{fmtM(d.so_tien)} ₫</p>
                         <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium",
                           isPending ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700")}>
-                          {isPending ? "Chờ duyệt" : "Chờ TT"}
+                          {isPending ? t("Chờ duyệt") : t("Chờ TT")}
                         </span>
                       </div>
                     </Link>
@@ -504,13 +506,13 @@ function DashboardPageContent() {
 
       {/* ── Chi phí & tài chính ── */}
       <div>
-        <SectionTitle>Chi phí & tài chính</SectionTitle>
+        <SectionTitle>{t("Chi phí & tài chính")}</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* Area chart: Chi phí 6 tháng */}
           <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Xu hướng chi phí</p>
-            <p className="text-xs text-muted-foreground mb-4">6 tháng gần nhất (đơn vị: triệu ₫)</p>
+            <p className="text-sm font-semibold mb-1">{t("Xu hướng chi phí")}</p>
+            <p className="text-xs text-muted-foreground mb-4">{t("6 tháng gần nhất (đơn vị: triệu ₫)")}</p>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={data.monthlyCostData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
                 <defs>
@@ -547,10 +549,10 @@ function DashboardPageContent() {
 
           {/* Donut + breakdown: Chi phí tháng này */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-1">Cơ cấu chi phí tháng</p>
+            <p className="text-sm font-semibold mb-1">{t("Cơ cấu chi phí tháng")}</p>
             <p className="text-xs text-muted-foreground mb-3">Tổng: <span className="font-semibold text-foreground">{fmtM(data.tongChiPhiThang)} ₫</span></p>
             {data.tongChiPhiThang === 0 ? (
-              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">Chưa có chi phí</div>
+              <div className="flex items-center justify-center h-[180px] text-sm text-muted-foreground">{t("Chưa có chi phí")}</div>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={150}>
@@ -585,10 +587,10 @@ function DashboardPageContent() {
 
       {/* ── Địa điểm ── */}
       <div>
-        <SectionTitle>Đoàn theo địa điểm (6 tháng)</SectionTitle>
+        <SectionTitle>{t("Đoàn theo địa điểm (6 tháng)")}</SectionTitle>
         <div className="rounded-xl border border-border bg-card p-4">
           {data.topDiaDiem.length === 0 ? (
-            <div className="flex items-center justify-center h-[160px] text-sm text-muted-foreground">Chưa có dữ liệu</div>
+            <div className="flex items-center justify-center h-[160px] text-sm text-muted-foreground">{t("Chưa có dữ liệu")}</div>
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(160, data.topDiaDiem.length * 36)}>
               <BarChart data={data.topDiaDiem} layout="vertical"
@@ -610,7 +612,7 @@ function DashboardPageContent() {
       {/* ── Đoàn đang chạy hôm nay ── */}
       {data.activeDoan.length > 0 && (
         <div>
-          <SectionTitle>Đang hoạt động hôm nay</SectionTitle>
+          <SectionTitle>{t("Đang hoạt động hôm nay")}</SectionTitle>
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-4 py-2 border-b border-border bg-emerald-50/60">
               <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
