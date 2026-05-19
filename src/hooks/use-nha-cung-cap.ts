@@ -12,6 +12,7 @@ export interface NhaCungCap {
   ngan_hang: string | null;
   so_tai_khoan: string | null;
   tai_khoan_thanh_toan: string | null;
+  tra_truoc: boolean;
   ghi_chu: string | null;
   created_at: string;
 }

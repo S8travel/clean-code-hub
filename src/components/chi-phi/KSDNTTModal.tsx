@@ -193,6 +193,7 @@ export default function KSDNTTModal({
           <KSCongNoPanel
             nccId={nccId}
             doanId={doanId}
+            maxAmount={mode === "deposit" ? depositAmount || 0 : conLai}
             value={canTru}
             onChange={onCanTruChange}
           />

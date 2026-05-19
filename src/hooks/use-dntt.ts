@@ -393,7 +393,7 @@ export function useRejectDNTT() {
 async function markPaidImpl(id: number, ngayISO: string, nguon?: string | null): Promise<number> {
   const { data: dntt, error: fetchErr } = await externalSupabase
     .from("de_nghi_thanh_toan")
-    .select("id, doan_id, so_tien, trang_thai_duyet")
+    .select("id, doan_id, so_tien, trang_thai_duyet, loai, nha_cung_cap_id, ten_nha_cung_cap")
     .eq("id", id)
     .single();
   if (fetchErr) throw fetchErr;
@@ -423,6 +423,33 @@ async function markPaidImpl(id: number, ngayISO: string, nguon?: string | null):
 
   const chiPhiIds = await getChiPhiIdsForDNTT(id);
   await recalcChiPhiStatus(chiPhiIds);
+
+  // ĐNTT trả trước đã trả đủ → tự lập quỹ (cong_no con_du loai='tra_truoc').
+  // Idempotent: chỉ tạo nếu CHƯA có cong_no nào gắn dntt_goc_id = id.
+  if ((dntt as any).loai === "tra_truoc") {
+    const paidNow = await getPaidAmount(id);
+    if (paidNow >= Number(dntt.so_tien)) {
+      const { data: existed } = await externalSupabase
+        .from("cong_no")
+        .select("id")
+        .eq("dntt_goc_id", id)
+        .limit(1)
+        .maybeSingle();
+      if (!existed) {
+        await externalSupabase.from("cong_no").insert({
+          doan_id: null,
+          dntt_goc_id: id,
+          nha_cung_cap_id: (dntt as any).nha_cung_cap_id ?? null,
+          ten_nha_cung_cap: (dntt as any).ten_nha_cung_cap ?? null,
+          so_tien_goc: Number(dntt.so_tien),
+          trang_thai: "con_du",
+          loai: "tra_truoc",
+          ly_do: "Quỹ trả trước dịch vụ",
+          ngay_tao: ngayISO,
+        });
+      }
+    }
+  }
   return dntt.doan_id as number;
 }
 
@@ -434,6 +461,8 @@ export function useMarkPaidDNTT() {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
       qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
+      qc.invalidateQueries({ queryKey: ["cong-no"] });
+      qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
     },
@@ -449,6 +478,8 @@ export function useMarkPaidWithDate() {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
       qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
+      qc.invalidateQueries({ queryKey: ["cong-no"] });
+      qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
     },

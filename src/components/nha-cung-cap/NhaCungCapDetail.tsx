@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { DeleteDialog } from "@/components/DeleteDialog";
@@ -22,6 +23,7 @@ export default function NhaCungCapDetail({ nhaCungCap, onDeleted }: Props) {
   const updateMut = useUpdateNhaCungCap();
   const deleteMut = useDeleteNhaCungCap();
   const [delOpen, setDelOpen] = useState(false);
+  const [traTruoc, setTraTruoc] = useState(false);
 
   const [form, setForm] = useState({
     ten: "",
@@ -49,6 +51,7 @@ export default function NhaCungCapDetail({ nhaCungCap, onDeleted }: Props) {
       tai_khoan_thanh_toan: nhaCungCap.tai_khoan_thanh_toan ?? "",
       ghi_chu: nhaCungCap.ghi_chu ?? "",
     });
+    setTraTruoc(!!nhaCungCap.tra_truoc);
   }, [nhaCungCap.id]);
 
   const set = (key: string, val: string) => setForm((f) => ({ ...f, [key]: val }));
@@ -70,6 +73,7 @@ export default function NhaCungCapDetail({ nhaCungCap, onDeleted }: Props) {
         ngan_hang: form.ngan_hang || null,
         so_tai_khoan: form.so_tai_khoan || null,
         tai_khoan_thanh_toan: form.tai_khoan_thanh_toan || null,
+        tra_truoc: traTruoc,
         ghi_chu: form.ghi_chu || null,
       });
       toast.success("Đã lưu thông tin NCC");
@@ -148,6 +152,21 @@ export default function NhaCungCapDetail({ nhaCungCap, onDeleted }: Props) {
         <div className="col-span-2">
           <Label className="text-xs">Tài khoản thanh toán</Label>
           <Textarea value={form.tai_khoan_thanh_toan} onChange={(e) => set("tai_khoan_thanh_toan", e.target.value)} className="text-sm min-h-[60px]" />
+        </div>
+        <div className="col-span-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+          <Checkbox
+            id="ncc-tra-truoc"
+            checked={traTruoc}
+            onCheckedChange={(v) => setTraTruoc(v === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="ncc-tra-truoc" className="text-xs font-normal cursor-pointer">
+            <span className="font-medium text-amber-800">NCC trả trước</span>
+            <span className="block text-amber-700">
+              Ứng tiền trước theo quỹ, dùng tới đâu cấn trừ tới đó. Khi tạo ĐNTT cho
+              NCC này, hệ thống tự gợi ý cấn trừ vào quỹ trả trước thay vì chi tiền.
+            </span>
+          </Label>
         </div>
         <div className="col-span-2">
           <Label className="text-xs">Ghi chú</Label>

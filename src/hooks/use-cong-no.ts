@@ -9,6 +9,7 @@ export interface CongNoRow {
   ten_nha_cung_cap: string | null;
   so_tien_goc: number;
   trang_thai: "con_du" | "da_can_tru" | "da_hoan_tien";
+  loai: "phat_sinh" | "tra_truoc";
   ly_do: string | null;
   ngay_tao: string;
   ghi_chu: string | null;
@@ -109,6 +110,52 @@ export function useUpdateCongNoStatus() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cong-no"] });
       qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
+    },
+  });
+}
+
+// Pha 1 — Lập quỹ trả trước: tạo ĐNTT loai='tra_truoc' (doan_id=null).
+// Duyệt + chi cash qua DNTTPage như ĐNTT thường → markPaidImpl tự sinh
+// cong_no con_du loai='tra_truoc' khi trả đủ (xem use-dntt.ts).
+export function useCreatePrepaidDNTT() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      nccId: number;
+      tenNcc: string;
+      soTien: number;
+      moTa: string;
+      ngayCanThanhToan?: string | null;
+    }) => {
+      const { data: ncc } = await externalSupabase
+        .from("nha_cung_cap")
+        .select("so_tai_khoan, ngan_hang")
+        .eq("id", args.nccId)
+        .maybeSingle();
+      const { data: authData } = await externalSupabase.auth.getUser();
+      const { data, error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .insert({
+          loai: "tra_truoc",
+          doan_id: null,
+          nha_cung_cap_id: args.nccId,
+          ten_nha_cung_cap: args.tenNcc,
+          so_tai_khoan: ncc?.so_tai_khoan ?? null,
+          ngan_hang: ncc?.ngan_hang ?? null,
+          so_tien: args.soTien,
+          mo_ta: args.moTa || `Trả trước dịch vụ — ${args.tenNcc}`,
+          trang_thai_duyet: "cho_duyet",
+          ngay_can_thanh_toan: args.ngayCanThanhToan ?? null,
+          tao_boi: authData?.user?.id ?? null,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      qc.invalidateQueries({ queryKey: ["cong-no"] });
     },
   });
 }

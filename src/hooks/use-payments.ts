@@ -38,6 +38,50 @@ export function usePaymentsByDoan(doanId: number | null | undefined) {
   });
 }
 
+export interface CongNoCanTruEntry {
+  id: number;
+  so_tien: number;
+  ngay_thanh_toan: string;
+  ghi_chu: string | null;
+  dntt_id: number;
+  doan_id: number | null;
+  ten_doan: string | null;
+  dntt_mo_ta: string | null;
+  dntt_loai: string | null;
+}
+
+// Các lần cấn trừ của 1 cong_no (quỹ trả trước / công nợ): đoàn nào, bao nhiêu,
+// ngày nào — lấy từ payments (nguồn chuẩn), join ĐNTT → đoàn.
+export function usePaymentsByCongNo(congNoId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["payments-by-cong-no", congNoId],
+    enabled: !!congNoId,
+    queryFn: async (): Promise<CongNoCanTruEntry[]> => {
+      const { data, error } = await externalSupabase
+        .from("payments")
+        .select(`
+          id, so_tien, ngay_thanh_toan, ghi_chu, dntt_id,
+          de_nghi_thanh_toan:dntt_id(doan_id, mo_ta, loai, doan:doan_id(ten_doan))
+        `)
+        .eq("cong_no_id", congNoId!)
+        .eq("method", "can_tru")
+        .order("ngay_thanh_toan", { ascending: true });
+      if (error) throw error;
+      return (data || []).map((p: any) => ({
+        id: p.id,
+        so_tien: Number(p.so_tien),
+        ngay_thanh_toan: p.ngay_thanh_toan,
+        ghi_chu: p.ghi_chu ?? null,
+        dntt_id: p.dntt_id,
+        doan_id: p.de_nghi_thanh_toan?.doan_id ?? null,
+        ten_doan: p.de_nghi_thanh_toan?.doan?.ten_doan ?? null,
+        dntt_mo_ta: p.de_nghi_thanh_toan?.mo_ta ?? null,
+        dntt_loai: p.de_nghi_thanh_toan?.loai ?? null,
+      }));
+    },
+  });
+}
+
 export interface PaymentByChiPhi {
   chi_phi_id: number;
   dntt_id: number;

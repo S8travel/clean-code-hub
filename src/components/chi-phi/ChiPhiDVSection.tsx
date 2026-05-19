@@ -1385,6 +1385,11 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
             <KSCongNoPanel
               nccId={dvModal?.nccId ?? undefined}
               doanId={doanId}
+              maxAmount={
+                dvModalMode === "deposit"
+                  ? dvDepositAmount || 0
+                  : dvModal?.thanhTien ?? 0
+              }
               value={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? null) : null}
               onChange={(v) => dvModal && setCanTruByDv((prev) => ({ ...prev, [dvModal.chiPhiId]: v }))}
             />

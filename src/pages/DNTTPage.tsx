@@ -50,6 +50,7 @@ const loaiLabel: Record<string, { text: string; color: string }> = {
   khach_san: { text: "KS", color: "bg-blue-100 text-blue-700" },
   nha_hang: { text: "NH", color: "bg-orange-100 text-orange-700" },
   dich_vu: { text: "DV", color: "bg-purple-100 text-purple-700" },
+  tra_truoc: { text: "Trả trước", color: "bg-amber-100 text-amber-700" },
 };
 
 
@@ -468,13 +469,14 @@ function DNTTPageContent() {
           <label className="text-xs text-muted-foreground mb-1 block">Loại</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[130px]">
-              <span>{!loai ? "Tất cả" : loai === "khach_san" ? "Khách sạn" : loai === "nha_hang" ? "Nhà hàng" : "Dịch vụ"}</span>
+              <span>{!loai ? "Tất cả" : loai === "khach_san" ? "Khách sạn" : loai === "nha_hang" ? "Nhà hàng" : loai === "tra_truoc" ? "Trả trước" : "Dịch vụ"}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="khach_san">Khách sạn</SelectItem>
               <SelectItem value="nha_hang">Nhà hàng</SelectItem>
               <SelectItem value="dich_vu">Dịch vụ</SelectItem>
+              <SelectItem value="tra_truoc">Trả trước</SelectItem>
             </SelectContent>
           </Select>
         </div>

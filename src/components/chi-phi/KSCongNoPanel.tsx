@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useCongNoByNCC } from "@/hooks/use-cong-no";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,25 +28,64 @@ interface Props {
   doanId: number;
   value: CanTruSelection | null;
   onChange: (v: CanTruSelection | null) => void;
+  /** Số tiền tối đa hợp lý để cấn trừ (= số tiền ĐNTT/đang thanh toán).
+   *  Mặc định & clamp soTienCanTru về min(quỹ còn lại, maxAmount). */
+  maxAmount?: number | null;
 }
 
-export default function KSCongNoPanel({ nccId, doanId, value, onChange }: Props) {
+export default function KSCongNoPanel({ nccId, doanId, value, onChange, maxAmount }: Props) {
   const { data: congNoList = [], isLoading } = useCongNoByNCC(nccId);
+  const cap = (conLai: number) =>
+    maxAmount != null && maxAmount > 0 ? Math.min(conLai, maxAmount) : conLai;
 
-  const options = useMemo(() =>
-    congNoList.map((r) => {
-      const tenDoan =
-        r.ten_doan ||
-        extractDoanFromGhiChu(r.ghi_chu) ||
-        (r.doan_id ? `#${r.doan_id}` : "Khoản dư");
+  const options = useMemo(() => {
+    const mapped = congNoList.map((r) => {
+      const isPrepaid = r.loai === "tra_truoc";
+      const tenDoan = isPrepaid
+        ? "Quỹ trả trước"
+        : r.ten_doan ||
+          extractDoanFromGhiChu(r.ghi_chu) ||
+          (r.doan_id ? `#${r.doan_id}` : "Khoản dư");
       return {
         id: r.id,
-        label: `${tenDoan} — ${fmt(r.so_tien_con_lai)} VND`,
+        label: `${isPrepaid ? "💰 Quỹ trả trước" : tenDoan} — ${fmt(r.so_tien_con_lai)} VND`,
         conLai: r.so_tien_con_lai,
         tenDoan,
+        isPrepaid,
       };
-    }),
-  [congNoList]);
+    });
+    // Quỹ trả trước lên đầu để OP thấy & ưu tiên cấn trừ
+    return mapped.sort((a, b) => Number(b.isPrepaid) - Number(a.isPrepaid));
+  }, [congNoList]);
+
+  const hasPrepaid = options.some((o) => o.isPrepaid);
+
+  // NCC trả trước → tự gợi ý (preselect) quỹ trả trước khi chưa chọn gì.
+  // Chỉ tự áp 1 lần / nccId — user xóa chọn thì tôn trọng, không ép lại.
+  const autoAppliedNcc = useRef<number | null>(null);
+  useEffect(() => {
+    if (autoAppliedNcc.current === nccId) return;
+    if (!nccId || options.length === 0) return;
+    const prepaid = options.find((o) => o.isPrepaid);
+    if (prepaid && !value) {
+      autoAppliedNcc.current = nccId;
+      onChange({
+        congNoId: prepaid.id,
+        soTienConLai: prepaid.conLai,
+        soTienCanTru: cap(prepaid.conLai),
+        tenDoan: prepaid.tenDoan,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nccId, options]);
+
+  // maxAmount đổi (vd switch full→cọc) → kẹp lại soTienCanTru nếu vượt.
+  useEffect(() => {
+    if (!value) return;
+    const capped = cap(value.soTienConLai);
+    if (value.soTienCanTru > capped) onChange({ ...value, soTienCanTru: capped });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxAmount]);
 
   if (!nccId || isLoading || options.length === 0) return null;
 
@@ -60,7 +99,7 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange }: Props)
     onChange({
       congNoId: opt.id,
       soTienConLai: opt.conLai,
-      soTienCanTru: opt.conLai,
+      soTienCanTru: cap(opt.conLai),
       tenDoan: opt.tenDoan,
     });
   };
@@ -68,7 +107,7 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange }: Props)
   const handleAmountChange = (raw: string) => {
     if (!value) return;
     const parsed = parseInt(raw.replace(/\D/g, ""), 10);
-    const soTienCanTru = isNaN(parsed) ? 0 : Math.min(parsed, value.soTienConLai);
+    const soTienCanTru = isNaN(parsed) ? 0 : Math.min(parsed, cap(value.soTienConLai));
     onChange({ ...value, soTienCanTru });
   };
 
@@ -76,7 +115,11 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange }: Props)
     <div className="flex items-center gap-2 flex-wrap">
       <div className="flex items-center gap-1 text-amber-600 text-xs shrink-0">
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-        <span className="font-medium">Có {options.length} khoản công nợ</span>
+        <span className="font-medium">
+          {hasPrepaid
+            ? "NCC trả trước — gợi ý cấn trừ vào quỹ"
+            : `Có ${options.length} khoản công nợ`}
+        </span>
       </div>
 
       <Select

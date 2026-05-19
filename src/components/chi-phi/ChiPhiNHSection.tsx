@@ -2064,6 +2064,13 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                 <KSCongNoPanel
                   nccId={nh?.nha_cung_cap_id}
                   doanId={doanId}
+                  maxAmount={
+                    isBSMode
+                      ? dnttBsAmount || 0
+                      : dnttModalMode === "deposit"
+                        ? dnttDepositAmount || 0
+                        : effectiveTotalBua
+                  }
                   value={canTruByMeal[dnttModalKey] ?? null}
                   onChange={(v) => setCanTruByMeal((prev) => ({ ...prev, [dnttModalKey]: v }))}
                 />
