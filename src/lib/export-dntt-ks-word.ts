@@ -15,6 +15,7 @@ import {
   HeightRule,
 } from "docx";
 import { saveAs } from "file-saver";
+import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
@@ -39,7 +40,7 @@ const COL_CANTRU_W = [...COL_CANTRU_FIXED, CONTENT_W - COL_CANTRU_FIXED.reduce((
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 function cell(
-  children: Paragraph[],
+  children: (Paragraph | Table)[],
   opts: { width?: number; rowSpan?: number; columnSpan?: number; shading?: typeof GRAY; borders?: any; margins?: { top: number; bottom: number; left: number; right: number } } = {}
 ): TableCell {
   return new TableCell({
@@ -245,20 +246,22 @@ function buildGhiChuPara(items: EdgeFunctionData[]): Paragraph | null {
   });
 }
 
-function buildHeaderTable(): Table {
+function buildHeaderTable(logoData: ArrayBuffer | null = null): Table {
   const HALF = Math.floor(CONTENT_W / 2);
   const today = new Date().toLocaleDateString("vi-VN");
+  const coParas = [
+    p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22 }),
+    p("S8 TRAVEL COMPANY", { size: 18, color: "555555" }),
+    p("MST: 0402021137", { size: 18, color: "555555" }),
+  ];
+  const coBlock = companyLogoTable(logoData, coParas);
   return new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
       new TableRow({
         children: [
           cell(
-            [
-              p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22 }),
-              p("S8 TRAVEL COMPANY", { size: 18, color: "555555" }),
-              p("MST: 0402021137", { size: 18, color: "555555" }),
-            ],
+            coBlock ? [coBlock] : coParas,
             { width: HALF, borders: NO_BORDERS, margins: { top: 60, bottom: 60, left: 0, right: 0 } }
           ),
           cell(
@@ -332,7 +335,7 @@ export async function exportDNTTKSWordFromData(data: EdgeFunctionData) {
     : `Đề nghị thanh toán tiền khách sạn ${ks.ten} cho đoàn ${doan.ten_doan}${soKhachSuffix}`);
 
   const doc = buildDoc(
-    buildHeaderTable(),
+    buildHeaderTable(await getLogoData()),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ noProof: true, text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
     new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ noProof: true, text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
     new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ noProof: true, text: lyDoText, font: "Arial", size: 20 })] }),
@@ -353,7 +356,7 @@ export async function exportDNTTKSBatchWordFromData(
   if (items.length === 0) return;
 
   const doc = buildDoc(
-    buildHeaderTable(),
+    buildHeaderTable(await getLogoData()),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ noProof: true, text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 32, bold: true })] }),
     new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 100, after: 60 }, children: [new TextRun({ noProof: true, text: "Kính gửi: Ban Giám Đốc Công ty TNHH Du lịch S8", font: "Arial", size: 20, bold: true })] }),
     new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 60, after: 160 }, children: [new TextRun({ noProof: true, text: items[0]?.lyDoText ?? `Đề nghị thanh toán tiền khách sạn cho đoàn ${tenDoan}`, font: "Arial", size: 20 })] }),

@@ -14,6 +14,7 @@ import {
   PageOrientation,
 } from "docx";
 import { saveAs } from "file-saver";
+import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
@@ -34,7 +35,7 @@ const COL_W = [1400, 1050, 2000, 700, 560, 1100, 600, 1300, 1050, 900, 1250, 200
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 function cell(
-  children: Paragraph[],
+  children: (Paragraph | Table)[],
   opts: {
     width?: number;
     rowSpan?: number;
@@ -119,19 +120,22 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
 
   // ── 1. Header: Company info + date ──────────────────────────────────────
   const HALF = Math.floor(CONTENT_W / 2);
+  const logoData = await getLogoData();
+  const coParas = [
+    p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 20, alignment: AlignmentType.LEFT }),
+    p("ĐC: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, TP Đà Nẵng", { size: 14, alignment: AlignmentType.LEFT }),
+    p("TEL: 02366.566.538", { size: 14, alignment: AlignmentType.LEFT }),
+    p("Email: s8travel.info@gmail.com / nhận hóa đơn: s8travel.hddt@gmail.com", { size: 14, alignment: AlignmentType.LEFT }),
+    p("MST: 0402021137", { size: 14, alignment: AlignmentType.LEFT }),
+  ];
+  const coBlock = companyLogoTable(logoData, coParas);
   const headerTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
       new TableRow({
         children: [
           cell(
-            [
-              p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 20, alignment: AlignmentType.LEFT }),
-              p("ĐC: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, TP Đà Nẵng", { size: 14, alignment: AlignmentType.LEFT }),
-              p("TEL: 02366.566.538", { size: 14, alignment: AlignmentType.LEFT }),
-              p("Email: s8travel.info@gmail.com / nhận hóa đơn: s8travel.hddt@gmail.com", { size: 14, alignment: AlignmentType.LEFT }),
-              p("MST: 0402021137", { size: 14, alignment: AlignmentType.LEFT }),
-            ],
+            coBlock ? [coBlock] : coParas,
             { width: HALF, borders: NO_BORDERS, margins: { top: 60, bottom: 60, left: 0, right: 0 } },
           ),
           cell(

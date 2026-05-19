@@ -13,6 +13,7 @@ import {
   VerticalAlign,
 } from "docx";
 import { saveAs } from "file-saver";
+import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
 import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
 import type { SetMenu } from "@/hooks/use-nha-hang";
 
@@ -49,7 +50,7 @@ const CELL_MARGINS = { top: 40, bottom: 40, left: 80, right: 80 };
 const CELL_MARGINS_LG = { top: 80, bottom: 80, left: 100, right: 100 };
 
 function cell(
-  children: Paragraph[],
+  children: (Paragraph | Table)[],
   opts: {
     width?: number;
     shading?: typeof HEADER_SHADING;
@@ -270,17 +271,20 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
   const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
 
   // ── 1. Header: Company + Quốc hiệu ─────────────────────────────────────
+  const logoData = await getLogoData();
+  const coParas = [
+    p("CÔNG TY TNHH DU LỊCH S8",   { bold: true, size: 20, align: AlignmentType.LEFT }),
+    p("S8 TRAVEL COMPANY",           { size: FS_SM, color: "555555", align: AlignmentType.LEFT }),
+    p("MST: 0402021137",             { size: FS_SM, color: "555555", align: AlignmentType.LEFT }),
+  ];
+  const coBlock = companyLogoTable(logoData, coParas);
   const headerTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
       new TableRow({
         children: [
           cell(
-            [
-              p("CÔNG TY TNHH DU LỊCH S8",   { bold: true, size: 20, align: AlignmentType.CENTER }),
-              p("S8 TRAVEL COMPANY",           { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
-              p("MST: 0402021137",             { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
-            ],
+            coBlock ? [coBlock] : coParas,
             { width: HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
           ),
           cell(
@@ -532,6 +536,7 @@ function buildDocFromCells(
   data: DieuTourExportData,
   cells: DayExportCell[],
   editedGhiChu: string,
+  logoData: ArrayBuffer | null = null,
 ): import("docx").Document {
   const {
     tenDoan, hdv, xe, ngayDi, ngayVe,
@@ -550,17 +555,19 @@ function buildDocFromCells(
   const shopStr = shopping === true ? "YES" : shopping === false ? "NO" : "—";
 
   // ── Header (same as main export) ─────────────────────────────────────────
+  const coParas = [
+    p("CÔNG TY TNHH DU LỊCH S8",   { bold: true, size: 20, align: AlignmentType.LEFT }),
+    p("S8 TRAVEL COMPANY",           { size: FS_SM, color: "555555", align: AlignmentType.LEFT }),
+    p("MST: 0402021137",             { size: FS_SM, color: "555555", align: AlignmentType.LEFT }),
+  ];
+  const coBlock = companyLogoTable(logoData, coParas);
   const headerTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
       new TableRow({
         children: [
           cell(
-            [
-              p("CÔNG TY TNHH DU LỊCH S8",   { bold: true, size: 20, align: AlignmentType.CENTER }),
-              p("S8 TRAVEL COMPANY",           { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
-              p("MST: 0402021137",             { size: FS_SM, color: "555555", align: AlignmentType.CENTER }),
-            ],
+            coBlock ? [coBlock] : coParas,
             { width: HALF, vertAlign: VerticalAlign.CENTER, margins: CELL_MARGINS_LG }
           ),
           cell(
@@ -723,7 +730,7 @@ export async function exportDieuTourWordFromCells(
   cells: DayExportCell[],
   editedGhiChu: string,
 ) {
-  const doc = buildDocFromCells(data, cells, editedGhiChu);
+  const doc = buildDocFromCells(data, cells, editedGhiChu, await getLogoData());
   const blob = await Packer.toBlob(doc);
   saveAs(blob, `${data.tenDoan}_bảng_điều_tour.docx`);
 }
@@ -734,7 +741,7 @@ export async function getDieuTourWordBlob(
   cells: DayExportCell[],
   editedGhiChu: string,
 ): Promise<Blob> {
-  const doc = buildDocFromCells(data, cells, editedGhiChu);
+  const doc = buildDocFromCells(data, cells, editedGhiChu, await getLogoData());
   return Packer.toBlob(doc);
 }
 
