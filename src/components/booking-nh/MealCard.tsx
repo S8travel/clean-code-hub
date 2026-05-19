@@ -24,7 +24,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import { buildUpdateEmailHtml, escapeHtml } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 
 const STATUS_CFG = {
@@ -307,14 +307,87 @@ export default function MealCard({
     // Update mode: minimal layout
     if (mode === "update") {
       const senderName = userProfile?.ho_ten || currentUserName;
-      const keyFields = buildKeyFieldsList([
-        { label: "Đoàn", value: tenDoan || "—" },
-        { label: "Ngày", value: fmtDate(ngayDate) },
-        { label: "Bữa ăn", value: buaLabel },
-        { label: "Số khách", value: soKhach != null ? `${soKhach} khách` : "—" },
-        { label: "Set menu", value: selectedMenu ? `${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}` : "—" },
-        { label: "HDV", value: formatHdvForEmail(doanHdv) },
-      ]);
+      // Diff đánh dấu THẲNG trong từng dòng (old → new) — KHÔNG mục riêng,
+      // KHÔNG callout đầu mail. prev null (gửi trước feature) → chỉ hiện giá trị
+      // hiện tại, không có mũi tên.
+      const prev = booking?.mail_sent_snapshot as Record<string, unknown> | null | undefined;
+      const num = (v: unknown) => (typeof v === "number" ? v : v == null ? 0 : Number(v) || 0);
+      const arrow = (label: string, p: number, c: number) =>
+        p !== c ? `${label} ${p} → ${c}` : `${label} ${c}`;
+
+      // Số khách: Người lớn (+ Trẻ em chỉ khi có — hoặc vừa đổi về 0 để thấy đổi)
+      const curLon = num(soKhachLon);
+      const curEm = num(soKhachEm1) + num(soKhachEm2);
+      const prevLon = prev ? num(prev.so_khach_lon) : curLon;
+      const prevEm = prev ? num(prev.so_khach_em1) + num(prev.so_khach_em2) : curEm;
+      const soKhachVal =
+        curEm > 0 || prevEm > 0
+          ? `${arrow("Người lớn", prevLon, curLon)} + ${arrow("Trẻ em", prevEm, curEm)}`
+          : arrow("Người lớn", prevLon, curLon);
+
+      // Ngày
+      const ngayChanged = !!prev && (prev.ngay_date ?? "") !== (ngayDate ?? "");
+      const ngayVal = ngayChanged
+        ? `${fmtDate(String(prev!.ngay_date))} → ${fmtDate(ngayDate)}`
+        : fmtDate(ngayDate);
+
+      // Set menu (fallback booking snapshot khi selectedMenu chưa resolve)
+      const curSetName = selectedMenu?.ten_set ?? booking?.ten_set_snapshot ?? null;
+      const curSetPrice = selectedMenu?.gia ?? booking?.gia_snapshot ?? null;
+      const curSetUnit = selectedMenu?.don_vi ?? booking?.don_vi_snapshot ?? null;
+      const fmtSet = (n: string | null, g: number | null, u: string | null) =>
+        n ? `${n}${g != null ? ` — ${g.toLocaleString("vi-VN")}${u ? `/${u}` : ""}` : ""}` : "—";
+      const curSet = fmtSet(curSetName, curSetPrice, curSetUnit);
+      const setChanged =
+        !!prev &&
+        ((prev.ten_set ?? "") !== (curSetName ?? "") ||
+          num(prev.gia) !== num(curSetPrice));
+      const setMenuVal = setChanged
+        ? `${fmtSet((prev!.ten_set as string | null) ?? null, (prev!.gia as number | null) ?? null, null)} → ${curSet}`
+        : curSet;
+
+      // Món ăn thay đổi: ghép "từ món → sang món", list NGAY DƯỚI Set menu.
+      // Không đổi → 1 dòng "Món ăn: N món".
+      const prevMon = prev && Array.isArray(prev.mon_an) ? (prev.mon_an as string[]) : [];
+      const curMon = monList;
+      const removedMon = prev ? prevMon.filter((m) => !curMon.includes(m)) : [];
+      const addedMon = prev ? curMon.filter((m) => !prevMon.includes(m)) : [];
+      const monChangeItems: string[] = [];
+      const pairs = Math.min(removedMon.length, addedMon.length);
+      for (let i = 0; i < pairs; i++)
+        monChangeItems.push(`${escapeHtml(removedMon[i])} → <strong>${escapeHtml(addedMon[i])}</strong>`);
+      for (const m of addedMon.slice(pairs))
+        monChangeItems.push(`Thêm: <strong>${escapeHtml(m)}</strong>`);
+      for (const m of removedMon.slice(pairs))
+        monChangeItems.push(`Bỏ: <strong>${escapeHtml(m)}</strong>`);
+
+      const liSt = `style="margin:4px 0;font-size:14px"`;
+      const lbl = (s: string) => `<span style="color:#64748b">${escapeHtml(s)}:</span>`;
+      const row = (label: string, value: string) =>
+        `<li ${liSt}>${lbl(label)} <strong>${escapeHtml(value)}</strong></li>`;
+      // Đổi cả set menu → diff từng món vô nghĩa, liệt kê NGUYÊN menu mới.
+      // Chỉ sửa món trong cùng set → ghép "từ → sang". Không đổi → "N món".
+      const monBlock = setChanged
+        ? curMon.length > 0
+          ? `<li ${liSt}>${lbl("Danh sách món (set menu mới)")}<ul style="margin:4px 0;padding-left:18px;list-style:decimal">${curMon
+              .map((m) => `<li style="margin:2px 0;font-size:14px">${escapeHtml(m)}</li>`)
+              .join("")}</ul></li>`
+          : row("Món ăn", "—")
+        : monChangeItems.length > 0
+          ? `<li ${liSt}>${lbl("Món ăn thay đổi")}<ul style="margin:4px 0;padding-left:18px;list-style:circle">${monChangeItems
+              .map((it) => `<li style="margin:2px 0;font-size:14px">${it}</li>`)
+              .join("")}</ul></li>`
+          : row("Món ăn", `${curMon.length} món`);
+
+      const keyFields = `<ul style="margin:0 0 8px;padding-left:18px;list-style:disc">${[
+        row("Đoàn", tenDoan || "—"),
+        row("Ngày", ngayVal),
+        row("Bữa ăn", buaLabel),
+        row("Số khách", soKhachVal),
+        row("Set menu", setMenuVal),
+        monBlock,
+        row("HDV", formatHdvForEmail(doanHdv)),
+      ].join("")}</ul>`;
       return buildUpdateEmailHtml({
         greeting: `Kính gửi ${nhaHangTen || "Quý nhà hàng"},`,
         intro: `Cập nhật booking ${buaLabel.toLowerCase()} đoàn ${tenDoan || "—"}:`,
@@ -380,6 +453,8 @@ export default function MealCard({
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
+    // updateNote = lời nhắn tự do (tùy chọn). Diff thay đổi KHÔNG prefill vào
+    // đây nữa — đã ghép thẳng vào nội dung mail (mục "Nội dung thay đổi…").
     setUpdateNote("");
     const buaLabel = buaAn === "trua" ? "ăn trưa" : "ăn tối";
     const ngayStr = ngayDate ? format(new Date(ngayDate + "T00:00:00"), "dd/MM", { locale: vi }) : "";
@@ -391,12 +466,15 @@ export default function MealCard({
     setEmailModalOpen(true);
   };
 
-  // Rebuild HTML khi user nhập lời nhắn (chỉ ở update mode)
+  // Rebuild HTML khi: user nhập lời nhắn (update mode) HOẶC các input async
+  // resolve sau khi mở modal (doanHdv/selectedMenu) → tránh kẹt "Bổ sung sau"
+  // do HDV query chưa về lúc openEmailModal. Edit body của user không trigger
+  // (chỉ phụ thuộc các giá trị nguồn, KHÔNG phụ thuộc emailHtml).
   useEffect(() => {
-    if (!emailModalOpen || emailMode !== "update") return;
-    setEmailHtml(buildEmailHtml("update", updateNote));
+    if (!emailModalOpen) return;
+    setEmailHtml(buildEmailHtml(emailMode, updateNote));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateNote]);
+  }, [updateNote, doanHdv, selectedMenu, emailMode, emailModalOpen]);
 
   const buildMailtoBody = () => {
     const buaLabel = buaAn === "trua" ? "Ä‚n trÆ°a" : "Ä‚n tá»‘i";
@@ -444,6 +522,7 @@ export default function MealCard({
         bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: booking.email_thread_id,
         mode: emailMode,
         mailContentHash: hashMailContent(buildMailFields()),
+        mailSentSnapshot: buildMailFields(),
       });
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
@@ -457,11 +536,12 @@ export default function MealCard({
   const handleMailtoFallback = () => {
     const mailtoBody = buildMailtoBody();
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    const hash = hashMailContent(buildMailFields());
+    const snap = buildMailFields();
+    const hash = hashMailContent(snap);
     if (emailMode === "update") {
-      saveBooking({ sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash } as Partial<BookingNHRow>);
+      saveBooking({ sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap } as Partial<BookingNHRow>);
     } else {
-      saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash } as Partial<BookingNHRow>);
+      saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap } as Partial<BookingNHRow>);
     }
     setEmailModalOpen(false);
     toast.success("Đã mở email client");
@@ -509,14 +589,15 @@ export default function MealCard({
   };
   const handleConfirmZaloSent = () => {
     const now = new Date().toISOString();
-    const hash = hashMailContent(buildMailFields());
+    const snap = buildMailFields();
+    const hash = hashMailContent(snap);
     if (booking?.id) {
-      updateMut.mutate({ id: booking.id, doan_id: doanId, booking_status: "da_gui", sent_at: now, sent_by: currentUserName, mail_content_hash: hash } as Partial<BookingNHRow> & { id: number; doan_id: number });
+      updateMut.mutate({ id: booking.id, doan_id: doanId, booking_status: "da_gui", sent_at: now, sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap } as Partial<BookingNHRow> & { id: number; doan_id: number });
     } else {
       upsertMut.mutate({
         doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn,
         nha_hang_id: nhaHangId!, mon_an_snapshot: monList, booking_status: "da_gui",
-        sent_at: now, sent_by: currentUserName, mail_content_hash: hash,
+        sent_at: now, sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap,
       } as any);
     }
     setZaloModalOpen(false);
@@ -722,10 +803,10 @@ export default function MealCard({
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleConfirm}>
                       <Check className="h-3 w-3 mr-1" /> Xác nhận
                     </Button>
-                    {booking?.email_thread_id && (
+                    {booking?.sent_at && (
                       <Button size="sm" variant="outline" className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
                         onClick={() => openEmailModal("update")}
-                        title="Gửi email cập nhật — sẽ thread vào mail booking cũ">
+                        title="Gửi email cập nhật — thread vào mail booking cũ (Gmail group theo subject)">
                         <Send className="h-3 w-3 mr-1" /> Gửi cập nhật
                       </Button>
                     )}
@@ -736,10 +817,10 @@ export default function MealCard({
                 )}
                 {booking?.booking_status === "nh_xac_nhan" && (
                   <>
-                    {booking?.email_thread_id && (
+                    {booking?.sent_at && (
                       <Button size="sm" variant="outline" className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
                         onClick={() => openEmailModal("update")}
-                        title="Gửi email cập nhật — sẽ thread vào mail booking cũ">
+                        title="Gửi email cập nhật — thread vào mail booking cũ (Gmail group theo subject)">
                         <Send className="h-3 w-3 mr-1" /> Gửi cập nhật
                       </Button>
                     )}

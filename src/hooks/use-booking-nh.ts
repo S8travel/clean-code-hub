@@ -20,6 +20,7 @@ export interface BookingNHRow {
   email_thread_id: string | null;
   deadline: string | null;
   mail_content_hash: string | null;
+  mail_sent_snapshot: Record<string, unknown> | null;
 }
 
 export interface MenuDayData {
@@ -251,6 +252,7 @@ export function useSendNHBookingEmail() {
       // mode='update' → giữ nguyên booking_status, chỉ update sent_at + email_thread_id
       mode?: "first" | "update";
       mailContentHash?: string;
+      mailSentSnapshot?: Record<string, unknown>;
     }) => {
       // EXPERIMENT: KHÔNG pass messageId/inReplyTo. Resend ghi đè Message-ID nên
       // In-Reply-To custom invalid → Gmail tạo thread mới. Bỏ → Gmail dựa Subject + From group.
@@ -291,6 +293,7 @@ export function useSendNHBookingEmail() {
       };
       if (params.mode !== "update") updatePayload.booking_status = "da_gui";
       if (params.mailContentHash !== undefined) updatePayload.mail_content_hash = params.mailContentHash;
+      if (params.mailSentSnapshot !== undefined) updatePayload.mail_sent_snapshot = params.mailSentSnapshot;
 
       const { error } = await externalSupabase
         .from("doan_booking_nh")
