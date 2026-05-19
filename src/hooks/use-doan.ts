@@ -155,6 +155,24 @@ export function useDiaDiem() {
   });
 }
 
+/** Chú thích khách của 1 đoàn (ăn chay / dị ứng / VIP…) — dùng cho mail booking. */
+export function useDoanChuThich(doanId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["doan-chu-thich", doanId],
+    enabled: !!doanId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("doan")
+        .select("chu_thich_khach")
+        .eq("id", doanId!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.chu_thich_khach ?? null) as string | null;
+    },
+  });
+}
+
 export function useHuongDanVien() {
   return useQuery({
     queryKey: ["huong_dan_vien"],

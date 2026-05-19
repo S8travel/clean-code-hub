@@ -17,7 +17,7 @@ import {
   useSetMenuMons,
   type BookingNHRow,
 } from "@/hooks/use-booking-nh";
-import { useCurrentUserProfile } from "@/hooks/use-doan";
+import { useCurrentUserProfile, useDoanChuThich } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useHdvByDoanId, formatHdvForEmail } from "@/hooks/use-hdv";
 import { externalSupabase } from "@/lib/supabase-external";
@@ -94,6 +94,7 @@ export default function MealCard({
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
   const { data: doanHdv } = useHdvByDoanId(doanId);
+  const { data: chuThichKhach } = useDoanChuThich(doanId);
   const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -303,6 +304,10 @@ export default function MealCard({
 
   const buildEmailHtml = (mode: "first" | "update" = "first", note = "") => {
     const buaLabel = buaAn === "trua" ? "Ăn trưa" : "Ăn tối";
+    // Chú thích khách (ăn chay / dị ứng / VIP…) từ tab Điều tour — quan trọng
+    // với nhà hàng nên hiển thị nổi bật.
+    const ctClean = (chuThichKhach ?? "").trim();
+    const ctHtml = escapeHtml(ctClean).replace(/\n/g, "<br>");
 
     // Update mode: minimal layout
     if (mode === "update") {
@@ -386,6 +391,9 @@ export default function MealCard({
         row("Số khách", soKhachVal),
         row("Set menu", setMenuVal),
         monBlock,
+        ctClean
+          ? `<li ${liSt}><span style="color:#b45309">⚠ Lưu ý khách:</span> <strong style="color:#b45309">${ctHtml}</strong></li>`
+          : "",
         row("HDV", formatHdvForEmail(doanHdv)),
       ].join("")}</ul>`;
       return buildUpdateEmailHtml({
@@ -425,6 +433,7 @@ export default function MealCard({
         ${soNoidBo ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Nội bộ</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soNoidBo} suất (${soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"})</td></tr>` : ""}
         ${selectedMenu ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Set menu</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}</td></tr>` : ""}
         <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">HDV</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${formatHdvForEmail(doanHdv)}</td></tr>
+        ${ctClean ? `<tr><td style="border:1px solid #fcd34d;background:#fffbeb;padding:8px 12px;color:#b45309;font-weight:600">⚠ Lưu ý khách</td><td style="border:1px solid #fcd34d;background:#fffbeb;padding:8px 12px;color:#b45309;font-weight:600">${ctHtml}</td></tr>` : ""}
       </table>
       ${monList.length > 0 ? `
       <p style="font-weight:600;margin:0 0 8px">Danh sách món:</p>
@@ -474,7 +483,7 @@ export default function MealCard({
     if (!emailModalOpen) return;
     setEmailHtml(buildEmailHtml(emailMode, updateNote));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateNote, doanHdv, selectedMenu, emailMode, emailModalOpen]);
+  }, [updateNote, doanHdv, chuThichKhach, selectedMenu, emailMode, emailModalOpen]);
 
   const buildMailtoBody = () => {
     const buaLabel = buaAn === "trua" ? "Ä‚n trÆ°a" : "Ä‚n tá»‘i";
