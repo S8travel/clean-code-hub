@@ -14,6 +14,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useEmailSignatures, type EmailSignature } from "@/hooks/use-email-signatures";
+import { uploadInlineImage } from "@/lib/email-inline-images";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const SIG_HR = `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">`;
@@ -170,6 +172,45 @@ export default function EmailPreviewModal({
     if (editRef.current) onHtmlChange(editRef.current.innerHTML);
   };
 
+  // Ảnh dán/thả vào body: upload Storage → chèn <img src=https> NGAY → state
+  // mail không bao giờ chứa data:/blob: (Gmail/Outlook chặn ảnh inline đó).
+  const [imgUploading, setImgUploading] = useState(false);
+  const insertImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setImgUploading(true);
+    try {
+      const url = await uploadInlineImage(file);
+      const node = editRef.current;
+      if (node) {
+        node.focus();
+        document.execCommand(
+          "insertHTML", false,
+          `<img src="${url}" alt="" style="max-width:100%;height:auto" />`,
+        );
+        onHtmlChange(node.innerHTML);
+      }
+    } catch (e: any) {
+      toast.error("Tải ảnh thất bại: " + (e?.message || ""));
+    } finally {
+      setImgUploading(false);
+    }
+  }, [onHtmlChange]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
+    for (const it of Array.from(e.clipboardData?.items ?? [])) {
+      if (it.kind === "file" && it.type.startsWith("image/")) {
+        const f = it.getAsFile();
+        if (f) { e.preventDefault(); void insertImageFile(f); return; }
+      }
+    }
+  }, [insertImageFile]);
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    for (const f of Array.from(e.dataTransfer?.files ?? [])) {
+      if (f.type.startsWith("image/")) { e.preventDefault(); void insertImageFile(f); return; }
+    }
+  }, [insertImageFile]);
+
   const handleSigChange = (val: string) => {
     const id = val === "none" ? null : val;
     setSelectedSigId(id);
@@ -272,6 +313,8 @@ export default function EmailPreviewModal({
             contentEditable
             suppressContentEditableWarning
             onInput={handleInput}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
             className="w-full min-h-[300px] max-h-[360px] overflow-y-auto border border-border rounded-md p-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-white"
           />
 
@@ -456,9 +499,9 @@ export default function EmailPreviewModal({
             <Mail className="h-4 w-4 mr-1.5" />
             Mở email client
           </Button>
-          <Button onClick={onSendViaServer} disabled={sending || !to}>
+          <Button onClick={onSendViaServer} disabled={sending || !to || imgUploading}>
             <Send className="h-4 w-4 mr-1.5" />
-            {sending ? "Đang gửi..." : "Gửi qua server"}
+            {imgUploading ? "Đang tải ảnh..." : sending ? "Đang gửi..." : "Gửi qua server"}
           </Button>
         </DialogFooter>
       </DialogContent>
