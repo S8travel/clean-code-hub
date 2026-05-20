@@ -49,77 +49,64 @@ export function isKSRoomRow(r: LocalKSRow): boolean {
   return !r.loai_row || r.loai_row === "phong";
 }
 
-// FOC per row: trả về tiền miễn + số phòng miễn cho row đó (pro-rata theo gross).
-// Helper dùng chung cho UI (hiển thị NET Thành tiền) + save (tien_cong_ty) + export.
-// Filter service rows ra khỏi ngưỡng + tổng day-gross — service không hưởng FOC.
+// FOC per row (Option A — foc_count nhập tay cho mọi row, KHÔNG auto-pool theo ngày).
+// Lý do: pool tự động phân bổ FOC theo bình quân giá → khi mix loại phòng (vd 30 twn
+// + 1 sgl nâng hạng), FOC dính một phần vào SGL → vượt giá trị thực (chỉ free 1 twn).
+// UI nay hiện "16免1 suggest" để OP biết tổng FOC, nhưng OP tự gán foc_count cho row
+// phòng giá thấp nhất. Signature giữ args (sameKsDayRows, focKhach, focMien) để callers
+// cũ không phải đổi — args hiện chỉ dùng cho legacy compat, không còn tính toán pool.
 function calcRowFocBreakdown(
   row: LocalKSRow,
-  sameKsDayRows: LocalKSRow[],
-  focKhach: number | null,
-  focMien: number | null,
+  _sameKsDayRows: LocalKSRow[],
+  _focKhach: number | null,
+  _focMien: number | null,
 ): { rowFocDeduction: number; rowFocCount: number } {
-  if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
-  if (!isKSRoomRow(row)) return { rowFocDeduction: 0, rowFocCount: 0 };
-  const roomDayRows = sameKsDayRows.filter(isKSRoomRow);
-  const dayTotalRooms = roomDayRows.reduce((s, r) => s + (r.so_phong || 0), 0);
-  if (dayTotalRooms < focKhach) return { rowFocDeduction: 0, rowFocCount: 0 };
-  const dayFocPhong = Math.floor(dayTotalRooms / focKhach) * focMien;
-  const dayGross = roomDayRows.reduce((s, r) => s + (r.so_phong || 0) * (r.gia_phong || 0), 0);
-  const avgPrice = dayTotalRooms > 0 ? dayGross / dayTotalRooms : 0;
-  const dayFocAmount = dayFocPhong * avgPrice;
-  const rowGross = (row.so_phong || 0) * (row.gia_phong || 0);
-  if (dayGross <= 0 || dayFocAmount <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
-  const rowFocDeduction = Math.round((rowGross / dayGross) * dayFocAmount);
-  const pricePerRoom = row.gia_phong || avgPrice || 0;
-  // KHÔNG làm tròn về integer: foc_mien thập phân (vd 0.5) → foc_count phải
-  // giữ 0.5 (Math.round(0.5)=1 sẽ in sai + billed lệch nửa phòng). Làm tròn 2dp
-  // chỉ để khử nhiễu float. Chỉ dùng cho hiển thị bản in ĐNTT KS.
-  const rowFocCount = pricePerRoom > 0
-    ? Math.round((rowFocDeduction / pricePerRoom) * 100) / 100
-    : 0;
-  return { rowFocDeduction, rowFocCount };
+  const focCount = Math.max(0, Number(row.foc_count) || 0);
+  if (focCount <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
+  const pricePerRoom = Number(row.gia_phong) || 0;
+  return {
+    rowFocDeduction: Math.round(focCount * pricePerRoom),
+    rowFocCount: focCount,
+  };
 }
 
-// Tổng KS = rooms_gross + services_net - foc_on_rooms.
-// Service rows trừ foc_count manual; rooms tính FOC pro-rata per-day.
+// Tổng KS = sum((so_luong - foc_count) × gia_phong) cho mọi row (phòng + dịch vụ).
+// focKhach/focMien không còn dùng để tính tiền (giữ args cho compat); chỉ dùng UI gợi ý.
 function calcTotalKS(
   rows: LocalKSRow[],
-  focKhach: number | null,
-  focMien: number | null,
+  _focKhach: number | null,
+  _focMien: number | null,
 ): number {
-  let roomsGross = 0;
-  let servicesNet = 0;
-  rows.forEach((r) => {
-    if (isKSRoomRow(r)) {
-      roomsGross += (Number(r.so_phong) || 0) * (Number(r.gia_phong) || 0) * (Number(r.so_dem) || 1);
-    } else {
-      const focCount = Math.max(0, Number(r.foc_count) || 0);
-      const billed = Math.max(0, (Number(r.so_phong) || 0) - focCount);
-      servicesNet += billed * (Number(r.gia_phong) || 0);
-    }
-  });
-  return roomsGross + servicesNet - calcFocDeduction(rows, focKhach, focMien);
+  return rows.reduce((sum, r) => {
+    const focCount = Math.max(0, Number(r.foc_count) || 0);
+    const billed = Math.max(0, (Number(r.so_phong) || 0) - focCount);
+    const soDem = isKSRoomRow(r) ? (Number(r.so_dem) || 1) : 1;
+    return sum + billed * (Number(r.gia_phong) || 0) * soDem;
+  }, 0);
 }
 
-// Tính giá trị FOC được miễn cho 1 KS (theo từng ngày).
-// Chỉ tính trên room rows (loai_row='phong'); service rows không hưởng FOC.
-function calcFocDeduction(rows: LocalKSRow[], focKhach: number | null, focMien: number | null): number {
-  if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) return 0;
-  const byDay: Record<string, LocalKSRow[]> = {};
-  rows.filter(isKSRoomRow).forEach((r) => {
-    const k = r.ngay_date || "";
-    (byDay[k] = byDay[k] || []).push(r);
-  });
-  let deduction = 0;
-  Object.values(byDay).forEach((dayRows) => {
-    const dayRooms = dayRows.reduce((s, r) => s + (r.so_phong || 0), 0);
-    if (dayRooms < focKhach) return; // chưa đủ ngưỡng đêm này
-    const focPhong = Math.floor(dayRooms / focKhach) * focMien;
-    const dayGross = dayRows.reduce((s, r) => s + (r.so_phong || 0) * (r.gia_phong || 0), 0);
-    const avgPrice = dayRooms > 0 ? dayGross / dayRooms : 0;
-    deduction += focPhong * avgPrice;
-  });
-  return Math.round(deduction);
+// Tính tổng FOC trừ (1 KS) — sum(row.foc_count × row.gia_phong) trên mọi row.
+// Giữ args focKhach/focMien để callers cũ không phải đổi.
+function calcFocDeduction(rows: LocalKSRow[], _focKhach: number | null, _focMien: number | null): number {
+  return rows.reduce((sum, r) => {
+    const focCount = Math.max(0, Number(r.foc_count) || 0);
+    return sum + Math.round(focCount * (Number(r.gia_phong) || 0));
+  }, 0);
+}
+
+// Gợi ý tổng FOC theo công thức 16免1 cho 1 ngày — info-only, KHÔNG auto-fill.
+// OP tự gán foc_count vào row phòng giá thấp nhất.
+export function calcFocSuggestion(
+  dayRoomRows: LocalKSRow[],
+  focKhach: number | null,
+  focMien: number | null,
+): { totalRooms: number; suggestedFoc: number } {
+  const totalRooms = dayRoomRows.reduce((s, r) => s + (Number(r.so_phong) || 0), 0);
+  if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) {
+    return { totalRooms, suggestedFoc: 0 };
+  }
+  if (totalRooms < focKhach) return { totalRooms, suggestedFoc: 0 };
+  return { totalRooms, suggestedFoc: Math.floor(totalRooms / focKhach) * focMien };
 }
 
 function fmtDateDisplay(d: string) {
@@ -913,15 +900,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     setLocalRows((prev) => {
       const updated = [...prev];
       const row = { ...updated[idx], [field]: value };
-      // Service rows: so_dem=1, trừ foc_count manual; rooms giữ công thức cũ.
-      const isRoom = isKSRoomRow(row);
-      if (isRoom) {
-        row.thanh_tien = row.so_phong * row.gia_phong * row.so_dem;
-      } else {
-        const focCount = Math.max(0, Number(row.foc_count) || 0);
-        const billed = Math.max(0, (Number(row.so_phong) || 0) - focCount);
-        row.thanh_tien = billed * (Number(row.gia_phong) || 0);
-      }
+      // Option A: dùng foc_count cho cả room + service. so_dem=1 cho service.
+      const focCount = Math.max(0, Number(row.foc_count) || 0);
+      const billed = Math.max(0, (Number(row.so_phong) || 0) - focCount);
+      const soDem = isKSRoomRow(row) ? (Number(row.so_dem) || 1) : 1;
+      row.thanh_tien = billed * (Number(row.gia_phong) || 0) * soDem;
       updated[idx] = row;
       return updated;
     });
@@ -934,26 +917,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       // Skip save if row is still empty (no room type and no price)
       if (!row.loai_phong && !row.gia_phong) return;
       const isRoom = isKSRoomRow(row);
-      // Tính FOC per ngày để lưu tien_cong_ty = giá sau khi trừ FOC
-      const sameKsDayRows = localRowsRef.current.filter(
-        (r) => r.khach_san_id === row.khach_san_id && r.ngay_date === row.ngay_date,
-      );
       const ksInfo = ksData?.khachSanMap[row.khach_san_id];
-      // Snapshot ưu tiên — KHÔNG dùng master trừ khi chưa có snapshot (lần đầu)
+      // Snapshot ưu tiên — KHÔNG dùng master trừ khi chưa có snapshot (lần đầu).
+      // Vẫn snapshot foc_khach/foc_mien để hiển thị "16免1 suggest" + lưu cấu hình KS lúc book.
       const sameKsRows = localRowsRef.current.filter((r) => r.khach_san_id === row.khach_san_id);
       const { foc_khach: focKhach, foc_mien: focMien } = resolveKSFoc(sameKsRows, ksInfo);
 
-      // Rooms: pro-rata FOC per-day. Services: manual foc_count trừ trực tiếp SL.
-      let tienCongTy: number;
+      // Option A: cả room + service đều dùng foc_count manual (OP nhập tay).
+      // tien_cong_ty = (so_phong - foc_count) × gia_phong. Mỗi row = 1 đêm cho room.
       const focCountManual = Math.max(0, Number(row.foc_count) || 0);
-      if (isRoom) {
-        const rowGross = (row.so_phong || 0) * (row.gia_phong || 0); // mỗi row = 1 đêm
-        const { rowFocDeduction } = calcRowFocBreakdown(row, sameKsDayRows, focKhach, focMien);
-        tienCongTy = rowGross - rowFocDeduction;
-      } else {
-        const billed = Math.max(0, (row.so_phong || 0) - focCountManual);
-        tienCongTy = billed * (row.gia_phong || 0);
-      }
+      const billed = Math.max(0, (row.so_phong || 0) - focCountManual);
+      const tienCongTy = billed * (row.gia_phong || 0);
 
       upsertMut.mutate(
         {
@@ -977,12 +951,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           tien_cong_ty: (!isRoom && row.is_hdv) ? 0 : tienCongTy,
           tien_hdv: (!isRoom && row.is_hdv) ? tienCongTy : 0,
           thanh_toan_dinh_ky: dinhKyKsIdsRef.current.has(row.khach_san_id),
-          // Snapshot: lần đầu lấy từ master (focKhach/focMien đã resolve ở trên).
-          // Lần sau giữ snapshot hiện có (resolveKSFoc trả snapshot nếu có).
+          // Snapshot: lần đầu lấy từ master. Lần sau giữ snapshot hiện có (resolveKSFoc trả snapshot nếu có).
           foc_khach_snapshot: focKhach,
           foc_mien_snapshot:  focMien,
           loai_row: row.loai_row ?? "phong",
-          foc_count: isRoom ? 0 : focCountManual,
+          foc_count: focCountManual,
         } as any,
         {
           onSuccess: (data) => {
@@ -1523,6 +1496,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     <TableRow className="text-xs">
                       <TableHead className="w-[120px] h-auto py-1 px-2">Loại phòng</TableHead>
                       <TableHead className="w-[60px] h-auto py-1 px-2">Số phòng</TableHead>
+                      <TableHead className="w-[60px] h-auto py-1 px-2" title="Số phòng miễn phí (OP tự nhập). Gợi ý 16免1 hiện ở header ngày.">FOC</TableHead>
                       <TableHead className="w-[90px] h-auto py-1 px-2">C/I</TableHead>
                       <TableHead className="w-[90px] h-auto py-1 px-2">C/O</TableHead>
                       <TableHead className="w-[50px] h-auto py-1 px-2">Đêm</TableHead>
@@ -2387,11 +2361,29 @@ function DayGroup({
       ? `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`
       : "Không xác định";
 
+  // Gợi ý FOC theo 16免1 cho header (info-only, OP tự gán vào row giá thấp nhất)
+  const roomDayRows = dayRows.filter(isKSRoomRow);
+  const suggest = calcFocSuggestion(roomDayRows, focKhach, focMien);
+  const assignedFoc = roomDayRows.reduce((s, r) => s + (Number(r.foc_count) || 0), 0);
+
   return (
     <>
       <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
-        <TableCell colSpan={7} className="py-1 px-2 text-xs font-medium">
-          {label}
+        <TableCell colSpan={8} className="py-1 px-2 text-xs font-medium">
+          <span>{label}</span>
+          {focKhach && focMien && suggest.totalRooms > 0 && (
+            <span
+              className="ml-2 text-[10px] font-normal text-muted-foreground"
+              title={`Tổng ${suggest.totalRooms} phòng · ${focKhach}免${focMien} → gợi ý FOC ${suggest.suggestedFoc}. OP tự gán cho row phòng giá thấp nhất.`}
+            >
+              · {focKhach}免{focMien}: <span className={cn(
+                "font-medium",
+                assignedFoc === suggest.suggestedFoc ? "text-emerald-700" : "text-orange-700",
+              )}>
+                gợi ý {suggest.suggestedFoc} / đã gán {assignedFoc}
+              </span>
+            </span>
+          )}
         </TableCell>
         <TableCell className="py-1 px-2 text-right">
           {!disabled && <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />}
@@ -2430,7 +2422,7 @@ function EmptyDayHeader({
   const label = `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`;
   return (
     <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
-      <TableCell colSpan={7} className="py-1 px-2 text-xs font-medium">
+      <TableCell colSpan={8} className="py-1 px-2 text-xs font-medium">
         {label}
         {isDayUse && (
           <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">

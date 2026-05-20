@@ -43,42 +43,32 @@ interface DraftRow {
   rowFocDeduction: number;
 }
 
-/** Tính FOC pro-rata cho rooms (clone logic calcRowFocBreakdown nhưng chạy trên drafts). */
+/** Option A: foc_count manual cho mọi row. rowFocDeduction = foc_count × gia_phong. */
 function recomputeFocForDrafts(
   drafts: DraftRow[],
-  focKhach: number | null,
-  focMien: number | null,
+  _focKhach: number | null,
+  _focMien: number | null,
 ): DraftRow[] {
-  if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) {
-    return drafts.map((d) => ({ ...d, rowFocDeduction: 0 }));
-  }
-  const byDay: Record<string, DraftRow[]> = {};
-  drafts.filter((d) => d.is_room).forEach((d) => {
-    (byDay[d.ngay_date] = byDay[d.ngay_date] || []).push(d);
-  });
-  const focByRowId: Record<number, number> = {};
-  for (const dayDrafts of Object.values(byDay)) {
-    const dayRooms = dayDrafts.reduce((s, d) => s + (d.so_phong || 0), 0);
-    if (dayRooms < focKhach) continue;
-    const focPhong = Math.floor(dayRooms / focKhach) * focMien;
-    const dayGross = dayDrafts.reduce((s, d) => s + (d.so_phong || 0) * (d.gia_phong || 0), 0);
-    if (dayGross <= 0) continue;
-    const avgPrice = dayGross / dayRooms;
-    const dayFocAmount = focPhong * avgPrice;
-    dayDrafts.forEach((d) => {
-      const rowGross = (d.so_phong || 0) * (d.gia_phong || 0);
-      focByRowId[d.id] = Math.round((rowGross / dayGross) * dayFocAmount);
-    });
-  }
-  return drafts.map((d) => ({ ...d, rowFocDeduction: focByRowId[d.id] || 0 }));
+  return drafts.map((d) => ({
+    ...d,
+    rowFocDeduction: Math.round((d.foc_count || 0) * (d.gia_phong || 0)),
+  }));
 }
 
-/** Tính tien_cong_ty (thực tế) cho 1 draft row. */
+/** Gợi ý FOC theo 16免1 cho 1 ngày (info-only, OP tự gán vào row phòng giá thấp nhất). */
+function calcDaySuggestion(
+  dayDrafts: DraftRow[],
+  focKhach: number | null,
+  focMien: number | null,
+): { totalRooms: number; suggestedFoc: number } {
+  const totalRooms = dayDrafts.reduce((s, d) => s + (Number(d.so_phong) || 0), 0);
+  if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) return { totalRooms, suggestedFoc: 0 };
+  if (totalRooms < focKhach) return { totalRooms, suggestedFoc: 0 };
+  return { totalRooms, suggestedFoc: Math.floor(totalRooms / focKhach) * focMien };
+}
+
+/** Tính tien_cong_ty (thực tế) cho 1 draft row — cùng formula cho room + service. */
 function calcRowActual(d: DraftRow): number {
-  if (d.is_room) {
-    const gross = (d.so_phong || 0) * (d.gia_phong || 0);
-    return Math.max(0, gross - d.rowFocDeduction);
-  }
   const billed = Math.max(0, (d.so_phong || 0) - (d.foc_count || 0));
   return billed * (d.gia_phong || 0);
 }
@@ -213,17 +203,33 @@ export default function KSAdjustModal({
                       <TableHead className="w-[100px] h-auto py-1.5 px-2">Ngày</TableHead>
                       <TableHead className="h-auto py-1.5 px-2">Loại phòng</TableHead>
                       <TableHead className="w-[80px] h-auto py-1.5 px-2 text-center">Số phòng</TableHead>
+                      <TableHead className="w-[70px] h-auto py-1.5 px-2 text-center" title="Số phòng miễn phí (OP tự nhập). Gợi ý 16免1 hiện ở header ngày.">FOC</TableHead>
                       <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">Giá phòng</TableHead>
                       <TableHead className="w-[90px] h-auto py-1.5 px-2 text-right">FOC trừ</TableHead>
                       <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">Thành tiền</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {roomsByDay.map(([date, dayDrafts]) => (
+                    {roomsByDay.map(([date, dayDrafts]) => {
+                      const suggest = calcDaySuggestion(dayDrafts, focKhach, focMien);
+                      const assignedFoc = dayDrafts.reduce((s, d) => s + (Number(d.foc_count) || 0), 0);
+                      return (
                       <Fragment key={date}>
                         <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
-                          <TableCell colSpan={6} className="py-1 px-2 text-xs font-medium">
-                            {fmtDay(date)}
+                          <TableCell colSpan={7} className="py-1 px-2 text-xs font-medium">
+                            <span>{fmtDay(date)}</span>
+                            {focKhach && focMien && suggest.totalRooms > 0 && (
+                              <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                                · {focKhach}免{focMien}:{" "}
+                                <span className={
+                                  assignedFoc === suggest.suggestedFoc
+                                    ? "font-medium text-emerald-700"
+                                    : "font-medium text-orange-700"
+                                }>
+                                  gợi ý {suggest.suggestedFoc} / đã gán {assignedFoc}
+                                </span>
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                         {dayDrafts.map((d) => (
@@ -238,6 +244,16 @@ export default function KSAdjustModal({
                                 min={0}
                                 value={d.so_phong}
                                 onChange={(e) => updateDraft(d.id, "so_phong", Number(e.target.value) || 0)}
+                                className="h-7 text-xs text-center w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1 px-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.5"
+                                value={d.foc_count}
+                                onChange={(e) => updateDraft(d.id, "foc_count", Number(e.target.value) || 0)}
                                 className="h-7 text-xs text-center w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               />
                             </TableCell>
@@ -258,7 +274,8 @@ export default function KSAdjustModal({
                           </TableRow>
                         ))}
                       </Fragment>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

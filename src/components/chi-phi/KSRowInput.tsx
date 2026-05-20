@@ -27,16 +27,18 @@ export default memo(function KSRowInput({
 }: Props) {
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
+  const [localFocCount, setLocalFocCount] = useState(String(row.foc_count ?? 0));
 
   // Re-sync khi prop đổi do reconcile (DB/máy khác). Prop chỉ đổi sau blur
   // hoặc reconcile → không đè lúc đang gõ.
-  const externalKey = `${row.id ?? "new"}|${row.loai_phong}|${row.so_phong}`;
+  const externalKey = `${row.id ?? "new"}|${row.loai_phong}|${row.so_phong}|${row.foc_count ?? 0}`;
   const lastSyncedKeyRef = useRef(externalKey);
   useEffect(() => {
     if (lastSyncedKeyRef.current !== externalKey) {
       lastSyncedKeyRef.current = externalKey;
       setLocalLoaiPhong(row.loai_phong);
       setLocalSoPhong(String(row.so_phong));
+      setLocalFocCount(String(row.foc_count ?? 0));
     }
   }, [externalKey, row]);
 
@@ -51,9 +53,15 @@ export default memo(function KSRowInput({
     setTimeout(() => onBlurSave(globalIdx), 0);
   }, [globalIdx, localSoPhong, onFieldChange, onBlurSave]);
 
+  const handleFocCountBlur = useCallback(() => {
+    const val = Math.max(0, Number(localFocCount) || 0);
+    onFieldChange(globalIdx, "foc_count", val);
+    setTimeout(() => onBlurSave(globalIdx), 0);
+  }, [globalIdx, localFocCount, onFieldChange, onBlurSave]);
+
   const soPhong = Number(localSoPhong) || 0;
   const thanhTienGross = soPhong * row.gia_phong * row.so_dem;
-  // Hiển thị NET (đã trừ FOC pro-rata) — khớp với subtotal card + lưu tien_cong_ty
+  // Hiển thị NET (đã trừ FOC theo foc_count manual) — khớp với subtotal card + lưu tien_cong_ty
   const thanhTien = Math.max(0, thanhTienGross - rowFocDeduction);
 
   return (
@@ -85,6 +93,25 @@ export default memo(function KSRowInput({
             onChange={(e) => setLocalSoPhong(e.target.value)}
             onBlur={handleSoPhongBlur}
             className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        )}
+      </TableCell>
+      <TableCell className="py-0.5 px-2">
+        {disabled ? (
+          <span className="text-xs text-center block tabular-nums" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+            {Number(localFocCount) > 0 ? localFocCount : "—"}
+          </span>
+        ) : (
+          <Input
+            type="number"
+            min={0}
+            step="0.5"
+            value={localFocCount}
+            onChange={(e) => setLocalFocCount(e.target.value)}
+            onBlur={handleFocCountBlur}
+            placeholder="0"
+            className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            title="Số phòng được miễn phí (FOC). Gợi ý 16免1 hiện ở header ngày."
           />
         )}
       </TableCell>
