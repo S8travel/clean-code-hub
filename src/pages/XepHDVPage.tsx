@@ -714,6 +714,7 @@ function XepHDVPageContent() {
         agent_ten: r.agent_ten || undefined,
         assigned_hdv_id: locked_hdv_id,
         locked_hdv_id,
+        locked_hdv_id_2: null,
         is_chained: false,
         so_khach: r.so_khach ? Number(r.so_khach) || null : null,
         ghi_chu: r.ghi_chu.trim() || null,
