@@ -1,0 +1,40 @@
+name: CI
+
+# Chạy mỗi khi push lên bất kỳ branch + mỗi khi mở/cập nhật pull request vào main.
+# Nếu fail → nút Merge bị xám trên PR → không merge code gãy vào main được.
+on:
+  push:
+    branches-ignore: []
+  pull_request:
+    branches: [main]
+
+# Huỷ run cũ khi push commit mới trên cùng branch → tiết kiệm phút runner.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps (lockfile)
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Unit test (vitest)
+        run: npm test
+
+      - name: Build
+        run: npm run build
