@@ -413,9 +413,16 @@ export default function MealCard({
           : "",
         row("HDV", formatHdvsForEmail(doanHdvs)),
       ].join("")}</ul>`;
+      // Banner cho booking gửi TRƯỚC khi có feature snapshot diff (mail_sent_snapshot=null
+       // nhưng booking đã da_gui) → user thấy ngay là không có data để so sánh, tránh
+      // hiểu nhầm "không có gì đổi".
+      const legacyNoSnapshot = !prev && !!booking?.sent_at;
+      const introWithNote = legacyNoSnapshot
+        ? `Cập nhật booking ${buaLabel.toLowerCase()} đoàn ${tenDoan || "—"} — <em style="color:#b45309">không có dữ liệu mail gốc để so sánh tự động, vui lòng đối chiếu với mail trước đó</em>:`
+        : `Cập nhật booking ${buaLabel.toLowerCase()} đoàn ${tenDoan || "—"}:`;
       return buildUpdateEmailHtml({
         greeting: `Kính gửi ${nhaHangTen || "Quý nhà hàng"},`,
-        intro: `Cập nhật booking ${buaLabel.toLowerCase()} đoàn ${tenDoan || "—"}:`,
+        intro: introWithNote,
         keyFieldsHtml: keyFields,
         note,
         senderName,
