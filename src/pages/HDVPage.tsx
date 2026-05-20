@@ -21,6 +21,7 @@ import { useAgents, useDiaDiem } from "@/hooks/use-doan";
 import { toast } from "sonner";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
+import { t, useTranslate } from "@/lib/i18n";
 
 const GIOI_TINH_OPTS = [
   { value: "nam", label: "Nam" },
@@ -52,6 +53,7 @@ const emptyForm = (): Omit<HDVRow, "id"> => ({
 });
 
 function HDVPageContent() {
+  useTranslate();
   const { data: list = [], isLoading } = useHDVList();
   const { data: agents = [] } = useAgents();
   const { data: diaDiemList = [] } = useDiaDiem();
@@ -123,9 +125,9 @@ function HDVPageContent() {
       setSelectedId(created.id);
       setNewName("");
       setShowCreate(false);
-      toast.success("Đã thêm hướng dẫn viên");
+      toast.success(t("Đã thêm hướng dẫn viên"));
     } catch {
-      toast.error("Lỗi khi tạo HDV");
+      toast.error(t("Lỗi khi tạo HDV"));
     }
   };
 
@@ -134,9 +136,9 @@ function HDVPageContent() {
     try {
       await updateMut.mutateAsync({ id: selected.id, ...form });
       setDirty(false);
-      toast.success("Đã lưu");
+      toast.success(t("Đã lưu"));
     } catch {
-      toast.error("Lỗi khi lưu");
+      toast.error(t("Lỗi khi lưu"));
     }
   };
 
@@ -146,9 +148,9 @@ function HDVPageContent() {
       await deleteMut.mutateAsync(deleteTarget.id);
       if (selectedId === deleteTarget.id) setSelectedId(null);
       setDeleteTarget(null);
-      toast.success("Đã xóa");
+      toast.success(t("Đã xóa"));
     } catch {
-      toast.error("Lỗi khi xóa");
+      toast.error(t("Lỗi khi xóa"));
     }
   };
 
@@ -161,26 +163,26 @@ function HDVPageContent() {
       <div className="w-72 shrink-0 border-r flex flex-col bg-card">
         <div className="p-3 border-b space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm">Hướng dẫn viên</h2>
+            <h2 className="font-semibold text-sm">{t("Hướng dẫn viên")}</h2>
             <Button
               size="sm" variant="outline" className="h-7 text-xs"
               onClick={() => setShowCreate(!showCreate)}
             >
-              <Plus className="h-3 w-3 mr-1" /> Thêm
+              <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
             </Button>
           </div>
           {showCreate && (
             <div className="flex gap-1">
               <Input
                 className="h-7 text-xs"
-                placeholder="Tên HDV..."
+                placeholder={t("Tên HDV...")}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 autoFocus
               />
               <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleCreate}>
-                Tạo
+                {t("Tạo")}
               </Button>
             </div>
           )}
@@ -188,7 +190,7 @@ function HDVPageContent() {
             <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               className="h-7 text-xs pl-7"
-              placeholder="Tìm kiếm..."
+              placeholder={t("Tìm kiếm...")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -197,9 +199,9 @@ function HDVPageContent() {
 
         <ScrollArea className="flex-1">
           {isLoading ? (
-            <div className="p-4 text-sm text-muted-foreground">Đang tải...</div>
+            <div className="p-4 text-sm text-muted-foreground">{t("Đang tải...")}</div>
           ) : filtered.length === 0 ? (
-            <div className="p-4 text-sm text-muted-foreground">Chưa có HDV</div>
+            <div className="p-4 text-sm text-muted-foreground">{t("Chưa có HDV")}</div>
           ) : (
             <div className="p-2 space-y-0.5">
               {filtered.map((hdv) => {
@@ -222,7 +224,7 @@ function HDVPageContent() {
                       <div className="flex items-center gap-1 shrink-0">
                         {!hdv.active && (
                           <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">
-                            Nghỉ
+                            {t("Nghỉ")}
                           </Badge>
                         )}
                         <Badge variant="secondary" className="text-[10px] h-4 px-1">
@@ -237,9 +239,9 @@ function HDVPageContent() {
                     </div>
                     {(hdv.gioi_tinh || tuoi) && (
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {hdv.gioi_tinh === "nam" ? "Nam" : hdv.gioi_tinh === "nu" ? "Nữ" : hdv.gioi_tinh ? "Khác" : ""}
+                        {hdv.gioi_tinh === "nam" ? t("Nam") : hdv.gioi_tinh === "nu" ? t("Nữ") : hdv.gioi_tinh ? t("Khác") : ""}
                         {hdv.gioi_tinh && tuoi ? " · " : ""}
-                        {tuoi ? `${tuoi} tuổi` : ""}
+                        {tuoi ? `${tuoi} ${t("tuổi")}` : ""}
                       </p>
                     )}
                   </button>
@@ -255,7 +257,7 @@ function HDVPageContent() {
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
           <div className="text-center space-y-2">
             <UserCheck className="h-10 w-10 mx-auto opacity-30" />
-            <p>Chọn một hướng dẫn viên để xem chi tiết</p>
+            <p>{t("Chọn một hướng dẫn viên để xem chi tiết")}</p>
           </div>
         </div>
       ) : (
@@ -271,7 +273,7 @@ function HDVPageContent() {
                     onCheckedChange={(v) => set("active", v)}
                   />
                   <span className={cn("text-xs font-medium", form.active ? "text-green-600" : "text-muted-foreground")}>
-                    {form.active ? "Đang hoạt động" : "Tạm nghỉ"}
+                    {form.active ? t("Đang hoạt động") : t("Tạm nghỉ")}
                   </span>
                 </div>
               </div>
@@ -280,7 +282,7 @@ function HDVPageContent() {
                   size="sm" variant="destructive" className="h-8 text-xs"
                   onClick={() => setDeleteTarget(selected)}
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Xóa
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> {t("Xóa")}
                 </Button>
                 <Button
                   size="sm" className="h-8 text-xs"
@@ -288,7 +290,7 @@ function HDVPageContent() {
                   disabled={!dirty || updateMut.isPending}
                 >
                   <Save className="h-3.5 w-3.5 mr-1" />
-                  {updateMut.isPending ? "Đang lưu..." : "Lưu"}
+                  {updateMut.isPending ? t("Đang lưu...") : t("Lưu")}
                 </Button>
               </div>
             </div>
@@ -296,7 +298,7 @@ function HDVPageContent() {
             {/* Thông tin cơ bản */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs">Họ tên <span className="text-destructive">*</span></Label>
+                <Label className="text-xs">{t("Họ tên")} <span className="text-destructive">*</span></Label>
                 <Input
                   className="h-8 text-sm"
                   value={form.ten}
@@ -305,73 +307,73 @@ function HDVPageContent() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Giới tính</Label>
+                <Label className="text-xs">{t("Giới tính")}</Label>
                 <Select
                   value={form.gioi_tinh ?? ""}
                   onValueChange={(v) => set("gioi_tinh", v || null)}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <span>{!form.gioi_tinh ? "Chọn giới tính" : GIOI_TINH_OPTS.find((o) => o.value === form.gioi_tinh)?.label ?? ""}</span>
+                    <span>{!form.gioi_tinh ? t("Chọn giới tính") : t(GIOI_TINH_OPTS.find((o) => o.value === form.gioi_tinh)?.label ?? "")}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {GIOI_TINH_OPTS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Bậc HDV</Label>
+                <Label className="text-xs">{t("Bậc HDV")}</Label>
                 <Select
                   value={String(form.bac ?? 3)}
                   onValueChange={(v) => set("bac", Number(v))}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <span>Bậc {form.bac ?? 3}</span>
+                    <span>{t("Bậc")} {form.bac ?? 3}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {BAC_OPTS.map((b) => (
-                      <SelectItem key={b} value={String(b)}>Bậc {b}</SelectItem>
+                      <SelectItem key={b} value={String(b)}>{t("Bậc")} {b}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-muted-foreground">Bậc 1 được ưu tiên xếp trước</p>
+                <p className="text-[11px] text-muted-foreground">{t("Bậc 1 được ưu tiên xếp trước")}</p>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Năm sinh</Label>
+                <Label className="text-xs">{t("Năm sinh")}</Label>
                 <Input
                   className="h-8 text-sm"
                   type="number"
                   min={1950}
                   max={new Date().getFullYear() - 18}
-                  placeholder="VD: 1990"
+                  placeholder={t("VD: 1990")}
                   value={form.nam_sinh ?? ""}
                   onChange={(e) => set("nam_sinh", e.target.value ? Number(e.target.value) : null)}
                 />
                 {form.nam_sinh && (
                   <p className="text-[11px] text-muted-foreground">
-                    {new Date().getFullYear() - form.nam_sinh} tuổi
+                    {new Date().getFullYear() - form.nam_sinh} {t("tuổi")}
                   </p>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Số điện thoại</Label>
+                <Label className="text-xs">{t("Số điện thoại")}</Label>
                 <Input
                   className="h-8 text-sm"
-                  placeholder="VD: 0901234567"
+                  placeholder={t("VD: 0901234567")}
                   value={form.so_dien_thoai ?? ""}
                   onChange={(e) => set("so_dien_thoai", e.target.value || null)}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Kinh nghiệm</Label>
+                <Label className="text-xs">{t("Kinh nghiệm")}</Label>
                 <Input
                   className="h-8 text-sm"
-                  placeholder="VD: 5 năm, chuyên tour Tây Bắc"
+                  placeholder={t("VD: 5 năm, chuyên tour Tây Bắc")}
                   value={form.kinh_nghiem ?? ""}
                   onChange={(e) => set("kinh_nghiem", e.target.value || null)}
                 />
@@ -381,19 +383,19 @@ function HDVPageContent() {
             {/* Thông tin ngân hàng */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs">Số tài khoản</Label>
+                <Label className="text-xs">{t("Số tài khoản")}</Label>
                 <Input
                   className="h-8 text-sm"
-                  placeholder="VD: 012345678901"
+                  placeholder={t("VD: 012345678901")}
                   value={form.so_tai_khoan ?? ""}
                   onChange={(e) => set("so_tai_khoan", e.target.value || null)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Ngân hàng</Label>
+                <Label className="text-xs">{t("Ngân hàng")}</Label>
                 <Input
                   className="h-8 text-sm"
-                  placeholder="VD: Vietcombank"
+                  placeholder={t("VD: Vietcombank")}
                   value={form.ngan_hang ?? ""}
                   onChange={(e) => set("ngan_hang", e.target.value || null)}
                 />
@@ -401,10 +403,10 @@ function HDVPageContent() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Chuyên môn</Label>
+              <Label className="text-xs">{t("Chuyên môn")}</Label>
               <Textarea
                 className="text-sm min-h-[80px] resize-none"
-                placeholder="Mô tả chuyên môn, tuyến đường, ngôn ngữ thuyết minh..."
+                placeholder={t("Mô tả chuyên môn, tuyến đường, ngôn ngữ thuyết minh...")}
                 value={form.chuyen_mon ?? ""}
                 onChange={(e) => set("chuyen_mon", e.target.value || null)}
               />
@@ -413,15 +415,15 @@ function HDVPageContent() {
             {/* Agent ưu tiên */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs">Agent ưu tiên</Label>
+                <Label className="text-xs">{t("Agent ưu tiên")}</Label>
                 {assignedAgents.length > 0 && (
                   <p className="text-[11px] text-muted-foreground">
-                    HDV sẽ được ưu tiên xếp cho {assignedAgents.map((a) => a.ten).join(", ")}
+                    {t("HDV sẽ được ưu tiên xếp cho")} {assignedAgents.map((a) => a.ten).join(", ")}
                   </p>
                 )}
               </div>
               {agents.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Chưa có agent nào</p>
+                <p className="text-xs text-muted-foreground">{t("Chưa có agent nào")}</p>
               ) : (
                 <div className="border rounded-md p-3 grid grid-cols-2 gap-2">
                   {agents.map((agent) => {
@@ -450,16 +452,16 @@ function HDVPageContent() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" /> Địa điểm hoạt động
+                  <MapPin className="h-3.5 w-3.5" /> {t("Địa điểm hoạt động")}
                 </Label>
                 {(form.dia_diem_ids ?? []).length > 0 && (
                   <p className="text-[11px] text-muted-foreground">
-                    {(form.dia_diem_ids ?? []).length} địa điểm được chọn
+                    {(form.dia_diem_ids ?? []).length} {t("địa điểm được chọn")}
                   </p>
                 )}
               </div>
               {diaDiemList.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Chưa có địa điểm nào</p>
+                <p className="text-xs text-muted-foreground">{t("Chưa có địa điểm nào")}</p>
               ) : (
                 <div className="border rounded-md p-3 grid grid-cols-2 gap-2">
                   {diaDiemList.map((dd) => {
@@ -485,10 +487,10 @@ function HDVPageContent() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Ghi chú</Label>
+              <Label className="text-xs">{t("Ghi chú")}</Label>
               <Textarea
                 className="text-sm min-h-[80px] resize-none"
-                placeholder="Ghi chú thêm..."
+                placeholder={t("Ghi chú thêm...")}
                 value={form.ghi_chu ?? ""}
                 onChange={(e) => set("ghi_chu", e.target.value || null)}
               />
@@ -501,18 +503,18 @@ function HDVPageContent() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xóa hướng dẫn viên?</AlertDialogTitle>
+            <AlertDialogTitle>{t("Xóa hướng dẫn viên?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Xóa <strong>{deleteTarget?.ten}</strong>. Hành động này không thể hoàn tác.
+              {t("Xóa")} <strong>{deleteTarget?.ten}</strong>. {t("Hành động này không thể hoàn tác.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>{t("Hủy")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleDelete}
             >
-              Xóa
+              {t("Xóa")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
