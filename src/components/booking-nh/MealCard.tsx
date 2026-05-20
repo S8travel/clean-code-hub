@@ -493,14 +493,14 @@ export default function MealCard({
   };
 
   // Rebuild HTML khi: user nhập lời nhắn (update mode) HOẶC các input async
-  // resolve sau khi mở modal (doanHdv/selectedMenu) → tránh kẹt "Bổ sung sau"
+  // resolve sau khi mở modal (doanHdvs/selectedMenu) → tránh kẹt "Bổ sung sau"
   // do HDV query chưa về lúc openEmailModal. Edit body của user không trigger
   // (chỉ phụ thuộc các giá trị nguồn, KHÔNG phụ thuộc emailHtml).
   useEffect(() => {
     if (!emailModalOpen) return;
     setEmailHtml(buildEmailHtml(emailMode, updateNote));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateNote, doanHdv, chuThichKhach, selectedMenu, emailMode, emailModalOpen]);
+  }, [updateNote, doanHdvs, chuThichKhach, selectedMenu, emailMode, emailModalOpen]);
 
   const buildMailtoBody = () => {
     const buaLabel = buaAn === "trua" ? "Ä‚n trÆ°a" : "Ä‚n tá»‘i";
