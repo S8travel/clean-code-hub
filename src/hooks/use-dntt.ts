@@ -594,13 +594,35 @@ export function useCancelDNTT() {
         .eq("id", id);
       if (error) throw error;
 
-      // Nếu đã có cash payment và user chọn mode → tạo cong_no record (chỉ phần cash)
-      if (mode && cashPaid > 0 && dntt.nha_cung_cap_id) {
+      // Nếu đã có cash payment và user chọn mode → tạo cong_no record (chỉ phần cash).
+      // DNTT cọc KS/NH thường không có nha_cung_cap_id (vì NCC info nằm ở master
+      // KS/NH master) → lookup từ ref. Cong_no có nha_cung_cap_id nullable nên
+      // ngay cả khi không tìm được NCC vẫn tạo record để audit.
+      if (mode && cashPaid > 0) {
+        let nccId = dntt.nha_cung_cap_id as number | null;
+        let nccTen = dntt.ten_nha_cung_cap as string | null;
+        if (!nccId && dntt.ref_loai && dntt.ref_id) {
+          const table = dntt.ref_loai === "khach_san" ? "khach_san"
+            : dntt.ref_loai === "nha_hang" ? "nha_hang"
+            : dntt.ref_loai === "canh_diem" ? "canh_diem"
+            : null;
+          if (table) {
+            const { data: refRow } = await externalSupabase
+              .from(table)
+              .select("ten, nha_cung_cap_id, nha_cung_cap:nha_cung_cap_id(ten)")
+              .eq("id", dntt.ref_id)
+              .maybeSingle();
+            if (refRow) {
+              nccId = (refRow as any).nha_cung_cap_id ?? null;
+              nccTen = (refRow as any).nha_cung_cap?.ten ?? (refRow as any).ten ?? null;
+            }
+          }
+        }
         const { error: cnErr } = await externalSupabase.from("cong_no").insert({
           doan_id: dntt.doan_id,
           dntt_goc_id: id,
-          nha_cung_cap_id: dntt.nha_cung_cap_id,
-          ten_nha_cung_cap: dntt.ten_nha_cung_cap,
+          nha_cung_cap_id: nccId,
+          ten_nha_cung_cap: nccTen,
           so_tien_goc: cashPaid,
           trang_thai: mode === "hoan_tien" ? "da_hoan_tien" : "con_du",
           ly_do: `Hủy ĐNTT #${id}: ${dntt.mo_ta || ""}`.trim(),
