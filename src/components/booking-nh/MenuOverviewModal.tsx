@@ -166,15 +166,49 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
     (d) => d.an_trua_nha_hang_id || d.an_toi_nha_hang_id
   );
 
+  // Fallback: bookings có set_menu_id nhưng mon_an_snapshot rỗng → fetch catalog
+  // (giống MonListEditor) để tránh in ra "Chưa có món" khi user chưa edit thủ công.
+  const fetchMonsFallback = async (): Promise<Record<number, string[]>> => {
+    const ids = new Set<number>();
+    for (const day of daysWithNH) {
+      if (day.booking_trua?.set_menu_id && (day.booking_trua.mon_an_snapshot?.length ?? 0) === 0) {
+        ids.add(day.booking_trua.set_menu_id);
+      }
+      if (day.booking_toi?.set_menu_id && (day.booking_toi.mon_an_snapshot?.length ?? 0) === 0) {
+        ids.add(day.booking_toi.set_menu_id);
+      }
+    }
+    if (ids.size === 0) return {};
+    const { data } = await externalSupabase
+      .from("nha_hang_set_menu_mon")
+      .select("set_menu_id, ten_mon, thu_tu")
+      .in("set_menu_id", [...ids])
+      .order("thu_tu", { ascending: true });
+    const map: Record<number, string[]> = {};
+    for (const row of data ?? []) {
+      if (!map[row.set_menu_id]) map[row.set_menu_id] = [];
+      map[row.set_menu_id].push(row.ten_mon as string);
+    }
+    return map;
+  };
+
+  const resolveMonList = (b: BookingNHRow | null, fallbackMap: Record<number, string[]>) => {
+    const snap = b?.mon_an_snapshot ?? [];
+    if (snap.length > 0) return snap;
+    if (b?.set_menu_id && fallbackMap[b.set_menu_id]) return fallbackMap[b.set_menu_id];
+    return [];
+  };
+
   const handlePrint = async () => {
+    const fallbackMap = await fetchMonsFallback();
     const wordDays = daysWithNH.map((day) => ({
       ngay_so: day.ngay_so,
       ngay_date: day.ngay_date,
       trua: day.an_trua_nha_hang_id
-        ? { ten_nh: day.an_trua_nha_hang_ten ?? "", mon_list: day.booking_trua?.mon_an_snapshot ?? [], mon_list_zh: [] }
+        ? { ten_nh: day.an_trua_nha_hang_ten ?? "", mon_list: resolveMonList(day.booking_trua, fallbackMap), mon_list_zh: [] }
         : null,
       toi: day.an_toi_nha_hang_id
-        ? { ten_nh: day.an_toi_nha_hang_ten ?? "", mon_list: day.booking_toi?.mon_an_snapshot ?? [], mon_list_zh: [] }
+        ? { ten_nh: day.an_toi_nha_hang_ten ?? "", mon_list: resolveMonList(day.booking_toi, fallbackMap), mon_list_zh: [] }
         : null,
     }));
     await exportMenuOverviewWord({ tenDoan: tenDoan ?? "", hdvTen: hdvTen ?? "", soKhach: soKhach ?? 0, days: wordDays });
@@ -188,16 +222,18 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
       if (day.booking_toi?.set_menu_id) setMenuIds.add(day.booking_toi.set_menu_id);
     }
 
-    // Fetch Chinese dish names from nha_hang_set_menu_mon
+    // Fetch Chinese dish names + VN fallback (theo thu_tu) từ nha_hang_set_menu_mon
     const zhMap: Record<number, Record<string, string>> = {};
+    const monsFallback: Record<number, string[]> = {};
     const ghiChuMap: Record<number, string | null> = {};
     if (setMenuIds.size > 0) {
       const ids = [...setMenuIds];
       const [{ data: monRows }, { data: smRows }] = await Promise.all([
         externalSupabase
           .from("nha_hang_set_menu_mon")
-          .select("set_menu_id, ten_mon, ten_mon_trung")
-          .in("set_menu_id", ids),
+          .select("set_menu_id, ten_mon, ten_mon_trung, thu_tu")
+          .in("set_menu_id", ids)
+          .order("thu_tu", { ascending: true }),
         externalSupabase
           .from("nha_hang_set_menu")
           .select("id, ghi_chu")
@@ -206,6 +242,8 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
       for (const row of monRows ?? []) {
         if (!zhMap[row.set_menu_id]) zhMap[row.set_menu_id] = {};
         zhMap[row.set_menu_id][row.ten_mon] = row.ten_mon_trung ?? "";
+        if (!monsFallback[row.set_menu_id]) monsFallback[row.set_menu_id] = [];
+        monsFallback[row.set_menu_id].push(row.ten_mon as string);
       }
       for (const sm of smRows ?? []) {
         ghiChuMap[sm.id] = sm.ghi_chu ?? null;
@@ -215,7 +253,10 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
     const buildMeal = (nhId: number | null, nhTen: string | null, booking: BookingNHRow | null): MenuWordMeal | null => {
       if (!nhId) return null;
       const lookup = booking?.set_menu_id ? (zhMap[booking.set_menu_id] ?? {}) : {};
-      const monList = booking?.mon_an_snapshot ?? [];
+      let monList = booking?.mon_an_snapshot ?? [];
+      if (monList.length === 0 && booking?.set_menu_id && monsFallback[booking.set_menu_id]) {
+        monList = monsFallback[booking.set_menu_id];
+      }
       return {
         ten_nh: nhTen ?? "",
         ten_set: booking?.ten_set_snapshot ?? null,
