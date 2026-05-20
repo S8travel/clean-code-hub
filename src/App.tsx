@@ -39,6 +39,7 @@ const LeadsPage            = lazy(() => import("./pages/LeadsPage.tsx"));
 const LeadReportPage       = lazy(() => import("./pages/LeadReportPage.tsx"));
 const ViecLeadPage         = lazy(() => import("./pages/ViecLeadPage.tsx"));
 const LeadFormPublicPage   = lazy(() => import("./pages/LeadFormPublicPage.tsx"));
+const HoanUngPage          = lazy(() => import("./pages/HoanUngPage.tsx"));
 const NotFound             = lazy(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient({
@@ -87,6 +88,7 @@ const App = () => (
                 <Route path="/quan-ly/visa" element={<VisaPage />} />
                 <Route path="/quan-ly/nha-cung-cap" element={<NhaCungCapPage />} />
                 <Route path="/de-nghi-thanh-toan" element={<DNTTPage />} />
+                <Route path="/hoan-ung" element={<HoanUngPage />} />
                 <Route path="/thanh-toan-dinh-ky" element={<ThanhToanDinhKyPage />} />
                 <Route path="/cong-no" element={<CongNoPage />} />
                 <Route path="/quan-ly/hdv" element={<HDVPage />} />

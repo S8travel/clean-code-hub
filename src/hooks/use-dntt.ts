@@ -48,6 +48,9 @@ export interface DNTTRow {
   // Hủy track (ai hủy, khi nào)
   huy_boi: string | null;
   huy_luc: string | null;
+  // Hoàn ứng (loai='hoan_ung')
+  loai_chi_hoan_ung: string | null;
+  nguoi_ung_id: string | null;
   // Joined
   ten_doan?: string;
   ten_ncc?: string;
