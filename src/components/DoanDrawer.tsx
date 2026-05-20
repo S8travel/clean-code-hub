@@ -143,7 +143,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
           return; // block save
         }
       } catch (err: any) {
-        toast.error("Lỗi kiểm tra conflict: " + (err?.message || ""));
+        toast.error(t("Lỗi kiểm tra conflict") + ": " + (err?.message || ""));
         return;
       } finally {
         setCheckingConflict(false);
@@ -163,7 +163,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     (diaDiem ?? []).map((d) => ({ value: d.id.toString(), label: d.ten })), [diaDiem]);
 
   const hdvOptions = useMemo(() =>
-    [{ value: "", label: "— Không có —" }, ...(hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten }))], [hdv]);
+    [{ value: "", label: t("— Không có —") }, ...(hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten }))], [hdv]);
 
   const xeOptions = useMemo(() =>
     (xeList ?? []).map((x: any) => {
@@ -177,7 +177,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     seriList.map((s) => ({ value: s.id.toString(), label: s.ten_seri })), [seriList]);
 
   const userOptions = useMemo(() =>
-    [{ value: "", label: "— Chưa phân —" },
+    [{ value: "", label: t("— Chưa phân —") },
      ...(userRoles ?? []).map((u) => ({ value: u.user_id, label: u.ho_ten }))], [userRoles]);
 
   const handleCreateAgent = async () => {
@@ -188,9 +188,9 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
       set("agent_id", created.id);
       setAddAgentOpen(false);
       setNewAgentName("");
-      toast.success(`Đã thêm Agent "${created.ten}"`);
+      toast.success(`${t("Đã thêm Agent")} "${created.ten}"`);
     } catch (e: any) {
-      toast.error(e?.message || "Lỗi thêm Agent");
+      toast.error(e?.message || t("Lỗi thêm Agent"));
     }
   };
 
@@ -216,7 +216,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-border/40">
               <h2 className="text-lg font-semibold">
-                {doan ? "Sửa Đoàn" : "Thêm Đoàn"}
+                {doan ? t("Sửa Đoàn") : t("Thêm Đoàn")}
               </h2>
               <button onClick={onClose} className="p-2 rounded-md hover:bg-muted transition-colors">
                 <X className="h-4 w-4" />
@@ -224,7 +224,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
             </div>
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 bg-muted/40">
-              <Field label="Tên Đoàn / Code Đoàn *">
+              <Field label={t("Tên Đoàn / Code Đoàn") + " *"}>
                 <Input
                   required
                   value={form.ten_doan}
@@ -234,25 +234,25 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 />
               </Field>
 
-              <Field label="Loại tuyến">
+              <Field label={t("Loại tuyến")}>
                 <Select
                   value={form.loai_tour ?? "none"}
                   onValueChange={(v) => set("loai_tour", v === "none" ? null : v)}
                 >
                   <SelectTrigger className="rounded-lg h-10">
-                    <span>{!form.loai_tour ? "— Chưa phân loại —" : LOAI_TOUR_OPTS.find((o) => o.value === form.loai_tour)?.label ?? "Chọn loại tuyến"}</span>
+                    <span>{!form.loai_tour ? t("— Chưa phân loại —") : t(LOAI_TOUR_OPTS.find((o) => o.value === form.loai_tour)?.label ?? "Chọn loại tuyến")}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">— Chưa phân loại —</SelectItem>
+                    <SelectItem value="none">{t("— Chưa phân loại —")}</SelectItem>
                     {LOAI_TOUR_OPTS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
 
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Ngày Đón *">
+                <Field label={t("Ngày Đón") + " *"}>
                   <DatePicker
                     value={form.ngay_di ?? ""}
                     onChange={(v) => {
@@ -265,7 +265,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                     className="w-full rounded-lg h-10"
                   />
                 </Field>
-                <Field label="Ngày Tiễn *">
+                <Field label={t("Ngày Tiễn") + " *"}>
                   <DatePicker
                     value={form.ngay_ve ?? ""}
                     onChange={(v) => set("ngay_ve", v)}
@@ -280,7 +280,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                       form.ngay_di ? (
                         <div className="flex items-center gap-2">
                           <span className="inline-block h-3 w-3 rounded-sm bg-blue-100 ring-1 ring-blue-300" />
-                          <span>Ngày đón: <strong className="text-foreground">{form.ngay_di.split("-").reverse().join("/")}</strong></span>
+                          <span>{t("Ngày đón")}: <strong className="text-foreground">{form.ngay_di.split("-").reverse().join("/")}</strong></span>
                         </div>
                       ) : null
                     }
@@ -289,12 +289,12 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 </Field>
               </div>
 
-              <Field label="Địa Điểm *">
+              <Field label={t("Địa Điểm") + " *"}>
                 <SearchableSelect
                   options={diaDiemOptions}
                   value={form.dia_diem_id?.toString() || ""}
                   onChange={(v) => set("dia_diem_id", v ? parseInt(v) : null)}
-                  placeholder="Chọn Địa Điểm"
+                  placeholder={t("Chọn Địa Điểm")}
                 />
               </Field>
 
@@ -305,13 +305,13 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                       options={agentOptions}
                       value={form.agent_id?.toString() || ""}
                       onChange={(v) => set("agent_id", v ? parseInt(v) : null)}
-                      placeholder="Chọn Agent"
+                      placeholder={t("Chọn Agent")}
                     />
                   </div>
                   <Button
                     type="button" variant="outline" size="icon"
                     className="h-9 w-9 shrink-0"
-                    title="Thêm Agent mới"
+                    title={t("Thêm Agent mới")}
                     onClick={() => { setNewAgentName(""); setAddAgentOpen(true); }}
                   >
                     <Plus className="h-4 w-4" />
@@ -319,73 +319,73 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 </div>
               </Field>
 
-              <Field label="Hướng Dẫn Viên">
+              <Field label={t("Hướng Dẫn Viên")}>
                 <SearchableSelect
                   options={hdvOptions}
                   value={form.huong_dan_vien_id?.toString() || ""}
                   onChange={(v) => set("huong_dan_vien_id", v ? parseInt(v) : null)}
-                  placeholder="Chọn HDV"
+                  placeholder={t("Chọn HDV")}
                 />
               </Field>
 
-              <Field label="Xe">
+              <Field label={t("Xe")}>
                 <SearchableSelect
                   options={xeOptions}
                   value={form.xe_id?.toString() || ""}
                   onChange={(v) => set("xe_id", v || null)}
-                  placeholder="Chọn xe"
+                  placeholder={t("Chọn xe")}
                 />
               </Field>
 
-              <Field label="Mẫu seri (áp dụng chương trình)">
+              <Field label={t("Mẫu seri (áp dụng chương trình)")}>
                 <SearchableSelect
                   options={seriOptions}
                   value={form.seri_id?.toString() || ""}
                   onChange={(v) => set("seri_id", v ? parseInt(v) : null)}
-                  placeholder="Chọn seri (tuỳ chọn)"
+                  placeholder={t("Chọn seri (tuỳ chọn)")}
                 />
                 {doan ? (
                   form.seri_id && form.seri_id !== originalSeriId ? (
                     <p className="text-xs text-amber-600 mt-1">
-                      Sẽ áp dụng seri mới khi cập nhật — chỉ thành công nếu đoàn chưa có lịch trình / booking / chi phí.
+                      {t("Sẽ áp dụng seri mới khi cập nhật — chỉ thành công nếu đoàn chưa có lịch trình / booking / chi phí.")}
                     </p>
                   ) : null
                 ) : (
                   form.seri_id && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Lịch trình sẽ được tự động điền sau khi tạo đoàn
+                      {t("Lịch trình sẽ được tự động điền sau khi tạo đoàn")}
                     </p>
                   )
                 )}
               </Field>
 
-              <Field label="Chuyến Bay Đến">
+              <Field label={t("Chuyến Bay Đến")}>
                 <Input
                   value={form.chuyen_bay_don ?? ""}
                   onChange={(e) => set("chuyen_bay_don", e.target.value)}
-                  placeholder="Số hiệu + giờ — VD: BR397 19:00 - 20:55"
+                  placeholder="VD: BR397 19:00 - 20:55"
                   className="rounded-lg"
                 />
               </Field>
-              <Field label="Chuyến Bay Tiễn">
+              <Field label={t("Chuyến Bay Tiễn")}>
                 <Input
                   value={form.chuyen_bay_tien ?? ""}
                   onChange={(e) => set("chuyen_bay_tien", e.target.value)}
-                  placeholder="Số hiệu + giờ — VD: BR398 14:25 - 18:00"
+                  placeholder="VD: BR398 14:25 - 18:00"
                   className="rounded-lg"
                 />
               </Field>
 
               <div className="space-y-2 rounded-lg bg-card border border-border/60 p-3">
-                <Label className="text-xs uppercase text-foreground font-bold">Số Khách</Label>
+                <Label className="text-xs uppercase text-foreground font-bold">{t("Số Khách")}</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <Field bare label={t("Người lớn")}>
                     <Input type="number" min={0} value={form.so_khach_lon ?? 0} onChange={(e) => set("so_khach_lon", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
-                  <Field bare label="Trẻ em 50%">
+                  <Field bare label={t("Trẻ em 50%")}>
                     <Input type="number" min={0} value={form.so_khach_em1 ?? 0} onChange={(e) => set("so_khach_em1", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
-                  <Field bare label="Trẻ em free">
+                  <Field bare label={t("Trẻ em free")}>
                     <Input type="number" min={0} value={form.so_khach_em2 ?? 0} onChange={(e) => set("so_khach_em2", parseInt(e.target.value) || 0)} className="rounded-lg tabular-nums" />
                   </Field>
                   <Field bare label="T/L">
@@ -393,25 +393,25 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   </Field>
                 </div>
                 <div className="flex items-center gap-2 pt-1">
-                  <Label className="text-xs text-muted-foreground">Tổng khách:</Label>
+                  <Label className="text-xs text-muted-foreground">{t("Tổng khách")}:</Label>
                   <span className="text-sm font-bold text-primary tabular-nums">{total}</span>
                 </div>
               </div>
 
-              <Field label="OP phụ trách">
+              <Field label={t("OP phụ trách")}>
                 <SearchableSelect
                   options={userOptions}
                   value={form.assigned_to ?? ""}
                   onChange={(v) => set("assigned_to", v || null)}
-                  placeholder="Chọn OP phụ trách"
+                  placeholder={t("Chọn OP phụ trách")}
                 />
               </Field>
 
-              <Field label="Yêu cầu đặc biệt">
+              <Field label={t("Yêu cầu đặc biệt")}>
                 <Textarea
                   value={form.ghi_chu ?? ""}
                   onChange={(e) => set("ghi_chu", e.target.value)}
-                  placeholder="Ví dụ: yêu cầu xe lms, chỉ định HDV, 招待團..."
+                  placeholder={t("Ví dụ: yêu cầu xe lms, chỉ định HDV, 招待團...")}
                   rows={3}
                   className="rounded-lg resize-none"
                 />
@@ -423,7 +423,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   disabled={isSaving || checkingConflict || !form.ten_doan.trim() || !form.ngay_di || !form.ngay_ve || !form.dia_diem_id || !form.agent_id}
                   className="w-full active:scale-[0.98] transition-transform"
                 >
-                  {checkingConflict ? "Đang kiểm tra..." : isSaving ? "Đang lưu..." : doan ? "Cập Nhật" : "Thêm Đoàn"}
+                  {checkingConflict ? t("Đang kiểm tra...") : isSaving ? t("Đang lưu...") : doan ? t("Cập Nhật") : t("Thêm Đoàn")}
                 </Button>
               </div>
             </form>
@@ -434,9 +434,9 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 
     <Dialog open={addAgentOpen} onOpenChange={(o) => !o && setAddAgentOpen(false)}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Thêm Agent mới</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t("Thêm Agent mới")}</DialogTitle></DialogHeader>
         <div className="space-y-2 pt-2">
-          <Label className="text-xs">Tên Agent</Label>
+          <Label className="text-xs">{t("Tên Agent")}</Label>
           <Input
             value={newAgentName}
             autoFocus
@@ -446,9 +446,9 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
           />
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setAddAgentOpen(false)}>Hủy</Button>
+          <Button type="button" variant="outline" onClick={() => setAddAgentOpen(false)}>{t("Hủy")}</Button>
           <Button type="button" onClick={handleCreateAgent} disabled={!newAgentName.trim() || createAgentMut.isPending}>
-            {createAgentMut.isPending ? "Đang lưu..." : "Lưu"}
+            {createAgentMut.isPending ? t("Đang lưu...") : t("Lưu")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -457,23 +457,23 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     <AlertDialog open={!!conflictLines} onOpenChange={(o) => { if (!o) setConflictLines(null); }}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>Không thể áp dụng seri mới</AlertDialogTitle>
+          <AlertDialogTitle>{t("Không thể áp dụng seri mới")}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-sm">
-              <p>Đoàn đã có dữ liệu trùng với seri:</p>
+              <p>{t("Đoàn đã có dữ liệu trùng với seri:")}</p>
               <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-xs whitespace-pre-wrap">
                 {(conflictLines ?? []).join("\n")}
               </div>
               <p className="text-muted-foreground">
-                Vui lòng xóa các mục trên (hoặc bỏ chọn seri) trước khi cập nhật.
+                {t("Vui lòng xóa các mục trên (hoặc bỏ chọn seri) trước khi cập nhật.")}
               </p>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => setConflictLines(null)}>Đóng</AlertDialogCancel>
+          <AlertDialogCancel onClick={() => setConflictLines(null)}>{t("Đóng")}</AlertDialogCancel>
           <AlertDialogAction onClick={() => { set("seri_id", originalSeriId); setConflictLines(null); }}>
-            Bỏ chọn seri mới
+            {t("Bỏ chọn seri mới")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

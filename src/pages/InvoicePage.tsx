@@ -83,7 +83,7 @@ const fmtDate = (d: string | null) => {
 };
 
 const TRANG_THAI_LABEL: Record<string, string> = {
-  dang_chay: "Đang chạy",
+  dang_chay: "Chờ xác nhận",
   hoan_thanh: "Hoàn thành",
   huy: "Đã hủy",
 };

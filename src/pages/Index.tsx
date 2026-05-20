@@ -48,7 +48,7 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
 const TRANG_THAI_OPTIONS = [
   { value: "all", label: "Tất cả" },
-  { value: "dang_chay", label: "Đang chạy" },
+  { value: "dang_chay", label: "Chờ xác nhận" },
   { value: "hoan_thanh", label: "Hoàn thành" },
   { value: "da_quyet_toan", label: "Đã quyết toán" },
   { value: "huy", label: "Đã hủy" },
@@ -472,7 +472,7 @@ export default function Index() {
           {([
             { key: "sap_khoi_hanh", label: "Sắp khởi hành", sub: "trong 3 ngày tới", n: stats.sapKhoiHanh, icon: CalendarClock, tile: "bg-amber-500" },
             { key: "dang_dien_ra", label: "Đang diễn ra", sub: "đang trong hành trình", n: stats.dangDienRa, icon: Bus, tile: "bg-blue-500" },
-            { key: "dang_chay", label: "Đang chạy", sub: "tổng đoàn hoạt động", n: stats.dangChay, icon: Activity, tile: "bg-emerald-500" },
+            { key: "dang_chay", label: "Chờ xác nhận", sub: "tổng đoàn hoạt động", n: stats.dangChay, icon: Activity, tile: "bg-emerald-500" },
             { key: "hoan_thanh", label: "Hoàn thành", sub: "trong tháng này", n: stats.hoanThanhThang, icon: CheckCircle2, tile: "bg-teal-500" },
           ] as const).map((c) => (
             <button
@@ -495,7 +495,7 @@ export default function Index() {
         <div className="flex items-center gap-1.5 flex-wrap mb-4">
           {([
             { key: "all", label: "Tất cả", n: stats.total },
-            { key: "dang_chay", label: "Đang chạy", n: stats.dangChay },
+            { key: "dang_chay", label: "Chờ xác nhận", n: stats.dangChay },
             { key: "sap_khoi_hanh", label: "Sắp khởi hành", n: stats.sapKhoiHanh },
             { key: "dang_dien_ra", label: "Đang diễn ra", n: stats.dangDienRa },
             { key: "hoan_thanh", label: "Hoàn thành", n: stats.hoanThanh },

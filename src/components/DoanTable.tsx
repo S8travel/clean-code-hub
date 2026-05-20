@@ -67,23 +67,23 @@ function avatarBg(name: string) { return AVATAR_BG[hashStr(name) % AVATAR_BG.len
 function richStatus(g: any, qtPaidSet: Set<number> | null) {
   const base = computeDoanStatus(g, qtPaidSet ?? null);
   if (base === "huy")
-    return { label: "Đã huỷ", tile: "bg-red-500", text: "text-red-600", chip: "Đã huỷ", icon: Ban };
+    return { label: t("Đã huỷ"), tile: "bg-red-500", text: "text-red-600", chip: t("Đã huỷ"), icon: Ban };
   if (base === "hoan_thanh" || base === "da_quyet_toan")
     return {
-      label: "Hoàn thành", tile: "bg-teal-500", text: "text-teal-600",
-      chip: base === "da_quyet_toan" ? "Đã quyết toán" : "Đã hoàn thành", icon: CheckCircle2,
+      label: t("Hoàn thành"), tile: "bg-teal-500", text: "text-teal-600",
+      chip: base === "da_quyet_toan" ? t("Đã quyết toán") : t("Đã hoàn thành"), icon: CheckCircle2,
     };
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const di = g.ngay_di ? new Date(g.ngay_di + "T00:00:00") : null;
   const ve = g.ngay_ve ? new Date(g.ngay_ve + "T00:00:00") : null;
   if (di && ve && di.getTime() <= today.getTime() && today.getTime() <= ve.getTime())
-    return { label: "Đang diễn ra", tile: "bg-blue-500", text: "text-blue-600", chip: "Đang diễn ra", icon: Bus };
+    return { label: t("Đang diễn ra"), tile: "bg-blue-500", text: "text-blue-600", chip: t("Đang diễn ra"), icon: Bus };
   if (di && di.getTime() > today.getTime()) {
     const days = Math.ceil((di.getTime() - today.getTime()) / 86400000);
     if (days <= 3)
-      return { label: "Sắp khởi hành", tile: "bg-amber-500", text: "text-amber-600", chip: `Khởi hành sau ${days} ngày`, icon: Plane };
+      return { label: t("Sắp khởi hành"), tile: "bg-amber-500", text: "text-amber-600", chip: `${t("Khởi hành sau")} ${days} ${t("ngày")}`, icon: Plane };
   }
-  return { label: "Đang chạy", tile: "bg-emerald-500", text: "text-emerald-600", chip: "Đang chạy", icon: Plane };
+  return { label: t("Chờ xác nhận"), tile: "bg-emerald-500", text: "text-emerald-600", chip: t("Chờ xác nhận"), icon: Plane };
 }
 
 function nightsLabel(g: any): string | null {
@@ -177,7 +177,7 @@ export function DoanTable({
   if (!sorted.length) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-        <p className="text-sm">Không tìm thấy đoàn nào phù hợp.</p>
+        <p className="text-sm">{t("Không tìm thấy đoàn nào phù hợp.")}</p>
       </div>
     );
   }
@@ -188,16 +188,16 @@ export function DoanTable({
   };
 
   const SORTS: { k: SortKey; l: string }[] = [
-    { k: "ten_doan", l: "Mã đoàn" },
-    { k: "ngay_di", l: "Ngày đón" },
-    { k: "ngay_ve", l: "Ngày tiễn" },
+    { k: "ten_doan", l: t("Mã đoàn") },
+    { k: "ngay_di", l: t("Ngày đón") },
+    { k: "ngay_ve", l: t("Ngày tiễn") },
   ];
 
   return (
     <div className="p-3">
       {/* Sort bar */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground px-1 mb-2.5">
-        <span>Sắp xếp:</span>
+        <span>{t("Sắp xếp")}:</span>
         {SORTS.map((s) => (
           <button
             key={s.k}
@@ -251,12 +251,12 @@ export function DoanTable({
                   <span className={cn("text-[10px] mt-1 leading-tight font-medium", st.text)}>{st.label}</span>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] text-muted-foreground">Mã đoàn</p>
+                  <p className="text-[10px] text-muted-foreground">{t("Mã đoàn")}</p>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-semibold text-sm text-[hsl(var(--brand))] truncate">{g.ten_doan}</span>
                     {g.loai_tour && LOAI_TOUR_BADGE[g.loai_tour] && (
                       <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", LOAI_TOUR_BADGE[g.loai_tour].className)}>
-                        {LOAI_TOUR_BADGE[g.loai_tour].label}
+                        {t(LOAI_TOUR_BADGE[g.loai_tour].label)}
                       </span>
                     )}
                   </div>
@@ -273,11 +273,11 @@ export function DoanTable({
               {/* 2. HDV / OP */}
               <div className="px-3 py-3 flex flex-col justify-center gap-1.5 min-w-0">
                 {hdvName !== "—"
-                  ? <Avatar name={hdvName} label="HDV" />
-                  : <p className="text-xs text-muted-foreground">HDV: —</p>}
+                  ? <Avatar name={hdvName} label={t("HDV")} />
+                  : <p className="text-xs text-muted-foreground">{t("HDV")}: —</p>}
                 {op
                   ? <Avatar name={op} label="OP" />
-                  : <p className="text-xs text-muted-foreground">OP: chưa phân</p>}
+                  : <p className="text-xs text-muted-foreground">OP: {t("chưa phân")}</p>}
               </div>
 
               {/* 3. Agent */}
@@ -285,7 +285,7 @@ export function DoanTable({
                 <p className="text-[10px] text-muted-foreground">Agent</p>
                 <p className="text-xs truncate" title={agentName}>{agentName}</p>
                 {agentHuy && (
-                  <p className="text-[10px] text-destructive/80 mt-0.5 truncate">Hủy bởi: {agentHuy}</p>
+                  <p className="text-[10px] text-destructive/80 mt-0.5 truncate">{t("Hủy bởi")}: {agentHuy}</p>
                 )}
               </div>
 
@@ -293,7 +293,7 @@ export function DoanTable({
               <div className="px-3 py-3 flex flex-col justify-center min-w-0">
                 <div className="flex items-center gap-1.5 text-xs">
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-bold text-sm">{total}</span> khách
+                  <span className="font-bold text-sm">{total}</span> {t("khách")}
                 </div>
                 <div className="flex mt-1.5">
                   <KhachChip label={t("Lớn")} value={lon} />
@@ -317,14 +317,14 @@ export function DoanTable({
                 {g.chuyen_bay_don && (
                   <div className="flex items-center gap-1.5 pt-0.5">
                     <Plane className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                    <span className="text-[10px] text-muted-foreground">Đón</span>
+                    <span className="text-[10px] text-muted-foreground">{t("Đón")}</span>
                     <code className="text-[11px] text-[hsl(var(--brand))] font-mono break-all">{g.chuyen_bay_don}</code>
                   </div>
                 )}
                 {g.chuyen_bay_tien && (
                   <div className="flex items-center gap-1.5">
                     <Plane className="h-3.5 w-3.5 text-orange-500 shrink-0 rotate-90" />
-                    <span className="text-[10px] text-muted-foreground">Tiễn</span>
+                    <span className="text-[10px] text-muted-foreground">{t("Tiễn")}</span>
                     <code className="text-[11px] text-[hsl(var(--brand))] font-mono break-all">{g.chuyen_bay_tien}</code>
                   </div>
                 )}
@@ -332,7 +332,7 @@ export function DoanTable({
 
               {/* 7. Loại xe */}
               <div className="px-3 py-3 flex flex-col justify-center min-w-0">
-                <p className="text-[10px] text-muted-foreground">Loại xe</p>
+                <p className="text-[10px] text-muted-foreground">{t("Loại xe")}</p>
                 {xe
                   ? <p className="text-xs leading-snug line-clamp-2" title={xe}>{xe}</p>
                   : <span className="text-xs text-muted-foreground">—</span>}
@@ -340,7 +340,7 @@ export function DoanTable({
 
               {/* 8. Yêu cầu đặc biệt */}
               <div className="px-3 py-3 flex flex-col justify-center min-w-0">
-                <p className="text-[10px] text-muted-foreground">Yêu cầu đặc biệt</p>
+                <p className="text-[10px] text-muted-foreground">{t("Yêu cầu đặc biệt")}</p>
                 {g.ghi_chu
                   ? <p className="text-xs line-clamp-3 leading-snug" title={g.ghi_chu}>{g.ghi_chu}</p>
                   : <span className="text-xs text-muted-foreground">—</span>}
@@ -350,27 +350,27 @@ export function DoanTable({
               <div className="px-1 py-3 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Thao tác">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title={t("Thao tác")}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-36">
                     <DropdownMenuItem onClick={() => onEdit?.(g)}>
-                      <Pencil className="h-3.5 w-3.5 mr-2" /> Sửa
+                      <Pencil className="h-3.5 w-3.5 mr-2" /> {t("Sửa")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onClone?.(g)}>
-                      <Copy className="h-3.5 w-3.5 mr-2 text-sky-600" /> Nhân bản
+                      <Copy className="h-3.5 w-3.5 mr-2 text-sky-600" /> {t("Nhân bản")}
                     </DropdownMenuItem>
                     {g.trang_thai !== "huy" && (
                       <DropdownMenuItem onClick={() => onCancel?.(g)}>
-                        <Ban className="h-3.5 w-3.5 mr-2 text-orange-500" /> Hủy đoàn
+                        <Ban className="h-3.5 w-3.5 mr-2 text-orange-500" /> {t("Hủy đoàn")}
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
                       onClick={() => onDelete?.(g)}
                       className="text-destructive focus:text-destructive"
                     >
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Xóa vĩnh viễn
+                      <Trash2 className="h-3.5 w-3.5 mr-2" /> {t("Xóa vĩnh viễn")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

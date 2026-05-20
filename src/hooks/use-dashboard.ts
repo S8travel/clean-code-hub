@@ -97,7 +97,7 @@ export function useDashboardStats() {
 
       // ── Trạng thái đoàn (6 tháng) ────────────────────────────────────────────
       const statusBreakdown = [
-        { name: "Đang chạy", value: doanList.filter((d) => d.trang_thai === "dang_chay").length, color: "#10b981" },
+        { name: "Chờ xác nhận", value: doanList.filter((d) => d.trang_thai === "dang_chay").length, color: "#10b981" },
         { name: "Hoàn thành", value: doanList.filter((d) => d.trang_thai === "hoan_thanh").length, color: "#6366f1" },
         { name: "Đã hủy", value: doanList.filter((d) => d.trang_thai === "huy").length, color: "#f43f5e" },
       ].filter((s) => s.value > 0);
