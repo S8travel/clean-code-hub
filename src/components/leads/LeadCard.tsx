@@ -3,10 +3,10 @@ import { format, isBefore, isToday, startOfDay } from "date-fns";
 import { Phone, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  LEAD_TRANG_THAI_OPTS,
   LEAD_NGUON_OPTS,
   type Lead,
 } from "@/hooks/use-leads";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   lead: Lead;
@@ -39,6 +39,7 @@ const UU_TIEN_COLOR: Record<string, string> = {
 };
 
 export const LeadCard = memo(function LeadCard({ lead, onClick, dragging }: Props) {
+  useTranslate();
   const today = startOfDay(new Date());
   const overdue =
     lead.ngay_follow_up_tiep &&
@@ -47,7 +48,6 @@ export const LeadCard = memo(function LeadCard({ lead, onClick, dragging }: Prop
     lead.ngay_follow_up_tiep && isToday(new Date(lead.ngay_follow_up_tiep));
 
   const diemDenList = lead.diem_den ?? [];
-  const statusLabel = LEAD_TRANG_THAI_OPTS.find((o) => o.value === lead.trang_thai)?.label;
 
   return (
     <div
@@ -73,14 +73,14 @@ export const LeadCard = memo(function LeadCard({ lead, onClick, dragging }: Prop
         </div>
         {lead.uu_tien && lead.uu_tien !== "trung_binh" && (
           <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full shrink-0", UU_TIEN_COLOR[lead.uu_tien])}>
-            {lead.uu_tien === "cao" ? "Cao" : "Thấp"}
+            {lead.uu_tien === "cao" ? t("Cao") : t("Thấp")}
           </span>
         )}
       </div>
 
       {/* Nguồn badge */}
       <span className={cn("inline-block text-[10px] px-1.5 py-0.5 rounded border", NGUON_COLOR[lead.nguon] ?? "bg-gray-50 text-gray-600 border-gray-100")}>
-        {nguonLabel(lead.nguon)}
+        {t(nguonLabel(lead.nguon))}
       </span>
 
       {/* Điểm đến */}

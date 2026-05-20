@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   leads: Lead[];
@@ -68,7 +69,7 @@ function KanbanColumn({
   return (
     <div className="flex flex-col min-w-[230px] max-w-[240px] shrink-0">
       <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">{label}</span>
+        <span className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">{t(label)}</span>
         <span className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 font-medium">{leads.length}</span>
       </div>
       <div
@@ -89,6 +90,7 @@ function KanbanColumn({
 
 // ── Main Kanban ─────────────────────────────────────────────
 export function LeadKanban({ leads, onLeadClick }: Props) {
+  useTranslate();
   const { user } = useAuth();
   const updateStatus = useUpdateLeadStatus();
 
@@ -124,8 +126,8 @@ export function LeadKanban({ leads, onLeadClick }: Props) {
     // chot_deal: just update status (full conversion flow in LeadDrawer)
     updateStatus.mutate(
       { id: leadId, trang_thai_moi: newStatus, created_by: user?.user_id },
-      { onSuccess: () => toast.success(`Đã chuyển sang: ${LEAD_TRANG_THAI_OPTS.find((o) => o.value === newStatus)?.label}`),
-        onError: (e: any) => toast.error(e?.message ?? "Lỗi khi đổi trạng thái") }
+      { onSuccess: () => toast.success(`${t("Đã chuyển sang")}: ${t(LEAD_TRANG_THAI_OPTS.find((o) => o.value === newStatus)?.label ?? "")}`),
+        onError: (e: any) => toast.error(e?.message ?? t("Lỗi khi đổi trạng thái")) }
     );
   };
 
@@ -139,8 +141,8 @@ export function LeadKanban({ leads, onLeadClick }: Props) {
         created_by: user?.user_id,
       },
       {
-        onSuccess: () => { toast.success("Đã ghi nhận mất khách"); setMatKhachDialog(null); },
-        onError: (e: any) => toast.error(e?.message ?? "Lỗi"),
+        onSuccess: () => { toast.success(t("Đã ghi nhận mất khách")); setMatKhachDialog(null); },
+        onError: (e: any) => toast.error(e?.message ?? t("Lỗi")),
       }
     );
   };
@@ -178,26 +180,26 @@ export function LeadKanban({ leads, onLeadClick }: Props) {
       <AlertDialog open={!!matKhachDialog} onOpenChange={(v) => !v && setMatKhachDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Ghi nhận mất khách</AlertDialogTitle>
+            <AlertDialogTitle>{t("Ghi nhận mất khách")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Nhập lý do để ghi lại và cải thiện quy trình sales.
+              {t("Nhập lý do để ghi lại và cải thiện quy trình sales.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Textarea
             value={lyDoMat}
             onChange={(e) => setLyDoMat(e.target.value)}
-            placeholder="VD: Khách chọn đơn vị khác, giá cao hơn đối thủ..."
+            placeholder={t("VD: Khách chọn đơn vị khác, giá cao hơn đối thủ...")}
             rows={3}
             className="resize-none"
           />
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>{t("Hủy")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmMatKhach}
               disabled={updateStatus.isPending}
               className="bg-red-500 hover:bg-red-600"
             >
-              Xác nhận mất khách
+              {t("Xác nhận mất khách")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -20,6 +20,7 @@ import { useUserRoles } from "@/hooks/use-doan";
 import { useReplaceDiemDen } from "@/hooks/use-lead-diem-den";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   open: boolean;
@@ -47,7 +48,11 @@ const PHONG_CACH_OPTS = [
   { value: "luxury", label: "Luxury" },
 ];
 
+const CAMPAIGN_EMPTY_LABEL = "— Không chọn —";
+const USER_AUTO_LABEL = "— Tự động chọn (round-robin) —";
+
 export function LeadFormDrawer({ open, onClose, lead }: Props) {
+  useTranslate();
   const { user } = useAuth();
   const { data: campaigns = [] } = useCampaignList({ active: true });
   const { data: userRoles = [] } = useUserRoles();
@@ -109,41 +114,41 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!form.ho_ten?.trim()) { toast.error("Họ tên không được để trống"); return; }
+    if (!form.ho_ten?.trim()) { toast.error(t("Họ tên không được để trống")); return; }
     if (!form.so_dien_thoai?.trim() && !form.email?.trim()) {
-      toast.error("Cần ít nhất SĐT hoặc email"); return;
+      toast.error(t("Cần ít nhất SĐT hoặc email")); return;
     }
-    if (!form.nguon) { toast.error("Vui lòng chọn nguồn"); return; }
+    if (!form.nguon) { toast.error(t("Vui lòng chọn nguồn")); return; }
 
     try {
       let leadId: number;
       if (lead) {
         await updateLead.mutateAsync({ id: lead.id, ...form });
         leadId = lead.id;
-        toast.success("Đã cập nhật lead");
+        toast.success(t("Đã cập nhật lead"));
       } else {
         const created = await createLead.mutateAsync({
           ...form, created_by: user?.user_id ?? null,
         });
         leadId = created.id;
-        toast.success("Đã tạo lead mới");
+        toast.success(t("Đã tạo lead mới"));
       }
       await replaceDiemDen.mutateAsync({ leadId, diemDenList: danhSachDiemDen });
       onClose();
     } catch (e: any) {
-      toast.error(e?.message ?? "Lỗi khi lưu");
+      toast.error(e?.message ?? t("Lỗi khi lưu"));
     }
   };
 
   const isSaving = createLead.isPending || updateLead.isPending || replaceDiemDen.isPending;
   const campaignOptions = [
-    { value: "", label: "— Không chọn —" },
+    { value: "", label: t(CAMPAIGN_EMPTY_LABEL) },
     ...campaigns.map((c) => ({ value: c.id.toString(), label: c.ten })),
   ];
   // Option đầu: assigned_to = "" → onChange convert thành null → trigger
   // fn_auto_assign_lead chạy round-robin chọn sales ít lead nhất.
   const userOptions = [
-    { value: "", label: "— Tự động chọn (round-robin) —" },
+    { value: "", label: t(USER_AUTO_LABEL) },
     ...userRoles.map((u) => ({ value: u.user_id, label: u.ho_ten })),
   ];
 
@@ -151,7 +156,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0 gap-0">
         <SheetHeader className="px-6 py-4 border-b shrink-0">
-          <SheetTitle>{lead ? "Sửa Lead" : "Thêm Lead mới"}</SheetTitle>
+          <SheetTitle>{lead ? t("Sửa Lead") : t("Thêm Lead mới")}</SheetTitle>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
@@ -165,7 +170,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
                       ? "bg-primary text-primary-foreground border-primary"
                       : "border-border hover:bg-muted"
                   )}>
-                  {o.label}
+                  {t(o.label)}
                 </button>
               ))}
             </div>
@@ -173,7 +178,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
 
           {/* Liên lạc */}
           <Field label="Họ tên *">
-            <Input value={form.ho_ten} onChange={(e) => set("ho_ten", e.target.value)} placeholder="Nguyễn Văn A" />
+            <Input value={form.ho_ten} onChange={(e) => set("ho_ten", e.target.value)} placeholder={t("Nguyễn Văn A")} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="SĐT">
@@ -185,17 +190,17 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
           </div>
           <Field label="Facebook">
             <Input value={form.facebook_url ?? ""} onChange={(e) => set("facebook_url", e.target.value)}
-              placeholder="https://facebook.com/... hoặc https://m.me/..." />
+              placeholder={t("https://facebook.com/... hoặc https://m.me/...")} />
           </Field>
 
           {/* B2B */}
           {isB2B && (
             <div className="grid grid-cols-2 gap-3">
               <Field label="Tên tổ chức">
-                <Input value={form.ten_to_chuc ?? ""} onChange={(e) => set("ten_to_chuc", e.target.value)} placeholder="Công ty ABC" />
+                <Input value={form.ten_to_chuc ?? ""} onChange={(e) => set("ten_to_chuc", e.target.value)} placeholder={t("Công ty ABC")} />
               </Field>
               <Field label="Chức vụ">
-                <Input value={form.chuc_vu ?? ""} onChange={(e) => set("chuc_vu", e.target.value)} placeholder="Trưởng phòng HR" />
+                <Input value={form.chuc_vu ?? ""} onChange={(e) => set("chuc_vu", e.target.value)} placeholder={t("Trưởng phòng HR")} />
               </Field>
             </div>
           )}
@@ -203,10 +208,10 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
           {/* Nguồn & Campaign */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Nguồn *">
-              <SearchableSelect options={LEAD_NGUON_OPTS} value={form.nguon ?? ""} onChange={(v) => set("nguon", v)} placeholder="Chọn nguồn" />
+              <SearchableSelect options={LEAD_NGUON_OPTS.map((o) => ({ value: o.value, label: t(o.label) }))} value={form.nguon ?? ""} onChange={(v) => set("nguon", v)} placeholder={t("Chọn nguồn")} />
             </Field>
             <Field label="Campaign">
-              <SearchableSelect options={campaignOptions} value={form.campaign_id?.toString() ?? ""} onChange={(v) => set("campaign_id", v ? parseInt(v) : null)} placeholder="Chọn campaign" />
+              <SearchableSelect options={campaignOptions} value={form.campaign_id?.toString() ?? ""} onChange={(v) => set("campaign_id", v ? parseInt(v) : null)} placeholder={t("Chọn campaign")} />
             </Field>
           </div>
 
@@ -218,7 +223,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
                   className={cn("flex-1 py-2 rounded-lg text-sm border transition-colors",
                     form.loai_tour === o.value ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
                   )}>
-                  {o.label}
+                  {t(o.label)}
                 </button>
               ))}
             </div>
@@ -229,7 +234,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
             <div className="flex gap-2">
               <Input value={diemDenInput} onChange={(e) => setDiemDenInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addDiemDen(diemDenInput); } }}
-                placeholder="Nhật Bản... Enter để thêm" className="flex-1" />
+                placeholder={t("Nhật Bản... Enter để thêm")} className="flex-1" />
               <Button type="button" variant="outline" size="sm" onClick={() => addDiemDen(diemDenInput)}>+</Button>
             </div>
             {danhSachDiemDen.length > 0 && (
@@ -258,14 +263,14 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
 
           {/* Thời gian */}
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-muted-foreground font-medium">Thời gian dự kiến</Label>
+            <Label className="text-xs uppercase text-muted-foreground font-medium">{t("Thời gian dự kiến")}</Label>
             <div className="flex gap-2">
               {[{ v: true, l: "Ngày cụ thể" }, { v: false, l: "Tháng dự kiến" }].map((o) => (
                 <button key={String(o.v)} type="button" onClick={() => setUseSpecificDate(o.v)}
                   className={cn("flex-1 py-1.5 text-xs rounded border transition-colors",
                     useSpecificDate === o.v ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
                   )}>
-                  {o.l}
+                  {t(o.l)}
                 </button>
               ))}
             </div>
@@ -296,7 +301,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
           </div>
 
           <Field label="Phong cách">
-            <SearchableSelect options={PHONG_CACH_OPTS} value={form.phong_cach ?? ""} onChange={(v) => set("phong_cach", v || null)} placeholder="Chọn phong cách" />
+            <SearchableSelect options={PHONG_CACH_OPTS.map((o) => ({ value: o.value, label: t(o.label) }))} value={form.phong_cach ?? ""} onChange={(v) => set("phong_cach", v || null)} placeholder={t("Chọn phong cách")} />
           </Field>
 
           <Field label="Yêu cầu đặc biệt">
@@ -306,7 +311,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
           {/* Phân công */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Sales phụ trách">
-              <SearchableSelect options={userOptions} value={form.assigned_to ?? ""} onChange={(v) => set("assigned_to", v || null)} placeholder="Chọn sales" />
+              <SearchableSelect options={userOptions} value={form.assigned_to ?? ""} onChange={(v) => set("assigned_to", v || null)} placeholder={t("Chọn sales")} />
             </Field>
             <Field label="Follow-up tiếp">
               <DatePicker value={form.ngay_follow_up_tiep ?? ""} onChange={(v) => set("ngay_follow_up_tiep", v)} className="w-full h-9" />
@@ -319,9 +324,9 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
         </div>
 
         <div className="px-6 py-4 border-t shrink-0 flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" className="flex-1" onClick={onClose}>{t("Hủy")}</Button>
           <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>
-            {isSaving ? "Đang lưu..." : lead ? "Cập nhật" : "Tạo Lead"}
+            {isSaving ? t("Đang lưu...") : lead ? t("Cập nhật") : t("Tạo Lead")}
           </Button>
         </div>
       </SheetContent>
@@ -332,7 +337,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs uppercase text-muted-foreground font-medium">{label}</Label>
+      <Label className="text-xs uppercase text-muted-foreground font-medium">{t(label)}</Label>
       {children}
     </div>
   );

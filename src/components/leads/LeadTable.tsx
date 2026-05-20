@@ -7,6 +7,7 @@ import {
   type Lead,
 } from "@/hooks/use-leads";
 import { useUserRoles } from "@/hooks/use-doan";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   leads: Lead[];
@@ -46,6 +47,7 @@ function initials(name: string) {
 }
 
 export function LeadTable({ leads, onRowClick }: Props) {
+  useTranslate();
   const { data: userRoles = [] } = useUserRoles();
   const today = startOfDay(new Date());
 
@@ -59,7 +61,7 @@ export function LeadTable({ leads, onRowClick }: Props) {
   if (leads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-        <p className="text-sm">Không có lead nào</p>
+        <p className="text-sm">{t("Không có lead nào")}</p>
       </div>
     );
   }
@@ -69,14 +71,14 @@ export function LeadTable({ leads, onRowClick }: Props) {
       <table className="w-full text-xs">
         <thead>
           <tr className="bg-[#E6F1FB] text-left">
-            <th className="py-1.5 px-2 font-medium whitespace-nowrap">Tên / SĐT</th>
-            {hasB2B && <th className="py-1.5 px-2 font-medium whitespace-nowrap">Tổ chức</th>}
-            <th className="py-1.5 px-2 font-medium whitespace-nowrap">Nguồn</th>
-            <th className="py-1.5 px-2 font-medium whitespace-nowrap">Điểm đến</th>
-            <th className="py-1.5 px-2 font-medium whitespace-nowrap">Sales</th>
-            <th className="py-1.5 px-2 font-medium whitespace-nowrap">Trạng thái</th>
-            <th className="py-1.5 px-2 font-medium whitespace-nowrap">Follow-up</th>
-            <th className="py-1.5 px-2 font-medium whitespace-nowrap">Ưu tiên</th>
+            <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Tên / SĐT")}</th>
+            {hasB2B && <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Tổ chức")}</th>}
+            <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Nguồn")}</th>
+            <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Điểm đến")}</th>
+            <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Sales")}</th>
+            <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Trạng thái")}</th>
+            <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Follow-up")}</th>
+            <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Ưu tiên")}</th>
             <th className="py-1.5 px-2 w-8" />
           </tr>
         </thead>
@@ -91,7 +93,9 @@ export function LeadTable({ leads, onRowClick }: Props) {
             const diemDen = lead.diem_den ?? [];
             const salesName = getUserName(lead.assigned_to);
             const statusLabel = LEAD_TRANG_THAI_OPTS.find((o) => o.value === lead.trang_thai)?.label;
+            const statusLabelI18n = statusLabel ? t(statusLabel) : "";
             const nguonLabel = LEAD_NGUON_OPTS.find((o) => o.value === lead.nguon)?.label ?? lead.nguon;
+            const nguonLabelI18n = t(nguonLabel);
 
             return (
               <tr
@@ -121,7 +125,7 @@ export function LeadTable({ leads, onRowClick }: Props) {
                 {/* Nguồn */}
                 <td className="py-1.5 px-2">
                   <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", NGUON_COLOR[lead.nguon] ?? "bg-gray-50 text-gray-600")}>
-                    {nguonLabel}
+                    {nguonLabelI18n}
                   </span>
                 </td>
 
@@ -157,7 +161,7 @@ export function LeadTable({ leads, onRowClick }: Props) {
                 {/* Trạng thái */}
                 <td className="py-1.5 px-2">
                   <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", STATUS_COLOR[lead.trang_thai] ?? "bg-gray-100 text-gray-600")}>
-                    {statusLabel}
+                    {statusLabelI18n}
                   </span>
                 </td>
 
@@ -181,7 +185,7 @@ export function LeadTable({ leads, onRowClick }: Props) {
                     <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium",
                       UU_TIEN_COLOR[lead.uu_tien] ?? "bg-gray-100 text-gray-600"
                     )}>
-                      {lead.uu_tien === "cao" ? "Cao" : lead.uu_tien === "trung_binh" ? "TB" : "Thấp"}
+                      {lead.uu_tien === "cao" ? t("Cao") : lead.uu_tien === "trung_binh" ? t("TB") : t("Thấp")}
                     </span>
                   ) : "—"}
                 </td>
