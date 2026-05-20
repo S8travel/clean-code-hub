@@ -3,14 +3,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Printer, Trash2 } from "lucide-react";
+import { Printer } from "lucide-react";
 import { exportMenuOverviewWord, exportMenuXihongWord, type MenuWordMeal } from "@/lib/export-menu-word";
 import { externalSupabase } from "@/lib/supabase-external";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
-  useUpsertBookingNH,
-  useUpdateBookingNH,
   type MenuDayData,
   type BookingNHRow,
 } from "@/hooks/use-booking-nh";
@@ -21,23 +19,23 @@ function fmtDay(d: string | null) {
   try { return format(new Date(d + "T00:00:00"), "dd/MM (EEE)", { locale: vi }); } catch { return d; }
 }
 
-interface MonListEditorProps {
-  doanId: number;
-  doanNgayId: number;
-  buaAn: "trua" | "toi";
+interface MonListViewProps {
   nhaHangId: number | null;
   booking: BookingNHRow | null;
-  onUpdated: () => void;
 }
 
-function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, onUpdated }: MonListEditorProps) {
-  const upsertMut = useUpsertBookingNH();
-  const updateMut = useUpdateBookingNH();
+// READ-ONLY: chỉ hiển thị danh sách món. Edit phải làm ở tab Booking NH
+// (MealCard). Tổng quan menu chỉ để xem nhanh + in.
+function MonListView({ nhaHangId, booking }: MonListViewProps) {
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
-  const [newMon, setNewMon] = useState("");
 
-  // Fallback: snapshot rỗng nhưng đã có set menu → lấy món từ catalog để hiển thị.
-  // Pattern khớp với MealColumn — user có thể edit, save sẽ persist lại snapshot.
+  // Đồng bộ khi booking thay đổi từ ngoài (cascade từ điều tour hoặc edit ở MealCard)
+  useEffect(() => {
+    setMonList(booking?.mon_an_snapshot ?? []);
+  }, [booking?.id, JSON.stringify(booking?.mon_an_snapshot)]);
+
+  // Fallback: snapshot rỗng nhưng đã có set menu → lấy từ catalog để hiển thị
+  // (không persist — đây là view-only).
   useEffect(() => {
     if (!booking?.set_menu_id) return;
     if ((booking?.mon_an_snapshot?.length ?? 0) > 0) return;
@@ -50,48 +48,14 @@ function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, onUpdate
         const mons = (data ?? []).map((m: any) => m.ten_mon as string);
         if (mons.length > 0) setMonList(mons);
       });
-  }, [booking?.set_menu_id]);
+  }, [booking?.set_menu_id, booking?.mon_an_snapshot]);
 
   if (!nhaHangId) {
     return <span className="text-xs text-muted-foreground/40 italic">Không có nhà hàng</span>;
   }
 
-  const save = (next: string[], extras: Partial<BookingNHRow> = {}) => {
-    const payload = {
-      doan_id: doanId,
-      doan_ngay_id: doanNgayId,
-      bua_an: buaAn,
-      nha_hang_id: nhaHangId,
-      mon_an_snapshot: next,
-      booking_status: booking?.booking_status ?? "chua_gui",
-      ...extras,
-    };
-    if (booking?.id) {
-      updateMut.mutate({ id: booking.id, doan_id: doanId, mon_an_snapshot: next, ...extras }, { onSuccess: onUpdated });
-    } else {
-      upsertMut.mutate(payload as any, { onSuccess: onUpdated });
-    }
-  };
-
-  const handleAdd = () => {
-    if (!newMon.trim()) return;
-    const next = [...monList, newMon.trim()];
-    setMonList(next);
-    setNewMon("");
-    save(next);
-  };
-
-  const handleRemove = (i: number) => {
-    const next = monList.filter((_, idx) => idx !== i);
-    setMonList(next);
-    save(next);
-  };
-
-  const handleBlur = () => save(monList);
-
   return (
     <div className="space-y-1 min-w-[160px]">
-      {/* Set menu name — locked from điều tour, display only */}
       {booking?.ten_set_snapshot && (
         <div className="pb-1.5 border-b border-border/50">
           <span className="text-xs font-medium text-foreground">{booking.ten_set_snapshot}</span>
@@ -102,43 +66,16 @@ function MonListEditor({ doanId, doanNgayId, buaAn, nhaHangId, booking, onUpdate
       ) : (
         <ul className="space-y-0.5">
           {monList.map((mon, i) => (
-            <li key={i} className="flex items-center gap-1 group">
-              <span className="text-muted-foreground text-xs w-4 shrink-0">{i + 1}.</span>
-              <input
-                className="flex-1 text-xs bg-transparent border-none outline-none hover:bg-muted/50 focus:bg-muted/50 px-1 rounded min-w-0"
-                value={mon}
-                onChange={(e) => {
-                  const next = [...monList];
-                  next[i] = e.target.value;
-                  setMonList(next);
-                }}
-                onBlur={handleBlur}
-              />
-              <button
-                onClick={() => handleRemove(i)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
+            <li key={i} className="flex items-start gap-1 text-xs">
+              <span className="text-muted-foreground w-4 shrink-0">{i + 1}.</span>
+              <span className="flex-1 break-words">{mon}</span>
             </li>
           ))}
         </ul>
       )}
-      <div className="flex items-center gap-1 pt-1">
-        <input
-          className="flex-1 text-xs border border-input rounded px-1.5 py-0.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-w-0"
-          placeholder="Thêm món..."
-          value={newMon}
-          onChange={(e) => setNewMon(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-        />
-        <button
-          onClick={handleAdd}
-          className="text-muted-foreground hover:text-foreground shrink-0 p-0.5"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      <p className="text-[10px] text-muted-foreground/60 italic pt-1">
+        Sửa món ở tab Booking NH
+      </p>
     </div>
   );
 }
@@ -332,13 +269,9 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
                             )} />
                             <span className="text-xs font-medium">{day.an_trua_nha_hang_ten}</span>
                           </div>
-                          <MonListEditor
-                            doanId={doanId}
-                            doanNgayId={day.doan_ngay_id}
-                            buaAn="trua"
+                          <MonListView
                             nhaHangId={day.an_trua_nha_hang_id}
                             booking={day.booking_trua}
-                            onUpdated={onUpdated}
                           />
                         </div>
                       ) : (
@@ -357,13 +290,9 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
                             )} />
                             <span className="text-xs font-medium">{day.an_toi_nha_hang_ten}</span>
                           </div>
-                          <MonListEditor
-                            doanId={doanId}
-                            doanNgayId={day.doan_ngay_id}
-                            buaAn="toi"
+                          <MonListView
                             nhaHangId={day.an_toi_nha_hang_id}
                             booking={day.booking_toi}
-                            onUpdated={onUpdated}
                           />
                         </div>
                       ) : (

@@ -925,8 +925,11 @@ export function useSaveDieuTour() {
             }
             continue;
           }
-          // Cùng NH nhưng set_menu thay đổi → sync set_menu + snapshot fields.
-          // Booking_nh phản ánh "current plan". mail_content_hash giữ snapshot mail đã gửi → dirty badge tự hiện nếu khác.
+          // Cùng NH nhưng set_menu thay đổi → sync set_menu + snapshot fields +
+          // mon_an_snapshot (LUÔN override từ catalog, kể cả khi đã gửi mail).
+          // Source of truth là điều tour: user đổi set ở đây thì booking PHẢI
+          // theo, kể cả user đã chỉnh món trong tab Booking NH trước đó. Nếu
+          // đã gửi mail thì dirty badge tự hiện → user gửi lại nếu cần.
           if (setMenuId !== existingBkNh.set_menu_id) {
             const updates: Record<string, any> = { set_menu_id: setMenuId ?? null };
             if (setMenuId) {
@@ -940,20 +943,17 @@ export function useSaveDieuTour() {
                 updates.gia_snapshot = sm.gia;
                 updates.don_vi_snapshot = sm.don_vi;
               }
-              // Mon list: chỉ auto-sync khi booking CHƯA gửi (tránh đè user edit trên booking đã gửi)
-              if (existingBkNh.booking_status === "chua_gui") {
-                const { data: mons } = await externalSupabase
-                  .from("nha_hang_set_menu_mon")
-                  .select("ten_mon")
-                  .eq("set_menu_id", setMenuId)
-                  .order("thu_tu", { ascending: true });
-                if (mons) updates.mon_an_snapshot = mons.map((m: any) => m.ten_mon);
-              }
+              const { data: mons } = await externalSupabase
+                .from("nha_hang_set_menu_mon")
+                .select("ten_mon")
+                .eq("set_menu_id", setMenuId)
+                .order("thu_tu", { ascending: true });
+              updates.mon_an_snapshot = (mons ?? []).map((m: any) => m.ten_mon);
             } else {
               updates.ten_set_snapshot = null;
               updates.gia_snapshot = null;
               updates.don_vi_snapshot = null;
-              if (existingBkNh.booking_status === "chua_gui") updates.mon_an_snapshot = [];
+              updates.mon_an_snapshot = [];
             }
             await externalSupabase.from("doan_booking_nh").update(updates).eq("id", existingBkNh.id);
           }
