@@ -158,6 +158,23 @@ export default function MealCard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(setMenuMons), selectedSetMenuId]);
 
+  // Fallback: booking đã có set_menu_id nhưng mon_an_snapshot rỗng (legacy data
+  // hoặc tạo bằng path không snap mons) → backfill từ catalog + persist. Chạy
+  // bất kể status: snapshot rỗng là missing data, nên kể cả da_gui cũng cần phục
+  // hồi để UI / print / mail thấy đúng món.
+  const monBackfillDone = useRef(false);
+  useEffect(() => {
+    if (!booking?.id) return;
+    if (monBackfillDone.current) return;
+    if (!booking.set_menu_id) return;
+    if ((booking.mon_an_snapshot?.length ?? 0) > 0) return;
+    if (setMenuMons.length === 0) return;
+    monBackfillDone.current = true;
+    setMonList(setMenuMons);
+    updateMut.mutate({ id: booking.id, doan_id: doanId, mon_an_snapshot: setMenuMons } as any);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking?.id, booking?.set_menu_id, JSON.stringify(booking?.mon_an_snapshot), JSON.stringify(setMenuMons)]);
+
   // Sync set menu từ điều tour → DB khi booking chưa có set_menu_id.
   // Fetch luôn mon_an_snapshot từ catalog cùng lúc để mọi nơi (MealCard, MenuOverviewModal,
   // export Word) đều thấy món thật trong DB thay vì fallback fetch riêng.
