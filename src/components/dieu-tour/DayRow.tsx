@@ -1,11 +1,20 @@
 import { useState } from "react";
-import { Lock, Plus, X, MessageSquarePlus } from "lucide-react";
+import { Lock, Plus, X, MessageSquarePlus, GripVertical } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor,
+  useSensor, useSensors, type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove, SortableContext, sortableKeyboardCoordinates,
+  useSortable, verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { SearchableSelect } from "@/components/SearchableSelect";
 import type { DayLocal, DayItemLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
@@ -26,6 +35,31 @@ interface Props {
   dayLabel?: string;
   doanId?: number; // optional: SeriPage không có doanId, các check NH/KS sẽ skip
   lockKhachSan?: boolean; // mẫu seri: khoá cột khách sạn
+}
+
+// Wrapper hỗ trợ kéo-thả sort cho 1 dòng cảnh điểm. Children-as-function để
+// component lồng dùng được setNodeRef + transform + drag handle, không phải
+// extract toàn bộ JSX ra prop.
+function SortableRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: (s: {
+    setNodeRef: (node: HTMLElement | null) => void;
+    style: React.CSSProperties;
+    listeners: ReturnType<typeof useSortable>["listeners"];
+    attributes: ReturnType<typeof useSortable>["attributes"];
+    isDragging: boolean;
+  }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return <>{children({ setNodeRef, style, listeners, attributes, isDragging })}</>;
 }
 
 function formatDayDisplay(dateStr: string) {
@@ -130,6 +164,22 @@ function SetMenuSelect({
 export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId, lockKhachSan }: Props) {
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
+
+  // DnD sensors + handler kéo-thả thứ tự cảnh điểm
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const sortableIds = day.items.map((it, i) => String(it.id ?? `tmp-${i}`));
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIdx = sortableIds.indexOf(String(active.id));
+    const newIdx = sortableIds.indexOf(String(over.id));
+    if (oldIdx < 0 || newIdx < 0) return;
+    const reordered = arrayMove(day.items, oldIdx, newIdx).map((it, i) => ({ ...it, thu_tu: i + 1 }));
+    updateItems(reordered);
+  };
   const [noteOpenMap, setNoteOpenMap] = useState<Record<number, boolean>>({});
   // Google Sheets-like: sau khi chọn cảnh điểm ở dòng cuối → tự thêm dòng mới + auto-open dropdown của nó.
   const [autoOpenIdx, setAutoOpenIdx] = useState<number | null>(null);
@@ -169,115 +219,133 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
           placeholder="Thành phố..."
         />
         <div className="space-y-0">
-        {day.items.map((item, idx) => {
-          const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
-          const selectedCanhDiem = canhDiemList.find((c) => c.id === item.canh_diem_id);
-          return (
-            <div key={idx} className="group flex items-center gap-0.5">
-              <div className="flex-1 min-w-0 space-y-0.5">
-                <SearchableSelect
-                  options={canhDiemOptions}
-                  value={item.canh_diem_id ? String(item.canh_diem_id) : ""}
-                  autoOpen={autoOpenIdx === idx}
-                  onChange={(v) => {
-                    const newItems = [...day.items];
-                    newItems[idx] = { ...item, canh_diem_id: v ? Number(v) : 0 };
-                    // Google Sheets-like: chọn ở dòng cuối + có value → thêm dòng mới rỗng + auto-open dòng đó
-                    const isLast = idx === day.items.length - 1;
-                    if (v && isLast) {
-                      newItems.push({ canh_diem_id: 0, thu_tu: newItems.length + 1, ghi_chu: "" });
-                      setAutoOpenIdx(idx + 1);
-                      // KHÔNG clear: effect trong SearchableSelect chỉ fire 1 lần khi autoOpen
-                      // chuyển false→true. Lần select tiếp theo sẽ overwrite autoOpenIdx.
-                    } else {
-                      setAutoOpenIdx(null);
-                    }
-                    updateItems(newItems);
-                  }}
-                  placeholder="Chọn cảnh điểm"
-                  className={`h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3${item.canh_diem_id ? " bg-blue-50 text-blue-900 font-medium" : ""}`}
-                />
-                {selectedCanhDiem && (
-                  <>
-                    {selectedCanhDiem.khach_san_id && (
-                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 mt-0.5">
-                        🏨 Day Use
-                      </span>
-                    )}
-                    {selectedCanhDiem.ghi_chu && (
-                      <p className="text-[13px] text-muted-foreground mt-0.5 whitespace-pre-wrap">
-                        {selectedCanhDiem.ghi_chu}
-                      </p>
-                    )}
-                  </>
-                )}
-                {noteOpen && (
-                  <textarea
-                    className="w-full text-[12px] border border-border/40 rounded px-2 py-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring overflow-hidden"
-                    rows={1}
-                    autoFocus={!item.ghi_chu?.trim()}
-                    placeholder="Chú thích..."
-                    value={item.ghi_chu || ""}
-                    ref={(el) => {
-                      if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
-                    }}
-                    onChange={(e) => {
-                      const t = e.currentTarget;
-                      t.style.height = "auto";
-                      t.style.height = t.scrollHeight + "px";
-                      updateGhiChu(idx, e.target.value);
-                    }}
-                    onBlur={() => {
-                      if (!item.ghi_chu?.trim()) {
-                        setNoteOpenMap((m) => ({ ...m, [idx]: false }));
-                      }
-                    }}
-                  />
-                )}
-              </div>
-              <div className="flex flex-col items-center gap-0 shrink-0">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-6 print-hide"
-                  onClick={async () => {
-                    // Pre-check: cảnh điểm đã save (id exists) → check DNTT + booking_dv.
-                    // Item mới chưa save (id=undefined) thì gỡ thẳng, không cần query DB.
-                    const target = day.items[idx];
-                    if (target.id) {
-                      const cd = canhDiemList.find((c) => c.id === target.canh_diem_id);
-                      const options = (doanId && cd) ? { doanId, canhDiem: cd } : undefined;
-                      const result = await checkCanhDiemDeletable(target.id, options);
-                      if (!result.ok) {
-                        toast.error(result.reason ?? "Không thể xóa");
-                        return;
-                      }
-                    }
-                    updateItems(day.items.filter((_, i) => i !== idx));
-                  }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-                <button
-                  type="button"
-                  className={`h-5 w-6 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded print-hide${noteOpen ? "" : " hidden group-hover:flex"}`}
-                  onClick={() => {
-                    if (noteOpen) {
-                      updateGhiChu(idx, "");
-                      setNoteOpenMap((m) => ({ ...m, [idx]: false }));
-                    } else {
-                      setNoteOpenMap((m) => ({ ...m, [idx]: true }));
-                    }
-                  }}
-                  title={noteOpen ? "Hủy chú thích" : "Thêm chú thích"}
-                >
-                  {noteOpen ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+            {day.items.map((item, idx) => {
+              const sortId = sortableIds[idx];
+              const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
+              const selectedCanhDiem = canhDiemList.find((c) => c.id === item.canh_diem_id);
+              return (
+                <SortableRow key={sortId} id={sortId}>
+                  {({ setNodeRef, style, listeners, attributes }) => (
+                    <div ref={setNodeRef} style={style} className="group flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        {...attributes}
+                        {...listeners}
+                        className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground p-0.5 print-hide touch-none shrink-0"
+                        title="Kéo để đổi thứ tự"
+                      >
+                        <GripVertical className="h-3 w-3" />
+                      </button>
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <SearchableSelect
+                          options={canhDiemOptions}
+                          value={item.canh_diem_id ? String(item.canh_diem_id) : ""}
+                          autoOpen={autoOpenIdx === idx}
+                          onChange={(v) => {
+                            const newItems = [...day.items];
+                            newItems[idx] = { ...item, canh_diem_id: v ? Number(v) : 0 };
+                            // Google Sheets-like: chọn ở dòng cuối + có value → thêm dòng mới rỗng + auto-open dòng đó
+                            const isLast = idx === day.items.length - 1;
+                            if (v && isLast) {
+                              newItems.push({ canh_diem_id: 0, thu_tu: newItems.length + 1, ghi_chu: "" });
+                              setAutoOpenIdx(idx + 1);
+                              // KHÔNG clear: effect trong SearchableSelect chỉ fire 1 lần khi autoOpen
+                              // chuyển false→true. Lần select tiếp theo sẽ overwrite autoOpenIdx.
+                            } else {
+                              setAutoOpenIdx(null);
+                            }
+                            updateItems(newItems);
+                          }}
+                          placeholder="Chọn cảnh điểm"
+                          className={`h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3${item.canh_diem_id ? " bg-blue-50 text-blue-900 font-medium" : ""}`}
+                        />
+                        {selectedCanhDiem && (
+                          <>
+                            {selectedCanhDiem.khach_san_id && (
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 mt-0.5">
+                                🏨 Day Use
+                              </span>
+                            )}
+                            {selectedCanhDiem.ghi_chu && (
+                              <p className="text-[13px] text-muted-foreground mt-0.5 whitespace-pre-wrap">
+                                {selectedCanhDiem.ghi_chu}
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {noteOpen && (
+                          <textarea
+                            className="w-full text-[12px] border border-border/40 rounded px-2 py-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring overflow-hidden"
+                            rows={1}
+                            autoFocus={!item.ghi_chu?.trim()}
+                            placeholder="Chú thích..."
+                            value={item.ghi_chu || ""}
+                            ref={(el) => {
+                              if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+                            }}
+                            onChange={(e) => {
+                              const t = e.currentTarget;
+                              t.style.height = "auto";
+                              t.style.height = t.scrollHeight + "px";
+                              updateGhiChu(idx, e.target.value);
+                            }}
+                            onBlur={() => {
+                              if (!item.ghi_chu?.trim()) {
+                                setNoteOpenMap((m) => ({ ...m, [idx]: false }));
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex flex-col items-center gap-0 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-6 print-hide"
+                          onClick={async () => {
+                            // Pre-check: cảnh điểm đã save (id exists) → check DNTT + booking_dv.
+                            // Item mới chưa save (id=undefined) thì gỡ thẳng, không cần query DB.
+                            const target = day.items[idx];
+                            if (target.id) {
+                              const cd = canhDiemList.find((c) => c.id === target.canh_diem_id);
+                              const options = (doanId && cd) ? { doanId, canhDiem: cd } : undefined;
+                              const result = await checkCanhDiemDeletable(target.id, options);
+                              if (!result.ok) {
+                                toast.error(result.reason ?? "Không thể xóa");
+                                return;
+                              }
+                            }
+                            updateItems(day.items.filter((_, i) => i !== idx));
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                        <button
+                          type="button"
+                          className={`h-5 w-6 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground rounded print-hide${noteOpen ? "" : " hidden group-hover:flex"}`}
+                          onClick={() => {
+                            if (noteOpen) {
+                              updateGhiChu(idx, "");
+                              setNoteOpenMap((m) => ({ ...m, [idx]: false }));
+                            } else {
+                              setNoteOpenMap((m) => ({ ...m, [idx]: true }));
+                            }
+                          }}
+                          title={noteOpen ? "Hủy chú thích" : "Thêm chú thích"}
+                        >
+                          {noteOpen ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </SortableRow>
+              );
+            })}
+          </SortableContext>
+        </DndContext>
         </div>
         <button
           type="button"
