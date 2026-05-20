@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Upload, X, FileCheck, AlertTriangle, Loader2, ScanText } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Upload, X, FileCheck, AlertTriangle, Loader2, ScanText, FileText, Eye } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -49,6 +49,14 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   );
   // Chẩn đoán OCR theo từng file (idx → số tiền đọc được / lỗi).
   const [ocrInfo, setOcrInfo] = useState<Record<number, { amount: number | null; err?: string }>>({});
+
+  // Object URLs cho ảnh preview — tạo 1 lần khi pick, revoke khi đóng.
+  const [previewUrls, setPreviewUrls] = useState<Record<number, string>>({});
+  const previewUrlsRef = useRef<Record<number, string>>({});
+  useEffect(() => { previewUrlsRef.current = previewUrls; }, [previewUrls]);
+
+  // Lightbox preview state — null khi đóng, file index khi mở.
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   // Refs cho vòng OCR (đăng ký 1 lần) đọc state mới nhất.
   const manualRef = useRef<Set<number>>(new Set());      // rowId user tự chọn → không auto đè
@@ -176,9 +184,26 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     filesRef.current = fs;
     setFiles(fs);
     setOcrInfo({});
+    // Revoke URLs cũ + build preview URLs mới cho ảnh (PDF skip — không render
+    // thumbnail bằng <img>).
+    for (const u of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(u);
+    const urls: Record<number, string> = {};
+    for (let i = 0; i < fs.length; i++) {
+      if (fs[i].type.startsWith("image/")) {
+        urls[i] = URL.createObjectURL(fs[i]);
+      }
+    }
+    setPreviewUrls(urls);
     recompute();          // ghép nhanh theo tên file ngay
     runOcr(fs, myRun);    // rồi OCR refine nền
   };
+
+  // Cleanup URLs khi unmount
+  useEffect(() => {
+    return () => {
+      for (const u of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(u);
+    };
+  }, []);
 
   const rerunOcr = () => {
     const fs = filesRef.current;
@@ -238,6 +263,9 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     setReasons({});
     setOcrProg({ running: false, done: 0, total: 0 });
     setOcrInfo({});
+    for (const u of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(u);
+    setPreviewUrls({});
+    setLightboxIdx(null);
     manualRef.current = new Set();
     ocrRef.current = {};
     assignRef.current = {};
@@ -380,42 +408,68 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                           {fmt(r.so_tien)}
                         </td>
                         <td className="p-2">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-start gap-1.5">
                             {matched ? (
-                              <FileCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              <FileCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-1.5" />
                             ) : (
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-1.5" />
                             )}
-                            <Select
-                              value={fi === undefined ? "_none" : String(fi)}
-                              onValueChange={(v) =>
-                                setRowFile(r.id, v === "_none" ? undefined : Number(v))
-                              }
-                            >
-                              <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                                <span className="truncate" title={fi === undefined ? undefined : files[fi]?.name}>
-                                  {fi === undefined ? "— Chưa gắn —" : files[fi]?.name}
+                            {/* Thumbnail preview — hiện khi đã ghép & là ảnh */}
+                            {fi !== undefined && previewUrls[fi] && (
+                              <button
+                                type="button"
+                                onClick={() => setLightboxIdx(fi)}
+                                className="shrink-0 relative group rounded border border-border overflow-hidden hover:border-blue-400 transition-colors"
+                                title="Bấm để xem to"
+                              >
+                                <img
+                                  src={previewUrls[fi]}
+                                  alt={files[fi]?.name}
+                                  className="h-12 w-12 object-cover"
+                                  loading="lazy"
+                                />
+                                <span className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-colors">
+                                  <Eye className="h-3.5 w-3.5 text-white opacity-0 group-hover:opacity-100" />
                                 </span>
-                              </SelectTrigger>
-                              <SelectContent className="max-w-[600px]">
-                                <SelectItem value="_none" className="text-xs">— Chưa gắn —</SelectItem>
-                                {files.map((f, i) => {
-                                  const usedElsewhere =
-                                    usedIdx.has(i) && assign[r.id] !== i;
-                                  return (
-                                    <SelectItem
-                                      key={i}
-                                      value={String(i)}
-                                      className="text-xs"
-                                      disabled={usedElsewhere}
-                                    >
-                                      {f.name}{usedElsewhere ? " (đã dùng)" : ""}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                            {badge(r.id)}
+                              </button>
+                            )}
+                            {fi !== undefined && !previewUrls[fi] && (
+                              <div className="shrink-0 h-12 w-12 rounded border border-border flex items-center justify-center bg-muted/30">
+                                <FileText className="h-5 w-5 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <Select
+                                value={fi === undefined ? "_none" : String(fi)}
+                                onValueChange={(v) =>
+                                  setRowFile(r.id, v === "_none" ? undefined : Number(v))
+                                }
+                              >
+                                <SelectTrigger className="h-7 text-xs w-full min-w-0">
+                                  <span className="truncate" title={fi === undefined ? undefined : files[fi]?.name}>
+                                    {fi === undefined ? "— Chưa gắn —" : files[fi]?.name}
+                                  </span>
+                                </SelectTrigger>
+                                <SelectContent className="max-w-[600px]">
+                                  <SelectItem value="_none" className="text-xs">— Chưa gắn —</SelectItem>
+                                  {files.map((f, i) => {
+                                    const usedElsewhere =
+                                      usedIdx.has(i) && assign[r.id] !== i;
+                                    return (
+                                      <SelectItem
+                                        key={i}
+                                        value={String(i)}
+                                        className="text-xs"
+                                        disabled={usedElsewhere}
+                                      >
+                                        {f.name}{usedElsewhere ? " (đã dùng)" : ""}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                              {badge(r.id)}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -433,6 +487,31 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             </div>
           )}
         </div>
+
+        {/* Lightbox: zoom ảnh khi click thumbnail */}
+        {lightboxIdx !== null && previewUrls[lightboxIdx] && (
+          <div
+            className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center cursor-zoom-out"
+            onClick={() => setLightboxIdx(null)}
+          >
+            <button
+              type="button"
+              className="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full bg-black/40"
+              onClick={(e) => { e.stopPropagation(); setLightboxIdx(null); }}
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="absolute top-4 left-4 text-white text-xs px-3 py-1 rounded bg-black/40 max-w-[60%] truncate" title={files[lightboxIdx]?.name}>
+              {files[lightboxIdx]?.name}
+            </div>
+            <img
+              src={previewUrls[lightboxIdx]}
+              alt={files[lightboxIdx]?.name}
+              className="max-h-[90vh] max-w-[90vw] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
 
         <DialogFooter className="gap-2 shrink-0">
           <Button variant="ghost" size="sm" onClick={handleClose} disabled={batchMut.isPending}>
