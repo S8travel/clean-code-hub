@@ -72,11 +72,22 @@ export function parseVNNumber(raw: string): number | null {
 
   let normalized: string;
   if (hasDot && hasComma) {
-    const lastDot = s.lastIndexOf(".");
-    const lastComma = s.lastIndexOf(",");
-    const decimalSep = lastDot > lastComma ? "." : ",";
-    const thousandSep = decimalSep === "." ? "," : ".";
-    normalized = s.split(thousandSep).join("").replace(decimalSep, ".");
+    // Heuristic: OCR hay đọc lẫn "." và "," trong cùng 1 số (vd "29.600,000")
+    // dù bản gốc dùng nhất quán 1 loại. Nếu mọi nhóm sau dấu đầu tiên đều
+    // đúng 3 chữ số → coi CẢ 2 dấu là thousands separator. Trường hợp ngược
+    // (decimal thật, vd "1.234,56") thì nhóm cuối < 3 chữ → rơi vào logic cũ.
+    const allSepsParts = s.split(/[.,]/);
+    const allThousands = allSepsParts.length >= 3
+      && allSepsParts.slice(1).every((p) => p.length === 3);
+    if (allThousands) {
+      normalized = allSepsParts.join("");
+    } else {
+      const lastDot = s.lastIndexOf(".");
+      const lastComma = s.lastIndexOf(",");
+      const decimalSep = lastDot > lastComma ? "." : ",";
+      const thousandSep = decimalSep === "." ? "," : ".";
+      normalized = s.split(thousandSep).join("").replace(decimalSep, ".");
+    }
   } else if (hasDot || hasComma) {
     const sep = hasDot ? "." : ",";
     const parts = s.split(sep);

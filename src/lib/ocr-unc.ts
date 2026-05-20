@@ -19,9 +19,10 @@ const MAX_AMOUNT = 10_000_000_000;
 // KHÔNG cho khoảng trắng TRONG số (tránh dính "7" của "Nhanh 24/7" vào
 // "10,000,000" → 710,000,000). Chỉ chấp nhận cụm nghìn . hoặc , hoặc số
 // liền ≥4 chữ số. Lookbehind chặn bắt giữa chừng 1 số dài.
-const MONEY_RE = /(?<![\d.,])(\d{1,3}(?:[.,]\d{3})+|\d{4,12})\s*(?:VN[DĐ]|VND|đồng|dong)/gi;
+// {1,4} cho phép OCR thiếu separator đầu (vd "7128,000 VND" thay vì "7.128,000").
+const MONEY_RE = /(?<![\d.,])(\d{1,4}(?:[.,]\d{3})+|\d{4,12})\s*(?:VN[DĐ]|VND|đồng|dong)/gi;
 // Fallback: số có separator nghìn (không bắt chuỗi liền = STK; không có \s).
-const SEP_NUMBER_RE = /(?<![\d.,])\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?/g;
+const SEP_NUMBER_RE = /(?<![\d.,])\d{1,4}(?:[.,]\d{3})+(?:[.,]\d{1,2})?/g;
 
 /** Chuẩn hoá để so khớp mã đoàn: HOA, bỏ mọi ký tự không phải chữ/số. */
 export function normCode(s: string): string {
@@ -114,6 +115,29 @@ export function parseAmountInWords(text: string): number | null {
   return vnWordsToNumber(after);
 }
 
+/**
+ * Trích amount từ chuỗi tiếng Việt trước "đồng" (KHÔNG cần label "bằng chữ").
+ * UNC eFAST không có label nhưng luôn có dòng số viết bằng chữ → bắt theo
+ * "đồng" + walk back tìm chuỗi number words. Tách riêng với parseAmountInWords
+ * vì rule cũ vẫn áp dụng cho Giấy báo nợ.
+ */
+export function parseAmountFromDongWord(text: string): number | null {
+  const flat = stripDiacritics(text).toLowerCase().replace(/[\r\n]+/g, " ");
+  // Tìm "đồng" theo word boundary — tránh dính vào "đồng nghĩa", v.v.
+  const matches = [...flat.matchAll(/\bdong\b/g)];
+  if (matches.length === 0) return null;
+  // Thử tất cả vị trí "đồng" và lấy số lớn nhất (main amount thường lớn nhất).
+  let best: number | null = null;
+  for (const m of matches) {
+    const end = m.index!;
+    const start = Math.max(0, end - 220);
+    const phrase = flat.slice(start, end);
+    const n = vnWordsToNumber(phrase + " dong");
+    if (n != null && (best == null || n > best)) best = n;
+  }
+  return best;
+}
+
 export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
   if (file.type === "application/pdf") return { amount: null, text: "" };
 
@@ -149,6 +173,17 @@ export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
   const wordsAmount = parseAmountInWords(raw);
   if (wordsAmount != null && wordsAmount >= MIN_AMOUNT && wordsAmount <= MAX_AMOUNT) {
     amount = wordsAmount;
+  }
+
+  // 4) FALLBACK cuối — khi 1/2/3 đều fail: trích từ "<words> đồng".
+  // UNC eFAST không có "bằng chữ" label nhưng luôn có dòng amount-in-words
+  // kết bằng "đồng". Bắt mọi mismatch separator OCR (vd "29.600,000" → ?,
+  // "7128,000" → ?) bằng cách đọc chữ.
+  if (amount == null) {
+    const dongAmount = parseAmountFromDongWord(raw);
+    if (dongAmount != null && dongAmount >= MIN_AMOUNT && dongAmount <= MAX_AMOUNT) {
+      amount = dongAmount;
+    }
   }
 
   return { amount, text };
