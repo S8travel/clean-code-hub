@@ -57,8 +57,14 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const assignRef = useRef<Record<number, number | undefined>>({}); // mirror assign cho recompute
   const runRef = useRef(0);                               // huỷ vòng cũ khi chọn lại / đóng
 
-  // Ghép lại toàn bộ (thuần, từ refs): ưu tiên mã đoàn+số tiền (OCR) >
-  // số tiền OCR > số tiền tên file. Giữ nguyên dòng user đã tự chọn (manual).
+  // Ghép lại toàn bộ (thuần, từ refs).
+  //
+  // Rule auto-match:
+  //  1) STRICT (code): nội dung UNC chứa mã đoàn + số tiền khớp → tin tuyệt đối.
+  //  2) AMBIGUITY-SAFE (amount): chỉ ghép khi UNIQUE cả 2 bên — không row khác
+  //     cùng số tiền VÀ không file khác cùng số tiền. Vì 1 đoàn có thể có
+  //     nhiều UNC + nhiều đoàn có thể cùng số tiền (ví dụ cọc 10tr).
+  //  Còn lại → để user chọn tay.
   const recompute = () => {
     const fs = filesRef.current;
     const ocr = ocrRef.current;
@@ -77,36 +83,64 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
         if (fiPrev !== undefined) used.add(fiPrev);
       }
     }
-    const pick = (
-      test: (r: HoaDonUNCRow, fi: number) => boolean,
-      reason: Reason,
-    ) => {
-      for (const r of rows) {
-        if (manual.has(r.id) || nextA[r.id] !== undefined) continue;
-        for (let fi = 0; fi < fs.length; fi++) {
-          if (used.has(fi)) continue;
-          if (test(r, fi)) { nextA[r.id] = fi; nextR[r.id] = reason; used.add(fi); break; }
-        }
-      }
-    };
-    // 2) Mã đoàn xuất hiện trong ảnh + số tiền khớp
-    pick((r, fi) => {
-      const o = ocr[fi]; if (!o || !r.ten_doan) return false;
+
+    // 2) STRICT: mã đoàn trong ảnh + số tiền khớp
+    for (const r of rows) {
+      if (manual.has(r.id) || nextA[r.id] !== undefined) continue;
+      if (!r.ten_doan) continue;
       // CHỈ lấy token mã đoàn đầu (trước dấu cách / "(") — ten_doan có thể
       // kèm mô tả "(4 ngày…)" / "Test" mà nội dung UNC không có.
       const codeTok = r.ten_doan.trim().split(/[\s(]/)[0];
       const code = normCode(codeTok);
-      return code.length >= 4 && normCode(o.text).includes(code)
-        && o.amount != null && isAmountMatch(o.amount, r.so_tien);
-    }, "code");
-    // 3) Số tiền OCR khớp
-    pick((r, fi) => {
+      if (code.length < 4) continue;
+      for (let fi = 0; fi < fs.length; fi++) {
+        if (used.has(fi)) continue;
+        const o = ocr[fi];
+        if (!o || o.amount == null) continue;
+        if (!isAmountMatch(o.amount, r.so_tien)) continue;
+        if (!normCode(o.text).includes(code)) continue;
+        nextA[r.id] = fi; nextR[r.id] = "code"; used.add(fi);
+        break;
+      }
+    }
+
+    // 3) AMBIGUITY-SAFE amount-only: 1 row ↔ 1 file duy nhất theo số tiền.
+    //    Helper: với 1 row (đã chưa được match), đếm file ứng viên + đếm row
+    //    khác cùng số tiền. Chỉ match khi cả 2 đếm = 1.
+    const unmatchedRows = rows.filter((r) => !manual.has(r.id) && nextA[r.id] === undefined);
+
+    const tryAmountMatch = (
+      reason: "amount_ocr" | "amount_file",
+      fileHasAmount: (fi: number, amount: number) => boolean,
+    ) => {
+      for (const r of unmatchedRows) {
+        if (nextA[r.id] !== undefined) continue;
+        // Đếm file ứng viên còn rảnh có cùng số tiền với r.so_tien
+        const candFiles: number[] = [];
+        for (let fi = 0; fi < fs.length; fi++) {
+          if (used.has(fi)) continue;
+          if (fileHasAmount(fi, r.so_tien)) candFiles.push(fi);
+        }
+        if (candFiles.length !== 1) continue; // 0 or >1 → ambiguous
+        const fi = candFiles[0];
+        // Đếm row khác (chưa match) muốn dùng cùng file này (cùng số tiền)
+        const rivalRows = unmatchedRows.filter(
+          (rr) => rr.id !== r.id && nextA[rr.id] === undefined
+            && fileHasAmount(fi, rr.so_tien),
+        );
+        if (rivalRows.length > 0) continue; // 1 file → nhiều row tranh → ambiguous
+        nextA[r.id] = fi; nextR[r.id] = reason; used.add(fi);
+      }
+    };
+
+    // OCR amount: dùng amount đã đọc từ ảnh
+    tryAmountMatch("amount_ocr", (fi, soTien) => {
       const o = ocr[fi];
-      return !!o && o.amount != null && isAmountMatch(o.amount, r.so_tien);
-    }, "amount_ocr");
-    // 4) Số tiền trong tên file khớp
-    pick((r, fi) =>
-      amountCandidates(fs[fi].name).has(Math.round(r.so_tien)), "amount_file");
+      return !!o && o.amount != null && isAmountMatch(o.amount, soTien);
+    });
+    // Filename amount: dùng số trong tên file
+    tryAmountMatch("amount_file", (fi, soTien) =>
+      amountCandidates(fs[fi].name).has(Math.round(soTien)));
 
     assignRef.current = nextA;
     setAssign(nextA);
