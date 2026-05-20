@@ -103,6 +103,9 @@ export interface NHDocEntry {
   so_tien_coc: number;
   can_tru: number;
   so_tien_con_tt: number;
+  /** True khi đây là ĐNTT cọc (in cho mục đích "Đề nghị thanh toán tiền cọc").
+   *  Ô "Số tiền còn thanh toán" hiển thị "(cọc)" + đỏ đậm. */
+  la_coc?: boolean;
 }
 
 export interface NHDocData {
@@ -160,10 +163,17 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
     spacing: { before: 60, after: 40 },
     children: [new TextRun({ noProof: true, text: "Kính gửi: Giám đốc công ty TNHH du lịch S8 Travel", font: "Arial", size: 20, bold: true })],
   });
+  const hasCoc = entries.some((e) => e.la_coc);
+  const allCoc = entries.length > 0 && entries.every((e) => e.la_coc);
+  const lyDoText = allCoc
+    ? "Lý do thanh toán: Thanh toán tiền cọc dịch vụ"
+    : hasCoc
+      ? "Lý do thanh toán: Thanh toán tiền dịch vụ + tiền cọc dịch vụ"
+      : "Lý do thanh toán: Thanh toán tiền dịch vụ";
   const lyDoPara = new Paragraph({
     alignment: AlignmentType.LEFT,
     spacing: { before: 40, after: 120 },
-    children: [new TextRun({ noProof: true, text: "Lý do thanh toán: Thanh toán tiền dịch vụ", font: "Arial", size: 20 })],
+    children: [new TextRun({ noProof: true, text: lyDoText, font: "Arial", size: 20 })],
   });
 
   // ── 4. Data table ─────────────────────────────────────────────────────────
@@ -268,11 +278,16 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
             width: COL_W[9], rowSpan: itemCount,
           }),
         );
-        // Số tiền còn TT
+        // Số tiền còn TT — la_coc → kèm "(cọc)" để rõ tính chất khoản này
+        const conTTText = entry.so_tien_con_tt > 0 ? fmt(entry.so_tien_con_tt) : "—";
+        const conTTChildren = entry.la_coc && entry.so_tien_con_tt > 0
+          ? [
+              p(conTTText, { bold: true, size: 14, color: "CC0000" }),
+              p("(cọc)", { size: 12, color: "CC0000", italic: true }),
+            ]
+          : [p(conTTText, { bold: true, size: 14, color: "CC0000" })];
         cells.push(
-          cell([p(entry.so_tien_con_tt > 0 ? fmt(entry.so_tien_con_tt) : "—", { bold: true, size: 14, color: "CC0000" })], {
-            width: COL_W[10], rowSpan: itemCount,
-          }),
+          cell(conTTChildren, { width: COL_W[10], rowSpan: itemCount }),
         );
         // Tài khoản thanh toán
         cells.push(cell(bankChildren, { width: COL_W[11], rowSpan: itemCount }));

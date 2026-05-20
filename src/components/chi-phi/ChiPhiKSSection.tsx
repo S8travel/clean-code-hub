@@ -1176,13 +1176,26 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   ];
 
   const activeDnttByKs: Record<number, number> = {};
+  // Pass 1: ưu tiên ĐNTT CỌC pending (chưa hủy / chưa từ chối / chưa paid) — in
+  // cọc ra trước để OP gửi duyệt cọc tách bạch (form la_coc của export KS).
   dnttList.forEach((d) => {
     if (d.ref_loai === "khach_san" && d.ref_id &&
+        d.la_coc &&
         d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
         d.payment_status !== "paid") {
       activeDnttByKs[d.ref_id] = d.id;
     }
   });
+  // Pass 2: ĐNTT pending khác (full / bổ sung).
+  dnttList.forEach((d) => {
+    if (d.ref_loai === "khach_san" && d.ref_id &&
+        d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
+        d.payment_status !== "paid" &&
+        !activeDnttByKs[d.ref_id]) {
+      activeDnttByKs[d.ref_id] = d.id;
+    }
+  });
+  // Pass 3: fallback ĐNTT đã paid (chỉ để in lại biên bản gốc).
   dnttList.forEach((d) => {
     if (d.ref_loai === "khach_san" && d.ref_id &&
         d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&

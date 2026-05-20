@@ -691,20 +691,34 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
           const extrasTotal = rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
           const thanhTien = row.tien_cong_ty + extrasTotal;
 
-          const soCoc = allDntts
-            .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
-            .reduce((s, d) => s + d.so_tien, 0);
+          // ĐNTT đang chờ in: chưa hủy/từ chối/paid. Ưu tiên cọc.
+          const liveDntts = activeDntts.filter((d) => d.payment_status !== "paid");
+          const pendingDntt = liveDntts.find((d) => d.la_coc) ?? liveDntts[0] ?? null;
+
+          // Có pending → in chính ĐNTT đó, không trừ cọc paid khác.
+          const soCoc = pendingDntt
+            ? 0
+            : allDntts
+                .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
+                .reduce((s, d) => s + d.so_tien, 0);
 
           const nccId = row.nha_cung_cap_id ?? null;
           let canTruAmount = 0;
           if (nccId && !canTruShownByNcc[nccId]) {
-            canTruAmount = paymentsList
-              .filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru")
-              .reduce((s, p) => s + p.payment_so_tien, 0);
+            canTruAmount = pendingDntt
+              ? paymentsList
+                  .filter((p) => p.dntt_id === pendingDntt.id && p.method === "can_tru")
+                  .reduce((s, p) => s + p.payment_so_tien, 0)
+              : paymentsList
+                  .filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru")
+                  .reduce((s, p) => s + p.payment_so_tien, 0);
             if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
           }
 
-          const soTienConTT = Math.max(0, thanhTien - soCoc - canTruAmount);
+          // Pending → in đúng so_tien ĐNTT đó (trừ cấn trừ); không có → còn lại.
+          const soTienConTT = pendingDntt
+            ? Math.max(0, pendingDntt.so_tien - canTruAmount)
+            : Math.max(0, thanhTien - soCoc - canTruAmount);
           const ngayDisplay = getDateLabel(day > 0 ? day : null);
 
           // Resolve NCC: ưu tiên DNTT snapshot, fallback nha_cung_cap master
@@ -732,6 +746,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
             so_tien_coc: soCoc,
             can_tru: canTruAmount,
             so_tien_con_tt: soTienConTT,
+            la_coc: !!pendingDntt?.la_coc,
             tai_khoan_thanh_toan: row.ref_doan_ngay_item_id
               ? (tkttMap[row.ref_doan_ngay_item_id] ?? null)
               : null,

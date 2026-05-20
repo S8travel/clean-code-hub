@@ -1022,20 +1022,13 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           ? dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId)
           : [];
 
-        // Cọc đã thanh toán thực sự (paid)
-        const soCoc = mealDntts
-          .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
-          .reduce((s, d) => s + d.so_tien, 0);
-
-        // Cấn trừ: tổng can_tru payments của các DNTT thuộc meal này (NCC-level dedupe)
-        const nccId = nh.nha_cung_cap_id ?? null;
-        let canTruAmount = 0;
-        if (nccId && !canTruShownByNcc[nccId] && chiPhiId) {
-          canTruAmount = paymentsList
-            .filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru")
-            .reduce((s, p) => s + p.payment_so_tien, 0);
-          if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
-        }
+        // ĐNTT đang chờ in: chọn cái đầu tiên chưa hủy / chưa từ chối / chưa paid.
+        // Ưu tiên cọc (la_coc=true) trước → in cọc ra trước, full sau.
+        const liveDntts = mealDntts.filter(
+          (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi"
+                 && d.payment_status !== "paid",
+        );
+        const activeDntt = liveDntts.find((d) => d.la_coc) ?? liveDntts[0] ?? null;
 
         // Chiết khấu chỉ áp main row (items[0]). Resolve theo pattern row override → nh master.
         const ckPct = row.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
@@ -1044,7 +1037,34 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           ? Math.round(mainItem.so_luong * mainItem.don_gia * ckPct / 100)
           : 0;
         const totalEntry = items.reduce((s, i) => s + i.so_luong * i.don_gia, 0) - ckAmount;
-        const soTienConTT = Math.max(0, totalEntry - soCoc - canTruAmount);
+
+        // Cọc đã thanh toán thực sự (paid) — chỉ trừ khi KHÔNG có ĐNTT pending.
+        // Có pending → in chính ĐNTT đó (so_tien của nó), không trừ cọc paid khác.
+        const soCoc = activeDntt
+          ? 0
+          : mealDntts
+              .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
+              .reduce((s, d) => s + d.so_tien, 0);
+
+        // Cấn trừ: tổng can_tru payments — của ĐNTT đang in (nếu có) hoặc cả meal.
+        const nccId = nh.nha_cung_cap_id ?? null;
+        let canTruAmount = 0;
+        if (nccId && !canTruShownByNcc[nccId] && chiPhiId) {
+          canTruAmount = activeDntt
+            ? paymentsList
+                .filter((p) => p.dntt_id === activeDntt.id && p.method === "can_tru")
+                .reduce((s, p) => s + p.payment_so_tien, 0)
+            : paymentsList
+                .filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru")
+                .reduce((s, p) => s + p.payment_so_tien, 0);
+          if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
+        }
+
+        // Số tiền cần thanh toán: có pending → đúng so_tien ĐNTT đó (trừ cấn trừ nếu
+        // có); không có → in phần còn lại = tổng meal − cọc đã trả − cấn trừ.
+        const soTienConTT = activeDntt
+          ? Math.max(0, activeDntt.so_tien - canTruAmount)
+          : Math.max(0, totalEntry - soCoc - canTruAmount);
 
         // Format ngay_date
         const d = new Date(row.ngay_date + "T00:00:00");
@@ -1063,6 +1083,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           so_tien_coc: soCoc,
           can_tru: canTruAmount,
           so_tien_con_tt: soTienConTT,
+          la_coc: !!activeDntt?.la_coc,
         });
     }
 
