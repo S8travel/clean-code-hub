@@ -120,22 +120,47 @@ export function parseAmountInWords(text: string): number | null {
  * UNC eFAST không có label nhưng luôn có dòng số viết bằng chữ → bắt theo
  * "đồng" + walk back tìm chuỗi number words. Tách riêng với parseAmountInWords
  * vì rule cũ vẫn áp dụng cho Giấy báo nợ.
+ *
+ * Tokenize toàn bộ + walk back từ "dong" lấy CHỈ chuỗi VN-word liên tiếp.
+ * Tránh trường hợp text "17974,500 VND <words> đồng" — "vnd" và "17974" ở
+ * giữa sẽ làm vnWordsToNumber break sớm hoặc parse sai.
  */
 export function parseAmountFromDongWord(text: string): number | null {
   const flat = stripDiacritics(text).toLowerCase().replace(/[\r\n]+/g, " ");
-  // Tìm "đồng" theo word boundary — tránh dính vào "đồng nghĩa", v.v.
-  const matches = [...flat.matchAll(/\bdong\b/g)];
-  if (matches.length === 0) return null;
-  // Thử tất cả vị trí "đồng" và lấy số lớn nhất (main amount thường lớn nhất).
-  let best: number | null = null;
-  for (const m of matches) {
-    const end = m.index!;
-    const start = Math.max(0, end - 220);
-    const phrase = flat.slice(start, end);
-    const n = vnWordsToNumber(phrase + " dong");
-    if (n != null && (best == null || n > best)) best = n;
+  // Tokenize: tách theo dấu/whitespace + fuzzy mỗi token.
+  const allToks = flat
+    .replace(/[.,/]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(fuzzyNumWord);
+
+  // Tìm vị trí "dong" cuối cùng trong mảng tokens (main amount thường ở
+  // cuối page, các dòng "VND" nằm trước).
+  const lastDongIdx = allToks.lastIndexOf("dong");
+  if (lastDongIdx < 0) return null;
+
+  // Walk back từ "dong" lấy chuỗi VN-word liên tiếp. Dừng khi gặp non-VN-word
+  // (vd "vnd", "17974", "tp", "efast") để không bị lẫn.
+  let startIdx = lastDongIdx;
+  while (startIdx > 0) {
+    const t = allToks[startIdx - 1];
+    if (!isVnNumberWord(t)) break;
+    startIdx--;
   }
-  return best;
+  if (startIdx === lastDongIdx) return null;
+
+  const phrase = allToks.slice(startIdx, lastDongIdx + 1).join(" ");
+  return vnWordsToNumber(phrase);
+}
+
+/** Token có phải là từ trong vocab số tiếng Việt không (sau fuzzy). */
+function isVnNumberWord(tok: string): boolean {
+  if (tok in VN_UNIT) return true;
+  const VN_FN_WORDS = new Set([
+    "muoi", "muop", "tram", "nghin", "ngan", "trieu", "ty", "ti",
+    "linh", "le",
+  ]);
+  return VN_FN_WORDS.has(tok);
 }
 
 export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
