@@ -12,18 +12,26 @@ export const LOAI_CHI_HOAN_UNG_OPTS: { value: string; label: string }[] = [
   { value: "khac",         label: "Khác" },
 ];
 
+export interface HoanUngItem {
+  loai_chi: string;
+  mo_ta: string;
+  so_tien: number;
+  hoa_don_url?: string | null;
+}
+
 export interface HoanUngRow {
   id: number;
-  loai_chi_hoan_ung: string | null;
+  loai_chi_hoan_ung: string | null;     // null khi multi-line (dùng hoan_ung_items)
+  hoan_ung_items: HoanUngItem[] | null; // array dòng chi phí
   nguoi_ung_id: string | null;
-  mo_ta: string | null;
-  so_tien: number;
-  ten_nha_cung_cap: string | null;  // tên người ứng (snapshot)
+  mo_ta: string | null;                  // summary "3 mục: VPP + Taxi"
+  so_tien: number;                       // SUM(items.so_tien)
+  ten_nha_cung_cap: string | null;       // tên người ứng (snapshot)
   so_tai_khoan: string | null;
   ngan_hang: string | null;
   trang_thai_duyet: string;
   ngay_can_thanh_toan: string | null;
-  hoa_don_url: string | null;
+  hoa_don_url: string | null;           // legacy 1-file, NULL khi dùng items
   tao_boi: string | null;
   tao_luc: string | null;
   duyet_boi: string | null;
@@ -37,16 +45,28 @@ export interface HoanUngRow {
 }
 
 export interface HoanUngInsert {
-  loai_chi_hoan_ung: string;
+  items: HoanUngItem[];                  // BẮT BUỘC >= 1 dòng
   nguoi_ung_id: string;
-  ten_nguoi_ung: string;           // snapshot vào ten_nha_cung_cap
-  mo_ta: string;
-  so_tien: number;
+  ten_nguoi_ung: string;                 // snapshot vào ten_nha_cung_cap
   so_tai_khoan?: string | null;
   ngan_hang?: string | null;
   ngay_can_thanh_toan?: string | null;
-  hoa_don_url?: string | null;
   tao_boi: string;
+}
+
+// Build summary mô tả từ items: "3 mục: VPP + Taxi + Khác" hoặc "VPP: Mua giấy A4"
+export function buildHoanUngSummary(items: HoanUngItem[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) {
+    const it = items[0];
+    const lc = LOAI_CHI_HOAN_UNG_OPTS.find((o) => o.value === it.loai_chi)?.label ?? it.loai_chi;
+    return `${lc}: ${it.mo_ta}`.slice(0, 200);
+  }
+  const labels = items.map((it) =>
+    LOAI_CHI_HOAN_UNG_OPTS.find((o) => o.value === it.loai_chi)?.label ?? it.loai_chi
+  );
+  const unique = [...new Set(labels)];
+  return `${items.length} mục: ${unique.join(" + ")}`;
 }
 
 // List hoàn ứng — query DNTT view với filter loai='hoan_ung'
@@ -92,6 +112,14 @@ export function useCreateHoanUng() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: HoanUngInsert) => {
+      if (payload.items.length === 0) throw new Error("Cần ít nhất 1 dòng chi phí");
+      const totalAmount = payload.items.reduce((s, it) => s + Number(it.so_tien || 0), 0);
+      if (totalAmount <= 0) throw new Error("Tổng số tiền phải lớn hơn 0");
+
+      // loai_chi_hoan_ung: nếu chỉ 1 loại → lưu để filter dễ; nhiều loại → null
+      const uniqueLoaiChi = [...new Set(payload.items.map((it) => it.loai_chi))];
+      const singleLoaiChi = uniqueLoaiChi.length === 1 ? uniqueLoaiChi[0] : null;
+
       const { data, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .insert({
@@ -99,14 +127,14 @@ export function useCreateHoanUng() {
           doan_id: null,
           nha_cung_cap_id: null,
           ten_nha_cung_cap: payload.ten_nguoi_ung,
-          loai_chi_hoan_ung: payload.loai_chi_hoan_ung,
+          loai_chi_hoan_ung: singleLoaiChi,
+          hoan_ung_items: payload.items,
           nguoi_ung_id: payload.nguoi_ung_id,
-          mo_ta: payload.mo_ta,
-          so_tien: payload.so_tien,
+          mo_ta: buildHoanUngSummary(payload.items),
+          so_tien: totalAmount,
           so_tai_khoan: payload.so_tai_khoan ?? null,
           ngan_hang: payload.ngan_hang ?? null,
           ngay_can_thanh_toan: payload.ngay_can_thanh_toan ?? null,
-          hoa_don_url: payload.hoa_don_url ?? null,
           tao_boi: payload.tao_boi,
           trang_thai_duyet: "cho_duyet",
         })

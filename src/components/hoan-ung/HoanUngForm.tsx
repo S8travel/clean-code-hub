@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Plus, Trash2, Paperclip } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from "@/components/ui/sheet";
@@ -13,34 +14,46 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  useCreateHoanUng, LOAI_CHI_HOAN_UNG_OPTS, type HoanUngInsert,
+  useCreateHoanUng, LOAI_CHI_HOAN_UNG_OPTS,
+  type HoanUngInsert, type HoanUngItem,
 } from "@/hooks/use-hoan-ung";
 import { externalSupabase } from "@/lib/supabase-external";
+
+const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
+interface DraftItem {
+  loai_chi: string;
+  mo_ta: string;
+  so_tien: number | "";
+  hoa_don_file: File | null;
+  hoa_don_url: string | null;  // URL sau khi upload (cache giữa các lần submit fail)
+}
+
+function emptyItem(): DraftItem {
+  return { loai_chi: "", mo_ta: "", so_tien: "", hoa_don_file: null, hoa_don_url: null };
+}
+
 export default function HoanUngForm({ open, onClose }: Props) {
   const { user } = useAuth();
   const createMut = useCreateHoanUng();
 
-  // Tự fill thông tin user từ user_roles khi mở form
+  // Thông tin nhận tiền (1 lần, dùng cho cả yêu cầu)
   const [hoTen, setHoTen] = useState("");
   const [soTaiKhoan, setSoTaiKhoan] = useState("");
   const [nganHang, setNganHang] = useState("");
 
-  const [loaiChi, setLoaiChi] = useState("");
-  const [moTa, setMoTa] = useState("");
-  const [soTien, setSoTien] = useState<number | "">("");
+  // Common
   const [ngayCanTT, setNgayCanTT] = useState("");
-  const [hoaDonFile, setHoaDonFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open || !user?.user_id) return;
-    // Fetch user_roles row để auto-fill họ tên (STK người ứng nếu có)
     externalSupabase
       .from("user_roles")
       .select("ho_ten, so_tai_khoan, ngan_hang")
@@ -55,114 +68,207 @@ export default function HoanUngForm({ open, onClose }: Props) {
   }, [open, user?.user_id]);
 
   const reset = () => {
-    setLoaiChi("");
-    setMoTa("");
-    setSoTien("");
+    setItems([emptyItem()]);
     setNgayCanTT("");
-    setHoaDonFile(null);
   };
+
+  const updateItem = (idx: number, patch: Partial<DraftItem>) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  };
+
+  const addItem = () => setItems((prev) => [...prev, emptyItem()]);
+  const removeItem = (idx: number) => {
+    setItems((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== idx)));
+  };
+
+  const total = items.reduce((s, it) => s + (Number(it.so_tien) || 0), 0);
 
   const handleSubmit = async () => {
     if (!user?.user_id) { toast.error("Chưa đăng nhập"); return; }
-    if (!loaiChi) { toast.error("Vui lòng chọn loại chi"); return; }
-    if (!moTa.trim()) { toast.error("Vui lòng nhập mô tả"); return; }
-    if (!soTien || Number(soTien) <= 0) { toast.error("Số tiền không hợp lệ"); return; }
+    if (items.length === 0) { toast.error("Cần ít nhất 1 dòng chi phí"); return; }
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (!it.loai_chi) { toast.error(`Dòng ${i + 1}: chọn loại chi`); return; }
+      if (!it.mo_ta.trim()) { toast.error(`Dòng ${i + 1}: nhập mô tả`); return; }
+      if (!it.so_tien || Number(it.so_tien) <= 0) { toast.error(`Dòng ${i + 1}: số tiền không hợp lệ`); return; }
+    }
 
-    let hoaDonUrl: string | null = null;
-    if (hoaDonFile) {
-      setUploading(true);
-      try {
-        const ext = hoaDonFile.name.split(".").pop() || "bin";
-        const path = `hoan-ung/${user.user_id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await externalSupabase.storage
-          .from("dntt-documents")
-          .upload(path, hoaDonFile, { upsert: false });
-        if (upErr) throw upErr;
-        const { data: urlData } = externalSupabase.storage
-          .from("dntt-documents")
-          .getPublicUrl(path);
-        hoaDonUrl = urlData.publicUrl;
-      } catch (e: any) {
-        toast.error("Lỗi upload hóa đơn: " + (e?.message ?? "unknown"));
-        setUploading(false);
-        return;
+    setSubmitting(true);
+
+    // Upload từng hóa đơn (nếu có) — file đã upload trước thì giữ URL cũ
+    const uploadedItems: HoanUngItem[] = [];
+    try {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        let url = it.hoa_don_url;
+        if (it.hoa_don_file && !url) {
+          const ext = it.hoa_don_file.name.split(".").pop() || "bin";
+          const path = `hoan-ung/${user.user_id}/${Date.now()}-${i}.${ext}`;
+          const { error: upErr } = await externalSupabase.storage
+            .from("dntt-documents")
+            .upload(path, it.hoa_don_file, { upsert: false });
+          if (upErr) throw upErr;
+          const { data: urlData } = externalSupabase.storage
+            .from("dntt-documents")
+            .getPublicUrl(path);
+          url = urlData.publicUrl;
+          // Cache URL để retry submit không upload lại
+          updateItem(i, { hoa_don_url: url });
+        }
+        uploadedItems.push({
+          loai_chi: it.loai_chi,
+          mo_ta: it.mo_ta.trim(),
+          so_tien: Number(it.so_tien),
+          hoa_don_url: url ?? null,
+        });
       }
-      setUploading(false);
+    } catch (e: any) {
+      toast.error("Lỗi upload hóa đơn: " + (e?.message ?? "unknown"));
+      setSubmitting(false);
+      return;
     }
 
     const payload: HoanUngInsert = {
-      loai_chi_hoan_ung: loaiChi,
+      items: uploadedItems,
       nguoi_ung_id: user.user_id,
       ten_nguoi_ung: hoTen || user.email || user.user_id,
-      mo_ta: moTa.trim(),
-      so_tien: Number(soTien),
       so_tai_khoan: soTaiKhoan.trim() || null,
       ngan_hang: nganHang.trim() || null,
       ngay_can_thanh_toan: ngayCanTT || null,
-      hoa_don_url: hoaDonUrl,
       tao_boi: user.user_id,
     };
 
     createMut.mutate(payload, {
       onSuccess: () => {
-        toast.success("Đã gửi yêu cầu hoàn ứng — chờ kế toán duyệt");
+        toast.success(`Đã gửi yêu cầu hoàn ứng (${items.length} mục, tổng ${fmt(total)} ₫)`);
         reset();
         onClose();
       },
       onError: (e: any) => toast.error("Lỗi: " + (e?.message ?? "Không tạo được")),
+      onSettled: () => setSubmitting(false),
     });
   };
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 gap-0">
+      <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col p-0 gap-0">
         <SheetHeader className="px-6 py-4 border-b shrink-0">
           <SheetTitle>Yêu cầu hoàn tiền tạm ứng</SheetTitle>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Loại chi *</Label>
-            <Select value={loaiChi} onValueChange={setLoaiChi}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Chọn loại chi" />
-              </SelectTrigger>
-              <SelectContent>
-                {LOAI_CHI_HOAN_UNG_OPTS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {/* Danh sách dòng chi phí */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs uppercase text-muted-foreground font-semibold">
+                Các dòng chi phí
+              </Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={addItem}
+                className="h-7 text-xs gap-1"
+              >
+                <Plus className="h-3 w-3" /> Thêm dòng
+              </Button>
+            </div>
+
+            {items.map((it, idx) => (
+              <div key={idx} className="rounded-md border border-border bg-card p-3 space-y-2.5 relative">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-muted-foreground">
+                    Dòng {idx + 1}
+                  </span>
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(idx)}
+                      className="text-muted-foreground hover:text-destructive"
+                      title="Xóa dòng"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-[160px_1fr] gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Loại chi *</Label>
+                    <Select value={it.loai_chi} onValueChange={(v) => updateItem(idx, { loai_chi: v })}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Chọn loại chi" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LOAI_CHI_HOAN_UNG_OPTS.map((o) => (
+                          <SelectItem key={o.value} value={o.value} className="text-xs">
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Số tiền (VND) *</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-8 text-xs tabular-nums"
+                      value={it.so_tien}
+                      onChange={(e) => updateItem(idx, { so_tien: e.target.value ? Number(e.target.value) : "" })}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Mô tả chi tiết *</Label>
+                  <Textarea
+                    className="text-xs min-h-[44px] resize-none"
+                    value={it.mo_ta}
+                    onChange={(e) => updateItem(idx, { mo_ta: e.target.value })}
+                    placeholder="VD: Mua mực in HP + giấy A4..."
+                    rows={2}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" /> Hóa đơn / chứng từ
+                  </Label>
+                  <Input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,image/*"
+                    onChange={(e) => updateItem(idx, {
+                      hoa_don_file: e.target.files?.[0] ?? null,
+                      hoa_don_url: null,  // reset URL khi đổi file
+                    })}
+                    className="text-xs file:mr-2 file:py-1 file:px-2 file:text-xs h-8"
+                  />
+                  {it.hoa_don_file && (
+                    <p className="text-[10px] text-muted-foreground truncate">{it.hoa_don_file.name}</p>
+                  )}
+                  {it.hoa_don_url && !it.hoa_don_file && (
+                    <a
+                      href={it.hoa_don_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-blue-600 hover:underline"
+                    >
+                      Đã upload — xem file
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <div className="flex items-center justify-end gap-2 px-1 py-1.5 text-xs">
+              <span className="text-muted-foreground">Tổng:</span>
+              <span className="text-base font-bold tabular-nums text-foreground">{fmt(total)} ₫</span>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Mô tả chi tiết *</Label>
-            <Textarea
-              value={moTa}
-              onChange={(e) => setMoTa(e.target.value)}
-              placeholder="VD: Mua mực in máy in công ty + giấy A4..."
-              rows={2}
-              className="resize-none"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Số tiền (VND) *</Label>
-            <Input
-              type="number"
-              min={0}
-              value={soTien}
-              onChange={(e) => setSoTien(e.target.value ? Number(e.target.value) : "")}
-              placeholder="0"
-              className="tabular-nums"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Ngày cần thanh toán</Label>
-            <DatePicker value={ngayCanTT} onChange={setNgayCanTT} className="w-full h-9" />
-          </div>
-
+          {/* Thông tin nhận tiền */}
           <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Thông tin nhận tiền (của bạn)
@@ -184,16 +290,8 @@ export default function HoanUngForm({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Hóa đơn / chứng từ</Label>
-            <Input
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,image/*"
-              onChange={(e) => setHoaDonFile(e.target.files?.[0] ?? null)}
-              className="text-xs file:mr-2 file:py-1 file:px-2 file:text-xs"
-            />
-            {hoaDonFile && (
-              <p className="text-[11px] text-muted-foreground truncate">{hoaDonFile.name}</p>
-            )}
+            <Label className="text-xs uppercase text-muted-foreground">Ngày cần thanh toán</Label>
+            <DatePicker value={ngayCanTT} onChange={setNgayCanTT} className="w-full h-9" />
           </div>
         </div>
 
@@ -202,9 +300,9 @@ export default function HoanUngForm({ open, onClose }: Props) {
           <Button
             className="flex-1"
             onClick={handleSubmit}
-            disabled={createMut.isPending || uploading}
+            disabled={submitting || createMut.isPending}
           >
-            {uploading ? "Đang upload..." : createMut.isPending ? "Đang gửi..." : "Gửi yêu cầu"}
+            {submitting ? "Đang gửi..." : `Gửi yêu cầu (${fmt(total)} ₫)`}
           </Button>
         </SheetFooter>
       </SheetContent>

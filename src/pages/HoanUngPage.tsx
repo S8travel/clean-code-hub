@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Plus, Wallet, Trash2, Clock, CheckCircle2, XCircle, FileText } from "lucide-react";
+import { Plus, Wallet, Trash2, Clock, CheckCircle2, FileText, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -50,6 +50,14 @@ export default function HoanUngPage() {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const toggleExpanded = (id: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const { data: rows = [], isLoading } = useHoanUngList({
     loai_chi:     filterLoaiChi || null,
@@ -186,10 +194,11 @@ export default function HoanUngPage() {
           <table className="w-full text-xs">
             <thead className="bg-[#E6F1FB] sticky top-0">
               <tr>
+                <th className="py-1.5 px-2 w-6" />
                 <th className="py-1.5 px-2 text-left font-medium">Người ứng</th>
-                <th className="py-1.5 px-2 text-left font-medium">Loại chi</th>
                 <th className="py-1.5 px-2 text-left font-medium">Mô tả</th>
-                <th className="py-1.5 px-2 text-right font-medium">Số tiền</th>
+                <th className="py-1.5 px-2 text-center font-medium">Mục</th>
+                <th className="py-1.5 px-2 text-right font-medium">Tổng tiền</th>
                 <th className="py-1.5 px-2 text-center font-medium">Trạng thái</th>
                 <th className="py-1.5 px-2 text-center font-medium">Hoàn tiền</th>
                 <th className="py-1.5 px-2 text-center font-medium">Ngày tạo</th>
@@ -198,65 +207,110 @@ export default function HoanUngPage() {
             </thead>
             <tbody>
               {filtered.map((r) => {
-                const loaiChiLabel = LOAI_CHI_HOAN_UNG_OPTS.find((o) => o.value === r.loai_chi_hoan_ung)?.label ?? r.loai_chi_hoan_ung;
                 const ttBadge = TRANG_THAI_BADGE[r.trang_thai_duyet] ?? TRANG_THAI_BADGE.cho_duyet;
                 const payBadge = PAYMENT_BADGE[r.payment_status] ?? PAYMENT_BADGE.unpaid;
                 const isMine = r.nguoi_ung_id === user?.user_id;
                 const canDelete = r.trang_thai_duyet === "tu_choi" && isMine;
+                const items = r.hoan_ung_items ?? [];
+                const isMulti = items.length > 1;
+                const isOpen = expanded.has(r.id);
                 return (
-                  <tr key={r.id} className="border-b border-border/40 hover:bg-muted/30">
-                    <td className="py-1.5 px-2">
-                      <p className="font-medium truncate max-w-[160px]">{r.nguoi_ung_ho_ten ?? r.ten_nha_cung_cap ?? "—"}</p>
-                      {r.so_tai_khoan && (
-                        <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
-                          {r.so_tai_khoan}{r.ngan_hang ? ` · ${r.ngan_hang}` : ""}
-                        </p>
+                  <Fragment key={r.id}>
+                    <tr
+                      className={cn(
+                        "border-b border-border/40 hover:bg-muted/30",
+                        items.length > 0 && "cursor-pointer",
                       )}
-                    </td>
-                    <td className="py-1.5 px-2">
-                      <Badge variant="outline" className="text-[10px] font-normal">{loaiChiLabel}</Badge>
-                    </td>
-                    <td className="py-1.5 px-2 max-w-[280px]">
-                      <p className="truncate">{r.mo_ta ?? "—"}</p>
-                      {r.hoa_don_url && (
-                        <a
-                          href={r.hoa_don_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] text-blue-600 hover:underline inline-flex items-center gap-0.5"
-                        >
-                          <FileText className="h-3 w-3" /> Xem hóa đơn
-                        </a>
-                      )}
-                    </td>
-                    <td className="py-1.5 px-2 text-right tabular-nums font-medium">
-                      {fmt(Number(r.so_tien))} ₫
-                    </td>
-                    <td className="py-1.5 px-2 text-center">
-                      <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-medium", ttBadge.cls)}>
-                        {ttBadge.label}
-                      </span>
-                    </td>
-                    <td className="py-1.5 px-2 text-center">
-                      <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-medium", payBadge.cls)}>
-                        {payBadge.label}
-                      </span>
-                    </td>
-                    <td className="py-1.5 px-2 text-center text-muted-foreground whitespace-nowrap">
-                      {r.tao_luc ? format(new Date(r.tao_luc), "dd/MM/yyyy") : "—"}
-                    </td>
-                    <td className="py-1.5 px-2 text-center">
-                      {canDelete && (
-                        <button
-                          onClick={() => setDeleteTarget(r.id)}
-                          className="text-muted-foreground hover:text-destructive p-1"
-                          title="Xóa (chỉ khi đã bị từ chối)"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                      onClick={() => items.length > 0 && toggleExpanded(r.id)}
+                    >
+                      <td className="py-1.5 px-2 text-center">
+                        {items.length > 0 && (
+                          isOpen ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground inline" />
+                                 : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground inline" />
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <p className="font-medium truncate max-w-[160px]">{r.nguoi_ung_ho_ten ?? r.ten_nha_cung_cap ?? "—"}</p>
+                        {r.so_tai_khoan && (
+                          <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                            {r.so_tai_khoan}{r.ngan_hang ? ` · ${r.ngan_hang}` : ""}
+                          </p>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2 max-w-[320px]">
+                        <p className="truncate">{r.mo_ta ?? "—"}</p>
+                      </td>
+                      <td className="py-1.5 px-2 text-center">
+                        {items.length > 0 ? (
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            {items.length} mục
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2 text-right tabular-nums font-medium">
+                        {fmt(Number(r.so_tien))} ₫
+                      </td>
+                      <td className="py-1.5 px-2 text-center">
+                        <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-medium", ttBadge.cls)}>
+                          {ttBadge.label}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-2 text-center">
+                        <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-medium", payBadge.cls)}>
+                          {payBadge.label}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-2 text-center text-muted-foreground whitespace-nowrap">
+                        {r.tao_luc ? format(new Date(r.tao_luc), "dd/MM/yyyy") : "—"}
+                      </td>
+                      <td className="py-1.5 px-2 text-center">
+                        {canDelete && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(r.id); }}
+                            className="text-muted-foreground hover:text-destructive p-1"
+                            title="Xóa (chỉ khi đã bị từ chối)"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {isOpen && items.length > 0 && (
+                      <tr className="border-b border-border/40 bg-muted/20">
+                        <td />
+                        <td colSpan={8} className="py-2 px-2">
+                          <div className="space-y-1.5">
+                            {items.map((it, idx) => {
+                              const lcLabel = LOAI_CHI_HOAN_UNG_OPTS.find((o) => o.value === it.loai_chi)?.label ?? it.loai_chi;
+                              return (
+                                <div key={idx} className="flex items-center gap-2 text-[11px] py-1 border-b border-border/30 last:border-0">
+                                  <span className="text-muted-foreground w-4 shrink-0">{idx + 1}.</span>
+                                  <Badge variant="outline" className="text-[10px] font-normal shrink-0">{lcLabel}</Badge>
+                                  <span className="flex-1 truncate">{it.mo_ta}</span>
+                                  {it.hoa_don_url && (
+                                    <a
+                                      href={it.hoa_don_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-blue-600 hover:underline inline-flex items-center gap-0.5 shrink-0"
+                                    >
+                                      <FileText className="h-3 w-3" /> Hóa đơn
+                                    </a>
+                                  )}
+                                  <span className="tabular-nums font-medium w-[100px] text-right shrink-0">
+                                    {fmt(Number(it.so_tien))} ₫
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
