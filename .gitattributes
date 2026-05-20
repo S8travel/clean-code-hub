@@ -1,0 +1,4 @@
+# Chuẩn hoá line-ending — tránh "289 file modified" noise giữa các máy.
+# * text=auto: git tự xử lý text vs binary.
+# eol=lf: lưu LF trong repo; checkout LF trên mọi OS (Windows editor vẫn hiển thị OK).
+* text=auto eol=lf
