@@ -225,14 +225,14 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-base">
             Gắn UNC nhanh — {doanLabel}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
           <p className="text-xs text-muted-foreground">
             {rows.length} ĐNTT đang thiếu UNC. Chọn nhiều ảnh UNC cùng lúc — hệ
             thống <strong>đọc ảnh (OCR)</strong> tự ghép theo <strong>mã đoàn + số
@@ -271,11 +271,14 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             </div>
           )}
 
-          {/* Chẩn đoán OCR theo từng file */}
+          {/* Chẩn đoán OCR theo từng file — list scroll trong panel để không
+              đẩy bảng ĐNTT khỏi viewport khi upload nhiều file. */}
           {files.length > 0 && (
-            <div className="border rounded-lg px-2 py-1.5 space-y-0.5 text-[11px] bg-muted/20">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-muted-foreground">OCR đọc ảnh</span>
+            <div className="border rounded-lg text-[11px] bg-muted/20">
+              <div className="flex items-center justify-between px-2 py-1.5 border-b border-border/50 sticky top-0 bg-muted/20 backdrop-blur">
+                <span className="font-medium text-muted-foreground">
+                  OCR đọc ảnh ({files.length} file)
+                </span>
                 {!ocrProg.running && (
                   <button
                     type="button"
@@ -286,23 +289,25 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                   </button>
                 )}
               </div>
-              {files.map((f, i) => {
-                const info = ocrInfo[i];
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2">
-                    <span className="truncate max-w-[360px] text-muted-foreground">{f.name}</span>
-                    <span className="shrink-0">
-                      {info === undefined
-                        ? <span className="text-muted-foreground">{ocrProg.running ? "đang đọc…" : "—"}</span>
-                        : info.err
-                          ? <span className="text-red-600">OCR lỗi: {info.err.slice(0, 40)}</span>
-                          : info.amount != null
-                            ? <span className="text-emerald-700 tabular-nums">đọc được {fmt(info.amount)} ₫</span>
-                            : <span className="text-amber-600">không đọc được số tiền</span>}
-                    </span>
-                  </div>
-                );
-              })}
+              <div className="max-h-[180px] overflow-y-auto px-2 py-1.5 space-y-0.5">
+                {files.map((f, i) => {
+                  const info = ocrInfo[i];
+                  return (
+                    <div key={i} className="flex items-center justify-between gap-2">
+                      <span className="truncate max-w-[360px] text-muted-foreground">{f.name}</span>
+                      <span className="shrink-0">
+                        {info === undefined
+                          ? <span className="text-muted-foreground">{ocrProg.running ? "đang đọc…" : "—"}</span>
+                          : info.err
+                            ? <span className="text-red-600">OCR lỗi: {info.err.slice(0, 40)}</span>
+                            : info.amount != null
+                              ? <span className="text-emerald-700 tabular-nums">đọc được {fmt(info.amount)} ₫</span>
+                              : <span className="text-amber-600">không đọc được số tiền</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -395,7 +400,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
           )}
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 shrink-0">
           <Button variant="ghost" size="sm" onClick={handleClose} disabled={batchMut.isPending}>
             <X className="h-4 w-4 mr-1" /> Đóng
           </Button>
