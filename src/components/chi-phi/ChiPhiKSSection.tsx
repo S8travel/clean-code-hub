@@ -501,6 +501,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
   const [aggNgayCan, setAggNgayCan] = useState("");
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
   const [aggCanTru, setAggCanTru] = useState<CanTruSelection | null>(null);
+  // Cho phép cọc nhiều lần: mode "full" = toàn bộ delta, "deposit" = 1 phần (cọc tiếp).
+  // la_coc=true khi mode="deposit".
+  const [aggCommitMode, setAggCommitMode] = useState<"full" | "deposit">("full");
+  const [aggDepositAmount, setAggDepositAmount] = useState<number>(0);
 
   // Sửa ĐNTT chờ duyệt
   const updateDNTT = useUpdateDNTT();
@@ -544,7 +548,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             : `Đã ghi nhận công nợ ${fmt(absDelta)} ₫`,
         );
       } else {
-        // Thiếu → tạo DNTT bổ sung. Allocations pro-rata theo chi_phi.tien_cong_ty hiện tại.
+        // Thiếu → tạo DNTT bổ sung. Mode "deposit" → la_coc=true + so_tien=aggDepositAmount
+        // (cho phép cọc nhiều lần). Mode "full" → so_tien=absDelta + la_coc=false như cũ.
+        const isDepositMode = aggCommitMode === "deposit";
+        const dnttAmount = isDepositMode
+          ? Math.max(0, Math.min(aggDepositAmount, absDelta))
+          : absDelta;
+        if (dnttAmount <= 0) {
+          toast.error("Số tiền cọc phải lớn hơn 0");
+          return;
+        }
+        // Allocations pro-rata theo chi_phi.tien_cong_ty hiện tại.
         const cps = chiPhiRows.filter((cp) => chiPhiIds.includes(cp.id!));
         const totalCt = cps.reduce((s, c) => s + Number(c.tien_cong_ty ?? 0), 0);
         const allocs: { chi_phi_id: number; so_tien: number }[] = [];
@@ -553,22 +567,23 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           for (let i = 0; i < cps.length; i++) {
             const isLast = i === cps.length - 1;
             const portion = isLast
-              ? absDelta - assigned
-              : Math.round(absDelta * (Number(cps[i].tien_cong_ty ?? 0) / totalCt));
+              ? dnttAmount - assigned
+              : Math.round(dnttAmount * (Number(cps[i].tien_cong_ty ?? 0) / totalCt));
             if (portion > 0) {
               allocs.push({ chi_phi_id: cps[i].id!, so_tien: portion });
               assigned += portion;
             }
           }
         }
+        const moTaPrefix = isDepositMode ? "[Cọc bổ sung]" : "[Bổ sung]";
         const newDntt = await insertDNTT.mutateAsync({
           doan_id: doanId,
           loai: "khach_san",
-          mo_ta: `[Bổ sung] ${ksName}`.trim(),
+          mo_ta: `${moTaPrefix} ${ksName}`.trim(),
           nha_cung_cap_id: nccId,
           ten_nha_cung_cap: nccName ?? null,
-          so_tien: absDelta,
-          la_coc: false,
+          so_tien: dnttAmount,
+          la_coc: isDepositMode,
           trang_thai_duyet: "cho_duyet",
           ref_loai: "khach_san",
           ref_id: ksId,
@@ -578,7 +593,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         } as any);
         const newDnttId = (newDntt as any)?.id ?? null;
 
-        const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, absDelta) : 0;
+        const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, dnttAmount) : 0;
         if (canTruAmt > 0 && newDnttId && aggCanTru) {
           const { error: payErr } = await externalSupabase.from("payments").insert({
             dntt_id: newDnttId,
@@ -592,10 +607,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           if (chiPhiIds.length > 0) await recalcChiPhiStatus(chiPhiIds);
         }
 
+        const successPrefix = isDepositMode ? "Đã tạo ĐNTT cọc bổ sung" : "Đã tạo ĐNTT bổ sung";
         toast.success(
           canTruAmt > 0
-            ? `Đã tạo ĐNTT bổ sung ${fmt(absDelta)} ₫ (cấn trừ ${fmt(canTruAmt)} ₫, cash còn ${fmt(absDelta - canTruAmt)} ₫)`
-            : `Đã tạo ĐNTT bổ sung ${fmt(absDelta)} ₫`,
+            ? `${successPrefix} ${fmt(dnttAmount)} ₫ (cấn trừ ${fmt(canTruAmt)} ₫, cash còn ${fmt(dnttAmount - canTruAmt)} ₫)`
+            : `${successPrefix} ${fmt(dnttAmount)} ₫`,
         );
       }
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
@@ -609,6 +625,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       setAggNgayCan("");
       setAggSurplusMode("con_du");
       setAggCanTru(null);
+      setAggCommitMode("full");
+      setAggDepositAmount(0);
     } catch (err: any) {
       toast.error("Lỗi: " + (err?.message || ""));
     }
@@ -1829,7 +1847,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                       }}
                     >
                       {effectiveDelta > 0
-                        ? `Thanh toán bổ sung ${fmt(effectiveDelta)} ₫`
+                        ? `Thanh toán / Cọc bổ sung ${fmt(effectiveDelta)} ₫`
                         : `Xử lý chênh lệch thừa ${fmt(Math.abs(effectiveDelta))} ₫`}
                     </Button>
                   </div>
@@ -1961,12 +1979,12 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       )}
 
       {/* Aggregate Commit Dialog — chốt chênh lệch sau OP edit so_phong/gia_phong/FOC */}
-      <Dialog open={!!aggCommit} onOpenChange={o => { if (!o) { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); } }}>
+      <Dialog open={!!aggCommit} onOpenChange={o => { if (!o) { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); setAggCommitMode("full"); setAggDepositAmount(0); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-sm">
               {aggCommit && aggCommit.delta > 0
-                ? "Tạo ĐNTT bổ sung"
+                ? (aggCommitMode === "deposit" ? "Tạo ĐNTT cọc bổ sung" : "Tạo ĐNTT bổ sung")
                 : aggSurplusMode === "hoan_tien" ? "Ghi nhận hoàn tiền" : "Ghi nhận công nợ"}
             </DialogTitle>
           </DialogHeader>
@@ -2018,6 +2036,56 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                   NCC: <span className="font-medium text-foreground">{aggCommit.nccName}</span>
                 </div>
               )}
+              {aggCommit.delta > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Hình thức tạo</Label>
+                  <RadioGroup
+                    value={aggCommitMode}
+                    onValueChange={(v) => {
+                      setAggCommitMode(v as "full" | "deposit");
+                      if (v === "deposit" && aggDepositAmount === 0) {
+                        // Default cọc 30% của delta, làm tròn 1000
+                        const def = Math.round((aggCommit.delta * 0.3) / 1000) * 1000;
+                        setAggDepositAmount(def);
+                      }
+                    }}
+                    className="space-y-1.5"
+                  >
+                    <div className="flex items-start gap-2">
+                      <RadioGroupItem value="full" id="ks-agg-full" className="mt-0.5" />
+                      <Label htmlFor="ks-agg-full" className="text-xs cursor-pointer leading-tight">
+                        <span className="font-medium">Toàn bộ — {fmt(aggCommit.delta)} ₫</span>
+                        <p className="text-muted-foreground font-normal">Thanh toán hết phần còn lại</p>
+                      </Label>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <RadioGroupItem value="deposit" id="ks-agg-deposit" className="mt-0.5" />
+                      <Label htmlFor="ks-agg-deposit" className="text-xs cursor-pointer leading-tight">
+                        <span className="font-medium">Cọc thêm 1 phần</span>
+                        <p className="text-muted-foreground font-normal">Đánh dấu là cọc — có thể tạo cọc nhiều lần</p>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {aggCommitMode === "deposit" && (
+                    <div className="mt-1.5 space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Số tiền cọc (tối đa {fmt(aggCommit.delta)} ₫)</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-xs"
+                        value={aggDepositAmount || ""}
+                        onChange={(e) => setAggDepositAmount(Math.min(Number(e.target.value) || 0, aggCommit.delta))}
+                        max={aggCommit.delta}
+                        min={0}
+                      />
+                      {aggDepositAmount > 0 && (
+                        <p className="text-[10px] text-muted-foreground tabular-nums">
+                          Còn lại sau cọc này: <span className="font-medium text-foreground">{fmt(aggCommit.delta - aggDepositAmount)} ₫</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               {aggCommit.delta > 0 && aggCommit.nccId != null && (
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">Cấn trừ công nợ NCC (optional)</Label>
@@ -2027,7 +2095,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     value={aggCanTru}
                     onChange={(v) => {
                       if (v && aggCommit) {
-                        const capped = Math.min(v.soTienCanTru, aggCommit.delta);
+                        const maxAmt = aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta;
+                        const capped = Math.min(v.soTienCanTru, maxAmt);
                         setAggCanTru({ ...v, soTienCanTru: capped });
                       } else {
                         setAggCanTru(v);
@@ -2036,9 +2105,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                   />
                   {aggCanTru && aggCanTru.soTienCanTru > 0 && (
                     <p className="text-[10px] text-muted-foreground tabular-nums">
-                      DNTT sẽ tạo: <span className="font-medium text-foreground">{fmt(aggCommit.delta)} ₫</span>
+                      DNTT sẽ tạo: <span className="font-medium text-foreground">{fmt(aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta)} ₫</span>
                       {" · "}Cấn trừ: <span className="font-medium text-amber-700">{fmt(aggCanTru.soTienCanTru)} ₫</span>
-                      {" · "}Cash còn TT: <span className="font-medium text-foreground">{fmt(aggCommit.delta - aggCanTru.soTienCanTru)} ₫</span>
+                      {" · "}Cash còn TT: <span className="font-medium text-foreground">{fmt((aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta) - aggCanTru.soTienCanTru)} ₫</span>
                     </p>
                   )}
                 </div>
@@ -2091,7 +2160,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
           )}
           <DialogFooter>
             <Button variant="outline" size="sm" className="text-xs"
-              onClick={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); }}>
+              onClick={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); setAggCommitMode("full"); setAggDepositAmount(0); }}>
               Đóng
             </Button>
             <Button
