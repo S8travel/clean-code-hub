@@ -27,9 +27,11 @@ import { useCanhDiem, useNhaHang, useKhachSan } from "@/hooks/use-dieu-tour";
 import type { DayLocal } from "@/hooks/use-dieu-tour";
 import { getWeekday } from "@/hooks/use-dieu-tour";
 import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
+import { t, useTranslate } from "@/lib/i18n";
 
 // ── Seri detail: table editor ──
 function SeriDetail({ seri }: { seri: SeriTour }) {
+  useTranslate();
   const { data: ngayRows = [], isLoading: loadingNgay } = useSeriNgayList(seri.id);
   const { data: itemRows = [], isLoading: loadingItems } = useSeriNgayItems(seri.id);
   const { data: canhDiemList = [] } = useCanhDiem();
@@ -58,11 +60,11 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
       { seriId: seri.id, days },
       {
         onSuccess: () => {
-          toast({ title: "Đã lưu lịch trình" });
+          toast({ title: t("Đã lưu lịch trình") });
           setDirty(false);
         },
         onError: (err: any) =>
-          toast({ title: "Lỗi: " + (err?.message || "Không thể lưu"), variant: "destructive" }),
+          toast({ title: t("Lỗi") + ": " + (err?.message || t("Không thể lưu")), variant: "destructive" }),
       }
     );
   };
@@ -79,7 +81,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {seri.shopping !== null && seri.shopping !== undefined && (
               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${seri.shopping ? "bg-green-100 text-green-700" : "bg-red-50 text-red-600"}`}>
-                Shopping: {seri.shopping ? "YES" : "NO"}
+                {t("Shopping")}: {seri.shopping ? "YES" : "NO"}
               </span>
             )}
             {seri.tang_pham && seri.tang_pham.length > 0 && (
@@ -88,7 +90,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">{days.length} ngày</Badge>
+          <Badge variant="outline" className="text-xs">{days.length} {t("ngày")}</Badge>
           <Button
             size="sm"
             className="h-8 text-xs"
@@ -96,7 +98,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
             disabled={!dirty || saveSeri.isPending}
           >
             <Save className="h-3.5 w-3.5 mr-1.5" />
-            {saveSeri.isPending ? "Đang lưu..." : "Lưu"}
+            {saveSeri.isPending ? t("Đang lưu...") : t("Lưu")}
           </Button>
         </div>
       </div>
@@ -104,7 +106,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
       {/* Table */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Đang tải...</p>
+          <p className="text-sm text-muted-foreground">{t("Đang tải...")}</p>
         ) : (
           <DayScheduleTable
             days={days}
@@ -112,7 +114,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
             canhDiemList={canhDiemList}
             nhaHangList={nhaHangList}
             khachSanList={khachSanList}
-            getDayLabel={(day) => `Ngày ${day.ngay_so}`}
+            getDayLabel={(day) => `${t("Ngày")} ${day.ngay_so}`}
             lockKhachSan
           />
         )}
@@ -123,6 +125,7 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
 
 // ── Main page ──
 function SeriPageContent() {
+  useTranslate();
   const { data: seriList = [], isLoading } = useSeriList();
   const createSeri = useCreateSeri();
   const updateSeri = useUpdateSeri();
@@ -187,18 +190,18 @@ function SeriPageContent() {
       {/* Left: seri list */}
       <div className="w-64 shrink-0 border-r flex flex-col h-full">
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h1 className="text-sm font-semibold">Mẫu seri</h1>
+          <h1 className="text-sm font-semibold">{t("Mẫu seri")}</h1>
           <Button size="sm" className="h-7 text-xs px-2.5" onClick={openCreate}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Thêm
+            <Plus className="h-3.5 w-3.5 mr-1" /> {t("Thêm")}
           </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
           {isLoading ? (
-            <p className="text-xs text-muted-foreground px-2 py-4">Đang tải...</p>
+            <p className="text-xs text-muted-foreground px-2 py-4">{t("Đang tải...")}</p>
           ) : seriList.length === 0 ? (
             <p className="text-xs text-muted-foreground px-2 py-8 text-center">
-              Chưa có mẫu seri nào
+              {t("Chưa có mẫu seri nào")}
             </p>
           ) : (
             seriList.map((s) => (
@@ -220,7 +223,7 @@ function SeriPageContent() {
                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     {s.shopping !== null && s.shopping !== undefined && (
                       <span className={`text-[10px] font-medium px-1 rounded ${s.shopping ? "bg-green-100 text-green-700" : "bg-red-50 text-red-600"}`}>
-                        Shop: {s.shopping ? "YES" : "NO"}
+                        {t("Shop")}: {s.shopping ? "YES" : "NO"}
                       </span>
                     )}
                     {s.tang_pham && s.tang_pham.length > 0 && (
@@ -258,7 +261,7 @@ function SeriPageContent() {
           <SeriDetail key={selectedSeri.id} seri={selectedSeri} />
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-            Chọn một mẫu seri để chỉnh sửa lịch trình
+            {t("Chọn một mẫu seri để chỉnh sửa lịch trình")}
           </div>
         )}
       </div>
@@ -267,33 +270,33 @@ function SeriPageContent() {
       <Dialog open={modalOpen} onOpenChange={(o) => { if (!o) setModalOpen(false); }}>
         <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
           <DialogHeader className="shrink-0">
-            <DialogTitle>{editTarget ? "Sửa mẫu seri" : "Tạo mẫu seri mới"}</DialogTitle>
+            <DialogTitle>{editTarget ? t("Sửa mẫu seri") : t("Tạo mẫu seri mới")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1 overflow-y-auto flex-1 pr-1">
             <div>
-              <Label className="text-sm">Tên seri *</Label>
+              <Label className="text-sm">{t("Tên seri *")}</Label>
               <Input
                 className="mt-1"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="VD: Đài Loan 5N4Đ"
+                placeholder={t("VD: Đài Loan 5N4Đ")}
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
               />
             </div>
             <div>
-              <Label className="text-sm">Mô tả</Label>
+              <Label className="text-sm">{t("Mô tả")}</Label>
               <Textarea
                 className="mt-1 resize-none"
                 rows={2}
                 value={formMoTa}
                 onChange={(e) => setFormMoTa(e.target.value)}
-                placeholder="Ghi chú ngắn về chương trình..."
+                placeholder={t("Ghi chú ngắn về chương trình...")}
               />
             </div>
             <GiftTagsSection gifts={formTangPham} setGifts={setFormTangPham} />
             <div>
-              <Label className="text-sm">Shopping</Label>
+              <Label className="text-sm">{t("Shopping")}</Label>
               <Select
                 value={formShopping || "none"}
                 onValueChange={(v) => setFormShopping(v === "none" ? "" : v as "yes" | "no")}
@@ -310,12 +313,12 @@ function SeriPageContent() {
             </div>
           </div>
           <DialogFooter className="shrink-0">
-            <Button variant="outline" onClick={() => setModalOpen(false)}>Hủy</Button>
+            <Button variant="outline" onClick={() => setModalOpen(false)}>{t("Hủy")}</Button>
             <Button
               onClick={handleSave}
               disabled={!formName.trim() || createSeri.isPending || updateSeri.isPending}
             >
-              {editTarget ? "Lưu" : "Tạo"}
+              {editTarget ? t("Lưu") : t("Tạo")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -325,13 +328,13 @@ function SeriPageContent() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xóa mẫu seri "{deleteTarget?.ten_seri}"?</AlertDialogTitle>
+            <AlertDialogTitle>{t("Xóa mẫu seri")} "{deleteTarget?.ten_seri}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              Toàn bộ lịch trình trong mẫu này sẽ bị xóa. Các đoàn đã áp dụng không bị ảnh hưởng.
+              {t("Toàn bộ lịch trình trong mẫu này sẽ bị xóa. Các đoàn đã áp dụng không bị ảnh hưởng.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>{t("Hủy")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={() => {
@@ -344,7 +347,7 @@ function SeriPageContent() {
                 });
               }}
             >
-              Xóa
+              {t("Xóa")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

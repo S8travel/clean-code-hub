@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
+import { t, useTranslate } from "@/lib/i18n";
 
 function NhaXePageContent() {
+  useTranslate();
   const { data: list, isLoading } = useNhaXeList();
   const { data: nccList } = useNhaCungCapList();
   const createMut = useCreateNhaXe();
@@ -38,7 +40,7 @@ function NhaXePageContent() {
   const selected = (list ?? []).find((nx) => nx.id === selectedId) ?? null;
 
   const handleCreate = async () => {
-    if (!newName.trim()) { toast.warning("Tên nhà xe bắt buộc"); return; }
+    if (!newName.trim()) { toast.warning(t("Tên nhà xe bắt buộc")); return; }
     try {
       const created = await createMut.mutateAsync({
         ten: newName.trim(),
@@ -50,9 +52,9 @@ function NhaXePageContent() {
       setNewNccId("");
       setNewDiaDiem("");
       setShowCreate(false);
-      toast.success("Đã tạo nhà xe");
+      toast.success(t("Đã tạo nhà xe"));
     } catch {
-      toast.error("Lỗi tạo nhà xe");
+      toast.error(t("Lỗi tạo nhà xe"));
     }
   };
 
@@ -62,15 +64,15 @@ function NhaXePageContent() {
       <div className="w-80 shrink-0 border-r flex flex-col bg-card">
         <div className="p-3 border-b space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm">Nhà xe</h2>
+            <h2 className="font-semibold text-sm">{t("Nhà xe")}</h2>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowCreate(true)}>
-              <Plus className="h-3 w-3 mr-1" /> Thêm
+              <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
             </Button>
           </div>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
-              placeholder="Tìm kiếm..."
+              placeholder={t("Tìm kiếm...")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-7 text-xs pl-7"
@@ -86,7 +88,7 @@ function NhaXePageContent() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">Không tìm thấy nhà xe</p>
+            <p className="p-3 text-xs text-muted-foreground">{t("Không tìm thấy nhà xe")}</p>
           ) : (
             <div className="p-1">
               {filtered.map((nx) => (
@@ -120,7 +122,7 @@ function NhaXePageContent() {
           <NhaXeDetail nhaXe={selected} onDeleted={() => setSelectedId(null)} />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Chọn nhà xe để xem chi tiết
+            {t("Chọn nhà xe để xem chi tiết")}
           </div>
         )}
       </div>
@@ -129,11 +131,11 @@ function NhaXePageContent() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Thêm nhà xe mới</DialogTitle>
+            <DialogTitle>{t("Thêm nhà xe mới")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">Tên nhà xe *</Label>
+              <Label className="text-xs">{t("Tên nhà xe *")}</Label>
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -142,17 +144,17 @@ function NhaXePageContent() {
               />
             </div>
             <div>
-              <Label className="text-xs">Nhà cung cấp</Label>
+              <Label className="text-xs">{t("Nhà cung cấp")}</Label>
               <SearchableSelect
                 options={nccOptions}
                 value={newNccId}
                 onChange={setNewNccId}
-                placeholder="Chọn nhà cung cấp"
+                placeholder={t("Chọn nhà cung cấp")}
                 className="h-8 text-sm"
               />
             </div>
             <div>
-              <Label className="text-xs">Địa điểm</Label>
+              <Label className="text-xs">{t("Địa điểm")}</Label>
               <Input
                 value={newDiaDiem}
                 onChange={(e) => setNewDiaDiem(e.target.value)}
@@ -161,8 +163,8 @@ function NhaXePageContent() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>Hủy</Button>
-            <Button size="sm" onClick={handleCreate} disabled={createMut.isPending}>Tạo</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>{t("Hủy")}</Button>
+            <Button size="sm" onClick={handleCreate} disabled={createMut.isPending}>{t("Tạo")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
+import { t, useTranslate } from "@/lib/i18n";
 
 function VisaPageContent() {
+  useTranslate();
   const { data: list, isLoading } = useDonViVisaList();
   const { data: nccList } = useNhaCungCapList();
   const createMut = useCreateDonViVisa();
@@ -37,7 +39,7 @@ function VisaPageContent() {
   const selected = (list ?? []).find((v) => v.id === selectedId) ?? null;
 
   const handleCreate = async () => {
-    if (!newName.trim()) { toast.warning("Tên đơn vị bắt buộc"); return; }
+    if (!newName.trim()) { toast.warning(t("Tên đơn vị bắt buộc")); return; }
     try {
       const created = await createMut.mutateAsync({
         ten: newName.trim(),
@@ -47,9 +49,9 @@ function VisaPageContent() {
       setNewName("");
       setNewNccId("");
       setShowCreate(false);
-      toast.success("Đã tạo đơn vị visa");
+      toast.success(t("Đã tạo đơn vị visa"));
     } catch {
-      toast.error("Lỗi tạo đơn vị visa");
+      toast.error(t("Lỗi tạo đơn vị visa"));
     }
   };
 
@@ -59,15 +61,15 @@ function VisaPageContent() {
       <div className="w-80 shrink-0 border-r flex flex-col bg-card">
         <div className="p-3 border-b space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm">Visa</h2>
+            <h2 className="font-semibold text-sm">{t("Visa")}</h2>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowCreate(true)}>
-              <Plus className="h-3 w-3 mr-1" /> Thêm
+              <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
             </Button>
           </div>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
-              placeholder="Tìm kiếm..."
+              placeholder={t("Tìm kiếm...")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-7 text-xs pl-7"
@@ -83,7 +85,7 @@ function VisaPageContent() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">Không tìm thấy đơn vị visa</p>
+            <p className="p-3 text-xs text-muted-foreground">{t("Không tìm thấy đơn vị visa")}</p>
           ) : (
             <div className="p-1">
               {filtered.map((v) => (
@@ -114,7 +116,7 @@ function VisaPageContent() {
           <DonViVisaDetail donViVisa={selected} onDeleted={() => setSelectedId(null)} />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Chọn đơn vị visa để xem chi tiết
+            {t("Chọn đơn vị visa để xem chi tiết")}
           </div>
         )}
       </div>
@@ -123,11 +125,11 @@ function VisaPageContent() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Thêm đơn vị visa mới</DialogTitle>
+            <DialogTitle>{t("Thêm đơn vị visa mới")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">Tên đơn vị *</Label>
+              <Label className="text-xs">{t("Tên đơn vị *")}</Label>
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -136,19 +138,19 @@ function VisaPageContent() {
               />
             </div>
             <div>
-              <Label className="text-xs">Nhà cung cấp</Label>
+              <Label className="text-xs">{t("Nhà cung cấp")}</Label>
               <SearchableSelect
                 options={nccOptions}
                 value={newNccId}
                 onChange={setNewNccId}
-                placeholder="Chọn nhà cung cấp"
+                placeholder={t("Chọn nhà cung cấp")}
                 className="h-8 text-sm"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>Hủy</Button>
-            <Button size="sm" onClick={handleCreate} disabled={createMut.isPending}>Tạo</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>{t("Hủy")}</Button>
+            <Button size="sm" onClick={handleCreate} disabled={createMut.isPending}>{t("Tạo")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
