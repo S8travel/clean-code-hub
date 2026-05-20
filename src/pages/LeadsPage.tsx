@@ -15,11 +15,13 @@ import { LeadKanban } from "@/components/leads/LeadKanban";
 import { LeadDrawer } from "@/components/leads/LeadDrawer";
 import { LeadFormDrawer } from "@/components/leads/LeadFormDrawer";
 import { LeadStatsWidget, type LeadStatsPreset } from "@/components/leads/LeadStatsWidget";
+import { t, useTranslate } from "@/lib/i18n";
 
 type ViewMode = "list" | "kanban";
 type FollowUpFilter = "all" | "today" | "overdue";
 
 export default function LeadsPage() {
+  useTranslate();
   const { user } = useAuth();
   const { data: userRoles = [] } = useUserRoles();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -124,13 +126,13 @@ export default function LeadsPage() {
       <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b bg-background">
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold">Quản lý Lead</h1>
+          <h1 className="text-xl font-bold">{t("Quản lý Lead")}</h1>
           {!isLoading && (
             <span className="text-sm text-muted-foreground ml-1">({leads.length})</span>
           )}
         </div>
         <Button onClick={openCreate} className="gap-1.5">
-          <Plus className="h-4 w-4" /> Thêm Lead
+          <Plus className="h-4 w-4" /> {t("Thêm Lead")}
         </Button>
       </div>
 
@@ -149,7 +151,7 @@ export default function LeadsPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm tên, SĐT, tổ chức..."
+            placeholder={t("Tìm tên, SĐT, tổ chức...")}
             className="pl-8 h-8 text-xs"
           />
         </div>
@@ -157,12 +159,12 @@ export default function LeadsPage() {
         {/* Filter: Trạng thái */}
         <Select value={filterStatus || "_all"} onValueChange={(v) => setFilterStatus(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[140px]">
-            <SelectValue placeholder="Trạng thái" />
+            <SelectValue placeholder={t("Trạng thái")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all" className="text-xs">Tất cả trạng thái</SelectItem>
+            <SelectItem value="_all" className="text-xs">{t("Tất cả trạng thái")}</SelectItem>
             {LEAD_TRANG_THAI_OPTS.map((o) => (
-              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+              <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -170,12 +172,12 @@ export default function LeadsPage() {
         {/* Filter: Nguồn */}
         <Select value={filterNguon || "_all"} onValueChange={(v) => setFilterNguon(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[120px]">
-            <SelectValue placeholder="Nguồn" />
+            <SelectValue placeholder={t("Nguồn")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all" className="text-xs">Tất cả nguồn</SelectItem>
+            <SelectItem value="_all" className="text-xs">{t("Tất cả nguồn")}</SelectItem>
             {LEAD_NGUON_OPTS.map((o) => (
-              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+              <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -183,22 +185,22 @@ export default function LeadsPage() {
         {/* Filter: Loại tour */}
         <Select value={filterLoaiTour || "_all"} onValueChange={(v) => setFilterLoaiTour(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[120px]">
-            <SelectValue placeholder="Loại tour" />
+            <SelectValue placeholder={t("Loại tour")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all" className="text-xs">Tất cả</SelectItem>
-            <SelectItem value="outbound" className="text-xs">Outbound</SelectItem>
-            <SelectItem value="noi_dia" className="text-xs">Nội địa</SelectItem>
+            <SelectItem value="_all" className="text-xs">{t("Tất cả")}</SelectItem>
+            <SelectItem value="outbound" className="text-xs">{t("Outbound")}</SelectItem>
+            <SelectItem value="noi_dia" className="text-xs">{t("Nội địa")}</SelectItem>
           </SelectContent>
         </Select>
 
         {/* Filter: Sales */}
         <Select value={filterSales || "_all"} onValueChange={(v) => setFilterSales(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[140px]">
-            <SelectValue placeholder="Sales phụ trách" />
+            <SelectValue placeholder={t("Sales phụ trách")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all" className="text-xs">Tất cả sales</SelectItem>
+            <SelectItem value="_all" className="text-xs">{t("Tất cả sales")}</SelectItem>
             {userOptions.map((u) => (
               <SelectItem key={u.value} value={u.value} className="text-xs">{u.label}</SelectItem>
             ))}
@@ -213,7 +215,7 @@ export default function LeadsPage() {
                 ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
                 : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
             }`}>
-            {followUpFilter === "overdue" ? "⚠️ Quá hạn follow-up" : "⏰ Follow-up hôm nay"}
+            {followUpFilter === "overdue" ? t("⚠️ Quá hạn follow-up") : t("⏰ Follow-up hôm nay")}
             <span className="ml-1 opacity-60">×</span>
           </button>
         )}
@@ -223,14 +225,14 @@ export default function LeadsPage() {
           <button
             onClick={() => setViewMode("list")}
             className={`p-1.5 transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-            title="Danh sách"
+            title={t("Danh sách")}
           >
             <List className="h-4 w-4" />
           </button>
           <button
             onClick={() => setViewMode("kanban")}
             className={`p-1.5 transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-            title="Kanban"
+            title={t("Kanban")}
           >
             <Columns3 className="h-4 w-4" />
           </button>
@@ -241,7 +243,7 @@ export default function LeadsPage() {
       <div className="flex-1 overflow-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
-            Đang tải...
+            {t("Đang tải...")}
           </div>
         ) : viewMode === "list" ? (
           <LeadTable leads={leads} onRowClick={openDetail} />

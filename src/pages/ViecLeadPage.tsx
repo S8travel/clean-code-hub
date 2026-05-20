@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMyNextActions, type MyNextActionRow } from "@/hooks/use-lead-next-action";
 import { CHANNEL_ICON, CHANNEL_LABEL, PRIORITY_LABEL } from "@/lib/lead-next-action";
 import { LeadDrawer } from "@/components/leads/LeadDrawer";
+import { t, useTranslate } from "@/lib/i18n";
 
 type Bucket = "qua_han" | "hom_nay" | "sap_toi";
 
@@ -30,6 +31,7 @@ const PRI_CLS: Record<string, string> = {
 };
 
 export default function ViecLeadPage() {
+  useTranslate();
   const { user } = useAuth();
   const { data: rows = [], isLoading } = useMyNextActions(user?.user_id ?? null);
 
@@ -52,34 +54,34 @@ export default function ViecLeadPage() {
       <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b bg-background">
         <div className="flex items-center gap-2">
           <Target className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold">Lead cần xử lý</h1>
+          <h1 className="text-xl font-bold">{t("Lead cần xử lý")}</h1>
           {!isLoading && (
             <span className="text-sm text-muted-foreground ml-1">({rows.length})</span>
           )}
         </div>
         <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="text-destructive font-medium">{grouped.qua_han.length} quá hạn</span>
+          <span className="text-destructive font-medium">{grouped.qua_han.length} {t("quá hạn")}</span>
           <span>·</span>
-          <span>{grouped.hom_nay.length} hôm nay</span>
+          <span>{grouped.hom_nay.length} {t("hôm nay")}</span>
           <span>·</span>
-          <span>{grouped.sap_toi.length} sắp tới</span>
+          <span>{grouped.sap_toi.length} {t("sắp tới")}</span>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-5 space-y-6 max-w-[1000px] mx-auto w-full">
         {isLoading ? (
-          <div className="py-20 text-center text-sm text-muted-foreground">Đang tải...</div>
+          <div className="py-20 text-center text-sm text-muted-foreground">{t("Đang tải...")}</div>
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
             <CheckCircle2 className="h-10 w-10 text-emerald-400 mb-3" />
-            <p className="text-sm">Không có việc nào — bạn đã xử lý hết lead 🎉</p>
+            <p className="text-sm">{t("Không có việc nào — bạn đã xử lý hết lead 🎉")}</p>
           </div>
         ) : (
           (["qua_han", "hom_nay", "sap_toi"] as Bucket[]).map((b) =>
             grouped[b].length === 0 ? null : (
               <div key={b}>
                 <p className={cn("text-xs font-semibold uppercase tracking-wide mb-2", BUCKET_META[b].cls)}>
-                  {BUCKET_META[b].label} ({grouped[b].length})
+                  {t(BUCKET_META[b].label)} ({grouped[b].length})
                 </p>
                 <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
                   {grouped[b].map((r) => {
@@ -103,7 +105,7 @@ export default function ViecLeadPage() {
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground truncate">
-                            {CHANNEL_LABEL[r.channel] ?? r.channel}
+                            {t(CHANNEL_LABEL[r.channel] ?? r.channel)}
                             {r.reason ? ` · ${r.reason}` : ""}
                           </p>
                         </div>
@@ -112,7 +114,7 @@ export default function ViecLeadPage() {
                             "text-[10px] font-semibold px-2 py-0.5 rounded-full border",
                             PRI_CLS[r.priority] ?? PRI_CLS.binh_thuong,
                           )}>
-                            {PRIORITY_LABEL[r.priority] ?? r.priority}
+                            {t(PRIORITY_LABEL[r.priority] ?? r.priority)}
                           </span>
                           <span className={cn("text-[11px]",
                             b === "qua_han" ? "text-destructive font-medium" : "text-muted-foreground")}>

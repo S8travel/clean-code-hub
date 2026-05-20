@@ -12,8 +12,10 @@ import { toast } from "sonner";
 import NhaHangDetail from "@/components/nha-hang/NhaHangDetail";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
+import { t, useTranslate } from "@/lib/i18n";
 
 function NhaHangPageContent() {
+  useTranslate();
   const { data: list, isLoading } = useNhaHangList();
   const createMut = useCreateNhaHang();
   const { data: nccList } = useNhaCungCapList();
@@ -38,9 +40,9 @@ function NhaHangPageContent() {
       setNewName("");
       setNewNccId("");
       setShowCreate(false);
-      toast.success("Đã tạo nhà hàng");
+      toast.success(t("Đã tạo nhà hàng"));
     } catch {
-      toast.error("Lỗi tạo nhà hàng");
+      toast.error(t("Lỗi tạo nhà hàng"));
     }
   };
 
@@ -50,15 +52,15 @@ function NhaHangPageContent() {
       <div className="w-80 shrink-0 border-r flex flex-col bg-card">
         <div className="p-3 border-b space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm">Nhà hàng</h2>
+            <h2 className="font-semibold text-sm">{t("Nhà hàng")}</h2>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowCreate(!showCreate)}>
-              <Plus className="h-3 w-3 mr-1" /> Thêm
+              <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
             </Button>
           </div>
           {showCreate && (
             <div className="space-y-1">
               <Input
-                placeholder="Tên nhà hàng *"
+                placeholder={t("Tên nhà hàng *")}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 className="h-7 text-xs"
@@ -69,11 +71,11 @@ function NhaHangPageContent() {
                   options={nccOptions}
                   value={newNccId}
                   onChange={setNewNccId}
-                  placeholder="Nhà cung cấp"
+                  placeholder={t("Nhà cung cấp")}
                   className="h-7 text-xs flex-1"
                 />
                 <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleCreate} disabled={createMut.isPending}>
-                  Tạo
+                  {t("Tạo")}
                 </Button>
               </div>
             </div>
@@ -81,7 +83,7 @@ function NhaHangPageContent() {
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
-              placeholder="Tìm kiếm..."
+              placeholder={t("Tìm kiếm...")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-7 text-xs pl-7"
@@ -96,7 +98,7 @@ function NhaHangPageContent() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">Không tìm thấy nhà hàng</p>
+            <p className="p-3 text-xs text-muted-foreground">{t("Không tìm thấy nhà hàng")}</p>
           ) : (
             <div className="p-1">
               {filtered.map((nh) => (
@@ -130,7 +132,7 @@ function NhaHangPageContent() {
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Chọn nhà hàng để xem chi tiết
+            {t("Chọn nhà hàng để xem chi tiết")}
           </div>
         )}
       </div>

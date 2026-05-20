@@ -16,8 +16,10 @@ import { toast } from "sonner";
 import CanhDiemDetail from "@/components/canh-diem/CanhDiemDetail";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
+import { t, useTranslate } from "@/lib/i18n";
 
 function CanhDiemPageContent() {
+  useTranslate();
   const { data: list, isLoading } = useCanhDiemList();
   const createMut = useCreateCanhDiem();
   const { data: nccList } = useNhaCungCapList();
@@ -43,9 +45,9 @@ function CanhDiemPageContent() {
       setNewName("");
       setNewNccId("");
       setShowCreate(false);
-      toast.success("Đã tạo cảnh điểm");
+      toast.success(t("Đã tạo cảnh điểm"));
     } catch {
-      toast.error("Lỗi tạo cảnh điểm");
+      toast.error(t("Lỗi tạo cảnh điểm"));
     }
   };
 
@@ -55,15 +57,15 @@ function CanhDiemPageContent() {
       <div className="w-80 shrink-0 border-r flex flex-col bg-card">
         <div className="p-3 border-b space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm">Cảnh điểm</h2>
+            <h2 className="font-semibold text-sm">{t("Cảnh điểm")}</h2>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowCreate(!showCreate)}>
-              <Plus className="h-3 w-3 mr-1" /> Thêm
+              <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
             </Button>
           </div>
           {showCreate && (
             <div className="space-y-1">
               <Input
-                placeholder="Tên cảnh điểm *"
+                placeholder={t("Tên cảnh điểm *")}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 className="h-7 text-xs"
@@ -71,11 +73,11 @@ function CanhDiemPageContent() {
               />
               <Select value={newLoai} onValueChange={setNewLoai}>
                 <SelectTrigger className="h-7 text-xs">
-                  <span>{newLoai === "canh_diem" ? "Cảnh điểm" : newLoai === "dich_vu" ? "Dịch vụ" : ""}</span>
+                  <span>{newLoai === "canh_diem" ? t("Cảnh điểm") : newLoai === "dich_vu" ? t("Dịch vụ") : ""}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="canh_diem">Cảnh điểm</SelectItem>
-                  <SelectItem value="dich_vu">Dịch vụ</SelectItem>
+                  <SelectItem value="canh_diem">{t("Cảnh điểm")}</SelectItem>
+                  <SelectItem value="dich_vu">{t("Dịch vụ")}</SelectItem>
                 </SelectContent>
               </Select>
 <div className="flex gap-1">
@@ -83,11 +85,11 @@ function CanhDiemPageContent() {
                   options={nccOptions}
                   value={newNccId}
                   onChange={setNewNccId}
-                  placeholder="Nhà cung cấp"
+                  placeholder={t("Nhà cung cấp")}
                   className="h-7 text-xs flex-1"
                 />
                 <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleCreate} disabled={createMut.isPending}>
-                  Tạo
+                  {t("Tạo")}
                 </Button>
               </div>
             </div>
@@ -95,7 +97,7 @@ function CanhDiemPageContent() {
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
-              placeholder="Tìm kiếm..."
+              placeholder={t("Tìm kiếm...")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-7 text-xs pl-7"
@@ -110,7 +112,7 @@ function CanhDiemPageContent() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">Không tìm thấy cảnh điểm</p>
+            <p className="p-3 text-xs text-muted-foreground">{t("Không tìm thấy cảnh điểm")}</p>
           ) : (
             <div className="p-1">
               {filtered.map((cd) => (
@@ -131,7 +133,7 @@ function CanhDiemPageContent() {
                       "text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0",
                       cd.loai === "dich_vu" ? "border-purple-300 text-purple-600" : "border-green-300 text-green-600"
                     )}>
-                      {cd.loai === "dich_vu" ? "DV" : "CĐ"}
+                      {cd.loai === "dich_vu" ? t("DV") : t("CĐ")}
                     </Badge>
                   </div>
                   {cd.dia_diem && (
@@ -155,7 +157,7 @@ function CanhDiemPageContent() {
           <CanhDiemDetail canhDiem={selected} onDeleted={() => setSelectedId(null)} />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Chọn cảnh điểm để xem chi tiết
+            {t("Chọn cảnh điểm để xem chi tiết")}
           </div>
         )}
       </div>
