@@ -22,6 +22,12 @@ function xeLabel(xe: any) {
   return parts.length ? parts.join(" · ") : "—";
 }
 
+function hdvLabel(hdv: any): string {
+  if (!hdv) return "";
+  const sdt = (hdv.so_dien_thoai ?? "").toString().trim();
+  return sdt ? `${hdv.ten} — ${sdt}` : hdv.ten;
+}
+
 interface Props {
   doan: any;
   bangDon: string;
@@ -65,7 +71,22 @@ export default function DoanInfoSection({
             <span className="font-bold" style={{ color: "#185FA5" }}>{doan.ten_doan}</span>
           </Row>
           <Row label="HDV" icon={User}>
-            <span>{doan.huong_dan_vien?.ten ?? "—"}</span>
+            {(() => {
+              const hdv1 = doan.huong_dan_vien;
+              const hdv2 = doan.huong_dan_vien_2;
+              if (!hdv1 && !hdv2) return <span>—</span>;
+              const parts = [hdv1, hdv2].filter(Boolean).map(hdvLabel);
+              return (
+                <span className="break-words">
+                  {parts.map((p, i) => (
+                    <span key={i}>
+                      {i > 0 && <span className="text-muted-foreground/60 mx-1.5">|</span>}
+                      {p}
+                    </span>
+                  ))}
+                </span>
+              );
+            })()}
           </Row>
           <Row label="Xe" icon={Bus}>
             <span>{xeLabel(doan.xe)}</span>

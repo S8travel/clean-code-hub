@@ -11,6 +11,7 @@ export interface Doan {
   agent_huy_id: number | null;
   dia_diem_id: number | null;
   huong_dan_vien_id: number | null;
+  huong_dan_vien_id_2: number | null;
   xe_id: number | null;
   seri_id: number | null;
   chuyen_bay_don: string | null;
@@ -56,6 +57,7 @@ export interface DoanInsert {
   agent_huy_id?: number | null;
   dia_diem_id?: number | null;
   huong_dan_vien_id?: number | null;
+  huong_dan_vien_id_2?: number | null;
   xe_id?: number | null;
   seri_id?: number | null;
   chuyen_bay_don?: string | null;
@@ -307,7 +309,8 @@ export function useDoanList(phanLoaiTour?: string[] | null) {
           agents:agent_id(id, ten),
           agent_huy:agent_huy_id(id, ten),
           dia_diem:dia_diem_id(ten),
-          huong_dan_vien:huong_dan_vien_id(id, ten),
+          huong_dan_vien:huong_dan_vien_id(id, ten, so_dien_thoai),
+          huong_dan_vien_2:huong_dan_vien_id_2(id, ten, so_dien_thoai),
           xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id)),
           van_phong:van_phong_id(id, ten)
         `);
@@ -443,7 +446,7 @@ export function useUpdateDoan() {
       // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem + diff log
       const { data: oldDoan, error: oldErr } = await externalSupabase
         .from("doan")
-        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, xe_id, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
+        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, xe_id, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
         .eq("id", id)
         .single();
       if (oldErr) throw oldErr;
@@ -614,6 +617,7 @@ export function useUpdateDoan() {
         ["agent_huy_id", "agent hủy"],
         ["dia_diem_id", "địa điểm"],
         ["huong_dan_vien_id", "HDV"],
+        ["huong_dan_vien_id_2", "HDV phụ"],
         ["xe_id", "xe"],
         ["seri_id", "seri tour"],
         ["van_phong_id", "văn phòng"],

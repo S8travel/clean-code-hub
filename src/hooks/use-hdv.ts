@@ -18,7 +18,13 @@ export interface HDVRow {
   bac: number;  // 1–5, bậc ưu tiên xếp (1 cao nhất)
 }
 
-/** Lấy HDV (ten + so_dien_thoai) đã gắn cho 1 đoàn. Trả null nếu doan chưa có HDV. */
+export interface HdvMailInfo {
+  id: number;
+  ten: string;
+  so_dien_thoai: string | null;
+}
+
+/** Lấy HDV chính (legacy single API). Phase 2 sẽ migrate callers sang useHdvsByDoanId. */
 export function useHdvByDoanId(doanId: number | null | undefined) {
   return useQuery({
     queryKey: ["hdv-by-doan", doanId],
@@ -44,11 +50,49 @@ export function useHdvByDoanId(doanId: number | null | undefined) {
   });
 }
 
-/** Format HDV cho email: "Tên — SĐT" | "Tên" | "Bổ sung sau". */
-export function formatHdvForEmail(hdv: { ten: string; so_dien_thoai: string | null } | null | undefined): string {
-  if (!hdv?.ten) return "Bổ sung sau";
+/** Lấy danh sách HDV (chính + phụ) của đoàn — empty array nếu chưa gán. */
+export function useHdvsByDoanId(doanId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["hdvs-by-doan", doanId],
+    enabled: !!doanId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<HdvMailInfo[]> => {
+      const { data: doan, error: e1 } = await externalSupabase
+        .from("doan")
+        .select("huong_dan_vien_id, huong_dan_vien_id_2")
+        .eq("id", doanId!)
+        .maybeSingle();
+      if (e1) throw e1;
+      const ids = [doan?.huong_dan_vien_id, doan?.huong_dan_vien_id_2].filter(Boolean) as number[];
+      if (ids.length === 0) return [];
+      const { data, error } = await externalSupabase
+        .from("huong_dan_vien")
+        .select("id, ten, so_dien_thoai")
+        .in("id", ids);
+      if (error) throw error;
+      // Giữ thứ tự HDV chính trước, phụ sau
+      const byId = new Map((data ?? []).map((h: any) => [h.id, h as HdvMailInfo]));
+      return ids.map((id) => byId.get(id)).filter(Boolean) as HdvMailInfo[];
+    },
+  });
+}
+
+/** Format 1 HDV: "Tên — SĐT" | "Tên" */
+function formatOneHdv(hdv: HdvMailInfo): string {
   const sdt = hdv.so_dien_thoai?.trim();
   return sdt ? `${hdv.ten} — ${sdt}` : hdv.ten;
+}
+
+/** Format HDV cho email: "Tên — SĐT" | "Tên" | "Bổ sung sau". (legacy: 1 HDV) */
+export function formatHdvForEmail(hdv: { ten: string; so_dien_thoai: string | null } | null | undefined): string {
+  if (!hdv?.ten) return "Bổ sung sau";
+  return formatOneHdv(hdv as HdvMailInfo);
+}
+
+/** Format nhiều HDV cho email/Word: ghép bằng " | ". Empty array → "Bổ sung sau". */
+export function formatHdvsForEmail(hdvs: HdvMailInfo[] | null | undefined): string {
+  if (!hdvs || hdvs.length === 0) return "Bổ sung sau";
+  return hdvs.map(formatOneHdv).join(" | ");
 }
 
 export function useHDVList() {

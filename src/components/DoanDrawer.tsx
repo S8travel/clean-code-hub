@@ -42,6 +42,7 @@ const EMPTY_FORM: DoanInsert = {
   agent_id: null,
   dia_diem_id: null,
   huong_dan_vien_id: null,
+  huong_dan_vien_id_2: null,
   xe_id: null,
   seri_id: null,
   chuyen_bay_don: "",
@@ -102,6 +103,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         agent_id: doan.agent_id ?? null,
         dia_diem_id: doan.dia_diem_id ?? null,
         huong_dan_vien_id: doan.huong_dan_vien_id ?? null,
+        huong_dan_vien_id_2: doan.huong_dan_vien_id_2 ?? null,
         xe_id: doan.xe_id ?? null,
         seri_id: doan.seri_id ?? null,
         chuyen_bay_don: doan.chuyen_bay_don || "",
@@ -326,6 +328,20 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   onChange={(v) => set("huong_dan_vien_id", v ? parseInt(v) : null)}
                   placeholder={t("Chọn HDV")}
                 />
+              </Field>
+
+              <Field label={t("HDV phụ (tuỳ chọn)")}>
+                <SearchableSelect
+                  options={hdvOptions.filter((o) => o.value !== form.huong_dan_vien_id?.toString())}
+                  value={form.huong_dan_vien_id_2?.toString() || ""}
+                  onChange={(v) => set("huong_dan_vien_id_2", v ? parseInt(v) : null)}
+                  placeholder={t("Chọn HDV phụ (đoàn đông)")}
+                />
+                {form.huong_dan_vien_id_2 && !form.huong_dan_vien_id && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    {t("Có HDV phụ mà chưa có HDV chính — nên gán HDV chính trước.")}
+                  </p>
+                )}
               </Field>
 
               <Field label={t("Xe")}>
