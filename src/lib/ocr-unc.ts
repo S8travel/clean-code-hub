@@ -91,8 +91,8 @@ function vnWordsToNumber(phrase: string): number | null {
   let sawAny = false;
   for (const w of toks) {
     if (w in VN_UNIT) { cur = VN_UNIT[w]; sawAny = true; }
-    else if (w === "muoi" || w === "muop") group += (cur || 1) * 10, (cur = 0);
-    else if (w === "tram") group += (cur || 1) * 100, (cur = 0);
+    else if (w === "muoi" || w === "muop") { group += (cur || 1) * 10; cur = 0; sawAny = true; }
+    else if (w === "tram") { group += (cur || 1) * 100; cur = 0; sawAny = true; }
     else if (w === "nghin" || w === "ngan") { total += (group + cur) * 1_000; group = 0; cur = 0; }
     else if (w === "trieu") { total += (group + cur) * 1_000_000; group = 0; cur = 0; }
     else if (w === "ty" || w === "ti") { total += (group + cur) * 1_000_000_000; group = 0; cur = 0; }
