@@ -1029,7 +1029,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         gia_phong: 0,
         thanh_tien: 0,
         is_day_use: !isService && isDayUse ? true : undefined,
-        ref_doan_ngay_item_id: !isService ? (refItemId ?? null) : null,
+        // Cần preserve link day-use cho CẢ phong + service rows. Trước đây
+        // service rows luôn nullify → reload mất link → row nhảy sang KS overnight
+        // qua Path 2 (doan_ngay.khach_san_id). Giờ giữ link cho mọi loại row.
+        ref_doan_ngay_item_id: refItemId ?? null,
         loai_row: loaiRow,
       },
     ]);
@@ -1514,6 +1517,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     {roomDayEntries.map(([dateStr, dayRows]) => {
                       const ngaySo = ngayDateToNgaySo[dateStr];
                       const doanNgayId = ngayDateToDoanNgayId[dateStr] || dayRows[0]?.doan_ngay_id;
+                      // Day-use card: row mới phải kế thừa ref_doan_ngay_item_id từ
+                      // row đã có cùng ngày, không thì save xong reload sẽ nhảy sang
+                      // KS overnight (Path 2). Lấy từ row đầu tiên có link.
+                      const refItemForDay = dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined;
                       return (
                         <DayGroup
                           key={dateStr}
@@ -1526,8 +1533,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                           onFieldChange={handleFieldChange}
                           onBlurSave={handleBlurSave}
                           onDelete={handleDelete}
-                          onAddRoom={() => handleAddRow(ksId, doanNgayId, dateStr)}
-                          onAddService={() => handleAddRow(ksId, doanNgayId, dateStr, undefined, "dich_vu_khac")}
+                          onAddRoom={() => handleAddRow(ksId, doanNgayId, dateStr, refItemForDay)}
+                          onAddService={() => handleAddRow(ksId, doanNgayId, dateStr, refItemForDay, "dich_vu_khac")}
                           disabled={isKsLocked}
                         />
                       );
@@ -1565,8 +1572,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     ngayDateToNgaySo={ngayDateToNgaySo}
                     ngayDateToDoanNgayId={ngayDateToDoanNgayId}
                     localRows={localRows}
-                    onAddMore={(doanNgayId, ngayDate) =>
-                      handleAddRow(ksId, doanNgayId, ngayDate, undefined, "dich_vu_khac")
+                    onAddMore={(doanNgayId, ngayDate, refItemId) =>
+                      handleAddRow(ksId, doanNgayId, ngayDate, refItemId, "dich_vu_khac")
                     }
                     onFieldChange={handleFieldChange}
                     onBlurSave={handleBlurSave}
@@ -2533,7 +2540,7 @@ function KSServicesSection({
   ngayDateToNgaySo: Record<string, number>;
   ngayDateToDoanNgayId: Record<string, number>;
   localRows: LocalKSRow[];
-  onAddMore: (doanNgayId: number, ngayDate: string) => void;
+  onAddMore: (doanNgayId: number, ngayDate: string, refItemId?: number) => void;
   onFieldChange: (idx: number, field: string, value: any) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
@@ -2579,7 +2586,7 @@ function KSServicesSection({
                         variant="ghost"
                         size="sm"
                         className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
-                        onClick={() => onAddMore(doanNgayId, dateStr)}
+                        onClick={() => onAddMore(doanNgayId, dateStr, dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined)}
                       >
                         <Plus className="h-3 w-3 mr-0.5" />
                         Thêm
