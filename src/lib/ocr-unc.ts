@@ -127,29 +127,28 @@ export function parseAmountInWords(text: string): number | null {
  */
 export function parseAmountFromDongWord(text: string): number | null {
   const flat = stripDiacritics(text).toLowerCase().replace(/[\r\n]+/g, " ");
-  // Tokenize: tách theo dấu/whitespace + fuzzy mỗi token.
-  const allToks = flat
+  // Tokenize RAW (KHÔNG fuzzy) để tìm "dong" thật. fuzzy("cong"→"dong") sẽ map
+  // "CÔNG TY" thành "dong" → lastIndexOf trả vị trí sai.
+  const rawToks = flat
     .replace(/[.,/]/g, " ")
     .split(/\s+/)
-    .filter(Boolean)
-    .map(fuzzyNumWord);
+    .filter(Boolean);
 
-  // Tìm vị trí "dong" cuối cùng trong mảng tokens (main amount thường ở
-  // cuối page, các dòng "VND" nằm trước).
-  const lastDongIdx = allToks.lastIndexOf("dong");
+  const lastDongIdx = rawToks.lastIndexOf("dong");
   if (lastDongIdx < 0) return null;
 
-  // Walk back từ "dong" lấy chuỗi VN-word liên tiếp. Dừng khi gặp non-VN-word
-  // (vd "vnd", "17974", "tp", "efast") để không bị lẫn.
+  // Walk back từ "dong" lấy chuỗi VN-word liên tiếp (sau fuzzy). Dừng khi gặp
+  // non-VN-word (vd "vnd", "17974", "tp", "efast") để không bị lẫn.
   let startIdx = lastDongIdx;
   while (startIdx > 0) {
-    const t = allToks[startIdx - 1];
-    if (!isVnNumberWord(t)) break;
+    const fuzzed = fuzzyNumWord(rawToks[startIdx - 1]);
+    if (!isVnNumberWord(fuzzed)) break;
     startIdx--;
   }
   if (startIdx === lastDongIdx) return null;
 
-  const phrase = allToks.slice(startIdx, lastDongIdx + 1).join(" ");
+  // Phrase: fuzzy từng token để bắt OCR sai chính tả ("sóu"→"sáu", "trdm"→"tram")
+  const phrase = rawToks.slice(startIdx, lastDongIdx + 1).map(fuzzyNumWord).join(" ");
   return vnWordsToNumber(phrase);
 }
 
