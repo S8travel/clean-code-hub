@@ -117,7 +117,14 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
       nhaHangList,
       khachSanList,
       tenDoan: doan.ten_doan,
-      hdv: doan.huong_dan_vien?.ten ?? "",
+      hdv: (() => {
+        const fmt = (h: any) =>
+          h?.so_dien_thoai?.trim() ? `${h.ten} — ${h.so_dien_thoai.trim()}` : h?.ten ?? "";
+        return [doan.huong_dan_vien, doan.huong_dan_vien_2]
+          .filter((h: any) => h?.ten)
+          .map(fmt)
+          .join(" | ");
+      })(),
       xe: doan.xe ?? null,
       ngayDi: doan.ngay_di ?? null,
       ngayVe: doan.ngay_ve ?? null,

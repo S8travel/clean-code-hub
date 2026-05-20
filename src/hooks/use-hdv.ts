@@ -24,32 +24,6 @@ export interface HdvMailInfo {
   so_dien_thoai: string | null;
 }
 
-/** Lấy HDV chính (legacy single API). Phase 2 sẽ migrate callers sang useHdvsByDoanId. */
-export function useHdvByDoanId(doanId: number | null | undefined) {
-  return useQuery({
-    queryKey: ["hdv-by-doan", doanId],
-    enabled: !!doanId,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data: doan, error: e1 } = await externalSupabase
-        .from("doan")
-        .select("huong_dan_vien_id")
-        .eq("id", doanId!)
-        .maybeSingle();
-      if (e1) throw e1;
-      const hdvId = doan?.huong_dan_vien_id;
-      if (!hdvId) return null;
-      const { data, error } = await externalSupabase
-        .from("huong_dan_vien")
-        .select("id, ten, so_dien_thoai")
-        .eq("id", hdvId)
-        .maybeSingle();
-      if (error) throw error;
-      return data as { id: number; ten: string; so_dien_thoai: string | null } | null;
-    },
-  });
-}
-
 /** Lấy danh sách HDV (chính + phụ) của đoàn — empty array nếu chưa gán. */
 export function useHdvsByDoanId(doanId: number | null | undefined) {
   return useQuery({
@@ -83,13 +57,7 @@ function formatOneHdv(hdv: HdvMailInfo): string {
   return sdt ? `${hdv.ten} — ${sdt}` : hdv.ten;
 }
 
-/** Format HDV cho email: "Tên — SĐT" | "Tên" | "Bổ sung sau". (legacy: 1 HDV) */
-export function formatHdvForEmail(hdv: { ten: string; so_dien_thoai: string | null } | null | undefined): string {
-  if (!hdv?.ten) return "Bổ sung sau";
-  return formatOneHdv(hdv as HdvMailInfo);
-}
-
-/** Format nhiều HDV cho email/Word: ghép bằng " | ". Empty array → "Bổ sung sau". */
+/** Format HDV (chính + phụ) cho email/Word: ghép bằng " | ". Empty → "Bổ sung sau". */
 export function formatHdvsForEmail(hdvs: HdvMailInfo[] | null | undefined): string {
   if (!hdvs || hdvs.length === 0) return "Bổ sung sau";
   return hdvs.map(formatOneHdv).join(" | ");

@@ -371,6 +371,18 @@ export default function DoanDetail() {
     scheduleSave();
   }, [scheduleSave]);
 
+  // Ghép HDV chính + phụ thành 1 chuỗi cho export Word + mail. Format:
+  //   "A — sdt | B — sdt" (chỉ A nếu không có phụ; "" nếu không có ai).
+  const hdvDisplayStr = useMemo(() => {
+    if (!doan) return "";
+    const fmt = (h: any) =>
+      h?.so_dien_thoai?.trim() ? `${h.ten} — ${h.so_dien_thoai.trim()}` : h?.ten ?? "";
+    return [doan.huong_dan_vien, doan.huong_dan_vien_2]
+      .filter((h) => h?.ten)
+      .map(fmt)
+      .join(" | ");
+  }, [doan]);
+
   const dieuTourExportData = useMemo((): DieuTourExportData | null => {
     if (!doan) return null;
     return {
@@ -379,7 +391,7 @@ export default function DoanDetail() {
       nhaHangList,
       khachSanList,
       tenDoan: doan.ten_doan,
-      hdv: doan.huong_dan_vien?.ten ?? "",
+      hdv: hdvDisplayStr,
       xe: doan.xe ?? null,
       ngayDi: doan.ngay_di ?? null,
       ngayVe: doan.ngay_ve ?? null,
@@ -592,7 +604,7 @@ export default function DoanDetail() {
               soKhachLon={coTinhSuatTLNhaHang ? soKhachLon + soKhachTl : soKhachLon}
               soKhachEm1={soKhachEm1}
               soKhachEm2={soKhachEm2}
-              hdvTen={doan.hdv || ""}
+              hdvTen={hdvDisplayStr}
             />
           </TabsContent>
 
@@ -604,7 +616,7 @@ export default function DoanDetail() {
               ngayVe={doan.ngay_ve}
               chuyenBayDon={doan.chuyen_bay_don}
               chuyenBayTien={doan.chuyen_bay_tien}
-              hdvName={doan.huong_dan_vien?.ten ?? null}
+              hdvName={hdvDisplayStr || null}
               soKhach={doan.so_khach}
               soKhachLon={soKhachLon}
               soKhachEm1={soKhachEm1}

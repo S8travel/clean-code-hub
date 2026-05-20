@@ -21,7 +21,7 @@ import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
-import { useHdvByDoanId, formatHdvForEmail } from "@/hooks/use-hdv";
+import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
 
 const STATUS_CFG = {
   chua_dat:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
@@ -79,7 +79,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   const sendEmailMut = useSendBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
-  const { data: doanHdv } = useHdvByDoanId(row.doan_id);
+  const { data: doanHdvs = [] } = useHdvsByDoanId(row.doan_id);
 
   const allRows = [row, ...siblings];
   const isMerged = siblings.length > 0;
@@ -201,7 +201,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
         { label: "Nhà cung cấp", value: nccName },
         { label: "Tổng số dịch vụ", value: `${dvSorted.length} mục` },
         { label: "Phạm vi ngày", value: dateRange },
-        { label: "HDV", value: formatHdvForEmail(doanHdv) },
+        { label: "HDV", value: formatHdvsForEmail(doanHdvs) },
       ]);
       return buildUpdateEmailHtml({
         greeting: `Kính gửi ${nccName},`,
@@ -238,7 +238,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${nccName}</strong>,</p>
       <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt dịch vụ cho đoàn <strong>${tenDoan}</strong>:</p>
 
-      <p style="margin:0 0 12px;font-size:14px;color:#475569"><strong>HDV:</strong> ${formatHdvForEmail(doanHdv)}</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#475569"><strong>HDV:</strong> ${formatHdvsForEmail(doanHdvs)}</p>
 
       <table style="border-collapse:collapse;width:100%;font-size:14px">
         <thead>

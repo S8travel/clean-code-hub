@@ -15,7 +15,7 @@ import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
-import { useHdvByDoanId, formatHdvForEmail } from "@/hooks/use-hdv";
+import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
 import {
   computeExportCells,
   type DayExportCell,
@@ -113,7 +113,7 @@ export default function BookingXeCard({
   const upsert = useUpsertBookingXe();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
-  const { data: doanHdv } = useHdvByDoanId(doanId);
+  const { data: doanHdvs = [] } = useHdvsByDoanId(doanId);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
@@ -155,7 +155,7 @@ export default function BookingXeCard({
   const buildEmailHTML = (mode: "first" | "update" = "first", note = "") => {
     const nhaXeTen = xe?.nha_xe?.ten ?? "Quý đối tác";
     const xeStr = xe ? `${xe.ten_xe}${xe.so_cho ? ` (${xe.so_cho} chỗ)` : ""}` : "—";
-    const hdvStr = formatHdvForEmail(doanHdv);
+    const hdvStr = formatHdvsForEmail(doanHdvs);
     const soKhachStr = soKhach ? `${soKhach} khách` : "—";
 
     if (mode === "update") {
