@@ -74,15 +74,38 @@ export default function BookingDVTab({ doanId, tenDoan, ngayDi }: Props) {
           </div>
         ) : (
           <div className="space-y-3">
-            {rows!.map((row) => (
-              <BookingDVCard
-                key={row.id}
-                row={row}
-                tenDoan={tenDoan}
-                ngayDi={ngayDi}
-                currentUserName={currentUserName}
-              />
-            ))}
+            {(() => {
+              // Gộp các booking cùng email NCC → 1 card. Email rỗng/null không
+              // gộp (mỗi row riêng). Ổn định thứ tự theo lần xuất hiện đầu tiên.
+              const groups: { email: string; rows: typeof rows }[] = [];
+              const emailIdx: Record<string, number> = {};
+              for (const r of rows!) {
+                const key = (r.email_nha_cung_cap || "").trim().toLowerCase();
+                if (!key) {
+                  groups.push({ email: "", rows: [r] });
+                  continue;
+                }
+                if (emailIdx[key] == null) {
+                  emailIdx[key] = groups.length;
+                  groups.push({ email: key, rows: [r] });
+                } else {
+                  groups[emailIdx[key]].rows!.push(r);
+                }
+              }
+              return groups.map((g) => {
+                const [primary, ...siblings] = g.rows!;
+                return (
+                  <BookingDVCard
+                    key={primary.id}
+                    row={primary}
+                    siblings={siblings}
+                    tenDoan={tenDoan}
+                    ngayDi={ngayDi}
+                    currentUserName={currentUserName}
+                  />
+                );
+              });
+            })()}
           </div>
         )}
       </div>

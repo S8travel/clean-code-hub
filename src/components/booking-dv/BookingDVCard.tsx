@@ -62,12 +62,18 @@ function TrackingLine({ active }: { active: boolean }) {
 
 interface Props {
   row: DVRow;
+  /** Các booking khác cùng email → gộp vào 1 card. Hành động (gửi mail, xác
+   *  nhận, hủy…) áp lên cả primary `row` + siblings. Service items hiển thị
+   *  được gắn `__row_id` để khi sửa số khách biết update đúng row nào. */
+  siblings?: DVRow[];
   tenDoan: string;
   currentUserName: string;
   ngayDi?: string | null;
 }
 
-export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }: Props) {
+type DvItemTagged = DVRow["dich_vu_list"][number] & { __row_id: number };
+
+export default function BookingDVCard({ row, siblings = [], tenDoan, currentUserName, ngayDi }: Props) {
   const updateMut = useUpdateBookingDV();
   const deleteMut = useDeleteBookingDV();
   const sendEmailMut = useSendBookingEmail();
@@ -75,12 +81,16 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const { email: currentUserEmail } = useCurrentUserEmail();
   const { data: doanHdv } = useHdvByDoanId(row.doan_id);
 
+  const allRows = [row, ...siblings];
+  const isMerged = siblings.length > 0;
+
   const [tenNCC, setTenNCC] = useState(row.ten_nha_cung_cap || "");
   const [email, setEmail] = useState(row.email_nha_cung_cap || "");
   const [ghiChu, setGhiChu] = useState(row.ghi_chu || "");
   const [deadline, setDeadline] = useState(() => {
     if (row.deadline) return row.deadline;
-    const sorted = [...(row.dich_vu_list || [])].sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
+    const allDvs = allRows.flatMap((r) => r.dich_vu_list || []);
+    const sorted = allDvs.sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
     return getDefaultDeadline(sorted[0]?.ngay_date || "");
   });
   const [expanded, setExpanded] = useState(false);
@@ -94,25 +104,53 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   const [emailBody, setEmailBody] = useState("");
   const [sending, setSending] = useState(false);
 
-  const isCancelled = row.booking_status === "da_huy" || row.booking_status === "cho_xac_nhan_huy";
-  const statusKey = row.booking_status as keyof typeof STATUS_CFG;
-  const status = STATUS_CFG[statusKey] || STATUS_CFG.chua_dat;
-
-  const [dvList, setDvList] = useState(row.dich_vu_list || []);
+  // dvList = union các dich_vu_list của allRows, gắn __row_id để khi sửa biết
+  // route save về đúng row. Init từ allRows.
+  const initialDvList: DvItemTagged[] = allRows.flatMap((r) =>
+    (r.dich_vu_list || []).map((d) => ({ ...d, __row_id: r.id })),
+  );
+  const [dvList, setDvList] = useState<DvItemTagged[]>(initialDvList);
   const dvSorted = [...dvList].sort((a, b) => a.ngay_date.localeCompare(b.ngay_date));
 
+  // Trạng thái hiệu lực (worst-case priority): da_huy > cho_xac_nhan_huy >
+  // chua_dat > cho_xac_nhan > da_xac_nhan > khong_dat. Chỉ duy nhất → status
+  // chính của row đó.
+  const STATUS_ORDER = ["da_huy", "cho_xac_nhan_huy", "chua_dat", "cho_xac_nhan", "da_xac_nhan", "khong_dat"] as const;
+  const effectiveStatus = STATUS_ORDER.find((s) => allRows.some((r) => r.booking_status === s)) || row.booking_status;
+  const isCancelled = effectiveStatus === "da_huy" || effectiveStatus === "cho_xac_nhan_huy";
+  const status = STATUS_CFG[effectiveStatus as keyof typeof STATUS_CFG] || STATUS_CFG.chua_dat;
+
   const buildMailFields = () => ({
-    ten_nha_cung_cap: tenNCC || row.ten_nha_cung_cap,
+    ten_nha_cung_cap: isMerged
+      ? [...new Set(allRows.map((r) => r.ten_nha_cung_cap).filter(Boolean))].join(" · ")
+      : (tenNCC || row.ten_nha_cung_cap),
     dich_vu: dvSorted.map((d) => ({ ten_dv: d.ten_dv, ngay_date: d.ngay_date, so_khach: d.so_khach })),
   });
 
-  const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(row.booking_status);
-  const isDirty = isActive && isMailDirty(row.sent_at, row.mail_content_hash, buildMailFields());
+  const isActive = allRows.some((r) => ["cho_xac_nhan", "da_xac_nhan"].includes(r.booking_status));
+  const fields = buildMailFields();
+  const isDirty = isActive && allRows.some((r) => isMailDirty(r.sent_at, r.mail_content_hash, fields));
 
-  const cardTitle = [...new Set(dvList.map((d) => d.ten_dv).filter(Boolean))].join(" · ") || tenNCC || "—";
+  // Tên hiển thị header (subtitle): nếu merged → liệt kê các NCC, ngược lại
+  // hiện tenNCC (editable).
+  const mergedNccNames = isMerged
+    ? [...new Set(allRows.map((r) => r.ten_nha_cung_cap).filter(Boolean))].join(" · ")
+    : "";
 
+  const cardTitle = [...new Set(dvList.map((d) => d.ten_dv).filter(Boolean))].join(" · ") || tenNCC || mergedNccNames || "—";
+
+  // save: 1 field update lên primary row. Dùng cho field metadata (tenNCC,
+  // email, ghi_chu, deadline) — chỉ primary có ý nghĩa edit.
   const save = (updates: Record<string, any>) =>
     updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates });
+
+  // saveAll: apply 1 updates payload lên TẤT CẢ allRows (booking_status,
+  // sent_at, mark khong_dat…).
+  const saveAll = (updates: Record<string, any>) => {
+    allRows.forEach((r) =>
+      updateMut.mutate({ id: r.id, doan_id: r.doan_id, updates }),
+    );
+  };
 
   useEffect(() => {
     if (!row.deadline) {
@@ -134,7 +172,15 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
       d.ten_dv === tenDv && d.ngay_date === ngayDate ? { ...d, so_khach: val } : d
     );
     setDvList(next);
-    save({ dich_vu_list: next });
+    // Route save về đúng row sở hữu item (qua __row_id). Khi merged, mỗi row
+    // chỉ lưu phần dich_vu_list THUỘC row đó (strip __row_id trước khi lưu DB).
+    const target = next.find((d) => d.ten_dv === tenDv && d.ngay_date === ngayDate);
+    const targetRowId = target?.__row_id ?? row.id;
+    const rowItems = next
+      .filter((d) => d.__row_id === targetRowId)
+      .map(({ __row_id, ...rest }) => { void __row_id; return rest; });
+    const targetRow = allRows.find((r) => r.id === targetRowId) ?? row;
+    updateMut.mutate({ id: targetRow.id, doan_id: targetRow.doan_id, updates: { dich_vu_list: rowItems } });
   };
 
   // ── Email ──────────────────────────────────────────────────────────
@@ -229,9 +275,17 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     setEmailMode(mode);
     setUpdateNote("");
     const ncc = tenNCC || row.ten_nha_cung_cap || "";
-    const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
+    // Tiêu đề dùng NGÀY DÙNG DỊCH VỤ (lấy từ dich_vu_list — sort ASC). 1 ngày
+    // duy nhất → "dd/MM"; nhiều ngày → "dd/MM–dd/MM". Bỏ qua ngày đi đoàn.
+    const dvDates = [...new Set(dvSorted.map((d) => d.ngay_date).filter(Boolean))].sort();
+    const fmtShort = (s: string) => format(new Date(s + "T00:00:00"), "dd/MM", { locale: vi });
+    const dvDateStr =
+      dvDates.length === 0 ? ""
+      : dvDates.length === 1 ? fmtShort(dvDates[0])
+      : `${fmtShort(dvDates[0])}–${fmtShort(dvDates[dvDates.length - 1])}`;
+    void ngayDi; // legacy — không còn dùng cho subject
     setEmailTo(email || row.email_nha_cung_cap || "");
-    const baseSubject = `[S8 Travel] Đặt dịch vụ – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}${ncc ? ` – ${ncc}` : ""}`;
+    const baseSubject = `[S8 Travel] Đặt dịch vụ – ${tenDoan}${dvDateStr ? ` – ${dvDateStr}` : ""}${ncc ? ` – ${ncc}` : ""}`;
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);
@@ -247,6 +301,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
     if (!emailTo) { toast.error("Vui lòng nhập email nhà cung cấp"); return; }
     setSending(true);
     try {
+      const hash = hashMailContent(buildMailFields());
       await sendEmailMut.mutateAsync({
         bookingId: row.id,
         doanId: row.doan_id,
@@ -257,8 +312,22 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
         mode: emailMode,
-        mailContentHash: hashMailContent(buildMailFields()),
+        mailContentHash: hash,
       });
+      // Merged: sau khi gửi 1 mail, cập nhật sent_at/sent_by/email_thread_id +
+      // mail_content_hash + (lần đầu) booking_status='cho_xac_nhan' cho mọi
+      // sibling rows để dirty/sent state đồng bộ.
+      if (siblings.length > 0) {
+        const sentAt = new Date().toISOString();
+        const siblingUpdates: Record<string, any> = {
+          sent_at: sentAt, sent_by: currentUserName,
+          email_subject: emailSubject, mail_content_hash: hash,
+        };
+        if (emailMode !== "update") siblingUpdates.booking_status = "cho_xac_nhan";
+        siblings.forEach((s) =>
+          updateMut.mutate({ id: s.id, doan_id: s.doan_id, updates: siblingUpdates }),
+        );
+      }
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
     } catch (err: any) {
@@ -351,21 +420,21 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
   };
 
   const handleConfirmZaloSent = () => {
-    save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hashMailContent(buildMailFields()) });
+    saveAll({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hashMailContent(buildMailFields()) });
     setZaloModalOpen(false);
   };
 
   // ── Status actions ─────────────────────────────────────────────────
   const handleConfirm = () => {
-    save({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
+    saveAll({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
     toast.success("Đã xác nhận booking");
   };
   const handleCancel = () => {
-    save({ booking_status: "cho_xac_nhan_huy" });
+    saveAll({ booking_status: "cho_xac_nhan_huy" });
     toast("Đã cập nhật trạng thái hủy");
   };
   const handleReset = () => {
-    save({ booking_status: "chua_dat", sent_at: null, sent_by: null, confirm_at: null });
+    saveAll({ booking_status: "chua_dat", sent_at: null, sent_by: null, confirm_at: null });
     toast("Đã đặt lại");
   };
 
@@ -380,14 +449,20 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
             {cardTitle}
           </p>
           <div className="flex items-center gap-1 mt-0.5">
-            <input
-              className="text-xs text-muted-foreground bg-transparent border-none outline-none flex-1 min-w-0 hover:bg-muted/50 focus:bg-background focus:border focus:border-input focus:px-1.5 rounded transition-all"
-              value={tenNCC}
-              onChange={(e) => setTenNCC(e.target.value)}
-              onBlur={() => save({ ten_nha_cung_cap: tenNCC })}
-              placeholder="Tên nhà cung cấp..."
-              disabled={isCancelled}
-            />
+            {isMerged ? (
+              <span className="text-xs text-muted-foreground truncate" title={mergedNccNames}>
+                {mergedNccNames} <span className="text-amber-700">· {allRows.length} NCC gộp</span>
+              </span>
+            ) : (
+              <input
+                className="text-xs text-muted-foreground bg-transparent border-none outline-none flex-1 min-w-0 hover:bg-muted/50 focus:bg-background focus:border focus:border-input focus:px-1.5 rounded transition-all"
+                value={tenNCC}
+                onChange={(e) => setTenNCC(e.target.value)}
+                onBlur={() => save({ ten_nha_cung_cap: tenNCC })}
+                placeholder="Tên nhà cung cấp..."
+                disabled={isCancelled}
+              />
+            )}
           </div>
           <div className="flex items-center gap-1 mt-0.5">
             <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -395,9 +470,10 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
               className="text-xs text-muted-foreground bg-transparent border-none outline-none flex-1 min-w-0 hover:bg-muted/50 focus:bg-background focus:border focus:border-input focus:px-1.5 rounded transition-all"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              onBlur={() => save({ email_nha_cung_cap: email })}
+              onBlur={() => isMerged ? null : save({ email_nha_cung_cap: email })}
               placeholder="Email nhà cung cấp..."
-              disabled={isCancelled}
+              disabled={isCancelled || isMerged}
+              title={isMerged ? "Email gộp — đổi email sẽ tách card; sửa từng booking ở DB" : undefined}
             />
           </div>
         </div>
@@ -504,7 +580,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
 
             <div className="flex flex-wrap gap-1.5 shrink-0 pt-0.5">
               {/* Gửi email — chỉ lần đầu */}
-              {row.booking_status === "chua_dat" && (
+              {effectiveStatus === "chua_dat" && (
                 <>
                   <Button size="sm" className="h-8 text-xs" onClick={() => openEmailModal()}>
                     <Send className="h-3.5 w-3.5 mr-1" />
@@ -523,7 +599,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                     size="sm"
                     variant="outline"
                     className="h-8 text-xs text-slate-500 border-slate-300 hover:bg-slate-50"
-                    onClick={() => updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates: { booking_status: "khong_dat" } })}
+                    onClick={() => saveAll({ booking_status: "khong_dat" })}
                     disabled={updateMut.isPending}
                   >
                     Không đặt
@@ -531,7 +607,7 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                 </>
               )}
               {/* Gửi cập nhật — sau khi đã gửi lần đầu (server hoặc mailto). Gmail group theo Subject+From. */}
-              {row.sent_at && row.booking_status !== "khong_dat" && (
+              {allRows.some((r) => r.sent_at) && effectiveStatus !== "khong_dat" && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -544,14 +620,14 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                 </Button>
               )}
               {/* Xác nhận */}
-              {row.booking_status === "cho_xac_nhan" && (
+              {effectiveStatus === "cho_xac_nhan" && (
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleConfirm}>
                   <Check className="h-3.5 w-3.5 mr-1" />
                   Xác nhận
                 </Button>
               )}
               {/* Hủy */}
-              {(row.booking_status === "cho_xac_nhan" || row.booking_status === "da_xac_nhan") && (
+              {(effectiveStatus === "cho_xac_nhan" || effectiveStatus === "da_xac_nhan") && (
                 <Button
                   size="sm" variant="outline"
                   className="h-8 text-xs text-destructive hover:bg-destructive/10"
@@ -562,30 +638,35 @@ export default function BookingDVCard({ row, tenDoan, currentUserName, ngayDi }:
                 </Button>
               )}
               {/* Xác nhận hủy */}
-              {row.booking_status === "cho_xac_nhan_huy" && (
+              {effectiveStatus === "cho_xac_nhan_huy" && (
                 <Button
                   size="sm" variant="outline"
                   className="h-8 text-xs text-red-600 border-red-300"
-                  onClick={() => save({ booking_status: "da_huy" })}
+                  onClick={() => saveAll({ booking_status: "da_huy" })}
                 >
                   <Check className="h-3.5 w-3.5 mr-1" />
                   Xác nhận hủy
                 </Button>
               )}
               {/* Đặt lại — khi đã hủy hoặc không đặt */}
-              {(row.booking_status === "da_huy" || row.booking_status === "khong_dat") && (
+              {(effectiveStatus === "da_huy" || effectiveStatus === "khong_dat") && (
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleReset}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
                   Đặt lại
                 </Button>
               )}
-              {/* Xóa */}
+              {/* Xóa — merged: xóa cả nhóm */}
               <Button
                 size="sm" variant="ghost"
                 className="h-8 w-8 text-destructive hover:bg-destructive/10"
                 onClick={() => {
-                  if (confirm(`Xóa booking "${tenNCC || "này"}"?`)) {
-                    deleteMut.mutate({ id: row.id, doan_id: row.doan_id });
+                  const label = isMerged
+                    ? `Xóa ${allRows.length} bookings của email "${email}"?`
+                    : `Xóa booking "${tenNCC || "này"}"?`;
+                  if (confirm(label)) {
+                    allRows.forEach((r) =>
+                      deleteMut.mutate({ id: r.id, doan_id: r.doan_id }),
+                    );
                   }
                 }}
               >
