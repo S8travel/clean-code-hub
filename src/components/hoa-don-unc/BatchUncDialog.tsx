@@ -259,7 +259,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-base">
             Gắn UNC nhanh — {doanLabel}
@@ -328,7 +328,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                   const info = ocrInfo[i];
                   return (
                     <div key={i} className="flex items-center justify-between gap-2">
-                      <span className="truncate max-w-[360px] text-muted-foreground">{f.name}</span>
+                      <span className="truncate flex-1 min-w-0 text-muted-foreground" title={f.name}>{f.name}</span>
                       <span className="shrink-0">
                         {info === undefined
                           ? <span className="text-muted-foreground">{ocrProg.running ? "đang đọc…" : "—"}</span>
@@ -352,7 +352,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                   <tr>
                     <th className="text-left p-2 font-medium">Đoàn / Nội dung</th>
                     <th className="text-right p-2 font-medium w-[110px]">Số tiền</th>
-                    <th className="text-left p-2 font-medium w-[300px]">File UNC</th>
+                    <th className="text-left p-2 font-medium">File UNC</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -360,18 +360,18 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                     const fi = assign[r.id];
                     const matched = fi !== undefined;
                     return (
-                      <tr key={r.id} className="border-t">
-                        <td className="p-2">
+                      <tr key={r.id} className="border-t align-top">
+                        <td className="p-2 max-w-[360px]">
                           {r.ten_doan && (
-                            <div className="text-[11px] font-semibold text-blue-700 truncate max-w-[260px]">
+                            <div className="text-[11px] font-semibold text-blue-700 break-words" title={r.ten_doan}>
                               {r.ten_doan}
                             </div>
                           )}
-                          <div className="font-medium truncate max-w-[260px]">
+                          <div className="font-medium break-words" title={r.mo_ta || r.ten_nha_cung_cap || ""}>
                             {r.mo_ta || r.ten_nha_cung_cap || `ĐNTT #${r.id}`}
                           </div>
                           {r.ten_nha_cung_cap && r.mo_ta && (
-                            <div className="text-muted-foreground truncate max-w-[260px]">
+                            <div className="text-muted-foreground break-words" title={r.ten_nha_cung_cap}>
                               {r.ten_nha_cung_cap}
                             </div>
                           )}
@@ -392,12 +392,12 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                                 setRowFile(r.id, v === "_none" ? undefined : Number(v))
                               }
                             >
-                              <SelectTrigger className="h-7 text-xs flex-1">
-                                <span className="truncate">
+                              <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+                                <span className="truncate" title={fi === undefined ? undefined : files[fi]?.name}>
                                   {fi === undefined ? "— Chưa gắn —" : files[fi]?.name}
                                 </span>
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="max-w-[600px]">
                                 <SelectItem value="_none" className="text-xs">— Chưa gắn —</SelectItem>
                                 {files.map((f, i) => {
                                   const usedElsewhere =
