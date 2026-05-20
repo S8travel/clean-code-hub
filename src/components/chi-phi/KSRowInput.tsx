@@ -29,11 +29,15 @@ export default memo(function KSRowInput({
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
   const [localFocCount, setLocalFocCount] = useState(String(row.foc_count ?? 0));
 
-  // Re-sync khi prop đổi do reconcile (DB/máy khác). Prop chỉ đổi sau blur
-  // hoặc reconcile → không đè lúc đang gõ.
+  // Re-sync khi prop đổi do reconcile (DB/máy khác). KHÔNG đè khi input
+  // đang được focus (user đang gõ) — tránh xoá chữ user vừa gõ khi máy
+  // khác lưu cùng dòng. Sau khi blur xong → editingRef=false → lần render
+  // tiếp theo sync bình thường.
   const externalKey = `${row.id ?? "new"}|${row.loai_phong}|${row.so_phong}|${row.foc_count ?? 0}`;
   const lastSyncedKeyRef = useRef(externalKey);
+  const editingRef = useRef(false);
   useEffect(() => {
+    if (editingRef.current) return;
     if (lastSyncedKeyRef.current !== externalKey) {
       lastSyncedKeyRef.current = externalKey;
       setLocalLoaiPhong(row.loai_phong);
@@ -75,7 +79,8 @@ export default memo(function KSRowInput({
           <Input
             value={localLoaiPhong}
             onChange={(e) => setLocalLoaiPhong(e.target.value)}
-            onBlur={handleLoaiPhongBlur}
+            onFocus={() => { editingRef.current = true; }}
+            onBlur={() => { editingRef.current = false; handleLoaiPhongBlur(); }}
             className="h-6 text-xs"
             placeholder="Twin/Double..."
           />
@@ -91,7 +96,8 @@ export default memo(function KSRowInput({
             type="number"
             value={localSoPhong}
             onChange={(e) => setLocalSoPhong(e.target.value)}
-            onBlur={handleSoPhongBlur}
+            onFocus={() => { editingRef.current = true; }}
+            onBlur={() => { editingRef.current = false; handleSoPhongBlur(); }}
             className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
         )}
@@ -108,7 +114,8 @@ export default memo(function KSRowInput({
             step="0.5"
             value={localFocCount}
             onChange={(e) => setLocalFocCount(e.target.value)}
-            onBlur={handleFocCountBlur}
+            onFocus={() => { editingRef.current = true; }}
+            onBlur={() => { editingRef.current = false; handleFocCountBlur(); }}
             placeholder="0"
             className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             title="Số phòng được miễn phí (FOC). Gợi ý 16免1 hiện ở header ngày."

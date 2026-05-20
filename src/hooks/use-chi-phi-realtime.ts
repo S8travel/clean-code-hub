@@ -31,9 +31,12 @@ export function useChiPhiChangeSignal(doanId: number | null | undefined) {
         () => {
           // Echo của chính mình (vừa blur-save) → bỏ qua, tránh refetch thừa.
           if (Date.now() - getLastChiPhiLocalSave(doanId) <= SUPPRESS_MS) return;
+          // Bao gồm cả ĐNTT + payments-by-chi-phi để badge "đã TT"/cấn trừ
+          // trên tab Chi phí máy passive tự tươi khi máy khác thanh toán.
           for (const k of [
             "doan_chi_phi", "chi_phi_ks_data", "chi_phi_nh_data",
             "chi_phi_nh_section", "chi_phi_hdv_section",
+            "de_nghi_thanh_toan", "payments-by-chi-phi",
           ]) {
             qc.invalidateQueries({ queryKey: [k, doanId] });
           }
