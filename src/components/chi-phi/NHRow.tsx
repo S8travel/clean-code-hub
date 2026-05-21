@@ -160,15 +160,13 @@ export default function NHRow({ meal, data, handlers }: Props) {
   const pendingStatusInfo = pendingDntts[0]
     ? STATUS_LABEL[pendingDntts[0].trang_thai_duyet] ?? STATUS_LABEL.cho_duyet
     : null;
-  // hoan_tien: cong_no records linked to this meal's DNTTs with trang_thai='da_hoan_tien'
-  const mealDnttIds = allMealDntts.map((d) => d.id);
+  // cong_no chỉ tra theo ĐNTT CÒN HIỆU LỰC. cong_no từ ĐNTT đã hủy/từ chối
+  // (vd hủy dịch vụ + hoàn tiền) là lịch sử đã tất toán → không tính vào card,
+  // không ẩn row khi user chọn lại nhà hàng đó ở Điều tour.
+  const mealDnttIds = activeDntts.map((d) => d.id);
   const hoanTienAmount = congNoList
     .filter((c) => c.dntt_goc_id != null && mealDnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
     .reduce((s, c) => s + c.so_tien_goc, 0);
-
-  // Hoàn tiền chỉ ẩn row khi DNTT đã bị cancel hết (legacy cancelDNTT flow).
-  // Hoàn tiền partial từ aggregate commit (DNTTs vẫn active) → giữ row hiển thị.
-  if (hoanTienAmount > 0 && activeDntts.length === 0) return null;
 
   // Tổng cong_no đã ghi nhận cho group này. Split CN/HT cho display modal.
   const groupCongNoForGroup = congNoList.filter(

@@ -950,8 +950,18 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   dnttList.forEach((d) => {
     if (d.ref_loai === "khach_san" && d.ref_id) dnttKsMap[d.id] = d.ref_id;
   });
+  // cong_no từ ĐNTT đã hủy/từ chối (vd "hủy dịch vụ" + hoàn tiền) là LỊCH SỬ
+  // đã tất toán → KHÔNG tính vào aggregate của card hiện tại (tránh badge
+  // "DNTT lệch" sai + "HT" rớt lại khi user chọn lại KS đó ở Điều tour).
+  // cong_no từ điều chỉnh thừa (ĐNTT còn sống) vẫn tính bình thường.
+  const cancelledDnttIds = new Set(
+    dnttList
+      .filter((d) => d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi")
+      .map((d) => d.id),
+  );
   congNoList.forEach((c) => {
     if (c.dntt_goc_id == null) return;
+    if (cancelledDnttIds.has(c.dntt_goc_id)) return;
     const ksId = dnttKsMap[c.dntt_goc_id];
     if (!ksId) return;
     const goc = Number(c.so_tien_goc ?? 0);
