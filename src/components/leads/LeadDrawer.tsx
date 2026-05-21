@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, MessageCircle, Mail, Facebook, Plus, Trash2, Check, Trophy } from "lucide-react";
@@ -29,7 +29,7 @@ import {
 import type { DoanInsert } from "@/hooks/use-doan";
 import { useLeadActivities, useCreateActivity, LEAD_ACTIVITY_LOAI_OPTS, LEAD_KET_QUA_OPTS } from "@/hooks/use-lead-activities";
 import { useLeadTasks, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/use-lead-tasks";
-import { useLeadDiemDen, useReplaceDiemDen } from "@/hooks/use-lead-diem-den";
+import { useLeadDiemDen, useReplaceDiemDen, type LeadDiemDen } from "@/hooks/use-lead-diem-den";
 import { useUserRoles } from "@/hooks/use-doan";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
@@ -64,6 +64,9 @@ const ACTIVITY_ICON: Record<string, string> = {
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
+// Ref ổn định cho default rỗng — tránh tạo [] mới mỗi render (loop effect).
+const EMPTY_DIEM_DEN: LeadDiemDen[] = [];
+
 type Tab = "info" | "activity" | "tasks";
 
 export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
@@ -72,7 +75,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const { data: lead, isLoading } = useLead(leadId);
   const { data: activities = [] } = useLeadActivities(leadId);
   const { data: tasks = [] } = useLeadTasks(leadId);
-  const { data: diemDenList = [] } = useLeadDiemDen(leadId);
+  const { data: diemDenList = EMPTY_DIEM_DEN } = useLeadDiemDen(leadId);
   const { data: userRoles = [] } = useUserRoles();
 
   const updateLead = useUpdateLead();
@@ -127,8 +130,12 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
   // Local state cho blur-save fields
   const [local, setLocal] = useState<Record<string, any>>({});
+  const lastLeadIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (lead) {
+    // Chỉ re-init khi đổi sang lead khác — bỏ qua refetch sau blur-save (cùng
+    // id, useUpdateLead invalidate ["lead", id]) để không ghi đè field nhập dở.
+    if (lead && lead.id !== lastLeadIdRef.current) {
+      lastLeadIdRef.current = lead.id;
       setLocal({
         ho_ten: lead.ho_ten ?? "",
         so_dien_thoai: lead.so_dien_thoai ?? "",
@@ -149,7 +156,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
         ghi_chu: lead.ghi_chu ?? "",
       });
     }
-  }, [lead?.id]);
+  }, [lead]);
 
   const setL = (k: string, v: any) => setLocal((p) => ({ ...p, [k]: v }));
 
@@ -168,7 +175,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const [diemDenInput, setDiemDenInput] = useState("");
   useEffect(() => {
     setLocalDiemDen(diemDenList.map((d) => d.diem_den));
-  }, [diemDenList.length]);
+  }, [diemDenList]);
 
   const saveDiemDen = (list: string[]) => {
     if (!leadId) return;
