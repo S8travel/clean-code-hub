@@ -189,10 +189,6 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
 
-  const [resendTarget, setResendTarget] = useState<DNTTRow | null>(null);
-  const [resendMode, setResendMode] = useState<"full" | "partial">("full");
-  const [resendAmount, setResendAmount] = useState(0);
-
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
@@ -253,23 +249,10 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
     });
   };
 
-  const handleResendSubmit = () => {
-    if (!resendTarget) return;
-    const soTien = resendMode === "full" ? resendTarget.so_tien : resendAmount;
-    if (soTien <= 0) { toast.error("Số tiền không hợp lệ"); return; }
-    updateDNTT.mutate({
-      id: resendTarget.id, doanId, so_tien: soTien,
-      trang_thai_duyet: "cho_duyet",
-      duyet_boi: null, duyet_luc: null, ghi_chu: null,
-    } as any, {
-      onSuccess: () => { toast.success("Đã gửi lại ĐNTT"); setResendTarget(null); },
-    });
-  };
-
   const handleEditSave = (id: number) => {
     const v = parseInt(editAmount.replace(/\D/g, ""), 10);
     if (!v || v <= 0) { toast.error("Số tiền không hợp lệ"); return; }
-    updateDNTT.mutate({ id, doanId, so_tien: v } as any, {
+    updateDNTT.mutate({ id, soTien: v }, {
       onSuccess: () => { toast.success("Đã cập nhật"); setEditingId(null); },
     });
   };
@@ -408,15 +391,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                       return (
                         <div key={d.id} className="flex items-center gap-1">
                           {isRejected ? (
-                            <>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                                {statusInfo.text} · {fmt(d.so_tien)}
-                              </span>
-                              <Button variant="outline" size="sm" className="h-5 text-[10px] px-1.5"
-                                onClick={() => { setResendTarget(d); setResendMode("full"); setResendAmount(d.so_tien); }}>
-                                Gửi lại
-                              </Button>
-                            </>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                              {statusInfo.text} · {fmt(d.so_tien)}
+                            </span>
                           ) : editingId === d.id ? (
                             <>
                               <Input autoFocus type="number" value={editAmount}
@@ -642,35 +619,6 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
               }}>
               Xác nhận
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Resend Dialog */}
-      <Dialog open={!!resendTarget} onOpenChange={(v) => { if (!v) setResendTarget(null); }}>
-        <DialogContent className="sm:max-w-[360px]">
-          <DialogHeader><DialogTitle className="text-sm">Gửi lại ĐNTT</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Số tiền gốc: {fmt(resendTarget?.so_tien ?? 0)} VND</p>
-            <RadioGroup value={resendMode} onValueChange={(v) => setResendMode(v as any)} className="flex gap-4">
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="full" id="bh-resend-full" />
-                <Label htmlFor="bh-resend-full" className="text-xs">Toàn bộ</Label>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="partial" id="bh-resend-partial" />
-                <Label htmlFor="bh-resend-partial" className="text-xs">1 phần</Label>
-              </div>
-            </RadioGroup>
-            {resendMode === "partial" && (
-              <Input type="number" value={resendAmount || ""}
-                onChange={(e) => setResendAmount(Number(e.target.value) || 0)}
-                placeholder="Nhập số tiền" className="h-8 text-xs" />
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setResendTarget(null)}>Hủy</Button>
-            <Button size="sm" onClick={handleResendSubmit} disabled={updateDNTT.isPending}>Gửi lại</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
