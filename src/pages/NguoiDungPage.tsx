@@ -334,7 +334,7 @@ function NguoiDungTab() {
     setPasswordPending(true);
     try {
       const { data: { session } } = await externalSupabase.auth.getSession();
-      const res = await fetch(`${EXTERNAL_SUPABASE_URL}/functions/v1/change-password`, {
+      const res = await fetch(`${EXTERNAL_SUPABASE_URL}/functions/v1/Change-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
