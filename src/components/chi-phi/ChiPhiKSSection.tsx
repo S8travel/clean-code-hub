@@ -836,12 +836,20 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       for (const p of prev) if (p.id == null) merged.push(p);
 
       // So sánh nông tránh set thừa (loop với persist effect).
+      // PHẢI gồm khach_san_id + ref_doan_ngay_item_id + doan_ngay_id: đây là field
+      // STRUCTURAL quyết định row thuộc card nào. Khi DB sửa link day-use (row nhảy
+      // KS được chỉnh lại) chỉ 2 field này đổi, các field tiền/SL/ngày giữ nguyên →
+      // thiếu chúng trong so sánh → reconcile return prev → giữ row cũ sai từ
+      // sessionStorage (F5 không sửa, phải đóng tab mở mới).
       if (merged.length === prev.length) {
         let same = true;
         for (let i = 0; i < merged.length; i++) {
           const a = merged[i], b = prev[i];
           if (
             a.id !== b.id ||
+            a.khach_san_id !== b.khach_san_id ||
+            (a.ref_doan_ngay_item_id ?? null) !== (b.ref_doan_ngay_item_id ?? null) ||
+            a.doan_ngay_id !== b.doan_ngay_id ||
             a.so_phong !== b.so_phong ||
             a.gia_phong !== b.gia_phong ||
             a.loai_phong !== b.loai_phong ||
