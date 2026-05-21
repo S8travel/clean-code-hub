@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
@@ -406,6 +407,36 @@ export function useDeleteChiPhi() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
+      // GUARD: chặn xóa chi phí đang nằm trong ĐNTT chưa hủy.
+      // dntt_allocations.chi_phi_id FK = ON DELETE CASCADE → xóa chi phí sẽ xóa
+      // luôn allocation (kể cả của ĐNTT cọc đã thanh toán) → mất dấu phần đã
+      // cọc/đã trả → ĐNTT khoản còn lại tính sai (trả dư/thiếu).
+      // User PHẢI dùng "Điều chỉnh" sửa SL/đơn giá về 0 thay vì xóa.
+      // ĐNTT đã hủy (da_huy) không chặn — flow auto-xóa chi phí orphan sau khi
+      // hủy ĐNTT vẫn chạy được.
+      const { data: allocs, error: allocErr } = await externalSupabase
+        .from("dntt_allocations")
+        .select("dntt_id")
+        .eq("chi_phi_id", id);
+      if (allocErr) throw allocErr;
+      const dnttIds = [...new Set((allocs ?? []).map((a: any) => a.dntt_id))];
+      if (dnttIds.length > 0) {
+        const { data: actives, error: dnttErr } = await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .select("id")
+          .in("id", dnttIds)
+          .neq("trang_thai_duyet", "da_huy");
+        if (dnttErr) throw dnttErr;
+        if (actives && actives.length > 0) {
+          const ids = actives.map((d: any) => d.id).sort((a, b) => a - b);
+          throw new Error(
+            `Chi phí này đang nằm trong ĐNTT #${ids.join(", #")} — không thể xóa. ` +
+            `Hãy dùng nút "Điều chỉnh" sửa số lượng/đơn giá về 0 thay vì xóa ` +
+            `(xóa sẽ làm mất dấu phần đã cọc/đã thanh toán, khiến ĐNTT sau tính sai).`,
+          );
+        }
+      }
+
       const { error } = await externalSupabase.from("doan_chi_phi").delete().eq("id", id);
       if (error) throw error;
       return { doanId, id, mo_ta, danh_muc };
@@ -416,6 +447,10 @@ export function useDeleteChiPhi() {
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       const dm = DANH_MUC_LABEL[danh_muc ?? ""] ?? (danh_muc ?? "");
       log({ doan_id: doanId, action: "xoa", table_name: "doan_chi_phi", record_id: id, mo_ta: `Xóa chi phí ${dm}${mo_ta ? ": " + mo_ta : ""}` });
+    },
+    onError: (err: any) => {
+      // Toast mặc định cho mọi caller (nhiều handleDelete không có onError riêng).
+      toast.error(err?.message ?? "Không xóa được chi phí");
     },
   });
 }

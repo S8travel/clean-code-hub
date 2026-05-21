@@ -16,6 +16,30 @@ import { externalSupabase } from "@/lib/supabase-external";
 
 ---
 
+## 🛠️ Quy tắc viết code — Definition of "XONG"
+
+> Một tính năng chỉ **XONG** khi đủ TẤT CẢ mục dưới. Thiếu 1 mục = **CHƯA xong**.
+> KHÔNG báo "đã xong" cho user khi còn thiếu mục nào.
+
+### Định nghĩa "XONG"
+- Chạy đúng yêu cầu nghiệp vụ (test thử golden path + edge case).
+- `npm run lint` sạch — **0 error** (CI báo đỏ nếu có error; warning thì cho qua).
+- `npx tsc -b` sạch — **0 error** (CI báo đỏ nếu fail). KHÔNG dùng `tsc -p tsconfig.json` (check 0 file).
+- Có unit test cho phần **tính tiền / logic nghiệp vụ** vừa viết.
+- KHÔNG thêm `any`, `@ts-ignore`, `eslint-disable` **mới**.
+
+### Quy tắc khi viết code
+- **Test ngay, không để "làm sau"**: mọi logic tính tiền / tính toán phải có test NGAY khi
+  viết tính năng.
+- **Tách logic tính toán** ra hàm / file `lib/` riêng, độc lập UI → test được mà không cần render.
+- **Sau mỗi tính năng**: tự chạy `lint` + `tsc -b`, sửa sạch RỒI mới sang việc kế — không để lỗi dồn.
+- **`any` / `@ts-ignore` / `eslint-disable`**: chỉ dùng khi thật sự cần và phải giải thích lý do.
+  Mặc định coi như đang **giấu một lỗi thật** → tìm nguyên nhân gốc thay vì bịt.
+- **File mới > ~400 dòng**: tách nhỏ (tách hàm tính toán ra hook/lib, tách component con).
+  Khi sửa file khổng lồ sẵn có (`ChiPhi*Section`...): cân nhắc tách bớt phần đụng tới.
+
+---
+
 ## 📊 Database Schema
 
 ### Đoàn tour (core)
@@ -333,19 +357,22 @@ so_mien    = floor(so_khach / foc_khach) * foc_mien
 thanh_tien = (so_khach - so_mien) * don_gia
 ```
 
-### FOC khách sạn (theo phòng × ĐÊM, KHÔNG nhân so_dem)
+### FOC khách sạn (Option A — foc_count nhập tay, KHÔNG auto-pool)
 ```
-Mỗi LocalKSRow đại diện cho 1 ĐÊM (so_dem hiện luôn = 1).
-Group rows by ngay_date → tính FOC PER NIGHT:
-  dayRooms     = sum(so_phong)             (KHÔNG * so_dem)
-  dayGross     = sum(so_phong * gia_phong) (KHÔNG * so_dem)
-  focPhong     = floor(dayRooms / foc_khach) * foc_mien
-  avgPrice     = dayGross / dayRooms
-  dayFocAmount = focPhong * avgPrice       (= tiền 1 đêm phòng FOC)
-  rowFocDeduction = (rowGross / dayGross) * dayFocAmount
+Mỗi row KS (phòng + dịch vụ) có cột foc_count — OP TỰ NHẬP số phòng miễn.
+  rowFocDeduction = foc_count * gia_phong
+  tien_cong_ty    = (so_luong - foc_count) * gia_phong
+foc_count là numeric (hỗ trợ 0.5 khi foc_mien thập phân).
 ```
-**LƯU Ý**: `calcFocDeduction` (display) và `handleBlurSave` (DB) PHẢI dùng cùng formula.
-Lệch nhau ở `* so_dem` → user thấy số khác số trong `doan_chi_phi.tien_cong_ty`.
+**Lý do bỏ auto-pool**: pool cũ phân bổ FOC theo bình quân giá toàn ngày → khi
+mix loại phòng (vd 30 twn 2.65M + 1 sgl 5.45M) FOC dính một phần vào SGL giá
+cao → vượt giá trị thực (chỉ free 1 twn). Option A: OP gán foc_count vào đúng
+row phòng giá thấp nhất.
+
+**UI gợi ý (info-only, KHÔNG auto-fill)**: header ngày hiện badge
+`16免1: gợi ý X / đã gán Y` — `X = floor(dayRooms / foc_khach) * foc_mien`
+(`calcFocSuggestion`). Xanh khi đã gán khớp gợi ý, cam khi lệch. `foc_khach`/
+`foc_mien` snapshot vẫn lưu để tính gợi ý, KHÔNG còn dùng tính tiền.
 
 ### KHÔNG insert generated columns
 ```typescript
@@ -581,8 +608,25 @@ Hủy (da_huy) khác với xóa — dùng useCancelDNTT, không mất dữ liệ
 dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
   → 1 ĐNTT không phân bổ 2 lần cho cùng 1 chi_phi
   → Nhiều ĐNTT khác nhau CÓ THỂ phân bổ cho cùng 1 chi_phi (thanh toán nhiều lần)
-  → ON DELETE CASCADE: xóa ĐNTT → xóa allocations
+  → ON DELETE CASCADE (dntt_id): xóa ĐNTT → xóa allocations
+  → ON DELETE CASCADE (chi_phi_id): xóa chi_phi → xóa allocations  ⚠️ NGUY HIỂM
 ```
+
+### ⛔ KHÔNG xóa chi phí đã nằm trong ĐNTT — phải "Điều chỉnh" về 0
+**Bối cảnh**: `dntt_allocations.chi_phi_id` FK = `ON DELETE CASCADE`. Xóa 1 chi phí
+sẽ xóa luôn allocation của nó — **kể cả allocation từ ĐNTT cọc đã thanh toán**.
+RPC `recalc_chi_phi_payment_status` tính `so_tien_da_tt` theo từng allocation độc
+lập (KHÔNG phân bổ lại) → mất allocation = **mất dấu phần đã cọc/đã trả** → ĐNTT
+khoản còn lại tính `delta = sumActual − sumPaid` bị sai → trả dư/thiếu tiền.
+
+**Guard** (`useDeleteChiPhi`, use-chi-phi.ts): trước khi delete, query
+`dntt_allocations` của chi_phi.id → nếu có allocation từ ĐNTT `trang_thai_duyet
+!= 'da_huy'` → throw error tiếng Việt (kèm ĐNTT id). ĐNTT `da_huy` KHÔNG chặn
+(flow auto-xóa chi phí orphan sau khi hủy ĐNTT vẫn chạy).
+
+**Nghiệp vụ**: muốn bỏ 1 chi phí đã cọc → dùng nút **"Điều chỉnh"** sửa số
+lượng/đơn giá về 0 (giữ row + allocation) → aggregate footer tính delta → tạo
+công nợ (nếu tổng nhóm < đã trả) hoặc ĐNTT bổ sung. KHÔNG xóa row.
 
 ---
 
@@ -625,6 +669,7 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
 - Không insert `thanh_tien` (generated column)
 - Không invalidate `doan_chi_phi` sau blur-save KS/NH (reset UI)
 - Không xóa ĐNTT đã `da_duyet` hoặc đã có payment — dùng hủy (useCancelDNTT)
+- Không xóa `doan_chi_phi` đang có allocation từ ĐNTT chưa hủy — `useDeleteChiPhi` đã chặn (throw error). Xóa → CASCADE mất allocation → mất dấu phần đã cọc/đã trả. Muốn bỏ → "Điều chỉnh" SL/đơn giá về 0
 - Không set `trang_thai_thanh_toan` của `doan_chi_phi` thủ công — dùng RPC `recalc_chi_phi_payment_status`
 - Không INSERT/UPDATE field `trang_thai_thanh_toan`, `linked_dntt_id`, `so_tien_con_lai`, `thanh_toan_luc` trên `de_nghi_thanh_toan` — đã DROP. Dùng `payments` table
 - Đọc `payment_status`, `paid_amount`, `thanh_toan_luc` qua view `dntt_with_payment_status`
@@ -632,7 +677,7 @@ dntt_allocations: UNIQUE (dntt_id, chi_phi_id)
 - `doan.xe_id` trỏ vào `nha_xe_loai_xe`, KHÔNG phải bảng `xe`
 - Không sửa `so_tien` của ĐNTT đã `da_duyet` hoặc đã paid — tạo adjustment thay thế
 - Không tính `delta` điều chỉnh từ `dnttGoc.so_tien` (frozen) HOẶC `chi_phi.thanh_tien` (user edit). Phải dùng `chi_phi.so_tien_da_dntt` (commitment thật, computed bởi RPC). `thanh_tien_thuc_te` set ABSOLUTE qua `proRataInts(soTienThucTe, allocs.so_tien)` — KHÔNG cộng dồn delta
-- Không nhân `so_dem` vào dayGross trong FOC khách sạn — mỗi LocalKSRow = 1 đêm. `calcFocDeduction` (display) và `handleBlurSave` (save) phải cùng công thức
+- FOC khách sạn dùng `foc_count` nhập tay per-row (Option A) — KHÔNG auto-pool theo ngày. `tien_cong_ty = (so_luong - foc_count) * gia_phong`. Gợi ý 16免1 chỉ info-only
 - 1 nhà hàng / dịch vụ chỉ xuất hiện tối đa 1 lần / tour (1 chi_phi row) — không có 2 bữa cùng NH
 - Thay đổi danh mục (NH, KS, dịch vụ, xe, visa) không được ảnh hưởng đến đoàn hiện có:
   - Giá → luôn snapshot vào tour khi lưu (`don_gia` trong `doan_ngay_item`, `dich_vu_list` JSONB)
