@@ -148,8 +148,7 @@ export default function TheodoiPage() {
   const canView = useRoleAtLeast("truong_phong");
   const { user } = useAuth();
   const navigate = useNavigate();
-  const vanPhongId = user?.role !== "admin" ? (user?.van_phong_id ?? null) : null;
-  const { data: groups = [], isLoading: loadingDoan } = useDoanList(vanPhongId);
+  const { data: groups = [], isLoading: loadingDoan } = useDoanList();
   const { data: assignUsers = [] } = useUserListForAssign();
   const allDoanIds = useMemo(
     () => ((groups as any[]) ?? []).map((g) => g.id),

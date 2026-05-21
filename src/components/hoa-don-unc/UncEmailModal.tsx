@@ -105,7 +105,7 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         .order("ks_final_sent_at", { ascending: false, nullsFirst: false });
       if (ksId != null) q = q.eq("khach_san_id", ksId);
       const { data } = await q;
-      const match = (data || []).find((bk: any) => {
+      const match: any = (data || []).find((bk: any) => {
         if (!bk?.khach_san?.email) return false;
         if (ksId != null) return true;
         if (nha_cung_cap_id != null) return bk?.khach_san?.nha_cung_cap_id === nha_cung_cap_id;
@@ -131,7 +131,7 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         new Date(bk.final_sent_at || bk.sent_at || 0).getTime();
       sent.sort((a: any, b: any) => ts(b) - ts(a)); // gửi mới nhất trước
       const moTaLow = (row.mo_ta || "").toLowerCase();
-      const match =
+      const match: any =
         (nha_cung_cap_id != null &&
           sent.find((bk: any) => bk?.nha_hang?.nha_cung_cap_id === nha_cung_cap_id)) ||
         sent.find(

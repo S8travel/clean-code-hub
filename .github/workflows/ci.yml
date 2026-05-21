@@ -30,8 +30,10 @@ jobs:
       - name: Install deps (lockfile)
         run: npm ci
 
-      - name: Typecheck (tsc --noEmit)
-        run: npx tsc --noEmit -p tsconfig.json
+      - name: Typecheck (tsc -b)
+        # tsc -b đi theo project references (tsconfig.app + tsconfig.node).
+        # KHÔNG dùng `-p tsconfig.json` vì file đó có "files": [] → check 0 file.
+        run: npx tsc -b
 
       - name: Unit test (vitest)
         run: npm test

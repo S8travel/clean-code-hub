@@ -65,6 +65,7 @@ interface DoanWithRel {
   agents?: { id: number; ten: string } | null;
   dia_diem?: { ten: string } | null;
   huong_dan_vien?: { id: number; ten: string } | null;
+  huong_dan_vien_2?: { id: number; ten: string } | null;
   xe?: any | null;
   // Extra DB fields not in the Doan interface
   bang_don?: string | null;
@@ -539,9 +540,8 @@ function InvoiceDoanCard({
 export default function InvoicePage() {
   const canView = useRoleAtLeast("giam_doc");
   const { user } = useAuth();
-  const vanPhongId = user?.role !== "admin" ? (user?.van_phong_id ?? null) : null;
 
-  const { data: allDoan = [], isLoading } = useDoanList(vanPhongId);
+  const { data: allDoan = [], isLoading } = useDoanList();
   const { data: agents = [] } = useAgents();
   const { data: diaDiems = [] } = useDiaDiem();
 

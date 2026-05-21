@@ -209,8 +209,7 @@ function filterDNTTByScope(items: DNTTItem[], scope: Set<string>): DNTTItem[] {
 export default function MyJobPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const vanPhongId = user?.role !== "admin" ? (user?.van_phong_id ?? null) : null;
-  const { data: allDoan = [], isLoading: loadingDoan } = useDoanList(vanPhongId);
+  const { data: allDoan = [], isLoading: loadingDoan } = useDoanList();
   const { data: td, isLoading: loadingTD } = useTheodoi();
 
   const [search, setSearch] = useState("");
