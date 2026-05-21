@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { htmlFromText } from "@/lib/lead-template";
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
-const SUPABASE_ANON_KEY = "sb_publishable_6R8_5n97R_1JRQRfrf5vJA_6cuXePLL";
+const SUPABASE_ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 export interface LeadTemplate {
   id: number;

@@ -161,7 +161,7 @@ export function useDeleteBookingKS() {
 }
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
-const SUPABASE_ANON_KEY = "sb_publishable_6R8_5n97R_1JRQRfrf5vJA_6cuXePLL";
+const SUPABASE_ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 // loai: 'dat_truoc' | 'final' | 'huy' | 'update'
 // 'update' = gửi cập nhật, KHÔNG đổi status — chỉ update sent_at + sent_by + email_thread_id

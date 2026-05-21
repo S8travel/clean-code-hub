@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const EXTERNAL_SUPABASE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co";
 const EXTERNAL_SUPABASE_ANON_KEY =
-  "sb_publishable_6R8_5n97R_1JRQRfrf5vJA_6cuXePLL";
+  "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 export const externalSupabase = createClient(
   EXTERNAL_SUPABASE_URL,

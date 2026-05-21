@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
-const ANON_KEY = "sb_publishable_6R8_5n97R_1JRQRfrf5vJA_6cuXePLL";
+const ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 interface Message {
   role: "user" | "assistant";
