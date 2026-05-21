@@ -55,7 +55,7 @@ export function useDinhKyChiPhiList(filters?: {
 
       // 3. Load NCC info
       const nccIds = [...new Set(cpRows.filter((r: any) => r.nha_cung_cap_id).map((r: any) => r.nha_cung_cap_id))];
-      let nccMap: Record<number, any> = {};
+      const nccMap: Record<number, any> = {};
       if (nccIds.length > 0) {
         const { data: nccList } = await externalSupabase
           .from("nha_cung_cap")

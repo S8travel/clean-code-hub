@@ -183,7 +183,7 @@ export function useChiPhiKSData(doanId?: number) {
       const nccIds = [
         ...new Set((ksList || []).filter((k: any) => k.nha_cung_cap_id).map((k: any) => k.nha_cung_cap_id)),
       ];
-      let nccMap: Record<number, any> = {};
+      const nccMap: Record<number, any> = {};
       if (nccIds.length > 0) {
         const { data: nccList } = await externalSupabase
           .from("nha_cung_cap")

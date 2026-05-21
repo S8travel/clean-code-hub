@@ -710,7 +710,7 @@ export function useSaveDieuTour() {
           }
         }
 
-        let insertedItems: Array<{
+        const insertedItems: Array<{
           id: number;
           canh_diem_id: number;
           co_phi: boolean | null;

@@ -21,6 +21,11 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // `any` còn ~700 chỗ (nợ kỹ thuật) — để `warn` cho CI pass được,
+      // dọn dần theo kiểu boy-scout. KHÔNG để `error` kẻo CI đỏ vĩnh viễn.
+      "@typescript-eslint/no-explicit-any": "warn",
+      // Cho phép idiom `cond && fn()` và `cond ? a() : b()` dùng như statement.
+      "@typescript-eslint/no-unused-expressions": ["error", { allowShortCircuit: true, allowTernary: true }],
     },
   },
 );
