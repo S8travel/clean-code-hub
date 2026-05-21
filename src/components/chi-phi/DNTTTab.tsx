@@ -13,7 +13,7 @@ import { useCancelDNTT } from "@/hooks/use-dntt";
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 const EXTERNAL_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1/xuat-word-dntt-ks";
-const EXTERNAL_ANON_KEY = "sb_publishable_6R8_5n97R_1JRQRfrf5vJA_6cuXePLL";
+const EXTERNAL_ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 interface Props {
   doanId: number;

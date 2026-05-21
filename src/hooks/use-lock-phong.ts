@@ -399,7 +399,7 @@ export function useLockPhongDeadlineAlerts(
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
 const SUPABASE_ANON_KEY =
-  "sb_publishable_6R8_5n97R_1JRQRfrf5vJA_6cuXePLL";
+  "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 export function useSendLockPhongBatchEmail() {
   const qc = useQueryClient();
