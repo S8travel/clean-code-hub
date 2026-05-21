@@ -9,23 +9,29 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import { useDNTTList, useUpdateDNTT, useDeleteDNTT } from "@/hooks/use-chi-phi";
 import { useCancelDNTT } from "@/hooks/use-dntt";
+import { externalSupabase } from "@/lib/supabase-external";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 const EXTERNAL_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1/xuat-word-dntt-ks";
-const EXTERNAL_ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
+const PUBLISHABLE_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 interface Props {
   doanId: number;
 }
 
 async function downloadDNTTWord(doanId: number, dnttIds: number[]) {
+  // Edge function xuat-word-dntt-ks có verify_jwt=true → Authorization phải là JWT
+  // session thật. Publishable key không phải JWT (gateway từ chối sau khi disable
+  // legacy keys) — nó chỉ dùng cho header apikey để định danh project.
+  const token = (await externalSupabase.auth.getSession()).data.session?.access_token;
+  if (!token) throw new Error("Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại");
   const res = await fetch(EXTERNAL_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "apikey": EXTERNAL_ANON_KEY,
-      "Authorization": `Bearer ${EXTERNAL_ANON_KEY}`,
+      "apikey": PUBLISHABLE_KEY,
+      "Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify({ doan_id: doanId, dntt_ids: dnttIds }),
   });
