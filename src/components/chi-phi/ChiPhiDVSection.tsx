@@ -4,14 +4,7 @@ import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2, Calend
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
-import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
@@ -20,6 +13,7 @@ import type { DNTTRow, ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
+import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -27,8 +21,12 @@ import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
-import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
-import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
+import { DVInput } from "./DVInput";
+import DVDnttModal, { type DVModalTarget } from "./DVDnttModal";
+import DVCancelModal, { type CancelTarget } from "./DVCancelModal";
+import DVAdjustModal from "./DVAdjustModal";
+import DVAggCommitModal, { type AggCommitTarget } from "./DVAggCommitModal";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -37,8 +35,6 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   da_duyet:  { text: "Đã duyệt",  cls: "bg-teal-100 text-teal-700" },
   tu_choi:   { text: "Từ chối",   cls: "bg-red-100 text-red-700" },
 };
-
-interface CancelTarget { dnttId: number; isPaid: boolean }
 
 interface LocalDVExtra {
   id?: number;
@@ -58,56 +54,6 @@ export interface ChiPhiDVSectionHandle {
   buildSelectedEntries: () => Promise<NHDocEntry[] | undefined>;
   clearSelection: () => void;
   getSelectedCount: () => number;
-}
-
-// Small inline number input (like NH's NHInput)
-function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, decimal = false }: {
-  value: number;
-  onChange: (v: number) => void;
-  onBlur: () => void;
-  width?: string;
-  /** Hiển thị dấu chấm phân cách hàng nghìn (vd 850.000). */
-  money?: boolean;
-  /** Cho phép số thập phân (đơn giá). Focus → raw "1500.5"; blur → "1.500,5". */
-  decimal?: boolean;
-}) {
-  if (decimal) {
-    return (
-      <DecimalInput
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
-      />
-    );
-  }
-  if (money) {
-    return (
-      <Input
-        type="text"
-        inputMode="numeric"
-        value={value != null ? value.toLocaleString("vi-VN") : ""}
-        onChange={(e) => {
-          const digits = e.target.value.replace(/\D/g, "");
-          onChange(digits ? Number(digits) : 0);
-        }}
-        onBlur={onBlur}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-        className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
-      />
-    );
-  }
-  return (
-    <Input
-      type="number"
-      min={0}
-      value={value ?? ""}
-      onChange={e => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
-      onBlur={onBlur}
-      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-      className={cn("h-6 text-xs px-1.5 py-0 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", width)}
-    />
-  );
 }
 
 const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }, ref) {
@@ -155,7 +101,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   // ĐNTT modal
-  interface DVModalTarget { chiPhiId: number; thanhTien: number; moTa: string; nccId: number | null; nhaySo: number | null }
   const [dvModal, setDvModal] = useState<DVModalTarget | null>(null);
   const [dvModalMode, setDvModalMode] = useState<"full" | "deposit">("full");
   const [dvDepositAmount, setDvDepositAmount] = useState(0);
@@ -169,15 +114,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const [adjustReason, setAdjustReason] = useState("");
 
   // Aggregate commit dialog (sau khi adjust + extras → commit chênh lệch)
-  interface AggCommitTarget {
-    mainRow: ChiPhiRow;
-    delta: number;       // < 0 = thừa (cong_no), > 0 = thiếu (DNTT bổ sung)
-    sumActual: number;
-    sumPaid: number;
-    groupCongNoCN: number;   // sum so_tien_goc cong_no state con_du + da_can_tru
-    groupCongNoHT: number;   // sum so_tien_goc cong_no state da_hoan_tien
-    paidDntt: DNTTRow | null;
-  }
   const [aggCommit, setAggCommit] = useState<AggCommitTarget | null>(null);
   const [aggReason, setAggReason] = useState("");
   const [aggNgayCan, setAggNgayCan] = useState("");
@@ -185,11 +121,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
   // Cấn trừ cong_no khi delta > 0 (thiếu): chọn cong_no NCC để giảm DNTT cash phần
   const [aggCanTru, setAggCanTru] = useState<CanTruSelection | null>(null);
-
-  // Resend dialog (rejected)
-  const [resendTarget, setResendTarget] = useState<DNTTRow | null>(null);
-  const [resendMode, setResendMode] = useState<"full" | "partial">("full");
-  const [resendAmount, setResendAmount] = useState(0);
 
   // Cancel dialog
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
@@ -490,27 +421,10 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
     }
   };
 
-  const handleResendSubmit = () => {
-    if (!resendTarget) return;
-    const soTien = resendMode === "full" ? resendTarget.so_tien : resendAmount;
-    if (soTien <= 0) { toast.error("Số tiền không hợp lệ"); return; }
-    updateDNTT.mutate({
-      id: resendTarget.id,
-      doanId,
-      so_tien: soTien,
-      trang_thai_duyet: "cho_duyet",
-      duyet_boi: null,
-      duyet_luc: null,
-      ghi_chu: null,
-    } as any, {
-      onSuccess: () => { toast.success("Đã gửi lại ĐNTT"); setResendTarget(null); },
-    });
-  };
-
   const handleEditSave = (id: number) => {
     const v = parseInt(editAmount.replace(/\D/g, ""), 10);
     if (!v || v <= 0) { toast.error("Số tiền không hợp lệ"); return; }
-    updateDNTT.mutate({ id, doanId, so_tien: v } as any, {
+    updateDNTT.mutate({ id, soTien: v }, {
       onSuccess: () => { toast.success("Đã cập nhật"); setEditingId(null); },
     });
   };
@@ -527,6 +441,23 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   };
 
   // ── Aggregate commit (chênh lệch sau adjust + extras) ───────────────────────
+
+  const handleAdjustSubmit = () => {
+    if (!adjustChiPhi) return;
+    const newSL  = parseInt(adjustSL.replace(/\D/g, ""), 10);
+    const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
+    if (isNaN(newSL) || !newGia) return;
+    updateActualMut.mutate(
+      { id: adjustChiPhi.id, doan_id: doanId, so_luong: newSL, don_gia: newGia, ly_do: adjustReason },
+      {
+        onSuccess: () => {
+          toast.success("Đã cập nhật chi phí thực tế");
+          setAdjustChiPhi(null);
+        },
+        onError: (err: any) => toast.error(err?.message || "Lỗi cập nhật"),
+      },
+    );
+  };
 
   const handleAggCommit = async () => {
     if (!aggCommit) return;
@@ -887,13 +818,8 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                 const groupCongNoForGroup = congNoList.filter(
                   (c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id),
                 );
-                const groupCongNoCN = groupCongNoForGroup
-                  .filter((c) => c.trang_thai === "con_du" || c.trang_thai === "da_can_tru")
-                  .reduce((s, c) => s + Number(c.so_tien_goc ?? 0), 0);
-                const groupCongNoHT = groupCongNoForGroup
-                  .filter((c) => c.trang_thai === "da_hoan_tien")
-                  .reduce((s, c) => s + Number(c.so_tien_goc ?? 0), 0);
-                const groupCongNoTotal = groupCongNoCN + groupCongNoHT;
+                const { groupCongNoCN, groupCongNoHT, groupCongNoTotal } =
+                  splitGroupCongNo(groupCongNoForGroup);
                 const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
                 const canCancel = activeDntt && (
                   activeDntt.trang_thai_duyet === "cho_duyet" ||
@@ -909,36 +835,24 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                   r.mo_ta?.startsWith(`[dvps_${row.id}] `),
                 );
                 const groupChiPhi = [row, ...extraChiPhiRows];
-                const companyChiPhi = groupChiPhi.filter(c => Number(c.tien_cong_ty ?? 0) > 0);
-                const sumActual = companyChiPhi.reduce(
-                  (s, c) => s + Number(c.thanh_tien_thuc_te ?? c.tien_cong_ty ?? 0), 0
-                );
-                const sumPaid = companyChiPhi.reduce(
-                  (s, c) => s + Number(c.so_tien_da_tt ?? 0), 0
-                );
-                const aggDelta = sumActual - sumPaid;
-                // effectiveDelta = chênh lệch còn LẠI sau khi trừ cong_no đã ghi nhận.
-                // - aggDelta < 0 (thừa): cong_no đã ghi nhận phần thừa → effectiveDelta tiến về 0
-                // - aggDelta > 0 (thiếu): DNTT bổ sung sẽ được tạo, daDeNghi check sẽ ẩn button
-                const effectiveDelta = aggDelta + groupCongNoTotal;
+                const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
+                const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+                const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
+                  sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+                });
                 const showAggBtn =
                   nguoiTt === "cong_ty" &&
                   daDeNghi === 0 &&
                   sumPaid > 0 &&
                   effectiveDelta !== 0;
                 const aggPaidDntt = paidDntts[0] ?? null;
-
-                // Mismatch warning: chi_phi total ≠ DNTT committed (cho_duyet/da_duyet),
-                // sau khi trừ cong_no đã ghi nhận. Trigger khi cascade số khách cập nhật
-                // chi_phi.tien_cong_ty nhưng DNTT.so_tien chưa sửa.
-                const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
-                const effectiveCommitted = sumCommitted - groupCongNoTotal;
                 const hasCommittedDntt = activeDntts.some(d =>
                   d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet",
                 );
-                // Hide badge when footer button shows (redundant — same info conveyed)
-                const dnttMismatch = hasCommittedDntt && sumActual !== effectiveCommitted && !showAggBtn
-                  ? sumActual - effectiveCommitted : 0;
+                // Ẩn badge khi nút footer hiện (trùng thông tin).
+                const dnttMismatch = calcDnttMismatch({
+                  sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn,
+                });
 
                 return [
                   <tr key={row.id} className={cn("hover:bg-muted/20", isSelected && "bg-primary/5")}>
@@ -1068,15 +982,9 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                             return (
                               <div key={d.id} className="flex items-center gap-0.5">
                                 {isRejected ? (
-                                  <>
-                                    <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                                      {statusInfo.text} · {fmt(d.so_tien)}
-                                    </span>
-                                    <Button variant="outline" size="sm" className="h-4 text-[10px] px-1 leading-none"
-                                      onClick={() => { setResendTarget(d); setResendMode("full"); setResendAmount(d.so_tien); }}>
-                                      Gửi lại
-                                    </Button>
-                                  </>
+                                  <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                    {statusInfo.text} · {fmt(d.so_tien)}
+                                  </span>
                                 ) : editingId === d.id ? (
                                   <>
                                     <Input autoFocus type="number" value={editAmount}
@@ -1372,374 +1280,58 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         </table>
       </div>
 
-      {/* ĐNTT Modal */}
-      <Dialog open={!!dvModal} onOpenChange={v => { if (!v) setDvModal(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Tạo đề nghị thanh toán — {dvModal?.moTa || "Dịch vụ"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2 text-xs">
-            <p>Tổng tiền: <span className="font-semibold">{fmt(dvModal?.thanhTien ?? 0)} VND</span></p>
-            <RadioGroup value={dvModalMode} onValueChange={v => setDvModalMode(v as "full" | "deposit")} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="full" id="dv-full" />
-                <Label htmlFor="dv-full" className="text-xs cursor-pointer">
-                  Toàn bộ — {fmt(dvModal?.thanhTien ?? 0)} VND
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="deposit" id="dv-dep" />
-                <Label htmlFor="dv-dep" className="text-xs cursor-pointer">1 phần (cọc)</Label>
-              </div>
-            </RadioGroup>
-            {dvModalMode === "deposit" && (
-              <div className="space-y-1">
-                <Label className="text-xs">Số tiền cọc</Label>
-                <Input type="number" className="h-8 text-xs"
-                  value={dvDepositAmount || ""}
-                  onChange={e => setDvDepositAmount(Number(e.target.value) || 0)}
-                  max={dvModal?.thanhTien} />
-                {dvDepositAmount > 0 && dvModal && (
-                  <p className="text-[11px] text-muted-foreground">Còn lại: {fmt(dvModal.thanhTien - dvDepositAmount)} VND</p>
-                )}
-              </div>
-            )}
-            <div className="space-y-1">
-              <Label className="text-xs">Ngày cần thanh toán</Label>
-              <DatePicker className="h-8 text-xs w-full" value={dvNgayCan} onChange={setDvNgayCan} />
-            </div>
-            <KSCongNoMultiPanel
-              nccId={dvModal?.nccId ?? undefined}
-              maxAmount={
-                dvModalMode === "deposit"
-                  ? dvDepositAmount || 0
-                  : dvModal?.thanhTien ?? 0
-              }
-              value={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? []) : []}
-              onChange={(v) => dvModal && setCanTruByDv((prev) => ({ ...prev, [dvModal.chiPhiId]: v }))}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setDvModal(null)}>Hủy</Button>
-            <Button size="sm" className="text-xs" onClick={handleDvModalSubmit} disabled={insertDNTT.isPending}>
-              Tạo đề nghị TT
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVDnttModal
+        target={dvModal}
+        mode={dvModalMode}
+        onModeChange={setDvModalMode}
+        depositAmount={dvDepositAmount}
+        onDepositAmountChange={setDvDepositAmount}
+        ngayCan={dvNgayCan}
+        onNgayCanChange={setDvNgayCan}
+        canTru={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? []) : []}
+        onCanTruChange={(v) => dvModal && setCanTruByDv((prev) => ({ ...prev, [dvModal.chiPhiId]: v }))}
+        onClose={() => setDvModal(null)}
+        onSubmit={handleDvModalSubmit}
+        submitting={insertDNTT.isPending}
+      />
 
-      {/* Adjust Dialog */}
-      <Dialog open={!!adjustChiPhi} onOpenChange={o => { if (!o) setAdjustChiPhi(null); }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Điều chỉnh chi phí thực tế</DialogTitle>
-          </DialogHeader>
-          {adjustChiPhi && (() => {
-            const newSL    = parseInt(adjustSL.replace(/\D/g, ""), 10) || 0;
-            const newGia   = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
-            const newTotal = newSL * newGia;
-            const oldTotal = adjustChiPhi.so_luong * adjustChiPhi.don_gia;
-            const changed  = newSL !== adjustChiPhi.so_luong || newGia !== adjustChiPhi.don_gia;
-            return (
-              <div className="space-y-3 py-1 text-sm">
-                <p className="text-xs text-muted-foreground">{adjustChiPhi.mo_ta}</p>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Hiện tại:</span>
-                  <span className="font-medium tabular-nums">
-                    {adjustChiPhi.so_luong} × {fmt(adjustChiPhi.don_gia)} = {fmt(oldTotal)} ₫
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Số lượng thực tế</Label>
-                    <Input
-                      className="h-8 text-sm tabular-nums"
-                      value={adjustSL}
-                      onChange={e => setAdjustSL(e.target.value.replace(/\D/g, ""))}
-                      placeholder="SL"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Đơn giá thực tế</Label>
-                    <Input
-                      className="h-8 text-sm tabular-nums"
-                      inputMode="decimal"
-                      value={adjustDonGia}
-                      onChange={(e) => {
-                        let s = e.target.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
-                        const firstDot = s.indexOf(".");
-                        if (firstDot >= 0) {
-                          s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
-                        }
-                        setAdjustDonGia(s);
-                      }}
-                      placeholder="Đơn giá"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-between text-xs border-t pt-2">
-                  <span className="text-muted-foreground">Tổng thực tế:</span>
-                  <span className="font-semibold tabular-nums text-primary">{fmt(newTotal)} ₫</span>
-                </div>
-                {changed && (
-                  <div className="text-[11px] text-muted-foreground">
-                    Sau lưu, hệ thống sẽ tự tính delta toàn nhóm (main + extras) và hiện
-                    nút "Ghi nhận công nợ" hoặc "Thanh toán bổ sung" ở cuối nhóm nếu cần.
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Lý do (optional)</Label>
-                  <Textarea
-                    className="text-xs min-h-[56px]"
-                    value={adjustReason}
-                    onChange={e => setAdjustReason(e.target.value)}
-                    placeholder="VD: 1 khách không đi do mệt..."
-                  />
-                </div>
-              </div>
-            );
-          })()}
-          <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustChiPhi(null)}>Đóng</Button>
-            <Button
-              size="sm"
-              className="text-xs"
-              disabled={
-                updateActualMut.isPending ||
-                !adjustChiPhi ||
-                !adjustSL || !adjustDonGia ||
-                (parseInt(adjustSL.replace(/\D/g, ""), 10) === adjustChiPhi?.so_luong &&
-                 (parseFloat(adjustDonGia.replace(/\.$/, "")) || 0) === adjustChiPhi?.don_gia)
-              }
-              onClick={() => {
-                if (!adjustChiPhi) return;
-                const newSL  = parseInt(adjustSL.replace(/\D/g, ""), 10);
-                const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
-                if (isNaN(newSL) || !newGia) return;
-                updateActualMut.mutate(
-                  { id: adjustChiPhi.id, doan_id: doanId, so_luong: newSL, don_gia: newGia, ly_do: adjustReason },
-                  {
-                    onSuccess: () => {
-                      toast.success("Đã cập nhật chi phí thực tế");
-                      setAdjustChiPhi(null);
-                    },
-                    onError: (err: any) => toast.error(err?.message || "Lỗi cập nhật"),
-                  },
-                );
-              }}
-            >
-              Cập nhật
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVAdjustModal
+        target={adjustChiPhi}
+        sl={adjustSL}
+        onSlChange={setAdjustSL}
+        donGia={adjustDonGia}
+        onDonGiaChange={setAdjustDonGia}
+        reason={adjustReason}
+        onReasonChange={setAdjustReason}
+        onClose={() => setAdjustChiPhi(null)}
+        onSubmit={handleAdjustSubmit}
+        submitting={updateActualMut.isPending}
+      />
 
-      {/* Aggregate Commit Dialog — chốt chênh lệch sau adjust + extras */}
-      <Dialog open={!!aggCommit} onOpenChange={o => { if (!o) { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); } }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {aggCommit && aggCommit.delta > 0
-                ? "Tạo ĐNTT bổ sung"
-                : aggSurplusMode === "hoan_tien" ? "Ghi nhận hoàn tiền" : "Ghi nhận công nợ"}
-            </DialogTitle>
-          </DialogHeader>
-          {aggCommit && (
-            <div className="space-y-3 py-1 text-sm">
-              <p className="text-xs text-muted-foreground">{aggCommit.mainRow.mo_ta}</p>
-              <div className="space-y-1 text-xs border rounded px-2 py-1.5 bg-muted/30">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tổng thực tế (nhóm):</span>
-                  <span className="font-medium tabular-nums">{fmt(aggCommit.sumActual)} ₫</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Đã thanh toán:</span>
-                  <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid)} ₫</span>
-                </div>
-                {aggCommit.groupCongNoCN > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(−) Đã ghi nhận công nợ:</span>
-                    <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoCN)} ₫</span>
-                  </div>
-                )}
-                {aggCommit.groupCongNoHT > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(−) Đã hoàn tiền:</span>
-                    <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoHT)} ₫</span>
-                  </div>
-                )}
-                {(aggCommit.groupCongNoCN > 0 || aggCommit.groupCongNoHT > 0) && (
-                  <div className="flex justify-between border-t pt-1">
-                    <span className="text-muted-foreground">Còn cần thanh toán:</span>
-                    <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid - aggCommit.groupCongNoCN - aggCommit.groupCongNoHT)} ₫</span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t pt-1">
-                  <span className="text-muted-foreground">Chênh lệch còn lại:</span>
-                  <span className={cn(
-                    "font-semibold tabular-nums",
-                    aggCommit.delta > 0 ? "text-orange-700" : "text-purple-700",
-                  )}>
-                    {aggCommit.delta > 0 ? "+" : "−"}{fmt(Math.abs(aggCommit.delta))} ₫
-                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                      ({aggCommit.delta > 0 ? "thiếu, cần thanh toán thêm" : "thừa"})
-                    </span>
-                  </span>
-                </div>
-              </div>
-              {aggCommit.paidDntt?.ten_nha_cung_cap && (
-                <div className="text-xs text-muted-foreground">
-                  NCC: <span className="font-medium text-foreground">{aggCommit.paidDntt.ten_nha_cung_cap}</span>
-                </div>
-              )}
-              {aggCommit.delta > 0 && aggCommit.mainRow.nha_cung_cap_id != null && (
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Cấn trừ công nợ NCC (optional)</Label>
-                  <KSCongNoPanel
-                    nccId={aggCommit.mainRow.nha_cung_cap_id}
-                    doanId={doanId}
-                    value={aggCanTru}
-                    onChange={(v) => {
-                      // Cap soTienCanTru ≤ delta để không vượt quá phần thiếu
-                      if (v && aggCommit) {
-                        const capped = Math.min(v.soTienCanTru, aggCommit.delta);
-                        setAggCanTru({ ...v, soTienCanTru: capped });
-                      } else {
-                        setAggCanTru(v);
-                      }
-                    }}
-                  />
-                  {aggCanTru && aggCanTru.soTienCanTru > 0 && (
-                    <p className="text-[10px] text-muted-foreground tabular-nums">
-                      DNTT sẽ tạo: <span className="font-medium text-foreground">{fmt(aggCommit.delta)} ₫</span>
-                      {" · "}Cấn trừ: <span className="font-medium text-amber-700">{fmt(aggCanTru.soTienCanTru)} ₫</span>
-                      {" · "}Cash còn TT: <span className="font-medium text-foreground">{fmt(aggCommit.delta - aggCanTru.soTienCanTru)} ₫</span>
-                    </p>
-                  )}
-                </div>
-              )}
-              {aggCommit.delta < 0 && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Hình thức xử lý</Label>
-                  <RadioGroup
-                    value={aggSurplusMode}
-                    onValueChange={(v) => setAggSurplusMode(v as "con_du" | "hoan_tien")}
-                    className="space-y-1.5"
-                  >
-                    <div className="flex items-start gap-2">
-                      <RadioGroupItem value="con_du" id="dv-agg-cn" className="mt-0.5" />
-                      <Label htmlFor="dv-agg-cn" className="text-xs cursor-pointer leading-tight">
-                        <span className="font-medium">Ghi nhận công nợ</span>
-                        <p className="text-muted-foreground font-normal">NCC giữ tiền — có thể cấn trừ với DNTT khác cùng NCC</p>
-                      </Label>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <RadioGroupItem value="hoan_tien" id="dv-agg-ht" className="mt-0.5" />
-                      <Label htmlFor="dv-agg-ht" className="text-xs cursor-pointer leading-tight">
-                        <span className="font-medium">Ghi nhận hoàn tiền</span>
-                        <p className="text-muted-foreground font-normal">NCC trả lại tiền cash — không cấn trừ</p>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              )}
-              {aggCommit.delta > 0 && (
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Ngày cần thanh toán</Label>
-                  <DatePicker className="h-8 text-xs w-full" value={aggNgayCan} onChange={setAggNgayCan} />
-                </div>
-              )}
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Lý do (optional)</Label>
-                <Textarea
-                  className="text-xs min-h-[56px]"
-                  value={aggReason}
-                  onChange={e => setAggReason(e.target.value)}
-                  placeholder={
-                    aggCommit.delta > 0
-                      ? "VD: phát sinh thêm 1 vé trẻ em..."
-                      : "VD: 1 khách không đi do mệt..."
-                  }
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs"
-              onClick={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); }}>
-              Đóng
-            </Button>
-            <Button
-              size="sm"
-              className={cn(
-                "text-xs text-white",
-                aggCommit && aggCommit.delta > 0
-                  ? "bg-orange-600 hover:bg-orange-700"
-                  : "bg-purple-600 hover:bg-purple-700",
-              )}
-              disabled={insertDNTT.isPending || !aggCommit}
-              onClick={handleAggCommit}
-            >
-              Xác nhận
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVAggCommitModal
+        target={aggCommit}
+        doanId={doanId}
+        reason={aggReason}
+        onReasonChange={setAggReason}
+        ngayCan={aggNgayCan}
+        onNgayCanChange={setAggNgayCan}
+        surplusMode={aggSurplusMode}
+        onSurplusModeChange={setAggSurplusMode}
+        canTru={aggCanTru}
+        onCanTruChange={setAggCanTru}
+        onClose={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); }}
+        onSubmit={handleAggCommit}
+        submitting={insertDNTT.isPending}
+      />
 
-      {/* Resend Dialog */}
-      <Dialog open={!!resendTarget} onOpenChange={v => { if (!v) setResendTarget(null); }}>
-        <DialogContent className="sm:max-w-[360px]">
-          <DialogHeader><DialogTitle className="text-sm">Gửi lại ĐNTT</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Số tiền gốc: {fmt(resendTarget?.so_tien ?? 0)} VND</p>
-            <RadioGroup value={resendMode} onValueChange={v => setResendMode(v as any)} className="flex gap-4">
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="full" id="dv-resend-full" />
-                <Label htmlFor="dv-resend-full" className="text-xs">Toàn bộ</Label>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="partial" id="dv-resend-partial" />
-                <Label htmlFor="dv-resend-partial" className="text-xs">1 phần</Label>
-              </div>
-            </RadioGroup>
-            {resendMode === "partial" && (
-              <Input type="number" value={resendAmount || ""}
-                onChange={e => setResendAmount(Number(e.target.value) || 0)}
-                placeholder="Nhập số tiền" className="h-8 text-xs" />
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setResendTarget(null)}>Hủy</Button>
-            <Button size="sm" onClick={handleResendSubmit} disabled={updateDNTT.isPending}>Gửi lại</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Cancel Dialog */}
-      <Dialog open={!!cancelTarget} onOpenChange={v => { if (!v) setCancelTarget(null); }}>
-        <DialogContent className="sm:max-w-[340px]">
-          <DialogHeader><DialogTitle className="text-sm">Hủy đề nghị thanh toán</DialogTitle></DialogHeader>
-          {cancelTarget?.isPaid && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Đã thanh toán — chọn cách xử lý:</p>
-              <RadioGroup value={cancelMode} onValueChange={v => setCancelMode(v as any)} className="flex gap-4">
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="hoan_tien" id="dv-cancel-ht" />
-                  <Label htmlFor="dv-cancel-ht" className="text-xs">Hoàn tiền</Label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="cong_no" id="dv-cancel-cn" />
-                  <Label htmlFor="dv-cancel-cn" className="text-xs">Ghi công nợ</Label>
-                </div>
-              </RadioGroup>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCancelTarget(null)}>Đóng</Button>
-            <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelMut.isPending}>Xác nhận hủy</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVCancelModal
+        target={cancelTarget}
+        mode={cancelMode}
+        onModeChange={setCancelMode}
+        onClose={() => setCancelTarget(null)}
+        onSubmit={handleCancel}
+        submitting={cancelMut.isPending}
+      />
 
       <DNTTNHPreviewModal
         open={!!previewDVData}

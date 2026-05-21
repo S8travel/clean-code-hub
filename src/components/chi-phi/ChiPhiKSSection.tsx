@@ -48,6 +48,7 @@ import {
   calcFocSuggestion,
   resolveKSFoc,
 } from "@/lib/foc-calc";
+import { calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -1270,22 +1271,19 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
         const sumPaid = daTT;
         const sumCommitted = cancellableDntts.reduce((s, d) => s + Number(d.so_tien), 0);
         const groupCongNoTotal = groupCongNoTotalByKs[ksId] || 0;
-        const aggDelta = sumActual - sumPaid;
-        const effectiveDelta = aggDelta + groupCongNoTotal;
-        const effectiveCommitted = sumCommitted - groupCongNoTotal;
+        const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
+          sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+        });
         const daDeNghi = unpaidDnttsForKs.reduce((s, d) => s + Math.max(0, d.so_tien - (d.paid_amount || 0)), 0);
         const showAggBtn = daDeNghi === 0 && sumPaid > 0 && effectiveDelta !== 0;
         const aggPaidDntt = paidDnttsForKs[0] ?? null;
-
-        // Mismatch warning: chi_phi total ≠ DNTT committed (cho_duyet/da_duyet),
-        // sau khi trừ cong_no đã ghi nhận. Trigger khi OP edit room (so_phong/gia_phong/FOC)
-        // sau khi DNTT đã commit nhưng DNTT.so_tien chưa sửa.
         const hasCommittedDntt = cancellableDntts.some(
           (d) => d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet",
         );
-        // Hide badge when footer button shows (redundant — same info conveyed)
-        const dnttMismatch = hasCommittedDntt && sumActual !== effectiveCommitted && !showAggBtn
-          ? sumActual - effectiveCommitted : 0;
+        // Ẩn badge khi nút footer hiện (trùng thông tin).
+        const dnttMismatch = calcDnttMismatch({
+          sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn,
+        });
 
         const roomsByDay: Record<string, LocalKSRow[]> = {};
         const servicesByDay: Record<string, LocalKSRow[]> = {};

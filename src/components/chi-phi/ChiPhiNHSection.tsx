@@ -29,6 +29,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
+import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import CatalogHoverCard from "./CatalogHoverCard";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
@@ -1247,13 +1248,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           const groupCongNoForGroup = congNoList.filter(
             (c) => c.dntt_goc_id != null && mealDnttIds.includes(c.dntt_goc_id),
           );
-          const groupCongNoCN = groupCongNoForGroup
-            .filter((c) => c.trang_thai === "con_du" || c.trang_thai === "da_can_tru")
-            .reduce((s, c) => s + Number(c.so_tien_goc ?? 0), 0);
-          const groupCongNoHT = groupCongNoForGroup
-            .filter((c) => c.trang_thai === "da_hoan_tien")
-            .reduce((s, c) => s + Number(c.so_tien_goc ?? 0), 0);
-          const groupCongNoTotal = groupCongNoCN + groupCongNoHT;
+          const { groupCongNoCN, groupCongNoHT, groupCongNoTotal } =
+            splitGroupCongNo(groupCongNoForGroup);
 
           // Aggregate-after-edits delta (CHỈ phần công ty thanh toán).
           // Group = main chi_phi (id=row.id) + extras chi_phi (mo_ta startsWith [trua]/[toi]).
@@ -1264,16 +1260,11 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
             cp.ref_doan_ngay_id === meal.doan_ngay_id &&
             (cp.id === row?.id || cp.mo_ta?.startsWith(extraPrefixStr)),
           );
-          const companyChiPhi = groupChiPhi.filter((c) => Number(c.tien_cong_ty ?? 0) > 0);
-          const sumActual = companyChiPhi.reduce(
-            (s, c) => s + Number(c.thanh_tien_thuc_te ?? c.tien_cong_ty ?? 0), 0
-          );
-          const sumPaid = companyChiPhi.reduce(
-            (s, c) => s + Number(c.so_tien_da_tt ?? 0), 0
-          );
-          const aggDelta = sumActual - sumPaid;
-          // effectiveDelta = chênh lệch còn LẠI sau khi trừ cong_no đã ghi nhận.
-          const effectiveDelta = aggDelta + groupCongNoTotal;
+          const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
+          const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+          const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
+            sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+          });
           const showAggBtn =
             nguoiTtMain === "cong_ty" &&
             daDeNghi === 0 &&
@@ -1281,22 +1272,14 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
             effectiveDelta !== 0;
           const aggPaidDntt = paidDntts[0] ?? null;
           const mainChiPhiRow = row?.id ? chiPhiRows.find((c) => c.id === row.id) : null;
-
-          // Mismatch warning: chi_phi total ≠ DNTT committed (cho_duyet/da_duyet),
-          // sau khi trừ cong_no đã ghi nhận. Trigger khi cascade số khách cập nhật
-          // chi_phi.tien_cong_ty nhưng DNTT.so_tien chưa sửa.
-          const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
-          const effectiveCommitted = sumCommitted - groupCongNoTotal;
           const hasCommittedDntt = activeDntts.some((d) =>
             d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet",
           );
-          // Hide badge when footer button shows (redundant — same info conveyed).
-          // sumActual === 0 nghĩa là chi_phi.tien_cong_ty CHƯA được persist (NH
-          // tính tiền từ snapshot booking, ghi tien_cong_ty lazily) — KHÔNG phải
-          // "tổng thực = 0". So 0 với committed sẽ ra lệch −full giả trên mọi
-          // dòng NH chưa lưu tay → chỉ cảnh báo khi có số chi_phi thật để so.
-          const dnttMismatch = hasCommittedDntt && sumActual > 0 && sumActual !== effectiveCommitted && !showAggBtn
-            ? sumActual - effectiveCommitted : 0;
+          // Ẩn badge khi nút footer hiện (trùng thông tin). sumActual === 0 nghĩa
+          // là chi_phi.tien_cong_ty CHƯA persist (NH ghi lazily) → KHÔNG cảnh báo.
+          const dnttMismatch = sumActual > 0
+            ? calcDnttMismatch({ sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn })
+            : 0;
 
           return (
             <Fragment key={key}>
