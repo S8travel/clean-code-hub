@@ -68,11 +68,11 @@ export default function EmailPreviewModal({
   updateNote = "",
   onUpdateNoteChange,
 }: Props) {
-  const editRef = useRef<HTMLDivElement>(null);
+  const editRef = useRef<HTMLDivElement | null>(null);
   const htmlRef = useRef(html);
   htmlRef.current = html; // always latest, no stale closure
 
-  const sigEditorRef = useRef<HTMLDivElement>(null);
+  const sigEditorRef = useRef<HTMLDivElement | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
 
   const saveSelection = () => {

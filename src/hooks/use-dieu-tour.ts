@@ -310,7 +310,7 @@ export function useInitDoanNgay() {
       };
       const start = parseUTC(ngayDi);
       const end = parseUTC(ngayVe);
-      const rows = [];
+      const rows: { doan_id: number; ngay_so: number; ngay_date: string; thu: string }[] = [];
       let i = 1;
       for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         const dateStr = d.toISOString().split("T")[0];

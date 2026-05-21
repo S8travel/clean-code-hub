@@ -201,7 +201,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
       <td className="px-3 py-2.5 font-medium">
         <CatalogHoverCard info={
           row.ref_doan_ngay_item_id && dvCdMap[row.ref_doan_ngay_item_id]
-            ? { kind: "dv", ten: row.mo_ta || "Dịch vụ", ...dvCdMap[row.ref_doan_ngay_item_id] }
+            ? { kind: "dv", ...dvCdMap[row.ref_doan_ngay_item_id] }
             : null
         }>
           <span>{row.mo_ta || "—"}</span>
