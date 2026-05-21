@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { TableCell, TableRow } from "@/components/ui/table";
-import type { LocalKSRow, KSLoaiRow } from "./ChiPhiKSSection";
+import type { LocalKSRow, KSLoaiRow } from "./ks-section-shared";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 

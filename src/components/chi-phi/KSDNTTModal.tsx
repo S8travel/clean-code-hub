@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useInsertDNTT } from "@/hooks/use-chi-phi";
 import { externalSupabase } from "@/lib/supabase-external";
 import { createCanTruPayments } from "@/hooks/use-payments";
-import type { LocalKSRow } from "./ChiPhiKSSection";
+import type { LocalKSRow } from "./ks-section-shared";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 
