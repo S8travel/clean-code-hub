@@ -4,14 +4,7 @@ import { Check, Pencil, Printer, X, Ban, SlidersHorizontal, Plus, Trash2, Calend
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
-import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
@@ -27,11 +20,12 @@ import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
-import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
-import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
 import { DVInput } from "./DVInput";
 import DVDnttModal, { type DVModalTarget } from "./DVDnttModal";
 import DVCancelModal, { type CancelTarget } from "./DVCancelModal";
+import DVAdjustModal from "./DVAdjustModal";
+import DVAggCommitModal, { type AggCommitTarget } from "./DVAggCommitModal";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -119,15 +113,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const [adjustReason, setAdjustReason] = useState("");
 
   // Aggregate commit dialog (sau khi adjust + extras → commit chênh lệch)
-  interface AggCommitTarget {
-    mainRow: ChiPhiRow;
-    delta: number;       // < 0 = thừa (cong_no), > 0 = thiếu (DNTT bổ sung)
-    sumActual: number;
-    sumPaid: number;
-    groupCongNoCN: number;   // sum so_tien_goc cong_no state con_du + da_can_tru
-    groupCongNoHT: number;   // sum so_tien_goc cong_no state da_hoan_tien
-    paidDntt: DNTTRow | null;
-  }
   const [aggCommit, setAggCommit] = useState<AggCommitTarget | null>(null);
   const [aggReason, setAggReason] = useState("");
   const [aggNgayCan, setAggNgayCan] = useState("");
@@ -455,6 +440,23 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   };
 
   // ── Aggregate commit (chênh lệch sau adjust + extras) ───────────────────────
+
+  const handleAdjustSubmit = () => {
+    if (!adjustChiPhi) return;
+    const newSL  = parseInt(adjustSL.replace(/\D/g, ""), 10);
+    const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
+    if (isNaN(newSL) || !newGia) return;
+    updateActualMut.mutate(
+      { id: adjustChiPhi.id, doan_id: doanId, so_luong: newSL, don_gia: newGia, ly_do: adjustReason },
+      {
+        onSuccess: () => {
+          toast.success("Đã cập nhật chi phí thực tế");
+          setAdjustChiPhi(null);
+        },
+        onError: (err: any) => toast.error(err?.message || "Lỗi cập nhật"),
+      },
+    );
+  };
 
   const handleAggCommit = async () => {
     if (!aggCommit) return;
@@ -1309,263 +1311,34 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         submitting={insertDNTT.isPending}
       />
 
-      {/* Adjust Dialog */}
-      <Dialog open={!!adjustChiPhi} onOpenChange={o => { if (!o) setAdjustChiPhi(null); }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Điều chỉnh chi phí thực tế</DialogTitle>
-          </DialogHeader>
-          {adjustChiPhi && (() => {
-            const newSL    = parseInt(adjustSL.replace(/\D/g, ""), 10) || 0;
-            const newGia   = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
-            const newTotal = newSL * newGia;
-            const oldTotal = adjustChiPhi.so_luong * adjustChiPhi.don_gia;
-            const changed  = newSL !== adjustChiPhi.so_luong || newGia !== adjustChiPhi.don_gia;
-            return (
-              <div className="space-y-3 py-1 text-sm">
-                <p className="text-xs text-muted-foreground">{adjustChiPhi.mo_ta}</p>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Hiện tại:</span>
-                  <span className="font-medium tabular-nums">
-                    {adjustChiPhi.so_luong} × {fmt(adjustChiPhi.don_gia)} = {fmt(oldTotal)} ₫
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Số lượng thực tế</Label>
-                    <Input
-                      className="h-8 text-sm tabular-nums"
-                      value={adjustSL}
-                      onChange={e => setAdjustSL(e.target.value.replace(/\D/g, ""))}
-                      placeholder="SL"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Đơn giá thực tế</Label>
-                    <Input
-                      className="h-8 text-sm tabular-nums"
-                      inputMode="decimal"
-                      value={adjustDonGia}
-                      onChange={(e) => {
-                        let s = e.target.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
-                        const firstDot = s.indexOf(".");
-                        if (firstDot >= 0) {
-                          s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
-                        }
-                        setAdjustDonGia(s);
-                      }}
-                      placeholder="Đơn giá"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-between text-xs border-t pt-2">
-                  <span className="text-muted-foreground">Tổng thực tế:</span>
-                  <span className="font-semibold tabular-nums text-primary">{fmt(newTotal)} ₫</span>
-                </div>
-                {changed && (
-                  <div className="text-[11px] text-muted-foreground">
-                    Sau lưu, hệ thống sẽ tự tính delta toàn nhóm (main + extras) và hiện
-                    nút "Ghi nhận công nợ" hoặc "Thanh toán bổ sung" ở cuối nhóm nếu cần.
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Lý do (optional)</Label>
-                  <Textarea
-                    className="text-xs min-h-[56px]"
-                    value={adjustReason}
-                    onChange={e => setAdjustReason(e.target.value)}
-                    placeholder="VD: 1 khách không đi do mệt..."
-                  />
-                </div>
-              </div>
-            );
-          })()}
-          <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustChiPhi(null)}>Đóng</Button>
-            <Button
-              size="sm"
-              className="text-xs"
-              disabled={
-                updateActualMut.isPending ||
-                !adjustChiPhi ||
-                !adjustSL || !adjustDonGia ||
-                (parseInt(adjustSL.replace(/\D/g, ""), 10) === adjustChiPhi?.so_luong &&
-                 (parseFloat(adjustDonGia.replace(/\.$/, "")) || 0) === adjustChiPhi?.don_gia)
-              }
-              onClick={() => {
-                if (!adjustChiPhi) return;
-                const newSL  = parseInt(adjustSL.replace(/\D/g, ""), 10);
-                const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
-                if (isNaN(newSL) || !newGia) return;
-                updateActualMut.mutate(
-                  { id: adjustChiPhi.id, doan_id: doanId, so_luong: newSL, don_gia: newGia, ly_do: adjustReason },
-                  {
-                    onSuccess: () => {
-                      toast.success("Đã cập nhật chi phí thực tế");
-                      setAdjustChiPhi(null);
-                    },
-                    onError: (err: any) => toast.error(err?.message || "Lỗi cập nhật"),
-                  },
-                );
-              }}
-            >
-              Cập nhật
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVAdjustModal
+        target={adjustChiPhi}
+        sl={adjustSL}
+        onSlChange={setAdjustSL}
+        donGia={adjustDonGia}
+        onDonGiaChange={setAdjustDonGia}
+        reason={adjustReason}
+        onReasonChange={setAdjustReason}
+        onClose={() => setAdjustChiPhi(null)}
+        onSubmit={handleAdjustSubmit}
+        submitting={updateActualMut.isPending}
+      />
 
-      {/* Aggregate Commit Dialog — chốt chênh lệch sau adjust + extras */}
-      <Dialog open={!!aggCommit} onOpenChange={o => { if (!o) { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); } }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {aggCommit && aggCommit.delta > 0
-                ? "Tạo ĐNTT bổ sung"
-                : aggSurplusMode === "hoan_tien" ? "Ghi nhận hoàn tiền" : "Ghi nhận công nợ"}
-            </DialogTitle>
-          </DialogHeader>
-          {aggCommit && (
-            <div className="space-y-3 py-1 text-sm">
-              <p className="text-xs text-muted-foreground">{aggCommit.mainRow.mo_ta}</p>
-              <div className="space-y-1 text-xs border rounded px-2 py-1.5 bg-muted/30">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tổng thực tế (nhóm):</span>
-                  <span className="font-medium tabular-nums">{fmt(aggCommit.sumActual)} ₫</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Đã thanh toán:</span>
-                  <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid)} ₫</span>
-                </div>
-                {aggCommit.groupCongNoCN > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(−) Đã ghi nhận công nợ:</span>
-                    <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoCN)} ₫</span>
-                  </div>
-                )}
-                {aggCommit.groupCongNoHT > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(−) Đã hoàn tiền:</span>
-                    <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoHT)} ₫</span>
-                  </div>
-                )}
-                {(aggCommit.groupCongNoCN > 0 || aggCommit.groupCongNoHT > 0) && (
-                  <div className="flex justify-between border-t pt-1">
-                    <span className="text-muted-foreground">Còn cần thanh toán:</span>
-                    <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid - aggCommit.groupCongNoCN - aggCommit.groupCongNoHT)} ₫</span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t pt-1">
-                  <span className="text-muted-foreground">Chênh lệch còn lại:</span>
-                  <span className={cn(
-                    "font-semibold tabular-nums",
-                    aggCommit.delta > 0 ? "text-orange-700" : "text-purple-700",
-                  )}>
-                    {aggCommit.delta > 0 ? "+" : "−"}{fmt(Math.abs(aggCommit.delta))} ₫
-                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                      ({aggCommit.delta > 0 ? "thiếu, cần thanh toán thêm" : "thừa"})
-                    </span>
-                  </span>
-                </div>
-              </div>
-              {aggCommit.paidDntt?.ten_nha_cung_cap && (
-                <div className="text-xs text-muted-foreground">
-                  NCC: <span className="font-medium text-foreground">{aggCommit.paidDntt.ten_nha_cung_cap}</span>
-                </div>
-              )}
-              {aggCommit.delta > 0 && aggCommit.mainRow.nha_cung_cap_id != null && (
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Cấn trừ công nợ NCC (optional)</Label>
-                  <KSCongNoPanel
-                    nccId={aggCommit.mainRow.nha_cung_cap_id}
-                    doanId={doanId}
-                    value={aggCanTru}
-                    onChange={(v) => {
-                      // Cap soTienCanTru ≤ delta để không vượt quá phần thiếu
-                      if (v && aggCommit) {
-                        const capped = Math.min(v.soTienCanTru, aggCommit.delta);
-                        setAggCanTru({ ...v, soTienCanTru: capped });
-                      } else {
-                        setAggCanTru(v);
-                      }
-                    }}
-                  />
-                  {aggCanTru && aggCanTru.soTienCanTru > 0 && (
-                    <p className="text-[10px] text-muted-foreground tabular-nums">
-                      DNTT sẽ tạo: <span className="font-medium text-foreground">{fmt(aggCommit.delta)} ₫</span>
-                      {" · "}Cấn trừ: <span className="font-medium text-amber-700">{fmt(aggCanTru.soTienCanTru)} ₫</span>
-                      {" · "}Cash còn TT: <span className="font-medium text-foreground">{fmt(aggCommit.delta - aggCanTru.soTienCanTru)} ₫</span>
-                    </p>
-                  )}
-                </div>
-              )}
-              {aggCommit.delta < 0 && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Hình thức xử lý</Label>
-                  <RadioGroup
-                    value={aggSurplusMode}
-                    onValueChange={(v) => setAggSurplusMode(v as "con_du" | "hoan_tien")}
-                    className="space-y-1.5"
-                  >
-                    <div className="flex items-start gap-2">
-                      <RadioGroupItem value="con_du" id="dv-agg-cn" className="mt-0.5" />
-                      <Label htmlFor="dv-agg-cn" className="text-xs cursor-pointer leading-tight">
-                        <span className="font-medium">Ghi nhận công nợ</span>
-                        <p className="text-muted-foreground font-normal">NCC giữ tiền — có thể cấn trừ với DNTT khác cùng NCC</p>
-                      </Label>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <RadioGroupItem value="hoan_tien" id="dv-agg-ht" className="mt-0.5" />
-                      <Label htmlFor="dv-agg-ht" className="text-xs cursor-pointer leading-tight">
-                        <span className="font-medium">Ghi nhận hoàn tiền</span>
-                        <p className="text-muted-foreground font-normal">NCC trả lại tiền cash — không cấn trừ</p>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              )}
-              {aggCommit.delta > 0 && (
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Ngày cần thanh toán</Label>
-                  <DatePicker className="h-8 text-xs w-full" value={aggNgayCan} onChange={setAggNgayCan} />
-                </div>
-              )}
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Lý do (optional)</Label>
-                <Textarea
-                  className="text-xs min-h-[56px]"
-                  value={aggReason}
-                  onChange={e => setAggReason(e.target.value)}
-                  placeholder={
-                    aggCommit.delta > 0
-                      ? "VD: phát sinh thêm 1 vé trẻ em..."
-                      : "VD: 1 khách không đi do mệt..."
-                  }
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs"
-              onClick={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); }}>
-              Đóng
-            </Button>
-            <Button
-              size="sm"
-              className={cn(
-                "text-xs text-white",
-                aggCommit && aggCommit.delta > 0
-                  ? "bg-orange-600 hover:bg-orange-700"
-                  : "bg-purple-600 hover:bg-purple-700",
-              )}
-              disabled={insertDNTT.isPending || !aggCommit}
-              onClick={handleAggCommit}
-            >
-              Xác nhận
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVAggCommitModal
+        target={aggCommit}
+        doanId={doanId}
+        reason={aggReason}
+        onReasonChange={setAggReason}
+        ngayCan={aggNgayCan}
+        onNgayCanChange={setAggNgayCan}
+        surplusMode={aggSurplusMode}
+        onSurplusModeChange={setAggSurplusMode}
+        canTru={aggCanTru}
+        onCanTruChange={setAggCanTru}
+        onClose={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); }}
+        onSubmit={handleAggCommit}
+        submitting={insertDNTT.isPending}
+      />
 
       <DVCancelModal
         target={cancelTarget}
