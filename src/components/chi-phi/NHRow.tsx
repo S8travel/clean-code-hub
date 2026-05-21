@@ -1,5 +1,5 @@
 import { format, subDays, parseISO } from "date-fns";
-import { Plus, Ban, Trash2, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
+import { Plus, Ban, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,8 @@ import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatc
 import CatalogHoverCard from "./CatalogHoverCard";
 import { NHInput } from "./NHInput";
 import { NHFocEditor } from "./NHFocEditor";
+import NHExtraRow from "./NHExtraRow";
+import NHAggFooterRow from "./NHAggFooterRow";
 import { type AdjustNHTarget } from "./NHAdjustModal";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -542,162 +544,50 @@ export default function NHRow({ meal, data, handlers }: Props) {
 
       {/* Extras sub-rows */}
       {extras.map((extra, idx) => (
-        <tr
+        <NHExtraRow
           key={idx}
-          className="border-b border-border/50 last:border-b-0 bg-muted/20"
-        >
-          {/* Col 1: empty */}
-          <td />
-          {/* Col 2: empty */}
-          <td />
-          {/* Col 3: description */}
-          <td className="px-3 py-1">
-            <div className="flex items-center gap-1.5 pl-4">
-              <span className="text-muted-foreground text-[10px] shrink-0">↳</span>
-              <Input
-                placeholder="Dịch vụ phát sinh"
-                value={extra.mo_ta}
-                onChange={(e) => handleExtraChange(key, idx, "mo_ta", e.target.value)}
-                onBlur={() => handleExtraSave(key, idx)}
-                className="h-6 text-xs flex-1"
-              />
-            </div>
-          </td>
-          {/* Col 4: empty */}
-          <td />
-          {/* Col 5: số lượng */}
-          <td className="px-2 py-1">
-            <div className="flex justify-center">
-              <NHInput
-                value={extra.so_luong}
-                onChange={(v) => handleExtraChange(key, idx, "so_luong", v)}
-                onBlur={() => handleExtraSave(key, idx)}
-                width="w-[44px]"
-              />
-            </div>
-          </td>
-          {/* Col 6: đơn giá */}
-          <td className="px-2 py-1">
-            <div className="flex justify-center">
-              <NHInput
-                value={extra.don_gia}
-                onChange={(v) => handleExtraChange(key, idx, "don_gia", v)}
-                onBlur={() => handleExtraSave(key, idx)}
-                width="w-[112px]"
-                money
-                decimal
-              />
-            </div>
-          </td>
-          {/* Col 7: CK% — empty */}
-          <td />
-          {/* Col 8: thành tiền */}
-          <td className="px-3 py-1 text-right whitespace-nowrap">
-            {extra.so_luong > 0 && extra.don_gia > 0 ? (
-              <span className={cn("text-[11px] font-semibold", extra.nguoi_tt === "hdv" ? "text-amber-600" : "text-primary")}>
-                {fmt(extra.so_luong * extra.don_gia)}
-              </span>
-            ) : ""}
-          </td>
-          {/* Col 9: Ai trả — toggle giống main row */}
-          <td className="px-2 py-1 text-center">
-            <button
-              onClick={() => {
-                const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
-                handleExtraChange(key, idx, "nguoi_tt", next);
-                handleExtraSave(key, idx, next);
-              }}
-              className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
-                extra.nguoi_tt === "cong_ty"
-                  ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
-                  : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
-              )}
-            >
-              {extra.nguoi_tt === "cong_ty" ? "Công ty" : "HDV"}
-            </button>
-          </td>
-          {/* Col 10: empty */}
-          <td />
-          {/* Col 11: delete */}
-          <td className="px-2 py-1">
-            <div className="flex justify-end">
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleExtraDelete(key, idx)}>
-                <Trash2 className="h-3 w-3 text-destructive" />
-              </Button>
-            </div>
-          </td>
-        </tr>
+          mealKey={key}
+          extra={extra}
+          idx={idx}
+          onChange={handleExtraChange}
+          onSave={handleExtraSave}
+          onDelete={handleExtraDelete}
+        />
       ))}
 
       {/* Aggregate commit footer row — chỉ hiện khi còn chênh lệch SAU TRỪ cong_no đã ghi nhận */}
       {showAggBtn && mainChiPhiRow && (
-        <tr className={cn(
-          "border-b border-border/50",
-          effectiveDelta > 0 ? "bg-orange-50/50" : "bg-purple-50/50",
-        )}>
-          <td colSpan={12} className="px-3 py-1.5">
-            <div className="flex items-center justify-end gap-3 text-[11px]">
-              <span className="text-muted-foreground">
-                Sau điều chỉnh:
-                <span className="ml-1">Thực tế <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
-                <span className="mx-1">·</span>
-                <span>Đã TT <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
-                {groupCongNoTotal > 0 && (
-                  <>
-                    <span className="mx-1">·</span>
-                    <span>Đã CN/HT <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
-                  </>
-                )}
-                <span className="mx-1">·</span>
-                <span>Còn lệch <span className={cn(
-                  "font-semibold tabular-nums",
-                  effectiveDelta > 0 ? "text-orange-700" : "text-purple-700",
-                )}>
-                  {effectiveDelta > 0 ? "+" : "−"}{fmt(Math.abs(effectiveDelta))} ₫
-                </span> ({effectiveDelta > 0 ? "thiếu" : "thừa"})</span>
-              </span>
-              <Button
-                size="sm"
-                className={cn(
-                  "h-7 text-[11px] px-2.5 text-white",
-                  effectiveDelta > 0
-                    ? "bg-orange-600 hover:bg-orange-700"
-                    : "bg-purple-600 hover:bg-purple-700",
-                )}
-                onClick={() => {
-                  setAggCommit({
-                    mainRow: mainChiPhiRow,
-                    nhName: nh?.ten || "Nhà hàng",
-                    nccId: nh?.nha_cung_cap_id ?? null,
-                    nccName: nh?.ten_ncc ?? null,
-                    delta: effectiveDelta,
-                    sumActual,
-                    sumPaid,
-                    groupCongNoCN,
-                    groupCongNoHT,
-                    paidDntt: aggPaidDntt,
-                    ngayDate: meal.ngay_date ?? null,
-                  });
-                  setAggReason("");
-                  setAggSurplusMode("con_du");
-                  setAggCanTru(null);
-                  if (effectiveDelta > 0 && meal.ngay_date) {
-                    try {
-                      setAggNgayCan(format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"));
-                    } catch { setAggNgayCan(""); }
-                  } else {
-                    setAggNgayCan("");
-                  }
-                }}
-              >
-                {effectiveDelta > 0
-                  ? `Thanh toán bổ sung ${fmt(effectiveDelta)} ₫`
-                  : `Xử lý chênh lệch thừa ${fmt(Math.abs(effectiveDelta))} ₫`}
-              </Button>
-            </div>
-          </td>
-        </tr>
+        <NHAggFooterRow
+          effectiveDelta={effectiveDelta}
+          sumActual={sumActual}
+          sumPaid={sumPaid}
+          groupCongNoTotal={groupCongNoTotal}
+          onCommit={() => {
+            setAggCommit({
+              mainRow: mainChiPhiRow,
+              nhName: nh?.ten || "Nhà hàng",
+              nccId: nh?.nha_cung_cap_id ?? null,
+              nccName: nh?.ten_ncc ?? null,
+              delta: effectiveDelta,
+              sumActual,
+              sumPaid,
+              groupCongNoCN,
+              groupCongNoHT,
+              paidDntt: aggPaidDntt,
+              ngayDate: meal.ngay_date ?? null,
+            });
+            setAggReason("");
+            setAggSurplusMode("con_du");
+            setAggCanTru(null);
+            if (effectiveDelta > 0 && meal.ngay_date) {
+              try {
+                setAggNgayCan(format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"));
+              } catch { setAggNgayCan(""); }
+            } else {
+              setAggNgayCan("");
+            }
+          }}
+        />
       )}
     </>
   );
