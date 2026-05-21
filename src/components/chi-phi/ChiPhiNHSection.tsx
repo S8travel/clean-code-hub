@@ -536,7 +536,9 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   // ── Main row handlers ─────────────────────────────────────────────────────
 
   const handleChange = useCallback((key: string, field: "so_khach" | "don_gia" | "chiet_khau_phan_tram", value: number) => {
-    setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+    // Sửa tay 1 field = override → set is_overridden NGAY (không đợi handleSave) để
+    // effect "Sync localRows" (cascade Điều tour) không ghi đè giá trị vừa nhập.
+    setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value, is_overridden: true } }));
   }, []);
 
   const handleSave = useCallback((key: string, nguoiTtOverride?: "cong_ty" | "hdv") => {
