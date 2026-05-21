@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
+import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { Printer, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -113,8 +114,8 @@ export default function DNTTTab({ doanId }: Props) {
     try {
       await downloadDNTTWord(doanId, [dnttId]);
       toast.success("Đã xuất file Word");
-    } catch (err: any) {
-      toast.error("Lỗi xuất file: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi xuất file: " + (errMsg(err) || ""));
     } finally {
       setPrintingId(null);
     }
@@ -130,8 +131,8 @@ export default function DNTTTab({ doanId }: Props) {
     try {
       await downloadDNTTWord(doanId, ksIds);
       toast.success("Đã xuất file Word");
-    } catch (err: any) {
-      toast.error("Lỗi xuất file: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi xuất file: " + (errMsg(err) || ""));
     } finally {
       setBatchPrinting(false);
     }

@@ -1,5 +1,6 @@
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
+import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,8 +164,8 @@ export default function KSAdjustModal({
       );
       toast.success(`Đã điều chỉnh ${changed.length} dòng`);
       onClose();
-    } catch (err: any) {
-      toast.error("Lỗi điều chỉnh: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi điều chỉnh: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSaving(false);
     }

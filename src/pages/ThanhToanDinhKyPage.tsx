@@ -30,6 +30,7 @@ import {
   type DinhKyDNTTRow,
 } from "@/hooks/use-thanh-toan-dinh-ky";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
+import { errMsg } from "@/lib/error";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -340,8 +341,8 @@ export default function ThanhToanDinhKyPage() {
       });
       toast.success("Đã tạo đề nghị thanh toán định kỳ");
       closeCreateDialog();
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Không thể tạo ĐNTT"));
     } finally {
       setSubmitting(false);
     }
@@ -814,8 +815,8 @@ function CancelDialog({
       await cancelMut.mutateAsync({ id: dntt.id, mode: needsMode ? mode : undefined });
       toast.success("Đã hủy ĐNTT");
       onClose();
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Không thể hủy"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Không thể hủy"));
     }
   };
 

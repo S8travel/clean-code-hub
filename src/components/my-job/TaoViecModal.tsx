@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,8 +81,8 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
       });
       toast.success(`Đã giao việc cho ${tenNguoiNhan}`);
       handleClose();
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message ?? ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 

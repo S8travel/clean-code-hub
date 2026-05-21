@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
@@ -253,8 +254,8 @@ export default function BookingVisaCard({
       save(savePayload);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật visa" : "Đã gửi email booking visa");
       setEmailModalOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message ?? "Lỗi gửi email");
+    } catch (err: unknown) {
+      toast.error(errMsg(err) || "Lỗi gửi email");
     } finally {
       setSending(false);
     }

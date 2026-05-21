@@ -46,6 +46,7 @@ import {
 import { useActivityLogList, useLogActivity, type ActivityLogFilters, type ActivityAction } from "@/hooks/use-activity-log";
 import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
 import { toast } from "sonner";
+import { errMsg } from "@/lib/error";
 
 const VAI_TRO_OPTS: { value: VaiTro; label: string }[] = [
   { value: "admin", label: "Admin" },
@@ -300,8 +301,8 @@ function NguoiDungTab() {
       setShowCreate(false);
       logActivity.mutate({ action: "tao", table_name: "user_roles", record_id: created.id, mo_ta: `Tạo tài khoản ${newName.trim()}` });
       toast.success("Đã thêm người dùng");
-    } catch (e: any) {
-      if (e?.code === "23505") {
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === "23505") {
         toast.error("Email đã tồn tại");
       } else {
         toast.error("Lỗi khi tạo người dùng");
@@ -319,8 +320,8 @@ function NguoiDungTab() {
       });
       setDirty(false);
       toast.success("Đã lưu");
-    } catch (e: any) {
-      if (e?.code === "23505") {
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === "23505") {
         toast.error("Email đã tồn tại");
       } else {
         toast.error("Lỗi khi lưu");
@@ -1298,8 +1299,8 @@ function SpecialistPermissionsSection({ userId }: { userId: string }) {
       await upsertMut.mutateAsync({ userId, rows });
       setDirty(false);
       toast.success("Đã lưu quyền specialist");
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Không lưu được"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Không lưu được"));
     }
   };
 

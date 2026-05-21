@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload, X, FileCheck, AlertTriangle, Loader2, ScanText, FileText, Eye } from "lucide-react";
+import { errMsg } from "@/lib/error";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -163,9 +164,9 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
         const res = await ocrUncSlip(fs[i]);
         ocrRef.current[i] = res;
         setOcrInfo((p) => ({ ...p, [i]: { amount: res.amount } }));
-      } catch (e: any) {
+      } catch (e: unknown) {
         ocrRef.current[i] = { amount: null, text: "" };
-        setOcrInfo((p) => ({ ...p, [i]: { amount: null, err: String(e?.message || e) } }));
+        setOcrInfo((p) => ({ ...p, [i]: { amount: null, err: errMsg(e) || String(e) } }));
       }
       if (runRef.current !== myRun) return;
       setOcrProg({ running: true, done: i + 1, total: fs.length });

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { normalizeEmails, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -562,8 +563,8 @@ function MealCardInner({
       });
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSending(false);
     }

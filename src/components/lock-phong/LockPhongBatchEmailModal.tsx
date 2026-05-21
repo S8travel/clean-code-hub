@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
+import { errMsg } from "@/lib/error";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -252,8 +253,8 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
       toast.success(isUpdate ? "Đã gửi email cập nhật gộp" : "Đã gửi email gộp");
       setPreviewOpen(false);
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSending(false);
     }

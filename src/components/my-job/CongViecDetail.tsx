@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
@@ -107,8 +108,8 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
       toast.success("Đã cập nhật trạng thái");
       setGhiChu("");
       setActionMode(null);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message ?? ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 
@@ -125,8 +126,8 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
         tieu_de_task: task.tieu_de,
       });
       setCommentText("");
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message ?? ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 

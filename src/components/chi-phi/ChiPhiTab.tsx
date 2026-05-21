@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { FileSpreadsheet, Printer } from "lucide-react";
+import { errMsg } from "@/lib/error";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
@@ -132,8 +133,8 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
         entries: all,
         nguoiDeNghi: currentUserName,
       });
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 
@@ -154,8 +155,8 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
         ksData,
       });
       toast.success("Đã xuất file Excel");
-    } catch (error: any) {
-      toast.error(error?.message || "Không thể xuất file Excel");
+    } catch (error: unknown) {
+      toast.error(errMsg(error) || "Không thể xuất file Excel");
     } finally {
       setExportingExcel(false);
     }

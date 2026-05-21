@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { errMsg } from "@/lib/error";
 import {
   Mail, Send, Pencil, Plus, Trash2, Star,
   Bold, Italic, Underline, Strikethrough,
@@ -189,8 +190,8 @@ export default function EmailPreviewModal({
         );
         onHtmlChange(node.innerHTML);
       }
-    } catch (e: any) {
-      toast.error("Tải ảnh thất bại: " + (e?.message || ""));
+    } catch (e: unknown) {
+      toast.error("Tải ảnh thất bại: " + (errMsg(e) || ""));
     } finally {
       setImgUploading(false);
     }

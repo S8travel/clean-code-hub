@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { errMsg } from "@/lib/error";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Trash2, Copy, Download, Upload } from "lucide-react";
@@ -328,8 +329,8 @@ function CreateForm({
       if (parsed.length === 0) { toast.error("Không có dòng dữ liệu hợp lệ"); return; }
       setRows(parsed);
       toast.success(`Đã import ${parsed.length} dòng từ file`);
-    } catch (err: any) {
-      toast.error("Lỗi đọc file: " + (err?.message || "không hỗ trợ định dạng"));
+    } catch (err: unknown) {
+      toast.error("Lỗi đọc file: " + (errMsg(err) || "không hỗ trợ định dạng"));
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -389,8 +390,8 @@ function CreateForm({
       }
       toast.success(`Đã tạo ${validRows.length} lock phòng`);
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSubmitting(false);
     }
@@ -701,8 +702,8 @@ function EditForm({
       });
       toast.success("Đã cập nhật lock phòng");
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Vui lòng thử lại"));
     }
   };
 

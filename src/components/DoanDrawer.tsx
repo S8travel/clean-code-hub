@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { errMsg } from "@/lib/error";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -144,8 +145,8 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
           setConflictLines(res.lines);
           return; // block save
         }
-      } catch (err: any) {
-        toast.error(t("Lỗi kiểm tra conflict") + ": " + (err?.message || ""));
+      } catch (err: unknown) {
+        toast.error(t("Lỗi kiểm tra conflict") + ": " + (errMsg(err) || ""));
         return;
       } finally {
         setCheckingConflict(false);
@@ -191,8 +192,8 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
       setAddAgentOpen(false);
       setNewAgentName("");
       toast.success(`${t("Đã thêm Agent")} "${created.ten}"`);
-    } catch (e: any) {
-      toast.error(e?.message || t("Lỗi thêm Agent"));
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || t("Lỗi thêm Agent"));
     }
   };
 

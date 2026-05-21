@@ -43,6 +43,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useLogActivity } from "@/hooks/use-activity-log";
+import { errMsg } from "@/lib/error";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -402,9 +403,9 @@ function DNTTPageContent() {
           ? `Đã đồng bộ ${total} ĐNTT sang Sheet (${inserted} mới, ${updated} cập nhật)`
           : "Không có ĐNTT nào trong bộ lọc hiện tại",
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
-        title: "Lỗi đồng bộ Sheet: " + (err?.message || "Vui lòng thử lại"),
+        title: "Lỗi đồng bộ Sheet: " + (errMsg(err) || "Vui lòng thử lại"),
         variant: "destructive",
       });
     } finally {

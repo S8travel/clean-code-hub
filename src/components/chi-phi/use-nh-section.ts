@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { errMsg } from "@/lib/error";
 import { format, subDays, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
@@ -664,8 +665,8 @@ export function useNHSection({
           setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: saved.id } }));
           row = { ...row, id: saved.id };
         }
-      } catch (err: any) {
-        toast.error("Lỗi lưu chi phí: " + (err?.message || ""));
+      } catch (err: unknown) {
+        toast.error("Lỗi lưu chi phí: " + (errMsg(err) || ""));
         return;
       }
     }
@@ -753,8 +754,8 @@ export function useNHSection({
 
       toast.success("Đã tạo đề nghị thanh toán");
       setDnttModalKey(null);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Không thể tạo ĐNTT"));
     } finally {
       setDnttSubmitting(false);
     }
@@ -867,8 +868,8 @@ export function useNHSection({
       setAggReason("");
       setAggNgayCan("");
       setAggCanTru(null);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 
@@ -1017,8 +1018,8 @@ export function useNHSection({
         entries,
         nguoiDeNghi: currentUserName,
       });
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 

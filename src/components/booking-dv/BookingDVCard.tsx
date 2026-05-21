@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -330,8 +331,8 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       }
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSending(false);
     }

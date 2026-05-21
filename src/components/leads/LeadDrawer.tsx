@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { errMsg } from "@/lib/error";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, MessageCircle, Mail, Facebook, Plus, Trash2, Check, Trophy } from "lucide-react";
 import { format, isBefore, isToday, startOfDay, formatDistanceToNow } from "date-fns";
@@ -119,8 +120,8 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
       setConfirmConvertOpen(false);
       onClose();
       navigate(`/doan/${newDoan.id}`);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Lỗi khi tạo đoàn");
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || "Lỗi khi tạo đoàn");
     }
   };
 

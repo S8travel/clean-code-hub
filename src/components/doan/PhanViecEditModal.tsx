@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { Users } from "lucide-react";
 import {
@@ -96,8 +97,8 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
       );
       onDone?.();
       onClose();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Lỗi phân việc");
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || "Lỗi phân việc");
     } finally {
       setSaving(false);
     }

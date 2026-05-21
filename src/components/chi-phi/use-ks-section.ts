@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format } from "date-fns";
+import { errMsg } from "@/lib/error";
 import { useCreateAdjustment, useUpdateDNTT } from "@/hooks/use-dntt";
 import type { DNTTRow } from "@/hooks/use-dntt";
 import {
@@ -233,8 +234,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     try {
       const allData = pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId));
       setPreviewItems(allData);
-    } catch (err: any) {
-      toast.error("Lỗi tải dữ liệu: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi tải dữ liệu: " + (errMsg(err) || ""));
     }
   };
 
@@ -245,8 +246,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       const allData = pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId));
       exportDNTTKSExcel(allData, tenDoan || String(doanId));
       toast.success("Đã xuất file Excel");
-    } catch (err: any) {
-      toast.error("Lỗi xuất file: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi xuất file: " + (errMsg(err) || ""));
     }
   };
 
@@ -395,8 +396,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       setAggCanTru(null);
       setAggCommitMode("full");
       setAggDepositAmount(0);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 
@@ -427,8 +428,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         toast.success("Đã hủy dịch vụ khách sạn");
       }
       setCancelTarget(null);
-    } catch (err: any) {
-      toast.error("Lỗi khi hủy: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi khi hủy: " + (errMsg(err) || ""));
     }
   };
 

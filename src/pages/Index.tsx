@@ -43,6 +43,7 @@ import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useUploadDoanTaiLieu } from "@/hooks/use-doan-tai-lieu";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
+import { errMsg } from "@/lib/error";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
@@ -253,8 +254,8 @@ export default function Index() {
               ngayDi: data.ngay_di,
             });
             toast.success("Đã áp dụng seri mới");
-          } catch (err: any) {
-            toast.error("Lỗi áp dụng seri: " + (err?.message || ""));
+          } catch (err: unknown) {
+            toast.error("Lỗi áp dụng seri: " + (errMsg(err) || ""));
           }
         }
         toast.success("Đã cập nhật đoàn");
@@ -317,8 +318,8 @@ export default function Index() {
               file: baoGiaFile,
               uploadedBy: currentUser?.user_id ?? null,
             });
-          } catch (upErr: any) {
-            toast.warning("Đoàn đã tạo nhưng tải báo giá thất bại: " + (upErr?.message ?? ""));
+          } catch (upErr: unknown) {
+            toast.warning("Đoàn đã tạo nhưng tải báo giá thất bại: " + (errMsg(upErr) || ""));
           }
         }
         if (p.seri_id && p.ngay_di) {
@@ -334,8 +335,8 @@ export default function Index() {
         toast.success(`✓ Tạo đoàn & phân việc: ${p.ten_doan}`);
       }
       setPendingPhanViec(null);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Lỗi tạo đoàn / phân việc");
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || "Lỗi tạo đoàn / phân việc");
     }
   };
 
