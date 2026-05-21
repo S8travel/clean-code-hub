@@ -43,7 +43,7 @@ function KhachSanPageContent() {
     try {
       const created = await createMut.mutateAsync({
         ten: newName.trim(),
-        nha_cung_cap_id: newNccId ? Number(newNccId) : null,
+        nha_cung_cap_id: newNccId ? Number(newNccId) : undefined,
         dia_diem: newDiaDiem.trim() || undefined,
       });
       setSelectedId(created.id);
