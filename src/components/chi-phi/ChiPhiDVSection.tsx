@@ -31,7 +31,6 @@ import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import { DVInput } from "./DVInput";
 import DVDnttModal, { type DVModalTarget } from "./DVDnttModal";
-import DVResendModal from "./DVResendModal";
 import DVCancelModal, { type CancelTarget } from "./DVCancelModal";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -136,11 +135,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
   // Cấn trừ cong_no khi delta > 0 (thiếu): chọn cong_no NCC để giảm DNTT cash phần
   const [aggCanTru, setAggCanTru] = useState<CanTruSelection | null>(null);
-
-  // Resend dialog (rejected)
-  const [resendTarget, setResendTarget] = useState<DNTTRow | null>(null);
-  const [resendMode, setResendMode] = useState<"full" | "partial">("full");
-  const [resendAmount, setResendAmount] = useState(0);
 
   // Cancel dialog
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
@@ -441,27 +435,10 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
     }
   };
 
-  const handleResendSubmit = () => {
-    if (!resendTarget) return;
-    const soTien = resendMode === "full" ? resendTarget.so_tien : resendAmount;
-    if (soTien <= 0) { toast.error("Số tiền không hợp lệ"); return; }
-    updateDNTT.mutate({
-      id: resendTarget.id,
-      doanId,
-      so_tien: soTien,
-      trang_thai_duyet: "cho_duyet",
-      duyet_boi: null,
-      duyet_luc: null,
-      ghi_chu: null,
-    } as any, {
-      onSuccess: () => { toast.success("Đã gửi lại ĐNTT"); setResendTarget(null); },
-    });
-  };
-
   const handleEditSave = (id: number) => {
     const v = parseInt(editAmount.replace(/\D/g, ""), 10);
     if (!v || v <= 0) { toast.error("Số tiền không hợp lệ"); return; }
-    updateDNTT.mutate({ id, doanId, so_tien: v } as any, {
+    updateDNTT.mutate({ id, soTien: v }, {
       onSuccess: () => { toast.success("Đã cập nhật"); setEditingId(null); },
     });
   };
@@ -1019,15 +996,9 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                             return (
                               <div key={d.id} className="flex items-center gap-0.5">
                                 {isRejected ? (
-                                  <>
-                                    <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                                      {statusInfo.text} · {fmt(d.so_tien)}
-                                    </span>
-                                    <Button variant="outline" size="sm" className="h-4 text-[10px] px-1 leading-none"
-                                      onClick={() => { setResendTarget(d); setResendMode("full"); setResendAmount(d.so_tien); }}>
-                                      Gửi lại
-                                    </Button>
-                                  </>
+                                  <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                    {statusInfo.text} · {fmt(d.so_tien)}
+                                  </span>
                                 ) : editingId === d.id ? (
                                   <>
                                     <Input autoFocus type="number" value={editAmount}
@@ -1595,17 +1566,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <DVResendModal
-        target={resendTarget}
-        mode={resendMode}
-        onModeChange={setResendMode}
-        amount={resendAmount}
-        onAmountChange={setResendAmount}
-        onClose={() => setResendTarget(null)}
-        onSubmit={handleResendSubmit}
-        submitting={updateDNTT.isPending}
-      />
 
       <DVCancelModal
         target={cancelTarget}
