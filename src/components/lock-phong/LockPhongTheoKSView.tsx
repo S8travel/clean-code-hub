@@ -724,8 +724,12 @@ function ThanhDoanDialog({
 }) {
   const [code, setCode] = useState("");
   const targetKey = target?.ksRowIds.join(",") ?? null;
-  // Re-init khi mở target khác
-  useMemo(() => { setCode(target?.currentCode ?? ""); }, [targetKey]);
+  // Re-init code khi mở target khác — pattern "adjust state during render".
+  const [prevTargetKey, setPrevTargetKey] = useState<string | null | undefined>(undefined);
+  if (targetKey !== prevTargetKey) {
+    setPrevTargetKey(targetKey);
+    setCode(target?.currentCode ?? "");
+  }
 
   return (
     <Dialog open={!!target} onOpenChange={(v) => { if (!v) onClose(); }}>
