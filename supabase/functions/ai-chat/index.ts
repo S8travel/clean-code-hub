@@ -31,7 +31,9 @@ serve(async (req) => {
     // ── Fetch DB context ───────────────────────────────────────────────────
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      // SB_SECRET_KEY = secret key mới; fallback SUPABASE_SERVICE_ROLE_KEY
+      // (legacy auto-inject) cho tới khi legacy keys bị disable.
+      Deno.env.get("SB_SECRET_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const [doanRes, khachSanRes, nhaHangRes, canhDiemRes, hdvRes] = await Promise.all([
