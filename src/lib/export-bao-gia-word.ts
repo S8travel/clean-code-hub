@@ -212,7 +212,7 @@ function buildManualDoc(
       cell(
         [
           p(
-            `${todayStr}　報價出去（報價效期：3 個月）`,
+            `${todayStr}\u3000報價出去（報價效期：3 個月）`,
             { bold: true, size: 20, color: "FFFFFF", align: AlignmentType.CENTER }
           ),
         ],
@@ -263,7 +263,7 @@ function buildManualDoc(
     return hotelDays.map((d, idx) => {
       const isFirst = idx === 0;
       const hotelCell = cell(
-        [p(`D${d.ngay}　　${d.khachSan.bang_gia_ten}`, { size: 18 })],
+        [p(`D${d.ngay}\u3000\u3000${d.khachSan.bang_gia_ten}`, { size: 18 })],
         { width: LEFT_W, margins: { top: 60, bottom: 60, left: 100, right: 100 } }
       );
 

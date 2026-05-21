@@ -513,8 +513,8 @@ function MealCardInner({
     return [
       `KÃ­nh gá»­i ${nhaHangTen},`,
       ``,
-      `CÃ´ng ty TNHH Du lá»‹ch S8 xin Ä‘áº·t ${buaLabel.toLowerCase()} cho Ä‘oÃ n ${tenDoan || ""}:`,
-      ngayDate ? `- NgÃ y: ${fmtDate(ngayDate)}` : "",
+      `CÃ´ng ty TNHH Du lá»‹ch S8 xin Ä‘áº·t ${buaLabel.toLowerCase()} cho Ä‘oÃ n ${tenDoan || ""}:`,
+      ngayDate ? `- NgÃ y: ${fmtDate(ngayDate)}` : "",
       `- Bá»¯a Äƒn: ${buaLabel}`,
       soKhach != null ? `- Sá»‘ khÃ¡ch: ${soKhach} khÃ¡ch` : "",
       selectedMenu ? `- Set menu: ${selectedMenu.ten_set}` : "",
@@ -529,7 +529,7 @@ function MealCardInner({
       ``,
       `CÃ”NG TY TNHH DU Lá»ŠCH S8`,
       `MST: 0402021137`,
-      `Ä/C: Táº§ng 2, TÃ²a nhÃ  Kim SÆ¡n, Sá»‘ 18 Phan ThÃ nh TÃ i, PhÆ°á»ng HÃ²a CÆ°á»ng, ThÃ nh Phá»‘ ÄÃ  Náºµng, Viá»‡t Nam`,
+      `Ä/C: Táº§ng 2, TÃ²a nhÃ  Kim SÆ¡n, Sá»‘ 18 Phan ThÃ nh TÃ i, PhÆ°á»ng HÃ²a CÆ°á»ng, ThÃ nh Phá»‘ ÄÃ  Náºµng, Viá»‡t Nam`,
       `Email: s8travel.hddt@gmail.com`,
     ].filter(Boolean).join("\n");
   };

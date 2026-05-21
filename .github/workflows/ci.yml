@@ -35,6 +35,11 @@ jobs:
         # KHÔNG dùng `-p tsconfig.json` vì file đó có "files": [] → check 0 file.
         run: npx tsc -b
 
+      - name: Lint (eslint)
+        # Chỉ FAIL khi có error (rules-of-hooks, lỗi nghiêm trọng...). ~760 warning
+        # (no-explicit-any, exhaustive-deps) vẫn cho qua — dọn dần kiểu boy-scout.
+        run: npm run lint
+
       - name: Unit test (vitest)
         run: npm test
 

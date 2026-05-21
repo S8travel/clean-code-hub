@@ -340,7 +340,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   const buildMailtoBody = () => [
     `KÃ­nh gá»­i ${tenNCC || row.ten_nha_cung_cap},`,
     "",
-    `S8 Travel xin Ä‘áº·t dá»‹ch vá»¥ cho Ä‘oÃ n ${tenDoan}:`,
+    `S8 Travel xin Ä‘áº·t dá»‹ch vá»¥ cho Ä‘oÃ n ${tenDoan}:`,
     "",
     ...dvSorted.map((d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khÃ¡ch)`),
     ...(ghiChu ? ["", `Ghi chÃº: ${ghiChu}`] : []),
@@ -352,7 +352,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
     "",
     "CÃ”NG TY TNHH DU Lá»ŠCH S8",
     "MST: 0402021137",
-    "Ä/C: Táº§ng 2, TÃ²a nhÃ  Kim SÆ¡n, Sá»‘ 18 Phan ThÃ nh TÃ i, PhÆ°á»ng HÃ²a CÆ°á»ng, ThÃ nh Phá»‘ ÄÃ  Náºµng, Viá»‡t Nam",
+    "Ä/C: Táº§ng 2, TÃ²a nhÃ  Kim SÆ¡n, Sá»‘ 18 Phan ThÃ nh TÃ i, PhÆ°á»ng HÃ²a CÆ°á»ng, ThÃ nh Phá»‘ ÄÃ  Náºµng, Viá»‡t Nam",
     "Email: s8travel.hddt@gmail.com",
   ].join("\n");
 

@@ -103,7 +103,8 @@ export default function LockPhongPage() {
 
   // Thống kê tổng (theo toàn bộ data, không phụ thuộc tab/filter)
   const stats = useMemo(() => {
-    let total = data.length, quaHan = 0, sapDen = 0, chuaGui = 0, daXN = 0, choXuLy = 0, canXuLy = 0;
+    const total = data.length;
+    let quaHan = 0, sapDen = 0, chuaGui = 0, daXN = 0, choXuLy = 0, canXuLy = 0;
     for (const lp of data) {
       const c = lpCat(lp, todayStr, today3Str, today7Str);
       if (c.quaHan) quaHan++;

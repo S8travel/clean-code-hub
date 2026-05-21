@@ -222,7 +222,7 @@ function getDoiTuongText(row: DNTTRow, hdvData?: HDVSectionData | null): string 
 }
 
 function sanitizeWorksheetName(name: string): string {
-  return name.replace(/[\\/*?:\[\]]/g, " ").trim().slice(0, 31) || "Sheet";
+  return name.replace(/[\\/*?:[\]]/g, " ").trim().slice(0, 31) || "Sheet";
 }
 
 function sanitizeFilename(name: string): string {

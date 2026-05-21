@@ -33,7 +33,7 @@ export function proRataInts(total: number, weights: number[]): number[] {
   const sumFloors = floors.reduce((s, f) => s + f, 0);
 
   // remaining = số đơn vị +1 cần phân phối (luôn nguyên >= 0)
-  let remaining = intTotal - sumFloors;
+  const remaining = intTotal - sumFloors;
 
   // Sắp xếp indices theo phần dư fractional DESC → phân +1 cho top remaining items
   const indices = exacts
