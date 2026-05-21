@@ -13,6 +13,7 @@ import type { DNTTRow, ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
+import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -817,13 +818,8 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                 const groupCongNoForGroup = congNoList.filter(
                   (c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id),
                 );
-                const groupCongNoCN = groupCongNoForGroup
-                  .filter((c) => c.trang_thai === "con_du" || c.trang_thai === "da_can_tru")
-                  .reduce((s, c) => s + Number(c.so_tien_goc ?? 0), 0);
-                const groupCongNoHT = groupCongNoForGroup
-                  .filter((c) => c.trang_thai === "da_hoan_tien")
-                  .reduce((s, c) => s + Number(c.so_tien_goc ?? 0), 0);
-                const groupCongNoTotal = groupCongNoCN + groupCongNoHT;
+                const { groupCongNoCN, groupCongNoHT, groupCongNoTotal } =
+                  splitGroupCongNo(groupCongNoForGroup);
                 const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
                 const canCancel = activeDntt && (
                   activeDntt.trang_thai_duyet === "cho_duyet" ||
@@ -839,36 +835,24 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                   r.mo_ta?.startsWith(`[dvps_${row.id}] `),
                 );
                 const groupChiPhi = [row, ...extraChiPhiRows];
-                const companyChiPhi = groupChiPhi.filter(c => Number(c.tien_cong_ty ?? 0) > 0);
-                const sumActual = companyChiPhi.reduce(
-                  (s, c) => s + Number(c.thanh_tien_thuc_te ?? c.tien_cong_ty ?? 0), 0
-                );
-                const sumPaid = companyChiPhi.reduce(
-                  (s, c) => s + Number(c.so_tien_da_tt ?? 0), 0
-                );
-                const aggDelta = sumActual - sumPaid;
-                // effectiveDelta = chênh lệch còn LẠI sau khi trừ cong_no đã ghi nhận.
-                // - aggDelta < 0 (thừa): cong_no đã ghi nhận phần thừa → effectiveDelta tiến về 0
-                // - aggDelta > 0 (thiếu): DNTT bổ sung sẽ được tạo, daDeNghi check sẽ ẩn button
-                const effectiveDelta = aggDelta + groupCongNoTotal;
+                const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
+                const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+                const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
+                  sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+                });
                 const showAggBtn =
                   nguoiTt === "cong_ty" &&
                   daDeNghi === 0 &&
                   sumPaid > 0 &&
                   effectiveDelta !== 0;
                 const aggPaidDntt = paidDntts[0] ?? null;
-
-                // Mismatch warning: chi_phi total ≠ DNTT committed (cho_duyet/da_duyet),
-                // sau khi trừ cong_no đã ghi nhận. Trigger khi cascade số khách cập nhật
-                // chi_phi.tien_cong_ty nhưng DNTT.so_tien chưa sửa.
-                const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
-                const effectiveCommitted = sumCommitted - groupCongNoTotal;
                 const hasCommittedDntt = activeDntts.some(d =>
                   d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet",
                 );
-                // Hide badge when footer button shows (redundant — same info conveyed)
-                const dnttMismatch = hasCommittedDntt && sumActual !== effectiveCommitted && !showAggBtn
-                  ? sumActual - effectiveCommitted : 0;
+                // Ẩn badge khi nút footer hiện (trùng thông tin).
+                const dnttMismatch = calcDnttMismatch({
+                  sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn,
+                });
 
                 return [
                   <tr key={row.id} className={cn("hover:bg-muted/20", isSelected && "bg-primary/5")}>
