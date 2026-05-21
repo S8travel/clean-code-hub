@@ -46,7 +46,9 @@ export default function NhaXeDetail({ nhaXe, onDeleted }: Props) {
       tai_khoan_thanh_toan: nhaXe.tai_khoan_thanh_toan ?? "",
       ghi_chu: nhaXe.ghi_chu ?? "",
     });
-  }, [nhaXe.id]);
+    // nhaXe là phần tử .find() từ react-query — ref ổn định, chỉ đổi khi
+    // chọn record khác hoặc refetch sau lưu → re-init form đúng lúc.
+  }, [nhaXe]);
 
   const set = (key: string, val: string) => setForm((f) => ({ ...f, [key]: val }));
 

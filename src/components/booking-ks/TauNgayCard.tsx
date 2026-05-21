@@ -78,7 +78,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   useEffect(() => {
     setSelectedSetMenu(row.set_menu_id);
     setDeadline(row.deadline || "");
-  }, [row.booking_id]);
+  }, [row.booking_id, row.set_menu_id, row.deadline]);
 
   const save = async (fields: Record<string, any>) => {
     try {

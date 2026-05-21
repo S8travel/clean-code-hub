@@ -124,13 +124,19 @@ function MealCardInner({
   const [deadline, setDeadline] = useState(booking?.deadline || getDefaultDeadline(ngayDate || ""));
   const [newMon, setNewMon] = useState("");
 
-  // Sync khi booking thay đổi từ bên ngoài (overview modal hoặc Điều tour đổi set menu)
+  // Sync khi booking thay đổi từ bên ngoài (overview modal hoặc Điều tour đổi set menu).
+  // Guard theo syncKey (id|set_menu|mon_an) → khi chỉ deadline/ghi_chu đổi (đã
+  // blur-save cục bộ) thì bỏ qua, không đè field đang nhập dở.
+  const lastBookingSyncRef = useRef<string>("");
   useEffect(() => {
+    const syncKey = `${booking?.id}|${booking?.set_menu_id}|${JSON.stringify(booking?.mon_an_snapshot ?? [])}`;
+    if (syncKey === lastBookingSyncRef.current) return;
+    lastBookingSyncRef.current = syncKey;
     setMonList(booking?.mon_an_snapshot ?? []);
     setGhiChu(booking?.ghi_chu ?? "");
     setDeadline(booking?.deadline || getDefaultDeadline(ngayDate || ""));
     setSelectedSetMenuId(booking?.set_menu_id ?? setMenuIdFromDieuTour ?? null);
-  }, [booking?.id, booking?.set_menu_id, JSON.stringify(booking?.mon_an_snapshot)]);
+  }, [booking, ngayDate, setMenuIdFromDieuTour]);
 
   // Khi user THỰC SỰ đổi set menu (selectedSetMenuId !== booking.set_menu_id) →
   // tự fill danh sách món từ catalog + save. KHÔNG chạy khi initial mount sync

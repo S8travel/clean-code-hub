@@ -59,7 +59,9 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
       tai_khoan_thanh_toan: khachSan.tai_khoan_thanh_toan ?? "",
       thong_tin_chung: khachSan.thong_tin_chung ?? "",
     });
-  }, [khachSan.id]);
+    // khachSan là phần tử .find() từ react-query — ref ổn định, chỉ đổi khi
+    // chọn record khác hoặc refetch sau lưu → re-init form đúng lúc.
+  }, [khachSan]);
 
   const set = (key: string, val: string) => setForm((f) => ({ ...f, [key]: val }));
 

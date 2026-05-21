@@ -29,10 +29,12 @@ interface MonListViewProps {
 function MonListView({ nhaHangId, booking }: MonListViewProps) {
   const [monList, setMonList] = useState<string[]>(booking?.mon_an_snapshot ?? []);
 
-  // Đồng bộ khi booking thay đổi từ ngoài (cascade từ điều tour hoặc edit ở MealCard)
+  // Đồng bộ khi booking thay đổi từ ngoài (cascade từ điều tour hoặc edit ở MealCard).
+  // mon_an_snapshot là array từ react-query — ref đổi khi nội dung đổi → bắt được
+  // thay đổi nội dung mà không cần JSON.stringify. View-only nên không sợ đè edit.
   useEffect(() => {
     setMonList(booking?.mon_an_snapshot ?? []);
-  }, [booking?.id, JSON.stringify(booking?.mon_an_snapshot)]);
+  }, [booking?.id, booking?.mon_an_snapshot]);
 
   // Fallback: snapshot rỗng nhưng đã có set menu → lấy từ catalog để hiển thị
   // (không persist — đây là view-only).

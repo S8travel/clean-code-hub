@@ -101,7 +101,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
       setUseSpecificDate(true);
     }
     setDiemDenInput("");
-  }, [open, lead]);
+  }, [open, lead, user?.user_id]);
 
   const set = (k: keyof LeadInsert, v: any) => setForm((p) => ({ ...p, [k]: v }));
 

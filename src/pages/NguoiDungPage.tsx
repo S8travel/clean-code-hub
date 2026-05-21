@@ -275,7 +275,9 @@ function NguoiDungTab() {
       });
       setDirty(false);
     }
-  }, [selectedId, list]);
+    // selected = list.find(...) — react-query structural sharing giữ ref ổn định
+    // khi user này không đổi → effect chỉ chạy khi đổi user hoặc data user đổi thật.
+  }, [selected]);
 
   const set = (field: keyof Omit<UserRoleRow, "id" | "created_at">, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -1246,8 +1248,11 @@ function NhatKyTab() {
 }
 
 // ── Specialist: per-user permission editor ──────────────────────────────────
+// Ref ổn định cho default rỗng — tránh tạo [] mới mỗi render (loop effect).
+const EMPTY_USER_PERMS: UserPermission[] = [];
+
 function SpecialistPermissionsSection({ userId }: { userId: string }) {
-  const { data: existing = [], isLoading } = useUserPermissions(userId);
+  const { data: existing = EMPTY_USER_PERMS, isLoading } = useUserPermissions(userId);
   const upsertMut = useUpsertUserPermissions();
 
   const [matrix, setMatrix] = useState<Record<Resource, { v: boolean; c: boolean; e: boolean; d: boolean }>>(
@@ -1271,7 +1276,7 @@ function SpecialistPermissionsSection({ userId }: { userId: string }) {
       })
     ) as any);
     setDirty(false);
-  }, [existing.length, userId]);
+  }, [existing, userId]);
 
   const toggle = (resource: Resource, action: "v" | "c" | "e" | "d") => {
     setMatrix((prev) => ({

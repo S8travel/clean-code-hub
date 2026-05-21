@@ -77,7 +77,7 @@ export default function DoanDetail() {
   const { data: dbNgayRows = [] } = useDoanNgayList(doanId || undefined);
   const { data: dbNgayItems = [] } = useDoanNgayItems(doanId || undefined);
   const saveMutation = useSaveDieuTour();
-  const initDoanNgay = useInitDoanNgay();
+  const { mutate: initDoanNgayMutate } = useInitDoanNgay();
 
   // Warning badge data (React Query deduplicates — no extra requests when tabs are active)
   const { data: bookingKSList = [] } = useBookingKS(doanId || undefined);
@@ -176,26 +176,29 @@ export default function DoanDetail() {
     if (!hasPendingChangesRef.current) {
       setDays(mergedWithBookingNh);
     }
-  }, [doan, dbNgayRows, dbNgayItems, menuData]);
+  }, [doan, dbNgayRows, dbNgayItems, menuData, doanId, initialized]);
 
   // Sync chuyen_bay_don/tien từ doan khi DoanDrawer sửa (chỉ 2 field này bị
   // duplicate trong local state; các field khác như HDV, xe, số khách... đọc
-  // doan trực tiếp nên tự cập nhật theo refetch).
+  // doan trực tiếp nên tự cập nhật theo refetch). Tách field ra const để effect
+  // chỉ chạy đúng khi field đó đổi — tránh đè input đang nhập dở khi doan refetch.
+  const chuyenBayDonDb = doan?.chuyen_bay_don;
+  const chuyenBayTienDb = doan?.chuyen_bay_tien;
   useEffect(() => {
-    if (!initialized || !doan) return;
-    setChuyenBayDon(doan.chuyen_bay_don || "");
-  }, [doan?.chuyen_bay_don, initialized]);
+    if (!initialized) return;
+    setChuyenBayDon(chuyenBayDonDb || "");
+  }, [chuyenBayDonDb, initialized]);
   useEffect(() => {
-    if (!initialized || !doan) return;
-    setChuyenBayTien(doan.chuyen_bay_tien || "");
-  }, [doan?.chuyen_bay_tien, initialized]);
+    if (!initialized) return;
+    setChuyenBayTien(chuyenBayTienDb || "");
+  }, [chuyenBayTienDb, initialized]);
 
   // Auto-init doan_ngay rows
   useEffect(() => {
     if (doanId && doan?.ngay_di && doan?.ngay_ve) {
-      initDoanNgay.mutate({ doanId, ngayDi: doan.ngay_di, ngayVe: doan.ngay_ve });
+      initDoanNgayMutate({ doanId, ngayDi: doan.ngay_di, ngayVe: doan.ngay_ve });
     }
-  }, [doanId, doan?.ngay_di, doan?.ngay_ve]);
+  }, [doanId, doan?.ngay_di, doan?.ngay_ve, initDoanNgayMutate]);
 
   // Refetch booking data when switching tabs
   useEffect(() => {
@@ -413,7 +416,7 @@ export default function DoanDetail() {
       thuTip,
       tipRate,
     };
-  }, [doan, days, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour, thuTip, tipRate]);
+  }, [doan, hdvDisplayStr, days, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour, thuTip, tipRate]);
 
   // Warning badge counts
   const bookingKSBadgeCount = useMemo(() =>

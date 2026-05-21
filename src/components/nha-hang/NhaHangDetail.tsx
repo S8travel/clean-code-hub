@@ -70,7 +70,9 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
       thong_tin_chung: nhaHang.thong_tin_chung ?? "",
       nha_cung_cap_id: (nhaHang as any).nha_cung_cap_id?.toString() ?? "",
     });
-  }, [nhaHang.id]);
+    // nhaHang là phần tử .find() từ react-query — ref ổn định, chỉ đổi khi
+    // chọn record khác hoặc refetch sau lưu → re-init form đúng lúc.
+  }, [nhaHang]);
 
   const handleSave = async () => {
 
