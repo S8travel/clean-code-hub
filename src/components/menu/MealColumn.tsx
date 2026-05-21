@@ -99,32 +99,8 @@ export default function MealColumn({
     }
   }, [booking, loadMonsForSet]);
 
-  const applySetMenu = useCallback(async (setId: number) => {
-    setSelectedSetId(setId);
-    const mons = await loadMonsForSet(setId);
-    setMonList(mons);
-    setHasManualEdits(false);
-    // Auto-save snapshot
-    autoSaveSnapshot(setId, mons, ghiChu);
-  }, [loadMonsForSet, ghiChu]);
-
-  const handleSetMenuChange = useCallback(async (val: string) => {
-    const setId = Number(val);
-    if (hasManualEdits && monList.length > 0) {
-      setPendingSetId(setId);
-      setShowReplaceConfirm(true);
-    } else {
-      applySetMenu(setId);
-    }
-  }, [hasManualEdits, monList, applySetMenu]);
-
-  const confirmReplace = useCallback(() => {
-    if (pendingSetId) applySetMenu(pendingSetId);
-    setShowReplaceConfirm(false);
-    setPendingSetId(null);
-  }, [pendingSetId, applySetMenu]);
-
-  // Auto-save functions
+  // Auto-save snapshot (debounce 800ms). Định nghĩa trước applySetMenu vì
+  // applySetMenu phụ thuộc vào nó (tránh TDZ khi đưa vào dep array).
   const autoSaveSnapshot = useCallback((setId: number | null, mons: string[], note: string) => {
     if (!nhaHangId) return;
     const setMenu = setMenuList.find(s => s.id === setId);
@@ -144,6 +120,31 @@ export default function MealColumn({
       });
     }, 800);
   }, [doanId, doanNgayId, buaAn, nhaHangId, setMenuList, upsertMut]);
+
+  const applySetMenu = useCallback(async (setId: number) => {
+    setSelectedSetId(setId);
+    const mons = await loadMonsForSet(setId);
+    setMonList(mons);
+    setHasManualEdits(false);
+    // Auto-save snapshot
+    autoSaveSnapshot(setId, mons, ghiChu);
+  }, [loadMonsForSet, ghiChu, autoSaveSnapshot]);
+
+  const handleSetMenuChange = useCallback(async (val: string) => {
+    const setId = Number(val);
+    if (hasManualEdits && monList.length > 0) {
+      setPendingSetId(setId);
+      setShowReplaceConfirm(true);
+    } else {
+      applySetMenu(setId);
+    }
+  }, [hasManualEdits, monList, applySetMenu]);
+
+  const confirmReplace = useCallback(() => {
+    if (pendingSetId) applySetMenu(pendingSetId);
+    setShowReplaceConfirm(false);
+    setPendingSetId(null);
+  }, [pendingSetId, applySetMenu]);
 
   // Mon list handlers
   const updateMon = (idx: number, val: string) => {
@@ -233,7 +234,7 @@ export default function MealColumn({
     } finally {
       setSending(false);
     }
-  }, [nhaHangEmail, selectedSetId, monList, ghiChu, doanId, doanNgayId, buaAn, nhaHangId, setMenuList, tenDoan, ngayDate, soKhach]);
+  }, [nhaHangEmail, selectedSetId, monList, ghiChu, doanId, doanNgayId, buaAn, nhaHangId, setMenuList, tenDoan, ngayDate, soKhach, queryClient]);
 
   // Status actions
   const handleConfirm = async () => {
