@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 const URL = "https://lflsbwoqzmbknzdpaequ.supabase.co";
-const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbHNid29xem1ia256ZHBhZXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MDAzNzcsImV4cCI6MjA4OTI3NjM3N30.RLsKYfH6XZw3Mcmk2fm1R6rKKzrtm0MLrYhtjIT--T0";
+const KEY = "sb_publishable_6R8_5n97R_1JRQRfrf5vJA_6cuXePLL";
 const FILE = "/home/nghianguyen/.claude/plans/ncc.txt";
 const APPLY = process.argv.includes("--apply");
 const LIST_CURRENT = process.argv.includes("--list-current");
