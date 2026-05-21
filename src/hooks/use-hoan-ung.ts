@@ -4,6 +4,7 @@
 // 2 field thêm: loai_chi_hoan_ung (enum), nguoi_ung_id (uuid → auth.users).
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
+import type { TablesInsert } from "@/lib/database.types";
 
 export const LOAI_CHI_HOAN_UNG_OPTS: { value: string; label: string }[] = [
   { value: "vpp",          label: "Văn phòng phẩm" },
@@ -97,7 +98,7 @@ export function useHoanUngList(filter?: {
           .from("user_roles")
           .select("user_id, ho_ten")
           .in("user_id", ids);
-        for (const r of roles ?? []) nameMap[r.user_id] = r.ho_ten;
+        for (const r of roles ?? []) nameMap[r.user_id] = r.ho_ten ?? "";
       }
       return (data ?? []).map((r: any) => ({
         ...r,
@@ -137,7 +138,7 @@ export function useCreateHoanUng() {
           ngay_can_thanh_toan: payload.ngay_can_thanh_toan ?? null,
           tao_boi: payload.tao_boi,
           trang_thai_duyet: "cho_duyet",
-        })
+        } as unknown as TablesInsert<"de_nghi_thanh_toan">)
         .select("id")
         .single();
       if (error) throw error;

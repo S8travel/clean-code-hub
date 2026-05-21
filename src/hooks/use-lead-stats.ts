@@ -15,7 +15,7 @@ export function useLeadStats(userId: string | null | undefined) {
     queryKey: ["lead_stats", userId],
     enabled: !!userId,
     queryFn: async () => {
-      const { data, error } = await externalSupabase.rpc("get_lead_stats", { p_user_id: userId });
+      const { data, error } = await externalSupabase.rpc("get_lead_stats", { p_user_id: userId! });
       if (error) throw error;
       const row = (data as LeadStats[] | null)?.[0];
       if (!row) return ZERO;

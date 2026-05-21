@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
+import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export interface BookingNHRow {
   id: number;
@@ -163,7 +164,7 @@ export function useUpsertBookingNH() {
     mutationFn: async (row: Partial<BookingNHRow> & { doan_ngay_id: number; bua_an: string; doan_id: number }) => {
       const { data, error } = await externalSupabase
         .from("doan_booking_nh")
-        .upsert(row, { onConflict: "doan_ngay_id,bua_an" })
+        .upsert(row as unknown as TablesInsert<"doan_booking_nh">, { onConflict: "doan_ngay_id,bua_an" })
         .select()
         .single();
       if (error) throw error;
@@ -191,7 +192,7 @@ export function useUpdateBookingNH() {
     mutationFn: async ({ id, doan_id, ...fields }: Partial<BookingNHRow> & { id: number; doan_id: number }) => {
       const { error } = await externalSupabase
         .from("doan_booking_nh")
-        .update(fields)
+        .update(fields as unknown as TablesUpdate<"doan_booking_nh">)
         .eq("id", id);
       if (error) throw error;
 

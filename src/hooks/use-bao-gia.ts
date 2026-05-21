@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
+import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export interface BaoGiaItem {
   loai: "hotel" | "meal" | "ticket" | "transport";
@@ -87,7 +88,7 @@ export function useCreateBaoGia() {
     mutationFn: async (payload: Omit<Partial<BaoGiaRow>, "id" | "created_at">) => {
       const { data, error } = await externalSupabase
         .from("bao_gia")
-        .insert(payload)
+        .insert(payload as unknown as TablesInsert<"bao_gia">)
         .select("id")
         .single();
       if (error) throw error;
@@ -103,7 +104,10 @@ export function useUpdateBaoGia() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...rest }: { id: number } & Partial<BaoGiaRow>) => {
-      const { error } = await externalSupabase.from("bao_gia").update(rest).eq("id", id);
+      const { error } = await externalSupabase
+        .from("bao_gia")
+        .update(rest as unknown as TablesUpdate<"bao_gia">)
+        .eq("id", id);
       if (error) throw error;
       return id;
     },

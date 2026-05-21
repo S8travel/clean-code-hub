@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { DayLocal, DayItemLocal } from "@/hooks/use-dieu-tour";
+import type { TablesInsert } from "@/lib/database.types";
 
 // ── Types ──
 
@@ -408,7 +409,7 @@ export function useApplySeriToDoan() {
       if (itemInserts.length > 0) {
         const { error: e4 } = await externalSupabase
           .from("doan_ngay_item")
-          .insert(itemInserts);
+          .insert(itemInserts as unknown as TablesInsert<"doan_ngay_item">[]);
         if (e4) throw e4;
       }
     },

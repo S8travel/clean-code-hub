@@ -162,7 +162,7 @@ export default function DoanDetail() {
       setChuyenBayDon(doan.chuyen_bay_don || "");
       setChuyenBayTien(doan.chuyen_bay_tien || "");
       setChuThichKhach(doan.chu_thich_khach || "");
-      setGifts(Array.isArray(doan.tang_pham) ? doan.tang_pham : []);
+      setGifts(Array.isArray(doan.tang_pham) ? (doan.tang_pham as unknown as string[]) : []);
       setGhiChuDieuTour(doan.ghi_chu_dieu_tour || "");
       setCoTinhSuatTLNhaHang(doan.co_tinh_suat_tl_nha_hang ?? false);
       setThuTip(doan.thu_tip ?? true);
@@ -393,7 +393,7 @@ export default function DoanDetail() {
       canhDiemList,
       nhaHangList,
       khachSanList,
-      tenDoan: doan.ten_doan,
+      tenDoan: doan.ten_doan ?? "",
       hdv: hdvDisplayStr,
       xe: doan.xe ?? null,
       ngayDi: doan.ngay_di ?? null,
@@ -595,13 +595,13 @@ export default function DoanDetail() {
           </TabsContent>
 
           <TabsContent value="booking-ks" className="mt-4">
-            <BookingKSTab doanId={doanId} tenDoan={doan.ten_doan} ngayDi={doan.ngay_di} soKhach={doan.so_khach} />
+            <BookingKSTab doanId={doanId} tenDoan={doan.ten_doan ?? ""} ngayDi={doan.ngay_di} soKhach={doan.so_khach ?? undefined} />
           </TabsContent>
 
           <TabsContent value="menu" className="mt-4">
             <BookingNHTab
               doanId={doanId}
-              tenDoan={doan.ten_doan}
+              tenDoan={doan.ten_doan ?? ""}
               soKhach={coTinhSuatTLNhaHang ? (totalKhach || doan.so_khach || 0) : ((totalKhach - soKhachTl) || doan.so_khach || 0)}
               soNoidBo={soKhachTl > 0 && !coTinhSuatTLNhaHang ? 3 : 2}
               soKhachLon={coTinhSuatTLNhaHang ? soKhachLon + soKhachTl : soKhachLon}
@@ -614,7 +614,7 @@ export default function DoanDetail() {
           <TabsContent value="booking-visa-xe" className="mt-4">
             <BookingVisaXeTab
               doanId={doanId}
-              tenDoan={doan.ten_doan}
+              tenDoan={doan.ten_doan ?? ""}
               ngayDi={doan.ngay_di}
               ngayVe={doan.ngay_ve}
               chuyenBayDon={doan.chuyen_bay_don}
@@ -633,7 +633,7 @@ export default function DoanDetail() {
           <TabsContent value="booking-dv" className="mt-4">
             <BookingDVTab
               doanId={doanId}
-              tenDoan={doan.ten_doan}
+              tenDoan={doan.ten_doan ?? ""}
               ngayDi={doan.ngay_di}
             />
           </TabsContent>

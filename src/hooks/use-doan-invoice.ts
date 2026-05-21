@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
+import type { TablesInsert } from "@/lib/database.types";
 
 export interface InvoiceFile {
   url: string;
@@ -38,7 +39,7 @@ export function useDoanInvoiceData(doanId?: number) {
       if (!data) return null;
       return {
         ...data,
-        invoice_files: (data.invoice_files ?? []) as InvoiceFile[],
+        invoice_files: (data.invoice_files ?? []) as unknown as InvoiceFile[],
       } as DoanInvoiceRow;
     },
   });
@@ -60,6 +61,7 @@ export function useChiPhiSummaryMap(doanIds: number[]) {
       const map = new Map<number, ChiPhiSummary>();
       for (const r of data ?? []) {
         if (r.trang_thai_dntt === "cong_no" || r.trang_thai_dntt === "hoan_tien") continue;
+        if (r.doan_id == null) continue;
         const prev = map.get(r.doan_id) ?? { thucTe: 0, total: 0 };
         const contrib = (r.tien_cong_ty ?? 0) + (r.tien_hdv ?? 0);
         prev.total += contrib;
@@ -84,7 +86,10 @@ export function useUpsertDoanInvoice() {
     }) => {
       const { error } = await externalSupabase
         .from("doan_invoice")
-        .upsert({ ...payload, updated_at: new Date().toISOString() }, { onConflict: "doan_id" });
+        .upsert(
+          { ...payload, updated_at: new Date().toISOString() } as unknown as TablesInsert<"doan_invoice">,
+          { onConflict: "doan_id" },
+        );
       if (error) throw error;
     },
     onSuccess: (_, v) => {
@@ -124,7 +129,11 @@ export function useUploadInvoiceFile() {
       const { error: upsertErr } = await externalSupabase
         .from("doan_invoice")
         .upsert(
-          { doan_id: doanId, invoice_files: updatedFiles, updated_at: new Date().toISOString() },
+          {
+            doan_id: doanId,
+            invoice_files: updatedFiles,
+            updated_at: new Date().toISOString(),
+          } as unknown as TablesInsert<"doan_invoice">,
           { onConflict: "doan_id" },
         );
       if (upsertErr) throw upsertErr;
@@ -170,7 +179,11 @@ export function useDeleteInvoiceFile() {
       const { error } = await externalSupabase
         .from("doan_invoice")
         .upsert(
-          { doan_id: doanId, invoice_files: updatedFiles, updated_at: new Date().toISOString() },
+          {
+            doan_id: doanId,
+            invoice_files: updatedFiles,
+            updated_at: new Date().toISOString(),
+          } as unknown as TablesInsert<"doan_invoice">,
           { onConflict: "doan_id" },
         );
       if (error) throw error;

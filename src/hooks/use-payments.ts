@@ -200,7 +200,7 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
             dntt_so_tien: dnttSoTien[p.dntt_id] || 1,
             alloc_so_tien: Number(alloc.so_tien),
             payment_id: p.id,
-            method: p.method,
+            method: p.method as "cash" | "can_tru",
             payment_so_tien: shares[i],
             cong_no_id: p.cong_no_id,
             ngay_thanh_toan: p.ngay_thanh_toan,

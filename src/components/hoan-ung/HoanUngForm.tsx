@@ -55,16 +55,17 @@ export default function HoanUngForm({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open || !user?.user_id) return;
+    // user_roles KHÔNG có cột so_tai_khoan/ngan_hang — select cũ làm hỏng cả
+    // query (kể cả ho_ten cũng không prefill). Chỉ lấy ho_ten; STK/ngân hàng
+    // nhập tay.
     externalSupabase
       .from("user_roles")
-      .select("ho_ten, so_tai_khoan, ngan_hang")
+      .select("ho_ten")
       .eq("user_id", user.user_id)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
         setHoTen(data.ho_ten ?? "");
-        setSoTaiKhoan((data as any).so_tai_khoan ?? "");
-        setNganHang((data as any).ngan_hang ?? "");
       });
   }, [open, user?.user_id]);
 

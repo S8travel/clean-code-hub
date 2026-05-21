@@ -53,7 +53,7 @@ export function useChiPhiNHSection(doanId?: number) {
           meals.push({
             doan_ngay_id: r.id,
             ngay_so: r.ngay_so,
-            ngay_date: r.ngay_date,
+            ngay_date: r.ngay_date ?? "",
             bua_an: "trua",
             nha_hang_id: r.an_trua_nha_hang_id,
             set_menu_id: r.an_trua_set_menu_id ?? null,
@@ -64,7 +64,7 @@ export function useChiPhiNHSection(doanId?: number) {
           meals.push({
             doan_ngay_id: r.id,
             ngay_so: r.ngay_so,
-            ngay_date: r.ngay_date,
+            ngay_date: r.ngay_date ?? "",
             bua_an: "toi",
             nha_hang_id: r.an_toi_nha_hang_id,
             set_menu_id: r.an_toi_set_menu_id ?? null,

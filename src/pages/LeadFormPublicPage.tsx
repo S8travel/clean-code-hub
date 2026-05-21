@@ -64,17 +64,17 @@ export default function LeadFormPublicPage() {
       const ngan_sach = form.ngan_sach.replace(/[^\d]/g, "");
       const { error } = await externalSupabase.rpc("create_lead_from_form", {
         p_ho_ten:              form.ho_ten.trim(),
-        p_so_dien_thoai:       form.so_dien_thoai.trim() || null,
-        p_email:               form.email.trim() || null,
+        p_so_dien_thoai:       (form.so_dien_thoai.trim() || null) as string | undefined,
+        p_email:               (form.email.trim() || null) as string | undefined,
         p_loai_tour:           form.loai_tour,
-        p_diem_den:            form.diem_den.trim() || null,
+        p_diem_den:            (form.diem_den.trim() || null) as string | undefined,
         p_so_nguoi_lon:        form.so_nguoi_lon,
         p_so_nguoi_em:         form.so_nguoi_em,
-        p_ngay_di_du_kien:     form.ngay_di || null,
-        p_ngay_ve_du_kien:     form.ngay_ve || null,
-        p_ngan_sach_per_khach: ngan_sach ? Number(ngan_sach) : null,
-        p_yeu_cau_dac_biet:    null,
-        p_ghi_chu:             form.ghi_chu.trim() || null,
+        p_ngay_di_du_kien:     (form.ngay_di || null) as string | undefined,
+        p_ngay_ve_du_kien:     (form.ngay_ve || null) as string | undefined,
+        p_ngan_sach_per_khach: (ngan_sach ? Number(ngan_sach) : null) as number | undefined,
+        p_yeu_cau_dac_biet:    null as unknown as string | undefined,
+        p_ghi_chu:             (form.ghi_chu.trim() || null) as string | undefined,
         p_nguon:               "web_form",
       });
       if (error) {

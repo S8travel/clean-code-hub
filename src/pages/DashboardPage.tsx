@@ -489,7 +489,7 @@ function DashboardPageContent() {
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <p className="text-sm font-semibold">{fmtM(d.so_tien)} ₫</p>
+                        <p className="text-sm font-semibold">{fmtM(d.so_tien ?? 0)} ₫</p>
                         <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium",
                           isPending ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700")}>
                           {isPending ? t("Chờ duyệt") : t("Chờ TT")}

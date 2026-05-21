@@ -2,6 +2,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import type { KhachSanItem } from "./use-dieu-tour";
+import type { TablesUpdate } from "@/lib/database.types";
 
 export interface BookingKSRow {
   id: number;
@@ -133,7 +134,7 @@ export function useUpdateBookingKS() {
     mutationFn: async ({ id, fields }: { id: number; fields: Partial<BookingKSRow> }) => {
       const { error } = await externalSupabase
         .from("doan_booking_ks")
-        .update(fields)
+        .update(fields as TablesUpdate<"doan_booking_ks">)
         .eq("id", id);
       if (error) throw error;
     },
@@ -250,7 +251,7 @@ export function useSendKSBookingEmail() {
 
       const { error } = await externalSupabase
         .from("doan_booking_ks")
-        .update(fields)
+        .update(fields as TablesUpdate<"doan_booking_ks">)
         .eq("id", params.bookingId);
       if (error) throw error;
     },

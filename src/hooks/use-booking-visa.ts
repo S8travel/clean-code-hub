@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { TablesInsert } from "@/lib/database.types";
 
 export interface BookingVisaRow {
   id: number;
@@ -41,7 +42,10 @@ export function useUpsertBookingVisa() {
     mutationFn: async (payload: Partial<BookingVisaRow> & { doan_id: number }) => {
       const { error } = await externalSupabase
         .from("doan_booking_visa")
-        .upsert({ ...payload, updated_at: new Date().toISOString() }, { onConflict: "id" });
+        .upsert(
+          { ...payload, updated_at: new Date().toISOString() } as TablesInsert<"doan_booking_visa">,
+          { onConflict: "id" },
+        );
       if (error) throw error;
     },
     onSuccess: (_, v) => qc.invalidateQueries({ queryKey: QK(v.doan_id) }),

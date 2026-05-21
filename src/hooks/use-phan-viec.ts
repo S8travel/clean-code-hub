@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { TablesInsert } from "@/lib/database.types";
 
 // Bộ đầu việc phân cho đoàn (rows cong_viec với loai_viec prefix pv_)
 // "Người giao" cho việc auto khi tạo đoàn = Hệ thống.
@@ -339,7 +340,7 @@ export function useCreatePhanViec() {
             do_uu_tien: a.key === "pv_ks" ? "cao" : "binh_thuong",
             han_xu_ly: doan.ngay_di || null,
             trang_thai: "cho_nhan",
-          })
+          } as unknown as TablesInsert<"cong_viec">)
           .select("id")
           .single();
         if (error) throw error;
@@ -352,7 +353,7 @@ export function useCreatePhanViec() {
           tieu_de: `Đoàn ${doan.ten_doan}: bạn phụ trách ${LABEL[a.key]}`,
           noi_dung: `Giao tự động bởi Hệ thống (tạo đoàn ${doan.ten_doan})`,
           is_read: false,
-        });
+        } as unknown as TablesInsert<"thong_bao">);
       }
 
       // 1b) Mục giao cho ADMIN → tạo dạng "Không cần" (đen, loại khỏi theo dõi/
