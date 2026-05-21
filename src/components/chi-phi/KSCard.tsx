@@ -177,11 +177,15 @@ export default function KSCard({ ksId, data, handlers }: Props) {
   // Orphaned + công nợ → auto-xóa, ẩn luôn khỏi UI
   if (isOrphaned && ksStatus === "cong_no") return null;
 
-  // Hoàn tiền → ẩn khỏi tab chi phí, chỉ lưu trong công nợ
-  if (ksStatus === "hoan_tien") return null;
+  // Orphaned + hoàn tiền → đã rời điều tour, ẩn (chỉ còn trong công nợ).
+  // Còn trong điều tour (user chọn lại KS đúng ô đó) → KHÔNG ẩn, coi như chi phí mới.
+  if (isOrphaned && ksStatus === "hoan_tien") return null;
 
-  // KS còn trong điều tour dù đã có cong_no → coi như chi phí mới, không show annotation
-  const effectiveKsStatus = (!isOrphaned && ksStatus === "cong_no") ? "chua_de_nghi" : ksStatus;
+  // KS còn trong điều tour dù đã có cong_no / hoàn tiền (lịch sử) → coi như chi phí mới.
+  const effectiveKsStatus =
+    (!isOrphaned && (ksStatus === "cong_no" || ksStatus === "hoan_tien"))
+      ? "chua_de_nghi"
+      : ksStatus;
 
   // cong_no/hoan_tien: collapsed by default; others: expanded by default
   const defaultCollapsed = effectiveKsStatus === "cong_no" || effectiveKsStatus === "hoan_tien";
