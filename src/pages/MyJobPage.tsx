@@ -360,7 +360,7 @@ export default function MyJobPage() {
         const dnttDaTT       = dntt.filter((r) => r.payment_status === "paid").length;
         return { g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT };
       });
-  }, [myDoan, td, search, trangThai]);
+  }, [myDoan, td, search, trangThai, hiddenIds, myDoanScopeMap]);
 
   // Phân trang "Đoàn được phân công" — 10 dòng/trang
   const DOAN_PAGE_SIZE = 10;

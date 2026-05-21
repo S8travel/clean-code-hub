@@ -95,7 +95,9 @@ function HDVPageContent() {
       });
       setDirty(false);
     }
-  }, [selectedId, list]);
+    // selected = list.find(...) — react-query structural sharing giữ ref ổn định
+    // khi HDV này không đổi → effect chỉ chạy khi đổi HDV hoặc data HDV đổi thật.
+  }, [selected]);
 
   const set = (field: keyof Omit<HDVRow, "id">, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
