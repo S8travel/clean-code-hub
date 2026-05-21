@@ -239,16 +239,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
     setSelectedIds([]);
   }, [doanId]);
 
-  if (dvRows.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        🎫 Chưa có dịch vụ nào trong chương trình.
-        <br />
-        <span className="text-xs">Vào mục Điều Tour → thêm dịch vụ có phí vào chương trình ngày.</span>
-      </div>
-    );
-  }
-
   // Nhóm theo ngày
   const byDay = new Map<number, typeof dvRows>();
   for (const row of dvRows) {
@@ -782,6 +772,17 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   }), [buildSelectedEntries, selectedIds.length]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  // Empty state — return SAU mọi hook (Rules of Hooks).
+  if (dvRows.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+        🎫 Chưa có dịch vụ nào trong chương trình.
+        <br />
+        <span className="text-xs">Vào mục Điều Tour → thêm dịch vụ có phí vào chương trình ngày.</span>
+      </div>
+    );
+  }
 
   const allSelected = selectedIds.length === dvRows.length && dvRows.length > 0;
 

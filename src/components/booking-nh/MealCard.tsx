@@ -82,11 +82,17 @@ interface Props {
   ngayDate?: string | null;
 }
 
-export default function MealCard({
-  doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail, nhaHangLoai, booking, currentUserName,
+// Guard ngoài: card "tàu ngày" hoặc chưa gán nhà hàng → return null TRƯỚC mọi hook.
+// MealCardInner chỉ mount khi card hoạt động nên hook bên trong luôn chạy đủ.
+export default function MealCard(props: Props) {
+  if (props.nhaHangLoai === "tau_ngay" || !props.nhaHangId) return null;
+  return <MealCardInner {...props} />;
+}
+
+function MealCardInner({
+  doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail, booking, currentUserName,
   conTrongDieuTour = true, setMenuIdFromDieuTour, tenDoan, soKhach, soKhachLon, soKhachEm1, soKhachEm2, soNoidBo, ngayDate,
 }: Props) {
-  if (nhaHangLoai === "tau_ngay") return null;
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
 
@@ -205,8 +211,6 @@ export default function MealCard({
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMenuIdFromDieuTour, booking?.id, booking?.set_menu_id, setMenuOptions]);
-
-  if (!nhaHangId) return null;
 
   const status = booking?.booking_status as keyof typeof STATUS_CFG | undefined;
   const statusCfg = STATUS_CFG[status ?? "chua_gui"];

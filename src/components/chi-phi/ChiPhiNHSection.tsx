@@ -2465,6 +2465,11 @@ function NHInput({
   /** Cho phép số thập phân (đơn giá). Focus → raw "1500.5"; blur → "1.500,5". */
   decimal?: boolean;
 }) {
+  // Hook phải gọi vô điều kiện TRƯỚC mọi return sớm (Rules of Hooks).
+  const formatVN = (n: number) => (n ? n.toLocaleString("vi-VN") : "");
+  const [local, setLocal] = useState(money ? formatVN(value) : String(value));
+  useEffect(() => { setLocal(money ? formatVN(value) : String(value)); }, [value, money]);
+
   if (decimal) {
     return (
       <DecimalInput
@@ -2475,9 +2480,6 @@ function NHInput({
       />
     );
   }
-  const formatVN = (n: number) => (n ? n.toLocaleString("vi-VN") : "");
-  const [local, setLocal] = useState(money ? formatVN(value) : String(value));
-  useEffect(() => { setLocal(money ? formatVN(value) : String(value)); }, [value, money]);
   return (
     <Input
       type={money ? "text" : "number"}
