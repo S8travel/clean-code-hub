@@ -27,6 +27,7 @@ import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/u
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
+import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import CatalogHoverCard from "./CatalogHoverCard";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
@@ -42,11 +43,6 @@ const dayLabel = (dateStr: string) => {
   const names = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
   return names[getDay(d)];
 };
-
-function calcSoKhachThucTe(soKhach: number, focKhach: number | null, focMien: number | null): number {
-  if (!focKhach || !focMien || focKhach <= 0) return soKhach;
-  return soKhach - Math.floor(soKhach / focKhach) * focMien;
-}
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   cho_duyet:     { text: "Chờ duyệt",  cls: "bg-yellow-100 text-yellow-700" },
@@ -86,35 +82,6 @@ export interface LocalNHRow {
   chiet_khau_phan_tram_snapshot?: number | null;
   is_overridden?: boolean;
   trang_thai_thanh_toan?: string;
-}
-
-// Resolve FOC: snapshot trên row > master nha_hang. Snapshot lock per-tour
-// → master changes không thay đổi calculation đoàn cũ.
-function resolveNHFoc(
-  row: { foc_khach_snapshot?: number | null; foc_mien_snapshot?: number | null } | null | undefined,
-  nh: { foc_khach: number | null; foc_mien: number | null } | null | undefined,
-): { foc_khach: number | null; foc_mien: number | null } {
-  if (row && (row.foc_khach_snapshot != null || row.foc_mien_snapshot != null)) {
-    return {
-      foc_khach: row.foc_khach_snapshot ?? null,
-      foc_mien:  row.foc_mien_snapshot  ?? null,
-    };
-  }
-  return {
-    foc_khach: nh?.foc_khach ?? null,
-    foc_mien:  nh?.foc_mien  ?? null,
-  };
-}
-
-// Resolve chiết khấu: snapshot > master. Lock per-tour.
-function resolveNHChietKhau(
-  row: { chiet_khau_phan_tram_snapshot?: number | null } | null | undefined,
-  nh: { chiet_khau_phan_tram: number | null } | null | undefined,
-): number {
-  if (row && row.chiet_khau_phan_tram_snapshot != null) {
-    return row.chiet_khau_phan_tram_snapshot;
-  }
-  return nh?.chiet_khau_phan_tram ?? 0;
 }
 
 interface LocalNHExtra {

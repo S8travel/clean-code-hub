@@ -11,7 +11,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useUpdateChiPhiActual } from "@/hooks/use-chi-phi";
-import { isKSRoomRow, type LocalKSRow } from "./ChiPhiKSSection";
+import { type LocalKSRow } from "./ChiPhiKSSection";
+import { isKSRoomRow } from "@/lib/foc-calc";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 

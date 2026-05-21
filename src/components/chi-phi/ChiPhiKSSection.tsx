@@ -41,73 +41,15 @@ import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { exportDNTTKSExcel } from "@/lib/export-dntt-ks-excel";
 import DNTTKSPreviewModal from "./DNTTKSPreviewModal";
 import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
+import {
+  isKSRoomRow,
+  calcRowFocBreakdown,
+  calcTotalKS,
+  calcFocSuggestion,
+  resolveKSFoc,
+} from "@/lib/foc-calc";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
-
-// Row 'phong' (hoặc legacy không có loai_row) tính vào FOC; service rows thì không.
-export function isKSRoomRow(r: LocalKSRow): boolean {
-  return !r.loai_row || r.loai_row === "phong";
-}
-
-// FOC per row (Option A — foc_count nhập tay cho mọi row, KHÔNG auto-pool theo ngày).
-// Lý do: pool tự động phân bổ FOC theo bình quân giá → khi mix loại phòng (vd 30 twn
-// + 1 sgl nâng hạng), FOC dính một phần vào SGL → vượt giá trị thực (chỉ free 1 twn).
-// UI nay hiện "16免1 suggest" để OP biết tổng FOC, nhưng OP tự gán foc_count cho row
-// phòng giá thấp nhất. Signature giữ args (sameKsDayRows, focKhach, focMien) để callers
-// cũ không phải đổi — args hiện chỉ dùng cho legacy compat, không còn tính toán pool.
-function calcRowFocBreakdown(
-  row: LocalKSRow,
-  _sameKsDayRows: LocalKSRow[],
-  _focKhach: number | null,
-  _focMien: number | null,
-): { rowFocDeduction: number; rowFocCount: number } {
-  const focCount = Math.max(0, Number(row.foc_count) || 0);
-  if (focCount <= 0) return { rowFocDeduction: 0, rowFocCount: 0 };
-  const pricePerRoom = Number(row.gia_phong) || 0;
-  return {
-    rowFocDeduction: Math.round(focCount * pricePerRoom),
-    rowFocCount: focCount,
-  };
-}
-
-// Tổng KS = sum((so_luong - foc_count) × gia_phong) cho mọi row (phòng + dịch vụ).
-// focKhach/focMien không còn dùng để tính tiền (giữ args cho compat); chỉ dùng UI gợi ý.
-function calcTotalKS(
-  rows: LocalKSRow[],
-  _focKhach: number | null,
-  _focMien: number | null,
-): number {
-  return rows.reduce((sum, r) => {
-    const focCount = Math.max(0, Number(r.foc_count) || 0);
-    const billed = Math.max(0, (Number(r.so_phong) || 0) - focCount);
-    const soDem = isKSRoomRow(r) ? (Number(r.so_dem) || 1) : 1;
-    return sum + billed * (Number(r.gia_phong) || 0) * soDem;
-  }, 0);
-}
-
-// Tính tổng FOC trừ (1 KS) — sum(row.foc_count × row.gia_phong) trên mọi row.
-// Giữ args focKhach/focMien để callers cũ không phải đổi.
-function calcFocDeduction(rows: LocalKSRow[], _focKhach: number | null, _focMien: number | null): number {
-  return rows.reduce((sum, r) => {
-    const focCount = Math.max(0, Number(r.foc_count) || 0);
-    return sum + Math.round(focCount * (Number(r.gia_phong) || 0));
-  }, 0);
-}
-
-// Gợi ý tổng FOC theo công thức 16免1 cho 1 ngày — info-only, KHÔNG auto-fill.
-// OP tự gán foc_count vào row phòng giá thấp nhất.
-export function calcFocSuggestion(
-  dayRoomRows: LocalKSRow[],
-  focKhach: number | null,
-  focMien: number | null,
-): { totalRooms: number; suggestedFoc: number } {
-  const totalRooms = dayRoomRows.reduce((s, r) => s + (Number(r.so_phong) || 0), 0);
-  if (!focKhach || !focMien || focKhach <= 0 || focMien <= 0) {
-    return { totalRooms, suggestedFoc: 0 };
-  }
-  if (totalRooms < focKhach) return { totalRooms, suggestedFoc: 0 };
-  return { totalRooms, suggestedFoc: Math.floor(totalRooms / focKhach) * focMien };
-}
 
 function fmtDateDisplay(d: string) {
   if (!d) return "—";
@@ -153,24 +95,6 @@ export interface LocalKSRow {
   loai_row?: KSLoaiRow;  // default 'phong' nếu không set
   foc_count?: number;    // dùng cho service rows (OP tự điền)
   is_hdv?: boolean;      // dòng dịch vụ HDV trả (tien_hdv>0) — ngoài tổng KS/ĐNTT
-}
-
-// Resolve FOC config: ưu tiên snapshot trên rows, fall back master
-function resolveKSFoc(
-  rows: LocalKSRow[],
-  ksMaster: { foc_khach: number | null; foc_mien: number | null } | undefined | null,
-): { foc_khach: number | null; foc_mien: number | null } {
-  const withSnap = rows.find((r) => r.foc_khach_snapshot != null || r.foc_mien_snapshot != null);
-  if (withSnap) {
-    return {
-      foc_khach: withSnap.foc_khach_snapshot ?? null,
-      foc_mien:  withSnap.foc_mien_snapshot  ?? null,
-    };
-  }
-  return {
-    foc_khach: ksMaster?.foc_khach ?? null,
-    foc_mien:  ksMaster?.foc_mien  ?? null,
-  };
 }
 
 // Dựng 1 LocalKSRow từ 1 doan_chi_phi (snapshot CỦA TOUR). Logic GIỮ
