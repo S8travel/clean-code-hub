@@ -61,6 +61,10 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
 
   // Inline edit for row fields (so_luong, don_gia)
   const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
+  // Ref mirror cho blur callback: DecimalInput.onBlur gọi onChange rồi setTimeout(onBlur)
+  // → handleRowSave chạy ở tick sau, closure editRow bị cũ 1 nhịp. Đọc ref để luôn mới.
+  const editRowRef = useRef(editRow);
+  useEffect(() => { editRowRef.current = editRow; }, [editRow]);
 
   // Extras state
   const [extrasMap, setExtrasMap] = useState<Record<number, LocalDVExtra[]>>({});
@@ -156,15 +160,17 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
     editRow[row.id] ?? { so_luong: row.so_luong, don_gia: row.don_gia };
 
   const handleRowChange = (id: number, field: "so_luong" | "don_gia", val: number) => {
-    setEditRow(prev => {
-      const base = dvRows.find(r => r.id === id);
-      const existing = prev[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
-      return { ...prev, [id]: { ...existing, [field]: val } };
-    });
+    const base = dvRows.find(r => r.id === id);
+    const cur = editRowRef.current;
+    const existing = cur[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
+    const next = { ...cur, [id]: { ...existing, [field]: val } };
+    // Cập nhật ref ngay (đồng bộ) → handleRowSave chạy sau setTimeout đọc đúng giá trị mới.
+    editRowRef.current = next;
+    setEditRow(next);
   };
 
   const handleRowSave = (row: typeof dvRows[0]) => {
-    const local = editRow[row.id];
+    const local = editRowRef.current[row.id];
     if (!local) return;
     if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
     const total = local.so_luong * local.don_gia;
