@@ -27,6 +27,8 @@ import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/u
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
+import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
+import { applyChietKhau } from "@/lib/chi-phi-calc";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import CatalogHoverCard from "./CatalogHoverCard";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
@@ -42,11 +44,6 @@ const dayLabel = (dateStr: string) => {
   const names = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
   return names[getDay(d)];
 };
-
-function calcSoKhachThucTe(soKhach: number, focKhach: number | null, focMien: number | null): number {
-  if (!focKhach || !focMien || focKhach <= 0) return soKhach;
-  return soKhach - Math.floor(soKhach / focKhach) * focMien;
-}
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   cho_duyet:     { text: "Chờ duyệt",  cls: "bg-yellow-100 text-yellow-700" },
@@ -86,35 +83,6 @@ export interface LocalNHRow {
   chiet_khau_phan_tram_snapshot?: number | null;
   is_overridden?: boolean;
   trang_thai_thanh_toan?: string;
-}
-
-// Resolve FOC: snapshot trên row > master nha_hang. Snapshot lock per-tour
-// → master changes không thay đổi calculation đoàn cũ.
-function resolveNHFoc(
-  row: { foc_khach_snapshot?: number | null; foc_mien_snapshot?: number | null } | null | undefined,
-  nh: { foc_khach: number | null; foc_mien: number | null } | null | undefined,
-): { foc_khach: number | null; foc_mien: number | null } {
-  if (row && (row.foc_khach_snapshot != null || row.foc_mien_snapshot != null)) {
-    return {
-      foc_khach: row.foc_khach_snapshot ?? null,
-      foc_mien:  row.foc_mien_snapshot  ?? null,
-    };
-  }
-  return {
-    foc_khach: nh?.foc_khach ?? null,
-    foc_mien:  nh?.foc_mien  ?? null,
-  };
-}
-
-// Resolve chiết khấu: snapshot > master. Lock per-tour.
-function resolveNHChietKhau(
-  row: { chiet_khau_phan_tram_snapshot?: number | null } | null | undefined,
-  nh: { chiet_khau_phan_tram: number | null } | null | undefined,
-): number {
-  if (row && row.chiet_khau_phan_tram_snapshot != null) {
-    return row.chiet_khau_phan_tram_snapshot;
-  }
-  return nh?.chiet_khau_phan_tram ?? 0;
 }
 
 interface LocalNHExtra {
@@ -568,7 +536,9 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   // ── Main row handlers ─────────────────────────────────────────────────────
 
   const handleChange = useCallback((key: string, field: "so_khach" | "don_gia" | "chiet_khau_phan_tram", value: number) => {
-    setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+    // Sửa tay 1 field = override → set is_overridden NGAY (không đợi handleSave) để
+    // effect "Sync localRows" (cascade Điều tour) không ghi đè giá trị vừa nhập.
+    setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value, is_overridden: true } }));
   }, []);
 
   const handleSave = useCallback((key: string, nguoiTtOverride?: "cong_ty" | "hdv") => {
@@ -582,7 +552,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     const soKhachThucTe = calcSoKhachThucTe(row.so_khach, focResolved.foc_khach, focResolved.foc_mien);
     const thanhTienTruocCK = soKhachThucTe * row.don_gia;
     const ck = row.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
-    const thanhTien = ck && ck > 0 ? Math.round(thanhTienTruocCK * (1 - ck / 100)) : thanhTienTruocCK;
+    const thanhTien = applyChietKhau(thanhTienTruocCK, ck);
     const nguoiTt = nguoiTtOverride ?? row.nguoi_tt ?? (nh?.nguoi_thanh_toan !== "hdv" ? "cong_ty" : "hdv");
 
     // Optimistic: mark override ngay để UI hiện badge 🔒 + nút ↺ trước khi mutation return.
@@ -733,6 +703,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
       const buaStr0 = row.bua_an === "trua" ? "trưa" : "tối";
       const focResolved0 = resolveNHFoc(row, nh0);
       const skTT0 = calcSoKhachThucTe(row.so_khach, focResolved0.foc_khach, focResolved0.foc_mien);
+      const thanhTien0 = applyChietKhau(skTT0 * row.don_gia, row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? null);
       try {
         const saved = await upsertMut.mutateAsync({
           doan_id: doanId,
@@ -743,8 +714,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           mo_ta: `${nhName0} (${buaStr0})`,
           don_gia: row.don_gia,
           so_luong: row.so_khach,
-          tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? Math.round(skTT0 * row.don_gia * (1 - (row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? 0) / 100)) : 0,
-          tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? Math.round(skTT0 * row.don_gia * (1 - (row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? 0) / 100)) : 0,
+          tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? thanhTien0 : 0,
+          tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? thanhTien0 : 0,
           foc_khach_snapshot: focResolved0.foc_khach,
           foc_mien_snapshot:  focResolved0.foc_mien,
           chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
@@ -769,8 +740,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     const hdvExtrasTotal = extras.filter(e => e.nguoi_tt === "hdv").reduce((s, e) => s + e.so_luong * e.don_gia, 0);
     const extrasTotal = allExtrasTotal - hdvExtrasTotal;
     const ckPct = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
-    const chietKhau = ckPct && ckPct > 0 ? Math.round(mainTotalTruocCK * ckPct / 100) : 0;
-    const totalBua = mainTotalTruocCK - chietKhau + extrasTotal;
+    const totalBua = applyChietKhau(mainTotalTruocCK, ckPct) + extrasTotal;
     // Số tiền chưa đề nghị (trừ phần đã cọc + thanh toán trước)
     const effectiveTotalBua = Math.max(0, totalBua - dnttAlreadyPaid);
     const isBSMode = effectiveTotalBua <= 0;
@@ -962,8 +932,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     if (isNaN(newSK) || !newGia) return;
     const skTT = calcSoKhachThucTe(newSK, adjustTarget.focKhach, adjustTarget.focMien);
     const totalTruocCK = skTT * newGia;
-    const ckTien = adjustTarget.ckPct > 0 ? Math.round(totalTruocCK * adjustTarget.ckPct / 100) : 0;
-    const totalSauCK = totalTruocCK - ckTien;
+    const totalSauCK = applyChietKhau(totalTruocCK, adjustTarget.ckPct);
     updateActualMut.mutate(
       {
         id: adjustTarget.chiPhi.id,
@@ -1033,10 +1002,9 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         // Chiết khấu chỉ áp main row (items[0]). Resolve theo pattern row override → nh master.
         const ckPct = row.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
         const mainItem = items[0];
-        const ckAmount = ckPct > 0 && mainItem
-          ? Math.round(mainItem.so_luong * mainItem.don_gia * ckPct / 100)
-          : 0;
-        const totalEntry = items.reduce((s, i) => s + i.so_luong * i.don_gia, 0) - ckAmount;
+        const mainBase = mainItem ? mainItem.so_luong * mainItem.don_gia : 0;
+        const allItemsBase = items.reduce((s, i) => s + i.so_luong * i.don_gia, 0);
+        const totalEntry = applyChietKhau(mainBase, ckPct) + (allItemsBase - mainBase);
 
         // Cọc đã thanh toán thực sự (paid) — chỉ trừ khi KHÔNG có ĐNTT pending.
         // Có pending → in chính ĐNTT đó (so_tien của nó), không trừ cọc paid khác.
@@ -1220,10 +1188,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           const totalTruocCK = mainTotal + extrasTotal;
           // Chiết khấu % từ local row (override) hoặc từ nha_hang — chỉ áp dụng cho main row
           const ckPhanTram = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? 0;
-          const chietKhauSoTien = ckPhanTram > 0
-            ? Math.round(mainTotal * ckPhanTram / 100)
-            : 0;
-          const mainThanhTien = mainTotal - chietKhauSoTien;
+          const mainThanhTien = applyChietKhau(mainTotal, ckPhanTram);
+          const chietKhauSoTien = mainTotal - mainThanhTien;
           const totalBua = mainThanhTien + extrasTotal;
 
           const dateLabel = meal.ngay_date
@@ -1998,9 +1964,11 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         const allExtrasTotalModal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
         const hdvExtrasTotalModal = extras.filter(e => e.nguoi_tt === "hdv").reduce((s, e) => s + e.so_luong * e.don_gia, 0);
         const extrasTotal = allExtrasTotalModal - hdvExtrasTotalModal;
-        const ckPctModal = nh?.chiet_khau_phan_tram ?? null;
-        const chietKhauModal = ckPctModal && ckPctModal > 0 ? Math.round(mainTotalModal * ckPctModal / 100) : 0;
-        const totalBua = mainTotalModal - chietKhauModal + extrasTotal;
+        // CK: row override → master (khớp handleDnttSubmit để preview = số ĐNTT thật).
+        const ckPctModal = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
+        const mainThanhTienModal = applyChietKhau(mainTotalModal, ckPctModal);
+        const chietKhauModal = mainTotalModal - mainThanhTienModal;
+        const totalBua = mainThanhTienModal + extrasTotal;
         const effectiveTotalBua = Math.max(0, totalBua - dnttAlreadyPaid);
         const isBSMode = effectiveTotalBua <= 0;
         const soTien = isBSMode ? dnttBsAmount : (dnttModalMode === "full" ? effectiveTotalBua : dnttDepositAmount);
@@ -2134,8 +2102,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
             const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
             const skTT = calcSoKhachThucTe(newSK, adjustTarget.focKhach, adjustTarget.focMien);
             const totalTruocCK = skTT * newGia;
-            const ckTien = adjustTarget.ckPct > 0 ? Math.round(totalTruocCK * adjustTarget.ckPct / 100) : 0;
-            const totalSauCK = totalTruocCK - ckTien;
+            const totalSauCK = applyChietKhau(totalTruocCK, adjustTarget.ckPct);
+            const ckTien = totalTruocCK - totalSauCK;
             const oldSK = adjustTarget.chiPhi.so_luong;
             const oldGia = adjustTarget.chiPhi.don_gia;
             const oldTotal = Number(adjustTarget.chiPhi.thanh_tien_thuc_te ?? adjustTarget.chiPhi.tien_cong_ty ?? 0);
