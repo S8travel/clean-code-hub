@@ -29,6 +29,10 @@ import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
+import { DVInput } from "./DVInput";
+import DVDnttModal, { type DVModalTarget } from "./DVDnttModal";
+import DVResendModal from "./DVResendModal";
+import DVCancelModal, { type CancelTarget } from "./DVCancelModal";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -37,8 +41,6 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   da_duyet:  { text: "Đã duyệt",  cls: "bg-teal-100 text-teal-700" },
   tu_choi:   { text: "Từ chối",   cls: "bg-red-100 text-red-700" },
 };
-
-interface CancelTarget { dnttId: number; isPaid: boolean }
 
 interface LocalDVExtra {
   id?: number;
@@ -58,56 +60,6 @@ export interface ChiPhiDVSectionHandle {
   buildSelectedEntries: () => Promise<NHDocEntry[] | undefined>;
   clearSelection: () => void;
   getSelectedCount: () => number;
-}
-
-// Small inline number input (like NH's NHInput)
-function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, decimal = false }: {
-  value: number;
-  onChange: (v: number) => void;
-  onBlur: () => void;
-  width?: string;
-  /** Hiển thị dấu chấm phân cách hàng nghìn (vd 850.000). */
-  money?: boolean;
-  /** Cho phép số thập phân (đơn giá). Focus → raw "1500.5"; blur → "1.500,5". */
-  decimal?: boolean;
-}) {
-  if (decimal) {
-    return (
-      <DecimalInput
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
-      />
-    );
-  }
-  if (money) {
-    return (
-      <Input
-        type="text"
-        inputMode="numeric"
-        value={value != null ? value.toLocaleString("vi-VN") : ""}
-        onChange={(e) => {
-          const digits = e.target.value.replace(/\D/g, "");
-          onChange(digits ? Number(digits) : 0);
-        }}
-        onBlur={onBlur}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-        className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
-      />
-    );
-  }
-  return (
-    <Input
-      type="number"
-      min={0}
-      value={value ?? ""}
-      onChange={e => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
-      onBlur={onBlur}
-      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-      className={cn("h-6 text-xs px-1.5 py-0 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", width)}
-    />
-  );
 }
 
 const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }, ref) {
@@ -155,7 +107,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   // ĐNTT modal
-  interface DVModalTarget { chiPhiId: number; thanhTien: number; moTa: string; nccId: number | null; nhaySo: number | null }
   const [dvModal, setDvModal] = useState<DVModalTarget | null>(null);
   const [dvModalMode, setDvModalMode] = useState<"full" | "deposit">("full");
   const [dvDepositAmount, setDvDepositAmount] = useState(0);
@@ -1372,61 +1323,20 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         </table>
       </div>
 
-      {/* ĐNTT Modal */}
-      <Dialog open={!!dvModal} onOpenChange={v => { if (!v) setDvModal(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Tạo đề nghị thanh toán — {dvModal?.moTa || "Dịch vụ"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2 text-xs">
-            <p>Tổng tiền: <span className="font-semibold">{fmt(dvModal?.thanhTien ?? 0)} VND</span></p>
-            <RadioGroup value={dvModalMode} onValueChange={v => setDvModalMode(v as "full" | "deposit")} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="full" id="dv-full" />
-                <Label htmlFor="dv-full" className="text-xs cursor-pointer">
-                  Toàn bộ — {fmt(dvModal?.thanhTien ?? 0)} VND
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="deposit" id="dv-dep" />
-                <Label htmlFor="dv-dep" className="text-xs cursor-pointer">1 phần (cọc)</Label>
-              </div>
-            </RadioGroup>
-            {dvModalMode === "deposit" && (
-              <div className="space-y-1">
-                <Label className="text-xs">Số tiền cọc</Label>
-                <Input type="number" className="h-8 text-xs"
-                  value={dvDepositAmount || ""}
-                  onChange={e => setDvDepositAmount(Number(e.target.value) || 0)}
-                  max={dvModal?.thanhTien} />
-                {dvDepositAmount > 0 && dvModal && (
-                  <p className="text-[11px] text-muted-foreground">Còn lại: {fmt(dvModal.thanhTien - dvDepositAmount)} VND</p>
-                )}
-              </div>
-            )}
-            <div className="space-y-1">
-              <Label className="text-xs">Ngày cần thanh toán</Label>
-              <DatePicker className="h-8 text-xs w-full" value={dvNgayCan} onChange={setDvNgayCan} />
-            </div>
-            <KSCongNoMultiPanel
-              nccId={dvModal?.nccId ?? undefined}
-              maxAmount={
-                dvModalMode === "deposit"
-                  ? dvDepositAmount || 0
-                  : dvModal?.thanhTien ?? 0
-              }
-              value={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? []) : []}
-              onChange={(v) => dvModal && setCanTruByDv((prev) => ({ ...prev, [dvModal.chiPhiId]: v }))}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setDvModal(null)}>Hủy</Button>
-            <Button size="sm" className="text-xs" onClick={handleDvModalSubmit} disabled={insertDNTT.isPending}>
-              Tạo đề nghị TT
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVDnttModal
+        target={dvModal}
+        mode={dvModalMode}
+        onModeChange={setDvModalMode}
+        depositAmount={dvDepositAmount}
+        onDepositAmountChange={setDvDepositAmount}
+        ngayCan={dvNgayCan}
+        onNgayCanChange={setDvNgayCan}
+        canTru={dvModal ? (canTruByDv[dvModal.chiPhiId] ?? []) : []}
+        onCanTruChange={(v) => dvModal && setCanTruByDv((prev) => ({ ...prev, [dvModal.chiPhiId]: v }))}
+        onClose={() => setDvModal(null)}
+        onSubmit={handleDvModalSubmit}
+        submitting={insertDNTT.isPending}
+      />
 
       {/* Adjust Dialog */}
       <Dialog open={!!adjustChiPhi} onOpenChange={o => { if (!o) setAdjustChiPhi(null); }}>
@@ -1686,60 +1596,25 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         </DialogContent>
       </Dialog>
 
-      {/* Resend Dialog */}
-      <Dialog open={!!resendTarget} onOpenChange={v => { if (!v) setResendTarget(null); }}>
-        <DialogContent className="sm:max-w-[360px]">
-          <DialogHeader><DialogTitle className="text-sm">Gửi lại ĐNTT</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Số tiền gốc: {fmt(resendTarget?.so_tien ?? 0)} VND</p>
-            <RadioGroup value={resendMode} onValueChange={v => setResendMode(v as any)} className="flex gap-4">
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="full" id="dv-resend-full" />
-                <Label htmlFor="dv-resend-full" className="text-xs">Toàn bộ</Label>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <RadioGroupItem value="partial" id="dv-resend-partial" />
-                <Label htmlFor="dv-resend-partial" className="text-xs">1 phần</Label>
-              </div>
-            </RadioGroup>
-            {resendMode === "partial" && (
-              <Input type="number" value={resendAmount || ""}
-                onChange={e => setResendAmount(Number(e.target.value) || 0)}
-                placeholder="Nhập số tiền" className="h-8 text-xs" />
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setResendTarget(null)}>Hủy</Button>
-            <Button size="sm" onClick={handleResendSubmit} disabled={updateDNTT.isPending}>Gửi lại</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVResendModal
+        target={resendTarget}
+        mode={resendMode}
+        onModeChange={setResendMode}
+        amount={resendAmount}
+        onAmountChange={setResendAmount}
+        onClose={() => setResendTarget(null)}
+        onSubmit={handleResendSubmit}
+        submitting={updateDNTT.isPending}
+      />
 
-      {/* Cancel Dialog */}
-      <Dialog open={!!cancelTarget} onOpenChange={v => { if (!v) setCancelTarget(null); }}>
-        <DialogContent className="sm:max-w-[340px]">
-          <DialogHeader><DialogTitle className="text-sm">Hủy đề nghị thanh toán</DialogTitle></DialogHeader>
-          {cancelTarget?.isPaid && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Đã thanh toán — chọn cách xử lý:</p>
-              <RadioGroup value={cancelMode} onValueChange={v => setCancelMode(v as any)} className="flex gap-4">
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="hoan_tien" id="dv-cancel-ht" />
-                  <Label htmlFor="dv-cancel-ht" className="text-xs">Hoàn tiền</Label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="cong_no" id="dv-cancel-cn" />
-                  <Label htmlFor="dv-cancel-cn" className="text-xs">Ghi công nợ</Label>
-                </div>
-              </RadioGroup>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCancelTarget(null)}>Đóng</Button>
-            <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelMut.isPending}>Xác nhận hủy</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DVCancelModal
+        target={cancelTarget}
+        mode={cancelMode}
+        onModeChange={setCancelMode}
+        onClose={() => setCancelTarget(null)}
+        onSubmit={handleCancel}
+        submitting={cancelMut.isPending}
+      />
 
       <DNTTNHPreviewModal
         open={!!previewDVData}
