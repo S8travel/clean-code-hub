@@ -36,6 +36,7 @@ import { useDoanOptions, useMarkPaidWithDate } from "@/hooks/use-dntt";
 import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { toast } from "@/hooks/use-toast";
+import { errMsg } from "@/lib/error";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -698,9 +699,9 @@ function HoaDonUNCPageContent() {
       toast({
         title: n > 0 ? `Đã đồng bộ ${n} DNTT sang Sheet` : "Không có DNTT mới cần sync",
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
-        title: "Lỗi đồng bộ Sheet: " + (err?.message || "Vui lòng thử lại"),
+        title: "Lỗi đồng bộ Sheet: " + (errMsg(err) || "Vui lòng thử lại"),
         variant: "destructive",
       });
     } finally {

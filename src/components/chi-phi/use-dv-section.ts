@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { format, subDays, parseISO, addDays } from "date-fns";
+import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi, useUpdateChiPhiActual } from "@/hooks/use-chi-phi";
@@ -392,8 +393,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
 
       toast.success("Đã gửi ĐNTT");
       setDvModal(null);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Không thể tạo ĐNTT"));
     }
   };
 
@@ -519,8 +520,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       setAggReason("");
       setAggNgayCan("");
       setAggCanTru(null);
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 
@@ -666,8 +667,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
         entries,
         nguoiDeNghi: currentUserName,
       });
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || ""));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || ""));
     }
   };
 

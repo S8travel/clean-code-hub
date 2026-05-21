@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
@@ -322,8 +323,8 @@ ${canTruNote}
       });
       toast.success("Đã gửi UNC cho nhà cung cấp");
       onClose();
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSending(false);
     }

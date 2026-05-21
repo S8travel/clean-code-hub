@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format, subDays, parseISO } from "date-fns";
+import { errMsg } from "@/lib/error";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { proRataInts } from "@/lib/pro-rata";
@@ -149,8 +150,8 @@ export default function KSDNTTModal({
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
       toast.success("Đã tạo đề nghị thanh toán");
       onClose();
-    } catch (err: any) {
-      toast.error("Lỗi: " + (err?.message || "Không thể tạo ĐNTT"));
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Không thể tạo ĐNTT"));
     } finally {
       setSubmitting(false);
     }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { errMsg } from "@/lib/error";
 import { format, addDays } from "date-fns";
 import { Plus, Ban, Trash2, Printer, FileText, FileDown } from "lucide-react";
 import HDVPreviewModal from "./HDVPreviewModal";
@@ -497,8 +498,8 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
         hdv,
         ngayLap: d.created_at,
       });
-    } catch (e: any) {
-      toast.error("Lỗi xuất Excel: " + (e?.message || ""));
+    } catch (e: unknown) {
+      toast.error("Lỗi xuất Excel: " + (errMsg(e) || ""));
     }
   };
 
@@ -675,8 +676,8 @@ function CreateHDVPaymentModal({
       });
       toast.success("Đã tạo đề nghị thanh toán");
       onClose();
-    } catch (e: any) {
-      toast.error(e?.message || "Lỗi tạo đề nghị TT");
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || "Lỗi tạo đề nghị TT");
     }
   };
 
@@ -688,8 +689,8 @@ function CreateHDVPaymentModal({
         hdv: hdv ?? null,
       });
       toast.success("Đã xuất file Excel");
-    } catch (e: any) {
-      toast.error("Lỗi xuất Excel: " + (e?.message || ""));
+    } catch (e: unknown) {
+      toast.error("Lỗi xuất Excel: " + (errMsg(e) || ""));
     }
   };
 

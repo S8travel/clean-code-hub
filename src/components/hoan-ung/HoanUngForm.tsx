@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Paperclip } from "lucide-react";
+import { errMsg } from "@/lib/error";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from "@/components/ui/sheet";
@@ -122,8 +123,8 @@ export default function HoanUngForm({ open, onClose }: Props) {
           hoa_don_url: url ?? null,
         });
       }
-    } catch (e: any) {
-      toast.error("Lỗi upload hóa đơn: " + (e?.message ?? "unknown"));
+    } catch (e: unknown) {
+      toast.error("Lỗi upload hóa đơn: " + (errMsg(e) || "unknown"));
       setSubmitting(false);
       return;
     }

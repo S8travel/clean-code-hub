@@ -3,6 +3,7 @@ import { Bot, X, Send, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
 const ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
@@ -58,10 +59,10 @@ export default function AiChat() {
       if (data.error) throw new Error(data.error);
 
       setMessages([...newMessages, { role: "assistant", content: data.answer }]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessages([...newMessages, {
         role: "assistant",
-        content: `⚠️ Lỗi: ${err.message ?? "Không kết nối được AI"}`,
+        content: `⚠️ Lỗi: ${errMsg(err) || "Không kết nối được AI"}`,
       }]);
     } finally {
       setLoading(false);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { normalizeEmails } from "@/lib/utils";
@@ -162,8 +163,8 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
       });
       onOpenChange(false);
       toast.success(mode === "update" ? "Đã gửi email cập nhật lock phòng" : "Đã gửi email lock phòng");
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSending(false);
     }

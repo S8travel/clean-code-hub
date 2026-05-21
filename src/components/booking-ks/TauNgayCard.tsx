@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { normalizeEmails } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
@@ -235,8 +236,8 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
       }
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? "Đã gửi email cập nhật tàu" : "Đã gửi email đặt tàu");
-    } catch (err: any) {
-      toast.error("Lỗi gửi email: " + (err?.message || "Vui lòng thử lại"));
+    } catch (err: unknown) {
+      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
     } finally {
       setSending(false);
     }

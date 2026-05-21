@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { errMsg } from "@/lib/error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -229,8 +230,8 @@ export default function MealColumn({
       toast.success("✓ Đã gửi mail đặt bữa ăn");
       // Invalidate to refetch fresh booking data
       queryClient.invalidateQueries({ queryKey: ["doan_booking_nh", doanId] });
-    } catch (err: any) {
-      toast.error(err.message || "Lỗi gửi mail");
+    } catch (err: unknown) {
+      toast.error(errMsg(err) || "Lỗi gửi mail");
     } finally {
       setSending(false);
     }

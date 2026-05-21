@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { errMsg } from "@/lib/error";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -135,8 +136,8 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
       }
       await replaceDiemDen.mutateAsync({ leadId, diemDenList: danhSachDiemDen });
       onClose();
-    } catch (e: any) {
-      toast.error(e?.message ?? t("Lỗi khi lưu"));
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || t("Lỗi khi lưu"));
     }
   };
 

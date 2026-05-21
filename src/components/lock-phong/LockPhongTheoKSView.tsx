@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO, differenceInDays, addDays, formatDistanceToNow } from "date-fns";
+import { errMsg } from "@/lib/error";
 import { vi } from "date-fns/locale";
 import { Check, ChevronDown, ChevronRight, ChevronLeft, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -165,8 +166,8 @@ export default function LockPhongTheoKSView({ data }: Props) {
         ),
       );
       toast.success(`Đã xác nhận ${pendingIds.length} đoàn`);
-    } catch (e: any) {
-      toast.error("Lỗi xác nhận: " + (e?.message || ""));
+    } catch (e: unknown) {
+      toast.error("Lỗi xác nhận: " + (errMsg(e) || ""));
     } finally {
       setConfirmingKsId(null);
     }
