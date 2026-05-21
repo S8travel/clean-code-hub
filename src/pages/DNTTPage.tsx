@@ -3,7 +3,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useBoPhan, useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
-import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight } from "lucide-react";
+import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight, Loader2, Share2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -383,9 +383,51 @@ function DNTTPageContent() {
     label: d.ten_doan,
   }));
 
+  // Sync sang Google Sheet (tab "Du chi") — theo filter hiện tại
+  const [syncing, setSyncing] = useState(false);
+  const handleSyncSheet = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await externalSupabase.functions.invoke(
+        "sync-dntt-du-chi-to-sheet",
+        { body: filters },
+      );
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const total = data?.total ?? 0;
+      const inserted = data?.inserted ?? 0;
+      const updated = data?.updated ?? 0;
+      toast({
+        title: total > 0
+          ? `Đã đồng bộ ${total} ĐNTT sang Sheet (${inserted} mới, ${updated} cập nhật)`
+          : "Không có ĐNTT nào trong bộ lọc hiện tại",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Lỗi đồng bộ Sheet: " + (err?.message || "Vui lòng thử lại"),
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Đề nghị thanh toán</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-2xl font-bold">Đề nghị thanh toán</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncSheet}
+          disabled={syncing}
+          className="gap-1.5"
+          title="Đồng bộ các ĐNTT theo bộ lọc hiện tại sang Google Sheet — tab Du chi"
+        >
+          {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+          {syncing ? "Đang đồng bộ..." : "Đồng bộ Sheet"}
+        </Button>
+      </div>
 
       {/* Metrics */}
       <div className="grid grid-cols-3 gap-4">
@@ -813,8 +855,11 @@ function DNTTPageContent() {
 }
 
 export default function DNTTPage() {
-  // Mở cho bộ phận kế toán + toàn bộ giám đốc trở lên (giam_doc, admin)
-  const canView = useBoPhan("ke_toan") || useRoleAtLeast("giam_doc");
-  if (!canView) return <AccessDenied />;
+  // Mở cho bộ phận kế toán + toàn bộ giám đốc trở lên (giam_doc, admin).
+  // Gọi cả 2 hook vô điều kiện — KHÔNG dùng `||` trực tiếp vì short-circuit sẽ
+  // bỏ qua hook thứ 2 khi hook thứ 1 truthy (vi phạm Rules of Hooks).
+  const isKeToan = useBoPhan("ke_toan");
+  const isGiamDoc = useRoleAtLeast("giam_doc");
+  if (!isKeToan && !isGiamDoc) return <AccessDenied />;
   return <DNTTPageContent />;
 }
