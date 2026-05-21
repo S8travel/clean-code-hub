@@ -508,9 +508,12 @@ if (x > 0) {
 
 ### Trạng thái dntt — chỉ approval
 ```
-trang_thai_duyet: cho_duyet → da_duyet → tu_choi (gửi lại → cho_duyet)
+trang_thai_duyet: cho_duyet → da_duyet → tu_choi (terminal — thử lại = tạo ĐNTT mới)
                   bất kỳ   → da_huy
 ```
+> ĐNTT `tu_choi` KHÔNG hồi sinh được (không có "gửi lại"). Nó là record audit, KHÔNG
+> còn tính vào `so_tien_da_dntt` (RPC loại cả `da_huy` lẫn `tu_choi`). Muốn thử lại →
+> tạo ĐNTT mới qua flow "Tạo ĐNTT" bình thường.
 
 ### Payment status (derived qua view dntt_with_payment_status)
 ```
