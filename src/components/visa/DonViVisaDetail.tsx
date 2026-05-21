@@ -43,7 +43,9 @@ export default function DonViVisaDetail({ donViVisa, onDeleted }: Props) {
       tai_khoan_thanh_toan: donViVisa.tai_khoan_thanh_toan ?? "",
       ghi_chu: donViVisa.ghi_chu ?? "",
     });
-  }, [donViVisa.id]);
+    // donViVisa là phần tử .find() từ react-query — ref ổn định, chỉ đổi khi
+    // chọn record khác hoặc refetch sau lưu → re-init form đúng lúc.
+  }, [donViVisa]);
 
   const set = (key: string, val: string) => setForm((f) => ({ ...f, [key]: val }));
 

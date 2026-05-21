@@ -52,7 +52,9 @@ export default function NhaCungCapDetail({ nhaCungCap, onDeleted }: Props) {
       ghi_chu: nhaCungCap.ghi_chu ?? "",
     });
     setTraTruoc(!!nhaCungCap.tra_truoc);
-  }, [nhaCungCap.id]);
+    // nhaCungCap là phần tử .find() từ react-query — ref ổn định, chỉ đổi khi
+    // chọn record khác hoặc refetch sau lưu → re-init form đúng lúc.
+  }, [nhaCungCap]);
 
   const set = (key: string, val: string) => setForm((f) => ({ ...f, [key]: val }));
 
