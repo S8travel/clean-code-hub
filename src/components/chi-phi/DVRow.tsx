@@ -129,16 +129,16 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   const totalTienCt = thanhTien + extrasCtTotal;
   const isDaTT = totalTienCt > 0 && daTT >= totalTienCt;
   const conLai = Math.max(0, totalTienCt - daTT);
-  const dnttIds = allDntts.map((d) => d.id);
+  // cong_no chỉ tra theo ĐNTT CÒN HIỆU LỰC. cong_no từ ĐNTT đã hủy/từ chối
+  // (vd hủy dịch vụ + hoàn tiền) là lịch sử đã tất toán → không tính vào row,
+  // không ẩn row khi user dùng lại dịch vụ đó ở Điều tour.
+  const dnttIds = activeDntts.map((d) => d.id);
   const congNoAmount = congNoList
     .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "con_du")
     .reduce((s, c) => s + c.so_tien_con_lai, 0);
   const hoanTienAmount = congNoList
     .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
     .reduce((s, c) => s + (c.so_tien_goc ?? 0), 0);
-  // Hoàn tiền chỉ ẩn row khi DNTT đã bị cancel hết (legacy cancelDNTT flow).
-  // Hoàn tiền partial từ aggregate commit (DNTTs vẫn active) → giữ row hiển thị.
-  if (hoanTienAmount > 0 && activeDntts.length === 0) return null;
   // Tổng cong_no đã ghi nhận cho group này (con_du + da_can_tru + da_hoan_tien).
   const groupCongNoForGroup = congNoList.filter(
     (c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id),
