@@ -126,10 +126,9 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   const logoData = await getLogoData();
   const coParas = [
     p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 20, alignment: AlignmentType.LEFT }),
-    p("ĐC: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, TP Đà Nẵng", { size: 14, alignment: AlignmentType.LEFT }),
-    p("TEL: 02366.566.538", { size: 14, alignment: AlignmentType.LEFT }),
-    p("Email: s8travel.info@gmail.com / nhận hóa đơn: s8travel.hddt@gmail.com", { size: 14, alignment: AlignmentType.LEFT }),
     p("MST: 0402021137", { size: 14, alignment: AlignmentType.LEFT }),
+    p("Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam", { size: 14, alignment: AlignmentType.LEFT }),
+    p("Email: s8travel.hddt@gmail.com", { size: 14, alignment: AlignmentType.LEFT }),
   ];
   const coBlock = companyLogoTable(logoData, coParas);
   const headerTable = new Table({

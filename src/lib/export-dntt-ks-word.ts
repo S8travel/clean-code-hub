@@ -37,6 +37,10 @@ const COL_W = [...COL_FIXED, CONTENT_W - COL_FIXED.reduce((a, b) => a + b, 0)];
 const COL_CANTRU_FIXED = [1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 900, 900, 1000, 2000];
 const COL_CANTRU_W = [...COL_CANTRU_FIXED, CONTENT_W - COL_CANTRU_FIXED.reduce((a, b) => a + b, 0)];
 
+// Columns khi ĐNTT là cọc (Thanh toán < tổng tiền phòng): thêm cột "Tổng tiền" ngay sau "Thành tiền"
+const COL_COC_FIXED = [1500, 800, 900, 900, 1200, 600, 650, 700, 1000, 1100, 1100, 900, 1000];
+const COL_COC_W = [...COL_COC_FIXED, CONTENT_W - COL_COC_FIXED.reduce((a, b) => a + b, 0)];
+
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 function cell(
@@ -125,16 +129,47 @@ const TABLE_HEADERS_CANTRU = [
   "Đã thanh\ntoán", "Cấn trừ", "Thanh toán", "Thông tin\nNgân hàng", "Ghi chú",
 ];
 
-function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[] {
+// ĐNTT cọc: thêm cột "Tổng tiền" sau "Thành tiền" → 14 cột
+const TABLE_HEADERS_COC = [
+  "Tên Khách sạn", "CODE\nKS",
+  "Check\nin", "Check\nout", "Loại Phòng", "Số\nđêm",
+  "Số\nLượng", "FOC", "Đơn giá", "Thành tiền", "Tổng tiền",
+  "Đã thanh\ntoán", "Thanh toán", "Thông tin\nNgân hàng",
+];
+
+// Tổng tiền phòng của 1 ĐNTT = Σ thành tiền các dòng (đã trừ FOC).
+export function calcTotalThanhTien(roomEntries: EdgeFunctionData["roomEntries"]): number {
+  return roomEntries.reduce((sum, r) => {
+    const rowSoDem = r.so_dem ?? 1;
+    const focCount = Math.max(0, r.foc_count ?? 0);
+    const billedQty = Math.max(0, r.so_luong - focCount);
+    return sum + r.don_gia * billedQty * rowSoDem;
+  }, 0);
+}
+
+// ĐNTT là "cọc" khi: ĐNTT thường (không la_coc, không cấn trừ) nhưng số tiền thanh toán
+// nhỏ hơn tổng tiền phòng → chỉ trả trước một phần.
+export function isItemCoc(d: EdgeFunctionData): boolean {
+  if (d.la_coc || (d.canTruTotal ?? 0) > 0) return false;
+  return d.soTien > 0 && d.soTien < calcTotalThanhTien(d.roomEntries);
+}
+
+function buildDataRows(data: EdgeFunctionData, layoutCanTru = false, layoutCoc = false): TableRow[] {
   const { ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
   const canTruTotal = data.canTruTotal ?? 0;
   const canTruNote = data.canTruNote ?? "";
   const bankChildren = buildBankChildren(ncc);
   const useCanTru = !la_coc && (layoutCanTru || canTruTotal > 0);
+  // Cọc: ĐNTT thường nhưng "Thanh toán" < tổng tiền phòng → layout 14 cột (thêm "Tổng tiền")
+  const tongTien = calcTotalThanhTien(roomEntries);
+  const itemIsCoc = !la_coc && !useCanTru && soTien > 0 && soTien < tongTien;
+  const useCoc = !la_coc && !useCanTru && (layoutCoc || itemIsCoc);
   // la_coc: 12 cột (bỏ "Thanh toán") → cột cuối merged 11+12 widths
   const colWidths = la_coc
     ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]]
-    : (useCanTru ? COL_CANTRU_W : COL_W);
+    : useCanTru ? COL_CANTRU_W
+    : useCoc ? COL_COC_W
+    : COL_W;
 
   const rows: TableRow[] = [];
   const totalRoomRows = roomEntries.length;
@@ -179,6 +214,18 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
         cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[12], rowSpan: totalRoomRows }));
         cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
         cells.push(cell([p(noteText, { size: 14, alignment: AlignmentType.LEFT })], { width: colWidths[14], rowSpan: totalRoomRows }));
+      } else if (useCoc) {
+        // ĐNTT cọc: col10 "Tổng tiền" = tổng tiền phòng; col11 "Đã TT"; col12 "Thanh toán" + nhãn (cọc)
+        const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
+        cells.push(cell([p(fmt(tongTien), { bold: true, size: 14 })], { width: colWidths[10], rowSpan: totalRoomRows }));
+        cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
+        cells.push(cell(
+          itemIsCoc
+            ? [p(fmt(soTien), { bold: true, size: 14 }), p("(cọc)", { size: 13, color: "FF0000", italics: true })]
+            : [p(fmt(soTien), { bold: true, size: 14 })],
+          { width: colWidths[12], rowSpan: totalRoomRows }
+        ));
+        cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
       } else {
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
         cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[10], rowSpan: totalRoomRows }));
@@ -194,12 +241,17 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
 
 function buildKSTable(data: EdgeFunctionData): Table {
   const canTruTotal = data.canTruTotal ?? 0;
+  const isCoc = isItemCoc(data);
   const colWidths = data.la_coc
     ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]]
-    : (canTruTotal > 0 ? COL_CANTRU_W : COL_W);
+    : canTruTotal > 0 ? COL_CANTRU_W
+    : isCoc ? COL_COC_W
+    : COL_W;
   const headers = data.la_coc
     ? TABLE_HEADERS_LA_COC
-    : (canTruTotal > 0 ? TABLE_HEADERS_CANTRU : TABLE_HEADERS);
+    : canTruTotal > 0 ? TABLE_HEADERS_CANTRU
+    : isCoc ? TABLE_HEADERS_COC
+    : TABLE_HEADERS;
   const headerRow = new TableRow({
     children: headers.map((h, i) =>
       cell([p(h, { bold: true, size: 14 })], { width: colWidths[i], shading: GRAY })
@@ -208,20 +260,26 @@ function buildKSTable(data: EdgeFunctionData): Table {
   return new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     columnWidths: colWidths,
-    rows: [headerRow, ...buildDataRows(data)],
+    rows: [headerRow, ...buildDataRows(data, false, isCoc)],
   });
 }
 
 function buildKSMergedTable(items: EdgeFunctionData[]): Table {
   const hasCanTru = items.some((i) => (i.canTruTotal ?? 0) > 0);
   const allLaCoc = items.length > 0 && items.every((i) => i.la_coc);
-  // ĐNTT cọc: 12 cột (bỏ "Thanh toán"). Còn lại 13/15 cột tùy có cấn trừ.
+  // ĐNTT cọc: thêm cột "Tổng tiền" (14 cột) khi có ĐNTT cọc, không cấn trừ, không toàn la_coc.
+  const hasCoc = !hasCanTru && !allLaCoc && items.some((i) => isItemCoc(i));
+  // la_coc: 12 cột (bỏ "Thanh toán"). Còn lại 13/14/15 cột tùy cọc / cấn trừ.
   const colWidths = hasCanTru
     ? COL_CANTRU_W
-    : (allLaCoc ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]] : COL_W);
+    : allLaCoc ? [...COL_FIXED.slice(0, 11), COL_W[11] + COL_W[12]]
+    : hasCoc ? COL_COC_W
+    : COL_W;
   const headers = hasCanTru
     ? TABLE_HEADERS_CANTRU
-    : (allLaCoc ? TABLE_HEADERS_LA_COC : TABLE_HEADERS);
+    : allLaCoc ? TABLE_HEADERS_LA_COC
+    : hasCoc ? TABLE_HEADERS_COC
+    : TABLE_HEADERS;
   const headerRow = new TableRow({
     children: headers.map((h, i) =>
       cell([p(h, { bold: true, size: 14 })], { width: colWidths[i], shading: GRAY })
@@ -229,7 +287,7 @@ function buildKSMergedTable(items: EdgeFunctionData[]): Table {
   });
   const rows: TableRow[] = [headerRow];
   for (const item of items) {
-    rows.push(...buildDataRows(item, hasCanTru));
+    rows.push(...buildDataRows(item, hasCanTru, hasCoc));
   }
   return new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, columnWidths: colWidths, rows });
 }
@@ -250,9 +308,10 @@ function buildHeaderTable(logoData: ArrayBuffer | null = null): Table {
   const HALF = Math.floor(CONTENT_W / 2);
   const today = new Date().toLocaleDateString("vi-VN");
   const coParas = [
-    p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22 }),
-    p("S8 TRAVEL COMPANY", { size: 18, color: "555555" }),
-    p("MST: 0402021137", { size: 18, color: "555555" }),
+    p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22, alignment: AlignmentType.LEFT }),
+    p("MST: 0402021137", { size: 16, color: "555555", alignment: AlignmentType.LEFT }),
+    p("Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam", { size: 16, color: "555555", alignment: AlignmentType.LEFT }),
+    p("Email: s8travel.hddt@gmail.com", { size: 16, color: "555555", alignment: AlignmentType.LEFT }),
   ];
   const coBlock = companyLogoTable(logoData, coParas);
   return new Table({
