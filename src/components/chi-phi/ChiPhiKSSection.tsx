@@ -929,34 +929,42 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       const billed = Math.max(0, (row.so_phong || 0) - focCountManual);
       const tienCongTy = billed * (row.gia_phong || 0);
 
+      const payload: any = {
+        id: row.id,
+        doan_id: doanId,
+        ngay_so: null,
+        loai: "chi",
+        danh_muc: "khach_san",
+        ref_doan_ngay_id: row.doan_ngay_id,
+        mo_ta:
+          row.loai_phong ||
+          (row.is_day_use
+            ? "Day Use"
+            : isRoom
+              ? "Phòng KS"
+              : "Dịch vụ KS"),
+        don_gia: row.gia_phong,
+        so_luong: row.so_phong,
+        // Chỉ dòng dịch vụ (non-room) mới được HDV trả. Phòng FOC luôn Công ty.
+        tien_cong_ty: (!isRoom && row.is_hdv) ? 0 : tienCongTy,
+        tien_hdv: (!isRoom && row.is_hdv) ? tienCongTy : 0,
+        thanh_toan_dinh_ky: dinhKyKsIdsRef.current.has(row.khach_san_id),
+        // Snapshot: lần đầu lấy từ master. Lần sau giữ snapshot hiện có (resolveKSFoc trả snapshot nếu có).
+        foc_khach_snapshot: focKhach,
+        foc_mien_snapshot:  focMien,
+        loai_row: row.loai_row ?? "phong",
+        foc_count: focCountManual,
+      };
+      // ref_doan_ngay_item_id là LINK STRUCTURAL (xác định row thuộc Day-use card
+      // nào). CHỈ set khi INSERT. KHÔNG đụng khi UPDATE — nếu reconcile dựng row
+      // qua Path 2 (vd dayUseItemMap lag), row.ref_doan_ngay_item_id = undefined;
+      // blur-save cũ ghi đè null → reload row nhảy sang KS overnight (Path 2).
+      if (!row.id) {
+        payload.ref_doan_ngay_item_id = row.ref_doan_ngay_item_id ?? null;
+      }
+
       upsertMut.mutate(
-        {
-          id: row.id,
-          doan_id: doanId,
-          ngay_so: null,
-          loai: "chi",
-          danh_muc: "khach_san",
-          ref_doan_ngay_id: row.doan_ngay_id,
-          ref_doan_ngay_item_id: row.ref_doan_ngay_item_id ?? null,
-          mo_ta:
-            row.loai_phong ||
-            (row.is_day_use
-              ? "Day Use"
-              : isRoom
-                ? "Phòng KS"
-                : "Dịch vụ KS"),
-          don_gia: row.gia_phong,
-          so_luong: row.so_phong,
-          // Chỉ dòng dịch vụ (non-room) mới được HDV trả. Phòng FOC luôn Công ty.
-          tien_cong_ty: (!isRoom && row.is_hdv) ? 0 : tienCongTy,
-          tien_hdv: (!isRoom && row.is_hdv) ? tienCongTy : 0,
-          thanh_toan_dinh_ky: dinhKyKsIdsRef.current.has(row.khach_san_id),
-          // Snapshot: lần đầu lấy từ master. Lần sau giữ snapshot hiện có (resolveKSFoc trả snapshot nếu có).
-          foc_khach_snapshot: focKhach,
-          foc_mien_snapshot:  focMien,
-          loai_row: row.loai_row ?? "phong",
-          foc_count: focCountManual,
-        } as any,
+        payload,
         {
           onSuccess: (data) => {
             const savedId = row.id ?? data?.id;
@@ -1509,10 +1517,17 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                     {roomDayEntries.map(([dateStr, dayRows]) => {
                       const ngaySo = ngayDateToNgaySo[dateStr];
                       const doanNgayId = ngayDateToDoanNgayId[dateStr] || dayRows[0]?.doan_ngay_id;
-                      // Day-use card: row mới phải kế thừa ref_doan_ngay_item_id từ
-                      // row đã có cùng ngày, không thì save xong reload sẽ nhảy sang
-                      // KS overnight (Path 2). Lấy từ row đầu tiên có link.
-                      const refItemForDay = dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined;
+                      // Day-use card: row mới phải kế thừa ref_doan_ngay_item_id, nếu
+                      // không reload sẽ nhảy sang KS overnight (Path 2). Lấy DETERMINISTIC
+                      // từ dayUseItemMap (theo ksId + ngày) — KHÔNG dò sibling rows vì
+                      // sibling có thể đã mất link → refItemForDay undefined → row mới
+                      // lưu null → nhảy KS. Fallback sibling chỉ cho case hiếm.
+                      const dayUseEntry = Object.entries(dayUseItemMap).find(
+                        ([, info]: any) => info.khach_san_id === ksId && info.ngay_date === dateStr,
+                      );
+                      const refItemForDay = dayUseEntry
+                        ? Number(dayUseEntry[0])
+                        : (dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined);
                       return (
                         <DayGroup
                           key={dateStr}
