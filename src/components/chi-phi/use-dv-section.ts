@@ -3,7 +3,7 @@ import { format, subDays, parseISO, addDays } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
-import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi, useUpdateChiPhiActual } from "@/hooks/use-chi-phi";
+import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
@@ -50,7 +50,6 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
-  const updateActualMut = useUpdateChiPhiActual();
   const qc = useQueryClient();
   const dvCdMap = useDVCanhDiemMap(doanId);
   const [canTruByDv, setCanTruByDv] = useState<Record<number, CanTruSelection[]>>({});
@@ -81,14 +80,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
   const [dvDepositAmount, setDvDepositAmount] = useState(0);
   const [dvNgayCan, setDvNgayCan] = useState("");
 
-  // Adjust dialog (after payment)
-  // HYBRID adjust: edit chi_phi state (SL + đơn giá). Aggregate commit ở footer.
-  const [adjustChiPhi, setAdjustChiPhi] = useState<ChiPhiRow | null>(null);
-  const [adjustSL, setAdjustSL]         = useState("");
-  const [adjustDonGia, setAdjustDonGia] = useState("");
-  const [adjustReason, setAdjustReason] = useState("");
-
-  // Aggregate commit dialog (sau khi adjust + extras → commit chênh lệch)
+  // Aggregate commit dialog (sửa inline xong → commit chênh lệch ở footer)
   const [aggCommit, setAggCommit] = useState<AggCommitTarget | null>(null);
   const [aggReason, setAggReason] = useState("");
   const [aggNgayCan, setAggNgayCan] = useState("");
@@ -185,6 +177,9 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       tien_hdv: isHDV ? total : 0,
       // HYBRID: user edit trực tiếp = override → cascade Điều tour bỏ qua row này
       is_overridden: true,
+      // Sửa inline = giá trị mới CHÍNH là thực tế → xóa override thực tế cũ
+      // (nếu có) để footer aggregate đọc đúng tien_cong_ty mới.
+      thanh_tien_thuc_te: null,
     }, {
       onSuccess: () => setEditRow(prev => { const next = { ...prev }; delete next[row.id]; return next; }),
     });
@@ -422,24 +417,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
     );
   };
 
-  // ── Aggregate commit (chênh lệch sau adjust + extras) ───────────────────────
-
-  const handleAdjustSubmit = () => {
-    if (!adjustChiPhi) return;
-    const newSL  = parseInt(adjustSL.replace(/\D/g, ""), 10);
-    const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
-    if (isNaN(newSL) || !newGia) return;
-    updateActualMut.mutate(
-      { id: adjustChiPhi.id, doan_id: doanId, so_luong: newSL, don_gia: newGia, ly_do: adjustReason },
-      {
-        onSuccess: () => {
-          toast.success("Đã cập nhật chi phí thực tế");
-          setAdjustChiPhi(null);
-        },
-        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi cập nhật"),
-      },
-    );
-  };
+  // ── Aggregate commit (chênh lệch sau khi sửa inline) ────────────────────────
 
   const handleAggCommit = async () => {
     if (!aggCommit) return;
@@ -689,7 +667,6 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
     getRowEdit, getDateLabel, setSelectedIds, handleRowChange, handleRowSave,
     handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
-    setAdjustChiPhi, setAdjustSL, setAdjustDonGia, setAdjustReason,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
     setAggSurplusMode, setAggCanTru, setAggNgayCan,
     handleExtraChange, handleExtraSave, handleExtraDelete,
@@ -703,9 +680,6 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
     dvModal, setDvModal, dvModalMode, setDvModalMode,
     dvDepositAmount, setDvDepositAmount, dvNgayCan, setDvNgayCan,
     canTruByDv, setCanTruByDv, handleDvModalSubmit,
-    // Adjust modal
-    adjustChiPhi, setAdjustChiPhi, adjustSL, setAdjustSL,
-    adjustDonGia, setAdjustDonGia, adjustReason, setAdjustReason, handleAdjustSubmit,
     // Aggregate commit modal
     aggCommit, setAggCommit, aggReason, setAggReason, aggNgayCan, setAggNgayCan,
     aggSurplusMode, setAggSurplusMode, aggCanTru, setAggCanTru, handleAggCommit,
@@ -713,7 +687,6 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
     cancelTarget, setCancelTarget, cancelMode, setCancelMode, handleCancel,
     // pending flags
     insertPending: insertDNTT.isPending,
-    updateActualPending: updateActualMut.isPending,
     cancelPending: cancelMut.isPending,
   };
 }

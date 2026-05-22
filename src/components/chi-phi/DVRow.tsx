@@ -1,5 +1,5 @@
 import { format, parseISO, subDays } from "date-fns";
-import { Check, Pencil, X, Ban, SlidersHorizontal, Plus, Trash2, CalendarClock } from "lucide-react";
+import { Check, Pencil, X, Ban, Plus, Trash2, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -65,10 +65,6 @@ export interface DVRowHandlers {
   handleToggleDinhKy: (row: ChiPhiRow) => void;
   handleExtraAdd: (mainId: number) => void;
   openDvModal: (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null, ngaySo: number | null) => void;
-  setAdjustChiPhi: (v: ChiPhiRow | null) => void;
-  setAdjustSL: (v: string) => void;
-  setAdjustDonGia: (v: string) => void;
-  setAdjustReason: (v: string) => void;
   setCancelMode: (v: "cong_no" | "hoan_tien") => void;
   setCancelTarget: (v: CancelTarget | null) => void;
   setAggCommit: (v: AggCommitTarget | null) => void;
@@ -100,7 +96,6 @@ export default function DVRow({ row, day, data, handlers }: Props) {
     getRowEdit, getDateLabel, setSelectedIds, handleRowChange, handleRowSave,
     handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
-    setAdjustChiPhi, setAdjustSL, setAdjustDonGia, setAdjustReason,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
     setAggSurplusMode, setAggCanTru, setAggNgayCan,
     handleExtraChange, handleExtraSave, handleExtraDelete,
@@ -116,6 +111,11 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   const activeDntts = allDntts.filter(
     d => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
   );
+  // Có ĐNTT còn hiệu lực (chờ duyệt / đã duyệt / đã thanh toán) → khóa nút
+  // xóa extras đã lưu ở UI. Allocation ĐNTT NH/DV chỉ trỏ main row nên guard
+  // data-layer không chặn extras; mà ĐNTT.so_tien lại tính cả extras → xóa
+  // extra làm sai số đã cam kết / sai delta aggregate. Bỏ extra → sửa SL về 0.
+  const hasActiveDntt = activeDntts.length > 0;
   const rejectedDntts = allDntts.filter(d => d.trang_thai_duyet === "tu_choi");
   const paidDntts = activeDntts.filter(d => d.payment_status === "paid");
   const pendingDntts = activeDntts.filter(d => d.payment_status !== "paid");
@@ -208,59 +208,33 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         </CatalogHoverCard>
       </td>
 
-      {/* SL — editable. HYBRID: lock khi đã thanh toán; show 🔒 + ↺ khi override. */}
+      {/* SL — editable inline mọi lúc; 🔒 khi override */}
       <td className="px-2 py-2.5">
         <div className="flex items-center justify-center gap-1">
-          {(() => {
-            const isPaid = row.trang_thai_thanh_toan === "paid" || row.trang_thai_thanh_toan === "partial_paid";
-            if (isPaid) {
-              return (
-                <span className="text-sm tabular-nums cursor-help" title="Đã có thanh toán — dùng nút Điều chỉnh để track công nợ">
-                  {row.so_luong}
-                </span>
-              );
-            }
-            return (
-              <>
-                <DVInput
-                  value={local.so_luong}
-                  onChange={v => handleRowChange(row.id, "so_luong", v)}
-                  onBlur={() => handleRowSave(row)}
-                  width="w-[44px]"
-                />
-                {row.is_overridden && (
-                  <span title="Đã override — không sync với Điều tour" className="text-amber-500 text-[10px]">🔒</span>
-                )}
-              </>
-            );
-          })()}
+          <DVInput
+            value={local.so_luong}
+            onChange={v => handleRowChange(row.id, "so_luong", v)}
+            onBlur={() => handleRowSave(row)}
+            width="w-[44px]"
+          />
+          {row.is_overridden && (
+            <span title="Đã override — không sync với Điều tour" className="text-amber-500 text-[10px]">🔒</span>
+          )}
         </div>
       </td>
 
-      {/* Đơn giá — editable + lock khi đã thanh toán */}
+      {/* Đơn giá — editable inline mọi lúc; ↺ reset khi override */}
       <td className="px-3 py-2.5">
         <div className="flex items-center justify-center gap-1">
-          {(() => {
-            const isPaid = row.trang_thai_thanh_toan === "paid" || row.trang_thai_thanh_toan === "partial_paid";
-            if (isPaid) {
-              return (
-                <span className="text-sm tabular-nums cursor-help" title="Đã có thanh toán — dùng nút Điều chỉnh để track công nợ">
-                  {fmt(row.don_gia)}
-                </span>
-              );
-            }
-            return (
-              <DVInput
-                value={local.don_gia}
-                onChange={v => handleRowChange(row.id, "don_gia", v)}
-                onBlur={() => handleRowSave(row)}
-                width="w-[112px]"
-                money
-                decimal
-              />
-            );
-          })()}
-          {row.is_overridden && row.trang_thai_thanh_toan !== "paid" && row.trang_thai_thanh_toan !== "partial_paid" && (
+          <DVInput
+            value={local.don_gia}
+            onChange={v => handleRowChange(row.id, "don_gia", v)}
+            onBlur={() => handleRowSave(row)}
+            width="w-[112px]"
+            money
+            decimal
+          />
+          {row.is_overridden && (
             <button
               type="button"
               onClick={() => handleResetOverride(row)}
@@ -410,18 +384,6 @@ export default function DVRow({ row, day, data, handlers }: Props) {
       {/* Actions */}
       <td className="px-2 py-2.5">
         <div className="flex items-center gap-1 justify-end">
-          {nguoiTt === "cong_ty" && paidDntts.length > 0 && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-              title="Điều chỉnh số lượng / đơn giá thực tế"
-              onClick={() => {
-                setAdjustChiPhi(row);
-                setAdjustSL(String(row.so_luong));
-                setAdjustDonGia(row.don_gia ? String(row.don_gia) : "");
-                setAdjustReason("");
-              }}>
-              <SlidersHorizontal className="h-3 w-3" />
-            </Button>
-          )}
           {nguoiTt === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid) && (
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
               title="Hủy ĐNTT"
@@ -522,12 +484,26 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
         {/* Delete */}
         <td className="px-2 py-1.5 text-right">
-          <button
-            onClick={() => handleExtraDelete(row.id!, idx)}
-            className="text-destructive hover:text-destructive/80 p-0.5"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+          {(() => {
+            const deleteLocked = extra.id != null && hasActiveDntt;
+            return (
+              <button
+                onClick={() => handleExtraDelete(row.id!, idx)}
+                disabled={deleteLocked}
+                title={deleteLocked
+                  ? "Dịch vụ đã có ĐNTT — không xóa được phát sinh. Muốn bỏ thì sửa số lượng/đơn giá về 0, hoặc hủy ĐNTT."
+                  : undefined}
+                className={cn(
+                  "p-0.5",
+                  deleteLocked
+                    ? "text-muted-foreground cursor-not-allowed"
+                    : "text-destructive hover:text-destructive/80",
+                )}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            );
+          })()}
         </td>
       </tr>
     )),

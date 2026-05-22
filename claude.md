@@ -416,12 +416,12 @@ n.toLocaleString("vi-VN") + " VND"
    tiếp ở Chi phí section → flag `is_overridden=true` tự set qua `handleRowSave`.
 
 3. **Phát sinh sau thanh toán NCC** (Aggregate-after-edits pattern, DV+NH):
-   - Input bị disable (lock theo `trang_thai_thanh_toan IN ('paid','partial_paid')`)
-   - OP nhấn "Điều chỉnh" (sliders) → modal nhập **SL + đơn giá thực tế** (NH có FOC + chiết khấu)
-     → `useUpdateChiPhiActual` chỉ update chi_phi state (so_luong, don_gia, tien_*,
-     thanh_tien_thuc_te, is_overridden=true). KHÔNG tạo cong_no/DNTT ngay.
-   - OP có thể thêm **extras** (rows phát sinh) qua nút ➕ — handleExtraSave save ngay
-   - Sau khi xong, hệ thống auto-compute **aggregate delta toàn nhóm**:
+   - NH/DV: OP sửa SL/đơn giá **inline trực tiếp mọi lúc** (kể cả sau thanh toán).
+     KHÔNG còn lock + modal "Điều chỉnh" (gỡ 2026-05-22). `handleSave`/`handleRowSave`
+     set `is_overridden=true` + `thanh_tien_thuc_te=null` — giá trị mới CHÍNH là thực tế.
+   - OP có thể thêm **extras** (rows phát sinh) qua nút ➕ — handleExtraSave save ngay.
+     Extras đã lưu KHÔNG xóa được khi nhóm còn ĐNTT hiệu lực — bỏ thì sửa SL/đơn giá về 0.
+   - Sau khi sửa, hệ thống auto-compute **aggregate delta toàn nhóm**:
      - `group = main row + extras` (extras filter theo prefix mo_ta)
      - `delta = sumActual_công_ty - sumPaid_công_ty` (CHỈ rows có `tien_cong_ty > 0`,
        loại HDV-paid rows vì HDV trả cash trên đường, không qua flow ĐNTT)
@@ -488,12 +488,12 @@ if (x > 0) {
 ### UI rules
 
 **ChiPhiDVSection / ChiPhiNHSection** (main rows / main meals):
-- Input editable mặc định
+- Input **editable inline mọi lúc** (kể cả sau thanh toán) — KHÔNG lock theo
+  `trang_thai_thanh_toan`. Sửa xong, footer aggregate hiện delta để execute.
 - `is_overridden=true` → 🔒 indicator + ↺ reset button
-- `trang_thai_thanh_toan IN ('paid','partial_paid')` → input disabled, tooltip
-  "Đã có thanh toán — dùng nút Điều chỉnh để track công nợ"
-- User edit → `handleSave` set `is_overridden: true` trong payload
-- Extras (rows tự tạo, ref=null hoặc nằm `extrasMap`): editable luôn, KHÔNG dùng flag
+- User edit → `handleSave`/`handleRowSave` set `is_overridden: true` +
+  `thanh_tien_thuc_te: null` trong payload
+- Extras: editable inline luôn; nút xóa khóa khi nhóm còn ĐNTT hiệu lực
 
 **ChiPhiKSSection**: KHÔNG đổi — KS độc lập, không có flag is_overridden cần thiết.
 
@@ -541,9 +541,9 @@ trang_thai_thanh_toan: 'unpaid' | 'partial_paid' | 'paid'
 ### Điều chỉnh sau khi đã thanh toán
 
 **DV + NH section** (current pattern — "Aggregate-after-edits"):
-- Modal "Điều chỉnh" → `useUpdateChiPhiActual` chỉ update chi_phi state
-  (so_luong, don_gia, tien_*, thanh_tien_thuc_te, is_overridden=true).
-  KHÔNG tạo cong_no/DNTT ngay.
+- Sửa SL/đơn giá **inline** (main row + extras) → `handleSave`/`handleRowSave`
+  update chi_phi state (so_luong, don_gia, tien_*, is_overridden=true,
+  thanh_tien_thuc_te=null). KHÔNG tạo cong_no/DNTT ngay.
 - Footer per group commit button (tính `delta = sumActual_company - sumPaid_company`):
   - `delta > 0` → INSERT dntt loai='dich_vu'/'nha_hang', mo_ta='[Bổ sung] ...', cho_duyet
   - `delta < 0` → INSERT cong_no với so_tien_goc=abs(delta), trang_thai='con_du'
@@ -627,8 +627,8 @@ khoản còn lại tính `delta = sumActual − sumPaid` bị sai → trả dư/
 != 'da_huy'` → throw error tiếng Việt (kèm ĐNTT id). ĐNTT `da_huy` KHÔNG chặn
 (flow auto-xóa chi phí orphan sau khi hủy ĐNTT vẫn chạy).
 
-**Nghiệp vụ**: muốn bỏ 1 chi phí đã cọc → dùng nút **"Điều chỉnh"** sửa số
-lượng/đơn giá về 0 (giữ row + allocation) → aggregate footer tính delta → tạo
+**Nghiệp vụ**: muốn bỏ 1 chi phí đã cọc → **sửa SL/đơn giá về 0** (NH/DV: inline;
+KS: modal "Điều chỉnh") — giữ row + allocation → aggregate footer tính delta → tạo
 công nợ (nếu tổng nhóm < đã trả) hoặc ĐNTT bổ sung. KHÔNG xóa row.
 
 ---

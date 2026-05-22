@@ -12,10 +12,12 @@ interface Props {
   onChange: (key: string, idx: number, field: keyof LocalNHExtra, value: string | number) => void;
   onSave: (key: string, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => void;
   onDelete: (key: string, idx: number) => void;
+  /** true khi extra đã lưu + bữa ăn có ĐNTT còn hiệu lực → khóa nút xóa. */
+  deleteLocked?: boolean;
 }
 
 // 1 dòng dịch vụ phát sinh của bữa ăn. Tách verbatim từ NHRow.
-export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete }: Props) {
+export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete, deleteLocked }: Props) {
   return (
     <tr className="border-b border-border/50 last:border-b-0 bg-muted/20">
       {/* Col 1: empty */}
@@ -94,8 +96,17 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       {/* Col 11: delete */}
       <td className="px-2 py-1">
         <div className="flex justify-end">
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onDelete(mealKey, idx)}>
-            <Trash2 className="h-3 w-3 text-destructive" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            disabled={deleteLocked}
+            title={deleteLocked
+              ? "Bữa ăn đã có ĐNTT — không xóa được phát sinh. Muốn bỏ thì sửa số lượng/đơn giá về 0, hoặc hủy ĐNTT."
+              : undefined}
+            onClick={() => onDelete(mealKey, idx)}
+          >
+            <Trash2 className={cn("h-3 w-3", deleteLocked ? "text-muted-foreground" : "text-destructive")} />
           </Button>
         </div>
       </td>

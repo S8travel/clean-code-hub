@@ -1,5 +1,5 @@
 import { format, subDays, parseISO } from "date-fns";
-import { Plus, Ban, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
+import { Plus, Ban, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +17,6 @@ import { NHInput } from "./NHInput";
 import { NHFocEditor } from "./NHFocEditor";
 import NHExtraRow from "./NHExtraRow";
 import NHAggFooterRow from "./NHAggFooterRow";
-import { type AdjustNHTarget } from "./NHAdjustModal";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
 import { fmt, STATUS_LABEL, extraPrefix, type LocalNHRow, type LocalNHExtra } from "./nh-section-shared";
@@ -56,10 +55,6 @@ export interface NHRowHandlers {
   handleEditAmountSave: (dnttId: number) => void;
   setEditingDnttId: (v: number | null) => void;
   setEditAmount: (v: string) => void;
-  setAdjustTarget: (v: AdjustNHTarget | null) => void;
-  setAdjustSoKhach: (v: string) => void;
-  setAdjustDonGia: (v: string) => void;
-  setAdjustReason: (v: string) => void;
   setCancelMode: (v: "cong_no" | "hoan_tien") => void;
   setCancelTarget: (v: NHCancelTarget | null) => void;
   setDnttAlreadyPaid: (v: number) => void;
@@ -92,8 +87,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
     setSelectedKeys, handleChange, handleSave, handleToggleNguoiTtNH,
     handleToggleDinhKyNH, addExtra, handleExtraChange, handleExtraSave,
     handleExtraDelete, handleResetOverrideNH, handleEditAmountSave,
-    setEditingDnttId, setEditAmount, setAdjustTarget, setAdjustSoKhach,
-    setAdjustDonGia, setAdjustReason, setCancelMode, setCancelTarget,
+    setEditingDnttId, setEditAmount, setCancelMode, setCancelTarget,
     setDnttAlreadyPaid, setDnttModalMode, setDnttDepositAmount, setDnttNgayCan,
     setDnttModalKey, setAggCommit, setAggReason, setAggSurplusMode,
     setAggCanTru, setAggNgayCan,
@@ -135,6 +129,11 @@ export default function NHRow({ meal, data, handlers }: Props) {
   const activeDntts = allMealDntts.filter(
     (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
   );
+  // Có ĐNTT còn hiệu lực (chờ duyệt / đã duyệt / đã thanh toán) → khóa nút
+  // xóa extras đã lưu ở UI. Allocation ĐNTT NH/DV chỉ trỏ main row nên guard
+  // data-layer không chặn extras; mà ĐNTT.so_tien lại tính cả extras → xóa
+  // extra làm sai số đã cam kết / sai delta aggregate. Bỏ extra → sửa SL về 0.
+  const hasActiveDntt = activeDntts.length > 0;
   // daTT = tổng paid_amount của các ĐNTT đang active của meal này
   const daTT = activeDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
   // pendingDntts: ĐNTT chưa được thanh toán đủ
@@ -177,7 +176,6 @@ export default function NHRow({ meal, data, handlers }: Props) {
 
   // Aggregate-after-edits delta (CHỈ phần công ty thanh toán).
   // Group = main chi_phi (id=row.id) + extras chi_phi (mo_ta startsWith [trua]/[toi]).
-  const nhMainMoTa = `${nh?.ten || "Nhà hàng"} (${meal.bua_an === "trua" ? "trưa" : "tối"})`;
   const extraPrefixStr = extraPrefix(meal.bua_an);
   const groupChiPhi = chiPhiRows.filter((cp) =>
     cp.danh_muc === "nha_hang" &&
@@ -256,76 +254,51 @@ export default function NHRow({ meal, data, handlers }: Props) {
           {buaIcon} {buaLabel}
         </td>
 
-        {/* Số khách — HYBRID: editable + lock khi paid, indicator khi override */}
+        {/* Số khách — editable inline mọi lúc; 🔒 khi override */}
         <td className="px-3 py-2">
           <div className="flex items-center justify-center gap-1">
-            {row ? (() => {
-              const isPaid = row.trang_thai_thanh_toan === "paid" || row.trang_thai_thanh_toan === "partial_paid";
-              if (isPaid) {
-                return (
-                  <>
-                    <span className="text-sm tabular-nums cursor-help w-[56px] text-center" title="Đã có thanh toán — dùng nút Điều chỉnh để track công nợ">
-                      {row.so_khach}
-                    </span>
-                    <span className="w-[20px] text-green-600 text-[10px]">
-                      {focMienSo > 0 ? `-${focMienSo}` : ""}
-                    </span>
-                  </>
-                );
-              }
-              return (
-                <>
-                  <NHInput
-                    value={row.so_khach}
-                    onChange={(v) => handleChange(key, "so_khach", v)}
-                    onBlur={() => handleSave(key)}
-                    width="w-[56px]"
-                  />
-                  {row.is_overridden && (
-                    <span title="Đã override — không sync với Điều tour" className="text-amber-500 text-[10px]">🔒</span>
-                  )}
-                  <span className="w-[20px] text-green-600 text-[10px]">
-                    {focMienSo > 0 ? `-${focMienSo}` : ""}
-                  </span>
-                </>
-              );
-            })() : <span className="text-muted-foreground">—</span>}
+            {row ? (
+              <>
+                <NHInput
+                  value={row.so_khach}
+                  onChange={(v) => handleChange(key, "so_khach", v)}
+                  onBlur={() => handleSave(key)}
+                  width="w-[56px]"
+                />
+                {row.is_overridden && (
+                  <span title="Đã override — không sync với Điều tour" className="text-amber-500 text-[10px]">🔒</span>
+                )}
+                <span className="w-[20px] text-green-600 text-[10px]">
+                  {focMienSo > 0 ? `-${focMienSo}` : ""}
+                </span>
+              </>
+            ) : <span className="text-muted-foreground">—</span>}
           </div>
         </td>
 
-        {/* Đơn giá — HYBRID: editable + lock + ↺ reset khi override */}
+        {/* Đơn giá — editable inline mọi lúc; ↺ reset khi override */}
         <td className="px-3 py-2">
           <div className="flex items-center justify-center gap-1">
-            {row ? (() => {
-              const isPaid = row.trang_thai_thanh_toan === "paid" || row.trang_thai_thanh_toan === "partial_paid";
-              if (isPaid) {
-                return (
-                  <span className="text-sm tabular-nums cursor-help w-[84px] text-center" title="Đã có thanh toán — dùng nút Điều chỉnh để track công nợ">
-                    {fmt(row.don_gia)}
-                  </span>
-                );
-              }
-              return (
-                <>
-                  <NHInput
-                    value={row.don_gia}
-                    onChange={(v) => handleChange(key, "don_gia", v)}
-                    onBlur={() => handleSave(key)}
-                    width="w-[112px]"
-                    money
-                    decimal
-                  />
-                  {row.is_overridden && row.id != null && (
-                    <button
-                      type="button"
-                      onClick={() => handleResetOverrideNH(key)}
-                      title="Reset override → sync lại từ Điều tour ngay"
-                      className="text-muted-foreground hover:text-primary text-[10px]"
-                    >↺</button>
-                  )}
-                </>
-              );
-            })() : <span className="text-muted-foreground">—</span>}
+            {row ? (
+              <>
+                <NHInput
+                  value={row.don_gia}
+                  onChange={(v) => handleChange(key, "don_gia", v)}
+                  onBlur={() => handleSave(key)}
+                  width="w-[112px]"
+                  money
+                  decimal
+                />
+                {row.is_overridden && row.id != null && (
+                  <button
+                    type="button"
+                    onClick={() => handleResetOverrideNH(key)}
+                    title="Reset override → sync lại từ Điều tour ngay"
+                    className="text-muted-foreground hover:text-primary text-[10px]"
+                  >↺</button>
+                )}
+              </>
+            ) : <span className="text-muted-foreground">—</span>}
           </div>
         </td>
 
@@ -478,25 +451,6 @@ export default function NHRow({ meal, data, handlers }: Props) {
         {/* Actions */}
         <td className="px-2 py-1.5">
           <div className="flex items-center gap-1 justify-end">
-            {nguoiTtMain === "cong_ty" && paidDntts.length > 0 && mainChiPhiRow && row && (
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-                title="Điều chỉnh số khách / đơn giá thực tế"
-                onClick={() => {
-                  setAdjustTarget({
-                    chiPhi: mainChiPhiRow,
-                    mainMoTa: nhMainMoTa,
-                    nhName: nh?.ten || "Nhà hàng",
-                    focKhach: focResolvedRow.foc_khach,
-                    focMien:  focResolvedRow.foc_mien,
-                    ckPct: ckPhanTram,
-                  });
-                  setAdjustSoKhach(String(row.so_khach));
-                  setAdjustDonGia(row.don_gia ? String(row.don_gia) : "");
-                  setAdjustReason("");
-                }}>
-                <SlidersHorizontal className="h-3 w-3" />
-              </Button>
-            )}
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
               title="Thêm dịch vụ phát sinh"
               onClick={() => addExtra(key)}>
@@ -550,6 +504,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
           onChange={handleExtraChange}
           onSave={handleExtraSave}
           onDelete={handleExtraDelete}
+          deleteLocked={extra.id != null && hasActiveDntt}
         />
       ))}
 
