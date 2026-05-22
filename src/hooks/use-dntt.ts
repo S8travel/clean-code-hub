@@ -3,6 +3,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { proRataInts } from "@/lib/pro-rata";
 import { useAuth } from "@/hooks/use-auth";
 import { isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
+import type { Tables, TablesUpdate } from "@/lib/database.types";
 
 export interface DNTTRow {
   id: number;
@@ -101,13 +102,19 @@ interface Filters {
   loai?: string | null;
 }
 
+// Row của dntt_with_payment_status kèm join doan + nha_cung_cap (useDNTTList).
+type DnttListJoinedRow = Tables<"dntt_with_payment_status"> & {
+  doan: { ten_doan: string | null } | null;
+  nha_cung_cap: { ten: string | null; so_tai_khoan: string | null; ngan_hang: string | null } | null;
+};
+
 // Helper: lấy danh sách chi_phi_id được phân bổ cho 1 DNTT
 export async function getChiPhiIdsForDNTT(dnttId: number): Promise<number[]> {
   const { data } = await externalSupabase
     .from("dntt_allocations")
     .select("chi_phi_id")
     .eq("dntt_id", dnttId);
-  return (data || []).map((r: any) => r.chi_phi_id as number);
+  return (data || []).map((r) => r.chi_phi_id);
 }
 
 // Helper: gọi RPC tính lại trạng thái thanh toán của các chi phí
@@ -124,7 +131,7 @@ export async function getPaidAmount(dnttId: number): Promise<number> {
     .from("payments")
     .select("so_tien")
     .eq("dntt_id", dnttId);
-  return (data || []).reduce((s: number, p: any) => s + Number(p.so_tien), 0);
+  return (data || []).reduce((s, p) => s + Number(p.so_tien), 0);
 }
 
 export function useDNTTList(filters: Filters) {
@@ -153,28 +160,28 @@ export function useDNTTList(filters: Filters) {
       const { data, error } = await q;
       if (error) throw error;
 
-      const rows = data || [];
+      const rows = (data || []) as DnttListJoinedRow[];
       // Resolve tao_boi (uuid → ho_ten) qua user_roles
-      const taoBoiIds = [...new Set(rows.map((r: any) => r.tao_boi).filter(Boolean))] as string[];
+      const taoBoiIds = [...new Set(rows.map((r) => r.tao_boi).filter((x): x is string => !!x))];
       const taoBoiMap = new Map<string, string>();
       if (taoBoiIds.length > 0) {
         const { data: users } = await externalSupabase
           .from("user_roles")
           .select("user_id, ho_ten")
           .in("user_id", taoBoiIds);
-        (users || []).forEach((u: any) => {
+        (users || []).forEach((u) => {
           if (u.user_id && u.ho_ten) taoBoiMap.set(u.user_id, u.ho_ten);
         });
       }
 
-      return rows.map((row: any) => ({
+      return rows.map((row) => ({
         ...row,
         ten_doan: row.doan?.ten_doan || "",
         ten_ncc: row.nha_cung_cap?.ten || row.ten_nha_cung_cap || "",
         ncc_so_tai_khoan: row.nha_cung_cap?.so_tai_khoan || row.so_tai_khoan || "",
         ncc_ngan_hang: row.nha_cung_cap?.ngan_hang || row.ngan_hang || "",
         tao_boi_ho_ten: row.tao_boi ? (taoBoiMap.get(row.tao_boi) ?? null) : null,
-      })) as DNTTRow[];
+      })) as unknown as DNTTRow[];
     },
   });
 }
@@ -216,21 +223,27 @@ export function useDNTTNeedingApproval(currentUserId: string | null | undefined)
         .order("created_at", { ascending: false });
       if (error) throw error;
 
-      return (data || [])
-        .filter((d: any) => {
+      type ApprovalQueryRow = Pick<
+        Tables<"dntt_with_payment_status">,
+        "id" | "doan_id" | "mo_ta" | "so_tien" | "tp_dh_duyet_luc"
+        | "kttt_duyet_luc" | "ktt_duyet_luc" | "created_at"
+      > & { doan: { ten_doan: string | null } | null };
+
+      return ((data || []) as ApprovalQueryRow[])
+        .filter((d) => {
           if (myLevels.includes(1) && !d.tp_dh_duyet_luc) return true;
           if (myLevels.includes(2) && d.tp_dh_duyet_luc && !d.kttt_duyet_luc) return true;
           if (myLevels.includes(3) && d.kttt_duyet_luc && !d.ktt_duyet_luc) return true;
           return false;
         })
-        .map((d: any): DNTTApprovalItem => ({
-          id: d.id,
+        .map((d): DNTTApprovalItem => ({
+          id: d.id ?? 0,
           doan_id: d.doan_id,
           ten_doan: d.doan?.ten_doan ?? "—",
           mo_ta: d.mo_ta,
-          so_tien: d.so_tien,
+          so_tien: d.so_tien ?? 0,
           cap: (!d.tp_dh_duyet_luc ? 1 : !d.kttt_duyet_luc ? 2 : 3) as ApprovalLevel,
-          created_at: d.created_at,
+          created_at: d.created_at ?? "",
         }));
     },
   });
@@ -261,7 +274,7 @@ export function useDNTTSummary() {
 
       let total = 0, choDuyet = 0, daDuyet = 0;
       let tongTien = 0, choDuyet7dTien = 0, daDuyet7dTien = 0;
-      for (const r of (data ?? []) as any[]) {
+      for (const r of data ?? []) {
         const st = Number(r.so_tien) || 0;
         total++;
         tongTien += st;
@@ -315,7 +328,7 @@ export function useApproveDNTT() {
       // (Cấp 1 + cấp 2 hiện auto-pass bởi DB trigger trg_auto_pass_dntt_level_1 — bỏ qua check.)
 
       const now = new Date().toISOString();
-      const update: Record<string, any> = {};
+      const update: TablesUpdate<"de_nghi_thanh_toan"> = {};
       if (level === 1) {
         update.tp_dh_duyet_boi = userId;
         update.tp_dh_duyet_luc = now;
@@ -430,7 +443,7 @@ async function markPaidImpl(id: number, ngayISO: string, nguon?: string | null):
 
   // ĐNTT trả trước đã trả đủ → tự lập quỹ (cong_no con_du loai='tra_truoc').
   // Idempotent: chỉ tạo nếu CHƯA có cong_no nào gắn dntt_goc_id = id.
-  if ((dntt as any).loai === "tra_truoc") {
+  if (dntt.loai === "tra_truoc") {
     const paidNow = await getPaidAmount(id);
     if (paidNow >= Number(dntt.so_tien)) {
       const { data: existed } = await externalSupabase
@@ -443,8 +456,8 @@ async function markPaidImpl(id: number, ngayISO: string, nguon?: string | null):
         await externalSupabase.from("cong_no").insert({
           doan_id: null,
           dntt_goc_id: id,
-          nha_cung_cap_id: (dntt as any).nha_cung_cap_id ?? null,
-          ten_nha_cung_cap: (dntt as any).ten_nha_cung_cap ?? null,
+          nha_cung_cap_id: dntt.nha_cung_cap_id ?? null,
+          ten_nha_cung_cap: dntt.ten_nha_cung_cap ?? null,
           so_tien_goc: Number(dntt.so_tien),
           trang_thai: "con_du",
           loai: "tra_truoc",
@@ -517,7 +530,7 @@ export function useCancelDNTT() {
         .select("id")
         .eq("dntt_goc_id", id);
       if (relatedCongNos && relatedCongNos.length > 0) {
-        const cnIds = relatedCongNos.map((c: any) => c.id as number);
+        const cnIds = relatedCongNos.map((c) => c.id);
         // Xóa payments tham chiếu các cong_no này (RESTRICT FK)
         await externalSupabase.from("payments").delete().in("cong_no_id", cnIds);
         await externalSupabase.from("cong_no").delete().in("id", cnIds);
@@ -538,15 +551,15 @@ export function useCancelDNTT() {
         .eq("dntt_id", id);
       const allPayments = payments || [];
       const cashPaid = allPayments
-        .filter((p: any) => p.method === "cash")
-        .reduce((s: number, p: any) => s + Number(p.so_tien), 0);
-      const canTruPayments = allPayments.filter((p: any) => p.method === "can_tru");
-      const canTruPaymentIds = canTruPayments.map((p: any) => p.id);
+        .filter((p) => p.method === "cash")
+        .reduce((s, p) => s + Number(p.so_tien), 0);
+      const canTruPayments = allPayments.filter((p) => p.method === "can_tru");
+      const canTruPaymentIds = canTruPayments.map((p) => p.id);
       const affectedCongNoIds = [
         ...new Set(
           canTruPayments
-            .filter((p: any) => p.cong_no_id != null)
-            .map((p: any) => p.cong_no_id as number),
+            .filter((p): p is typeof p & { cong_no_id: number } => p.cong_no_id != null)
+            .map((p) => p.cong_no_id),
         ),
       ];
 
@@ -602,8 +615,8 @@ export function useCancelDNTT() {
       // KS/NH master) → lookup từ ref. Cong_no có nha_cung_cap_id nullable nên
       // ngay cả khi không tìm được NCC vẫn tạo record để audit.
       if (mode && cashPaid > 0) {
-        let nccId = dntt.nha_cung_cap_id as number | null;
-        let nccTen = dntt.ten_nha_cung_cap as string | null;
+        let nccId: number | null = dntt.nha_cung_cap_id;
+        let nccTen: string | null = dntt.ten_nha_cung_cap;
         if (!nccId && dntt.ref_loai && dntt.ref_id) {
           const table = dntt.ref_loai === "khach_san" ? "khach_san"
             : dntt.ref_loai === "nha_hang" ? "nha_hang"
@@ -616,8 +629,13 @@ export function useCancelDNTT() {
               .eq("id", dntt.ref_id)
               .maybeSingle();
             if (refRow) {
-              nccId = (refRow as any).nha_cung_cap_id ?? null;
-              nccTen = (refRow as any).nha_cung_cap?.ten ?? (refRow as any).ten ?? null;
+              const r = refRow as {
+                ten: string | null;
+                nha_cung_cap_id: number | null;
+                nha_cung_cap: { ten: string | null } | null;
+              };
+              nccId = r.nha_cung_cap_id ?? null;
+              nccTen = r.nha_cung_cap?.ten ?? r.ten ?? null;
             }
           }
         }
@@ -691,7 +709,7 @@ export function useUpdateDNTT() {
           .eq("id", allocList[0].id);
       } else if (allocList.length > 1) {
         // Largest-remainder để SUM(allocs) === soTien (no rounding drift)
-        const newAmts = proRataInts(soTien, allocList.map((a: any) => Number(a.so_tien)));
+        const newAmts = proRataInts(soTien, allocList.map((a) => Number(a.so_tien)));
         for (let i = 0; i < allocList.length; i++) {
           await externalSupabase
             .from("dntt_allocations")
@@ -723,7 +741,7 @@ export function useDeleteDNTT() {
         .select("id")
         .eq("dntt_goc_id", id);
       if (relatedCongNos && relatedCongNos.length > 0) {
-        const cnIds = relatedCongNos.map((c: any) => c.id as number);
+        const cnIds = relatedCongNos.map((c) => c.id);
         await externalSupabase.from("payments").delete().in("cong_no_id", cnIds);
         await externalSupabase.from("cong_no").delete().in("id", cnIds);
       }
@@ -742,8 +760,12 @@ export function useDeleteDNTT() {
         .eq("dntt_id", id)
         .eq("method", "can_tru");
       const affectedCongNoIds = [
-        ...new Set((payments || []).map((p: any) => p.cong_no_id).filter((x: any) => x != null)),
-      ] as number[];
+        ...new Set(
+          (payments || [])
+            .map((p) => p.cong_no_id)
+            .filter((x): x is number => x != null),
+        ),
+      ];
 
       // 3) Xóa DNTT (payments cascade)
       const { error } = await externalSupabase
@@ -811,7 +833,7 @@ export function useCreateAdjustment() {
       let currentTotal = dnttGoc.so_tien;
 
       if (allocs && allocs.length > 0) {
-        const ids = allocs.map((a: any) => a.chi_phi_id);
+        const ids = allocs.map((a) => a.chi_phi_id);
         const { data: cpRows } = await externalSupabase
           .from("doan_chi_phi")
           .select("id, so_tien_da_dntt")
@@ -820,7 +842,7 @@ export function useCreateAdjustment() {
           // so_tien_da_dntt: sum allocs từ các DNTT không huỷ (computed bởi recalc RPC)
           // Phản ánh đúng commitment đã ràng buộc cho chi_phi này.
           currentTotal = cpRows.reduce(
-            (s: number, r: any) => s + Number(r.so_tien_da_dntt ?? 0),
+            (s, r) => s + Number(r.so_tien_da_dntt ?? 0),
             0,
           );
         }
@@ -880,7 +902,7 @@ export function useCreateAdjustment() {
       // = pro-rata soTienThucTe theo alloc proportion. SUM(per-row) === soTienThucTe.
       // Lý do: nếu cộng dồn (base + delta) và base đã chứa edit của user → sai.
       if (allocs && allocs.length > 0) {
-        const newThucTeAmts = proRataInts(soTienThucTe, allocs.map((a: any) => Number(a.so_tien)));
+        const newThucTeAmts = proRataInts(soTienThucTe, allocs.map((a) => Number(a.so_tien)));
         const chiPhiIds: number[] = [];
 
         for (let i = 0; i < allocs.length; i++) {
