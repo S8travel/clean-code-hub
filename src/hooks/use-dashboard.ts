@@ -67,7 +67,9 @@ export function useDashboardStats() {
       const cp6List = cp6Res.data || [];
       const congNoList = congNoRes.data || [];
 
-      const guestCount = (d: any) =>
+      type DoanRow = (typeof doanList)[number];
+
+      const guestCount = (d: DoanRow) =>
         (d.so_khach_lon || 0) + (d.so_khach_em1 || 0) + (d.so_khach_em2 || 0) + (d.so_khach_tl || 0) || d.so_khach || 0;
 
       // ── Đoàn stats ───────────────────────────────────────────────────────────
@@ -166,14 +168,14 @@ export function useDashboardStats() {
       // ── ĐNTT stats ────────────────────────────────────────────────────────────
       const pendingApproval = dnttList.filter((d) => d.trang_thai_duyet === "cho_duyet");
       const pendingPayment = dnttList.filter(
-        (d: any) => d.trang_thai_duyet === "da_duyet" && d.payment_status !== "paid",
+        (d) => d.trang_thai_duyet === "da_duyet" && d.payment_status !== "paid",
       );
-      const recentDNTT = dnttList.filter((d: any) => d.payment_status !== "paid").slice(0, 8);
+      const recentDNTT = dnttList.filter((d) => d.payment_status !== "paid").slice(0, 8);
 
       // ── Agent breakdown ───────────────────────────────────────────────────────
       // Tháng này / tháng sau (theo ngay_di)
-      const inThisMonth = (d: any) => d.ngay_di && d.ngay_di >= monthStart && d.ngay_di <= monthEnd;
-      const inNextMonth = (d: any) => d.ngay_di && d.ngay_di >= nextMonthStart && d.ngay_di <= nextMonthEnd;
+      const inThisMonth = (d: DoanRow) => !!d.ngay_di && d.ngay_di >= monthStart && d.ngay_di <= monthEnd;
+      const inNextMonth = (d: DoanRow) => !!d.ngay_di && d.ngay_di >= nextMonthStart && d.ngay_di <= nextMonthEnd;
 
       const agentNameMap = new Map(agentList.map((a) => [a.id, a.ten]));
       const agentMap = new Map<number, { name: string; tmDoan: number; tmKhach: number; nmDoan: number; nmKhach: number }>();
@@ -260,7 +262,7 @@ export function useDashboardStats() {
       for (const b of duChiBuckets) duChiAgg.set(b.key, { count: 0, tien: 0 });
       const msDay = 86400000;
       const todayMid = new Date(todayStr + "T00:00:00").getTime();
-      for (const d of dnttList as any[]) {
+      for (const d of dnttList) {
         if (d.trang_thai_duyet !== "cho_duyet" && d.trang_thai_duyet !== "da_duyet") continue;
         if (d.payment_status === "paid") continue;
         const con = Number(d.so_tien || 0) - Number(d.paid_amount || 0);

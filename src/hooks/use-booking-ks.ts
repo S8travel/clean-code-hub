@@ -83,39 +83,42 @@ export function useBookingKS(doanId: number | undefined) {
         .select("doan_ngay_id, canh_diem:canh_diem_id (khach_san_id), doan_ngay:doan_ngay_id (ngay_date)")
         .eq("doan_id", doanId!);
       if (e2b) throw e2b;
-      for (const it of (itemRows || []) as any[]) {
-        const ksId = it.canh_diem?.khach_san_id;
-        const date = it.doan_ngay?.ngay_date;
+      for (const it of itemRows || []) {
+        // Joined relation: PostgREST trả object (single FK) — narrow an toàn.
+        const canhDiem = it.canh_diem as { khach_san_id: number | null } | null;
+        const doanNgay = it.doan_ngay as { ngay_date: string | null } | null;
+        const ksId = canhDiem?.khach_san_id;
+        const date = doanNgay?.ngay_date;
         if (!ksId || !date) continue;
         if (!grouped.has(ksId)) grouped.set(ksId, { dates: [], codes: [], dayUseDates: [] });
         grouped.get(ksId)!.dayUseDates.push(date);
       }
 
       // 3. Fetch khach_san info for all booking rows
-      const allKsIds = [...new Set(bookings.map((b: any) => b.khach_san_id))];
+      const allKsIds = [...new Set(bookings.map((b) => b.khach_san_id))];
       const { data: ksList, error: e3 } = await externalSupabase
         .from("khach_san")
         .select("id, ten, email, dia_chi, dia_diem, dia_diem_zh, so_dien_thoai, website, nguoi_thanh_toan")
         .in("id", allKsIds);
       if (e3) throw e3;
 
-      const ksMap = new Map((ksList || []).map((k: any) => [k.id, k]));
+      const ksMap = new Map((ksList || []).map((k) => [k.id, k]));
 
       // 4. Merge — show all existing booking records regardless of current nguoi_thanh_toan
       // (preventing new creation for "khach" KS is handled in use-dieu-tour.ts)
-      return (bookings as any[]).map((b): BookingKSDisplay => {
-        const ks = ksMap.get(b.khach_san_id) || ({} as any);
+      return bookings.map((b): BookingKSDisplay => {
+        const ks = ksMap.get(b.khach_san_id);
         const g = grouped.get(b.khach_san_id) || { dates: [], codes: [], dayUseDates: [] };
         const uniqueDayUse = [...new Set(g.dayUseDates)];
         return {
           ...b,
-          khach_san_ten: ks.ten || "—",
-          khach_san_email: ks.email || null,
-          khach_san_dia_chi: ks.dia_chi || null,
-          khach_san_dia_diem: ks.dia_diem || null,
-          khach_san_dia_diem_zh: ks.dia_diem_zh || null,
-          khach_san_so_dien_thoai: ks.so_dien_thoai || null,
-          khach_san_website: ks.website || null,
+          khach_san_ten: ks?.ten || "—",
+          khach_san_email: ks?.email || null,
+          khach_san_dia_chi: ks?.dia_chi || null,
+          khach_san_dia_diem: ks?.dia_diem || null,
+          khach_san_dia_diem_zh: ks?.dia_diem_zh || null,
+          khach_san_so_dien_thoai: ks?.so_dien_thoai || null,
+          khach_san_website: ks?.website || null,
           so_dem: g.dates.length,
           ngay_dates: g.dates,
           day_use_dates: uniqueDayUse,
@@ -211,12 +214,14 @@ export function useSendKSBookingEmail() {
 
       // Cập nhật trạng thái tương ứng
       const now = new Date().toISOString();
-      let fields: Partial<BookingKSRow> = { email_thread_id: threadId };
+      // email_subject là cột DB (có trong doan_booking_ks) nhưng chưa nằm trong
+      // BookingKSRow interface → mở rộng cục bộ để không cần `any`.
+      let fields: Partial<BookingKSRow> & { email_subject?: string } = { email_thread_id: threadId };
       if (params.mailContentHash !== undefined) fields.mail_content_hash = params.mailContentHash;
       // Lưu subject để mail UNC sau này có thể vào cùng thread (Gmail group by subject).
       // Chỉ lưu cho 'final'/'dat_truoc' (mail chính). 'huy'/'update' sẽ vào cùng thread cũ.
       if (params.loai === "final" || params.loai === "dat_truoc") {
-        (fields as any).email_subject = params.subject;
+        fields.email_subject = params.subject;
       }
       if (params.loai === "dat_truoc") {
         fields = {
@@ -270,9 +275,9 @@ export async function syncBookingStatus(doanId: number) {
 
   if (!rows || rows.length === 0) return;
 
-  const allFinal = rows.every((r: any) => r.ks_final_status === "ks_xac_nhan_final");
+  const allFinal = rows.every((r) => r.ks_final_status === "ks_xac_nhan_final");
   const hasCancel = rows.some(
-    (r: any) => r.ks_final_status === "cho_ks_xac_nhan_huy" || r.ks_final_status === "ks_xac_nhan_huy"
+    (r) => r.ks_final_status === "cho_ks_xac_nhan_huy" || r.ks_final_status === "ks_xac_nhan_huy"
   );
 
   const status = allFinal ? "da_booking" : hasCancel ? "co_huy" : "dang_booking";

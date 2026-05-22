@@ -176,7 +176,7 @@ export function useSeriNgayItems(seriId: number | null) {
       if (e1) throw e1;
       if (!ngayRows || ngayRows.length === 0) return [] as SeriNgayItem[];
 
-      const ngayIds = ngayRows.map((r: any) => r.id);
+      const ngayIds = ngayRows.map((r) => r.id);
       const { data, error: e2 } = await externalSupabase
         .from("seri_tour_ngay_item")
         .select("*")
@@ -266,7 +266,8 @@ export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyC
 
   // Items count per doan_ngay_id
   const itemCountByNgayId = new Map<number, number>();
-  for (const it of items as any[]) {
+  for (const it of items) {
+    if (it.doan_ngay_id == null) continue;
     itemCountByNgayId.set(it.doan_ngay_id, (itemCountByNgayId.get(it.doan_ngay_id) ?? 0) + 1);
   }
 
@@ -333,7 +334,7 @@ export function useApplySeriToDoan() {
         .eq("doan_id", doanId);
       if (eExist) throw eExist;
       const existingByNgaySo = new Map<number, number>(
-        (existingNgay ?? []).map((r: any) => [r.ngay_so, r.id]),
+        (existingNgay ?? []).map((r) => [r.ngay_so, r.id]),
       );
 
       const ngaySoToDoanNgayId = new Map<number, number>();
@@ -374,7 +375,7 @@ export function useApplySeriToDoan() {
       }
 
       // 3. Fetch seri items
-      const seriNgayIds = seriNgayRows.map((r: any) => r.id);
+      const seriNgayIds = seriNgayRows.map((r) => r.id);
       const { data: seriItems, error: e3 } = await externalSupabase
         .from("seri_tour_ngay_item")
         .select("*")
@@ -384,11 +385,11 @@ export function useApplySeriToDoan() {
 
       // Map seri_ngay.id → ngay_so. ngaySoToDoanNgayId đã build ở trên.
       const seriNgayToNgaySo = new Map<number, number>(
-        seriNgayRows.map((r: any) => [r.id, r.ngay_so])
+        seriNgayRows.map((r) => [r.id, r.ngay_so])
       );
 
       const itemInserts = seriItems
-        .map((si: any) => {
+        .map((si) => {
           const ngaySo = seriNgayToNgaySo.get(si.seri_ngay_id);
           if (ngaySo === undefined) return null;
           const doanNgayId = ngaySoToDoanNgayId.get(ngaySo);
@@ -488,9 +489,9 @@ export function useSaveSeri() {
 
       // Insert items
       const ngaySoToId = new Map<number, number>(
-        (insertedNgay ?? []).map((r: any) => [r.ngay_so, r.id])
+        (insertedNgay ?? []).map((r) => [r.ngay_so, r.id])
       );
-      const itemInserts: any[] = [];
+      const itemInserts: TablesInsert<"seri_tour_ngay_item">[] = [];
       days.forEach((d) => {
         const ngayId = ngaySoToId.get(d.ngay_so);
         if (!ngayId) return;

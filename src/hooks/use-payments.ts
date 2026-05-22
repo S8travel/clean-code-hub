@@ -112,17 +112,27 @@ export function usePaymentsByCongNo(congNoId: number | null | undefined) {
         .eq("method", "can_tru")
         .order("ngay_thanh_toan", { ascending: true });
       if (error) throw error;
-      return (data || []).map((p: any) => ({
-        id: p.id,
-        so_tien: Number(p.so_tien),
-        ngay_thanh_toan: p.ngay_thanh_toan,
-        ghi_chu: p.ghi_chu ?? null,
-        dntt_id: p.dntt_id,
-        doan_id: p.de_nghi_thanh_toan?.doan_id ?? null,
-        ten_doan: p.de_nghi_thanh_toan?.doan?.ten_doan ?? null,
-        dntt_mo_ta: p.de_nghi_thanh_toan?.mo_ta ?? null,
-        dntt_loai: p.de_nghi_thanh_toan?.loai ?? null,
-      }));
+      // de_nghi_thanh_toan là joined relation (single FK) → narrow để đọc field.
+      type JoinedDntt = {
+        doan_id: number | null;
+        mo_ta: string | null;
+        loai: string | null;
+        doan: { ten_doan: string | null } | null;
+      };
+      return (data || []).map((p) => {
+        const dntt = p.de_nghi_thanh_toan as JoinedDntt | null;
+        return {
+          id: p.id,
+          so_tien: Number(p.so_tien),
+          ngay_thanh_toan: p.ngay_thanh_toan,
+          ghi_chu: p.ghi_chu ?? null,
+          dntt_id: p.dntt_id,
+          doan_id: dntt?.doan_id ?? null,
+          ten_doan: dntt?.doan?.ten_doan ?? null,
+          dntt_mo_ta: dntt?.mo_ta ?? null,
+          dntt_loai: dntt?.loai ?? null,
+        };
+      });
     },
   });
 }
@@ -157,12 +167,21 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
 
       if (!allocs || allocs.length === 0) return [] as PaymentByChiPhi[];
 
+      // Joined relation de_nghi_thanh_toan (single FK) — narrow shape của alloc.
+      type AllocRow = {
+        chi_phi_id: number;
+        so_tien: number;
+        dntt_id: number;
+        de_nghi_thanh_toan: { doan_id: number | null; so_tien: number; trang_thai_duyet: string };
+      };
+      const allocRows = allocs as unknown as AllocRow[];
+
       // Filter out cancelled DNTTs
-      const activeAllocs = allocs.filter(
-        (a: any) => a.de_nghi_thanh_toan.trang_thai_duyet !== "da_huy" &&
-                    a.de_nghi_thanh_toan.trang_thai_duyet !== "tu_choi"
+      const activeAllocs = allocRows.filter(
+        (a) => a.de_nghi_thanh_toan.trang_thai_duyet !== "da_huy" &&
+               a.de_nghi_thanh_toan.trang_thai_duyet !== "tu_choi"
       );
-      const dnttIds = [...new Set(activeAllocs.map((a: any) => a.dntt_id))];
+      const dnttIds = [...new Set(activeAllocs.map((a) => a.dntt_id))];
 
       const { data: payments } = await externalSupabase
         .from("payments")
@@ -171,14 +190,14 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
 
       const result: PaymentByChiPhi[] = [];
       const dnttSoTien: Record<number, number> = {};
-      activeAllocs.forEach((a: any) => {
+      activeAllocs.forEach((a) => {
         dnttSoTien[a.dntt_id] = a.de_nghi_thanh_toan.so_tien;
       });
 
       // Group allocs by dntt_id để pro-rata theo từng payment cho khớp 100%
       // (thay vì Math.round độc lập per-row gây drift khi sum lại).
       const allocsByDntt = new Map<number, typeof activeAllocs>();
-      activeAllocs.forEach((a: any) => {
+      activeAllocs.forEach((a) => {
         const list = allocsByDntt.get(a.dntt_id) ?? [];
         list.push(a);
         allocsByDntt.set(a.dntt_id, list);
@@ -190,7 +209,7 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
         // SUM(shares) === Number(p.so_tien) — guaranteed
         const shares = proRataInts(
           Number(p.so_tien),
-          dnttAllocs.map((a: any) => Number(a.so_tien)),
+          dnttAllocs.map((a) => Number(a.so_tien)),
         );
         for (let i = 0; i < dnttAllocs.length; i++) {
           const alloc = dnttAllocs[i];

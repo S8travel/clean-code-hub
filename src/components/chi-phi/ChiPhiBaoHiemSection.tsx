@@ -17,6 +17,7 @@ import {
   useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi,
 } from "@/hooks/use-chi-phi";
 import type { DNTTRow } from "@/hooks/use-chi-phi";
+import { errMsg } from "@/lib/error";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
@@ -66,7 +67,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   const baoHiemCD = canhDiemList.find(
     (cd) => cd.loai === "dich_vu" && cd.ten.toLowerCase().includes("bảo hiểm")
   );
-  const nccId = (baoHiemCD as any)?.nha_cung_cap_id ?? null;
+  const nccId = baoHiemCD?.nha_cung_cap_id ?? null;
   const giaMacDinh = baoHiemCD?.gia_mac_dinh ?? 0;
 
   const soNgay = ngayDi && ngayVe
@@ -124,7 +125,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
       nha_cung_cap_id: nccId,
       thanh_toan_dinh_ky: true,
       // KHÔNG set trang_thai_thanh_toan: DB default = 'unpaid', RPC recalc quản lý.
-    } as any, {
+    }, {
       onError: () => { autoSaved.current = false; },
     });
   }, [chiPhiLoading, existing, giaMacDinh, soKhach, soNgay]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -141,7 +142,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
       doan_id: doanId,
       tien_cong_ty: next === "cong_ty" ? thanhTien : 0,
       tien_hdv: next === "hdv" ? thanhTien : 0,
-    } as any);
+    });
   };
 
   const handleSave = async () => {
@@ -165,7 +166,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         nha_cung_cap_id: nccId,
         thanh_toan_dinh_ky: true,
         // KHÔNG set trang_thai_thanh_toan: DB default + RPC recalc quản lý.
-      } as any);
+      });
       dirtyRef.current = false; // đã lưu → cho phép reconcile tiếp
       toast.success("Đã lưu bảo hiểm");
     } catch {
@@ -244,7 +245,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
       ref_id: modal.chiPhiId,
       ngay_can_thanh_toan: ngayCan || null,
       allocations: [{ chi_phi_id: modal.chiPhiId, so_tien: soTien }],
-    } as any, {
+    }, {
       onSuccess: () => { toast.success("Đã gửi ĐNTT"); setModal(null); },
     });
   };
@@ -263,7 +264,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
       { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
       {
         onSuccess: () => { toast.success("Đã hủy"); setCancelTarget(null); },
-        onError: (err: any) => toast.error(err?.message || "Lỗi khi hủy"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy"),
       },
     );
   };
@@ -271,7 +272,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
   const handleToggleDinhKy = () => {
     if (!existing) return;
     const newVal = !existing.thanh_toan_dinh_ky;
-    upsertMut.mutate({ id: existing.id, doan_id: doanId, thanh_toan_dinh_ky: newVal } as any, {
+    upsertMut.mutate({ id: existing.id, doan_id: doanId, thanh_toan_dinh_ky: newVal }, {
       onSuccess: () => toast.success(newVal ? "Đã bật thanh toán định kỳ" : "Đã tắt thanh toán định kỳ"),
     });
   };
@@ -614,7 +615,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                     else toast.success(`Đã ghi công nợ ${fmt(Math.abs(result.delta))} ₫`);
                     setAdjustTarget(null);
                   },
-                  onError: (err: any) => toast.error(err?.message || "Lỗi điều chỉnh"),
+                  onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi điều chỉnh"),
                 });
               }}>
               Xác nhận
@@ -630,7 +631,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
           {cancelTarget?.isPaid && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">Đã thanh toán — chọn cách xử lý:</p>
-              <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as any)} className="flex gap-4">
+              <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as "cong_no" | "hoan_tien")} className="flex gap-4">
                 <div className="flex items-center gap-1.5">
                   <RadioGroupItem value="hoan_tien" id="bh-cancel-ht" />
                   <Label htmlFor="bh-cancel-ht" className="text-xs">Hoàn tiền</Label>

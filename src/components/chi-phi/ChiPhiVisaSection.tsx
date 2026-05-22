@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { errMsg } from "@/lib/error";
 import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,7 +104,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
       ty_gia: tyGia || null,
       chiet_khau_pct: ckVnd || null, // cột giữ tên cũ, giá trị nay là VND
       thanh_toan_dinh_ky: true,       // Visa mặc định thanh toán định kỳ
-    } as any, {
+    }, {
       onSuccess: () => { toast.success("Đã thêm visa"); onAdded(); },
     });
   };
@@ -280,7 +281,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       tien_te_loai: local.tien_te_loai,
       ty_gia: local.ty_gia || null,
       chiet_khau_pct: local.chiet_khau_pct || null,
-    } as any, {
+    }, {
       onSuccess: () => setEditRow((prev) => { const next = { ...prev }; delete next[row.id]; return next; }),
     });
   };
@@ -293,7 +294,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       doan_id: doanId,
       tien_cong_ty: next === "cong_ty" ? total : 0,
       tien_hdv: next === "hdv" ? total : 0,
-    } as any);
+    });
   };
 
   // ── Extra (phụ phí) ───────────────────────────────────────────────────────
@@ -319,7 +320,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       tien_hdv: 0,
       nha_cung_cap_id: parent?.nha_cung_cap_id ?? null,
       thanh_toan_dinh_ky: true,       // Visa mặc định thanh toán định kỳ
-    } as any, {
+    }, {
       onSuccess: () => {
         setAddExtraForId(null);
         toast.success("Đã thêm phụ phí visa");
@@ -330,7 +331,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
   // ── Định kỳ toggle ────────────────────────────────────────────────────────
   const handleToggleDinhKy = (row: typeof visaRows[0]) => {
     const newVal = !row.thanh_toan_dinh_ky;
-    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal } as any, {
+    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal }, {
       onSuccess: () => toast.success(newVal ? "Đã bật thanh toán định kỳ" : "Đã tắt thanh toán định kỳ"),
     });
   };
@@ -361,7 +362,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       ref_id: chiPhiId,
       ngay_can_thanh_toan: ngayCan || null,
       allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
-    } as any, {
+    }, {
       onSuccess: () => { toast.success("Đã gửi ĐNTT"); setModal(null); },
     });
   };
@@ -380,7 +381,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
       {
         onSuccess: () => { toast.success("Đã hủy"); setCancelTarget(null); },
-        onError: (err: any) => toast.error(err?.message || "Lỗi khi hủy"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy"),
       },
     );
   };
@@ -893,7 +894,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                       else toast.success(`Đã ghi công nợ ${fmt(Math.abs(result.delta))} ₫`);
                       setAdjustTarget(null);
                     },
-                    onError: (err: any) => toast.error(err?.message || "Lỗi điều chỉnh"),
+                    onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi điều chỉnh"),
                   },
                 );
               }}
@@ -912,7 +913,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
           {cancelTarget?.isPaid && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">Đã thanh toán — chọn cách xử lý:</p>
-              <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as any)} className="flex gap-4">
+              <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as "cong_no" | "hoan_tien")} className="flex gap-4">
                 <div className="flex items-center gap-1.5">
                   <RadioGroupItem value="hoan_tien" id="visa-cancel-ht" />
                   <Label htmlFor="visa-cancel-ht" className="text-xs">Hoàn tiền</Label>

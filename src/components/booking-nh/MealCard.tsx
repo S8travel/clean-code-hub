@@ -166,7 +166,7 @@ function MealCardInner({
         mon_an_snapshot: setMenuMons, ghi_chu: ghiChu,
         booking_status: booking?.booking_status ?? "chua_gui",
         ...setMenuPayload,
-      } as any);
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(setMenuMons), selectedSetMenuId]);
@@ -184,7 +184,7 @@ function MealCardInner({
     if (setMenuMons.length === 0) return;
     monBackfillDone.current = true;
     setMonList(setMenuMons);
-    updateMut.mutate({ id: booking.id, doan_id: doanId, mon_an_snapshot: setMenuMons } as any);
+    updateMut.mutate({ id: booking.id, doan_id: doanId, mon_an_snapshot: setMenuMons });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking?.id, booking?.set_menu_id, JSON.stringify(booking?.mon_an_snapshot), JSON.stringify(setMenuMons)]);
 
@@ -206,7 +206,7 @@ function MealCardInner({
       .eq("set_menu_id", setMenuIdFromDieuTour)
       .order("thu_tu", { ascending: true })
       .then(({ data }) => {
-        const mons = (data ?? []).map((m: any) => m.ten_mon as string);
+        const mons = (data ?? []).map((m) => m.ten_mon);
         updateMut.mutate({
           id: booking.id, doan_id: doanId,
           set_menu_id: setMenuIdFromDieuTour,
@@ -214,7 +214,7 @@ function MealCardInner({
           gia_snapshot: menu.gia ?? null,
           don_vi_snapshot: menu.don_vi ?? null,
           mon_an_snapshot: mons,
-        } as any);
+        });
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMenuIdFromDieuTour, booking?.id, booking?.set_menu_id, setMenuOptions]);
@@ -271,7 +271,7 @@ function MealCardInner({
     if (booking?.id) {
       updateMut.mutate({ id: booking.id, doan_id: doanId, ...setMenuPayload, ...overrides });
     } else {
-      upsertMut.mutate(payload as any);
+      upsertMut.mutate(payload);
     }
   };
 
@@ -310,7 +310,7 @@ function MealCardInner({
         ghi_chu: ghiChu,
         booking_status: "chua_gui",
         ...setMenuPayload,
-      } as any);
+      });
     }
   };
 
@@ -549,7 +549,7 @@ function MealCardInner({
           doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn,
           nha_hang_id: nhaHangId, mon_an_snapshot: monList, ghi_chu: ghiChu,
           booking_status: "chua_gui",
-        } as any, { onSuccess: () => resolve(), onError: () => resolve() });
+        }, { onSuccess: () => resolve(), onError: () => resolve() });
       });
     }
     setSending(true);
@@ -633,9 +633,9 @@ function MealCardInner({
     } else {
       upsertMut.mutate({
         doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn,
-        nha_hang_id: nhaHangId!, mon_an_snapshot: monList, booking_status: "da_gui",
+        nha_hang_id: nhaHangId, mon_an_snapshot: monList, booking_status: "da_gui",
         sent_at: now, sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap,
-      } as any);
+      });
     }
     setZaloModalOpen(false);
   };

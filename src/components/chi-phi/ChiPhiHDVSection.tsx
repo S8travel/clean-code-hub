@@ -32,13 +32,25 @@ import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
+// Subset thông tin đoàn mà section HDV cần (số khách + ngày + tên).
+export interface HDVDoanInfo {
+  ten_doan?: string | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+}
+
 interface Props {
   doanId: number;
-  doan?: any;
+  doan?: HDVDoanInfo;
 }
 
 // Tính "Phải thu HDV" mặc định (giống logic mặc định ChiPhiPhasThuSection)
-function computeHdvPhaiThuVND(doan: any | undefined): number {
+function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   if (!doan) return 0;
   const soKhach =
     (doan.so_khach_lon ?? 0) + (doan.so_khach_em1 ?? 0) +
@@ -266,13 +278,13 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
       mo_ta: payload.mo_ta || null,
       tien_cong_ty: payload.nguoi_tt === "cong_ty" ? tien : 0,
       tien_hdv: payload.nguoi_tt === "hdv" ? tien : 0,
-    } as any, { onSuccess: () => invalidate() });
+    }, { onSuccess: () => invalidate() });
   };
 
   const handleDelete = (id: number) => {
     deleteMut.mutate({ id, doanId }, {
       onSuccess: () => { invalidate(); toast.success("Đã xóa"); },
-      onError: (e: any) => toast.error(e?.message || "Lỗi xóa"),
+      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi xóa"),
     });
   };
 
@@ -288,7 +300,7 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
         don_gia: 0,
         tien_cong_ty: 0,
         tien_hdv: 0,
-      } as any);
+      });
       invalidate();
     } catch {
       toast.error("Lỗi khi thêm");
@@ -538,7 +550,7 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
               <Button
                 size="sm" variant="ghost"
                 className="h-6 text-xs text-destructive hover:text-destructive"
-                onClick={() => cancelMut.mutate({ id: d.id }, { onSuccess: () => toast.success("Đã hủy"), onError: (e: any) => toast.error(e?.message) })}
+                onClick={() => cancelMut.mutate({ id: d.id }, { onSuccess: () => toast.success("Đã hủy"), onError: (e: unknown) => toast.error(errMsg(e)) })}
                 disabled={cancelMut.isPending}
               >
                 <Ban className="h-3 w-3 mr-1" /> Hủy
@@ -576,7 +588,7 @@ interface CreateModalProps {
   defaultSoTien?: number;
   defaultLaThuHoi?: boolean;
   // Quyết toán context — chỉ dùng cho hdv_quyet_toan
-  doan?: any;
+  doan?: HDVDoanInfo;
   tongHdvChi?: number;
   hdv?: HDVInfo | null;  // full info để in file (cần STK + ngân hàng)
   onClose: () => void;

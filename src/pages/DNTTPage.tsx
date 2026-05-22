@@ -54,6 +54,14 @@ const loaiLabel: Record<string, { text: string; color: string }> = {
   tra_truoc: { text: "Trả trước", color: "bg-amber-100 text-amber-700" },
 };
 
+// Shape của ĐNTT cọc sibling đọc từ dntt_with_payment_status (subset cột).
+interface CocSiblingRow {
+  doan_id: number | null;
+  ref_loai: string | null;
+  ref_id: number | null;
+  paid_amount: number | null;
+}
+
 
 
 // Cell duyệt 1 cấp — sequential gate ở UI: cấp X chỉ enable khi cấp X-1 đã duyệt.
@@ -177,7 +185,7 @@ function DNTTPageContent() {
   const { user } = useAuth();
   const { data: userRoles = [] } = useUserRoles();
   const userMap = useMemo(
-    () => new Map((userRoles as any[]).map((u) => [u.user_id as string, (u.ho_ten as string) ?? ""])),
+    () => new Map(userRoles.map((u) => [u.user_id, u.ho_ten ?? ""])),
     [userRoles],
   );
   const approveMut = useApproveDNTT();
@@ -241,14 +249,16 @@ function DNTTPageContent() {
         .not("trang_thai_duyet", "eq", "tu_choi");
       // Lọc đúng cặp (doan_id, ref_loai, ref_id) — tránh cross-product
       const validKeys = new Set(refTriples);
-      return (data || []).filter((d: any) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`));
+      return ((data || []) as CocSiblingRow[]).filter(
+        (d) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`),
+      );
     },
   });
 
   // Map (doan_id|ref) → tổng cọc đã thanh toán (paid_amount của cọc DNTTs)
   const cocByRef = useMemo(() => {
     const m: Record<string, number> = {};
-    cocDntts.forEach((d: any) => {
+    cocDntts.forEach((d) => {
       const k = `${d.doan_id}|${d.ref_loai}|${d.ref_id}`;
       m[k] = (m[k] || 0) + (d.paid_amount || 0);
     });
@@ -267,7 +277,7 @@ function DNTTPageContent() {
         .eq("method", "can_tru")
         .in("dntt_id", visibleDnttIds);
       const m: Record<number, number> = {};
-      (data || []).forEach((p: any) => {
+      (data || []).forEach((p) => {
         m[p.dntt_id] = (m[p.dntt_id] || 0) + Number(p.so_tien);
       });
       return m;
@@ -302,7 +312,7 @@ function DNTTPageContent() {
         toast({ title: level === 3 ? "Đã duyệt cuối — ĐNTT chuyển sang đã duyệt" : `Đã duyệt cấp ${level}` });
         logActivity.mutate({ action: "duyet", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Duyệt cấp ${level} ĐNTT #${id}` });
       },
-      onError: (e: any) => toast({ title: e?.message || "Lỗi duyệt", variant: "destructive" }),
+      onError: (e: unknown) => toast({ title: errMsg(e) || "Lỗi duyệt", variant: "destructive" }),
     });
   };
 
@@ -332,7 +342,7 @@ function DNTTPageContent() {
           toast({ title: cancelTarget.isPaid ? "Đã hủy khoản thanh toán" : "Đã hủy đề nghị" });
           setCancelTarget(null);
         },
-        onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể hủy"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể hủy"), variant: "destructive" }),
       },
     );
   };
@@ -364,7 +374,7 @@ function DNTTPageContent() {
           }
           setAdjustTarget(null);
         },
-        onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể điều chỉnh"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể điều chỉnh"), variant: "destructive" }),
       },
     );
   };
@@ -379,9 +389,9 @@ function DNTTPageContent() {
     });
   };
 
-  const doanSelectOpts = doanOpts.map((d: any) => ({
+  const doanSelectOpts = doanOpts.map((d) => ({
     value: String(d.id),
-    label: d.ten_doan,
+    label: d.ten_doan ?? "",
   }));
 
   // Sync sang Google Sheet (tab "Du chi") — theo filter hiện tại

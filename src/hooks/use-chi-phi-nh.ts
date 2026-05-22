@@ -33,6 +33,14 @@ export interface NHSectionData {
   nhaHangMap: Record<number, NhaHangDetail>;
 }
 
+// Subset thông tin NCC dùng để gắn vào NhaHangDetail.
+interface NccBrief {
+  id: number;
+  ten: string | null;
+  so_tai_khoan: string | null;
+  ngan_hang: string | null;
+}
+
 export function useChiPhiNHSection(doanId?: number) {
   return useQuery({
     queryKey: ["chi_phi_nh_section", doanId],
@@ -82,7 +90,7 @@ export function useChiPhiNHSection(doanId?: number) {
         .select("doan_ngay_id, bua_an, gia_snapshot")
         .eq("doan_id", doanId!);
       const bkMap = new Map<string, number | null>();
-      (bkList || []).forEach((b: any) => {
+      (bkList || []).forEach((b) => {
         bkMap.set(`${b.doan_ngay_id}_${b.bua_an}`, b.gia_snapshot);
       });
 
@@ -99,7 +107,7 @@ export function useChiPhiNHSection(doanId?: number) {
           .from("nha_hang_set_menu")
           .select("id, gia")
           .in("id", fallbackSmIds);
-        (smList || []).forEach((s: any) => { smMap[s.id] = s.gia; });
+        (smList || []).forEach((s) => { smMap[s.id] = s.gia; });
       }
 
       meals.forEach((m) => {
@@ -121,24 +129,29 @@ export function useChiPhiNHSection(doanId?: number) {
 
       // 4. Load nha_cung_cap
       const nccIds = [
-        ...new Set((nhList || []).filter((n: any) => n.nha_cung_cap_id).map((n: any) => n.nha_cung_cap_id)),
+        ...new Set(
+          (nhList || [])
+            .map((n) => n.nha_cung_cap_id)
+            .filter((id): id is number => id != null),
+        ),
       ];
-      const nccMap: Record<number, any> = {};
+      const nccMap: Record<number, NccBrief> = {};
       if (nccIds.length > 0) {
         const { data: nccList } = await externalSupabase
           .from("nha_cung_cap")
           .select("id, ten, so_tai_khoan, ngan_hang")
           .in("id", nccIds);
-        (nccList || []).forEach((n: any) => {
+        (nccList || []).forEach((n) => {
           nccMap[n.id] = n;
         });
       }
 
       const nhaHangMap: Record<number, NhaHangDetail> = {};
-      (nhList || []).forEach((nh: any) => {
+      (nhList || []).forEach((nh) => {
         const ncc = nh.nha_cung_cap_id ? nccMap[nh.nha_cung_cap_id] : null;
         nhaHangMap[nh.id] = {
           ...nh,
+          ten: nh.ten ?? "",
           tai_khoan_thanh_toan: nh.tai_khoan_thanh_toan || null,
           ten_ncc: ncc?.ten || null,
           ncc_so_tai_khoan: ncc?.so_tai_khoan || null,
@@ -181,9 +194,11 @@ export function useDVCanhDiemMap(doanId?: number): Record<number, CanhDiemInfo> 
         .eq("doan_id", doanId!);
       if (error) throw error;
       const map: Record<number, CanhDiemInfo> = {};
-      for (const item of (data ?? []) as any[]) {
-        if (item.id && item.canh_diem) {
-          map[item.id] = item.canh_diem as CanhDiemInfo;
+      for (const item of data ?? []) {
+        // canh_diem là joined relation (single FK) → narrow về CanhDiemInfo.
+        const canhDiem = item.canh_diem as CanhDiemInfo | null;
+        if (item.id && canhDiem) {
+          map[item.id] = canhDiem;
         }
       }
       return map;
