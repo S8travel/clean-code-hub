@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign, PageOrientation } from 'npm:docx@9.5.3'
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign, PageOrientation, HeightRule } from 'npm:docx@9.5.3'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,10 +44,13 @@ Deno.serve(async (req: Request) => {
     const CM = { top: 80, bottom: 80, left: 120, right: 120 }
     const HFILL = 'D9D9D9'
 
-    const t = (text: string, o: any = {}) => new TextRun({ text: String(text ?? ''), font: 'Times New Roman', size: o.size ?? 22, bold: o.bold ?? false, color: o.color ?? '000000', italic: o.italic ?? false })
-    const p = (runs: any, align = AlignmentType.LEFT, spacing?: any) => new Paragraph({ alignment: align, spacing: spacing || { before: 60, after: 60 }, children: Array.isArray(runs) ? runs : [runs] })
+    interface TextOpts { size?: number; bold?: boolean; color?: string; italic?: boolean }
+    interface SpacingOpts { before?: number; after?: number }
+    interface CellOpts { noBorder?: boolean; fill?: string; va?: (typeof VerticalAlign)[keyof typeof VerticalAlign]; cs?: number; rs?: number; w?: number }
+    const t = (text: string, o: TextOpts = {}) => new TextRun({ text: String(text ?? ''), font: 'Times New Roman', size: o.size ?? 22, bold: o.bold ?? false, color: o.color ?? '000000', italic: o.italic ?? false })
+    const p = (runs: TextRun | TextRun[], align = AlignmentType.LEFT, spacing?: SpacingOpts) => new Paragraph({ alignment: align, spacing: spacing || { before: 60, after: 60 }, children: Array.isArray(runs) ? runs : [runs] })
     const emptyP = () => new Paragraph({ spacing: { before: 60, after: 60 }, children: [] })
-    const C = (children: any, o: any = {}) => new TableCell({ borders: o.noBorder ? NONE_B : AB, shading: { fill: o.fill ?? 'FFFFFF', type: ShadingType.CLEAR }, margins: CM, verticalAlign: o.va ?? VerticalAlign.CENTER, columnSpan: o.cs, rowSpan: o.rs, width: o.w ? { size: o.w, type: WidthType.DXA } : undefined, children: Array.isArray(children) ? children : [children] })
+    const C = (children: Paragraph | Paragraph[], o: CellOpts = {}) => new TableCell({ borders: o.noBorder ? NONE_B : AB, shading: { fill: o.fill ?? 'FFFFFF', type: ShadingType.CLEAR }, margins: CM, verticalAlign: o.va ?? VerticalAlign.CENTER, columnSpan: o.cs, rowSpan: o.rs, width: o.w ? { size: o.w, type: WidthType.DXA } : undefined, children: Array.isArray(children) ? children : [children] })
 
     // ----------------------------------------------------------
     // HEADER ROW: 2 truong hop
@@ -103,7 +106,8 @@ Deno.serve(async (req: Request) => {
           .eq('ref_id', ks_id)
           .eq('la_coc', true)
         if (prevCoc && prevCoc.length > 0) {
-          daCocTruoc = prevCoc.reduce((s: number, r: any) => s + Number(r.so_tien || 0), 0)
+          daCocTruoc = (prevCoc as Array<{ so_tien: number | string | null }>)
+            .reduce((s, r) => s + Number(r.so_tien || 0), 0)
         }
       }
 
@@ -202,7 +206,7 @@ Deno.serve(async (req: Request) => {
         borders: { top: { style: BorderStyle.NONE, size: 0 }, bottom: { style: BorderStyle.NONE, size: 0 }, left: { style: BorderStyle.NONE, size: 0 }, right: { style: BorderStyle.NONE, size: 0 }, insideH: { style: BorderStyle.NONE, size: 0 }, insideV: { style: BorderStyle.NONE, size: 0 } },
         rows: [
           new TableRow({ children: sigCols.map((label) => C([p(t(label, { bold: true, size: 18 }), AlignmentType.CENTER), p(t('(Ký, ghi rõ họ tên)', { italic: true, size: 16 }), AlignmentType.CENTER)], { noBorder: true, w: sigW })) }),
-          new TableRow({ height: { value: 800, rule: 'exact' } as any, children: sigCols.map(() => C(p(t('')), { noBorder: true, w: sigW })) }),
+          new TableRow({ height: { value: 800, rule: HeightRule.EXACT }, children: sigCols.map(() => C(p(t('')), { noBorder: true, w: sigW })) }),
           new TableRow({ children: sigNames.map((name) => C(p(t(name, { bold: true, size: 18, italic: true }), AlignmentType.CENTER), { noBorder: true, w: sigW })) }),
         ]
       })
@@ -219,7 +223,7 @@ Deno.serve(async (req: Request) => {
       allTableRows.push(...result.rows)
     }
 
-    const allChildren: any[] = [
+    const allChildren: (Paragraph | Table)[] = [
       p(t('CÔNG TY TNHH DU LỊCH S8', { bold: true, size: 24 }), AlignmentType.LEFT),
       p(t('MST: 0402021137', { size: 18 }), AlignmentType.LEFT),
       p(t('Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam', { size: 18 }), AlignmentType.LEFT),
@@ -241,8 +245,8 @@ Deno.serve(async (req: Request) => {
     const buffer = await Packer.toBuffer(doc)
     const filename = (doan.ten_doan ?? 'dntt') + '_DNTT_KS.docx'
     return new Response(buffer, { headers: { ...corsHeaders, 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': 'attachment; filename="' + encodeURIComponent(filename) + '"' } })
-  } catch (err: any) {
-    const msg = err?.message ?? String(err)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
     console.error('Edge function error:', msg)
     return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }

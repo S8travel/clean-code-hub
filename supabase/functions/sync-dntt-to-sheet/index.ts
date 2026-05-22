@@ -16,6 +16,23 @@ import {
   appendRows,
   fmtDate,
 } from "../_shared/sheets.ts";
+import type { SheetCell, SheetValues } from "../_shared/sheets.ts";
+
+// Một row trả về từ RPC get_dntt_pending_export.
+interface DnttExportRow {
+  id: number;
+  ten_doan: string | null;
+  loai: string | null;
+  mo_ta: string | null;
+  ten_nha_cung_cap: string | null;
+  so_tien: number | string | null;
+  ngay_can_thanh_toan: string | null;
+  thanh_toan_luc: string | null;
+  nguon: string | null;
+  hoa_don_url: string | null;
+  unc_url: string | null;
+  payment_status: string | null;
+}
 
 const SHEET_HEADER = [
   "ID DNTT",         // A
@@ -51,7 +68,7 @@ const STATUS_LABEL: Record<string, string> = {
   paid: "Đã TT",
 };
 
-function buildRow(r: any, syncedAtStr: string): any[] {
+function buildRow(r: DnttExportRow, syncedAtStr: string): SheetCell[] {
   return [
     r.id,
     r.ten_doan ?? "",
@@ -104,7 +121,7 @@ serve(async (req) => {
     // 1. Lấy tất cả DNTT da_duyet (paid + partial + unpaid)
     const { data: rows, error: rpcErr } = await supabase.rpc("get_dntt_pending_export");
     if (rpcErr) throw rpcErr;
-    const pending = (rows ?? []) as any[];
+    const pending = (rows ?? []) as DnttExportRow[];
 
     if (pending.length === 0) {
       return new Response(
@@ -123,8 +140,8 @@ serve(async (req) => {
     // 4. Partition pending → toUpdate vs toInsert
     const syncedAt = new Date().toISOString();
     const syncedAtStr = fmtDate(syncedAt);
-    const toUpdate: { range: string; values: any[][] }[] = [];
-    const toInsert: any[][] = [];
+    const toUpdate: { range: string; values: SheetValues }[] = [];
+    const toInsert: SheetValues = [];
     const allIds: number[] = [];
     for (const r of pending) {
       allIds.push(r.id);
@@ -162,9 +179,10 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     return new Response(
-      JSON.stringify({ error: err?.message || String(err) }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
