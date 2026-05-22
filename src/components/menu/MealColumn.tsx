@@ -73,7 +73,7 @@ export default function MealColumn({
       .select("ten_mon")
       .eq("set_menu_id", setId)
       .order("thu_tu", { ascending: true });
-    return (data || []).map((m: any) => m.ten_mon as string);
+    return (data || []).map((m) => m.ten_mon);
   }, []);
 
   // Initialize from booking snapshot
@@ -116,7 +116,7 @@ export default function MealColumn({
         ten_set_snapshot: setMenu?.ten_set || null,
         gia_snapshot: setMenu?.gia || null,
         don_vi_snapshot: setMenu?.don_vi || "VND",
-        mon_an_snapshot: mons as any,
+        mon_an_snapshot: mons,
         ghi_chu: note || null,
       });
     }, 800);
@@ -198,7 +198,7 @@ export default function MealColumn({
           ten_set_snapshot: setMenu?.ten_set || null,
           gia_snapshot: setMenu?.gia || null,
           don_vi_snapshot: setMenu?.don_vi || "VND",
-          mon_an_snapshot: monList as any,
+          mon_an_snapshot: monList,
           ghi_chu: ghiChu || null,
           booking_status: "da_gui",
           sent_at: new Date().toISOString(),
@@ -240,13 +240,13 @@ export default function MealColumn({
   // Status actions
   const handleConfirm = async () => {
     if (!booking?.id) return;
-    await updateMut.mutateAsync({ id: booking.id, doan_id: doanId, booking_status: "nh_xac_nhan" } as any);
+    await updateMut.mutateAsync({ id: booking.id, doan_id: doanId, booking_status: "nh_xac_nhan" });
     toast.success("✓ NH đã xác nhận");
   };
 
   const handleCancel = async () => {
     if (!booking?.id) return;
-    await updateMut.mutateAsync({ id: booking.id, doan_id: doanId, booking_status: "da_huy" } as any);
+    await updateMut.mutateAsync({ id: booking.id, doan_id: doanId, booking_status: "da_huy" });
     toast.success("Đã hủy booking");
   };
 
@@ -258,7 +258,7 @@ export default function MealColumn({
       booking_status: "chua_gui",
       sent_at: null,
       sent_by: null,
-    } as any);
+    });
     toast.success("Đã đặt lại booking");
   };
 

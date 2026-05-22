@@ -70,6 +70,10 @@ const EMPTY_DIEM_DEN: LeadDiemDen[] = [];
 
 type Tab = "info" | "activity" | "tasks";
 
+// State cục bộ cho các field blur-save trong tab Thông tin.
+// Giá trị có thể là string (text input) hoặc number (input số) tùy field.
+type LeadLocalState = Record<string, string | number>;
+
 export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -130,7 +134,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("info");
 
   // Local state cho blur-save fields
-  const [local, setLocal] = useState<Record<string, any>>({});
+  const [local, setLocal] = useState<LeadLocalState>({});
   const lastLeadIdRef = useRef<number | null>(null);
   useEffect(() => {
     // Chỉ re-init khi đổi sang lead khác — bỏ qua refetch sau blur-save (cùng
@@ -159,15 +163,15 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
     }
   }, [lead]);
 
-  const setL = (k: string, v: any) => setLocal((p) => ({ ...p, [k]: v }));
+  const setL = (k: string, v: string | number) => setLocal((p) => ({ ...p, [k]: v }));
 
-  const saveField = useCallback((key: keyof LeadInsert, value: any) => {
+  const saveField = useCallback((key: keyof LeadInsert, value: string | number | null) => {
     if (!lead) return;
-    const cur = (lead as any)[key];
+    const cur = (lead as unknown as Record<string, unknown>)[key];
     const val = value === "" ? null : value;
     if (val === cur || (val === null && cur === null)) return;
     updateLead.mutate({ id: lead.id, [key]: val }, {
-      onError: (e: any) => toast.error(e?.message ?? "Lỗi khi lưu"),
+      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi khi lưu"),
     });
   }, [lead, updateLead]);
 
@@ -200,7 +204,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
       created_by: user?.user_id,
     }, {
       onSuccess: () => { setActivityNd(""); setActivityKq(""); toast.success("Đã lưu hoạt động"); },
-      onError: (e: any) => toast.error(e?.message ?? "Lỗi"),
+      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi"),
     });
   };
 
@@ -218,7 +222,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
       created_by: user?.user_id,
     }, {
       onSuccess: () => { setTaskMoTa(""); setTaskDeadline(""); },
-      onError: (e: any) => toast.error(e?.message ?? "Lỗi"),
+      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi"),
     });
   };
 
@@ -368,7 +372,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                   so_dien_thoai: lead.so_dien_thoai,
                   email: lead.email,
                   trang_thai: lead.trang_thai,
-                  do_not_contact: (lead as any).do_not_contact,
+                  do_not_contact: (lead as { do_not_contact?: boolean | null }).do_not_contact,
                 }}
                 currentUserId={user?.user_id}
               />
@@ -501,12 +505,12 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="Ngày đi">
-                        <DatePicker value={local.ngay_di_du_kien ?? ""}
+                        <DatePicker value={String(local.ngay_di_du_kien ?? "")}
                           onChange={(v) => { setL("ngay_di_du_kien", v); saveField("ngay_di_du_kien", v); }}
                           className="w-full h-8 text-xs" />
                       </Field>
                       <Field label="Ngày về">
-                        <DatePicker value={local.ngay_ve_du_kien ?? ""}
+                        <DatePicker value={String(local.ngay_ve_du_kien ?? "")}
                           onChange={(v) => { setL("ngay_ve_du_kien", v); saveField("ngay_ve_du_kien", v); }}
                           className="w-full h-8 text-xs" />
                       </Field>
@@ -516,13 +520,13 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       <Field label="Số ngày">
                         <Input type="number" min={1} value={local.so_ngay ?? ""}
                           onChange={(e) => setL("so_ngay", e.target.value)}
-                          onBlur={() => saveField("so_ngay", local.so_ngay ? parseInt(local.so_ngay) : null)}
+                          onBlur={() => saveField("so_ngay", local.so_ngay ? parseInt(String(local.so_ngay)) : null)}
                           className="tabular-nums text-xs h-8" placeholder="5" />
                       </Field>
                       <Field label="Ngân sách/khách">
                         <Input type="number" min={0} value={local.ngan_sach_per_khach ?? ""}
                           onChange={(e) => setL("ngan_sach_per_khach", e.target.value)}
-                          onBlur={() => saveField("ngan_sach_per_khach", local.ngan_sach_per_khach ? parseInt(local.ngan_sach_per_khach) : null)}
+                          onBlur={() => saveField("ngan_sach_per_khach", local.ngan_sach_per_khach ? parseInt(String(local.ngan_sach_per_khach)) : null)}
                           className="tabular-nums text-xs h-8" placeholder="VND" />
                       </Field>
                     </div>
@@ -552,7 +556,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                           placeholder="Chọn ưu tiên" />
                       </Field>
                       <Field label="Follow-up tiếp">
-                        <DatePicker value={local.ngay_follow_up_tiep ?? ""}
+                        <DatePicker value={String(local.ngay_follow_up_tiep ?? "")}
                           onChange={(v) => { setL("ngay_follow_up_tiep", v); saveField("ngay_follow_up_tiep", v); }}
                           className="w-full h-8 text-xs" />
                       </Field>

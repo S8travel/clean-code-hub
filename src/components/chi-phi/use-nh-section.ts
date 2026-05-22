@@ -543,7 +543,7 @@ export function useNHSection({
       // Cập nhật chi phí row trong DB nếu đã tồn tại
       const row = localRowsRef.current[key];
       if (row?.id) {
-        upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal } as any);
+        upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal });
       }
       return next;
     });
@@ -568,7 +568,9 @@ export function useNHSection({
     }));
   }, []);
 
-  const handleExtraChange = useCallback((key: string, idx: number, field: keyof LocalNHExtra, value: any) => {
+  const handleExtraChange = useCallback((
+    key: string, idx: number, field: keyof LocalNHExtra, value: LocalNHExtra[keyof LocalNHExtra],
+  ) => {
     setExtrasMap((prev) => {
       const list = [...(prev[key] || [])];
       list[idx] = { ...list[idx], [field]: value };
@@ -729,7 +731,7 @@ export function useNHSection({
         ngay_can_thanh_toan: dnttNgayCan || null,
         allocations: [{ chi_phi_id: row.id, so_tien: soTien }],
       });
-      const mainNhId = (mainNhRecord as any)?.id ?? null;
+      const mainNhId = mainNhRecord?.id ?? null;
 
       const allIds = [row.id, ...extras.filter((e) => e.id).map((e) => e.id!)];
       await externalSupabase
@@ -778,7 +780,7 @@ export function useNHSection({
           toast.success(cancelTarget.isPaid ? "Đã hủy khoản thanh toán" : "Đã hủy đề nghị");
           setCancelTarget(null);
         },
-        onError: (err: any) => toast.error(err?.message || "Lỗi khi hủy"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy"),
       },
     );
   };
@@ -835,8 +837,8 @@ export function useNHSection({
           ngay_can_thanh_toan: aggNgayCan || null,
           ghi_chu: aggReason ? `Lý do: ${aggReason}` : null,
           allocations: [{ chi_phi_id: mainRow.id, so_tien: absDelta }],
-        } as any);
-        const newDnttId = (newDntt as any)?.id ?? null;
+        });
+        const newDnttId = newDntt?.id ?? null;
 
         const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, absDelta) : 0;
         if (canTruAmt > 0 && newDnttId && aggCanTru) {
@@ -898,7 +900,7 @@ export function useNHSection({
           setAdjustDonGia("");
           setAdjustReason("");
         },
-        onError: (err: any) => toast.error(err?.message || "Lỗi cập nhật"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi cập nhật"),
       },
     );
   };

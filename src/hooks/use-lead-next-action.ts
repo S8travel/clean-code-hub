@@ -128,7 +128,7 @@ export async function syncNextAction(leadId: number): Promise<void> {
     }
   };
 
-  if ((lead as any).do_not_contact || TERMINAL_STAGES.includes((lead as any).trang_thai)) {
+  if (lead.do_not_contact || TERMINAL_STAGES.includes(lead.trang_thai)) {
     await deactivate();
     return;
   }
@@ -137,7 +137,7 @@ export async function syncNextAction(leadId: number): Promise<void> {
     .from("lead_cadence").select("*").eq("active", true);
 
   // Mốc bắt đầu stage: ngay_lien_he_cuoi → activity đổi-status mới nhất → created_at
-  let stageStartAt: string = (lead as any).ngay_lien_he_cuoi || (lead as any).created_at;
+  let stageStartAt: string = lead.ngay_lien_he_cuoi || lead.created_at || new Date().toISOString();
   const { data: lastStatusAct } = await externalSupabase
     .from("lead_activity")
     .select("created_at")
@@ -146,7 +146,7 @@ export async function syncNextAction(leadId: number): Promise<void> {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (lastStatusAct?.created_at && (!((lead as any).ngay_lien_he_cuoi))) {
+  if (lastStatusAct?.created_at && !lead.ngay_lien_he_cuoi) {
     stageStartAt = lastStatusAct.created_at;
   }
 
@@ -169,8 +169,8 @@ export async function syncNextAction(leadId: number): Promise<void> {
     .maybeSingle();
 
   const draft = computeNextAction({
-    trangThai: (lead as any).trang_thai,
-    doNotContact: !!(lead as any).do_not_contact,
+    trangThai: lead.trang_thai,
+    doNotContact: !!lead.do_not_contact,
     touchesInStage: touchCount ?? 0,
     stageStartAt,
     lastOutcome: (lastDone?.outcome as LnaOutcome) ?? null,
@@ -236,7 +236,7 @@ export function useCompleteAction() {
       const { data: l } = await externalSupabase
         .from("lead").select("total_touches").eq("id", p.leadId).maybeSingle();
       await externalSupabase.from("lead").update({
-        total_touches: ((l as any)?.total_touches ?? 0) + 1,
+        total_touches: (l?.total_touches ?? 0) + 1,
         last_touched_at: new Date().toISOString(),
       }).eq("id", p.leadId);
 
