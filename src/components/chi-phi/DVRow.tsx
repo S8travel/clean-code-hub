@@ -111,11 +111,6 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   const activeDntts = allDntts.filter(
     d => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
   );
-  // Có ĐNTT còn hiệu lực (chờ duyệt / đã duyệt / đã thanh toán) → khóa nút
-  // xóa extras đã lưu ở UI. Allocation ĐNTT NH/DV chỉ trỏ main row nên guard
-  // data-layer không chặn extras; mà ĐNTT.so_tien lại tính cả extras → xóa
-  // extra làm sai số đã cam kết / sai delta aggregate. Bỏ extra → sửa SL về 0.
-  const hasActiveDntt = activeDntts.length > 0;
   const rejectedDntts = allDntts.filter(d => d.trang_thai_duyet === "tu_choi");
   const paidDntts = activeDntts.filter(d => d.payment_status === "paid");
   const pendingDntts = activeDntts.filter(d => d.payment_status !== "paid");
@@ -208,9 +203,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         </CatalogHoverCard>
       </td>
 
-      {/* SL — editable inline mọi lúc; 🔒 khi override */}
+      {/* SL — editable inline; input căn trái cố định (🔒 nằm sau) */}
       <td className="px-2 py-2.5">
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center gap-1">
           <DVInput
             value={local.so_luong}
             onChange={v => handleRowChange(row.id, "so_luong", v)}
@@ -223,9 +218,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         </div>
       </td>
 
-      {/* Đơn giá — editable inline mọi lúc; ↺ reset khi override */}
+      {/* Đơn giá — editable inline; input căn trái cố định (↺ nằm sau) */}
       <td className="px-3 py-2.5">
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center gap-1">
           <DVInput
             value={local.don_gia}
             onChange={v => handleRowChange(row.id, "don_gia", v)}
@@ -435,9 +430,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             />
           </div>
         </td>
-        {/* SL */}
+        {/* SL — căn trái, khớp dòng chính */}
         <td className="px-2 py-1.5">
-          <div className="flex justify-center">
+          <div className="flex items-center gap-1">
             <DVInput
               value={extra.so_luong}
               onChange={v => handleExtraChange(row.id!, idx, "so_luong", v)}
@@ -446,9 +441,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             />
           </div>
         </td>
-        {/* Đơn giá */}
+        {/* Đơn giá — căn trái, khớp dòng chính */}
         <td className="px-3 py-1.5">
-          <div className="flex justify-center">
+          <div className="flex items-center gap-1">
             <DVInput
               value={extra.don_gia}
               onChange={v => handleExtraChange(row.id!, idx, "don_gia", v)}
@@ -484,26 +479,12 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
         {/* Delete */}
         <td className="px-2 py-1.5 text-right">
-          {(() => {
-            const deleteLocked = extra.id != null && hasActiveDntt;
-            return (
-              <button
-                onClick={() => handleExtraDelete(row.id!, idx)}
-                disabled={deleteLocked}
-                title={deleteLocked
-                  ? "Dịch vụ đã có ĐNTT — không xóa được phát sinh. Muốn bỏ thì sửa số lượng/đơn giá về 0, hoặc hủy ĐNTT."
-                  : undefined}
-                className={cn(
-                  "p-0.5",
-                  deleteLocked
-                    ? "text-muted-foreground cursor-not-allowed"
-                    : "text-destructive hover:text-destructive/80",
-                )}
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            );
-          })()}
+          <button
+            onClick={() => handleExtraDelete(row.id!, idx)}
+            className="text-destructive hover:text-destructive/80 p-0.5"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
         </td>
       </tr>
     )),

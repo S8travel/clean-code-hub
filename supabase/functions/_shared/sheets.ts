@@ -1,5 +1,5 @@
 // Helper dùng chung cho các edge function đồng bộ Google Sheet
-// (sync-dntt-to-sheet, sync-dntt-du-chi-to-sheet).
+// (sync-dntt-to-sheet, sync-dntt-du-chi-to-sheet, sync-chi-phi-to-sheet).
 // Sửa logic Sheets API ở ĐÂY — không lặp lại trong từng function.
 
 /** Một ô trong Google Sheet — chuỗi hoặc số. */
@@ -269,5 +269,115 @@ export function fmtDateTime(s: string | null): string {
     return `${dd}/${mm}/${d.getFullYear()} ${hh}:${mi}`;
   } catch {
     return s;
+  }
+}
+
+// ─── Báo cáo dạng tab mới mỗi lần chạy (sync-chi-phi-to-sheet) ───────────────
+
+/**
+ * Tạo 1 tab mới tên `baseTitle`. Nếu tab trùng tên đã tồn tại → thêm hậu tố
+ * " (2)", " (3)"… Trả về { sheetId, title } thực tế đã tạo.
+ */
+export async function createDatedTab(
+  accessToken: string,
+  spreadsheetId: string,
+  baseTitle: string,
+): Promise<{ sheetId: number; title: string }> {
+  const metaRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!metaRes.ok) {
+    throw new Error(`Sheet metadata failed: ${await metaRes.text()}`);
+  }
+  const meta = (await metaRes.json()) as {
+    sheets?: Array<{ properties?: { title?: string } }>;
+  };
+  const existing = new Set(
+    (meta.sheets ?? []).map((s) => s?.properties?.title ?? ""),
+  );
+
+  let title = baseTitle;
+  let n = 2;
+  while (existing.has(title)) {
+    title = `${baseTitle} (${n})`;
+    n += 1;
+  }
+
+  const addRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requests: [{ addSheet: { properties: { title } } }],
+      }),
+    },
+  );
+  if (!addRes.ok) {
+    throw new Error(`Sheet addSheet failed: ${await addRes.text()}`);
+  }
+  const addJson = (await addRes.json()) as {
+    replies?: Array<{ addSheet?: { properties?: { sheetId?: number; title?: string } } }>;
+  };
+  const props = addJson.replies?.[0]?.addSheet?.properties;
+  if (!props || typeof props.sheetId !== "number") {
+    throw new Error("Sheet addSheet không trả về sheetId");
+  }
+  return { sheetId: props.sheetId, title: props.title ?? title };
+}
+
+/**
+ * Ghi 1 khối giá trị 2D vào `range` (vd "'2026-05-22'!A1:I20").
+ * Tên tab có ký tự đặc biệt (gạch ngang, khoảng trắng) PHẢI bọc nháy đơn.
+ */
+export async function writeValues(
+  accessToken: string,
+  spreadsheetId: string,
+  range: string,
+  values: SheetValues,
+): Promise<void> {
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ values }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Sheet writeValues failed: ${await res.text()}`);
+  }
+}
+
+/**
+ * Gửi mảng request tùy ý lên spreadsheets:batchUpdate — dùng cho định dạng ô
+ * (repeatCell, autoResizeDimensions, updateSpreadsheetProperties…).
+ */
+export async function batchUpdateSpreadsheet(
+  accessToken: string,
+  spreadsheetId: string,
+  requests: Record<string, unknown>[],
+): Promise<void> {
+  if (requests.length === 0) return;
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ requests }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Sheet batchUpdate failed: ${await res.text()}`);
   }
 }

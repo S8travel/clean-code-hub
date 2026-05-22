@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { NHInput } from "./NHInput";
 import { fmt, type LocalNHExtra } from "./nh-section-shared";
 
@@ -12,12 +13,10 @@ interface Props {
   onChange: (key: string, idx: number, field: keyof LocalNHExtra, value: string | number) => void;
   onSave: (key: string, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => void;
   onDelete: (key: string, idx: number) => void;
-  /** true khi extra đã lưu + bữa ăn có ĐNTT còn hiệu lực → khóa nút xóa. */
-  deleteLocked?: boolean;
 }
 
 // 1 dòng dịch vụ phát sinh của bữa ăn. Tách verbatim từ NHRow.
-export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete, deleteLocked }: Props) {
+export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete }: Props) {
   return (
     <tr className="border-b border-border/50 last:border-b-0 bg-muted/20">
       {/* Col 1: empty */}
@@ -39,20 +38,20 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       </td>
       {/* Col 4: empty */}
       <td />
-      {/* Col 5: số lượng */}
-      <td className="px-2 py-1">
-        <div className="flex justify-center">
+      {/* Col 5: số lượng — căn trái, khớp dòng chính */}
+      <td className="px-3 py-1">
+        <div className="flex items-center gap-1">
           <NHInput
             value={extra.so_luong}
             onChange={(v) => onChange(mealKey, idx, "so_luong", v)}
             onBlur={() => onSave(mealKey, idx)}
-            width="w-[44px]"
+            width="w-[56px]"
           />
         </div>
       </td>
-      {/* Col 6: đơn giá */}
-      <td className="px-2 py-1">
-        <div className="flex justify-center">
+      {/* Col 6: đơn giá — căn trái, khớp dòng chính */}
+      <td className="px-3 py-1">
+        <div className="flex items-center gap-1">
           <NHInput
             value={extra.don_gia}
             onChange={(v) => onChange(mealKey, idx, "don_gia", v)}
@@ -63,13 +62,22 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
           />
         </div>
       </td>
-      {/* Col 7: CK% — empty */}
-      <td />
-      {/* Col 8: thành tiền */}
+      {/* Col 7: CK% riêng từng extra (suất trẻ em = CK; HDV phát sinh để 0) */}
+      <td className="px-2 py-1">
+        <div className="flex justify-center">
+          <NHInput
+            value={extra.chiet_khau_phan_tram}
+            onChange={(v) => onChange(mealKey, idx, "chiet_khau_phan_tram", v)}
+            onBlur={() => onSave(mealKey, idx)}
+            width="w-[48px]"
+          />
+        </div>
+      </td>
+      {/* Col 8: thành tiền (đã trừ CK) */}
       <td className="px-3 py-1 text-right whitespace-nowrap">
         {extra.so_luong > 0 && extra.don_gia > 0 ? (
           <span className={cn("text-[11px] font-semibold", extra.nguoi_tt === "hdv" ? "text-amber-600" : "text-primary")}>
-            {fmt(extra.so_luong * extra.don_gia)}
+            {fmt(applyChietKhau(extra.so_luong * extra.don_gia, extra.chiet_khau_phan_tram))}
           </span>
         ) : ""}
       </td>
@@ -96,17 +104,8 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       {/* Col 11: delete */}
       <td className="px-2 py-1">
         <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            disabled={deleteLocked}
-            title={deleteLocked
-              ? "Bữa ăn đã có ĐNTT — không xóa được phát sinh. Muốn bỏ thì sửa số lượng/đơn giá về 0, hoặc hủy ĐNTT."
-              : undefined}
-            onClick={() => onDelete(mealKey, idx)}
-          >
-            <Trash2 className={cn("h-3 w-3", deleteLocked ? "text-muted-foreground" : "text-destructive")} />
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onDelete(mealKey, idx)}>
+            <Trash2 className="h-3 w-3 text-destructive" />
           </Button>
         </div>
       </td>

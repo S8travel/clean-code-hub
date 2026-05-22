@@ -419,8 +419,9 @@ n.toLocaleString("vi-VN") + " VND"
    - NH/DV: OP sửa SL/đơn giá **inline trực tiếp mọi lúc** (kể cả sau thanh toán).
      KHÔNG còn lock + modal "Điều chỉnh" (gỡ 2026-05-22). `handleSave`/`handleRowSave`
      set `is_overridden=true` + `thanh_tien_thuc_te=null` — giá trị mới CHÍNH là thực tế.
-   - OP có thể thêm **extras** (rows phát sinh) qua nút ➕ — handleExtraSave save ngay.
-     Extras đã lưu KHÔNG xóa được khi nhóm còn ĐNTT hiệu lực — bỏ thì sửa SL/đơn giá về 0.
+   - OP có thể thêm/sửa/xóa **extras** (rows phát sinh) qua nút ➕ — sửa inline, tự lưu.
+     Mỗi extra NH có **CK% riêng** (ô nhập per dòng): suất trẻ em = menu chính → nhập
+     CK; HDV phát sinh → để 0. `applyChietKhau` per dòng (làm tròn 1 lần/dòng = Mức A).
    - Sau khi sửa, hệ thống auto-compute **aggregate delta toàn nhóm**:
      - `group = main row + extras` (extras filter theo prefix mo_ta)
      - `delta = sumActual_công_ty - sumPaid_công_ty` (CHỈ rows có `tien_cong_ty > 0`,
@@ -702,7 +703,7 @@ của tour ngay khi tạo. Master danh mục đổi sau KHÔNG được ảnh h�
 | Giá phòng KS | `doan_ks_dem.gia_phong` (user nhập tay) | — |
 | FOC khách sạn | `doan_chi_phi.foc_khach_snapshot` + `foc_mien_snapshot` | `resolveKSFoc(rows, ksMaster)` |
 | FOC nhà hàng | `doan_chi_phi.foc_khach_snapshot` + `foc_mien_snapshot` | `resolveNHFoc(row, nhMaster)` |
-| Chiết khấu nhà hàng | `doan_chi_phi.chiet_khau_phan_tram_snapshot` | `resolveNHChietKhau(row, nhMaster)` |
+| Chiết khấu NH (per dòng: main + extras) | `doan_chi_phi.chiet_khau_phan_tram_snapshot` | main: `resolveNHChietKhau(row, nhMaster)`; extra: đọc trực tiếp cột |
 | Tip HDV | `doan.tip_rate`, `tip_so_ngay_override`, `tip_so_khach_override`, `tip_lump_sum` | — |
 
 **Rule khi code**:
