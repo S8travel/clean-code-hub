@@ -58,7 +58,7 @@ export function useDoanOpMap(doanIds: number[]) {
         .order("created_at", { ascending: false });
       if (error) throw error;
       const byDoan = new Map<number, string>();
-      for (const r of (data ?? []) as any[]) {
+      for (const r of data ?? []) {
         if (r.doan_id != null && !byDoan.has(r.doan_id)) byDoan.set(r.doan_id, r.nguoi_nhan);
       }
       const uids = [...new Set([...byDoan.values()])];
@@ -66,7 +66,7 @@ export function useDoanOpMap(doanIds: number[]) {
       if (uids.length) {
         const { data: u } = await externalSupabase
           .from("user_roles").select("user_id, ho_ten").in("user_id", uids);
-        (u ?? []).forEach((x: any) => nameMap.set(x.user_id, x.ho_ten ?? x.user_id));
+        (u ?? []).forEach((x) => nameMap.set(x.user_id, x.ho_ten ?? x.user_id));
       }
       const out = new Map<number, { user_id: string; ten: string }>();
       byDoan.forEach((uid, did) => out.set(did, { user_id: uid, ten: nameMap.get(uid) ?? "—" }));
@@ -88,9 +88,11 @@ export function useDefaultAssignees() {
         .in("pv_default_for", ["pv_xe", "pv_visa", "pv_ve_mb"]);
       if (error) throw error;
       const map: Partial<Record<PvKey, { user_id: string; ten: string }>> = {};
-      for (const r of (data ?? []) as any[]) {
-        if (!map[r.pv_default_for as PvKey]) {
-          map[r.pv_default_for as PvKey] = { user_id: r.user_id, ten: r.ho_ten ?? r.user_id };
+      for (const r of data ?? []) {
+        if (r.pv_default_for == null) continue;
+        const key = r.pv_default_for as PvKey;
+        if (!map[key]) {
+          map[key] = { user_id: r.user_id, ten: r.ho_ten ?? r.user_id };
         }
       }
       return map;
@@ -117,7 +119,7 @@ export function useDoanPhanViecMatrix(doanIds: number[]) {
         .order("created_at", { ascending: false });
       if (error) throw error;
       const latest = new Map<string, { nguoi_nhan: string; trang_thai: string }>();
-      for (const r of (data ?? []) as any[]) {
+      for (const r of data ?? []) {
         const k = `${r.doan_id}|${r.loai_viec}`;
         if (!latest.has(k)) latest.set(k, { nguoi_nhan: r.nguoi_nhan, trang_thai: r.trang_thai });
       }
@@ -126,7 +128,7 @@ export function useDoanPhanViecMatrix(doanIds: number[]) {
       if (uids.length) {
         const { data: u } = await externalSupabase
           .from("user_roles").select("user_id, ho_ten").in("user_id", uids);
-        (u ?? []).forEach((x: any) => nameMap.set(x.user_id, x.ho_ten ?? x.user_id));
+        (u ?? []).forEach((x) => nameMap.set(x.user_id, x.ho_ten ?? x.user_id));
       }
       const out = new Map<number, Partial<Record<PvKey, PvCell>>>();
       latest.forEach((v, k) => {
@@ -161,7 +163,7 @@ export function useSetPvKhongCan() {
             nguoi_nhan: SYSTEM_USER_ID,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", (ex as any).id);
+          .eq("id", ex.id);
       } else {
         await externalSupabase.from("cong_viec").insert({
           tieu_de: `[${LABEL[p.key]}] ${p.doanTen} — Không cần`,
@@ -196,7 +198,7 @@ export function useMyPhanViecScope(uid: string | null | undefined) {
         .not("trang_thai", "in", "(huy,khong_can)");
       if (error) throw error;
       const m = new Map<number, Set<"ks" | "nh" | "dv">>();
-      for (const r of (data ?? []) as any[]) {
+      for (const r of data ?? []) {
         if (r.doan_id == null) continue;
         if (!m.has(r.doan_id)) m.set(r.doan_id, new Set());
         const s = m.get(r.doan_id)!;
@@ -219,7 +221,7 @@ export function useAssignPvItem() {
       // Gán cho ADMIN = đánh dấu "Không cần" (admin không làm việc điều hành)
       const { data: tgt } = await externalSupabase
         .from("user_roles").select("role").eq("user_id", p.userId).maybeSingle();
-      if ((tgt as any)?.role === "admin") {
+      if (tgt?.role === "admin") {
         const { data: exKC } = await externalSupabase
           .from("cong_viec").select("id")
           .eq("doan_id", p.doanId).eq("loai_viec", p.key)
@@ -228,7 +230,7 @@ export function useAssignPvItem() {
         if (exKC) {
           await externalSupabase.from("cong_viec")
             .update({ trang_thai: "khong_can", nguoi_nhan: SYSTEM_USER_ID, updated_at: new Date().toISOString() })
-            .eq("id", (exKC as any).id);
+            .eq("id", exKC.id);
         } else {
           await externalSupabase.from("cong_viec").insert({
             tieu_de: `[${LABEL[p.key]}] ${p.doanTen} — Không cần`,
@@ -246,13 +248,13 @@ export function useAssignPvItem() {
         .eq("doan_id", p.doanId).eq("loai_viec", p.key)
         .in("trang_thai", ["cho_nhan", "dang_lam"])
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (ex && (ex as any).nguoi_nhan === p.userId) return;
+      if (ex && ex.nguoi_nhan === p.userId) return;
       if (ex) {
         await externalSupabase.from("cong_viec")
           .update({ trang_thai: "huy", updated_at: new Date().toISOString() })
-          .eq("id", (ex as any).id);
+          .eq("id", ex.id);
         await externalSupabase.from("thong_bao").insert({
-          user_id: (ex as any).nguoi_nhan, doan_id: p.doanId, doan_ten: p.doanTen,
+          user_id: ex.nguoi_nhan, doan_id: p.doanId, doan_ten: p.doanTen,
           loai: "giao_viec",
           tieu_de: `Đoàn ${p.doanTen}: việc ${LABEL[p.key]} đã chuyển người khác`,
           noi_dung: "Bạn không còn phụ trách việc này.", is_read: false,
@@ -305,13 +307,13 @@ export function useCreatePhanViec() {
         .eq("doan_id", doan.id)
         .like("loai_viec", "pv_%")
         .neq("trang_thai", "huy");
-      const done = new Set((existing ?? []).map((r: any) => r.loai_viec));
+      const done = new Set((existing ?? []).map((r) => r.loai_viec));
 
       // Admin được giao việc pv → coi là "Không cần" (admin không làm việc điều hành,
       // không nag điều phối, không thông báo). KHÔNG để thành "Chưa phân".
       const { data: admins } = await externalSupabase
         .from("user_roles").select("user_id").eq("role", "admin");
-      const adminSet = new Set((admins ?? []).map((r: any) => r.user_id));
+      const adminSet = new Set((admins ?? []).map((r) => r.user_id));
 
       const assigned = p.assignments.filter((a) => a.assignedTo && !adminSet.has(a.assignedTo!) && !done.has(a.key));
       const adminAssigned = p.assignments.filter((a) => a.assignedTo && adminSet.has(a.assignedTo!) && !done.has(a.key));
@@ -323,7 +325,7 @@ export function useCreatePhanViec() {
       if (uids.length) {
         const { data: u } = await externalSupabase
           .from("user_roles").select("user_id, ho_ten").in("user_id", uids);
-        (u ?? []).forEach((x: any) => nameMap.set(x.user_id, x.ho_ten ?? x.user_id));
+        (u ?? []).forEach((x) => nameMap.set(x.user_id, x.ho_ten ?? x.user_id));
       }
 
       // 1) Mục có người → cong_viec + thong_bao cho người nhận

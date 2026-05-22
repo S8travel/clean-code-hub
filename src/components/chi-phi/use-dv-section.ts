@@ -185,7 +185,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       tien_hdv: isHDV ? total : 0,
       // HYBRID: user edit trực tiếp = override → cascade Điều tour bỏ qua row này
       is_overridden: true,
-    } as any, {
+    }, {
       onSuccess: () => setEditRow(prev => { const next = { ...prev }; delete next[row.id]; return next; }),
     });
   };
@@ -195,7 +195,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
   const handleResetOverride = async (row: typeof dvRows[0]) => {
     if (!row.ref_doan_ngay_item_id) {
       // Extras (no item link) — chỉ clear flag
-      upsertMut.mutate({ id: row.id, doan_id: doanId, is_overridden: false } as any);
+      upsertMut.mutate({ id: row.id, doan_id: doanId, is_overridden: false });
       return;
     }
     const { data: item } = await externalSupabase
@@ -205,7 +205,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       .single();
     if (!item) {
       // Fallback: chỉ clear flag (cascade lần sau sẽ sync)
-      upsertMut.mutate({ id: row.id, doan_id: doanId, is_overridden: false } as any);
+      upsertMut.mutate({ id: row.id, doan_id: doanId, is_overridden: false });
       return;
     }
     const isHdv = row.tien_hdv > 0;
@@ -221,7 +221,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       tien_hdv:     isHdv ? newTotal : 0,
       is_overridden: false,
       thanh_tien_thuc_te: null,
-    } as any);
+    });
   };
 
   const handleToggleNguoiTt = (row: typeof dvRows[0]) => {
@@ -232,7 +232,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       doan_id: doanId,
       tien_cong_ty: next === "cong_ty" ? total : 0,
       tien_hdv: next === "hdv" ? total : 0,
-    } as any);
+    });
   };
 
   // ── Extra handlers ────────────────────────────────────────────────────────
@@ -244,10 +244,15 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
     }));
   };
 
-  const handleExtraChange = (mainId: number, idx: number, field: keyof LocalDVExtra, value: any) => {
+  const handleExtraChange = (
+    mainId: number,
+    idx: number,
+    field: keyof LocalDVExtra,
+    value: LocalDVExtra[keyof LocalDVExtra],
+  ) => {
     setExtrasMap((prev) => {
       const list = [...(prev[mainId] || [])];
-      list[idx] = { ...list[idx], [field]: value };
+      list[idx] = { ...list[idx], [field]: value } as LocalDVExtra;
       return { ...prev, [mainId]: list };
     });
   };
@@ -272,7 +277,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       so_luong: extra.so_luong,
       tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
       tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
-    } as any, {
+    }, {
       onSuccess: (data) => {
         if (!extra.id && data?.id) {
           setExtrasMap((prev) => {
@@ -317,7 +322,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
 
   const handleToggleDinhKy = (row: typeof dvRows[0]) => {
     const newVal = !row.thanh_toan_dinh_ky;
-    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal } as any, {
+    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal }, {
       onSuccess: () => toast.success(newVal ? "Đã bật thanh toán định kỳ" : "Đã tắt thanh toán định kỳ"),
     });
   };
@@ -373,8 +378,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
         ref_id: chiPhiId,
         ngay_can_thanh_toan: dvNgayCan || null,
         allocations: [{ chi_phi_id: chiPhiId, so_tien: fullAmount }],
-      } as any);
-      const mainDvId = (mainRecord as any)?.id ?? null;
+      });
+      const mainDvId = mainRecord?.id ?? null;
 
       if (canTruAmount > 0 && nccId && mainDvId) {
         await createCanTruPayments({
@@ -412,7 +417,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
       { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
       {
         onSuccess: () => { toast.success("Đã hủy"); setCancelTarget(null); },
-        onError: (err: any) => toast.error(err?.message || "Lỗi khi hủy"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy"),
       },
     );
   };
@@ -431,7 +436,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
           toast.success("Đã cập nhật chi phí thực tế");
           setAdjustChiPhi(null);
         },
-        onError: (err: any) => toast.error(err?.message || "Lỗi cập nhật"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi cập nhật"),
       },
     );
   };
@@ -486,8 +491,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
           ngay_can_thanh_toan: aggNgayCan || null,
           ghi_chu: aggReason ? `Lý do: ${aggReason}` : null,
           allocations: [{ chi_phi_id: mainRow.id, so_tien: absDelta }],
-        } as any);
-        const newDnttId = (newDntt as any)?.id ?? null;
+        });
+        const newDnttId = newDntt?.id ?? null;
 
         // Insert can_tru payment nếu user select cong_no
         const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, absDelta) : 0;
@@ -543,7 +548,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
         .select("id, canh_diem:canh_diem_id(tai_khoan_thanh_toan)")
         .in("id", refItemIds);
       for (const item of ngayItems ?? []) {
-        tkttMap[item.id] = (item.canh_diem as any)?.tai_khoan_thanh_toan ?? null;
+        const cd = Array.isArray(item.canh_diem) ? item.canh_diem[0] : item.canh_diem;
+        tkttMap[item.id] = (cd as { tai_khoan_thanh_toan?: string | null } | null)?.tai_khoan_thanh_toan ?? null;
       }
     }
 
