@@ -16,6 +16,7 @@ import {
 import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
 import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
+import { applyChietKhau } from "@/lib/chi-phi-calc";
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
@@ -88,6 +89,8 @@ export interface NHDocItem {
   so_luong: number;
   don_gia: number;
   ghi_chu?: string;
+  /** CK% riêng dòng này (main + extras đều có CK riêng). 0/undefined = không CK. */
+  chiet_khau_phan_tram?: number;
 }
 
 export interface NHDocEntry {
@@ -97,7 +100,7 @@ export interface NHDocEntry {
   foc_khach: number | null; // foc_khach (mỗi X khách)
   foc: number | null;       // foc_mien (miễn Y) — giữ tên `foc` cho backward compat
   items: NHDocItem[];
-  /** % chiết khấu áp lên MAIN row (items[0]). Extras không trừ CK. 0 = không CK. */
+  /** @deprecated CK% giờ per-item (NHDocItem.chiet_khau_phan_tram). Giữ cho tương thích. */
   chiet_khau_phan_tram?: number;
   ncc: { ten?: string; so_tai_khoan?: string; ngan_hang?: string } | null;
   tai_khoan_thanh_toan: string | null;
@@ -198,8 +201,6 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   let firstEntry = true;
 
   for (const entry of entries) {
-    // CK% áp main row (items[0]). Thành tiền main = gross - ckAmount.
-    const ckPct = entry.chiet_khau_phan_tram ?? 0;
     const itemCount = Math.max(entry.items.length, 1);
     const items = entry.items.length > 0 ? entry.items : [{ so_luong: 0, don_gia: 0, ghi_chu: "" }];
 
@@ -222,11 +223,10 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
       const item = items[ri];
       const isFirst = ri === 0;
       const grossThanhTien = item.so_luong * item.don_gia;
-      // CK chỉ áp main row (items[0]). Extras KHÔNG trừ CK.
-      const ckAmountRow = isFirst && ckPct > 0
-        ? Math.round(grossThanhTien * ckPct / 100)
-        : 0;
-      const thanhTien = grossThanhTien - ckAmountRow;
+      // CK% riêng từng dòng (main + extras). Dùng applyChietKhau → khớp tuyệt
+      // đối số hệ thống lưu (handleSave / handleExtraSave).
+      const itemCk = item.chiet_khau_phan_tram ?? 0;
+      const thanhTien = applyChietKhau(grossThanhTien, itemCk);
       const cells: TableCell[] = [];
 
       // CODE ĐOÀN — only on very first row, spans all rows
@@ -259,9 +259,9 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
 
       // Đơn giá — per item
       cells.push(cell([p(item.don_gia > 0 ? fmt(item.don_gia) : "—", { size: 14 })], { width: COL_W[5] }));
-      // CK % — chỉ main row hiện %, extras "—"
-      const ckText = isFirst && ckPct > 0 ? `${ckPct}%` : "—";
-      cells.push(cell([p(ckText, { size: 14, color: isFirst && ckPct > 0 ? "CC0000" : undefined })], { width: COL_W[6] }));
+      // CK % — mỗi dòng hiện CK riêng
+      const ckText = itemCk > 0 ? `${itemCk}%` : "—";
+      cells.push(cell([p(ckText, { size: 14, color: itemCk > 0 ? "CC0000" : undefined })], { width: COL_W[6] }));
       // Thành tiền — main đã trừ CK, extras gross
       cells.push(cell([p(thanhTien > 0 ? fmt(thanhTien) : "—", { bold: true, size: 14 })], { width: COL_W[7] }));
 

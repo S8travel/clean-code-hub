@@ -47,4 +47,7 @@ export interface LocalNHExtra {
   so_luong: number;
   don_gia: number;
   nguoi_tt: "cong_ty" | "hdv";
+  /** CK% riêng của dòng phát sinh — áp per dòng (suất trẻ em = menu chính cần CK;
+   *  HDV phát sinh để 0). Lưu vào doan_chi_phi.chiet_khau_phan_tram_snapshot. */
+  chiet_khau_phan_tram: number;
 }
