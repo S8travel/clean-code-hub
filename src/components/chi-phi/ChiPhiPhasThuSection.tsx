@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import type { HDVDoanInfo } from "./ChiPhiHDVSection";
 
 const NDT_TIP_CO_TL = 150;
 const NDT_TIP_KHONG_TL = 300;
@@ -19,7 +20,7 @@ interface ExtraRow { id: number; moTa: string; soTien: number; loaiTien: LoaiTie
 const LOAI_TIEN_LABEL: Record<LoaiTien, string> = { NDT: "NDT", "NT$": "NT$", "US$": "US$", USD: "USD", VND: "VND" };
 
 interface Props {
-  doan?: any;
+  doan?: HDVDoanInfo;
 }
 
 export default function ChiPhiPhasThuSection({ doan }: Props) {

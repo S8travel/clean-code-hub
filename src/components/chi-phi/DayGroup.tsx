@@ -49,7 +49,7 @@ export function DayGroup({
   localRows: LocalKSRow[];
   focKhach: number | null;
   focMien: number | null;
-  onFieldChange: (idx: number, field: string, value: any) => void;
+  onFieldChange: (idx: number, field: string, value: string | number) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
   onAddRoom: () => void;

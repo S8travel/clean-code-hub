@@ -252,8 +252,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
           });
         }
       },
-      onError: (e: any) =>
-        toast({ title: "Lỗi: " + (e?.message || "Không gắn được"), variant: "destructive" }),
+      onError: (e: unknown) =>
+        toast({ title: "Lỗi: " + (errMsg(e) || "Không gắn được"), variant: "destructive" }),
     });
   };
 

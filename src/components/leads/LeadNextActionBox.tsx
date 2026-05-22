@@ -4,6 +4,7 @@ import { vi } from "date-fns/locale";
 import { toast } from "sonner";
 import { Target, Phone, MessageCircle, Mail, Check, Clock, SkipForward, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -114,7 +115,7 @@ export function LeadNextActionBox({ lead, currentUserId }: Props) {
         }
         setOutcome("rep_interested");
       },
-      onError: (e: any) => toast.error(e?.message ?? "Lỗi khi lưu"),
+      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi khi lưu"),
     });
   };
 

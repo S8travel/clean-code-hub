@@ -14,7 +14,7 @@ interface Props {
   globalIdx: number;
   // FOC pro-rata tính từ parent — trừ vào "Thành tiền" hiển thị NET.
   rowFocDeduction?: number;
-  onFieldChange: (idx: number, field: string, value: any) => void;
+  onFieldChange: (idx: number, field: string, value: string | number) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
   /** Khoá input khi KS đã có DNTT paid — chỉ chỉnh được qua "Điều chỉnh" modal. */

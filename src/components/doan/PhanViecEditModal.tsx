@@ -49,7 +49,7 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
         .eq("id", doanId!)
         .single();
       if (error) throw error;
-      return data as any;
+      return data;
     },
   });
 
@@ -83,7 +83,7 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
         const v = sel[it.key];
         if (!v || v === original[it.key]) continue; // không đổi
         if (v === NONE) continue;                    // để trống → không xử lý
-        const base = { doanId: did, doanTen: doan.ten_doan, ngayDi: doan.ngay_di ?? null, key: it.key };
+        const base = { doanId: did, doanTen: doan.ten_doan ?? "", ngayDi: doan.ngay_di ?? null, key: it.key };
         if (v === KC) await kcMut.mutateAsync(base);
         else await assignMut.mutateAsync({ ...base, userId: v });
       }
@@ -120,7 +120,7 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs space-y-0.5">
           <div className="flex justify-between gap-2">
             <span className="text-muted-foreground">Agent</span>
-            <span>{doan?.agents?.ten ?? "—"}</span>
+            <span>{(doan?.agents as { ten?: string | null } | null)?.ten ?? "—"}</span>
           </div>
           <div className="flex justify-between gap-2">
             <span className="text-muted-foreground">Địa điểm</span>

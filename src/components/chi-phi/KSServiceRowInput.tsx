@@ -13,7 +13,7 @@ type ServiceLoai = Exclude<KSLoaiRow, "phong">;
 interface Props {
   row: LocalKSRow;
   globalIdx: number;
-  onFieldChange: (idx: number, field: string, value: any) => void;
+  onFieldChange: (idx: number, field: string, value: string | number) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
   /** Khoá input khi KS đã có DNTT paid. */

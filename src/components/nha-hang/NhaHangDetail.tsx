@@ -68,7 +68,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
       foc_mien: nhaHang.foc_mien?.toString() ?? "",
       chiet_khau: nhaHang.chiet_khau_phan_tram?.toString() ?? "",
       thong_tin_chung: nhaHang.thong_tin_chung ?? "",
-      nha_cung_cap_id: (nhaHang as any).nha_cung_cap_id?.toString() ?? "",
+      nha_cung_cap_id: nhaHang.nha_cung_cap_id?.toString() ?? "",
     });
     // nhaHang là phần tử .find() từ react-query — ref ổn định, chỉ đổi khi
     // chọn record khác hoặc refetch sau lưu → re-init form đúng lúc.

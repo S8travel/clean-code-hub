@@ -114,7 +114,7 @@ export default function KSDNTTModal({
         allocations: allocations.length > 0 ? allocations : undefined,
       };
       const mainRecord = await insertDNTT.mutateAsync(payload);
-      const mainDnttId = (mainRecord as any)?.id ?? null;
+      const mainDnttId = mainRecord?.id ?? null;
 
       // 2. Nếu có cấn trừ: tạo các payment can_tru (gộp nhiều cong_no cùng NCC)
       if (canTruAmount > 0 && mainDnttId) {

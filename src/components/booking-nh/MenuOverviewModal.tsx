@@ -47,7 +47,7 @@ function MonListView({ nhaHangId, booking }: MonListViewProps) {
       .eq("set_menu_id", booking.set_menu_id)
       .order("thu_tu", { ascending: true })
       .then(({ data }) => {
-        const mons = (data ?? []).map((m: any) => m.ten_mon as string);
+        const mons = (data ?? []).map((m) => m.ten_mon as string);
         if (mons.length > 0) setMonList(mons);
       });
   }, [booking?.set_menu_id, booking?.mon_an_snapshot]);

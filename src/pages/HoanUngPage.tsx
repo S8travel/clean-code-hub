@@ -13,6 +13,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -88,7 +89,7 @@ export default function HoanUngPage() {
     if (deleteTarget == null) return;
     deleteMut.mutate(deleteTarget, {
       onSuccess: () => { toast.success("Đã xóa yêu cầu"); setDeleteTarget(null); },
-      onError: (e: any) => toast.error("Lỗi: " + (e?.message ?? "Không xóa được")),
+      onError: (e: unknown) => toast.error("Lỗi: " + (errMsg(e) || "Không xóa được")),
     });
   };
 

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useLeadsList, LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS, type Lead } from "@/hooks/use-leads";
+import { useLeadsList, LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS, type Lead, type LeadTrangThai } from "@/hooks/use-leads";
 import { useUserRoles } from "@/hooks/use-doan";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadTable } from "@/components/leads/LeadTable";
@@ -53,7 +53,7 @@ export default function LeadsPage() {
   }, [user?.user_id]);
 
   const { data: rawLeads = [], isLoading } = useLeadsList({
-    trang_thai: (filterStatus as any) || null,
+    trang_thai: (filterStatus as LeadTrangThai) || null,
     assigned_to: filterSales || null,
     nguon: filterNguon || null,
     loai_tour: filterLoaiTour || null,

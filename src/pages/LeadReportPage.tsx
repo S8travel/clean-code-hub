@@ -234,7 +234,7 @@ export default function LeadReportPage() {
               <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={lyDoMat} dataKey="cnt" nameKey="ly_do" cx="50%" cy="50%" outerRadius={80} label={(e: any) => `${e.cnt}`}>
+                    <Pie data={lyDoMat} dataKey="cnt" nameKey="ly_do" cx="50%" cy="50%" outerRadius={80} label={(e: { cnt?: number }) => `${e.cnt}`}>
                       {lyDoMat.map((_, i) => (
                         <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                       ))}
