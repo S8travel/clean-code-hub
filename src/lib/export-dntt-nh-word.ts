@@ -31,8 +31,8 @@ const PAGE_H = 11906;
 const MARGIN = 720;
 const CONTENT_W = PAGE_W - MARGIN * 2; // 15398
 
-// 13 columns — total = 15398. Idx 6 = CK% (mới, áp main row).
-const COL_W = [1400, 1050, 2000, 700, 560, 1100, 600, 1300, 1050, 900, 1250, 2000, 1488];
+// 14 columns — total = 15398. Idx 6 = CK%, idx 8 = Tổng tiền (Σ thành tiền của ĐNTT).
+const COL_W = [1200, 1000, 1800, 650, 550, 1050, 600, 1200, 1200, 1050, 900, 1200, 1700, 1298];
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -118,6 +118,14 @@ export interface NHDocData {
   nguoiDeNghi?: string;
 }
 
+/** Tổng tiền 1 entry NH/DV = Σ thành tiền các item (đã trừ chiết khấu riêng từng dòng). */
+export function calcNHEntryTotal(items: NHDocItem[]): number {
+  return items.reduce(
+    (s, it) => s + applyChietKhau(it.so_luong * it.don_gia, it.chiet_khau_phan_tram ?? 0),
+    0,
+  );
+}
+
 export async function exportDNTTNHWordFromData(data: NHDocData) {
   const { doan, entries, nguoiDeNghi = "" } = data;
   if (entries.length === 0) return;
@@ -182,11 +190,11 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   // ── 4. Data table ─────────────────────────────────────────────────────────
   const rows: TableRow[] = [];
 
-  // Header row — 13 cột (thêm "CK %" trước "Thành tiền")
+  // Header row — 14 cột ("Tổng tiền" sau "Thành tiền")
   const headers = [
     "CODE\nĐOÀN", "NGÀY", "TÊN NHÀ HÀNG\n/ DỊCH VỤ", "Số\nkhách",
-    "FOC", "Đơn giá\n(gồm VAT)", "CK %", "Thành\ntiền", "Số tiền\ncọc",
-    "Cấn\ntrừ", "Số tiền còn\nthanh toán", "Tài khoản\nthanh toán", "Ghi chú",
+    "FOC", "Đơn giá\n(gồm VAT)", "CK %", "Thành\ntiền", "Tổng\ntiền",
+    "Số tiền\ncọc", "Cấn\ntrừ", "Số tiền còn\nthanh toán", "Tài khoản\nthanh toán", "Ghi chú",
   ];
   rows.push(
     new TableRow({
@@ -203,6 +211,7 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   for (const entry of entries) {
     const itemCount = Math.max(entry.items.length, 1);
     const items = entry.items.length > 0 ? entry.items : [{ so_luong: 0, don_gia: 0, ghi_chu: "" }];
+    const entryTongTien = calcNHEntryTotal(items);
 
     // Bank / payment account info from restaurant's tai_khoan_thanh_toan
     const bankChildren: Paragraph[] = [];
@@ -266,16 +275,22 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
       cells.push(cell([p(thanhTien > 0 ? fmt(thanhTien) : "—", { bold: true, size: 14 })], { width: COL_W[7] }));
 
       if (isFirst) {
-        // Số tiền cọc
+        // Tổng tiền — Σ thành tiền của entry
+        cells.push(
+          cell([p(entryTongTien > 0 ? fmt(entryTongTien) : "—", { bold: true, size: 14 })], {
+            width: COL_W[8], rowSpan: itemCount,
+          }),
+        );
+        // Số tiền cọc (= tiền cọc đã thanh toán trước đó)
         cells.push(
           cell([p(entry.so_tien_coc > 0 ? fmt(entry.so_tien_coc) : "—", { size: 14, color: entry.so_tien_coc > 0 ? "FF6600" : undefined })], {
-            width: COL_W[8], rowSpan: itemCount,
+            width: COL_W[9], rowSpan: itemCount,
           }),
         );
         // Cấn trừ
         cells.push(
           cell([p(entry.can_tru > 0 ? fmt(entry.can_tru) : "—", { size: 14, color: entry.can_tru > 0 ? "FF6600" : undefined })], {
-            width: COL_W[9], rowSpan: itemCount,
+            width: COL_W[10], rowSpan: itemCount,
           }),
         );
         // Số tiền còn TT — la_coc → kèm "(cọc)" để rõ tính chất khoản này
@@ -287,14 +302,14 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
             ]
           : [p(conTTText, { bold: true, size: 14, color: "CC0000" })];
         cells.push(
-          cell(conTTChildren, { width: COL_W[10], rowSpan: itemCount }),
+          cell(conTTChildren, { width: COL_W[11], rowSpan: itemCount }),
         );
         // Tài khoản thanh toán
-        cells.push(cell(bankChildren, { width: COL_W[11], rowSpan: itemCount }));
+        cells.push(cell(bankChildren, { width: COL_W[12], rowSpan: itemCount }));
       }
 
-      // Ghi chú — per item (cột cuối — idx 12)
-      cells.push(cell([p(item.ghi_chu || "—", { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[12] }));
+      // Ghi chú — per item (cột cuối — idx 13)
+      cells.push(cell([p(item.ghi_chu || "—", { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[13] }));
 
       rows.push(new TableRow({ children: cells }));
     }
