@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useApproveDNTT, useMarkPaidDNTT, useCancelDNTT } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
+import type { TablesInsert } from "@/lib/database.types";
 
 export interface HDVChiPhiItem {
   id: number;
@@ -101,7 +102,7 @@ export function useChiPhiHDVSection(doanId?: number) {
         if (hdvRow) {
           hdv = {
             id: hdvRow.id,
-            ten: hdvRow.ten,
+            ten: hdvRow.ten ?? "",
             so_tai_khoan: hdvRow.so_tai_khoan ?? null,
             ngan_hang: hdvRow.ngan_hang ?? null,
           };
@@ -234,7 +235,7 @@ export function useCreateHDVPayment() {
           quyet_toan_data: payload.quyetToanData ?? null,
           ngay_can_thanh_toan: payload.ngayCanThanhToan ?? null,
           tao_boi: taoBoi,
-        })
+        } as unknown as TablesInsert<"de_nghi_thanh_toan">)
         .select("id")
         .single();
       if (error) throw error;

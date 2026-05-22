@@ -554,7 +554,7 @@ export default function InvoicePage() {
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
   const endedDoan = useMemo(
-    () => (allDoan as DoanWithRel[]).filter((d) => d.ngay_ve && d.ngay_ve < today),
+    () => (allDoan as unknown as DoanWithRel[]).filter((d) => d.ngay_ve && d.ngay_ve < today),
     [allDoan, today],
   );
 

@@ -254,8 +254,8 @@ export function useUpdateLeadStatus() {
       const { error } = await externalSupabase.rpc("update_lead_status", {
         p_lead_id:        id,
         p_trang_thai_moi: trang_thai_moi,
-        p_ly_do_mat:      ly_do_mat ?? null,
-        p_created_by:     created_by ?? null,
+        p_ly_do_mat:      (ly_do_mat ?? null) as string | undefined,
+        p_created_by:     (created_by ?? null) as string | undefined,
       });
       if (error) throw error;
     },

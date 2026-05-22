@@ -314,9 +314,9 @@ export function useDashboardStats() {
         duChiTong,
         // ĐNTT
         pendingApprovalCount: pendingApproval.length,
-        pendingApprovalAmount: pendingApproval.reduce((s, d) => s + d.so_tien, 0),
+        pendingApprovalAmount: pendingApproval.reduce((s, d) => s + (d.so_tien ?? 0), 0),
         pendingPaymentCount: pendingPayment.length,
-        pendingPaymentAmount: pendingPayment.reduce((s, d) => s + d.so_tien, 0),
+        pendingPaymentAmount: pendingPayment.reduce((s, d) => s + (d.so_tien ?? 0), 0),
         recentDNTT,
         // Chi phí
         tongChiPhiThang,

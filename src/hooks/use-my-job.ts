@@ -59,7 +59,7 @@ export function useMyDeadlines(doanIds: number[]) {
           doanId: row.doan_id,
           doanName: (row.doan as any)?.ten_doan ?? "",
           label: (row.khach_san as any)?.ten ?? "Khách sạn",
-          deadline: row.deadline,
+          deadline: row.deadline ?? "",
           status: row.ks_final_status,
         });
       }
@@ -74,7 +74,7 @@ export function useMyDeadlines(doanIds: number[]) {
           doanId: row.doan_id,
           doanName: (row.doan as any)?.ten_doan ?? "",
           label: `${(row.nha_hang as any)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
-          deadline: row.deadline,
+          deadline: row.deadline ?? "",
           status: row.booking_status,
         });
       }
@@ -86,8 +86,8 @@ export function useMyDeadlines(doanIds: number[]) {
           bookingId: row.id,
           doanId: row.doan_id,
           doanName: (row.doan as any)?.ten_doan ?? "",
-          label: row.ten_nha_cung_cap,
-          deadline: row.deadline,
+          label: row.ten_nha_cung_cap ?? "",
+          deadline: row.deadline ?? "",
           status: row.booking_status,
         });
       }
@@ -129,7 +129,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
           type: "ks", bookingId: row.id, doanId: row.doan_id,
           doanName: (row.doan as any)?.ten_doan ?? "",
           label: (row.khach_san as any)?.ten ?? "Khách sạn",
-          deadline: row.deadline, status: row.ks_final_status,
+          deadline: row.deadline ?? "", status: row.ks_final_status,
         });
       }
       for (const row of nhRes.data ?? []) {
@@ -141,7 +141,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
           type: loai === "tau_ngay" ? "ks" : "nh", bookingId: row.id, doanId: row.doan_id,
           doanName: (row.doan as any)?.ten_doan ?? "",
           label: `${(row.nha_hang as any)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
-          deadline: row.deadline, status: row.booking_status,
+          deadline: row.deadline ?? "", status: row.booking_status,
         });
       }
       for (const row of dvRes.data ?? []) {
@@ -150,7 +150,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         items.push({
           type: "dv", bookingId: row.id, doanId: row.doan_id,
           doanName: (row.doan as any)?.ten_doan ?? "",
-          label: row.ten_nha_cung_cap, deadline: row.deadline, status: row.booking_status,
+          label: row.ten_nha_cung_cap ?? "", deadline: row.deadline ?? "", status: row.booking_status,
         });
       }
       return items.sort((a, b) => a.deadline.localeCompare(b.deadline));

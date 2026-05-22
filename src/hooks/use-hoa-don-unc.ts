@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
+import type { TablesInsert } from "@/lib/database.types";
 
 export type TrangThaiDoc = "chua_co" | "da_co" | "khong_can";
 
@@ -303,7 +304,7 @@ export function useSaveHoaDonSoTien() {
           do_uu_tien: "cao",
           han_xu_ly: null,
           trang_thai: "cho_nhan",
-        })
+        } as unknown as TablesInsert<"cong_viec">)
         .select("id")
         .single();
       if (cvErr) throw cvErr;

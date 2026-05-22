@@ -5,6 +5,7 @@ import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
+import type { TablesInsert } from "@/lib/database.types";
 
 export type DNTTRow = DNTTRowFromHook;
 
@@ -472,7 +473,7 @@ export function useInsertDNTT() {
       const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
       const { data, error } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .insert({ ...dnttPayload, tao_boi: taoBoi })
+        .insert({ ...dnttPayload, tao_boi: taoBoi } as unknown as TablesInsert<"de_nghi_thanh_toan">)
         .select("id")
         .single();
       if (error) throw error;

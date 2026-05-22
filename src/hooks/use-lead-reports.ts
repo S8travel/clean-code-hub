@@ -20,11 +20,13 @@ export interface SalesRow {
 }
 export interface LyDoMatRow     { ly_do: string; cnt: number; }
 
-const rpcParams = (f: LeadReportFilter) => ({
+const rpcParams = (
+  f: LeadReportFilter,
+): { p_from: string; p_to: string; p_loai_tour?: string; p_van_phong_id?: number } => ({
   p_from:         f.from,
   p_to:           f.to,
-  p_loai_tour:    f.loai_tour || null,
-  p_van_phong_id: f.van_phong_id ?? null,
+  p_loai_tour:    (f.loai_tour || null) as string | undefined,
+  p_van_phong_id: (f.van_phong_id ?? null) as number | undefined,
 });
 
 export function useLeadFunnel(filter: LeadReportFilter | null) {
