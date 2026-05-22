@@ -2,6 +2,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
+import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 // ── Lookup types ──
 export interface CanhDiemItem {
@@ -338,13 +339,13 @@ async function getActiveDnttIdsForChiPhi(chiPhiId: number): Promise<number[]> {
     .select("dntt_id")
     .eq("chi_phi_id", chiPhiId);
   if (!rawAllocs || rawAllocs.length === 0) return [];
-  const dnttIds = [...new Set(rawAllocs.map((a: any) => a.dntt_id as number))];
+  const dnttIds = [...new Set(rawAllocs.map((a) => a.dntt_id))];
   const { data: activeDntts } = await externalSupabase
     .from("de_nghi_thanh_toan")
     .select("id")
     .in("id", dnttIds)
     .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
-  return (activeDntts ?? []).map((d: any) => d.id as number);
+  return (activeDntts ?? []).map((d) => d.id);
 }
 
 // Pre-check trước khi user xóa cảnh điểm khỏi điều tour.
@@ -408,7 +409,7 @@ export async function checkNhaHangDeletable(
     .select("id, mo_ta")
     .eq("ref_doan_ngay_id", doanNgayId)
     .eq("danh_muc", "nha_hang");
-  const cpRow = (cpRows || []).find((r: any) => typeof r.mo_ta === "string" && r.mo_ta.endsWith(mealSuffix));
+  const cpRow = (cpRows || []).find((r) => typeof r.mo_ta === "string" && r.mo_ta.endsWith(mealSuffix));
   if (cpRow) {
     const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
     if (activeDnttIds.length > 0) {
@@ -535,11 +536,12 @@ export function useSaveDieuTour() {
         .from("doan_ngay")
         .select("id, ngay_so, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, thanh_pho")
         .eq("doan_id", doanId);
-      const existingByNgaySo = new Map<number, any>(
-        (existingNgayRows ?? []).map((r: any) => [r.ngay_so, r]),
+      type ExistingNgayRow = NonNullable<typeof existingNgayRows>[number];
+      const existingByNgaySo = new Map<number, ExistingNgayRow>(
+        (existingNgayRows ?? []).map((r) => [r.ngay_so, r]),
       );
 
-      const existingDoanNgayIds = (existingNgayRows ?? []).map((r: any) => r.id).filter(Boolean);
+      const existingDoanNgayIds = (existingNgayRows ?? []).map((r) => r.id).filter(Boolean);
       const existingItemsByNgayId = new Map<number, number[]>();
       if (existingDoanNgayIds.length > 0) {
         const { data: existingItems } = await externalSupabase
@@ -547,10 +549,11 @@ export function useSaveDieuTour() {
           .select("doan_ngay_id, canh_diem_id")
           .in("doan_ngay_id", existingDoanNgayIds);
         for (const it of existingItems ?? []) {
-          if (!existingItemsByNgayId.has((it as any).doan_ngay_id)) {
-            existingItemsByNgayId.set((it as any).doan_ngay_id, []);
+          if (it.doan_ngay_id == null || it.canh_diem_id == null) continue;
+          if (!existingItemsByNgayId.has(it.doan_ngay_id)) {
+            existingItemsByNgayId.set(it.doan_ngay_id, []);
           }
-          existingItemsByNgayId.get((it as any).doan_ngay_id)!.push((it as any).canh_diem_id);
+          existingItemsByNgayId.get(it.doan_ngay_id)!.push(it.canh_diem_id);
         }
       }
 
@@ -562,43 +565,45 @@ export function useSaveDieuTour() {
       const labelNH = (id: number | null | undefined) =>
         id ? (nhNameMap.get(id) || `NH #${id}`) : "—";
       const labelCD = (id: number) => cdNameMap.get(id) || `cảnh điểm #${id}`;
-      const labelTxt = (v: string | null | undefined) => (v ?? "").trim() || "—";
+      const labelTxt = (v: unknown) => String(v ?? "").trim() || "—";
       const dieuTourLogs: string[] = [];
 
       // Diff log doan fields (chỉ log nếu old doan tồn tại — tức UPDATE)
       if (oldDoan) {
-        const oldTotal = ((oldDoan as any).so_khach_lon ?? 0) + ((oldDoan as any).so_khach_em1 ?? 0)
-                       + ((oldDoan as any).so_khach_em2 ?? 0) + ((oldDoan as any).so_khach_tl ?? 0);
+        const oldDoanRec = oldDoan as Record<string, unknown>;
+        const num = (v: unknown) => Number(v ?? 0);
+        const oldTotal = num(oldDoanRec.so_khach_lon) + num(oldDoanRec.so_khach_em1)
+                       + num(oldDoanRec.so_khach_em2) + num(oldDoanRec.so_khach_tl);
         if (oldTotal !== so_khach) {
           dieuTourLogs.push(`Đổi số khách ${oldTotal} → ${so_khach}`);
         }
-        const strFields: Array<{ key: keyof typeof doanFields; label: string }> = [
-          { key: "bang_don" as any, label: "bảng đơn" },
-          { key: "truong_doan" as any, label: "trưởng đoàn" },
-          { key: "chuyen_bay_don" as any, label: "chuyến bay đón" },
-          { key: "chuyen_bay_tien" as any, label: "chuyến bay tiễn" },
-          { key: "chu_thich_khach" as any, label: "chú thích khách" },
-          { key: "ghi_chu_dieu_tour" as any, label: "ghi chú điều tour" },
+        const strFields: Array<{ key: keyof SaveDieuTourPayload["doanFields"]; label: string }> = [
+          { key: "bang_don", label: "bảng đơn" },
+          { key: "truong_doan", label: "trưởng đoàn" },
+          { key: "chuyen_bay_don", label: "chuyến bay đón" },
+          { key: "chuyen_bay_tien", label: "chuyến bay tiễn" },
+          { key: "chu_thich_khach", label: "chú thích khách" },
+          { key: "ghi_chu_dieu_tour", label: "ghi chú điều tour" },
         ];
         for (const f of strFields) {
-          const newV = (doanFields as any)[f.key];
+          const newV = doanFields[f.key];
           if (newV === undefined) continue;
-          const oldV = (oldDoan as any)[f.key];
+          const oldV = oldDoanRec[f.key];
           if ((oldV ?? "") !== (newV ?? "")) {
             dieuTourLogs.push(`Đổi ${f.label} "${labelTxt(oldV)}" → "${labelTxt(newV)}"`);
           }
         }
         if (doanFields.co_tinh_suat_tl_nha_hang !== undefined
-            && (oldDoan as any).co_tinh_suat_tl_nha_hang !== doanFields.co_tinh_suat_tl_nha_hang) {
+            && oldDoanRec.co_tinh_suat_tl_nha_hang !== doanFields.co_tinh_suat_tl_nha_hang) {
           dieuTourLogs.push(
             `${doanFields.co_tinh_suat_tl_nha_hang ? "Bật" : "Tắt"} tính suất TL nhà hàng`,
           );
         }
-        if (doanFields.thu_tip !== undefined && (oldDoan as any).thu_tip !== doanFields.thu_tip) {
+        if (doanFields.thu_tip !== undefined && oldDoanRec.thu_tip !== doanFields.thu_tip) {
           dieuTourLogs.push(`${doanFields.thu_tip ? "Bật" : "Tắt"} thu tip`);
         }
         if (doanFields.tang_pham !== undefined) {
-          const oldArr = Array.isArray((oldDoan as any).tang_pham) ? (oldDoan as any).tang_pham as string[] : [];
+          const oldArr = Array.isArray(oldDoanRec.tang_pham) ? oldDoanRec.tang_pham as string[] : [];
           const newArr = Array.isArray(doanFields.tang_pham) ? doanFields.tang_pham : [];
           const added = newArr.filter((x: string) => !oldArr.includes(x));
           const removed = oldArr.filter((x: string) => !newArr.includes(x));
@@ -610,7 +615,7 @@ export function useSaveDieuTour() {
       // 2. Upsert doan_ngay — use upsert to handle both new and existing rows
       for (let idx = 0; idx < days.length; idx++) {
         const day = days[idx];
-        const ngayPayload: any = {
+        const ngayPayload: TablesInsert<"doan_ngay"> = {
           doan_id: doanId,
           ngay_so: day.ngay_so,
           ngay_date: day.ngay_date,
@@ -687,7 +692,7 @@ export function useSaveDieuTour() {
           .not("canh_diem_id", "in", selectedCanhDiemIds.length > 0 ? `(${selectedCanhDiemIds.join(",")})` : "(0)");
 
         if (itemsToDelete && itemsToDelete.length > 0) {
-          const idsToDelete = itemsToDelete.map((it: any) => it.id);
+          const idsToDelete = itemsToDelete.map((it) => it.id);
           // Delete referencing doan_chi_phi rows first — pre-check DNTT
           for (const itemId of idsToDelete) {
             await deleteChiPhiByItemIdSafe(itemId);
@@ -712,7 +717,7 @@ export function useSaveDieuTour() {
 
         const insertedItems: Array<{
           id: number;
-          canh_diem_id: number;
+          canh_diem_id: number | null;
           co_phi: boolean | null;
           don_gia: number | null;
           so_luong: number | null;
@@ -727,13 +732,16 @@ export function useSaveDieuTour() {
             .from("doan_ngay_item")
             .select("id, canh_diem_id, don_gia, co_phi, so_luong, nguoi_thanh_toan")
             .eq("doan_ngay_id", doanNgayId);
-          const existingMap = new Map((existingRows || []).map((r: any) => [r.canh_diem_id, r]));
+          type ExistingItemRow = NonNullable<typeof existingRows>[number];
+          const existingMap = new Map<number | null, ExistingItemRow>(
+            (existingRows || []).map((r) => [r.canh_diem_id, r]),
+          );
 
           for (let idx = 0; idx < validItems.length; idx++) {
             const it = validItems[idx];
             const cd = canhDiemList.find((c) => c.id === it.canh_diem_id);
             const existing = existingMap.get(it.canh_diem_id);
-            const commonFields: any = {
+            const commonFields: TablesUpdate<"doan_ngay_item"> = {
               thu_tu: idx + 1,
               co_phi: cd?.co_phi ?? false,
               so_luong: soKhach,
@@ -748,7 +756,7 @@ export function useSaveDieuTour() {
                 .eq("id", existing.id)
                 .select("id, canh_diem_id, co_phi, don_gia, so_luong, nguoi_thanh_toan")
                 .single();
-              if (data) insertedItems.push(data as any);
+              if (data) insertedItems.push(data);
             } else {
               // INSERT: snap master canh_diem.gia_mac_dinh tại thời điểm tạo
               const { data } = await externalSupabase
@@ -762,7 +770,7 @@ export function useSaveDieuTour() {
                 })
                 .select("id, canh_diem_id, co_phi, don_gia, so_luong, nguoi_thanh_toan")
                 .single();
-              if (data) insertedItems.push(data as any);
+              if (data) insertedItems.push(data);
             }
           }
         }
@@ -799,7 +807,7 @@ export function useSaveDieuTour() {
             const newTotal   = newDonGia * newSoLuong;
             const isHdv      = item.nguoi_thanh_toan === "hdv";
 
-            const masterFields: any = {
+            const masterFields: TablesInsert<"doan_chi_phi"> = {
               doan_id: doanId,
               ngay_so: day.ngay_so,
               loai: "chi",
@@ -809,7 +817,7 @@ export function useSaveDieuTour() {
               mo_ta: cd?.ten ?? "",
               nha_cung_cap_id: cd?.nha_cung_cap_id ?? null,
             };
-            const pricingFields: any = {
+            const pricingFields: TablesUpdate<"doan_chi_phi"> = {
               don_gia: newDonGia,
               so_luong: newSoLuong,
               tien_cong_ty: isHdv ? 0 : newTotal,
@@ -832,7 +840,7 @@ export function useSaveDieuTour() {
               } else {
                 const soLuongChanged = Number(existing.so_luong) !== newSoLuong
                                     || Number(existing.don_gia)  !== newDonGia;
-                const updatePayload: any = { ...masterFields, ...pricingFields };
+                const updatePayload: TablesUpdate<"doan_chi_phi"> = { ...masterFields, ...pricingFields };
                 if (soLuongChanged) {
                   updatePayload.thanh_tien_thuc_te = null;
                   counters.thucTeClearCount++;
@@ -864,25 +872,27 @@ export function useSaveDieuTour() {
               // - initialFields: chỉ INSERT (lần đầu); UPDATE KHÔNG đụng
               //   để tránh reset tien_cong_ty/hdv (computed bởi NH section
               //   khi user save thật sự)
-              const alwaysFields: any = {
+              const moTaMeal = mealItem
+                ? `${mealItem.ten}${meal.label === "an_trua" ? " (trưa)" : meal.label === "an_toi" ? " (tối)" : ""}`
+                : "";
+              const alwaysFields: TablesInsert<"doan_chi_phi"> = {
                 doan_id: doanId,
                 ngay_so: day.ngay_so,
                 loai: "chi",
                 danh_muc: "nha_hang",
                 ref_doan_ngay_id: doanNgayId,
-                mo_ta: mealItem
-                  ? `${(mealItem as any).ten}${meal.label === "an_trua" ? " (trưa)" : meal.label === "an_toi" ? " (tối)" : ""}`
-                  : "",
-                nha_cung_cap_id: (mealItem as any)?.nha_cung_cap_id ?? null,
+                mo_ta: moTaMeal,
+                nha_cung_cap_id: mealItem?.nha_cung_cap_id ?? null,
               };
               // initialFields: chỉ INSERT (lần đầu), KHÔNG update.
               // Snapshot FOC + chiết khấu master tại lúc cascade insert — lock per tour.
-              const initialFields = {
+              const initialFields: TablesInsert<"doan_chi_phi"> = {
+                loai: "chi",
                 tien_cong_ty: 0,
                 tien_hdv: 0,
-                foc_khach_snapshot: (mealItem as any)?.foc_khach ?? null,
-                foc_mien_snapshot:  (mealItem as any)?.foc_mien  ?? null,
-                chiet_khau_phan_tram_snapshot: (mealItem as any)?.chiet_khau_phan_tram ?? null,
+                foc_khach_snapshot: mealItem?.foc_khach ?? null,
+                foc_mien_snapshot:  mealItem?.foc_mien  ?? null,
+                chiet_khau_phan_tram_snapshot: mealItem?.chiet_khau_phan_tram ?? null,
               };
 
               // Upsert: filter mo_ta để phân biệt trưa/tối (cùng doan_ngay).
@@ -892,7 +902,7 @@ export function useSaveDieuTour() {
                 .eq("doan_id", doanId)
                 .eq("danh_muc", "nha_hang")
                 .eq("ref_doan_ngay_id", doanNgayId)
-                .eq("mo_ta", alwaysFields.mo_ta)
+                .eq("mo_ta", moTaMeal)
                 .limit(1);
               const existing = existingRows?.[0];
               if (existing) {
@@ -931,7 +941,7 @@ export function useSaveDieuTour() {
           // theo, kể cả user đã chỉnh món trong tab Booking NH trước đó. Nếu
           // đã gửi mail thì dirty badge tự hiện → user gửi lại nếu cần.
           if (setMenuId !== existingBkNh.set_menu_id) {
-            const updates: Record<string, any> = { set_menu_id: setMenuId ?? null };
+            const updates: TablesUpdate<"doan_booking_nh"> = { set_menu_id: setMenuId ?? null };
             if (setMenuId) {
               const { data: sm } = await externalSupabase
                 .from("nha_hang_set_menu")
@@ -948,7 +958,7 @@ export function useSaveDieuTour() {
                 .select("ten_mon")
                 .eq("set_menu_id", setMenuId)
                 .order("thu_tu", { ascending: true });
-              updates.mon_an_snapshot = (mons ?? []).map((m: any) => m.ten_mon);
+              updates.mon_an_snapshot = (mons ?? []).map((m) => m.ten_mon);
             } else {
               updates.ten_set_snapshot = null;
               updates.gia_snapshot = null;
@@ -979,7 +989,7 @@ export function useSaveDieuTour() {
           .from("khach_san")
           .select("id, nguoi_thanh_toan")
           .in("id", allKsIdsInDays);
-        khachKsIds = new Set((ksCheck || []).filter((k: any) => k.nguoi_thanh_toan === "khach").map((k: any) => k.id));
+        khachKsIds = new Set((ksCheck || []).filter((k) => k.nguoi_thanh_toan === "khach").map((k) => k.id));
       }
 
       const { data: allBookingKs } = await externalSupabase
@@ -1148,7 +1158,12 @@ export async function syncDieuTourToBookingDV(params: {
       // Sent booking: update dich_vu_list để booking phản ánh "current plan".
       // mail_content_hash giữ snapshot mail đã gửi → dirty badge tự hiện nếu khác.
       const oldList = Array.isArray(existing.dich_vu_list) ? existing.dich_vu_list : [];
-      const oldKeys = new Set(oldList.map((d: any) => `${d.ten_dv}|${d.ngay_date}`));
+      const oldKeys = new Set(
+        oldList.map((d) => {
+          const dv = d as { ten_dv?: string; ngay_date?: string };
+          return `${dv.ten_dv}|${dv.ngay_date}`;
+        }),
+      );
       const newKeys = new Set(dichVu.map((d) => `${d.ten_dv}|${d.ngay_date}`));
       const hasChange =
         oldKeys.size !== newKeys.size ||

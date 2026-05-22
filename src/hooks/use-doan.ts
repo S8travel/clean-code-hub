@@ -203,11 +203,11 @@ export function useXeList() {
         .select("id, ten");
       if (e2) throw e2;
 
-      const nhaXeMap = Object.fromEntries((nhaXe ?? []).map((n: any) => [n.id, n.ten]));
-      return (loaiXe ?? []).map((x: any) => ({
+      const nhaXeMap = Object.fromEntries((nhaXe ?? []).map((n) => [n.id, n.ten]));
+      return (loaiXe ?? []).map((x) => ({
         ...x,
         nha_xe: { id: x.nha_xe_id, ten: nhaXeMap[x.nha_xe_id] ?? "" },
-      })) as any[];
+      }));
     },
   });
 }
@@ -238,7 +238,7 @@ export function useDoanQuyetToanPaidSet() {
         .eq("payment_status", "paid")
         .neq("trang_thai_duyet", "da_huy");
       if (error) throw error;
-      return new Set((data ?? []).map((d: any) => d.doan_id as number).filter((x): x is number => x != null));
+      return new Set((data ?? []).map((d) => d.doan_id).filter((x): x is number => x != null));
     },
   });
 }
@@ -433,7 +433,7 @@ export function useCreateDoan() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["doan"] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
-      log({ doan_id: (data as any).id, action: "tao", table_name: "doan", record_id: (data as any).id, mo_ta: `Tạo đoàn: ${(data as any).ten_doan}` });
+      log({ doan_id: data.id, action: "tao", table_name: "doan", record_id: data.id, mo_ta: `Tạo đoàn: ${data.ten_doan}` });
     },
   });
 }
@@ -461,10 +461,10 @@ export function useUpdateDoan() {
       // 3. Detect BẤT KỲ so_khach_* field thay đổi
       const soKhachKeys = ["so_khach_lon", "so_khach_em1", "so_khach_em2", "so_khach_tl"] as const;
       const so_khach_changed = soKhachKeys.some(
-        (k) => (updates as any)[k] !== undefined && (updates as any)[k] !== (oldDoan as any)[k]
+        (k) => updates[k] !== undefined && updates[k] !== oldDoan[k]
       );
-      const newTotal = ((data as any).so_khach_lon ?? 0) + ((data as any).so_khach_em1 ?? 0)
-                    + ((data as any).so_khach_em2 ?? 0) + ((data as any).so_khach_tl ?? 0);
+      const newTotal = (data.so_khach_lon ?? 0) + (data.so_khach_em1 ?? 0)
+                    + (data.so_khach_em2 ?? 0) + (data.so_khach_tl ?? 0);
 
       let thucTeClearCount = 0;
       let committedDnttAffected = 0;
@@ -481,8 +481,8 @@ export function useUpdateDoan() {
 
         // 4b. Compute soNgay (bao_hiem dùng so_luong = soKhach × soNgay)
         let soNgay = 1;
-        const ngayDi = (data as any).ngay_di ?? oldDoan.ngay_di;
-        const ngayVe = (data as any).ngay_ve ?? oldDoan.ngay_ve;
+        const ngayDi = data.ngay_di ?? oldDoan.ngay_di;
+        const ngayVe = data.ngay_ve ?? oldDoan.ngay_ve;
         if (ngayDi && ngayVe) {
           const di = new Date(ngayDi);
           const ve = new Date(ngayVe);
@@ -502,32 +502,32 @@ export function useUpdateDoan() {
         const idsToRecalc: number[] = [];
 
         for (const cp of chiPhis ?? []) {
-          if ((cp as any).is_overridden) continue;
-          const tt = (cp as any).trang_thai_thanh_toan;
+          if (cp.is_overridden) continue;
+          const tt = cp.trang_thai_thanh_toan;
           if (tt === "paid" || tt === "partial_paid") continue;
 
           // Skip extras — dịch vụ phát sinh độc lập với tổng số khách
-          const moTa = String((cp as any).mo_ta ?? "");
+          const moTa = String(cp.mo_ta ?? "");
           if (/^\[dvps_\d+\]\s/.test(moTa)) continue;
           if (moTa.startsWith("[trua] ") || moTa.startsWith("[toi] ")) continue;
 
-          const newSoLuong = (cp as any).danh_muc === "bao_hiem" ? newTotal * soNgay : newTotal;
-          if (Number((cp as any).so_luong) === newSoLuong) continue;
+          const newSoLuong = cp.danh_muc === "bao_hiem" ? newTotal * soNgay : newTotal;
+          if (Number(cp.so_luong) === newSoLuong) continue;
 
           // Track rows committed-DNTT bị thay đổi → caller toast warning
-          const td = (cp as any).trang_thai_dntt;
+          const td = cp.trang_thai_dntt;
           if (td === "cho_duyet" || td === "da_duyet") committedDnttAffected++;
 
-          const isHdv = Number((cp as any).tien_hdv) > 0;
-          const newTotalCp = newSoLuong * Number((cp as any).don_gia ?? 0);
+          const isHdv = Number(cp.tien_hdv) > 0;
+          const newTotalCp = newSoLuong * Number(cp.don_gia ?? 0);
           await externalSupabase.from("doan_chi_phi").update({
             so_luong: newSoLuong,
             tien_cong_ty: isHdv ? 0 : newTotalCp,
             tien_hdv:     isHdv ? newTotalCp : 0,
             thanh_tien_thuc_te: null,
-          }).eq("id", (cp as any).id);
+          }).eq("id", cp.id);
           thucTeClearCount++;
-          idsToRecalc.push((cp as any).id);
+          idsToRecalc.push(cp.id);
         }
 
         // 4d. Recalc statuses cho rows đã update
@@ -542,8 +542,8 @@ export function useUpdateDoan() {
       const ngayDiChanged = updates.ngay_di !== undefined && updates.ngay_di !== oldDoan.ngay_di;
       const ngayVeChanged = updates.ngay_ve !== undefined && updates.ngay_ve !== oldDoan.ngay_ve;
       if (ngayDiChanged || ngayVeChanged) {
-        const newNgayDi = (data as any).ngay_di as string | null;
-        const newNgayVe = (data as any).ngay_ve as string | null;
+        const newNgayDi = data.ngay_di;
+        const newNgayVe = data.ngay_ve;
         if (newNgayDi && newNgayVe) {
           const thuMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
           const parseUTC = (s: string) => {
@@ -560,7 +560,7 @@ export function useUpdateDoan() {
             .eq("doan_id", id)
             .order("ngay_so", { ascending: true });
           const existingMap = new Map<number, number>(
-            (existingNgay || []).map((r: any) => [r.ngay_so, r.id])
+            (existingNgay || []).map((r) => [r.ngay_so, r.id])
           );
 
           // Update từng ngay_so có trong newRange → ngay_date + thu mới
@@ -588,11 +588,12 @@ export function useUpdateDoan() {
 
       // Diff log per field — bỏ qua field undefined (không update)
       const diffLogs: string[] = [];
-      const labelTxt = (v: any) => (v == null || v === "") ? "—" : String(v);
+      const labelTxt = (v: unknown) => (v == null || v === "") ? "—" : String(v);
       if (so_khach_changed && oldTotal !== newTotal) {
         diffLogs.push(`Đổi số khách ${oldTotal} → ${newTotal}`);
       }
-      const textFields: Array<[string, string]> = [
+      // Các key dưới đây tồn tại trên cả DoanInsert (updates) lẫn oldDoan select.
+      const textFields: Array<[keyof DoanInsert, string]> = [
         ["ten_doan", "tên đoàn"],
         ["chuyen_bay_don", "chuyến bay đón"],
         ["chuyen_bay_tien", "chuyến bay tiễn"],
@@ -604,15 +605,16 @@ export function useUpdateDoan() {
         ["thi_truong", "thị trường"],
         ["loai_tour", "loại tour"],
       ];
+      const oldDoanRec = oldDoan as Record<string, unknown>;
       for (const [k, label] of textFields) {
-        const newV = (updates as any)[k];
+        const newV = updates[k];
         if (newV === undefined) continue;
-        const oldV = (oldDoan as any)[k];
+        const oldV = oldDoanRec[k];
         if ((oldV ?? "") !== (newV ?? "")) {
           diffLogs.push(`Đổi ${label} "${labelTxt(oldV)}" → "${labelTxt(newV)}"`);
         }
       }
-      const idFields: Array<[string, string]> = [
+      const idFields: Array<[keyof DoanInsert, string]> = [
         ["agent_id", "agent"],
         ["agent_huy_id", "agent hủy"],
         ["dia_diem_id", "địa điểm"],
@@ -623,14 +625,14 @@ export function useUpdateDoan() {
         ["van_phong_id", "văn phòng"],
       ];
       for (const [k, label] of idFields) {
-        const newV = (updates as any)[k];
+        const newV = updates[k];
         if (newV === undefined) continue;
-        const oldV = (oldDoan as any)[k];
+        const oldV = oldDoanRec[k];
         if ((oldV ?? null) !== (newV ?? null)) {
           diffLogs.push(`Đổi ${label}: ${labelTxt(oldV)} → ${labelTxt(newV)}`);
         }
       }
-      if (updates.shopping !== undefined && (oldDoan as any).shopping !== updates.shopping) {
+      if (updates.shopping !== undefined && oldDoanRec.shopping !== updates.shopping) {
         diffLogs.push(updates.shopping ? "Bật shopping" : "Tắt shopping");
       }
       // Gộp cascade thành 1 log thay vì log từng chi phí
