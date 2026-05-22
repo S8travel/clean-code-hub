@@ -5,7 +5,8 @@ import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
-import type { TablesInsert } from "@/lib/database.types";
+import { errMsg } from "@/lib/error";
+import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export type DNTTRow = DNTTRowFromHook;
 
@@ -74,6 +75,46 @@ export interface ChiPhiRow {
   don_gia_raw: number | null;
 }
 
+// NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).
+type NccLite = Pick<Tables<"nha_cung_cap">, "id" | "ten" | "so_tai_khoan" | "ngan_hang">;
+
+// KS data dùng trong ChiPhiKSSection — ks fields đã select + thông tin NCC join.
+// ten coerce về string (đoàn luôn gắn KS có tên) để consumer không phải xử lý null.
+type KhachSanWithNcc = Pick<
+  Tables<"khach_san">,
+  "id" | "foc_khach" | "foc_mien" | "dia_diem"
+  | "nha_cung_cap_id" | "nguoi_thanh_toan" | "tai_khoan_thanh_toan"
+> & {
+  ten: string;
+  ten_ncc: string | null;
+  ncc_so_tai_khoan: string | null;
+  ncc_ngan_hang: string | null;
+};
+
+// NH data dùng trong ChiPhiNHSection — nh fields đã select + thông tin NCC join.
+type NhaHangWithNcc = Pick<
+  Tables<"nha_hang">,
+  "id" | "ten" | "dia_chi" | "nha_cung_cap_id" | "chiet_khau_phan_tram" | "nguoi_thanh_toan"
+> & {
+  ten_ncc: string | null;
+  ncc_so_tai_khoan: string | null;
+  ncc_ngan_hang: string | null;
+};
+
+interface NHMeal {
+  doan_ngay_id: number;
+  ngay_date: string | null;
+  bua_an: "trua" | "toi";
+  nha_hang_id: number;
+}
+
+interface NHBookingLite {
+  doan_ngay_id: number | null;
+  bua_an: string | null;
+  ten_set_snapshot: string | null;
+  gia_snapshot: number | null;
+}
+
 // ── Queries ──
 
 export function useChiPhiList(doanId?: number) {
@@ -138,38 +179,46 @@ export function useChiPhiKSData(doanId?: number) {
         .select("id, doan_ngay_id, canh_diem_id, don_gia, so_luong, canh_diem:canh_diem_id (id, ten, khach_san_id)")
         .eq("doan_id", doanId!);
       const dayUseItems = (itemsWithCanhDiem || []).filter(
-        (it: any) => it.canh_diem?.khach_san_id != null,
+        (it) => it.canh_diem?.khach_san_id != null,
       );
       // Build map ngày từ doan_ngay (kể cả ngày không có khach_san_id) để tra ngay_date cho item
       const { data: allNgayRows } = await externalSupabase
         .from("doan_ngay")
         .select("id, ngay_so, ngay_date")
         .eq("doan_id", doanId!);
+      // ngay_date trong DB là string | null nhưng đoàn_ngày luôn có ngày → assert.
       const ngayInfoById: Record<number, { ngay_so: number; ngay_date: string }> = {};
-      (allNgayRows || []).forEach((n: any) => {
-        ngayInfoById[n.id] = { ngay_so: n.ngay_so, ngay_date: n.ngay_date };
+      (allNgayRows || []).forEach((n) => {
+        ngayInfoById[n.id] = { ngay_so: n.ngay_so, ngay_date: n.ngay_date! };
       });
       // Map item_id → { khach_san_id, ngay_so, ngay_date, doan_ngay_id }
       const dayUseItemMap: Record<number, { khach_san_id: number; ngay_so: number; ngay_date: string; doan_ngay_id: number; don_gia: number; so_luong: number; canh_diem_ten: string }> = {};
       const ksIdsFromDayUse = new Set<number>();
-      dayUseItems.forEach((it: any) => {
-        const ng = ngayInfoById[it.doan_ngay_id];
+      dayUseItems.forEach((it) => {
+        const doanNgayId = it.doan_ngay_id;
+        if (doanNgayId == null) return;
+        const ng = ngayInfoById[doanNgayId];
         if (!ng) return;
-        const ksId = it.canh_diem.khach_san_id as number;
+        const ksId = it.canh_diem?.khach_san_id;
+        if (ksId == null) return;
         ksIdsFromDayUse.add(ksId);
         dayUseItemMap[it.id] = {
           khach_san_id: ksId,
           ngay_so: ng.ngay_so,
           ngay_date: ng.ngay_date,
-          doan_ngay_id: it.doan_ngay_id,
+          doan_ngay_id: doanNgayId,
           don_gia: it.don_gia ?? 0,
           so_luong: it.so_luong ?? 0,
-          canh_diem_ten: it.canh_diem.ten ?? "",
+          canh_diem_ten: it.canh_diem?.ten ?? "",
         };
       });
 
-      const ksIdsFromNgay = new Set((ngayRows || []).map((r: any) => r.khach_san_id));
-      const ksIdsFromDntt = new Set((dnttRows || []).map((r: any) => r.ref_id));
+      const ksIdsFromNgay = new Set(
+        (ngayRows || []).map((r) => r.khach_san_id).filter((x): x is number => x != null),
+      );
+      const ksIdsFromDntt = new Set(
+        (dnttRows || []).map((r) => r.ref_id).filter((x): x is number => x != null),
+      );
       const allKsIds = [...new Set([...ksIdsFromNgay, ...ksIdsFromDntt, ...ksIdsFromDayUse])];
       // Track which KS ids are "orphaned" (in DNTT but no longer in tour schedule + not day-use)
       const orphanedKsIds = [...ksIdsFromDntt].filter((id) => !ksIdsFromNgay.has(id) && !ksIdsFromDayUse.has(id));
@@ -183,24 +232,29 @@ export function useChiPhiKSData(doanId?: number) {
       if (e2) throw e2;
 
       const nccIds = [
-        ...new Set((ksList || []).filter((k: any) => k.nha_cung_cap_id).map((k: any) => k.nha_cung_cap_id)),
+        ...new Set(
+          (ksList || [])
+            .map((k) => k.nha_cung_cap_id)
+            .filter((x): x is number => x != null),
+        ),
       ];
-      const nccMap: Record<number, any> = {};
+      const nccMap: Record<number, NccLite> = {};
       if (nccIds.length > 0) {
         const { data: nccList } = await externalSupabase
           .from("nha_cung_cap")
           .select("id, ten, so_tai_khoan, ngan_hang")
           .in("id", nccIds);
-        (nccList || []).forEach((n: any) => {
+        (nccList || []).forEach((n) => {
           nccMap[n.id] = n;
         });
       }
 
-      const khachSanMap: Record<number, any> = {};
-      (ksList || []).forEach((ks: any) => {
+      const khachSanMap: Record<number, KhachSanWithNcc> = {};
+      (ksList || []).forEach((ks) => {
         const ncc = ks.nha_cung_cap_id ? nccMap[ks.nha_cung_cap_id] : null;
         khachSanMap[ks.id] = {
           ...ks,
+          ten: ks.ten ?? "",
           ten_ncc: ncc?.ten || null,
           ncc_so_tai_khoan: ncc?.so_tai_khoan || null,
           ncc_ngan_hang: ncc?.ngan_hang || null,
@@ -208,7 +262,7 @@ export function useChiPhiKSData(doanId?: number) {
       });
 
       const filteredNgayRows = (ngayRows || []).filter(
-        (r: any) => khachSanMap[r.khach_san_id]?.nguoi_thanh_toan !== "khach"
+        (r) => r.khach_san_id != null && khachSanMap[r.khach_san_id]?.nguoi_thanh_toan !== "khach"
       );
       // Filter dayUseItemMap: bỏ các item mà KS có nguoi_thanh_toan='khach'
       const filteredDayUseItemMap: typeof dayUseItemMap = {};
@@ -245,7 +299,7 @@ export function useChiPhiNHData(doanId?: number) {
       if (e1) throw e1;
 
       const nhIds = new Set<number>();
-      (ngayRows || []).forEach((r: any) => {
+      (ngayRows || []).forEach((r) => {
         if (r.an_trua_nha_hang_id) nhIds.add(r.an_trua_nha_hang_id);
         if (r.an_toi_nha_hang_id) nhIds.add(r.an_toi_nha_hang_id);
       });
@@ -257,18 +311,24 @@ export function useChiPhiNHData(doanId?: number) {
         .in("id", [...nhIds]);
       if (e2) throw e2;
 
-      const nccNhIds = [...new Set((nhList || []).filter((n: any) => n.nha_cung_cap_id).map((n: any) => n.nha_cung_cap_id))];
-      const nccNhMap: Record<number, any> = {};
+      const nccNhIds = [
+        ...new Set(
+          (nhList || [])
+            .map((n) => n.nha_cung_cap_id)
+            .filter((x): x is number => x != null),
+        ),
+      ];
+      const nccNhMap: Record<number, NccLite> = {};
       if (nccNhIds.length > 0) {
         const { data: nccList } = await externalSupabase
           .from("nha_cung_cap")
           .select("id, ten, so_tai_khoan, ngan_hang")
           .in("id", nccNhIds);
-        (nccList || []).forEach((n: any) => { nccNhMap[n.id] = n; });
+        (nccList || []).forEach((n) => { nccNhMap[n.id] = n; });
       }
 
-      const nhaHangMap: Record<number, any> = {};
-      (nhList || []).forEach((nh: any) => {
+      const nhaHangMap: Record<number, NhaHangWithNcc> = {};
+      (nhList || []).forEach((nh) => {
         const ncc = nh.nha_cung_cap_id ? nccNhMap[nh.nha_cung_cap_id] : null;
         nhaHangMap[nh.id] = {
           ...nh,
@@ -278,8 +338,8 @@ export function useChiPhiNHData(doanId?: number) {
         };
       });
 
-      const meals: any[] = [];
-      (ngayRows || []).forEach((r: any) => {
+      const meals: NHMeal[] = [];
+      (ngayRows || []).forEach((r) => {
         if (r.an_trua_nha_hang_id) {
           meals.push({
             doan_ngay_id: r.id,
@@ -298,8 +358,8 @@ export function useChiPhiNHData(doanId?: number) {
         .select("doan_ngay_id, bua_an, ten_set_snapshot, gia_snapshot")
         .eq("doan_id", doanId!);
 
-      const bookingMap: Record<string, any> = {};
-      (bookings || []).forEach((b: any) => {
+      const bookingMap: Record<string, NHBookingLite> = {};
+      (bookings || []).forEach((b) => {
         bookingMap[`${b.doan_ngay_id}_${b.bua_an}`] = b;
       });
 
@@ -334,7 +394,7 @@ export function useUpdateChiPhiActual() {
         .select("tien_hdv")
         .eq("id", args.id)
         .single();
-      const isHdv = Number((cur as any)?.tien_hdv ?? 0) > 0;
+      const isHdv = Number(cur?.tien_hdv ?? 0) > 0;
       const { data, error } = await externalSupabase
         .from("doan_chi_phi")
         .update({
@@ -359,7 +419,7 @@ export function useUpdateChiPhiActual() {
         doan_id: vars.doan_id,
         action: "sua",
         table_name: "doan_chi_phi",
-        record_id: (data as any)?.id,
+        record_id: data?.id,
         mo_ta: `Điều chỉnh thực tế: SL=${vars.so_luong}, đơn giá=${fmtVND(vars.don_gia)}${vars.ly_do ? ` (${vars.ly_do})` : ""}`,
       });
     },
@@ -371,19 +431,25 @@ export function useUpsertChiPhi() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: Partial<ChiPhiRow> & { doan_id: number }) => {
-      const { thanh_tien, ...clean } = payload as any;
+      // thanh_tien là generated column — loại trước khi insert/update.
+      const { thanh_tien, ...clean } = payload;
+      void thanh_tien;
       if (clean.id) {
         const { id, ...rest } = clean;
         const { data, error } = await externalSupabase
           .from("doan_chi_phi")
-          .update(rest)
+          .update(rest as TablesUpdate<"doan_chi_phi">)
           .eq("id", id)
           .select("id")
           .single();
         if (error) throw error;
         return data;
       } else {
-        const { data, error } = await externalSupabase.from("doan_chi_phi").insert(clean).select("id").single();
+        const { data, error } = await externalSupabase
+          .from("doan_chi_phi")
+          .insert(clean as unknown as TablesInsert<"doan_chi_phi">)
+          .select("id")
+          .single();
         if (error) throw error;
         return data;
       }
@@ -398,7 +464,7 @@ export function useUpsertChiPhi() {
       const moTa = isNew
         ? `Thêm chi phí ${dm}${variables.mo_ta ? ": " + variables.mo_ta : ""} — ${fmtVND(tien)}`
         : `Cập nhật chi phí ${dm}${variables.mo_ta ? ": " + variables.mo_ta : ""}`;
-      log({ doan_id: variables.doan_id, action: isNew ? "tao" : "sua", table_name: "doan_chi_phi", record_id: (data as any)?.id, mo_ta: moTa });
+      log({ doan_id: variables.doan_id, action: isNew ? "tao" : "sua", table_name: "doan_chi_phi", record_id: data?.id, mo_ta: moTa });
     },
   });
 }
@@ -420,7 +486,7 @@ export function useDeleteChiPhi() {
         .select("dntt_id")
         .eq("chi_phi_id", id);
       if (allocErr) throw allocErr;
-      const dnttIds = [...new Set((allocs ?? []).map((a: any) => a.dntt_id))];
+      const dnttIds = [...new Set((allocs ?? []).map((a) => a.dntt_id))];
       if (dnttIds.length > 0) {
         const { data: actives, error: dnttErr } = await externalSupabase
           .from("de_nghi_thanh_toan")
@@ -429,7 +495,7 @@ export function useDeleteChiPhi() {
           .neq("trang_thai_duyet", "da_huy");
         if (dnttErr) throw dnttErr;
         if (actives && actives.length > 0) {
-          const ids = actives.map((d: any) => d.id).sort((a, b) => a - b);
+          const ids = actives.map((d) => d.id).sort((a, b) => a - b);
           throw new Error(
             `Chi phí này đang nằm trong ĐNTT #${ids.join(", #")} — không thể xóa. ` +
             `Hãy dùng nút "Điều chỉnh" sửa số lượng/đơn giá về 0 thay vì xóa ` +
@@ -449,9 +515,9 @@ export function useDeleteChiPhi() {
       const dm = DANH_MUC_LABEL[danh_muc ?? ""] ?? (danh_muc ?? "");
       log({ doan_id: doanId, action: "xoa", table_name: "doan_chi_phi", record_id: id, mo_ta: `Xóa chi phí ${dm}${mo_ta ? ": " + mo_ta : ""}` });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       // Toast mặc định cho mọi caller (nhiều handleDelete không có onError riêng).
-      toast.error(err?.message ?? "Không xóa được chi phí");
+      toast.error(errMsg(err) || "Không xóa được chi phí");
     },
   });
 }
@@ -466,7 +532,7 @@ export function useInsertDNTT() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (payload: Record<string, any> & { doan_id: number; allocations?: AllocationRow[] }) => {
+    mutationFn: async (payload: Record<string, unknown> & { doan_id: number; allocations?: AllocationRow[] }) => {
       const { allocations, ...dnttPayload } = payload;
       // Lấy user_id trực tiếp từ auth (tránh race với useAuth state)
       const { data: authData } = await externalSupabase.auth.getUser();
@@ -501,8 +567,10 @@ export function useInsertDNTT() {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", v.doan_id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
-      const loaiLabel = DANH_MUC_LABEL[v.loai ?? ""] ?? (v.loai ?? "");
-      log({ doan_id: v.doan_id, action: "tao", table_name: "de_nghi_thanh_toan", record_id: (data as any)?.id, mo_ta: `Tạo ĐNTT ${loaiLabel} — ${fmtVND(v.so_tien ?? 0)}` });
+      const loai = (v.loai as string | null | undefined) ?? "";
+      const soTien = (v.so_tien as number | null | undefined) ?? 0;
+      const loaiLabel = DANH_MUC_LABEL[loai] ?? loai;
+      log({ doan_id: v.doan_id, action: "tao", table_name: "de_nghi_thanh_toan", record_id: data?.id, mo_ta: `Tạo ĐNTT ${loaiLabel} — ${fmtVND(soTien)}` });
     },
   });
 }
@@ -534,17 +602,26 @@ export function useChiPhiAllocations(chiPhiId: number | null | undefined) {
       if (error) throw error;
 
       // Bổ sung payment_status từ view (1 query phụ)
-      const dnttIds = [...new Set((data || []).map((r: any) => r.dntt_id))];
+      const dnttIds = [
+        ...new Set((data || []).map((r) => r.dntt_id).filter((x): x is number => x != null)),
+      ];
       const paidMap: Record<number, { paid_amount: number; payment_status: string }> = {};
       if (dnttIds.length > 0) {
         const { data: paidRows } = await externalSupabase
           .from("dntt_with_payment_status")
           .select("id, paid_amount, payment_status")
           .in("id", dnttIds);
-        (paidRows || []).forEach((p: any) => { paidMap[p.id] = p; });
+        (paidRows || []).forEach((p) => {
+          if (p.id != null) {
+            paidMap[p.id] = {
+              paid_amount: p.paid_amount ?? 0,
+              payment_status: p.payment_status ?? "unpaid",
+            };
+          }
+        });
       }
 
-      return (data || []).map((r: any) => ({
+      return (data || []).map((r) => ({
         ...r,
         de_nghi_thanh_toan: {
           ...r.de_nghi_thanh_toan,
@@ -578,7 +655,7 @@ export function useDeleteDNTT() {
         .from("dntt_allocations")
         .select("chi_phi_id")
         .eq("dntt_id", id);
-      const chiPhiIds = (allocBefore || []).map((r: any) => r.chi_phi_id as number);
+      const chiPhiIds = (allocBefore || []).map((r) => r.chi_phi_id);
 
       // Reverse adjustment artifacts: xóa cong_no có dntt_goc_id = id + reset thanh_tien_thuc_te
       const { data: relatedCongNos } = await externalSupabase
@@ -586,7 +663,7 @@ export function useDeleteDNTT() {
         .select("id")
         .eq("dntt_goc_id", id);
       if (relatedCongNos && relatedCongNos.length > 0) {
-        const cnIds = relatedCongNos.map((c: any) => c.id as number);
+        const cnIds = relatedCongNos.map((c) => c.id);
         await externalSupabase.from("payments").delete().in("cong_no_id", cnIds);
         await externalSupabase.from("cong_no").delete().in("id", cnIds);
       }
@@ -604,8 +681,12 @@ export function useDeleteDNTT() {
         .eq("dntt_id", id)
         .eq("method", "can_tru");
       const affectedCongNoIds = [
-        ...new Set((payments || []).map((p: any) => p.cong_no_id).filter((x: any) => x != null)),
-      ] as number[];
+        ...new Set(
+          (payments || [])
+            .map((p) => p.cong_no_id)
+            .filter((x): x is number => x != null),
+        ),
+      ];
 
       const { error } = await externalSupabase.from("de_nghi_thanh_toan").delete().eq("id", id);
       if (error) throw error;
@@ -644,8 +725,11 @@ export function useUpdateDNTT() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, doanId, ...rest }: { id: number; doanId: number } & Record<string, any>) => {
-      const { error } = await externalSupabase.from("de_nghi_thanh_toan").update(rest).eq("id", id);
+    mutationFn: async ({ id, doanId, ...rest }: { id: number; doanId: number } & Record<string, unknown>) => {
+      const { error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update(rest as TablesUpdate<"de_nghi_thanh_toan">)
+        .eq("id", id);
       if (error) throw error;
 
       return doanId;
@@ -656,10 +740,9 @@ export function useUpdateDNTT() {
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       let action: "sua" | "duyet" | "tu_choi" | "thanh_toan" = "sua";
       let moTa = `Cập nhật ĐNTT #${vars.id}`;
-      const v = vars as Record<string, any>;
-      if (v.trang_thai_duyet === "duyet") { action = "duyet"; moTa = `Duyệt ĐNTT #${vars.id}`; }
-      else if (v.trang_thai_duyet === "tu_choi") { action = "tu_choi"; moTa = `Từ chối ĐNTT #${vars.id}`; }
-      else if (v.payment_status === "paid") { action = "thanh_toan"; moTa = `Thanh toán ĐNTT #${vars.id}`; }
+      if (vars.trang_thai_duyet === "duyet") { action = "duyet"; moTa = `Duyệt ĐNTT #${vars.id}`; }
+      else if (vars.trang_thai_duyet === "tu_choi") { action = "tu_choi"; moTa = `Từ chối ĐNTT #${vars.id}`; }
+      else if (vars.payment_status === "paid") { action = "thanh_toan"; moTa = `Thanh toán ĐNTT #${vars.id}`; }
       log({ doan_id: doanId, action, table_name: "de_nghi_thanh_toan", record_id: vars.id, mo_ta: moTa });
     },
   });
