@@ -105,7 +105,11 @@ export default function NHRow({ meal, data, handlers }: Props) {
     : 0;
   const focMienSo = row ? row.so_khach - soKhachThucTe : 0;
   const mainTotal = row ? soKhachThucTe * row.don_gia : 0;
-  const extrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
+  // Extras: mỗi dòng áp CK% riêng (suất trẻ em = menu chính cần CK).
+  const extrasTotal = extras.reduce(
+    (s, e) => s + applyChietKhau(e.so_luong * e.don_gia, e.chiet_khau_phan_tram),
+    0,
+  );
   const totalTruocCK = mainTotal + extrasTotal;
   // Chiết khấu % từ local row (override) hoặc từ nha_hang — chỉ áp dụng cho main row
   const ckPhanTram = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? 0;
@@ -129,11 +133,6 @@ export default function NHRow({ meal, data, handlers }: Props) {
   const activeDntts = allMealDntts.filter(
     (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
   );
-  // Có ĐNTT còn hiệu lực (chờ duyệt / đã duyệt / đã thanh toán) → khóa nút
-  // xóa extras đã lưu ở UI. Allocation ĐNTT NH/DV chỉ trỏ main row nên guard
-  // data-layer không chặn extras; mà ĐNTT.so_tien lại tính cả extras → xóa
-  // extra làm sai số đã cam kết / sai delta aggregate. Bỏ extra → sửa SL về 0.
-  const hasActiveDntt = activeDntts.length > 0;
   // daTT = tổng paid_amount của các ĐNTT đang active của meal này
   const daTT = activeDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
   // pendingDntts: ĐNTT chưa được thanh toán đủ
@@ -254,9 +253,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
           {buaIcon} {buaLabel}
         </td>
 
-        {/* Số khách — editable inline mọi lúc; 🔒 khi override */}
+        {/* Số khách — editable inline; input căn trái cố định (🔒/FOC nằm sau) */}
         <td className="px-3 py-2">
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center gap-1">
             {row ? (
               <>
                 <NHInput
@@ -276,9 +275,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
           </div>
         </td>
 
-        {/* Đơn giá — editable inline mọi lúc; ↺ reset khi override */}
+        {/* Đơn giá — editable inline; input căn trái cố định (↺ nằm sau) */}
         <td className="px-3 py-2">
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center gap-1">
             {row ? (
               <>
                 <NHInput
@@ -504,7 +503,6 @@ export default function NHRow({ meal, data, handlers }: Props) {
           onChange={handleExtraChange}
           onSave={handleExtraSave}
           onDelete={handleExtraDelete}
-          deleteLocked={extra.id != null && hasActiveDntt}
         />
       ))}
 

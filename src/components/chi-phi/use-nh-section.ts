@@ -166,6 +166,7 @@ export function useNHSection({
           so_luong: cp.so_luong,
           don_gia: cp.don_gia,
           nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
+          chiet_khau_phan_tram: cp.chiet_khau_phan_tram_snapshot ?? 0,
         }));
       }
     }
@@ -277,6 +278,7 @@ export function useNHSection({
             so_luong: cp.so_luong,
             don_gia: cp.don_gia,
             nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
+            chiet_khau_phan_tram: cp.chiet_khau_phan_tram_snapshot ?? 0,
           }));
           changed = true;
         }
@@ -556,9 +558,11 @@ export function useNHSection({
   // ── Extra handlers ────────────────────────────────────────────────────────
 
   const addExtra = useCallback((key: string) => {
+    // Extra mới: CK% mặc định = CK% của bữa (dòng chính) — sửa được; để 0 nếu HDV.
+    const mealCk = localRowsRef.current[key]?.chiet_khau_phan_tram ?? 0;
     setExtrasMap((prev) => ({
       ...prev,
-      [key]: [...(prev[key] || []), { mo_ta: "", so_luong: 1, don_gia: 0, nguoi_tt: "cong_ty" }],
+      [key]: [...(prev[key] || []), { mo_ta: "", so_luong: 1, don_gia: 0, nguoi_tt: "cong_ty", chiet_khau_phan_tram: mealCk }],
     }));
   }, []);
 
@@ -578,7 +582,8 @@ export function useNHSection({
     if (!extra || !row || (!extra.mo_ta && !extra.don_gia)) return;
 
     const prefix = extraPrefix(row.bua_an);
-    const thanhTien = extra.so_luong * extra.don_gia;
+    // CK riêng từng extra — áp per dòng (làm tròn 1 lần/dòng, đúng Mức A).
+    const thanhTien = applyChietKhau(extra.so_luong * extra.don_gia, extra.chiet_khau_phan_tram);
     const nguoiTt = nguoiTtOverride ?? extra.nguoi_tt;
 
     upsertMut.mutate(
@@ -594,6 +599,7 @@ export function useNHSection({
         so_luong: extra.so_luong,
         tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
         tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
+        chiet_khau_phan_tram_snapshot: extra.chiet_khau_phan_tram,
       },
       {
         onSuccess: (data) => {
@@ -673,9 +679,10 @@ export function useNHSection({
     const focResolved = resolveNHFoc(row, nh);
     const soKhachThucTe = calcSoKhachThucTe(row.so_khach, focResolved.foc_khach, focResolved.foc_mien);
     const mainTotalTruocCK = soKhachThucTe * row.don_gia;
-    const allExtrasTotal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
-    const hdvExtrasTotal = extras.filter(e => e.nguoi_tt === "hdv").reduce((s, e) => s + e.so_luong * e.don_gia, 0);
-    const extrasTotal = allExtrasTotal - hdvExtrasTotal;
+    // Extras công ty — mỗi dòng áp CK riêng. HDV extras loại trừ (HDV trả tiền mặt).
+    const extrasTotal = extras
+      .filter((e) => e.nguoi_tt !== "hdv")
+      .reduce((s, e) => s + applyChietKhau(e.so_luong * e.don_gia, e.chiet_khau_phan_tram), 0);
     const ckPct = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
     const totalBua = applyChietKhau(mainTotalTruocCK, ckPct) + extrasTotal;
     // Số tiền chưa đề nghị (trừ phần đã cọc + thanh toán trước)
@@ -889,12 +896,13 @@ export function useNHSection({
         // Build items: main meal + extras
         const extras = extrasMapRef.current[key] || [];
         const items: NHDocEntry["items"] = [];
+        const mainCkPct = row.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
         if (row.don_gia > 0) {
-          items.push({ so_luong: soLuongThuc, don_gia: row.don_gia, ghi_chu: "" });
+          items.push({ so_luong: soLuongThuc, don_gia: row.don_gia, ghi_chu: "", chiet_khau_phan_tram: mainCkPct });
         }
         extras.forEach((e) => {
           if (e.don_gia > 0) {
-            items.push({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta });
+            items.push({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta, chiet_khau_phan_tram: e.chiet_khau_phan_tram });
           }
         });
         if (items.length === 0) continue;
@@ -913,12 +921,11 @@ export function useNHSection({
         );
         const activeDntt = liveDntts.find((d) => d.la_coc) ?? liveDntts[0] ?? null;
 
-        // Chiết khấu chỉ áp main row (items[0]). Resolve theo pattern row override → nh master.
-        const ckPct = row.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
-        const mainItem = items[0];
-        const mainBase = mainItem ? mainItem.so_luong * mainItem.don_gia : 0;
-        const allItemsBase = items.reduce((s, i) => s + i.so_luong * i.don_gia, 0);
-        const totalEntry = applyChietKhau(mainBase, ckPct) + (allItemsBase - mainBase);
+        // Chiết khấu áp PER dòng (main + extras, mỗi dòng CK riêng) — làm tròn 1 lần/dòng.
+        const totalEntry = items.reduce(
+          (s, i) => s + applyChietKhau(i.so_luong * i.don_gia, i.chiet_khau_phan_tram ?? 0),
+          0,
+        );
 
         // Cọc đã thanh toán thực sự (paid) — chỉ trừ khi KHÔNG có ĐNTT pending.
         // Có pending → in chính ĐNTT đó (so_tien của nó), không trừ cọc paid khác.
@@ -959,7 +966,7 @@ export function useNHSection({
           foc_khach: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_khach : null,
           foc: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_mien : null,
           items,
-          chiet_khau_phan_tram: ckPct,
+          chiet_khau_phan_tram: mainCkPct,
           ncc: { ten: nh.ten_ncc || undefined, so_tai_khoan: nh.ncc_so_tai_khoan || undefined, ngan_hang: nh.ncc_ngan_hang || undefined },
           tai_khoan_thanh_toan: nh.tai_khoan_thanh_toan || null,
           so_tien_coc: soCoc,

@@ -65,3 +65,34 @@ describe("calcNHThanhTien", () => {
     expect(calcNHThanhTien(10, 16, 1, 100_000, null)).toBe(1_000_000);
   });
 });
+
+// ─── CK per-dòng cho extras NH ───────────────────────────────────────────────
+// Mỗi dòng phát sinh có CK% RIÊNG, áp độc lập qua applyChietKhau. KHÔNG pool /
+// chia trung bình giá toàn nhóm (bài học sai kế toán từ FOC khách sạn).
+
+describe("CK per-dòng extras NH", () => {
+  // 3 dòng phát sinh CK% khác nhau: suất trẻ em có CK, HDV phát sinh CK 0.
+  const rows = [
+    { base: 1_000_000, ck: 10 }, // suất trẻ em
+    { base: 500_000, ck: 0 },    // HDV phát sinh — không CK
+    { base: 333_333, ck: 7 },    // suất trẻ em khác giá
+  ];
+  const sumRows = (rs: typeof rows) =>
+    rs.reduce((s, r) => s + applyChietKhau(r.base, r.ck), 0);
+
+  it("mỗi dòng áp CK riêng → tổng = Σ từng dòng độc lập", () => {
+    // 900.000 + 500.000 + round(333333×0.93)=310.000
+    expect(sumRows(rows)).toBe(900_000 + 500_000 + 310_000);
+  });
+
+  it("xóa 1 dòng → các dòng còn lại GIỮ NGUYÊN giá trị", () => {
+    const after = sumRows([rows[0], rows[2]]);
+    expect(after).toBe(applyChietKhau(1_000_000, 10) + applyChietKhau(333_333, 7));
+  });
+
+  it("KHÔNG chia trung bình: per-dòng khác hẳn cách pool CK bình quân", () => {
+    const totalBase = rows.reduce((s, r) => s + r.base, 0);
+    const avgCk = rows.reduce((s, r) => s + r.ck, 0) / rows.length;
+    expect(sumRows(rows)).not.toBe(applyChietKhau(totalBase, avgCk));
+  });
+});
