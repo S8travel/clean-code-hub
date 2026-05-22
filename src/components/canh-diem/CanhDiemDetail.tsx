@@ -57,10 +57,10 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     setNguoiThanhToan(canhDiem.nguoi_thanh_toan || "");
     setEmail(canhDiem.email || "");
     setTaiKhoanThanhToan(canhDiem.tai_khoan_thanh_toan || "");
-    setThongTinChung((canhDiem as any).thong_tin_chung || "");
+    setThongTinChung(canhDiem.thong_tin_chung || "");
     setGhiChu(canhDiem.ghi_chu || "");
-    setNhaCungCapId((canhDiem as any).nha_cung_cap_id?.toString() || "");
-    setKhachSanId((canhDiem as any).khach_san_id?.toString() || "");
+    setNhaCungCapId(canhDiem.nha_cung_cap_id?.toString() || "");
+    setKhachSanId(canhDiem.khach_san_id?.toString() || "");
   }, [canhDiem]);
 
   const handleSave = async () => {

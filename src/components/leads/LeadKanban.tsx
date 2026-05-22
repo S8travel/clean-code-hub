@@ -9,6 +9,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import {
   LEAD_TRANG_THAI_OPTS,
   useUpdateLeadStatus,
@@ -127,7 +128,7 @@ export function LeadKanban({ leads, onLeadClick }: Props) {
     updateStatus.mutate(
       { id: leadId, trang_thai_moi: newStatus, created_by: user?.user_id },
       { onSuccess: () => toast.success(`${t("Đã chuyển sang")}: ${t(LEAD_TRANG_THAI_OPTS.find((o) => o.value === newStatus)?.label ?? "")}`),
-        onError: (e: any) => toast.error(e?.message ?? t("Lỗi khi đổi trạng thái")) }
+        onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi khi đổi trạng thái")) }
     );
   };
 
@@ -142,7 +143,7 @@ export function LeadKanban({ leads, onLeadClick }: Props) {
       },
       {
         onSuccess: () => { toast.success(t("Đã ghi nhận mất khách")); setMatKhachDialog(null); },
-        onError: (e: any) => toast.error(e?.message ?? t("Lỗi")),
+        onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi")),
       }
     );
   };

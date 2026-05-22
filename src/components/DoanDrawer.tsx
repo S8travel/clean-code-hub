@@ -58,9 +58,16 @@ const EMPTY_FORM: DoanInsert = {
   ghi_chu: "",
 };
 
+// Đoàn đang sửa — DoanDrawer chỉ đọc một số field để pre-fill form.
+// Index signature cho phép nhận trực tiếp DoanRow (query result rộng hơn).
+interface DoanDrawerInput {
+  id: number;
+  [key: string]: unknown;
+}
+
 interface Props {
   open: boolean;
-  doan: any | null;
+  doan: DoanDrawerInput | null;
   onClose: () => void;
   onSave: (data: DoanInsert) => void;
   isSaving: boolean;
@@ -97,28 +104,33 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 
   useEffect(() => {
     if (doan) {
+      // doan = DoanRow (query result) — field truy cập qua index signature là
+      // unknown; narrow từng field về kiểu DoanInsert tương ứng.
+      const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+      const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
+      const seriId = num(doan.seri_id);
       setForm({
-        ten_doan: doan.ten_doan || "",
-        loai_tour: doan.loai_tour ?? null,
-        thi_truong: doan.thi_truong ?? null,
-        agent_id: doan.agent_id ?? null,
-        dia_diem_id: doan.dia_diem_id ?? null,
-        huong_dan_vien_id: doan.huong_dan_vien_id ?? null,
-        huong_dan_vien_id_2: doan.huong_dan_vien_id_2 ?? null,
-        xe_id: doan.xe_id ?? null,
-        seri_id: doan.seri_id ?? null,
-        chuyen_bay_don: doan.chuyen_bay_don || "",
-        chuyen_bay_tien: doan.chuyen_bay_tien || "",
-        so_khach_lon: doan.so_khach_lon ?? 0,
-        so_khach_em1: doan.so_khach_em1 ?? 0,
-        so_khach_em2: doan.so_khach_em2 ?? 0,
-        so_khach_tl: doan.so_khach_tl ?? 0,
-        ngay_di: doan.ngay_di || "",
-        ngay_ve: doan.ngay_ve || "",
-        assigned_to: doan.assigned_to || null,
-        ghi_chu: doan.ghi_chu || "",
+        ten_doan: str(doan.ten_doan) || "",
+        loai_tour: (str(doan.loai_tour) ?? null) as DoanInsert["loai_tour"],
+        thi_truong: str(doan.thi_truong),
+        agent_id: num(doan.agent_id),
+        dia_diem_id: num(doan.dia_diem_id),
+        huong_dan_vien_id: num(doan.huong_dan_vien_id),
+        huong_dan_vien_id_2: num(doan.huong_dan_vien_id_2),
+        xe_id: num(doan.xe_id),
+        seri_id: seriId,
+        chuyen_bay_don: str(doan.chuyen_bay_don) || "",
+        chuyen_bay_tien: str(doan.chuyen_bay_tien) || "",
+        so_khach_lon: num(doan.so_khach_lon) ?? 0,
+        so_khach_em1: num(doan.so_khach_em1) ?? 0,
+        so_khach_em2: num(doan.so_khach_em2) ?? 0,
+        so_khach_tl: num(doan.so_khach_tl) ?? 0,
+        ngay_di: str(doan.ngay_di) || "",
+        ngay_ve: str(doan.ngay_ve) || "",
+        assigned_to: str(doan.assigned_to) || null,
+        ghi_chu: str(doan.ghi_chu) || "",
       });
-      setOriginalSeriId(doan.seri_id ?? null);
+      setOriginalSeriId(seriId);
     } else {
       setForm({ ...EMPTY_FORM, assigned_to: null, seri_id: null });
       setOriginalSeriId(null);
@@ -155,7 +167,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     onSave(payload);
   };
 
-  const set = (key: keyof DoanInsert, value: any) =>
+  const set = <K extends keyof DoanInsert>(key: K, value: DoanInsert[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
   // Build options
@@ -169,7 +181,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
     [{ value: "", label: t("— Không có —") }, ...(hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten }))], [hdv]);
 
   const xeOptions = useMemo(() =>
-    (xeList ?? []).map((x: any) => {
+    (xeList ?? []).map((x) => {
       const nhaXe = x.nha_xe?.ten ?? "";
       const socho = x.so_cho ? `${x.so_cho} chỗ` : "";
       const parts = [nhaXe, x.ten_xe, socho].filter(Boolean);
@@ -240,7 +252,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
               <Field label={t("Loại tuyến")}>
                 <Select
                   value={form.loai_tour ?? "none"}
-                  onValueChange={(v) => set("loai_tour", v === "none" ? null : v)}
+                  onValueChange={(v) => set("loai_tour", v === "none" ? null : (v as DoanInsert["loai_tour"]))}
                 >
                   <SelectTrigger className="rounded-lg h-10">
                     <span>{!form.loai_tour ? t("— Chưa phân loại —") : t(LOAI_TOUR_OPTS.find((o) => o.value === form.loai_tour)?.label ?? "Chọn loại tuyến")}</span>
@@ -349,7 +361,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 <SearchableSelect
                   options={xeOptions}
                   value={form.xe_id?.toString() || ""}
-                  onChange={(v) => set("xe_id", v || null)}
+                  onChange={(v) => set("xe_id", v ? parseInt(v) : null)}
                   placeholder={t("Chọn xe")}
                 />
               </Field>

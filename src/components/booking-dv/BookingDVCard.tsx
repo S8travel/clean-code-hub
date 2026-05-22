@@ -142,12 +142,12 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
 
   // save: 1 field update lên primary row. Dùng cho field metadata (tenNCC,
   // email, ghi_chu, deadline) — chỉ primary có ý nghĩa edit.
-  const save = (updates: Record<string, any>) =>
+  const save = (updates: Record<string, unknown>) =>
     updateMut.mutate({ id: row.id, doan_id: row.doan_id, updates });
 
   // saveAll: apply 1 updates payload lên TẤT CẢ allRows (booking_status,
   // sent_at, mark khong_dat…).
-  const saveAll = (updates: Record<string, any>) => {
+  const saveAll = (updates: Record<string, unknown>) => {
     allRows.forEach((r) =>
       updateMut.mutate({ id: r.id, doan_id: r.doan_id, updates }),
     );
@@ -320,7 +320,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       // sibling rows để dirty/sent state đồng bộ.
       if (siblings.length > 0) {
         const sentAt = new Date().toISOString();
-        const siblingUpdates: Record<string, any> = {
+        const siblingUpdates: Record<string, unknown> = {
           sent_at: sentAt, sent_by: currentUserName,
           email_subject: emailSubject, mail_content_hash: hash,
         };

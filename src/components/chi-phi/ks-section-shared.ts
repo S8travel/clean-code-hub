@@ -2,6 +2,7 @@
 // Tách verbatim từ ChiPhiKSSection để hook / row / modal / shell cùng dùng.
 
 import { format, getDay } from "date-fns";
+import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 
 export const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -51,12 +52,25 @@ export interface LocalKSRow {
   is_hdv?: boolean;      // dòng dịch vụ HDV trả (tien_hdv>0) — ngoài tổng KS/ĐNTT
 }
 
+// Ngày của đoàn — chỉ field mà buildKSRowFromCp đọc.
+export interface KSNgayInfo {
+  ngay_date: string | null;
+  khach_san_id: number | null;
+}
+
+// Item day-use KS — chỉ field mà buildKSRowFromCp đọc.
+export interface KSDayUseInfo {
+  khach_san_id: number;
+  ngay_date: string;
+  doan_ngay_id: number;
+}
+
 // Dựng 1 LocalKSRow từ 1 doan_chi_phi (snapshot CỦA TOUR). Logic GIỮ
 // NGUYÊN hệt init cũ — KHÔNG đọc danh mục. null nếu thiếu ngày/KS hợp lệ.
 export function buildKSRowFromCp(
-  cp: any,
-  ngayMap: Record<number, any>,
-  dayUseItemMap: Record<number, any>,
+  cp: ChiPhiRow,
+  ngayMap: Record<number, KSNgayInfo>,
+  dayUseItemMap: Record<number, KSDayUseInfo>,
 ): LocalKSRow | null {
   if (cp.ref_doan_ngay_item_id && dayUseItemMap[cp.ref_doan_ngay_item_id]) {
     const info = dayUseItemMap[cp.ref_doan_ngay_item_id];

@@ -117,13 +117,13 @@ export function useChiPhiHDVSection(doanId?: number) {
         .gt("tien_hdv", 0)
         .order("created_at", { ascending: true });
 
-      const chiPhiItems: HDVChiPhiItem[] = (cpRows || []).map((r: any) => ({
+      const chiPhiItems: HDVChiPhiItem[] = (cpRows || []).map((r) => ({
         id: r.id,
         mo_ta: r.mo_ta,
-        danh_muc: r.danh_muc,
+        danh_muc: r.danh_muc ?? "",
         so_luong: r.so_luong ?? 1,
         don_gia: r.don_gia ?? 0,
-        tien_hdv: r.tien_hdv,
+        tien_hdv: r.tien_hdv ?? 0,
       }));
       const tongHdvChi = chiPhiItems.reduce((s, r) => s + r.tien_hdv, 0);
 
@@ -135,7 +135,7 @@ export function useChiPhiHDVSection(doanId?: number) {
         .eq("danh_muc", "hdv_ho_tro")
         .order("created_at", { ascending: true });
 
-      const hoTroItems: HDVHoTroItem[] = (hoTroRows || []).map((r: any) => ({
+      const hoTroItems: HDVHoTroItem[] = (hoTroRows || []).map((r) => ({
         id: r.id,
         mo_ta: r.mo_ta,
         loai: r.loai ?? "cong_tac_phi",
@@ -157,10 +157,10 @@ export function useChiPhiHDVSection(doanId?: number) {
         .in("ref_loai", ["hdv_tam_ung", "hdv_quyet_toan"])
         .order("created_at", { ascending: true });
 
-      const allHdvDntts = (dnttRows || []).map((d: any) => ({
+      const allHdvDntts = (dnttRows || []).map((d) => ({
         ...d,
         la_thu_hoi: !!(d.ghi_chu || "").includes("[Thu hồi]"),
-        quyet_toan_data: d.quyet_toan_data ?? null,
+        quyet_toan_data: (d.quyet_toan_data ?? null) as QuyetToanData | null,
       })) as HDVDNTTRow[];
       // Loại da_huy / tu_choi khỏi list hiển thị — DNTT bị hủy không nên show
       // trong section HDV nữa (audit qua activity_log).

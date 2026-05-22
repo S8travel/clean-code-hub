@@ -41,7 +41,7 @@ import { AccessDenied } from "@/components/PermissionGate";
 
 // ─── Parse ngày từ Excel ──────────────────────────────────────────
 // Dùng cellDates: false → serial number hoặc string, tránh lỗi timezone của JS Date
-function parseExcelDate(raw: any): string {
+function parseExcelDate(raw: unknown): string {
   if (raw == null || raw === "") return "";
 
   // Serial number Excel (cellDates: false) — tính thủ công bằng UTC tránh lệch timezone
@@ -758,12 +758,12 @@ function XepHDVPageContent() {
         const data = new Uint8Array(ev.target!.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: "array", cellDates: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+        const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
         if (rows.length < 2) { toast.error("File không có dữ liệu"); return; }
 
         // Xác định cột từ header row (row 0)
-        const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
+        const headers = rows[0].map((h) => String(h).trim().toLowerCase());
         const col = (names: string[]) => names.map((n) => headers.indexOf(n)).find((i) => i >= 0) ?? -1;
 
         const iName   = col(["ten_doan", "tên đoàn", "ten doan", "name"]);

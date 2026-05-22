@@ -51,11 +51,18 @@ export function useCongNoList(filters: CongNoFilters = {}) {
       const { data, error } = await q;
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
-        ...row,
-        ten_doan: row.doan?.ten_doan || "",
-        ten_ncc: row.nha_cung_cap?.ten || row.ten_nha_cung_cap || "",
-      })) as CongNoRow[];
+      return (data || []).map((row) => {
+        const r = row as typeof row & {
+          doan?: { ten_doan?: string | null } | null;
+          nha_cung_cap?: { ten?: string | null } | null;
+          ten_nha_cung_cap?: string | null;
+        };
+        return {
+          ...r,
+          ten_doan: r.doan?.ten_doan || "",
+          ten_ncc: r.nha_cung_cap?.ten || r.ten_nha_cung_cap || "",
+        };
+      }) as CongNoRow[];
     },
   });
 }
@@ -77,10 +84,13 @@ export function useCongNoByNCC(nccId: number | null | undefined) {
         .gt("so_tien_con_lai", 0)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []).map((row: any) => ({
-        ...row,
-        ten_doan: row.doan?.ten_doan || "",
-      })) as CongNoRow[];
+      return (data || []).map((row) => {
+        const r = row as typeof row & { doan?: { ten_doan?: string | null } | null };
+        return {
+          ...r,
+          ten_doan: r.doan?.ten_doan || "",
+        };
+      }) as CongNoRow[];
     },
   });
 }
@@ -128,7 +138,10 @@ export async function isDnttPaidFromPrepaid(
     .eq("dntt_id", dnttId)
     .eq("method", "can_tru");
   if (error) return false;
-  return (data ?? []).some((p: any) => p.cong_no?.loai === "tra_truoc");
+  return (data ?? []).some((p) => {
+    const cn = (p as { cong_no?: { loai?: string | null } | null }).cong_no;
+    return cn?.loai === "tra_truoc";
+  });
 }
 
 // Pha 1 — Lập quỹ trả trước: tạo ĐNTT loai='tra_truoc' (doan_id=null).

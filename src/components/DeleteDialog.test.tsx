@@ -1,13 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import type { ReactNode, MouseEventHandler } from "react";
 import { DeleteDialog } from "@/components/DeleteDialog";
 
 vi.mock("framer-motion", () => ({
   motion: {
-    div: ({ children, onClick, className }: any) =>
+    div: ({ children, onClick, className }: {
+      children?: ReactNode;
+      onClick?: MouseEventHandler<HTMLDivElement>;
+      className?: string;
+    }) =>
       <div onClick={onClick} className={className}>{children}</div>,
   },
-  AnimatePresence: ({ children }: any) => <>{children}</>,
+  AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
 const defaultProps = {

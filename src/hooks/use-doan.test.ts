@@ -5,16 +5,18 @@ import React from "react";
 import { useDoanList, useCreateDoan, useUpdateDoan, useDeleteDoan, useCancelDoan } from "@/hooks/use-doan";
 
 // Supabase chainable builder factory
-function makeBuilder(resolved: { data: any; error: any }) {
-  const builder: any = {};
+function makeBuilder(resolved: { data: unknown; error: unknown }) {
+  const builder: Record<string, unknown> = {};
   const chainMethods = ["select", "insert", "update", "delete", "upsert", "eq", "not", "gte", "lte", "order", "filter", "limit", "in", "is"];
   for (const method of chainMethods) {
     builder[method] = vi.fn().mockReturnValue(builder);
   }
   builder.single = vi.fn().mockResolvedValue(resolved);
   builder.maybeSingle = vi.fn().mockResolvedValue(resolved);
-  builder.then = (resolve: any, reject: any) =>
-    Promise.resolve(resolved).then(resolve, reject);
+  builder.then = (
+    resolve: (v: unknown) => unknown,
+    reject: (e: unknown) => unknown,
+  ) => Promise.resolve(resolved).then(resolve, reject);
   return builder;
 }
 

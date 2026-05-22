@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { errMsg } from "@/lib/error";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
 import { Mail, X as XIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -121,7 +122,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
   ) => {
     updateFields.mutate(
       { id, fields },
-      { onError: (e: any) => toast.error("Lỗi cập nhật: " + (e?.message || "")) },
+      { onError: (e: unknown) => toast.error("Lỗi cập nhật: " + (errMsg(e) || "")) },
     );
   };
 
@@ -357,9 +358,9 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
                     setThanhDoanTarget(null);
                   }
                 },
-                onError: (e: any) => {
+                onError: (e: unknown) => {
                   hadError = true;
-                  toast.error("Lỗi: " + (e?.message || ""));
+                  toast.error("Lỗi: " + (errMsg(e) || ""));
                 },
               },
             );

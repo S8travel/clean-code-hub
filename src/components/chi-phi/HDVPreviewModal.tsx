@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
+import type { HDVSectionData, HDVDNTTRow } from "@/hooks/use-chi-phi-hdv";
 import { exportHDVStatsExcel } from "@/lib/export-hdv-stats-excel";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -30,10 +30,21 @@ function fmtDate(d?: string | null): string {
   }
 }
 
+interface HDVPreviewDoan {
+  ten_doan?: string | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  doan: any;
+  doan: HDVPreviewDoan | null | undefined;
   data: HDVSectionData | null;
   hdvPhaiThuVND: number;
 }
@@ -243,7 +254,7 @@ function Td({ children, className = "", colSpan }: { children?: React.ReactNode;
   return <td className={`px-3 py-1.5 ${className}`} colSpan={colSpan}>{children}</td>;
 }
 
-function DNTTTable({ rows }: { rows: any[] }) {
+function DNTTTable({ rows }: { rows: HDVDNTTRow[] }) {
   return (
     <table className="w-full text-xs">
       <thead>

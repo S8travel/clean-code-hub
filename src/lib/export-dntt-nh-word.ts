@@ -13,6 +13,7 @@ import {
   VerticalAlign,
   PageOrientation,
 } from "docx";
+import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
 import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
 
@@ -41,9 +42,9 @@ function cell(
     rowSpan?: number;
     columnSpan?: number;
     shading?: typeof GRAY;
-    borders?: any;
+    borders?: ITableCellBorders;
     margins?: { top: number; bottom: number; left: number; right: number };
-    vAlign?: (typeof VerticalAlign)[keyof typeof VerticalAlign];
+    vAlign?: TableVerticalAlign;
   } = {},
 ): TableCell {
   return new TableCell({
@@ -53,7 +54,7 @@ function cell(
     rowSpan: opts.rowSpan,
     columnSpan: opts.columnSpan,
     shading: opts.shading ?? WHITE,
-    verticalAlign: (opts.vAlign ?? VerticalAlign.CENTER) as any,
+    verticalAlign: opts.vAlign ?? VerticalAlign.CENTER,
     margins: opts.margins ?? { top: 30, bottom: 30, left: 60, right: 60 },
   });
 }

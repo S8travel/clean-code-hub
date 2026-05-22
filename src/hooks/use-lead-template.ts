@@ -93,7 +93,7 @@ export function useSendLeadEmail() {
         const { data: t } = await externalSupabase
           .from("lead_template").select("used_count").eq("id", p.templateId).maybeSingle();
         await externalSupabase.from("lead_template")
-          .update({ used_count: ((t as any)?.used_count ?? 0) + 1 })
+          .update({ used_count: (t?.used_count ?? 0) + 1 })
           .eq("id", p.templateId);
       }
       return data;
@@ -113,7 +113,7 @@ export function useBumpTemplateUse() {
       const { data: t } = await externalSupabase
         .from("lead_template").select("used_count").eq("id", templateId).maybeSingle();
       await externalSupabase.from("lead_template")
-        .update({ used_count: ((t as any)?.used_count ?? 0) + 1 })
+        .update({ used_count: (t?.used_count ?? 0) + 1 })
         .eq("id", templateId);
     },
     onSuccess: () => {
