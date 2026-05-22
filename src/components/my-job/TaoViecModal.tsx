@@ -53,7 +53,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
     if (open) setNguoiNhan(userId);
   }, [open, userId]);
 
-  const filteredDoan = (allDoan as any[])
+  const filteredDoan = allDoan
     .filter((d) => !doanSearch || d.ten_doan?.toLowerCase().includes(doanSearch.toLowerCase()))
     .slice(0, 20);
 
@@ -63,7 +63,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
 
     const tenNguoiNhan = users.find((u) => u.user_id === nguoi_nhan)?.ho_ten ?? "";
     const tenDoan = doan_id
-      ? (allDoan as any[]).find((d) => String(d.id) === doan_id)?.ten_doan ?? null
+      ? allDoan.find((d) => String(d.id) === doan_id)?.ten_doan ?? null
       : null;
 
     try {
@@ -186,12 +186,12 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
             />
             {doanSearch && filteredDoan.length > 0 && (
               <div className="border rounded-md max-h-32 overflow-y-auto">
-                {filteredDoan.map((d: any) => (
+                {filteredDoan.map((d) => (
                   <button
                     key={d.id}
                     type="button"
                     className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
-                    onClick={() => { setDoanId(String(d.id)); setDoanSearch(d.ten_doan); }}
+                    onClick={() => { setDoanId(String(d.id)); setDoanSearch(d.ten_doan ?? ""); }}
                   >
                     {d.ten_doan}
                   </button>
@@ -200,7 +200,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
             )}
             {doan_id && (
               <p className="text-[11px] text-green-600">
-                ✓ {(allDoan as any[]).find((d) => String(d.id) === doan_id)?.ten_doan}
+                ✓ {allDoan.find((d) => String(d.id) === doan_id)?.ten_doan}
                 <button className="ml-2 text-muted-foreground hover:text-foreground" onClick={() => { setDoanId(""); setDoanSearch(""); }}>✕</button>
               </p>
             )}

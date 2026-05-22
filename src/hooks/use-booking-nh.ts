@@ -1,7 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
-import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
+import type { Json, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export interface BookingNHRow {
   id: number;
@@ -96,12 +96,12 @@ export function useBookingNH(doanId: number | undefined) {
           .select("id, ten, email, nguoi_thanh_toan, loai")
           .in("id", [...nhIds]);
         if (nhList) {
-          nhMap = new Map(nhList.map((n: any) => [n.id, { ten: n.ten, email: n.email, nguoi_thanh_toan: n.nguoi_thanh_toan, loai: n.loai ?? 'nha_hang' }]));
+          nhMap = new Map(nhList.map((n) => [n.id, { ten: n.ten ?? "", email: n.email, nguoi_thanh_toan: n.nguoi_thanh_toan, loai: n.loai ?? 'nha_hang' }]));
         }
       }
 
       // 4. Merge — dùng effective nha_hang_id (assignment hiện tại hoặc orphaned booking)
-      return ngayRows.map((r: any): MenuDayData => {
+      return ngayRows.map((r): MenuDayData => {
         const bkgTruaRaw = bookingMap.get(`${r.id}_trua`) || null;
         const bkgToiRaw  = bookingMap.get(`${r.id}_toi`)  || null;
 
@@ -286,7 +286,7 @@ export function useSendNHBookingEmail() {
       const threadId = isFirst ? newThreadId : params.emailThreadId;
 
       // mode='update' → KHÔNG đổi booking_status, chỉ update sent_at/by + email_thread_id
-      const updatePayload: Record<string, any> = {
+      const updatePayload: TablesUpdate<"doan_booking_nh"> = {
         sent_at: new Date().toISOString(),
         sent_by: params.sentBy,
         email_thread_id: threadId,
@@ -294,7 +294,7 @@ export function useSendNHBookingEmail() {
       };
       if (params.mode !== "update") updatePayload.booking_status = "da_gui";
       if (params.mailContentHash !== undefined) updatePayload.mail_content_hash = params.mailContentHash;
-      if (params.mailSentSnapshot !== undefined) updatePayload.mail_sent_snapshot = params.mailSentSnapshot;
+      if (params.mailSentSnapshot !== undefined) updatePayload.mail_sent_snapshot = params.mailSentSnapshot as Json;
 
       const { error } = await externalSupabase
         .from("doan_booking_nh")
@@ -335,7 +335,7 @@ export function useSetMenuMons(setMenuId: number | null) {
         .eq("set_menu_id", setMenuId!)
         .order("thu_tu", { ascending: true });
       if (error) throw error;
-      return (data || []).map((m: any) => m.ten_mon as string);
+      return (data || []).map((m) => m.ten_mon);
     },
   });
 }

@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import { useDNTTList, useUpdateDNTT, useDeleteDNTT } from "@/hooks/use-chi-phi";
-import { useCancelDNTT } from "@/hooks/use-dntt";
+import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 import { externalSupabase } from "@/lib/supabase-external";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -104,7 +104,7 @@ export default function DNTTTab({ doanId }: Props) {
           toast.success("Đã hủy đề nghị thanh toán");
           setCancelTarget(null);
         },
-        onError: (err: any) => toast.error(err?.message || "Lỗi khi hủy đề nghị"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy đề nghị"),
       },
     );
   };
@@ -138,8 +138,8 @@ export default function DNTTTab({ doanId }: Props) {
     }
   };
 
-  const canDelete = (d: any) => d.trang_thai_duyet === "tu_choi";
-  const isKS = (d: any) => d.ref_loai === "khach_san";
+  const canDelete = (d: DNTTRow) => d.trang_thai_duyet === "tu_choi";
+  const isKS = (d: DNTTRow) => d.ref_loai === "khach_san";
 
   return (
     <div className="space-y-3">
@@ -281,7 +281,7 @@ export default function DNTTTab({ doanId }: Props) {
   );
 }
 
-function StatusBadge({ d }: { d: any }) {
+function StatusBadge({ d }: { d: DNTTRow }) {
   if (d.trang_thai_duyet === "da_huy") {
     return <Badge variant="secondary" className="text-[10px]">Đã hủy</Badge>;
   }
@@ -312,7 +312,7 @@ function StatusBadge({ d }: { d: any }) {
 }
 
 function DNTTFooter({ d, onResend, onCancel }: {
-  d: any;
+  d: DNTTRow;
   onResend: (id: number) => void;
   onCancel: (id: number) => void;
 }) {

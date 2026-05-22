@@ -22,6 +22,7 @@ import { useDoanOptions } from "@/hooks/use-dntt";
 import { useCongNoList, useUpdateCongNoStatus, useCreatePrepaidDNTT, type CongNoRow } from "@/hooks/use-cong-no";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { toast } from "@/hooks/use-toast";
+import { errMsg } from "@/lib/error";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -70,7 +71,7 @@ export default function CongNoPage() {
           toast({ title: "Đã tạo ĐNTT trả trước — duyệt & chi tại trang Đề nghị TT để lập quỹ" });
           setQtOpen(false); resetQt();
         },
-        onError: (e: any) => toast({ title: "Lỗi: " + (e?.message || "Không tạo được"), variant: "destructive" }),
+        onError: (e: unknown) => toast({ title: "Lỗi: " + (errMsg(e) || "Không tạo được"), variant: "destructive" }),
       },
     );
   };
@@ -85,9 +86,9 @@ export default function CongNoPage() {
 
   const handleChangeStatus = (id: number, current: string) => {
     const newStatus = current === "con_du" ? "da_hoan_tien" : "con_du";
-    changeStatusMut.mutate({ id, trangThai: newStatus as any }, {
+    changeStatusMut.mutate({ id, trangThai: newStatus }, {
       onSuccess: () => toast({ title: newStatus === "da_hoan_tien" ? "Đã chuyển sang Hoàn tiền" : "Đã chuyển sang Công nợ" }),
-      onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể đổi trạng thái"), variant: "destructive" }),
+      onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể đổi trạng thái"), variant: "destructive" }),
     });
   };
 
@@ -134,9 +135,9 @@ export default function CongNoPage() {
     };
   }, [allRows]);
 
-  const doanSelectOpts = doanOpts.map((d: any) => ({
+  const doanSelectOpts = doanOpts.map((d) => ({
     value: String(d.id),
-    label: d.ten_doan,
+    label: d.ten_doan ?? "",
   }));
 
   const resetFilters = () => {

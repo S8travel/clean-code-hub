@@ -38,6 +38,14 @@ export interface TheodoiData {
   dnttList: DNTTItem[];
 }
 
+// Quan hệ join Supabase trả về object hoặc array tuỳ FK — lấy `ten` an toàn.
+function nameOf(rel: unknown): string | null {
+  const o = Array.isArray(rel) ? rel[0] : rel;
+  if (o == null || typeof o !== "object") return null;
+  const ten = (o as { ten?: unknown }).ten;
+  return typeof ten === "string" ? ten : null;
+}
+
 export function useTheodoi() {
   return useQuery({
     queryKey: ["theo-doi"],
@@ -73,32 +81,32 @@ export function useTheodoi() {
       if (dvRes.error) throw dvRes.error;
       if (dnttRes.error) throw dnttRes.error;
 
-      const ksList: KSItem[] = (ksRes.data ?? []).map((r: any) => ({
+      const ksList: KSItem[] = (ksRes.data ?? []).map((r) => ({
         doan_id: r.doan_id,
-        khach_san_ten: r.khach_san?.ten ?? "—",
+        khach_san_ten: nameOf(r.khach_san) ?? "—",
         ks_dat_truoc_status: r.ks_dat_truoc_status,
         ks_final_status: r.ks_final_status,
       }));
 
-      const nhList: NHItem[] = (nhRes.data ?? []).map((r: any) => ({
+      const nhList: NHItem[] = (nhRes.data ?? []).map((r) => ({
         doan_id: r.doan_id,
-        nha_hang_ten: r.nha_hang?.ten ?? null,
-        bua_an: r.bua_an,
+        nha_hang_ten: nameOf(r.nha_hang) ?? null,
+        bua_an: r.bua_an as "trua" | "toi",
         booking_status: r.booking_status,
       }));
 
-      const dvList: DVItem[] = (dvRes.data ?? []).map((r: any) => ({
+      const dvList: DVItem[] = (dvRes.data ?? []).map((r) => ({
         doan_id: r.doan_id,
         ten_nha_cung_cap: r.ten_nha_cung_cap,
         booking_status: r.booking_status,
       }));
 
-      const dnttList: DNTTItem[] = (dnttRes.data ?? []).map((r: any) => ({
-        doan_id: r.doan_id,
+      const dnttList: DNTTItem[] = (dnttRes.data ?? []).map((r) => ({
+        doan_id: r.doan_id!,
         mo_ta: r.mo_ta,
         so_tien: r.so_tien ?? 0,
-        trang_thai_duyet: r.trang_thai_duyet,
-        payment_status: r.payment_status ?? "unpaid",
+        trang_thai_duyet: r.trang_thai_duyet ?? "",
+        payment_status: (r.payment_status ?? "unpaid") as "unpaid" | "partial" | "paid",
         ref_loai: r.ref_loai ?? null,
         loai: r.loai ?? "",
       }));

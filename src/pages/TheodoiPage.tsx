@@ -20,6 +20,7 @@ import {
 } from "@/hooks/use-phan-viec";
 import { useTheodoi, type KSItem, type NHItem, type DVItem } from "@/hooks/use-theo-doi";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { CheckCircle2, Circle, AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
@@ -32,6 +33,14 @@ function fmtDate(d: string | null | undefined) {
 function fmtDatetime(d: string | null | undefined) {
   if (!d) return "—";
   try { return format(new Date(d), "dd/MM/yy", { locale: vi }); } catch { return d; }
+}
+
+// doan.agents là quan hệ join (object hoặc array, tuỳ FK) — lấy `ten` an toàn.
+function agentTen(rel: unknown): string {
+  const o = Array.isArray(rel) ? rel[0] : rel;
+  if (o == null || typeof o !== "object") return "—";
+  const ten = (o as { ten?: unknown }).ten;
+  return typeof ten === "string" && ten ? ten : "—";
 }
 
 // ── Booking status (giữ nguyên hiển thị cũ) ─────────────────────────────────
@@ -151,7 +160,7 @@ export default function TheodoiPage() {
   const { data: groups = [], isLoading: loadingDoan } = useDoanList();
   const { data: assignUsers = [] } = useUserListForAssign();
   const allDoanIds = useMemo(
-    () => ((groups as any[]) ?? []).map((g) => g.id),
+    () => (groups ?? []).map((g) => g.id),
     [groups],
   );
   const { data: pvMatrix } = useDoanPhanViecMatrix(allDoanIds);
@@ -193,9 +202,9 @@ export default function TheodoiPage() {
 
   const rows = useMemo(() => {
     if (!groups) return [];
-    return (groups as any[]).filter((g) => {
+    return groups.filter((g) => {
       if (trangThai !== "all" && g.trang_thai !== trangThai) return false;
-      if (search && !g.ten_doan.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !(g.ten_doan ?? "").toLowerCase().includes(search.toLowerCase())) return false;
       if (createdFrom || createdTo) {
         const c = (g.created_at ?? "").slice(0, 10);
         if (createdFrom && c < createdFrom) return false;
@@ -242,14 +251,14 @@ export default function TheodoiPage() {
   const onAssign = (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey; userId: string }) => {
     assignMut.mutate(p, {
       onSuccess: () => toast.success("Đã phân việc — đã thông báo người nhận"),
-      onError: (e: any) => toast.error(e?.message ?? "Lỗi phân việc"),
+      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi phân việc"),
     });
   };
 
   const onKhongCan = (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey }) => {
     setKcMut.mutate(p, {
       onSuccess: () => toast.success("Đã đánh dấu Không cần — sẽ không theo dõi/thông báo"),
-      onError: (e: any) => toast.error(e?.message ?? "Lỗi"),
+      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi"),
     });
   };
 
@@ -422,14 +431,14 @@ export default function TheodoiPage() {
                           {fmtDate(g.ngay_di)}
                         </TableCell>
                         <TableCell className="py-1.5 px-3 text-muted-foreground whitespace-nowrap">
-                          {g.agents?.ten ?? "—"}
+                          {agentTen(g.agents)}
                         </TableCell>
                         {PHAN_VIEC_ITEMS.map((it) => (
                           <TableCell key={it.key} className="py-1.5 px-2 text-center align-top">
                             <div className="flex flex-col items-center gap-1">
                               <PvAssignCell
                                 doanId={g.id}
-                                doanTen={g.ten_doan}
+                                doanTen={g.ten_doan ?? ""}
                                 ngayDi={g.ngay_di ?? null}
                                 pvKey={it.key}
                                 cell={cells[it.key]}

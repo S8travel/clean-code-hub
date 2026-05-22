@@ -232,15 +232,22 @@ export default function ThanhToanDinhKyPage() {
     });
 
     dnttList.forEach((d) => {
+      // Hook useDinhKyDNTTList join NCC vào row nhưng DinhKyDNTTRow chưa khai
+      // báo các field này — narrow cục bộ thay vì `any`.
+      const dNcc = d as DinhKyDNTTRow & {
+        ten_ncc?: string | null;
+        ncc_so_tai_khoan?: string | null;
+        ncc_ngan_hang?: string | null;
+      };
       const nccKey = String(d.nha_cung_cap_id ?? "khong_ncc");
-      const minDate = (d as any).ngay_di_min as string | null | undefined;
+      const minDate = d.ngay_di_min;
       const monthKey = monthKeyFromDate(minDate ?? null) ?? "khong_thang";
       const bucket = ensureNcc(
         nccKey,
         d.nha_cung_cap_id,
-        (d as any).ten_ncc || "Chưa có NCC",
-        (d as any).ncc_so_tai_khoan || null,
-        (d as any).ncc_ngan_hang || null,
+        dNcc.ten_ncc || "Chưa có NCC",
+        dNcc.ncc_so_tai_khoan || null,
+        dNcc.ncc_ngan_hang || null,
       );
       ensureMonth(bucket, monthKey).dntts.push(d);
     });
@@ -926,7 +933,7 @@ function DnttDetailDialog({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {allocs.map((a: any) => (
+                  {allocs.map((a) => (
                     <TableRow key={a.chi_phi_id} className="text-xs">
                       <TableCell className="py-1.5 font-medium">
                         {a.chi_phi?.doan?.ten_doan || `Đoàn #${a.chi_phi?.doan_id}`}
