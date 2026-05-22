@@ -18,6 +18,26 @@ import {
   fmtDate,
   fmtDateTime,
 } from "../_shared/sheets.ts";
+import type { SheetCell, SheetValues } from "../_shared/sheets.ts";
+
+// Một row từ view dntt_with_payment_status (kèm join doan + nha_cung_cap).
+interface DnttDuChiRow {
+  id: number;
+  doan_id: number | null;
+  loai: string | null;
+  mo_ta: string | null;
+  ten_nha_cung_cap: string | null;
+  so_tien: number | string | null;
+  ngay_can_thanh_toan: string | null;
+  created_at: string | null;
+  tao_boi: string | null;
+  ktt_duyet_boi: string | null;
+  ktt_duyet_luc: string | null;
+  trang_thai_duyet: string | null;
+  ghi_chu: string | null;
+  doan?: { ten_doan?: string | null } | null;
+  nha_cung_cap?: { ten?: string | null } | null;
+}
 
 const SHEET_HEADER = [
   "ID DNTT",          // A
@@ -67,7 +87,7 @@ function fmtApprovalCell(
   return time ? `${name} — ${time}` : name;
 }
 
-function buildRow(r: any, userMap: Map<string, string>, syncedAtStr: string): any[] {
+function buildRow(r: DnttDuChiRow, userMap: Map<string, string>, syncedAtStr: string): SheetCell[] {
   const tenNcc = r.nha_cung_cap?.ten ?? r.ten_nha_cung_cap ?? "";
   const tenDoan = r.doan?.ten_doan ?? "";
   const nguoiDeNghi = r.tao_boi ? (userMap.get(r.tao_boi) ?? "") : "";
@@ -156,7 +176,7 @@ serve(async (req) => {
 
     const { data: rows, error: qErr } = await q;
     if (qErr) throw qErr;
-    const pending = (rows ?? []) as any[];
+    const pending = (rows ?? []) as DnttDuChiRow[];
 
     if (pending.length === 0) {
       return new Response(
@@ -178,9 +198,10 @@ serve(async (req) => {
         .from("user_roles")
         .select("user_id, ho_ten")
         .in("user_id", [...uuids]);
-      (users || []).forEach((u: any) => {
-        if (u.user_id && u.ho_ten) userMap.set(u.user_id, u.ho_ten);
-      });
+      (users as Array<{ user_id: string | null; ho_ten: string | null }> | null ?? [])
+        .forEach((u) => {
+          if (u.user_id && u.ho_ten) userMap.set(u.user_id, u.ho_ten);
+        });
     }
 
     // 3. Auth + ensure tab + header
@@ -194,8 +215,8 @@ serve(async (req) => {
     // 5. Partition pending → toUpdate vs toInsert
     const syncedAt = new Date().toISOString();
     const syncedAtStr = fmtDateTime(syncedAt);
-    const toUpdate: { range: string; values: any[][] }[] = [];
-    const toInsert: any[][] = [];
+    const toUpdate: { range: string; values: SheetValues }[] = [];
+    const toInsert: SheetValues = [];
     for (const r of pending) {
       const rowValues = buildRow(r, userMap, syncedAtStr);
       const existingRowIdx = idRowMap.get(r.id);
@@ -223,9 +244,10 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     return new Response(
-      JSON.stringify({ error: err?.message || String(err) }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

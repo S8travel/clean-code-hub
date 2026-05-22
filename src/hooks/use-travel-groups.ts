@@ -6,9 +6,19 @@ export interface TravelGroup {
   id: string;
   name: string;
   created_at: string;
-  [key: string]: any;
+  // Named columns used by the (currently unused) GroupDrawer/GroupTable views.
+  // Declared explicitly so consumers type-check without an `any` index signature.
+  ten_doan: string;
+  hdv: string | null;
+  so_khach: number | null;
+  ngay_di: string | null;
+  ngay_ve: string | null;
+  ghi_chu: string | null;
+  [key: string]: unknown;
 }
-export type TravelGroupInsert = Partial<TravelGroup>;
+// `ten_doan` stays required so consumers (GroupDrawer form state) can call
+// string methods on it without an undefined check.
+export type TravelGroupInsert = Partial<TravelGroup> & { ten_doan: string };
 export type TravelGroupUpdate = Partial<TravelGroup>;
 
 // `travel_groups` is not present in the generated Database types; use an

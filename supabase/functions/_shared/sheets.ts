@@ -2,6 +2,11 @@
 // (sync-dntt-to-sheet, sync-dntt-du-chi-to-sheet).
 // Sửa logic Sheets API ở ĐÂY — không lặp lại trong từng function.
 
+/** Một ô trong Google Sheet — chuỗi hoặc số. */
+export type SheetCell = string | number;
+/** Một ma trận giá trị (rows × cols) gửi lên Sheets API. */
+export type SheetValues = SheetCell[][];
+
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -94,9 +99,11 @@ export async function ensureSheetTab(
     const err = await metaRes.text();
     throw new Error(`Sheet metadata failed: ${err}`);
   }
-  const meta = await metaRes.json();
+  const meta = (await metaRes.json()) as {
+    sheets?: Array<{ properties?: { title?: string } }>;
+  };
   const exists = (meta.sheets ?? []).some(
-    (s: any) => s?.properties?.title === tabName,
+    (s) => s?.properties?.title === tabName,
   );
   if (exists) return;
 
@@ -190,7 +197,7 @@ export async function readExistingIdRowMap(
 export async function batchUpdateRows(
   accessToken: string,
   spreadsheetId: string,
-  updates: { range: string; values: any[][] }[],
+  updates: { range: string; values: SheetValues }[],
 ): Promise<void> {
   if (updates.length === 0) return;
   const res = await fetch(
@@ -216,7 +223,7 @@ export async function appendRows(
   spreadsheetId: string,
   tabName: string,
   lastCol: string,
-  rows: any[][],
+  rows: SheetValues,
 ): Promise<void> {
   if (rows.length === 0) return;
   const range = `${tabName}!A:${lastCol}`;

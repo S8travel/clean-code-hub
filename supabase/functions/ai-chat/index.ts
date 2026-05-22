@@ -59,13 +59,15 @@ serve(async (req) => {
         .order("ten"),
     ]);
 
-    const hdvList = hdvRes.data ?? [];
-    const hdvMap = Object.fromEntries(hdvList.map((h: any) => [h.id, h.ten]));
+    const hdvList = (hdvRes.data ?? []) as Array<{ id: number; ten: string }>;
+    const hdvMap: Record<number, string> = Object.fromEntries(
+      hdvList.map((h) => [h.id, h.ten]),
+    );
 
     const context = {
-      doan: (doanRes.data ?? []).map((d: any) => ({
+      doan: ((doanRes.data ?? []) as Array<Record<string, unknown>>).map((d) => ({
         ...d,
-        ten_hdv: hdvMap[d.huong_dan_vien_id] ?? null,
+        ten_hdv: hdvMap[d.huong_dan_vien_id as number] ?? null,
       })),
       khach_san: khachSanRes.data ?? [],
       nha_hang: nhaHangRes.data ?? [],
@@ -106,10 +108,12 @@ Câu hỏi: ${question}`;
         max_tokens: 1024,
         system: systemPrompt,
         messages: [
-          ...(Array.isArray(history) ? history.map((m: any) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: m.content,
-          })) : []),
+          ...(Array.isArray(history)
+            ? (history as Array<{ role?: string; content?: unknown }>).map((m) => ({
+                role: m.role === "assistant" ? "assistant" : "user",
+                content: m.content,
+              }))
+            : []),
           { role: "user", content: question },
         ],
       }),
@@ -126,8 +130,9 @@ Câu hỏi: ${question}`;
     return new Response(JSON.stringify({ answer }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message ?? "Lỗi không xác định" }), {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: message || "Lỗi không xác định" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
