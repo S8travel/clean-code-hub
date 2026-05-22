@@ -156,20 +156,20 @@ export default function KSCard({ ksId, data, handlers }: Props) {
 
   const ngayDateToNgaySo: Record<string, number> = {};
   const ngayDateToDoanNgayId: Record<string, number> = {};
-  ngayRows.forEach((r: any) => {
-    if (r.khach_san_id === ksId) {
+  ngayRows.forEach((r) => {
+    if (r.khach_san_id === ksId && r.ngay_date) {
       ngayDateToNgaySo[r.ngay_date] = r.ngay_so;
       ngayDateToDoanNgayId[r.ngay_date] = r.id;
     }
   });
   // Bổ sung mapping từ day-use items (ngày day-use có thể không có khach_san_id qua đêm)
-  Object.values(dayUseItemMap).forEach((info: any) => {
+  Object.values(dayUseItemMap).forEach((info) => {
     if (info.khach_san_id === ksId && info.ngay_date) {
       ngayDateToNgaySo[info.ngay_date] = info.ngay_so;
       ngayDateToDoanNgayId[info.ngay_date] = info.doan_ngay_id;
     }
   });
-  const isKsDayUse = dayUseKsIds.includes(ksId) && !ngayRows.some((r: any) => r.khach_san_id === ksId);
+  const isKsDayUse = dayUseKsIds.includes(ksId) && !ngayRows.some((r) => r.khach_san_id === ksId);
 
   const isOrphaned = orphanedKsIds.includes(ksId); // không còn trong điều tour
   const isKsDinhKy = dinhKyKsIds.has(ksId);
@@ -247,7 +247,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
             <KSCodeEditor
               doanId={doanId}
               ksId={ksId}
-              currentCode={(ksData?.ngayRows as any[])?.find((r: any) => r.khach_san_id === ksId)?.ks_ma_code || ""}
+              currentCode={ksData?.ngayRows?.find((r) => r.khach_san_id === ksId)?.ks_ma_code || ""}
             />
             <KSFocEditor
               doanId={doanId}
@@ -314,7 +314,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                 // sibling có thể đã mất link → refItemForDay undefined → row mới
                 // lưu null → nhảy KS. Fallback sibling chỉ cho case hiếm.
                 const dayUseEntry = Object.entries(dayUseItemMap).find(
-                  ([, info]: any) => info.khach_san_id === ksId && info.ngay_date === dateStr,
+                  ([, info]) => info.khach_san_id === ksId && info.ngay_date === dateStr,
                 );
                 const refItemForDay = dayUseEntry
                   ? Number(dayUseEntry[0])
@@ -338,8 +338,9 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                 );
               })}
               {ngayRows
-                .filter((r: any) => r.khach_san_id === ksId && !roomsByDay[r.ngay_date])
-                .map((r: any) => (
+                .filter((r): r is typeof r & { ngay_date: string } =>
+                  r.khach_san_id === ksId && !!r.ngay_date && !roomsByDay[r.ngay_date])
+                .map((r) => (
                   <EmptyDayHeader
                     key={r.ngay_date}
                     dateStr={r.ngay_date}
@@ -349,8 +350,8 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                   />
                 ))}
               {Object.entries(dayUseItemMap)
-                .filter(([, info]: any) => info.khach_san_id === ksId && !roomsByDay[info.ngay_date])
-                .map(([itemIdStr, info]: any) => (
+                .filter(([, info]) => info.khach_san_id === ksId && !roomsByDay[info.ngay_date])
+                .map(([itemIdStr, info]) => (
                   <EmptyDayHeader
                     key={`day-use-${itemIdStr}`}
                     dateStr={info.ngay_date}

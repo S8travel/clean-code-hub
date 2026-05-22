@@ -30,6 +30,11 @@ function fmtVnd(n: number): string {
   return (n ?? 0).toLocaleString("vi-VN") + " VND";
 }
 
+// Supabase joined relation có thể trả object hoặc array — lấy phần tử đầu.
+function firstRel<T>(v: T | T[] | null | undefined): T | null {
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+}
+
 // DB email field có thể có nhiều email cách nhau bằng newline, dấu chấm phẩy,
 // hoặc Chinese fullwidth comma — UI Input 1 dòng làm chúng dán liền nhau →
 // Resend reject. Normalize về dạng "a@x.com, b@y.com".
@@ -106,14 +111,22 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         .order("ks_final_sent_at", { ascending: false, nullsFirst: false });
       if (ksId != null) q = q.eq("khach_san_id", ksId);
       const { data } = await q;
-      const match: any = (data || []).find((bk: any) => {
-        if (!bk?.khach_san?.email) return false;
+      type KsJoin = { email: string | null; nha_cung_cap_id: number | null };
+      type KsBooking = {
+        email_thread_id: string | null;
+        email_subject: string | null;
+        khach_san: KsJoin | KsJoin[] | null;
+      };
+      const match = ((data || []) as unknown as KsBooking[]).find((bk) => {
+        const ks = firstRel(bk.khach_san);
+        if (!ks?.email) return false;
         if (ksId != null) return true;
-        if (nha_cung_cap_id != null) return bk?.khach_san?.nha_cung_cap_id === nha_cung_cap_id;
+        if (nha_cung_cap_id != null) return ks.nha_cung_cap_id === nha_cung_cap_id;
         return false;
       });
-      if (match?.khach_san?.email)
-        return { email: normalizeEmailList(match.khach_san.email), threadId: match.email_thread_id ?? null, bookingSubject: (match as any).email_subject ?? null, source: "booking" };
+      const matchKs = match ? firstRel(match.khach_san) : null;
+      if (matchKs?.email)
+        return { email: normalizeEmailList(matchKs.email), threadId: match!.email_thread_id ?? null, bookingSubject: match!.email_subject ?? null, source: "booking" };
     }
 
     if (loai === "nha_hang" && doan_id) {
@@ -124,22 +137,33 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         .from("doan_booking_nh")
         .select("email_thread_id, email_subject, final_sent_at, sent_at, nha_hang:nha_hang_id(ten, email, nha_cung_cap_id)")
         .eq("doan_id", doan_id);
+      type NhJoin = { ten: string | null; email: string | null; nha_cung_cap_id: number | null };
+      type NhBooking = {
+        email_thread_id: string | null;
+        email_subject: string | null;
+        final_sent_at: string | null;
+        sent_at: string | null;
+        nha_hang: NhJoin | NhJoin[] | null;
+      };
       // Chỉ booking đã gửi (có email_subject) + có email → mới thread được.
-      const sent = (data || []).filter(
-        (bk: any) => bk?.email_subject && bk?.nha_hang?.email,
+      const sent = ((data || []) as unknown as NhBooking[]).filter(
+        (bk) => bk.email_subject && firstRel(bk.nha_hang)?.email,
       );
-      const ts = (bk: any) =>
+      const ts = (bk: NhBooking) =>
         new Date(bk.final_sent_at || bk.sent_at || 0).getTime();
-      sent.sort((a: any, b: any) => ts(b) - ts(a)); // gửi mới nhất trước
+      sent.sort((a, b) => ts(b) - ts(a)); // gửi mới nhất trước
       const moTaLow = (row.mo_ta || "").toLowerCase();
-      const match: any =
-        (nha_cung_cap_id != null &&
-          sent.find((bk: any) => bk?.nha_hang?.nha_cung_cap_id === nha_cung_cap_id)) ||
-        sent.find(
-          (bk: any) => bk?.nha_hang?.ten && moTaLow.includes(bk.nha_hang.ten.toLowerCase()),
-        );
-      if (match && match.nha_hang?.email)
-        return { email: normalizeEmailList(match.nha_hang.email), threadId: match.email_thread_id ?? null, bookingSubject: match.email_subject ?? null, source: "booking" };
+      const match: NhBooking | undefined =
+        (nha_cung_cap_id != null
+          ? sent.find((bk) => firstRel(bk.nha_hang)?.nha_cung_cap_id === nha_cung_cap_id)
+          : undefined) ||
+        sent.find((bk) => {
+          const ten = firstRel(bk.nha_hang)?.ten;
+          return !!ten && moTaLow.includes(ten.toLowerCase());
+        });
+      const matchNh = match ? firstRel(match.nha_hang) : null;
+      if (match && matchNh?.email)
+        return { email: normalizeEmailList(matchNh.email), threadId: match.email_thread_id ?? null, bookingSubject: match.email_subject ?? null, source: "booking" };
     }
   } catch {
     // Bỏ qua, dùng fallback NCC
@@ -155,7 +179,7 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         .select("ten, email")
         .eq("nha_cung_cap_id", nha_cung_cap_id)
         .not("email", "is", null);
-      const email = pickCatalogEmail(data as any, row.mo_ta);
+      const email = pickCatalogEmail(data, row.mo_ta);
       if (email) return { email: normalizeEmailList(email), threadId: null, bookingSubject: null, source: "ncc" };
     }
     if (loai === "khach_san" && nha_cung_cap_id) {
@@ -164,7 +188,7 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
         .select("ten, email")
         .eq("nha_cung_cap_id", nha_cung_cap_id)
         .not("email", "is", null);
-      const email = pickCatalogEmail(data as any, row.mo_ta);
+      const email = pickCatalogEmail(data, row.mo_ta);
       if (email) return { email: normalizeEmailList(email), threadId: null, bookingSubject: null, source: "ncc" };
     }
   } catch {
@@ -222,7 +246,7 @@ export default function UncEmailModal({ row, open, onClose }: Props) {
         .select("so_tien")
         .eq("dntt_id", row.id)
         .eq("method", "can_tru");
-      return (data || []).reduce((s: number, p: any) => s + Number(p.so_tien ?? 0), 0);
+      return (data || []).reduce((s, p) => s + Number(p.so_tien ?? 0), 0);
     },
   });
 

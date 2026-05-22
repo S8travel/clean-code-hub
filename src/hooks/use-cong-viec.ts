@@ -72,38 +72,40 @@ export function useCongViecList(userId: string | null | undefined) {
       if (!tasks || tasks.length === 0) return [];
 
       // Collect unique user ids
-      const userIds = [...new Set(tasks.flatMap((t: any) => [t.nguoi_giao, t.nguoi_nhan]))];
+      const userIds = [...new Set(tasks.flatMap((t) => [t.nguoi_giao, t.nguoi_nhan]))];
       const { data: userRoles } = await externalSupabase
         .from("user_roles")
         .select("user_id, ho_ten")
         .in("user_id", userIds);
       const nameMap: Record<string, string> = {};
-      (userRoles ?? []).forEach((u: any) => { nameMap[u.user_id] = u.ho_ten ?? u.user_id; });
+      (userRoles ?? []).forEach((u) => { nameMap[u.user_id] = u.ho_ten ?? u.user_id; });
 
       // Collect doan ids
-      const doanIds = [...new Set(tasks.map((t: any) => t.doan_id).filter(Boolean))];
+      const doanIds = [...new Set(tasks.map((t) => t.doan_id).filter((id): id is number => id != null))];
       const doanNameMap: Record<number, string> = {};
       if (doanIds.length > 0) {
         const { data: doans } = await externalSupabase
           .from("doan")
           .select("id, ten_doan")
           .in("id", doanIds);
-        (doans ?? []).forEach((d: any) => { doanNameMap[d.id] = d.ten_doan; });
+        (doans ?? []).forEach((d) => { doanNameMap[d.id] = d.ten_doan ?? ""; });
       }
 
       // Fetch comment counts
-      const taskIds = tasks.map((t: any) => t.id);
+      const taskIds = tasks.map((t) => t.id);
       const { data: commentCounts } = await externalSupabase
         .from("cong_viec_comment")
         .select("cong_viec_id")
         .in("cong_viec_id", taskIds);
       const countMap: Record<number, number> = {};
-      (commentCounts ?? []).forEach((c: any) => {
+      (commentCounts ?? []).forEach((c) => {
         countMap[c.cong_viec_id] = (countMap[c.cong_viec_id] ?? 0) + 1;
       });
 
-      return tasks.map((t: any): CongViecRow => ({
+      return tasks.map((t): CongViecRow => ({
         ...t,
+        created_at: t.created_at ?? "",
+        updated_at: t.updated_at ?? "",
         ten_nguoi_giao: t.nguoi_giao === SYSTEM_USER_ID ? "Hệ thống" : (nameMap[t.nguoi_giao] ?? null),
         ten_nguoi_nhan: nameMap[t.nguoi_nhan] ?? null,
         ten_doan: t.doan_id ? (doanNameMap[t.doan_id] ?? null) : null,
@@ -135,16 +137,17 @@ export function useCongViecComments(congViecId: number | null | undefined) {
       if (error) throw error;
       if (!data || data.length === 0) return [];
 
-      const userIds = [...new Set(data.map((c: any) => c.user_id))];
+      const userIds = [...new Set(data.map((c) => c.user_id))];
       const { data: userRoles } = await externalSupabase
         .from("user_roles")
         .select("user_id, ho_ten")
         .in("user_id", userIds);
       const nameMap: Record<string, string> = {};
-      (userRoles ?? []).forEach((u: any) => { nameMap[u.user_id] = u.ho_ten ?? ""; });
+      (userRoles ?? []).forEach((u) => { nameMap[u.user_id] = u.ho_ten ?? ""; });
 
-      return data.map((c: any): CongViecComment => ({
+      return data.map((c): CongViecComment => ({
         ...c,
+        created_at: c.created_at ?? "",
         ho_ten: nameMap[c.user_id] ?? null,
       }));
     },
@@ -162,7 +165,7 @@ export function useUserListForAssign() {
         .eq("active", true)
         .order("ho_ten");
       if (error) throw error;
-      return (data ?? []).map((u: any) => ({
+      return (data ?? []).map((u): UserForAssign => ({
         user_id: u.user_id,
         ho_ten: u.ho_ten ?? u.user_id,
         role: u.role,

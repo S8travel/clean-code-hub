@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { errMsg } from "@/lib/error";
 import {
   useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi,
 } from "@/hooks/use-chi-phi";
@@ -31,9 +32,16 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
 
 interface CancelTarget { dnttId: number; isPaid: boolean }
 
+/** Loại xe (joined) — chỉ các field section đọc. */
+interface XeInfo {
+  ten_xe?: string | null;
+  so_cho?: number | null;
+  nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
+}
+
 interface Props {
   doanId: number;
-  xe: any;
+  xe: XeInfo | null;
 }
 
 export default function ChiPhiXeSection({ doanId, xe }: Props) {
@@ -119,7 +127,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       don_gia: local.don_gia,
       tien_cong_ty: isHDV ? 0 : total,
       tien_hdv: isHDV ? total : 0,
-    } as any, {
+    }, {
       onSuccess: () => setEditRow((prev) => { const next = { ...prev }; delete next[row.id]; return next; }),
     });
   };
@@ -132,13 +140,13 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       doan_id: doanId,
       tien_cong_ty: next === "cong_ty" ? total : 0,
       tien_hdv: next === "hdv" ? total : 0,
-    } as any);
+    });
   };
 
   // ── Định kỳ toggle ────────────────────────────────────────────────────────
   const handleToggleDinhKy = (row: typeof xeRows[0]) => {
     const newVal = !row.thanh_toan_dinh_ky;
-    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal } as any, {
+    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal }, {
       onSuccess: () => toast.success(newVal ? "Đã bật thanh toán định kỳ" : "Đã tắt thanh toán định kỳ"),
     });
   };
@@ -166,7 +174,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       tien_hdv: 0,
       nha_cung_cap_id: parent?.nha_cung_cap_id ?? null,
       thanh_toan_dinh_ky: true,
-    } as any, {
+    }, {
       onSuccess: () => {
         setAddExtraForId(null);
         toast.success("Đã thêm phụ phí xe");
@@ -188,7 +196,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       tien_hdv: 0,
       nha_cung_cap_id: xe?.nha_xe?.nha_cung_cap_id ?? null,
       thanh_toan_dinh_ky: true,
-    } as any, {
+    }, {
       onSuccess: () => toast.success("Đã thêm dòng xe"),
     });
   };
@@ -219,7 +227,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       ref_id: chiPhiId,
       ngay_can_thanh_toan: ngayCan || null,
       allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
-    } as any, {
+    }, {
       onSuccess: () => { toast.success("Đã gửi ĐNTT"); setModal(null); },
     });
   };
@@ -238,7 +246,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
       {
         onSuccess: () => { toast.success("Đã hủy"); setCancelTarget(null); },
-        onError: (err: any) => toast.error(err?.message || "Lỗi khi hủy"),
+        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy"),
       },
     );
   };
@@ -687,7 +695,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                     else toast.success(`Đã ghi công nợ ${fmt(Math.abs(result.delta))} ₫`);
                     setAdjustTarget(null);
                   },
-                  onError: (err: any) => toast.error(err?.message || "Lỗi điều chỉnh"),
+                  onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi điều chỉnh"),
                 });
               }}>
               Xác nhận
@@ -704,7 +712,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
           {cancelTarget?.isPaid && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">Đã thanh toán — chọn cách xử lý:</p>
-              <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as any)} className="flex gap-4">
+              <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as "cong_no" | "hoan_tien")} className="flex gap-4">
                 <div className="flex items-center gap-1.5">
                   <RadioGroupItem value="hoan_tien" id="xe-cancel-ht" />
                   <Label htmlFor="xe-cancel-ht" className="text-xs">Hoàn tiền</Label>
