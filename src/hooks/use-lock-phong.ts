@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
+import type { TablesUpdate } from "@/lib/database.types";
 
 // ── Types ──
 
@@ -88,7 +89,7 @@ export function useLockPhongList() {
       if (e1) throw e1;
       if (!records || records.length === 0) return [];
 
-      const ids = (records as any[]).map((r) => r.id);
+      const ids = records.map((r) => r.id);
 
       // 2. Fetch all lock_phong_ks rows
       const { data: ksRows, error: e2 } = await externalSupabase
@@ -99,35 +100,36 @@ export function useLockPhongList() {
       if (e2) throw e2;
 
       if (!ksRows || ksRows.length === 0) {
-        return (records as any[]).map((r): LockPhongDisplay => ({ ...r, hotels: [] }));
+        return (records as LockPhong[]).map((r): LockPhongDisplay => ({ ...r, hotels: [] }));
       }
 
       // 3. Fetch khach_san info
-      const allKsIds = [...new Set((ksRows as any[]).map((r) => r.khach_san_id))];
+      const allKsIds = [...new Set(ksRows.map((r) => r.khach_san_id))];
       const { data: ksList, error: e3 } = await externalSupabase
         .from("khach_san")
         .select("id, ten, email, dia_diem")
         .in("id", allKsIds);
       if (e3) throw e3;
 
-      const ksMap = new Map(((ksList || []) as any[]).map((k) => [k.id, k]));
+      type KsInfo = { id: number; ten: string | null; email: string | null; dia_diem: string | null };
+      const ksMap = new Map<number, KsInfo>((ksList || []).map((k) => [k.id, k]));
 
       // 4. Group ks rows by lock_phong_id
       const ksGrouped = new Map<number, LockPhongKSDisplay[]>();
-      for (const ks of ksRows as any[]) {
+      for (const ks of ksRows as LockPhongKS[]) {
         if (!ksGrouped.has(ks.lock_phong_id)) ksGrouped.set(ks.lock_phong_id, []);
-        const info = ksMap.get(ks.khach_san_id) || ({} as any);
+        const info = ksMap.get(ks.khach_san_id);
         ksGrouped.get(ks.lock_phong_id)!.push({
           ...ks,
-          khach_san_ten: info.ten || "—",
-          khach_san_email: info.email || null,
-          khach_san_dia_diem: info.dia_diem || null,
+          khach_san_ten: info?.ten || "—",
+          khach_san_email: info?.email || null,
+          khach_san_dia_diem: info?.dia_diem || null,
           so_dem: calcSoDem(ks.check_in, ks.check_out),
         });
       }
 
       // 5. Merge
-      return (records as any[]).map((r): LockPhongDisplay => ({
+      return (records as LockPhong[]).map((r): LockPhongDisplay => ({
         ...r,
         hotels: ksGrouped.get(r.id) || [],
       }));
@@ -164,7 +166,7 @@ export function useCreateLockPhong() {
 
       if (hotels.length > 0) {
         const inserts = hotels.map(({ id: _id, ...h }) => ({
-          lock_phong_id: (newRecord as any).id,
+          lock_phong_id: newRecord.id,
           khach_san_id: h.khach_san_id,
           check_in: h.check_in,
           check_out: h.check_out,
@@ -218,7 +220,7 @@ export function useUpdateLockPhong() {
         .eq("lock_phong_id", id);
       if (allExisting.error) throw allExisting.error;
 
-      const existingInDB = ((allExisting.data || []) as any[]).map((r) => r.id);
+      const existingInDB = (allExisting.data || []).map((r) => r.id);
       const toDelete = existingInDB.filter((dbId) => !existingIds.includes(dbId));
 
       if (toDelete.length > 0) {
@@ -451,7 +453,7 @@ export function useSendLockPhongBatchEmail() {
 
       // Rows chưa gửi → set full status + thread + hash riêng từng row
       for (const id of params.ksIds) {
-        const patch: Record<string, any> = {
+        const patch: TablesUpdate<"lock_phong_ks"> = {
           email_status: "cho_xac_nhan",
           email_sent_at: now,
           email_sent_by: params.sentBy,
@@ -469,7 +471,7 @@ export function useSendLockPhongBatchEmail() {
       if (isUpdate && params.allKsIds && params.allKsIds.length > 0) {
         const alreadySentIds = params.allKsIds.filter((id) => !params.ksIds.includes(id));
         for (const id of alreadySentIds) {
-          const patch: Record<string, any> = {
+          const patch: TablesUpdate<"lock_phong_ks"> = {
             email_sent_at: now,
             email_sent_by: params.sentBy,
             email_thread_id: threadId,
@@ -536,7 +538,7 @@ export function useSendLockPhongEmail() {
       const threadId = isFirst ? newThreadId : params.emailThreadId;
       const now = new Date().toISOString();
 
-      const updatePayload: Record<string, any> = {
+      const updatePayload: TablesUpdate<"lock_phong_ks"> = {
         email_sent_at: now,
         email_sent_by: params.sentBy,
         email_thread_id: threadId,

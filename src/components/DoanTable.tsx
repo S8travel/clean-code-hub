@@ -19,7 +19,7 @@ import { t, useTranslate } from "@/lib/i18n";
 
 /* ── helpers ── */
 
-function fmtDate(d: string | null) {
+function fmtDate(d: string | null | undefined) {
   if (!d) return { date: "—", day: "" };
   const parsed = parseISO(d);
   return {
@@ -33,13 +33,50 @@ const LOAI_TOUR_BADGE: Record<string, { label: string; className: string }> = {
   noi_dia:  { label: "Nội địa",  className: "bg-orange-100 text-orange-700" },
 };
 
-function lookup(obj: any, field = "ten"): string {
+/** Đoàn row (joined) — chỉ các field DoanTable đọc; permissive cho field phụ. */
+export interface DoanRow {
+  id: number;
+  ten_doan?: string | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+  loai_tour?: string | null;
+  trang_thai?: string | null;
+  agent_id?: number | null;
+  agent_huy_id?: number | null;
+  dia_diem_id?: number | null;
+  huong_dan_vien_id?: number | null;
+  xe_id?: number | null;
+  seri_id?: number | null;
+  assigned_to?: string | null;
+  shopping?: boolean | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  chuyen_bay_don?: string | null;
+  chuyen_bay_tien?: string | null;
+  ghi_chu?: string | null;
+  huong_dan_vien?: { ten?: string | null } | null;
+  agents?: { ten?: string | null } | null;
+  agent_huy?: { ten?: string | null } | null;
+  dia_diem?: { ten?: string | null } | null;
+  xe?: { ten_xe?: string | null; so_cho?: number | null; nha_xe?: { ten?: string | null } | null } | null;
+  [key: string]: unknown;
+}
+
+type LookupObj = { [key: string]: unknown } | null | undefined;
+
+function lookup(obj: LookupObj, field = "ten"): string {
   if (!obj) return "—";
-  if (typeof obj === "object" && obj[field]) return obj[field];
+  if (typeof obj === "object") {
+    const v = obj[field];
+    if (typeof v === "string" && v) return v;
+  }
   return "—";
 }
 
-function xeLabel(xe: any): string | null {
+function xeLabel(xe: DoanRow["xe"]): string | null {
   if (!xe) return null;
   const parts = [xe.nha_xe?.ten ?? "", xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
@@ -64,7 +101,7 @@ function badgeColor(name: string) { return PALETTE[hashStr(name) % PALETTE.lengt
 function avatarBg(name: string) { return AVATAR_BG[hashStr(name) % AVATAR_BG.length]; }
 
 // Trạng thái giàu: huỷ / hoàn thành / đang diễn ra / sắp khởi hành / đang chạy
-function richStatus(g: any, qtPaidSet: Set<number> | null) {
+function richStatus(g: DoanRow, qtPaidSet: Set<number> | null) {
   const base = computeDoanStatus(g, qtPaidSet ?? null);
   if (base === "huy")
     return { label: t("Đã huỷ"), tile: "bg-red-500", text: "text-red-600", chip: t("Đã huỷ"), icon: Ban };
@@ -86,7 +123,7 @@ function richStatus(g: any, qtPaidSet: Set<number> | null) {
   return { label: t("Chờ xác nhận"), tile: "bg-emerald-500", text: "text-emerald-600", chip: t("Chờ xác nhận"), icon: Plane };
 }
 
-function nightsLabel(g: any): string | null {
+function nightsLabel(g: DoanRow): string | null {
   if (!g.ngay_di || !g.ngay_ve) return null;
   const d = Math.round(
     (new Date(g.ngay_ve + "T00:00:00").getTime() - new Date(g.ngay_di + "T00:00:00").getTime()) / 86400000,
@@ -99,16 +136,16 @@ type SortDir = "asc" | "desc";
 
 /* ── props ── */
 interface Props {
-  groups: any[] | undefined;
+  groups: DoanRow[] | undefined;
   isLoading: boolean;
   userRolesMap: Map<string, string>;
   sortKey?: string;
   sortDir?: "asc" | "desc";
   onSortChange?: (key: string, dir: "asc" | "desc") => void;
-  onEdit?: (doan: any) => void;
-  onClone?: (doan: any) => void;
-  onCancel?: (doan: any) => void;
-  onDelete?: (doan: any) => void;
+  onEdit?: (doan: DoanRow) => void;
+  onClone?: (doan: DoanRow) => void;
+  onCancel?: (doan: DoanRow) => void;
+  onDelete?: (doan: DoanRow) => void;
 }
 
 function Avatar({ name, label }: { name: string; label: string }) {
@@ -142,7 +179,7 @@ export function DoanTable({
   useTranslate();
   const navigate = useNavigate();
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
-  const { data: opMap } = useDoanOpMap((groups ?? []).map((g: any) => g.id));
+  const { data: opMap } = useDoanOpMap((groups ?? []).map((g) => g.id));
   const [sortKeyState, setSortKeyState] = useState<SortKey>("ngay_di");
   const [sortDirState, setSortDirState] = useState<SortDir>("asc");
   const sortKey = (sortKeyProp as SortKey | undefined) ?? sortKeyState;

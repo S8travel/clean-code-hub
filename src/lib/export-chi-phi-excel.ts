@@ -17,13 +17,58 @@ interface SheetDefinition {
   rows: SheetCell[][];
 }
 
+/** Đoàn (joined) — chỉ các field export đọc; tất cả optional cho linh hoạt. */
+export interface ExportDoan {
+  id?: number | null;
+  ten_doan?: string | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  truong_doan?: string | null;
+  bang_don?: string | null;
+  tang_pham?: unknown;
+  shopping?: boolean | null;
+  chuyen_bay_don?: string | null;
+  chuyen_bay_tien?: string | null;
+  assigned_to?: string | null;
+  agents?: { ten?: string | null } | null;
+  huong_dan_vien?: { ten?: string | null } | null;
+  xe?: {
+    ten_xe?: string | null;
+    so_cho?: number | null;
+    nha_xe?: { ten?: string | null } | null;
+  } | null;
+}
+
+/** Row ngày KS — export chỉ đọc các field này. */
+export interface ExportKsNgayRow {
+  id?: number;
+  khach_san_id?: number | null;
+  ngay_so?: number | null;
+  ngay_date?: string | null;
+  ks_ma_code?: string | null;
+  ks_loai_phong?: string | null;
+}
+
+/** Thông tin KS map — export chỉ đọc tên + FOC; permissive cho field phụ. */
+export interface ExportKsInfo {
+  ten?: string | null;
+  foc_khach?: number | null;
+  foc_mien?: number | null;
+  [key: string]: unknown;
+}
+
 interface ExportChiPhiDoanExcelParams {
-  doan: any;
+  doan: ExportDoan;
   chiPhiRows: ChiPhiRow[];
   dnttList: DNTTRow[];
   hdvData?: HDVSectionData | null;
   opName?: string;
-  ksData?: { ngayRows: any[]; khachSanMap: Record<number, any> } | null;
+  ksData?: { ngayRows: ExportKsNgayRow[]; khachSanMap: Record<number, ExportKsInfo> } | null;
 }
 
 const encoder = new TextEncoder();
@@ -126,7 +171,7 @@ function formatDateValue(value?: string | null, withTime = false): string {
   return format(date, withTime ? "dd/MM/yyyy HH:mm" : "dd/MM/yyyy");
 }
 
-function getSoKhach(doan: any): number {
+function getSoKhach(doan: ExportDoan): number {
   return (
     (doan?.so_khach_lon ?? 0) +
     (doan?.so_khach_em1 ?? 0) +
@@ -137,7 +182,7 @@ function getSoKhach(doan: any): number {
   );
 }
 
-function getSoKhachText(doan: any): string {
+function getSoKhachText(doan: ExportDoan): string {
   const total = getSoKhach(doan);
   const adults = doan?.so_khach_lon ?? 0;
   const tl = doan?.so_khach_tl ?? 0;
@@ -146,7 +191,7 @@ function getSoKhachText(doan: any): string {
   return `${total} khách (${adults} NL, ${tl} TL, ${em1} TE1, ${em2} TE2)`;
 }
 
-function getXeText(doan: any): string {
+function getXeText(doan: ExportDoan): string {
   if (!doan?.xe) return "—";
   return [
     doan.xe.nha_xe?.ten,
@@ -157,11 +202,11 @@ function getXeText(doan: any): string {
     .join(" · ") || "—";
 }
 
-function getHdvText(doan: any, hdvData?: HDVSectionData | null): string {
+function getHdvText(doan: ExportDoan, hdvData?: HDVSectionData | null): string {
   return doan?.huong_dan_vien?.ten || hdvData?.hdv?.ten || "—";
 }
 
-function getDateRangeText(doan: any): string {
+function getDateRangeText(doan: ExportDoan): string {
   if (!doan?.ngay_di || !doan?.ngay_ve) return "—";
   return `${formatDateValue(doan.ngay_di)} -> ${formatDateValue(doan.ngay_ve)}`;
 }
@@ -566,8 +611,8 @@ function createZipBlob(files: Array<{ name: string; content: string }>): Blob {
 function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows, hdvData, opName, ksData } = params;
 
-  const ngayRowById: Record<number, any> = {};
-  (ksData?.ngayRows || []).forEach((r: any) => { ngayRowById[r.id] = r; });
+  const ngayRowById: Record<number, ExportKsNgayRow> = {};
+  (ksData?.ngayRows || []).forEach((r) => { if (r.id != null) ngayRowById[r.id] = r; });
 
   const activeRows = chiPhiRows.filter(isActiveChiPhi);
   const ksRows = activeRows.filter((r) => r.danh_muc === "khach_san");
@@ -638,12 +683,14 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   ]);
 
   // KS: chỉ hiển thị tên KS theo từng ngày (lấy từ doan_ngay), KHÔNG hiển thị chi phí cụ thể
-  const ksNgayRows = (ksData?.ngayRows || []).filter((n: any) => n.khach_san_id);
-  const ksNgaySorted = [...ksNgayRows].sort((a: any, b: any) =>
+  const ksNgayRows = (ksData?.ngayRows || []).filter((n) => n.khach_san_id);
+  const ksNgaySorted = [...ksNgayRows].sort((a, b) =>
     (a.ngay_date || "").localeCompare(b.ngay_date || ""),
   );
   for (const ngayRow of ksNgaySorted) {
-    const ks = ksData?.khachSanMap?.[ngayRow.khach_san_id];
+    const ks = ngayRow.khach_san_id != null
+      ? ksData?.khachSanMap?.[ngayRow.khach_san_id]
+      : undefined;
     const hotelName = ks?.ten || "—";
     const ciDateStr = ngayRow?.ngay_date ? formatDateValue(ngayRow.ngay_date) : "—";
     const coDateRaw = ngayRow?.ngay_date ? new Date(ngayRow.ngay_date + "T00:00:00") : null;

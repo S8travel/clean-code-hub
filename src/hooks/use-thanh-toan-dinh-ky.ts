@@ -45,39 +45,41 @@ export function useDinhKyChiPhiList(filters?: {
       if (!cpRows || cpRows.length === 0) return [];
 
       // 2. Load doan info
-      const doanIds = [...new Set(cpRows.map((r: any) => r.doan_id))];
+      const doanIds = [...new Set(cpRows.map((r) => r.doan_id).filter((id): id is number => id != null))];
       const { data: doanList } = await externalSupabase
         .from("doan")
         .select("id, ten_doan, ngay_di")
         .in("id", doanIds);
-      const doanMap: Record<number, any> = {};
-      (doanList || []).forEach((d: any) => { doanMap[d.id] = d; });
+      type DoanInfo = { id: number; ten_doan: string | null; ngay_di: string | null };
+      const doanMap: Record<number, DoanInfo> = {};
+      (doanList || []).forEach((d) => { doanMap[d.id] = d; });
 
       // 3. Load NCC info
-      const nccIds = [...new Set(cpRows.filter((r: any) => r.nha_cung_cap_id).map((r: any) => r.nha_cung_cap_id))];
-      const nccMap: Record<number, any> = {};
+      const nccIds = [...new Set(cpRows.map((r) => r.nha_cung_cap_id).filter((id): id is number => id != null))];
+      type NccInfo = { id: number; ten: string | null; so_tai_khoan: string | null; ngan_hang: string | null };
+      const nccMap: Record<number, NccInfo> = {};
       if (nccIds.length > 0) {
         const { data: nccList } = await externalSupabase
           .from("nha_cung_cap")
           .select("id, ten, so_tai_khoan, ngan_hang")
           .in("id", nccIds);
-        (nccList || []).forEach((n: any) => { nccMap[n.id] = n; });
+        (nccList || []).forEach((n) => { nccMap[n.id] = n; });
       }
 
-      let rows: DinhKyChiPhiRow[] = cpRows.map((r: any) => {
-        const doan = doanMap[r.doan_id] || {};
+      let rows: DinhKyChiPhiRow[] = cpRows.map((r): DinhKyChiPhiRow => {
+        const doan: Partial<DoanInfo> = (r.doan_id != null ? doanMap[r.doan_id] : undefined) || {};
         const ncc = r.nha_cung_cap_id ? nccMap[r.nha_cung_cap_id] : null;
         return {
           id: r.id,
-          doan_id: r.doan_id,
+          doan_id: r.doan_id ?? 0,
           ten_doan: doan.ten_doan ?? null,
           ngay_kh_di: doan.ngay_di ?? null,
-          danh_muc: r.danh_muc,
+          danh_muc: r.danh_muc ?? "",
           mo_ta: r.mo_ta,
-          thanh_tien: r.thanh_tien,
+          thanh_tien: r.thanh_tien ?? 0,
           thanh_tien_thuc_te: r.thanh_tien_thuc_te,
           so_tien_da_tt: r.so_tien_da_tt ?? 0,
-          trang_thai_thanh_toan: r.trang_thai_thanh_toan,
+          trang_thai_thanh_toan: r.trang_thai_thanh_toan ?? "unpaid",
           nha_cung_cap_id: r.nha_cung_cap_id,
           ten_ncc: ncc?.ten ?? null,
           ncc_so_tai_khoan: ncc?.so_tai_khoan ?? null,
@@ -195,13 +197,19 @@ export function useDinhKyDNTTList(filters?: {
       const { data, error } = await q;
       if (error) throw error;
 
-      let rows = (data || []).map((row: any) => ({
+      type DnttJoinRow = Record<string, unknown> & {
+        nha_cung_cap?: { ten?: string | null; so_tai_khoan?: string | null; ngan_hang?: string | null } | null;
+        ten_nha_cung_cap?: string | null;
+        so_tai_khoan?: string | null;
+        ngan_hang?: string | null;
+      };
+      let rows = ((data || []) as DnttJoinRow[]).map((row) => ({
         ...row,
         ten_doan: "",
         ten_ncc: row.nha_cung_cap?.ten || row.ten_nha_cung_cap || "",
         ncc_so_tai_khoan: row.nha_cung_cap?.so_tai_khoan || row.so_tai_khoan || "",
         ncc_ngan_hang: row.nha_cung_cap?.ngan_hang || row.ngan_hang || "",
-      })) as DinhKyDNTTRow[];
+      })) as unknown as DinhKyDNTTRow[];
 
       if (!filters?.includeResolved) {
         rows = rows.filter(
@@ -221,9 +229,16 @@ export function useDinhKyDNTTList(filters?: {
           .select("dntt_id, chi_phi:chi_phi_id (doan:doan_id (ngay_di))")
           .in("dntt_id", dnttIds);
 
+        // Joined relation chi_phi → doan may come back as object or array
+        type AllocJoin = {
+          dntt_id: number;
+          chi_phi: { doan: { ngay_di: string | null } | { ngay_di: string | null }[] | null } | null;
+        };
+        const firstOf = <T,>(v: T | T[] | null | undefined): T | null =>
+          Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
         const ngayDiByDntt: Record<number, string[]> = {};
-        (allocs || []).forEach((a: any) => {
-          const ngayDi = a.chi_phi?.doan?.ngay_di;
+        ((allocs || []) as unknown as AllocJoin[]).forEach((a) => {
+          const ngayDi = firstOf(a.chi_phi?.doan)?.ngay_di;
           if (!ngayDi) return;
           (ngayDiByDntt[a.dntt_id] = ngayDiByDntt[a.dntt_id] || []).push(ngayDi);
         });
@@ -253,6 +268,19 @@ export function useDinhKyDNTTList(filters?: {
   });
 }
 
+export interface DinhKyDNTTAllocationRow {
+  chi_phi_id: number;
+  so_tien: number;
+  chi_phi: {
+    id: number;
+    doan_id: number | null;
+    danh_muc: string;
+    mo_ta: string | null;
+    thanh_tien: number;
+    doan: { id: number; ten_doan: string; ngay_di: string | null } | null;
+  } | null;
+}
+
 // Lấy allocations + chi phí + đoàn cho 1 ĐNTT định kỳ (xem chi tiết)
 export function useDinhKyDNTTAllocations(dnttId: number | null | undefined) {
   return useQuery({
@@ -270,7 +298,7 @@ export function useDinhKyDNTTAllocations(dnttId: number | null | undefined) {
         `)
         .eq("dntt_id", dnttId!);
       if (error) throw error;
-      return (data || []) as any[];
+      return (data || []) as unknown as DinhKyDNTTAllocationRow[];
     },
   });
 }

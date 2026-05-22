@@ -232,7 +232,7 @@ function DocCell({
           // Chạy OCR sau khi upload xong (background, không block toast).
           runOcr(file);
         },
-        onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể tải lên"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể tải lên"), variant: "destructive" }),
       },
     );
   };
@@ -273,7 +273,7 @@ function DocCell({
       { id: row.id, loaiDoc },
       {
         onSuccess: () => toast({ title: "Đã xóa file" }),
-        onError: (err: any) => toast({ title: "Lỗi: " + err?.message, variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: "Lỗi: " + errMsg(err), variant: "destructive" }),
       },
     );
     setDeleteOpen(false);
@@ -283,7 +283,7 @@ function DocCell({
     updateMut.mutate(
       { id: row.id, field: statusField, value },
       {
-        onError: (err: any) => toast({ title: "Lỗi: " + err?.message, variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: "Lỗi: " + errMsg(err), variant: "destructive" }),
       },
     );
   };
@@ -473,7 +473,7 @@ function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
             toast({ title: "Đã lưu số tiền hóa đơn" });
           }
         },
-        onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không lưu được"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không lưu được"), variant: "destructive" }),
       },
     );
   };
@@ -592,7 +592,7 @@ function HoaDonUNCPageContent() {
         .eq("method", "can_tru")
         .in("dntt_id", visibleDnttIds);
       const m: Record<number, number> = {};
-      (data || []).forEach((p: any) => {
+      (data || []).forEach((p) => {
         m[p.dntt_id] = (m[p.dntt_id] || 0) + Number(p.so_tien);
       });
       return m;
@@ -614,7 +614,7 @@ function HoaDonUNCPageContent() {
         .order("ngay_thanh_toan", { ascending: false });
       const m: Record<number, string> = {};
       // Lấy nguồn của payment mới nhất per dntt_id
-      (data || []).forEach((p: any) => { if (!m[p.dntt_id] && p.nguon) m[p.dntt_id] = p.nguon; });
+      (data || []).forEach((p) => { if (!m[p.dntt_id] && p.nguon) m[p.dntt_id] = p.nguon; });
       return m;
     },
   });
@@ -631,10 +631,17 @@ function HoaDonUNCPageContent() {
     return [...set];
   }, [mainRows]);
 
-  const { data: cocDntts = [] as any[] } = useQuery({
+  type CocDnttRow = {
+    id: number;
+    doan_id: number | null;
+    ref_loai: string | null;
+    ref_id: number | null;
+    paid_amount: number | null;
+  };
+  const { data: cocDntts = [] as CocDnttRow[] } = useQuery({
     queryKey: ["hoadon-unc-coc-siblings", refTriples.join(",")],
     enabled: refTriples.length > 0,
-    queryFn: async () => {
+    queryFn: async (): Promise<CocDnttRow[]> => {
       const doanIds = [...new Set(refTriples.map((p) => Number(p.split("|")[0])).filter(Number.isFinite))];
       const refLoais = [...new Set(refTriples.map((p) => p.split("|")[1]))];
       const refIds = [...new Set(refTriples.map((p) => Number(p.split("|")[2])).filter(Number.isFinite))];
@@ -649,12 +656,12 @@ function HoaDonUNCPageContent() {
         .not("trang_thai_duyet", "eq", "da_huy")
         .not("trang_thai_duyet", "eq", "tu_choi");
       const validKeys = new Set(refTriples);
-      return (data || []).filter((d: any) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`));
+      return ((data || []) as CocDnttRow[]).filter((d) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`));
     },
   });
   const cocByRef = useMemo(() => {
     const m: Record<string, number> = {};
-    cocDntts.forEach((d: any) => {
+    cocDntts.forEach((d) => {
       const k = `${d.doan_id}|${d.ref_loai}|${d.ref_id}`;
       m[k] = (m[k] || 0) + (d.paid_amount || 0);
     });
@@ -674,7 +681,7 @@ function HoaDonUNCPageContent() {
       { id, ngayThanhToan: format(new Date(), "yyyy-MM-dd"), nguon: nguon ?? null },
       {
         onSuccess: () => toast({ title: nguon ? `Đã xác nhận TT — ${nguon}` : "Đã xác nhận thanh toán" }),
-        onError: (err: any) => toast({ title: "Lỗi: " + (err?.message || "Không thể xác nhận"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể xác nhận"), variant: "destructive" }),
       },
     );
   };
@@ -709,9 +716,9 @@ function HoaDonUNCPageContent() {
     }
   };
 
-  const doanSelectOpts = (doanOpts as any[]).map((d: any) => ({
+  const doanSelectOpts = doanOpts.map((d) => ({
     value: String(d.id),
-    label: d.ten_doan,
+    label: d.ten_doan ?? "",
   }));
 
   // Gắn UNC nhanh: tất cả ĐNTT chưa có UNC theo bộ lọc hiện tại (mọi đoàn).

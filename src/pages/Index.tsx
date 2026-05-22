@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DoanTable } from "@/components/DoanTable";
+import { DoanTable, type DoanRow } from "@/components/DoanTable";
 import { DoanDrawer } from "@/components/DoanDrawer";
 import { PhanViecModal } from "@/components/doan/PhanViecModal";
 import { useDoanOpMap, useCreatePhanViec, useAssignPvItem, type PvKey } from "@/hooks/use-phan-viec";
@@ -68,7 +68,8 @@ export default function Index() {
   const phanLoaiTour = (currentUser?.role !== "admin" && currentUser?.role !== "giam_doc")
     ? (currentUser?.phan_loai_tour ?? null)
     : null;
-  const { data: groups, isLoading, error } = useDoanList(phanLoaiTour);
+  const { data: groupsRaw, isLoading, error } = useDoanList(phanLoaiTour);
+  const groups = groupsRaw as unknown as DoanRow[] | undefined;
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   useDoanRealtime();
   const createDoan = useCreateDoan();
@@ -83,12 +84,12 @@ export default function Index() {
   const { data: agents } = useAgents();
   const { data: diaDiemList } = useDiaDiem();
   const { data: userRoles } = useUserRoles();
-  const { data: doanOpMap } = useDoanOpMap((groups ?? []).map((g: any) => g.id));
+  const { data: doanOpMap } = useDoanOpMap((groups ?? []).map((g) => g.id));
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingDoan, setEditingDoan] = useState<any | null>(null);
-  const [deletingDoan, setDeletingDoan] = useState<any | null>(null);
-  const [cancelingDoan, setCancelingDoan] = useState<any | null>(null);
+  const [editingDoan, setEditingDoan] = useState<DoanRow | null>(null);
+  const [deletingDoan, setDeletingDoan] = useState<DoanRow | null>(null);
+  const [cancelingDoan, setCancelingDoan] = useState<DoanRow | null>(null);
   const [pendingCreate, setPendingCreate] = useState<DoanInsert | null>(null);
   const [pendingPhanViec, setPendingPhanViec] = useState<
     { payload: DoanInsert; info: { code: string; agent: string; diaDiem: string; soKhach: number | null; ngayDi: string | null; ngayVe: string | null; loaiTour: string | null } } | null
@@ -140,10 +141,10 @@ export default function Index() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const today3Str = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   const curYM = todayStr.slice(0, 7);
-  const gCat = (g: any) => {
+  const gCat = (g: DoanRow) => {
     const status = computeDoanStatus(g, qtPaidSet ?? null);
-    const di = g.ngay_di as string | null;
-    const ve = g.ngay_ve as string | null;
+    const di = g.ngay_di ?? null;
+    const ve = g.ngay_ve ?? null;
     const sapKhoiHanh = status === "dang_chay" && !!di && di >= todayStr && di <= today3Str;
     const dangDienRa = status === "dang_chay" && !!di && !!ve && di <= todayStr && ve >= todayStr;
     const hoanThanhThang =
@@ -169,7 +170,7 @@ export default function Index() {
 
   const filtered = useMemo(() => {
     if (!groups) return [];
-    return groups.filter((g: any) => {
+    return groups.filter((g) => {
       if (search) {
         const q = search.toLowerCase();
         const opName = doanOpMap?.get(g.id)?.ten || "";
@@ -222,14 +223,14 @@ export default function Index() {
       if (editingDoan) {
         const result = await updateDoan.mutateAsync({ id: editingDoan.id, ...data });
         // HYBRID: cảnh báo nếu cascade so_khach đã reset adjustment cũ trên N chi phí
-        const x = (result as any)?.thucTeClearCount ?? 0;
+        const x = result?.thucTeClearCount ?? 0;
         if (x > 0) {
           toast.warning(
             `Đã đồng bộ ${x} chi phí theo số khách mới. Adjustment cũ (nếu có) đã reset.`,
             { duration: 6000 }
           );
         }
-        const aff = (result as any)?.committedDnttAffected ?? 0;
+        const aff = result?.committedDnttAffected ?? 0;
         if (aff > 0) {
           toast.warning(
             `${aff} chi phí có DNTT chờ duyệt/đã duyệt vừa cập nhật theo số khách mới. ` +
@@ -300,19 +301,19 @@ export default function Index() {
 
   // Mở modal phân việc (chưa tạo đoàn) — đoàn chỉ tạo khi xác nhận
   const openPhanViec = (payload: DoanInsert) => {
-    const agent = (agents ?? []).find((a: any) => a.id === payload.agent_id)?.ten ?? "—";
-    const diaDiem = (diaDiemList ?? []).find((d: any) => d.id === payload.dia_diem_id)?.ten ?? "—";
+    const agent = (agents ?? []).find((a) => a.id === payload.agent_id)?.ten ?? "—";
+    const diaDiem = (diaDiemList ?? []).find((d) => d.id === payload.dia_diem_id)?.ten ?? "—";
     const soKhach =
       (payload.so_khach_lon ?? 0) + (payload.so_khach_em1 ?? 0) +
       (payload.so_khach_em2 ?? 0) + (payload.so_khach_tl ?? 0) ||
-      (payload as any).so_khach || null;
+      payload.so_khach || null;
     setPendingPhanViec({
       payload,
       info: {
         code: payload.ten_doan, agent, diaDiem, soKhach,
         ngayDi: payload.ngay_di ?? null,
-        ngayVe: (payload as any).ngay_ve ?? null,
-        loaiTour: (payload as any).loai_tour ?? null,
+        ngayVe: payload.ngay_ve ?? null,
+        loaiTour: payload.loai_tour ?? null,
       },
     });
   };
@@ -323,7 +324,7 @@ export default function Index() {
     baoGiaFile: File | null,
   ) => {
     if (!pendingPhanViec) return;
-    const p = { ...pendingPhanViec.payload } as any;
+    const p: DoanInsert = { ...pendingPhanViec.payload };
     try {
       const created = await createDoan.mutateAsync(p);
       if (created) {
@@ -346,7 +347,7 @@ export default function Index() {
           catch { /* non-fatal */ }
         }
         await createPhanViec.mutateAsync({
-          doan: { id: created.id, ten_doan: p.ten_doan, loai_tour: (p as any).loai_tour ?? null, ngay_di: p.ngay_di ?? null },
+          doan: { id: created.id, ten_doan: p.ten_doan, loai_tour: p.loai_tour ?? null, ngay_di: p.ngay_di ?? null },
           creatorId: currentUser?.user_id ?? "",
           creatorName: currentUser?.ho_ten ?? "",
           assignments,
@@ -374,15 +375,16 @@ export default function Index() {
     //   - Final là phase quyết định: nếu Final đã/đang hủy → toàn booking coi như cancelled,
     //     bất kể ks_dat_truoc_status (đặt trước có thể vẫn ở ks_xac_nhan trước khi user
     //     chuyển sang Final rồi hủy). Đồng bộ với use-dieu-tour.checkKhachSanDeletable.
-    const isKsCancelled = (r: any) => {
+    type KsStatusRow = { ks_dat_truoc_status: string | null; ks_final_status: string | null };
+    const isKsCancelled = (r: KsStatusRow) => {
       const cancelStates = ["cho_ks_xac_nhan_huy", "ks_xac_nhan_huy"];
       if (r.ks_final_status) return cancelStates.includes(r.ks_final_status);
-      return cancelStates.includes(r.ks_dat_truoc_status);
+      return r.ks_dat_truoc_status != null && cancelStates.includes(r.ks_dat_truoc_status);
     };
-    const isKsSent = (r: any) =>
+    const isKsSent = (r: KsStatusRow) =>
       (r.ks_dat_truoc_status && r.ks_dat_truoc_status !== "chua_gui") ||
       (r.ks_final_status && r.ks_final_status !== "chua_gui");
-    const activeKS = (ks.data ?? []).filter((r: any) => !isKsCancelled(r) && isKsSent(r)).length;
+    const activeKS = (ks.data ?? []).filter((r) => !isKsCancelled(r) && isKsSent(r)).length;
     if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn đã gửi mail chưa hủy`);
     if ((nh.data ?? []).length > 0) errors.push(`Booking NH: còn ${nh.data!.length} bữa chưa hủy`);
     if ((dv.data ?? []).length > 0) errors.push(`Booking DV: còn ${dv.data!.length} dịch vụ chưa hủy`);
@@ -390,7 +392,7 @@ export default function Index() {
     return errors;
   };
 
-  const handleOpenCancel = async (doan: any) => {
+  const handleOpenCancel = async (doan: DoanRow) => {
     const errors = await checkDoanCancelable(doan.id);
     if (errors.length > 0) {
       toast.error("Không thể hủy đoàn", { description: errors.join(" · ") });
@@ -399,7 +401,7 @@ export default function Index() {
     setCancelingDoan(doan);
   };
 
-  const handleOpenDelete = async (doan: any) => {
+  const handleOpenDelete = async (doan: DoanRow) => {
     const errors = await checkDoanCancelable(doan.id);
     if (errors.length > 0) {
       toast.error("Không thể xóa đoàn", { description: errors.join(" · ") });
@@ -432,7 +434,7 @@ export default function Index() {
     }
   };
 
-  const handleClone = async (doan: any) => {
+  const handleClone = async (doan: DoanRow) => {
     try {
       const payload: DoanInsert = {
         ten_doan: doan.ten_doan + " - bản sao",
