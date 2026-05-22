@@ -148,8 +148,10 @@ export function calcTotalThanhTien(roomEntries: EdgeFunctionData["roomEntries"])
   }, 0);
 }
 
-// ĐNTT là "cọc" khi: ĐNTT thường (không la_coc, không cấn trừ) nhưng số tiền thanh toán
-// nhỏ hơn tổng tiền phòng → chỉ trả trước một phần.
+// ĐNTT trả MỘT PHẦN: ĐNTT thường (không la_coc, không cấn trừ) nhưng số tiền thanh
+// toán < tổng tiền phòng → dùng layout có thêm cột "Tổng tiền".
+// LƯU Ý: hàm này chỉ quyết định LAYOUT, KHÔNG quyết định nhãn "(cọc)".
+// Nhãn "(cọc)" chỉ hiện cho ĐNTT cọc thật (cờ la_coc = true).
 export function isItemCoc(d: EdgeFunctionData): boolean {
   if (d.la_coc || (d.canTruTotal ?? 0) > 0) return false;
   return d.soTien > 0 && d.soTien < calcTotalThanhTien(d.roomEntries);
@@ -203,8 +205,11 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false, layoutCoc =
 
     if (isFirst) {
       if (la_coc) {
-        // ĐNTT cọc: col10 "Cần thanh toán" = soTien (đỏ); col11 "Thông tin NH" = blob bank
-        cells.push(cell([p(fmt(soTien), { bold: true, size: 14, color: "FF0000" })], { width: colWidths[10], rowSpan: totalRoomRows }));
+        // ĐNTT cọc thật: col10 "Cần thanh toán" = soTien (đỏ) + nhãn "(cọc)"; col11 "Thông tin NH"
+        cells.push(cell([
+          p(fmt(soTien), { bold: true, size: 14, color: "FF0000" }),
+          p("(cọc)", { size: 13, color: "FF0000", italics: true }),
+        ], { width: colWidths[10], rowSpan: totalRoomRows }));
         cells.push(cell(bankChildren, { width: colWidths[11], rowSpan: totalRoomRows }));
       } else if (useCanTru) {
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
@@ -216,16 +221,12 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false, layoutCoc =
         cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
         cells.push(cell([p(noteText, { size: 14, alignment: AlignmentType.LEFT })], { width: colWidths[14], rowSpan: totalRoomRows }));
       } else if (useCoc) {
-        // ĐNTT cọc: col10 "Tổng tiền" = tổng tiền phòng; col11 "Đã TT"; col12 "Thanh toán" + nhãn (cọc)
+        // ĐNTT trả 1 phần: col10 "Tổng tiền" = tổng tiền phòng; col11 "Đã cọc"; col12 "Thanh toán".
+        // KHÔNG kèm nhãn "(cọc)" — đây không phải ĐNTT cọc thật (xem cờ la_coc ở trên).
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
         cells.push(cell([p(fmt(tongTien), { bold: true, size: 14 })], { width: colWidths[10], rowSpan: totalRoomRows }));
         cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
-        cells.push(cell(
-          itemIsCoc
-            ? [p(fmt(soTien), { bold: true, size: 14 }), p("(cọc)", { size: 13, color: "FF0000", italics: true })]
-            : [p(fmt(soTien), { bold: true, size: 14 })],
-          { width: colWidths[12], rowSpan: totalRoomRows }
-        ));
+        cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[12], rowSpan: totalRoomRows }));
         cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));
       } else {
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
