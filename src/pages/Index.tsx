@@ -17,7 +17,7 @@ import {
 import { DoanTable } from "@/components/DoanTable";
 import { DoanDrawer } from "@/components/DoanDrawer";
 import { PhanViecModal } from "@/components/doan/PhanViecModal";
-import { useDoanOpMap, useCreatePhanViec, type PvKey } from "@/hooks/use-phan-viec";
+import { useDoanOpMap, useCreatePhanViec, useAssignPvItem, type PvKey } from "@/hooks/use-phan-viec";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import {
   useDoanList,
@@ -78,6 +78,7 @@ export default function Index() {
   const cancelDoan = useCancelDoan();
   // const addPerm = useAddDoanPermission(); // FEATURE_DOAN_PERM_DISABLED
   const applySeri = useApplySeriToDoan();
+  const assignPvItem = useAssignPvItem();
   const logActivity = useLogActivity();
   const { data: agents } = useAgents();
   const { data: diaDiemList } = useDiaDiem();
@@ -243,6 +244,24 @@ export default function Index() {
         //     await addPerm.mutateAsync({ doan_id: editingDoan.id, user_id: data.assigned_to, ho_ten: assigneeName, quyen: "admin" });
         //   } catch { /* ignore if permission already exists */ }
         // }
+        // Đổi "OP phụ trách" (assigned_to) → giao lại việc phân việc pv_nh_dv
+        // cho người đó. Cột OP ở danh sách đoàn đọc từ cong_viec (useDoanOpMap)
+        // nên phải reassign thì danh sách mới hiển thị OP mới.
+        if (data.assigned_to && data.assigned_to !== editingDoan.assigned_to) {
+          try {
+            await assignPvItem.mutateAsync({
+              doanId: editingDoan.id,
+              doanTen: data.ten_doan ?? editingDoan.ten_doan,
+              ngayDi: data.ngay_di ?? editingDoan.ngay_di ?? null,
+              key: "pv_nh_dv",
+              userId: data.assigned_to,
+            });
+          } catch (err: unknown) {
+            toast.warning(
+              "Đã cập nhật đoàn nhưng chưa giao lại được việc cho OP: " + (errMsg(err) || ""),
+            );
+          }
+        }
         logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         // Áp dụng seri mới nếu user vừa chọn seri khác. DoanDrawer đã pre-check conflict,
         // nên ở đây chắc chắn đoàn không có lịch trình / booking / chi phí.
