@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
+import type { Control, UseFormRegister, FieldValues } from "react-hook-form";
 import { errMsg } from "@/lib/error";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -71,8 +72,8 @@ function DoanHotelRows({
   ksOptions,
 }: {
   doanIdx: number;
-  control: any;
-  register: any;
+  control: Control<FieldValues>;
+  register: UseFormRegister<FieldValues>;
   ksOptions: { value: string; label: string }[];
 }) {
   const { fields, append, remove } = useFieldArray({
@@ -196,7 +197,7 @@ function subDaysISO(yyyymmdd: string, days: number): string {
 }
 
 // Parse 1 cell ngày → "yyyy-MM-dd" (chấp nhận Excel serial, ISO, dd/MM/yyyy)
-function parseDateCell(v: any): string {
+function parseDateCell(v: unknown): string {
   if (v == null || v === "") return "";
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === "number") {
@@ -298,14 +299,14 @@ function CreateForm({
       const wb = XLSX.read(buf, { type: "array", cellDates: false });
       const ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) { toast.error("File trống"); return; }
-      const aoa = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: "" });
+      const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
       if (aoa.length < 2) { toast.error("File cần ít nhất 1 dòng dữ liệu"); return; }
 
       // Skip header row, parse rows
       const parsed: CreateRow[] = [];
       for (let i = 1; i < aoa.length; i++) {
         const r = aoa[i];
-        if (!r || r.every((c: any) => c === "" || c == null)) continue;
+        if (!r || r.every((c) => c === "" || c == null)) continue;
         const ten_doan = String(r[0] ?? "").trim();
         const check_in = parseDateCell(r[1]);
         const so_dem_raw = Number(r[2]);

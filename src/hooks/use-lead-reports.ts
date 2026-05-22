@@ -36,7 +36,7 @@ export function useLeadFunnel(filter: LeadReportFilter | null) {
     queryFn: async () => {
       const { data, error } = await externalSupabase.rpc("get_lead_funnel", rpcParams(filter!));
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({ trang_thai: r.trang_thai, cnt: Number(r.cnt) })) as FunnelRow[];
+      return (data ?? []).map((r) => ({ trang_thai: r.trang_thai, cnt: Number(r.cnt) })) as FunnelRow[];
     },
   });
 }
@@ -48,7 +48,7 @@ export function useLeadByNguon(filter: LeadReportFilter | null) {
     queryFn: async () => {
       const { data, error } = await externalSupabase.rpc("get_lead_by_nguon", rpcParams(filter!));
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({
+      return (data ?? []).map((r) => ({
         nguon: r.nguon,
         total_lead: Number(r.total_lead),
         chot_deal: Number(r.chot_deal),
@@ -64,7 +64,7 @@ export function useLeadBySales(filter: LeadReportFilter | null) {
     queryFn: async () => {
       const { data, error } = await externalSupabase.rpc("get_lead_by_sales", rpcParams(filter!));
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({
+      return (data ?? []).map((r) => ({
         user_id:    r.user_id,
         ho_ten:     r.ho_ten,
         total_lead: Number(r.total_lead),
@@ -83,7 +83,7 @@ export function useLeadLyDoMat(filter: LeadReportFilter | null) {
     queryFn: async () => {
       const { data, error } = await externalSupabase.rpc("get_lead_ly_do_mat", rpcParams(filter!));
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({ ly_do: r.ly_do, cnt: Number(r.cnt) })) as LyDoMatRow[];
+      return (data ?? []).map((r) => ({ ly_do: r.ly_do, cnt: Number(r.cnt) })) as LyDoMatRow[];
     },
   });
 }

@@ -81,7 +81,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     setDeadline(row.deadline || "");
   }, [row.booking_id, row.set_menu_id, row.deadline]);
 
-  const save = async (fields: Record<string, any>) => {
+  const save = async (fields: Partial<TauNgayDisplayRow>) => {
     try {
       await updateMut.mutateAsync({
         booking_id: row.booking_id,
@@ -96,7 +96,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     }
   };
 
-  const updateStatus = async (fields: Record<string, any>) => {
+  const updateStatus = async (fields: Partial<TauNgayDisplayRow>) => {
     try {
       await save(fields);
     } catch {
@@ -392,7 +392,7 @@ function DatTruocSection({
   row: TauNgayDisplayRow;
   onOpenEmail: () => void;
   onResendEmail: () => void;
-  onUpdateStatus: (fields: Record<string, any>) => void;
+  onUpdateStatus: (fields: Partial<TauNgayDisplayRow>) => void;
 }) {
   const status = row.dat_truoc_status;
 
@@ -478,7 +478,7 @@ function FinalSection({
 }: {
   row: TauNgayDisplayRow;
   datTruocConfirmed: boolean;
-  onUpdateStatus: (fields: Record<string, any>) => void;
+  onUpdateStatus: (fields: Partial<TauNgayDisplayRow>) => void;
 }) {
   const status = row.final_status;
 

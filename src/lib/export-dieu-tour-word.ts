@@ -12,6 +12,7 @@ import {
   ShadingType,
   VerticalAlign,
 } from "docx";
+import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
 import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
 import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
@@ -54,9 +55,9 @@ function cell(
   opts: {
     width?: number;
     shading?: typeof HEADER_SHADING;
-    vertAlign?: (typeof VerticalAlign)[keyof typeof VerticalAlign];
+    vertAlign?: TableVerticalAlign;
     colSpan?: number;
-    borders?: any;
+    borders?: ITableCellBorders;
     margins?: { top?: number; bottom?: number; left?: number; right?: number };
   } = {}
 ): TableCell {
@@ -65,7 +66,7 @@ function cell(
     borders: opts.borders ?? BORDERS,
     width: { size: opts.width ?? 0, type: WidthType.DXA },
     shading: opts.shading ?? NO_SHADING,
-    verticalAlign: (opts.vertAlign ?? VerticalAlign.TOP) as any,
+    verticalAlign: opts.vertAlign ?? VerticalAlign.TOP,
     columnSpan: opts.colSpan,
     margins: opts.margins ?? CELL_MARGINS,
   });
@@ -133,7 +134,15 @@ function formatDateShort(dateStr: string): string {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-function xeLabel(xe: any): string {
+// Shape tối thiểu của xe (join nha_xe_loai_xe + nha_xe) dùng để render nhãn.
+// Lỏng (mọi field optional) để nhận object join từ nhiều nguồn khác nhau.
+export interface XeExportInfo {
+  ten_xe?: string | null;
+  so_cho?: number | null;
+  nha_xe?: { ten?: string | null } | null;
+}
+
+function xeLabel(xe: XeExportInfo | null | undefined): string {
   if (!xe) return "—";
   const nhaXe = xe.nha_xe?.ten ?? "";
   const socho = xe.so_cho ? `${xe.so_cho} chỗ` : "";
@@ -149,7 +158,7 @@ export interface DieuTourExportData {
   khachSanList: KhachSanItem[];
   tenDoan: string;
   hdv: string;
-  xe: any;
+  xe: XeExportInfo | null;
   ngayDi: string | null;
   ngayVe: string | null;
   bangDon: string;

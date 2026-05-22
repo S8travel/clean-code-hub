@@ -280,7 +280,10 @@ function NguoiDungTab() {
     // khi user này không đổi → effect chỉ chạy khi đổi user hoặc data user đổi thật.
   }, [selected]);
 
-  const set = (field: keyof Omit<UserRoleRow, "id" | "created_at">, value: any) => {
+  const set = <K extends keyof Omit<UserRoleRow, "id" | "created_at">>(
+    field: K,
+    value: UserRoleRow[K],
+  ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setDirty(true);
   };
@@ -1025,7 +1028,7 @@ function PhanQuyenTab() {
     }
     upsertMut.mutate(rows, {
       onSuccess: () => { toast.success("Đã lưu phân quyền"); setDirty(false); },
-      onError: (e: any) => toast.error("Lỗi: " + e?.message),
+      onError: (e: unknown) => toast.error("Lỗi: " + errMsg(e)),
     });
   };
 
@@ -1256,10 +1259,11 @@ function SpecialistPermissionsSection({ userId }: { userId: string }) {
   const { data: existing = EMPTY_USER_PERMS, isLoading } = useUserPermissions(userId);
   const upsertMut = useUpsertUserPermissions();
 
-  const [matrix, setMatrix] = useState<Record<Resource, { v: boolean; c: boolean; e: boolean; d: boolean }>>(
+  type PermFlags = { v: boolean; c: boolean; e: boolean; d: boolean };
+  const [matrix, setMatrix] = useState<Record<Resource, PermFlags>>(
     () => Object.fromEntries(
       RESOURCES.map((r) => [r.value, { v: false, c: false, e: false, d: false }])
-    ) as any
+    ) as Record<Resource, PermFlags>
   );
   const [dirty, setDirty] = useState(false);
 
@@ -1275,7 +1279,7 @@ function SpecialistPermissionsSection({ userId }: { userId: string }) {
           d: row?.can_delete ?? false,
         }];
       })
-    ) as any);
+    ) as Record<Resource, PermFlags>);
     setDirty(false);
   }, [existing, userId]);
 

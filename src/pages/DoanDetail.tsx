@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
@@ -86,7 +87,7 @@ export default function DoanDetail() {
   const upsertChiPhi = useUpsertChiPhi();
   const deleteChiPhi = useDeleteChiPhi();
 
-  const doan = groups?.find((g: any) => String(g.id) === id);
+  const doan = groups?.find((g) => String(g.id) === id);
 
   // Local state for editable fields
   const [bangDon, setBangDon] = useState("");
@@ -285,9 +286,9 @@ export default function DoanDetail() {
             // Sync booking DV failed silently — chính flow lưu đoàn vẫn pass
           }
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           setSaveStatus("error");
-          toast.error(err.message || "Lỗi khi lưu");
+          toast.error(errMsg(err) || "Lỗi khi lưu");
           // Restore-on-error safety net: reset pending flag để init useEffect
           // (line 144) re-sync `days` từ DB khi data refetch về. Tránh UI bị
           // stuck ở state đã edit nhưng save fail (vd: xóa cảnh điểm có DNTT).
@@ -350,7 +351,7 @@ export default function DoanDetail() {
           don_gia: SIM_DON_GIA,
           tien_cong_ty: SIM_DON_GIA * soKhach,
           tien_hdv: 0,
-        } as any, { onSuccess: invalidateHdv });
+        }, { onSuccess: invalidateHdv });
       }
     } else if (hadSim && !hasSim) {
       const simRow = chiPhiRows.find((c) => c.mo_ta === SIM_MO_TA && c.danh_muc === "hdv_ho_tro");
@@ -378,9 +379,10 @@ export default function DoanDetail() {
   //   "A — sdt | B — sdt" (chỉ A nếu không có phụ; "" nếu không có ai).
   const hdvDisplayStr = useMemo(() => {
     if (!doan) return "";
-    const fmt = (h: any) =>
+    type HdvJoin = { ten?: string | null; so_dien_thoai?: string | null } | null | undefined;
+    const fmt = (h: HdvJoin) =>
       h?.so_dien_thoai?.trim() ? `${h.ten} — ${h.so_dien_thoai.trim()}` : h?.ten ?? "";
-    return [doan.huong_dan_vien, doan.huong_dan_vien_2]
+    return ([doan.huong_dan_vien, doan.huong_dan_vien_2] as HdvJoin[])
       .filter((h) => h?.ten)
       .map(fmt)
       .join(" | ");

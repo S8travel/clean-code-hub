@@ -30,6 +30,7 @@ import { useCongViecList } from "@/hooks/use-cong-viec";
 import { useMyPhanViecScope } from "@/hooks/use-phan-viec";
 import GiaoViecTab from "@/components/my-job/GiaoViecTab";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { CheckCircle2, Circle, StickyNote, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -271,7 +272,7 @@ export default function MyJobPage() {
   // Đoàn của tôi: team tôi phụ trách HOẶC là OP (assigned_to) HOẶC được phân việc (pv_*)
   const myDoan = useMemo(
     () =>
-      (allDoan as any[]).filter(
+      allDoan.filter(
         (d) =>
           (d.agent_id && myAgentTaskMap.has(d.agent_id)) ||
           d.assigned_to === uid ||
@@ -339,7 +340,7 @@ export default function MyJobPage() {
       .filter((g) => {
         if (hiddenIds.has(g.id)) return false;
         if (trangThai !== "all" && g.trang_thai !== trangThai) return false;
-        if (search && !g.ten_doan.toLowerCase().includes(search.toLowerCase())) return false;
+        if (search && !(g.ten_doan ?? "").toLowerCase().includes(search.toLowerCase())) return false;
         return true;
       })
       .map((g) => {
@@ -384,7 +385,7 @@ export default function MyJobPage() {
     }).length;
     const tongKhachThang = myDoan
       .filter((d) => d.ngay_di && d.ngay_di >= monthStart && d.ngay_di <= monthEnd)
-      .reduce((s: number, d: any) => s + (d.so_khach ?? 0), 0);
+      .reduce((s, d) => s + (d.so_khach ?? 0), 0);
 
     // Đoàn đang chạy có booking chưa hoàn tất (trong phạm vi scope)
     const choBooking = myDoan.filter((d) => {
@@ -416,7 +417,7 @@ export default function MyJobPage() {
     for (const d of myDoan) {
       if (d.trang_thai === "huy" || d.trang_thai === "hoan_thanh") continue;
       const id = d.id;
-      const name = d.ten_doan;
+      const name = d.ten_doan ?? "";
       const daysLeft = d.ngay_di ? differenceInDays(new Date(d.ngay_di + "T00:00:00"), now) : null;
 
       const scope = myDoanScopeMap.get(id) ?? new Set<string>();
@@ -732,7 +733,7 @@ export default function MyJobPage() {
                             </StatusBadge>
                           }
                           items={dntt.map((r) => {
-                            const s = ttLabel((r as any).payment_status ?? "unpaid");
+                            const s = ttLabel(r.payment_status ?? "unpaid");
                             return { label: r.mo_ta ?? "—", statusLabel: s.label, statusCls: s.cls };
                           })}
                         />
@@ -936,7 +937,7 @@ export default function MyJobPage() {
                                   { type: item.type, bookingId: item.bookingId },
                                   {
                                     onSuccess: () => toast.success("Đã đánh dấu xong"),
-                                    onError: (err: any) => toast.error(err?.message || "Lỗi đánh dấu"),
+                                    onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi đánh dấu"),
                                   },
                                 );
                               }}

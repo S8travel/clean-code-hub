@@ -73,7 +73,7 @@ export default function DNTTCell({
       ref_loai: "doan_chi_phi",
       ref_id: chiPhiId,
       allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
-    } as any, {
+    }, {
       onSuccess: () => toast.success("Đã gửi ĐNTT"),
     });
   };
@@ -100,7 +100,7 @@ export default function DNTTCell({
       duyet_boi: null,
       duyet_luc: null,
       ghi_chu: null,
-    } as any, {
+    }, {
       onSuccess: () => {
         toast.success("Đã gửi lại ĐNTT");
         setResendOpen(false);
@@ -118,7 +118,7 @@ export default function DNTTCell({
       id,
       doanId,
       so_tien: val,
-    } as any, {
+    }, {
       onSuccess: () => {
         toast.success("Đã cập nhật ĐNTT");
         setEditingId(null);
@@ -241,7 +241,7 @@ export default function DNTTCell({
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">Thành tiền: {fmt(thanhTien)} VND</p>
-            <RadioGroup value={cocMode} onValueChange={(v) => setCocMode(v as any)} className="flex gap-4">
+            <RadioGroup value={cocMode} onValueChange={(v) => setCocMode(v as "percent" | "amount")} className="flex gap-4">
               <div className="flex items-center gap-1.5">
                 <RadioGroupItem value="percent" id="coc-pct" />
                 <Label htmlFor="coc-pct" className="text-xs">% cọc</Label>
@@ -283,7 +283,7 @@ export default function DNTTCell({
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">Thành tiền: {fmt(thanhTien)} VND</p>
-            <RadioGroup value={resendMode} onValueChange={(v) => setResendMode(v as any)} className="flex gap-4">
+            <RadioGroup value={resendMode} onValueChange={(v) => setResendMode(v as "full" | "partial")} className="flex gap-4">
               <div className="flex items-center gap-1.5">
                 <RadioGroupItem value="full" id="resend-full" />
                 <Label htmlFor="resend-full" className="text-xs">Thanh toán toàn bộ</Label>

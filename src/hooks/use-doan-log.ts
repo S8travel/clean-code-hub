@@ -23,6 +23,14 @@ export interface DoanLogGlobal extends DoanLogRow {
 
 const QK = "doan_log";
 
+// Quan hệ join doan:doan_id(ten_doan) — Supabase trả object hoặc array tuỳ FK.
+function doanTenOf(rel: unknown): string | null {
+  const o = Array.isArray(rel) ? rel[0] : rel;
+  if (o == null || typeof o !== "object") return null;
+  const ten = (o as { ten_doan?: unknown }).ten_doan;
+  return typeof ten === "string" ? ten : null;
+}
+
 export function useDoanLogList(doanId: number | undefined) {
   return useQuery<DoanLogRow[]>({
     queryKey: [QK, doanId],
@@ -49,7 +57,10 @@ export function useDoanLogGia() {
         .eq("loai", "gia")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []).map((r: any) => ({ ...r, doan_ten: r.doan?.ten_doan ?? null }));
+      return (data || []).map(({ doan, ...r }) => ({
+        ...r,
+        doan_ten: doanTenOf(doan),
+      })) as DoanLogGlobal[];
     },
   });
 }
@@ -64,7 +75,10 @@ export function useDoanLogSuCo() {
         .eq("loai", "su_co")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []).map((r: any) => ({ ...r, doan_ten: r.doan?.ten_doan ?? null }));
+      return (data || []).map(({ doan, ...r }) => ({
+        ...r,
+        doan_ten: doanTenOf(doan),
+      })) as DoanLogGlobal[];
     },
   });
 }
@@ -82,7 +96,10 @@ export function useDoanLogGhiChu(userId: string | null | undefined) {
         .eq("is_resolved", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []).map((r: any) => ({ ...r, doan_ten: r.doan?.ten_doan ?? null }));
+      return (data || []).map(({ doan, ...r }) => ({
+        ...r,
+        doan_ten: doanTenOf(doan),
+      })) as DoanLogGlobal[];
     },
   });
 }
@@ -116,7 +133,7 @@ export function useCreateDoanLog() {
           .in("vai_tro", ["giam_doc", "admin"]);
 
         if (managers && managers.length > 0) {
-          const notifications = managers.map((m: any) => ({
+          const notifications = managers.map((m) => ({
             user_id: m.user_id,
             log_id: data.id,
             doan_id: payload.doan_id,

@@ -13,6 +13,7 @@ import {
   VerticalAlign,
   PageOrientation,
 } from "docx";
+import type { IShadingAttributesProperties, ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -32,10 +33,10 @@ function cell(
     width?: number;
     rowSpan?: number;
     columnSpan?: number;
-    shading?: any;
-    borders?: any;
+    shading?: IShadingAttributesProperties;
+    borders?: ITableCellBorders;
     margins?: { top: number; bottom: number; left: number; right: number };
-    vAlign?: string;
+    vAlign?: TableVerticalAlign;
   } = {},
 ): TableCell {
   return new TableCell({
@@ -45,7 +46,7 @@ function cell(
     rowSpan: opts.rowSpan,
     columnSpan: opts.columnSpan,
     shading: opts.shading ?? WHITE,
-    verticalAlign: (opts.vAlign ?? VerticalAlign.TOP) as any,
+    verticalAlign: opts.vAlign ?? VerticalAlign.TOP,
     margins: opts.margins ?? { top: 50, bottom: 50, left: 80, right: 80 },
   });
 }
@@ -56,12 +57,12 @@ function p(
     bold?: boolean;
     size?: number;
     color?: string;
-    alignment?: string;
+    alignment?: (typeof AlignmentType)[keyof typeof AlignmentType];
     italic?: boolean;
   } = {},
 ): Paragraph {
   return new Paragraph({
-    alignment: (opts.alignment ?? AlignmentType.LEFT) as any,
+    alignment: opts.alignment ?? AlignmentType.LEFT,
     children: [
       new TextRun({ noProof: true,
         text,
