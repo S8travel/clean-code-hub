@@ -8,7 +8,6 @@ import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import NHRow from "./NHRow";
 import NHOrphanRows from "./NHOrphanRows";
 import NHDnttModal from "./NHDnttModal";
-import NHAdjustModal from "./NHAdjustModal";
 import NHAggCommitModal from "./NHAggCommitModal";
 import NHCancelModal from "./NHCancelModal";
 import { useNHSection } from "./use-nh-section";
@@ -42,9 +41,6 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     dnttDepositAmount, setDnttDepositAmount, dnttAlreadyPaid,
     dnttBsAmount, setDnttBsAmount, dnttNgayCan, setDnttNgayCan,
     dnttModalCanTru, setDnttModalCanTru, dnttSubmitting, handleDnttSubmit, closeDnttModal,
-    adjustTarget, setAdjustTarget, adjustSoKhach, setAdjustSoKhach,
-    adjustDonGia, setAdjustDonGia, adjustReason, setAdjustReason,
-    handleAdjustSubmit, updateActualPending,
     aggCommit, aggReason, setAggReason, aggNgayCan, setAggNgayCan,
     aggSurplusMode, setAggSurplusMode, aggCanTru, setAggCanTru,
     handleAggCommit, insertPending, closeAggCommit,
@@ -177,19 +173,6 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         submitting={dnttSubmitting}
         onClose={closeDnttModal}
         onSubmit={handleDnttSubmit}
-      />
-
-      <NHAdjustModal
-        target={adjustTarget}
-        soKhach={adjustSoKhach}
-        onSoKhachChange={setAdjustSoKhach}
-        donGia={adjustDonGia}
-        onDonGiaChange={setAdjustDonGia}
-        reason={adjustReason}
-        onReasonChange={setAdjustReason}
-        submitting={updateActualPending}
-        onClose={() => setAdjustTarget(null)}
-        onSubmit={handleAdjustSubmit}
       />
 
       <NHAggCommitModal

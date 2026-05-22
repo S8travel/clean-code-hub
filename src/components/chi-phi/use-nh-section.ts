@@ -5,7 +5,7 @@ import { format, subDays, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import {
-  useChiPhiList, useUpsertChiPhi, useDeleteChiPhi, useDNTTList, useInsertDNTT, useUpdateChiPhiActual,
+  useChiPhiList, useUpsertChiPhi, useDeleteChiPhi, useDNTTList, useInsertDNTT,
 } from "@/hooks/use-chi-phi";
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
@@ -16,7 +16,6 @@ import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { type CanTruSelection } from "./KSCongNoPanel";
-import { type AdjustNHTarget } from "./NHAdjustModal";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
 import { extraPrefix, type LocalNHRow, type LocalNHExtra } from "./nh-section-shared";
@@ -72,15 +71,7 @@ export function useNHSection({
   const [cancelTarget, setCancelTarget] = useState<NHCancelTarget | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
-  // Điều chỉnh sau thanh toán — HYBRID: edit chi_phi state (so_khach + đơn giá).
-  // Aggregate commit ở footer xử lý chênh lệch (cong_no / DNTT bổ sung).
-  const updateActualMut = useUpdateChiPhiActual();
-  const [adjustTarget, setAdjustTarget] = useState<AdjustNHTarget | null>(null);
-  const [adjustSoKhach, setAdjustSoKhach] = useState("");
-  const [adjustDonGia,  setAdjustDonGia]  = useState("");
-  const [adjustReason,  setAdjustReason]  = useState("");
-
-  // Aggregate commit dialog (sau khi adjust + extras → commit chênh lệch)
+  // Aggregate commit dialog (sửa inline xong → commit chênh lệch ở footer)
   const [aggCommit, setAggCommit] = useState<AggCommitNHTarget | null>(null);
   const [aggReason, setAggReason] = useState("");
   const [aggNgayCan, setAggNgayCan] = useState("");
@@ -484,6 +475,9 @@ export function useNHSection({
         chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
         // HYBRID: user save NH section = override → cascade Điều tour bỏ qua
         is_overridden: true,
+        // Sửa inline = giá trị mới CHÍNH là thực tế → xóa override thực tế cũ
+        // (nếu có) để footer aggregate đọc đúng tien_cong_ty mới.
+        thanh_tien_thuc_te: null,
       },
       {
         onSuccess: (data) => {
@@ -875,36 +869,6 @@ export function useNHSection({
     }
   };
 
-  const handleAdjustSubmit = () => {
-    if (!adjustTarget) return;
-    const newSK = parseInt(adjustSoKhach.replace(/\D/g, ""), 10);
-    const newGia = parseFloat(adjustDonGia.replace(/\.$/, "")) || 0;
-    if (isNaN(newSK) || !newGia) return;
-    const skTT = calcSoKhachThucTe(newSK, adjustTarget.focKhach, adjustTarget.focMien);
-    const totalTruocCK = skTT * newGia;
-    const totalSauCK = applyChietKhau(totalTruocCK, adjustTarget.ckPct);
-    updateActualMut.mutate(
-      {
-        id: adjustTarget.chiPhi.id,
-        doan_id: doanId,
-        so_luong: newSK,
-        don_gia: newGia,
-        ly_do: adjustReason,
-        total_override: totalSauCK,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Đã cập nhật bữa ăn thực tế");
-          setAdjustTarget(null);
-          setAdjustSoKhach("");
-          setAdjustDonGia("");
-          setAdjustReason("");
-        },
-        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi cập nhật"),
-      },
-    );
-  };
-
   // ── Print handler ─────────────────────────────────────────────────────────
 
   const buildSelectedEntries = useCallback((): NHDocEntry[] | undefined => {
@@ -1041,7 +1005,6 @@ export function useNHSection({
     handleToggleDinhKyNH, addExtra, handleExtraChange, handleExtraSave,
     handleExtraDelete, handleResetOverrideNH, handleEditAmountSave,
     setEditingDnttId, setEditAmount,
-    setAdjustTarget, setAdjustSoKhach, setAdjustDonGia, setAdjustReason,
     setCancelMode, setCancelTarget,
     setDnttAlreadyPaid, setDnttModalMode, setDnttDepositAmount, setDnttNgayCan, setDnttModalKey,
     setAggCommit, setAggReason, setAggSurplusMode, setAggCanTru, setAggNgayCan,
@@ -1075,12 +1038,6 @@ export function useNHSection({
     dnttModalCanTru, setDnttModalCanTru,
     dnttSubmitting, handleDnttSubmit,
     closeDnttModal: () => setDnttModalKey(null),
-    // Adjust modal
-    adjustTarget, setAdjustTarget,
-    adjustSoKhach, setAdjustSoKhach,
-    adjustDonGia, setAdjustDonGia,
-    adjustReason, setAdjustReason,
-    handleAdjustSubmit, updateActualPending: updateActualMut.isPending,
     // Aggregate commit modal
     aggCommit, aggReason, setAggReason, aggNgayCan, setAggNgayCan,
     aggSurplusMode, setAggSurplusMode, aggCanTru, setAggCanTru,

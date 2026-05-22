@@ -6,7 +6,6 @@ import type { NHDocEntry } from "@/lib/export-dntt-nh-word";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import DVDnttModal from "./DVDnttModal";
 import DVCancelModal from "./DVCancelModal";
-import DVAdjustModal from "./DVAdjustModal";
 import DVAggCommitModal from "./DVAggCommitModal";
 import DVRow from "./DVRow";
 import { useDVSection } from "./use-dv-section";
@@ -35,12 +34,10 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
     dvModal, setDvModal, dvModalMode, setDvModalMode,
     dvDepositAmount, setDvDepositAmount, dvNgayCan, setDvNgayCan,
     canTruByDv, setCanTruByDv, handleDvModalSubmit,
-    adjustChiPhi, setAdjustChiPhi, adjustSL, setAdjustSL,
-    adjustDonGia, setAdjustDonGia, adjustReason, setAdjustReason, handleAdjustSubmit,
     aggCommit, setAggCommit, aggReason, setAggReason, aggNgayCan, setAggNgayCan,
     aggSurplusMode, setAggSurplusMode, aggCanTru, setAggCanTru, handleAggCommit,
     cancelTarget, setCancelTarget, cancelMode, setCancelMode, handleCancel,
-    insertPending, updateActualPending, cancelPending,
+    insertPending, cancelPending,
   } = s;
 
   // Expose imperative API cho ChiPhiTab (in DNTT gộp NH + DV).
@@ -140,19 +137,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         onClose={() => setDvModal(null)}
         onSubmit={handleDvModalSubmit}
         submitting={insertPending}
-      />
-
-      <DVAdjustModal
-        target={adjustChiPhi}
-        sl={adjustSL}
-        onSlChange={setAdjustSL}
-        donGia={adjustDonGia}
-        onDonGiaChange={setAdjustDonGia}
-        reason={adjustReason}
-        onReasonChange={setAdjustReason}
-        onClose={() => setAdjustChiPhi(null)}
-        onSubmit={handleAdjustSubmit}
-        submitting={updateActualPending}
       />
 
       <DVAggCommitModal
