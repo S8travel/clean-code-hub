@@ -21,9 +21,10 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
-      // `any` còn ~700 chỗ (nợ kỹ thuật) — để `warn` cho CI pass được,
-      // dọn dần theo kiểu boy-scout. KHÔNG để `error` kẻo CI đỏ vĩnh viễn.
-      "@typescript-eslint/no-explicit-any": "warn",
+      // `any` đã dọn sạch toàn repo (Mục 5 review code — PR #17/#19/#20/#22-#30).
+      // Để `error` để CI chặn mọi `any` mới — code mới buộc dùng type thật,
+      // `unknown`, hoặc `Tables<>`/`TablesInsert<>`/`TablesUpdate<>`.
+      "@typescript-eslint/no-explicit-any": "error",
       // Cho phép idiom `cond && fn()` và `cond ? a() : b()` dùng như statement.
       "@typescript-eslint/no-unused-expressions": ["error", { allowShortCircuit: true, allowTernary: true }],
     },
