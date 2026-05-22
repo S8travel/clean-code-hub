@@ -11,6 +11,7 @@ import {
   useDNTTList,
   useInsertDNTT,
 } from "@/hooks/use-chi-phi";
+import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
@@ -98,8 +99,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
 
     // Lấy ngày từ ngayRows (nguồn chính xác) theo doan_ngay_id
     const ngayDateMap: Record<number, string> = {};
-    (ksData.ngayRows as any[]).forEach((n: any) => {
-      ngayDateMap[n.id] = n.ngay_date;
+    ksData.ngayRows.forEach((n) => {
+      ngayDateMap[n.id] = n.ngay_date ?? "";
     });
 
     // Room entries from localRows for this KS — sort theo ngày, sau đó loại phòng
@@ -159,7 +160,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     const soDem = new Set(ngayDates).size || ksRows[0]?.so_dem || 1;
 
     // Code KS from ngayRows
-    const ngayRow = (ksData.ngayRows as any[]).find((r) => r.khach_san_id === ksId);
+    const ngayRow = ksData.ngayRows.find((r) => r.khach_san_id === ksId);
     const codeKS = ngayRow?.ks_ma_code || "";
 
     // cocTotal: cọc đã thanh toán đủ (paid)
@@ -176,7 +177,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     const ksChiPhiIds = chiPhiRows
       .filter((cp) => cp.danh_muc === "khach_san" && cp.ref_doan_ngay_id != null)
       .filter((cp) => {
-        const ng = ksData?.ngayRows.find((r: any) => r.id === cp.ref_doan_ngay_id);
+        const ng = ksData?.ngayRows.find((r) => r.id === cp.ref_doan_ngay_id);
         return ng?.khach_san_id === ksId;
       })
       .map((cp) => cp.id!)
@@ -359,8 +360,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
           ngay_can_thanh_toan: aggNgayCan || null,
           ghi_chu: aggReason ? `Lý do: ${aggReason}` : null,
           allocations: allocs.length > 0 ? allocs : undefined,
-        } as any);
-        const newDnttId = (newDntt as any)?.id ?? null;
+        });
+        const newDnttId = newDntt?.id ?? null;
 
         const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, dnttAmount) : 0;
         if (canTruAmt > 0 && newDnttId && aggCanTru) {
@@ -474,8 +475,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
 
     const validKsIds = new Set(Object.keys(ksData.khachSanMap).map(Number));
     const validNgayIds = new Set([
-      ...(ksData.ngayRows || []).map((r: any) => r.id),
-      ...Object.values((ksData as any).dayUseItemMap || {}).map((info: any) => info.doan_ngay_id),
+      ...(ksData.ngayRows || []).map((r) => r.id),
+      ...Object.values(ksData.dayUseItemMap || {}).map((info) => info.doan_ngay_id),
     ]);
     const validChiPhiIds = new Set(chiPhiRows.map((r) => r.id).filter(Boolean));
 
@@ -577,9 +578,9 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   useEffect(() => {
     if (!ksData) return;
     const ksChiPhi = chiPhiRows.filter((c) => c.danh_muc === "khach_san");
-    const ngayMap: Record<number, any> = {};
-    (ksData.ngayRows || []).forEach((r: any) => { ngayMap[r.id] = r; });
-    const dayUseItemMap = (ksData as any).dayUseItemMap || {};
+    const ngayMap: Record<number, KSNgayRow> = {};
+    (ksData.ngayRows || []).forEach((r) => { ngayMap[r.id] = r; });
+    const dayUseItemMap = ksData.dayUseItemMap || {};
 
     // dinhKyKsIds: init 1 lần từ DB
     if (!dinhKyInitRef.current && ksChiPhi.length > 0) {
@@ -667,7 +668,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       doan_id: doanId,
       tien_cong_ty: toHdv ? 0 : net,
       tien_hdv: toHdv ? net : 0,
-    } as any);
+    });
   }, [doanId, upsertMut]);
 
   const handleToggleDinhKy = useCallback((ksId: number) => {
@@ -678,13 +679,13 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       // Cập nhật tất cả chi phí rows của KS này trong DB
       const rowsForKs = localRowsRef.current.filter((r) => r.khach_san_id === ksId && r.id);
       rowsForKs.forEach((r) => {
-        upsertMut.mutate({ id: r.id, doan_id: doanId, thanh_toan_dinh_ky: newVal } as any);
+        upsertMut.mutate({ id: r.id, doan_id: doanId, thanh_toan_dinh_ky: newVal });
       });
       return next;
     });
   }, [doanId, upsertMut]);
 
-  const handleFieldChange = useCallback((idx: number, field: string, value: any) => {
+  const handleFieldChange = useCallback((idx: number, field: string, value: string | number) => {
     const editId = localRowsRef.current[idx]?.id;
     if (editId != null) dirtyRowIdsRef.current.add(editId);
     setLocalRows((prev) => {
@@ -719,7 +720,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       const billed = Math.max(0, (row.so_phong || 0) - focCountManual);
       const tienCongTy = billed * (row.gia_phong || 0);
 
-      const payload: any = {
+      const payload: Partial<ChiPhiRow> & { doan_id: number } = {
         id: row.id,
         doan_id: doanId,
         ngay_so: null,
@@ -843,7 +844,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
           setAdjustTarget(null);
           setAdjustSurplusMode("cong_no");
         },
-        onError: (err: any) => toast.error("Lỗi: " + (err?.message || "")),
+        onError: (err: unknown) => toast.error("Lỗi: " + (errMsg(err) || "")),
       },
     );
   };
@@ -888,7 +889,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
 
   // Build map ksId → list of chi_phi_id (cho payments lookup)
   const chiPhiIdsByKs: Record<number, number[]> = {};
-  const dayUseItemMap = (ksData as any)?.dayUseItemMap || {};
+  const dayUseItemMap = ksData?.dayUseItemMap || {};
   chiPhiRows.forEach((cp) => {
     if (cp.danh_muc !== "khach_san" || !cp.id) return;
     // Day-use: tra qua doan_ngay_item → canh_diem.khach_san_id
@@ -898,7 +899,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       return;
     }
     if (!cp.ref_doan_ngay_id) return;
-    const ng = ngayRows.find((r: any) => r.id === cp.ref_doan_ngay_id);
+    const ng = ngayRows.find((r) => r.id === cp.ref_doan_ngay_id);
     if (!ng?.khach_san_id) return;
     (chiPhiIdsByKs[ng.khach_san_id] = chiPhiIdsByKs[ng.khach_san_id] || []).push(cp.id);
   });
@@ -1001,10 +1002,10 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
 
   // Danh sách KS từ doan_ngay + orphaned KS từ DNTT + KS day-use (qua wrapper canh_diem)
   const orphanedKsIds = ksData?.orphanedKsIds || [];
-  const dayUseKsIds = (ksData as any)?.dayUseKsIds || [];
+  const dayUseKsIds = ksData?.dayUseKsIds || [];
   const distinctKsIdsFromNgay = [
     ...new Set([
-      ...ngayRows.map((r: any) => r.khach_san_id).filter(Boolean),
+      ...ngayRows.map((r) => r.khach_san_id).filter(Boolean),
       ...orphanedKsIds,
       ...dayUseKsIds,
     ]),
@@ -1115,6 +1116,7 @@ type KSData = ReturnType<typeof useChiPhiKSData>["data"];
 // derive lại từ đó để KHÔNG khai báo `any` mới trong file này.
 type KSKhachSanMap = NonNullable<KSData>["khachSanMap"];
 type KSNgayRows = NonNullable<KSData>["ngayRows"];
+type KSNgayRow = KSNgayRows[number];
 type KSDayUseItemMap = NonNullable<KSData>["dayUseItemMap"];
 
 export interface KSCardData {

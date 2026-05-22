@@ -11,14 +11,30 @@ export interface DeadlineItem {
   status: string;
 }
 
+// Quan hệ join doan: select chỉ lấy ten_doan + trang_thai. Supabase trả về
+// object hoặc null tuỳ FK; chuẩn hoá thành shape tối thiểu cần dùng.
+type JoinedDoan = { ten_doan: string | null; trang_thai: string | null } | null;
 // Đoàn đã huỷ → không còn deadline cần đuổi NCC
-const isDoanHuy = (row: any) => (row.doan as any)?.trang_thai === "huy";
+const isDoanHuy = (row: { doan: JoinedDoan }) => row.doan?.trang_thai === "huy";
 // Chỉ booking ĐÃ GỬI mới có deadline thật. Chưa gửi / không đặt → bỏ qua.
-const ksSent = (r: any) =>
+const ksSent = (r: { ks_final_status: string; ks_dat_truoc_status: string }) =>
   r.ks_final_status !== "chua_gui" || r.ks_dat_truoc_status !== "chua_gui";
-const nhSent = (r: any) =>
+const nhSent = (r: { booking_status: string }) =>
   r.booking_status !== "chua_gui" && r.booking_status !== "khong_dat";
-const dvSent = (r: any) => r.booking_status !== "chua_dat";
+const dvSent = (r: { booking_status: string }) => r.booking_status !== "chua_dat";
+
+// Supabase trả quan hệ join là object hoặc array (tuỳ FK) — chuẩn hoá về 1 object.
+function asJoined(rel: unknown): JoinedDoan {
+  const o = Array.isArray(rel) ? rel[0] : rel;
+  if (o == null || typeof o !== "object") return null;
+  return o as NonNullable<JoinedDoan>;
+}
+// Quan hệ join chỉ cần `ten` (+ `loai` cho nhà hàng).
+function asNamed(rel: unknown): { ten: string | null; loai?: string | null } | null {
+  const o = Array.isArray(rel) ? rel[0] : rel;
+  if (o == null || typeof o !== "object") return null;
+  return o as { ten: string | null; loai?: string | null };
+}
 
 export function useMyDeadlines(doanIds: number[]) {
   return useQuery<DeadlineItem[]>({
@@ -57,8 +73,8 @@ export function useMyDeadlines(doanIds: number[]) {
           type: "ks",
           bookingId: row.id,
           doanId: row.doan_id,
-          doanName: (row.doan as any)?.ten_doan ?? "",
-          label: (row.khach_san as any)?.ten ?? "Khách sạn",
+          doanName: asJoined(row.doan)?.ten_doan ?? "",
+          label: asNamed(row.khach_san)?.ten ?? "Khách sạn",
           deadline: row.deadline ?? "",
           status: row.ks_final_status,
         });
@@ -67,13 +83,13 @@ export function useMyDeadlines(doanIds: number[]) {
       for (const row of nhRes.data ?? []) {
         if (isDoanHuy(row) || !nhSent(row)) continue;
         const buaLabel = row.bua_an === "trua" ? "Trưa" : "Tối";
-        const loai = (row.nha_hang as any)?.loai ?? "nha_hang";
+        const loai = asNamed(row.nha_hang)?.loai ?? "nha_hang";
         items.push({
           type: loai === "tau_ngay" ? "ks" : "nh",
           bookingId: row.id,
           doanId: row.doan_id,
-          doanName: (row.doan as any)?.ten_doan ?? "",
-          label: `${(row.nha_hang as any)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
+          doanName: asJoined(row.doan)?.ten_doan ?? "",
+          label: `${asNamed(row.nha_hang)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
           deadline: row.deadline ?? "",
           status: row.booking_status,
         });
@@ -85,7 +101,7 @@ export function useMyDeadlines(doanIds: number[]) {
           type: "dv",
           bookingId: row.id,
           doanId: row.doan_id,
-          doanName: (row.doan as any)?.ten_doan ?? "",
+          doanName: asJoined(row.doan)?.ten_doan ?? "",
           label: row.ten_nha_cung_cap ?? "",
           deadline: row.deadline ?? "",
           status: row.booking_status,
@@ -105,7 +121,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
     enabled: !!hoTen,
     staleTime: 30_000,
     queryFn: async () => {
-      const norm = (s: any) => (s == null ? "" : String(s)).trim().toLowerCase();
+      const norm = (s: unknown) => (s == null ? "" : String(s)).trim().toLowerCase();
       const me = norm(hoTen);
       const [ksRes, nhRes, dvRes] = await Promise.all([
         externalSupabase
@@ -127,8 +143,8 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         if (![row.ks_final_sent_by, row.ks_dat_truoc_sent_by].some((v) => norm(v) === me)) continue;
         items.push({
           type: "ks", bookingId: row.id, doanId: row.doan_id,
-          doanName: (row.doan as any)?.ten_doan ?? "",
-          label: (row.khach_san as any)?.ten ?? "Khách sạn",
+          doanName: asJoined(row.doan)?.ten_doan ?? "",
+          label: asNamed(row.khach_san)?.ten ?? "Khách sạn",
           deadline: row.deadline ?? "", status: row.ks_final_status,
         });
       }
@@ -136,11 +152,11 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         if (isDoanHuy(row) || !nhSent(row)) continue;
         if (![row.sent_by, row.dat_truoc_sent_by, row.final_sent_by].some((v) => norm(v) === me)) continue;
         const buaLabel = row.bua_an === "trua" ? "Trưa" : "Tối";
-        const loai = (row.nha_hang as any)?.loai ?? "nha_hang";
+        const loai = asNamed(row.nha_hang)?.loai ?? "nha_hang";
         items.push({
           type: loai === "tau_ngay" ? "ks" : "nh", bookingId: row.id, doanId: row.doan_id,
-          doanName: (row.doan as any)?.ten_doan ?? "",
-          label: `${(row.nha_hang as any)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
+          doanName: asJoined(row.doan)?.ten_doan ?? "",
+          label: `${asNamed(row.nha_hang)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
           deadline: row.deadline ?? "", status: row.booking_status,
         });
       }
@@ -149,7 +165,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         if (norm(row.sent_by) !== me) continue;
         items.push({
           type: "dv", bookingId: row.id, doanId: row.doan_id,
-          doanName: (row.doan as any)?.ten_doan ?? "",
+          doanName: asJoined(row.doan)?.ten_doan ?? "",
           label: row.ten_nha_cung_cap ?? "", deadline: row.deadline ?? "", status: row.booking_status,
         });
       }
