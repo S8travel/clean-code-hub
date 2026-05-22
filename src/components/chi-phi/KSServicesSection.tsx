@@ -27,7 +27,7 @@ export default function KSServicesSection({
   ngayDateToDoanNgayId: Record<string, number>;
   localRows: LocalKSRow[];
   onAddMore: (doanNgayId: number, ngayDate: string, refItemId?: number) => void;
-  onFieldChange: (idx: number, field: string, value: any) => void;
+  onFieldChange: (idx: number, field: string, value: string | number) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
   onToggleNguoiTt?: (idx: number) => void;

@@ -49,7 +49,7 @@ export interface NHRowHandlers {
   handleToggleNguoiTtNH: (key: string) => void;
   handleToggleDinhKyNH: (key: string) => void;
   addExtra: (key: string) => void;
-  handleExtraChange: (key: string, idx: number, field: keyof LocalNHExtra, value: any) => void;
+  handleExtraChange: (key: string, idx: number, field: keyof LocalNHExtra, value: LocalNHExtra[keyof LocalNHExtra]) => void;
   handleExtraSave: (key: string, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => void;
   handleExtraDelete: (key: string, idx: number) => void;
   handleResetOverrideNH: (key: string) => void;

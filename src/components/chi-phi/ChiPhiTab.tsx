@@ -23,13 +23,55 @@ import { toast } from "sonner";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
+// Thông tin đoàn ChiPhiTab + các section con đọc (số khách, ngày, agent, HDV, xe…).
+export interface ChiPhiTabDoan {
+  ten_doan?: string | null;
+  assigned_to?: string | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+  agents?: { ten?: string | null } | null;
+  huong_dan_vien?: { ten?: string | null } | null;
+  xe?: {
+    ten_xe?: string | null;
+    so_cho?: number | null;
+    nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
+  } | null;
+  tang_pham?: unknown;
+}
+
+// Prop nhận vào: row `doan` từ useDoanList — các quan hệ join (`agents`, `xe`,
+// `huong_dan_vien`) có thể có kiểu phantom SelectQueryError do nhập nhằng FK,
+// nên nhận `unknown` ở các trường đó rồi chuẩn hoá về ChiPhiTabDoan bên trong.
+interface ChiPhiTabDoanInput {
+  ten_doan?: string | null;
+  assigned_to?: string | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+  agents?: unknown;
+  huong_dan_vien?: unknown;
+  xe?: unknown;
+  tang_pham?: unknown;
+}
+
 interface Props {
   doanId: number;
-  doan: any;
+  doan: ChiPhiTabDoanInput;
   coTinhSuatTLNhaHang?: boolean;
 }
 
-export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) {
+export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang }: Props) {
+  // Chuẩn hoá row đoàn về ChiPhiTabDoan (các quan hệ join có kiểu chính xác).
+  const doan = doanInput as ChiPhiTabDoan;
   const [exportingExcel, setExportingExcel] = useState(false);
   // Máy/tab khác đổi chi phí → invalidate query → section reconcile lại
   // từ DB (snapshot tour), không reset người đang gõ. Không cần banner.
@@ -220,7 +262,7 @@ export default function ChiPhiTab({ doanId, doan, coTinhSuatTLNhaHang }: Props) 
 
         <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di} />
+        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} />
 
         <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
 

@@ -16,6 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { toast } from "@/hooks/use-toast";
 import {
   useSeriList, useCreateSeri, useUpdateSeri, useDeleteSeri,
@@ -63,8 +64,8 @@ function SeriDetail({ seri }: { seri: SeriTour }) {
           toast({ title: t("Đã lưu lịch trình") });
           setDirty(false);
         },
-        onError: (err: any) =>
-          toast({ title: t("Lỗi") + ": " + (err?.message || t("Không thể lưu")), variant: "destructive" }),
+        onError: (err: unknown) =>
+          toast({ title: t("Lỗi") + ": " + (errMsg(err) || t("Không thể lưu")), variant: "destructive" }),
       }
     );
   };

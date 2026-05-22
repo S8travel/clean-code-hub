@@ -1,7 +1,19 @@
 import { format } from "date-fns";
 
+interface ChiPhiHeaderDoan {
+  ten_doan?: string | null;
+  agents?: { ten?: string | null } | null;
+  so_khach_lon?: number | null;
+  so_khach_tl?: number | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+  huong_dan_vien?: { ten?: string | null } | null;
+  xe?: { nha_xe?: { ten?: string | null } | null; ten_xe?: string | null; so_cho?: number | null } | null;
+  tang_pham?: unknown;
+}
+
 interface Props {
-  doan: any;
+  doan: ChiPhiHeaderDoan;
   opName?: string;
 }
 

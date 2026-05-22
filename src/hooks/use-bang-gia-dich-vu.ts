@@ -65,7 +65,7 @@ function detectLoai(raw: string): BangGiaDichVu["loai"] {
 export function parseExcelFile(buffer: ArrayBuffer): Omit<BangGiaDichVu, "id" | "created_at">[] {
   const wb = XLSX.read(buffer, { type: "array" });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
 
   return rows
     .slice(1)

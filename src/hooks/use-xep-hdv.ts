@@ -39,7 +39,7 @@ export function useDoanForXep(filter: { from: string; to: string } | null) {
         .lte("ngay_di", filter!.to)
         .order("ngay_di");
       if (error) throw error;
-      return (data ?? []).map((d: any) => ({
+      return (data ?? []).map((d) => ({
         doan_id: d.id,
         ten_doan: d.ten_doan,
         ngay_di: d.ngay_di,
@@ -49,7 +49,7 @@ export function useDoanForXep(filter: { from: string; to: string } | null) {
         agent_id: d.agent_id,
         dia_diem_id: d.dia_diem_id,
         dia_diem_ten: d.dia_diem?.ten ?? null,
-        agent_ten: d.agents?.ten ?? null,
+        agent_ten: (d.agents as { ten?: string | null } | null)?.ten ?? null,
         assigned_hdv_id: d.huong_dan_vien_id ?? null,
         locked_hdv_id: d.huong_dan_vien_id ?? null,
         locked_hdv_id_2: d.huong_dan_vien_id_2 ?? null,

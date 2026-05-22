@@ -13,7 +13,13 @@ function fmtDateInfo(dateStr: string | null): string {
   return `${d.toLocaleDateString("vi-VN")} (${WD[d.getDay()]})`;
 }
 
-function xeLabelInfo(xe: any): string {
+interface XeLabelInfo {
+  nha_xe?: { ten?: string | null } | null;
+  ten_xe?: string | null;
+  so_cho?: number | null;
+}
+
+function xeLabelInfo(xe: XeLabelInfo | null | undefined): string {
   if (!xe) return "—";
   const parts = [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean);
   return parts.join(" · ") || "—";

@@ -53,7 +53,7 @@ export function useDoanTaiLieuByDoanIds(doanIds: number[]) {
         .in("doan_id", ids);
       if (error) throw error;
       const map = new Map<number, Partial<Record<DoanTaiLieuLoai, DoanTaiLieuRow>>>();
-      (data ?? []).forEach((r: any) => {
+      (data ?? []).forEach((r) => {
         if (!map.has(r.doan_id)) map.set(r.doan_id, {});
         map.get(r.doan_id)![r.loai as DoanTaiLieuLoai] = r as DoanTaiLieuRow;
       });

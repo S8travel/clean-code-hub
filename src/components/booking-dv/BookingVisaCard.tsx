@@ -244,7 +244,7 @@ export default function BookingVisaCard({
 
       const threadId = isFirst ? newThreadId : booking.email_thread_id;
       // mode='update' → KHÔNG đổi booking_status
-      const savePayload: Record<string, any> = {
+      const savePayload: Partial<BookingVisaRow> = {
         sent_at: new Date().toISOString(),
         sent_by: userProfile?.ho_ten ?? "",
         email_thread_id: emailId ?? threadId ?? undefined,

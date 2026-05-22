@@ -146,7 +146,7 @@ export default function HoanUngForm({ open, onClose }: Props) {
         reset();
         onClose();
       },
-      onError: (e: any) => toast.error("Lỗi: " + (e?.message ?? "Không tạo được")),
+      onError: (e: unknown) => toast.error("Lỗi: " + (errMsg(e) || "Không tạo được")),
       onSettled: () => setSubmitting(false),
     });
   };

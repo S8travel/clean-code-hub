@@ -104,7 +104,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
     setDiemDenInput("");
   }, [open, lead, user?.user_id]);
 
-  const set = (k: keyof LeadInsert, v: any) => setForm((p) => ({ ...p, [k]: v }));
+  const set = <K extends keyof LeadInsert>(k: K, v: LeadInsert[K]) => setForm((p) => ({ ...p, [k]: v }));
 
   const isB2B = ["cong_ty", "truong_hoc", "agent_doi_tac"].includes(form.loai_khach ?? "");
 

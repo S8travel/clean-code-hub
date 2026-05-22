@@ -45,7 +45,7 @@ export function useHdvsByDoanId(doanId: number | null | undefined) {
         .in("id", ids);
       if (error) throw error;
       // Giữ thứ tự HDV chính trước, phụ sau
-      const byId = new Map((data ?? []).map((h: any) => [h.id, h as HdvMailInfo]));
+      const byId = new Map((data ?? []).map((h) => [h.id, h as HdvMailInfo]));
       return ids.map((id) => byId.get(id)).filter(Boolean) as HdvMailInfo[];
     },
   });

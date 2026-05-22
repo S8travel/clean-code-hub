@@ -99,7 +99,7 @@ function HDVPageContent() {
     // khi HDV này không đổi → effect chỉ chạy khi đổi HDV hoặc data HDV đổi thật.
   }, [selected]);
 
-  const set = (field: keyof Omit<HDVRow, "id">, value: any) => {
+  const set = <K extends keyof Omit<HDVRow, "id">>(field: K, value: Omit<HDVRow, "id">[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setDirty(true);
   };

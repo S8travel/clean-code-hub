@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { TablesUpdate } from "@/lib/database.types";
 
 export interface CanhDiem {
   id: number;
@@ -63,7 +64,7 @@ export function useCreateCanhDiem() {
 export function useUpdateCanhDiem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: number; updates: Record<string, any> }) => {
+    mutationFn: async (params: { id: number; updates: TablesUpdate<"canh_diem"> }) => {
       const { error } = await externalSupabase
         .from("canh_diem")
         .update(params.updates)

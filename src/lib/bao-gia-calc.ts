@@ -1,4 +1,4 @@
-import type { BaoGiaKetQua, BaoGiaCase } from "@/hooks/use-bao-gia";
+import type { BaoGiaKetQua, BaoGiaCase, BaoGiaItem } from "@/hooks/use-bao-gia";
 
 export interface ManualItem {
   id: string;
@@ -79,7 +79,7 @@ export function calcBaoGia(
   const baoGiaItems = items
     .filter((i) => i.gia)
     .map((i) => ({
-      loai: i.loai as any,
+      loai: (i.loai === "extra" ? "transport" : i.loai) satisfies BaoGiaItem["loai"],
       mo_ta: i.bang_gia_ten || i.mo_ta,
       don_gia: i.gia!,
       ghi_chu: "",

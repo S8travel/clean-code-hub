@@ -76,7 +76,7 @@ export interface DVRowHandlers {
   setAggSurplusMode: (v: "con_du" | "hoan_tien") => void;
   setAggCanTru: (v: null) => void;
   setAggNgayCan: (v: string) => void;
-  handleExtraChange: (mainId: number, idx: number, field: keyof LocalDVExtra, v: any) => void;
+  handleExtraChange: (mainId: number, idx: number, field: keyof LocalDVExtra, v: LocalDVExtra[keyof LocalDVExtra]) => void;
   handleExtraSave: (mainId: number, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => void;
   handleExtraDelete: (mainId: number, idx: number) => void;
 }
