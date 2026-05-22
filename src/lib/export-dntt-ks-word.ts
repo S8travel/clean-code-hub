@@ -14,6 +14,7 @@ import {
   PageOrientation,
   HeightRule,
 } from "docx";
+import type { ITableCellBorders } from "docx";
 import { saveAs } from "file-saver";
 import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
 
@@ -45,7 +46,7 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 function cell(
   children: (Paragraph | Table)[],
-  opts: { width?: number; rowSpan?: number; columnSpan?: number; shading?: typeof GRAY; borders?: any; margins?: { top: number; bottom: number; left: number; right: number } } = {}
+  opts: { width?: number; rowSpan?: number; columnSpan?: number; shading?: typeof GRAY; borders?: ITableCellBorders; margins?: { top: number; bottom: number; left: number; right: number } } = {}
 ): TableCell {
   return new TableCell({
     children,
@@ -54,7 +55,7 @@ function cell(
     rowSpan: opts.rowSpan,
     columnSpan: opts.columnSpan,
     shading: opts.shading ?? WHITE,
-    verticalAlign: VerticalAlign.CENTER as any,
+    verticalAlign: VerticalAlign.CENTER,
     margins: opts.margins ?? { top: 30, bottom: 30, left: 60, right: 60 },
   });
 }

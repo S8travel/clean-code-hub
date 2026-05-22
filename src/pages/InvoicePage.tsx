@@ -64,9 +64,14 @@ interface DoanWithRel {
   ghi_chu_dieu_tour: string | null;
   agents?: { id: number; ten: string } | null;
   dia_diem?: { ten: string } | null;
-  huong_dan_vien?: { id: number; ten: string } | null;
-  huong_dan_vien_2?: { id: number; ten: string } | null;
-  xe?: any | null;
+  huong_dan_vien?: { id: number; ten: string; so_dien_thoai?: string | null } | null;
+  huong_dan_vien_2?: { id: number; ten: string; so_dien_thoai?: string | null } | null;
+  xe?: {
+    id: number;
+    ten_xe: string | null;
+    so_cho: number | null;
+    nha_xe?: { id: number; ten: string | null } | null;
+  } | null;
   // Extra DB fields not in the Doan interface
   bang_don?: string | null;
   truong_doan?: string | null;
@@ -119,10 +124,10 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
       khachSanList,
       tenDoan: doan.ten_doan,
       hdv: (() => {
-        const fmt = (h: any) =>
-          h?.so_dien_thoai?.trim() ? `${h.ten} — ${h.so_dien_thoai.trim()}` : h?.ten ?? "";
+        const fmt = (h: { ten: string; so_dien_thoai?: string | null }) =>
+          h.so_dien_thoai?.trim() ? `${h.ten} — ${h.so_dien_thoai.trim()}` : h.ten ?? "";
         return [doan.huong_dan_vien, doan.huong_dan_vien_2]
-          .filter((h: any) => h?.ten)
+          .filter((h): h is NonNullable<typeof h> => !!h?.ten)
           .map(fmt)
           .join(" | ");
       })(),

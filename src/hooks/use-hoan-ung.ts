@@ -91,7 +91,13 @@ export function useHoanUngList(filter?: {
       if (error) throw error;
 
       // Lookup ho_ten người ứng từ user_roles
-      const ids = [...new Set((data ?? []).map((r: any) => r.nguoi_ung_id).filter(Boolean))];
+      const ids = [
+        ...new Set(
+          (data ?? [])
+            .map((r) => (r as { nguoi_ung_id?: string | null }).nguoi_ung_id)
+            .filter((x): x is string => !!x),
+        ),
+      ];
       const nameMap: Record<string, string> = {};
       if (ids.length > 0) {
         const { data: roles } = await externalSupabase
@@ -100,10 +106,13 @@ export function useHoanUngList(filter?: {
           .in("user_id", ids);
         for (const r of roles ?? []) nameMap[r.user_id] = r.ho_ten ?? "";
       }
-      return (data ?? []).map((r: any) => ({
-        ...r,
-        nguoi_ung_ho_ten: r.nguoi_ung_id ? nameMap[r.nguoi_ung_id] ?? null : null,
-      })) as HoanUngRow[];
+      return (data ?? []).map((r) => {
+        const nguoiUngId = (r as { nguoi_ung_id?: string | null }).nguoi_ung_id;
+        return {
+          ...r,
+          nguoi_ung_ho_ten: nguoiUngId ? nameMap[nguoiUngId] ?? null : null,
+        };
+      }) as unknown as HoanUngRow[];
     },
   });
 }

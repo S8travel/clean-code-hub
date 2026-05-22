@@ -14,7 +14,27 @@ function formatDate(d: string | null) {
   return `${date.toLocaleDateString("vi-VN")} (${WEEKDAYS[date.getDay()]})`;
 }
 
-function xeLabel(xe: any) {
+interface XeInfo {
+  ten_xe?: string | null;
+  so_cho?: number | null;
+  nha_xe?: { ten?: string | null } | null;
+}
+
+interface HdvInfo {
+  ten: string | null;
+  so_dien_thoai?: string | null;
+}
+
+interface DoanInfo {
+  ten_doan: string | null;
+  huong_dan_vien?: HdvInfo | null;
+  huong_dan_vien_2?: HdvInfo | null;
+  xe?: XeInfo | null;
+  ngay_di: string | null;
+  ngay_ve: string | null;
+}
+
+function xeLabel(xe: XeInfo | null | undefined) {
   if (!xe) return "—";
   const nhaXe = xe.nha_xe?.ten ?? "";
   const socho = xe.so_cho ? `${xe.so_cho} chỗ` : "";
@@ -22,14 +42,15 @@ function xeLabel(xe: any) {
   return parts.length ? parts.join(" · ") : "—";
 }
 
-function hdvLabel(hdv: any): string {
+function hdvLabel(hdv: HdvInfo | null | undefined): string {
   if (!hdv) return "";
+  const ten = hdv.ten ?? "";
   const sdt = (hdv.so_dien_thoai ?? "").toString().trim();
-  return sdt ? `${hdv.ten} — ${sdt}` : hdv.ten;
+  return sdt ? `${ten} — ${sdt}` : ten;
 }
 
 interface Props {
-  doan: any;
+  doan: DoanInfo;
   bangDon: string;
   setBangDon: (v: string) => void;
   shopping: boolean | null;

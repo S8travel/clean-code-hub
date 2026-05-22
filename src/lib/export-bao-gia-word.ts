@@ -12,6 +12,7 @@ import {
   ShadingType,
   VerticalAlign,
 } from "docx";
+import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
 import type { BaoGiaKetQua, BaoGiaItem } from "@/hooks/use-bao-gia";
 
@@ -52,10 +53,10 @@ function cell(
   opts: {
     width?: number;
     shading?: typeof HEADER_SHADING;
-    vertAlign?: (typeof VerticalAlign)[keyof typeof VerticalAlign];
+    vertAlign?: TableVerticalAlign;
     colSpan?: number;
     rowSpan?: number;
-    borders?: any;
+    borders?: ITableCellBorders;
     margins?: { top?: number; bottom?: number; left?: number; right?: number };
   } = {}
 ): TableCell {
@@ -64,7 +65,7 @@ function cell(
     borders:        opts.borders  ?? BORDERS,
     width:          { size: opts.width ?? 0, type: WidthType.DXA },
     shading:        opts.shading  ?? NO_SHADING,
-    verticalAlign:  (opts.vertAlign ?? VerticalAlign.CENTER) as any,
+    verticalAlign:  opts.vertAlign ?? VerticalAlign.CENTER,
     columnSpan:     opts.colSpan,
     rowSpan:        opts.rowSpan,
     margins:        opts.margins  ?? { top: 60, bottom: 60, left: 100, right: 100 },

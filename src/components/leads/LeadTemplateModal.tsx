@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Send, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,10 +88,10 @@ export function LeadTemplateModal({ open, onClose, leadId, actionId, actionChann
               toast.success("Đã gửi email & cập nhật việc tiếp theo.");
               onClose();
             },
-            onError: (e: any) => toast.error(e?.message ?? "Gửi xong nhưng lỗi cập nhật việc"),
+            onError: (e: unknown) => toast.error(errMsg(e) || "Gửi xong nhưng lỗi cập nhật việc"),
           });
         },
-        onError: (e: any) => toast.error(e?.message ?? "Lỗi gửi email"),
+        onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi gửi email"),
       },
     );
   };

@@ -180,7 +180,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
     updateFields.mutate(
       { id, fields },
       {
-        onError: (e: any) => toast.error("Lỗi cập nhật: " + (e?.message || "")),
+        onError: (e: unknown) => toast.error("Lỗi cập nhật: " + (errMsg(e) || "")),
       },
     );
   };
@@ -502,7 +502,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                             if (next !== (lockPhong.deadline ?? null)) {
                                               updateDeadline.mutate(
                                                 { id: lockPhong.id, deadline: next },
-                                                { onError: (e: any) => toast.error("Lỗi sửa deadline: " + (e?.message || "")) },
+                                                { onError: (e: unknown) => toast.error("Lỗi sửa deadline: " + (errMsg(e) || "")) },
                                               );
                                             }
                                           }}
@@ -703,9 +703,9 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     setThanhDoanTarget(null);
                   }
                 },
-                onError: (e: any) => {
+                onError: (e: unknown) => {
                   hadError = true;
-                  toast.error("Lỗi: " + (e?.message || ""));
+                  toast.error("Lỗi: " + (errMsg(e) || ""));
                 },
               },
             );

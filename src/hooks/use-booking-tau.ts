@@ -63,7 +63,7 @@ export function useBookingTau(doanId: number | undefined) {
         .eq("loai", "tau_ngay");
 
       const tauMap = new Map<number, { ten: string; email: string | null; website: string | null }>(
-        (nhList ?? []).map((n: any) => [n.id, { ten: n.ten, email: n.email, website: n.website ?? null }])
+        (nhList ?? []).map((n) => [n.id, { ten: n.ten ?? "", email: n.email, website: n.website ?? null }]),
       );
       if (!tauMap.size) return [];
 
@@ -73,7 +73,8 @@ export function useBookingTau(doanId: number | undefined) {
         .select("*, set_menu:set_menu_id(ten_set)")
         .eq("doan_id", doanId!);
 
-      const bookingMap = new Map<string, any>();
+      type BookingTauRow = NonNullable<typeof bookings>[number];
+      const bookingMap = new Map<string, BookingTauRow>();
       for (const b of bookings ?? []) {
         bookingMap.set(`${b.doan_ngay_id}_${b.bua_an}`, b);
       }
@@ -97,7 +98,7 @@ export function useBookingTau(doanId: number | undefined) {
             nha_hang_email: nh.email,
             nha_hang_website: nh.website,
             set_menu_id: bkg?.set_menu_id ?? null,
-            set_menu_ten: (bkg?.set_menu as any)?.ten_set ?? null,
+            set_menu_ten: (bkg?.set_menu as { ten_set?: string | null } | null)?.ten_set ?? null,
             booking_status: bkg?.booking_status ?? "chua_gui",
             sent_at: bkg?.sent_at ?? null,
             email_thread_id: bkg?.email_thread_id ?? null,

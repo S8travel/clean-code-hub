@@ -46,7 +46,7 @@ export default function DoanLogTab({ doanId }: Props) {
   const deleteMut = useDeleteDoanLog();
   const updateMut = useUpdateDoanLog();
 
-  const doan = (doanList as any[]).find((d) => d.id === doanId);
+  const doan = doanList.find((d) => d.id === doanId);
 
   const [showForm, setShowForm] = useState(false);
   const [loai, setLoai] = useState<"gia" | "su_co" | "ghi_chu">("gia");
@@ -168,7 +168,7 @@ export default function DoanLogTab({ doanId }: Props) {
             <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
               <div>
                 <Label className="text-xs">Loại phát sinh</Label>
-                <Select value={loai} onValueChange={(v) => setLoai(v as any)}>
+                <Select value={loai} onValueChange={(v) => setLoai(v as "gia" | "su_co" | "ghi_chu")}>
                   <SelectTrigger className="h-8 text-sm mt-1">
                     <span>{loai === "gia" ? "Phát sinh giá" : loai === "su_co" ? "Phát sinh sự cố" : "Ghi chú"}</span>
                   </SelectTrigger>

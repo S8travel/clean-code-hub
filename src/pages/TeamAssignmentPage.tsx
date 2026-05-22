@@ -88,10 +88,10 @@ function TeamTab({ teamId }: { teamId: number }) {
   const [addingTaskType, setAddingTaskType] = useState<string | null>(null);
 
   const assignedAgentIds = new Set(teamAgentRows.map((r) => r.agent_id));
-  const availableAgents = allAgents.filter((a: any) => !assignedAgentIds.has(a.id));
+  const availableAgents = allAgents.filter((a) => !assignedAgentIds.has(a.id));
 
   function agentName(agentId: number) {
-    return allAgents.find((a: any) => a.id === agentId)?.ten ?? `Agent #${agentId}`;
+    return allAgents.find((a) => a.id === agentId)?.ten ?? `Agent #${agentId}`;
   }
 
   function userName(userId: string) {
@@ -182,7 +182,7 @@ function TeamTab({ teamId }: { teamId: number }) {
                 {availableAgents.length === 0 ? (
                   <SelectItem value="__none" disabled>Không còn agent</SelectItem>
                 ) : (
-                  availableAgents.map((a: any) => (
+                  availableAgents.map((a) => (
                     <SelectItem key={a.id} value={String(a.id)}>{a.ten}</SelectItem>
                   ))
                 )}

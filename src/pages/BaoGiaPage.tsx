@@ -78,7 +78,7 @@ export default function BaoGiaPage() {
     if (view.mode !== "new-result") return;
     const { ketQua, exchangeRate, profitUsd } = view;
     createMutation.mutate(
-      { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua as any, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: trangThai },
+      { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: trangThai },
       {
         onSuccess: () => { toast.success(trangThai === "final" ? "Đã lưu chính thức!" : "Đã lưu bản nháp!"); setView({ mode: "list" }); },
         onError: () => toast.error("Lỗi lưu báo giá"),
@@ -179,7 +179,7 @@ export default function BaoGiaPage() {
           <BaoGiaManual
             onSave={(ketQua, exchangeRate, profitUsd, trangThai) => {
               createMutation.mutate(
-                { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua as any, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: trangThai },
+                { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: trangThai },
                 {
                   onSuccess: () => {
                     toast.success(trangThai === "final" ? "Đã lưu chính thức!" : "Đã lưu bản nháp!");

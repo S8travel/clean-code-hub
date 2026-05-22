@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { saveAs } from "file-saver";
-import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
+import type { HDVSectionData, HDVDNTTRow } from "@/hooks/use-chi-phi-hdv";
 
 type CellStyle = "text" | "title" | "section" | "header" | "label" | "value" | "number" | "total" | "total_number" | "note";
 
@@ -247,8 +247,20 @@ function createZipBlob(files: Array<{ name: string; content: string }>): Blob {
   });
 }
 
+interface ExportDoan {
+  id?: number | null;
+  ten_doan?: string | null;
+  so_khach?: number | null;
+  so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
+  so_khach_tl?: number | null;
+  ngay_di?: string | null;
+  ngay_ve?: string | null;
+}
+
 interface ExportParams {
-  doan: any;
+  doan: ExportDoan | null | undefined;
   data: HDVSectionData;
   hdvPhaiThuVND: number;
 }
@@ -345,7 +357,7 @@ export function exportHDVStatsExcel({ doan, data, hdvPhaiThuVND }: ExportParams)
   }
 
   // ── Tạm ứng / Quyết toán ──
-  function pushDnttSection(title: string, list: any[]) {
+  function pushDnttSection(title: string, list: HDVDNTTRow[]) {
     if (list.length === 0) return;
     rows.push([cell(title, "section", TOTAL_COLS)]);
     rows.push([

@@ -5,6 +5,7 @@ import { vi } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import {
   useDoanTaiLieuList,
   useUploadDoanTaiLieu,
@@ -78,7 +79,7 @@ function DocSection({
       { doanId, loai, file, uploadedBy },
       {
         onSuccess: () => toast.success(`Đã upload ${TAI_LIEU_LABEL[loai]}`),
-        onError: (err: any) => toast.error("Lỗi upload: " + (err?.message || "")),
+        onError: (err: unknown) => toast.error("Lỗi upload: " + (errMsg(err) || "")),
       },
     );
   };
@@ -92,7 +93,7 @@ function DocSection({
           toast.success("Đã xóa tài liệu");
           setConfirmDelete(false);
         },
-        onError: (err: any) => toast.error("Lỗi xóa: " + (err?.message || "")),
+        onError: (err: unknown) => toast.error("Lỗi xóa: " + (errMsg(err) || "")),
       },
     );
   };

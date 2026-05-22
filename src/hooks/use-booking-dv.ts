@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
+import type { TablesUpdate } from "@/lib/database.types";
 
 export interface DichVuItem {
   ten_dv: string;
@@ -37,10 +38,10 @@ export function useBookingDVList(doanId: number | undefined) {
         .eq("doan_id", doanId!)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({
+      return (data ?? []).map((r) => ({
         ...r,
-        dich_vu_list: Array.isArray(r.dich_vu_list) ? r.dich_vu_list : [],
-      }));
+        dich_vu_list: (Array.isArray(r.dich_vu_list) ? r.dich_vu_list : []) as unknown as DichVuItem[],
+      })) as BookingDVRow[];
     },
   });
 }
@@ -51,11 +52,11 @@ export function useUpdateBookingDV() {
     mutationFn: async (params: {
       id: number;
       doan_id: number;
-      updates: Record<string, any>;
+      updates: Record<string, unknown>;
     }) => {
       const { error } = await externalSupabase
         .from("doan_booking_dv")
-        .update(params.updates)
+        .update(params.updates as TablesUpdate<"doan_booking_dv">)
         .eq("id", params.id);
       if (error) throw error;
     },
@@ -142,7 +143,7 @@ export function useSendBookingEmail() {
 
       const threadId = isFirst ? newThreadId : params.emailThreadId;
 
-      const updatePayload: Record<string, any> = {
+      const updatePayload: TablesUpdate<"doan_booking_dv"> = {
         sent_at: new Date().toISOString(),
         sent_by: params.sentBy,
         email_thread_id: threadId,

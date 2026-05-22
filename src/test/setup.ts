@@ -28,16 +28,19 @@ if (!global.PointerEvent) {
       super(type, params);
     }
   }
-  (global as any).PointerEvent = PointerEvent;
+  (global as { PointerEvent: typeof PointerEvent }).PointerEvent = PointerEvent;
 }
 
 // jsdom does not implement IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = "";
+  readonly thresholds: ReadonlyArray<number> = [];
   observe() {}
   unobserve() {}
   disconnect() {}
-  takeRecords() { return []; }
-} as any;
+  takeRecords(): IntersectionObserverEntry[] { return []; }
+};
 
 // cmdk calls scrollIntoView on list items; jsdom doesn't implement it
 Element.prototype.scrollIntoView = () => {};

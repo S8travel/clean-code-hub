@@ -38,8 +38,8 @@ export function useKeToanBrief(uid: string | null, enabled: boolean) {
           .select("id, so_tien_con_lai, trang_thai")
           .eq("trang_thai", "con_du"),
       ]);
-      const dntt = (dnttRes.data ?? []) as any[];
-      const cn = (cnRes.data ?? []) as any[];
+      const dntt = dnttRes.data ?? [];
+      const cn = cnRes.data ?? [];
 
       const canChi = dntt.filter((d) => d.payment_status !== "paid");
       const overdue = canChi.filter((d) => d.ngay_can_thanh_toan && d.ngay_can_thanh_toan < today);

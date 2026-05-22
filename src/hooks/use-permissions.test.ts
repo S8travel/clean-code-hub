@@ -10,15 +10,17 @@ vi.mock("@/hooks/use-auth", () => ({
 }));
 
 vi.mock("@/lib/supabase-external", () => {
-  const builder: any = {};
+  const builder: Record<string, unknown> = {};
   const chainMethods = ["select", "insert", "update", "delete", "upsert", "eq", "not", "gte", "lte", "order", "filter", "limit"];
   for (const method of chainMethods) {
     builder[method] = vi.fn().mockReturnValue(builder);
   }
   builder.single = vi.fn().mockResolvedValue({ data: null, error: null });
   builder.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-  builder.then = (resolve: any, reject: any) =>
-    Promise.resolve({ data: [], error: null }).then(resolve, reject);
+  builder.then = (
+    resolve: (v: unknown) => unknown,
+    reject: (e: unknown) => unknown,
+  ) => Promise.resolve({ data: [], error: null }).then(resolve, reject);
   return {
     externalSupabase: {
       from: vi.fn().mockReturnValue(builder),
