@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { t, useTranslate } from "@/lib/i18n";
 
 const DEFAULT_GIFTS = ["Dầu", "Nón", "Nước", "Ảnh", "Sim", "Túi xách", "Mũ lưỡi trai", "Quạt"];
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function GiftTagsSection({ gifts, setGifts }: Props) {
+  useTranslate();
   const [adding, setAdding] = useState(false);
   const [newTag, setNewTag] = useState("");
 
@@ -38,7 +40,7 @@ export default function GiftTagsSection({ gifts, setGifts }: Props) {
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold flex items-center gap-1.5">🎁 Tặng phẩm</h3>
+      <h3 className="text-sm font-semibold flex items-center gap-1.5">🎁 {t("Tặng phẩm")}</h3>
       <div className="flex flex-wrap gap-2">
         {allTags.map((tag) => {
           const active = gifts.includes(tag);
@@ -54,7 +56,7 @@ export default function GiftTagsSection({ gifts, setGifts }: Props) {
               }`}
             >
               {active && <Check className="inline h-3 w-3 mr-1" />}
-              {tag}
+              {t(tag)}
             </button>
           );
         })}
@@ -67,7 +69,7 @@ export default function GiftTagsSection({ gifts, setGifts }: Props) {
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } if (e.key === "Escape") setAdding(false); }}
-              placeholder="Tên tag..."
+              placeholder={t("Tên tag...")}
             />
             <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAdding(false)}>
               <X className="h-3 w-3" />
@@ -79,7 +81,7 @@ export default function GiftTagsSection({ gifts, setGifts }: Props) {
             onClick={() => setAdding(true)}
             className="px-3 py-1 rounded-full text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-foreground transition-colors"
           >
-            <Plus className="inline h-3 w-3 mr-0.5" /> Thêm
+            <Plus className="inline h-3 w-3 mr-0.5" /> {t("Thêm")}
           </button>
         )}
         </span>

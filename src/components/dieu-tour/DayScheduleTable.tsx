@@ -3,6 +3,7 @@ import DayRow from "./DayRow";
 import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
 import { getWeekday } from "@/hooks/use-dieu-tour";
 import { useMemo } from "react";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   days: DayLocal[];
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId, lockKhachSan }: Props) {
+  useTranslate();
   const canhDiemOptions = useMemo(() =>
     canhDiemList.map((c) => ({
       value: String(c.id),
@@ -83,17 +85,17 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-      <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">📅 Lịch trình ngày</h3>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">📅 {t("Lịch trình ngày")}</h3>
       {/* Mobile: vuốt ngang thay vì bóp cột; desktop & print giữ nguyên */}
       <div className="overflow-x-auto print:overflow-visible">
       <div className="min-w-[820px] print:min-w-0">
       {/* Header */}
       <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border border-gray-300 rounded-t-lg bg-white text-sm font-bold text-foreground">
-        <div className="p-2 border-r border-gray-300 text-center">Ngày</div>
-        <div className="p-2 border-r border-gray-300 text-center">Chương trình</div>
-        <div className="p-2 border-r border-gray-300 text-center">Ăn trưa</div>
-        <div className="p-2 border-r border-gray-300 text-center">Ăn tối</div>
-        <div className="p-2 print:border-r-0 text-center">Khách sạn</div>
+        <div className="p-2 border-r border-gray-300 text-center">{t("Ngày")}</div>
+        <div className="p-2 border-r border-gray-300 text-center">{t("Chương trình")}</div>
+        <div className="p-2 border-r border-gray-300 text-center">{t("Ăn trưa")}</div>
+        <div className="p-2 border-r border-gray-300 text-center">{t("Ăn tối")}</div>
+        <div className="p-2 print:border-r-0 text-center">{t("Khách sạn")}</div>
         <div className="p-2 print-hide"></div>
       </div>
       {/* Rows */}
@@ -122,7 +124,7 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
         onClick={handleAddDay}
         className="w-full py-2.5 border border-dashed border-border rounded-b-lg text-sm text-muted-foreground hover:border-foreground hover:text-foreground transition-colors print-hide"
       >
-        <Plus className="inline h-4 w-4 mr-1" /> Thêm ngày
+        <Plus className="inline h-4 w-4 mr-1" /> {t("Thêm ngày")}
       </button>
       </div>
       </div>
