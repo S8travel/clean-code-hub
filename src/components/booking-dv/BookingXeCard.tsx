@@ -22,12 +22,13 @@ import {
   type DayExportCell,
   type DieuTourExportData,
 } from "@/lib/export-dieu-tour-word";
+import { t, useTranslate } from "@/lib/i18n";
 
 const STATUS_CFG = {
-  chua_dat:     { label: "Chưa gửi",    cls: "bg-muted text-muted-foreground" },
-  cho_xac_nhan: { label: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
-  da_xac_nhan:  { label: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
-  da_huy:       { label: "Đã hủy",        cls: "bg-red-100 text-red-700" },
+  chua_dat:     { labelKey: "Chưa gửi",    cls: "bg-muted text-muted-foreground" },
+  cho_xac_nhan: { labelKey: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
+  da_xac_nhan:  { labelKey: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
+  da_huy:       { labelKey: "Đã hủy",        cls: "bg-red-100 text-red-700" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -111,6 +112,7 @@ export default function BookingXeCard({
   doanId, tenDoan, ngayDi, ngayVe, chuyenBayDon, chuyenBayTien, hdvTen, soKhach,
   xe, booking, exportData,
 }: Props) {
+  useTranslate();
   const upsert = useUpsertBookingXe();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
@@ -239,7 +241,7 @@ export default function BookingXeCard({
   }, [updateNote]);
 
   const handleSendViaServer = async () => {
-    if (!emailTo) { toast.error("Vui lòng nhập email nhà xe"); return; }
+    if (!emailTo) { toast.error(t("Vui lòng nhập email nhà xe")); return; }
     setSending(true);
     try {
       const isFirst = !booking?.email_thread_id;
@@ -265,10 +267,10 @@ export default function BookingXeCard({
       };
       if (emailMode !== "update") savePayload.booking_status = "cho_xac_nhan";
       save(savePayload);
-      toast.success(emailMode === "update" ? "Đã gửi email cập nhật xe" : "Đã gửi email booking xe");
+      toast.success(emailMode === "update" ? t("Đã gửi email cập nhật xe") : t("Đã gửi email booking xe"));
       setEmailModalOpen(false);
     } catch (err: unknown) {
-      toast.error(errMsg(err) || "Lỗi gửi email");
+      toast.error(errMsg(err) || t("Lỗi gửi email"));
     } finally {
       setSending(false);
     }
@@ -276,23 +278,23 @@ export default function BookingXeCard({
 
   const handleConfirm = () => {
     save({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
-    toast.success("Đã xác nhận booking xe");
+    toast.success(t("Đã xác nhận booking xe"));
   };
 
   const handleCancel = () => {
     save({ booking_status: "da_huy" });
-    toast.success("Đã hủy booking xe");
+    toast.success(t("Đã hủy booking xe"));
   };
 
   const handleReset = () => {
     save({ booking_status: "chua_dat", sent_at: null, confirm_at: null });
-    toast.success("Đã reset trạng thái");
+    toast.success(t("Đã reset trạng thái"));
   };
 
   if (!xe) {
     return (
       <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-        Chưa có xe trong điều tour — vào tab <strong>Điều Tour</strong> để gán xe cho đoàn.
+        {t("Chưa có xe trong điều tour — vào tab")} <strong>{t("Điều Tour")}</strong> {t("để gán xe cho đoàn.")}
       </div>
     );
   }
@@ -310,7 +312,7 @@ export default function BookingXeCard({
               <p className="text-sm font-semibold leading-tight">
                 {nhaXe?.ten ?? "—"}
                 {xe.ten_xe && <span className="font-normal text-muted-foreground ml-1.5">· {xe.ten_xe}</span>}
-                {xe.so_cho && <span className="font-normal text-muted-foreground ml-1.5">· {xe.so_cho} chỗ</span>}
+                {xe.so_cho && <span className="font-normal text-muted-foreground ml-1.5">· {xe.so_cho} {t("chỗ")}</span>}
               </p>
               <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                 {nhaXe?.email && (
@@ -324,13 +326,13 @@ export default function BookingXeCard({
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {isDirty && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title={t("Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ")}>
                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                Có thay đổi
+                {t("Có thay đổi")}
               </span>
             )}
             <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium", statusCfg.cls)}>
-              {statusCfg.label}
+              {t(statusCfg.labelKey)}
             </span>
           </div>
         </div>
@@ -339,17 +341,17 @@ export default function BookingXeCard({
         <div className="p-3 space-y-3">
           {/* Tracking */}
           <div className="flex items-center gap-1 px-2">
-            <TrackingStep label="Đã sync" active={true} />
+            <TrackingStep label={t("Đã sync")} active={true} />
             <TrackingLine active={!!booking?.sent_at} />
-            <TrackingStep label="Đã gửi" time={booking?.sent_at} by={booking?.sent_by} active={!!booking?.sent_at} />
+            <TrackingStep label={t("Đã gửi")} time={booking?.sent_at} by={booking?.sent_by} active={!!booking?.sent_at} />
             <TrackingLine active={!!booking?.confirm_at} />
-            <TrackingStep label="Xác nhận" time={booking?.confirm_at} active={!!booking?.confirm_at} />
+            <TrackingStep label={t("Xác nhận")} time={booking?.confirm_at} active={!!booking?.confirm_at} />
           </div>
 
           {/* Deadline + ghi chú */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Deadline</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("Deadline")}</label>
               <DatePicker
                 className="w-full mt-0.5 h-7 text-xs"
                 value={deadline}
@@ -357,14 +359,14 @@ export default function BookingXeCard({
               />
             </div>
             <div>
-              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Ghi chú</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("Ghi chú")}</label>
               <Textarea
                 className="mt-0.5 text-xs resize-none min-h-[28px] h-7"
                 rows={1}
                 value={ghiChu}
                 onChange={(e) => setGhiChu(e.target.value)}
                 onBlur={() => { if (ghiChu !== (booking?.ghi_chu ?? "")) save({ ghi_chu: ghiChu }); }}
-                placeholder="Ghi chú..."
+                placeholder={t("Ghi chú...")}
               />
             </div>
           </div>
@@ -379,23 +381,23 @@ export default function BookingXeCard({
                 booking?.sent_at && "text-amber-700 border-amber-300 hover:bg-amber-50",
               )}
               onClick={() => openEmailModal(booking?.sent_at ? "update" : "first")}
-              title={booking?.sent_at ? "Gửi cập nhật — sẽ thread vào mail booking cũ" : undefined}
+              title={booking?.sent_at ? t("Gửi cập nhật — sẽ thread vào mail booking cũ") : undefined}
             >
-              <Mail className="h-3 w-3" /> {booking?.sent_at ? "Gửi cập nhật" : "Soạn email"}
+              <Mail className="h-3 w-3" /> {booking?.sent_at ? t("Gửi cập nhật") : t("Soạn email")}
             </Button>
             {status === "cho_xac_nhan" && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={handleConfirm}>
-                <Check className="h-3 w-3" /> Xác nhận
+                <Check className="h-3 w-3" /> {t("Xác nhận")}
               </Button>
             )}
             {(status === "cho_xac_nhan" || status === "da_xac_nhan") && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50" onClick={handleCancel}>
-                <X className="h-3 w-3" /> Hủy
+                <X className="h-3 w-3" /> {t("Hủy")}
               </Button>
             )}
             {status !== "chua_dat" && (
               <Button size="sm" variant="ghost" className="h-7 text-xs gap-1.5 text-muted-foreground" onClick={handleReset}>
-                <RotateCcw className="h-3 w-3" /> Reset
+                <RotateCcw className="h-3 w-3" /> {t("Reset")}
               </Button>
             )}
           </div>
@@ -406,7 +408,7 @@ export default function BookingXeCard({
       <EmailPreviewModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
-        title={emailMode === "update" ? "Gửi email cập nhật xe (thread vào mail cũ)" : "Gửi email booking xe"}
+        title={emailMode === "update" ? t("Gửi email cập nhật xe (thread vào mail cũ)") : t("Gửi email booking xe")}
         to={emailTo}
         onToChange={setEmailTo}
         subject={emailSubject}

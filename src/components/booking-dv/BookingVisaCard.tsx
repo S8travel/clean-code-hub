@@ -25,12 +25,13 @@ import {
   getDieuTourWordBlob,
   type DieuTourExportData,
 } from "@/lib/export-dieu-tour-word";
+import { t, useTranslate } from "@/lib/i18n";
 
 const STATUS_CFG = {
-  chua_dat:     { label: "Chưa gửi",    cls: "bg-muted text-muted-foreground" },
-  cho_xac_nhan: { label: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
-  da_xac_nhan:  { label: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
-  da_huy:       { label: "Đã hủy",        cls: "bg-red-100 text-red-700" },
+  chua_dat:     { labelKey: "Chưa gửi",    cls: "bg-muted text-muted-foreground" },
+  cho_xac_nhan: { labelKey: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
+  da_xac_nhan:  { labelKey: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
+  da_huy:       { labelKey: "Đã hủy",        cls: "bg-red-100 text-red-700" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -83,6 +84,7 @@ export default function BookingVisaCard({
   doanId, tenDoan, ngayDi, soKhachLon = 0, soKhachEm1 = 0, soKhachEm2 = 0, soKhachTl = 0,
   booking, donViList, exportData, onDelete,
 }: Props) {
+  useTranslate();
   const upsert = useUpsertBookingVisa();
   const deleteMut = useDeleteBookingVisa();
   const { data: userProfile } = useCurrentUserProfile();
@@ -213,7 +215,7 @@ export default function BookingVisaCard({
   }, [updateNote]);
 
   const handleSendViaServer = async () => {
-    if (!emailTo) { toast.error("Vui lòng nhập email đơn vị visa"); return; }
+    if (!emailTo) { toast.error(t("Vui lòng nhập email đơn vị visa")); return; }
     setSending(true);
     try {
       const isFirst = !booking.email_thread_id;
@@ -227,7 +229,7 @@ export default function BookingVisaCard({
           const b64 = await blobToBase64(blob);
           attachments = [{ filename: `${tenDoan}_bảng_điều_tour.docx`, content: b64 }];
         } catch {
-          toast.error("Không thể tạo file đính kèm, vẫn gửi email không có file");
+          toast.error(t("Không thể tạo file đính kèm, vẫn gửi email không có file"));
         }
       }
 
@@ -252,10 +254,10 @@ export default function BookingVisaCard({
       };
       if (emailMode !== "update") savePayload.booking_status = "cho_xac_nhan";
       save(savePayload);
-      toast.success(emailMode === "update" ? "Đã gửi email cập nhật visa" : "Đã gửi email booking visa");
+      toast.success(emailMode === "update" ? t("Đã gửi email cập nhật visa") : t("Đã gửi email booking visa"));
       setEmailModalOpen(false);
     } catch (err: unknown) {
-      toast.error(errMsg(err) || "Lỗi gửi email");
+      toast.error(errMsg(err) || t("Lỗi gửi email"));
     } finally {
       setSending(false);
     }
@@ -263,7 +265,7 @@ export default function BookingVisaCard({
 
   const handleConfirm = () => {
     save({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
-    toast.success("Đã xác nhận booking visa");
+    toast.success(t("Đã xác nhận booking visa"));
   };
   const handleCancel = () => { save({ booking_status: "da_huy" }); };
   const handleReset = () => { save({ booking_status: "chua_dat", sent_at: null, confirm_at: null }); };
@@ -292,10 +294,10 @@ export default function BookingVisaCard({
               ) : (
                 <Select value={selectedDonViId ? String(selectedDonViId) : "none"} onValueChange={handleDonViChange}>
                   <SelectTrigger className="h-7 text-xs w-full max-w-[280px]">
-                    <span>{!selectedDonViId ? "-- Chọn đơn vị --" : donViList.find((d) => d.id === selectedDonViId)?.ten ?? "Chọn đơn vị visa..."}</span>
+                    <span>{!selectedDonViId ? `-- ${t("Chọn đơn vị")} --` : donViList.find((d) => d.id === selectedDonViId)?.ten ?? t("Chọn đơn vị visa...")}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">-- Chọn đơn vị --</SelectItem>
+                    <SelectItem value="none">-- {t("Chọn đơn vị")} --</SelectItem>
                     {donViList.map((d) => (
                       <SelectItem key={d.id} value={String(d.id)}>{d.ten}</SelectItem>
                     ))}
@@ -306,13 +308,13 @@ export default function BookingVisaCard({
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {isDirty && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title={t("Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ")}>
                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                Có thay đổi
+                {t("Có thay đổi")}
               </span>
             )}
             <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium", statusCfg.cls)}>
-              {statusCfg.label}
+              {t(statusCfg.labelKey)}
             </span>
             <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={handleDelete}>
               <Trash2 className="h-3 w-3" />
@@ -326,7 +328,7 @@ export default function BookingVisaCard({
           {donVi && (
             <Select value={String(selectedDonViId)} onValueChange={handleDonViChange}>
               <SelectTrigger className="h-6 text-[11px] border-dashed">
-                <span>{donViList.find((d) => d.id === selectedDonViId)?.ten ?? "Đổi đơn vị visa"}</span>
+                <span>{donViList.find((d) => d.id === selectedDonViId)?.ten ?? t("Đổi đơn vị visa")}</span>
               </SelectTrigger>
               <SelectContent>
                 {donViList.map((d) => (
@@ -338,17 +340,17 @@ export default function BookingVisaCard({
 
           {/* Tracking */}
           <div className="flex items-center gap-1 px-2">
-            <TrackingStep label="Đã tạo" active={true} />
+            <TrackingStep label={t("Đã tạo")} active={true} />
             <TrackingLine active={!!booking.sent_at} />
-            <TrackingStep label="Đã gửi" time={booking.sent_at} by={booking.sent_by} active={!!booking.sent_at} />
+            <TrackingStep label={t("Đã gửi")} time={booking.sent_at} by={booking.sent_by} active={!!booking.sent_at} />
             <TrackingLine active={!!booking.confirm_at} />
-            <TrackingStep label="Xác nhận" time={booking.confirm_at} active={!!booking.confirm_at} />
+            <TrackingStep label={t("Xác nhận")} time={booking.confirm_at} active={!!booking.confirm_at} />
           </div>
 
           {/* Deadline + ghi chú */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Deadline</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("Deadline")}</label>
               <DatePicker
                 className="w-full mt-0.5 h-7 text-xs"
                 value={deadline}
@@ -356,14 +358,14 @@ export default function BookingVisaCard({
               />
             </div>
             <div>
-              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Loại visa / Ghi chú</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("Loại visa / Ghi chú")}</label>
               <Textarea
                 className="mt-0.5 text-xs resize-none min-h-[28px] h-7"
                 rows={1}
                 value={ghiChu}
                 onChange={(e) => setGhiChu(e.target.value)}
                 onBlur={() => { if (ghiChu !== (booking.ghi_chu ?? "")) save({ ghi_chu: ghiChu }); }}
-                placeholder="VD: Visa TQ 30 ngày..."
+                placeholder={t("VD: Visa TQ 30 ngày...")}
               />
             </div>
           </div>
@@ -378,23 +380,23 @@ export default function BookingVisaCard({
                 booking.sent_at && "text-amber-700 border-amber-300 hover:bg-amber-50",
               )}
               onClick={() => openEmailModal(booking.sent_at ? "update" : "first")}
-              title={booking.sent_at ? "Gửi cập nhật — sẽ thread vào mail booking cũ" : undefined}
+              title={booking.sent_at ? t("Gửi cập nhật — sẽ thread vào mail booking cũ") : undefined}
             >
-              <Mail className="h-3 w-3" /> {booking.sent_at ? "Gửi cập nhật" : "Soạn email"}
+              <Mail className="h-3 w-3" /> {booking.sent_at ? t("Gửi cập nhật") : t("Soạn email")}
             </Button>
             {status === "cho_xac_nhan" && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={handleConfirm}>
-                <Check className="h-3 w-3" /> Xác nhận
+                <Check className="h-3 w-3" /> {t("Xác nhận")}
               </Button>
             )}
             {(status === "cho_xac_nhan" || status === "da_xac_nhan") && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50" onClick={handleCancel}>
-                <X className="h-3 w-3" /> Hủy
+                <X className="h-3 w-3" /> {t("Hủy")}
               </Button>
             )}
             {status !== "chua_dat" && (
               <Button size="sm" variant="ghost" className="h-7 text-xs gap-1.5 text-muted-foreground" onClick={handleReset}>
-                <RotateCcw className="h-3 w-3" /> Reset
+                <RotateCcw className="h-3 w-3" /> {t("Reset")}
               </Button>
             )}
           </div>
@@ -409,7 +411,7 @@ export default function BookingVisaCard({
             />
             <Paperclip className="h-3 w-3 text-muted-foreground" />
             <span className="text-[11px] text-muted-foreground">
-              Đính kèm bảng điều tour (.docx){!exportData && " — chưa có dữ liệu"}
+              {t("Đính kèm bảng điều tour (.docx)")}{!exportData && ` — ${t("chưa có dữ liệu")}`}
             </span>
           </label>
         </div>
@@ -418,7 +420,7 @@ export default function BookingVisaCard({
       <EmailPreviewModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
-        title={emailMode === "update" ? "Gửi email cập nhật visa (thread vào mail cũ)" : "Gửi email booking visa"}
+        title={emailMode === "update" ? t("Gửi email cập nhật visa (thread vào mail cũ)") : t("Gửi email booking visa")}
         to={emailTo}
         onToChange={setEmailTo}
         subject={emailSubject}

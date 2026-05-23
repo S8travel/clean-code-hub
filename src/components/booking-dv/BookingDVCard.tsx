@@ -23,14 +23,15 @@ import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
+import { t, useTranslate } from "@/lib/i18n";
 
 const STATUS_CFG = {
-  chua_dat:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
-  cho_xac_nhan:    { label: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
-  da_xac_nhan:     { label: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
-  cho_xac_nhan_huy:{ label: "Chờ XN hủy",   cls: "bg-orange-100 text-orange-700" },
-  da_huy:          { label: "Đã hủy",        cls: "bg-red-100 text-red-700" },
-  khong_dat:       { label: "Không đặt",     cls: "bg-slate-100 text-slate-500" },
+  chua_dat:        { labelKey: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
+  cho_xac_nhan:    { labelKey: "Chờ xác nhận", cls: "bg-amber-100 text-amber-700" },
+  da_xac_nhan:     { labelKey: "Đã xác nhận",  cls: "bg-emerald-100 text-emerald-700" },
+  cho_xac_nhan_huy:{ labelKey: "Chờ XN hủy",   cls: "bg-orange-100 text-orange-700" },
+  da_huy:          { labelKey: "Đã hủy",        cls: "bg-red-100 text-red-700" },
+  khong_dat:       { labelKey: "Không đặt",     cls: "bg-slate-100 text-slate-500" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -75,6 +76,7 @@ interface Props {
 type DvItemTagged = DVRow["dich_vu_list"][number] & { __row_id: number };
 
 export default function BookingDVCard({ row, siblings = [], tenDoan, currentUserName, ngayDi }: Props) {
+  useTranslate();
   const updateMut = useUpdateBookingDV();
   const deleteMut = useDeleteBookingDV();
   const sendEmailMut = useSendBookingEmail();
@@ -299,7 +301,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   }, [updateNote]);
 
   const handleSendViaServer = async () => {
-    if (!emailTo) { toast.error("Vui lòng nhập email nhà cung cấp"); return; }
+    if (!emailTo) { toast.error(t("Vui lòng nhập email nhà cung cấp")); return; }
     setSending(true);
     try {
       const hash = hashMailContent(buildMailFields());
@@ -330,9 +332,9 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
         );
       }
       setEmailModalOpen(false);
-      toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
+      toast.success(emailMode === "update" ? t("Đã gửi email cập nhật") : t("Đã gửi email booking"));
     } catch (err: unknown) {
-      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi gửi email") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     } finally {
       setSending(false);
     }
@@ -386,7 +388,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       save({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash });
     }
     setEmailModalOpen(false);
-    toast.success("Đã mở email client");
+    toast.success(t("Đã mở email client"));
   };
 
   const buildZaloText = () => {
@@ -428,15 +430,15 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   // ── Status actions ─────────────────────────────────────────────────
   const handleConfirm = () => {
     saveAll({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
-    toast.success("Đã xác nhận booking");
+    toast.success(t("Đã xác nhận booking"));
   };
   const handleCancel = () => {
     saveAll({ booking_status: "cho_xac_nhan_huy" });
-    toast("Đã cập nhật trạng thái hủy");
+    toast(t("Đã cập nhật trạng thái hủy"));
   };
   const handleReset = () => {
     saveAll({ booking_status: "chua_dat", sent_at: null, sent_by: null, confirm_at: null });
-    toast("Đã đặt lại");
+    toast(t("Đã đặt lại"));
   };
 
   return (
@@ -452,7 +454,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
           <div className="flex items-center gap-1 mt-0.5">
             {isMerged ? (
               <span className="text-xs text-muted-foreground truncate" title={mergedNccNames}>
-                {mergedNccNames} <span className="text-amber-700">· {allRows.length} NCC gộp</span>
+                {mergedNccNames} <span className="text-amber-700">· {allRows.length} {t("NCC gộp")}</span>
               </span>
             ) : (
               <input
@@ -460,7 +462,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                 value={tenNCC}
                 onChange={(e) => setTenNCC(e.target.value)}
                 onBlur={() => save({ ten_nha_cung_cap: tenNCC })}
-                placeholder="Tên nhà cung cấp..."
+                placeholder={t("Tên nhà cung cấp...")}
                 disabled={isCancelled}
               />
             )}
@@ -472,22 +474,22 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onBlur={() => isMerged ? null : save({ email_nha_cung_cap: email })}
-              placeholder="Email nhà cung cấp..."
+              placeholder={t("Email nhà cung cấp...")}
               disabled={isCancelled || isMerged}
-              title={isMerged ? "Email gộp — đổi email sẽ tách card; sửa từng booking ở DB" : undefined}
+              title={isMerged ? t("Email gộp — đổi email sẽ tách card; sửa từng booking ở DB") : undefined}
             />
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           {isDirty && (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title={t("Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ")}>
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-              Có thay đổi
+              {t("Có thay đổi")}
             </span>
           )}
           <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium", status.cls)}>
-            {status.label}
+            {t(status.labelKey)}
           </span>
           <button
             onClick={() => setExpanded((v) => !v)}
@@ -504,15 +506,15 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
           <div className="px-4 py-3">
             {dvSorted.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                Chưa có dịch vụ. Lưu điều tour để tự động sync.
+                {t("Chưa có dịch vụ. Lưu điều tour để tự động sync.")}
               </p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-border">
-                    <th className="text-left py-1.5 font-medium pr-4 w-[100px]">Ngày</th>
-                    <th className="text-left py-1.5 font-medium">Dịch vụ</th>
-                    <th className="text-center py-1.5 font-medium w-[100px]">Số khách</th>
+                    <th className="text-left py-1.5 font-medium pr-4 w-[100px]">{t("Ngày")}</th>
+                    <th className="text-left py-1.5 font-medium">{t("Dịch vụ")}</th>
+                    <th className="text-center py-1.5 font-medium w-[100px]">{t("Số khách")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -549,11 +551,11 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
           {/* ── Tracking Timeline ────────────────────────────────────── */}
           <div className="px-6 py-3 bg-muted/10 border-t border-border">
             <div className="flex items-center">
-              <TrackingStep label="Đã sync" time={row.created_at} active={true} />
+              <TrackingStep label={t("Đã sync")} time={row.created_at} active={true} />
               <TrackingLine active={!!row.sent_at} />
-              <TrackingStep label="Đã gửi mail" time={row.sent_at} active={!!row.sent_at} by={row.sent_by} />
+              <TrackingStep label={t("Đã gửi mail")} time={row.sent_at} active={!!row.sent_at} by={row.sent_by} />
               <TrackingLine active={!!row.confirm_at} />
-              <TrackingStep label="Xác nhận" time={row.confirm_at} active={!!row.confirm_at} />
+              <TrackingStep label={t("Xác nhận")} time={row.confirm_at} active={!!row.confirm_at} />
             </div>
           </div>
 
@@ -561,7 +563,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
           <div className="px-4 py-3 border-t border-border flex items-start gap-4">
             <div className="flex-1 space-y-2">
               <Textarea
-                placeholder="Ghi chú..."
+                placeholder={t("Ghi chú...")}
                 value={ghiChu}
                 onChange={(e) => setGhiChu(e.target.value)}
                 onBlur={() => save({ ghi_chu: ghiChu })}
@@ -570,7 +572,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                 rows={2}
               />
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("Deadline xác nhận")}</p>
                 <DatePicker
                   value={deadline}
                   onChange={(v) => { handleDeadlineChange(v); save({ deadline: v || null }); }}
@@ -585,7 +587,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                 <>
                   <Button size="sm" className="h-8 text-xs" onClick={() => openEmailModal()}>
                     <Send className="h-3.5 w-3.5 mr-1" />
-                    Gửi email
+                    {t("Gửi email")}
                   </Button>
                   <Button
                     size="sm"
@@ -594,7 +596,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                     onClick={handleSendZalo}
                     disabled={updateMut.isPending}
                   >
-                    Gửi Zalo
+                    {t("Gửi Zalo")}
                   </Button>
                   <Button
                     size="sm"
@@ -603,7 +605,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                     onClick={() => saveAll({ booking_status: "khong_dat" })}
                     disabled={updateMut.isPending}
                   >
-                    Không đặt
+                    {t("Không đặt")}
                   </Button>
                 </>
               )}
@@ -614,17 +616,17 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                   variant="outline"
                   className="h-8 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
                   onClick={() => openEmailModal("update")}
-                  title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+                  title={t("Gửi email cập nhật — sẽ thread vào mail booking cũ")}
                 >
                   <Send className="h-3.5 w-3.5 mr-1" />
-                  Gửi cập nhật
+                  {t("Gửi cập nhật")}
                 </Button>
               )}
               {/* Xác nhận */}
               {effectiveStatus === "cho_xac_nhan" && (
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleConfirm}>
                   <Check className="h-3.5 w-3.5 mr-1" />
-                  Xác nhận
+                  {t("Xác nhận")}
                 </Button>
               )}
               {/* Hủy */}
@@ -635,7 +637,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                   onClick={handleCancel}
                 >
                   <X className="h-3.5 w-3.5 mr-1" />
-                  Hủy
+                  {t("Hủy")}
                 </Button>
               )}
               {/* Xác nhận hủy */}
@@ -646,14 +648,14 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                   onClick={() => saveAll({ booking_status: "da_huy" })}
                 >
                   <Check className="h-3.5 w-3.5 mr-1" />
-                  Xác nhận hủy
+                  {t("Xác nhận hủy")}
                 </Button>
               )}
               {/* Đặt lại — khi đã hủy hoặc không đặt */}
               {(effectiveStatus === "da_huy" || effectiveStatus === "khong_dat") && (
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleReset}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  Đặt lại
+                  {t("Đặt lại")}
                 </Button>
               )}
               {/* Xóa — merged: xóa cả nhóm */}
@@ -662,8 +664,8 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
                 className="h-8 w-8 text-destructive hover:bg-destructive/10"
                 onClick={() => {
                   const label = isMerged
-                    ? `Xóa ${allRows.length} bookings của email "${email}"?`
-                    : `Xóa booking "${tenNCC || "này"}"?`;
+                    ? `${t("Xóa")} ${allRows.length} bookings ${t("của email")} "${email}"?`
+                    : `${t("Xóa booking")} "${tenNCC || t("này")}"?`;
                   if (confirm(label)) {
                     allRows.forEach((r) =>
                       deleteMut.mutate({ id: r.id, doan_id: r.doan_id }),
@@ -682,7 +684,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       <EmailPreviewModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
-        title={emailMode === "update" ? "Gửi email cập nhật dịch vụ (thread vào mail cũ)" : "Gửi email đặt dịch vụ"}
+        title={emailMode === "update" ? t("Gửi email cập nhật dịch vụ (thread vào mail cũ)") : t("Gửi email đặt dịch vụ")}
         to={emailTo}
         onToChange={setEmailTo}
         subject={emailSubject}
@@ -700,7 +702,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       <Dialog open={zaloModalOpen} onOpenChange={setZaloModalOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Nội dung gửi Zalo</DialogTitle>
+            <DialogTitle>{t("Nội dung gửi Zalo")}</DialogTitle>
           </DialogHeader>
           <textarea
             readOnly
@@ -709,11 +711,11 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
             onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
           />
           <div className="flex justify-between gap-2 pt-1">
-            <Button variant="outline" onClick={() => { navigator.clipboard.writeText(zaloText); toast.success("Đã sao chép"); }}>
-              Sao chép
+            <Button variant="outline" onClick={() => { navigator.clipboard.writeText(zaloText); toast.success(t("Đã sao chép")); }}>
+              {t("Sao chép")}
             </Button>
             <Button onClick={handleConfirmZaloSent} disabled={updateMut.isPending}>
-              Đã gửi
+              {t("Đã gửi")}
             </Button>
           </div>
         </DialogContent>

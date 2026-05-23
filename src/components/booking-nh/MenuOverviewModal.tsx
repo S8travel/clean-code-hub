@@ -13,6 +13,7 @@ import {
   type BookingNHRow,
 } from "@/hooks/use-booking-nh";
 import { cn } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDay(d: string | null) {
   if (!d) return "—";
@@ -53,7 +54,7 @@ function MonListView({ nhaHangId, booking }: MonListViewProps) {
   }, [booking?.set_menu_id, booking?.mon_an_snapshot]);
 
   if (!nhaHangId) {
-    return <span className="text-xs text-muted-foreground/40 italic">Không có nhà hàng</span>;
+    return <span className="text-xs text-muted-foreground/40 italic">{t("Không có nhà hàng")}</span>;
   }
 
   return (
@@ -64,7 +65,7 @@ function MonListView({ nhaHangId, booking }: MonListViewProps) {
         </div>
       )}
       {monList.length === 0 ? (
-        <p className="text-xs text-muted-foreground/50 italic">Chưa có món</p>
+        <p className="text-xs text-muted-foreground/50 italic">{t("Chưa có món")}</p>
       ) : (
         <ul className="space-y-0.5">
           {monList.map((mon, i) => (
@@ -76,7 +77,7 @@ function MonListView({ nhaHangId, booking }: MonListViewProps) {
         </ul>
       )}
       <p className="text-[10px] text-muted-foreground/60 italic pt-1">
-        Sửa món ở tab Booking NH
+        {t("Sửa món ở tab Booking NH")}
       </p>
     </div>
   );
@@ -101,6 +102,7 @@ interface Props {
 }
 
 export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdated, tenDoan, soKhach, hdvTen }: Props) {
+  useTranslate();
   const daysWithNH = days.filter(
     (d) => d.an_trua_nha_hang_id || d.an_toi_nha_hang_id
   );
@@ -221,33 +223,33 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Menu tổng quan cả đoàn</DialogTitle>
+          <DialogTitle>{t("Menu tổng quan cả đoàn")}</DialogTitle>
         </DialogHeader>
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handlePrint} disabled={daysWithNH.length === 0}>
-            <Printer className="h-4 w-4 mr-1.5" /> In menu
+            <Printer className="h-4 w-4 mr-1.5" /> {t("In menu")}
           </Button>
           <Button variant="outline" size="sm" onClick={handlePrintXihong} disabled={daysWithNH.length === 0}>
-            <Printer className="h-4 w-4 mr-1.5" /> In kiểu Xihong
+            <Printer className="h-4 w-4 mr-1.5" /> {t("In kiểu Xihong")}
           </Button>
         </div>
 
         {daysWithNH.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
-            Chưa có nhà hàng nào được chỉ định trong điều tour.
+            {t("Chưa có nhà hàng nào được chỉ định trong điều tour.")}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-muted/40 text-xs text-muted-foreground">
-                  <th className="text-left px-3 py-2 font-medium border border-border w-[100px]">Ngày</th>
+                  <th className="text-left px-3 py-2 font-medium border border-border w-[100px]">{t("Ngày")}</th>
                   <th className="text-left px-3 py-2 font-medium border border-border">
-                    🍱 Bữa trưa
+                    🍱 {t("Bữa trưa")}
                   </th>
                   <th className="text-left px-3 py-2 font-medium border border-border">
-                    🍽 Bữa tối
+                    🍽 {t("Bữa tối")}
                   </th>
                 </tr>
               </thead>
@@ -256,7 +258,7 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
                   <tr key={day.doan_ngay_id} className="border-b border-border align-top hover:bg-muted/20 transition-colors">
                     {/* Ngày */}
                     <td className="px-3 py-3 border border-border">
-                      <p className="font-medium text-xs">Ngày {day.ngay_so}</p>
+                      <p className="font-medium text-xs">{t("Ngày")} {day.ngay_so}</p>
                       <p className="text-muted-foreground text-xs">{fmtDay(day.ngay_date)}</p>
                     </td>
 
@@ -308,7 +310,7 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
 
             {/* Legend */}
             <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-              <span className="font-medium">Trạng thái:</span>
+              <span className="font-medium">{t("Trạng thái")}:</span>
               {[
                 { cls: "bg-muted-foreground/30", label: "Chưa gửi" },
                 { cls: "bg-amber-400",           label: "Đã gửi" },
@@ -317,7 +319,7 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
               ].map(({ cls, label }) => (
                 <span key={label} className="flex items-center gap-1">
                   <span className={cn("w-2 h-2 rounded-full", cls)} />
-                  {label}
+                  {t(label)}
                 </span>
               ))}
             </div>
@@ -325,7 +327,7 @@ export default function MenuOverviewModal({ open, onClose, doanId, days, onUpdat
         )}
 
         <div className="flex justify-end pt-2">
-          <Button variant="outline" onClick={onClose}>Đóng</Button>
+          <Button variant="outline" onClick={onClose}>{t("Đóng")}</Button>
         </div>
       </DialogContent>
     </Dialog>
