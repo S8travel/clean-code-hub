@@ -10,21 +10,22 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useCreateCongViec, useUserListForAssign } from "@/hooks/use-cong-viec";
 import { useDoanList } from "@/hooks/use-doan";
 import { toast } from "sonner";
+import { t, useTranslate } from "@/lib/i18n";
 
 const LOAI_OPTIONS = [
-  { value: "booking_ks",  label: "Booking Khách sạn" },
-  { value: "booking_nh",  label: "Booking Nhà hàng" },
-  { value: "visa",        label: "Xử lý Visa" },
-  { value: "thanh_toan",  label: "Thanh toán" },
-  { value: "lien_he",     label: "Liên hệ / Xác nhận" },
-  { value: "khac",        label: "Khác" },
+  { value: "booking_ks",  labelKey: "Booking Khách sạn" },
+  { value: "booking_nh",  labelKey: "Booking Nhà hàng" },
+  { value: "visa",        labelKey: "Xử lý Visa" },
+  { value: "thanh_toan",  labelKey: "Thanh toán" },
+  { value: "lien_he",     labelKey: "Liên hệ / Xác nhận" },
+  { value: "khac",        labelKey: "Khác" },
 ];
 
 const UU_TIEN_OPTIONS = [
-  { value: "khan_cap",    label: "🔴 Khẩn cấp" },
-  { value: "cao",         label: "🟠 Cao" },
-  { value: "binh_thuong", label: "🟡 Bình thường" },
-  { value: "thap",        label: "🟢 Thấp" },
+  { value: "khan_cap",    labelKey: "🔴 Khẩn cấp" },
+  { value: "cao",         labelKey: "🟠 Cao" },
+  { value: "binh_thuong", labelKey: "🟡 Bình thường" },
+  { value: "thap",        labelKey: "🟢 Thấp" },
 ];
 
 interface Props {
@@ -35,6 +36,7 @@ interface Props {
 }
 
 export default function TaoViecModal({ open, onClose, userId, userName }: Props) {
+  useTranslate();
   const { data: users = [] } = useUserListForAssign();
   const { data: allDoan = [] } = useDoanList(null);
   const createMut = useCreateCongViec();
@@ -58,8 +60,8 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
     .slice(0, 20);
 
   const handleSubmit = async () => {
-    if (!tieu_de.trim()) { toast.error("Vui lòng nhập tiêu đề công việc"); return; }
-    if (!nguoi_nhan) { toast.error("Vui lòng chọn người nhận việc"); return; }
+    if (!tieu_de.trim()) { toast.error(t("Vui lòng nhập tiêu đề công việc")); return; }
+    if (!nguoi_nhan) { toast.error(t("Vui lòng chọn người nhận việc")); return; }
 
     const tenNguoiNhan = users.find((u) => u.user_id === nguoi_nhan)?.ho_ten ?? "";
     const tenDoan = doan_id
@@ -79,10 +81,10 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
         ten_nguoi_giao: userName,
         ten_doan: tenDoan,
       });
-      toast.success(`Đã giao việc cho ${tenNguoiNhan}`);
+      toast.success(`${t("Đã giao việc cho")} ${tenNguoiNhan}`);
       handleClose();
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || ""));
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
     }
   };
 
@@ -96,16 +98,16 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-sm">Tạo việc mới</DialogTitle>
+          <DialogTitle className="text-sm">{t("Tạo việc mới")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 py-1 text-xs">
           {/* Tiêu đề */}
           <div className="space-y-1">
-            <Label className="text-xs">Tiêu đề <span className="text-destructive">*</span></Label>
+            <Label className="text-xs">{t("Tiêu đề")} <span className="text-destructive">*</span></Label>
             <Input
               className="h-8 text-xs"
-              placeholder="Ví dụ: Xác nhận booking KS Cầu Giấy đoàn HAN..."
+              placeholder={t("Ví dụ: Xác nhận booking KS Cầu Giấy đoàn HAN...")}
               value={tieu_de}
               onChange={(e) => setTieuDe(e.target.value)}
               autoFocus
@@ -115,35 +117,35 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
           {/* Người nhận + Ưu tiên */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Người nhận <span className="text-destructive">*</span></Label>
+              <Label className="text-xs">{t("Người nhận")} <span className="text-destructive">*</span></Label>
               <Select value={nguoi_nhan} onValueChange={setNguoiNhan}>
                 <SelectTrigger className="h-8 text-xs">
                   <span>
                     {(() => {
                       const u = users.find((u) => u.user_id === nguoi_nhan);
-                      if (!u) return "Chọn người nhận...";
-                      return u.user_id === userId ? `${u.ho_ten} (bản thân)` : u.ho_ten;
+                      if (!u) return t("Chọn người nhận...");
+                      return u.user_id === userId ? `${u.ho_ten} ${t("(bản thân)")}` : u.ho_ten;
                     })()}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
                   {users.map((u) => (
                     <SelectItem key={u.user_id} value={u.user_id} className="text-xs">
-                      {u.user_id === userId ? `${u.ho_ten} (bản thân)` : u.ho_ten}
+                      {u.user_id === userId ? `${u.ho_ten} ${t("(bản thân)")}` : u.ho_ten}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Độ ưu tiên</Label>
+              <Label className="text-xs">{t("Độ ưu tiên")}</Label>
               <Select value={do_uu_tien} onValueChange={setDoUuTien}>
                 <SelectTrigger className="h-8 text-xs">
-                  <span>{UU_TIEN_OPTIONS.find((o) => o.value === do_uu_tien)?.label ?? ""}</span>
+                  <span>{t(UU_TIEN_OPTIONS.find((o) => o.value === do_uu_tien)?.labelKey ?? "")}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {UU_TIEN_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.labelKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -153,20 +155,20 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
           {/* Loại việc + Deadline */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Loại việc</Label>
+              <Label className="text-xs">{t("Loại việc")}</Label>
               <Select value={loai_viec} onValueChange={setLoaiViec}>
                 <SelectTrigger className="h-8 text-xs">
-                  <span>{LOAI_OPTIONS.find((o) => o.value === loai_viec)?.label ?? ""}</span>
+                  <span>{t(LOAI_OPTIONS.find((o) => o.value === loai_viec)?.labelKey ?? "")}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {LOAI_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.labelKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Hạn xử lý</Label>
+              <Label className="text-xs">{t("Hạn xử lý")}</Label>
               <DatePicker
                 className="h-8 text-xs w-full"
                 value={han_xu_ly}
@@ -177,10 +179,10 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
 
           {/* Đoàn liên quan */}
           <div className="space-y-1">
-            <Label className="text-xs">Đoàn liên quan (tuỳ chọn)</Label>
+            <Label className="text-xs">{t("Đoàn liên quan (tuỳ chọn)")}</Label>
             <Input
               className="h-8 text-xs"
-              placeholder="Tìm tên đoàn..."
+              placeholder={t("Tìm tên đoàn...")}
               value={doanSearch}
               onChange={(e) => { setDoanSearch(e.target.value); setDoanId(""); }}
             />
@@ -208,10 +210,10 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
 
           {/* Mô tả */}
           <div className="space-y-1">
-            <Label className="text-xs">Mô tả chi tiết</Label>
+            <Label className="text-xs">{t("Mô tả chi tiết")}</Label>
             <Textarea
               className="text-xs min-h-[64px]"
-              placeholder="Hướng dẫn, yêu cầu cụ thể..."
+              placeholder={t("Hướng dẫn, yêu cầu cụ thể...")}
               value={mo_ta}
               onChange={(e) => setMoTa(e.target.value)}
             />
@@ -219,9 +221,9 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
         </div>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" className="text-xs" onClick={handleClose}>Hủy</Button>
+          <Button variant="outline" size="sm" className="text-xs" onClick={handleClose}>{t("Hủy")}</Button>
           <Button size="sm" className="text-xs" onClick={handleSubmit} disabled={createMut.isPending}>
-            {createMut.isPending ? "Đang giao..." : "Giao việc"}
+            {createMut.isPending ? t("Đang giao...") : t("Giao việc")}
           </Button>
         </DialogFooter>
       </DialogContent>

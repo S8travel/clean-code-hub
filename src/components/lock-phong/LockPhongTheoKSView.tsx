@@ -24,15 +24,16 @@ import {
 import LockPhongEmailModal from "./LockPhongEmailModal";
 import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
 import { isLockPhongDirty } from "./LockPhongCard";
+import { t, useTranslate } from "@/lib/i18n";
 
 function EmailStatusBadge({ status }: { status: string }) {
   if (status === "da_xac_nhan")
-    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">Đã xác nhận</Badge>;
+    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">{t("Đã xác nhận")}</Badge>;
   if (status === "cho_xac_nhan")
-    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">Chờ xác nhận</Badge>;
+    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">{t("Chờ xác nhận")}</Badge>;
   if (status === "da_huy")
-    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">Đã hủy</Badge>;
-  return <Badge className="text-[10px] bg-muted text-muted-foreground border-0">Chưa gửi</Badge>;
+    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">{t("Đã hủy")}</Badge>;
+  return <Badge className="text-[10px] bg-muted text-muted-foreground border-0">{t("Chưa gửi")}</Badge>;
 }
 
 // ── Inline editable cells ─────────────────────────────────────────────────────
@@ -91,14 +92,14 @@ function deadlineDisplay(deadline: string | null, outcome?: string | null) {
       return {
         text: dateStr,
         cls: "text-muted-foreground line-through",
-        subtext: outcome === "thanh_doan" ? "Đã thành đoàn" : "Đã hủy",
+        subtext: outcome === "thanh_doan" ? t("Đã thành đoàn") : t("Đã hủy"),
       };
     }
-    if (diff < 0) return { text: dateStr, cls: "text-red-700 font-semibold", subtext: `Quá hạn ${Math.abs(diff)} ngày` };
-    if (diff === 0) return { text: dateStr, cls: "text-orange-700 font-semibold", subtext: "Hôm nay" };
-    if (diff <= 3) return { text: dateStr, cls: "text-orange-600 font-medium", subtext: `Còn ${diff} ngày` };
-    if (diff <= 7) return { text: dateStr, cls: "text-amber-600", subtext: `Còn ${diff} ngày` };
-    return { text: dateStr, cls: "text-foreground", subtext: `Còn ${diff} ngày` };
+    if (diff < 0) return { text: dateStr, cls: "text-red-700 font-semibold", subtext: `${t("Quá hạn")} ${Math.abs(diff)} ${t("ngày")}` };
+    if (diff === 0) return { text: dateStr, cls: "text-orange-700 font-semibold", subtext: t("Hôm nay") };
+    if (diff <= 3) return { text: dateStr, cls: "text-orange-600 font-medium", subtext: `${t("Còn")} ${diff} ${t("ngày")}` };
+    if (diff <= 7) return { text: dateStr, cls: "text-amber-600", subtext: `${t("Còn")} ${diff} ${t("ngày")}` };
+    return { text: dateStr, cls: "text-foreground", subtext: `${t("Còn")} ${diff} ${t("ngày")}` };
   } catch {
     return { text: deadline, cls: "text-muted-foreground", subtext: "" };
   }
@@ -123,6 +124,7 @@ interface Props {
 }
 
 export default function LockPhongTheoKSView({ data }: Props) {
+  useTranslate();
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [emailTarget, setEmailTarget] = useState<{
     lockPhong: LockPhongDisplay;
@@ -151,7 +153,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
   ) => {
     if (pendingIds.length === 0) return;
     const ok = window.confirm(
-      `Xác nhận lock phòng cho ${pendingIds.length} đoàn tại ${khachSanTen}?`,
+      `${t("Xác nhận lock phòng cho")} ${pendingIds.length} ${t("đoàn tại")} ${khachSanTen}?`,
     );
     if (!ok) return;
     setConfirmingKsId(khachSanId);
@@ -165,9 +167,9 @@ export default function LockPhongTheoKSView({ data }: Props) {
           }),
         ),
       );
-      toast.success(`Đã xác nhận ${pendingIds.length} đoàn`);
+      toast.success(`${t("Đã xác nhận")} ${pendingIds.length} ${t("đoàn")}`);
     } catch (e: unknown) {
-      toast.error("Lỗi xác nhận: " + (errMsg(e) || ""));
+      toast.error(t("Lỗi xác nhận") + ": " + (errMsg(e) || ""));
     } finally {
       setConfirmingKsId(null);
     }
@@ -180,7 +182,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
     updateFields.mutate(
       { id, fields },
       {
-        onError: (e: unknown) => toast.error("Lỗi cập nhật: " + (errMsg(e) || "")),
+        onError: (e: unknown) => toast.error(t("Lỗi cập nhật") + ": " + (errMsg(e) || "")),
       },
     );
   };
@@ -268,7 +270,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
   if (groups.length === 0) {
     return (
       <p className="py-12 text-center text-sm text-muted-foreground">
-        Chưa có dữ liệu lock phòng
+        {t("Chưa có dữ liệu lock phòng")}
       </p>
     );
   }
@@ -310,12 +312,12 @@ export default function LockPhongTheoKSView({ data }: Props) {
           .slice(-1)[0] ?? null;
         const lastMailRel = lastMailAt
           ? formatDistanceToNow(new Date(lastMailAt), { addSuffix: true, locale: vi })
-          : "Chưa gửi";
+          : t("Chưa gửi");
         const hotelStatus =
-          quaHan > 0 ? { l: "Quá hạn", c: "bg-red-100 text-red-700" }
-          : sapDen > 0 ? { l: "Sắp đến hạn", c: "bg-amber-100 text-amber-700" }
-          : total > 0 && daXN === total ? { l: "Đã xác nhận", c: "bg-emerald-100 text-emerald-700" }
-          : { l: "Chờ xử lý", c: "bg-blue-100 text-blue-700" };
+          quaHan > 0 ? { l: t("Quá hạn"), c: "bg-red-100 text-red-700" }
+          : sapDen > 0 ? { l: t("Sắp đến hạn"), c: "bg-amber-100 text-amber-700" }
+          : total > 0 && daXN === total ? { l: t("Đã xác nhận"), c: "bg-emerald-100 text-emerald-700" }
+          : { l: t("Chờ xử lý"), c: "bg-blue-100 text-blue-700" };
         const pendingIds = group.entries.flatMap(({ ksRows }) =>
           ksRows.filter((r) => r.email_status === "cho_xac_nhan").map((r) => r.id),
         );
@@ -339,7 +341,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                   <span className="font-semibold text-sm">{group.khach_san_ten}</span>
                   <Badge className={cn("text-[10px] border-0", hotelStatus.c)}>{hotelStatus.l}</Badge>
                   <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                    <Hotel className="h-3 w-3" />{group.entries.length} đoàn
+                    <Hotel className="h-3 w-3" />{group.entries.length} {t("đoàn")}
                   </span>
                   {group.khach_san_dia_diem && (
                     <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
@@ -351,16 +353,16 @@ export default function LockPhongTheoKSView({ data }: Props) {
                   <div className="h-1.5 w-32 rounded-full bg-muted overflow-hidden">
                     <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="text-[11px] text-muted-foreground">{pct}% đã xác nhận</span>
+                  <span className="text-[11px] text-muted-foreground">{pct}% {t("đã xác nhận")}</span>
                 </div>
               </button>
 
               <div className="hidden md:flex items-center gap-4 shrink-0 text-center">
                 {[
-                  { n: daXN, l: "Đã xác nhận", c: "text-emerald-600" },
-                  { n: choXN, l: "Chờ xác nhận", c: "text-blue-600" },
-                  { n: sapDen, l: "Sắp đến hạn", c: "text-amber-600" },
-                  { n: quaHan, l: "Quá hạn", c: "text-red-600" },
+                  { n: daXN, l: t("Đã xác nhận"), c: "text-emerald-600" },
+                  { n: choXN, l: t("Chờ xác nhận"), c: "text-blue-600" },
+                  { n: sapDen, l: t("Sắp đến hạn"), c: "text-amber-600" },
+                  { n: quaHan, l: t("Quá hạn"), c: "text-red-600" },
                 ].map((x) => (
                   <div key={x.l} className="w-16">
                     <div className={cn("text-base font-bold", x.c)}>{x.n}</div>
@@ -370,10 +372,10 @@ export default function LockPhongTheoKSView({ data }: Props) {
               </div>
 
               <div className="hidden xl:block shrink-0 w-44 text-xs border-l border-border pl-3">
-                <div className="text-[10px] text-muted-foreground">Deadline sớm nhất</div>
+                <div className="text-[10px] text-muted-foreground">{t("Deadline sớm nhất")}</div>
                 <div className={dl.cls}>{dl.text}</div>
                 {dl.subtext && <div className="text-[10px] text-muted-foreground">{dl.subtext}</div>}
-                <div className="text-[10px] text-muted-foreground mt-0.5">Last mail: {lastMailRel}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{t("Last mail")}: {lastMailRel}</div>
               </div>
 
               <div className="shrink-0 flex items-center gap-2">
@@ -382,7 +384,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1.5 text-xs text-teal-700 border-teal-300 hover:bg-teal-50"
-                    title={`Xác nhận lock phòng cho ${pendingIds.length} đoàn đang chờ xác nhận`}
+                    title={`${t("Xác nhận lock phòng cho")} ${pendingIds.length} ${t("đoàn đang chờ xác nhận")}`}
                     disabled={isConfirming}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -390,14 +392,14 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     }}
                   >
                     <Check className="h-3.5 w-3.5" />
-                    {isConfirming ? "Đang xác nhận..." : `Xác nhận all (${pendingIds.length})`}
+                    {isConfirming ? t("Đang xác nhận...") : `${t("Xác nhận all")} (${pendingIds.length})`}
                   </Button>
                 )}
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-7 gap-1.5 text-xs"
-                  title="Gửi 1 email gộp cho tất cả đoàn tại khách sạn này"
+                  title={t("Gửi 1 email gộp cho tất cả đoàn tại khách sạn này")}
                   onClick={(e) => {
                     e.stopPropagation();
                     const flatEntries = group.entries.flatMap(({ lockPhong, ksRows }) =>
@@ -412,13 +414,13 @@ export default function LockPhongTheoKSView({ data }: Props) {
                   }}
                 >
                   <MailPlus className="h-3.5 w-3.5" />
-                  Gửi gộp
+                  {t("Gửi gộp")}
                 </Button>
                 <button
                   type="button"
                   onClick={() => toggleExpand(group.khach_san_id)}
                   className="h-7 w-7 grid place-items-center rounded hover:bg-muted/50 text-muted-foreground"
-                  title={isOpen ? "Thu gọn" : "Mở chi tiết"}
+                  title={isOpen ? t("Thu gọn") : t("Mở chi tiết")}
                 >
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </button>
@@ -431,16 +433,16 @@ export default function LockPhongTheoKSView({ data }: Props) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/10">
-                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Tên đoàn</th>
-                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Seri</th>
-                      <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground w-[130px]">Deadline</th>
-                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Check-in</th>
-                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Check-out</th>
-                      <th className="px-4 py-1.5 text-center text-xs font-medium text-muted-foreground w-14">Đêm</th>
-                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Số phòng</th>
-                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">Code NCC</th>
-                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground w-[200px]">Trạng thái</th>
-                      <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground w-[130px]">TT mail</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">{t("Tên đoàn")}</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">{t("Seri")}</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground w-[130px]">{t("Deadline")}</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">{t("Check-in")}</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">{t("Check-out")}</th>
+                      <th className="px-4 py-1.5 text-center text-xs font-medium text-muted-foreground w-14">{t("Đêm")}</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">{t("Số phòng")}</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground">{t("Code NCC")}</th>
+                      <th className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground w-[200px]">{t("Trạng thái")}</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground w-[130px]">{t("TT mail")}</th>
                       <th className="px-4 py-1.5 text-xs font-medium text-muted-foreground" />
                     </tr>
                   </thead>
@@ -471,7 +473,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                   {lockPhong.ten_doan}
                                   {callCount > 1 && (
                                     <Badge className="ml-1.5 text-[9px] px-1 py-0 bg-blue-50 text-blue-600 border-blue-200">
-                                      {callCount} call
+                                      {callCount} {t("call")}
                                     </Badge>
                                   )}
                                 </td>
@@ -502,7 +504,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                             if (next !== (lockPhong.deadline ?? null)) {
                                               updateDeadline.mutate(
                                                 { id: lockPhong.id, deadline: next },
-                                                { onError: (e: unknown) => toast.error("Lỗi sửa deadline: " + (errMsg(e) || "")) },
+                                                { onError: (e: unknown) => toast.error(t("Lỗi sửa deadline") + ": " + (errMsg(e) || "")) },
                                               );
                                             }
                                           }}
@@ -554,21 +556,21 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                   <SelectTrigger className="h-7 w-[140px] text-xs">
                                     <span>
                                       {outcomeValue === "cho_xu_ly"
-                                        ? "Chờ xử lý"
+                                        ? t("Chờ xử lý")
                                         : outcomeValue === "da_huy"
-                                        ? "Đã hủy"
-                                        : "Thành đoàn"}
+                                        ? t("Đã hủy")
+                                        : t("Thành đoàn")}
                                     </span>
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="cho_xu_ly">Chờ xử lý</SelectItem>
-                                    <SelectItem value="da_huy">Đã hủy</SelectItem>
-                                    <SelectItem value="thanh_doan">Thành đoàn</SelectItem>
+                                    <SelectItem value="cho_xu_ly">{t("Chờ xử lý")}</SelectItem>
+                                    <SelectItem value="da_huy">{t("Đã hủy")}</SelectItem>
+                                    <SelectItem value="thanh_doan">{t("Thành đoàn")}</SelectItem>
                                   </SelectContent>
                                 </Select>
                                 {ksRow.outcome_status === "thanh_doan" && (
                                   <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">
-                                    {ksRow.code_doan_thanh || "(chưa code)"}
+                                    {ksRow.code_doan_thanh || t("(chưa code)")}
                                   </Badge>
                                 )}
                                 {ksRow.outcome_status === "da_huy" && (
@@ -582,10 +584,10 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 {isLockPhongDirty(ksRow) && (
                                   <span
                                     className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1"
-                                    title="Có thay đổi sau khi gửi mail"
+                                    title={t("Có thay đổi sau khi gửi mail")}
                                   >
                                     <span className="w-1 h-1 rounded-full bg-orange-500" />
-                                    Đổi
+                                    {t("Đổi")}
                                   </span>
                                 )}
                               </div>
@@ -598,7 +600,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                                 onClick={() => setEmailTarget({ lockPhong, ksRow })}
                               >
                                 <Mail className="h-3 w-3" />
-                                Email
+                                {t("Email")}
                               </Button>
                             </td>
                           </tr>
@@ -610,19 +612,19 @@ export default function LockPhongTheoKSView({ data }: Props) {
                 {group.entries.length > ePageSize && (
                   <div className="flex items-center justify-between text-xs text-muted-foreground px-4 py-2 border-t border-border">
                     <span>
-                      Hiển thị {(eCur - 1) * ePageSize + 1}–{Math.min(eCur * ePageSize, group.entries.length)} / {group.entries.length} đoàn
+                      {t("Hiển thị")} {(eCur - 1) * ePageSize + 1}–{Math.min(eCur * ePageSize, group.entries.length)} / {group.entries.length} {t("đoàn")}
                     </span>
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="sm" className="h-6 text-xs px-2"
                         disabled={eCur <= 1}
                         onClick={() => setEntryPage((m) => ({ ...m, [group.khach_san_id]: eCur - 1 }))}>
-                        <ChevronLeft className="h-3 w-3 mr-0.5" /> Trước
+                        <ChevronLeft className="h-3 w-3 mr-0.5" /> {t("Trước")}
                       </Button>
-                      <span className="px-2">Trang {eCur}/{eTotalPages}</span>
+                      <span className="px-2">{t("Trang")} {eCur}/{eTotalPages}</span>
                       <Button variant="outline" size="sm" className="h-6 text-xs px-2"
                         disabled={eCur >= eTotalPages}
                         onClick={() => setEntryPage((m) => ({ ...m, [group.khach_san_id]: eCur + 1 }))}>
-                        Sau <ChevronRight className="h-3 w-3 ml-0.5" />
+                        {t("Sau")} <ChevronRight className="h-3 w-3 ml-0.5" />
                       </Button>
                     </div>
                   </div>
@@ -636,26 +638,26 @@ export default function LockPhongTheoKSView({ data }: Props) {
       {groups.length > 0 && (
         <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 flex-wrap gap-2">
           <span>
-            Hiển thị {(lpCur - 1) * lpPageSize + 1}–{Math.min(lpCur * lpPageSize, groups.length)} / {groups.length} khách sạn
+            {t("Hiển thị")} {(lpCur - 1) * lpPageSize + 1}–{Math.min(lpCur * lpPageSize, groups.length)} / {groups.length} {t("khách sạn")}
           </span>
           <div className="flex items-center gap-1">
             <Button variant="outline" size="sm" className="h-7 text-xs"
               disabled={lpCur <= 1} onClick={() => setLpPage(lpCur - 1)}>
-              <ChevronLeft className="h-3 w-3 mr-0.5" /> Trước
+              <ChevronLeft className="h-3 w-3 mr-0.5" /> {t("Trước")}
             </Button>
-            <span className="px-2">Trang {lpCur}/{lpTotalPages}</span>
+            <span className="px-2">{t("Trang")} {lpCur}/{lpTotalPages}</span>
             <Button variant="outline" size="sm" className="h-7 text-xs"
               disabled={lpCur >= lpTotalPages} onClick={() => setLpPage(lpCur + 1)}>
-              Sau <ChevronRight className="h-3 w-3 ml-0.5" />
+              {t("Sau")} <ChevronRight className="h-3 w-3 ml-0.5" />
             </Button>
           </div>
           <Select value={String(lpPageSize)} onValueChange={(v) => { setLpPageSize(Number(v)); setLpPage(1); }}>
             <SelectTrigger className="h-7 text-xs w-[140px]">
-              <span>Hiển thị {lpPageSize}/trang</span>
+              <span>{t("Hiển thị")} {lpPageSize}/{t("trang")}</span>
             </SelectTrigger>
             <SelectContent>
               {[5, 10, 20, 50].map((n) => (
-                <SelectItem key={n} value={String(n)}>{n} khách sạn / trang</SelectItem>
+                <SelectItem key={n} value={String(n)}>{n} {t("khách sạn / trang")}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -686,7 +688,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
           if (!thanhDoanTarget) return;
           const trimmed = code.trim();
           if (!trimmed) {
-            toast.warning("Cần nhập code đoàn chính thức");
+            toast.warning(t("Cần nhập code đoàn chính thức"));
             return;
           }
           // Apply cho tất cả ksRows (đoàn có thể stay nhiều lần ở cùng KS)
@@ -699,13 +701,13 @@ export default function LockPhongTheoKSView({ data }: Props) {
                 onSuccess: () => {
                   pending -= 1;
                   if (pending === 0 && !hadError) {
-                    toast.success(`Đã đánh dấu thành đoàn (${trimmed})`);
+                    toast.success(`${t("Đã đánh dấu thành đoàn")} (${trimmed})`);
                     setThanhDoanTarget(null);
                   }
                 },
                 onError: (e: unknown) => {
                   hadError = true;
-                  toast.error("Lỗi: " + (errMsg(e) || ""));
+                  toast.error(t("Lỗi") + ": " + (errMsg(e) || ""));
                 },
               },
             );
@@ -723,6 +725,7 @@ function ThanhDoanDialog({
   onClose: () => void;
   onSubmit: (code: string) => void;
 }) {
+  useTranslate();
   const [code, setCode] = useState("");
   const targetKey = target?.ksRowIds.join(",") ?? null;
   // Re-init code khi mở target khác — pattern "adjust state during render".
@@ -736,30 +739,30 @@ function ThanhDoanDialog({
     <Dialog open={!!target} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Đoàn lock thành đoàn chính thức</DialogTitle>
+          <DialogTitle>{t("Đoàn lock thành đoàn chính thức")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2 text-sm">
           {target && (
             <p className="text-muted-foreground">
-              Lock: <span className="font-medium text-foreground">{target.tenDoan}</span>
+              {t("Lock")}: <span className="font-medium text-foreground">{target.tenDoan}</span>
             </p>
           )}
           <div className="space-y-1.5">
-            <Label className="text-xs">Code đoàn chính thức *</Label>
+            <Label className="text-xs">{t("Code đoàn chính thức")} *</Label>
             <Input
               autoFocus
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="vd: TQ250501-FY"
+              placeholder={t("vd: TQ250501-FY")}
               className="h-9 text-sm"
               onKeyDown={(e) => { if (e.key === "Enter") onSubmit(code); }}
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" onClick={onClose}>{t("Hủy")}</Button>
           <Button onClick={() => onSubmit(code)} disabled={!code.trim()}>
-            Xác nhận
+            {t("Xác nhận")}
           </Button>
         </DialogFooter>
       </DialogContent>

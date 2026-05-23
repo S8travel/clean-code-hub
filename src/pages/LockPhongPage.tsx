@@ -20,16 +20,17 @@ import LockPhongTheoKSView from "@/components/lock-phong/LockPhongTheoKSView";
 import LockPhongTheoDeadlineView from "@/components/lock-phong/LockPhongTheoDeadlineView";
 import LockPhongFormDialog from "@/components/lock-phong/LockPhongFormDialog";
 import { format, addDays } from "date-fns";
+import { t, useTranslate } from "@/lib/i18n";
 
 type DeadlineFilter = "all" | "qua_han" | "sap_den" | "con_xa" | "da_book";
 type OutcomeStatus = "cho_xu_ly" | "thanh_doan" | "da_huy";
 type ViewMode = "theo_ks" | "theo_deadline";
 type Tab = "all" | "can_xu_ly" | "qua_han" | "sap_den" | "chua_gui" | "cho_xu_ly" | "da_xac_nhan";
 
-const OUTCOME_OPTIONS: { value: OutcomeStatus; label: string }[] = [
-  { value: "cho_xu_ly",  label: "Chờ xử lý" },
-  { value: "thanh_doan", label: "Thành đoàn" },
-  { value: "da_huy",     label: "Đã hủy" },
+const OUTCOME_OPTIONS: { value: OutcomeStatus; labelKey: string }[] = [
+  { value: "cho_xu_ly",  labelKey: "Chờ xử lý" },
+  { value: "thanh_doan", labelKey: "Thành đoàn" },
+  { value: "da_huy",     labelKey: "Đã hủy" },
 ];
 
 // Phân loại 1 lock_phong theo trạng thái booking/deadline
@@ -65,6 +66,7 @@ function lpCat(lp: LockPhongDisplay, today: string, today3: string, today7: stri
 // (Đã bỏ "Tổng quan Lock Phòng" / donut theo yêu cầu)
 
 export default function LockPhongPage() {
+  useTranslate();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<LockPhongDisplay | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("theo_ks");
@@ -91,7 +93,7 @@ export default function LockPhongPage() {
 
   const ksOptions = useMemo(
     () => [
-      { value: "all", label: "Tất cả khách sạn" },
+      { value: "all", label: t("Tất cả khách sạn") },
       ...ksList.map((k) => ({ value: String(k.id), label: k.ten ?? "" })),
     ],
     [ksList],
@@ -199,35 +201,35 @@ export default function LockPhongPage() {
 
   const statCards = [
     {
-      key: "can_xu_ly" as Tab, label: "Lock phòng cần xử lý", count: stats.canXuLy,
-      sub: "sắp đến deadline / quá hạn", icon: AlertTriangle,
+      key: "can_xu_ly" as Tab, labelKey: "Lock phòng cần xử lý", count: stats.canXuLy,
+      subKey: "sắp đến deadline / quá hạn", icon: AlertTriangle,
       tile: "bg-orange-500", wrap: "bg-orange-50 border-orange-200", alert: true,
     },
     {
-      key: "qua_han" as Tab, label: "Quá hạn", count: stats.quaHan, sub: "đoàn",
+      key: "qua_han" as Tab, labelKey: "Quá hạn", count: stats.quaHan, subKey: "đoàn",
       icon: AlertTriangle, tile: "bg-red-500", wrap: "bg-card border-border", alert: false,
     },
     {
-      key: "sap_den" as Tab, label: "Sắp đến hạn", count: stats.sapDen, sub: "đoàn (3–7 ngày)",
+      key: "sap_den" as Tab, labelKey: "Sắp đến hạn", count: stats.sapDen, subKey: "đoàn (3–7 ngày)",
       icon: Clock, tile: "bg-amber-500", wrap: "bg-card border-border", alert: false,
     },
     {
-      key: "chua_gui" as Tab, label: "Chưa gửi mail", count: stats.chuaGui, sub: "đoàn",
+      key: "chua_gui" as Tab, labelKey: "Chưa gửi mail", count: stats.chuaGui, subKey: "đoàn",
       icon: Mail, tile: "bg-blue-500", wrap: "bg-card border-border", alert: false,
     },
     {
-      key: "da_xac_nhan" as Tab, label: "Đã xác nhận", count: stats.daXN, sub: "đoàn",
+      key: "da_xac_nhan" as Tab, labelKey: "Đã xác nhận", count: stats.daXN, subKey: "đoàn",
       icon: CheckCircle2, tile: "bg-emerald-500", wrap: "bg-card border-border", alert: false,
     },
   ];
 
-  const tabs: { key: Tab; label: string; count: number; cls: string }[] = [
-    { key: "all", label: "Tất cả", count: stats.total, cls: "text-foreground" },
-    { key: "qua_han", label: "Quá hạn", count: stats.quaHan, cls: "text-red-600" },
-    { key: "sap_den", label: "Sắp đến hạn", count: stats.sapDen, cls: "text-amber-600" },
-    { key: "chua_gui", label: "Chưa gửi mail", count: stats.chuaGui, cls: "text-blue-600" },
-    { key: "cho_xu_ly", label: "Chờ xử lý", count: stats.choXuLy, cls: "text-orange-600" },
-    { key: "da_xac_nhan", label: "Đã xác nhận", count: stats.daXN, cls: "text-emerald-600" },
+  const tabs: { key: Tab; labelKey: string; count: number; cls: string }[] = [
+    { key: "all", labelKey: "Tất cả", count: stats.total, cls: "text-foreground" },
+    { key: "qua_han", labelKey: "Quá hạn", count: stats.quaHan, cls: "text-red-600" },
+    { key: "sap_den", labelKey: "Sắp đến hạn", count: stats.sapDen, cls: "text-amber-600" },
+    { key: "chua_gui", labelKey: "Chưa gửi mail", count: stats.chuaGui, cls: "text-blue-600" },
+    { key: "cho_xu_ly", labelKey: "Chờ xử lý", count: stats.choXuLy, cls: "text-orange-600" },
+    { key: "da_xac_nhan", labelKey: "Đã xác nhận", count: stats.daXN, cls: "text-emerald-600" },
   ];
 
   return (
@@ -236,10 +238,10 @@ export default function LockPhongPage() {
       <div>
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-xl font-semibold">Lock Phòng</h1>
+          <h1 className="text-xl font-semibold">{t("Lock Phòng")}</h1>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Quản lý giữ phòng khách sạn theo seri, theo deadline
+          {t("Quản lý giữ phòng khách sạn theo seri, theo deadline")}
         </p>
       </div>
 
@@ -248,7 +250,7 @@ export default function LockPhongPage() {
         {statCards.map((s) => (
           <button
             key={s.key}
-            onClick={() => setTab((t) => (t === s.key ? "all" : s.key))}
+            onClick={() => setTab((prev) => (prev === s.key ? "all" : s.key))}
             className={cn(
               "flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-shadow hover:shadow-md",
               s.wrap,
@@ -259,10 +261,10 @@ export default function LockPhongPage() {
               <s.icon className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] text-muted-foreground leading-snug">{s.label}</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">{t(s.labelKey)}</p>
               <p className="text-xl font-bold leading-tight">
                 {s.count}{" "}
-                <span className="text-[11px] font-normal text-muted-foreground">{s.sub}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">{t(s.subKey)}</span>
               </p>
             </div>
           </button>
@@ -272,32 +274,32 @@ export default function LockPhongPage() {
       {/* Tabs + add */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {tabs.map((t) => (
+          {tabs.map((tab1) => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
+              key={tab1.key}
+              onClick={() => setTab(tab1.key)}
               className={cn(
                 "h-8 px-3 rounded-full text-xs font-medium border transition-colors inline-flex items-center gap-1.5",
-                tab === t.key
+                tab === tab1.key
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-card hover:bg-muted/50 border-border",
               )}
             >
-              {t.label}
+              {t(tab1.labelKey)}
               <span
                 className={cn(
                   "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold",
-                  tab === t.key ? "bg-white/25" : cn("bg-muted", t.cls),
+                  tab === tab1.key ? "bg-white/25" : cn("bg-muted", tab1.cls),
                 )}
               >
-                {t.count}
+                {tab1.count}
               </span>
             </button>
           ))}
         </div>
         <Button size="sm" className="gap-1.5 h-8 text-xs shrink-0" onClick={handleAddNew}>
           <Plus className="h-3.5 w-3.5" />
-          Thêm Lock Phòng
+          {t("Thêm Lock Phòng")}
         </Button>
       </div>
 
@@ -308,7 +310,7 @@ export default function LockPhongPage() {
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Code đoàn / seri..."
+                placeholder={t("Code đoàn / seri...")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-8 text-sm pl-7 w-48"
@@ -318,14 +320,14 @@ export default function LockPhongPage() {
               options={ksOptions}
               value={filterKsId}
               onChange={setFilterKsId}
-              placeholder="Tất cả khách sạn"
+              placeholder={t("Tất cả khách sạn")}
               className="w-56 h-8 text-sm"
             />
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
                   <CalendarIcon className="h-3.5 w-3.5" />
-                  {checkInFrom ? format(checkInFrom, "dd/MM/yyyy") : "C/I từ"}
+                  {checkInFrom ? format(checkInFrom, "dd/MM/yyyy") : t("C/I từ")}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -336,7 +338,7 @@ export default function LockPhongPage() {
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
                   <CalendarIcon className="h-3.5 w-3.5" />
-                  {checkInTo ? format(checkInTo, "dd/MM/yyyy") : "C/I đến"}
+                  {checkInTo ? format(checkInTo, "dd/MM/yyyy") : t("C/I đến")}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -346,19 +348,19 @@ export default function LockPhongPage() {
             <Select value={deadlineFilter} onValueChange={(v) => setDeadlineFilter(v as DeadlineFilter)}>
               <SelectTrigger className="h-8 text-sm w-[160px]">
                 <span>
-                  {deadlineFilter === "all" ? "⏰ Mọi deadline"
-                    : deadlineFilter === "qua_han" ? "🔴 Quá hạn"
-                    : deadlineFilter === "sap_den" ? "🟠 Sắp đến (3–7 ngày)"
-                    : deadlineFilter === "con_xa" ? "🟢 Còn xa"
-                    : "✅ Đã book xong"}
+                  {deadlineFilter === "all" ? t("⏰ Mọi deadline")
+                    : deadlineFilter === "qua_han" ? t("🔴 Quá hạn")
+                    : deadlineFilter === "sap_den" ? t("🟠 Sắp đến (3–7 ngày)")
+                    : deadlineFilter === "con_xa" ? t("🟢 Còn xa")
+                    : t("✅ Đã book xong")}
                 </span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">⏰ Mọi deadline</SelectItem>
-                <SelectItem value="qua_han">🔴 Quá hạn</SelectItem>
-                <SelectItem value="sap_den">🟠 Sắp đến (3–7 ngày)</SelectItem>
-                <SelectItem value="con_xa">🟢 Còn xa</SelectItem>
-                <SelectItem value="da_book">✅ Đã book xong</SelectItem>
+                <SelectItem value="all">{t("⏰ Mọi deadline")}</SelectItem>
+                <SelectItem value="qua_han">{t("🔴 Quá hạn")}</SelectItem>
+                <SelectItem value="sap_den">{t("🟠 Sắp đến (3–7 ngày)")}</SelectItem>
+                <SelectItem value="con_xa">{t("🟢 Còn xa")}</SelectItem>
+                <SelectItem value="da_book">{t("✅ Đã book xong")}</SelectItem>
               </SelectContent>
             </Select>
             <div className="inline-flex items-center gap-3 h-8 px-2.5 rounded-md border border-border bg-background">
@@ -372,7 +374,7 @@ export default function LockPhongPage() {
                     onCheckedChange={() => toggleOutcome(opt.value)}
                     className="h-3.5 w-3.5"
                   />
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </label>
               ))}
             </div>
@@ -384,7 +386,7 @@ export default function LockPhongPage() {
                   viewMode === "theo_ks" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
                 }`}
               >
-                Theo khách sạn
+                {t("Theo khách sạn")}
               </button>
               <button
                 type="button"
@@ -393,12 +395,12 @@ export default function LockPhongPage() {
                   viewMode === "theo_deadline" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50"
                 }`}
               >
-                Theo deadline
+                {t("Theo deadline")}
               </button>
             </div>
             {hasActiveFilter && (
               <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearFilters}>
-                <X className="h-3 w-3" /> Xóa lọc ({filtered.length}/{data.length})
+                <X className="h-3 w-3" /> {t("Xóa lọc")} ({filtered.length}/{data.length})
               </Button>
             )}
           </div>
@@ -413,17 +415,17 @@ export default function LockPhongPage() {
           ) : data.length === 0 ? (
             <div className="py-16 text-center space-y-2">
               <Lock className="h-8 w-8 text-muted-foreground mx-auto" />
-              <p className="text-sm text-muted-foreground">Chưa có lock phòng nào</p>
+              <p className="text-sm text-muted-foreground">{t("Chưa có lock phòng nào")}</p>
               <Button variant="outline" size="sm" className="gap-1.5 mt-2" onClick={handleAddNew}>
                 <Plus className="h-3.5 w-3.5" />
-                Tạo lock phòng đầu tiên
+                {t("Tạo lock phòng đầu tiên")}
               </Button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">Không có lock phòng nào khớp bộ lọc</p>
+              <p className="text-sm text-muted-foreground">{t("Không có lock phòng nào khớp bộ lọc")}</p>
               <Button variant="outline" size="sm" onClick={clearFilters}>
-                Xóa lọc
+                {t("Xóa lọc")}
               </Button>
             </div>
           ) : viewMode === "theo_deadline" ? (

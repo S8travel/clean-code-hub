@@ -7,6 +7,7 @@ import { useCongViecList, type CongViecRow } from "@/hooks/use-cong-viec";
 import CongViecCard from "./CongViecCard";
 import CongViecDetail from "./CongViecDetail";
 import TaoViecModal from "./TaoViecModal";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   userId: string;
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function GiaoViecTab({ userId, userName }: Props) {
+  useTranslate();
   const { data: tasks = [], isLoading } = useCongViecList(userId);
 
   const [view, setView] = useState<"received" | "sent">("received");
@@ -24,23 +26,23 @@ export default function GiaoViecTab({ userId, userName }: Props) {
 
   // Always derive from fresh tasks so detail reflects latest state after mutations
   const selectedTask: CongViecRow | null =
-    selectedId != null ? (tasks.find((t) => t.id === selectedId) ?? null) : null;
+    selectedId != null ? (tasks.find((task) => task.id === selectedId) ?? null) : null;
 
   const displayed = tasks
-    .filter((t) => (view === "received" ? t.nguoi_nhan === userId : t.nguoi_giao === userId))
-    .filter((t) => {
-      if (filterStatus === "active") return t.trang_thai === "cho_nhan" || t.trang_thai === "dang_lam";
-      if (filterStatus === "done") return t.trang_thai === "hoan_thanh" || t.trang_thai === "tu_choi";
+    .filter((task) => (view === "received" ? task.nguoi_nhan === userId : task.nguoi_giao === userId))
+    .filter((task) => {
+      if (filterStatus === "active") return task.trang_thai === "cho_nhan" || task.trang_thai === "dang_lam";
+      if (filterStatus === "done") return task.trang_thai === "hoan_thanh" || task.trang_thai === "tu_choi";
       return true;
     })
-    .filter((t) => filterPriority === "all" || t.do_uu_tien === filterPriority);
+    .filter((task) => filterPriority === "all" || task.do_uu_tien === filterPriority);
 
   const receivedPending = tasks.filter(
-    (t) => t.nguoi_nhan === userId && (t.trang_thai === "cho_nhan" || t.trang_thai === "dang_lam"),
+    (task) => task.nguoi_nhan === userId && (task.trang_thai === "cho_nhan" || task.trang_thai === "dang_lam"),
   ).length;
 
   const sentPending = tasks.filter(
-    (t) => t.nguoi_giao === userId && (t.trang_thai === "cho_nhan" || t.trang_thai === "dang_lam"),
+    (task) => task.nguoi_giao === userId && (task.trang_thai === "cho_nhan" || task.trang_thai === "dang_lam"),
   ).length;
 
   return (
@@ -55,7 +57,7 @@ export default function GiaoViecTab({ userId, userName }: Props) {
             }`}
           >
             <Inbox className="h-3.5 w-3.5" />
-            Được giao cho tôi
+            {t("Được giao cho tôi")}
             {receivedPending > 0 && (
               <span className="ml-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 leading-4">
                 {receivedPending}
@@ -69,7 +71,7 @@ export default function GiaoViecTab({ userId, userName }: Props) {
             }`}
           >
             <SendHorizonal className="h-3.5 w-3.5" />
-            Tôi đã giao
+            {t("Tôi đã giao")}
             {sentPending > 0 && (
               <span className="ml-0.5 rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 leading-4">
                 {sentPending}
@@ -80,7 +82,7 @@ export default function GiaoViecTab({ userId, userName }: Props) {
 
         <Button size="sm" className="text-xs h-8 gap-1.5" onClick={() => setShowCreate(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Tạo việc
+          {t("Tạo việc")}
         </Button>
       </div>
 
@@ -88,27 +90,27 @@ export default function GiaoViecTab({ userId, userName }: Props) {
       <div className="flex items-center gap-2">
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="h-7 text-xs w-32">
-            <span>{filterStatus === "active" ? "Đang xử lý" : filterStatus === "done" ? "Đã xong" : "Tất cả"}</span>
+            <span>{filterStatus === "active" ? t("Đang xử lý") : filterStatus === "done" ? t("Đã xong") : t("Tất cả")}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="active">Đang xử lý</SelectItem>
-            <SelectItem value="done">Đã xong</SelectItem>
-            <SelectItem value="all">Tất cả</SelectItem>
+            <SelectItem value="active">{t("Đang xử lý")}</SelectItem>
+            <SelectItem value="done">{t("Đã xong")}</SelectItem>
+            <SelectItem value="all">{t("Tất cả")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterPriority} onValueChange={setFilterPriority}>
           <SelectTrigger className="h-7 text-xs w-36">
-            <span>{filterPriority === "all" ? "Mọi ưu tiên" : filterPriority === "khan_cap" ? "🔴 Khẩn cấp" : filterPriority === "cao" ? "🟠 Cao" : filterPriority === "binh_thuong" ? "🟡 Bình thường" : "🟢 Thấp"}</span>
+            <span>{filterPriority === "all" ? t("Mọi ưu tiên") : filterPriority === "khan_cap" ? t("🔴 Khẩn cấp") : filterPriority === "cao" ? t("🟠 Cao") : filterPriority === "binh_thuong" ? t("🟡 Bình thường") : t("🟢 Thấp")}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Mọi ưu tiên</SelectItem>
-            <SelectItem value="khan_cap">🔴 Khẩn cấp</SelectItem>
-            <SelectItem value="cao">🟠 Cao</SelectItem>
-            <SelectItem value="binh_thuong">🟡 Bình thường</SelectItem>
-            <SelectItem value="thap">🟢 Thấp</SelectItem>
+            <SelectItem value="all">{t("Mọi ưu tiên")}</SelectItem>
+            <SelectItem value="khan_cap">{t("🔴 Khẩn cấp")}</SelectItem>
+            <SelectItem value="cao">{t("🟠 Cao")}</SelectItem>
+            <SelectItem value="binh_thuong">{t("🟡 Bình thường")}</SelectItem>
+            <SelectItem value="thap">{t("🟢 Thấp")}</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">{displayed.length} việc</span>
+        <span className="text-xs text-muted-foreground">{displayed.length} {t("việc")}</span>
       </div>
 
       {/* Task list */}
@@ -118,9 +120,9 @@ export default function GiaoViecTab({ userId, userName }: Props) {
         </div>
       ) : displayed.length === 0 ? (
         <div className="rounded-lg border bg-muted/30 px-4 py-10 text-center">
-          <p className="text-sm text-muted-foreground font-medium">Không có việc nào</p>
+          <p className="text-sm text-muted-foreground font-medium">{t("Không có việc nào")}</p>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
-            {view === "received" ? "Bạn chưa được giao việc nào" : "Bạn chưa giao việc cho ai"}
+            {view === "received" ? t("Bạn chưa được giao việc nào") : t("Bạn chưa giao việc cho ai")}
           </p>
         </div>
       ) : (

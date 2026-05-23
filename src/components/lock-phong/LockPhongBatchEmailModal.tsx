@@ -21,6 +21,7 @@ import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { buildUpdateEmailHtml, escapeHtml } from "@/lib/email-update";
 import { hashMailContent } from "@/lib/mail-content-hash";
 import { isLockPhongDirty } from "./LockPhongCard";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDate(d: string) {
   try {
@@ -32,12 +33,12 @@ function fmtDate(d: string) {
 
 function EmailStatusBadge({ status }: { status: string }) {
   if (status === "da_xac_nhan")
-    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">Đã XN</Badge>;
+    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">{t("Đã XN")}</Badge>;
   if (status === "cho_xac_nhan")
-    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">Chờ XN</Badge>;
+    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">{t("Chờ XN")}</Badge>;
   if (status === "da_huy")
-    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">Đã hủy</Badge>;
-  return <Badge className="text-[10px] bg-muted text-muted-foreground border-0">Chưa gửi</Badge>;
+    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">{t("Đã hủy")}</Badge>;
+  return <Badge className="text-[10px] bg-muted text-muted-foreground border-0">{t("Chưa gửi")}</Badge>;
 }
 
 export interface KSGroupEntry {
@@ -121,6 +122,7 @@ interface Props {
 }
 
 export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: Props) {
+  useTranslate();
   const { data: currentUserName = "" } = useCurrentUserName();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
@@ -199,7 +201,7 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
 
   const handleOpenPreview = () => {
     if (selectedEntries.length === 0) {
-      toast.error("Chọn ít nhất 1 đoàn để gửi");
+      toast.error(t("Chọn ít nhất 1 đoàn để gửi"));
       return;
     }
     const name = userProfile?.ho_ten || currentUserName;
@@ -250,11 +252,11 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
         inReplyToThreadId: null,
         mailContentHashes: hashes,
       });
-      toast.success(isUpdate ? "Đã gửi email cập nhật gộp" : "Đã gửi email gộp");
+      toast.success(isUpdate ? t("Đã gửi email cập nhật gộp") : t("Đã gửi email gộp"));
       setPreviewOpen(false);
       onOpenChange(false);
     } catch (err: unknown) {
-      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi gửi email") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     } finally {
       setSending(false);
     }
@@ -276,7 +278,7 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
     setPreviewOpen(false);
     onOpenChange(false);
-    toast.success("Đã mở email client");
+    toast.success(t("Đã mở email client"));
   };
 
   return (
@@ -286,13 +288,13 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
         <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {isUpdate ? `Gửi cập nhật gộp — ${group.khach_san_ten}` : `Gửi email gộp — ${group.khach_san_ten}`}
+              {isUpdate ? `${t("Gửi cập nhật gộp")} — ${group.khach_san_ten}` : `${t("Gửi email gộp")} — ${group.khach_san_ten}`}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-2 py-1 flex-1 min-h-0 flex flex-col">
             <p className="text-xs text-muted-foreground">
-              Chọn các đoàn muốn đưa vào email. Mặc định chọn các đoàn chưa gửi.
+              {t("Chọn các đoàn muốn đưa vào email. Mặc định chọn các đoàn chưa gửi.")}
             </p>
             <div className="border border-border rounded-lg divide-y divide-border overflow-y-auto flex-1 min-h-0">
               {group.entries.map(({ lockPhong, ksRow }) => (
@@ -313,12 +315,12 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
                       {isLockPhongDirty(ksRow) && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1">
                           <span className="w-1 h-1 rounded-full bg-orange-500" />
-                          Có thay đổi
+                          {t("Có thay đổi")}
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {fmtDate(ksRow.check_in)} → {fmtDate(ksRow.check_out)} · {ksRow.so_dem} đêm
+                      {fmtDate(ksRow.check_in)} → {fmtDate(ksRow.check_out)} · {ksRow.so_dem} {t("đêm")}
                       {ksRow.so_phong ? ` · ${ksRow.so_phong}` : ""}
                     </p>
                   </div>
@@ -328,11 +330,11 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
 
             {selectedEntries.length > 0 && (
               <p className="text-xs text-muted-foreground">
-                Đã chọn <span className="font-medium text-foreground">{selectedEntries.length}</span> đoàn
+                {t("Đã chọn")} <span className="font-medium text-foreground">{selectedEntries.length}</span> {t("đoàn")}
                 {selectedEntries.filter((e) => e.ksRow.email_status !== "chua_gui").length > 0 && (
                   <span className="text-amber-600">
-                    {" "}(bao gồm{" "}
-                    {selectedEntries.filter((e) => e.ksRow.email_status !== "chua_gui").length} đoàn đã gửi — chỉ đoàn "Chưa gửi" mới cập nhật trạng thái)
+                    {" "}({t("bao gồm")}{" "}
+                    {selectedEntries.filter((e) => e.ksRow.email_status !== "chua_gui").length} {t("đoàn đã gửi — chỉ đoàn \"Chưa gửi\" mới cập nhật trạng thái")})
                   </span>
                 )}
               </p>
@@ -341,14 +343,14 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
 
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-              Hủy
+              {t("Hủy")}
             </Button>
             <Button
               size="sm"
               onClick={handleOpenPreview}
               disabled={selectedEntries.length === 0}
             >
-              Xem trước & Gửi →
+              {t("Xem trước & Gửi")} →
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -360,8 +362,8 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
           open={previewOpen}
           onOpenChange={(v) => { if (!v) setPreviewOpen(false); }}
           title={isUpdate
-            ? `Gửi cập nhật gộp — ${group.khach_san_ten} (${selectedEntries.length} đoàn, thread vào mail cũ)`
-            : `Gửi email gộp — ${group.khach_san_ten} (${selectedEntries.length} đoàn)`}
+            ? `${t("Gửi cập nhật gộp")} — ${group.khach_san_ten} (${selectedEntries.length} ${t("đoàn")}, ${t("thread vào mail cũ")})`
+            : `${t("Gửi email gộp")} — ${group.khach_san_ten} (${selectedEntries.length} ${t("đoàn")})`}
           to={emailTo}
           onToChange={setEmailTo}
           subject={emailSubject}
