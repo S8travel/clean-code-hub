@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { useBatchUploadUNC, type HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
 import { isAmountMatch } from "@/lib/ocr-invoice";
 import { ocrUncSlip, normCode, type OcrUncResult } from "@/lib/ocr-unc";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props) {
+  useTranslate();
   const inputRef = useRef<HTMLInputElement>(null);
   const batchMut = useBatchUploadUNC();
   const [files, setFiles] = useState<File[]>([]);
@@ -238,22 +240,22 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const leftoverFiles = files.filter((_, i) => !usedIdx.has(i));
 
   const handleSave = () => {
-    if (pairs.length === 0) { toast({ title: "Chưa ghép file nào", variant: "destructive" }); return; }
+    if (pairs.length === 0) { toast({ title: t("Chưa ghép file nào"), variant: "destructive" }); return; }
     batchMut.mutate(pairs, {
       onSuccess: ({ ok, failed, errors }) => {
         if (failed === 0) {
-          toast({ title: `Đã gắn UNC cho ${ok} ĐNTT` });
+          toast({ title: `${t("Đã gắn UNC cho")} ${ok} ĐNTT` });
           handleClose();
         } else {
           toast({
-            title: `Gắn ${ok} OK, ${failed} lỗi`,
+            title: `${t("Gắn")} ${ok} OK, ${failed} ${t("lỗi")}`,
             description: errors.slice(0, 3).join("; "),
             variant: "destructive",
           });
         }
       },
       onError: (e: unknown) =>
-        toast({ title: "Lỗi: " + (errMsg(e) || "Không gắn được"), variant: "destructive" }),
+        toast({ title: `${t("Lỗi")}: ${errMsg(e) || t("Không gắn được")}`, variant: "destructive" }),
     });
   };
 
@@ -278,11 +280,11 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     const r = reasons[rowId];
     if (assign[rowId] === undefined) return null;
     if (r === "code")
-      return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">khớp mã đoàn</span>;
+      return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{t("khớp mã đoàn")}</span>;
     if (r === "amount_ocr" || r === "amount_file")
-      return <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">khớp số tiền</span>;
+      return <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">{t("khớp số tiền")}</span>;
     if (r === "manual")
-      return <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">chọn tay</span>;
+      return <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{t("chọn tay")}</span>;
     return null;
   };
 
@@ -291,16 +293,13 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-base">
-            Gắn UNC nhanh — {doanLabel}
+            {t("Gắn UNC nhanh")} — {doanLabel}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
           <p className="text-xs text-muted-foreground">
-            {rows.length} ĐNTT đang thiếu UNC. Chọn nhiều ảnh UNC cùng lúc — hệ
-            thống <strong>đọc ảnh (OCR)</strong> tự ghép theo <strong>mã đoàn + số
-            tiền</strong>; dòng nào sai chỉ cần đổi lại bằng dropdown. Mỗi file
-            gắn đúng 1 ĐNTT.
+            {rows.length} {t("ĐNTT đang thiếu UNC. Chọn nhiều ảnh UNC cùng lúc — hệ thống đọc ảnh (OCR) tự ghép theo mã đoàn + số tiền; dòng nào sai chỉ cần đổi lại bằng dropdown. Mỗi file gắn đúng 1 ĐNTT.")}
           </p>
 
           {/* Vùng chọn / kéo-thả file */}
@@ -311,11 +310,11 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             className="border-2 border-dashed rounded-lg px-4 py-6 text-center cursor-pointer hover:bg-muted/40 transition-colors"
           >
             <Upload className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
-            <p className="text-sm font-medium">Bấm chọn / kéo-thả nhiều ảnh UNC vào đây</p>
+            <p className="text-sm font-medium">{t("Bấm chọn / kéo-thả nhiều ảnh UNC vào đây")}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {files.length > 0
-                ? `Đã chọn ${files.length} file — đã ghép ${matchedCount}/${rows.length}`
-                : "Ảnh chụp app ngân hàng (jpg/png) — không cần đổi tên file"}
+                ? `${t("Đã chọn")} ${files.length} ${t("file — đã ghép")} ${matchedCount}/${rows.length}`
+                : t("Ảnh chụp app ngân hàng (jpg/png) — không cần đổi tên file")}
             </p>
             <input
               ref={inputRef}
@@ -330,7 +329,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
           {ocrProg.running && (
             <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
               <ScanText className="h-3.5 w-3.5 animate-pulse" />
-              Đang đọc ảnh {ocrProg.done}/{ocrProg.total}… (có thể chỉnh tay trong lúc chờ)
+              {t("Đang đọc ảnh")} {ocrProg.done}/{ocrProg.total}… {t("(có thể chỉnh tay trong lúc chờ)")}
             </div>
           )}
 
@@ -340,7 +339,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             <div className="border rounded-lg text-[11px] bg-muted/20">
               <div className="flex items-center justify-between px-2 py-1.5 border-b border-border/50 sticky top-0 bg-muted/20 backdrop-blur">
                 <span className="font-medium text-muted-foreground">
-                  OCR đọc ảnh ({files.length} file)
+                  {t("OCR đọc ảnh")} ({files.length} {t("file")})
                 </span>
                 {!ocrProg.running && (
                   <button
@@ -348,7 +347,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                     onClick={rerunOcr}
                     className="inline-flex items-center gap-1 text-blue-700 hover:underline"
                   >
-                    <ScanText className="h-3 w-3" /> Đọc lại OCR
+                    <ScanText className="h-3 w-3" /> {t("Đọc lại OCR")}
                   </button>
                 )}
               </div>
@@ -360,12 +359,12 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                       <span className="truncate flex-1 min-w-0 text-muted-foreground" title={f.name}>{f.name}</span>
                       <span className="shrink-0">
                         {info === undefined
-                          ? <span className="text-muted-foreground">{ocrProg.running ? "đang đọc…" : "—"}</span>
+                          ? <span className="text-muted-foreground">{ocrProg.running ? t("đang đọc…") : "—"}</span>
                           : info.err
-                            ? <span className="text-red-600">OCR lỗi: {info.err.slice(0, 40)}</span>
+                            ? <span className="text-red-600">{t("OCR lỗi")}: {info.err.slice(0, 40)}</span>
                             : info.amount != null
-                              ? <span className="text-emerald-700 tabular-nums">đọc được {fmt(info.amount)} ₫</span>
-                              : <span className="text-amber-600">không đọc được số tiền</span>}
+                              ? <span className="text-emerald-700 tabular-nums">{t("đọc được")} {fmt(info.amount)} ₫</span>
+                              : <span className="text-amber-600">{t("không đọc được số tiền")}</span>}
                       </span>
                     </div>
                   );
@@ -379,9 +378,9 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
               <table className="w-full text-xs">
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
-                    <th className="text-left p-2 font-medium">Đoàn / Nội dung</th>
-                    <th className="text-right p-2 font-medium w-[110px]">Số tiền</th>
-                    <th className="text-left p-2 font-medium">File UNC</th>
+                    <th className="text-left p-2 font-medium">{t("Đoàn / Nội dung")}</th>
+                    <th className="text-right p-2 font-medium w-[110px]">{t("Số tiền")}</th>
+                    <th className="text-left p-2 font-medium">{t("File UNC")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -448,11 +447,11 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                               >
                                 <SelectTrigger className="h-7 text-xs w-full min-w-0">
                                   <span className="truncate" title={fi === undefined ? undefined : files[fi]?.name}>
-                                    {fi === undefined ? "— Chưa gắn —" : files[fi]?.name}
+                                    {fi === undefined ? t("— Chưa gắn —") : files[fi]?.name}
                                   </span>
                                 </SelectTrigger>
                                 <SelectContent className="max-w-[600px]">
-                                  <SelectItem value="_none" className="text-xs">— Chưa gắn —</SelectItem>
+                                  <SelectItem value="_none" className="text-xs">{t("— Chưa gắn —")}</SelectItem>
                                   {files.map((f, i) => {
                                     const usedElsewhere =
                                       usedIdx.has(i) && assign[r.id] !== i;
@@ -463,7 +462,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                                         className="text-xs"
                                         disabled={usedElsewhere}
                                       >
-                                        {f.name}{usedElsewhere ? " (đã dùng)" : ""}
+                                        {f.name}{usedElsewhere ? ` ${t("(đã dùng)")}` : ""}
                                       </SelectItem>
                                     );
                                   })}
@@ -483,7 +482,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
           {leftoverFiles.length > 0 && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-              {leftoverFiles.length} file chưa ghép vào ĐNTT nào:{" "}
+              {leftoverFiles.length} {t("file chưa ghép vào ĐNTT nào")}:{" "}
               {leftoverFiles.map((f) => f.name).join(", ")}
             </div>
           )}
@@ -516,7 +515,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
         <DialogFooter className="gap-2 shrink-0">
           <Button variant="ghost" size="sm" onClick={handleClose} disabled={batchMut.isPending}>
-            <X className="h-4 w-4 mr-1" /> Đóng
+            <X className="h-4 w-4 mr-1" /> {t("Đóng")}
           </Button>
           <Button
             size="sm"
@@ -524,8 +523,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             disabled={batchMut.isPending || matchedCount === 0}
           >
             {batchMut.isPending
-              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Đang lưu...</>
-              : `Lưu tất cả (${matchedCount})`}
+              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {t("Đang lưu...")}</>
+              : `${t("Lưu tất cả")} (${matchedCount})`}
           </Button>
         </DialogFooter>
       </DialogContent>

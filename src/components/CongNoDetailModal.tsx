@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/table";
 import { usePaymentsByCongNo } from "@/hooks/use-payments";
 import type { CongNoRow } from "@/hooks/use-cong-no";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 const fmtDate = (s: string | null) => {
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function CongNoDetailModal({ row, onClose }: Props) {
+  useTranslate();
   const navigate = useNavigate();
   const { data: entries = [], isLoading } = usePaymentsByCongNo(row?.id);
 
@@ -33,9 +35,9 @@ export default function CongNoDetailModal({ row, onClose }: Props) {
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            Chi tiết cấn trừ — {row?.ten_ncc || "—"}{" "}
+            {t("Chi tiết cấn trừ")} — {row?.ten_ncc || "—"}{" "}
             <span className={isPrepaid ? "text-amber-600" : "text-purple-600"}>
-              ({isPrepaid ? "Quỹ trả trước" : "Công nợ"})
+              ({isPrepaid ? t("Quỹ trả trước") : t("Công nợ")})
             </span>
           </DialogTitle>
         </DialogHeader>
@@ -43,15 +45,15 @@ export default function CongNoDetailModal({ row, onClose }: Props) {
         {row && (
           <div className="grid grid-cols-3 gap-3 text-sm">
             <div className="rounded-md border p-2">
-              <p className="text-xs text-muted-foreground">Gốc</p>
+              <p className="text-xs text-muted-foreground">{t("Gốc")}</p>
               <p className="font-semibold">{fmt(row.so_tien_goc)} ₫</p>
             </div>
             <div className="rounded-md border p-2">
-              <p className="text-xs text-muted-foreground">Đã cấn trừ</p>
+              <p className="text-xs text-muted-foreground">{t("Đã cấn trừ")}</p>
               <p className="font-semibold text-purple-600">{fmt(row.so_tien_da_dung)} ₫</p>
             </div>
             <div className="rounded-md border p-2">
-              <p className="text-xs text-muted-foreground">Còn lại</p>
+              <p className="text-xs text-muted-foreground">{t("Còn lại")}</p>
               <p className="font-semibold text-amber-600">{fmt(row.so_tien_con_lai)} ₫</p>
             </div>
           </div>
@@ -61,23 +63,23 @@ export default function CongNoDetailModal({ row, onClose }: Props) {
           <Table>
             <TableHeader>
               <TableRow className="text-xs">
-                <TableHead className="py-2 px-3 w-[110px]">Ngày</TableHead>
-                <TableHead className="py-2 px-3">Đoàn</TableHead>
-                <TableHead className="py-2 px-3">Mô tả ĐNTT</TableHead>
-                <TableHead className="py-2 px-3 w-[130px] text-right">Số tiền</TableHead>
+                <TableHead className="py-2 px-3 w-[110px]">{t("Ngày")}</TableHead>
+                <TableHead className="py-2 px-3">{t("Đoàn")}</TableHead>
+                <TableHead className="py-2 px-3">{t("Mô tả ĐNTT")}</TableHead>
+                <TableHead className="py-2 px-3 w-[130px] text-right">{t("Số tiền")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-6 text-muted-foreground text-sm">
-                    Đang tải...
+                    {t("Đang tải...")}
                   </TableCell>
                 </TableRow>
               ) : entries.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-6 text-muted-foreground text-sm">
-                    Chưa có lần cấn trừ nào.
+                    {t("Chưa có lần cấn trừ nào.")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -90,7 +92,7 @@ export default function CongNoDetailModal({ row, onClose }: Props) {
                           className="text-left hover:underline text-primary font-medium"
                           onClick={() => { onClose(); navigate(`/doan/${e.doan_id}`); }}
                         >
-                          {e.ten_doan || `Đoàn #${e.doan_id}`}
+                          {e.ten_doan || `${t("Đoàn")} #${e.doan_id}`}
                         </button>
                       ) : (
                         <span className="text-muted-foreground">{e.ten_doan || "—"}</span>
