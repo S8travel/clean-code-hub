@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatThousands, parseThousands } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   // Doan context
@@ -44,6 +45,7 @@ export default function TipSection({
   thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum,
   onThuTipChange, onTipRateChange, onTipSoNgayOverrideChange, onTipSoKhachOverrideChange, onTipLumpSumChange,
 }: Props) {
+  useTranslate();
   // Auto-suggest values
   const autoRate = soKhachTl > 0 ? 150 : 300;
   const autoSoNgay = ngayDi && ngayVe ? daysBetween(ngayDi, ngayVe) : 0;
@@ -75,13 +77,13 @@ export default function TipSection({
       <div className="flex items-center gap-3 flex-wrap">
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <Checkbox checked={thuTip} onCheckedChange={(v) => onThuTipChange(!!v)} />
-          <span className="text-sm font-medium">Thu tiền tip</span>
+          <span className="text-sm font-medium">{t("Thu tiền tip")}</span>
         </label>
 
         {thuTip && (
           <>
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground">Đơn giá:</span>
+              <span className="text-muted-foreground">{t("Đơn giá")}:</span>
               <Input
                 type="text"
                 inputMode="decimal"
@@ -103,11 +105,11 @@ export default function TipSection({
                 placeholder={String(autoRate)}
                 className="h-7 w-16 text-xs text-center"
               />
-              <span className="text-muted-foreground">NT/khách/ngày</span>
+              <span className="text-muted-foreground">{t("NT/khách/ngày")}</span>
             </div>
 
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground">Số khách:</span>
+              <span className="text-muted-foreground">{t("Số khách")}:</span>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -119,12 +121,12 @@ export default function TipSection({
                 }}
                 placeholder={String(autoSoKhach)}
                 className="h-7 w-14 text-xs text-center"
-                title={`Mặc định = số khách − T/L (${soKhach} − ${soKhachTl} = ${autoSoKhach}). T/L không đóng tip.`}
+                title={`${t("Mặc định = số khách − T/L")} (${soKhach} − ${soKhachTl} = ${autoSoKhach}). ${t("T/L không đóng tip.")}`}
               />
             </div>
 
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground">Số ngày:</span>
+              <span className="text-muted-foreground">{t("Số ngày")}:</span>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -141,7 +143,7 @@ export default function TipSection({
 
             <div className="flex items-center gap-1.5 text-xs ml-auto">
               <span className="text-muted-foreground">
-                {effectiveSoKhach} khách × {effectiveSoNgay} ngày × {fmt(effectiveRate)} = Tổng:
+                {effectiveSoKhach} {t("khách")} × {effectiveSoNgay} {t("ngày")} × {fmt(effectiveRate)} = {t("Tổng")}:
               </span>
               <Input
                 type="text"
@@ -164,7 +166,7 @@ export default function TipSection({
                   "h-7 w-28 text-xs text-right font-semibold",
                   isOverridden && "text-amber-700 border-amber-300",
                 )}
-                title={isOverridden ? "Lump sum override — không sync với số khách" : "Tự tính"}
+                title={isOverridden ? t("Lump sum override — không sync với số khách") : t("Tự tính")}
               />
               <span className="text-muted-foreground">NT</span>
               {isOverridden && (
@@ -174,7 +176,7 @@ export default function TipSection({
                   size="icon"
                   className="h-6 w-6 text-muted-foreground hover:text-foreground"
                   onClick={() => onTipLumpSumChange(null)}
-                  title="Reset về auto-compute"
+                  title={t("Reset về auto-compute")}
                 >
                   <RotateCcw className="h-3 w-3" />
                 </Button>
