@@ -6,6 +6,7 @@ import {
   ShieldCheck, User, UserCheck, Bus, CalendarDays,
   ClipboardList, ShoppingBag, Users, Utensils, StickyNote,
 } from "lucide-react";
+import { t, useTranslate } from "@/lib/i18n";
 
 function formatDate(d: string | null) {
   if (!d) return "—";
@@ -37,7 +38,7 @@ interface DoanInfo {
 function xeLabel(xe: XeInfo | null | undefined) {
   if (!xe) return "—";
   const nhaXe = xe.nha_xe?.ten ?? "";
-  const socho = xe.so_cho ? `${xe.so_cho} chỗ` : "";
+  const socho = xe.so_cho ? `${xe.so_cho} ${t("chỗ")}` : "";
   const parts = [nhaXe, xe.ten_xe, socho].filter(Boolean);
   return parts.length ? parts.join(" · ") : "—";
 }
@@ -80,18 +81,19 @@ export default function DoanInfoSection({
   chuThichKhach, setChuThichKhach,
   coTinhSuatTLNhaHang, setCoTinhSuatTLNhaHang,
 }: Props) {
+  useTranslate();
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-card">
       <div className="px-4 py-2.5 border-b border-border">
-        <h3 className="text-sm font-semibold flex items-center gap-1.5">📋 Thông tin đoàn</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-1.5">📋 {t("Thông tin đoàn")}</h3>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
         {/* Left: readonly + chuyến bay inline */}
         <div className="p-4 space-y-2 text-sm">
-          <Row label="Code đoàn" icon={ShieldCheck}>
+          <Row label={t("Code đoàn")} icon={ShieldCheck}>
             <span className="font-bold" style={{ color: "#185FA5" }}>{doan.ten_doan}</span>
           </Row>
-          <Row label="HDV" icon={User}>
+          <Row label={t("HDV")} icon={User}>
             {(() => {
               const hdv1 = doan.huong_dan_vien;
               const hdv2 = doan.huong_dan_vien_2;
@@ -109,41 +111,41 @@ export default function DoanInfoSection({
               );
             })()}
           </Row>
-          <Row label="Xe" icon={Bus}>
+          <Row label={t("Xe")} icon={Bus}>
             <span>{xeLabel(doan.xe)}</span>
           </Row>
           {/* Ngày đón + chuyến bay đón inline */}
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><CalendarDays className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Ngày đón:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><CalendarDays className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />{t("Ngày đón")}:</span>
             <span className="shrink-0">{formatDate(doan.ngay_di)}</span>
             <Input
               className="h-7 text-sm flex-1 min-w-0"
               value={chuyenBayDon}
               onChange={(e) => setChuyenBayDon(e.target.value)}
-              placeholder="Chuyến bay đón..."
+              placeholder={t("Chuyến bay đón...")}
             />
           </div>
           {/* Ngày tiễn + chuyến bay tiễn inline */}
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><CalendarDays className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Ngày tiễn:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><CalendarDays className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />{t("Ngày tiễn")}:</span>
             <span className="shrink-0">{formatDate(doan.ngay_ve)}</span>
             <Input
               className="h-7 text-sm flex-1 min-w-0"
               value={chuyenBayTien}
               onChange={(e) => setChuyenBayTien(e.target.value)}
-              placeholder="Chuyến bay tiễn..."
+              placeholder={t("Chuyến bay tiễn...")}
             />
           </div>
         </div>
         {/* Right: editable + compact guest count */}
         <div className="p-4 space-y-2 text-sm">
-          <Row label="Bảng đón" icon={ClipboardList} editable>
-            <Input className="h-7 text-sm" value={bangDon} onChange={(e) => setBangDon(e.target.value)} placeholder="Nhập bảng đón..." />
+          <Row label={t("Bảng đón")} icon={ClipboardList} editable>
+            <Input className="h-7 text-sm" value={bangDon} onChange={(e) => setBangDon(e.target.value)} placeholder={t("Nhập bảng đón...")} />
           </Row>
           <Row label="Shopping" icon={ShoppingBag} editable>
             <Select value={shopping === null ? "" : shopping ? "yes" : "no"} onValueChange={(v) => setShopping(v === "yes" ? true : v === "no" ? false : null)}>
               <SelectTrigger className="h-7 text-sm w-28">
-                <span>{shopping === null ? "Chọn" : shopping ? "YES" : "NO"}</span>
+                <span>{shopping === null ? t("Chọn") : shopping ? "YES" : "NO"}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="yes">YES</SelectItem>
@@ -152,19 +154,19 @@ export default function DoanInfoSection({
             </Select>
           </Row>
           <Row label="T/L" icon={UserCheck} editable>
-            <Input className="h-7 text-sm" value={truongDoan} onChange={(e) => setTruongDoan(e.target.value)} placeholder="Tên trưởng đoàn..." />
+            <Input className="h-7 text-sm" value={truongDoan} onChange={(e) => setTruongDoan(e.target.value)} placeholder={t("Tên trưởng đoàn...")} />
           </Row>
-          <Row label="T/L ăn NH" icon={Utensils} editable>
+          <Row label={t("T/L ăn NH")} icon={Utensils} editable>
             <div className="flex items-center gap-2">
               <Switch checked={coTinhSuatTLNhaHang} onCheckedChange={setCoTinhSuatTLNhaHang} />
               <span className="text-xs text-muted-foreground">
-                {coTinhSuatTLNhaHang ? "Tính suất ăn T/L" : "Không tính"}
+                {coTinhSuatTLNhaHang ? t("Tính suất ăn T/L") : t("Không tính")}
               </span>
             </div>
           </Row>
           {/* Compact guest count */}
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><Users className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Số khách:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0"><Users className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />{t("Số khách")}:</span>
             <div className="flex items-center gap-1.5 flex-wrap">
               <GuestChip label="NL" value={soKhachLon} />
               <span className="text-muted-foreground/40 text-xs">·</span>
@@ -174,16 +176,16 @@ export default function DoanInfoSection({
               <span className="text-muted-foreground/40 text-xs">·</span>
               <GuestChip label="T/L" value={soKhachTl} />
               <span className="text-muted-foreground/40 text-xs">·</span>
-              <GuestChip label="Tổng" value={totalFromDoan} highlight />
+              <GuestChip label={t("Tổng")} value={totalFromDoan} highlight />
             </div>
           </div>
           {/* Chú thích khách */}
           <div className="flex items-start gap-2 pt-0.5">
-            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0 pt-1.5"><StickyNote className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />Chú thích:</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground w-24 shrink-0 pt-1.5"><StickyNote className="h-3.5 w-3.5 text-[#185FA5] shrink-0" />{t("Chú thích")}:</span>
             <textarea
               value={chuThichKhach}
               onChange={(e) => setChuThichKhach(e.target.value)}
-              placeholder="VD: Khách ăn chay, dị ứng, VIP..."
+              placeholder={t("VD: Khách ăn chay, dị ứng, VIP...")}
               rows={2}
               className="flex-1 text-sm resize-none rounded-md border border-input bg-background px-2 py-1.5"
             />
