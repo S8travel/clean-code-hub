@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./ChiPhiHDVSection";
 
 const NDT_TIP_CO_TL = 150;
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function ChiPhiPhasThuSection({ doan }: Props) {
+  useTranslate();
   const soKhach =
     (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
     (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
@@ -79,7 +81,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center justify-between flex-wrap gap-2">
-        <p className="text-sm font-semibold">💰 Phải thu</p>
+        <p className="text-sm font-semibold">💰 {t("Phải thu")}</p>
         <div className="flex items-center gap-3 flex-wrap">
           {totalVND > 0 && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -92,7 +94,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
             </div>
           )}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addRow}>
-            <Plus className="h-3 w-3 mr-1" /> Thêm
+            <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
           </Button>
         </div>
       </div>
