@@ -11,6 +11,7 @@ import { DeleteDialog } from "@/components/DeleteDialog";
 import { useDNTTList, useUpdateDNTT, useDeleteDNTT } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 import { externalSupabase } from "@/lib/supabase-external";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -26,7 +27,7 @@ async function downloadDNTTWord(doanId: number, dnttIds: number[]) {
   // session thật. Publishable key không phải JWT (gateway từ chối sau khi disable
   // legacy keys) — nó chỉ dùng cho header apikey để định danh project.
   const token = (await externalSupabase.auth.getSession()).data.session?.access_token;
-  if (!token) throw new Error("Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại");
+  if (!token) throw new Error(t("Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại"));
   const res = await fetch(EXTERNAL_URL, {
     method: "POST",
     headers: {
@@ -49,6 +50,7 @@ async function downloadDNTTWord(doanId: number, dnttIds: number[]) {
 }
 
 export default function DNTTTab({ doanId }: Props) {
+  useTranslate();
   const { data: dnttList = [], isLoading } = useDNTTList(doanId);
   const updateMut = useUpdateDNTT();
   const deleteMut = useDeleteDNTT();
@@ -60,10 +62,10 @@ export default function DNTTTab({ doanId }: Props) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [batchPrinting, setBatchPrinting] = useState(false);
 
-  if (isLoading) return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
+  if (isLoading) return <div className="text-sm text-muted-foreground py-4">{t("Đang tải...")}</div>;
 
   if (dnttList.length === 0) {
-    return <p className="text-sm text-muted-foreground py-4">Chưa có đề nghị thanh toán nào.</p>;
+    return <p className="text-sm text-muted-foreground py-4">{t("Chưa có đề nghị thanh toán nào.")}</p>;
   }
 
   const toggleSelect = (id: number) => {
@@ -78,7 +80,7 @@ export default function DNTTTab({ doanId }: Props) {
   const handleResend = (id: number) => {
     updateMut.mutate(
       { id, doanId, trang_thai_duyet: "cho_duyet", ghi_chu: null },
-      { onSuccess: () => toast.success("Đã gửi lại đề nghị TT") },
+      { onSuccess: () => toast.success(t("Đã gửi lại đề nghị TT")) },
     );
   };
 
@@ -88,7 +90,7 @@ export default function DNTTTab({ doanId }: Props) {
       { id: deleteTarget.id, doanId, refId: deleteTarget.refId },
       {
         onSuccess: () => {
-          toast.success("Đã xóa đề nghị thanh toán");
+          toast.success(t("Đã xóa đề nghị thanh toán"));
           setDeleteTarget(null);
         },
       },
@@ -101,10 +103,10 @@ export default function DNTTTab({ doanId }: Props) {
       { id: cancelTarget.id },
       {
         onSuccess: () => {
-          toast.success("Đã hủy đề nghị thanh toán");
+          toast.success(t("Đã hủy đề nghị thanh toán"));
           setCancelTarget(null);
         },
-        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy đề nghị"),
+        onError: (err: unknown) => toast.error(errMsg(err) || t("Lỗi khi hủy đề nghị")),
       },
     );
   };
@@ -113,9 +115,9 @@ export default function DNTTTab({ doanId }: Props) {
     setPrintingId(dnttId);
     try {
       await downloadDNTTWord(doanId, [dnttId]);
-      toast.success("Đã xuất file Word");
+      toast.success(t("Đã xuất file Word"));
     } catch (err: unknown) {
-      toast.error("Lỗi xuất file: " + (errMsg(err) || ""));
+      toast.error(t("Lỗi xuất file: ") + (errMsg(err) || ""));
     } finally {
       setPrintingId(null);
     }
@@ -124,15 +126,15 @@ export default function DNTTTab({ doanId }: Props) {
   const handlePrintSelected = async () => {
     const ksIds = selectedIds.filter((id) => dnttList.find((d) => d.id === id && d.ref_loai === "khach_san"));
     if (ksIds.length === 0) {
-      toast.error("Không có ĐNTT khách sạn nào được chọn");
+      toast.error(t("Không có ĐNTT khách sạn nào được chọn"));
       return;
     }
     setBatchPrinting(true);
     try {
       await downloadDNTTWord(doanId, ksIds);
-      toast.success("Đã xuất file Word");
+      toast.success(t("Đã xuất file Word"));
     } catch (err: unknown) {
-      toast.error("Lỗi xuất file: " + (errMsg(err) || ""));
+      toast.error(t("Lỗi xuất file: ") + (errMsg(err) || ""));
     } finally {
       setBatchPrinting(false);
     }
@@ -152,7 +154,7 @@ export default function DNTTTab({ doanId }: Props) {
             id="select-all-dntt"
           />
           <label htmlFor="select-all-dntt" className="text-xs text-muted-foreground cursor-pointer select-none">
-            {selectedIds.length > 0 ? `Đã chọn ${selectedIds.length}/${dnttList.length}` : "Chọn tất cả"}
+            {selectedIds.length > 0 ? `${t("Đã chọn")} ${selectedIds.length}/${dnttList.length}` : t("Chọn tất cả")}
           </label>
         </div>
         {selectedIds.length > 0 && (
@@ -162,13 +164,13 @@ export default function DNTTTab({ doanId }: Props) {
               className="h-7 text-xs"
               onClick={handlePrintSelected}
               disabled={batchPrinting || ksSelectedCount === 0}
-              title={ksSelectedCount === 0 ? "Không có ĐNTT khách sạn nào được chọn" : undefined}
+              title={ksSelectedCount === 0 ? t("Không có ĐNTT khách sạn nào được chọn") : undefined}
             >
               <Printer className="h-3.5 w-3.5 mr-1" />
-              {batchPrinting ? "Đang xuất..." : `In ĐNTT KS${ksSelectedCount > 0 ? ` (${ksSelectedCount})` : ""}`}
+              {batchPrinting ? t("Đang xuất...") : `${t("In ĐNTT KS")}${ksSelectedCount > 0 ? ` (${ksSelectedCount})` : ""}`}
             </Button>
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={clearAll}>
-              Bỏ chọn
+              {t("Bỏ chọn")}
             </Button>
           </>
         )}
@@ -211,7 +213,7 @@ export default function DNTTTab({ doanId }: Props) {
                         className="h-6 w-6 text-muted-foreground hover:text-primary"
                         onClick={() => handlePrintSingle(d.id)}
                         disabled={printingId === d.id}
-                        title="In ĐNTT"
+                        title={t("In ĐNTT")}
                       >
                         <Printer className="h-3.5 w-3.5" />
                       </Button>
@@ -222,10 +224,10 @@ export default function DNTTTab({ doanId }: Props) {
                         size="icon"
                         variant="ghost"
                         className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        title="Xóa"
-                        onClick={() => setDeleteTarget({ id: d.id, refId: d.ref_id, moTa: d.mo_ta || "ĐNTT" })}
+                        title={t("Xóa")}
+                        onClick={() => setDeleteTarget({ id: d.id, refId: d.ref_id, moTa: d.mo_ta || t("ĐNTT") })}
                       >
-                        <span className="text-[11px]">Xóa</span>
+                        <span className="text-[11px]">{t("Xóa")}</span>
                       </Button>
                     )}
                   </div>
@@ -234,12 +236,12 @@ export default function DNTTTab({ doanId }: Props) {
                 {/* Amounts */}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   <div>
-                    <span className="text-muted-foreground">{d.la_coc ? "Cọc:" : "Số tiền:"}</span>{" "}
+                    <span className="text-muted-foreground">{d.la_coc ? t("Cọc:") : t("Số tiền:")}</span>{" "}
                     <span className="font-semibold text-primary">{fmt(d.so_tien)} VND</span>
                   </div>
                   {d.so_tien > (d.paid_amount || 0) && d.payment_status !== "unpaid" && (
                     <div>
-                      <span className="text-muted-foreground">Còn lại:</span>{" "}
+                      <span className="text-muted-foreground">{t("Còn lại:")}</span>{" "}
                       <span>{fmt(d.so_tien - (d.paid_amount || 0))} VND</span>
                     </div>
                   )}
@@ -254,7 +256,7 @@ export default function DNTTTab({ doanId }: Props) {
                 <DNTTFooter
                   d={d}
                   onResend={handleResend}
-                  onCancel={() => setCancelTarget({ id: d.id, moTa: d.mo_ta || "ĐNTT" })}
+                  onCancel={() => setCancelTarget({ id: d.id, moTa: d.mo_ta || t("ĐNTT") })}
                 />
               </CardContent>
             </Card>
@@ -283,13 +285,13 @@ export default function DNTTTab({ doanId }: Props) {
 
 function StatusBadge({ d }: { d: DNTTRow }) {
   if (d.trang_thai_duyet === "da_huy") {
-    return <Badge variant="secondary" className="text-[10px]">Đã hủy</Badge>;
+    return <Badge variant="secondary" className="text-[10px]">{t("Đã hủy")}</Badge>;
   }
 
   if (d.payment_status === "paid") {
     return (
       <div className="text-right">
-        <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">Đã thanh toán</Badge>
+        <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">{t("Đã thanh toán")}</Badge>
         {d.thanh_toan_luc && (
           <p className="text-[10px] text-muted-foreground mt-0.5">
             {format(new Date(d.thanh_toan_luc), "dd/MM/yyyy")}
@@ -301,11 +303,11 @@ function StatusBadge({ d }: { d: DNTTRow }) {
 
   switch (d.trang_thai_duyet) {
     case "cho_duyet":
-      return <Badge className="text-[10px] bg-yellow-100 text-yellow-800 border-yellow-300">Chờ duyệt ĐNTT</Badge>;
+      return <Badge className="text-[10px] bg-yellow-100 text-yellow-800 border-yellow-300">{t("Chờ duyệt ĐNTT")}</Badge>;
     case "da_duyet":
-      return <Badge className="text-[10px] bg-teal-100 text-teal-800 border-teal-300">Đã duyệt ĐNTT</Badge>;
+      return <Badge className="text-[10px] bg-teal-100 text-teal-800 border-teal-300">{t("Đã duyệt ĐNTT")}</Badge>;
     case "tu_choi":
-      return <Badge variant="destructive" className="text-[10px]">Từ chối</Badge>;
+      return <Badge variant="destructive" className="text-[10px]">{t("Từ chối")}</Badge>;
     default:
       return null;
   }
@@ -323,37 +325,37 @@ function DNTTFooter({ d, onResend, onCancel }: {
     case "cho_duyet":
       return (
         <div className="pt-1.5 border-t border-border flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">Đang chờ kế toán duyệt</p>
+          <p className="text-[11px] text-muted-foreground">{t("Đang chờ kế toán duyệt")}</p>
           <Button
             size="sm"
             variant="outline"
             className="h-7 text-xs text-destructive hover:text-destructive"
             onClick={() => onCancel(d.id)}
           >
-            <Ban className="h-3 w-3 mr-1" /> Hủy
+            <Ban className="h-3 w-3 mr-1" /> {t("Hủy")}
           </Button>
         </div>
       );
     case "da_duyet":
       return (
         <div className="pt-1.5 border-t border-border flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">Chờ chuyển khoản (UNC)</p>
+          <p className="text-[11px] text-muted-foreground">{t("Chờ chuyển khoản (UNC)")}</p>
           <Button
             size="sm"
             variant="outline"
             className="h-7 text-xs text-destructive hover:text-destructive"
             onClick={() => onCancel(d.id)}
           >
-            <Ban className="h-3 w-3 mr-1" /> Hủy
+            <Ban className="h-3 w-3 mr-1" /> {t("Hủy")}
           </Button>
         </div>
       );
     case "tu_choi":
       return (
         <div className="pt-1.5 border-t border-border space-y-1.5">
-          {d.ghi_chu && <p className="text-[11px] text-destructive">Lý do từ chối: {d.ghi_chu}</p>}
+          {d.ghi_chu && <p className="text-[11px] text-destructive">{t("Lý do từ chối:")} {d.ghi_chu}</p>}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onResend(d.id)}>
-            Gửi lại
+            {t("Gửi lại")}
           </Button>
         </div>
       );
