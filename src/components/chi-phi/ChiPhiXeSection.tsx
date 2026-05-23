@@ -690,7 +690,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                 if (!adjustTarget) return;
                 const soTienThucTe = parseInt(adjustAmount.replace(/\D/g, ""), 10);
                 if (isNaN(soTienThucTe)) return;
-                adjustMut.mutate({ dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || t("Điều chỉnh") }, {
+                // lyDo ghi vào ghi_chu/ly_do của DB — giữ tiếng Việt độc lập ngôn ngữ UI
+                adjustMut.mutate({ dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || "Điều chỉnh" }, {
                   onSuccess: (result) => {
                     if (!result) return;
                     if (result.delta > 0) toast.success(`${t("Đã tạo ĐNTT bổ sung")} ${fmt(result.delta)} ₫`);
