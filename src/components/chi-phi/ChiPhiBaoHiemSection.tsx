@@ -119,7 +119,8 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
       doan_id: doanId,
       danh_muc: "bao_hiem",
       loai: "bao_hiem",
-      mo_ta: baoHiemCD ? `${t("Bảo hiểm")} - ${baoHiemCD.ten}` : t("Bảo hiểm"),
+      // mo_ta ghi vào DB — giữ tiếng Việt độc lập ngôn ngữ UI
+      mo_ta: baoHiemCD ? `Bảo hiểm - ${baoHiemCD.ten}` : "Bảo hiểm",
       don_gia: giaMacDinh,
       so_luong: soKhach * soNgay,
       tien_cong_ty: soKhach * soNgay * giaMacDinh,
@@ -160,7 +161,8 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
         doan_id: doanId,
         danh_muc: "bao_hiem",
         loai: "bao_hiem",
-        mo_ta: baoHiemCD ? `${t("Bảo hiểm")} - ${baoHiemCD.ten}` : t("Bảo hiểm"),
+        // mo_ta ghi vào DB — giữ tiếng Việt độc lập ngôn ngữ UI
+        mo_ta: baoHiemCD ? `Bảo hiểm - ${baoHiemCD.ten}` : "Bảo hiểm",
         don_gia: donGia,
         so_luong: soLuong,
         tien_cong_ty: isHDV ? 0 : thanhTien,
@@ -610,7 +612,8 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                 if (!adjustTarget) return;
                 const soTienThucTe = parseInt(adjustAmount.replace(/\D/g, ""), 10);
                 if (isNaN(soTienThucTe)) return;
-                adjustMut.mutate({ dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || t("Điều chỉnh") }, {
+                // lyDo ghi vào ghi_chu/ly_do của DB — giữ tiếng Việt độc lập ngôn ngữ UI
+                adjustMut.mutate({ dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || "Điều chỉnh" }, {
                   onSuccess: (result) => {
                     if (!result) return;
                     if (result.delta > 0) toast.success(`${t("Đã tạo ĐNTT bổ sung")} ${fmt(result.delta)} ₫`);

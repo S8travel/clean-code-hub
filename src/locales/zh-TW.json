@@ -1461,5 +1461,9 @@
   "🟠 Sắp đến (3–7 ngày)": "🟠 即將到期（3–7 天）",
   "🟡 Bình thường": "🟡 一般",
   "🟢 Còn xa": "🟢 尚遠",
-  "🟢 Thấp": "🟢 低"
+  "🟢 Thấp": "🟢 低",
+  "thiếu, cần thanh toán thêm": "短缺，需補繳",
+  "đề nghị thanh toán đang chờ xử lý. Sau khi hủy, bạn có thể tạo đề nghị mới với số tiền chính xác hơn.": "付款申請正在處理中。取消後，您可建立金額更準確的新申請。",
+  "Giữ lại làm công nợ, cấn trừ vào booking sau": "保留為應付帳款，於後續預訂沖抵",
+  "Đề nghị sẽ bị hủy, chi phí trở về trạng thái chưa gửi duyệt.": "申請將被取消，費用回到未送審狀態。"
 }
