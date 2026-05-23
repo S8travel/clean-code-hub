@@ -888,7 +888,8 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                 const soTienThucTe = parseInt(adjustAmount.replace(/\D/g, ""), 10);
                 if (isNaN(soTienThucTe)) return;
                 adjustMut.mutate(
-                  { dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || t("Điều chỉnh") },
+                  // lyDo ghi vào ghi_chu/ly_do của DB — giữ tiếng Việt độc lập ngôn ngữ UI
+                  { dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || "Điều chỉnh" },
                   {
                     onSuccess: (result) => {
                       if (!result) return;
