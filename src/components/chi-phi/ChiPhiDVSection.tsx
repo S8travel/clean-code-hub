@@ -9,6 +9,7 @@ import DVCancelModal from "./DVCancelModal";
 import DVAggCommitModal from "./DVAggCommitModal";
 import DVRow from "./DVRow";
 import { useDVSection } from "./use-dv-section";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -26,6 +27,7 @@ export interface ChiPhiDVSectionHandle {
 
 // Tab Chi phí Dịch vụ — chỉ render. Toàn bộ state/logic ở useDVSection.
 const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }, ref) {
+  useTranslate();
   const s = useDVSection({ doanId, tenDoan, ngayBatDau });
   const {
     dvRows, total, sortedDays, dvData, dvHandlers,
@@ -51,9 +53,9 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   if (dvRows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        🎫 Chưa có dịch vụ nào trong chương trình.
+        🎫 {t("Chưa có dịch vụ nào trong chương trình.")}
         <br />
-        <span className="text-xs">Vào mục Điều Tour → thêm dịch vụ có phí vào chương trình ngày.</span>
+        <span className="text-xs">{t("Vào mục Điều Tour → thêm dịch vụ có phí vào chương trình ngày.")}</span>
       </div>
     );
   }
@@ -63,20 +65,20 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
-        <p className="text-sm font-semibold text-purple-900">🎫 Dịch vụ</p>
+        <p className="text-sm font-semibold text-purple-900">🎫 {t("Dịch vụ")}</p>
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
             <>
               <Button size="sm" className="h-7 text-xs" onClick={handlePrintSelected}>
                 <Printer className="h-3.5 w-3.5 mr-1" />
-                In ĐNTT ({selectedIds.length})
+                {t("In ĐNTT")} ({selectedIds.length})
               </Button>
               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedIds([])}>
-                Bỏ chọn
+                {t("Bỏ chọn")}
               </Button>
             </>
           )}
-          <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>
+          <span className="text-xs text-muted-foreground">{t("Tổng")}: {fmt(total)} ₫</span>
         </div>
       </div>
 
@@ -103,14 +105,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                   className="h-3.5 w-3.5"
                 />
               </th>
-              <th className="text-left px-3 py-2.5">Ngày</th>
-              <th className="text-left px-3 py-2.5">Dịch vụ</th>
-              <th className="text-center px-2 py-2.5">SL</th>
-              <th className="text-center px-3 py-2.5">Đơn giá</th>
-              <th className="text-right px-3 py-2.5">Thành tiền</th>
-              <th className="text-center px-2 py-2.5">Nguồn</th>
-              <th className="text-center px-3 py-2.5">TT ĐNTT</th>
-              <th className="text-center px-3 py-2.5">TT Thanh toán</th>
+              <th className="text-left px-3 py-2.5">{t("Ngày")}</th>
+              <th className="text-left px-3 py-2.5">{t("Dịch vụ")}</th>
+              <th className="text-center px-2 py-2.5">{t("SL")}</th>
+              <th className="text-center px-3 py-2.5">{t("Đơn giá")}</th>
+              <th className="text-right px-3 py-2.5">{t("Thành tiền")}</th>
+              <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
+              <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
+              <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
               <th className="px-2 py-2.5" />
             </tr>
           </thead>

@@ -6,14 +6,16 @@ import { cn } from "@/lib/utils";
 import { isKSRoomRow, calcRowFocBreakdown, calcFocSuggestion } from "@/lib/foc-calc";
 import KSRowInput from "./KSRowInput";
 import { dayLabel, type LocalKSRow } from "./ks-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 /* ── Add buttons cụm (Phòng + Dịch vụ) cho header ngày ── */
 export function DayAddButtons({ onAddRoom, onAddService }: { onAddRoom: () => void; onAddService: () => void }) {
+  useTranslate();
   return (
     <div className="inline-flex items-center gap-0.5 whitespace-nowrap">
       <Button variant="ghost" size="sm" className="h-6 text-xs px-1.5" onClick={onAddRoom}>
         <Plus className="h-3 w-3 mr-0.5" />
-        Phòng
+        {t("Phòng")}
       </Button>
       <Button
         variant="ghost"
@@ -22,7 +24,7 @@ export function DayAddButtons({ onAddRoom, onAddService }: { onAddRoom: () => vo
         onClick={onAddService}
       >
         <Plus className="h-3 w-3 mr-0.5" />
-        Dịch vụ
+        {t("Dịch vụ")}
       </Button>
     </div>
   );
@@ -56,10 +58,11 @@ export function DayGroup({
   onAddService: () => void;
   disabled?: boolean;
 }) {
+  useTranslate();
   const label =
     dateStr !== "unknown"
-      ? `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`
-      : "Không xác định";
+      ? `${t("Ngày")} ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`
+      : t("Không xác định");
 
   // Gợi ý FOC theo 16免1 cho header (info-only, OP tự gán vào row giá thấp nhất)
   const roomDayRows = dayRows.filter(isKSRoomRow);
@@ -74,13 +77,13 @@ export function DayGroup({
           {focKhach && focMien && suggest.totalRooms > 0 && (
             <span
               className="ml-2 text-[10px] font-normal text-muted-foreground"
-              title={`Tổng ${suggest.totalRooms} phòng · ${focKhach}免${focMien} → gợi ý FOC ${suggest.suggestedFoc}. OP tự gán cho row phòng giá thấp nhất.`}
+              title={`${t("Tổng")} ${suggest.totalRooms} ${t("phòng")} · ${focKhach}免${focMien} → ${t("gợi ý FOC")} ${suggest.suggestedFoc}. ${t("OP tự gán cho row phòng giá thấp nhất.")}`}
             >
               · {focKhach}免{focMien}: <span className={cn(
                 "font-medium",
                 assignedFoc === suggest.suggestedFoc ? "text-emerald-700" : "text-orange-700",
               )}>
-                gợi ý {suggest.suggestedFoc} / đã gán {assignedFoc}
+                {t("gợi ý")} {suggest.suggestedFoc} / {t("đã gán")} {assignedFoc}
               </span>
             </span>
           )}
@@ -119,7 +122,8 @@ export function EmptyDayHeader({
   onAddRoom: () => void;
   onAddService: () => void;
 }) {
-  const label = `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`;
+  useTranslate();
+  const label = `${t("Ngày")} ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`;
   return (
     <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
       <TableCell colSpan={8} className="py-1 px-2 text-xs font-medium">

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
+import { t, useTranslate } from "@/lib/i18n";
 
 // Code NCC editor — OP nhập tay, save vào doan_ngay.ks_ma_code cho tất cả ngày của KS này
 // trong đoàn. Dùng cho cột CODE KS khi in ĐNTT + nội dung thanh toán ngân hàng.
@@ -12,6 +13,7 @@ export default function KSCodeEditor({
   ksId: number;
   currentCode: string;
 }) {
+  useTranslate();
   const qc = useQueryClient();
   const [code, setCode] = useState(currentCode);
 
@@ -26,18 +28,18 @@ export default function KSCodeEditor({
       .eq("doan_id", doanId)
       .eq("khach_san_id", ksId);
     if (error) {
-      toast.error("Lỗi lưu code NCC: " + error.message);
+      toast.error(t("Lỗi lưu code NCC") + ": " + error.message);
       return;
     }
-    toast.success("Đã lưu code NCC");
+    toast.success(t("Đã lưu code NCC"));
     qc.invalidateQueries({ queryKey: ["chi_phi_ks_data", doanId] });
     qc.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
     qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
   };
 
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Code NCC — dùng cho ĐNTT + nội dung thanh toán">
-      Code
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title={t("Code NCC — dùng cho ĐNTT + nội dung thanh toán")}>
+      {t("Code")}
       <input
         value={code}
         onChange={(e) => setCode(e.target.value)}

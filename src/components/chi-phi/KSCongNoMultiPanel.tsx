@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle } from "lucide-react";
 import type { CanTruSelection } from "./KSCongNoPanel";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -26,22 +27,23 @@ interface Props {
  * Quỹ trả trước lên đầu + tự tích chọn tới khi đủ maxAmount.
  */
 export default function KSCongNoMultiPanel({ nccId, value, onChange, maxAmount }: Props) {
+  useTranslate();
   const { data: congNoList = [], isLoading } = useCongNoByNCC(nccId);
 
   const options = useMemo(() => {
     const mapped = congNoList.map((r) => {
       const isPrepaid = r.loai === "tra_truoc";
       const tenDoan = isPrepaid
-        ? "Quỹ trả trước"
+        ? t("Quỹ trả trước")
         : r.ten_doan ||
           extractDoanFromGhiChu(r.ghi_chu) ||
-          (r.doan_id ? `#${r.doan_id}` : "Khoản dư");
+          (r.doan_id ? `#${r.doan_id}` : t("Khoản dư"));
       return {
         id: r.id,
         conLai: r.so_tien_con_lai,
         tenDoan,
         isPrepaid,
-        label: `${isPrepaid ? "💰 Quỹ trả trước" : tenDoan} — ${fmt(r.so_tien_con_lai)} VND`,
+        label: `${isPrepaid ? `💰 ${t("Quỹ trả trước")}` : tenDoan} — ${fmt(r.so_tien_con_lai)} VND`,
       };
     });
     return mapped.sort((a, b) => Number(b.isPrepaid) - Number(a.isPrepaid));
@@ -90,7 +92,7 @@ export default function KSCongNoMultiPanel({ nccId, value, onChange, maxAmount }
     }
     if (
       trimmed.length !== value.length ||
-      trimmed.some((t, i) => t.soTienCanTru !== value[i].soTienCanTru)
+      trimmed.some((tr, i) => tr.soTienCanTru !== value[i].soTienCanTru)
     ) {
       onChange(trimmed);
     }
@@ -131,7 +133,7 @@ export default function KSCongNoMultiPanel({ nccId, value, onChange, maxAmount }
       <div className="flex items-center gap-1 text-amber-700 text-xs">
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         <span className="font-medium">
-          {hasPrepaid ? "NCC trả trước — chọn quỹ/công nợ để cấn trừ" : `Có ${options.length} khoản công nợ — có thể chọn nhiều`}
+          {hasPrepaid ? t("NCC trả trước — chọn quỹ/công nợ để cấn trừ") : `${t("Có")} ${options.length} ${t("khoản công nợ — có thể chọn nhiều")}`}
         </span>
       </div>
       <div className="space-y-1">
@@ -153,7 +155,7 @@ export default function KSCongNoMultiPanel({ nccId, value, onChange, maxAmount }
                     className="h-7 text-xs w-28"
                     value={sel.soTienCanTru ? fmt(sel.soTienCanTru) : ""}
                     onChange={(e) => setAmount(o.id, e.target.value)}
-                    placeholder="Số tiền"
+                    placeholder={t("Số tiền")}
                   />
                   <span className="text-[11px] text-muted-foreground">₫</span>
                 </div>
@@ -164,9 +166,9 @@ export default function KSCongNoMultiPanel({ nccId, value, onChange, maxAmount }
       </div>
       {sumSelected > 0 && (
         <div className="text-[11px] text-muted-foreground border-t border-amber-200 pt-1">
-          Tổng cấn trừ: <span className="font-medium text-amber-700 tabular-nums">{fmt(sumSelected)} ₫</span>
+          {t("Tổng cấn trừ")}: <span className="font-medium text-amber-700 tabular-nums">{fmt(sumSelected)} ₫</span>
           {effMax !== Infinity && (
-            <> {" / "} tối đa <span className="tabular-nums">{fmt(effMax)} ₫</span></>
+            <> {" / "} {t("tối đa")} <span className="tabular-nums">{fmt(effMax)} ₫</span></>
           )}
         </div>
       )}

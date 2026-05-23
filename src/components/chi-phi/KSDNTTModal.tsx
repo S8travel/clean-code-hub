@@ -19,6 +19,7 @@ import { createCanTruPayments } from "@/hooks/use-payments";
 import type { LocalKSRow } from "./ks-section-shared";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -55,6 +56,7 @@ export default function KSDNTTModal({
   open, onClose, doanId, ksId, ksName, nccId, nccTen, nccStk, nccNganHang,
   totalKS, daCoc, localRows, chiPhiRowIds, canTru, onCanTruChange, tenDoanMoi, serviceDate,
 }: Props) {
+  useTranslate();
   const conLai = totalKS - daCoc;
   const canTruAmount = canTru.reduce((s, x) => s + x.soTienCanTru, 0);
   const thucThanhToan = Math.max(conLai - canTruAmount, 0);
@@ -74,14 +76,14 @@ export default function KSDNTTModal({
     const parts: string[] = [];
     localRows.forEach((r) => {
       const dateStr = r.ngay_date ? format(new Date(r.ngay_date), "dd/MM") : "?";
-      parts.push(`${r.loai_phong || "Phòng"} x${r.so_phong} (${dateStr})`);
+      parts.push(`${r.loai_phong || t("Phòng")} x${r.so_phong} (${dateStr})`);
     });
     return `${ksName} - ${parts.join(", ")}`;
   };
 
   const handleSubmit = async () => {
     if (soTien <= 0 && canTruAmount <= 0) {
-      toast.error("Số tiền phải lớn hơn 0");
+      toast.error(t("Số tiền phải lớn hơn 0"));
       return;
     }
     setSubmitting(true);
@@ -148,10 +150,10 @@ export default function KSDNTTModal({
 
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
-      toast.success("Đã tạo đề nghị thanh toán");
+      toast.success(t("Đã tạo đề nghị thanh toán"));
       onClose();
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || "Không thể tạo ĐNTT"));
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || t("Không thể tạo ĐNTT")));
     } finally {
       setSubmitting(false);
     }
@@ -161,34 +163,34 @@ export default function KSDNTTModal({
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-sm">Tạo đề nghị thanh toán — {ksName}</DialogTitle>
+          <DialogTitle className="text-sm">{t("Tạo đề nghị thanh toán")} — {ksName}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Tóm tắt số tiền */}
           <div className="text-xs space-y-1 bg-muted/40 rounded-md px-3 py-2">
             <div className="flex justify-between">
-              <span>Tổng tiền KS:</span>
+              <span>{t("Tổng tiền KS")}:</span>
               <span className="font-semibold">{fmt(totalKS)} VND</span>
             </div>
             {daCoc > 0 && (
               <div className="flex justify-between text-muted-foreground">
-                <span>Đã thanh toán:</span>
+                <span>{t("Đã thanh toán")}:</span>
                 <span>{fmt(daCoc)} VND</span>
               </div>
             )}
             <div className="flex justify-between">
-              <span>Còn lại:</span>
+              <span>{t("Còn lại")}:</span>
               <span className="font-semibold">{fmt(conLai)} VND</span>
             </div>
             {canTruAmount > 0 && (
               <>
                 <div className="flex justify-between text-amber-600">
-                  <span>Cấn trừ ({canTru.length} khoản):</span>
+                  <span>{t("Cấn trừ")} ({canTru.length} {t("khoản")}):</span>
                   <span className="font-semibold">− {fmt(canTruAmount)} VND</span>
                 </div>
                 <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
-                  <span>Thực thanh toán:</span>
+                  <span>{t("Thực thanh toán")}:</span>
                   <span>{fmt(thucThanhToan)} VND</span>
                 </div>
               </>
@@ -209,13 +211,13 @@ export default function KSDNTTModal({
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="full" id="full" />
                 <Label htmlFor="full" className="text-xs cursor-pointer">
-                  Toàn bộ — {fmt(thucThanhToan)} VND
+                  {t("Toàn bộ")} — {fmt(thucThanhToan)} VND
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="deposit" id="deposit" />
                 <Label htmlFor="deposit" className="text-xs cursor-pointer">
-                  1 phần (cọc/cấn trừ)
+                  {t("1 phần (cọc/cấn trừ)")}
                 </Label>
               </div>
             </RadioGroup>
@@ -223,7 +225,7 @@ export default function KSDNTTModal({
 
           {mode === "deposit" && thucThanhToan > 0 && (
             <div className="space-y-2">
-              <Label className="text-xs">Số tiền cọc/cấn trừ</Label>
+              <Label className="text-xs">{t("Số tiền cọc/cấn trừ")}</Label>
               <Input
                 type="number"
                 className="h-8 text-xs"
@@ -234,7 +236,7 @@ export default function KSDNTTModal({
               />
               {depositAmount > 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  Còn lại: {fmt(thucThanhToan - depositAmount)} VND
+                  {t("Còn lại")}: {fmt(thucThanhToan - depositAmount)} VND
                 </p>
               )}
             </div>
@@ -242,16 +244,16 @@ export default function KSDNTTModal({
 
           {/* Ngày cần thanh toán */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Ngày cần thanh toán</Label>
+            <Label className="text-xs">{t("Ngày cần thanh toán")}</Label>
             <DatePicker className="h-8 text-xs w-full" value={ngayCan} onChange={setNgayCan} />
           </div>
 
           {/* Ghi chú */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Ghi chú</Label>
+            <Label className="text-xs">{t("Ghi chú")}</Label>
             <Textarea
               className="text-xs min-h-[60px] resize-none"
-              placeholder="Ghi chú thêm (tùy chọn)"
+              placeholder={t("Ghi chú thêm (tùy chọn)")}
               value={ghiChu}
               onChange={(e) => setGhiChu(e.target.value)}
             />
@@ -259,14 +261,14 @@ export default function KSDNTTModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>{t("Hủy")}</Button>
           <Button
             size="sm"
             className="text-xs"
             onClick={handleSubmit}
             disabled={submitting || (soTien <= 0 && canTruAmount <= 0)}
           >
-            Tạo đề nghị TT
+            {t("Tạo đề nghị TT")}
           </Button>
         </DialogFooter>
       </DialogContent>

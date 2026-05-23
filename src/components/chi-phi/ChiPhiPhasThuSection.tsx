@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./ChiPhiHDVSection";
 
 const NDT_TIP_CO_TL = 150;
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function ChiPhiPhasThuSection({ doan }: Props) {
+  useTranslate();
   const soKhach =
     (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
     (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
@@ -79,7 +81,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center justify-between flex-wrap gap-2">
-        <p className="text-sm font-semibold">💰 Phải thu</p>
+        <p className="text-sm font-semibold">💰 {t("Phải thu")}</p>
         <div className="flex items-center gap-3 flex-wrap">
           {totalVND > 0 && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -92,7 +94,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
             </div>
           )}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addRow}>
-            <Plus className="h-3 w-3 mr-1" /> Thêm
+            <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
           </Button>
         </div>
       </div>
@@ -100,13 +102,13 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
-              <th className="text-left px-4 py-2.5">Mục</th>
-              <th className="text-center px-3 py-2.5">Khách</th>
-              <th className="text-center px-3 py-2.5">Ngày</th>
-              <th className="text-center px-3 py-2.5">Đơn giá/khách/ngày</th>
-              <th className="text-right px-3 py-2.5">Tổng</th>
-              <th className="text-center px-3 py-2.5">Tỷ giá</th>
-              <th className="text-right px-4 py-2.5">Thành tiền VND</th>
+              <th className="text-left px-4 py-2.5">{t("Mục")}</th>
+              <th className="text-center px-3 py-2.5">{t("Khách")}</th>
+              <th className="text-center px-3 py-2.5">{t("Ngày")}</th>
+              <th className="text-center px-3 py-2.5">{t("Đơn giá/khách/ngày")}</th>
+              <th className="text-right px-3 py-2.5">{t("Tổng")}</th>
+              <th className="text-center px-3 py-2.5">{t("Tỷ giá")}</th>
+              <th className="text-right px-4 py-2.5">{t("Thành tiền VND")}</th>
               <th className="w-8" />
             </tr>
           </thead>
@@ -120,7 +122,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                     "px-1.5 py-0.5 rounded text-[10px] font-medium",
                     coTL ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700",
                   )}>
-                    {coTL ? "Có T/L" : "Không T/L"}
+                    {coTL ? t("Có T/L") : t("Không T/L")}
                   </span>
                   <button
                     onClick={() => setTipNguoiThu((v) => v === "cong_ty" ? "hdv" : "cong_ty")}
@@ -131,7 +133,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                         : "bg-blue-50 text-blue-700 border-blue-200",
                     )}
                   >
-                    {tipNguoiThu === "hdv" ? "HDV thu" : "Công ty thu"}
+                    {tipNguoiThu === "hdv" ? t("HDV thu") : t("Công ty thu")}
                   </button>
                 </div>
               </td>
@@ -203,7 +205,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                         value={row.moTa}
                         onChange={(e) => updateRow(row.id, "moTa", e.target.value)}
                         className="h-6 text-xs px-1.5"
-                        placeholder="Mô tả khoản thu..."
+                        placeholder={t("Mô tả khoản thu...")}
                         autoFocus
                       />
                       <button
@@ -215,7 +217,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                             : "bg-blue-50 text-blue-700 border-blue-200",
                         )}
                       >
-                        {row.nguoiThu === "hdv" ? "HDV thu" : "Công ty thu"}
+                        {row.nguoiThu === "hdv" ? t("HDV thu") : t("Công ty thu")}
                       </button>
                     </div>
                   </td>

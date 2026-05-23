@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { LocalKSRow } from "./ks-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -25,6 +26,7 @@ export default memo(function KSRowInput({
   row, globalIdx, rowFocDeduction = 0,
   onFieldChange, onBlurSave, onDelete, disabled = false,
 }: Props) {
+  useTranslate();
   const [localLoaiPhong, setLocalLoaiPhong] = useState(row.loai_phong);
   const [localSoPhong, setLocalSoPhong] = useState(String(row.so_phong));
   const [localFocCount, setLocalFocCount] = useState(String(row.foc_count ?? 0));
@@ -72,7 +74,7 @@ export default memo(function KSRowInput({
     <TableRow className="text-xs">
       <TableCell className="py-0.5 px-2">
         {disabled ? (
-          <span className="text-xs font-medium" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+          <span className="text-xs font-medium" title={t("Đã thanh toán — dùng nút Điều chỉnh để track")}>
             {localLoaiPhong || "—"}
           </span>
         ) : (
@@ -82,13 +84,13 @@ export default memo(function KSRowInput({
             onFocus={() => { editingRef.current = true; }}
             onBlur={() => { editingRef.current = false; handleLoaiPhongBlur(); }}
             className="h-6 text-xs"
-            placeholder="Twin/Double..."
+            placeholder={t("Twin/Double...")}
           />
         )}
       </TableCell>
       <TableCell className="py-0.5 px-2">
         {disabled ? (
-          <span className="text-xs text-center block tabular-nums" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+          <span className="text-xs text-center block tabular-nums" title={t("Đã thanh toán — dùng nút Điều chỉnh để track")}>
             {localSoPhong || 0}
           </span>
         ) : (
@@ -104,7 +106,7 @@ export default memo(function KSRowInput({
       </TableCell>
       <TableCell className="py-0.5 px-2">
         {disabled ? (
-          <span className="text-xs text-center block tabular-nums" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+          <span className="text-xs text-center block tabular-nums" title={t("Đã thanh toán — dùng nút Điều chỉnh để track")}>
             {Number(localFocCount) > 0 ? localFocCount : "—"}
           </span>
         ) : (
@@ -118,7 +120,7 @@ export default memo(function KSRowInput({
             onBlur={() => { editingRef.current = false; handleFocCountBlur(); }}
             placeholder="0"
             className="h-6 text-xs text-center w-[50px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            title="Số phòng được miễn phí (FOC). Gợi ý 16免1 hiện ở header ngày."
+            title={t("Số phòng được miễn phí (FOC). Gợi ý 16免1 hiện ở header ngày.")}
           />
         )}
       </TableCell>
@@ -131,7 +133,7 @@ export default memo(function KSRowInput({
       <TableCell className="py-0.5 px-2 text-xs text-center">{row.so_dem}</TableCell>
       <TableCell className="py-0.5 px-2">
         {disabled ? (
-          <span className="text-xs text-right block tabular-nums" title="Đã thanh toán — dùng nút Điều chỉnh để track">
+          <span className="text-xs text-right block tabular-nums" title={t("Đã thanh toán — dùng nút Điều chỉnh để track")}>
             {fmt(row.gia_phong || 0)}
           </span>
         ) : (

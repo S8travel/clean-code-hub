@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { fmt } from "./nh-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   effectiveDelta: number;
@@ -14,6 +15,7 @@ interface Props {
 export default function NHAggFooterRow({
   effectiveDelta, sumActual, sumPaid, groupCongNoTotal, onCommit,
 }: Props) {
+  useTranslate();
   return (
     <tr className={cn(
       "border-b border-border/50",
@@ -22,23 +24,23 @@ export default function NHAggFooterRow({
       <td colSpan={12} className="px-3 py-1.5">
         <div className="flex items-center justify-end gap-3 text-[11px]">
           <span className="text-muted-foreground">
-            Sau điều chỉnh:
-            <span className="ml-1">Thực tế <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
+            {t("Sau điều chỉnh")}:
+            <span className="ml-1">{t("Thực tế")} <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
             <span className="mx-1">·</span>
-            <span>Đã TT <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
+            <span>{t("Đã TT")} <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
             {groupCongNoTotal > 0 && (
               <>
                 <span className="mx-1">·</span>
-                <span>Đã CN/HT <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
+                <span>{t("Đã CN/HT")} <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
               </>
             )}
             <span className="mx-1">·</span>
-            <span>Còn lệch <span className={cn(
+            <span>{t("Còn lệch")} <span className={cn(
               "font-semibold tabular-nums",
               effectiveDelta > 0 ? "text-orange-700" : "text-purple-700",
             )}>
               {effectiveDelta > 0 ? "+" : "−"}{fmt(Math.abs(effectiveDelta))} ₫
-            </span> ({effectiveDelta > 0 ? "thiếu" : "thừa"})</span>
+            </span> ({effectiveDelta > 0 ? t("thiếu") : t("thừa")})</span>
           </span>
           <Button
             size="sm"
@@ -51,8 +53,8 @@ export default function NHAggFooterRow({
             onClick={onCommit}
           >
             {effectiveDelta > 0
-              ? `Thanh toán bổ sung ${fmt(effectiveDelta)} ₫`
-              : `Xử lý chênh lệch thừa ${fmt(Math.abs(effectiveDelta))} ₫`}
+              ? `${t("Thanh toán bổ sung")} ${fmt(effectiveDelta)} ₫`
+              : `${t("Xử lý chênh lệch thừa")} ${fmt(Math.abs(effectiveDelta))} ₫`}
           </Button>
         </div>
       </td>

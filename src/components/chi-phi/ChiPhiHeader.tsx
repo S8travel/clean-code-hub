@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface ChiPhiHeaderDoan {
   ten_doan?: string | null;
@@ -18,24 +19,25 @@ interface Props {
 }
 
 export default function ChiPhiHeader({ doan, opName }: Props) {
+  useTranslate();
   const items = [
-    { label: "Mã đoàn", value: doan.ten_doan },
+    { label: t("Mã đoàn"), value: doan.ten_doan },
     { label: "Agent", value: doan.agents?.ten || "—" },
     {
-      label: "Số khách",
+      label: t("Số khách"),
       value: `${doan.so_khach_lon || 0} NL · ${doan.so_khach_tl || 0} TL · FOC`,
     },
     {
-      label: "Ngày",
+      label: t("Ngày"),
       value: doan.ngay_di && doan.ngay_ve
         ? `${format(new Date(doan.ngay_di), "dd/MM/yyyy")} → ${format(new Date(doan.ngay_ve), "dd/MM/yyyy")}`
         : "—",
     },
-    { label: "HDV", value: doan.huong_dan_vien?.ten || "—" },
-    { label: "Xe", value: doan.xe ? [doan.xe.nha_xe?.ten, doan.xe.ten_xe, doan.xe.so_cho ? `${doan.xe.so_cho} chỗ` : ""].filter(Boolean).join(" · ") || "—" : "—" },
+    { label: t("HDV"), value: doan.huong_dan_vien?.ten || "—" },
+    { label: t("Xe"), value: doan.xe ? [doan.xe.nha_xe?.ten, doan.xe.ten_xe, doan.xe.so_cho ? `${doan.xe.so_cho} ${t("chỗ")}` : ""].filter(Boolean).join(" · ") || "—" : "—" },
     { label: "OP", value: opName || "—" },
     {
-      label: "Quà tặng",
+      label: t("Quà tặng"),
       value: Array.isArray(doan.tang_pham) && doan.tang_pham.length > 0
         ? doan.tang_pham.join(", ")
         : "—",
@@ -44,7 +46,7 @@ export default function ChiPhiHeader({ doan, opName }: Props) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <h3 className="text-sm font-semibold mb-3">Thông tin đoàn</h3>
+      <h3 className="text-sm font-semibold mb-3">{t("Thông tin đoàn")}</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {items.map((item) => (
           <div key={item.label}>

@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Check, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { useInsertDNTT, useUpdateDNTT, type DNTTRow } from "@/hooks/use-chi-phi";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -29,6 +30,7 @@ export default function DNTTCell({
   loai = "khach_san",
   dnttList, selectedDnttIds, onToggleDntt,
 }: Props) {
+  useTranslate();
   const insertDNTT = useInsertDNTT();
   const updateDNTT = useUpdateDNTT();
 
@@ -48,7 +50,7 @@ export default function DNTTCell({
   const [editAmount, setEditAmount] = useState("");
 
   if (!chiPhiId) {
-    return <span className="text-xs text-muted-foreground">Lưu trước</span>;
+    return <span className="text-xs text-muted-foreground">{t("Lưu trước")}</span>;
   }
 
   const myDntt = dnttList.filter(d => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId);
@@ -74,7 +76,7 @@ export default function DNTTCell({
       ref_id: chiPhiId,
       allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
     }, {
-      onSuccess: () => toast.success("Đã gửi ĐNTT"),
+      onSuccess: () => toast.success(t("Đã gửi ĐNTT")),
     });
   };
 
@@ -89,7 +91,7 @@ export default function DNTTCell({
     if (!resendId) return;
     const soTien = resendMode === "full" ? thanhTien : resendAmount;
     if (soTien <= 0) {
-      toast.error("Số tiền không hợp lệ");
+      toast.error(t("Số tiền không hợp lệ"));
       return;
     }
     updateDNTT.mutate({
@@ -102,7 +104,7 @@ export default function DNTTCell({
       ghi_chu: null,
     }, {
       onSuccess: () => {
-        toast.success("Đã gửi lại ĐNTT");
+        toast.success(t("Đã gửi lại ĐNTT"));
         setResendOpen(false);
       },
     });
@@ -111,7 +113,7 @@ export default function DNTTCell({
   const handleEditSave = (id: number) => {
     const val = Number(editAmount);
     if (!val || val <= 0) {
-      toast.error("Số tiền không hợp lệ");
+      toast.error(t("Số tiền không hợp lệ"));
       return;
     }
     updateDNTT.mutate({
@@ -120,7 +122,7 @@ export default function DNTTCell({
       so_tien: val,
     }, {
       onSuccess: () => {
-        toast.success("Đã cập nhật ĐNTT");
+        toast.success(t("Đã cập nhật ĐNTT"));
         setEditingId(null);
       },
     });
@@ -131,7 +133,7 @@ export default function DNTTCell({
       ? Math.round(thanhTien * cocValue / 100)
       : cocValue;
     if (soTien <= 0 || soTien >= thanhTien) {
-      toast.error("Số tiền cọc không hợp lệ");
+      toast.error(t("Số tiền cọc không hợp lệ"));
       return;
     }
     handleSendDNTT(true, soTien, cocMode === "percent" ? cocValue : undefined);
@@ -145,12 +147,12 @@ export default function DNTTCell({
           {d.trang_thai_duyet === "tu_choi" ? (
             <>
               <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                Từ chối · {fmt(d.so_tien)}
+                {t("Từ chối")} · {fmt(d.so_tien)}
               </Badge>
               <Button size="sm" variant="outline" className="h-5 text-[10px] px-2"
                 disabled={isPending}
                 onClick={() => handleResendOpen(d)}>
-                Gửi lại
+                {t("Gửi lại")}
               </Button>
             </>
           ) : editingId === d.id ? (
@@ -183,7 +185,7 @@ export default function DNTTCell({
                 variant={d.trang_thai_duyet === "da_duyet" ? "default" : "secondary"}
                 className="text-[10px] px-1.5 py-0"
               >
-                {d.trang_thai_duyet === "da_duyet" ? "Đã duyệt" : "Chờ duyệt"} · {fmt(d.so_tien)}
+                {d.trang_thai_duyet === "da_duyet" ? t("Đã duyệt") : t("Chờ duyệt")} · {fmt(d.so_tien)}
               </Badge>
               {d.trang_thai_duyet === "cho_duyet" && (
                 <Button size="icon" variant="ghost" className="h-5 w-5"
@@ -201,12 +203,12 @@ export default function DNTTCell({
           <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
             disabled={isPending}
             onClick={() => handleSendDNTT(false, thanhTien)}>
-            Gửi ĐNTT: {fmt(thanhTien)}
+            {t("Gửi ĐNTT:")} {fmt(thanhTien)}
           </Button>
           <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
             disabled={isPending}
             onClick={() => setCocOpen(true)}>
-            Cọc...
+            {t("Cọc...")}
           </Button>
         </div>
       )}
@@ -215,7 +217,7 @@ export default function DNTTCell({
         <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
           disabled={isPending}
           onClick={() => handleSendDNTT(false, remaining)}>
-          Gửi ĐNTT: {fmt(remaining)}
+          {t("Gửi ĐNTT:")} {fmt(remaining)}
         </Button>
       )}
 
@@ -224,12 +226,12 @@ export default function DNTTCell({
           <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
             disabled={isPending}
             onClick={() => handleSendDNTT(false, thanhTien)}>
-            Gửi ĐNTT: {fmt(thanhTien)}
+            {t("Gửi ĐNTT:")} {fmt(thanhTien)}
           </Button>
           <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
             disabled={isPending}
             onClick={() => setCocOpen(true)}>
-            Cọc...
+            {t("Cọc...")}
           </Button>
         </div>
       )}
@@ -237,41 +239,41 @@ export default function DNTTCell({
       <Dialog open={cocOpen} onOpenChange={setCocOpen}>
         <DialogContent className="sm:max-w-[360px]">
           <DialogHeader>
-            <DialogTitle className="text-sm">Gửi cọc</DialogTitle>
+            <DialogTitle className="text-sm">{t("Gửi cọc")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Thành tiền: {fmt(thanhTien)} VND</p>
+            <p className="text-xs text-muted-foreground">{t("Thành tiền:")} {fmt(thanhTien)} VND</p>
             <RadioGroup value={cocMode} onValueChange={(v) => setCocMode(v as "percent" | "amount")} className="flex gap-4">
               <div className="flex items-center gap-1.5">
                 <RadioGroupItem value="percent" id="coc-pct" />
-                <Label htmlFor="coc-pct" className="text-xs">% cọc</Label>
+                <Label htmlFor="coc-pct" className="text-xs">{t("% cọc")}</Label>
               </div>
               <div className="flex items-center gap-1.5">
                 <RadioGroupItem value="amount" id="coc-amt" />
-                <Label htmlFor="coc-amt" className="text-xs">Số tiền</Label>
+                <Label htmlFor="coc-amt" className="text-xs">{t("Số tiền")}</Label>
               </div>
             </RadioGroup>
             <Input
               type="number"
               value={cocValue || ""}
               onChange={e => setCocValue(Number(e.target.value) || 0)}
-              placeholder={cocMode === "percent" ? "VD: 30" : "VD: 5000000"}
+              placeholder={cocMode === "percent" ? t("VD: 30") : t("VD: 5000000")}
               className="h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             {cocMode === "percent" && cocValue > 0 && (
               <p className="text-xs text-muted-foreground">
-                = {fmt(Math.round(thanhTien * cocValue / 100))} VND · Còn lại: {fmt(thanhTien - Math.round(thanhTien * cocValue / 100))} VND
+                = {fmt(Math.round(thanhTien * cocValue / 100))} VND · {t("Còn lại:")} {fmt(thanhTien - Math.round(thanhTien * cocValue / 100))} VND
               </p>
             )}
             {cocMode === "amount" && cocValue > 0 && (
               <p className="text-xs text-muted-foreground">
-                Còn lại: {fmt(thanhTien - cocValue)} VND
+                {t("Còn lại:")} {fmt(thanhTien - cocValue)} VND
               </p>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCocOpen(false)}>Hủy</Button>
-            <Button size="sm" onClick={handleCocSubmit} disabled={isPending}>Gửi cọc</Button>
+            <Button variant="outline" size="sm" onClick={() => setCocOpen(false)}>{t("Hủy")}</Button>
+            <Button size="sm" onClick={handleCocSubmit} disabled={isPending}>{t("Gửi cọc")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -279,18 +281,18 @@ export default function DNTTCell({
       <Dialog open={resendOpen} onOpenChange={setResendOpen}>
         <DialogContent className="sm:max-w-[360px]">
           <DialogHeader>
-            <DialogTitle className="text-sm">Gửi lại ĐNTT</DialogTitle>
+            <DialogTitle className="text-sm">{t("Gửi lại ĐNTT")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Thành tiền: {fmt(thanhTien)} VND</p>
+            <p className="text-xs text-muted-foreground">{t("Thành tiền:")} {fmt(thanhTien)} VND</p>
             <RadioGroup value={resendMode} onValueChange={(v) => setResendMode(v as "full" | "partial")} className="flex gap-4">
               <div className="flex items-center gap-1.5">
                 <RadioGroupItem value="full" id="resend-full" />
-                <Label htmlFor="resend-full" className="text-xs">Thanh toán toàn bộ</Label>
+                <Label htmlFor="resend-full" className="text-xs">{t("Thanh toán toàn bộ")}</Label>
               </div>
               <div className="flex items-center gap-1.5">
                 <RadioGroupItem value="partial" id="resend-partial" />
-                <Label htmlFor="resend-partial" className="text-xs">Thanh toán 1 phần</Label>
+                <Label htmlFor="resend-partial" className="text-xs">{t("Thanh toán 1 phần")}</Label>
               </div>
             </RadioGroup>
             {resendMode === "partial" && (
@@ -299,20 +301,20 @@ export default function DNTTCell({
                   type="number"
                   value={resendAmount || ""}
                   onChange={e => setResendAmount(Number(e.target.value) || 0)}
-                  placeholder="Nhập số tiền"
+                  placeholder={t("Nhập số tiền")}
                   className="h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 {resendAmount > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    Còn lại: {fmt(thanhTien - resendAmount)} VND
+                    {t("Còn lại:")} {fmt(thanhTien - resendAmount)} VND
                   </p>
                 )}
               </>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setResendOpen(false)}>Hủy</Button>
-            <Button size="sm" onClick={handleResendSubmit} disabled={isPending}>Gửi lại</Button>
+            <Button variant="outline" size="sm" onClick={() => setResendOpen(false)}>{t("Hủy")}</Button>
+            <Button size="sm" onClick={handleResendSubmit} disabled={isPending}>{t("Gửi lại")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
