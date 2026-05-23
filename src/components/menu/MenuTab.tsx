@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBookingNH } from "@/hooks/use-booking-nh";
 import MealColumn from "./MealColumn";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   doanId: number;
@@ -13,10 +14,11 @@ function formatDayHeader(ngaySo: number, ngayDate: string | null, thu: string | 
     ? new Date(ngayDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })
     : "";
   const thuStr = thu || "";
-  return `Ngày ${ngaySo}${dateStr ? ` · ${dateStr}` : ""}${thuStr ? ` · ${thuStr}` : ""}`;
+  return `${t("Ngày")} ${ngaySo}${dateStr ? ` · ${dateStr}` : ""}${thuStr ? ` · ${thuStr}` : ""}`;
 }
 
 export default function MenuTab({ doanId, tenDoan, soKhach }: Props) {
+  useTranslate();
   const { data: days, isLoading } = useBookingNH(doanId);
 
   if (isLoading) {
@@ -30,7 +32,7 @@ export default function MenuTab({ doanId, tenDoan, soKhach }: Props) {
   if (!days?.length) {
     return (
       <div className="rounded-xl bg-card border border-border p-12 text-center text-muted-foreground text-sm">
-        Chưa có dữ liệu ngày. Hãy lưu tab Điều tour trước.
+        {t("Chưa có dữ liệu ngày. Hãy lưu tab Điều tour trước.")}
       </div>
     );
   }
@@ -49,7 +51,7 @@ export default function MenuTab({ doanId, tenDoan, soKhach }: Props) {
             {/* An trua */}
             <div className="p-3">
               <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                🍽 Ăn trưa
+                {t("🍽 Ăn trưa")}
               </div>
               <MealColumn
                 doanId={doanId}
@@ -68,7 +70,7 @@ export default function MenuTab({ doanId, tenDoan, soKhach }: Props) {
             {/* An toi */}
             <div className="p-3">
               <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                🍽 Ăn tối
+                {t("🍽 Ăn tối")}
               </div>
               <MealColumn
                 doanId={doanId}

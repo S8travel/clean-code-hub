@@ -16,6 +16,7 @@ import { useDoanActivityLog, type ActivityAction } from "@/hooks/use-activity-lo
 import { useAuth } from "@/hooks/use-auth";
 import { useDoanList } from "@/hooks/use-doan";
 import { cn } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 
 const ACTION_CONFIG: Record<ActivityAction, { label: string; icon: React.ElementType; cls: string }> = {
   tao:       { label: "Tạo mới",   icon: PlusCircle,  cls: "text-green-600" },
@@ -37,6 +38,7 @@ const LOAI_CONFIG = {
 };
 
 export default function DoanLogTab({ doanId }: Props) {
+  useTranslate();
   const { user } = useAuth();
   const { data: logs = [], isLoading } = useDoanLogList(doanId);
   const { data: activityLogs = [], isLoading: isLoadingActivity } = useDoanActivityLog(doanId);
@@ -67,7 +69,7 @@ export default function DoanLogTab({ doanId }: Props) {
 
   const handleSubmit = async () => {
     if (!tieuDe.trim()) {
-      toast.warning("Vui lòng nhập tiêu đề");
+      toast.warning(t("Vui lòng nhập tiêu đề"));
       return;
     }
     try {
@@ -81,10 +83,10 @@ export default function DoanLogTab({ doanId }: Props) {
         created_by: user?.user_id ?? undefined,
         created_by_ten: user?.ho_ten ?? undefined,
       });
-      toast.success("Đã thêm log");
+      toast.success(t("Đã thêm log"));
       resetForm();
     } catch {
-      toast.error("Lỗi khi thêm log");
+      toast.error(t("Lỗi khi thêm log"));
     }
   };
 
@@ -99,17 +101,17 @@ export default function DoanLogTab({ doanId }: Props) {
         user_ten: user?.ho_ten ?? null,
       });
     } catch {
-      toast.error("Lỗi cập nhật");
+      toast.error(t("Lỗi cập nhật"));
     }
   };
 
   const handleDelete = async (id: number, currentLoai: string) => {
-    if (!window.confirm("Xóa phát sinh này?")) return;
+    if (!window.confirm(t("Xóa phát sinh này?"))) return;
     try {
       await deleteMut.mutateAsync({ id, doan_id: doanId, loai: currentLoai });
-      toast.success("Đã xóa");
+      toast.success(t("Đã xóa"));
     } catch {
-      toast.error("Lỗi khi xóa");
+      toast.error(t("Lỗi khi xóa"));
     }
   };
 
@@ -121,7 +123,7 @@ export default function DoanLogTab({ doanId }: Props) {
 
   const handleUpdate = async (id: number, currentLoai: string) => {
     if (!editTieuDe.trim()) {
-      toast.warning("Vui lòng nhập tiêu đề");
+      toast.warning(t("Vui lòng nhập tiêu đề"));
       return;
     }
     try {
@@ -132,10 +134,10 @@ export default function DoanLogTab({ doanId }: Props) {
         tieu_de: editTieuDe.trim(),
         noi_dung: editNoiDung.trim() || null,
       });
-      toast.success("Đã cập nhật");
+      toast.success(t("Đã cập nhật"));
       setEditId(null);
     } catch {
-      toast.error("Lỗi khi cập nhật");
+      toast.error(t("Lỗi khi cập nhật"));
     }
   };
 
@@ -144,22 +146,22 @@ export default function DoanLogTab({ doanId }: Props) {
       <Tabs defaultValue="phat_sinh">
         <TabsList className="mb-4">
           <TabsTrigger value="phat_sinh">
-            Nhật ký phát sinh
+            {t("Nhật ký phát sinh")}
             {logs.length > 0 && <span className="ml-1.5 text-[10px] bg-amber-500 text-white rounded-full px-1.5 py-0.5">{logs.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="lich_su">
             <History className="h-3.5 w-3.5 mr-1" />
-            Lịch sử thay đổi
+            {t("Lịch sử thay đổi")}
             {activityLogs.length > 0 && <span className="ml-1.5 text-[10px] bg-slate-500 text-white rounded-full px-1.5 py-0.5">{activityLogs.length}</span>}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="phat_sinh" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Nhật ký phát sinh</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{t("Nhật ký phát sinh")}</h3>
             {!showForm && (
               <Button size="sm" onClick={() => setShowForm(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Thêm
+                <Plus className="h-3.5 w-3.5 mr-1" /> {t("Thêm")}
               </Button>
             )}
           </div>
@@ -167,40 +169,40 @@ export default function DoanLogTab({ doanId }: Props) {
           {showForm && (
             <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
               <div>
-                <Label className="text-xs">Loại phát sinh</Label>
+                <Label className="text-xs">{t("Loại phát sinh")}</Label>
                 <Select value={loai} onValueChange={(v) => setLoai(v as "gia" | "su_co" | "ghi_chu")}>
                   <SelectTrigger className="h-8 text-sm mt-1">
-                    <span>{loai === "gia" ? "Phát sinh giá" : loai === "su_co" ? "Phát sinh sự cố" : "Ghi chú"}</span>
+                    <span>{loai === "gia" ? t("Phát sinh giá") : loai === "su_co" ? t("Phát sinh sự cố") : t("Ghi chú")}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gia">Phát sinh giá</SelectItem>
-                    <SelectItem value="su_co">Phát sinh sự cố</SelectItem>
-                    <SelectItem value="ghi_chu">Ghi chú</SelectItem>
+                    <SelectItem value="gia">{t("Phát sinh giá")}</SelectItem>
+                    <SelectItem value="su_co">{t("Phát sinh sự cố")}</SelectItem>
+                    <SelectItem value="ghi_chu">{t("Ghi chú")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Tiêu đề *</Label>
+                <Label className="text-xs">{t("Tiêu đề *")}</Label>
                 <Input
                   value={tieuDe}
                   onChange={(e) => setTieuDe(e.target.value)}
                   className="h-8 text-sm mt-1"
-                  placeholder="Tóm tắt phát sinh..."
+                  placeholder={t("Tóm tắt phát sinh...")}
                 />
               </div>
               <div>
-                <Label className="text-xs">Nội dung chi tiết</Label>
+                <Label className="text-xs">{t("Nội dung chi tiết")}</Label>
                 <Textarea
                   value={noiDung}
                   onChange={(e) => setNoiDung(e.target.value)}
                   className="text-sm mt-1 min-h-[80px]"
-                  placeholder="Mô tả chi tiết..."
+                  placeholder={t("Mô tả chi tiết...")}
                 />
               </div>
               <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="outline" onClick={resetForm}>Hủy</Button>
+                <Button size="sm" variant="outline" onClick={resetForm}>{t("Hủy")}</Button>
                 <Button size="sm" onClick={handleSubmit} disabled={createMut.isPending}>
-                  Lưu
+                  {t("Lưu")}
                 </Button>
               </div>
             </div>
@@ -208,9 +210,9 @@ export default function DoanLogTab({ doanId }: Props) {
 
           <Separator />
 
-          {isLoading && <p className="text-sm text-muted-foreground">Đang tải...</p>}
+          {isLoading && <p className="text-sm text-muted-foreground">{t("Đang tải...")}</p>}
           {!isLoading && logs.length === 0 && (
-            <p className="text-sm text-muted-foreground italic">Chưa có phát sinh nào.</p>
+            <p className="text-sm text-muted-foreground italic">{t("Chưa có phát sinh nào.")}</p>
           )}
 
           <div className="space-y-2">
@@ -227,12 +229,12 @@ export default function DoanLogTab({ doanId }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2 flex-wrap">
                       <span className={cn("text-[11px] font-medium px-1.5 py-0.5 rounded border", cfg.color)}>
-                        {cfg.label}
+                        {t(cfg.label)}
                       </span>
                       {log.is_resolved && (
                         <Badge variant="outline" className="text-[11px] text-green-700 border-green-300 gap-1">
                           <CheckCircle2 className="h-3 w-3" />
-                          Xác nhận bởi {log.resolved_by_ten ?? "—"}
+                          {t("Xác nhận bởi")} {log.resolved_by_ten ?? "—"}
                           {log.resolved_at && ` · ${format(new Date(log.resolved_at), "dd/MM HH:mm", { locale: vi })}`}
                         </Badge>
                       )}
@@ -244,17 +246,17 @@ export default function DoanLogTab({ doanId }: Props) {
                           value={editTieuDe}
                           onChange={(e) => setEditTieuDe(e.target.value)}
                           className="h-8 text-sm"
-                          placeholder="Tiêu đề..."
+                          placeholder={t("Tiêu đề...")}
                         />
                         <Textarea
                           value={editNoiDung}
                           onChange={(e) => setEditNoiDung(e.target.value)}
                           className="text-sm min-h-[60px]"
-                          placeholder="Nội dung chi tiết..."
+                          placeholder={t("Nội dung chi tiết...")}
                         />
                         <div className="flex gap-2 justify-end">
-                          <Button size="sm" variant="outline" onClick={() => setEditId(null)}>Hủy</Button>
-                          <Button size="sm" onClick={() => handleUpdate(log.id, log.loai)} disabled={updateMut.isPending}>Lưu</Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditId(null)}>{t("Hủy")}</Button>
+                          <Button size="sm" onClick={() => handleUpdate(log.id, log.loai)} disabled={updateMut.isPending}>{t("Lưu")}</Button>
                         </div>
                       </div>
                     ) : (
@@ -278,14 +280,14 @@ export default function DoanLogTab({ doanId }: Props) {
                         <button
                           onClick={() => startEdit(log.id, log.tieu_de, log.noi_dung)}
                           className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-                          title="Sửa"
+                          title={t("Sửa")}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(log.id, log.loai)}
                           className="text-muted-foreground hover:text-red-600 transition-colors p-0.5"
-                          title="Xóa"
+                          title={t("Xóa")}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -293,7 +295,7 @@ export default function DoanLogTab({ doanId }: Props) {
                           <button
                             onClick={() => handleConfirm(log.id, log.loai)}
                             className="text-muted-foreground hover:text-green-600 transition-colors p-0.5"
-                            title="Xác nhận đã xử lý"
+                            title={t("Xác nhận đã xử lý")}
                           >
                             <Circle className="h-4 w-4" />
                           </button>
@@ -304,7 +306,7 @@ export default function DoanLogTab({ doanId }: Props) {
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
                     )}
                     {!log.is_resolved && log.loai === "gia" && (
-                      <span className="text-[10px] text-amber-600 italic">Chờ invoice</span>
+                      <span className="text-[10px] text-amber-600 italic">{t("Chờ invoice")}</span>
                     )}
                   </div>
                 </div>
@@ -314,11 +316,11 @@ export default function DoanLogTab({ doanId }: Props) {
         </TabsContent>
 
         <TabsContent value="lich_su" className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Lịch sử thay đổi</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{t("Lịch sử thay đổi")}</h3>
           <Separator />
-          {isLoadingActivity && <p className="text-sm text-muted-foreground">Đang tải...</p>}
+          {isLoadingActivity && <p className="text-sm text-muted-foreground">{t("Đang tải...")}</p>}
           {!isLoadingActivity && activityLogs.length === 0 && (
-            <p className="text-sm text-muted-foreground italic">Chưa có thay đổi nào được ghi lại.</p>
+            <p className="text-sm text-muted-foreground italic">{t("Chưa có thay đổi nào được ghi lại.")}</p>
           )}
           <div className="space-y-1.5">
             {activityLogs.map((entry) => {

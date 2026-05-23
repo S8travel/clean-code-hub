@@ -14,6 +14,7 @@ import { useUserListForAssign } from "@/hooks/use-cong-viec";
 import {
   defaultPhanViec, useDefaultAssignees, type PvKey,
 } from "@/hooks/use-phan-viec";
+import { t, useTranslate } from "@/lib/i18n";
 
 export interface PhanViecInfo {
   code: string;
@@ -40,6 +41,7 @@ interface Props {
 interface RowState { key: PvKey; label: string; checked: boolean; assignedTo: string }
 
 export function PhanViecModal({ open, onClose, info, creatorId, submitting, onConfirm }: Props) {
+  useTranslate();
   const { data: users = [] } = useUserListForAssign();
   const { data: defaults } = useDefaultAssignees();
   const [rows, setRows] = useState<RowState[]>([]);
@@ -68,7 +70,7 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
     const assignments = rows
       .filter((r) => r.checked)
       .map((r) => ({ key: r.key, assignedTo: r.assignedTo || null }));
-    if (assignments.length === 0) { toast.error("Chọn ít nhất 1 đầu việc"); return; }
+    if (assignments.length === 0) { toast.error(t("Chọn ít nhất 1 đầu việc")); return; }
     await onConfirm(assignments, file);
   };
 
@@ -81,35 +83,34 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm flex items-center gap-2">
-            <Users className="h-4 w-4" /> Phân việc đoàn
+            <Users className="h-4 w-4" /> {t("Phân việc đoàn")}
           </DialogTitle>
         </DialogHeader>
 
         {/* Thông tin cơ bản đoàn */}
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs space-y-0.5">
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Code</span>
+            <span className="text-muted-foreground">{t("Code")}</span>
             <span className="font-semibold">{info.code}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Agent</span><span>{info.agent}</span>
+            <span className="text-muted-foreground">{t("Agent")}</span><span>{info.agent}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Địa điểm</span><span>{info.diaDiem}</span>
+            <span className="text-muted-foreground">{t("Địa điểm")}</span><span>{info.diaDiem}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Số khách</span>
+            <span className="text-muted-foreground">{t("Số khách")}</span>
             <span>{info.soKhach ?? "—"}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Ngày đi → về</span>
+            <span className="text-muted-foreground">{t("Ngày đi → về")}</span>
             <span className="tabular-nums">{dateStr}</span>
           </div>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Người được chọn nhận thông báo (giao bởi Hệ thống). Mục để trống →
-          báo điều phối phân người. Giám đốc nhận thông tin đoàn.
+          {t("Người được chọn nhận thông báo (giao bởi Hệ thống). Mục để trống → báo điều phối phân người. Giám đốc nhận thông tin đoàn.")}
         </p>
 
         <div className="space-y-2 py-1">
@@ -120,17 +121,17 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
                 onCheckedChange={(v) => setRow(r.key, { checked: !!v })}
                 className="shrink-0"
               />
-              <Label className="text-sm w-32 shrink-0">{r.label}</Label>
+              <Label className="text-sm w-32 shrink-0">{t(r.label)}</Label>
               <Select
                 value={r.assignedTo || "_none"}
                 onValueChange={(v) => setRow(r.key, { assignedTo: v === "_none" ? "" : v })}
                 disabled={!r.checked}
               >
                 <SelectTrigger className="h-8 text-xs flex-1">
-                  <SelectValue placeholder="— Chưa phân —" />
+                  <SelectValue placeholder={t("— Chưa phân —")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none" className="text-xs">— Chưa phân —</SelectItem>
+                  <SelectItem value="_none" className="text-xs">{t("— Chưa phân —")}</SelectItem>
                   {users.map((u) => (
                     <SelectItem key={u.user_id} value={u.user_id} className="text-xs">
                       {u.ho_ten}
@@ -145,7 +146,7 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
         {/* Gắn báo giá (tuỳ chọn) — lưu vào Tài liệu của đoàn (mục Báo giá) */}
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">
-            Gắn báo giá (tuỳ chọn — pdf / doc / ảnh)
+            {t("Gắn báo giá (tuỳ chọn — pdf / doc / ảnh)")}
           </Label>
           {file ? (
             <div className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
@@ -162,13 +163,13 @@ export function PhanViecModal({ open, onClose, info, creatorId, submitting, onCo
             />
           )}
           <p className="text-[11px] text-muted-foreground">
-            File sẽ hiển thị trong tab <span className="font-medium">Tài liệu</span> của đoàn (mục Báo giá).
+            {t("File sẽ hiển thị trong tab")} <span className="font-medium">{t("Tài liệu")}</span> {t("của đoàn (mục Báo giá).")}
           </p>
         </div>
 
         <DialogFooter>
           <Button size="sm" onClick={submit} disabled={submitting}>
-            {submitting ? "Đang tạo đoàn..." : "Xác nhận phân việc & tạo đoàn"}
+            {submitting ? t("Đang tạo đoàn...") : t("Xác nhận phân việc & tạo đoàn")}
           </Button>
         </DialogFooter>
       </DialogContent>

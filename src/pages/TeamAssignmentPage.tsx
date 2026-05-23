@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { t, useTranslate } from "@/lib/i18n";
 
 const TASK_TYPES = [
   { value: "ks",   label: "Khách sạn" },
@@ -42,13 +43,14 @@ const TASK_TYPES = [
 
 // ── PersonBadge ───────────────────────────────────────────────────────────────
 function PersonBadge({ name, onRemove }: { name: string; onRemove: () => void }) {
+  useTranslate();
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1">
       {name}
       <button
         onClick={onRemove}
         className="hover:text-blue-600 transition-colors"
-        title="Xóa"
+        title={t("Xóa")}
       >
         <X className="h-3 w-3" />
       </button>
@@ -58,13 +60,14 @@ function PersonBadge({ name, onRemove }: { name: string; onRemove: () => void })
 
 // ── AgentBadge ────────────────────────────────────────────────────────────────
 function AgentBadge({ name, onRemove }: { name: string; onRemove: () => void }) {
+  useTranslate();
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-800 text-xs font-medium px-2.5 py-1">
       {name}
       <button
         onClick={onRemove}
         className="hover:text-green-600 transition-colors"
-        title="Xóa"
+        title={t("Xóa")}
       >
         <X className="h-3 w-3" />
       </button>
@@ -74,6 +77,7 @@ function AgentBadge({ name, onRemove }: { name: string; onRemove: () => void }) 
 
 // ── TeamTab ───────────────────────────────────────────────────────────────────
 function TeamTab({ teamId }: { teamId: number }) {
+  useTranslate();
   const { data: teamAgentRows = [], isLoading: loadingAgents } = useTeamAgents(teamId);
   const { data: assignments = [], isLoading: loadingAssignments } = useTeamTaskAssignments(teamId);
   const { data: allAgents = [] } = useAgents();
@@ -115,7 +119,7 @@ function TeamTab({ teamId }: { teamId: number }) {
       await addAgent.mutateAsync({ team_id: teamId, agent_id: Number(agentId) });
       setAddingAgent(false);
     } catch {
-      toast.error("Không thể thêm agent");
+      toast.error(t("Không thể thêm agent"));
     }
   }
 
@@ -123,7 +127,7 @@ function TeamTab({ teamId }: { teamId: number }) {
     try {
       await deleteAgent.mutateAsync({ id: row.id, team_id: teamId });
     } catch {
-      toast.error("Không thể xóa agent");
+      toast.error(t("Không thể xóa agent"));
     }
   }
 
@@ -132,7 +136,7 @@ function TeamTab({ teamId }: { teamId: number }) {
       await addAssignment.mutateAsync({ team_id: teamId, task_type: taskType, user_id: userId });
       setAddingTaskType(null);
     } catch {
-      toast.error("Không thể thêm phân công");
+      toast.error(t("Không thể thêm phân công"));
     }
   }
 
@@ -140,7 +144,7 @@ function TeamTab({ teamId }: { teamId: number }) {
     try {
       await deleteAssignment.mutateAsync({ id: row.id, team_id: teamId });
     } catch {
-      toast.error("Không thể xóa phân công");
+      toast.error(t("Không thể xóa phân công"));
     }
   }
 
@@ -157,11 +161,11 @@ function TeamTab({ teamId }: { teamId: number }) {
       {/* Agents section */}
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Agents trong team
+          {t("Agents trong team")}
         </h3>
         <div className="flex flex-wrap items-center gap-2">
           {teamAgentRows.length === 0 && (
-            <span className="text-xs text-muted-foreground">Chưa có agent nào</span>
+            <span className="text-xs text-muted-foreground">{t("Chưa có agent nào")}</span>
           )}
           {teamAgentRows.map((row) => (
             <AgentBadge
@@ -176,11 +180,11 @@ function TeamTab({ teamId }: { teamId: number }) {
               onOpenChange={(open) => { if (!open) setAddingAgent(false); }}
             >
               <SelectTrigger className="h-7 w-44 text-xs" autoFocus>
-                <span className="text-muted-foreground">Chọn agent...</span>
+                <span className="text-muted-foreground">{t("Chọn agent...")}</span>
               </SelectTrigger>
               <SelectContent>
                 {availableAgents.length === 0 ? (
-                  <SelectItem value="__none" disabled>Không còn agent</SelectItem>
+                  <SelectItem value="__none" disabled>{t("Không còn agent")}</SelectItem>
                 ) : (
                   availableAgents.map((a) => (
                     <SelectItem key={a.id} value={String(a.id)}>{a.ten}</SelectItem>
@@ -193,7 +197,7 @@ function TeamTab({ teamId }: { teamId: number }) {
               onClick={() => setAddingAgent(true)}
               className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground text-xs px-2.5 py-1 hover:border-primary hover:text-primary transition-colors"
             >
-              <Plus className="h-3 w-3" /> Thêm agent
+              <Plus className="h-3 w-3" /> {t("Thêm agent")}
             </button>
           )}
         </div>
@@ -202,14 +206,14 @@ function TeamTab({ teamId }: { teamId: number }) {
       {/* Task assignments section */}
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Phân công công việc
+          {t("Phân công công việc")}
         </h3>
         <div className="rounded-lg border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="text-xs font-semibold w-32">Mảng</TableHead>
-                <TableHead className="text-xs font-semibold">Người phụ trách</TableHead>
+                <TableHead className="text-xs font-semibold w-32">{t("Mảng")}</TableHead>
+                <TableHead className="text-xs font-semibold">{t("Người phụ trách")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -221,7 +225,7 @@ function TeamTab({ teamId }: { teamId: number }) {
                 return (
                   <TableRow key={tt.value} className="align-middle">
                     <TableCell className="py-2 px-3 text-xs font-medium text-foreground whitespace-nowrap">
-                      {tt.label}
+                      {t(tt.label)}
                     </TableCell>
                     <TableCell className="py-2 px-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -238,11 +242,11 @@ function TeamTab({ teamId }: { teamId: number }) {
                             onOpenChange={(open) => { if (!open) setAddingTaskType(null); }}
                           >
                             <SelectTrigger className="h-7 w-48 text-xs" autoFocus>
-                              <span className="text-muted-foreground">Chọn người...</span>
+                              <span className="text-muted-foreground">{t("Chọn người...")}</span>
                             </SelectTrigger>
                             <SelectContent>
                               {usersAvail.length === 0 ? (
-                                <SelectItem value="__none" disabled>Không còn người dùng</SelectItem>
+                                <SelectItem value="__none" disabled>{t("Không còn người dùng")}</SelectItem>
                               ) : (
                                 usersAvail.map((u) => (
                                   <SelectItem key={u.user_id} value={u.user_id}>
@@ -257,7 +261,7 @@ function TeamTab({ teamId }: { teamId: number }) {
                             onClick={() => setAddingTaskType(tt.value)}
                             className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground text-xs px-2.5 py-1 hover:border-primary hover:text-primary transition-colors"
                           >
-                            <Plus className="h-3 w-3" /> Thêm
+                            <Plus className="h-3 w-3" /> {t("Thêm")}
                           </button>
                         )}
                       </div>
@@ -275,6 +279,7 @@ function TeamTab({ teamId }: { teamId: number }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TeamAssignmentPage() {
+  useTranslate();
   const { data: teams = [], isLoading } = useTeamList();
 
   return (
@@ -282,10 +287,10 @@ export default function TeamAssignmentPage() {
       <div>
         <h1 className="text-lg font-semibold flex items-center gap-2">
           <Users2 className="h-5 w-5 text-primary" />
-          Phân công team
+          {t("Phân công team")}
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Gắn agent vào team và phân công mảng công việc cho từng thành viên
+          {t("Gắn agent vào team và phân công mảng công việc cho từng thành viên")}
         </p>
       </div>
 
@@ -294,19 +299,19 @@ export default function TeamAssignmentPage() {
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
         </div>
       ) : teams.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Chưa có team nào trong hệ thống</p>
+        <p className="text-sm text-muted-foreground">{t("Chưa có team nào trong hệ thống")}</p>
       ) : (
         <Tabs defaultValue={String(teams[0].id)}>
           <TabsList>
-            {teams.map((t) => (
-              <TabsTrigger key={t.id} value={String(t.id)} className="text-sm">
-                Team {t.ten_team}
+            {teams.map((team) => (
+              <TabsTrigger key={team.id} value={String(team.id)} className="text-sm">
+                {t("Team")} {team.ten_team}
               </TabsTrigger>
             ))}
           </TabsList>
-          {teams.map((t) => (
-            <TabsContent key={t.id} value={String(t.id)}>
-              <TeamTab teamId={t.id} />
+          {teams.map((team) => (
+            <TabsContent key={team.id} value={String(team.id)}>
+              <TeamTab teamId={team.id} />
             </TabsContent>
           ))}
         </Tabs>

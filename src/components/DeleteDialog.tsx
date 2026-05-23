@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   open: boolean;
@@ -28,14 +29,15 @@ export function DeleteDialog({
   confirmLoadingLabel,
   variant = "delete",
 }: Props) {
+  useTranslate();
   const isCancel = variant === "cancel";
 
-  const defaultTitle = isCancel ? "Hủy đoàn?" : "Xác nhận xóa?";
+  const defaultTitle = isCancel ? t("Hủy đoàn?") : t("Xác nhận xóa?");
   const defaultDesc = isCancel
-    ? `Đoàn "${name}" sẽ được chuyển sang trạng thái Đã hủy. Dữ liệu vẫn được giữ lại.`
-    : `Đoàn "${name}" sẽ bị xóa vĩnh viễn. Không thể khôi phục lại.`;
-  const defaultConfirm = isCancel ? "Hủy đoàn" : "Xóa";
-  const defaultLoading = isCancel ? "Đang hủy..." : "Đang xóa...";
+    ? `${t("Đoàn")} "${name}" ${t("sẽ được chuyển sang trạng thái Đã hủy. Dữ liệu vẫn được giữ lại.")}`
+    : `${t("Đoàn")} "${name}" ${t("sẽ bị xóa vĩnh viễn. Không thể khôi phục lại.")}`;
+  const defaultConfirm = isCancel ? t("Hủy đoàn") : t("Xóa");
+  const defaultLoading = isCancel ? t("Đang hủy...") : t("Đang xóa...");
 
   return (
     <AnimatePresence>
@@ -71,7 +73,7 @@ export function DeleteDialog({
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" size="sm" onClick={onCancel} className="active:scale-[0.98]">
-                Đóng
+                {t("Đóng")}
               </Button>
               <Button
                 variant={isCancel ? "outline" : "destructive"}

@@ -25,6 +25,7 @@ import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { CheckCircle2, Circle, AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -45,23 +46,23 @@ function agentTen(rel: unknown): string {
 
 // ── Booking status (giữ nguyên hiển thị cũ) ─────────────────────────────────
 function ksOverallStatus(dt: string, fn: string) {
-  if (fn === "ks_xac_nhan_huy")      return { label: "✗ Đã hủy",           cls: "text-red-600" };
-  if (fn === "cho_ks_xac_nhan_huy")  return { label: "⏳ Chờ XN hủy",      cls: "text-orange-600" };
-  if (fn === "ks_xac_nhan_final")    return { label: "✓ Final",             cls: "text-purple-600" };
-  if (fn === "cho_ks_xac_nhan")      return { label: "⏳ Chờ XN Final",     cls: "text-green-600" };
-  if (dt === "ks_xac_nhan")          return { label: "✓ Đặt trước XN",      cls: "text-teal-600" };
-  if (dt === "cho_ks_xac_nhan")      return { label: "⏳ Chờ XN đặt trước", cls: "text-blue-600" };
-  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+  if (fn === "ks_xac_nhan_huy")      return { label: t("✗ Đã hủy"),           cls: "text-red-600" };
+  if (fn === "cho_ks_xac_nhan_huy")  return { label: t("⏳ Chờ XN hủy"),      cls: "text-orange-600" };
+  if (fn === "ks_xac_nhan_final")    return { label: t("✓ Final"),             cls: "text-purple-600" };
+  if (fn === "cho_ks_xac_nhan")      return { label: t("⏳ Chờ XN Final"),     cls: "text-green-600" };
+  if (dt === "ks_xac_nhan")          return { label: t("✓ Đặt trước XN"),      cls: "text-teal-600" };
+  if (dt === "cho_ks_xac_nhan")      return { label: t("⏳ Chờ XN đặt trước"), cls: "text-blue-600" };
+  return { label: t("○ Chưa gửi"), cls: "text-muted-foreground" };
 }
 function nhStatusLabel(status: string) {
-  if (status === "da_gui") return { label: "✓ Đã gửi", cls: "text-green-600" };
-  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+  if (status === "da_gui") return { label: t("✓ Đã gửi"), cls: "text-green-600" };
+  return { label: t("○ Chưa gửi"), cls: "text-muted-foreground" };
 }
 function dvStatusLabel(status: string) {
-  if (status === "da_xac_nhan") return { label: "✓ Đã XN", cls: "text-green-600" };
-  if (status === "cho_xac_nhan") return { label: "⏳ Chờ XN", cls: "text-amber-600" };
-  if (status === "da_huy") return { label: "✗ Đã hủy", cls: "text-red-600" };
-  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+  if (status === "da_xac_nhan") return { label: t("✓ Đã XN"), cls: "text-green-600" };
+  if (status === "cho_xac_nhan") return { label: t("⏳ Chờ XN"), cls: "text-amber-600" };
+  if (status === "da_huy") return { label: t("✗ Đã hủy"), cls: "text-red-600" };
+  return { label: t("○ Chưa gửi"), cls: "text-muted-foreground" };
 }
 
 function Badge({ done, total, children }: { done: number; total: number; children: ReactNode }) {
@@ -125,7 +126,7 @@ function PvAssignCell({
 }) {
   const isKC = cell?.trang_thai === "khong_can";
   const cls = cell ? (STT_CLS[cell.trang_thai] ?? "text-foreground") : "text-muted-foreground";
-  const label = !cell ? "Chưa phân" : isKC ? "Không cần" : cell.ten;
+  const label = !cell ? t("Chưa phân") : isKC ? t("Không cần") : cell.ten;
   const value = isKC ? KC : (cell?.user_id ?? "_none");
   return (
     <Select
@@ -146,7 +147,7 @@ function PvAssignCell({
             {u.ho_ten}
           </SelectItem>
         ))}
-        <SelectItem value={KC} className="text-xs font-medium">⊘ Không cần</SelectItem>
+        <SelectItem value={KC} className="text-xs font-medium">{t("⊘ Không cần")}</SelectItem>
       </SelectContent>
     </Select>
   );
@@ -154,6 +155,7 @@ function PvAssignCell({
 
 // ── Main page ───────────────────────────────────────────────────────────────
 export default function TheodoiPage() {
+  useTranslate();
   const canView = useRoleAtLeast("truong_phong");
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -250,15 +252,15 @@ export default function TheodoiPage() {
 
   const onAssign = (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey; userId: string }) => {
     assignMut.mutate(p, {
-      onSuccess: () => toast.success("Đã phân việc — đã thông báo người nhận"),
-      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi phân việc"),
+      onSuccess: () => toast.success(t("Đã phân việc — đã thông báo người nhận")),
+      onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi phân việc")),
     });
   };
 
   const onKhongCan = (p: { doanId: number; doanTen: string; ngayDi: string | null; key: PvKey }) => {
     setKcMut.mutate(p, {
-      onSuccess: () => toast.success("Đã đánh dấu Không cần — sẽ không theo dõi/thông báo"),
-      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi"),
+      onSuccess: () => toast.success(t("Đã đánh dấu Không cần — sẽ không theo dõi/thông báo")),
+      onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi")),
     });
   };
 
@@ -266,15 +268,15 @@ export default function TheodoiPage() {
     <TooltipProvider delayDuration={200}>
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Theo dõi</h1>
+        <h1 className="text-lg font-semibold">{t("Theo dõi")}</h1>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="theo-doi">Theo dõi đoàn</TabsTrigger>
+          <TabsTrigger value="theo-doi">{t("Theo dõi đoàn")}</TabsTrigger>
           <TabsTrigger value="su-co" className="flex items-center gap-1.5">
             <AlertTriangle className="h-3.5 w-3.5" />
-            Sự cố
+            {t("Sự cố")}
             {suCoLogs.filter((l) => !l.is_resolved).length > 0 && (
               <span className="ml-0.5 min-w-[16px] h-[16px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
                 {suCoLogs.filter((l) => !l.is_resolved).length}
@@ -288,29 +290,29 @@ export default function TheodoiPage() {
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <Input
-                placeholder="Tìm tên đoàn..."
+                placeholder={t("Tìm tên đoàn...")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-8 text-xs w-48"
               />
               <Select value={trangThai} onValueChange={setTrangThai}>
                 <SelectTrigger className="h-8 text-xs w-36">
-                  <span>{trangThai === "dang_chay" ? "Chờ xác nhận" : trangThai === "huy" ? "Đã hủy" : "Tất cả"}</span>
+                  <span>{trangThai === "dang_chay" ? t("Chờ xác nhận") : trangThai === "huy" ? t("Đã hủy") : t("Tất cả")}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dang_chay">Chờ xác nhận</SelectItem>
-                  <SelectItem value="huy">Đã hủy</SelectItem>
-                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="dang_chay">{t("Chờ xác nhận")}</SelectItem>
+                  <SelectItem value="huy">{t("Đã hủy")}</SelectItem>
+                  <SelectItem value="all">{t("Tất cả")}</SelectItem>
                 </SelectContent>
               </Select>
-              <span className="text-xs text-muted-foreground">{sortedRows.length} đoàn</span>
+              <span className="text-xs text-muted-foreground">{sortedRows.length} {t("đoàn")}</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap text-xs">
-              <span className="text-muted-foreground">Ngày tạo:</span>
+              <span className="text-muted-foreground">{t("Ngày tạo:")}</span>
               <Input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} className="h-8 text-xs w-36" />
               <span className="text-muted-foreground">→</span>
               <Input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} className="h-8 text-xs w-36" />
-              <span className="text-muted-foreground ml-2">Ngày đi:</span>
+              <span className="text-muted-foreground ml-2">{t("Ngày đi:")}</span>
               <Input type="date" value={departFrom} onChange={(e) => setDepartFrom(e.target.value)} className="h-8 text-xs w-36" />
               <span className="text-muted-foreground">→</span>
               <Input type="date" value={departTo} onChange={(e) => setDepartTo(e.target.value)} className="h-8 text-xs w-36" />
@@ -319,14 +321,14 @@ export default function TheodoiPage() {
                   onClick={() => { setCreatedFrom(""); setCreatedTo(""); setDepartFrom(""); setDepartTo(""); }}
                   className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground border rounded"
                 >
-                  Xóa filter ngày
+                  {t("Xóa filter ngày")}
                 </button>
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Tên người: <span className="text-amber-600 font-medium">vàng</span> = chưa xác nhận ·{" "}
-              <span className="text-green-600 font-medium">xanh</span> = đã nhận ·{" "}
-              <span className="text-muted-foreground line-through">xám</span> = từ chối
+              {t("Tên người:")} <span className="text-amber-600 font-medium">{t("vàng")}</span> = {t("chưa xác nhận")} ·{" "}
+              <span className="text-green-600 font-medium">{t("xanh")}</span> = {t("đã nhận")} ·{" "}
+              <span className="text-muted-foreground line-through">{t("xám")}</span> = {t("từ chối")}
             </p>
           </div>
 
@@ -334,7 +336,7 @@ export default function TheodoiPage() {
           {!loadingDoan && sortedRows.length > 0 && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedRows.length)} / {sortedRows.length}
+                {t("Hiển thị")} {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedRows.length)} / {sortedRows.length}
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -343,15 +345,15 @@ export default function TheodoiPage() {
                   className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
                 >
                   <ChevronLeft className="h-3 w-3" />
-                  Trước
+                  {t("Trước")}
                 </button>
-                <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+                <span className="px-2 text-muted-foreground">{t("Trang")} {currentPage} / {totalPages}</span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage >= totalPages}
                   className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
                 >
-                  Sau
+                  {t("Sau")}
                   <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
@@ -368,13 +370,13 @@ export default function TheodoiPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#E6F1FB] text-xs">
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Tên đoàn</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">{t("Tên đoàn")}</TableHead>
                     <TableHead
                       className="text-xs font-semibold py-2 px-3 whitespace-nowrap cursor-pointer hover:bg-blue-100 select-none"
                       onClick={() => toggleSort("created_at")}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Ngày tạo
+                        {t("Ngày tạo")}
                         {sortBy === "created_at"
                           ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
                           : <ArrowUpDown className="h-3 w-3 opacity-30" />}
@@ -385,16 +387,16 @@ export default function TheodoiPage() {
                       onClick={() => toggleSort("ngay_di")}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Ngày đi
+                        {t("Ngày đi")}
                         {sortBy === "ngay_di"
                           ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
                           : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                       </span>
                     </TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Agent</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">{t("Agent")}</TableHead>
                     {PHAN_VIEC_ITEMS.map((it) => (
                       <TableHead key={it.key} className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">
-                        {it.label}
+                        {t(it.label)}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -403,7 +405,7 @@ export default function TheodoiPage() {
                   {pageRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4 + PHAN_VIEC_ITEMS.length} className="text-center py-8 text-xs text-muted-foreground">
-                        Không có đoàn nào
+                        {t("Không có đoàn nào")}
                       </TableCell>
                     </TableRow>
                   ) : pageRows.map(({ g }, idx) => {
@@ -449,7 +451,7 @@ export default function TheodoiPage() {
                               />
                               {it.key === "pv_ks" && (
                                 <InfoTooltip
-                                  trigger={<Badge done={ksFinal} total={ks.length}>{ksFinal}/{ks.length} Final</Badge>}
+                                  trigger={<Badge done={ksFinal} total={ks.length}>{ksFinal}/{ks.length} {t("Final")}</Badge>}
                                   items={ks.map((r) => {
                                     const s = ksOverallStatus(r.ks_dat_truoc_status, r.ks_final_status);
                                     return { label: r.khach_san_ten, statusLabel: s.label, statusCls: s.cls };
@@ -459,14 +461,14 @@ export default function TheodoiPage() {
                               {it.key === "pv_nh_dv" && (
                                 <div className="flex items-center justify-center gap-1 flex-wrap">
                                   <InfoTooltip
-                                    trigger={<Badge done={nhSent} total={nh.length}>NH {nhSent}/{nh.length} gửi</Badge>}
+                                    trigger={<Badge done={nhSent} total={nh.length}>NH {nhSent}/{nh.length} {t("gửi")}</Badge>}
                                     items={nh.map((r) => {
                                       const s = nhStatusLabel(r.booking_status);
-                                      return { label: r.nha_hang_ten ?? "—", sub: r.bua_an === "trua" ? "Trưa" : "Tối", statusLabel: s.label, statusCls: s.cls };
+                                      return { label: r.nha_hang_ten ?? "—", sub: r.bua_an === "trua" ? t("Trưa") : t("Tối"), statusLabel: s.label, statusCls: s.cls };
                                     })}
                                   />
                                   <InfoTooltip
-                                    trigger={<Badge done={dvXN} total={dv.length}>DV {dvXN}/{dv.length} XN</Badge>}
+                                    trigger={<Badge done={dvXN} total={dv.length}>DV {dvXN}/{dv.length} {t("XN")}</Badge>}
                                     items={dv.map((r) => {
                                       const s = dvStatusLabel(r.booking_status);
                                       return { label: r.ten_nha_cung_cap, statusLabel: s.label, statusCls: s.cls };
@@ -489,9 +491,9 @@ export default function TheodoiPage() {
 
         <TabsContent value="su-co" className="mt-4">
           <div className="max-w-3xl space-y-2">
-            {loadingSuCo && <p className="text-sm text-muted-foreground">Đang tải...</p>}
+            {loadingSuCo && <p className="text-sm text-muted-foreground">{t("Đang tải...")}</p>}
             {!loadingSuCo && suCoLogs.length === 0 && (
-              <p className="text-sm text-muted-foreground italic">Chưa có sự cố nào.</p>
+              <p className="text-sm text-muted-foreground italic">{t("Chưa có sự cố nào.")}</p>
             )}
             {suCoLogs.map((log) => (
               <div
@@ -507,10 +509,10 @@ export default function TheodoiPage() {
                       onClick={() => navigate(`/doan/${log.doan_id}?tab=log`)}
                       className="text-xs font-medium text-blue-600 hover:underline"
                     >
-                      {log.doan_ten ?? `Đoàn #${log.doan_id}`}
+                      {log.doan_ten ?? `${t("Đoàn")} #${log.doan_id}`}
                     </button>
                     {log.is_resolved && (
-                      <UiBadge variant="outline" className="text-[11px] text-green-700 border-green-300">Đã xử lý</UiBadge>
+                      <UiBadge variant="outline" className="text-[11px] text-green-700 border-green-300">{t("Đã xử lý")}</UiBadge>
                     )}
                   </div>
                   <p className="text-sm font-medium">{log.tieu_de}</p>
@@ -523,10 +525,10 @@ export default function TheodoiPage() {
                   onClick={async () => {
                     try {
                       await toggleMut.mutateAsync({ id: log.id, doan_id: log.doan_id, loai: "su_co", is_resolved: !log.is_resolved, user_id: user?.user_id ?? null, user_ten: user?.ho_ten ?? null });
-                    } catch { toast.error("Lỗi cập nhật"); }
+                    } catch { toast.error(t("Lỗi cập nhật")); }
                   }}
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  title={log.is_resolved ? "Đánh dấu chưa xử lý" : "Đánh dấu đã xử lý"}
+                  title={log.is_resolved ? t("Đánh dấu chưa xử lý") : t("Đánh dấu đã xử lý")}
                 >
                   {log.is_resolved
                     ? <CheckCircle2 className="h-4 w-4 text-green-600" />

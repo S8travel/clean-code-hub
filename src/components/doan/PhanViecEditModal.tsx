@@ -17,6 +17,7 @@ import {
   PHAN_VIEC_ITEMS, useDoanPhanViecMatrix, useAssignPvItem,
   useSetPvKhongCan, useResolvePhanCong, type PvKey,
 } from "@/hooks/use-phan-viec";
+import { t, useTranslate } from "@/lib/i18n";
 
 const KC = "__khong_can__";
 const NONE = "_none";
@@ -31,6 +32,7 @@ interface Props {
 // Modal phân việc chế độ SỬA — mở từ thông báo pv_phancong cho điều phối.
 // Nạp trạng thái phân việc hiện tại; phân nốt mục trống → xác nhận.
 export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
+  useTranslate();
   const { data: users = [] } = useUserListForAssign();
   const { data: matrix } = useDoanPhanViecMatrix(doanId ? [doanId] : []);
   const assignMut = useAssignPvItem();
@@ -92,13 +94,13 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
       if (!stillMissing) await resolveMut.mutateAsync(did);
       toast.success(
         stillMissing
-          ? "Đã phân — vẫn còn mục trống, điều phối sẽ được nhắc lại"
-          : "Đã phân việc xong",
+          ? t("Đã phân — vẫn còn mục trống, điều phối sẽ được nhắc lại")
+          : t("Đã phân việc xong"),
       );
       onDone?.();
       onClose();
     } catch (e: unknown) {
-      toast.error(errMsg(e) || "Lỗi phân việc");
+      toast.error(errMsg(e) || t("Lỗi phân việc"));
     } finally {
       setSaving(false);
     }
@@ -113,49 +115,49 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm flex items-center gap-2">
-            <Users className="h-4 w-4" /> Phân việc — {doan?.ten_doan ?? `Đoàn #${doanId}`}
+            <Users className="h-4 w-4" /> {t("Phân việc —")} {doan?.ten_doan ?? `${t("Đoàn")} #${doanId}`}
           </DialogTitle>
         </DialogHeader>
 
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs space-y-0.5">
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Agent</span>
+            <span className="text-muted-foreground">{t("Agent")}</span>
             <span>{(doan?.agents as { ten?: string | null } | null)?.ten ?? "—"}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Địa điểm</span>
+            <span className="text-muted-foreground">{t("Địa điểm")}</span>
             <span>{doan?.dia_diem?.ten ?? "—"}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Số khách</span>
+            <span className="text-muted-foreground">{t("Số khách")}</span>
             <span>{doan?.so_khach ?? "—"}</span>
           </div>
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Ngày đi → về</span>
+            <span className="text-muted-foreground">{t("Ngày đi → về")}</span>
             <span className="tabular-nums">{dateStr}</span>
           </div>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Chọn người cho mục còn trống. Để trống = chưa phân (sẽ nhắc lại). Admin = Không cần.
+          {t("Chọn người cho mục còn trống. Để trống = chưa phân (sẽ nhắc lại). Admin = Không cần.")}
         </p>
 
         <div className="space-y-2 py-1">
           {PHAN_VIEC_ITEMS.map((it) => (
             <div key={it.key} className="flex items-center gap-2">
-              <Label className="text-sm w-32 shrink-0">{it.label}</Label>
+              <Label className="text-sm w-32 shrink-0">{t(it.label)}</Label>
               <Select value={sel[it.key] ?? NONE} onValueChange={(v) => setRow(it.key, v)}>
                 <SelectTrigger className="h-8 text-xs flex-1">
-                  <SelectValue placeholder="— Chưa phân —" />
+                  <SelectValue placeholder={t("— Chưa phân —")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE} className="text-xs">— Chưa phân —</SelectItem>
+                  <SelectItem value={NONE} className="text-xs">{t("— Chưa phân —")}</SelectItem>
                   {users.map((u) => (
                     <SelectItem key={u.user_id} value={u.user_id} className="text-xs">
                       {u.ho_ten}
                     </SelectItem>
                   ))}
-                  <SelectItem value={KC} className="text-xs font-medium">⊘ Không cần</SelectItem>
+                  <SelectItem value={KC} className="text-xs font-medium">{t("⊘ Không cần")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -164,7 +166,7 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
 
         <DialogFooter>
           <Button size="sm" onClick={submit} disabled={saving || !doan}>
-            {saving ? "Đang lưu..." : "Xác nhận phân việc"}
+            {saving ? t("Đang lưu...") : t("Xác nhận phân việc")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -31,20 +31,21 @@ import {
 } from "@/hooks/use-thanh-toan-dinh-ky";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 import { errMsg } from "@/lib/error";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-const duyetLabel: Record<string, { text: string; cls: string }> = {
-  cho_duyet: { text: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
-  da_duyet: { text: "Đã duyệt", cls: "bg-teal-100 text-teal-700" },
-  tu_choi: { text: "Từ chối", cls: "bg-red-100 text-red-700" },
-  da_huy: { text: "Đã hủy", cls: "bg-gray-100 text-gray-600" },
+const duyetLabel: Record<string, { textKey: string; cls: string }> = {
+  cho_duyet: { textKey: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
+  da_duyet: { textKey: "Đã duyệt", cls: "bg-teal-100 text-teal-700" },
+  tu_choi: { textKey: "Từ chối", cls: "bg-red-100 text-red-700" },
+  da_huy: { textKey: "Đã hủy", cls: "bg-gray-100 text-gray-600" },
 };
 
-const paymentLabel: Record<string, { text: string; cls: string }> = {
-  unpaid: { text: "Chưa TT", cls: "bg-muted text-muted-foreground" },
-  partial: { text: "Một phần", cls: "bg-amber-100 text-amber-700" },
-  paid: { text: "Đã TT", cls: "bg-emerald-100 text-emerald-700" },
+const paymentLabel: Record<string, { textKey: string; cls: string }> = {
+  unpaid: { textKey: "Chưa TT", cls: "bg-muted text-muted-foreground" },
+  partial: { textKey: "Một phần", cls: "bg-amber-100 text-amber-700" },
+  paid: { textKey: "Đã TT", cls: "bg-emerald-100 text-emerald-700" },
 };
 
 // ── Quick month picker: 2 dropdowns Tháng + Năm
@@ -57,6 +58,7 @@ function MonthPicker({
   year: number | null;
   onChange: (m: number | null, y: number | null) => void;
 }) {
+  useTranslate();
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
   return (
@@ -66,12 +68,12 @@ function MonthPicker({
         onValueChange={(v) => onChange(v === "all" ? null : Number(v), year)}
       >
         <SelectTrigger className="h-8 text-sm w-[110px]">
-          <span>{month == null ? "Tất cả tháng" : `Tháng ${month}`}</span>
+          <span>{month == null ? t("Tất cả tháng") : `${t("Tháng")} ${month}`}</span>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Tất cả tháng</SelectItem>
+          <SelectItem value="all">{t("Tất cả tháng")}</SelectItem>
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-            <SelectItem key={m} value={String(m)}>Tháng {m}</SelectItem>
+            <SelectItem key={m} value={String(m)}>{t("Tháng")} {m}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -80,10 +82,10 @@ function MonthPicker({
         onValueChange={(v) => onChange(month, v === "all" ? null : Number(v))}
       >
         <SelectTrigger className="h-8 text-sm w-[100px]">
-          <span>{year == null ? "Tất cả năm" : String(year)}</span>
+          <span>{year == null ? t("Tất cả năm") : String(year)}</span>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Tất cả năm</SelectItem>
+          <SelectItem value="all">{t("Tất cả năm")}</SelectItem>
           {years.map((y) => (
             <SelectItem key={y} value={String(y)}>{y}</SelectItem>
           ))}
@@ -99,9 +101,9 @@ function monthKeyFromDate(d?: string | null): string | null {
   return d.slice(0, 7); // "YYYY-MM"
 }
 function monthLabelFromKey(monthKey: string): string {
-  if (monthKey === "khong_thang") return "Chưa rõ tháng";
+  if (monthKey === "khong_thang") return t("Chưa rõ tháng");
   const [y, m] = monthKey.split("-");
-  return `Tháng ${parseInt(m, 10)}/${y}`;
+  return `${t("Tháng")} ${parseInt(m, 10)}/${y}`;
 }
 
 interface MonthGroup {
@@ -133,6 +135,7 @@ interface DialogContext {
 }
 
 export default function ThanhToanDinhKyPage() {
+  useTranslate();
   const [filterNcc, setFilterNcc] = useState<string>("all");
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -222,7 +225,7 @@ export default function ThanhToanDinhKyPage() {
     rows.forEach((r) => {
       const nccKey = String(r.nha_cung_cap_id ?? "khong_ncc");
       const monthKey = monthKeyFromDate(r.ngay_kh_di) ?? "khong_thang";
-      const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? "Chưa có NCC", r.ncc_so_tai_khoan, r.ncc_ngan_hang);
+      const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? t("Chưa có NCC"), r.ncc_so_tai_khoan, r.ncc_ngan_hang);
       const mg = ensureMonth(bucket, monthKey);
       mg.rows.push(r);
       const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
@@ -245,7 +248,7 @@ export default function ThanhToanDinhKyPage() {
       const bucket = ensureNcc(
         nccKey,
         d.nha_cung_cap_id,
-        dNcc.ten_ncc || "Chưa có NCC",
+        dNcc.ten_ncc || t("Chưa có NCC"),
         dNcc.ncc_so_tai_khoan || null,
         dNcc.ncc_ngan_hang || null,
       );
@@ -288,12 +291,12 @@ export default function ThanhToanDinhKyPage() {
   const batchPartialValid = batchMode === "full" || (batchPartialNum > 0 && batchPartialNum <= dialogTotalConLai);
 
   const openCreateDialogForMonth = (ncc: NccGroup, mg: MonthGroup) => {
-    if (!ncc.nccId) { toast.error("Tháng này không có NCC hợp lệ"); return; }
+    if (!ncc.nccId) { toast.error(t("Tháng này không có NCC hợp lệ")); return; }
     const eligible = mg.rows.filter((r) => {
       const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
       return Math.max(0, tt - r.so_tien_da_tt) > 0;
     });
-    if (eligible.length === 0) { toast.warning("Tháng này không còn chi phí cần thanh toán"); return; }
+    if (eligible.length === 0) { toast.warning(t("Tháng này không còn chi phí cần thanh toán")); return; }
     setDialogCtx({
       nccId: ncc.nccId,
       nccTen: ncc.nccTen,
@@ -316,7 +319,7 @@ export default function ThanhToanDinhKyPage() {
   const handleCreateBatch = async () => {
     if (!dialogCtx) return;
     if (!batchPartialValid || batchEffectiveAmount <= 0) {
-      toast.error("Số tiền không hợp lệ");
+      toast.error(t("Số tiền không hợp lệ"));
       return;
     }
 
@@ -346,10 +349,10 @@ export default function ThanhToanDinhKyPage() {
         soTien: batchEffectiveAmount,
         laCoc: batchMode === "partial",
       });
-      toast.success("Đã tạo đề nghị thanh toán định kỳ");
+      toast.success(t("Đã tạo đề nghị thanh toán định kỳ"));
       closeCreateDialog();
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || "Không thể tạo ĐNTT"));
+      toast.error(t("Lỗi: ") + (errMsg(err) || t("Không thể tạo ĐNTT")));
     } finally {
       setSubmitting(false);
     }
@@ -369,9 +372,9 @@ export default function ThanhToanDinhKyPage() {
     <div className="p-6 space-y-5 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Thanh toán định kỳ</h1>
+          <h1 className="text-lg font-semibold">{t("Thanh toán định kỳ")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            NCC cho nợ → tổng hợp chi phí → tạo ĐNTT gộp → duyệt → thanh toán
+            {t("NCC cho nợ → tổng hợp chi phí → tạo ĐNTT gộp → duyệt → thanh toán")}
           </p>
         </div>
       </div>
@@ -380,12 +383,12 @@ export default function ThanhToanDinhKyPage() {
       <div className="flex items-center gap-3 flex-wrap">
         <SearchableSelect
           options={[
-            { value: "all", label: "Tất cả nhà cung cấp" },
+            { value: "all", label: t("Tất cả nhà cung cấp") },
             ...nccOptions.map((n) => ({ value: String(n.id), label: n.ten })),
           ]}
           value={filterNcc}
           onChange={setFilterNcc}
-          placeholder="Tất cả nhà cung cấp"
+          placeholder={t("Tất cả nhà cung cấp")}
           className="w-[220px] h-8 text-sm"
         />
 
@@ -400,7 +403,7 @@ export default function ThanhToanDinhKyPage() {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="h-8 text-sm gap-2">
               <CalendarIcon className="h-3.5 w-3.5" />
-              {tuNgay ? format(tuNgay, "dd/MM/yyyy") : "Từ ngày"}
+              {tuNgay ? format(tuNgay, "dd/MM/yyyy") : t("Từ ngày")}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -412,7 +415,7 @@ export default function ThanhToanDinhKyPage() {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="h-8 text-sm gap-2">
               <CalendarIcon className="h-3.5 w-3.5" />
-              {denNgay ? format(denNgay, "dd/MM/yyyy") : "Đến ngày"}
+              {denNgay ? format(denNgay, "dd/MM/yyyy") : t("Đến ngày")}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -422,24 +425,24 @@ export default function ThanhToanDinhKyPage() {
 
         {hasActiveFilter && (
           <Button variant="ghost" size="sm" className="h-8 text-sm" onClick={clearFilters}>
-            Xóa bộ lọc
+            {t("Xóa bộ lọc")}
           </Button>
         )}
       </div>
 
       {effectiveTuNgay || effectiveDenNgay ? (
         <p className="text-xs text-muted-foreground -mt-2">
-          Lọc đoàn khởi hành: {effectiveTuNgay || "—"} → {effectiveDenNgay || "—"} (theo `doan.ngay_di`)
+          {t("Lọc đoàn khởi hành:")} {effectiveTuNgay || "—"} → {effectiveDenNgay || "—"} {t("(theo `doan.ngay_di`)")}
         </p>
       ) : null}
 
       {isLoading && (
-        <div className="text-sm text-muted-foreground">Đang tải...</div>
+        <div className="text-sm text-muted-foreground">{t("Đang tải...")}</div>
       )}
 
       {!isLoading && groupedByNccMonth.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-          Không có chi phí định kỳ và ĐNTT nào trong bộ lọc hiện tại
+          {t("Không có chi phí định kỳ và ĐNTT nào trong bộ lọc hiện tại")}
         </div>
       )}
 
@@ -450,7 +453,7 @@ export default function ThanhToanDinhKyPage() {
             <CardTitle className="text-sm font-semibold">{ncc.nccTen}</CardTitle>
             {ncc.nccStk && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                STK: {ncc.nccStk} · {ncc.nccNganHang || "—"}
+                {t("STK:")} {ncc.nccStk} · {ncc.nccNganHang || "—"}
               </p>
             )}
           </CardHeader>
@@ -471,7 +474,7 @@ export default function ThanhToanDinhKyPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Tạo ĐNTT định kỳ
+              {t("Tạo ĐNTT định kỳ")}
               {dialogCtx && <span className="text-xs font-normal text-muted-foreground"> — {dialogCtx.nccTen} · {dialogCtx.monthLabel}</span>}
             </DialogTitle>
           </DialogHeader>
@@ -479,25 +482,25 @@ export default function ThanhToanDinhKyPage() {
             <div className="space-y-4 py-2">
               <div className="rounded-md bg-muted/40 px-4 py-3 space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Số khoản</span>
+                  <span className="text-muted-foreground">{t("Số khoản")}</span>
                   <span className="font-medium">{dialogCtx.rows.length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tổng còn lại của tháng</span>
+                  <span className="text-muted-foreground">{t("Tổng còn lại của tháng")}</span>
                   <span className="font-semibold text-orange-600">{fmt(dialogTotalConLai)} ₫</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Chuyển đến</span>
+                  <span className="text-muted-foreground">{t("Chuyển đến")}</span>
                   {dialogCtx.rows[0]?.ncc_so_tai_khoan ? (
                     <span>{dialogCtx.rows[0].ncc_so_tai_khoan} · {dialogCtx.rows[0].ncc_ngan_hang || "—"}</span>
                   ) : (
-                    <span className="text-amber-700 italic">Chưa có TK — cập nhật trong Quản lý NCC</span>
+                    <span className="text-amber-700 italic">{t("Chưa có TK — cập nhật trong Quản lý NCC")}</span>
                   )}
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm">Số tiền đề nghị</Label>
+                <Label className="text-sm">{t("Số tiền đề nghị")}</Label>
                 <div className="flex gap-1.5">
                   <button
                     type="button"
@@ -509,7 +512,7 @@ export default function ThanhToanDinhKyPage() {
                         : "border-border hover:bg-muted/40",
                     )}
                   >
-                    Toàn bộ ({fmt(dialogTotalConLai)} ₫)
+                    {t("Toàn bộ")} ({fmt(dialogTotalConLai)} ₫)
                   </button>
                   <button
                     type="button"
@@ -521,7 +524,7 @@ export default function ThanhToanDinhKyPage() {
                         : "border-border hover:bg-muted/40",
                     )}
                   >
-                    Trả trước 1 phần (cọc)
+                    {t("Trả trước 1 phần (cọc)")}
                   </button>
                 </div>
                 {batchMode === "partial" && (
@@ -531,18 +534,18 @@ export default function ThanhToanDinhKyPage() {
                       inputMode="numeric"
                       value={batchPaidAmount}
                       onChange={(e) => setBatchPaidAmount(e.target.value.replace(/\D/g, ""))}
-                      placeholder={`Nhập số tiền cọc (≤ ${fmt(dialogTotalConLai)} ₫)`}
+                      placeholder={`${t("Nhập số tiền cọc (≤")} ${fmt(dialogTotalConLai)} ₫)`}
                       className="text-sm"
                       autoFocus
                     />
                     {batchPaidAmount && !batchPartialValid && (
                       <p className="text-[11px] text-red-600">
-                        Số tiền phải lớn hơn 0 và ≤ {fmt(dialogTotalConLai)} ₫
+                        {t("Số tiền phải lớn hơn 0 và ≤")} {fmt(dialogTotalConLai)} ₫
                       </p>
                     )}
                     {batchPartialValid && batchPartialNum > 0 && batchPartialNum < dialogTotalConLai && (
                       <p className="text-[11px] text-muted-foreground">
-                        Phần còn lại {fmt(dialogTotalConLai - batchEffectiveAmount)} ₫ → tạo ĐNTT khác sau
+                        {t("Phần còn lại")} {fmt(dialogTotalConLai - batchEffectiveAmount)} ₫ {t("→ tạo ĐNTT khác sau")}
                       </p>
                     )}
                   </div>
@@ -550,7 +553,7 @@ export default function ThanhToanDinhKyPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm">Mô tả ĐNTT</Label>
+                <Label className="text-sm">{t("Mô tả ĐNTT")}</Label>
                 <Input
                   value={batchMoTa}
                   onChange={(e) => setBatchMoTa(e.target.value)}
@@ -571,7 +574,7 @@ export default function ThanhToanDinhKyPage() {
                   return dialogCtx.rows.map((r, i) => (
                     <div key={r.id} className="flex justify-between text-muted-foreground">
                       <span className="truncate max-w-[220px]">
-                        {r.ten_doan || `Đoàn #${r.doan_id}`} · {r.mo_ta}
+                        {r.ten_doan || `${t("Đoàn")} #${r.doan_id}`} · {r.mo_ta}
                       </span>
                       <span className="ml-2 font-medium text-foreground shrink-0">
                         {fmt(allocated[i])} ₫
@@ -586,11 +589,11 @@ export default function ThanhToanDinhKyPage() {
               {batchMode === "partial" && batchPartialValid && batchPartialNum > 0 && (
                 <div className="rounded-md border border-border px-4 py-2 text-xs space-y-0.5">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Đề nghị thanh toán lần này</span>
+                    <span className="text-muted-foreground">{t("Đề nghị thanh toán lần này")}</span>
                     <span className="font-semibold text-orange-600">{fmt(batchEffectiveAmount)} ₫</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Sau khi tạo, còn lại</span>
+                    <span className="text-muted-foreground">{t("Sau khi tạo, còn lại")}</span>
                     <span className="font-medium">{fmt(dialogTotalConLai - batchEffectiveAmount)} ₫</span>
                   </div>
                 </div>
@@ -598,12 +601,12 @@ export default function ThanhToanDinhKyPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={closeCreateDialog}>Hủy</Button>
+            <Button variant="outline" onClick={closeCreateDialog}>{t("Hủy")}</Button>
             <Button
               onClick={handleCreateBatch}
               disabled={submitting || !batchPartialValid || batchEffectiveAmount <= 0}
             >
-              {submitting ? "Đang tạo..." : `Tạo ĐNTT${batchMode === "partial" ? " cọc" : ""}`}
+              {submitting ? t("Đang tạo...") : `${t("Tạo ĐNTT")}${batchMode === "partial" ? ` ${t("cọc")}` : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -621,6 +624,7 @@ function MonthGroupCard({
   monthGroup: MonthGroup;
   onCreateDNTT: () => void;
 }) {
+  useTranslate();
   // Default thu gọn để dễ scan summary; user click để mở.
   const [expanded, setExpanded] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DNTTRow | null>(null);
@@ -642,7 +646,7 @@ function MonthGroupCard({
       const ex = map.get(r.doan_id);
       if (ex) ex.rows.push(r);
       else map.set(r.doan_id, {
-        ten_doan: r.ten_doan ?? `Đoàn #${r.doan_id}`,
+        ten_doan: r.ten_doan ?? `${t("Đoàn")} #${r.doan_id}`,
         ngay_di: r.ngay_kh_di,
         rows: [r],
       });
@@ -663,19 +667,19 @@ function MonthGroupCard({
           {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
           <span className="text-sm font-medium">{monthGroup.monthLabel}</span>
           <span className="text-xs text-muted-foreground">
-            · {fmt(monthGroup.totalThanhTien)} / Đã TT <span className="text-emerald-600">{fmt(monthGroup.totalDaTT)}</span> /{" "}
+            · {fmt(monthGroup.totalThanhTien)} / {t("Đã TT")} <span className="text-emerald-600">{fmt(monthGroup.totalDaTT)}</span> /{" "}
             <span className={fullyPaid ? "text-emerald-600 font-medium" : "text-orange-600 font-medium"}>
-              Còn {fmt(monthGroup.totalConLai)}
+              {t("Còn")} {fmt(monthGroup.totalConLai)}
             </span>
             {monthGroup.rows.length > 0 && (
-              <> · {monthGroup.rows.length} chi phí · {monthGroup.doanCount} đoàn</>
+              <> · {monthGroup.rows.length} {t("chi phí")} · {monthGroup.doanCount} {t("đoàn")}</>
             )}
             {fullyPaid && <span className="ml-1">✓</span>}
           </span>
         </button>
         {monthGroup.totalConLai > 0 && (
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={onCreateDNTT}>
-            <Plus className="h-3 w-3" /> Tạo ĐNTT
+            <Plus className="h-3 w-3" /> {t("Tạo ĐNTT")}
           </Button>
         )}
       </div>
@@ -706,11 +710,11 @@ function MonthGroupCard({
                           <span className="ml-2 shrink-0">
                             {fmt(tt)} ₫{" "}
                             {isPaid ? (
-                              <span className="text-emerald-600 text-[10px]">✓ Đã TT</span>
+                              <span className="text-emerald-600 text-[10px]">✓ {t("Đã TT")}</span>
                             ) : r.so_tien_da_tt > 0 ? (
-                              <span className="text-amber-600 text-[10px]">Còn {fmt(conLai)}</span>
+                              <span className="text-amber-600 text-[10px]">{t("Còn")} {fmt(conLai)}</span>
                             ) : (
-                              <span className="text-orange-600 text-[10px]">Chưa TT</span>
+                              <span className="text-orange-600 text-[10px]">{t("Chưa TT")}</span>
                             )}
                           </span>
                         </div>
@@ -726,7 +730,7 @@ function MonthGroupCard({
           {monthGroup.dntts.length > 0 && (
             <div>
               <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-1">
-                ĐNTT của tháng này ({monthGroup.dntts.length})
+                {t("ĐNTT của tháng này")} ({monthGroup.dntts.length})
               </div>
               <div className="space-y-1">
                 {monthGroup.dntts.map((d) => {
@@ -740,7 +744,7 @@ function MonthGroupCard({
                       <span className="font-mono text-muted-foreground shrink-0">#{d.id}</span>
                       <span className="truncate flex-1">
                         {d.mo_ta || "—"}
-                        {d.la_coc && <span className="ml-1 px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px]">Cọc</span>}
+                        {d.la_coc && <span className="ml-1 px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px]">{t("Cọc")}</span>}
                       </span>
                       {rangeText && (
                         <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] shrink-0">
@@ -752,15 +756,15 @@ function MonthGroupCard({
                         +{fmt(d.paid_amount || 0)}
                       </span>
                       <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0", duyetInfo.cls)}>
-                        {duyetInfo.text}
+                        {t(duyetInfo.textKey)}
                       </span>
                       <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0", ttInfo.cls)}>
-                        {ttInfo.text}
+                        {t(ttInfo.textKey)}
                       </span>
                       <Button
                         variant="ghost" size="sm"
                         className="h-6 px-1.5 shrink-0"
-                        title="Xem chi tiết"
+                        title={t("Xem chi tiết")}
                         onClick={() => setViewTarget(d)}
                       >
                         <Eye className="h-3.5 w-3.5" />
@@ -768,7 +772,7 @@ function MonthGroupCard({
                       <Button
                         variant="ghost" size="sm"
                         className="h-6 px-1.5 text-red-600 hover:text-red-700 shrink-0"
-                        title="Hủy ĐNTT"
+                        title={t("Hủy ĐNTT")}
                         disabled={!canCancel}
                         onClick={() => setCancelTarget(d)}
                       >
@@ -812,6 +816,7 @@ function CancelDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  useTranslate();
   const cancelMut = useCancelDNTT();
   const [mode, setMode] = useState<"cong_no" | "hoan_tien" | undefined>(undefined);
   const paid = dntt.paid_amount || 0;
@@ -820,10 +825,10 @@ function CancelDialog({
   const handleConfirm = async () => {
     try {
       await cancelMut.mutateAsync({ id: dntt.id, mode: needsMode ? mode : undefined });
-      toast.success("Đã hủy ĐNTT");
+      toast.success(t("Đã hủy ĐNTT"));
       onClose();
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || "Không thể hủy"));
+      toast.error(t("Lỗi: ") + (errMsg(err) || t("Không thể hủy")));
     }
   };
 
@@ -831,13 +836,13 @@ function CancelDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Hủy ĐNTT #{dntt.id}</DialogTitle>
+          <DialogTitle>{t("Hủy ĐNTT")} #{dntt.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2 text-sm">
           <p className="text-muted-foreground">
             {needsMode
-              ? `Đã có ${fmt(paid)} ₫ được thanh toán. Chọn cách xử lý:`
-              : "ĐNTT chưa có thanh toán nào — sẽ được đánh dấu đã hủy."}
+              ? `${t("Đã có")} ${fmt(paid)} ${t("₫ được thanh toán. Chọn cách xử lý:")}`
+              : t("ĐNTT chưa có thanh toán nào — sẽ được đánh dấu đã hủy.")}
           </p>
           {needsMode && (
             <div className="space-y-1.5">
@@ -849,9 +854,9 @@ function CancelDialog({
                   onChange={() => setMode("cong_no")}
                 />
                 <div>
-                  <div className="font-medium">Tạo công nợ với NCC</div>
+                  <div className="font-medium">{t("Tạo công nợ với NCC")}</div>
                   <div className="text-xs text-muted-foreground">
-                    Số tiền đã trả thành công nợ, dùng cấn trừ ĐNTT khác sau.
+                    {t("Số tiền đã trả thành công nợ, dùng cấn trừ ĐNTT khác sau.")}
                   </div>
                 </div>
               </label>
@@ -863,9 +868,9 @@ function CancelDialog({
                   onChange={() => setMode("hoan_tien")}
                 />
                 <div>
-                  <div className="font-medium">NCC hoàn tiền</div>
+                  <div className="font-medium">{t("NCC hoàn tiền")}</div>
                   <div className="text-xs text-muted-foreground">
-                    NCC đã trả lại tiền mặt, không cần cấn trừ.
+                    {t("NCC đã trả lại tiền mặt, không cần cấn trừ.")}
                   </div>
                 </div>
               </label>
@@ -873,13 +878,13 @@ function CancelDialog({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Đóng</Button>
+          <Button variant="outline" onClick={onClose}>{t("Đóng")}</Button>
           <Button
             variant="destructive"
             onClick={handleConfirm}
             disabled={cancelMut.isPending || (needsMode && !mode)}
           >
-            {cancelMut.isPending ? "Đang hủy..." : "Xác nhận hủy"}
+            {cancelMut.isPending ? t("Đang hủy...") : t("Xác nhận hủy")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -897,46 +902,47 @@ function DnttDetailDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  useTranslate();
   const { data: allocs = [], isLoading } = useDinhKyDNTTAllocations(dntt.id);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Chi tiết ĐNTT #{dntt.id}</DialogTitle>
+          <DialogTitle>{t("Chi tiết ĐNTT")} #{dntt.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2 text-sm">
           <div className="rounded-md bg-muted/40 px-4 py-2 space-y-0.5 text-xs">
-            <div><span className="text-muted-foreground">Mô tả: </span>{dntt.mo_ta || "—"}</div>
+            <div><span className="text-muted-foreground">{t("Mô tả:")} </span>{dntt.mo_ta || "—"}</div>
             <div>
-              <span className="text-muted-foreground">Tổng: </span>
+              <span className="text-muted-foreground">{t("Tổng:")} </span>
               <span className="font-semibold">{fmt(dntt.so_tien)} ₫</span>
               {" · "}
-              <span className="text-muted-foreground">Đã TT: </span>
+              <span className="text-muted-foreground">{t("Đã TT:")} </span>
               <span className="text-emerald-600">{fmt(dntt.paid_amount || 0)} ₫</span>
             </div>
           </div>
           <div className="text-xs font-semibold uppercase text-muted-foreground">
-            {allocs.length} chi phí được phân bổ
+            {allocs.length} {t("chi phí được phân bổ")}
           </div>
           {isLoading ? (
-            <div className="text-xs text-muted-foreground">Đang tải...</div>
+            <div className="text-xs text-muted-foreground">{t("Đang tải...")}</div>
           ) : (
             <div className="border border-border rounded-md overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="text-xs">
-                    <TableHead className="py-1">Đoàn</TableHead>
-                    <TableHead className="py-1">Ngày đi</TableHead>
-                    <TableHead className="py-1">Mô tả</TableHead>
-                    <TableHead className="py-1 text-right">Số tiền</TableHead>
+                    <TableHead className="py-1">{t("Đoàn")}</TableHead>
+                    <TableHead className="py-1">{t("Ngày đi")}</TableHead>
+                    <TableHead className="py-1">{t("Mô tả")}</TableHead>
+                    <TableHead className="py-1 text-right">{t("Số tiền")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {allocs.map((a) => (
                     <TableRow key={a.chi_phi_id} className="text-xs">
                       <TableCell className="py-1.5 font-medium">
-                        {a.chi_phi?.doan?.ten_doan || `Đoàn #${a.chi_phi?.doan_id}`}
+                        {a.chi_phi?.doan?.ten_doan || `${t("Đoàn")} #${a.chi_phi?.doan_id}`}
                       </TableCell>
                       <TableCell className="py-1.5 text-muted-foreground whitespace-nowrap">
                         {a.chi_phi?.doan?.ngay_di
@@ -955,7 +961,7 @@ function DnttDetailDialog({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Đóng</Button>
+          <Button variant="outline" onClick={onClose}>{t("Đóng")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

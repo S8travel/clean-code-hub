@@ -24,6 +24,7 @@ import {
   useRealtimeThongBao,
   type ThongBaoRow,
 } from "@/hooks/use-thong-bao";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   userId: string | null | undefined;
@@ -63,10 +64,10 @@ function iconFor(loai: string) {
 
 function groupByTime(items: ThongBaoRow[]) {
   const groups: { label: string; items: ThongBaoRow[] }[] = [
-    { label: "Hôm nay",   items: [] },
-    { label: "Hôm qua",   items: [] },
-    { label: "Tuần này",  items: [] },
-    { label: "Cũ hơn",    items: [] },
+    { label: t("Hôm nay"),   items: [] },
+    { label: t("Hôm qua"),   items: [] },
+    { label: t("Tuần này"),  items: [] },
+    { label: t("Cũ hơn"),    items: [] },
   ];
   for (const it of items) {
     const d = new Date(it.created_at);
@@ -95,6 +96,7 @@ function targetUrl(tb: ThongBaoRow): string | null {
 }
 
 export function NotificationBell({ userId }: Props) {
+  useTranslate();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [tab,  setTab]  = useState("all");
@@ -117,21 +119,21 @@ export function NotificationBell({ userId }: Props) {
     if (desktopOn) {
       disableDesktopNotif();
       setDesktopOn(false);
-      toast.success("Đã tắt thông báo desktop");
+      toast.success(t("Đã tắt thông báo desktop"));
       return;
     }
     if (!desktopNotifSupported()) {
-      toast.error("Trình duyệt không hỗ trợ thông báo desktop");
+      toast.error(t("Trình duyệt không hỗ trợ thông báo desktop"));
       return;
     }
     if (desktopNotifPermission() === "denied") {
-      toast.error("Trình duyệt đã chặn quyền thông báo — hãy mở lại trong cài đặt trình duyệt cho trang này");
+      toast.error(t("Trình duyệt đã chặn quyền thông báo — hãy mở lại trong cài đặt trình duyệt cho trang này"));
       return;
     }
     const ok = await enableDesktopNotif();
     setDesktopOn(ok);
-    if (ok) toast.success("Đã bật thông báo desktop");
-    else toast.error("Chưa cấp quyền thông báo");
+    if (ok) toast.success(t("Đã bật thông báo desktop"));
+    else toast.error(t("Chưa cấp quyền thông báo"));
   };
 
   // Filter theo tab + lấy 15 cái mới nhất
@@ -150,7 +152,7 @@ export function NotificationBell({ userId }: Props) {
       nav(url);
     } else {
       // Không có trang liên kết → báo rõ thay vì im lặng (tránh cảm giác "click hỏng")
-      toast("Thông báo chỉ để xem — không có trang chi tiết");
+      toast(t("Thông báo chỉ để xem — không có trang chi tiết"));
     }
   };
 
@@ -163,7 +165,7 @@ export function NotificationBell({ userId }: Props) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          aria-label="Thông báo"
+          aria-label={t("Thông báo")}
           className="relative inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-muted transition-colors"
         >
           <Bell className={cn("h-5 w-5", unread > 0 && "text-foreground")} />
@@ -178,12 +180,12 @@ export function NotificationBell({ userId }: Props) {
       <PopoverContent align="end" className="w-[380px] p-0">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="text-sm font-semibold">Thông báo</h3>
+          <h3 className="text-sm font-semibold">{t("Thông báo")}</h3>
           <div className="flex items-center gap-2">
             {desktopNotifSupported() && (
               <button
                 onClick={toggleDesktop}
-                title={desktopOn ? "Tắt thông báo desktop" : "Bật thông báo desktop"}
+                title={desktopOn ? t("Tắt thông báo desktop") : t("Bật thông báo desktop")}
                 className={cn(
                   "flex items-center justify-center h-6 w-6 rounded transition-colors",
                   desktopOn
@@ -200,7 +202,7 @@ export function NotificationBell({ userId }: Props) {
               className="text-xs flex items-center gap-1 text-muted-foreground hover:text-primary disabled:opacity-50 transition-colors"
             >
               <CheckCheck className="h-3.5 w-3.5" />
-              Đã đọc tất cả
+              {t("Đã đọc tất cả")}
             </button>
           </div>
         </div>
@@ -208,10 +210,10 @@ export function NotificationBell({ userId }: Props) {
         {/* Tabs */}
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="grid grid-cols-4 h-9 mx-2 mt-2">
-            <TabsTrigger value="all"       className="text-xs">Tất cả</TabsTrigger>
-            <TabsTrigger value="deadline"  className="text-xs">Deadline</TabsTrigger>
-            <TabsTrigger value="cong_viec" className="text-xs">Công việc</TabsTrigger>
-            <TabsTrigger value="khac"      className="text-xs">Khác</TabsTrigger>
+            <TabsTrigger value="all"       className="text-xs">{t("Tất cả")}</TabsTrigger>
+            <TabsTrigger value="deadline"  className="text-xs">{t("Deadline")}</TabsTrigger>
+            <TabsTrigger value="cong_viec" className="text-xs">{t("Công việc")}</TabsTrigger>
+            <TabsTrigger value="khac"      className="text-xs">{t("Khác")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value={tab} className="mt-0">
@@ -219,7 +221,7 @@ export function NotificationBell({ userId }: Props) {
               {grouped.length === 0 ? (
                 <div className="flex flex-col items-center py-10 text-muted-foreground">
                   <Bell className="h-8 w-8 opacity-30 mb-2" />
-                  <p className="text-xs">Chưa có thông báo</p>
+                  <p className="text-xs">{t("Chưa có thông báo")}</p>
                 </div>
               ) : (
                 grouped.map((g) => (
@@ -274,7 +276,7 @@ export function NotificationBell({ userId }: Props) {
             onClick={() => { setOpen(false); nav("/thong-bao"); }}
             className="w-full text-xs text-center py-1.5 rounded hover:bg-muted text-primary font-medium"
           >
-            Xem tất cả thông báo →
+            {t("Xem tất cả thông báo →")}
           </button>
         </div>
       </PopoverContent>

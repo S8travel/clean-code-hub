@@ -23,6 +23,7 @@ import {
   useUpdateBookingNH,
   type BookingNHRow,
 } from "@/hooks/use-booking-nh";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   doanId: number;
@@ -48,6 +49,7 @@ export default function MealColumn({
   doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail,
   booking, tenDoan, soKhach, ngayDate,
 }: Props) {
+  useTranslate();
   const { data: setMenuList = [] } = useSetMenuOptions(nhaHangId);
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
@@ -176,11 +178,11 @@ export default function MealColumn({
   // Send mail
   const handleSendMail = useCallback(async () => {
     if (!nhaHangEmail) {
-      toast.error("Nhà hàng chưa có email");
+      toast.error(t("Nhà hàng chưa có email"));
       return;
     }
     if (!selectedSetId || monList.length === 0) {
-      toast.error("Vui lòng chọn set menu và danh sách món");
+      toast.error(t("Vui lòng chọn set menu và danh sách món"));
       return;
     }
     setSending(true);
@@ -227,11 +229,11 @@ export default function MealColumn({
         }),
       }).catch(() => {/* email send failure is non-blocking */});
 
-      toast.success("✓ Đã gửi mail đặt bữa ăn");
+      toast.success(t("✓ Đã gửi mail đặt bữa ăn"));
       // Invalidate to refetch fresh booking data
       queryClient.invalidateQueries({ queryKey: ["doan_booking_nh", doanId] });
     } catch (err: unknown) {
-      toast.error(errMsg(err) || "Lỗi gửi mail");
+      toast.error(errMsg(err) || t("Lỗi gửi mail"));
     } finally {
       setSending(false);
     }
@@ -241,13 +243,13 @@ export default function MealColumn({
   const handleConfirm = async () => {
     if (!booking?.id) return;
     await updateMut.mutateAsync({ id: booking.id, doan_id: doanId, booking_status: "nh_xac_nhan" });
-    toast.success("✓ NH đã xác nhận");
+    toast.success(t("✓ NH đã xác nhận"));
   };
 
   const handleCancel = async () => {
     if (!booking?.id) return;
     await updateMut.mutateAsync({ id: booking.id, doan_id: doanId, booking_status: "da_huy" });
-    toast.success("Đã hủy booking");
+    toast.success(t("Đã hủy booking"));
   };
 
   const handleReset = async () => {
@@ -259,7 +261,7 @@ export default function MealColumn({
       sent_at: null,
       sent_by: null,
     });
-    toast.success("Đã đặt lại booking");
+    toast.success(t("Đã đặt lại booking"));
   };
 
   const handleResend = async () => {
@@ -269,7 +271,7 @@ export default function MealColumn({
   if (!nhaHangId) {
     return (
       <div className="text-sm text-muted-foreground italic p-3 bg-muted/30 rounded-lg">
-        Chưa chọn nhà hàng trong Điều tour
+        {t("Chưa chọn nhà hàng trong Điều tour")}
       </div>
     );
   }
@@ -279,7 +281,7 @@ export default function MealColumn({
       {/* Restaurant name */}
       <div className="flex items-center gap-2">
         <span className="font-medium text-sm">{nhaHangTen}</span>
-        <Badge variant="outline" className="text-xs">Điều tour</Badge>
+        <Badge variant="outline" className="text-xs">{t("Điều tour")}</Badge>
       </div>
 
       {/* Set menu dropdown */}
@@ -292,7 +294,7 @@ export default function MealColumn({
           <span>
             {(() => {
               const s = selectedSetId ? setMenuList.find((x) => x.id === selectedSetId) : null;
-              return s ? `${s.ten_set} · ${s.gia ? `${s.gia.toLocaleString()} ${s.don_vi}` : ""}` : "-- Chọn set menu --";
+              return s ? `${s.ten_set} · ${s.gia ? `${s.gia.toLocaleString()} ${s.don_vi}` : ""}` : t("-- Chọn set menu --");
             })()}
           </span>
         </SelectTrigger>
@@ -329,7 +331,7 @@ export default function MealColumn({
           ))}
           {!isDisabled && (
             <Button variant="ghost" size="sm" className="text-xs h-6" onClick={addMon}>
-              <Plus className="h-3 w-3 mr-1" /> Thêm món
+              <Plus className="h-3 w-3 mr-1" /> {t("Thêm món")}
             </Button>
           )}
         </div>
@@ -340,7 +342,7 @@ export default function MealColumn({
         value={ghiChu}
         onChange={e => setGhiChu(e.target.value)}
         onBlur={handleGhiChuBlur}
-        placeholder="Ghi chú..."
+        placeholder={t("Ghi chú...")}
         rows={2}
         className="text-sm resize-none"
         disabled={isDisabled}
@@ -349,7 +351,7 @@ export default function MealColumn({
       {/* Status + Actions */}
       <div className="flex flex-wrap items-center gap-2">
         <Badge className={STATUS_CONFIG[status]?.className || ""}>
-          {STATUS_CONFIG[status]?.label || status}
+          {t(STATUS_CONFIG[status]?.label || status)}
         </Badge>
 
         {booking?.sent_at && status !== "chua_gui" && (
@@ -364,20 +366,20 @@ export default function MealColumn({
           {status === "chua_gui" && (
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSendMail} disabled={sending}>
               {sending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Mail className="h-3 w-3 mr-1" />}
-              Gửi mail
+              {t("Gửi mail")}
             </Button>
           )}
 
           {status === "da_gui" && (
             <>
               <Button size="sm" variant="outline" className="h-7 text-xs text-teal-600" onClick={handleConfirm}>
-                <Check className="h-3 w-3 mr-1" /> NH đã xác nhận
+                <Check className="h-3 w-3 mr-1" /> {t("NH đã xác nhận")}
               </Button>
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleResend} disabled={sending}>
-                <Mail className="h-3 w-3 mr-1" /> Gửi lại
+                <Mail className="h-3 w-3 mr-1" /> {t("Gửi lại")}
               </Button>
               <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
-                <X className="h-3 w-3 mr-1" /> Hủy
+                <X className="h-3 w-3 mr-1" /> {t("Hủy")}
               </Button>
             </>
           )}
@@ -385,17 +387,17 @@ export default function MealColumn({
           {status === "nh_xac_nhan" && (
             <>
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleResend} disabled={sending}>
-                <Mail className="h-3 w-3 mr-1" /> Gửi lại
+                <Mail className="h-3 w-3 mr-1" /> {t("Gửi lại")}
               </Button>
               <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
-                <X className="h-3 w-3 mr-1" /> Hủy
+                <X className="h-3 w-3 mr-1" /> {t("Hủy")}
               </Button>
             </>
           )}
 
           {status === "da_huy" && (
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReset}>
-              <RotateCcw className="h-3 w-3 mr-1" /> Đặt lại
+              <RotateCcw className="h-3 w-3 mr-1" /> {t("Đặt lại")}
             </Button>
           )}
         </div>
@@ -405,14 +407,14 @@ export default function MealColumn({
       <AlertDialog open={showReplaceConfirm} onOpenChange={setShowReplaceConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Thay đổi set menu?</AlertDialogTitle>
+            <AlertDialogTitle>{t("Thay đổi set menu?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Thay set menu sẽ mất các chỉnh sửa thủ công. Tiếp tục?
+              {t("Thay set menu sẽ mất các chỉnh sửa thủ công. Tiếp tục?")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmReplace}>Tiếp tục</AlertDialogAction>
+            <AlertDialogCancel>{t("Hủy")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmReplace}>{t("Tiếp tục")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
