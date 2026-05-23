@@ -10,6 +10,7 @@ import type { NhaHangDetail } from "@/hooks/use-chi-phi-nh";
 import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { fmt, type LocalNHRow, type LocalNHExtra } from "./nh-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   row: LocalNHRow | null;
@@ -37,6 +38,7 @@ export default function NHDnttModal({
   alreadyPaid, bsAmount, onBsAmountChange, ngayCan, onNgayCanChange,
   canTru, onCanTruChange, submitting, onClose, onSubmit,
 }: Props) {
+  useTranslate();
   if (!row) return null;
   const focResolvedModal = resolveNHFoc(row, nh);
   const soKhachThucTe = calcSoKhachThucTe(row.so_khach, focResolvedModal.foc_khach, focResolvedModal.foc_mien);
@@ -58,44 +60,44 @@ export default function NHDnttModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {isBSMode ? "ĐNTT bổ sung" : alreadyPaid > 0 ? "ĐNTT còn lại" : "Tạo đề nghị TT"} — {nh?.ten}
+            {isBSMode ? t("ĐNTT bổ sung") : alreadyPaid > 0 ? t("ĐNTT còn lại") : t("Tạo đề nghị TT")} — {nh?.ten}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2 text-xs">
           {chietKhauModal > 0 ? (
             <div className="space-y-0.5">
-              <p className="text-muted-foreground">Tổng bữa ăn (sau FOC): <span className="font-semibold text-foreground">{fmt(mainTotalModal + extrasTotal)} VND</span></p>
-              <p className="text-green-600">Chiết khấu {ckPctModal}%: <span className="font-semibold">−{fmt(chietKhauModal)} VND</span></p>
-              <p>Thực thanh toán: <span className="font-semibold">{fmt(totalBua)} VND</span></p>
+              <p className="text-muted-foreground">{t("Tổng bữa ăn (sau FOC)")}: <span className="font-semibold text-foreground">{fmt(mainTotalModal + extrasTotal)} VND</span></p>
+              <p className="text-green-600">{t("Chiết khấu")} {ckPctModal}%: <span className="font-semibold">−{fmt(chietKhauModal)} VND</span></p>
+              <p>{t("Thực thanh toán")}: <span className="font-semibold">{fmt(totalBua)} VND</span></p>
             </div>
           ) : (
-            <p>Tổng bữa ăn: <span className="font-semibold">{fmt(totalBua)} VND</span></p>
+            <p>{t("Tổng bữa ăn")}: <span className="font-semibold">{fmt(totalBua)} VND</span></p>
           )}
           {alreadyPaid > 0 && (
             <>
-              <p>Đã thanh toán: <span className="font-semibold text-amber-600">- {fmt(alreadyPaid)} VND</span></p>
-              {!isBSMode && <p>Còn lại: <span className="font-semibold text-primary">{fmt(effectiveTotalBua)} VND</span></p>}
+              <p>{t("Đã thanh toán")}: <span className="font-semibold text-amber-600">- {fmt(alreadyPaid)} VND</span></p>
+              {!isBSMode && <p>{t("Còn lại")}: <span className="font-semibold text-primary">{fmt(effectiveTotalBua)} VND</span></p>}
             </>
           )}
           {extras.length > 0 && alreadyPaid === 0 && (
             <div className="space-y-0.5 text-muted-foreground">
-              <p>Gồm: {fmt(mainTotalModal)} VND (chính){allExtrasTotalModal > 0 ? ` + ${fmt(allExtrasTotalModal)} VND (phát sinh)` : ""}</p>
+              <p>{t("Gồm")}: {fmt(mainTotalModal)} VND ({t("chính")}){allExtrasTotalModal > 0 ? ` + ${fmt(allExtrasTotalModal)} VND (${t("phát sinh")})` : ""}</p>
               {hdvExtrasTotalModal > 0 && (
-                <p className="text-amber-600">HDV thanh toán: <span className="font-semibold">−{fmt(hdvExtrasTotalModal)} VND</span></p>
+                <p className="text-amber-600">{t("HDV thanh toán")}: <span className="font-semibold">−{fmt(hdvExtrasTotalModal)} VND</span></p>
               )}
             </div>
           )}
           {isBSMode ? (
             <div className="space-y-1.5">
-              <p className="text-[11px] text-amber-600">Đã thanh toán đủ — nhập số tiền bổ sung cần thanh toán thêm.</p>
-              <Label className="text-xs">Số tiền bổ sung</Label>
+              <p className="text-[11px] text-amber-600">{t("Đã thanh toán đủ — nhập số tiền bổ sung cần thanh toán thêm.")}</p>
+              <Label className="text-xs">{t("Số tiền bổ sung")}</Label>
               <Input
                 type="number"
                 className="h-8 text-xs"
                 value={bsAmount || ""}
                 onChange={(e) => onBsAmountChange(Number(e.target.value) || 0)}
                 min={0}
-                placeholder="Nhập số tiền..."
+                placeholder={t("Nhập số tiền...")}
               />
             </div>
           ) : (
@@ -108,19 +110,19 @@ export default function NHDnttModal({
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="full" id="nh-full" />
                   <Label htmlFor="nh-full" className="text-xs cursor-pointer">
-                    Toàn bộ — {fmt(effectiveTotalBua)} VND
+                    {t("Toàn bộ")} — {fmt(effectiveTotalBua)} VND
                   </Label>
                 </div>
                 {alreadyPaid === 0 && (
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="deposit" id="nh-dep" />
-                    <Label htmlFor="nh-dep" className="text-xs cursor-pointer">1 phần (cọc)</Label>
+                    <Label htmlFor="nh-dep" className="text-xs cursor-pointer">{t("1 phần (cọc)")}</Label>
                   </div>
                 )}
               </RadioGroup>
               {mode === "deposit" && alreadyPaid === 0 && (
                 <div className="space-y-1">
-                  <Label className="text-xs">Số tiền cọc</Label>
+                  <Label className="text-xs">{t("Số tiền cọc")}</Label>
                   <Input
                     type="number"
                     className="h-8 text-xs"
@@ -129,7 +131,7 @@ export default function NHDnttModal({
                     max={effectiveTotalBua}
                   />
                   {depositAmount > 0 && (
-                    <p className="text-[11px] text-muted-foreground">Còn lại: {fmt(soTienConLai)} VND</p>
+                    <p className="text-[11px] text-muted-foreground">{t("Còn lại")}: {fmt(soTienConLai)} VND</p>
                   )}
                 </div>
               )}
@@ -137,7 +139,7 @@ export default function NHDnttModal({
           )}
           {/* Ngày cần thanh toán */}
           <div className="space-y-1">
-            <Label className="text-xs">Ngày cần thanh toán</Label>
+            <Label className="text-xs">{t("Ngày cần thanh toán")}</Label>
             <DatePicker className="h-8 text-xs w-full" value={ngayCan} onChange={onNgayCanChange} />
           </div>
           <KSCongNoMultiPanel
@@ -155,7 +157,7 @@ export default function NHDnttModal({
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>
-            Hủy
+            {t("Hủy")}
           </Button>
           <Button
             size="sm"
@@ -163,7 +165,7 @@ export default function NHDnttModal({
             onClick={onSubmit}
             disabled={submitting || soTien <= 0}
           >
-            Tạo đề nghị TT
+            {t("Tạo đề nghị TT")}
           </Button>
         </DialogFooter>
       </DialogContent>

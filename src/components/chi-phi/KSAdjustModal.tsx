@@ -14,6 +14,7 @@ import {
 import { useUpdateChiPhiActual } from "@/hooks/use-chi-phi";
 import { type LocalKSRow } from "./ks-section-shared";
 import { isKSRoomRow } from "@/lib/foc-calc";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -78,6 +79,7 @@ function calcRowActual(d: DraftRow): number {
 export default function KSAdjustModal({
   open, onClose, doanId, ksName, rows, focKhach, focMien, sumPaid,
 }: Props) {
+  useTranslate();
   const updateActualMut = useUpdateChiPhiActual();
   const [saving, setSaving] = useState(false);
 
@@ -145,7 +147,7 @@ export default function KSAdjustModal({
       );
     });
     if (changed.length === 0) {
-      toast.info("Chưa có thay đổi");
+      toast.info(t("Chưa có thay đổi"));
       return;
     }
     setSaving(true);
@@ -162,10 +164,10 @@ export default function KSAdjustModal({
           }),
         ),
       );
-      toast.success(`Đã điều chỉnh ${changed.length} dòng`);
+      toast.success(`${t("Đã điều chỉnh")} ${changed.length} ${t("dòng")}`);
       onClose();
     } catch (err: unknown) {
-      toast.error("Lỗi điều chỉnh: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi điều chỉnh") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     } finally {
       setSaving(false);
     }
@@ -180,14 +182,13 @@ export default function KSAdjustModal({
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-base">
-            Điều chỉnh khách sạn — {ksName}
+            {t("Điều chỉnh khách sạn")} — {ksName}
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-1">
           <p className="text-xs text-muted-foreground">
-            Sửa số phòng / giá thực tế sau khi đã thanh toán. Sau khi lưu, hệ thống sẽ hiển thị
-            chênh lệch (thiếu/thừa) ở dưới card KS để bạn xử lý (tạo ĐNTT bổ sung hoặc ghi nhận công nợ).
+            {t("Sửa số phòng / giá thực tế sau khi đã thanh toán. Sau khi lưu, hệ thống sẽ hiển thị chênh lệch (thiếu/thừa) ở dưới card KS để bạn xử lý (tạo ĐNTT bổ sung hoặc ghi nhận công nợ).")}
           </p>
 
           {/* Room table */}
@@ -195,20 +196,20 @@ export default function KSAdjustModal({
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  🛏️ Phòng
+                  🛏️ {t("Phòng")}
                 </span>
               </div>
               <div className="rounded-md border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="text-xs bg-muted/30">
-                      <TableHead className="w-[100px] h-auto py-1.5 px-2">Ngày</TableHead>
-                      <TableHead className="h-auto py-1.5 px-2">Loại phòng</TableHead>
-                      <TableHead className="w-[80px] h-auto py-1.5 px-2 text-center">Số phòng</TableHead>
-                      <TableHead className="w-[70px] h-auto py-1.5 px-2 text-center" title="Số phòng miễn phí (OP tự nhập). Gợi ý 16免1 hiện ở header ngày.">FOC</TableHead>
-                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">Giá phòng</TableHead>
-                      <TableHead className="w-[90px] h-auto py-1.5 px-2 text-right">FOC trừ</TableHead>
-                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">Thành tiền</TableHead>
+                      <TableHead className="w-[100px] h-auto py-1.5 px-2">{t("Ngày")}</TableHead>
+                      <TableHead className="h-auto py-1.5 px-2">{t("Loại phòng")}</TableHead>
+                      <TableHead className="w-[80px] h-auto py-1.5 px-2 text-center">{t("Số phòng")}</TableHead>
+                      <TableHead className="w-[70px] h-auto py-1.5 px-2 text-center" title={t("Số phòng miễn phí (OP tự nhập). Gợi ý 16免1 hiện ở header ngày.")}>FOC</TableHead>
+                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">{t("Giá phòng")}</TableHead>
+                      <TableHead className="w-[90px] h-auto py-1.5 px-2 text-right">{t("FOC trừ")}</TableHead>
+                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">{t("Thành tiền")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -228,7 +229,7 @@ export default function KSAdjustModal({
                                     ? "font-medium text-emerald-700"
                                     : "font-medium text-orange-700"
                                 }>
-                                  gợi ý {suggest.suggestedFoc} / đã gán {assignedFoc}
+                                  {t("gợi ý")} {suggest.suggestedFoc} / {t("đã gán")} {assignedFoc}
                                 </span>
                               </span>
                             )}
@@ -289,19 +290,19 @@ export default function KSAdjustModal({
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  🍽️ Dịch vụ KS
+                  🍽️ {t("Dịch vụ KS")}
                 </span>
               </div>
               <div className="rounded-md border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="text-xs bg-muted/30">
-                      <TableHead className="w-[100px] h-auto py-1.5 px-2">Ngày</TableHead>
-                      <TableHead className="h-auto py-1.5 px-2">Tên dịch vụ</TableHead>
-                      <TableHead className="w-[60px] h-auto py-1.5 px-2 text-center">SL</TableHead>
+                      <TableHead className="w-[100px] h-auto py-1.5 px-2">{t("Ngày")}</TableHead>
+                      <TableHead className="h-auto py-1.5 px-2">{t("Tên dịch vụ")}</TableHead>
+                      <TableHead className="w-[60px] h-auto py-1.5 px-2 text-center">{t("SL")}</TableHead>
                       <TableHead className="w-[60px] h-auto py-1.5 px-2 text-center">FOC</TableHead>
-                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">Đơn giá</TableHead>
-                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">Thành tiền</TableHead>
+                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">{t("Đơn giá")}</TableHead>
+                      <TableHead className="w-[120px] h-auto py-1.5 px-2 text-right">{t("Thành tiền")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -350,7 +351,7 @@ export default function KSAdjustModal({
 
           {drafts.length === 0 && (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              Không có dòng chi phí nào để điều chỉnh.
+              {t("Không có dòng chi phí nào để điều chỉnh.")}
             </p>
           )}
         </div>
@@ -359,15 +360,15 @@ export default function KSAdjustModal({
         {drafts.length > 0 && (
           <div className="border-t border-border pt-3 space-y-1.5 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Thực tế mới:</span>
+              <span className="text-muted-foreground">{t("Thực tế mới")}:</span>
               <span className="font-semibold tabular-nums">{fmt(sumActualNew)} ₫</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Đã thanh toán:</span>
+              <span className="text-muted-foreground">{t("Đã thanh toán")}:</span>
               <span className="tabular-nums">{fmt(sumPaid)} ₫</span>
             </div>
             <div className="flex items-center justify-between font-medium">
-              <span className="text-muted-foreground">Chênh lệch:</span>
+              <span className="text-muted-foreground">{t("Chênh lệch")}:</span>
               <span
                 className={
                   delta > 0 ? "text-orange-700 tabular-nums"
@@ -377,17 +378,17 @@ export default function KSAdjustModal({
               >
                 {delta > 0 ? "+" : delta < 0 ? "−" : ""}
                 {fmt(Math.abs(delta))} ₫
-                {delta > 0 && " (thiếu — cần TT bổ sung)"}
-                {delta < 0 && " (thừa — cần ghi nhận CN/HT)"}
+                {delta > 0 && ` (${t("thiếu — cần TT bổ sung")})`}
+                {delta < 0 && ` (${t("thừa — cần ghi nhận CN/HT")})`}
               </span>
             </div>
           </div>
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Hủy</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t("Hủy")}</Button>
           <Button onClick={handleSave} disabled={saving || drafts.length === 0}>
-            {saving ? "Đang lưu..." : "Lưu điều chỉnh"}
+            {saving ? t("Đang lưu...") : t("Lưu điều chỉnh")}
           </Button>
         </DialogFooter>
       </DialogContent>

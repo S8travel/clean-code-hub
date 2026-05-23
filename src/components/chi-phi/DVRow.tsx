@@ -12,13 +12,14 @@ import { DVInput } from "./DVInput";
 import type { DVModalTarget } from "./DVDnttModal";
 import type { CancelTarget } from "./DVCancelModal";
 import type { AggCommitTarget } from "./DVAggCommitModal";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  cho_duyet: { text: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
-  da_duyet:  { text: "Đã duyệt",  cls: "bg-teal-100 text-teal-700" },
-  tu_choi:   { text: "Từ chối",   cls: "bg-red-100 text-red-700" },
+const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
+  cho_duyet: { textKey: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
+  da_duyet:  { textKey: "Đã duyệt",  cls: "bg-teal-100 text-teal-700" },
+  tu_choi:   { textKey: "Từ chối",   cls: "bg-red-100 text-red-700" },
 };
 
 export interface LocalDVExtra {
@@ -87,6 +88,7 @@ interface Props {
 // 1 dòng chi phí dịch vụ: dòng chính + dòng phát sinh + dòng aggregate footer.
 // Tách verbatim từ ChiPhiDVSection — giữ nguyên 100% logic/hành vi.
 export default function DVRow({ row, day, data, handlers }: Props) {
+  useTranslate();
   const {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
     canTruByDnttId, selectedIds, editingId, editAmount, ngayBatDau,
@@ -213,7 +215,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             width="w-[44px]"
           />
           {row.is_overridden && (
-            <span title="Đã override — không sync với Điều tour" className="text-amber-500 text-[10px]">🔒</span>
+            <span title={t("Đã override — không sync với Điều tour")} className="text-amber-500 text-[10px]">🔒</span>
           )}
         </div>
       </td>
@@ -233,7 +235,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             <button
               type="button"
               onClick={() => handleResetOverride(row)}
-              title="Reset override → sync lại từ Điều tour lần save tới"
+              title={t("Reset override → sync lại từ Điều tour lần save tới")}
               className="text-muted-foreground hover:text-primary text-[10px]"
             >↺</button>
           )}
@@ -257,7 +259,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
               : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
           )}
         >
-          {nguoiTt === "cong_ty" ? "Công ty" : "HDV"}
+          {nguoiTt === "cong_ty" ? t("Công ty") : t("HDV")}
         </button>
       </td>
 
@@ -276,7 +278,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 <div key={d.id} className="flex items-center gap-0.5">
                   {isRejected ? (
                     <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                      {statusInfo.text} · {fmt(d.so_tien)}
+                      {t(statusInfo.textKey)} · {fmt(d.so_tien)}
                     </span>
                   ) : editingId === d.id ? (
                     <>
@@ -305,8 +307,8 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                         return (
                           <div className="inline-flex flex-col items-start gap-0.5">
                             <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                              {statusInfo.text} · {fmt(d.so_tien)}
-                              {d.la_coc && <span className="ml-1 opacity-70">·Cọc</span>}
+                              {t(statusInfo.textKey)} · {fmt(d.so_tien)}
+                              {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
                             </span>
                             {ct > 0 && (
                               <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap">
@@ -318,7 +320,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                       })()}
                       {d.trang_thai_duyet === "cho_duyet" && (
                         <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-blue-500"
-                          title="Sửa số tiền"
+                          title={t("Sửa số tiền")}
                           onClick={() => { setEditingId(d.id); setEditAmount(String(d.so_tien)); }}>
                           <Pencil className="h-2.5 w-2.5" />
                         </Button>
@@ -331,9 +333,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             {dnttMismatch !== 0 && (
               <span
                 className="inline-flex items-center px-1 py-px rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
-                title={`Số tiền DNTT đã commit (${fmt(sumCommitted)} ₫) khác chi phí thực tế (${fmt(sumActual)} ₫). Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.`}
+                title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.")}`}
               >
-                ⚠ DNTT lệch {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
+                ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
               </span>
             )}
           </div>
@@ -350,11 +352,11 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             <div key={d.id}>
               {d.payment_status === "paid" ? (
                 <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                  Đã TT{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
+                  {t("Đã TT")}{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
                 </span>
               ) : (
                 <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                  Chờ UNC · {fmt(d.so_tien - (d.paid_amount || 0))}
+                  {t("Chờ UNC")} · {fmt(d.so_tien - (d.paid_amount || 0))}
                 </span>
               )}
             </div>
@@ -381,7 +383,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         <div className="flex items-center gap-1 justify-end">
           {nguoiTt === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid) && (
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-              title="Hủy ĐNTT"
+              title={t("Hủy ĐNTT")}
               onClick={() => {
                 setCancelMode("hoan_tien");
                 setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" });
@@ -391,21 +393,21 @@ export default function DVRow({ row, day, data, handlers }: Props) {
           )}
           <Button variant="ghost" size="sm"
             className={cn("h-7 text-xs px-2 gap-1", row.thanh_toan_dinh_ky ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
-            title={row.thanh_toan_dinh_ky ? "Đang định kỳ — bấm để tắt" : "Đặt thanh toán định kỳ"}
+            title={row.thanh_toan_dinh_ky ? t("Đang định kỳ — bấm để tắt") : t("Đặt thanh toán định kỳ")}
             disabled={upsertMut.isPending}
             onClick={() => handleToggleDinhKy(row)}>
             <CalendarClock className="h-3.5 w-3.5" />
-            {row.thanh_toan_dinh_ky && "Định kỳ"}
+            {row.thanh_toan_dinh_ky && t("Định kỳ")}
           </Button>
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-            title="Thêm dịch vụ phát sinh"
+            title={t("Thêm dịch vụ phát sinh")}
             onClick={() => handleExtraAdd(row.id!)}>
             <Plus className="h-3 w-3" />
           </Button>
           {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && totalTienCt > 0 && (
             <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
               onClick={() => openDvModal(row.id!, totalTienCt, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
-              ĐNTT
+              {t("ĐNTT")}
             </Button>
           )}
           {/* "ĐNTT bổ sung" cũ — REMOVED, replaced by aggregate footer button (showAggBtn) */}
@@ -423,7 +425,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             <span className="text-[10px] text-muted-foreground shrink-0">↳</span>
             <Input
               className="h-6 text-xs px-1.5 py-0 flex-1"
-              placeholder="Tên dịch vụ phát sinh..."
+              placeholder={t("Tên dịch vụ phát sinh...")}
               value={extra.mo_ta}
               onChange={(e) => handleExtraChange(row.id!, idx, "mo_ta", e.target.value)}
               onBlur={() => handleExtraSave(row.id!, idx)}
@@ -473,7 +475,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
             )}
           >
-            {extra.nguoi_tt === "cong_ty" ? "Công ty" : "HDV"}
+            {extra.nguoi_tt === "cong_ty" ? t("Công ty") : t("HDV")}
           </button>
         </td>
         <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
@@ -496,23 +498,23 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         <td colSpan={10} className="px-3 py-1.5">
           <div className="flex items-center justify-end gap-3 text-[11px]">
             <span className="text-muted-foreground">
-              Sau điều chỉnh:
-              <span className="ml-1">Thực tế <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
+              {t("Sau điều chỉnh")}:
+              <span className="ml-1">{t("Thực tế")} <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
               <span className="mx-1">·</span>
-              <span>Đã TT <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
+              <span>{t("Đã TT")} <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
               {groupCongNoTotal > 0 && (
                 <>
                   <span className="mx-1">·</span>
-                  <span>Đã CN/HT <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
+                  <span>{t("Đã CN/HT")} <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
                 </>
               )}
               <span className="mx-1">·</span>
-              <span>Còn lệch <span className={cn(
+              <span>{t("Còn lệch")} <span className={cn(
                 "font-semibold tabular-nums",
                 effectiveDelta > 0 ? "text-orange-700" : "text-purple-700",
               )}>
                 {effectiveDelta > 0 ? "+" : "−"}{fmt(Math.abs(effectiveDelta))} ₫
-              </span> ({effectiveDelta > 0 ? "thiếu" : "thừa"})</span>
+              </span> ({effectiveDelta > 0 ? t("thiếu") : t("thừa")})</span>
             </span>
             <Button
               size="sm"
@@ -547,8 +549,8 @@ export default function DVRow({ row, day, data, handlers }: Props) {
               }}
             >
               {effectiveDelta > 0
-                ? `Thanh toán bổ sung ${fmt(effectiveDelta)} ₫`
-                : `Xử lý chênh lệch thừa ${fmt(Math.abs(effectiveDelta))} ₫`}
+                ? `${t("Thanh toán bổ sung")} ${fmt(effectiveDelta)} ₫`
+                : `${t("Xử lý chênh lệch thừa")} ${fmt(Math.abs(effectiveDelta))} ₫`}
             </Button>
           </div>
         </td>

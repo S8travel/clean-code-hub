@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { t, useTranslate } from "@/lib/i18n";
 
 export interface NHCancelTarget {
   dnttId: number;
@@ -22,12 +23,13 @@ interface Props {
 export default function NHCancelModal({
   target, mode, onModeChange, submitting, onClose, onSubmit,
 }: Props) {
+  useTranslate();
   return (
     <Dialog open={!!target} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {target?.isPaid ? "Hủy khoản thanh toán" : "Hủy đề nghị thanh toán"}
+            {target?.isPaid ? t("Hủy khoản thanh toán") : t("Hủy đề nghị thanh toán")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
@@ -41,25 +43,25 @@ export default function NHCancelModal({
               <div className="flex items-start gap-2">
                 <RadioGroupItem value="hoan_tien" id="nh-hoan" className="mt-0.5" />
                 <Label htmlFor="nh-hoan" className="text-xs cursor-pointer">
-                  <span className="font-medium">Hoàn lại tiền</span>
-                  <p className="text-muted-foreground font-normal">Không ghi nhận công nợ</p>
+                  <span className="font-medium">{t("Hoàn lại tiền")}</span>
+                  <p className="text-muted-foreground font-normal">{t("Không ghi nhận công nợ")}</p>
                 </Label>
               </div>
               <div className="flex items-start gap-2">
                 <RadioGroupItem value="cong_no" id="nh-cno" className="mt-0.5" />
                 <Label htmlFor="nh-cno" className="text-xs cursor-pointer">
-                  <span className="font-medium">Cấn trừ công nợ</span>
-                  <p className="text-muted-foreground font-normal">Ghi nhận công nợ cho nhà cung cấp</p>
+                  <span className="font-medium">{t("Cấn trừ công nợ")}</span>
+                  <p className="text-muted-foreground font-normal">{t("Ghi nhận công nợ cho nhà cung cấp")}</p>
                 </Label>
               </div>
             </RadioGroup>
           ) : (
-            <p className="text-xs">Đề nghị sẽ bị hủy, chi phí trở về trạng thái chưa gửi duyệt.</p>
+            <p className="text-xs">{t("Đề nghị sẽ bị hủy, chi phí trở về trạng thái chưa gửi duyệt.")}</p>
           )}
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>
-            Đóng
+            {t("Đóng")}
           </Button>
           <Button
             variant="destructive"
@@ -68,7 +70,7 @@ export default function NHCancelModal({
             onClick={onSubmit}
             disabled={submitting}
           >
-            Xác nhận hủy
+            {t("Xác nhận hủy")}
           </Button>
         </DialogFooter>
       </DialogContent>

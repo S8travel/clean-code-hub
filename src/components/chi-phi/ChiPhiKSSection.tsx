@@ -12,6 +12,7 @@ import KSCancelModal from "./KSCancelModal";
 import KSAggCommitModal from "./KSAggCommitModal";
 import KSLegacyAdjustModal from "./KSLegacyAdjustModal";
 import { useKSSection } from "./use-ks-section";
+import { t, useTranslate } from "@/lib/i18n";
 
 // Re-export shared types — giữ tương thích cho importer cũ.
 export type { KSLoaiRow, LocalKSRow } from "./ks-section-shared";
@@ -24,6 +25,7 @@ interface Props {
 
 // Tab Chi phí Khách sạn — chỉ render. Toàn bộ state/logic ở useKSSection.
 export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: Props) {
+  useTranslate();
   const s = useKSSection({ doanId, soKhach, tenDoan });
   const {
     ksLoading,
@@ -54,19 +56,19 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
     handleCancelSubmit, cancelPending,
   } = s;
 
-  if (ksLoading) return <div className="text-sm text-muted-foreground">Đang tải KS...</div>;
+  if (ksLoading) return <div className="text-sm text-muted-foreground">{t("Đang tải KS...")}</div>;
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 space-y-2">
       <h3 className="text-sm font-semibold flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-900 px-3 py-1.5 rounded-md">
-        🏨 Khách sạn
+        🏨 {t("Khách sạn")}
         <Badge variant="secondary" className="text-xs">
-          Điều tour
+          {t("Điều tour")}
         </Badge>
       </h3>
 
       {distinctKsIdsFromNgay.length === 0 && localRows.length === 0 && (
-        <p className="text-sm text-muted-foreground">Chưa có chi phí khách sạn.</p>
+        <p className="text-sm text-muted-foreground">{t("Chưa có chi phí khách sạn.")}</p>
       )}
 
       {/* Toolbar select + print */}
@@ -82,8 +84,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
             />
             <label htmlFor="select-all-ks" className="text-xs text-muted-foreground cursor-pointer select-none">
               {selectedKsIds.length > 0
-                ? `Đã chọn ${selectedKsIds.length}/${distinctKsIdsFromNgay.length} KS`
-                : "Chọn tất cả"}
+                ? `${t("Đã chọn")} ${selectedKsIds.length}/${distinctKsIdsFromNgay.length} KS`
+                : t("Chọn tất cả")}
             </label>
           </div>
           {selectedKsIds.length > 0 && (
@@ -93,10 +95,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 className="h-7 text-xs"
                 onClick={() => handlePrintSelected(activeDnttByKs)}
                 disabled={ksWithDnttSelected === 0}
-                title={ksWithDnttSelected === 0 ? "Không có KS nào đang có ĐNTT" : undefined}
+                title={ksWithDnttSelected === 0 ? t("Không có KS nào đang có ĐNTT") : undefined}
               >
                 <Printer className="h-3.5 w-3.5 mr-1" />
-                {`In Word${ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}`}
+                {`${t("In Word")}${ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}`}
               </Button>
               <Button
                 size="sm"
@@ -104,12 +106,12 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
                 className="h-7 text-xs"
                 onClick={() => handleExportExcel(activeDnttByKs)}
                 disabled={batchPrinting || ksWithDnttSelected === 0}
-                title={ksWithDnttSelected === 0 ? "Không có KS nào đang có ĐNTT" : undefined}
+                title={ksWithDnttSelected === 0 ? t("Không có KS nào đang có ĐNTT") : undefined}
               >
-                Xuất Excel{ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}
+                {t("Xuất Excel")}{ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}
               </Button>
               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedKsIds([])}>
-                Bỏ chọn
+                {t("Bỏ chọn")}
               </Button>
             </>
           )}

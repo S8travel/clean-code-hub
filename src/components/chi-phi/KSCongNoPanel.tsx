@@ -5,6 +5,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { AlertCircle } from "lucide-react";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -34,6 +35,7 @@ interface Props {
 }
 
 export default function KSCongNoPanel({ nccId, doanId, value, onChange, maxAmount }: Props) {
+  useTranslate();
   const { data: congNoList = [], isLoading } = useCongNoByNCC(nccId);
   const cap = (conLai: number) =>
     maxAmount != null && maxAmount > 0 ? Math.min(conLai, maxAmount) : conLai;
@@ -42,13 +44,13 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange, maxAmoun
     const mapped = congNoList.map((r) => {
       const isPrepaid = r.loai === "tra_truoc";
       const tenDoan = isPrepaid
-        ? "Quỹ trả trước"
+        ? t("Quỹ trả trước")
         : r.ten_doan ||
           extractDoanFromGhiChu(r.ghi_chu) ||
-          (r.doan_id ? `#${r.doan_id}` : "Khoản dư");
+          (r.doan_id ? `#${r.doan_id}` : t("Khoản dư"));
       return {
         id: r.id,
-        label: `${isPrepaid ? "💰 Quỹ trả trước" : tenDoan} — ${fmt(r.so_tien_con_lai)} VND`,
+        label: `${isPrepaid ? `💰 ${t("Quỹ trả trước")}` : tenDoan} — ${fmt(r.so_tien_con_lai)} VND`,
         conLai: r.so_tien_con_lai,
         tenDoan,
         isPrepaid,
@@ -117,8 +119,8 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange, maxAmoun
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         <span className="font-medium">
           {hasPrepaid
-            ? "NCC trả trước — gợi ý cấn trừ vào quỹ"
-            : `Có ${options.length} khoản công nợ`}
+            ? t("NCC trả trước — gợi ý cấn trừ vào quỹ")
+            : `${t("Có")} ${options.length} ${t("khoản công nợ")}`}
         </span>
       </div>
 
@@ -127,10 +129,10 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange, maxAmoun
         onValueChange={handleSelectChange}
       >
         <SelectTrigger className="h-7 text-xs w-[220px]">
-          <span>{!value ? "— Không cấn trừ —" : options.find((o) => o.id === value.congNoId)?.label ?? "Chọn khoản cấn trừ..."}</span>
+          <span>{!value ? t("— Không cấn trừ —") : options.find((o) => o.id === value.congNoId)?.label ?? t("Chọn khoản cấn trừ...")}</span>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">— Không cấn trừ —</SelectItem>
+          <SelectItem value="none">{t("— Không cấn trừ —")}</SelectItem>
           {options.map((o) => (
             <SelectItem key={o.id} value={String(o.id)}>
               {o.label}
@@ -145,7 +147,7 @@ export default function KSCongNoPanel({ nccId, doanId, value, onChange, maxAmoun
             className="h-7 text-xs w-32"
             value={value.soTienCanTru || ""}
             onChange={(e) => handleAmountChange(e.target.value)}
-            placeholder="Số tiền"
+            placeholder={t("Số tiền")}
           />
           <span className="text-xs text-muted-foreground shrink-0">VND</span>
         </div>
