@@ -11,6 +11,7 @@ import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { BOOKING_CC, type BookingCcType } from "@/lib/booking-cc";
 import type { HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   row: HoaDonUNCRow;
@@ -209,7 +210,7 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
 
 async function fetchAsBase64(url: string, ncc: string | null, id: number) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Không tải được file UNC đã upload");
+  if (!res.ok) throw new Error(t("Không tải được file UNC đã upload"));
   const blob = await res.blob();
   const buf = await blob.arrayBuffer();
   const bytes = new Uint8Array(buf);
@@ -226,6 +227,7 @@ async function fetchAsBase64(url: string, ncc: string | null, id: number) {
 }
 
 export default function UncEmailModal({ row, open, onClose }: Props) {
+  useTranslate();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
 
@@ -327,11 +329,11 @@ ${canTruNote}
   const handleSendViaServer = async () => {
     const cleanTo = normalizeEmailList(emailTo);
     if (!cleanTo) {
-      toast.error("Vui lòng nhập email người nhận");
+      toast.error(t("Vui lòng nhập email người nhận"));
       return;
     }
     if (!row.unc_url) {
-      toast.error("Không tìm thấy file UNC đã upload");
+      toast.error(t("Không tìm thấy file UNC đã upload"));
       return;
     }
     setSending(true);
@@ -345,10 +347,10 @@ ${canTruNote}
         replyTo:  userProfile?.email || currentUserEmail || undefined,
         attachments: [attachment],
       });
-      toast.success("Đã gửi UNC cho nhà cung cấp");
+      toast.success(t("Đã gửi UNC cho nhà cung cấp"));
       onClose();
     } catch (err: unknown) {
-      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(`${t("Lỗi gửi email")}: ${errMsg(err) || t("Vui lòng thử lại")}`);
     } finally {
       setSending(false);
     }
@@ -365,7 +367,7 @@ ${canTruNote}
     <EmailPreviewModal
       open={open}
       onOpenChange={(v) => { if (!v) onClose(); }}
-      title={loadingTarget ? "Gửi UNC (đang tra email NCC...)" : "Gửi UNC cho nhà cung cấp"}
+      title={loadingTarget ? t("Gửi UNC (đang tra email NCC...)") : t("Gửi UNC cho nhà cung cấp")}
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}
