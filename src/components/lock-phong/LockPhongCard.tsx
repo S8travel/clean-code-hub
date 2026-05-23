@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
 import { isMailDirty } from "@/lib/mail-content-hash";
+import { t, useTranslate } from "@/lib/i18n";
 
 function buildLockPhongMailFields(hotel: LockPhongKSDisplay) {
   return {
@@ -42,13 +43,13 @@ function fmtDate(d: string) {
 
 function EmailStatusBadge({ status }: { status: string }) {
   if (status === "da_xac_nhan")
-    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">Đã xác nhận</Badge>;
+    return <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0">{t("Đã xác nhận")}</Badge>;
   if (status === "cho_xac_nhan")
-    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">Chờ xác nhận</Badge>;
+    return <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">{t("Chờ xác nhận")}</Badge>;
   if (status === "da_huy")
-    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">Đã hủy</Badge>;
+    return <Badge className="text-[10px] bg-red-100 text-red-700 border-0">{t("Đã hủy")}</Badge>;
   return (
-    <Badge className="text-[10px] bg-muted text-muted-foreground border-0">Chưa gửi</Badge>
+    <Badge className="text-[10px] bg-muted text-muted-foreground border-0">{t("Chưa gửi")}</Badge>
   );
 }
 
@@ -58,6 +59,7 @@ interface HotelRowProps {
 }
 
 function HotelRow({ hotel, lockPhong }: HotelRowProps) {
+  useTranslate();
   const [emailOpen, setEmailOpen] = useState(false);
   const updateEmailMut = useUpdateLockPhongKSEmail();
 
@@ -70,18 +72,18 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
           email_confirm_at: new Date().toISOString(),
         },
       });
-      toast.success("Đã đánh dấu xác nhận");
+      toast.success(t("Đã đánh dấu xác nhận"));
     } catch {
-      toast.error("Lỗi cập nhật trạng thái");
+      toast.error(t("Lỗi cập nhật trạng thái"));
     }
   };
 
   const handleCancel = async () => {
     try {
       await updateEmailMut.mutateAsync({ id: hotel.id, fields: { email_status: "da_huy" } });
-      toast.success("Đã hủy");
+      toast.success(t("Đã hủy"));
     } catch {
-      toast.error("Lỗi cập nhật trạng thái");
+      toast.error(t("Lỗi cập nhật trạng thái"));
     }
   };
 
@@ -89,7 +91,7 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
     try {
       await updateEmailMut.mutateAsync({ id: hotel.id, fields: { email_status: "chua_gui" } });
     } catch {
-      toast.error("Lỗi cập nhật trạng thái");
+      toast.error(t("Lỗi cập nhật trạng thái"));
     }
   };
 
@@ -110,7 +112,7 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
             <span>{fmtDate(hotel.check_in)}</span>
             <ArrowRight className="h-3 w-3" />
             <span>{fmtDate(hotel.check_out)}</span>
-            <span className="text-foreground font-medium">({hotel.so_dem} đêm)</span>
+            <span className="text-foreground font-medium">({hotel.so_dem} {t("đêm")})</span>
             {hotel.so_phong && (
               <>
                 <span className="text-muted-foreground/40">·</span>
@@ -125,9 +127,9 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
 
         <div className="flex items-center gap-1.5 shrink-0">
           {isLockPhongDirty(hotel) && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title={t("Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ")}>
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-              Có thay đổi
+              {t("Có thay đổi")}
             </span>
           )}
           <EmailStatusBadge status={hotel.email_status} />
@@ -138,7 +140,7 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
               size="sm"
               variant="ghost"
               className="h-6 w-6 p-0 text-teal-600 hover:text-teal-700"
-              title="Đánh dấu đã xác nhận"
+              title={t("Đánh dấu đã xác nhận")}
               onClick={handleConfirm}
               disabled={updateEmailMut.isPending}
             >
@@ -151,7 +153,7 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
               size="sm"
               variant="ghost"
               className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-              title="Hủy"
+              title={t("Hủy")}
               onClick={handleCancel}
               disabled={updateEmailMut.isPending}
             >
@@ -164,7 +166,7 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
               size="sm"
               variant="ghost"
               className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground text-[10px]"
-              title="Reset về chưa gửi"
+              title={t("Reset về chưa gửi")}
               onClick={handleReset}
               disabled={updateEmailMut.isPending}
             >
@@ -184,14 +186,14 @@ function HotelRow({ hotel, lockPhong }: HotelRowProps) {
                 : "text-muted-foreground"
             )}
             onClick={() => setEmailOpen(true)}
-            title={hotel.email_sent_at ? "Gửi email cập nhật — sẽ thread vào mail cũ" : undefined}
+            title={hotel.email_sent_at ? t("Gửi email cập nhật — sẽ thread vào mail cũ") : undefined}
           >
             <Mail className="h-3 w-3" />
             {hotel.email_status === "chua_gui"
-              ? "Gửi email"
+              ? t("Gửi email")
               : hotel.email_sent_at
-              ? "Gửi cập nhật"
-              : "Gửi lại"}
+              ? t("Gửi cập nhật")
+              : t("Gửi lại")}
           </Button>
         </div>
       </div>
@@ -215,15 +217,16 @@ interface Props {
 }
 
 export default function LockPhongCard({ entry, onEdit }: Props) {
+  useTranslate();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteMut = useDeleteLockPhong();
 
   const handleDelete = async () => {
     try {
       await deleteMut.mutateAsync(entry.id);
-      toast.success("Đã xóa lock phòng");
+      toast.success(t("Đã xóa lock phòng"));
     } catch {
-      toast.error("Lỗi khi xóa");
+      toast.error(t("Lỗi khi xóa"));
     }
   };
 
@@ -240,7 +243,7 @@ export default function LockPhongCard({ entry, onEdit }: Props) {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Ngày xuất phát: {fmtDate(entry.ngay_xuat_phat)}
+              {t("Ngày xuất phát")}: {fmtDate(entry.ngay_xuat_phat)}
             </p>
             {entry.ghi_chu && (
               <p className="text-xs text-muted-foreground italic mt-0.5">{entry.ghi_chu}</p>
@@ -253,7 +256,7 @@ export default function LockPhongCard({ entry, onEdit }: Props) {
               size="sm"
               className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
               onClick={() => onEdit(entry)}
-              title="Chỉnh sửa"
+              title={t("Chỉnh sửa")}
             >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
@@ -262,7 +265,7 @@ export default function LockPhongCard({ entry, onEdit }: Props) {
               size="sm"
               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
               onClick={() => setDeleteOpen(true)}
-              title="Xóa"
+              title={t("Xóa")}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -272,7 +275,7 @@ export default function LockPhongCard({ entry, onEdit }: Props) {
         {/* Hotels */}
         <div className="px-4">
           {entry.hotels.length === 0 ? (
-            <p className="py-3 text-xs text-muted-foreground">Chưa có khách sạn nào</p>
+            <p className="py-3 text-xs text-muted-foreground">{t("Chưa có khách sạn nào")}</p>
           ) : (
             entry.hotels.map((hotel) => (
               <HotelRow key={hotel.id} hotel={hotel} lockPhong={entry} />
@@ -287,7 +290,7 @@ export default function LockPhongCard({ entry, onEdit }: Props) {
         onConfirm={handleDelete}
         onCancel={() => setDeleteOpen(false)}
         isDeleting={deleteMut.isPending}
-        description={`Lock phòng "${entry.ten_doan}" sẽ bị xóa vĩnh viễn cùng toàn bộ dữ liệu khách sạn liên quan.`}
+        description={`${t("Lock phòng")} "${entry.ten_doan}" ${t("sẽ bị xóa vĩnh viễn cùng toàn bộ dữ liệu khách sạn liên quan.")}`}
       />
     </>
   );

@@ -15,6 +15,7 @@ import {
   type CongViecRow,
 } from "@/hooks/use-cong-viec";
 import { PhanViecEditModal } from "@/components/doan/PhanViecEditModal";
+import { t, useTranslate } from "@/lib/i18n";
 
 const UU_TIEN_LABEL: Record<string, string> = {
   khan_cap: "🔴 Khẩn cấp", cao: "🟠 Cao",
@@ -36,13 +37,13 @@ const PV_TT_LABEL: Record<string, string> = {
   huy: "Đã huỷ", khong_can: "Không cần",
 };
 
-const TRANG_THAI_CFG: Record<string, { label: string; cls: string }> = {
-  cho_nhan:   { label: "Chờ nhận",   cls: "text-blue-600" },
-  dang_lam:   { label: "Đang làm",   cls: "text-amber-600" },
-  hoan_thanh: { label: "Hoàn thành", cls: "text-green-600" },
-  tu_choi:    { label: "Từ chối",    cls: "text-red-600" },
-  huy:        { label: "Đã huỷ",     cls: "text-muted-foreground line-through" },
-  khong_can:  { label: "Không cần",  cls: "text-muted-foreground" },
+const TRANG_THAI_CFG: Record<string, { labelKey: string; cls: string }> = {
+  cho_nhan:   { labelKey: "Chờ nhận",   cls: "text-blue-600" },
+  dang_lam:   { labelKey: "Đang làm",   cls: "text-amber-600" },
+  hoan_thanh: { labelKey: "Hoàn thành", cls: "text-green-600" },
+  tu_choi:    { labelKey: "Từ chối",    cls: "text-red-600" },
+  huy:        { labelKey: "Đã huỷ",     cls: "text-muted-foreground line-through" },
+  khong_can:  { labelKey: "Không cần",  cls: "text-muted-foreground" },
 };
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -63,6 +64,7 @@ interface Props {
 }
 
 export default function CongViecDetail({ task, open, onClose, userId, userName }: Props) {
+  useTranslate();
   const { data: comments = [] } = useCongViecComments(task?.id ?? null);
   const updateStatus = useUpdateCongViecStatus();
   const createComment = useCreateCongViecComment();
@@ -85,13 +87,13 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
   const isAssigner = task.nguoi_giao === userId;
   const isPv = task.loai_viec.startsWith("pv_");
   const isPhanCong = task.loai_viec === "pv_phancong";
-  const ttCfg = TRANG_THAI_CFG[task.trang_thai] ?? { label: task.trang_thai, cls: "text-muted-foreground" };
-  const ttLabel = isPv ? (PV_TT_LABEL[task.trang_thai] ?? ttCfg.label) : ttCfg.label;
+  const ttCfg = TRANG_THAI_CFG[task.trang_thai] ?? { labelKey: task.trang_thai, cls: "text-muted-foreground" };
+  const ttLabel = isPv ? t(PV_TT_LABEL[task.trang_thai] ?? ttCfg.labelKey) : t(ttCfg.labelKey);
 
   const handleUpdateStatus = async (newStatus: "dang_lam" | "hoan_thanh" | "tu_choi") => {
     const needsNote = newStatus === "hoan_thanh" || newStatus === "tu_choi";
     if (needsNote && !ghiChu.trim()) {
-      toast.error("Vui lòng nhập ghi chú");
+      toast.error(t("Vui lòng nhập ghi chú"));
       return;
     }
     try {
@@ -105,11 +107,11 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
         tieu_de: task.tieu_de,
         ten_nguoi_nhan: task.ten_nguoi_nhan ?? userName,
       });
-      toast.success("Đã cập nhật trạng thái");
+      toast.success(t("Đã cập nhật trạng thái"));
       setGhiChu("");
       setActionMode(null);
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || ""));
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
     }
   };
 
@@ -127,7 +129,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
       });
       setCommentText("");
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || ""));
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
     }
   };
 
@@ -147,20 +149,20 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-xs">
           {/* Metadata grid */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            <InfoRow label="Loại việc" value={LOAI_LABEL[task.loai_viec] ?? task.loai_viec} />
-            <InfoRow label="Độ ưu tiên" value={UU_TIEN_LABEL[task.do_uu_tien] ?? task.do_uu_tien} />
-            <InfoRow label="Người giao" value={task.ten_nguoi_giao ?? "—"} />
-            <InfoRow label="Người nhận" value={task.ten_nguoi_nhan ?? "—"} />
+            <InfoRow label={t("Loại việc")} value={t(LOAI_LABEL[task.loai_viec] ?? task.loai_viec)} />
+            <InfoRow label={t("Độ ưu tiên")} value={t(UU_TIEN_LABEL[task.do_uu_tien] ?? task.do_uu_tien)} />
+            <InfoRow label={t("Người giao")} value={task.ten_nguoi_giao ?? "—"} />
+            <InfoRow label={t("Người nhận")} value={task.ten_nguoi_nhan ?? "—"} />
             {task.han_xu_ly && (
-              <InfoRow label="Hạn xử lý" value={format(parseISO(task.han_xu_ly), "dd/MM/yyyy")} />
+              <InfoRow label={t("Hạn xử lý")} value={format(parseISO(task.han_xu_ly), "dd/MM/yyyy")} />
             )}
-            {task.ten_doan && <InfoRow label="Đoàn" value={task.ten_doan} />}
+            {task.ten_doan && <InfoRow label={t("Đoàn")} value={task.ten_doan} />}
           </div>
 
           {/* Description */}
           {task.mo_ta && (
             <div className="space-y-1">
-              <p className="text-[10px] text-muted-foreground font-medium">Mô tả</p>
+              <p className="text-[10px] text-muted-foreground font-medium">{t("Mô tả")}</p>
               <p className="whitespace-pre-wrap leading-relaxed">{task.mo_ta}</p>
             </div>
           )}
@@ -168,7 +170,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
           {/* Result notes */}
           {task.ghi_chu_ket_qua && (
             <div className="rounded-md bg-muted/40 px-3 py-2 space-y-1">
-              <p className="text-[10px] text-muted-foreground font-medium">Kết quả / Ghi chú</p>
+              <p className="text-[10px] text-muted-foreground font-medium">{t("Kết quả / Ghi chú")}</p>
               <p className="whitespace-pre-wrap leading-relaxed">{task.ghi_chu_ket_qua}</p>
             </div>
           )}
@@ -181,21 +183,21 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
                   <Button size="sm" className="text-xs flex-1"
                     disabled={updateStatus.isPending}
                     onClick={() => handleUpdateStatus("dang_lam")}>
-                    {updateStatus.isPending ? "..." : "Xác nhận"}
+                    {updateStatus.isPending ? "..." : t("Xác nhận")}
                   </Button>
                   <Button size="sm" variant="outline"
                     className="text-xs flex-1 text-red-600 border-red-300 hover:bg-red-50"
                     onClick={() => setActionMode("tu_choi")}>
-                    Không nhận
+                    {t("Không nhận")}
                   </Button>
                 </div>
               )}
               {actionMode === "tu_choi" && (
                 <div className="space-y-2 rounded-md border p-3">
-                  <p className="font-medium text-xs">Lý do không nhận *</p>
+                  <p className="font-medium text-xs">{t("Lý do không nhận")} *</p>
                   <Textarea
                     className="text-xs min-h-[72px]"
-                    placeholder="Vì sao bạn không nhận việc này..."
+                    placeholder={t("Vì sao bạn không nhận việc này...")}
                     value={ghiChu}
                     onChange={(e) => setGhiChu(e.target.value)}
                     autoFocus
@@ -204,11 +206,11 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
                     <Button size="sm" className="text-xs flex-1 bg-red-600 hover:bg-red-700"
                       disabled={updateStatus.isPending}
                       onClick={() => handleUpdateStatus("tu_choi")}>
-                      {updateStatus.isPending ? "Đang lưu..." : "Xác nhận không nhận"}
+                      {updateStatus.isPending ? t("Đang lưu...") : t("Xác nhận không nhận")}
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs"
                       onClick={() => { setActionMode(null); setGhiChu(""); }}>
-                      Hủy
+                      {t("Hủy")}
                     </Button>
                   </div>
                 </div>
@@ -219,14 +221,14 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
           {/* Điều phối: pv_phancong → mở modal phân việc (trạng thái hiện tại) */}
           {isPhanCong && isRecipient && (task.trang_thai === "cho_nhan" || task.trang_thai === "dang_lam") && (
             <Button size="sm" className="text-xs w-full" onClick={() => setPvEditOpen(true)}>
-              Mở phân việc
+              {t("Mở phân việc")}
             </Button>
           )}
           {isPhanCong && task.trang_thai !== "cho_nhan" && task.trang_thai !== "dang_lam" && (
             <p className="text-xs text-muted-foreground italic rounded-md bg-muted/40 px-3 py-2">
               {task.trang_thai === "huy"
-                ? "Đoàn đã huỷ — không cần phân việc nữa."
-                : "Phân công đã xử lý xong."}
+                ? t("Đoàn đã huỷ — không cần phân việc nữa.")
+                : t("Phân công đã xử lý xong.")}
             </p>
           )}
 
@@ -238,7 +240,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
               onClick={() => handleUpdateStatus("dang_lam")}
               disabled={updateStatus.isPending}
             >
-              {updateStatus.isPending ? "Đang xử lý..." : "Nhận việc"}
+              {updateStatus.isPending ? t("Đang xử lý...") : t("Nhận việc")}
             </Button>
           )}
 
@@ -247,25 +249,25 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
               {!actionMode && (
                 <div className="flex gap-2">
                   <Button size="sm" className="text-xs flex-1" onClick={() => setActionMode("hoan_thanh")}>
-                    Hoàn thành
+                    {t("Hoàn thành")}
                   </Button>
                   <Button
                     size="sm" variant="outline"
                     className="text-xs flex-1 text-red-600 border-red-300 hover:bg-red-50"
                     onClick={() => setActionMode("tu_choi")}
                   >
-                    Không thể làm
+                    {t("Không thể làm")}
                   </Button>
                 </div>
               )}
               {actionMode && (
                 <div className="space-y-2 rounded-md border p-3">
                   <p className="font-medium text-xs">
-                    {actionMode === "hoan_thanh" ? "Ghi chú kết quả *" : "Lý do từ chối *"}
+                    {actionMode === "hoan_thanh" ? t("Ghi chú kết quả *") : t("Lý do từ chối *")}
                   </p>
                   <Textarea
                     className="text-xs min-h-[72px]"
-                    placeholder={actionMode === "hoan_thanh" ? "Mô tả kết quả đã hoàn thành..." : "Lý do không thể thực hiện..."}
+                    placeholder={actionMode === "hoan_thanh" ? t("Mô tả kết quả đã hoàn thành...") : t("Lý do không thể thực hiện...")}
                     value={ghiChu}
                     onChange={(e) => setGhiChu(e.target.value)}
                     autoFocus
@@ -277,11 +279,11 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
                       onClick={() => handleUpdateStatus(actionMode)}
                       disabled={updateStatus.isPending}
                     >
-                      {updateStatus.isPending ? "Đang lưu..." : actionMode === "hoan_thanh" ? "Xác nhận hoàn thành" : "Xác nhận từ chối"}
+                      {updateStatus.isPending ? t("Đang lưu...") : actionMode === "hoan_thanh" ? t("Xác nhận hoàn thành") : t("Xác nhận từ chối")}
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs"
                       onClick={() => { setActionMode(null); setGhiChu(""); }}>
-                      Hủy
+                      {t("Hủy")}
                     </Button>
                   </div>
                 </div>
@@ -298,26 +300,26 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
                   className="text-xs w-full text-muted-foreground"
                   onClick={() => setActionMode("hoan_thanh")}
                 >
-                  Đóng task (force hoàn thành)
+                  {t("Đóng task (force hoàn thành)")}
                 </Button>
               )}
               {actionMode && (
                 <div className="space-y-2 rounded-md border p-3">
-                  <p className="font-medium text-xs">Ghi chú (tùy chọn)</p>
+                  <p className="font-medium text-xs">{t("Ghi chú (tùy chọn)")}</p>
                   <Textarea
                     className="text-xs min-h-[60px]"
                     value={ghiChu}
                     onChange={(e) => setGhiChu(e.target.value)}
-                    placeholder="Lý do đóng sớm..."
+                    placeholder={t("Lý do đóng sớm...")}
                   />
                   <div className="flex gap-2">
                     <Button size="sm" className="text-xs flex-1"
                       onClick={() => handleUpdateStatus("hoan_thanh")} disabled={updateStatus.isPending}>
-                      {updateStatus.isPending ? "Đang lưu..." : "Xác nhận đóng"}
+                      {updateStatus.isPending ? t("Đang lưu...") : t("Xác nhận đóng")}
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs"
                       onClick={() => { setActionMode(null); setGhiChu(""); }}>
-                      Hủy
+                      {t("Hủy")}
                     </Button>
                   </div>
                 </div>
@@ -328,10 +330,10 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
           {/* Comment thread */}
           <div className="space-y-2 border-t pt-3">
             <p className="text-[10px] text-muted-foreground font-medium">
-              Bình luận ({comments.length})
+              {t("Bình luận")} ({comments.length})
             </p>
             {comments.length === 0 && (
-              <p className="text-[11px] text-muted-foreground/60">Chưa có bình luận</p>
+              <p className="text-[11px] text-muted-foreground/60">{t("Chưa có bình luận")}</p>
             )}
             {comments.map((c) => (
               <div
@@ -357,7 +359,7 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
         <div className="border-t px-4 py-3 flex gap-2 items-end">
           <Textarea
             className="text-xs min-h-[36px] max-h-[96px] resize-none flex-1"
-            placeholder="Nhập bình luận... (Enter để gửi)"
+            placeholder={t("Nhập bình luận... (Enter để gửi)")}
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
             onKeyDown={(e) => {

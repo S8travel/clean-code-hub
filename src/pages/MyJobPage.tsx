@@ -34,6 +34,7 @@ import { errMsg } from "@/lib/error";
 import { CheckCircle2, Circle, StickyNote, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { t, useTranslate } from "@/lib/i18n";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmtDate(d: string | null | undefined) {
@@ -43,38 +44,38 @@ function fmtDate(d: string | null | undefined) {
 
 // ── KS overall status ─────────────────────────────────────────────────────────
 function ksOverallStatus(dt: string, fn: string) {
-  if (fn === "ks_xac_nhan_huy")     return { label: "✗ Đã hủy",           cls: "text-red-600" };
-  if (fn === "cho_ks_xac_nhan_huy") return { label: "⏳ Chờ XN hủy",      cls: "text-orange-600" };
-  if (fn === "ks_xac_nhan_final")   return { label: "✓ Final",             cls: "text-purple-600" };
-  if (fn === "cho_ks_xac_nhan")     return { label: "⏳ Chờ XN Final",     cls: "text-green-600" };
-  if (dt === "ks_xac_nhan")         return { label: "✓ Đặt trước XN",      cls: "text-teal-600" };
-  if (dt === "cho_ks_xac_nhan")     return { label: "⏳ Chờ XN đặt trước", cls: "text-blue-600" };
-  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+  if (fn === "ks_xac_nhan_huy")     return { label: t("✗ Đã hủy"),           cls: "text-red-600" };
+  if (fn === "cho_ks_xac_nhan_huy") return { label: t("⏳ Chờ XN hủy"),      cls: "text-orange-600" };
+  if (fn === "ks_xac_nhan_final")   return { label: t("✓ Final"),             cls: "text-purple-600" };
+  if (fn === "cho_ks_xac_nhan")     return { label: t("⏳ Chờ XN Final"),     cls: "text-green-600" };
+  if (dt === "ks_xac_nhan")         return { label: t("✓ Đặt trước XN"),      cls: "text-teal-600" };
+  if (dt === "cho_ks_xac_nhan")     return { label: t("⏳ Chờ XN đặt trước"), cls: "text-blue-600" };
+  return { label: t("○ Chưa gửi"), cls: "text-muted-foreground" };
 }
 
 function nhStatusLabel(status: string) {
-  if (status === "da_gui") return { label: "✓ Đã gửi", cls: "text-green-600" };
-  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+  if (status === "da_gui") return { label: t("✓ Đã gửi"), cls: "text-green-600" };
+  return { label: t("○ Chưa gửi"), cls: "text-muted-foreground" };
 }
 
 function dvStatusLabel(status: string) {
-  if (status === "da_xac_nhan")  return { label: "✓ Đã XN",   cls: "text-green-600" };
-  if (status === "cho_xac_nhan") return { label: "⏳ Chờ XN", cls: "text-amber-600" };
-  if (status === "da_huy")       return { label: "✗ Đã hủy",  cls: "text-red-600" };
-  return { label: "○ Chưa gửi", cls: "text-muted-foreground" };
+  if (status === "da_xac_nhan")  return { label: t("✓ Đã XN"),   cls: "text-green-600" };
+  if (status === "cho_xac_nhan") return { label: t("⏳ Chờ XN"), cls: "text-amber-600" };
+  if (status === "da_huy")       return { label: t("✗ Đã hủy"),  cls: "text-red-600" };
+  return { label: t("○ Chưa gửi"), cls: "text-muted-foreground" };
 }
 
 function dnttDuyetLabel(status: string) {
-  if (status === "da_duyet") return { label: "✓ Đã duyệt",  cls: "text-green-600" };
-  if (status === "cho_duyet") return { label: "⏳ Chờ duyệt", cls: "text-amber-600" };
-  if (status === "tu_choi")   return { label: "✗ Từ chối",   cls: "text-red-600" };
+  if (status === "da_duyet") return { label: t("✓ Đã duyệt"),  cls: "text-green-600" };
+  if (status === "cho_duyet") return { label: t("⏳ Chờ duyệt"), cls: "text-amber-600" };
+  if (status === "tu_choi")   return { label: t("✗ Từ chối"),   cls: "text-red-600" };
   return { label: status, cls: "text-muted-foreground" };
 }
 
 function ttLabel(status: string) {
-  if (status === "paid")    return { label: "✓ Đã TT",   cls: "text-green-600" };
-  if (status === "partial") return { label: "Một phần",  cls: "text-amber-600" };
-  return { label: "○ Chưa TT", cls: "text-muted-foreground" };
+  if (status === "paid")    return { label: t("✓ Đã TT"),   cls: "text-green-600" };
+  if (status === "partial") return { label: t("Một phần"),  cls: "text-amber-600" };
+  return { label: t("○ Chưa TT"), cls: "text-muted-foreground" };
 }
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
@@ -167,6 +168,7 @@ type TodoItem = {
 };
 
 // ── Deadline helpers ──────────────────────────────────────────────────────────
+// label là acronym (KS, NH, DV) → KHÔNG wrap.
 const TYPE_CFG = {
   ks: { icon: Hotel,    label: "KS",  cls: "bg-blue-100 text-blue-700" },
   nh: { icon: Utensils, label: "NH",  cls: "bg-orange-100 text-orange-700" },
@@ -183,10 +185,10 @@ function deadlineGroup(deadline: string): "overdue" | "today" | "week" | "later"
 }
 
 const GROUP_CFG = {
-  overdue: { label: "Quá hạn",     cls: "text-red-600",   bg: "bg-red-50 border-red-200" },
-  today:   { label: "Hôm nay",     cls: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
-  week:    { label: "7 ngày tới",  cls: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
-  later:   { label: "Sau đó",      cls: "text-muted-foreground", bg: "bg-muted/30 border-border" },
+  overdue: { labelKey: "Quá hạn",     cls: "text-red-600",   bg: "bg-red-50 border-red-200" },
+  today:   { labelKey: "Hôm nay",     cls: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  week:    { labelKey: "7 ngày tới",  cls: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
+  later:   { labelKey: "Sau đó",      cls: "text-muted-foreground", bg: "bg-muted/30 border-border" },
 };
 
 // ── Scope helpers ─────────────────────────────────────────────────────────────
@@ -208,6 +210,7 @@ function filterDNTTByScope(items: DNTTItem[], scope: Set<string>): DNTTItem[] {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function MyJobPage() {
+  useTranslate();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: allDoan = [], isLoading: loadingDoan } = useDoanList();
@@ -328,7 +331,7 @@ export default function MyJobPage() {
 
   const { data: congViecTasks = [] } = useCongViecList(uid);
   const giaoViecPending = congViecTasks.filter(
-    (t) => t.nguoi_nhan === uid && (t.trang_thai === "cho_nhan" || t.trang_thai === "dang_lam"),
+    (task) => task.nguoi_nhan === uid && (task.trang_thai === "cho_nhan" || task.trang_thai === "dang_lam"),
   ).length;
 
   const { data: dnttNeedApproval = [] } = useDNTTNeedingApproval(uid);
@@ -438,17 +441,17 @@ export default function MyJobPage() {
 
       // HIGH: sắp đi trong 3 ngày mà còn việc
       if (daysLeft !== null && daysLeft >= 0 && daysLeft <= 3 && hasBookingIssue) {
-        items.push({ priority: "high", label: `Ngày đi còn ${daysLeft} ngày — còn booking chưa xong`, doanName: name, doanId: id });
+        items.push({ priority: "high", label: `${t("Ngày đi còn")} ${daysLeft} ${t("ngày — còn booking chưa xong")}`, doanName: name, doanId: id });
       } else {
         // MEDIUM: booking cụ thể chưa xong
-        if (ksNotFinal > 0) items.push({ priority: "medium", label: `Booking KS: ${ksNotFinal} chỗ chưa final`, doanName: name, doanId: id });
-        if (nhNotSent > 0)  items.push({ priority: "medium", label: `Booking NH: ${nhNotSent} bữa chưa gửi`, doanName: name, doanId: id });
-        if (dvNotXN > 0)    items.push({ priority: "medium", label: `Booking DV: ${dvNotXN} dịch vụ chưa xác nhận`, doanName: name, doanId: id });
+        if (ksNotFinal > 0) items.push({ priority: "medium", label: `${t("Booking KS")}: ${ksNotFinal} ${t("chỗ chưa final")}`, doanName: name, doanId: id });
+        if (nhNotSent > 0)  items.push({ priority: "medium", label: `${t("Booking NH")}: ${nhNotSent} ${t("bữa chưa gửi")}`, doanName: name, doanId: id });
+        if (dvNotXN > 0)    items.push({ priority: "medium", label: `${t("Booking DV")}: ${dvNotXN} ${t("dịch vụ chưa xác nhận")}`, doanName: name, doanId: id });
         // MEDIUM: ĐNTT chờ duyệt
-        if (dnttPending > 0) items.push({ priority: "medium", label: `${dnttPending} phiếu ĐNTT đang chờ duyệt`, doanName: name, doanId: id });
+        if (dnttPending > 0) items.push({ priority: "medium", label: `${dnttPending} ${t("phiếu ĐNTT đang chờ duyệt")}`, doanName: name, doanId: id });
         // LOW: sắp đi trong 7 ngày
         if (daysLeft !== null && daysLeft >= 0 && daysLeft <= 7 && !hasBookingIssue) {
-          items.push({ priority: "low", label: `Ngày khởi hành còn ${daysLeft} ngày`, doanName: name, doanId: id });
+          items.push({ priority: "low", label: `${t("Ngày khởi hành còn")} ${daysLeft} ${t("ngày")}`, doanName: name, doanId: id });
         }
       }
     }
@@ -457,7 +460,7 @@ export default function MyJobPage() {
     for (const d of dnttNeedApproval) {
       items.push({
         priority: "high",
-        label: `ĐNTT cần duyệt cấp ${d.cap}: ${d.mo_ta ?? "—"} (${d.so_tien.toLocaleString("vi-VN")} ₫)`,
+        label: `${t("ĐNTT cần duyệt cấp")} ${d.cap}: ${d.mo_ta ?? "—"} (${d.so_tien.toLocaleString("vi-VN")} ₫)`,
         doanName: d.ten_doan,
         doanId: d.doan_id ?? 0,
         url: "/de-nghi-thanh-toan",
@@ -489,21 +492,21 @@ export default function MyJobPage() {
         <div>
           <h1 className="text-lg font-semibold flex items-center gap-2">
             <BriefcaseBusiness className="h-5 w-5 text-primary" />
-            Công việc của tôi
+            {t("Công việc của tôi")}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Xin chào, <span className="font-medium text-foreground">{user?.ho_ten ?? "—"}</span>
-            {user?.role && <> · {ROLE_LABELS[user.role] ?? user.role}</>}
-            {user?.bo_phan && <> · {BO_PHAN_LABELS[user.bo_phan] ?? user.bo_phan}</>}
+            {t("Xin chào")}, <span className="font-medium text-foreground">{user?.ho_ten ?? "—"}</span>
+            {user?.role && <> · {t(ROLE_LABELS[user.role] ?? user.role)}</>}
+            {user?.bo_phan && <> · {t(BO_PHAN_LABELS[user.bo_phan] ?? user.bo_phan)}</>}
           </p>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="tong-quan">
           <TabsList className="h-9">
-            <TabsTrigger value="tong-quan" className="text-xs">Tổng quan</TabsTrigger>
+            <TabsTrigger value="tong-quan" className="text-xs">{t("Tổng quan")}</TabsTrigger>
             <TabsTrigger value="deadline" className="text-xs">
-              Deadline
+              {t("Deadline")}
               {filteredDeadlines.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
                   {filteredDeadlines.filter((d) => deadlineGroup(d.deadline) !== "later").length || filteredDeadlines.length}
@@ -511,7 +514,7 @@ export default function MyJobPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="giao-viec" className="text-xs">
-              Giao việc
+              {t("Giao việc")}
               {giaoViecPending > 0 && (
                 <span className="ml-1.5 rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
                   {giaoViecPending}
@@ -529,30 +532,30 @@ export default function MyJobPage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
-              label="Đoàn đang chạy"
+              label={t("Đoàn đang chạy")}
               value={stats.dangChay}
-              sub="được phân công"
+              sub={t("được phân công")}
               icon={BriefcaseBusiness}
               cls="bg-primary/10"
             />
             <StatCard
-              label="Sắp khởi hành"
+              label={t("Sắp khởi hành")}
               value={stats.sapKhoiHanh}
-              sub="trong 7 ngày tới"
+              sub={t("trong 7 ngày tới")}
               icon={CalendarClock}
               cls="bg-orange-100"
             />
             <StatCard
-              label="Chờ đặt booking"
+              label={t("Chờ đặt booking")}
               value={stats.choBooking}
-              sub="đoàn còn việc chưa xong"
+              sub={t("đoàn còn việc chưa xong")}
               icon={ClipboardList}
               cls={stats.choBooking > 0 ? "bg-amber-500" : "bg-green-100"}
             />
             <StatCard
-              label="Tổng khách tháng này"
+              label={t("Tổng khách tháng này")}
               value={stats.tongKhachThang}
-              sub="từ đoàn của tôi"
+              sub={t("từ đoàn của tôi")}
               icon={Users}
               cls="bg-teal-100"
             />
@@ -562,33 +565,33 @@ export default function MyJobPage() {
         {/* Section: Đoàn của tôi */}
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="text-sm font-semibold">Đoàn được phân công</h2>
+            <h2 className="text-sm font-semibold">{t("Đoàn được phân công")}</h2>
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Tìm tên đoàn..."
+                placeholder={t("Tìm tên đoàn...")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-8 text-xs w-44"
               />
               <Select value={trangThai} onValueChange={setTrangThai}>
                 <SelectTrigger className="h-8 text-xs w-36">
-                  <span>{trangThai === "dang_chay" ? "Chờ xác nhận" : trangThai === "hoan_thanh" ? "Hoàn thành" : trangThai === "huy" ? "Đã hủy" : "Tất cả"}</span>
+                  <span>{trangThai === "dang_chay" ? t("Chờ xác nhận") : trangThai === "hoan_thanh" ? t("Hoàn thành") : trangThai === "huy" ? t("Đã hủy") : t("Tất cả")}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dang_chay">Chờ xác nhận</SelectItem>
-                  <SelectItem value="hoan_thanh">Hoàn thành</SelectItem>
-                  <SelectItem value="huy">Đã hủy</SelectItem>
-                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="dang_chay">{t("Chờ xác nhận")}</SelectItem>
+                  <SelectItem value="hoan_thanh">{t("Hoàn thành")}</SelectItem>
+                  <SelectItem value="huy">{t("Đã hủy")}</SelectItem>
+                  <SelectItem value="all">{t("Tất cả")}</SelectItem>
                 </SelectContent>
               </Select>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">{rows.length} đoàn</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{rows.length} {t("đoàn")}</span>
             </div>
           </div>
 
           {!isLoading && rows.length > 0 && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                Hiển thị {(currentDoanPage - 1) * DOAN_PAGE_SIZE + 1}–{Math.min(currentDoanPage * DOAN_PAGE_SIZE, rows.length)} / {rows.length}
+                {t("Hiển thị")} {(currentDoanPage - 1) * DOAN_PAGE_SIZE + 1}–{Math.min(currentDoanPage * DOAN_PAGE_SIZE, rows.length)} / {rows.length}
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -597,15 +600,15 @@ export default function MyJobPage() {
                   className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
                 >
                   <ChevronLeft className="h-3 w-3" />
-                  Trước
+                  {t("Trước")}
                 </button>
-                <span className="px-2 text-muted-foreground">Trang {currentDoanPage} / {totalDoanPages}</span>
+                <span className="px-2 text-muted-foreground">{t("Trang")} {currentDoanPage} / {totalDoanPages}</span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalDoanPages, p + 1))}
                   disabled={currentDoanPage >= totalDoanPages}
                   className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
                 >
-                  Sau
+                  {t("Sau")}
                   <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
@@ -621,15 +624,15 @@ export default function MyJobPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#E6F1FB] text-xs">
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Tên đoàn</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Ngày đi</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">Ngày về</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">KH</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Booking KS</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Booking NH</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Booking DV</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">ĐNTT</TableHead>
-                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">Thanh toán</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">{t("Tên đoàn")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">{t("Ngày đi")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap">{t("Ngày về")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">{t("KH")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">{t("Booking KS")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">{t("Booking NH")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">{t("Booking DV")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">{t("ĐNTT")}</TableHead>
+                    <TableHead className="text-xs font-semibold py-2 px-3 whitespace-nowrap text-center">{t("Thanh toán")}</TableHead>
                     <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
@@ -637,7 +640,7 @@ export default function MyJobPage() {
                   {rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
-                        Không có đoàn nào
+                        {t("Không có đoàn nào")}
                       </TableCell>
                     </TableRow>
                   ) : pageRows.map(({ g, ks, ksFinal, nh, nhSent, dv, dvXN, dntt, dnttDuyet, dnttDaTT }) => (
@@ -665,7 +668,7 @@ export default function MyJobPage() {
                         <InfoTooltip
                           trigger={
                             <StatusBadge done={ksFinal} total={ks.length}>
-                              {ksFinal}/{ks.length} Final
+                              {ksFinal}/{ks.length} {t("Final")}
                             </StatusBadge>
                           }
                           items={ks.map((r) => {
@@ -680,14 +683,14 @@ export default function MyJobPage() {
                         <InfoTooltip
                           trigger={
                             <StatusBadge done={nhSent} total={nh.length}>
-                              {nhSent}/{nh.length} gửi
+                              {nhSent}/{nh.length} {t("gửi")}
                             </StatusBadge>
                           }
                           items={nh.map((r) => {
                             const s = nhStatusLabel(r.booking_status);
                             return {
                               label: r.nha_hang_ten ?? "—",
-                              sub: r.bua_an === "trua" ? "Trưa" : "Tối",
+                              sub: r.bua_an === "trua" ? t("Trưa") : t("Tối"),
                               statusLabel: s.label, statusCls: s.cls,
                             };
                           })}
@@ -699,7 +702,7 @@ export default function MyJobPage() {
                         <InfoTooltip
                           trigger={
                             <StatusBadge done={dvXN} total={dv.length} colorMode="traffic">
-                              {dvXN}/{dv.length} XN
+                              {dvXN}/{dv.length} {t("XN")}
                             </StatusBadge>
                           }
                           items={dv.map((r) => {
@@ -714,7 +717,7 @@ export default function MyJobPage() {
                         <InfoTooltip
                           trigger={
                             <StatusBadge done={dnttDuyet} total={dntt.length}>
-                              {dnttDuyet}/{dntt.length} duyệt
+                              {dnttDuyet}/{dntt.length} {t("duyệt")}
                             </StatusBadge>
                           }
                           items={dntt.map((r) => {
@@ -729,7 +732,7 @@ export default function MyJobPage() {
                         <InfoTooltip
                           trigger={
                             <StatusBadge done={dnttDaTT} total={dntt.length}>
-                              {dnttDaTT}/{dntt.length} TT
+                              {dnttDaTT}/{dntt.length} {t("TT")}
                             </StatusBadge>
                           }
                           items={dntt.map((r) => {
@@ -749,7 +752,7 @@ export default function MyJobPage() {
                                 <EyeOff className="h-3.5 w-3.5" />
                               </button>
                             </TooltipTrigger>
-                            <TooltipContent side="left">Hủy theo dõi</TooltipContent>
+                            <TooltipContent side="left">{t("Hủy theo dõi")}</TooltipContent>
                           </Tooltip>
                         )}
                       </TableCell>
@@ -765,7 +768,7 @@ export default function MyJobPage() {
         {ghiChuLogs.length > 0 && (
           <div className="space-y-2">
             <h2 className="text-sm font-semibold flex items-center gap-1.5">
-              <StickyNote className="h-4 w-4 text-blue-500" /> Ghi chú của tôi
+              <StickyNote className="h-4 w-4 text-blue-500" /> {t("Ghi chú của tôi")}
             </h2>
             {ghiChuLogs.map((log) => (
               <div
@@ -777,7 +780,7 @@ export default function MyJobPage() {
                     onClick={() => navigate(`/doan/${log.doan_id}?tab=log`)}
                     className="text-xs font-medium text-blue-600 hover:underline"
                   >
-                    {log.doan_ten ?? `Đoàn #${log.doan_id}`}
+                    {log.doan_ten ?? `${t("Đoàn")} #${log.doan_id}`}
                   </button>
                   <p className="text-xs text-foreground mt-0.5">{log.tieu_de}</p>
                   {log.noi_dung && <p className="text-xs text-muted-foreground">{log.noi_dung}</p>}
@@ -785,7 +788,7 @@ export default function MyJobPage() {
                 <button
                   onClick={() => toggleResolved.mutate({ id: log.id, doan_id: log.doan_id, loai: "ghi_chu", is_resolved: true })}
                   className="shrink-0 text-muted-foreground hover:text-green-600 transition-colors"
-                  title="Đánh dấu đã xong"
+                  title={t("Đánh dấu đã xong")}
                 >
                   <Circle className="h-4 w-4" />
                 </button>
@@ -796,11 +799,11 @@ export default function MyJobPage() {
 
         {/* Section: Việc cần xử lý */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold">Việc cần xử lý</h2>
+          <h2 className="text-sm font-semibold">{t("Việc cần xử lý")}</h2>
           {!isLoading && todos.length > 0 && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                Hiển thị {(currentTodoPage - 1) * TODO_PAGE_SIZE + 1}–{Math.min(currentTodoPage * TODO_PAGE_SIZE, todos.length)} / {todos.length}
+                {t("Hiển thị")} {(currentTodoPage - 1) * TODO_PAGE_SIZE + 1}–{Math.min(currentTodoPage * TODO_PAGE_SIZE, todos.length)} / {todos.length}
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -809,15 +812,15 @@ export default function MyJobPage() {
                   className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
                 >
                   <ChevronLeft className="h-3 w-3" />
-                  Trước
+                  {t("Trước")}
                 </button>
-                <span className="px-2 text-muted-foreground">Trang {currentTodoPage} / {totalTodoPages}</span>
+                <span className="px-2 text-muted-foreground">{t("Trang")} {currentTodoPage} / {totalTodoPages}</span>
                 <button
                   onClick={() => setTodoPage((p) => Math.min(totalTodoPages, p + 1))}
                   disabled={currentTodoPage >= totalTodoPages}
                   className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
                 >
-                  Sau
+                  {t("Sau")}
                   <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
@@ -829,8 +832,8 @@ export default function MyJobPage() {
             </div>
           ) : todos.length === 0 ? (
             <div className="rounded-lg border bg-green-50 border-green-100 px-4 py-6 text-center">
-              <p className="text-sm text-green-700 font-medium">Không có việc gì cần xử lý</p>
-              <p className="text-xs text-green-600 mt-0.5">Tất cả đoàn đều đang ổn</p>
+              <p className="text-sm text-green-700 font-medium">{t("Không có việc gì cần xử lý")}</p>
+              <p className="text-xs text-green-600 mt-0.5">{t("Tất cả đoàn đều đang ổn")}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -868,9 +871,9 @@ export default function MyJobPage() {
               </div>
             ) : filteredDeadlines.length === 0 ? (
               <div className="rounded-lg border bg-muted/30 px-4 py-10 text-center">
-                <p className="text-sm text-muted-foreground font-medium">Chưa có deadline nào</p>
+                <p className="text-sm text-muted-foreground font-medium">{t("Chưa có deadline nào")}</p>
                 <p className="text-xs text-muted-foreground/70 mt-0.5">
-                  Vào chi tiết từng booking (KS / NH / DV) để điền deadline
+                  {t("Vào chi tiết từng booking (KS / NH / DV) để điền deadline")}
                 </p>
               </div>
             ) : (
@@ -882,7 +885,7 @@ export default function MyJobPage() {
                   return (
                     <div key={group} className="space-y-2">
                       <h3 className={cn("text-xs font-semibold uppercase tracking-wide", gcfg.cls)}>
-                        {gcfg.label} ({items.length})
+                        {t(gcfg.labelKey)} ({items.length})
                       </h3>
                       {items.map((item) => {
                         const tcfg = TYPE_CFG[item.type];
@@ -890,10 +893,10 @@ export default function MyJobPage() {
                         const dl = parseISO(item.deadline);
                         const daysLeft = differenceInDays(dl, new Date());
                         const daysText = group === "overdue"
-                          ? `Quá ${Math.abs(daysLeft)} ngày`
+                          ? `${t("Quá")} ${Math.abs(daysLeft)} ${t("ngày")}`
                           : group === "today"
-                          ? "Hôm nay"
-                          : `Còn ${daysLeft} ngày`;
+                          ? t("Hôm nay")
+                          : `${t("Còn")} ${daysLeft} ${t("ngày")}`;
                         return (
                           <div
                             key={`${item.type}-${item.bookingId}`}
@@ -930,20 +933,20 @@ export default function MyJobPage() {
                               variant="outline"
                               className="h-7 px-2 text-[11px] gap-1 shrink-0 bg-white/70"
                               disabled={markDone.isPending}
-                              title="Đánh dấu deadline này đã xong"
+                              title={t("Đánh dấu deadline này đã xong")}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 markDone.mutate(
                                   { type: item.type, bookingId: item.bookingId },
                                   {
-                                    onSuccess: () => toast.success("Đã đánh dấu xong"),
-                                    onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi đánh dấu"),
+                                    onSuccess: () => toast.success(t("Đã đánh dấu xong")),
+                                    onError: (err: unknown) => toast.error(errMsg(err) || t("Lỗi đánh dấu")),
                                   },
                                 );
                               }}
                             >
                               <Check className="h-3 w-3" />
-                              Đã xong
+                              {t("Đã xong")}
                             </Button>
                             <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           </div>

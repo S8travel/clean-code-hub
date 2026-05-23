@@ -11,6 +11,7 @@ import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent } from "@/lib/mail-content-hash";
 import { useEffect } from "react";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDate(d: string) {
   try {
@@ -79,6 +80,7 @@ interface Props {
 }
 
 export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksRow, mode = "first" }: Props) {
+  useTranslate();
   const { data: currentUserName = "" } = useCurrentUserName();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
@@ -162,9 +164,9 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
         mailContentHash: hash,
       });
       onOpenChange(false);
-      toast.success(mode === "update" ? "Đã gửi email cập nhật lock phòng" : "Đã gửi email lock phòng");
+      toast.success(mode === "update" ? t("Đã gửi email cập nhật lock phòng") : t("Đã gửi email lock phòng"));
     } catch (err: unknown) {
-      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi gửi email") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     } finally {
       setSending(false);
     }
@@ -186,7 +188,7 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
       `CÔNG TY TNHH DU LỊCH S8\nMST: 0402021137\nEmail: s8travel.hddt@gmail.com`;
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
     onOpenChange(false);
-    toast.success("Đã mở email client");
+    toast.success(t("Đã mở email client"));
   };
 
   return (
@@ -194,8 +196,8 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
       open={open}
       onOpenChange={handleOpenChange}
       title={mode === "update"
-        ? `Gửi cập nhật lock phòng – ${ksRow.khach_san_ten} (thread vào mail cũ)`
-        : `Gửi email lock phòng – ${ksRow.khach_san_ten}`}
+        ? `${t("Gửi cập nhật lock phòng")} – ${ksRow.khach_san_ten} ${t("(thread vào mail cũ)")}`
+        : `${t("Gửi email lock phòng")} – ${ksRow.khach_san_ten}`}
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}

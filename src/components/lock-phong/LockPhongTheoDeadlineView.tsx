@@ -21,6 +21,7 @@ import {
   useUpdateLockPhongKSOutcome, useUpdateLockPhongKSFields,
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
+import { t, useTranslate } from "@/lib/i18n";
 
 // ── Inline editable cells (duplicated from KS view) ─────────────────────────
 function EditableTextCell({
@@ -69,26 +70,26 @@ function deadlineDisplay(deadline: string | null, outcome?: string | null) {
       return {
         text: dateStr,
         cls: "text-muted-foreground line-through",
-        subtext: outcome === "thanh_doan" ? "Đã thành đoàn" : "Đã hủy",
+        subtext: outcome === "thanh_doan" ? t("Đã thành đoàn") : t("Đã hủy"),
       };
     }
     if (diff < 0) {
       return {
         text: dateStr,
         cls: "text-red-700 font-semibold",
-        subtext: `Quá hạn ${Math.abs(diff)} ngày`,
+        subtext: `${t("Quá hạn")} ${Math.abs(diff)} ${t("ngày")}`,
       };
     }
     if (diff === 0) {
-      return { text: dateStr, cls: "text-orange-700 font-semibold", subtext: "Hôm nay" };
+      return { text: dateStr, cls: "text-orange-700 font-semibold", subtext: t("Hôm nay") };
     }
     if (diff <= 3) {
-      return { text: dateStr, cls: "text-orange-600 font-medium", subtext: `Còn ${diff} ngày` };
+      return { text: dateStr, cls: "text-orange-600 font-medium", subtext: `${t("Còn")} ${diff} ${t("ngày")}` };
     }
     if (diff <= 7) {
-      return { text: dateStr, cls: "text-amber-600", subtext: `Còn ${diff} ngày` };
+      return { text: dateStr, cls: "text-amber-600", subtext: `${t("Còn")} ${diff} ${t("ngày")}` };
     }
-    return { text: dateStr, cls: "text-foreground", subtext: `Còn ${diff} ngày` };
+    return { text: dateStr, cls: "text-foreground", subtext: `${t("Còn")} ${diff} ${t("ngày")}` };
   } catch {
     return { text: deadline, cls: "text-muted-foreground", subtext: "" };
   }
@@ -104,6 +105,7 @@ interface Props {
 }
 
 export default function LockPhongTheoDeadlineView({ data }: Props) {
+  useTranslate();
   const [emailTarget, setEmailTarget] = useState<{
     lockPhong: LockPhongDisplay;
     ksRow: LockPhongKSDisplay;
@@ -122,7 +124,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
   ) => {
     updateFields.mutate(
       { id, fields },
-      { onError: (e: unknown) => toast.error("Lỗi cập nhật: " + (errMsg(e) || "")) },
+      { onError: (e: unknown) => toast.error(t("Lỗi cập nhật") + ": " + (errMsg(e) || "")) },
     );
   };
 
@@ -172,7 +174,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
   if (rows.length === 0) {
     return (
       <p className="py-12 text-center text-sm text-muted-foreground">
-        Chưa có dữ liệu lock phòng
+        {t("Chưa có dữ liệu lock phòng")}
       </p>
     );
   }
@@ -183,16 +185,16 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/20">
-              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">Deadline</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[180px]">Tên đoàn</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[90px]">Seri</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground min-w-[180px]">Khách sạn</th>
-              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">Check-in</th>
-              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">Check-out</th>
-              <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground w-14">Đêm</th>
-              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[180px]">Số phòng</th>
-              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[120px]">Code NCC</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[200px]">Trạng thái</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">{t("Deadline")}</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[180px]">{t("Tên đoàn")}</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[90px]">{t("Seri")}</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground min-w-[180px]">{t("Khách sạn")}</th>
+              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">{t("Check-in")}</th>
+              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[130px]">{t("Check-out")}</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground w-14">{t("Đêm")}</th>
+              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[180px]">{t("Số phòng")}</th>
+              <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground w-[120px]">{t("Code NCC")}</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-[200px]">{t("Trạng thái")}</th>
               <th className="px-2 py-2 w-[90px]" />
             </tr>
           </thead>
@@ -254,21 +256,21 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
                         <SelectTrigger className="h-7 w-[130px] text-xs">
                           <span>
                             {outcomeValue === "cho_xu_ly"
-                              ? "Chờ xử lý"
+                              ? t("Chờ xử lý")
                               : outcomeValue === "da_huy"
-                              ? "Đã hủy"
-                              : "Thành đoàn"}
+                              ? t("Đã hủy")
+                              : t("Thành đoàn")}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cho_xu_ly">Chờ xử lý</SelectItem>
-                          <SelectItem value="da_huy">Đã hủy</SelectItem>
-                          <SelectItem value="thanh_doan">Thành đoàn</SelectItem>
+                          <SelectItem value="cho_xu_ly">{t("Chờ xử lý")}</SelectItem>
+                          <SelectItem value="da_huy">{t("Đã hủy")}</SelectItem>
+                          <SelectItem value="thanh_doan">{t("Thành đoàn")}</SelectItem>
                         </SelectContent>
                       </Select>
                       {ksRow.outcome_status === "thanh_doan" && (
                         <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">
-                          {ksRow.code_doan_thanh || "(chưa code)"}
+                          {ksRow.code_doan_thanh || t("(chưa code)")}
                         </Badge>
                       )}
                       {ksRow.outcome_status === "da_huy" && (
@@ -284,7 +286,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
                       onClick={() => setEmailTarget({ lockPhong, ksRow })}
                     >
                       <Mail className="h-3 w-3" />
-                      Email
+                      {t("Email")}
                     </Button>
                   </td>
                 </tr>
@@ -298,7 +300,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
       {totalPages > 1 && (
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border bg-muted/10 text-xs">
           <span className="text-muted-foreground">
-            Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, rows.length)} / {rows.length}
+            {t("Hiển thị")} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, rows.length)} / {rows.length}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -311,7 +313,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
             <span className="px-2 tabular-nums">
-              Trang {page}/{totalPages}
+              {t("Trang")} {page}/{totalPages}
             </span>
             <Button
               variant="outline"
@@ -342,7 +344,7 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
           if (!thanhDoanTarget) return;
           const trimmed = code.trim();
           if (!trimmed) {
-            toast.warning("Cần nhập code đoàn chính thức");
+            toast.warning(t("Cần nhập code đoàn chính thức"));
             return;
           }
           let pending = thanhDoanTarget.ksRowIds.length;
@@ -354,13 +356,13 @@ export default function LockPhongTheoDeadlineView({ data }: Props) {
                 onSuccess: () => {
                   pending -= 1;
                   if (pending === 0 && !hadError) {
-                    toast.success(`Đã đánh dấu thành đoàn (${trimmed})`);
+                    toast.success(`${t("Đã đánh dấu thành đoàn")} (${trimmed})`);
                     setThanhDoanTarget(null);
                   }
                 },
                 onError: (e: unknown) => {
                   hadError = true;
-                  toast.error("Lỗi: " + (errMsg(e) || ""));
+                  toast.error(t("Lỗi") + ": " + (errMsg(e) || ""));
                 },
               },
             );
@@ -378,6 +380,7 @@ function ThanhDoanDialog({
   onClose: () => void;
   onSubmit: (code: string) => void;
 }) {
+  useTranslate();
   const [code, setCode] = useState("");
   const targetKey = target?.ksRowIds.join(",") ?? null;
   // Re-init code khi mở target khác — pattern "adjust state during render".
@@ -391,30 +394,30 @@ function ThanhDoanDialog({
     <Dialog open={!!target} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Đoàn lock thành đoàn chính thức</DialogTitle>
+          <DialogTitle>{t("Đoàn lock thành đoàn chính thức")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2 text-sm">
           {target && (
             <p className="text-muted-foreground">
-              Lock: <span className="font-medium text-foreground">{target.tenDoan}</span>
+              {t("Lock")}: <span className="font-medium text-foreground">{target.tenDoan}</span>
             </p>
           )}
           <div className="space-y-1.5">
-            <Label className="text-xs">Code đoàn chính thức *</Label>
+            <Label className="text-xs">{t("Code đoàn chính thức")} *</Label>
             <Input
               autoFocus
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="vd: TQ250501-FY"
+              placeholder={t("vd: TQ250501-FY")}
               className="h-9 text-sm"
               onKeyDown={(e) => { if (e.key === "Enter") onSubmit(code); }}
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" onClick={onClose}>{t("Hủy")}</Button>
           <Button onClick={() => onSubmit(code)} disabled={!code.trim()}>
-            Xác nhận
+            {t("Xác nhận")}
           </Button>
         </DialogFooter>
       </DialogContent>

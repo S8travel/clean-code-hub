@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import { useDeleteLockPhong, type LockPhongDisplay } from "@/hooks/use-lock-phong";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDate(d: string) {
   try {
@@ -25,20 +26,20 @@ function DeadlineBadge({ deadline }: { deadline: string | null }) {
   if (diff < 0) {
     return (
       <span className="inline-flex items-center gap-0.5 text-[10px] text-red-600 font-medium">
-        <Clock className="h-2.5 w-2.5" /> Quá hạn {Math.abs(diff)}n
+        <Clock className="h-2.5 w-2.5" /> {t("Quá hạn")} {Math.abs(diff)}n
       </span>
     );
   }
   if (diff <= 3) {
     return (
       <span className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 font-medium">
-        <Clock className="h-2.5 w-2.5" /> DL: {fmtDate(deadline)} ({diff === 0 ? "hôm nay" : `còn ${diff}n`})
+        <Clock className="h-2.5 w-2.5" /> {t("DL")}: {fmtDate(deadline)} ({diff === 0 ? t("hôm nay") : `${t("còn")} ${diff}n`})
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
-      <Clock className="h-2.5 w-2.5" /> DL: {fmtDate(deadline)}
+      <Clock className="h-2.5 w-2.5" /> {t("DL")}: {fmtDate(deadline)}
     </span>
   );
 }
@@ -55,6 +56,7 @@ interface Props {
 }
 
 export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
+  useTranslate();
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<LockPhongDisplay | null>(null);
   const deleteMut = useDeleteLockPhong();
@@ -91,9 +93,9 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
     if (!deleteTarget) return;
     try {
       await deleteMut.mutateAsync(deleteTarget.id);
-      toast.success("Đã xóa lock phòng");
+      toast.success(t("Đã xóa lock phòng"));
     } catch {
-      toast.error("Lỗi khi xóa");
+      toast.error(t("Lỗi khi xóa"));
     } finally {
       setDeleteTarget(null);
     }
@@ -102,7 +104,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
   if (groups.length === 0) {
     return (
       <p className="py-12 text-center text-sm text-muted-foreground">
-        Chưa có dữ liệu lock phòng
+        {t("Chưa có dữ liệu lock phòng")}
       </p>
     );
   }
@@ -126,7 +128,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
                 <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm">{group.ten_seri}</span>
                   <Badge variant="secondary" className="text-[10px]">
-                    {group.entries.length} đoàn
+                    {group.entries.length} {t("đoàn")}
                   </Badge>
                 </div>
                 {isOpen ? (
@@ -147,7 +149,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-sm">{entry.ten_doan}</span>
                             <span className="text-xs text-muted-foreground">
-                              Xuất phát: {fmtDate(entry.ngay_xuat_phat)}
+                              {t("Xuất phát")}: {fmtDate(entry.ngay_xuat_phat)}
                             </span>
                             <DeadlineBadge deadline={entry.deadline} />
                           </div>
@@ -162,7 +164,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                            title="Chỉnh sửa"
+                            title={t("Chỉnh sửa")}
                             onClick={() => onEdit(entry)}
                           >
                             <Pencil className="h-3 w-3" />
@@ -171,7 +173,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                            title="Xóa"
+                            title={t("Xóa")}
                             onClick={() => setDeleteTarget(entry)}
                           >
                             <Trash2 className="h-3 w-3" />
@@ -202,7 +204,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
                               <ArrowRight className="h-2.5 w-2.5" />
                               <span>{fmtDate(hotel.check_out)}</span>
                               <span className="font-medium text-foreground">
-                                ({hotel.so_dem} đêm)
+                                ({hotel.so_dem} {t("đêm")})
                               </span>
                               {hotel.so_phong && (
                                 <>
@@ -217,7 +219,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
 
                       {entry.hotels.length === 0 && (
                         <p className="mt-1 text-xs text-muted-foreground italic pl-1">
-                          Chưa có khách sạn
+                          {t("Chưa có khách sạn")}
                         </p>
                       )}
                     </div>
@@ -235,7 +237,7 @@ export default function LockPhongTheoSeriView({ data, onEdit }: Props) {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         isDeleting={deleteMut.isPending}
-        description={`Lock phòng "${deleteTarget?.ten_doan}" sẽ bị xóa vĩnh viễn cùng toàn bộ dữ liệu khách sạn liên quan.`}
+        description={`${t("Lock phòng")} "${deleteTarget?.ten_doan}" ${t("sẽ bị xóa vĩnh viễn cùng toàn bộ dữ liệu khách sạn liên quan.")}`}
       />
     </>
   );

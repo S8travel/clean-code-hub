@@ -26,6 +26,7 @@ import {
   useUpdateLockPhong,
   type LockPhongDisplay,
 } from "@/hooks/use-lock-phong";
+import { t, useTranslate } from "@/lib/i18n";
 
 // ── Helpers ──
 
@@ -94,7 +95,7 @@ function DoanHotelRows({
                 options={ksOptions}
                 value={cf.value ? String(cf.value) : ""}
                 onChange={(val) => cf.onChange(val ? Number(val) : 0)}
-                placeholder="Chọn KS..."
+                placeholder={t("Chọn KS...")}
                 className="h-8 text-xs"
               />
             )}
@@ -122,7 +123,7 @@ function DoanHotelRows({
           {/* Số phòng */}
           <Input
             {...register(`doans.${doanIdx}.hotels.${hIdx}.so_phong`)}
-            placeholder="6 TWN, 1 DBL"
+            placeholder={t("6 TWN, 1 DBL")}
             className="h-8 text-xs"
           />
           {/* Remove */}
@@ -147,7 +148,7 @@ function DoanHotelRows({
         onClick={() => append(emptyHotel())}
       >
         <Plus className="h-3 w-3" />
-        Thêm KS
+        {t("Thêm KS")}
       </Button>
     </div>
   );
@@ -254,6 +255,7 @@ function CreateForm({
   onOpenChange: (v: boolean) => void;
   ksList: { id: number; ten: string }[];
 }) {
+  useTranslate();
   const createMut = useCreateLockPhong();
   const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten ?? "" }));
 
@@ -298,9 +300,9 @@ function CreateForm({
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array", cellDates: false });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      if (!ws) { toast.error("File trống"); return; }
+      if (!ws) { toast.error(t("File trống")); return; }
       const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
-      if (aoa.length < 2) { toast.error("File cần ít nhất 1 dòng dữ liệu"); return; }
+      if (aoa.length < 2) { toast.error(t("File cần ít nhất 1 dòng dữ liệu")); return; }
 
       // Skip header row, parse rows
       const parsed: CreateRow[] = [];
@@ -327,11 +329,11 @@ function CreateForm({
           ghi_chu,
         });
       }
-      if (parsed.length === 0) { toast.error("Không có dòng dữ liệu hợp lệ"); return; }
+      if (parsed.length === 0) { toast.error(t("Không có dòng dữ liệu hợp lệ")); return; }
       setRows(parsed);
-      toast.success(`Đã import ${parsed.length} dòng từ file`);
+      toast.success(`${t("Đã import")} ${parsed.length} ${t("dòng từ file")}`);
     } catch (err: unknown) {
-      toast.error("Lỗi đọc file: " + (errMsg(err) || "không hỗ trợ định dạng"));
+      toast.error(t("Lỗi đọc file") + ": " + (errMsg(err) || t("không hỗ trợ định dạng")));
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -358,11 +360,11 @@ function CreateForm({
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!khachSanId) {
-      toast.error("Chưa chọn khách sạn");
+      toast.error(t("Chưa chọn khách sạn"));
       return;
     }
     if (validRows.length === 0) {
-      toast.error("Chưa có dòng đoàn nào hợp lệ (cần Code + Check-in + Cấu hình phòng)");
+      toast.error(t("Chưa có dòng đoàn nào hợp lệ (cần Code + Check-in + Cấu hình phòng)"));
       return;
     }
     setSubmitting(true);
@@ -389,10 +391,10 @@ function CreateForm({
           }],
         });
       }
-      toast.success(`Đã tạo ${validRows.length} lock phòng`);
+      toast.success(`${t("Đã tạo")} ${validRows.length} ${t("lock phòng")}`);
       onOpenChange(false);
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     } finally {
       setSubmitting(false);
     }
@@ -405,29 +407,29 @@ function CreateForm({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">
-              Khách sạn <span className="text-destructive">*</span>
+              {t("Khách sạn")} <span className="text-destructive">*</span>
             </Label>
             <SearchableSelect
               options={ksOptions}
               value={khachSanId ? String(khachSanId) : ""}
               onChange={(v) => setKhachSanId(v ? Number(v) : null)}
-              placeholder="Chọn khách sạn cần lock..."
+              placeholder={t("Chọn khách sạn cần lock...")}
               className="h-9 text-sm"
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Tên seri (chung)</Label>
+            <Label className="text-xs">{t("Tên seri (chung)")}</Label>
             <Input
               value={tenSeri}
               onChange={(e) => setTenSeri(e.target.value)}
-              placeholder="vd: Trung Quốc 6N5Đ"
+              placeholder={t("vd: Trung Quốc 6N5Đ")}
               className="h-9 text-sm"
             />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">
-              Số ngày đến deadline
-              <span className="text-muted-foreground font-normal"> (deadline = check-in − N)</span>
+              {t("Số ngày đến deadline")}
+              <span className="text-muted-foreground font-normal"> {t("(deadline = check-in − N)")}</span>
             </Label>
             <Input
               type="number"
@@ -443,17 +445,17 @@ function CreateForm({
         <div className="space-y-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <Label className="text-xs font-semibold uppercase">
-              Danh sách đoàn ({rows.length})
+              {t("Danh sách đoàn")} ({rows.length})
             </Label>
             <div className="flex items-center gap-1.5 flex-wrap">
               <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={downloadTemplateXlsx}>
-                <Download className="h-3 w-3" /> Tải file mẫu
+                <Download className="h-3 w-3" /> {t("Tải file mẫu")}
               </Button>
               <Button
                 type="button" variant="outline" size="sm" className="h-7 text-xs gap-1"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Upload className="h-3 w-3" /> Upload file
+                <Upload className="h-3 w-3" /> {t("Upload file")}
               </Button>
               <input
                 ref={fileInputRef}
@@ -466,7 +468,7 @@ function CreateForm({
                 }}
               />
               <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleAddRow}>
-                <Plus className="h-3 w-3" /> Thêm dòng
+                <Plus className="h-3 w-3" /> {t("Thêm dòng")}
               </Button>
             </div>
           </div>
@@ -475,14 +477,14 @@ function CreateForm({
             <table className="w-full text-xs">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[160px]">Code đoàn *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Ngày check-in *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[80px]">Số đêm *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[180px]">Cấu hình phòng *</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Tình trạng phòng</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">Code NCC</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">Deadline</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Ghi chú</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[160px]">{t("Code đoàn")} *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">{t("Ngày check-in")} *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[80px]">{t("Số đêm")} *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[180px]">{t("Cấu hình phòng")} *</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">{t("Tình trạng phòng")}</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[140px]">{t("Code NCC")}</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-[150px]">{t("Deadline")}</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">{t("Ghi chú")}</th>
                   <th className="w-16" />
                 </tr>
               </thead>
@@ -517,7 +519,7 @@ function CreateForm({
                       <Input
                         value={r.cau_hinh_phong}
                         onChange={(e) => updateRow(idx, { cau_hinh_phong: e.target.value })}
-                        placeholder="6 TWN, 1 DBL"
+                        placeholder={t("6 TWN, 1 DBL")}
                         className="h-7 text-xs"
                       />
                     </td>
@@ -525,7 +527,7 @@ function CreateForm({
                       <Input
                         value={r.tinh_trang_phong}
                         onChange={(e) => updateRow(idx, { tinh_trang_phong: e.target.value })}
-                        placeholder="vd: Còn / Hết"
+                        placeholder={t("vd: Còn / Hết")}
                         className="h-7 text-xs"
                       />
                     </td>
@@ -533,7 +535,7 @@ function CreateForm({
                       <Input
                         value={r.code_ncc}
                         onChange={(e) => updateRow(idx, { code_ncc: e.target.value })}
-                        placeholder="(NCC cấp)"
+                        placeholder={t("(NCC cấp)")}
                         className="h-7 text-xs"
                       />
                     </td>
@@ -554,7 +556,7 @@ function CreateForm({
                             handleAddRow();
                           }
                         }}
-                        placeholder="(tuỳ chọn)"
+                        placeholder={t("(tuỳ chọn)")}
                         className="h-7 text-xs"
                       />
                     </td>
@@ -565,7 +567,7 @@ function CreateForm({
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-blue-600"
-                          title="Sao chép dòng"
+                          title={t("Sao chép dòng")}
                           onClick={() => handleDuplicateRow(idx)}
                         >
                           <Copy className="h-3.5 w-3.5" />
@@ -575,7 +577,7 @@ function CreateForm({
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                          title="Xóa dòng"
+                          title={t("Xóa dòng")}
                           disabled={rows.length === 1}
                           onClick={() => handleRemoveRow(idx)}
                         >
@@ -590,17 +592,17 @@ function CreateForm({
           </div>
 
           <p className="text-[11px] text-muted-foreground italic">
-            Tip: nhập <b>Check-in</b> → <b>Deadline</b> tự fill = check-in − số ngày ở header. Mặc định <b>Số đêm</b> = 1. Bấm <b>Enter</b> ở Ghi chú để thêm dòng mới. Dùng nút <b>copy</b> để nhân bản dòng. Check-out tự tính = check-in + số đêm.
+            {t("Tip: nhập")} <b>{t("Check-in")}</b> → <b>{t("Deadline")}</b> {t("tự fill = check-in − số ngày ở header. Mặc định")} <b>{t("Số đêm")}</b> {t("= 1. Bấm")} <b>Enter</b> {t("ở Ghi chú để thêm dòng mới. Dùng nút")} <b>copy</b> {t("để nhân bản dòng. Check-out tự tính = check-in + số đêm.")}
           </p>
         </div>
 
         {/* Ghi chú */}
         <div className="space-y-1">
-          <Label className="text-xs">Ghi chú chung</Label>
+          <Label className="text-xs">{t("Ghi chú chung")}</Label>
           <Textarea
             value={ghiChuChung}
             onChange={(e) => setGhiChuChung(e.target.value)}
-            placeholder="Áp dụng cho tất cả đoàn..."
+            placeholder={t("Áp dụng cho tất cả đoàn...")}
             rows={2}
             className="text-sm resize-none"
           />
@@ -610,14 +612,14 @@ function CreateForm({
       <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
         <div className="flex-1 text-xs text-muted-foreground">
           {validRows.length > 0
-            ? `Sẽ tạo ${validRows.length} lock phòng`
-            : "Chưa có dòng đoàn nào hợp lệ"}
+            ? `${t("Sẽ tạo")} ${validRows.length} ${t("lock phòng")}`
+            : t("Chưa có dòng đoàn nào hợp lệ")}
         </div>
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-          Hủy
+          {t("Hủy")}
         </Button>
         <Button type="submit" disabled={!canSubmit}>
-          {submitting ? "Đang tạo..." : `Tạo Lock${validRows.length > 1 ? ` (${validRows.length})` : ""}`}
+          {submitting ? t("Đang tạo...") : `${t("Tạo Lock")}${validRows.length > 1 ? ` (${validRows.length})` : ""}`}
         </Button>
       </DialogFooter>
     </form>
@@ -635,6 +637,7 @@ function EditForm({
   onOpenChange: (v: boolean) => void;
   ksList: { id: number; ten: string }[];
 }) {
+  useTranslate();
   const updateMut = useUpdateLockPhong();
   const ksOptions = ksList.map((k) => ({ value: String(k.id), label: k.ten ?? "" }));
 
@@ -701,10 +704,10 @@ function EditForm({
           ghi_chu: h.ghi_chu || undefined,
         })),
       });
-      toast.success("Đã cập nhật lock phòng");
+      toast.success(t("Đã cập nhật lock phòng"));
       onOpenChange(false);
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     }
   };
 
@@ -713,12 +716,12 @@ function EditForm({
       <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">Tên seri <span className="text-destructive">*</span></Label>
+            <Label className="text-xs">{t("Tên seri")} <span className="text-destructive">*</span></Label>
             <Input {...register("ten_seri")} className="h-9 text-sm" />
             {errors.ten_seri && <p className="text-xs text-destructive">{errors.ten_seri.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Code đoàn <span className="text-destructive">*</span></Label>
+            <Label className="text-xs">{t("Code đoàn")} <span className="text-destructive">*</span></Label>
             <Input {...register("ten_doan")} className="h-9 text-sm" />
             {errors.ten_doan && <p className="text-xs text-destructive">{errors.ten_doan.message}</p>}
           </div>
@@ -726,7 +729,7 @@ function EditForm({
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">Ngày xuất phát <span className="text-destructive">*</span></Label>
+            <Label className="text-xs">{t("Ngày xuất phát")} <span className="text-destructive">*</span></Label>
             <Controller
               control={control}
               name="ngay_xuat_phat"
@@ -744,7 +747,7 @@ function EditForm({
             {errors.ngay_xuat_phat && <p className="text-xs text-destructive">{errors.ngay_xuat_phat.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Deadline <span className="text-muted-foreground">(mặc định -45 ngày)</span></Label>
+            <Label className="text-xs">{t("Deadline")} <span className="text-muted-foreground">{t("(mặc định -45 ngày)")}</span></Label>
             <Controller
               control={control}
               name="deadline"
@@ -756,14 +759,14 @@ function EditForm({
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Ghi chú</Label>
+          <Label className="text-xs">{t("Ghi chú")}</Label>
           <Textarea {...register("ghi_chu")} rows={2} className="text-sm resize-none" />
         </div>
 
         {/* Hotel rows */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold">Khách sạn</Label>
+            <Label className="text-xs font-semibold">{t("Khách sạn")}</Label>
             <Button
               type="button"
               variant="outline"
@@ -772,15 +775,15 @@ function EditForm({
               onClick={() => appendHotel(emptyHotel())}
             >
               <Plus className="h-3 w-3" />
-              Thêm KS
+              {t("Thêm KS")}
             </Button>
           </div>
           {/* Column headers */}
           <div className="grid grid-cols-[180px_1fr_1fr_140px_28px] gap-1.5">
-            <span className="text-[11px] text-muted-foreground">Khách sạn</span>
-            <span className="text-[11px] text-muted-foreground">Check-in</span>
-            <span className="text-[11px] text-muted-foreground">Check-out</span>
-            <span className="text-[11px] text-muted-foreground">Số phòng</span>
+            <span className="text-[11px] text-muted-foreground">{t("Khách sạn")}</span>
+            <span className="text-[11px] text-muted-foreground">{t("Check-in")}</span>
+            <span className="text-[11px] text-muted-foreground">{t("Check-out")}</span>
+            <span className="text-[11px] text-muted-foreground">{t("Số phòng")}</span>
             <span />
           </div>
           {hotelFields.map((field, hIdx) => (
@@ -793,7 +796,7 @@ function EditForm({
                     options={ksOptions}
                     value={cf.value ? String(cf.value) : ""}
                     onChange={(val) => cf.onChange(val ? Number(val) : 0)}
-                    placeholder="Chọn KS..."
+                    placeholder={t("Chọn KS...")}
                     className="h-8 text-xs"
                   />
                 )}
@@ -812,7 +815,7 @@ function EditForm({
                   <DatePicker value={cf.value ?? ""} onChange={cf.onChange} className="h-8 text-xs w-full" />
                 )}
               />
-              <Input {...register(`hotels.${hIdx}.so_phong`)} placeholder="6 TWN, 1 DBL" className="h-8 text-xs" />
+              <Input {...register(`hotels.${hIdx}.so_phong`)} placeholder={t("6 TWN, 1 DBL")} className="h-8 text-xs" />
               <Button
                 type="button"
                 variant="ghost"
@@ -830,10 +833,10 @@ function EditForm({
 
       <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-          Hủy
+          {t("Hủy")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Đang lưu..." : "Cập nhật"}
+          {isSubmitting ? t("Đang lưu...") : t("Cập nhật")}
         </Button>
       </DialogFooter>
     </form>
@@ -843,6 +846,7 @@ function EditForm({
 // ── Main Dialog ──
 
 export default function LockPhongFormDialog({ open, onOpenChange, initialData }: Props) {
+  useTranslate();
   const { data: ksList = [] } = useKhachSanList();
 
   return (
@@ -850,7 +854,7 @@ export default function LockPhongFormDialog({ open, onOpenChange, initialData }:
       <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] flex flex-col overflow-hidden p-0">
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-border shrink-0">
           <DialogTitle className="text-base">
-            {initialData ? "Chỉnh sửa Lock Phòng" : "Thêm Lock Phòng"}
+            {initialData ? t("Chỉnh sửa Lock Phòng") : t("Thêm Lock Phòng")}
           </DialogTitle>
         </DialogHeader>
 
