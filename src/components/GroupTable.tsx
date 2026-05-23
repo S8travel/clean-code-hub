@@ -4,6 +4,7 @@ import { Pencil, Trash2, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { TravelGroup } from "@/hooks/use-travel-groups";
 import { Skeleton } from "@/components/ui/skeleton";
+import { t, useTranslate } from "@/lib/i18n";
 
 const transition = { duration: 0.2, ease: [0.2, 0, 0, 1] as const };
 
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function GroupTable({ groups, isLoading, onEdit, onDelete }: Props) {
+  useTranslate();
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -33,8 +35,8 @@ export function GroupTable({ groups, isLoading, onEdit, onDelete }: Props) {
   if (!groups?.length) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-        <p className="text-body">No travel groups found.</p>
-        <p className="text-label mt-1">Start by adding your first tour.</p>
+        <p className="text-body">{t("No travel groups found.")}</p>
+        <p className="text-label mt-1">{t("Start by adding your first tour.")}</p>
       </div>
     );
   }
@@ -44,12 +46,12 @@ export function GroupTable({ groups, isLoading, onEdit, onDelete }: Props) {
       {/* Desktop Table */}
       <div className="hidden md:block">
         <div className="grid grid-cols-[2fr_1.5fr_1fr_1.2fr_1.2fr_2fr_80px] gap-x-3 px-4 py-2 text-label uppercase text-muted-foreground">
-          <span>Tên Đoàn</span>
+          <span>{t("Tên Đoàn")}</span>
           <span>HDV</span>
-          <span className="text-center">Số Khách</span>
-          <span>Ngày Đi</span>
-          <span>Ngày Về</span>
-          <span>Ghi Chú</span>
+          <span className="text-center">{t("Số Khách")}</span>
+          <span>{t("Ngày Đi")}</span>
+          <span>{t("Ngày Về")}</span>
+          <span>{t("Ghi Chú")}</span>
           <span />
         </div>
         <AnimatePresence initial={false}>
@@ -73,14 +75,14 @@ export function GroupTable({ groups, isLoading, onEdit, onDelete }: Props) {
                 <button
                   onClick={() => onEdit(g)}
                   className="p-2 rounded-md hover:bg-muted transition-colors"
-                  title="Edit"
+                  title={t("Edit")}
                 >
                   <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
                 <button
                   onClick={() => onDelete(g)}
                   className="p-2 rounded-md hover:bg-destructive/10 transition-colors"
-                  title="Delete"
+                  title={t("Delete")}
                 >
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </button>
@@ -103,6 +105,7 @@ export function GroupTable({ groups, isLoading, onEdit, onDelete }: Props) {
 }
 
 function MobileCard({ group: g, onEdit, onDelete }: { group: TravelGroup; onEdit: (g: TravelGroup) => void; onDelete: (g: TravelGroup) => void }) {
+  useTranslate();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -117,7 +120,7 @@ function MobileCard({ group: g, onEdit, onDelete }: { group: TravelGroup; onEdit
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-body truncate">{g.ten_doan}</p>
-          <p className="text-muted-foreground text-[13px]">{g.hdv || "No guide"} · {g.so_khach ?? 0} guests</p>
+          <p className="text-muted-foreground text-[13px]">{g.hdv || t("No guide")} · {g.so_khach ?? 0} {t("guests")}</p>
         </div>
         <div className="flex gap-1 ml-2 shrink-0">
           <button onClick={() => setExpanded(!expanded)} className="p-2 rounded-md hover:bg-muted transition-colors">
@@ -142,16 +145,16 @@ function MobileCard({ group: g, onEdit, onDelete }: { group: TravelGroup; onEdit
           >
             <div className="pt-3 mt-3 border-t border-border/40 grid grid-cols-2 gap-2 text-[13px]">
               <div>
-                <span className="text-label text-muted-foreground block">NGÀY ĐI</span>
+                <span className="text-label text-muted-foreground block">{t("NGÀY ĐI")}</span>
                 <span className="tabular-nums">{formatDate(g.ngay_di)}</span>
               </div>
               <div>
-                <span className="text-label text-muted-foreground block">NGÀY VỀ</span>
+                <span className="text-label text-muted-foreground block">{t("NGÀY VỀ")}</span>
                 <span className="tabular-nums">{formatDate(g.ngay_ve)}</span>
               </div>
               {g.ghi_chu && (
                 <div className="col-span-2">
-                  <span className="text-label text-muted-foreground block">GHI CHÚ</span>
+                  <span className="text-label text-muted-foreground block">{t("GHI CHÚ")}</span>
                   <span className="text-muted-foreground">{g.ghi_chu}</span>
                 </div>
               )}

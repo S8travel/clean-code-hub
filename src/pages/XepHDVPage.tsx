@@ -38,6 +38,7 @@ import {
 } from "@/hooks/use-xep-hdv";
 import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
+import { t, useTranslate } from "@/lib/i18n";
 
 // ─── Parse ngày từ Excel ──────────────────────────────────────────
 // Dùng cellDates: false → serial number hoặc string, tránh lỗi timezone của JS Date
@@ -123,6 +124,7 @@ function HDVResultCard({
   onReassign: (tourIdx: number, newHdvId: number | null) => void;
   getSuggestionsForTour?: (tour: TourInput) => { primary: { id: number; ten: string }[]; secondary: { id: number; ten: string }[] };
 }) {
+  useTranslate();
   const [open, setOpen] = useState(true);
   const [openPopover, setOpenPopover] = useState<number | null>(null);
   const isUnassigned = hdvId === null;
@@ -142,7 +144,7 @@ function HDVResultCard({
           : <CalendarCheck className="h-3.5 w-3.5 text-primary shrink-0" />}
         <span className={isUnassigned ? "text-destructive" : ""}>{hdvName}</span>
         <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">
-          {tours.length} đoàn
+          {tours.length} {t("đoàn")}
         </Badge>
       </button>
 
@@ -153,13 +155,13 @@ function HDVResultCard({
               <div className="flex items-center gap-2 flex-wrap">
                 {tour.is_chained && (
                   <span className="flex items-center gap-0.5 text-amber-600 font-medium shrink-0">
-                    <Zap className="h-3 w-3" /> Ghép chuyến
+                    <Zap className="h-3 w-3" /> {t("Ghép chuyến")}
                   </span>
                 )}
                 <span className="font-medium">{tour.ten_doan}</span>
                 {!tour.doan_id && (
                   <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">
-                    File
+                    {t("File")}
                   </Badge>
                 )}
               </div>
@@ -174,12 +176,12 @@ function HDVResultCard({
                     {tour.chuyen_bay_don && `↓${tour.chuyen_bay_don}`}
                   </span>
                 )}
-                {tour.so_khach != null && <span className="text-[10px]">{tour.so_khach} khách</span>}
+                {tour.so_khach != null && <span className="text-[10px]">{tour.so_khach} {t("khách")}</span>}
                 {tour.ghi_chu && <span className="text-[10px] italic">{tour.ghi_chu}</span>}
                 {(() => {
                   const sugg = getSuggestionsForTour?.(tour);
                   const curName = tour.assigned_hdv_id
-                    ? (allHdvs.find((h) => h.id === tour.assigned_hdv_id)?.ten ?? `HDV #${tour.assigned_hdv_id}`)
+                    ? (allHdvs.find((h) => h.id === tour.assigned_hdv_id)?.ten ?? `${t("HDV")} #${tour.assigned_hdv_id}`)
                     : null;
                   if (sugg) {
                     // Combobox có nhóm gợi ý (cho đoàn chưa xếp)
@@ -190,25 +192,25 @@ function HDVResultCard({
                             "flex items-center gap-1 h-6 px-2 text-[11px] border rounded ml-auto min-w-[120px] max-w-[160px] hover:bg-muted/60",
                             curName ? "text-primary font-medium" : "text-muted-foreground"
                           )}>
-                            <span className="flex-1 truncate text-left">{curName ?? "— Chưa xếp —"}</span>
+                            <span className="flex-1 truncate text-left">{curName ?? t("— Chưa xếp —")}</span>
                             <ChevronDown className="h-3 w-3 shrink-0" />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-56 p-0" align="end">
                           <Command>
-                            <CommandInput placeholder="Tìm HDV..." className="h-8 text-xs" />
+                            <CommandInput placeholder={t("Tìm HDV...")} className="h-8 text-xs" />
                             <CommandList>
-                              <CommandEmpty className="py-2 text-xs text-center text-muted-foreground">Không tìm thấy</CommandEmpty>
+                              <CommandEmpty className="py-2 text-xs text-center text-muted-foreground">{t("Không tìm thấy")}</CommandEmpty>
                               <CommandItem
                                 value="__none__"
                                 onSelect={() => { onReassign(idx, null); setOpenPopover(null); }}
                                 className="text-xs text-muted-foreground"
                               >
                                 <Check className={cn("h-3 w-3 mr-2", !tour.assigned_hdv_id ? "opacity-100" : "opacity-0")} />
-                                — Chưa xếp —
+                                {t("— Chưa xếp —")}
                               </CommandItem>
                               {sugg.primary.length > 0 && (
-                                <CommandGroup heading="Phù hợp (agent + địa điểm)">
+                                <CommandGroup heading={t("Phù hợp (agent + địa điểm)")}>
                                   {sugg.primary.map((h) => (
                                     <CommandItem key={h.id} value={h.ten} onSelect={() => { onReassign(idx, h.id); setOpenPopover(null); }} className="text-xs">
                                       <Check className={cn("h-3 w-3 mr-2", tour.assigned_hdv_id === h.id ? "opacity-100" : "opacity-0")} />
@@ -218,7 +220,7 @@ function HDVResultCard({
                                 </CommandGroup>
                               )}
                               {sugg.secondary.length > 0 && (
-                                <CommandGroup heading="Phù hợp địa điểm">
+                                <CommandGroup heading={t("Phù hợp địa điểm")}>
                                   {sugg.secondary.map((h) => (
                                     <CommandItem key={h.id} value={h.ten} onSelect={() => { onReassign(idx, h.id); setOpenPopover(null); }} className="text-xs">
                                       <Check className={cn("h-3 w-3 mr-2", tour.assigned_hdv_id === h.id ? "opacity-100" : "opacity-0")} />
@@ -228,7 +230,7 @@ function HDVResultCard({
                                 </CommandGroup>
                               )}
                               {sugg.primary.length === 0 && sugg.secondary.length === 0 && (
-                                <CommandGroup heading="Tất cả HDV">
+                                <CommandGroup heading={t("Tất cả HDV")}>
                                   {allHdvs.map((h) => (
                                     <CommandItem key={h.id} value={h.ten} onSelect={() => { onReassign(idx, h.id); setOpenPopover(null); }} className="text-xs">
                                       <Check className={cn("h-3 w-3 mr-2", tour.assigned_hdv_id === h.id ? "opacity-100" : "opacity-0")} />
@@ -250,10 +252,10 @@ function HDVResultCard({
                       onValueChange={(v) => onReassign(idx, v === "none" ? null : Number(v))}
                     >
                       <SelectTrigger className="h-6 text-[11px] w-36 ml-auto">
-                        <span>{tour.assigned_hdv_id == null ? "— Chưa xếp —" : allHdvs.find((h) => h.id === tour.assigned_hdv_id)?.ten ?? ""}</span>
+                        <span>{tour.assigned_hdv_id == null ? t("— Chưa xếp —") : allHdvs.find((h) => h.id === tour.assigned_hdv_id)?.ten ?? ""}</span>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">— Chưa xếp —</SelectItem>
+                        <SelectItem value="none">{t("— Chưa xếp —")}</SelectItem>
                         {allHdvs.map((h) => (
                           <SelectItem key={h.id} value={h.id.toString()}>{h.ten}</SelectItem>
                         ))}
@@ -287,10 +289,10 @@ interface ReviewRow {
 }
 
 function validateReviewRow(r: ReviewRow): string | undefined {
-  if (!r.ten_doan.trim()) return "Thiếu tên đoàn";
-  if (!r.ngay_di) return "Ngày đi không hợp lệ";
-  if (!r.ngay_ve) return "Ngày về không hợp lệ";
-  if (r.ngay_di > r.ngay_ve) return "Ngày đi sau ngày về";
+  if (!r.ten_doan.trim()) return t("Thiếu tên đoàn");
+  if (!r.ngay_di) return t("Ngày đi không hợp lệ");
+  if (!r.ngay_ve) return t("Ngày về không hợp lệ");
+  if (r.ngay_di > r.ngay_ve) return t("Ngày đi sau ngày về");
   return undefined;
 }
 
@@ -303,6 +305,7 @@ function ReviewDialog({
   onConfirm: (rows: ReviewRow[]) => void;
   onCancel: () => void;
 }) {
+  useTranslate();
   const [editRows, setEditRows] = useState<ReviewRow[]>(() =>
     rows.map((r) => ({ ...r, error: validateReviewRow(r) }))
   );
@@ -324,11 +327,11 @@ function ReviewDialog({
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
       <DialogContent className="max-w-5xl flex flex-col" style={{ maxHeight: "85vh" }}>
         <DialogHeader>
-          <DialogTitle>Kiểm tra dữ liệu import</DialogTitle>
+          <DialogTitle>{t("Kiểm tra dữ liệu import")}</DialogTitle>
           <DialogDescription>
-            <span className="text-green-600 font-medium">{validCount} hàng hợp lệ</span>
+            <span className="text-green-600 font-medium">{validCount} {t("hàng hợp lệ")}</span>
             {errorCount > 0 && (
-              <span className="text-destructive font-medium ml-2">· {errorCount} hàng lỗi — chỉnh sửa trực tiếp trong bảng</span>
+              <span className="text-destructive font-medium ml-2">· {errorCount} {t("hàng lỗi — chỉnh sửa trực tiếp trong bảng")}</span>
             )}
           </DialogDescription>
         </DialogHeader>
@@ -339,17 +342,17 @@ function ReviewDialog({
             <thead className="sticky top-0 z-10">
               <tr className="bg-[#E6F1FB] text-left">
                 <th className="border px-2 py-1.5 w-8">#</th>
-                <th className="border px-2 py-1.5 min-w-[140px]">Tên đoàn</th>
-                <th className="border px-2 py-1.5 w-28">Ngày đi</th>
-                <th className="border px-2 py-1.5 w-28">Ngày về</th>
-                <th className="border px-2 py-1.5 min-w-[100px]">Bay tiễn</th>
-                <th className="border px-2 py-1.5 min-w-[100px]">Bay đón</th>
-                <th className="border px-2 py-1.5 min-w-[90px]">Địa điểm</th>
-                <th className="border px-2 py-1.5 min-w-[80px]">Agent</th>
-                <th className="border px-2 py-1.5 min-w-[100px]">HDV</th>
-                <th className="border px-2 py-1.5 w-20">Số khách</th>
-                <th className="border px-2 py-1.5 min-w-[120px]">Ghi chú</th>
-                <th className="border px-2 py-1.5 w-32">Trạng thái</th>
+                <th className="border px-2 py-1.5 min-w-[140px]">{t("Tên đoàn")}</th>
+                <th className="border px-2 py-1.5 w-28">{t("Ngày đi")}</th>
+                <th className="border px-2 py-1.5 w-28">{t("Ngày về")}</th>
+                <th className="border px-2 py-1.5 min-w-[100px]">{t("Bay tiễn")}</th>
+                <th className="border px-2 py-1.5 min-w-[100px]">{t("Bay đón")}</th>
+                <th className="border px-2 py-1.5 min-w-[90px]">{t("Địa điểm")}</th>
+                <th className="border px-2 py-1.5 min-w-[80px]">{t("Agent")}</th>
+                <th className="border px-2 py-1.5 min-w-[100px]">{t("HDV")}</th>
+                <th className="border px-2 py-1.5 w-20">{t("Số khách")}</th>
+                <th className="border px-2 py-1.5 min-w-[120px]">{t("Ghi chú")}</th>
+                <th className="border px-2 py-1.5 w-32">{t("Trạng thái")}</th>
               </tr>
             </thead>
             <tbody>
@@ -426,7 +429,7 @@ function ReviewDialog({
                       className="h-6 text-xs px-1 border-0 focus:border focus:border-primary bg-transparent"
                       value={row.hdv_ten}
                       onChange={(e) => updateRow(idx, { hdv_ten: e.target.value })}
-                      placeholder="(tùy chọn)"
+                      placeholder={t("(tùy chọn)")}
                     />
                   </td>
 
@@ -454,7 +457,7 @@ function ReviewDialog({
                   <td className="border px-2 py-0.5">
                     {row.error
                       ? <span className="text-destructive text-[10px] leading-tight">{row.error}</span>
-                      : <span className="text-green-600 font-medium">✓ Hợp lệ</span>
+                      : <span className="text-green-600 font-medium">{t("✓ Hợp lệ")}</span>
                     }
                   </td>
                 </tr>
@@ -466,12 +469,12 @@ function ReviewDialog({
         <DialogFooter className="pt-2">
           <div className="flex items-center gap-2 w-full justify-between">
             <p className="text-xs text-muted-foreground">
-              {errorCount > 0 && `${errorCount} hàng lỗi sẽ bị bỏ qua khi xác nhận`}
+              {errorCount > 0 && `${errorCount} ${t("hàng lỗi sẽ bị bỏ qua khi xác nhận")}`}
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onCancel}>Hủy</Button>
+              <Button variant="outline" onClick={onCancel}>{t("Hủy")}</Button>
               <Button onClick={() => onConfirm(editRows)} disabled={validCount === 0}>
-                Thêm {validCount} đoàn hợp lệ
+                {t("Thêm")} {validCount} {t("đoàn hợp lệ")}
               </Button>
             </div>
           </div>
@@ -495,9 +498,10 @@ function ScheduleGrid({
   result: TourInput[];
   hdvList: { id: number; ten: string }[];
 }) {
-  const assignedTours = result.filter((t) => t.assigned_hdv_id !== null);
+  useTranslate();
+  const assignedTours = result.filter((tour) => tour.assigned_hdv_id !== null);
   if (assignedTours.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-8">Không có đoàn nào được xếp</p>;
+    return <p className="text-sm text-muted-foreground text-center py-8">{t("Không có đoàn nào được xếp")}</p>;
   }
 
   // Phạm vi ngày
@@ -511,7 +515,7 @@ function ScheduleGrid({
   const monthGroups: { label: string; month: string; count: number }[] = [];
   for (const day of days) {
     const key = format(day, "yyyy-MM");
-    const label = `Tháng ${format(day, "M")}`;
+    const label = `${t("Tháng")} ${format(day, "M")}`;
     if (!monthGroups.length || monthGroups[monthGroups.length - 1].month !== key) {
       monthGroups.push({ month: key, label, count: 1 });
     } else {
@@ -583,7 +587,7 @@ function ScheduleGrid({
     <div className="space-y-2">
       <div className="text-center">
         <p className="font-bold text-sm uppercase tracking-wide">
-          LỊCH ĐIỀU HƯỚNG DẪN VIÊN THÁNG {titleMonth} NĂM {titleYear}
+          {t("LỊCH ĐIỀU HƯỚNG DẪN VIÊN THÁNG")} {titleMonth} {t("NĂM")} {titleYear}
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -591,9 +595,9 @@ function ScheduleGrid({
           <thead>
             {/* Hàng nhóm tháng */}
             <tr className="bg-green-600 text-white text-center">
-              <th rowSpan={2} className="border border-green-700 px-2 py-1 whitespace-nowrap">STT</th>
-              <th rowSpan={2} className="border border-green-700 px-3 py-1 whitespace-nowrap">Họ tên</th>
-              <th rowSpan={2} className="border border-green-700 px-2 py-1">Tên</th>
+              <th rowSpan={2} className="border border-green-700 px-2 py-1 whitespace-nowrap">{t("STT")}</th>
+              <th rowSpan={2} className="border border-green-700 px-3 py-1 whitespace-nowrap">{t("Họ tên")}</th>
+              <th rowSpan={2} className="border border-green-700 px-2 py-1">{t("Tên")}</th>
               {monthGroups.map((mg) => (
                 <th key={mg.month} colSpan={mg.count} className="border border-green-700 px-1 py-0.5">
                   {mg.label}
@@ -641,6 +645,7 @@ function ScheduleGrid({
 
 // ─── Main page ────────────────────────────────────────────────────
 function XepHDVPageContent() {
+  useTranslate();
   const id = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -689,7 +694,7 @@ function XepHDVPageContent() {
   // Xác nhận từ ReviewDialog → chuyển hàng hợp lệ vào fileTours
   function confirmImport(rows: ReviewRow[]) {
     const validRows = rows.filter((r) => !r.error && r.ten_doan.trim() && r.ngay_di && r.ngay_ve);
-    if (validRows.length === 0) { toast.error("Không có hàng hợp lệ"); return; }
+    if (validRows.length === 0) { toast.error(t("Không có hàng hợp lệ")); return; }
 
     const newTours: (TourInput & { _key: string })[] = validRows.map((r, i) => {
       const dia_diem_id = diaDiemList.find(
@@ -731,8 +736,8 @@ function XepHDVPageContent() {
     setResult(null);
     const skipped = rows.length - validRows.length;
     toast.success(
-      `Đã thêm ${newTours.length} đoàn` +
-      (skipped > 0 ? ` · bỏ qua ${skipped} hàng lỗi` : "")
+      `${t("Đã thêm")} ${newTours.length} ${t("đoàn")}` +
+      (skipped > 0 ? ` · ${t("bỏ qua")} ${skipped} ${t("hàng lỗi")}` : "")
     );
   }
 
@@ -760,7 +765,7 @@ function XepHDVPageContent() {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
-        if (rows.length < 2) { toast.error("File không có dữ liệu"); return; }
+        if (rows.length < 2) { toast.error(t("File không có dữ liệu")); return; }
 
         // Xác định cột từ header row (row 0)
         const headers = rows[0].map((h) => String(h).trim().toLowerCase());
@@ -778,7 +783,7 @@ function XepHDVPageContent() {
         const iGhiChu  = col(["ghi_chu", "ghi chú", "ghi chu", "note", "notes"]);
 
         if (iName < 0 || iFrom < 0 || iTo < 0) {
-          toast.error("File thiếu cột bắt buộc: ten_doan, ngay_di, ngay_ve");
+          toast.error(t("File thiếu cột bắt buộc: ten_doan, ngay_di, ngay_ve"));
           return;
         }
 
@@ -808,7 +813,7 @@ function XepHDVPageContent() {
           });
         }
 
-        if (reviewData.length === 0) { toast.error("Không có dữ liệu nào"); return; }
+        if (reviewData.length === 0) { toast.error(t("Không có dữ liệu nào")); return; }
 
         const errorCount = reviewData.filter(
           (r) => !r.ngay_di || !r.ngay_ve || r.ngay_di > r.ngay_ve
@@ -822,7 +827,7 @@ function XepHDVPageContent() {
           confirmImport(reviewData.map((r) => ({ ...r, error: undefined })));
         }
       } catch {
-        toast.error("Lỗi đọc file Excel");
+        toast.error(t("Lỗi đọc file Excel"));
       }
     };
     reader.readAsArrayBuffer(file);
@@ -858,8 +863,8 @@ function XepHDVPageContent() {
 
   function handleRun() {
     const tours = getSelectedTours();
-    if (tours.length === 0) { toast.error("Chưa chọn đoàn nào"); return; }
-    if (poolHdvs.length === 0) { toast.error("Không có hướng dẫn viên nào trong pool"); return; }
+    if (tours.length === 0) { toast.error(t("Chưa chọn đoàn nào")); return; }
+    if (poolHdvs.length === 0) { toast.error(t("Không có hướng dẫn viên nào trong pool")); return; }
     setResult(assignHDVs(tours, poolHdvs, maxToursPerHDV));
     setLockedTourKeys(new Set());
     setViewMode("cards");
@@ -867,7 +872,7 @@ function XepHDVPageContent() {
 
   function handleRerun() {
     if (!result) return;
-    if (poolHdvs.length === 0) { toast.error("Không có hướng dẫn viên nào trong pool"); return; }
+    if (poolHdvs.length === 0) { toast.error(t("Không có hướng dẫn viên nào trong pool")); return; }
     const toursForRerun = result.map((t) => {
       const key = tourResultKey(t);
       const isLocked = lockedTourKeys.has(key);
@@ -896,12 +901,12 @@ function XepHDVPageContent() {
     if (!result) return;
     const toSave = result.filter((t) => t.doan_id != null);
     const skipped = result.filter((t) => t.doan_id == null).length;
-    if (toSave.length === 0) { toast.error("Không có đoàn nào từ DB để lưu"); return; }
+    if (toSave.length === 0) { toast.error(t("Không có đoàn nào từ DB để lưu")); return; }
     try {
       await saveMut.mutateAsync(toSave.map((t) => ({ doan_id: t.doan_id!, hdv_id: t.assigned_hdv_id })));
-      toast.success(`Đã lưu ${toSave.length} đoàn${skipped > 0 ? ` · ${skipped} đoàn từ file không lưu vào DB` : ""}`);
+      toast.success(`${t("Đã lưu")} ${toSave.length} ${t("đoàn")}${skipped > 0 ? ` · ${skipped} ${t("đoàn từ file không lưu vào DB")}` : ""}`);
     } catch {
-      toast.error("Lỗi khi lưu");
+      toast.error(t("Lỗi khi lưu"));
     }
   }
 
@@ -1112,7 +1117,7 @@ function XepHDVPageContent() {
       <div className="flex items-center justify-between px-4 py-2.5 border-b bg-card shrink-0">
         <div className="flex items-center gap-2">
           <CalendarCheck className="h-4 w-4 text-primary" />
-          <h1 className="font-semibold text-sm">Xếp hướng dẫn viên</h1>
+          <h1 className="font-semibold text-sm">{t("Xếp hướng dẫn viên")}</h1>
         </div>
         <div className="flex items-center gap-2">
           {result && (
@@ -1126,7 +1131,7 @@ function XepHDVPageContent() {
                     viewMode === "cards" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
                   )}
                 >
-                  <List className="h-3.5 w-3.5" /> Phân công
+                  <List className="h-3.5 w-3.5" /> {t("Phân công")}
                 </button>
                 <button
                   onClick={() => setViewMode("grid")}
@@ -1135,7 +1140,7 @@ function XepHDVPageContent() {
                     viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"
                   )}
                 >
-                  <LayoutGrid className="h-3.5 w-3.5" /> Lịch
+                  <LayoutGrid className="h-3.5 w-3.5" /> {t("Lịch")}
                 </button>
               </div>
               {/* Sub-toggle chỉ hiện ở view Phân công */}
@@ -1148,7 +1153,7 @@ function XepHDVPageContent() {
                       assignView === "byhdv" ? "bg-muted font-medium" : "hover:bg-muted/60"
                     )}
                   >
-                    Theo HDV
+                    {t("Theo HDV")}
                   </button>
                   <button
                     onClick={() => setAssignView("bydate")}
@@ -1157,7 +1162,7 @@ function XepHDVPageContent() {
                       assignView === "bydate" ? "bg-muted font-medium" : "hover:bg-muted/60"
                     )}
                   >
-                    Theo ngày
+                    {t("Theo ngày")}
                   </button>
                 </div>
               )}
@@ -1168,7 +1173,7 @@ function XepHDVPageContent() {
               size="sm" variant="outline" className="h-8 text-xs gap-1.5"
               onClick={assignView === "byhdv" ? exportAssignmentToExcel : exportByDateToExcel}
             >
-              <Download className="h-3.5 w-3.5" /> Tải Excel
+              <Download className="h-3.5 w-3.5" /> {t("Tải Excel")}
             </Button>
           )}
           {result && viewMode === "grid" && (
@@ -1176,11 +1181,11 @@ function XepHDVPageContent() {
               size="sm" variant="outline" className="h-8 text-xs gap-1.5"
               onClick={exportScheduleToExcel}
             >
-              <Download className="h-3.5 w-3.5" /> Tải Excel
+              <Download className="h-3.5 w-3.5" /> {t("Tải Excel")}
             </Button>
           )}
           <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleRun} disabled={selectedDoanIds.size === 0}>
-            <Play className="h-3.5 w-3.5" /> Chạy xếp
+            <Play className="h-3.5 w-3.5" /> {t("Chạy xếp")}
           </Button>
           <Button
             size="sm" variant="outline" className="h-8 text-xs gap-1.5"
@@ -1188,7 +1193,7 @@ function XepHDVPageContent() {
             disabled={!result || saveMut.isPending}
           >
             <Save className="h-3.5 w-3.5" />
-            {saveMut.isPending ? "Đang lưu..." : "Xác nhận & Lưu"}
+            {saveMut.isPending ? t("Đang lưu...") : t("Xác nhận & Lưu")}
           </Button>
         </div>
       </div>
@@ -1202,15 +1207,15 @@ function XepHDVPageContent() {
               {/* Section: Đoàn cần xếp */}
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                  Đoàn cần xếp ({selectedDoanIds.size})
+                  {t("Đoàn cần xếp")} ({selectedDoanIds.size})
                 </p>
 
                 {/* Filter từ DB */}
                 <div className="border rounded-md p-2.5 space-y-2">
-                  <p className="text-xs font-medium">Lấy từ DB</p>
+                  <p className="text-xs font-medium">{t("Lấy từ DB")}</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <div className="space-y-0.5">
-                      <Label className="text-[10px] text-muted-foreground">Từ ngày</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t("Từ ngày")}</Label>
                       <DatePicker
                         className="h-7 text-xs w-full"
                         value={dbFrom}
@@ -1218,7 +1223,7 @@ function XepHDVPageContent() {
                       />
                     </div>
                     <div className="space-y-0.5">
-                      <Label className="text-[10px] text-muted-foreground">Đến ngày</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t("Đến ngày")}</Label>
                       <DatePicker
                         className="h-7 text-xs w-full"
                         value={dbTo}
@@ -1229,14 +1234,14 @@ function XepHDVPageContent() {
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                       <Checkbox checked={hideWithHdv} onCheckedChange={(v) => setHideWithHdv(!!v)} />
-                      Chỉ đoàn chưa có HDV
+                      {t("Chỉ đoàn chưa có HDV")}
                     </label>
                     <Button
                       size="sm" variant="outline" className="h-6 text-xs ml-auto"
                       disabled={!dbFrom || !dbTo}
                       onClick={() => { setFilterActive({ from: dbFrom, to: dbTo }); setResult(null); }}
                     >
-                      {dbFetching ? "Đang tải..." : "Tải"}
+                      {dbFetching ? t("Đang tải...") : t("Tải")}
                     </Button>
                   </div>
                   {displayDbTours.length > 0 && (
@@ -1256,7 +1261,7 @@ function XepHDVPageContent() {
                                 {tour.locked_hdv_id && (
                                   <Badge variant="secondary" className="text-[9px] h-3.5 px-1 gap-0.5 shrink-0">
                                     <Lock className="h-2.5 w-2.5" />
-                                    {hdvList.find((h) => h.id === tour.locked_hdv_id)?.ten.split(/\s+/).pop() ?? "HDV"}
+                                    {hdvList.find((h) => h.id === tour.locked_hdv_id)?.ten.split(/\s+/).pop() ?? t("HDV")}
                                   </Badge>
                                 )}
                               </div>
@@ -1271,23 +1276,23 @@ function XepHDVPageContent() {
                     </div>
                   )}
                   {filterActive && displayDbTours.length === 0 && !dbFetching && (
-                    <p className="text-xs text-muted-foreground text-center py-1">Không có đoàn nào</p>
+                    <p className="text-xs text-muted-foreground text-center py-1">{t("Không có đoàn nào")}</p>
                   )}
                 </div>
 
                 {/* Upload Excel */}
                 <div className="border rounded-md p-2.5 space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium">Upload file Excel</p>
+                    <p className="text-xs font-medium">{t("Upload file Excel")}</p>
                     <Button
                       size="sm" variant="ghost" className="h-6 text-[11px] gap-1 text-muted-foreground"
                       onClick={downloadTemplate}
                     >
-                      <Download className="h-3 w-3" /> Tải file mẫu
+                      <Download className="h-3 w-3" /> {t("Tải file mẫu")}
                     </Button>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    Cột: ten_doan · hdv · agent · ngay_di · ngay_ve · chuyen_bay_tien · chuyen_bay_don · dia_diem
+                    {t("Cột: ten_doan · hdv · agent · ngay_di · ngay_ve · chuyen_bay_tien · chuyen_bay_don · dia_diem")}
                   </p>
 
                   <input
@@ -1301,7 +1306,7 @@ function XepHDVPageContent() {
                     size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <Upload className="h-3.5 w-3.5" /> Chọn file (.xlsx / .xls)
+                    <Upload className="h-3.5 w-3.5" /> {t("Chọn file (.xlsx / .xls)")}
                   </Button>
 
                   {/* Danh sách đoàn từ file */}
@@ -1331,7 +1336,7 @@ function XepHDVPageContent() {
                                 {tour.locked_hdv_id && (
                                   <Badge variant="secondary" className="text-[9px] h-3.5 px-1 gap-0.5 shrink-0">
                                     <Lock className="h-2.5 w-2.5" />
-                                    {hdvList.find((h) => h.id === tour.locked_hdv_id)?.ten.split(/\s+/).pop() ?? "HDV"}
+                                    {hdvList.find((h) => h.id === tour.locked_hdv_id)?.ten.split(/\s+/).pop() ?? t("HDV")}
                                   </Badge>
                                 )}
                               </div>
@@ -1357,7 +1362,7 @@ function XepHDVPageContent() {
               {/* Section: Hướng dẫn viên */}
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                  Hướng dẫn viên
+                  {t("Hướng dẫn viên")}
                 </p>
                 <div className="border rounded-md p-2.5 space-y-2">
                   <div className="flex gap-3">
@@ -1368,7 +1373,7 @@ function XepHDVPageContent() {
                         onChange={() => setHdvMode("all")}
                         className="accent-primary"
                       />
-                      Tất cả đang hoạt động
+                      {t("Tất cả đang hoạt động")}
                       <span className="text-muted-foreground">({activeHdvs.length})</span>
                     </label>
                     <label className="flex items-center gap-1.5 text-xs cursor-pointer">
@@ -1378,7 +1383,7 @@ function XepHDVPageContent() {
                         onChange={() => setHdvMode("manual")}
                         className="accent-primary"
                       />
-                      Chọn thủ công
+                      {t("Chọn thủ công")}
                     </label>
                   </div>
                   {hdvMode === "manual" && (
@@ -1407,17 +1412,17 @@ function XepHDVPageContent() {
                       })}
                     </div>
                   )}
-                  <p className="text-[10px] text-muted-foreground">Pool: {poolHdvs.length} HDV</p>
+                  <p className="text-[10px] text-muted-foreground">{t("Pool:")} {poolHdvs.length} {t("HDV")}</p>
                 </div>
               </div>
 
               {/* Section: Giới hạn đoàn */}
               <div className="space-y-1.5">
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                  Giới hạn xếp
+                  {t("Giới hạn xếp")}
                 </p>
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs shrink-0 w-28">Đoàn tối đa / HDV</Label>
+                  <Label className="text-xs shrink-0 w-28">{t("Đoàn tối đa / HDV")}</Label>
                   <Input
                     className="h-7 text-xs w-20"
                     type="number"
@@ -1440,11 +1445,11 @@ function XepHDVPageContent() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5">
                       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
-                        Khóa đoàn
+                        {t("Khóa đoàn")}
                       </p>
                       {lockedTourKeys.size > 0 && (
                         <Badge variant="secondary" className="text-[9px] h-4 px-1.5 normal-case">
-                          {lockedTourKeys.size} đoàn khóa
+                          {lockedTourKeys.size} {t("đoàn khóa")}
                         </Badge>
                       )}
                     </div>
@@ -1452,16 +1457,16 @@ function XepHDVPageContent() {
                       {/* Quick-lock theo agent */}
                       {(() => {
                         const agentsInList = agents.filter((ag) =>
-                          lockList.some((t) => t.agent_id === ag.id)
+                          lockList.some((tour) => tour.agent_id === ag.id)
                         );
                         if (agentsInList.length === 0) return null;
                         return (
                           <div className="space-y-1">
-                            <p className="text-[10px] text-muted-foreground">Khóa nhanh theo agent:</p>
+                            <p className="text-[10px] text-muted-foreground">{t("Khóa nhanh theo agent:")}</p>
                             <div className="flex flex-wrap gap-1">
                               {agentsInList.map((ag) => {
                                 const tourKeysOfAgent = lockList
-                                  .filter((t) => t.agent_id === ag.id)
+                                  .filter((tour) => tour.agent_id === ag.id)
                                   .map(tourResultKey);
                                 const allLocked = tourKeysOfAgent.length > 0 &&
                                   tourKeysOfAgent.every((k) => lockedTourKeys.has(k));
@@ -1504,7 +1509,7 @@ function XepHDVPageContent() {
                           const isLocked = lockedTourKeys.has(key);
                           const hdvId = result ? tour.assigned_hdv_id : tour.locked_hdv_id;
                           const hdvName = hdvId
-                            ? (hdvMap.get(hdvId) ?? hdvList.find((h) => h.id === hdvId)?.ten ?? `HDV #${hdvId}`)
+                            ? (hdvMap.get(hdvId) ?? hdvList.find((h) => h.id === hdvId)?.ten ?? `${t("HDV")} #${hdvId}`)
                             : null;
                           return (
                             <label
@@ -1545,8 +1550,8 @@ function XepHDVPageContent() {
                           size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5"
                           onClick={handleRerun}
                         >
-                          <Play className="h-3.5 w-3.5" /> Xếp lại
-                          {lockedTourKeys.size > 0 && ` (${lockList.length - lockedTourKeys.size} đoàn còn lại)`}
+                          <Play className="h-3.5 w-3.5" /> {t("Xếp lại")}
+                          {lockedTourKeys.size > 0 && ` (${lockList.length - lockedTourKeys.size} ${t("đoàn còn lại")})`}
                         </Button>
                       )}
                     </div>
@@ -1572,7 +1577,7 @@ function XepHDVPageContent() {
               {!result ? (
                 <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-2">
                   <CalendarCheck className="h-10 w-10 opacity-20" />
-                  <p className="text-sm">Chọn đoàn và HDV, rồi bấm "Chạy xếp"</p>
+                  <p className="text-sm">{t("Chọn đoàn và HDV, rồi bấm \"Chạy xếp\"")}</p>
                 </div>
               ) : assignView === "bydate" ? (
                 /* ── View theo ngày ── */
@@ -1580,16 +1585,16 @@ function XepHDVPageContent() {
                   <table className="text-xs w-full border-collapse">
                     <thead>
                       <tr className="bg-[#E6F1FB] text-left">
-                        <th className="border px-2 py-1.5 min-w-[160px]">Tên đoàn</th>
-                        <th className="border px-2 py-1.5 min-w-[120px]">HDV</th>
-                        <th className="border px-2 py-1.5 min-w-[80px]">Agent</th>
-                        <th className="border px-2 py-1.5 w-24">Ngày đi</th>
-                        <th className="border px-2 py-1.5 w-24">Ngày về</th>
-                        <th className="border px-2 py-1.5 w-20">Bay tiễn</th>
-                        <th className="border px-2 py-1.5 w-20">Bay đón</th>
-                        <th className="border px-2 py-1.5 min-w-[80px]">Địa điểm</th>
-                        <th className="border px-2 py-1.5 w-20">Số khách</th>
-                        <th className="border px-2 py-1.5 min-w-[100px]">Ghi chú</th>
+                        <th className="border px-2 py-1.5 min-w-[160px]">{t("Tên đoàn")}</th>
+                        <th className="border px-2 py-1.5 min-w-[120px]">{t("HDV")}</th>
+                        <th className="border px-2 py-1.5 min-w-[80px]">{t("Agent")}</th>
+                        <th className="border px-2 py-1.5 w-24">{t("Ngày đi")}</th>
+                        <th className="border px-2 py-1.5 w-24">{t("Ngày về")}</th>
+                        <th className="border px-2 py-1.5 w-20">{t("Bay tiễn")}</th>
+                        <th className="border px-2 py-1.5 w-20">{t("Bay đón")}</th>
+                        <th className="border px-2 py-1.5 min-w-[80px]">{t("Địa điểm")}</th>
+                        <th className="border px-2 py-1.5 w-20">{t("Số khách")}</th>
+                        <th className="border px-2 py-1.5 min-w-[100px]">{t("Ghi chú")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1597,7 +1602,7 @@ function XepHDVPageContent() {
                         .sort((a, b) => a.ngay_di.localeCompare(b.ngay_di) || a.ten_doan.localeCompare(b.ten_doan))
                         .map((tour, idx) => {
                           const hdvId = tour.assigned_hdv_id;
-                          const hdvName = hdvId ? (hdvMap.get(hdvId) ?? `HDV #${hdvId}`) : null;
+                          const hdvName = hdvId ? (hdvMap.get(hdvId) ?? `${t("HDV")} #${hdvId}`) : null;
                           const changed = tour._prev_hdv_id !== undefined && tour._prev_hdv_id !== tour.assigned_hdv_id;
                           return (
                             <tr key={idx} className={cn(
@@ -1607,11 +1612,11 @@ function XepHDVPageContent() {
                               <td className="border px-2 py-1 font-medium">
                                 <div className="flex items-center gap-1">
                                   {changed && (
-                                    <span className="text-amber-600 font-bold text-[10px] shrink-0" title="Đã thay đổi HDV">✱</span>
+                                    <span className="text-amber-600 font-bold text-[10px] shrink-0" title={t("Đã thay đổi HDV")}>✱</span>
                                   )}
                                   {tour.ten_doan}
                                   {!tour.doan_id && (
-                                    <span className="text-[9px] border rounded px-1 text-muted-foreground ml-1">File</span>
+                                    <span className="text-[9px] border rounded px-1 text-muted-foreground ml-1">{t("File")}</span>
                                   )}
                                 </div>
                               </td>
@@ -1629,16 +1634,16 @@ function XepHDVPageContent() {
                                           hdvName ? "text-primary font-medium" : "text-destructive"
                                         )}>
                                           {tour.is_chained && <Zap className="h-3 w-3 text-amber-500 shrink-0" />}
-                                          <span className="flex-1 truncate">{hdvName ?? "— Chưa xếp —"}</span>
+                                          <span className="flex-1 truncate">{hdvName ?? t("— Chưa xếp —")}</span>
                                           <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                                         </button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-52 p-0" align="start">
                                         <Command>
-                                          <CommandInput placeholder="Tìm HDV..." className="h-8 text-xs" />
+                                          <CommandInput placeholder={t("Tìm HDV...")} className="h-8 text-xs" />
                                           <CommandList>
                                             <CommandEmpty className="py-2 text-xs text-center text-muted-foreground">
-                                              Không tìm thấy
+                                              {t("Không tìm thấy")}
                                             </CommandEmpty>
                                             <CommandGroup>
                                               <CommandItem
@@ -1650,7 +1655,7 @@ function XepHDVPageContent() {
                                                 className="text-xs text-muted-foreground"
                                               >
                                                 <Check className={cn("h-3 w-3 mr-2", hdvId === null ? "opacity-100" : "opacity-0")} />
-                                                — Chưa xếp —
+                                                {t("— Chưa xếp —")}
                                               </CommandItem>
                                               {poolHdvs.map((hdv) => (
                                                 <CommandItem
@@ -1693,20 +1698,20 @@ function XepHDVPageContent() {
                 <>
                   {/* Stats bar */}
                   <div className="flex items-center gap-3 pb-1 text-xs text-muted-foreground">
-                    <span>{result.length} đoàn</span>
+                    <span>{result.length} {t("đoàn")}</span>
                     <span>·</span>
-                    <span>{groupedResult!.size - (unassignedCount > 0 ? 1 : 0)} HDV được xếp</span>
+                    <span>{groupedResult!.size - (unassignedCount > 0 ? 1 : 0)} {t("HDV được xếp")}</span>
                     {unassignedCount > 0 && (
-                      <span className="text-destructive font-medium">· {unassignedCount} chưa xếp được</span>
+                      <span className="text-destructive font-medium">· {unassignedCount} {t("chưa xếp được")}</span>
                     )}
-                    {result.some((t) => t.is_chained) && (
+                    {result.some((tour) => tour.is_chained) && (
                       <span className="text-amber-600 flex items-center gap-0.5">
-                        <Zap className="h-3 w-3" /> {result.filter((t) => t.is_chained).length} ghép chuyến
+                        <Zap className="h-3 w-3" /> {result.filter((tour) => tour.is_chained).length} {t("ghép chuyến")}
                       </span>
                     )}
-                    {result.some((t) => t._prev_hdv_id !== undefined && t._prev_hdv_id !== t.assigned_hdv_id) && (
+                    {result.some((tour) => tour._prev_hdv_id !== undefined && tour._prev_hdv_id !== tour.assigned_hdv_id) && (
                       <span className="text-amber-600 font-medium">
-                        · ✱ {result.filter((t) => t._prev_hdv_id !== undefined && t._prev_hdv_id !== t.assigned_hdv_id).length} thay đổi
+                        · ✱ {result.filter((tour) => tour._prev_hdv_id !== undefined && tour._prev_hdv_id !== tour.assigned_hdv_id).length} {t("thay đổi")}
                       </span>
                     )}
                   </div>
@@ -1714,12 +1719,12 @@ function XepHDVPageContent() {
                   {unassignedCount > 0 && groupedResult!.has(null) && (
                     <HDVResultCard
                       hdvId={null}
-                      hdvName="Chưa xếp được"
+                      hdvName={t("Chưa xếp được")}
                       tours={groupedResult!.get(null)!}
                       allHdvs={activeHdvs}
                       onReassign={(idx, newHdvId) => {
-                        const unassigned = result.filter((t) => t.assigned_hdv_id === null);
-                        const globalIdx = result.findIndex((t) => t === unassigned[idx]);
+                        const unassigned = result.filter((tour) => tour.assigned_hdv_id === null);
+                        const globalIdx = result.findIndex((tour) => tour === unassigned[idx]);
                         handleReassign(globalIdx, newHdvId);
                       }}
                       getSuggestionsForTour={(tour) => getSuggestions(tour, result, poolHdvs)}
@@ -1733,11 +1738,11 @@ function XepHDVPageContent() {
                       <HDVResultCard
                         key={hdvId}
                         hdvId={hdvId}
-                        hdvName={hdvMap.get(hdvId!) ?? `HDV #${hdvId}`}
+                        hdvName={hdvMap.get(hdvId!) ?? `${t("HDV")} #${hdvId}`}
                         tours={tours}
                         allHdvs={activeHdvs}
                         onReassign={(idx, newHdvId) => {
-                          const globalIdx = result.findIndex((t) => t === tours[idx]);
+                          const globalIdx = result.findIndex((tour) => tour === tours[idx]);
                           handleReassign(globalIdx, newHdvId);
                         }}
                       />

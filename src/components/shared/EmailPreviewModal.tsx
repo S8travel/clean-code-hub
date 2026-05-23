@@ -18,6 +18,7 @@ import { useEmailSignatures, type EmailSignature } from "@/hooks/use-email-signa
 import { uploadInlineImage } from "@/lib/email-inline-images";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 
 const SIG_HR = `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">`;
 
@@ -54,7 +55,7 @@ interface Props {
 export default function EmailPreviewModal({
   open,
   onOpenChange,
-  title = "Gửi email",
+  title,
   to,
   onToChange,
   subject,
@@ -69,6 +70,8 @@ export default function EmailPreviewModal({
   updateNote = "",
   onUpdateNoteChange,
 }: Props) {
+  useTranslate();
+  const resolvedTitle = title ?? t("Gửi email");
   const editRef = useRef<HTMLDivElement | null>(null);
   const htmlRef = useRef(html);
   htmlRef.current = html; // always latest, no stale closure
@@ -191,7 +194,7 @@ export default function EmailPreviewModal({
         onHtmlChange(node.innerHTML);
       }
     } catch (e: unknown) {
-      toast.error("Tải ảnh thất bại: " + (errMsg(e) || ""));
+      toast.error(t("Tải ảnh thất bại: ") + (errMsg(e) || ""));
     } finally {
       setImgUploading(false);
     }
@@ -237,7 +240,7 @@ export default function EmailPreviewModal({
   const saveSig = () => {
     const id = editingId || crypto.randomUUID();
     const finalHtml = sigEditorRef.current?.innerHTML ?? editHtml;
-    const newSig: EmailSignature = { id, name: editName.trim() || "Chữ ký", html: finalHtml };
+    const newSig: EmailSignature = { id, name: editName.trim() || t("Chữ ký"), html: finalHtml };
     upsert(newSig);
     setSelectedSigId(id);
     setSigEditing(false);
@@ -262,7 +265,7 @@ export default function EmailPreviewModal({
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Mail className="h-4 w-4" />
-            {title}
+            {resolvedTitle}
           </DialogTitle>
         </DialogHeader>
 
@@ -271,8 +274,8 @@ export default function EmailPreviewModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-muted-foreground mb-1">
-                Đến{" "}
-                <span className="text-muted-foreground/60 font-normal">(nhiều email cách nhau bằng dấu phẩy)</span>
+                {t("Đến")}{" "}
+                <span className="text-muted-foreground/60 font-normal">{t("(nhiều email cách nhau bằng dấu phẩy)")}</span>
               </p>
               <Input
                 value={to}
@@ -282,7 +285,7 @@ export default function EmailPreviewModal({
               />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Tiêu đề</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("Tiêu đề")}</p>
               <Input
                 value={subject}
                 onChange={(e) => onSubjectChange(e.target.value)}
@@ -295,20 +298,20 @@ export default function EmailPreviewModal({
           {mode === "update" && (
             <div>
               <p className="text-xs text-muted-foreground mb-1">
-                Lời nhắn cập nhật{" "}
-                <span className="text-muted-foreground/60 font-normal">(optional — hiện callout vàng đầu mail)</span>
+                {t("Lời nhắn cập nhật")}{" "}
+                <span className="text-muted-foreground/60 font-normal">{t("(optional — hiện callout vàng đầu mail)")}</span>
               </p>
               <Input
                 value={updateNote}
                 onChange={(e) => onUpdateNoteChange?.(e.target.value)}
-                placeholder="VD: Số khách tăng từ 16 → 18, đổi set menu sang 200k..."
+                placeholder={t("VD: Số khách tăng từ 16 → 18, đổi set menu sang 200k...")}
                 className="text-sm h-8"
               />
             </div>
           )}
 
           {/* Editor */}
-          <p className="text-xs text-muted-foreground font-medium">Nội dung email</p>
+          <p className="text-xs text-muted-foreground font-medium">{t("Nội dung email")}</p>
           <div
             ref={editorCallbackRef}
             contentEditable
@@ -322,22 +325,22 @@ export default function EmailPreviewModal({
           {/* Signature section */}
           <div className="space-y-2 border-t border-border pt-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground shrink-0">Chữ ký:</span>
+              <span className="text-xs text-muted-foreground shrink-0">{t("Chữ ký:")}</span>
               <Select value={selectedSigId ?? "none"} onValueChange={handleSigChange}>
                 <SelectTrigger className="h-7 text-xs flex-1 max-w-[260px]">
                   <span className="inline-flex items-center gap-1">
                     {!selectedSigId
-                      ? "Không có chữ ký"
+                      ? t("Không có chữ ký")
                       : (
                         <>
-                          {sigs.find((s) => s.id === selectedSigId)?.name ?? "Không có chữ ký"}
+                          {sigs.find((s) => s.id === selectedSigId)?.name ?? t("Không có chữ ký")}
                           {defaultId === selectedSigId && <Star className="h-3 w-3 text-amber-500 fill-amber-400" />}
                         </>
                       )}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Không có chữ ký</SelectItem>
+                  <SelectItem value="none">{t("Không có chữ ký")}</SelectItem>
                   {sigs.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       <span className="inline-flex items-center gap-1">
@@ -353,7 +356,7 @@ export default function EmailPreviewModal({
                   size="sm"
                   variant="ghost"
                   className="h-7 px-2"
-                  title={defaultId === selectedSig.id ? "Bỏ mặc định" : "Đặt làm mặc định"}
+                  title={defaultId === selectedSig.id ? t("Bỏ mặc định") : t("Đặt làm mặc định")}
                   onClick={() => setDefault(defaultId === selectedSig.id ? null : selectedSig.id)}
                 >
                   <Star className={cn(
@@ -370,7 +373,7 @@ export default function EmailPreviewModal({
                 </Button>
               )}
               {!sigEditing && (
-                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={startNewSig} title="Thêm chữ ký mới">
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={startNewSig} title={t("Thêm chữ ký mới")}>
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -382,7 +385,7 @@ export default function EmailPreviewModal({
                 <Input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Tên chữ ký (vd: Chữ ký công ty)"
+                  placeholder={t("Tên chữ ký (vd: Chữ ký công ty)")}
                   className="h-7 text-xs"
                 />
                 {/* Format toolbar */}
@@ -405,9 +408,9 @@ export default function EmailPreviewModal({
                   ))}
                   <div className="w-px h-4 bg-border mx-0.5" />
                   {([
-                    { title: "Căn trái", cmd: "justifyLeft", icon: <AlignLeft className="h-3.5 w-3.5" /> },
-                    { title: "Căn giữa", cmd: "justifyCenter", icon: <AlignCenter className="h-3.5 w-3.5" /> },
-                    { title: "Căn phải", cmd: "justifyRight", icon: <AlignRight className="h-3.5 w-3.5" /> },
+                    { title: t("Căn trái"), cmd: "justifyLeft", icon: <AlignLeft className="h-3.5 w-3.5" /> },
+                    { title: t("Căn giữa"), cmd: "justifyCenter", icon: <AlignCenter className="h-3.5 w-3.5" /> },
+                    { title: t("Căn phải"), cmd: "justifyRight", icon: <AlignRight className="h-3.5 w-3.5" /> },
                   ] as const).map(({ title, cmd, icon }) => (
                     <button
                       key={cmd}
@@ -427,14 +430,14 @@ export default function EmailPreviewModal({
                     onMouseDown={saveSelection}
                     onChange={(e) => restoreAndExec("fontSize", e.target.value)}
                   >
-                    {[["1","Nhỏ"],["2","Vừa-"],["3","Vừa"],["4","To"],["5","To+"],["6","Lớn"],["7","Lớn+"]].map(([v, l]) => (
+                    {[["1",t("Nhỏ")],["2",t("Vừa-")],["3",t("Vừa")],["4",t("To")],["5",t("To+")],["6",t("Lớn")],["7",t("Lớn+")]].map(([v, l]) => (
                       <option key={v} value={v}>{l}</option>
                     ))}
                   </select>
                   <div className="w-px h-4 bg-border mx-0.5" />
                   {/* Text color */}
                   <label
-                    title="Màu chữ"
+                    title={t("Màu chữ")}
                     className="relative h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
                     onMouseDown={saveSelection}
                   >
@@ -449,11 +452,11 @@ export default function EmailPreviewModal({
                   {/* Insert link */}
                   <button
                     type="button"
-                    title="Chèn link"
+                    title={t("Chèn link")}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       saveSelection();
-                      const url = prompt("Nhập URL:");
+                      const url = prompt(t("Nhập URL:"));
                       if (url) restoreAndExec("createLink", url);
                     }}
                     className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -473,16 +476,16 @@ export default function EmailPreviewModal({
                     }
                   }}
                   className="w-full min-h-[112px] text-xs border border-border rounded p-2 focus:outline-none focus:ring-2 focus:ring-ring bg-white empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
-                  data-placeholder="Nhập nội dung chữ ký..."
+                  data-placeholder={t("Nhập nội dung chữ ký...")}
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={saveSig} disabled={!editName.trim() && !editHtml.trim()}>Lưu</Button>
+                  <Button size="sm" onClick={saveSig} disabled={!editName.trim() && !editHtml.trim()}>{t("Lưu")}</Button>
                   {editingId && (
                     <Button size="sm" variant="destructive" onClick={deleteSig}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />Xóa
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />{t("Xóa")}
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => setSigEditing(false)}>Hủy</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSigEditing(false)}>{t("Hủy")}</Button>
                 </div>
               </div>
             )}
@@ -490,19 +493,19 @@ export default function EmailPreviewModal({
           </div>
 
           <p className="text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
-            <strong>Gửi qua server</strong> dùng HTML đúng như nội dung trên.{" "}
-            <strong>Mở email client</strong> dùng <code className="text-[11px]">mailto:</code>, Outlook chỉ nhận text thuần và sẽ khác bố cục.
+            <strong>{t("Gửi qua server")}</strong> {t("dùng HTML đúng như nội dung trên.")}{" "}
+            <strong>{t("Mở email client")}</strong> {t("dùng")} <code className="text-[11px]">mailto:</code>{t(", Outlook chỉ nhận text thuần và sẽ khác bố cục.")}
           </p>
         </div>
 
         <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
           <Button variant="outline" onClick={onMailtoFallback} type="button">
             <Mail className="h-4 w-4 mr-1.5" />
-            Mở email client
+            {t("Mở email client")}
           </Button>
           <Button onClick={onSendViaServer} disabled={sending || !to || imgUploading}>
             <Send className="h-4 w-4 mr-1.5" />
-            {imgUploading ? "Đang tải ảnh..." : sending ? "Đang gửi..." : "Gửi qua server"}
+            {imgUploading ? t("Đang tải ảnh...") : sending ? t("Đang gửi...") : t("Gửi qua server")}
           </Button>
         </DialogFooter>
       </DialogContent>

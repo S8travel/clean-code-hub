@@ -21,6 +21,7 @@ import {
   useUserRoles,
 } from "@/hooks/use-doan";
 import type { UserRole } from "@/hooks/use-doan";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   doanId: number;
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function PermissionPopover({ doanId, doanCode, children }: Props) {
+  useTranslate();
   const { data: permissions, isLoading } = useDoanPermissions(doanId);
   const { data: userRoles } = useUserRoles();
   const addPerm = useAddDoanPermission();
@@ -59,16 +61,16 @@ export function PermissionPopover({ doanId, doanCode, children }: Props) {
         <div className="px-4 py-3 border-b border-border/40">
           <h4 className="text-sm font-semibold flex items-center gap-2">
             <Shield className="h-4 w-4 text-[hsl(var(--brand))]" />
-            Phân quyền đoàn
+            {t("Phân quyền đoàn")}
           </h4>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">{doanCode}</p>
         </div>
 
         <div className="p-4 space-y-3 max-h-[300px] overflow-y-auto">
           {isLoading ? (
-            <p className="text-xs text-muted-foreground">Đang tải...</p>
+            <p className="text-xs text-muted-foreground">{t("Đang tải...")}</p>
           ) : permissions?.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Chưa có ai được phân quyền.</p>
+            <p className="text-xs text-muted-foreground">{t("Chưa có ai được phân quyền.")}</p>
           ) : (
             permissions?.map((p) => (
               <div key={p.id} className="flex items-center justify-between gap-2">
@@ -96,7 +98,7 @@ export function PermissionPopover({ doanId, doanCode, children }: Props) {
           <div className="flex items-center gap-2">
             <Select value={selectedUser} onValueChange={setSelectedUser}>
               <SelectTrigger className="h-8 text-xs flex-1">
-                <span>{availableUsers.find((u) => u.user_id === selectedUser)?.ho_ten ?? "Chọn người..."}</span>
+                <span>{availableUsers.find((u) => u.user_id === selectedUser)?.ho_ten ?? t("Chọn người...")}</span>
               </SelectTrigger>
               <SelectContent>
                 {availableUsers.map((u) => (
@@ -105,7 +107,7 @@ export function PermissionPopover({ doanId, doanCode, children }: Props) {
                   </SelectItem>
                 ))}
                 {availableUsers.length === 0 && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Không còn người khả dụng</div>
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">{t("Không còn người khả dụng")}</div>
                 )}
               </SelectContent>
             </Select>
@@ -116,7 +118,7 @@ export function PermissionPopover({ doanId, doanCode, children }: Props) {
               onClick={handleAdd}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
-              Thêm
+              {t("Thêm")}
             </Button>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
+import { t, useTranslate } from "@/lib/i18n";
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
 const ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
@@ -14,6 +15,7 @@ interface Message {
 }
 
 export default function AiChat() {
+  useTranslate();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -62,7 +64,7 @@ export default function AiChat() {
     } catch (err: unknown) {
       setMessages([...newMessages, {
         role: "assistant",
-        content: `⚠️ Lỗi: ${errMsg(err) || "Không kết nối được AI"}`,
+        content: `⚠️ ${t("Lỗi:")} ${errMsg(err) || t("Không kết nối được AI")}`,
       }]);
     } finally {
       setLoading(false);
@@ -106,7 +108,7 @@ export default function AiChat() {
             {messages.length === 0 && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl rounded-bl-sm px-3 py-2 text-xs leading-relaxed bg-muted text-foreground">
-                  Xin chào, em là trợ lý AI của S8 Travel. Em có thể giúp được gì ạ?
+                  {t("Xin chào, em là trợ lý AI của S8 Travel. Em có thể giúp được gì ạ?")}
                 </div>
               </div>
             )}
@@ -130,7 +132,7 @@ export default function AiChat() {
               <div className="flex justify-start">
                 <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-1.5">
                   <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Đang xử lý...</span>
+                  <span className="text-xs text-muted-foreground">{t("Đang xử lý...")}</span>
                 </div>
               </div>
             )}
@@ -145,7 +147,7 @@ export default function AiChat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder="Nhập câu hỏi..."
+              placeholder={t("Nhập câu hỏi...")}
               className="h-8 text-xs flex-1"
               disabled={loading}
             />

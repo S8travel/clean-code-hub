@@ -15,6 +15,7 @@ import {
   type DoanTaiLieuRow,
 } from "@/hooks/use-doan-tai-lieu";
 import { useAuth } from "@/hooks/use-auth";
+import { t, useTranslate } from "@/lib/i18n";
 
 const SECTIONS: { loai: DoanTaiLieuLoai; desc: string; accent: string }[] = [
   { loai: "bao_gia",         desc: "Báo giá tour gửi khách",           accent: "bg-blue-50 border-blue-200" },
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export default function DoanTaiLieuTab({ doanId }: Props) {
+  useTranslate();
   const { data: docs = [], isLoading } = useDoanTaiLieuList(doanId);
   const { user } = useAuth();
 
@@ -34,7 +36,7 @@ export default function DoanTaiLieuTab({ doanId }: Props) {
   docs.forEach((d) => { docByLoai[d.loai] = d; });
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-4">Đang tải tài liệu...</p>;
+    return <p className="text-sm text-muted-foreground py-4">{t("Đang tải tài liệu...")}</p>;
   }
 
   return (
@@ -64,6 +66,7 @@ function DocSection({
   accent: string;
   uploadedBy: string | null;
 }) {
+  useTranslate();
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadDoanTaiLieu();
   const del = useDeleteDoanTaiLieu();
@@ -78,8 +81,8 @@ function DocSection({
     upload.mutate(
       { doanId, loai, file, uploadedBy },
       {
-        onSuccess: () => toast.success(`Đã upload ${TAI_LIEU_LABEL[loai]}`),
-        onError: (err: unknown) => toast.error("Lỗi upload: " + (errMsg(err) || "")),
+        onSuccess: () => toast.success(`${t("Đã upload")} ${t(TAI_LIEU_LABEL[loai])}`),
+        onError: (err: unknown) => toast.error(t("Lỗi upload: ") + (errMsg(err) || "")),
       },
     );
   };
@@ -90,10 +93,10 @@ function DocSection({
       { id: existing.id, doanId },
       {
         onSuccess: () => {
-          toast.success("Đã xóa tài liệu");
+          toast.success(t("Đã xóa tài liệu"));
           setConfirmDelete(false);
         },
-        onError: (err: unknown) => toast.error("Lỗi xóa: " + (errMsg(err) || "")),
+        onError: (err: unknown) => toast.error(t("Lỗi xóa: ") + (errMsg(err) || "")),
       },
     );
   };
@@ -104,9 +107,9 @@ function DocSection({
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <FileText className="h-4 w-4 text-muted-foreground" />
-            {TAI_LIEU_LABEL[loai]}
+            {t(TAI_LIEU_LABEL[loai])}
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t(desc)}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <input
@@ -128,7 +131,7 @@ function DocSection({
             ) : (
               <Upload className="h-3 w-3" />
             )}
-            {existing ? "Thay file" : "Upload"}
+            {existing ? t("Thay file") : t("Upload")}
           </Button>
         </div>
       </div>
@@ -143,10 +146,10 @@ function DocSection({
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 truncate"
             >
               <ExternalLink className="h-3 w-3 shrink-0" />
-              <span className="truncate">{existing.file_name || "Xem file"}</span>
+              <span className="truncate">{existing.file_name || t("Xem file")}</span>
             </a>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Upload {format(new Date(existing.uploaded_at), "dd/MM/yyyy HH:mm", { locale: vi })}
+              {t("Upload")} {format(new Date(existing.uploaded_at), "dd/MM/yyyy HH:mm", { locale: vi })}
             </p>
           </div>
           {confirmDelete ? (
@@ -158,7 +161,7 @@ function DocSection({
                 onClick={handleDelete}
                 disabled={del.isPending}
               >
-                Xác nhận xóa
+                {t("Xác nhận xóa")}
               </Button>
               <Button
                 size="sm"
@@ -166,7 +169,7 @@ function DocSection({
                 className="h-6 text-[11px] px-2"
                 onClick={() => setConfirmDelete(false)}
               >
-                Hủy
+                {t("Hủy")}
               </Button>
             </div>
           ) : (
@@ -175,14 +178,14 @@ function DocSection({
               variant="ghost"
               className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-destructive"
               onClick={() => setConfirmDelete(true)}
-              title="Xóa"
+              title={t("Xóa")}
             >
               <Trash2 className="h-3 w-3" />
             </Button>
           )}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground italic px-1">Chưa có file.</p>
+        <p className="text-xs text-muted-foreground italic px-1">{t("Chưa có file.")}</p>
       )}
     </div>
   );

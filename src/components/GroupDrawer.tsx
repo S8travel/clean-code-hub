@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { TravelGroup, TravelGroupInsert } from "@/hooks/use-travel-groups";
+import { t, useTranslate } from "@/lib/i18n";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
+  useTranslate();
   const [form, setForm] = useState<TravelGroupInsert>({
     ten_doan: "",
     hdv: "",
@@ -70,7 +72,7 @@ export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
             className="fixed right-0 top-0 z-50 h-full w-full max-w-md bg-background shadow-xl border-l border-border/40 flex flex-col"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-border/40">
-              <h2 className="text-display font-semibold">{group ? "Edit Group" : "New Group"}</h2>
+              <h2 className="text-display font-semibold">{group ? t("Edit Group") : t("New Group")}</h2>
               <button onClick={onClose} className="p-2 rounded-md hover:bg-muted transition-colors">
                 <X className="h-4 w-4" />
               </button>
@@ -78,28 +80,28 @@ export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
               <div className="space-y-1.5">
-                <Label className="text-label uppercase text-muted-foreground">Tên Đoàn *</Label>
+                <Label className="text-label uppercase text-muted-foreground">{t("Tên Đoàn *")}</Label>
                 <Input
                   required
                   value={form.ten_doan}
                   onChange={(e) => setForm({ ...form, ten_doan: e.target.value })}
-                  placeholder="VD: Tour Đà Nẵng T3"
+                  placeholder={t("VD: Tour Đà Nẵng T3")}
                   className="rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-label uppercase text-muted-foreground">Hướng dẫn viên</Label>
+                <Label className="text-label uppercase text-muted-foreground">{t("Hướng dẫn viên")}</Label>
                 <Input
                   value={form.hdv ?? ""}
                   onChange={(e) => setForm({ ...form, hdv: e.target.value })}
-                  placeholder="Tên HDV"
+                  placeholder={t("Tên HDV")}
                   className="rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-label uppercase text-muted-foreground">Số Khách</Label>
+                <Label className="text-label uppercase text-muted-foreground">{t("Số Khách")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -111,7 +113,7 @@ export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-label uppercase text-muted-foreground">Ngày Đi</Label>
+                  <Label className="text-label uppercase text-muted-foreground">{t("Ngày Đi")}</Label>
                   <DatePicker
                     value={form.ngay_di ?? ""}
                     onChange={(v) => setForm({ ...form, ngay_di: v })}
@@ -119,7 +121,7 @@ export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-label uppercase text-muted-foreground">Ngày Về</Label>
+                  <Label className="text-label uppercase text-muted-foreground">{t("Ngày Về")}</Label>
                   <DatePicker
                     value={form.ngay_ve ?? ""}
                     onChange={(v) => setForm({ ...form, ngay_ve: v })}
@@ -129,11 +131,11 @@ export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-label uppercase text-muted-foreground">Ghi Chú</Label>
+                <Label className="text-label uppercase text-muted-foreground">{t("Ghi Chú")}</Label>
                 <Textarea
                   value={form.ghi_chu ?? ""}
                   onChange={(e) => setForm({ ...form, ghi_chu: e.target.value })}
-                  placeholder="Notes..."
+                  placeholder={t("Notes...")}
                   rows={3}
                   className="rounded-lg resize-none"
                 />
@@ -145,7 +147,7 @@ export function GroupDrawer({ open, group, onClose, onSave, isSaving }: Props) {
                   disabled={isSaving || !form.ten_doan.trim()}
                   className="w-full active:scale-[0.98] transition-transform"
                 >
-                  {isSaving ? "Saving..." : group ? "Update Group" : "Add Group"}
+                  {isSaving ? t("Saving...") : group ? t("Update Group") : t("Add Group")}
                 </Button>
               </div>
             </form>
