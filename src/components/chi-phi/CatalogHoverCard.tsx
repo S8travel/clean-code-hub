@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import type { NhaHangDetail } from "@/hooks/use-chi-phi-nh";
 import type { CanhDiemInfo } from "@/hooks/use-chi-phi-nh";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -46,21 +47,21 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function NHCard({ info }: { info: NHInfo }) {
   const focText =
     info.foc_khach != null && info.foc_mien != null && info.foc_mien > 0
-      ? `${info.foc_khach} khách + ${info.foc_mien} miễn phí`
+      ? `${info.foc_khach} ${t("khách")} + ${info.foc_mien} ${t("miễn phí")}`
       : null;
 
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-semibold truncate">{info.ten}</p>
       <div className="border-t pt-1.5 space-y-1">
-        <Row label="FOC" value={focText ?? "Không có"} />
-        <Row label="Chiết khấu" value={info.chiet_khau_phan_tram ? `${info.chiet_khau_phan_tram}%` : "—"} />
-        <Row label="Thông tin" value={info.thong_tin_chung} />
-        <Row label="Người TT" value={info.nguoi_thanh_toan ? (NGUOI_TT_LABEL[info.nguoi_thanh_toan] ?? info.nguoi_thanh_toan) : null} />
-        <Row label="Nhà cung cấp" value={info.ten_ncc} />
+        <Row label="FOC" value={focText ?? t("Không có")} />
+        <Row label={t("Chiết khấu")} value={info.chiet_khau_phan_tram ? `${info.chiet_khau_phan_tram}%` : "—"} />
+        <Row label={t("Thông tin")} value={info.thong_tin_chung} />
+        <Row label={t("Người TT")} value={info.nguoi_thanh_toan ? t(NGUOI_TT_LABEL[info.nguoi_thanh_toan] ?? info.nguoi_thanh_toan) : null} />
+        <Row label={t("Nhà cung cấp")} value={info.ten_ncc} />
         {(info.ncc_ngan_hang || info.ncc_so_tai_khoan) && (
           <Row
-            label="Tài khoản"
+            label={t("Tài khoản")}
             value={[info.ncc_ngan_hang, info.ncc_so_tai_khoan].filter(Boolean).join(" — ")}
           />
         )}
@@ -74,12 +75,12 @@ function DVCard({ info }: { info: DVInfo }) {
     <div className="space-y-1.5">
       <p className="text-xs font-semibold truncate">{info.ten}</p>
       <div className="border-t pt-1.5 space-y-1">
-        <Row label="Loại" value={info.loai ? (LOAI_DV_LABEL[info.loai] ?? info.loai) : null} />
-        <Row label="Có phí" value={info.co_phi != null ? (info.co_phi ? "Có" : "Không") : null} />
-        <Row label="Giá mặc định" value={info.gia_mac_dinh != null ? fmt(info.gia_mac_dinh) + " VND" : null} />
-        <Row label="Thông tin" value={info.thong_tin_chung} />
-        <Row label="Ghi chú" value={info.ghi_chu} />
-        <Row label="SĐT" value={info.so_dien_thoai} />
+        <Row label={t("Loại")} value={info.loai ? t(LOAI_DV_LABEL[info.loai] ?? info.loai) : null} />
+        <Row label={t("Có phí")} value={info.co_phi != null ? (info.co_phi ? t("Có") : t("Không")) : null} />
+        <Row label={t("Giá mặc định")} value={info.gia_mac_dinh != null ? fmt(info.gia_mac_dinh) + " VND" : null} />
+        <Row label={t("Thông tin")} value={info.thong_tin_chung} />
+        <Row label={t("Ghi chú")} value={info.ghi_chu} />
+        <Row label={t("SĐT")} value={info.so_dien_thoai} />
         <Row label="Email" value={info.email} />
       </div>
     </div>
@@ -87,6 +88,7 @@ function DVCard({ info }: { info: DVInfo }) {
 }
 
 export default function CatalogHoverCard({ info, children }: Props) {
+  useTranslate();
   if (!info) return <>{children}</>;
 
   return (

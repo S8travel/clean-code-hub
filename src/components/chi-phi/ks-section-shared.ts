@@ -12,13 +12,13 @@ export function fmtDateDisplay(d: string) {
   return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 }
 
-export const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  cho_duyet:     { text: "Chờ duyệt ĐNTT",  cls: "bg-yellow-100 text-yellow-700" },
-  da_duyet:      { text: "Đã duyệt ĐNTT",   cls: "bg-teal-100 text-teal-700" },
-  da_thanh_toan: { text: "Đã thanh toán",   cls: "bg-emerald-100 text-emerald-700" },
-  hoan_tien:     { text: "Hoàn tiền",       cls: "bg-blue-100 text-blue-700" },
-  cong_no:       { text: "Công nợ",         cls: "bg-purple-100 text-purple-700" },
-  tu_choi:       { text: "Từ chối",         cls: "bg-red-100 text-red-700" },
+export const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
+  cho_duyet:     { textKey: "Chờ duyệt ĐNTT",  cls: "bg-yellow-100 text-yellow-700" },
+  da_duyet:      { textKey: "Đã duyệt ĐNTT",   cls: "bg-teal-100 text-teal-700" },
+  da_thanh_toan: { textKey: "Đã thanh toán",   cls: "bg-emerald-100 text-emerald-700" },
+  hoan_tien:     { textKey: "Hoàn tiền",       cls: "bg-blue-100 text-blue-700" },
+  cong_no:       { textKey: "Công nợ",         cls: "bg-purple-100 text-purple-700" },
+  tu_choi:       { textKey: "Từ chối",         cls: "bg-red-100 text-red-700" },
 };
 
 export const dayLabel = (dateStr: string) => {

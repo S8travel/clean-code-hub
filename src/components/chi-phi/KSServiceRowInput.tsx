@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { LocalKSRow, KSLoaiRow } from "./ks-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -25,6 +26,7 @@ interface Props {
 export default memo(function KSServiceRowInput({
   row, globalIdx, onFieldChange, onBlurSave, onDelete, disabled = false, onToggleNguoiTt,
 }: Props) {
+  useTranslate();
   const [localTen, setLocalTen] = useState(row.loai_phong);
   const [localSL, setLocalSL] = useState(String(row.so_phong));
   const [localFoc, setLocalFoc] = useState(String(row.foc_count ?? 0));
@@ -66,8 +68,8 @@ export default memo(function KSServiceRowInput({
   const currentLoai: ServiceLoai =
     row.loai_row && row.loai_row !== "phong" ? row.loai_row : "dich_vu_khac";
 
-  const lockTitle = "Đã thanh toán — dùng nút Điều chỉnh để track";
-  const loaiLabel = currentLoai === "dich_vu_an" ? "Ăn" : currentLoai === "dich_vu_ve" ? "Vé" : "Khác";
+  const lockTitle = t("Đã thanh toán — dùng nút Điều chỉnh để track");
+  const loaiLabel = currentLoai === "dich_vu_an" ? t("Ăn") : currentLoai === "dich_vu_ve" ? t("Vé") : t("Khác");
 
   return (
     <TableRow className="text-xs">
@@ -80,7 +82,7 @@ export default memo(function KSServiceRowInput({
             onChange={(e) => setLocalTen(e.target.value)}
             onBlur={handleTenBlur}
             className="h-6 text-xs"
-            placeholder="Tên dịch vụ..."
+            placeholder={t("Tên dịch vụ...")}
           />
         )}
       </TableCell>
@@ -96,9 +98,9 @@ export default memo(function KSServiceRowInput({
             }}
             className="h-6 text-xs border rounded px-1 bg-background w-full"
           >
-            <option value="dich_vu_an">Ăn</option>
-            <option value="dich_vu_ve">Vé</option>
-            <option value="dich_vu_khac">Khác</option>
+            <option value="dich_vu_an">{t("Ăn")}</option>
+            <option value="dich_vu_ve">{t("Vé")}</option>
+            <option value="dich_vu_khac">{t("Khác")}</option>
           </select>
         )}
       </TableCell>
@@ -125,7 +127,7 @@ export default memo(function KSServiceRowInput({
             onChange={(e) => setLocalFoc(e.target.value)}
             onBlur={handleFocBlur}
             placeholder="0"
-            title="FOC (miễn phí) — OP tự nhập"
+            title={t("FOC (miễn phí) — OP tự nhập")}
             className="h-6 text-xs text-center w-[60px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
         )}
@@ -150,7 +152,7 @@ export default memo(function KSServiceRowInput({
             <button
               onClick={() => !disabled && onToggleNguoiTt(globalIdx)}
               disabled={disabled}
-              title={row.is_hdv ? "HDV trả — bấm để chuyển Công ty" : "Công ty trả — bấm để chuyển HDV (HDV trả tiền mặt, không vào ĐNTT)"}
+              title={row.is_hdv ? t("HDV trả — bấm để chuyển Công ty") : t("Công ty trả — bấm để chuyển HDV (HDV trả tiền mặt, không vào ĐNTT)")}
               className={
                 "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors " +
                 (disabled ? "cursor-default opacity-70 " : "cursor-pointer ") +
@@ -159,7 +161,7 @@ export default memo(function KSServiceRowInput({
                   : "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100")
               }
             >
-              {row.is_hdv ? "HDV" : "Công ty"}
+              {row.is_hdv ? t("HDV") : t("Công ty")}
             </button>
           )}
         </div>

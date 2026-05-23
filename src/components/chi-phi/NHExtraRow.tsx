@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { NHInput } from "./NHInput";
 import { fmt, type LocalNHExtra } from "./nh-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   mealKey: string;
@@ -17,6 +18,7 @@ interface Props {
 
 // 1 dòng dịch vụ phát sinh của bữa ăn. Tách verbatim từ NHRow.
 export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete }: Props) {
+  useTranslate();
   return (
     <tr className="border-b border-border/50 last:border-b-0 bg-muted/20">
       {/* Col 1: empty */}
@@ -28,7 +30,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
         <div className="flex items-center gap-1.5 pl-4">
           <span className="text-muted-foreground text-[10px] shrink-0">↳</span>
           <Input
-            placeholder="Dịch vụ phát sinh"
+            placeholder={t("Dịch vụ phát sinh")}
             value={extra.mo_ta}
             onChange={(e) => onChange(mealKey, idx, "mo_ta", e.target.value)}
             onBlur={() => onSave(mealKey, idx)}
@@ -96,7 +98,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
               : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
           )}
         >
-          {extra.nguoi_tt === "cong_ty" ? "Công ty" : "HDV"}
+          {extra.nguoi_tt === "cong_ty" ? t("Công ty") : t("HDV")}
         </button>
       </td>
       {/* Col 10: empty */}

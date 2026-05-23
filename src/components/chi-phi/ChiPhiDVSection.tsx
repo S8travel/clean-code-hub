@@ -105,14 +105,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                   className="h-3.5 w-3.5"
                 />
               </th>
-              <th className="text-left px-3 py-2.5">Ngày</th>
-              <th className="text-left px-3 py-2.5">Dịch vụ</th>
-              <th className="text-center px-2 py-2.5">SL</th>
-              <th className="text-center px-3 py-2.5">Đơn giá</th>
-              <th className="text-right px-3 py-2.5">Thành tiền</th>
-              <th className="text-center px-2 py-2.5">Nguồn</th>
-              <th className="text-center px-3 py-2.5">TT ĐNTT</th>
-              <th className="text-center px-3 py-2.5">TT Thanh toán</th>
+              <th className="text-left px-3 py-2.5">{t("Ngày")}</th>
+              <th className="text-left px-3 py-2.5">{t("Dịch vụ")}</th>
+              <th className="text-center px-2 py-2.5">{t("SL")}</th>
+              <th className="text-center px-3 py-2.5">{t("Đơn giá")}</th>
+              <th className="text-right px-3 py-2.5">{t("Thành tiền")}</th>
+              <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
+              <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
+              <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
               <th className="px-2 py-2.5" />
             </tr>
           </thead>
