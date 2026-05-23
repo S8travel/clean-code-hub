@@ -37,6 +37,7 @@ import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { toast } from "@/hooks/use-toast";
 import { errMsg } from "@/lib/error";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -48,13 +49,13 @@ const PAYMENT_SOURCES: string[] = [
   "TCB-1902 0186 4550 12 (Cá nhân)",
 ];
 
-const loaiLabel: Record<string, { text: string; color: string }> = {
-  khach_san: { text: "KS", color: "bg-blue-100 text-blue-700" },
-  nha_hang: { text: "NH", color: "bg-orange-100 text-orange-700" },
-  dich_vu: { text: "DV", color: "bg-purple-100 text-purple-700" },
-  xe: { text: "Xe", color: "bg-green-100 text-green-700" },
-  visa: { text: "Visa", color: "bg-indigo-100 text-indigo-700" },
-  bao_hiem: { text: "BH", color: "bg-rose-100 text-rose-700" },
+const loaiLabel: Record<string, { textKey: string; color: string }> = {
+  khach_san: { textKey: "KS", color: "bg-blue-100 text-blue-700" },
+  nha_hang: { textKey: "NH", color: "bg-orange-100 text-orange-700" },
+  dich_vu: { textKey: "DV", color: "bg-purple-100 text-purple-700" },
+  xe: { textKey: "Xe", color: "bg-green-100 text-green-700" },
+  visa: { textKey: "Visa", color: "bg-indigo-100 text-indigo-700" },
+  bao_hiem: { textKey: "BH", color: "bg-rose-100 text-rose-700" },
 };
 
 // Loại viết tắt cho nội dung thanh toán (chữ thường, copy vào UNC)
@@ -156,10 +157,10 @@ function buildPaymentContent(row: HoaDonUNCRow): string {
   return noDiacritics(parts.join(" "));
 }
 
-const docStatusConfig: Record<TrangThaiDoc, { text: string; icon: React.ElementType; cls: string }> = {
-  chua_co: { text: "Chưa có", icon: FileX, cls: "bg-red-50 text-red-600 border border-red-200" },
-  da_co: { text: "Đã có", icon: FileCheck, cls: "bg-green-50 text-green-700 border border-green-200" },
-  khong_can: { text: "Không cần", icon: FileText, cls: "bg-gray-100 text-gray-500 border border-gray-200" },
+const docStatusConfig: Record<TrangThaiDoc, { textKey: string; icon: React.ElementType; cls: string }> = {
+  chua_co: { textKey: "Chưa có", icon: FileX, cls: "bg-red-50 text-red-600 border border-red-200" },
+  da_co: { textKey: "Đã có", icon: FileCheck, cls: "bg-green-50 text-green-700 border border-green-200" },
+  khong_can: { textKey: "Không cần", icon: FileText, cls: "bg-gray-100 text-gray-500 border border-gray-200" },
 };
 
 function DocCell({
@@ -173,6 +174,7 @@ function DocCell({
    *  để không mất khi list refetch (invalidate) remount DocCell. */
   onUncUploaded?: (row: HoaDonUNCRow, publicUrl: string) => void;
 }) {
+  useTranslate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadMut = useUploadDNTTDoc();
   const deleteMut = useDeleteDNTTDoc();
@@ -225,14 +227,14 @@ function DocCell({
       { id: row.id, file, loaiDoc },
       {
         onSuccess: (publicUrl) => {
-          toast({ title: `Đã tải lên ${loaiDoc === "hoa_don" ? "hóa đơn" : "UNC"}` });
+          toast({ title: `${t("Đã tải lên")} ${loaiDoc === "hoa_don" ? t("hóa đơn") : "UNC"}` });
           if (loaiDoc === "unc") {
             onUncUploaded?.(row, publicUrl);
           }
           // Chạy OCR sau khi upload xong (background, không block toast).
           runOcr(file);
         },
-        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể tải lên"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: `${t("Lỗi")}: ${errMsg(err) || t("Không thể tải lên")}`, variant: "destructive" }),
       },
     );
   };
@@ -259,10 +261,10 @@ function DocCell({
           return;
         }
       }
-      toast({ title: "Clipboard không có ảnh — hãy chụp/copy ảnh trước", variant: "destructive" });
+      toast({ title: t("Clipboard không có ảnh — hãy chụp/copy ảnh trước"), variant: "destructive" });
     } catch {
       toast({
-        title: "Không đọc được clipboard. Cấp quyền clipboard cho trang rồi thử lại.",
+        title: t("Không đọc được clipboard. Cấp quyền clipboard cho trang rồi thử lại."),
         variant: "destructive",
       });
     }
@@ -272,8 +274,8 @@ function DocCell({
     deleteMut.mutate(
       { id: row.id, loaiDoc },
       {
-        onSuccess: () => toast({ title: "Đã xóa file" }),
-        onError: (err: unknown) => toast({ title: "Lỗi: " + errMsg(err), variant: "destructive" }),
+        onSuccess: () => toast({ title: t("Đã xóa file") }),
+        onError: (err: unknown) => toast({ title: `${t("Lỗi")}: ${errMsg(err)}`, variant: "destructive" }),
       },
     );
     setDeleteOpen(false);
@@ -283,7 +285,7 @@ function DocCell({
     updateMut.mutate(
       { id: row.id, field: statusField, value },
       {
-        onError: (err: unknown) => toast({ title: "Lỗi: " + errMsg(err), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: `${t("Lỗi")}: ${errMsg(err)}`, variant: "destructive" }),
       },
     );
   };
@@ -297,12 +299,12 @@ function DocCell({
         <Select value={status} onValueChange={handleStatusChange} disabled={isPending}>
           <SelectTrigger className={cn("h-6 text-xs px-2 py-0 w-auto gap-1 border-0 shadow-none", cfg.cls)}>
             <Icon className="h-3 w-3 shrink-0" />
-            <span>{cfg.text}</span>
+            <span>{t(cfg.textKey)}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="chua_co">Chưa có</SelectItem>
-            <SelectItem value="da_co">Đã có</SelectItem>
-            <SelectItem value="khong_can">Không cần</SelectItem>
+            <SelectItem value="chua_co">{t("Chưa có")}</SelectItem>
+            <SelectItem value="da_co">{t("Đã có")}</SelectItem>
+            <SelectItem value="khong_can">{t("Không cần")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -317,14 +319,14 @@ function DocCell({
               className="h-6 px-2 text-xs"
               onClick={() => window.open(url, "_blank")}
             >
-              <Eye className="h-3 w-3 mr-1" /> Xem
+              <Eye className="h-3 w-3 mr-1" /> {t("Xem")}
             </Button>
             {loaiDoc === "unc" && (
               <Button
                 variant="outline"
                 size="icon"
                 className="h-6 w-6 text-sky-600"
-                title="Gửi mail UNC cho NCC"
+                title={t("Gửi mail UNC cho NCC")}
                 onClick={() => onUncUploaded?.(row, url!)}
               >
                 <Mail className="h-3 w-3" />
@@ -357,14 +359,14 @@ function DocCell({
               disabled={isPending}
             >
               <Upload className="h-3 w-3 mr-1" />
-              {isPending ? "Đang tải..." : "Tải lên"}
+              {isPending ? t("Đang tải...") : t("Tải lên")}
             </Button>
             {loaiDoc === "unc" && (
               <Button
                 variant="outline"
                 size="icon"
                 className="h-6 w-6"
-                title="Paste ảnh từ clipboard (Ctrl+C ảnh rồi bấm)"
+                title={t("Paste ảnh từ clipboard (Ctrl+C ảnh rồi bấm)")}
                 onClick={handlePasteFromClipboard}
                 disabled={isPending}
               >
@@ -380,27 +382,27 @@ function DocCell({
         <div className="text-[10px] leading-tight">
           {ocrState.status === "running" && (
             <span className="inline-flex items-center gap-1 text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Đang quét hóa đơn...
+              <Loader2 className="h-3 w-3 animate-spin" /> {t("Đang quét hóa đơn...")}
             </span>
           )}
           {ocrState.status === "error" && (
-            <span className="inline-flex items-center gap-1 text-muted-foreground" title="Tesseract lỗi — kiểm tra thủ công">
-              <ScanText className="h-3 w-3" /> Không quét được
+            <span className="inline-flex items-center gap-1 text-muted-foreground" title={t("Tesseract lỗi — kiểm tra thủ công")}>
+              <ScanText className="h-3 w-3" /> {t("Không quét được")}
             </span>
           )}
           {ocrState.status === "done" && ocrState.detected == null && (
-            <span className="inline-flex items-center gap-1 text-muted-foreground" title="OCR không nhận ra số tiền — kiểm tra thủ công">
-              <ScanText className="h-3 w-3" /> Không đoán được số tiền
+            <span className="inline-flex items-center gap-1 text-muted-foreground" title={t("OCR không nhận ra số tiền — kiểm tra thủ công")}>
+              <ScanText className="h-3 w-3" /> {t("Không đoán được số tiền")}
             </span>
           )}
           {ocrState.status === "done" && ocrState.detected != null && ocrState.matched && (
-            <span className="inline-flex items-center gap-1 text-emerald-600 font-medium" title={`Đoán: ${ocrState.detected.toLocaleString("vi-VN")} ₫`}>
-              ✓ Khớp số tiền
+            <span className="inline-flex items-center gap-1 text-emerald-600 font-medium" title={`${t("Đoán")}: ${ocrState.detected.toLocaleString("vi-VN")} ₫`}>
+              ✓ {t("Khớp số tiền")}
             </span>
           )}
           {ocrState.status === "done" && ocrState.detected != null && !ocrState.matched && (
-            <span className="inline-flex items-center gap-1 text-amber-600 font-medium" title={`Hóa đơn: ${ocrState.detected.toLocaleString("vi-VN")} ₫ vs ĐNTT: ${row.so_tien.toLocaleString("vi-VN")} ₫`}>
-              ⚠ Lệch {Math.abs(ocrState.detected - row.so_tien).toLocaleString("vi-VN")} ₫
+            <span className="inline-flex items-center gap-1 text-amber-600 font-medium" title={`${t("Hóa đơn")}: ${ocrState.detected.toLocaleString("vi-VN")} ₫ vs ĐNTT: ${row.so_tien.toLocaleString("vi-VN")} ₫`}>
+              ⚠ {t("Lệch")} {Math.abs(ocrState.detected - row.so_tien).toLocaleString("vi-VN")} ₫
             </span>
           )}
         </div>
@@ -410,14 +412,14 @@ function DocCell({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xóa file?</AlertDialogTitle>
+            <AlertDialogTitle>{t("Xóa file?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              File sẽ bị xóa và trạng thái sẽ trở về "Chưa có".
+              {t("File sẽ bị xóa và trạng thái sẽ trở về \"Chưa có\".")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm}>Xóa</AlertDialogAction>
+            <AlertDialogCancel>{t("Hủy")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm}>{t("Xóa")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -428,6 +430,7 @@ function DocCell({
 // Cột "Hóa đơn": nhập SỐ TIỀN hóa đơn (thay upload ảnh). Lưu xong so với
 // so_tien của DNTT — lệch bất kỳ → tạo việc ưu tiên cao + chuông cho OP.
 function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
+  useTranslate();
   const { user } = useAuth();
   const saveMut = useSaveHoaDonSoTien();
   const entered = (row.hoa_don_so_tien ?? 0) > 0;
@@ -445,7 +448,7 @@ function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
   const handleConfirm = () => {
     const next = val > 0 ? val : null;
     if (next == null) {
-      toast({ title: "Nhập số tiền hóa đơn trước khi xác nhận", variant: "destructive" });
+      toast({ title: t("Nhập số tiền hóa đơn trước khi xác nhận"), variant: "destructive" });
       return;
     }
     if (next === (row.hoa_don_so_tien ?? null)) {
@@ -466,14 +469,14 @@ function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
         onSuccess: (res) => {
           setEditing(false);
           if (res.mismatch && res.notified) {
-            toast({ title: "⚠ Hóa đơn lệch — đã báo OP + tạo việc ưu tiên cao", variant: "destructive" });
+            toast({ title: t("⚠ Hóa đơn lệch — đã báo OP + tạo việc ưu tiên cao"), variant: "destructive" });
           } else if (res.mismatch) {
-            toast({ title: "⚠ Hóa đơn lệch số tiền (chưa xác định OP để báo)", variant: "destructive" });
+            toast({ title: t("⚠ Hóa đơn lệch số tiền (chưa xác định OP để báo)"), variant: "destructive" });
           } else {
-            toast({ title: "Đã lưu số tiền hóa đơn" });
+            toast({ title: t("Đã lưu số tiền hóa đơn") });
           }
         },
-        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không lưu được"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: `${t("Lỗi")}: ${errMsg(err) || t("Không lưu được")}`, variant: "destructive" }),
       },
     );
   };
@@ -490,20 +493,20 @@ function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
             variant="ghost"
             size="icon"
             className="h-6 w-6 text-blue-500"
-            title="Sửa số tiền hóa đơn"
+            title={t("Sửa số tiền hóa đơn")}
             onClick={() => { setVal(row.hoa_don_so_tien ?? 0); setEditing(true); }}
           >
             <Pencil className="h-3 w-3" />
           </Button>
         </div>
         {lech === 0 ? (
-          <span className="text-[10px] text-emerald-600 font-medium">✓ Khớp số tiền DNTT</span>
+          <span className="text-[10px] text-emerald-600 font-medium">✓ {t("Khớp số tiền DNTT")}</span>
         ) : (
           <span
             className="text-[10px] text-red-600 font-medium"
             title={`HĐ ${Math.round(row.hoa_don_so_tien!).toLocaleString("vi-VN")} ₫ vs DNTT ${Math.round(row.so_tien).toLocaleString("vi-VN")} ₫`}
           >
-            ⚠ Lệch {lech > 0 ? "+" : ""}{lech.toLocaleString("vi-VN")} ₫
+            ⚠ {t("Lệch")} {lech > 0 ? "+" : ""}{lech.toLocaleString("vi-VN")} ₫
           </span>
         )}
       </div>
@@ -517,13 +520,13 @@ function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
         <DecimalInput
           value={val}
           onChange={(v) => setVal(v ?? 0)}
-          placeholder="Nhập số tiền HĐ"
+          placeholder={t("Nhập số tiền HĐ")}
           className="h-7 text-xs flex-1 text-right"
         />
         <Button
           size="icon"
           className="h-7 w-7 shrink-0"
-          title="Xác nhận số tiền hóa đơn"
+          title={t("Xác nhận số tiền hóa đơn")}
           disabled={saveMut.isPending}
           onClick={handleConfirm}
         >
@@ -533,15 +536,16 @@ function HoaDonAmountCell({ row }: { row: HoaDonUNCRow }) {
         </Button>
       </div>
       {!entered ? (
-        <span className="text-[10px] text-muted-foreground">Chưa nhập hóa đơn</span>
+        <span className="text-[10px] text-muted-foreground">{t("Chưa nhập hóa đơn")}</span>
       ) : (
-        <span className="text-[10px] text-muted-foreground">Đang sửa — bấm Xác nhận để lưu</span>
+        <span className="text-[10px] text-muted-foreground">{t("Đang sửa — bấm Xác nhận để lưu")}</span>
       )}
     </div>
   );
 }
 
 function HoaDonUNCPageContent() {
+  useTranslate();
   const navigate = useNavigate();
 
   const [doanId, setDoanId] = useState<string>("");
@@ -680,8 +684,8 @@ function HoaDonUNCPageContent() {
     markPaidMut.mutate(
       { id, ngayThanhToan: format(new Date(), "yyyy-MM-dd"), nguon: nguon ?? null },
       {
-        onSuccess: () => toast({ title: nguon ? `Đã xác nhận TT — ${nguon}` : "Đã xác nhận thanh toán" }),
-        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể xác nhận"), variant: "destructive" }),
+        onSuccess: () => toast({ title: nguon ? `${t("Đã xác nhận TT")} — ${nguon}` : t("Đã xác nhận thanh toán") }),
+        onError: (err: unknown) => toast({ title: `${t("Lỗi")}: ${errMsg(err) || t("Không thể xác nhận")}`, variant: "destructive" }),
       },
     );
   };
@@ -704,11 +708,11 @@ function HoaDonUNCPageContent() {
       if (data?.error) throw new Error(data.error);
       const n = data?.synced ?? 0;
       toast({
-        title: n > 0 ? `Đã đồng bộ ${n} DNTT sang Sheet` : "Không có DNTT mới cần sync",
+        title: n > 0 ? `${t("Đã đồng bộ")} ${n} ${t("DNTT sang Sheet")}` : t("Không có DNTT mới cần sync"),
       });
     } catch (err: unknown) {
       toast({
-        title: "Lỗi đồng bộ Sheet: " + (errMsg(err) || "Vui lòng thử lại"),
+        title: `${t("Lỗi đồng bộ Sheet")}: ${errMsg(err) || t("Vui lòng thử lại")}`,
         variant: "destructive",
       });
     } finally {
@@ -729,11 +733,11 @@ function HoaDonUNCPageContent() {
   );
   const batchScopeLabel = doanId
     ? (doanSelectOpts.find((o) => o.value === doanId)?.label ?? "")
-    : `Tất cả (${new Set(batchRows.map((r) => r.doan_id)).size} đoàn)`;
+    : `${t("Tất cả")} (${new Set(batchRows.map((r) => r.doan_id)).size} ${t("đoàn")})`;
 
   const openBatch = () => {
     if (batchRows.length === 0) {
-      toast({ title: "Không còn ĐNTT nào thiếu UNC (theo bộ lọc hiện tại)" });
+      toast({ title: t("Không còn ĐNTT nào thiếu UNC (theo bộ lọc hiện tại)") });
       return;
     }
     setBatchOpen(true);
@@ -742,27 +746,27 @@ function HoaDonUNCPageContent() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold">Thanh Toán, Hóa Đơn & UNC</h1>
+        <h1 className="text-2xl font-bold">{t("Thanh Toán, Hóa Đơn & UNC")}</h1>
         <Button
           variant="outline"
           size="sm"
           onClick={handleSyncSheet}
           disabled={syncing}
           className="gap-1.5"
-          title="Đồng bộ các DNTT đã thanh toán nhưng chưa export sang Google Sheet"
+          title={t("Đồng bộ các DNTT đã thanh toán nhưng chưa export sang Google Sheet")}
         >
           {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
-          {syncing ? "Đang đồng bộ..." : "Đồng bộ Sheet"}
+          {syncing ? t("Đang đồng bộ...") : t("Đồng bộ Sheet")}
         </Button>
       </div>
 
       {/* Metrics */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Chờ thanh toán", value: metrics.chuaTT, cls: "text-amber-600" },
-          { label: "Đã thanh toán", value: metrics.daTT, cls: "text-emerald-600" },
-          { label: "Thiếu hóa đơn", value: metrics.thieu_hd, cls: "text-red-600" },
-          { label: "Thiếu UNC", value: metrics.thieu_unc, cls: "text-orange-600" },
+          { label: t("Chờ thanh toán"), value: metrics.chuaTT, cls: "text-amber-600" },
+          { label: t("Đã thanh toán"), value: metrics.daTT, cls: "text-emerald-600" },
+          { label: t("Thiếu hóa đơn"), value: metrics.thieu_hd, cls: "text-red-600" },
+          { label: t("Thiếu UNC"), value: metrics.thieu_unc, cls: "text-orange-600" },
         ].map(m => (
           <Card key={m.label}>
             <CardContent className="p-4">
@@ -776,74 +780,74 @@ function HoaDonUNCPageContent() {
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-[200px]">
-          <label className="text-xs text-muted-foreground mb-1 block">Đoàn</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Đoàn")}</label>
           <SearchableSelect
             options={doanSelectOpts}
             value={doanId}
             onChange={setDoanId}
-            placeholder="Tất cả đoàn"
-            searchPlaceholder="Tìm đoàn..."
+            placeholder={t("Tất cả đoàn")}
+            searchPlaceholder={t("Tìm đoàn...")}
           />
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Loại</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Loại")}</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[130px]">
-              <span>{!loai ? "Tất cả" : loai === "khach_san" ? "Khách sạn" : loai === "nha_hang" ? "Nhà hàng" : loai === "dich_vu" ? "Dịch vụ" : loai === "xe" ? "Xe" : loai === "visa" ? "Visa" : "Bảo hiểm"}</span>
+              <span>{!loai ? t("Tất cả") : loai === "khach_san" ? t("Khách sạn") : loai === "nha_hang" ? t("Nhà hàng") : loai === "dich_vu" ? t("Dịch vụ") : loai === "xe" ? t("Xe") : loai === "visa" ? t("Visa") : t("Bảo hiểm")}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="khach_san">Khách sạn</SelectItem>
-              <SelectItem value="nha_hang">Nhà hàng</SelectItem>
-              <SelectItem value="dich_vu">Dịch vụ</SelectItem>
-              <SelectItem value="xe">Xe</SelectItem>
-              <SelectItem value="visa">Visa</SelectItem>
-              <SelectItem value="bao_hiem">Bảo hiểm</SelectItem>
+              <SelectItem value="all">{t("Tất cả")}</SelectItem>
+              <SelectItem value="khach_san">{t("Khách sạn")}</SelectItem>
+              <SelectItem value="nha_hang">{t("Nhà hàng")}</SelectItem>
+              <SelectItem value="dich_vu">{t("Dịch vụ")}</SelectItem>
+              <SelectItem value="xe">{t("Xe")}</SelectItem>
+              <SelectItem value="visa">{t("Visa")}</SelectItem>
+              <SelectItem value="bao_hiem">{t("Bảo hiểm")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Trạng thái hóa đơn</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Trạng thái hóa đơn")}</label>
           <Select value={trangThaiHD} onValueChange={v => setTrangThaiHD(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[150px]">
-              <span>{!trangThaiHD ? "Tất cả" : trangThaiHD === "chua_co" ? "Chưa có" : trangThaiHD === "da_co" ? "Đã có" : "Không cần"}</span>
+              <span>{!trangThaiHD ? t("Tất cả") : trangThaiHD === "chua_co" ? t("Chưa có") : trangThaiHD === "da_co" ? t("Đã có") : t("Không cần")}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="chua_co">Chưa có</SelectItem>
-              <SelectItem value="da_co">Đã có</SelectItem>
-              <SelectItem value="khong_can">Không cần</SelectItem>
+              <SelectItem value="all">{t("Tất cả")}</SelectItem>
+              <SelectItem value="chua_co">{t("Chưa có")}</SelectItem>
+              <SelectItem value="da_co">{t("Đã có")}</SelectItem>
+              <SelectItem value="khong_can">{t("Không cần")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Trạng thái UNC</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Trạng thái UNC")}</label>
           <Select value={trangThaiUNC} onValueChange={v => setTrangThaiUNC(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[150px]">
-              <span>{!trangThaiUNC ? "Tất cả" : trangThaiUNC === "chua_co" ? "Chưa có" : trangThaiUNC === "da_co" ? "Đã có" : "Không cần"}</span>
+              <span>{!trangThaiUNC ? t("Tất cả") : trangThaiUNC === "chua_co" ? t("Chưa có") : trangThaiUNC === "da_co" ? t("Đã có") : t("Không cần")}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="chua_co">Chưa có</SelectItem>
-              <SelectItem value="da_co">Đã có</SelectItem>
-              <SelectItem value="khong_can">Không cần</SelectItem>
+              <SelectItem value="all">{t("Tất cả")}</SelectItem>
+              <SelectItem value="chua_co">{t("Chưa có")}</SelectItem>
+              <SelectItem value="da_co">{t("Đã có")}</SelectItem>
+              <SelectItem value="khong_can">{t("Không cần")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Trạng thái TT</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Trạng thái TT")}</label>
           <Select value={trangThaiTT} onValueChange={v => setTrangThaiTT(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[150px]">
-              <span>{!trangThaiTT ? "Tất cả" : trangThaiTT === "chua_tt" ? "Chờ thanh toán" : "Đã thanh toán"}</span>
+              <span>{!trangThaiTT ? t("Tất cả") : trangThaiTT === "chua_tt" ? t("Chờ thanh toán") : t("Đã thanh toán")}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="chua_tt">Chờ thanh toán</SelectItem>
-              <SelectItem value="da_tt">Đã thanh toán</SelectItem>
+              <SelectItem value="all">{t("Tất cả")}</SelectItem>
+              <SelectItem value="chua_tt">{t("Chờ thanh toán")}</SelectItem>
+              <SelectItem value="da_tt">{t("Đã thanh toán")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -856,10 +860,10 @@ function HoaDonUNCPageContent() {
           size="sm"
           className="gap-1.5"
           onClick={openBatch}
-          title="Gắn UNC hàng loạt cho mọi ĐNTT chưa có UNC (theo bộ lọc hiện tại)"
+          title={t("Gắn UNC hàng loạt cho mọi ĐNTT chưa có UNC (theo bộ lọc hiện tại)")}
         >
           <Upload className="h-4 w-4" />
-          Gắn UNC nhanh{batchRows.length > 0 ? ` (${batchRows.length})` : ""}
+          {t("Gắn UNC nhanh")}{batchRows.length > 0 ? ` (${batchRows.length})` : ""}
         </Button>
       </div>
 
@@ -868,15 +872,15 @@ function HoaDonUNCPageContent() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]">STT</TableHead>
-              <TableHead className="min-w-[130px]">Đoàn</TableHead>
-              <TableHead className="w-[60px]">Loại</TableHead>
-              <TableHead className="min-w-[180px]">Mô tả</TableHead>
-              <TableHead className="min-w-[280px]">Nội dung thanh toán</TableHead>
-              <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
-              <TableHead className="w-[100px]">Ngày cần TT</TableHead>
-              <TableHead className="min-w-[180px]">Thanh toán</TableHead>
-              <TableHead className="min-w-[160px]">Hóa đơn</TableHead>
+              <TableHead className="w-[50px]">{t("STT")}</TableHead>
+              <TableHead className="min-w-[130px]">{t("Đoàn")}</TableHead>
+              <TableHead className="w-[60px]">{t("Loại")}</TableHead>
+              <TableHead className="min-w-[180px]">{t("Mô tả")}</TableHead>
+              <TableHead className="min-w-[280px]">{t("Nội dung thanh toán")}</TableHead>
+              <TableHead className="min-w-[110px] text-right">{t("Số tiền")}</TableHead>
+              <TableHead className="w-[100px]">{t("Ngày cần TT")}</TableHead>
+              <TableHead className="min-w-[180px]">{t("Thanh toán")}</TableHead>
+              <TableHead className="min-w-[160px]">{t("Hóa đơn")}</TableHead>
               <TableHead className="min-w-[160px]">UNC</TableHead>
             </TableRow>
           </TableHeader>
@@ -884,17 +888,19 @@ function HoaDonUNCPageContent() {
             {isLoading ? (
               <TableRow>
                 <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                  Đang tải...
+                  {t("Đang tải...")}
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                  Không có dữ liệu
+                  {t("Không có dữ liệu")}
                 </TableCell>
               </TableRow>
             ) : pageRows.map((row, idx) => {
-              const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
+              const lt = loaiLabel[row.loai];
+              const lTxt = lt ? t(lt.textKey) : row.loai;
+              const lCls = lt?.color ?? "bg-muted text-muted-foreground";
               const canTruRow = canTruMap[row.id];
               return (
                 <TableRow key={row.id}>
@@ -903,8 +909,8 @@ function HoaDonUNCPageContent() {
                     <span className="text-sm font-medium">{row.ten_doan ?? "—"}</span>
                   </TableCell>
                   <TableCell>
-                    <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lt.color)}>
-                      {lt.text}
+                    <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lCls)}>
+                      {lTxt}
                     </span>
                   </TableCell>
                   <TableCell className="text-sm">{row.mo_ta ?? "—"}</TableCell>
@@ -915,9 +921,9 @@ function HoaDonUNCPageContent() {
                       onClick={() => {
                         const content = buildPaymentContent(row);
                         navigator.clipboard.writeText(content);
-                        toast({ title: "Đã sao chép nội dung TT" });
+                        toast({ title: t("Đã sao chép nội dung TT") });
                       }}
-                      title="Click để sao chép"
+                      title={t("Click để sao chép")}
                     >
                       {buildPaymentContent(row)}
                     </button>
@@ -939,26 +945,26 @@ function HoaDonUNCPageContent() {
                         <div className="space-y-0.5">
                           {ct > 0 ? (
                             <div className="text-xs space-y-0.5">
-                              <div className="text-muted-foreground">Tổng: <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
-                              <div className="text-amber-600">Cấn trừ: −{fmt(ct)}</div>
-                              <div className={cn("text-sm font-semibold", amountCls)}>Thực TT: {sign}{fmt(thucTT)}</div>
+                              <div className="text-muted-foreground">{t("Tổng")}: <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
+                              <div className="text-amber-600">{t("Cấn trừ")}: −{fmt(ct)}</div>
+                              <div className={cn("text-sm font-semibold", amountCls)}>{t("Thực TT")}: {sign}{fmt(thucTT)}</div>
                             </div>
                           ) : (
                             <div className={amountCls}>{sign}{fmt(row.so_tien)}</div>
                           )}
                           {isThuHoi && (
                             <span className="inline-block text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                              Thu hồi
+                              {t("Thu hồi")}
                             </span>
                           )}
                           {row.la_coc && (
                             <span className="inline-block text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
-                              Cọc
+                              {t("Cọc")}
                             </span>
                           )}
                           {!row.la_coc && cocSibling > 0 && (
                             <div className="text-[11px] text-muted-foreground font-normal">
-                              Đã cọc: <span className="text-amber-600 font-medium">{fmt(cocSibling)}</span>
+                              {t("Đã cọc")}: <span className="text-amber-600 font-medium">{fmt(cocSibling)}</span>
                             </div>
                           )}
                         </div>
@@ -974,7 +980,7 @@ function HoaDonUNCPageContent() {
                     {row.payment_status === "paid" ? (
                       <div className="flex flex-col gap-0.5">
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 w-fit">
-                          <CreditCard className="h-3 w-3" /> Đã TT
+                          <CreditCard className="h-3 w-3" /> {t("Đã TT")}
                         </span>
                         {row.thanh_toan_luc && (
                           <span className="text-xs text-muted-foreground">
@@ -994,7 +1000,7 @@ function HoaDonUNCPageContent() {
                           onValueChange={(v) => setNguonMap(prev => ({ ...prev, [row.id]: v }))}
                         >
                           <SelectTrigger className="h-7 px-2 text-xs w-[160px]">
-                            <span>{nguonMap[row.id] || "Chọn nguồn"}</span>
+                            <span>{nguonMap[row.id] || t("Chọn nguồn")}</span>
                           </SelectTrigger>
                           <SelectContent>
                             {PAYMENT_SOURCES.map((src) => (
@@ -1008,7 +1014,7 @@ function HoaDonUNCPageContent() {
                           disabled={markPaidMut.isPending || !nguonMap[row.id]}
                           onClick={() => handleMarkPaid(row.id, nguonMap[row.id])}
                         >
-                          Xác nhận TT
+                          {t("Xác nhận TT")}
                         </Button>
                       </div>
                     )}
@@ -1036,7 +1042,7 @@ function HoaDonUNCPageContent() {
       {!isLoading && mainRows.length > 0 && (
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">
-            Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, mainRows.length)} / {mainRows.length}
+            {t("Hiển thị")} {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, mainRows.length)} / {mainRows.length}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -1045,15 +1051,15 @@ function HoaDonUNCPageContent() {
               className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
             >
               <ChevronLeft className="h-3 w-3" />
-              Trước
+              {t("Trước")}
             </button>
-            <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+            <span className="px-2 text-muted-foreground">{t("Trang")} {currentPage} / {totalPages}</span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
               className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
             >
-              Sau
+              {t("Sau")}
               <ChevronRight className="h-3 w-3" />
             </button>
           </div>
