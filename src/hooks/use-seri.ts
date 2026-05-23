@@ -236,9 +236,9 @@ export interface SeriApplyConflict {
 /** Check một đoàn đã có lịch trình / booking / chi phí gì chưa
  *  trước khi áp dụng seri mới.
  *
- *  Seri sau refactor KHÔNG carry KS (cột KS bị lock ở SeriPage), nên KS-only
- *  data trong đoàn (booking KS, chi phí KS, doan_ngay chỉ có KS) KHÔNG bị coi
- *  là conflict — applySeri sẽ preserve KS fields. */
+ *  Seri chỉ carry NH (ăn trưa/tối) và cảnh điểm. Các chi phí khác (KS, bảo
+ *  hiểm, HDV hỗ trợ) độc lập với seri nên KHÔNG bị coi là conflict —
+ *  applySeri không động vào chúng. */
 export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyConflict> {
   const [ngayRes, itemRes, nhRes, dvRes, cpRes] = await Promise.all([
     externalSupabase
@@ -249,12 +249,13 @@ export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyC
     externalSupabase.from("doan_ngay_item").select("doan_ngay_id").eq("doan_id", doanId),
     externalSupabase.from("doan_booking_nh").select("id", { count: "exact", head: true }).eq("doan_id", doanId),
     externalSupabase.from("doan_booking_dv").select("id", { count: "exact", head: true }).eq("doan_id", doanId),
-    // Chi phí KS không tính (KS độc lập với seri)
+    // Chỉ tính chi phí NH / cảnh điểm — đây là 2 danh mục seri carry.
+    // KS, bảo hiểm, HDV hỗ trợ độc lập với seri.
     externalSupabase
       .from("doan_chi_phi")
       .select("id", { count: "exact", head: true })
       .eq("doan_id", doanId)
-      .neq("danh_muc", "khach_san"),
+      .in("danh_muc", ["nha_hang", "canh_diem"]),
   ]);
 
   const lines: string[] = [];
@@ -293,7 +294,7 @@ export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyC
   }
   if (nhCount > 0) lines.push(`${nhCount} booking nhà hàng`);
   if (dvCount > 0) lines.push(`${dvCount} booking dịch vụ`);
-  if (cpCount > 0) lines.push(`${cpCount} chi phí (NH / cảnh điểm / dịch vụ)`);
+  if (cpCount > 0) lines.push(`${cpCount} chi phí (NH / cảnh điểm)`);
 
   return { hasConflict: lines.length > 0, lines };
 }
