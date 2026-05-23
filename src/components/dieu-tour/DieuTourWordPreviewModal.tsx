@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileDown } from "lucide-react";
 import { computeExportCells, exportDieuTourWordFromCells } from "@/lib/export-dieu-tour-word";
 import type { DieuTourExportData, DayExportCell } from "@/lib/export-dieu-tour-word";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDateInfo(dateStr: string | null): string {
   if (!dateStr) return "—";
@@ -21,51 +22,52 @@ interface XeLabelInfo {
 
 function xeLabelInfo(xe: XeLabelInfo | null | undefined): string {
   if (!xe) return "—";
-  const parts = [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean);
+  const parts = [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} ${t("chỗ")}` : ""].filter(Boolean);
   return parts.join(" · ") || "—";
 }
 
 function InfoTable({ data }: { data: DieuTourExportData }) {
+  useTranslate();
   const shopStr = data.shopping === true ? "YES" : data.shopping === false ? "NO" : "—";
   // Tip — cùng công thức với export Word (150 NT nếu có T/L, ngược lại 300 NT)
   const effTipRate = data.tipRate ?? (data.soKhachTl > 0 ? 150 : 300);
   const tipText = data.thuTip
-    ? `Có – ${effTipRate.toLocaleString("vi-VN")} NT/khách/ngày`
-    : "Không";
+    ? `${t("Có")} – ${effTipRate.toLocaleString("vi-VN")} ${t("NT/khách/ngày")}`
+    : t("Không");
   return (
     <table className="w-full border-collapse text-xs mb-3">
       <tbody>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 w-24 whitespace-nowrap">Code đoàn</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 w-24 whitespace-nowrap">{t("Code đoàn")}</td>
           <td className="border border-gray-300 px-2 py-1 font-semibold text-blue-700">{data.tenDoan}</td>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 w-24 whitespace-nowrap">Bảng đón</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 w-24 whitespace-nowrap">{t("Bảng đón")}</td>
           <td className="border border-gray-300 px-2 py-1">{data.bangDon || "—"}</td>
         </tr>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">HDV</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("HDV")}</td>
           <td className="border border-gray-300 px-2 py-1">{data.hdv || "—"}</td>
           <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Shopping</td>
           <td className="border border-gray-300 px-2 py-1">{shopStr}</td>
         </tr>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Xe</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("Xe")}</td>
           <td className="border border-gray-300 px-2 py-1">{xeLabelInfo(data.xe)}</td>
           <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">T/L</td>
           <td className="border border-gray-300 px-2 py-1">{data.truongDoan || "—"}</td>
         </tr>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Ngày đón</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("Ngày đón")}</td>
           <td className="border border-gray-300 px-2 py-1">
             {fmtDateInfo(data.ngayDi)}
             {data.chuyenBayDon && <span className="text-gray-500 ml-3">{data.chuyenBayDon}</span>}
           </td>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Quà tặng</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("Quà tặng")}</td>
           <td className="border border-gray-300 px-2 py-1">
             {data.gifts && data.gifts.length > 0 ? data.gifts.join(", ") : "—"}
           </td>
         </tr>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Ngày tiễn</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("Ngày tiễn")}</td>
           <td className="border border-gray-300 px-2 py-1">
             {fmtDateInfo(data.ngayVe)}
             {data.chuyenBayTien && <span className="text-gray-500 ml-3">{data.chuyenBayTien}</span>}
@@ -74,23 +76,23 @@ function InfoTable({ data }: { data: DieuTourExportData }) {
           <td className="border border-gray-300 px-2 py-1">{tipText}</td>
         </tr>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Số khách</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("Số khách")}</td>
           <td colSpan={3} className="border border-gray-300 px-2 py-1">
             <span className="font-semibold">NL:</span> {data.soKhachLon}&nbsp;&nbsp;
             <span className="font-semibold">TE 50%:</span> {data.soKhachEm1}&nbsp;&nbsp;
             <span className="font-semibold">TE free:</span> {data.soKhachEm2}&nbsp;&nbsp;
             <span className="font-semibold">T/L:</span> {data.soKhachTl}&nbsp;&nbsp;
-            <span className="font-semibold">Tổng: <span className="text-blue-700">{data.totalKhach}</span></span>
+            <span className="font-semibold">{t("Tổng")}: <span className="text-blue-700">{data.totalKhach}</span></span>
           </td>
         </tr>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap align-top">Chú thích</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap align-top">{t("Chú thích")}</td>
           <td colSpan={3} className="border border-gray-300 px-2 py-1 whitespace-pre-line">{data.chuThichKhach || "—"}</td>
         </tr>
         <tr>
-          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">T/L ăn NH</td>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("T/L ăn NH")}</td>
           <td colSpan={3} className="border border-gray-300 px-2 py-1">
-            {data.coTinhSuatTLNhaHang ? "Có tính suất ăn T/L" : "Không tính"}
+            {data.coTinhSuatTLNhaHang ? t("Có tính suất ăn T/L") : t("Không tính")}
           </td>
         </tr>
       </tbody>
@@ -105,7 +107,7 @@ interface Props {
   onGhiChuSave: (text: string) => void;
 }
 
-const COL_HEADERS = ["Ngày", "Chương trình", "Ăn trưa", "Ăn tối", "Khách sạn"];
+const COL_HEADER_KEYS = ["Ngày", "Chương trình", "Ăn trưa", "Ăn tối", "Khách sạn"];
 const COL_WIDTHS  = ["w-16", "w-64", "w-48", "w-48", "w-52"];
 const ROW_HEIGHTS: Record<string, number> = {};
 
@@ -123,6 +125,7 @@ function CellTextarea({
 }
 
 export default function DieuTourWordPreviewModal({ open, data, onClose, onGhiChuSave }: Props) {
+  useTranslate();
   const [cells, setCells] = useState<DayExportCell[]>([]);
   const [ghiChu, setGhiChu] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -159,7 +162,7 @@ export default function DieuTourWordPreviewModal({ open, data, onClose, onGhiChu
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-4 pt-4 pb-2 shrink-0">
-          <DialogTitle className="text-sm">Xem trước bảng điều tour — có thể chỉnh sửa trước khi xuất</DialogTitle>
+          <DialogTitle className="text-sm">{t("Xem trước bảng điều tour — có thể chỉnh sửa trước khi xuất")}</DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto px-4">
@@ -170,12 +173,12 @@ export default function DieuTourWordPreviewModal({ open, data, onClose, onGhiChu
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr>
-                {COL_HEADERS.map((h, i) => (
+                {COL_HEADER_KEYS.map((h, i) => (
                   <th
                     key={h}
                     className={`border border-gray-300 bg-gray-100 px-2 py-1 text-center font-semibold ${COL_WIDTHS[i]}`}
                   >
-                    {h}
+                    {t(h)}
                   </th>
                 ))}
               </tr>
@@ -205,22 +208,22 @@ export default function DieuTourWordPreviewModal({ open, data, onClose, onGhiChu
 
           {/* Ghi chú */}
           <div className="mt-4 space-y-1">
-            <p className="text-xs font-semibold">Ghi chú</p>
+            <p className="text-xs font-semibold">{t("Ghi chú")}</p>
             <Textarea
               value={ghiChu}
               onChange={(e) => setGhiChu(e.target.value)}
               rows={5}
               className="text-xs font-mono resize-y"
-              placeholder="Nhập ghi chú..."
+              placeholder={t("Nhập ghi chú...")}
             />
           </div>
         </div>
 
         <DialogFooter className="px-4 py-3 shrink-0 border-t">
-          <Button variant="outline" size="sm" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>{t("Hủy")}</Button>
           <Button size="sm" className="gap-1.5" onClick={handleExport} disabled={exporting}>
             <FileDown className="h-3.5 w-3.5" />
-            {exporting ? "Đang xuất..." : "Xuất Word"}
+            {exporting ? t("Đang xuất...") : t("Xuất Word")}
           </Button>
         </DialogFooter>
       </DialogContent>

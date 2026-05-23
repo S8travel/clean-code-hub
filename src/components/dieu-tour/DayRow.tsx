@@ -21,6 +21,7 @@ import type { DayLocal, DayItemLocal, CanhDiemItem, NhaHangItem, KhachSanItem } 
 import { checkCanhDiemDeletable, checkNhaHangDeletable, checkKhachSanDeletable } from "@/hooks/use-dieu-tour";
 import { useSetMenus } from "@/hooks/use-nha-hang";
 import { toast } from "sonner";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   day: DayLocal;
@@ -96,7 +97,7 @@ function MealNote({
         className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors mt-0.5 print-hide"
       >
         <MessageSquarePlus className="h-3 w-3" />
-        Thêm chú thích
+        {t("Thêm chú thích")}
       </button>
     );
   }
@@ -106,7 +107,7 @@ function MealNote({
       <Textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Chú thích bữa ăn..."
+        placeholder={t("Chú thích bữa ăn...")}
         rows={2}
         className="text-xs resize-none pr-6 min-h-[40px]"
         autoFocus={!value}
@@ -145,12 +146,12 @@ function SetMenuSelect({
         <span>
           {(() => {
             const m = value ? menus.find((x) => x.id === value) : null;
-            return m ? `${m.ten_set}${m.gia ? ` — ${fmt(m.gia)}đ` : ""}` : "Chọn set menu";
+            return m ? `${m.ten_set}${m.gia ? ` — ${fmt(m.gia)}đ` : ""}` : t("Chọn set menu");
           })()}
         </span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="none">-- Không chọn --</SelectItem>
+        <SelectItem value="none">{t("-- Không chọn --")}</SelectItem>
         {menus.map((m) => (
           <SelectItem key={m.id} value={String(m.id)}>
             {m.ten_set}{m.gia ? ` — ${fmt(m.gia)}đ` : ""}
@@ -162,6 +163,7 @@ function SetMenuSelect({
 }
 
 export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId, lockKhachSan }: Props) {
+  useTranslate();
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
 
@@ -216,7 +218,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
           className={`h-7 text-[13px] font-medium text-center ${day.thanh_pho?.trim() ? "bg-rose-50 text-rose-800 border-rose-200" : ""}`}
           value={day.thanh_pho}
           onChange={(e) => update({ thanh_pho: e.target.value })}
-          placeholder="Thành phố..."
+          placeholder={t("Thành phố...")}
         />
         <div className="space-y-0">
         <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -234,7 +236,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                         {...attributes}
                         {...listeners}
                         className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground p-0.5 print-hide touch-none shrink-0"
-                        title="Kéo để đổi thứ tự"
+                        title={t("Kéo để đổi thứ tự")}
                       >
                         <GripVertical className="h-3 w-3" />
                       </button>
@@ -258,14 +260,14 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                             }
                             updateItems(newItems);
                           }}
-                          placeholder="Chọn cảnh điểm"
+                          placeholder={t("Chọn cảnh điểm")}
                           className={`h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3${item.canh_diem_id ? " bg-blue-50 text-blue-900 font-medium" : ""}`}
                         />
                         {selectedCanhDiem && (
                           <>
                             {selectedCanhDiem.khach_san_id && (
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 mt-0.5">
-                                🏨 Day Use
+                                🏨 {t("Day Use")}
                               </span>
                             )}
                             {selectedCanhDiem.ghi_chu && (
@@ -280,7 +282,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                             className="w-full text-[12px] border border-border/40 rounded px-2 py-0.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring overflow-hidden"
                             rows={1}
                             autoFocus={!item.ghi_chu?.trim()}
-                            placeholder="Chú thích..."
+                            placeholder={t("Chú thích...")}
                             value={item.ghi_chu || ""}
                             ref={(el) => {
                               if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
@@ -314,7 +316,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                               const options = (doanId && cd) ? { doanId, canhDiem: cd } : undefined;
                               const result = await checkCanhDiemDeletable(target.id, options);
                               if (!result.ok) {
-                                toast.error(result.reason ?? "Không thể xóa");
+                                toast.error(result.reason ?? t("Không thể xóa"));
                                 return;
                               }
                             }
@@ -334,7 +336,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                               setNoteOpenMap((m) => ({ ...m, [idx]: true }));
                             }
                           }}
-                          title={noteOpen ? "Hủy chú thích" : "Thêm chú thích"}
+                          title={noteOpen ? t("Hủy chú thích") : t("Thêm chú thích")}
                         >
                           {noteOpen ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
                         </button>
@@ -356,7 +358,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
           }}
           className="w-full py-1.5 border border-dashed border-border rounded-md text-xs text-muted-foreground hover:border-foreground transition-colors print-hide"
         >
-          <Plus className="inline h-3 w-3 mr-1" /> Thêm cảnh điểm / dịch vụ
+          <Plus className="inline h-3 w-3 mr-1" /> {t("Thêm cảnh điểm / dịch vụ")}
         </button>
       </div>
 
@@ -375,22 +377,22 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   if (nid !== selectedNhaTrua.id) update({ an_trua_nha_hang_id: nid, an_trua_set_menu_id: null });
                   setEditSel(null);
                 }}
-                placeholder="Chọn nhà hàng khác"
+                placeholder={t("Chọn nhà hàng khác")}
                 className="h-7 text-xs flex-1"
               />
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="Giữ nguyên" onClick={() => setEditSel(null)}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title={t("Giữ nguyên")} onClick={() => setEditSel(null)}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
           ) : (
           <>
             <div className="flex items-center gap-1">
-              <button type="button" title="Bấm để đổi nhà hàng"
+              <button type="button" title={t("Bấm để đổi nhà hàng")}
                 className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
                 onClick={async () => {
                   if (doanId && day.id && selectedNhaTrua) {
                     const result = await checkNhaHangDeletable(day.id, selectedNhaTrua.id, "trua", selectedNhaTrua.ten);
-                    if (!result.ok) { toast.error(result.reason ?? "Không thể đổi"); return; }
+                    if (!result.ok) { toast.error(result.reason ?? t("Không thể đổi")); return; }
                   }
                   setEditSel("trua");
                 }}>
@@ -400,7 +402,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 // Pre-check: nếu đã save (day.id) và có doanId → check DNTT + booking_nh
                 if (doanId && day.id && selectedNhaTrua) {
                   const result = await checkNhaHangDeletable(day.id, selectedNhaTrua.id, "trua", selectedNhaTrua.ten);
-                  if (!result.ok) { toast.error(result.reason ?? "Không thể xóa"); return; }
+                  if (!result.ok) { toast.error(result.reason ?? t("Không thể xóa")); return; }
                 }
                 update({ an_trua_nha_hang_id: null, an_trua_set_menu_id: null });
               }}>
@@ -424,7 +426,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
             options={nhaHangOptions}
             value=""
             onChange={(v) => update({ an_trua_nha_hang_id: v ? Number(v) : null })}
-            placeholder="Chọn"
+            placeholder={t("Chọn")}
             className="h-7 text-xs"
           />
         )}
@@ -445,22 +447,22 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   if (nid !== selectedNhaToi.id) update({ an_toi_nha_hang_id: nid, an_toi_set_menu_id: null });
                   setEditSel(null);
                 }}
-                placeholder="Chọn nhà hàng khác"
+                placeholder={t("Chọn nhà hàng khác")}
                 className="h-7 text-xs flex-1"
               />
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="Giữ nguyên" onClick={() => setEditSel(null)}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title={t("Giữ nguyên")} onClick={() => setEditSel(null)}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
           ) : (
           <>
             <div className="flex items-center gap-1">
-              <button type="button" title="Bấm để đổi nhà hàng"
+              <button type="button" title={t("Bấm để đổi nhà hàng")}
                 className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
                 onClick={async () => {
                   if (doanId && day.id && selectedNhaToi) {
                     const result = await checkNhaHangDeletable(day.id, selectedNhaToi.id, "toi", selectedNhaToi.ten);
-                    if (!result.ok) { toast.error(result.reason ?? "Không thể đổi"); return; }
+                    if (!result.ok) { toast.error(result.reason ?? t("Không thể đổi")); return; }
                   }
                   setEditSel("toi");
                 }}>
@@ -469,7 +471,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
                 if (doanId && day.id && selectedNhaToi) {
                   const result = await checkNhaHangDeletable(day.id, selectedNhaToi.id, "toi", selectedNhaToi.ten);
-                  if (!result.ok) { toast.error(result.reason ?? "Không thể xóa"); return; }
+                  if (!result.ok) { toast.error(result.reason ?? t("Không thể xóa")); return; }
                 }
                 update({ an_toi_nha_hang_id: null, an_toi_set_menu_id: null });
               }}>
@@ -493,7 +495,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
             options={nhaHangOptions}
             value=""
             onChange={(v) => update({ an_toi_nha_hang_id: v ? Number(v) : null })}
-            placeholder="Chọn"
+            placeholder={t("Chọn")}
             className="h-7 text-xs"
           />
         )}
@@ -504,7 +506,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         {lockKhachSan ? (
           <div className="flex items-center gap-1.5 px-2 py-2 rounded-md bg-muted/40 text-[12px] text-muted-foreground italic">
             <Lock className="h-3 w-3" />
-            Đã khoá ở mẫu seri
+            {t("Đã khoá ở mẫu seri")}
           </div>
         ) : selectedKS ? (
           editSel === "ks" ? (
@@ -519,22 +521,22 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                   if (nid !== selectedKS.id) update({ khach_san_id: nid });
                   setEditSel(null);
                 }}
-                placeholder="Chọn khách sạn khác"
+                placeholder={t("Chọn khách sạn khác")}
                 className="h-7 text-xs flex-1"
               />
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="Giữ nguyên" onClick={() => setEditSel(null)}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" title={t("Giữ nguyên")} onClick={() => setEditSel(null)}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
           ) : (
           <>
             <div className="flex items-center gap-1">
-              <button type="button" title="Bấm để đổi khách sạn"
+              <button type="button" title={t("Bấm để đổi khách sạn")}
                 className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
                 onClick={async () => {
                   if (doanId && selectedKS) {
                     const result = await checkKhachSanDeletable(doanId, selectedKS.id, selectedKS.ten);
-                    if (!result.ok) { toast.error(result.reason ?? "Không thể đổi"); return; }
+                    if (!result.ok) { toast.error(result.reason ?? t("Không thể đổi")); return; }
                   }
                   setEditSel("ks");
                 }}>
@@ -543,7 +545,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
                 if (doanId && selectedKS) {
                   const result = await checkKhachSanDeletable(doanId, selectedKS.id, selectedKS.ten);
-                  if (!result.ok) { toast.error(result.reason ?? "Không thể xóa"); return; }
+                  if (!result.ok) { toast.error(result.reason ?? t("Không thể xóa")); return; }
                 }
                 update({ khach_san_id: null });
               }}>
@@ -558,7 +560,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
             options={khachSanOptions}
             value=""
             onChange={(v) => update({ khach_san_id: v ? Number(v) : null })}
-            placeholder="Chọn"
+            placeholder={t("Chọn")}
             className="h-7 text-xs"
           />
         )}
@@ -568,17 +570,17 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               className={`w-full min-h-[24px] text-[13px] border rounded-md px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring ${day.ks_ma_code?.trim() ? "bg-violet-50 text-violet-800 border-violet-200" : "bg-background border-border"}`}
               value={day.ks_ma_code}
               onChange={(e) => update({ ks_ma_code: e.target.value })}
-              placeholder="Mã code đặt phòng"
+              placeholder={t("Mã code đặt phòng")}
               rows={1}
-              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+              onInput={(e) => { const ta = e.currentTarget; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }}
             />
             <textarea
               className={`w-full min-h-[24px] text-[13px] border rounded-md px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring ${day.ks_loai_phong?.trim() ? "bg-violet-50 text-violet-800 border-violet-200" : "bg-background border-border"}`}
               value={day.ks_loai_phong}
               onChange={(e) => update({ ks_loai_phong: e.target.value })}
-              placeholder="Loại phòng: 2 TWN, 1 DBL..."
+              placeholder={t("Loại phòng: 2 TWN, 1 DBL...")}
               rows={1}
-              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+              onInput={(e) => { const ta = e.currentTarget; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }}
             />
           </>
         )}
