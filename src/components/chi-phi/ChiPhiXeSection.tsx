@@ -21,13 +21,14 @@ import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-d
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  cho_duyet: { text: "Chờ duyệt ĐNTT", cls: "bg-yellow-100 text-yellow-700" },
-  da_duyet:  { text: "Đã duyệt ĐNTT",  cls: "bg-teal-100 text-teal-700" },
-  tu_choi:   { text: "Từ chối",         cls: "bg-red-100 text-red-700" },
+const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
+  cho_duyet: { textKey: "Chờ duyệt ĐNTT", cls: "bg-yellow-100 text-yellow-700" },
+  da_duyet:  { textKey: "Đã duyệt ĐNTT",  cls: "bg-teal-100 text-teal-700" },
+  tu_choi:   { textKey: "Từ chối",         cls: "bg-red-100 text-red-700" },
 };
 
 interface CancelTarget { dnttId: number; isPaid: boolean }
@@ -45,6 +46,7 @@ interface Props {
 }
 
 export default function ChiPhiXeSection({ doanId, xe }: Props) {
+  useTranslate();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
@@ -99,7 +101,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   const total = xeRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
 
   const xeLabel = xe
-    ? [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} chỗ` : ""].filter(Boolean).join(" · ")
+    ? [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} ${t("chỗ")}` : ""].filter(Boolean).join(" · ")
     : null;
 
   // ── Row edit helpers ──────────────────────────────────────────────────────
@@ -147,7 +149,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   const handleToggleDinhKy = (row: typeof xeRows[0]) => {
     const newVal = !row.thanh_toan_dinh_ky;
     upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal }, {
-      onSuccess: () => toast.success(newVal ? "Đã bật thanh toán định kỳ" : "Đã tắt thanh toán định kỳ"),
+      onSuccess: () => toast.success(newVal ? t("Đã bật thanh toán định kỳ") : t("Đã tắt thanh toán định kỳ")),
     });
   };
 
@@ -160,8 +162,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   const handleSaveExtra = () => {
     if (!addExtraForId) return;
     const parent = xeRows.find((r) => r.id === addExtraForId);
-    if (!extraFields.mo_ta.trim()) { toast.warning("Nhập mô tả phụ phí"); return; }
-    if (extraFields.don_gia <= 0) { toast.warning("Đơn giá phải lớn hơn 0"); return; }
+    if (!extraFields.mo_ta.trim()) { toast.warning(t("Nhập mô tả phụ phí")); return; }
+    if (extraFields.don_gia <= 0) { toast.warning(t("Đơn giá phải lớn hơn 0")); return; }
     const total = extraFields.so_luong * extraFields.don_gia;
     upsertMut.mutate({
       doan_id: doanId,
@@ -177,14 +179,14 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     }, {
       onSuccess: () => {
         setAddExtraForId(null);
-        toast.success("Đã thêm phụ phí xe");
+        toast.success(t("Đã thêm phụ phí xe"));
       },
     });
   };
 
   // ── Add xe row ────────────────────────────────────────────────────────────
   const handleAddXe = () => {
-    if (!xeLabel) { toast.warning("Đoàn chưa chọn xe trong phần điều tour"); return; }
+    if (!xeLabel) { toast.warning(t("Đoàn chưa chọn xe trong phần điều tour")); return; }
     upsertMut.mutate({
       doan_id: doanId,
       danh_muc: "xe",
@@ -197,7 +199,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       nha_cung_cap_id: xe?.nha_xe?.nha_cung_cap_id ?? null,
       thanh_toan_dinh_ky: true,
     }, {
-      onSuccess: () => toast.success("Đã thêm dòng xe"),
+      onSuccess: () => toast.success(t("Đã thêm dòng xe")),
     });
   };
 
@@ -213,8 +215,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     if (!modal) return;
     const { chiPhiId, thanhTien, moTa, nccId } = modal;
     const soTien = modalMode === "full" ? thanhTien : depositAmount;
-    if (soTien <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
-    if (modalMode === "deposit" && soTien >= thanhTien) { toast.error("Số tiền cọc phải nhỏ hơn tổng tiền"); return; }
+    if (soTien <= 0) { toast.error(t("Số tiền phải lớn hơn 0")); return; }
+    if (modalMode === "deposit" && soTien >= thanhTien) { toast.error(t("Số tiền cọc phải nhỏ hơn tổng tiền")); return; }
     insertDNTT.mutate({
       doan_id: doanId,
       loai: "xe",
@@ -228,15 +230,15 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       ngay_can_thanh_toan: ngayCan || null,
       allocations: [{ chi_phi_id: chiPhiId, so_tien: soTien }],
     }, {
-      onSuccess: () => { toast.success("Đã gửi ĐNTT"); setModal(null); },
+      onSuccess: () => { toast.success(t("Đã gửi ĐNTT")); setModal(null); },
     });
   };
 
   const handleEditSave = (id: number) => {
     const v = parseInt(editAmount.replace(/\D/g, ""), 10);
-    if (!v || v <= 0) { toast.error("Số tiền không hợp lệ"); return; }
+    if (!v || v <= 0) { toast.error(t("Số tiền không hợp lệ")); return; }
     updateDNTT.mutate({ id, soTien: v }, {
-      onSuccess: () => { toast.success("Đã cập nhật"); setEditingId(null); },
+      onSuccess: () => { toast.success(t("Đã cập nhật")); setEditingId(null); },
     });
   };
 
@@ -245,8 +247,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     cancelMut.mutate(
       { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
       {
-        onSuccess: () => { toast.success("Đã hủy"); setCancelTarget(null); },
-        onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy"),
+        onSuccess: () => { toast.success(t("Đã hủy")); setCancelTarget(null); },
+        onError: (err: unknown) => toast.error(errMsg(err) || t("Lỗi khi hủy")),
       },
     );
   };
@@ -256,20 +258,20 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-green-100 bg-green-50">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-green-900">🚌 Xe</span>
+          <span className="text-sm font-semibold text-green-900">🚌 {t("Xe")}</span>
           {xeLabel && <span className="text-xs text-muted-foreground">· {xeLabel}</span>}
         </div>
         <div className="flex items-center gap-3">
-          {total > 0 && <span className="text-xs text-muted-foreground">Tổng: {fmt(total)} ₫</span>}
+          {total > 0 && <span className="text-xs text-muted-foreground">{t("Tổng:")} {fmt(total)} ₫</span>}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleAddXe} disabled={upsertMut.isPending}>
-            + Thêm
+            + {t("Thêm")}
           </Button>
         </div>
       </div>
 
       {xeRows.length === 0 ? (
         <p className="px-4 py-3 text-sm text-muted-foreground">
-          {xeLabel ? `Bấm "+ Thêm" để ghi nhận chi phí xe.` : "Chưa có xe trong điều tour. Vào tab Điều Tour để chọn xe."}
+          {xeLabel ? t("Bấm \"+ Thêm\" để ghi nhận chi phí xe.") : t("Chưa có xe trong điều tour. Vào tab Điều Tour để chọn xe.")}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -286,13 +288,13 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
             </colgroup>
             <thead>
               <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
-                <th className="text-left px-4 py-2.5">Mô tả</th>
-                <th className="text-center px-2 py-2.5">SL</th>
-                <th className="text-center px-3 py-2.5">Đơn giá</th>
-                <th className="text-right px-3 py-2.5">Thành tiền</th>
-                <th className="text-center px-2 py-2.5">Nguồn</th>
-                <th className="text-center px-3 py-2.5">TT ĐNTT</th>
-                <th className="text-center px-3 py-2.5">TT Thanh toán</th>
+                <th className="text-left px-4 py-2.5">{t("Mô tả")}</th>
+                <th className="text-center px-2 py-2.5">{t("SL")}</th>
+                <th className="text-center px-3 py-2.5">{t("Đơn giá")}</th>
+                <th className="text-right px-3 py-2.5">{t("Thành tiền")}</th>
+                <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
+                <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
+                <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
                 <th className="px-2 py-2.5" />
               </tr>
             </thead>
@@ -384,7 +386,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                             : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
                         )}
                       >
-                        {nguoiTt === "cong_ty" ? "Công ty" : "HDV"}
+                        {nguoiTt === "cong_ty" ? t("Công ty") : "HDV"}
                       </button>
                     </td>
 
@@ -403,7 +405,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                               <div key={d.id} className="flex items-center gap-1.5 flex-wrap justify-center">
                                 {isRejected ? (
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                                    {statusInfo.text} · {fmt(d.so_tien)}
+                                    {t(statusInfo.textKey)} · {fmt(d.so_tien)}
                                   </span>
                                 ) : editingId === d.id ? (
                                   <>
@@ -432,8 +434,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                                       return (
                                         <div className="inline-flex flex-col items-start gap-0.5">
                                           <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                                            {statusInfo.text} · {fmt(d.so_tien)}
-                                            {d.la_coc && <span className="ml-1 opacity-70">·Cọc</span>}
+                                            {t(statusInfo.textKey)} · {fmt(d.so_tien)}
+                                            {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
                                           </span>
                                           {ct > 0 && (
                                             <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap">
@@ -468,11 +470,11 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           <div key={d.id}>
                             {d.payment_status === "paid" ? (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                                Đã TT{d.thanh_toan_luc ? ` ${new Date(d.thanh_toan_luc).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}` : ""}
+                                {t("Đã TT")}{d.thanh_toan_luc ? ` ${new Date(d.thanh_toan_luc).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}` : ""}
                               </span>
                             ) : (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                                Chờ UNC · {fmt(d.so_tien - (d.paid_amount || 0))}
+                                {t("Chờ UNC")} · {fmt(d.so_tien - (d.paid_amount || 0))}
                               </span>
                             )}
                           </div>
@@ -499,7 +501,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                       <div className="flex items-center gap-1 justify-end">
                         {nguoiTt === "cong_ty" && isDaTT && paidDntts.length > 0 && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-                            title="Điều chỉnh sau thanh toán"
+                            title={t("Điều chỉnh sau thanh toán")}
                             onClick={() => {
                               const lastPaid = paidDntts[paidDntts.length - 1];
                               setAdjustTarget(lastPaid as unknown as DNTTRowDntt);
@@ -511,7 +513,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                         )}
                         {nguoiTt === "cong_ty" && canCancel && activeDntt && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                            title="Hủy ĐNTT"
+                            title={t("Hủy ĐNTT")}
                             onClick={() => {
                               setCancelMode("hoan_tien");
                               setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" });
@@ -521,31 +523,31 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                         )}
                         <Button variant="ghost" size="sm"
                           className={cn("h-7 text-xs px-2 gap-1", row.thanh_toan_dinh_ky ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
-                          title={row.thanh_toan_dinh_ky ? "Đang định kỳ — bấm để tắt" : "Đặt thanh toán định kỳ"}
+                          title={row.thanh_toan_dinh_ky ? t("Đang định kỳ — bấm để tắt") : t("Đặt thanh toán định kỳ")}
                           disabled={upsertMut.isPending}
                           onClick={() => handleToggleDinhKy(row)}>
                           <CalendarClock className="h-3.5 w-3.5" />
-                          {row.thanh_toan_dinh_ky && "Định kỳ"}
+                          {row.thanh_toan_dinh_ky && t("Định kỳ")}
                         </Button>
                         {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                             onClick={() => openModal(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id)}>
-                            ĐNTT
+                            {t("ĐNTT")}
                           </Button>
                         )}
                         {nguoiTt === "cong_ty" && activeDntts.length > 0 && daDeNghi === 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                             onClick={() => openModal(row.id!, conLai > 0 ? conLai : thanhTien, row.mo_ta || "", row.nha_cung_cap_id)}>
-                            {conLai > 0 ? "ĐNTT còn lại" : "ĐNTT bổ sung"}
+                            {conLai > 0 ? t("ĐNTT còn lại") : t("ĐNTT bổ sung")}
                           </Button>
                         )}
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
-                          title="Thêm phụ phí"
+                          title={t("Thêm phụ phí")}
                           onClick={() => openAddExtra(row.id)}>
                           <Plus className="h-3 w-3" />
                         </Button>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteMut.mutate({ id: row.id, doanId }, { onSuccess: () => toast.success("Đã xóa") })}
+                          onClick={() => deleteMut.mutate({ id: row.id, doanId }, { onSuccess: () => toast.success(t("Đã xóa")) })}
                           disabled={deleteMut.isPending}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -556,10 +558,10 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                     <tr className="bg-amber-50/60 border-b border-dashed border-amber-200">
                       <td colSpan={8} className="px-4 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ Phụ phí</span>
+                          <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ {t("Phụ phí")}</span>
                           <Input
                             autoFocus
-                            placeholder="Mô tả (vd: Xe trung chuyển)"
+                            placeholder={t("Mô tả (vd: Xe trung chuyển)")}
                             className="h-6 text-xs flex-1 min-w-[160px]"
                             value={extraFields.mo_ta}
                             onChange={(e) => setExtraFields((p) => ({ ...p, mo_ta: e.target.value }))}
@@ -568,7 +570,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           <Input
                             type="number"
                             min={0}
-                            placeholder="SL"
+                            placeholder={t("SL")}
                             className="h-6 text-xs w-14 text-center"
                             value={extraFields.so_luong ?? ""}
                             onChange={(e) => setExtraFields((p) => ({ ...p, so_luong: e.target.value === "" ? 0 : Number(e.target.value) }))}
@@ -577,7 +579,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           <DecimalInput
                             value={extraFields.don_gia}
                             onChange={(v) => setExtraFields((p) => ({ ...p, don_gia: v }))}
-                            placeholder="Đơn giá"
+                            placeholder={t("Đơn giá")}
                             className="h-6 text-xs w-28 text-right"
                           />
                           {extraFields.don_gia > 0 && (
@@ -585,8 +587,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                               = {fmt(extraFields.so_luong * extraFields.don_gia)} ₫
                             </span>
                           )}
-                          <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending}>Lưu</Button>
-                          <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setAddExtraForId(null)}>Hủy</Button>
+                          <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending}>{t("Lưu")}</Button>
+                          <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setAddExtraForId(null)}>{t("Hủy")}</Button>
                         </div>
                       </td>
                     </tr>
@@ -603,43 +605,43 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       <Dialog open={!!modal} onOpenChange={(v) => { if (!v) setModal(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-sm">Tạo đề nghị thanh toán — {modal?.moTa || "Xe"}</DialogTitle>
+            <DialogTitle className="text-sm">{t("Tạo đề nghị thanh toán")} — {modal?.moTa || t("Xe")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
-            <p>Tổng tiền: <span className="font-semibold">{fmt(modal?.thanhTien ?? 0)} VND</span></p>
+            <p>{t("Tổng tiền:")} <span className="font-semibold">{fmt(modal?.thanhTien ?? 0)} VND</span></p>
             <RadioGroup value={modalMode} onValueChange={(v) => setModalMode(v as "full" | "deposit")} className="space-y-2">
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="full" id="xe-full" />
                 <Label htmlFor="xe-full" className="text-xs cursor-pointer">
-                  Toàn bộ — {fmt(modal?.thanhTien ?? 0)} VND
+                  {t("Toàn bộ")} — {fmt(modal?.thanhTien ?? 0)} VND
                 </Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="deposit" id="xe-dep" />
-                <Label htmlFor="xe-dep" className="text-xs cursor-pointer">1 phần (cọc)</Label>
+                <Label htmlFor="xe-dep" className="text-xs cursor-pointer">{t("1 phần (cọc)")}</Label>
               </div>
             </RadioGroup>
             {modalMode === "deposit" && (
               <div className="space-y-1">
-                <Label className="text-xs">Số tiền cọc</Label>
+                <Label className="text-xs">{t("Số tiền cọc")}</Label>
                 <Input type="number" className="h-8 text-xs"
                   value={depositAmount || ""}
                   onChange={(e) => setDepositAmount(Number(e.target.value) || 0)}
                   max={modal?.thanhTien} />
                 {depositAmount > 0 && modal && (
-                  <p className="text-[11px] text-muted-foreground">Còn lại: {fmt(modal.thanhTien - depositAmount)} VND</p>
+                  <p className="text-[11px] text-muted-foreground">{t("Còn lại:")} {fmt(modal.thanhTien - depositAmount)} VND</p>
                 )}
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-xs">Ngày cần thanh toán</Label>
+              <Label className="text-xs">{t("Ngày cần thanh toán")}</Label>
               <DatePicker className="h-8 text-xs w-full" value={ngayCan} onChange={setNgayCan} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setModal(null)}>Hủy</Button>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setModal(null)}>{t("Hủy")}</Button>
             <Button size="sm" className="text-xs" onClick={handleModalSubmit} disabled={insertDNTT.isPending}>
-              Tạo đề nghị TT
+              {t("Tạo đề nghị TT")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -648,19 +650,19 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       {/* Adjust Dialog */}
       <Dialog open={!!adjustTarget} onOpenChange={(o) => { if (!o) setAdjustTarget(null); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="text-sm">Điều chỉnh sau thanh toán</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-sm">{t("Điều chỉnh sau thanh toán")}</DialogTitle></DialogHeader>
           {adjustTarget && (
             <div className="space-y-3 py-1 text-sm">
               <p className="text-xs text-muted-foreground">{adjustTarget.mo_ta}</p>
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Đã thanh toán:</span>
+                <span className="text-muted-foreground">{t("Đã thanh toán:")}</span>
                 <span className="font-semibold">{fmt(adjustTarget.so_tien)} ₫</span>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Số tiền thực tế</Label>
+                <Label className="text-xs font-medium">{t("Số tiền thực tế")}</Label>
                 <Input className="h-8 text-sm" value={adjustAmount}
                   onChange={(e) => setAdjustAmount(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Nhập số tiền..." />
+                  placeholder={t("Nhập số tiền...")} />
               </div>
               {(() => {
                 const actual = parseInt(adjustAmount.replace(/\D/g, ""), 10);
@@ -669,36 +671,36 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                 return (
                   <div className={cn("rounded px-3 py-2 text-xs font-medium",
                     delta > 0 ? "bg-yellow-50 text-yellow-700" : "bg-purple-50 text-purple-700")}>
-                    {delta > 0 ? `Thiếu ${fmt(delta)} ₫ → tạo ĐNTT bổ sung` : `Thừa ${fmt(Math.abs(delta))} ₫ → ghi công nợ NCC`}
+                    {delta > 0 ? `${t("Thiếu")} ${fmt(delta)} ₫ → ${t("tạo ĐNTT bổ sung")}` : `${t("Thừa")} ${fmt(Math.abs(delta))} ₫ → ${t("ghi công nợ NCC")}`}
                   </div>
                 );
               })()}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Lý do</Label>
+                <Label className="text-xs font-medium">{t("Lý do")}</Label>
                 <Textarea className="text-xs min-h-[56px]" value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)} placeholder="VD: Thay đổi số lượng..." />
+                  onChange={(e) => setAdjustReason(e.target.value)} placeholder={t("VD: Thay đổi số lượng...")} />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustTarget(null)}>Đóng</Button>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustTarget(null)}>{t("Đóng")}</Button>
             <Button size="sm" className="text-xs"
               disabled={adjustMut.isPending || !adjustAmount || parseInt(adjustAmount.replace(/\D/g, ""), 10) === adjustTarget?.so_tien}
               onClick={() => {
                 if (!adjustTarget) return;
                 const soTienThucTe = parseInt(adjustAmount.replace(/\D/g, ""), 10);
                 if (isNaN(soTienThucTe)) return;
-                adjustMut.mutate({ dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || "Điều chỉnh" }, {
+                adjustMut.mutate({ dnttGoc: adjustTarget, soTienThucTe, lyDo: adjustReason || t("Điều chỉnh") }, {
                   onSuccess: (result) => {
                     if (!result) return;
-                    if (result.delta > 0) toast.success(`Đã tạo ĐNTT bổ sung ${fmt(result.delta)} ₫`);
-                    else toast.success(`Đã ghi công nợ ${fmt(Math.abs(result.delta))} ₫`);
+                    if (result.delta > 0) toast.success(`${t("Đã tạo ĐNTT bổ sung")} ${fmt(result.delta)} ₫`);
+                    else toast.success(`${t("Đã ghi công nợ")} ${fmt(Math.abs(result.delta))} ₫`);
                     setAdjustTarget(null);
                   },
-                  onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi điều chỉnh"),
+                  onError: (err: unknown) => toast.error(errMsg(err) || t("Lỗi điều chỉnh")),
                 });
               }}>
-              Xác nhận
+              {t("Xác nhận")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -708,25 +710,25 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       {/* Cancel Dialog */}
       <Dialog open={!!cancelTarget} onOpenChange={(v) => { if (!v) setCancelTarget(null); }}>
         <DialogContent className="sm:max-w-[340px]">
-          <DialogHeader><DialogTitle className="text-sm">Hủy đề nghị thanh toán</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-sm">{t("Hủy đề nghị thanh toán")}</DialogTitle></DialogHeader>
           {cancelTarget?.isPaid && (
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Đã thanh toán — chọn cách xử lý:</p>
+              <p className="text-xs text-muted-foreground">{t("Đã thanh toán — chọn cách xử lý:")}</p>
               <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as "cong_no" | "hoan_tien")} className="flex gap-4">
                 <div className="flex items-center gap-1.5">
                   <RadioGroupItem value="hoan_tien" id="xe-cancel-ht" />
-                  <Label htmlFor="xe-cancel-ht" className="text-xs">Hoàn tiền</Label>
+                  <Label htmlFor="xe-cancel-ht" className="text-xs">{t("Hoàn tiền")}</Label>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <RadioGroupItem value="cong_no" id="xe-cancel-cn" />
-                  <Label htmlFor="xe-cancel-cn" className="text-xs">Ghi công nợ</Label>
+                  <Label htmlFor="xe-cancel-cn" className="text-xs">{t("Ghi công nợ")}</Label>
                 </div>
               </RadioGroup>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCancelTarget(null)}>Đóng</Button>
-            <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelMut.isPending}>Xác nhận hủy</Button>
+            <Button variant="outline" size="sm" onClick={() => setCancelTarget(null)}>{t("Đóng")}</Button>
+            <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelMut.isPending}>{t("Xác nhận hủy")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

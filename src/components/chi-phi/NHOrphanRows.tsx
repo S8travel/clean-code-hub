@@ -3,6 +3,7 @@ import type { DNTTRow } from "@/hooks/use-dntt";
 import type { CongNoRow } from "@/hooks/use-cong-no";
 import type { NHMealRow } from "@/hooks/use-chi-phi-nh";
 import { fmt, STATUS_LABEL, parseNHMoTa } from "./nh-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   meals: NHMealRow[];
@@ -14,6 +15,7 @@ interface Props {
 // Các dòng NH đã bị gỡ khỏi điều tour nhưng vẫn còn chi phí / DNTT.
 // Tách verbatim từ ChiPhiNHSection.
 export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }: Props) {
+  useTranslate();
   const currentNgayIds = new Set(meals.map((m) => m.doan_ngay_id));
   const orphanedCps = chiPhiRows.filter((cp) => {
     if (cp.danh_muc !== "nha_hang") return false;
@@ -32,7 +34,7 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
     <>
       <tr>
         <td colSpan={11} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
-          Không còn trong lịch trình điều tour
+          {t("Không còn trong lịch trình điều tour")}
         </td>
       </tr>
       {orphanedCps.map((cp) => {
@@ -82,7 +84,7 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
                     const si = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
                     return (
                       <span key={d.id} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${si.cls}`}>
-                        {si.text} · {fmt(d.so_tien)}
+                        {t(si.textKey)} · {fmt(d.so_tien)}
                       </span>
                     );
                   })}
@@ -95,9 +97,9 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
                 {cpActiveDntts.map(d => (
                   <div key={d.id}>
                     {d.payment_status === "paid" ? (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">Đã TT</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">{t("Đã TT")}</span>
                     ) : (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">Chờ UNC</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">{t("Chờ UNC")}</span>
                     )}
                   </div>
                 ))}

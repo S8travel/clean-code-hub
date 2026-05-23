@@ -19,6 +19,7 @@ import KSFocEditor from "./KSFocEditor";
 import KSCodeEditor from "./KSCodeEditor";
 import { fmt, STATUS_LABEL, type LocalKSRow } from "./ks-section-shared";
 import type { KSCardData, KSCardHandlers } from "./use-ks-section";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   ksId: number;
@@ -29,6 +30,7 @@ interface Props {
 // 1 card khách sạn: phòng + dịch vụ + thanh toán section.
 // Tách verbatim từ ChiPhiKSSection — giữ nguyên 100% logic/hành vi.
 export default function KSCard({ ksId, data, handlers }: Props) {
+  useTranslate();
   const {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
     grouped, localRows, dnttList, congNoList,
@@ -214,19 +216,19 @@ export default function KSCard({ ksId, data, handlers }: Props) {
               )}
               {effectiveKsStatus === "cong_no" && congNoAmount > 0 && (
                 <span className="text-purple-600 font-semibold text-xs">
-                  — Công nợ: {fmt(congNoAmount)} VND
+                  — {t("Công nợ")}: {fmt(congNoAmount)} VND
                 </span>
               )}
               {effectiveKsStatus === "hoan_tien" && hoanTienAmount > 0 && (
                 <span className="text-blue-600 font-semibold text-xs">
-                  — Hoàn tiền: {fmt(hoanTienAmount)} VND
+                  — {t("Hoàn tiền")}: {fmt(hoanTienAmount)} VND
                 </span>
               )}
             </button>
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
             {isKsDinhKy && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700">Định kỳ</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700">{t("Định kỳ")}</span>
             )}
             {totalKS > 0 && (
               <span className="text-xs text-muted-foreground">
@@ -239,9 +241,9 @@ export default function KSCard({ ksId, data, handlers }: Props) {
             {dnttMismatch !== 0 && (
               <span
                 className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
-                title={`Số tiền DNTT đã commit (${fmt(sumCommitted)} ₫) khác chi phí thực tế (${fmt(sumActual)} ₫). Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.`}
+                title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.")}`}
               >
-                ⚠ DNTT lệch {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
+                ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
               </span>
             )}
             <KSCodeEditor
@@ -261,10 +263,10 @@ export default function KSCard({ ksId, data, handlers }: Props) {
               size="sm"
               className={cn("h-7 text-xs px-2 gap-1", isKsDinhKy ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
               onClick={() => handleToggleDinhKy(ksId)}
-              title={isKsDinhKy ? "Đang thanh toán định kỳ — bấm để bỏ" : "Đặt thanh toán định kỳ"}
+              title={isKsDinhKy ? t("Đang thanh toán định kỳ — bấm để bỏ") : t("Đặt thanh toán định kỳ")}
             >
               <CalendarClock className="h-3.5 w-3.5" />
-              {isKsDinhKy && "Định kỳ"}
+              {isKsDinhKy && t("Định kỳ")}
             </Button>
             <button onClick={() => toggleCollapse(ksId)} className="text-muted-foreground hover:text-foreground">
               {showContent
@@ -283,24 +285,24 @@ export default function KSCard({ ksId, data, handlers }: Props) {
       {showContent && <CardContent className="px-4 pb-1.5 pt-0">
         {isOrphaned && (
           <p className="text-xs text-muted-foreground italic mb-2">
-            Khách sạn đã được xóa khỏi lịch trình điều tour.
+            {t("Khách sạn đã được xóa khỏi lịch trình điều tour.")}
           </p>
         )}
         {!isOrphaned && <div className="overflow-x-auto">
           <div className="flex items-center gap-2 px-1 py-0.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">🛏️ Phòng</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">🛏️ {t("Phòng")}</span>
           </div>
           <Table>
             <TableHeader>
               <TableRow className="text-xs">
-                <TableHead className="w-[120px] h-auto py-1 px-2">Loại phòng</TableHead>
-                <TableHead className="w-[60px] h-auto py-1 px-2">Số phòng</TableHead>
-                <TableHead className="w-[60px] h-auto py-1 px-2" title="Số phòng miễn phí (OP tự nhập). Gợi ý 16免1 hiện ở header ngày.">FOC</TableHead>
+                <TableHead className="w-[120px] h-auto py-1 px-2">{t("Loại phòng")}</TableHead>
+                <TableHead className="w-[60px] h-auto py-1 px-2">{t("Số phòng")}</TableHead>
+                <TableHead className="w-[60px] h-auto py-1 px-2" title={t("Số phòng miễn phí (OP tự nhập). Gợi ý 16免1 hiện ở header ngày.")}>FOC</TableHead>
                 <TableHead className="w-[90px] h-auto py-1 px-2">C/I</TableHead>
                 <TableHead className="w-[90px] h-auto py-1 px-2">C/O</TableHead>
-                <TableHead className="w-[50px] h-auto py-1 px-2">Đêm</TableHead>
-                <TableHead className="w-[100px] h-auto py-1 px-2">Giá/phòng</TableHead>
-                <TableHead className="w-[110px] h-auto py-1 px-2">Thành tiền</TableHead>
+                <TableHead className="w-[50px] h-auto py-1 px-2">{t("Đêm")}</TableHead>
+                <TableHead className="w-[100px] h-auto py-1 px-2">{t("Giá/phòng")}</TableHead>
+                <TableHead className="w-[110px] h-auto py-1 px-2">{t("Thành tiền")}</TableHead>
                 <TableHead className="w-[32px] h-auto py-1 px-2" />
               </TableRow>
             </TableHeader>
@@ -436,7 +438,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                           </span>
                         )}
                         {dntt.la_coc && (
-                          <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">Cọc</span>
+                          <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">{t("Cọc")}</span>
                         )}
                         {(() => {
                           const ct = canTruByDnttId[dntt.id] || 0;
@@ -444,7 +446,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                           const thucTT = Math.max(0, dntt.so_tien - ct);
                           return (
                             <span className="px-1 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px]"
-                              title={`Tổng ${fmt(dntt.so_tien)} − Cấn trừ ${fmt(ct)} = Thực TT ${fmt(thucTT)}`}>
+                              title={`${t("Tổng")} ${fmt(dntt.so_tien)} − ${t("Cấn trừ")} ${fmt(ct)} = ${t("Thực TT")} ${fmt(thucTT)}`}>
                               CT {fmt(ct)}
                             </span>
                           );
@@ -457,15 +459,15 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                             : "bg-muted text-muted-foreground",
                         )}>
                           {isPaid
-                            ? `Đã TT${dntt.thanh_toan_luc ? ` ${format(new Date(dntt.thanh_toan_luc), "dd/MM")}` : ""}`
-                            : isWaiting ? "Chờ duyệt"
-                            : isApproved ? "Đã duyệt"
+                            ? `${t("Đã TT")}${dntt.thanh_toan_luc ? ` ${format(new Date(dntt.thanh_toan_luc), "dd/MM")}` : ""}`
+                            : isWaiting ? t("Chờ duyệt")
+                            : isApproved ? t("Đã duyệt")
                             : "—"}
                         </span>
                         {dntt.ngay_can_thanh_toan && (
                           <span
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 text-[10px] font-medium"
-                            title="Ngày cần thanh toán"
+                            title={t("Ngày cần thanh toán")}
                           >
                             <CalendarClock className="h-3 w-3" />
                             {format(new Date(dntt.ngay_can_thanh_toan), "dd/MM/yyyy")}
@@ -507,7 +509,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-                                title="Sửa số tiền"
+                                title={t("Sửa số tiền")}
                                 onClick={() => {
                                   setEditingDnttId(dntt.id);
                                   setEditAmount(String(dntt.so_tien));
@@ -534,7 +536,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                                 }}
                               >
                                 <Ban className="h-3 w-3 mr-1" />
-                                Hủy
+                                {t("Hủy")}
                               </Button>
                             )}
                           </>
@@ -569,23 +571,23 @@ export default function KSCard({ ksId, data, handlers }: Props) {
               effectiveDelta > 0 ? "bg-orange-50/70" : "bg-purple-50/70",
             )}>
               <span className="text-muted-foreground">
-                Sau điều chỉnh:
-                <span className="ml-1">Thực tế <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
+                {t("Sau điều chỉnh")}:
+                <span className="ml-1">{t("Thực tế")} <span className="font-medium text-foreground tabular-nums">{fmt(sumActual)}</span> ₫</span>
                 <span className="mx-1">·</span>
-                <span>Đã TT <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
+                <span>{t("Đã TT")} <span className="font-medium text-foreground tabular-nums">{fmt(sumPaid)}</span> ₫</span>
                 {groupCongNoTotal > 0 && (
                   <>
                     <span className="mx-1">·</span>
-                    <span>Đã CN/HT <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
+                    <span>{t("Đã CN/HT")} <span className="font-medium text-foreground tabular-nums">{fmt(groupCongNoTotal)}</span> ₫</span>
                   </>
                 )}
                 <span className="mx-1">·</span>
-                <span>Còn lệch <span className={cn(
+                <span>{t("Còn lệch")} <span className={cn(
                   "font-semibold tabular-nums",
                   effectiveDelta > 0 ? "text-orange-700" : "text-purple-700",
                 )}>
                   {effectiveDelta > 0 ? "+" : "−"}{fmt(Math.abs(effectiveDelta))} ₫
-                </span> ({effectiveDelta > 0 ? "thiếu" : "thừa"})</span>
+                </span> ({effectiveDelta > 0 ? t("thiếu") : t("thừa")})</span>
               </span>
               {/* Cả delta > 0 (thiếu) và delta < 0 (thừa) đều mở aggregate commit modal.
                   Modal có KSCongNoPanel cho cấn trừ + RadioGroup cho hoàn tiền/công nợ. */}
@@ -628,8 +630,8 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                 }}
               >
                 {effectiveDelta > 0
-                  ? `Thanh toán / Cọc bổ sung ${fmt(effectiveDelta)} ₫`
-                  : `Xử lý chênh lệch thừa ${fmt(Math.abs(effectiveDelta))} ₫`}
+                  ? `${t("Thanh toán / Cọc bổ sung")} ${fmt(effectiveDelta)} ₫`
+                  : `${t("Xử lý chênh lệch thừa")} ${fmt(Math.abs(effectiveDelta))} ₫`}
               </Button>
             </div>
           )}
@@ -644,7 +646,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                  title="Điều chỉnh số phòng / giá phòng thực tế sau thanh toán"
+                  title={t("Điều chỉnh số phòng / giá phòng thực tế sau thanh toán")}
                   onClick={() => {
                     setKsAdjustTarget({
                       ksId,
@@ -657,7 +659,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                   }}
                 >
                   <SlidersHorizontal className="h-3 w-3 mr-1" />
-                  Điều chỉnh
+                  {t("Điều chỉnh")}
                 </Button>
               )}
               {/* Ẩn nếu cong_no đã cover full sumPaid → đã settle qua agg modal.
@@ -680,12 +682,12 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                   }}
                 >
                   <Ban className="h-3 w-3 mr-1" />
-                  Hủy dịch vụ
+                  {t("Hủy dịch vụ")}
                 </Button>
               )}
               {/* Thanh toán định kỳ: ẩn nút ĐNTT, kế toán xử lý qua trang định kỳ */}
               {isKsDinhKy && effectiveKsStatus === "chua_de_nghi" && (
-                <span className="text-[11px] text-indigo-500 italic">Thanh toán định kỳ</span>
+                <span className="text-[11px] text-indigo-500 italic">{t("Thanh toán định kỳ")}</span>
               )}
               {/* Chưa có DNTT nào → nút tạo lần đầu (giữ nguyên) */}
               {!isKsDinhKy && effectiveKsStatus === "chua_de_nghi" && (
@@ -696,7 +698,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                   onClick={() => { setModalKsId(ksId); setModalOpen(true); }}
                 >
                   <ArrowRight className="h-3 w-3 mr-1" />
-                  Đề nghị TT
+                  {t("Đề nghị TT")}
                 </Button>
               )}
               {/* "Đề nghị TT bổ sung / còn lại" cũ — REMOVED, replaced by aggregate breakdown button. */}

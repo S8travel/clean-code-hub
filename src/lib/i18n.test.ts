@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { isZhTW, t, ZH_CORRECTIONS } from "@/lib/i18n";
+import { isZhTW, t, ZH_CORRECTIONS, notifyLanguageChange } from "@/lib/i18n";
 
 function clearCookies() {
   document.cookie.split(";").forEach((c) => {
     const key = c.split("=")[0].trim();
     document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
   });
+  // Reset i18next language về VI sau mỗi test (cookie cleared)
+  notifyLanguageChange();
 }
 
 describe("isZhTW", () => {
@@ -33,15 +35,19 @@ describe("t", () => {
     expect(t("Lock Phòng")).toBe("Lock Phòng");
   });
 
-  // TODO: bản dịch ZH-TW chưa triển khai (i18n migration chưa bắt đầu) — bật lại khi xong.
-  it.skip("returns the override value in ZH-TW mode for a known key", () => {
+  it("returns the override value in ZH-TW mode for a known key", async () => {
     document.cookie = "googtrans=/vi/zh-TW";
+    notifyLanguageChange();
+    // i18next.changeLanguage là async — đợi 1 tick cho language switch xong.
+    await new Promise((r) => setTimeout(r, 0));
     expect(t("Lock Phòng")).toBe("鎖房");
     expect(t("Danh sách đoàn")).toBe("團表");
   });
 
-  it("returns the original string in ZH-TW mode when key has no override", () => {
+  it("returns the original string in ZH-TW mode when key has no override", async () => {
     document.cookie = "googtrans=/vi/zh-TW";
+    notifyLanguageChange();
+    await new Promise((r) => setTimeout(r, 0));
     expect(t("Some unknown key")).toBe("Some unknown key");
   });
 });

@@ -29,6 +29,7 @@ import {
 import { useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
 import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -68,6 +69,7 @@ function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
 }
 
 export default function ChiPhiHDVSection({ doanId, doan }: Props) {
+  useTranslate();
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
   const [showQuyetToan, setShowQuyetToan] = useState(false);
@@ -78,7 +80,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
   // > 0: HDV đã chi vượt thu → công ty còn phải trả lại. < 0: HDV thu nhiều hơn chi → HDV trả lại công ty.
 
   if (isLoading) {
-    return <div className="text-sm text-muted-foreground py-4">Đang tải...</div>;
+    return <div className="text-sm text-muted-foreground py-4">{t("Đang tải...")}</div>;
   }
 
   const hdv = data?.hdv ?? null;
@@ -110,32 +112,32 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
                 )}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">Chưa chỉ định HDV</p>
+              <p className="text-xs text-muted-foreground italic">{t("Chưa chỉ định HDV")}</p>
             )}
 
             {(tongHdvChi > 0 || tongHoTroHDV > 0 || hdvPhaiThuVND > 0) && (
               <div className="flex gap-4 flex-wrap">
                 {tongHdvChi > 0 && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Tổng HDV chi</p>
+                    <p className="text-[11px] text-muted-foreground">{t("Tổng HDV chi")}</p>
                     <p className="text-sm font-semibold">{fmt(tongHdvChi)} ₫</p>
                   </div>
                 )}
                 {hdvPhaiThuVND > 0 && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Phải thu HDV</p>
+                    <p className="text-[11px] text-muted-foreground">{t("Phải thu HDV")}</p>
                     <p className="text-sm font-semibold text-amber-600">{fmt(hdvPhaiThuVND)} ₫</p>
                   </div>
                 )}
                 {tamUngDaTT > 0 && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Đã tạm ứng</p>
+                    <p className="text-[11px] text-muted-foreground">{t("Đã tạm ứng")}</p>
                     <p className="text-sm font-semibold text-emerald-600">{fmt(tamUngDaTT)} ₫</p>
                   </div>
                 )}
                 <div>
                   <p className="text-[11px] text-muted-foreground">
-                    {netConPhaiTra > 0 ? "Công ty còn phải trả" : netConPhaiTra < 0 ? "HDV phải trả lại" : "Đã đủ"}
+                    {netConPhaiTra > 0 ? t("Công ty còn phải trả") : netConPhaiTra < 0 ? t("HDV phải trả lại") : t("Đã đủ")}
                   </p>
                   <p className={cn(
                     "text-sm font-semibold",
@@ -151,16 +153,16 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           {/* Buttons */}
           <div className="flex gap-2 shrink-0 flex-wrap">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowPreview(true)}>
-              <Printer className="h-3 w-3 mr-1" /> In thống kê
+              <Printer className="h-3 w-3 mr-1" /> {t("In thống kê")}
             </Button>
             {!daQuyetToan && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowTamUng(true)}>
-                <Plus className="h-3 w-3 mr-1" /> Tạm ứng
+                <Plus className="h-3 w-3 mr-1" /> {t("Tạm ứng")}
               </Button>
             )}
             {(tamUngList.length > 0 || tongHdvChi > 0 || tongHoTroHDV > 0) && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowQuyetToan(true)}>
-                <Plus className="h-3 w-3 mr-1" /> Quyết toán
+                <Plus className="h-3 w-3 mr-1" /> {t("Quyết toán")}
               </Button>
             )}
           </div>
@@ -170,7 +172,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
         {tamUngList.length > 0 && (
           <div className="border-b border-border">
             <div className="px-4 py-1.5 bg-muted/20">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Tạm ứng</p>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("Tạm ứng")}</p>
             </div>
             <div className="divide-y divide-border">
               {tamUngList.map((d) => (
@@ -184,7 +186,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
         {quyetToanList.length > 0 && (
           <div>
             <div className="px-4 py-1.5 bg-muted/20 border-b border-border">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Quyết toán</p>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("Quyết toán")}</p>
             </div>
             <div className="divide-y divide-border">
               {quyetToanList.map((d) => (
@@ -196,7 +198,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
 
         {/* Empty state nếu chưa có gì */}
         {tamUngList.length === 0 && quyetToanList.length === 0 && (
-          <p className="px-4 py-3 text-sm text-muted-foreground">Chưa có tạm ứng hoặc quyết toán.</p>
+          <p className="px-4 py-3 text-sm text-muted-foreground">{t("Chưa có tạm ứng hoặc quyết toán.")}</p>
         )}
       </div>
 
@@ -209,7 +211,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           doanId={doanId}
           hdvId={hdv?.id ?? null}
           refLoai="hdv_tam_ung"
-          title="Tạo tạm ứng HDV"
+          title={t("Tạo tạm ứng HDV")}
           onClose={() => setShowTamUng(false)}
         />
       )}
@@ -218,7 +220,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           doanId={doanId}
           hdvId={hdv?.id ?? null}
           refLoai="hdv_quyet_toan"
-          title="Tạo quyết toán HDV"
+          title={t("Tạo quyết toán HDV")}
           defaultSoTien={Math.abs(netConPhaiTra)}
           defaultLaThuHoi={netConPhaiTra < 0}
           doan={doan}
@@ -283,8 +285,8 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
 
   const handleDelete = (id: number) => {
     deleteMut.mutate({ id, doanId }, {
-      onSuccess: () => { invalidate(); toast.success("Đã xóa"); },
-      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi xóa"),
+      onSuccess: () => { invalidate(); toast.success(t("Đã xóa")); },
+      onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi xóa")),
     });
   };
 
@@ -303,7 +305,7 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
       });
       invalidate();
     } catch {
-      toast.error("Lỗi khi thêm");
+      toast.error(t("Lỗi khi thêm"));
     } finally {
       setAddingRow(false);
     }
@@ -313,23 +315,23 @@ function HoTroHDVTable({ doanId, hoTroItems }: {
     <div className="rounded-lg border border-border overflow-hidden">
       <div className="px-4 py-2 bg-sky-50 border-b border-sky-100 flex items-center justify-between">
         <p className="text-xs font-semibold text-sky-800 uppercase tracking-wide">
-          Hướng dẫn viên
+          {t("Hướng dẫn viên")}
         </p>
         <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleAdd} disabled={addingRow}>
-          <Plus className="h-3 w-3 mr-1" /> Thêm
+          <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
         </Button>
       </div>
       {hoTroItems.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">Chưa có khoản hỗ trợ nào. Nhấn "+ Thêm" để thêm.</p>
+        <p className="px-4 py-3 text-sm text-muted-foreground">{t("Chưa có khoản hỗ trợ nào. Nhấn \"+ Thêm\" để thêm.")}</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/20">
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Loại</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-24">SL</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Đơn giá</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">Thành tiền</th>
-              <th className="text-center px-2 py-2 text-xs font-medium text-muted-foreground w-20">Nguồn</th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">{t("Loại")}</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-24">{t("SL")}</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">{t("Đơn giá")}</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">{t("Thành tiền")}</th>
+              <th className="text-center px-2 py-2 text-xs font-medium text-muted-foreground w-20">{t("Nguồn")}</th>
               <th className="w-8" />
             </tr>
           </thead>
@@ -433,7 +435,7 @@ function HDVHoTroRow({
           onChange={(e) => setMoTa(e.target.value)}
           onBlur={triggerSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-          placeholder="VD: Công tác phí, Tiền ngủ, ..."
+          placeholder={t("VD: Công tác phí, Tiền ngủ, ...")}
           className="h-7 text-xs"
         />
       </td>
@@ -470,7 +472,7 @@ function HDVHoTroRow({
               : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200",
           )}
         >
-          {nguoiTt === "cong_ty" ? "Công ty" : "HDV"}
+          {nguoiTt === "cong_ty" ? t("Công ty") : "HDV"}
         </button>
       </td>
       <td className="px-2 py-2 text-right">
@@ -501,7 +503,7 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
 
   const handlePrintQuyetToan = () => {
     if (!d.quyet_toan_data) {
-      toast.error("Chưa có chi tiết quyết toán. Tạo lại quyết toán với form chi tiết để xuất Excel.");
+      toast.error(t("Chưa có chi tiết quyết toán. Tạo lại quyết toán với form chi tiết để xuất Excel."));
       return;
     }
     try {
@@ -511,7 +513,7 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
         ngayLap: d.created_at,
       });
     } catch (e: unknown) {
-      toast.error("Lỗi xuất Excel: " + (errMsg(e) || ""));
+      toast.error(t("Lỗi xuất Excel: ") + (errMsg(e) || ""));
     }
   };
 
@@ -519,7 +521,7 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
     <div className={cn("px-4 py-2.5 flex items-center justify-between gap-3", (isHuy || isTuChoi) && "opacity-50")}>
       <div className="min-w-0 flex-1">
         <p className="text-sm truncate">
-          {d.la_thu_hoi ? "⬅ " : ""}{d.mo_ta || (d.la_thu_hoi ? "Thu hồi tạm ứng" : "—")}
+          {d.la_thu_hoi ? "⬅ " : ""}{d.mo_ta || (d.la_thu_hoi ? t("Thu hồi tạm ứng") : "—")}
         </p>
         <p className="text-[11px] text-muted-foreground">
           {format(new Date(d.created_at), "dd/MM/yyyy HH:mm")}
@@ -529,7 +531,7 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
 
       <div className="flex items-center gap-2 shrink-0">
         <span className={cn("text-sm font-semibold", d.la_thu_hoi && "text-blue-600")}>
-          {d.la_thu_hoi ? "-" : ""}{fmt(d.so_tien)} ₫{d.la_thu_hoi && <span className="ml-1 text-xs">(thu hồi)</span>}
+          {d.la_thu_hoi ? "-" : ""}{fmt(d.so_tien)} ₫{d.la_thu_hoi && <span className="ml-1 text-xs">({t("thu hồi")})</span>}
         </span>
         <HDVStatusBadge d={d} />
 
@@ -538,9 +540,9 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
             size="sm" variant="ghost"
             className="h-6 text-xs"
             onClick={handlePrintQuyetToan}
-            title="In Giấy đề nghị quyết toán (Excel)"
+            title={t("In Giấy đề nghị quyết toán (Excel)")}
           >
-            <FileText className="h-3 w-3 mr-1" /> In
+            <FileText className="h-3 w-3 mr-1" /> {t("In")}
           </Button>
         )}
 
@@ -550,10 +552,10 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
               <Button
                 size="sm" variant="ghost"
                 className="h-6 text-xs text-destructive hover:text-destructive"
-                onClick={() => cancelMut.mutate({ id: d.id }, { onSuccess: () => toast.success("Đã hủy"), onError: (e: unknown) => toast.error(errMsg(e)) })}
+                onClick={() => cancelMut.mutate({ id: d.id }, { onSuccess: () => toast.success(t("Đã hủy")), onError: (e: unknown) => toast.error(errMsg(e)) })}
                 disabled={cancelMut.isPending}
               >
-                <Ban className="h-3 w-3 mr-1" /> Hủy
+                <Ban className="h-3 w-3 mr-1" /> {t("Hủy")}
               </Button>
             )}
           </>
@@ -565,16 +567,16 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
 
 function HDVStatusBadge({ d }: { d: HDVDNTTRow }) {
   if (d.trang_thai_duyet === "da_huy")
-    return <Badge variant="secondary" className="text-[10px]">Đã hủy</Badge>;
+    return <Badge variant="secondary" className="text-[10px]">{t("Đã hủy")}</Badge>;
   if (d.payment_status === "paid")
-    return <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">Đã thanh toán</Badge>;
+    return <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">{t("Đã thanh toán")}</Badge>;
   switch (d.trang_thai_duyet) {
     case "cho_duyet":
-      return <Badge className="text-[10px] bg-yellow-100 text-yellow-800 border-yellow-300">Chờ duyệt</Badge>;
+      return <Badge className="text-[10px] bg-yellow-100 text-yellow-800 border-yellow-300">{t("Chờ duyệt")}</Badge>;
     case "da_duyet":
-      return <Badge className="text-[10px] bg-teal-100 text-teal-800 border-teal-300">Đã duyệt</Badge>;
+      return <Badge className="text-[10px] bg-teal-100 text-teal-800 border-teal-300">{t("Đã duyệt")}</Badge>;
     case "tu_choi":
-      return <Badge variant="destructive" className="text-[10px]">Từ chối</Badge>;
+      return <Badge variant="destructive" className="text-[10px]">{t("Từ chối")}</Badge>;
     default:
       return null;
   }
@@ -623,8 +625,8 @@ function CreateHDVPaymentModal({
   const [soTien, setSoTien] = useState(defaultSoTien ?? 0);
   const [moTa, setMoTa] = useState(
     isQT
-      ? `Quyết toán HDV ${hdvName} ${soKhachDefault}p ${soNgayDefault}`.replace(/\s+/g, " ").trim()
-      : "Tạm ứng cho hướng dẫn viên",
+      ? `${t("Quyết toán HDV")} ${hdvName} ${soKhachDefault}p ${soNgayDefault}`.replace(/\s+/g, " ").trim()
+      : t("Tạm ứng cho hướng dẫn viên"),
   );
   const [ghiChu, setGhiChu] = useState("");
   const [laThuHoi, setLaThuHoi] = useState(defaultLaThuHoi ?? false);
@@ -678,7 +680,7 @@ function CreateHDVPaymentModal({
   });
 
   const handleSubmit = async () => {
-    if (soTien <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
+    if (soTien <= 0) { toast.error(t("Số tiền phải lớn hơn 0")); return; }
     try {
       await createMut.mutateAsync({
         doanId, hdvId, refLoai, soTien, laThuHoi, moTa,
@@ -686,10 +688,10 @@ function CreateHDVPaymentModal({
         quyetToanData: isQT ? buildQuyetToanData() : null,
         ngayCanThanhToan: ngayCanTT || null,
       });
-      toast.success("Đã tạo đề nghị thanh toán");
+      toast.success(t("Đã tạo đề nghị thanh toán"));
       onClose();
     } catch (e: unknown) {
-      toast.error(errMsg(e) || "Lỗi tạo đề nghị TT");
+      toast.error(errMsg(e) || t("Lỗi tạo đề nghị TT"));
     }
   };
 
@@ -700,9 +702,9 @@ function CreateHDVPaymentModal({
         data: buildQuyetToanData(),
         hdv: hdv ?? null,
       });
-      toast.success("Đã xuất file Excel");
+      toast.success(t("Đã xuất file Excel"));
     } catch (e: unknown) {
-      toast.error("Lỗi xuất Excel: " + (errMsg(e) || ""));
+      toast.error(t("Lỗi xuất Excel: ") + (errMsg(e) || ""));
     }
   };
 
@@ -715,12 +717,12 @@ function CreateHDVPaymentModal({
           {isQT && (
             <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
               <p className="text-xs font-semibold text-muted-foreground uppercase">
-                Chi tiết quyết toán (Form S8)
+                {t("Chi tiết quyết toán (Form S8)")}
               </p>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <Label className="text-[11px] text-muted-foreground">Mã đoàn</Label>
+                  <Label className="text-[11px] text-muted-foreground">{t("Mã đoàn")}</Label>
                   <p className="font-medium">{doan?.ten_doan || "—"}</p>
                 </div>
                 <div>
@@ -728,61 +730,61 @@ function CreateHDVPaymentModal({
                   <p className="font-medium">{hdvName || "—"}</p>
                 </div>
                 <div>
-                  <Label className="text-[11px] text-muted-foreground">Số khách</Label>
+                  <Label className="text-[11px] text-muted-foreground">{t("Số khách")}</Label>
                   <p className="font-medium">{soKhachDefault}</p>
                 </div>
                 <div>
-                  <Label className="text-[11px] text-muted-foreground">Số ngày</Label>
+                  <Label className="text-[11px] text-muted-foreground">{t("Số ngày")}</Label>
                   <p className="font-medium">{soNgayDefault}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <NumberField label="Tạm ứng" value={tamUng} onChange={setTamUng} />
-                <NumberField label="Thu tiền trách nhiệm" value={thuTrachNhiem} onChange={setThuTrachNhiem} />
+                <NumberField label={t("Tạm ứng")} value={tamUng} onChange={setTamUng} />
+                <NumberField label={t("Thu tiền trách nhiệm")} value={thuTrachNhiem} onChange={setThuTrachNhiem} />
               </div>
 
               {/* Tip — NT/khách/ngày × số khách × số ngày × tỷ giá */}
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground">Thu tiền tip</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("Thu tiền tip")}</Label>
                 <div className="grid grid-cols-4 gap-1.5">
                   <Input
                     type="number" min={0} className="h-7 text-xs"
                     value={tipSoKhach || ""} onChange={(e) => setTipSoKhach(Number(e.target.value) || 0)}
-                    placeholder="SL khách"
+                    placeholder={t("SL khách")}
                   />
                   <Input
                     type="number" min={0} className="h-7 text-xs"
                     value={tipDonGia || ""} onChange={(e) => setTipDonGia(Number(e.target.value) || 0)}
-                    placeholder="ĐG NT/khách/ngày"
+                    placeholder={t("ĐG NT/khách/ngày")}
                   />
                   <Input
                     type="number" min={0} className="h-7 text-xs"
                     value={tipTyGia || ""} onChange={(e) => setTipTyGia(Number(e.target.value) || 0)}
-                    placeholder="Tỷ giá"
+                    placeholder={t("Tỷ giá")}
                   />
                   <p className="h-7 text-xs flex items-center justify-end font-semibold text-emerald-700">
                     {fmt(thuTipVnd)} ₫
                   </p>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  {tipSoKhach} × {tipDonGia} NT × {soNgayDefault} ngày × {tipTyGia} = {fmt(thuTipVnd)} ₫
+                  {tipSoKhach} × {tipDonGia} NT × {soNgayDefault} {t("ngày")} × {tipTyGia} = {fmt(thuTipVnd)} ₫
                 </p>
               </div>
 
               {/* Đầu khách */}
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground">Thu tiền đầu khách</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("Thu tiền đầu khách")}</Label>
                 <div className="grid grid-cols-3 gap-1.5">
                   <Input
                     type="number" min={0} className="h-7 text-xs"
                     value={dauKhachSoKhach || ""} onChange={(e) => setDauKhachSoKhach(Number(e.target.value) || 0)}
-                    placeholder="SL khách"
+                    placeholder={t("SL khách")}
                   />
                   <Input
                     type="number" min={0} className="h-7 text-xs"
                     value={dauKhachDonGia || ""} onChange={(e) => setDauKhachDonGia(Number(e.target.value) || 0)}
-                    placeholder="ĐG"
+                    placeholder={t("ĐG")}
                   />
                   <p className="h-7 text-xs flex items-center justify-end font-semibold text-emerald-700">
                     {fmt(thuDauKhachVnd)} ₫
@@ -792,17 +794,17 @@ function CreateHDVPaymentModal({
 
               {/* Quỹ VP */}
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground">Thu tiền quỹ văn phòng</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("Thu tiền quỹ văn phòng")}</Label>
                 <div className="grid grid-cols-3 gap-1.5">
                   <Input
                     type="number" min={0} className="h-7 text-xs"
                     value={quyVpSoLuong || ""} onChange={(e) => setQuyVpSoLuong(Number(e.target.value) || 0)}
-                    placeholder="SL"
+                    placeholder={t("SL")}
                   />
                   <Input
                     type="number" min={0} className="h-7 text-xs"
                     value={quyVpDonGia || ""} onChange={(e) => setQuyVpDonGia(Number(e.target.value) || 0)}
-                    placeholder="ĐG"
+                    placeholder={t("ĐG")}
                   />
                   <p className="h-7 text-xs flex items-center justify-end font-semibold text-emerald-700">
                     {fmt(thuQuyVpVnd)} ₫
@@ -811,23 +813,23 @@ function CreateHDVPaymentModal({
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <NumberField label="Thu tiền bán OP" value={thuBanOp} onChange={setThuBanOp} />
-                <NumberField label="Thu khác" value={thuKhac} onChange={setThuKhac} />
+                <NumberField label={t("Thu tiền bán OP")} value={thuBanOp} onChange={setThuBanOp} />
+                <NumberField label={t("Thu khác")} value={thuKhac} onChange={setThuKhac} />
               </div>
 
               {/* Tổng + Còn phải thanh toán */}
               <div className="border-t border-border pt-2 space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tổng quyết toán (HDV chi):</span>
+                  <span className="text-muted-foreground">{t("Tổng quyết toán (HDV chi):")}</span>
                   <span className="font-semibold">{fmt(tongHdvChiVal)} ₫</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tổng thu:</span>
+                  <span className="text-muted-foreground">{t("Tổng thu:")}</span>
                   <span className="font-semibold text-emerald-700">{fmt(tongThu)} ₫</span>
                 </div>
                 <div className="flex justify-between border-t border-border pt-1">
                   <span className="font-semibold">
-                    {conPhaiThanhToan >= 0 ? "Công ty còn phải trả HDV:" : "HDV phải trả lại công ty:"}
+                    {conPhaiThanhToan >= 0 ? t("Công ty còn phải trả HDV:") : t("HDV phải trả lại công ty:")}
                   </span>
                   <span className={cn(
                     "font-bold",
@@ -837,29 +839,29 @@ function CreateHDVPaymentModal({
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground italic">
-                  Số tiền ĐNTT bên dưới tự đồng bộ với giá trị này.
+                  {t("Số tiền ĐNTT bên dưới tự đồng bộ với giá trị này.")}
                 </p>
               </div>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Mô tả</Label>
+            <Label className="text-xs">{t("Mô tả")}</Label>
             <Input className="h-8 text-sm" value={moTa} onChange={(e) => setMoTa(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Số tiền ĐNTT (VND)</Label>
+            <Label className="text-xs">{t("Số tiền ĐNTT (VND)")}</Label>
             <Input
               className="h-8 text-sm" type="number" min={0}
               value={soTien || ""} onChange={(e) => setSoTien(Number(e.target.value))}
-              placeholder="VD: 5000000"
+              placeholder={t("VD: 5000000")}
             />
             {soTien > 0 && <p className="text-[11px] text-muted-foreground">{fmt(soTien)} ₫</p>}
           </div>
           {isQT && (
             <>
               <div className="space-y-1.5">
-                <Label className="text-xs">Ngày cần thanh toán</Label>
+                <Label className="text-xs">{t("Ngày cần thanh toán")}</Label>
                 <Input
                   className="h-8 text-sm" type="date"
                   value={ngayCanTT} onChange={(e) => setNgayCanTT(e.target.value)}
@@ -868,28 +870,28 @@ function CreateHDVPaymentModal({
               <div className="flex items-center gap-2">
                 <Checkbox id="la-thu-hoi" checked={laThuHoi} onCheckedChange={(v) => setLaThuHoi(!!v)} />
                 <Label htmlFor="la-thu-hoi" className="text-xs cursor-pointer">
-                  HDV hoàn lại tiền (thu hồi tạm ứng thừa)
+                  {t("HDV hoàn lại tiền (thu hồi tạm ứng thừa)")}
                 </Label>
               </div>
             </>
           )}
           <div className="space-y-1.5">
-            <Label className="text-xs">Ghi chú</Label>
+            <Label className="text-xs">{t("Ghi chú")}</Label>
             <Textarea
               className="text-sm min-h-[60px] resize-none" value={ghiChu}
-              onChange={(e) => setGhiChu(e.target.value)} placeholder="Ghi chú thêm (nếu có)..."
+              onChange={(e) => setGhiChu(e.target.value)} placeholder={t("Ghi chú thêm (nếu có)...")}
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Hủy</Button>
+            <Button variant="outline" size="sm" onClick={onClose}>{t("Hủy")}</Button>
             {isQT && (
               <Button variant="outline" size="sm" onClick={handleExport} className="gap-1">
                 <FileDown className="h-3.5 w-3.5" />
-                In file Excel
+                {t("In file Excel")}
               </Button>
             )}
             <Button size="sm" onClick={handleSubmit} disabled={createMut.isPending}>
-              {createMut.isPending ? "Đang tạo..." : "Tạo"}
+              {createMut.isPending ? t("Đang tạo...") : t("Tạo")}
             </Button>
           </div>
         </div>

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileDown } from "lucide-react";
 import { exportDNTTKSWordFromData, exportDNTTKSBatchWordFromData } from "@/lib/export-dntt-ks-word";
 import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -27,6 +28,7 @@ function computeLyDo(item: EdgeFunctionData, isBatch: boolean): string {
 }
 
 export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
+  useTranslate();
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [nguoiDeNghi, setNguoiDeNghi] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -76,7 +78,7 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-5 pt-4 pb-2 shrink-0">
-          <DialogTitle className="text-sm">Xem trước ĐNTT — có thể chỉnh sửa trước khi xuất</DialogTitle>
+          <DialogTitle className="text-sm">{t("Xem trước ĐNTT — có thể chỉnh sửa trước khi xuất")}</DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto px-5 space-y-5">
@@ -87,7 +89,7 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
 
               {/* Lý do */}
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Lý do</label>
+                <label className="text-[11px] text-muted-foreground">{t("Lý do")}</label>
                 <Input
                   value={item.lyDoText ?? ""}
                   onChange={(e) => updateItem(i, { lyDoText: e.target.value })}
@@ -97,12 +99,12 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
 
               {/* Room entries table */}
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Bảng phòng</label>
+                <label className="text-[11px] text-muted-foreground">{t("Bảng phòng")}</label>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-xs">
                     <thead>
                       <tr className="bg-gray-100">
-                        {["Check in", "Check out", "Loại phòng", "Số đêm", "Số lượng", "FOC", "Đơn giá", "Thành tiền"].map((h) => (
+                        {[t("Check in"), t("Check out"), t("Loại phòng"), t("Số đêm"), t("Số lượng"), "FOC", t("Đơn giá"), t("Thành tiền")].map((h) => (
                           <th key={h} className="border border-gray-300 px-2 py-1 text-center font-semibold whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -172,27 +174,27 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
                   <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs space-y-1">
                     {item.la_coc && (
                       <div className="text-amber-700 font-medium">
-                        ★ ĐNTT này là khoản <span className="font-semibold">cọc</span>
+                        ★ {t("ĐNTT này là khoản")} <span className="font-semibold">{t("cọc")}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tổng tiền phòng:</span>
+                      <span className="text-muted-foreground">{t("Tổng tiền phòng:")}</span>
                       <span className="font-medium">{fmt(tongPhong)} ₫</span>
                     </div>
                     {cocTotal > 0 && (
                       <div className="flex justify-between text-red-600">
-                        <span>Đã cọc trước:</span>
+                        <span>{t("Đã cọc trước:")}</span>
                         <span>− {fmt(cocTotal)} ₫</span>
                       </div>
                     )}
                     {canTruTotal > 0 && (
                       <div className="flex justify-between text-amber-600">
-                        <span>Cấn trừ công nợ:</span>
+                        <span>{t("Cấn trừ công nợ:")}</span>
                         <span>− {fmt(canTruTotal)} ₫</span>
                       </div>
                     )}
                     <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold">
-                      <span>{item.la_coc ? "Số tiền cọc" : (canTruTotal > 0 ? "Thực thanh toán" : "Số tiền ĐNTT")}:</span>
+                      <span>{item.la_coc ? t("Số tiền cọc") : (canTruTotal > 0 ? t("Thực thanh toán") : t("Số tiền ĐNTT"))}:</span>
                       <span className="text-primary">{fmt(thucTT)} ₫</span>
                     </div>
                   </div>
@@ -201,13 +203,13 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
 
               {/* Ghi chú per-item */}
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Ghi chú</label>
+                <label className="text-[11px] text-muted-foreground">{t("Ghi chú")}</label>
                 <Textarea
                   value={item.ghiChu ?? ""}
                   onChange={(e) => updateItem(i, { ghiChu: e.target.value })}
                   rows={2}
                   className="text-xs resize-none"
-                  placeholder="Ghi chú cho ĐNTT này..."
+                  placeholder={t("Ghi chú cho ĐNTT này...")}
                 />
               </div>
             </div>
@@ -215,16 +217,16 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
 
           {/* Người đề nghị (shared across all items in batch) */}
           <div className="space-y-1 pb-1">
-            <label className="text-[11px] text-muted-foreground">Người đề nghị</label>
+            <label className="text-[11px] text-muted-foreground">{t("Người đề nghị")}</label>
             <Input value={nguoiDeNghi} onChange={(e) => setNguoiDeNghi(e.target.value)} className="text-xs h-8 max-w-xs" />
           </div>
         </div>
 
         <DialogFooter className="px-5 py-3 shrink-0 border-t">
-          <Button variant="outline" size="sm" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>{t("Hủy")}</Button>
           <Button size="sm" className="gap-1.5" onClick={handleExport} disabled={exporting}>
             <FileDown className="h-3.5 w-3.5" />
-            {exporting ? "Đang xuất..." : "Xuất Word"}
+            {exporting ? t("Đang xuất...") : t("Xuất Word")}
           </Button>
         </DialogFooter>
       </DialogContent>

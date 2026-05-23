@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDatetime(d: string | null | undefined) {
   if (!d) return "";
@@ -34,20 +35,20 @@ function BuaLabel({ bua }: { bua: "trua" | "toi" }) {
       "px-1.5 py-0.5 rounded text-[10px] font-semibold",
       bua === "trua" ? "bg-orange-100 text-orange-700" : "bg-indigo-100 text-indigo-700"
     )}>
-      {bua === "trua" ? "Trưa" : "Tối"}
+      {bua === "trua" ? t("Trưa") : t("Tối")}
     </span>
   );
 }
 
-function getOverallStatus(row: TauNgayDisplayRow): { label: string; cls: string } {
+function getOverallStatus(row: TauNgayDisplayRow): { labelKey: string; cls: string } {
   const { dat_truoc_status: dt, final_status: fn } = row;
-  if (fn === "xac_nhan_huy")      return { label: "Đã hủy",         cls: "bg-red-100 text-red-700" };
-  if (fn === "cho_xac_nhan_huy")  return { label: "Chờ XN hủy",     cls: "bg-orange-100 text-orange-700" };
-  if (fn === "xac_nhan_final")    return { label: "Final đã XN",     cls: "bg-purple-100 text-purple-700" };
-  if (fn === "cho_xac_nhan")      return { label: "Chờ XN Final",    cls: "bg-green-100 text-green-700" };
-  if (dt === "xac_nhan")          return { label: "Đặt trước đã XN", cls: "bg-teal-100 text-teal-700" };
-  if (dt === "cho_xac_nhan")      return { label: "Chờ XN đặt trước", cls: "bg-blue-100 text-blue-700" };
-  return { label: "Chưa gửi", cls: "bg-muted text-muted-foreground" };
+  if (fn === "xac_nhan_huy")      return { labelKey: "Đã hủy",         cls: "bg-red-100 text-red-700" };
+  if (fn === "cho_xac_nhan_huy")  return { labelKey: "Chờ XN hủy",     cls: "bg-orange-100 text-orange-700" };
+  if (fn === "xac_nhan_final")    return { labelKey: "Final đã XN",     cls: "bg-purple-100 text-purple-700" };
+  if (fn === "cho_xac_nhan")      return { labelKey: "Chờ XN Final",    cls: "bg-green-100 text-green-700" };
+  if (dt === "xac_nhan")          return { labelKey: "Đặt trước đã XN", cls: "bg-teal-100 text-teal-700" };
+  if (dt === "cho_xac_nhan")      return { labelKey: "Chờ XN đặt trước", cls: "bg-blue-100 text-blue-700" };
+  return { labelKey: "Chưa gửi", cls: "bg-muted text-muted-foreground" };
 }
 
 interface Props {
@@ -58,6 +59,7 @@ interface Props {
 }
 
 export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: Props) {
+  useTranslate();
   const updateMut = useUpdateBookingTau();
   const sendEmailMut = useSendNHBookingEmail();
   const { data: userProfile } = useCurrentUserProfile();
@@ -92,7 +94,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         ...fields,
       });
     } catch {
-      toast.error("Lỗi khi lưu");
+      toast.error(t("Lỗi khi lưu"));
     }
   };
 
@@ -100,7 +102,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     try {
       await save(fields);
     } catch {
-      toast.error("Lỗi cập nhật");
+      toast.error(t("Lỗi cập nhật"));
     }
   };
 
@@ -118,10 +120,10 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         dat_truoc_status: "chua_gui",
         final_status: "chua_gui",
       });
-      toast.info("Đã tạo booking — vui lòng thử gửi lại");
+      toast.info(t("Đã tạo booking — vui lòng thử gửi lại"));
       return false;
     } catch {
-      toast.error("Lỗi tạo booking");
+      toast.error(t("Lỗi tạo booking"));
       return false;
     }
   };
@@ -211,7 +213,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   };
 
   const handleSendViaServer = async () => {
-    if (!row.booking_id) { toast.error("Cần lưu booking trước khi gửi email"); return; }
+    if (!row.booking_id) { toast.error(t("Cần lưu booking trước khi gửi email")); return; }
     setSending(true);
     try {
       await sendEmailMut.mutateAsync({
@@ -235,9 +237,9 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         });
       }
       setEmailModalOpen(false);
-      toast.success(emailMode === "update" ? "Đã gửi email cập nhật tàu" : "Đã gửi email đặt tàu");
+      toast.success(emailMode === "update" ? t("Đã gửi email cập nhật tàu") : t("Đã gửi email đặt tàu"));
     } catch (err: unknown) {
-      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi gửi email") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     } finally {
       setSending(false);
     }
@@ -292,12 +294,12 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
             <BuaLabel bua={row.bua_an} />
             <span className="text-xs text-muted-foreground hidden sm:inline">{ngayStr}</span>
             <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", overall.cls)}>
-              {overall.label}
+              {t(overall.labelKey)}
             </span>
             {isDirty && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title={t("Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ")}>
                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                Có thay đổi
+                {t("Có thay đổi")}
               </span>
             )}
           </div>
@@ -313,7 +315,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
             {/* Set menu */}
             {setMenuOptions.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Set menu / Buffet</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("Set menu / Buffet")}</p>
                 <select
                   value={selectedSetMenu ?? ""}
                   onChange={(e) => {
@@ -323,7 +325,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
                   }}
                   className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
                 >
-                  <option value="">— Chưa chọn —</option>
+                  <option value="">— {t("Chưa chọn")} —</option>
                   {setMenuOptions.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.ten_set}{s.gia ? ` – ${s.gia.toLocaleString("vi-VN")} ${s.don_vi}` : ""}
@@ -335,7 +337,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
 
             {/* Deadline */}
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("Deadline xác nhận")}</p>
               <DatePicker
                 value={deadline}
                 onChange={(v) => { setDeadline(v); save({ deadline: v || null }); }}
@@ -364,7 +366,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
       <EmailPreviewModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
-        title={emailMode === "update" ? "Gửi email cập nhật tàu (thread vào mail cũ)" : "Gửi email đặt tàu"}
+        title={emailMode === "update" ? t("Gửi email cập nhật tàu (thread vào mail cũ)") : t("Gửi email đặt tàu")}
         to={emailTo}
         onToChange={setEmailTo}
         subject={emailSubject}
@@ -396,26 +398,26 @@ function DatTruocSection({
 }) {
   const status = row.dat_truoc_status;
 
-  const BADGE: Record<string, { label: string; dot: string }> = {
-    chua_gui:     { label: "Chưa gửi",         dot: "bg-muted-foreground/30" },
-    cho_xac_nhan: { label: "Chờ tàu xác nhận", dot: "bg-amber-400" },
-    xac_nhan:     { label: "Tàu đã xác nhận",  dot: "bg-teal-500" },
+  const BADGE: Record<string, { labelKey: string; dot: string }> = {
+    chua_gui:     { labelKey: "Chưa gửi",         dot: "bg-muted-foreground/30" },
+    cho_xac_nhan: { labelKey: "Chờ tàu xác nhận", dot: "bg-amber-400" },
+    xac_nhan:     { labelKey: "Tàu đã xác nhận",  dot: "bg-teal-500" },
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
   return (
     <div className="rounded-lg border border-blue-200/60 bg-blue-50/30 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-blue-700">Đặt trước</p>
+        <p className="text-xs font-semibold text-blue-700">{t("Đặt trước")}</p>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
-          {badge.label}
+          {t(badge.labelKey)}
         </span>
       </div>
 
       {status === "chua_gui" && (
         <Button size="sm" variant="outline" className="h-8 text-xs w-full" onClick={onOpenEmail}>
-          <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi email đặt tàu
+          <Mail className="h-3.5 w-3.5 mr-1.5" /> {t("Gửi email đặt tàu")}
         </Button>
       )}
 
@@ -423,7 +425,7 @@ function DatTruocSection({
         <div className="space-y-1.5">
           {row.dat_truoc_sent_at && (
             <p className="text-[10px] text-muted-foreground">
-              Gửi lúc: {fmtDatetime(row.dat_truoc_sent_at)}
+              {t("Gửi lúc")}: {fmtDatetime(row.dat_truoc_sent_at)}
             </p>
           )}
           <Button
@@ -434,15 +436,15 @@ function DatTruocSection({
               dat_truoc_confirm_at: new Date().toISOString(),
             })}
           >
-            <Check className="h-3 w-3 mr-1" /> Tàu xác nhận đặt trước
+            <Check className="h-3 w-3 mr-1" /> {t("Tàu xác nhận đặt trước")}
           </Button>
           <Button
             size="sm" variant="outline"
             className="h-6 text-[10px] text-amber-700 border-amber-300 hover:bg-amber-50 w-full"
             onClick={onResendEmail}
-            title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+            title={t("Gửi email cập nhật — sẽ thread vào mail booking cũ")}
           >
-            <Mail className="h-3 w-3 mr-1" /> Gửi cập nhật
+            <Mail className="h-3 w-3 mr-1" /> {t("Gửi cập nhật")}
           </Button>
         </div>
       )}
@@ -451,7 +453,7 @@ function DatTruocSection({
         <div className="space-y-1.5">
           {row.dat_truoc_confirm_at && (
             <p className="text-[10px] text-teal-600">
-              ✓ XN lúc: {fmtDatetime(row.dat_truoc_confirm_at)}
+              ✓ {t("XN lúc")}: {fmtDatetime(row.dat_truoc_confirm_at)}
             </p>
           )}
           {row.dat_truoc_sent_at && (
@@ -459,9 +461,9 @@ function DatTruocSection({
               size="sm" variant="outline"
               className="h-6 text-[10px] text-amber-700 border-amber-300 hover:bg-amber-50 w-full"
               onClick={onResendEmail}
-              title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+              title={t("Gửi email cập nhật — sẽ thread vào mail booking cũ")}
             >
-              <Mail className="h-3 w-3 mr-1" /> Gửi cập nhật
+              <Mail className="h-3 w-3 mr-1" /> {t("Gửi cập nhật")}
             </Button>
           )}
         </div>
@@ -485,17 +487,17 @@ function FinalSection({
   if (!datTruocConfirmed) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-muted/10 p-3 flex items-center justify-center min-h-[80px]">
-        <p className="text-xs text-muted-foreground italic">Chờ xác nhận đặt trước</p>
+        <p className="text-xs text-muted-foreground italic">{t("Chờ xác nhận đặt trước")}</p>
       </div>
     );
   }
 
-  const BADGE: Record<string, { label: string; dot: string }> = {
-    chua_gui:          { label: "Chờ xử lý",       dot: "bg-muted-foreground/30" },
-    cho_xac_nhan:      { label: "Chờ tàu XN",      dot: "bg-amber-400" },
-    xac_nhan_final:    { label: "Tàu đã XN Final", dot: "bg-purple-500" },
-    cho_xac_nhan_huy:  { label: "Chờ XN hủy",      dot: "bg-orange-400" },
-    xac_nhan_huy:      { label: "Đã hủy",           dot: "bg-red-400" },
+  const BADGE: Record<string, { labelKey: string; dot: string }> = {
+    chua_gui:          { labelKey: "Chờ xử lý",       dot: "bg-muted-foreground/30" },
+    cho_xac_nhan:      { labelKey: "Chờ tàu XN",      dot: "bg-amber-400" },
+    xac_nhan_final:    { labelKey: "Tàu đã XN Final", dot: "bg-purple-500" },
+    cho_xac_nhan_huy:  { labelKey: "Chờ XN hủy",      dot: "bg-orange-400" },
+    xac_nhan_huy:      { labelKey: "Đã hủy",           dot: "bg-red-400" },
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
@@ -505,10 +507,10 @@ function FinalSection({
   return (
     <div className="rounded-lg border border-green-200/60 bg-green-50/30 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-green-700">Final</p>
+        <p className="text-xs font-semibold text-green-700">{t("Final")}</p>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
-          {badge.label}
+          {t(badge.labelKey)}
         </span>
       </div>
 
@@ -519,12 +521,12 @@ function FinalSection({
             className="h-7 text-xs text-green-700 border-green-300 flex-1"
             onClick={() => onUpdateStatus({ final_status: "cho_xac_nhan" })}
           >
-            <Check className="h-3 w-3 mr-1" /> Final
+            <Check className="h-3 w-3 mr-1" /> {t("Final")}
           </Button>
           <Button
             size="sm" variant="outline"
             className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
-            onClick={handleHuy} title="Hủy booking"
+            onClick={handleHuy} title={t("Hủy booking")}
           >
             <X className="h-3 w-3" />
           </Button>
@@ -541,12 +543,12 @@ function FinalSection({
               final_confirm_at: new Date().toISOString(),
             })}
           >
-            <Check className="h-3 w-3 mr-1" /> Tàu xác nhận Final
+            <Check className="h-3 w-3 mr-1" /> {t("Tàu xác nhận Final")}
           </Button>
           <Button
             size="sm" variant="outline"
             className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
-            onClick={handleHuy} title="Hủy booking"
+            onClick={handleHuy} title={t("Hủy booking")}
           >
             <X className="h-3 w-3" />
           </Button>
@@ -557,7 +559,7 @@ function FinalSection({
         <div className="space-y-1.5">
           {row.final_confirm_at && (
             <p className="text-[10px] text-purple-600">
-              ✓ Final lúc: {fmtDatetime(row.final_confirm_at)}
+              ✓ {t("Final lúc")}: {fmtDatetime(row.final_confirm_at)}
             </p>
           )}
           <Button
@@ -565,7 +567,7 @@ function FinalSection({
             className="h-7 text-xs text-red-500 border-red-300 w-full"
             onClick={handleHuy}
           >
-            <X className="h-3 w-3 mr-1" /> Hủy booking
+            <X className="h-3 w-3 mr-1" /> {t("Hủy booking")}
           </Button>
         </div>
       )}
@@ -573,7 +575,7 @@ function FinalSection({
       {status === "cho_xac_nhan_huy" && (
         <div className="space-y-1.5">
           <p className="text-[10px] text-orange-600 flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> Chờ tàu xác nhận hủy
+            <AlertTriangle className="h-3 w-3" /> {t("Chờ tàu xác nhận hủy")}
           </p>
           <Button
             size="sm" variant="outline"
@@ -583,14 +585,14 @@ function FinalSection({
               final_confirm_at: new Date().toISOString(),
             })}
           >
-            <Check className="h-3 w-3 mr-1" /> Tàu xác nhận hủy
+            <Check className="h-3 w-3 mr-1" /> {t("Tàu xác nhận hủy")}
           </Button>
         </div>
       )}
 
       {status === "xac_nhan_huy" && (
         <p className="text-xs text-red-500">
-          ✕ Đã hủy{row.final_confirm_at ? ` ${fmtDatetime(row.final_confirm_at)}` : ""}
+          ✕ {t("Đã hủy")}{row.final_confirm_at ? ` ${fmtDatetime(row.final_confirm_at)}` : ""}
         </p>
       )}
     </div>

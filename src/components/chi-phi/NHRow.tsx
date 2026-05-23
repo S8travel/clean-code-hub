@@ -20,6 +20,7 @@ import NHAggFooterRow from "./NHAggFooterRow";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
 import { fmt, STATUS_LABEL, extraPrefix, type LocalNHRow, type LocalNHExtra } from "./nh-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 /** Dữ liệu dùng chung — gom cụm để khỏi truyền hàng chục props rời. */
 export interface NHRowData {
@@ -78,6 +79,7 @@ interface Props {
 // 1 bữa ăn: dòng chính + dòng phát sinh + dòng aggregate footer.
 // Tách verbatim từ ChiPhiNHSection — giữ nguyên 100% logic/hành vi.
 export default function NHRow({ meal, data, handlers }: Props) {
+  useTranslate();
   const {
     localRows, extrasMap, nhaHangMap, selectedKeys, dinhKyKeys, dnttList,
     paymentsList, congNoList, chiPhiRows, canTruByDnttId, editingDnttId,
@@ -120,7 +122,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
   const dateLabel = meal.ngay_date
     ? `N${meal.ngay_so} · ${format(new Date(meal.ngay_date + "T00:00:00"), "d/M")}`
     : `N${meal.ngay_so}`;
-  const buaLabel = meal.bua_an === "trua" ? "Trưa" : "Tối";
+  const buaLabel = meal.bua_an === "trua" ? t("Trưa") : t("Tối");
   const buaIcon = meal.bua_an === "trua" ? "🌤" : "🌙";
 
   const isMealDinhKy = dinhKyKeys.has(key);
@@ -265,7 +267,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   width="w-[56px]"
                 />
                 {row.is_overridden && (
-                  <span title="Đã override — không sync với Điều tour" className="text-amber-500 text-[10px]">🔒</span>
+                  <span title={t("Đã override — không sync với Điều tour")} className="text-amber-500 text-[10px]">🔒</span>
                 )}
                 <span className="w-[20px] text-green-600 text-[10px]">
                   {focMienSo > 0 ? `-${focMienSo}` : ""}
@@ -292,7 +294,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   <button
                     type="button"
                     onClick={() => handleResetOverrideNH(key)}
-                    title="Reset override → sync lại từ Điều tour ngay"
+                    title={t("Reset override → sync lại từ Điều tour ngay")}
                     className="text-muted-foreground hover:text-primary text-[10px]"
                   >↺</button>
                 )}
@@ -333,7 +335,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
               )}
             >
-              {nguoiTtMain === "cong_ty" ? "Công ty" : "HDV"}
+              {nguoiTtMain === "cong_ty" ? t("Công ty") : t("HDV")}
             </button>
           )}
         </td>
@@ -381,8 +383,8 @@ export default function NHRow({ meal, data, handlers }: Props) {
                           return (
                             <div className="inline-flex flex-col items-start gap-0.5">
                               <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium ${statusInfo.cls} whitespace-nowrap`}>
-                                {statusInfo.text} · {fmt(d.so_tien)}
-                                {d.la_coc && <span className="ml-1 opacity-70">·Cọc</span>}
+                                {t(statusInfo.textKey)} · {fmt(d.so_tien)}
+                                {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
                               </span>
                               {ct > 0 && (
                                 <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap">
@@ -394,7 +396,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                         })()}
                         {d.trang_thai_duyet === "cho_duyet" && (
                           <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-blue-500 hover:text-blue-600"
-                            title="Sửa số tiền"
+                            title={t("Sửa số tiền")}
                             onClick={() => { setEditingDnttId(d.id); setEditAmount(String(d.so_tien)); }}>
                             <Pencil className="h-2.5 w-2.5" />
                           </Button>
@@ -407,9 +409,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
               {dnttMismatch !== 0 && (
                 <span
                   className="inline-flex items-center px-1 py-px rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
-                  title={`Số tiền DNTT đã commit (${fmt(sumCommitted)} ₫) khác chi phí thực tế (${fmt(sumActual)} ₫). Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.`}
+                  title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.")}`}
                 >
-                  ⚠ DNTT lệch {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
+                  ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
                 </span>
               )}
             </div>
@@ -426,11 +428,11 @@ export default function NHRow({ meal, data, handlers }: Props) {
               <div key={d.id}>
                 {d.payment_status === "paid" ? (
                   <span className="px-1 py-px rounded text-[10px] leading-none font-medium bg-emerald-100 text-emerald-700">
-                    Đã TT{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
+                    {t("Đã TT")}{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
                   </span>
                 ) : (
                   <span className="px-1 py-px rounded text-[10px] leading-none font-medium bg-yellow-100 text-yellow-800">
-                    Chờ UNC · {fmt(d.so_tien - (d.paid_amount || 0))}
+                    {t("Chờ UNC")} · {fmt(d.so_tien - (d.paid_amount || 0))}
                   </span>
                 )}
               </div>
@@ -451,19 +453,19 @@ export default function NHRow({ meal, data, handlers }: Props) {
         <td className="px-2 py-1.5">
           <div className="flex items-center gap-1 justify-end">
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-              title="Thêm dịch vụ phát sinh"
+              title={t("Thêm dịch vụ phát sinh")}
               onClick={() => addExtra(key)}>
               <Plus className="h-3 w-3" />
             </Button>
             {nguoiTtMain === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid) && (
               <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                title="Hủy"
+                title={t("Hủy")}
                 onClick={() => {
                   setCancelMode("hoan_tien");
                   setCancelTarget({
                     dnttId: activeDntt.id,
                     isPaid: activeDntt.payment_status === "paid",
-                    nhName: nh?.ten || "Nhà hàng",
+                    nhName: nh?.ten || t("Nhà hàng"),
                   });
                 }}>
                 <Ban className="h-3 w-3" />
@@ -472,9 +474,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
             <Button variant="ghost" size="sm"
               className={cn("h-7 text-xs px-2 gap-1", isMealDinhKy ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
               onClick={() => handleToggleDinhKyNH(key)}
-              title={isMealDinhKy ? "Đang định kỳ — bấm để bỏ" : "Đặt thanh toán định kỳ"}>
+              title={isMealDinhKy ? t("Đang định kỳ — bấm để bỏ") : t("Đặt thanh toán định kỳ")}>
               <CalendarClock className="h-3.5 w-3.5" />
-              {isMealDinhKy && "Định kỳ"}
+              {isMealDinhKy && t("Định kỳ")}
             </Button>
             {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length === 0 && !!row && (
               <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
@@ -485,7 +487,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   setDnttNgayCan(meal.ngay_date ? (() => { try { return format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"); } catch { return ""; } })() : "");
                   setDnttModalKey(key);
                 }}>
-                ĐNTT
+                {t("ĐNTT")}
               </Button>
             )}
             {/* "ĐNTT bổ sung" cũ — REMOVED, replaced by aggregate footer button (showAggBtn) */}
@@ -516,7 +518,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
           onCommit={() => {
             setAggCommit({
               mainRow: mainChiPhiRow,
-              nhName: nh?.ten || "Nhà hàng",
+              nhName: nh?.ten || t("Nhà hàng"),
               nccId: nh?.nha_cung_cap_id ?? null,
               nccName: nh?.ten_ncc ?? null,
               delta: effectiveDelta,

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
 import { toast } from "sonner";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -70,6 +71,7 @@ interface Props {
 }
 
 export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang }: Props) {
+  useTranslate();
   // Chuẩn hoá row đoàn về ChiPhiTabDoan (các quan hệ join có kiểu chính xác).
   const doan = doanInput as ChiPhiTabDoan;
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -152,7 +154,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       const nhCount = nhSectionRef.current?.getSelectedCount() ?? 0;
       const dvCount = dvSectionRef.current?.getSelectedCount() ?? 0;
       if (nhCount === 0 && dvCount === 0) {
-        toast.error("Chưa chọn nhà hàng / dịch vụ nào để in");
+        toast.error(t("Chưa chọn nhà hàng / dịch vụ nào để in"));
         return;
       }
 
@@ -162,12 +164,12 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       const dvEntries = dvRaw ?? [];
 
       toast.info(
-        `Đã chọn: NH=${nhCount} (build=${nhEntries.length}) · DV=${dvCount} (build=${dvEntries.length})`,
+        `${t("Đã chọn")}: NH=${nhCount} (build=${nhEntries.length}) · DV=${dvCount} (build=${dvEntries.length})`,
       );
 
       const all = [...nhEntries, ...dvEntries];
       if (all.length === 0) {
-        toast.error("Không build được entries — kiểm tra console");
+        toast.error(t("Không build được entries — kiểm tra console"));
         return;
       }
       setCombinedPreview({
@@ -176,13 +178,13 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         nguoiDeNghi: currentUserName,
       });
     } catch (err: unknown) {
-      toast.error("Lỗi: " + (errMsg(err) || ""));
+      toast.error(`${t("Lỗi")}: ${errMsg(err) || ""}`);
     }
   };
 
   const handleExportExcel = async () => {
     if (chiPhiRows.length === 0 && dnttList.length === 0) {
-      toast.error("Chưa có dữ liệu chi phí để xuất Excel");
+      toast.error(t("Chưa có dữ liệu chi phí để xuất Excel"));
       return;
     }
 
@@ -196,9 +198,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         opName,
         ksData,
       });
-      toast.success("Đã xuất file Excel");
+      toast.success(t("Đã xuất file Excel"));
     } catch (error: unknown) {
-      toast.error(errMsg(error) || "Không thể xuất file Excel");
+      toast.error(errMsg(error) || t("Không thể xuất file Excel"));
     } finally {
       setExportingExcel(false);
     }
@@ -212,10 +214,10 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
           variant="default"
           className="h-8 text-xs gap-1.5"
           onClick={handlePrintCombined}
-          title="In ĐNTT gộp các nhà hàng + dịch vụ đã chọn"
+          title={t("In ĐNTT gộp các nhà hàng + dịch vụ đã chọn")}
         >
           <Printer className="h-3.5 w-3.5" />
-          In ĐNTT gộp NH + DV
+          {t("In ĐNTT gộp NH + DV")}
         </Button>
         <Button
           size="sm"
@@ -225,7 +227,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
           disabled={exportingExcel || isHDVLoading}
         >
           <FileSpreadsheet className="h-3.5 w-3.5" />
-          {exportingExcel ? "Đang xuất..." : "Xuất Excel"}
+          {exportingExcel ? t("Đang xuất...") : t("Xuất Excel")}
         </Button>
       </div>
 
@@ -236,21 +238,21 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="grid grid-cols-4 divide-x divide-border">
             <div className="px-4 py-3">
-              <p className="text-[11px] text-muted-foreground mb-0.5">Chi phí dự trù</p>
+              <p className="text-[11px] text-muted-foreground mb-0.5">{t("Chi phí dự trù")}</p>
               <p className="text-sm font-semibold text-foreground">{fmt(summary.total)} ₫</p>
             </div>
             <div className="px-4 py-3">
-              <p className="text-[11px] text-muted-foreground mb-0.5">Chi phí thực tế</p>
+              <p className="text-[11px] text-muted-foreground mb-0.5">{t("Chi phí thực tế")}</p>
               <p className={cn("text-sm font-semibold", summary.daDieuChinh ? "text-blue-600" : "text-foreground")}>
                 {fmt(summary.thucTe)} ₫
               </p>
             </div>
             <div className="px-4 py-3">
-              <p className="text-[11px] text-muted-foreground mb-0.5">Công ty thanh toán</p>
+              <p className="text-[11px] text-muted-foreground mb-0.5">{t("Công ty thanh toán")}</p>
               <p className="text-sm font-semibold text-blue-600">{fmt(summary.congTy)} ₫</p>
             </div>
             <div className="px-4 py-3">
-              <p className="text-[11px] text-muted-foreground mb-0.5">Tiền đã thanh toán</p>
+              <p className="text-[11px] text-muted-foreground mb-0.5">{t("Tiền đã thanh toán")}</p>
               <p className="text-sm font-semibold text-emerald-600">{fmt(summary.daTT)} ₫</p>
             </div>
           </div>

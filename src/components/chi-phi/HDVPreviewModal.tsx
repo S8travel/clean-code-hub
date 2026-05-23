@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import type { HDVSectionData, HDVDNTTRow } from "@/hooks/use-chi-phi-hdv";
 import { exportHDVStatsExcel } from "@/lib/export-hdv-stats-excel";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -50,6 +51,7 @@ interface Props {
 }
 
 export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuVND }: Props) {
+  useTranslate();
   if (!data) return null;
 
   const soKhach =
@@ -74,25 +76,25 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">
-            Thống kê chi phí HDV — {doan?.ten_doan ?? "—"}
+            {t("Thống kê chi phí HDV")} — {doan?.ten_doan ?? "—"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 text-sm">
           {/* HDV + tour info */}
           <div className="grid grid-cols-2 gap-3 p-3 rounded-md bg-muted/30 border">
-            <Info label="HDV" value={data.hdv?.ten ?? "Chưa chỉ định"} />
+            <Info label="HDV" value={data.hdv?.ten ?? t("Chưa chỉ định")} />
             <Info
-              label="Ngày tour"
+              label={t("Ngày tour")}
               value={
                 doan?.ngay_di && doan?.ngay_ve
                   ? `${fmtDate(doan.ngay_di)} - ${fmtDate(doan.ngay_ve)}`
                   : "—"
               }
             />
-            <Info label="Số khách" value={soKhach} />
+            <Info label={t("Số khách")} value={soKhach} />
             <Info
-              label="Tài khoản"
+              label={t("Tài khoản")}
               value={
                 [data.hdv?.so_tai_khoan, data.hdv?.ngan_hang].filter(Boolean).join(" — ") || "—"
               }
@@ -101,11 +103,11 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
 
           {/* Tóm tắt */}
           <div className="grid grid-cols-4 gap-3">
-            <SummaryCard label="Tổng HDV chi" value={data.tongHdvChi} />
-            <SummaryCard label="Đã tạm ứng" value={data.tamUngDaTT} />
-            <SummaryCard label="Phải thu HDV" value={hdvPhaiThuVND} color="text-orange-600" />
+            <SummaryCard label={t("Tổng HDV chi")} value={data.tongHdvChi} />
+            <SummaryCard label={t("Đã tạm ứng")} value={data.tamUngDaTT} />
+            <SummaryCard label={t("Phải thu HDV")} value={hdvPhaiThuVND} color="text-orange-600" />
             <SummaryCard
-              label={netConPhaiTra > 0 ? "Công ty còn phải trả" : netConPhaiTra < 0 ? "HDV phải trả lại" : "Đã đủ"}
+              label={netConPhaiTra > 0 ? t("Công ty còn phải trả") : netConPhaiTra < 0 ? t("HDV phải trả lại") : t("Đã đủ")}
               value={Math.abs(netConPhaiTra)}
               color={netConPhaiTra > 0 ? "text-orange-600" : netConPhaiTra < 0 ? "text-blue-600" : "text-emerald-600"}
             />
@@ -113,14 +115,14 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
 
           {/* Chi phí HDV ứng */}
           {chiPhiUngRows.length > 0 && (
-            <Section title="Chi phí HDV ứng tiền">
+            <Section title={t("Chi phí HDV ứng tiền")}>
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-muted/40 text-muted-foreground">
-                    <Th className="text-left">Mô tả</Th>
-                    <Th className="text-center">SL</Th>
-                    <Th className="text-right">Đơn giá</Th>
-                    <Th className="text-right">Thành tiền</Th>
+                    <Th className="text-left">{t("Mô tả")}</Th>
+                    <Th className="text-center">{t("SL")}</Th>
+                    <Th className="text-right">{t("Đơn giá")}</Th>
+                    <Th className="text-right">{t("Thành tiền")}</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -133,7 +135,7 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
                     </tr>
                   ))}
                   <tr className="bg-muted/30 font-medium">
-                    <Td colSpan={3} className="text-right">Cộng</Td>
+                    <Td colSpan={3} className="text-right">{t("Cộng")}</Td>
                     <Td className="text-right text-primary">{fmt(totalChiPhi)} ₫</Td>
                   </tr>
                 </tbody>
@@ -143,15 +145,15 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
 
           {/* Hỗ trợ HDV (Section UI) */}
           {data.hoTroItems.length > 0 && (
-            <Section title="Chi phí 'Hướng dẫn viên' (section UI)">
+            <Section title={t("Chi phí 'Hướng dẫn viên' (section UI)")}>
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-muted/40 text-muted-foreground">
-                    <Th className="text-left">Loại</Th>
-                    <Th className="text-center">SL</Th>
-                    <Th className="text-right">Đơn giá</Th>
-                    <Th className="text-right">Thành tiền</Th>
-                    <Th className="text-center">Nguồn</Th>
+                    <Th className="text-left">{t("Loại")}</Th>
+                    <Th className="text-center">{t("SL")}</Th>
+                    <Th className="text-right">{t("Đơn giá")}</Th>
+                    <Th className="text-right">{t("Thành tiền")}</Th>
+                    <Th className="text-center">{t("Nguồn")}</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -174,14 +176,14 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
                                 : "text-muted-foreground"
                             }
                           >
-                            {ai}
+                            {ai === "Công ty" ? t("Công ty") : ai}
                           </span>
                         </Td>
                       </tr>
                     );
                   })}
                   <tr className="bg-muted/30 font-medium">
-                    <Td colSpan={3} className="text-right">Cộng</Td>
+                    <Td colSpan={3} className="text-right">{t("Cộng")}</Td>
                     <Td className="text-right text-primary">{fmt(totalHoTro)} ₫</Td>
                     <Td />
                   </tr>
@@ -192,24 +194,24 @@ export default function HDVPreviewModal({ open, onClose, doan, data, hdvPhaiThuV
 
           {/* Tạm ứng */}
           {data.tamUngList.length > 0 && (
-            <Section title="Tạm ứng">
+            <Section title={t("Tạm ứng")}>
               <DNTTTable rows={data.tamUngList} />
             </Section>
           )}
 
           {/* Quyết toán */}
           {data.quyetToanList.length > 0 && (
-            <Section title="Quyết toán">
+            <Section title={t("Quyết toán")}>
               <DNTTTable rows={data.quyetToanList} />
             </Section>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Đóng</Button>
+          <Button variant="outline" onClick={onClose}>{t("Đóng")}</Button>
           <Button onClick={handleExport}>
             <Printer className="h-3.5 w-3.5 mr-1.5" />
-            Tải Excel
+            {t("Tải Excel")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -259,12 +261,12 @@ function DNTTTable({ rows }: { rows: HDVDNTTRow[] }) {
     <table className="w-full text-xs">
       <thead>
         <tr className="bg-muted/40 text-muted-foreground">
-          <Th className="text-left">Ngày tạo</Th>
-          <Th className="text-left">Mô tả</Th>
-          <Th className="text-right">Số tiền</Th>
-          <Th className="text-right">Đã TT</Th>
-          <Th className="text-center">Duyệt</Th>
-          <Th className="text-center">TT</Th>
+          <Th className="text-left">{t("Ngày tạo")}</Th>
+          <Th className="text-left">{t("Mô tả")}</Th>
+          <Th className="text-right">{t("Số tiền")}</Th>
+          <Th className="text-right">{t("Đã TT")}</Th>
+          <Th className="text-center">{t("Duyệt")}</Th>
+          <Th className="text-center">{t("TT")}</Th>
         </tr>
       </thead>
       <tbody className="divide-y">
@@ -274,8 +276,8 @@ function DNTTTable({ rows }: { rows: HDVDNTTRow[] }) {
             <Td className="text-left">{d.mo_ta || "—"}</Td>
             <Td className="text-right font-medium">{fmt(d.so_tien)} ₫</Td>
             <Td className="text-right">{fmt(d.paid_amount ?? 0)} ₫</Td>
-            <Td className="text-center">{DNTT_STATUS_LABEL[d.trang_thai_duyet] ?? d.trang_thai_duyet}</Td>
-            <Td className="text-center">{PAYMENT_STATUS_LABEL[d.payment_status ?? "unpaid"] ?? d.payment_status}</Td>
+            <Td className="text-center">{DNTT_STATUS_LABEL[d.trang_thai_duyet] ? t(DNTT_STATUS_LABEL[d.trang_thai_duyet]) : d.trang_thai_duyet}</Td>
+            <Td className="text-center">{PAYMENT_STATUS_LABEL[d.payment_status ?? "unpaid"] ? t(PAYMENT_STATUS_LABEL[d.payment_status ?? "unpaid"]) : d.payment_status}</Td>
           </tr>
         ))}
       </tbody>

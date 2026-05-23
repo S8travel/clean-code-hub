@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import MealCard from "./MealCard";
 import MenuOverviewModal from "./MenuOverviewModal";
+import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDay(d: string | null) {
   if (!d) return "—";
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, soKhachLon, soKhachEm1, soKhachEm2, hdvTen }: Props) {
+  useTranslate();
   const { data: days = [], isLoading } = useBookingNH(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
   const qc = useQueryClient();
@@ -67,15 +69,15 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold">Booking Nhà hàng</h2>
+          <h2 className="text-base font-semibold">{t("Booking Nhà hàng")}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Từ điều tour — mỗi bữa ăn 1 booking riêng
+            {t("Từ điều tour — mỗi bữa ăn 1 booking riêng")}
           </p>
         </div>
         {daysWithNH.length > 0 && (
           <Button variant="outline" size="sm" onClick={() => setOverviewOpen(true)}>
             <LayoutList className="h-4 w-4 mr-1.5" />
-            Menu tổng quan
+            {t("Menu tổng quan")}
           </Button>
         )}
       </div>
@@ -88,7 +90,7 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
               <div key={label} className="rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Icon className={cn("h-3.5 w-3.5", cls)} />
-                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <span className="text-xs text-muted-foreground">{t(label)}</span>
                 </div>
                 <p className={cn("text-2xl font-bold", cls)}>{value}</p>
               </div>
@@ -96,7 +98,7 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
           </div>
           {soNoidBo > 0 && (
             <p className="text-xs text-muted-foreground px-0.5">
-              + {soNoidBo} suất nội bộ ({soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"}) — miễn phí, không tính chi phí
+              + {soNoidBo} {t("suất nội bộ")} ({soNoidBo === 3 ? t("T/L · HDV · Lái xe") : t("HDV · Lái xe")}) — {t("miễn phí, không tính chi phí")}
             </p>
           )}
         </div>
@@ -106,9 +108,9 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
       {daysWithNH.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-card p-14 text-center">
           <Utensils className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm font-medium text-muted-foreground">Chưa có nhà hàng nào</p>
+          <p className="text-sm font-medium text-muted-foreground">{t("Chưa có nhà hàng nào")}</p>
           <p className="text-xs text-muted-foreground/60 mt-1 max-w-xs mx-auto">
-            Chọn nhà hàng cho từng ngày trong tab Điều tour, sau đó lưu để hiển thị ở đây.
+            {t("Chọn nhà hàng cho từng ngày trong tab Điều tour, sau đó lưu để hiển thị ở đây.")}
           </p>
         </div>
       ) : (
@@ -117,7 +119,7 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
             <div key={day.doan_ngay_id} className="space-y-2">
               {/* Day header */}
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold">Ngày {day.ngay_so}</span>
+                <span className="text-sm font-semibold">{t("Ngày")} {day.ngay_so}</span>
                 <span className="text-xs text-muted-foreground">{fmtDay(day.ngay_date)}</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
