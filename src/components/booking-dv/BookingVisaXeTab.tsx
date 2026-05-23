@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import BookingXeCard from "./BookingXeCard";
 import BookingVisaCard from "./BookingVisaCard";
 import type { DieuTourExportData } from "@/lib/export-dieu-tour-word";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface XeInfo {
   id: number;
@@ -37,6 +38,7 @@ export default function BookingVisaXeTab({
   hdvName, soKhach, soKhachLon = 0, soKhachEm1 = 0, soKhachEm2 = 0, soKhachTl = 0,
   xe, dieuTourExportData,
 }: Props) {
+  useTranslate();
   const { data: xeBooking, isLoading: xeLoading } = useBookingXe(doanId);
   const { data: visaList = [], isLoading: visaLoading } = useBookingVisaList(doanId);
   const { data: donViVisaList = [] } = useDonViVisaList();
@@ -56,7 +58,7 @@ export default function BookingVisaXeTab({
     <div className="space-y-6">
       {/* ── Section: Xe ─────────────────────────────────────────────── */}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Xe</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{t("Xe")}</h3>
         <BookingXeCard
           doanId={doanId}
           tenDoan={tenDoan}
@@ -75,18 +77,18 @@ export default function BookingVisaXeTab({
       {/* ── Section: Visa ────────────────────────────────────────────── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Visa</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{t("Visa")}</h3>
           <Button
             size="sm"
             variant="outline"
             className="h-7 text-xs gap-1"
             onClick={() => insertVisa.mutate({ doan_id: doanId })}
           >
-            <Plus className="h-3 w-3" /> Thêm đơn vị visa
+            <Plus className="h-3 w-3" /> {t("Thêm đơn vị visa")}
           </Button>
         </div>
         {visaList.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-2">Chưa có booking visa nào. Nhấn "Thêm đơn vị visa" để tạo.</p>
+          <p className="text-xs text-muted-foreground py-2">{t("Chưa có booking visa nào. Nhấn \"Thêm đơn vị visa\" để tạo.")}</p>
         ) : (
           <div className="space-y-3">
             {visaList.map((v) => (

@@ -38,24 +38,25 @@ import {
   nextDateStr,
   serializeRoomValues,
 } from "@/lib/booking-ks-rooms";
+import { t, useTranslate } from "@/lib/i18n";
 
 
 function getOverallStatus(row: BookingKSDisplay) {
   const dt = row.ks_dat_truoc_status;
   const fn = row.ks_final_status;
   if (fn === "ks_xac_nhan_huy")
-    return { label: "Đã hủy", cls: "bg-red-100 text-red-700" };
+    return { labelKey: "Đã hủy", cls: "bg-red-100 text-red-700" };
   if (fn === "cho_ks_xac_nhan_huy")
-    return { label: "Chờ XN hủy", cls: "bg-orange-100 text-orange-700" };
+    return { labelKey: "Chờ XN hủy", cls: "bg-orange-100 text-orange-700" };
   if (fn === "ks_xac_nhan_final")
-    return { label: "Final đã XN", cls: "bg-purple-100 text-purple-700" };
+    return { labelKey: "Final đã XN", cls: "bg-purple-100 text-purple-700" };
   if (fn === "cho_ks_xac_nhan")
-    return { label: "Chờ XN Final", cls: "bg-green-100 text-green-700" };
+    return { labelKey: "Chờ XN Final", cls: "bg-green-100 text-green-700" };
   if (dt === "ks_xac_nhan")
-    return { label: "Đặt trước: KS đã XN", cls: "bg-teal-100 text-teal-700" };
+    return { labelKey: "Đặt trước: KS đã XN", cls: "bg-teal-100 text-teal-700" };
   if (dt === "cho_ks_xac_nhan")
-    return { label: "Chờ XN đặt trước", cls: "bg-blue-100 text-blue-700" };
-  return { label: "Chưa gửi", cls: "bg-muted text-muted-foreground" };
+    return { labelKey: "Chờ XN đặt trước", cls: "bg-blue-100 text-blue-700" };
+  return { labelKey: "Chưa gửi", cls: "bg-muted text-muted-foreground" };
 }
 
 function fmtDate(d: string) {
@@ -83,6 +84,7 @@ interface Props {
 }
 
 export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props) {
+  useTranslate();
   const { data: bookings, isLoading } = useBookingKS(doanId);
   const { data: tauBookings = [] } = useBookingTau(doanId);
   const updateMut = useUpdateBookingKS();
@@ -116,14 +118,14 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
     );
 
   const handleExportAll = async () => {
-    if (selectedIds.size === 0) { toast.warning("Chọn ít nhất 1 khách sạn"); return; }
+    if (selectedIds.size === 0) { toast.warning(t("Chọn ít nhất 1 khách sạn")); return; }
     setIsExporting(true);
     try {
       const selected = visibleBookings.filter((b) => selectedIds.has(b.id));
       await exportBookingWord(tenDoan, selected, tauBookings, soKhach);
-      toast.success("Đã xuất file Word");
+      toast.success(t("Đã xuất file Word"));
     } catch (err: unknown) {
-      toast.error("Lỗi xuất: " + (err instanceof Error ? err.message : "Vui lòng thử lại"));
+      toast.error(t("Lỗi xuất") + ": " + (err instanceof Error ? err.message : t("Vui lòng thử lại")));
     } finally {
       setIsExporting(false);
     }
@@ -137,7 +139,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
       await updateMut.mutateAsync({ id: row.id, fields });
       await syncBookingStatus(doanId);
     } catch {
-      toast.error("Lỗi khi cập nhật");
+      toast.error(t("Lỗi khi cập nhật"));
     }
   };
 
@@ -146,10 +148,10 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
     try {
       await deleteMut.mutateAsync(deleteTarget.id);
       await syncBookingStatus(doanId);
-      toast.success("Đã xóa booking");
+      toast.success(t("Đã xóa booking"));
       setDeleteTarget(null);
     } catch {
-      toast.error("Lỗi khi xóa");
+      toast.error(t("Lỗi khi xóa"));
     }
   };
 
@@ -165,9 +167,9 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
   if (!visibleBookings.length && !tauBookings.length)
     return (
       <div className="rounded-xl bg-card border border-border p-14 text-center">
-        <p className="text-sm font-medium text-muted-foreground">Chưa có booking nào.</p>
+        <p className="text-sm font-medium text-muted-foreground">{t("Chưa có booking nào.")}</p>
         <p className="text-xs text-muted-foreground/60 mt-1">
-          Chọn khách sạn trong tab Điều Tour và lưu để tạo booking.
+          {t("Chọn khách sạn trong tab Điều Tour và lưu để tạo booking.")}
         </p>
       </div>
     );
@@ -181,9 +183,9 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">Booking Khách Sạn</h2>
+          <h2 className="text-base font-semibold">{t("Booking Khách Sạn")}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {total} khách sạn · {dtConfirmed} đã XN đặt trước · {finalConfirmed} đã XN final
+            {total} {t("khách sạn")} · {dtConfirmed} {t("đã XN đặt trước")} · {finalConfirmed} {t("đã XN final")}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -192,7 +194,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
               checked={allSelected && total > 0}
               onCheckedChange={toggleAll}
             />
-            Chọn tất cả
+            {t("Chọn tất cả")}
           </label>
           <Button
             size="sm"
@@ -206,7 +208,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
             ) : (
               <FileDown className="h-3.5 w-3.5 mr-1" />
             )}
-            In xác nhận{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+            {t("In xác nhận")}{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
           </Button>
         </div>
       </div>
@@ -231,7 +233,7 @@ export default function BookingKSTab({ doanId, tenDoan, ngayDi, soKhach }: Props
 
       {tauBookings.length > 0 && (
         <div className="mt-2">
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Tàu du lịch ngày</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">{t("Tàu du lịch ngày")}</h3>
           <div className="space-y-2">
             {tauBookings.map((row) => (
               <TauNgayCard
@@ -501,9 +503,9 @@ Email: s8travel.hddt@gmail.com`;
         mailContentHash: hashMailContent(buildMailFields()),
       });
       setEmailModalOpen(false);
-      toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email đặt phòng");
+      toast.success(emailMode === "update" ? t("Đã gửi email cập nhật") : t("Đã gửi email đặt phòng"));
     } catch (err: unknown) {
-      toast.error("Lỗi gửi email: " + (err instanceof Error ? err.message : "Vui lòng thử lại"));
+      toast.error(t("Lỗi gửi email") + ": " + (err instanceof Error ? err.message : t("Vui lòng thử lại")));
     } finally {
       setSending(false);
     }
@@ -519,14 +521,14 @@ Email: s8travel.hddt@gmail.com`;
       updateStatus(row, { ks_dat_truoc_status: "cho_ks_xac_nhan", ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName, mail_content_hash: hash });
     }
     setEmailModalOpen(false);
-    toast.success("Đã mở email client");
+    toast.success(t("Đã mở email client"));
   };
 
   const save = async (fields: Partial<BookingKSRow>) => {
     try {
       await updateMut.mutateAsync({ id: row.id, fields });
     } catch {
-      toast.error("Lỗi khi lưu");
+      toast.error(t("Lỗi khi lưu"));
     }
   };
 
@@ -560,7 +562,7 @@ Email: s8travel.hddt@gmail.com`;
       {!row.con_trong_dieu_tour && (
         <div className="px-4 py-1.5 bg-amber-50 border-b border-amber-200 flex items-center gap-1.5 text-xs text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          Khách sạn này đã bị xóa khỏi điều tour — booking vẫn được giữ lại
+          {t("Khách sạn này đã bị xóa khỏi điều tour — booking vẫn được giữ lại")}
         </div>
       )}
       {/* Header */}
@@ -581,12 +583,12 @@ Email: s8travel.hddt@gmail.com`;
                   overall.cls
                 )}
               >
-                {overall.label}
+                {t(overall.labelKey)}
               </span>
               {isDirty && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 flex items-center gap-1" title={t("Nội dung đã thay đổi so với mail gần nhất — gửi cập nhật để đồng bộ")}>
                   <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                  Có thay đổi
+                  {t("Có thay đổi")}
                 </span>
               )}
             </div>
@@ -600,12 +602,12 @@ Email: s8travel.hddt@gmail.com`;
               )}
               {row.ngay_dates.length > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/70 border border-sky-200 text-sky-800">
-                  📅 {row.ngay_dates.map(fmtDate).join(", ")} ({row.so_dem} đêm)
+                  📅 {row.ngay_dates.map(fmtDate).join(", ")} ({row.so_dem} {t("đêm")})
                 </span>
               )}
               {row.day_use_dates && row.day_use_dates.length > 0 && (
                 <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-medium">
-                  Day Use: {row.day_use_dates.map(fmtDate).join(", ")}
+                  {t("Day Use")}: {row.day_use_dates.map(fmtDate).join(", ")}
                 </span>
               )}
               {row.khach_san_so_dien_thoai && (
@@ -649,7 +651,7 @@ Email: s8travel.hddt@gmail.com`;
         {/* Inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Số phòng đặt trước</p>
+            <p className="text-xs text-muted-foreground mb-1">{t("Số phòng đặt trước")}</p>
             <div className="space-y-1.5">
               {roomInputDates.map((date, i) => (
                 <div key={date || "single"} className="flex items-center gap-2">
@@ -662,7 +664,7 @@ Email: s8travel.hddt@gmail.com`;
                     value={soPhongByNight[i] ?? ""}
                     onChange={(e) => updateRoomValue(setSoPhongByNight, i, e.target.value)}
                     onBlur={() => save({ ks_dat_truoc: serializeRoomValues(soPhongByNight) || null })}
-                    placeholder="VD: 6 TWN, 1 DBL..."
+                    placeholder={t("VD: 6 TWN, 1 DBL...")}
                     className="h-8 text-xs"
                     disabled={isCancelled}
                   />
@@ -672,7 +674,7 @@ Email: s8travel.hddt@gmail.com`;
           </div>
           {datTruocConfirmed ? (
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Số phòng Final</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("Số phòng Final")}</p>
               <div className="space-y-1.5">
                 {roomInputDates.map((date, i) => (
                   <div key={date || "single"} className="flex items-center gap-2">
@@ -685,7 +687,7 @@ Email: s8travel.hddt@gmail.com`;
                       value={soPhongFinalByNight[i] ?? ""}
                       onChange={(e) => updateRoomValue(setSoPhongFinalByNight, i, e.target.value)}
                       onBlur={() => save({ ks_final: serializeRoomValues(soPhongFinalByNight) || null })}
-                      placeholder="VD: 5 TWN, 2 DBL..."
+                      placeholder={t("VD: 5 TWN, 2 DBL...")}
                       className="h-8 text-xs"
                       disabled={isCancelled}
                     />
@@ -697,18 +699,18 @@ Email: s8travel.hddt@gmail.com`;
             <div />
           )}
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Ghi chú</p>
+            <p className="text-xs text-muted-foreground mb-1">{t("Ghi chú")}</p>
             <Input
               value={ghiChu}
               onChange={(e) => setGhiChu(e.target.value)}
               onBlur={() => save({ ks_ghi_chu_booking: ghiChu })}
-              placeholder="Ghi chú..."
+              placeholder={t("Ghi chú...")}
               className="h-8 text-xs"
             />
           </div>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Deadline xác nhận</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("Deadline xác nhận")}</p>
           <DatePicker
             value={deadline}
             onChange={(v) => { setDeadline(v); save({ deadline: v || null }); }}
@@ -725,7 +727,7 @@ Email: s8travel.hddt@gmail.com`;
             className="h-8 text-xs w-full"
             onClick={() => openEmailModal("first")}
           >
-            <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi email đặt phòng
+            <Mail className="h-3.5 w-3.5 mr-1.5" /> {t("Gửi email đặt phòng")}
           </Button>
         )}
 
@@ -736,9 +738,9 @@ Email: s8travel.hddt@gmail.com`;
             variant="outline"
             className="h-8 text-xs w-full border-amber-300 text-amber-700 hover:bg-amber-50"
             onClick={() => openEmailModal("update")}
-            title="Gửi email cập nhật — sẽ thread vào mail booking cũ"
+            title={t("Gửi email cập nhật — sẽ thread vào mail booking cũ")}
           >
-            <Mail className="h-3.5 w-3.5 mr-1.5" /> Gửi cập nhật
+            <Mail className="h-3.5 w-3.5 mr-1.5" /> {t("Gửi cập nhật")}
           </Button>
         )}
 
@@ -760,7 +762,7 @@ Email: s8travel.hddt@gmail.com`;
     <EmailPreviewModal
       open={emailModalOpen}
       onOpenChange={setEmailModalOpen}
-      title={emailMode === "update" ? "Gửi email cập nhật (thread vào mail cũ)" : "Gửi email đặt phòng"}
+      title={emailMode === "update" ? t("Gửi email cập nhật (thread vào mail cũ)") : t("Gửi email đặt phòng")}
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}
@@ -789,20 +791,20 @@ function DatTruocSection({
 }) {
   const status = row.ks_dat_truoc_status;
 
-  const BADGE: Record<string, { label: string; dot: string }> = {
-    chua_gui:        { label: "Chưa gửi",         dot: "bg-muted-foreground/30" },
-    cho_ks_xac_nhan: { label: "Chờ KS xác nhận",  dot: "bg-amber-400" },
-    ks_xac_nhan:     { label: "KS đã xác nhận",    dot: "bg-teal-500" },
+  const BADGE: Record<string, { labelKey: string; dot: string }> = {
+    chua_gui:        { labelKey: "Chưa gửi",         dot: "bg-muted-foreground/30" },
+    cho_ks_xac_nhan: { labelKey: "Chờ KS xác nhận",  dot: "bg-amber-400" },
+    ks_xac_nhan:     { labelKey: "KS đã xác nhận",    dot: "bg-teal-500" },
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
   return (
     <div className="rounded-lg border border-blue-200/60 bg-blue-50/30 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-blue-700">Đặt trước</p>
+        <p className="text-xs font-semibold text-blue-700">{t("Đặt trước")}</p>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
-          {badge.label}
+          {t(badge.labelKey)}
         </span>
       </div>
 
@@ -810,7 +812,7 @@ function DatTruocSection({
         <div className="space-y-1.5">
           {row.ks_dat_truoc_sent_at && (
             <p className="text-[10px] text-muted-foreground">
-              Gửi lúc: {fmtDatetime(row.ks_dat_truoc_sent_at)}
+              {t("Gửi lúc")}: {fmtDatetime(row.ks_dat_truoc_sent_at)}
             </p>
           )}
           <Button
@@ -821,17 +823,17 @@ function DatTruocSection({
               updateStatus(row, {
                 ks_dat_truoc_status: "ks_xac_nhan",
                 ks_dat_truoc_confirm_at: new Date().toISOString(),
-              }).then(() => toast.success("KS đã xác nhận đặt trước"))
+              }).then(() => toast.success(t("KS đã xác nhận đặt trước")))
             }
           >
-            <Check className="h-3 w-3 mr-1" /> KS xác nhận đặt trước
+            <Check className="h-3 w-3 mr-1" /> {t("KS xác nhận đặt trước")}
           </Button>
         </div>
       )}
 
       {status === "ks_xac_nhan" && row.ks_dat_truoc_confirm_at && (
         <p className="text-[10px] text-teal-600">
-          ✓ XN lúc: {fmtDatetime(row.ks_dat_truoc_confirm_at)}
+          ✓ {t("XN lúc")}: {fmtDatetime(row.ks_dat_truoc_confirm_at)}
         </p>
       )}
     </div>
@@ -852,22 +854,22 @@ function FinalSection({
 
   const handleHuy = () => {
     updateStatus(row, { ks_final_status: "cho_ks_xac_nhan_huy" })
-      .then(() => toast.success("Đã cập nhật trạng thái hủy"));
+      .then(() => toast.success(t("Đã cập nhật trạng thái hủy")));
   };
 
-  const BADGE: Record<string, { label: string; dot: string }> = {
-    chua_gui:             { label: "Chờ xử lý",        dot: "bg-muted-foreground/30" },
-    cho_ks_xac_nhan:      { label: "Chờ KS xác nhận",  dot: "bg-amber-400" },
-    ks_xac_nhan_final:    { label: "KS đã XN Final",   dot: "bg-purple-500" },
-    cho_ks_xac_nhan_huy:  { label: "Chờ XN hủy",       dot: "bg-orange-400" },
-    ks_xac_nhan_huy:      { label: "Đã hủy",            dot: "bg-red-400" },
+  const BADGE: Record<string, { labelKey: string; dot: string }> = {
+    chua_gui:             { labelKey: "Chờ xử lý",        dot: "bg-muted-foreground/30" },
+    cho_ks_xac_nhan:      { labelKey: "Chờ KS xác nhận",  dot: "bg-amber-400" },
+    ks_xac_nhan_final:    { labelKey: "KS đã XN Final",   dot: "bg-purple-500" },
+    cho_ks_xac_nhan_huy:  { labelKey: "Chờ XN hủy",       dot: "bg-orange-400" },
+    ks_xac_nhan_huy:      { labelKey: "Đã hủy",            dot: "bg-red-400" },
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
   if (!datTruocConfirmed) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-muted/10 p-3 flex items-center justify-center min-h-[80px]">
-        <p className="text-xs text-muted-foreground italic">Chờ xác nhận đặt trước</p>
+        <p className="text-xs text-muted-foreground italic">{t("Chờ xác nhận đặt trước")}</p>
       </div>
     );
   }
@@ -875,10 +877,10 @@ function FinalSection({
   return (
     <div className="rounded-lg border border-green-200/60 bg-green-50/30 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-green-700">Final</p>
+        <p className="text-xs font-semibold text-green-700">{t("Final")}</p>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <span className={cn("w-2 h-2 rounded-full shrink-0", badge.dot)} />
-          {badge.label}
+          {t(badge.labelKey)}
         </span>
       </div>
 
@@ -890,17 +892,17 @@ function FinalSection({
             className="h-7 text-xs text-green-700 border-green-300 flex-1"
             onClick={() =>
               updateStatus(row, { ks_final_status: "cho_ks_xac_nhan" })
-                .then(() => toast.success("Chờ KS xác nhận Final"))
+                .then(() => toast.success(t("Chờ KS xác nhận Final")))
             }
           >
-            <Check className="h-3 w-3 mr-1" /> Final
+            <Check className="h-3 w-3 mr-1" /> {t("Final")}
           </Button>
           <Button
             size="sm"
             variant="outline"
             className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
             onClick={handleHuy}
-            title="Hủy booking"
+            title={t("Hủy booking")}
           >
             <X className="h-3 w-3" />
           </Button>
@@ -917,17 +919,17 @@ function FinalSection({
               updateStatus(row, {
                 ks_final_status: "ks_xac_nhan_final",
                 ks_final_confirm_at: new Date().toISOString(),
-              }).then(() => toast.success("KS đã xác nhận Final"))
+              }).then(() => toast.success(t("KS đã xác nhận Final")))
             }
           >
-            <Check className="h-3 w-3 mr-1" /> KS xác nhận Final
+            <Check className="h-3 w-3 mr-1" /> {t("KS xác nhận Final")}
           </Button>
           <Button
             size="sm"
             variant="outline"
             className="h-7 w-7 p-0 text-red-500 border-red-300 shrink-0"
             onClick={handleHuy}
-            title="Hủy booking"
+            title={t("Hủy booking")}
           >
             <X className="h-3 w-3" />
           </Button>
@@ -938,7 +940,7 @@ function FinalSection({
         <div className="space-y-1.5">
           {row.ks_final_confirm_at && (
             <p className="text-[10px] text-purple-600">
-              ✓ Final lúc: {fmtDatetime(row.ks_final_confirm_at)}
+              ✓ {t("Final lúc")}: {fmtDatetime(row.ks_final_confirm_at)}
             </p>
           )}
           <Button
@@ -947,7 +949,7 @@ function FinalSection({
             className="h-7 text-xs text-red-500 border-red-300 w-full"
             onClick={handleHuy}
           >
-            <X className="h-3 w-3 mr-1" /> Hủy booking
+            <X className="h-3 w-3 mr-1" /> {t("Hủy booking")}
           </Button>
         </div>
       )}
@@ -955,7 +957,7 @@ function FinalSection({
       {status === "cho_ks_xac_nhan_huy" && (
         <div className="space-y-1.5">
           <p className="text-[10px] text-orange-600 flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> Chờ KS xác nhận hủy
+            <AlertTriangle className="h-3 w-3" /> {t("Chờ KS xác nhận hủy")}
           </p>
           <Button
             size="sm"
@@ -965,17 +967,17 @@ function FinalSection({
               updateStatus(row, {
                 ks_final_status: "ks_xac_nhan_huy",
                 ks_final_confirm_at: new Date().toISOString(),
-              }).then(() => toast.success("Đã xác nhận hủy"))
+              }).then(() => toast.success(t("Đã xác nhận hủy")))
             }
           >
-            <Check className="h-3 w-3 mr-1" /> KS xác nhận hủy
+            <Check className="h-3 w-3 mr-1" /> {t("KS xác nhận hủy")}
           </Button>
         </div>
       )}
 
       {status === "ks_xac_nhan_huy" && (
         <p className="text-xs text-red-500">
-          ✕ Đã hủy{" "}
+          ✕ {t("Đã hủy")}{" "}
           {row.ks_final_confirm_at ? fmtDatetime(row.ks_final_confirm_at) : ""}
         </p>
       )}

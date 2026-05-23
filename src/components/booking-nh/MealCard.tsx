@@ -27,14 +27,15 @@ import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildUpdateEmailHtml, escapeHtml } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { t, useTranslate } from "@/lib/i18n";
 
 const STATUS_CFG = {
-  chua_gui:        { label: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
-  da_gui:          { label: "Đã gửi",         cls: "bg-amber-100 text-amber-700" },
-  nh_xac_nhan:     { label: "Đã xác nhận",   cls: "bg-emerald-100 text-emerald-700" },
-  cho_xac_nhan_huy:{ label: "Chờ XN hủy",    cls: "bg-orange-100 text-orange-700" },
-  da_huy:          { label: "Đã hủy",         cls: "bg-red-100 text-red-700" },
-  khong_dat:       { label: "Không đặt",      cls: "bg-slate-100 text-slate-500" },
+  chua_gui:        { labelKey: "Chưa gửi",      cls: "bg-muted text-muted-foreground" },
+  da_gui:          { labelKey: "Đã gửi",         cls: "bg-amber-100 text-amber-700" },
+  nh_xac_nhan:     { labelKey: "Đã xác nhận",   cls: "bg-emerald-100 text-emerald-700" },
+  cho_xac_nhan_huy:{ labelKey: "Chờ XN hủy",    cls: "bg-orange-100 text-orange-700" },
+  da_huy:          { labelKey: "Đã hủy",         cls: "bg-red-100 text-red-700" },
+  khong_dat:       { labelKey: "Không đặt",      cls: "bg-slate-100 text-slate-500" },
 };
 
 function fmtDatetime(d: string | null | undefined) {
@@ -94,6 +95,7 @@ function MealCardInner({
   doanId, doanNgayId, buaAn, nhaHangId, nhaHangTen, nhaHangEmail, booking, currentUserName,
   conTrongDieuTour = true, setMenuIdFromDieuTour, tenDoan, soKhach, soKhachLon, soKhachEm1, soKhachEm2, soNoidBo, ngayDate,
 }: Props) {
+  useTranslate();
   const upsertMut = useUpsertBookingNH();
   const updateMut = useUpdateBookingNH();
 
@@ -562,9 +564,9 @@ function MealCardInner({
         mailSentSnapshot: buildMailFields(),
       });
       setEmailModalOpen(false);
-      toast.success(emailMode === "update" ? "Đã gửi email cập nhật" : "Đã gửi email booking");
+      toast.success(emailMode === "update" ? t("Đã gửi email cập nhật") : t("Đã gửi email booking"));
     } catch (err: unknown) {
-      toast.error("Lỗi gửi email: " + (errMsg(err) || "Vui lòng thử lại"));
+      toast.error(t("Lỗi gửi email") + ": " + (errMsg(err) || t("Vui lòng thử lại")));
     } finally {
       setSending(false);
     }
@@ -581,7 +583,7 @@ function MealCardInner({
       saveBooking({ booking_status: "da_gui", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap } as Partial<BookingNHRow>);
     }
     setEmailModalOpen(false);
-    toast.success("Đã mở email client");
+    toast.success(t("Đã mở email client"));
   };
 
   const buildZaloText = () => {
@@ -641,15 +643,15 @@ function MealCardInner({
   };
   const handleConfirm = () => {
     saveBooking({ booking_status: "nh_xac_nhan" });
-    toast.success("Đã xác nhận");
+    toast.success(t("Đã xác nhận"));
   };
   const handleCancel = () => {
     saveBooking({ booking_status: "cho_xac_nhan_huy" });
-    toast("Đã cập nhật trạng thái hủy");
+    toast(t("Đã cập nhật trạng thái hủy"));
   };
   const handleReset = () => {
     saveBooking({ booking_status: "chua_gui", sent_at: null, sent_by: null });
-    toast("Đã đặt lại");
+    toast(t("Đã đặt lại"));
   };
 
   return (
@@ -659,7 +661,7 @@ function MealCardInner({
       {!conTrongDieuTour && (
         <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-200 flex items-center gap-1.5 text-xs text-amber-700">
           <X className="h-3 w-3 shrink-0" />
-          Nhà hàng này đã bị xóa khỏi điều tour — booking vẫn được giữ lại
+          {t("Nhà hàng này đã bị xóa khỏi điều tour — booking vẫn được giữ lại")}
         </div>
       )}
       {/* Header */}
@@ -667,16 +669,16 @@ function MealCardInner({
         {/* Row 1: bữa ăn + tên + status + toggle */}
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-muted-foreground uppercase w-14 shrink-0">
-            {buaAn === "trua" ? "🍱 Trưa" : "🍽 Tối"}
+            {buaAn === "trua" ? `🍱 ${t("Trưa")}` : `🍽 ${t("Tối")}`}
           </span>
           <span className="text-sm font-medium truncate flex-1">{nhaHangTen || "—"}</span>
           <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0", statusCfg.cls)}>
-            {statusCfg.label}
+            {t(statusCfg.labelKey)}
           </span>
           {isDirty && (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 bg-orange-100 text-orange-700 flex items-center gap-1" title="Nội dung đã thay đổi so với mail booking gần nhất — gửi cập nhật để đồng bộ">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 bg-orange-100 text-orange-700 flex items-center gap-1" title={t("Nội dung đã thay đổi so với mail booking gần nhất — gửi cập nhật để đồng bộ")}>
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-              Có thay đổi
+              {t("Có thay đổi")}
             </span>
           )}
           <button onClick={() => setExpanded((v) => !v)} className="text-muted-foreground hover:text-foreground p-0.5 shrink-0">
@@ -696,7 +698,7 @@ function MealCardInner({
               )}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground/40 italic">Chưa chọn set menu</span>
+            <span className="text-xs text-muted-foreground/40 italic">{t("Chưa chọn set menu")}</span>
           )}
         </div>
       </div>
@@ -706,7 +708,7 @@ function MealCardInner({
           {/* Set menu */}
           {(setMenuOptions.length > 0 || setMenuIdFromDieuTour != null) && (
             <div className="px-4 pt-3 pb-1">
-              <p className="text-xs text-muted-foreground mb-1.5">Set menu</p>
+              <p className="text-xs text-muted-foreground mb-1.5">{t("Set menu")}</p>
               {setMenuIdFromDieuTour != null ? (
                 <p className="text-sm font-medium text-foreground">
                   {selectedMenu?.ten_set ?? "—"}
@@ -719,7 +721,7 @@ function MealCardInner({
                   disabled={isCancelled}
                   onChange={(e) => handleSetMenuChange(e.target.value ? Number(e.target.value) : null)}
                 >
-                  <option value="">-- Không chọn --</option>
+                  <option value="">-- {t("Không chọn")} --</option>
                   {setMenuOptions.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.ten_set}{m.gia != null ? ` — ${m.gia.toLocaleString("vi-VN")}/${m.don_vi}` : ""}
@@ -732,9 +734,9 @@ function MealCardInner({
 
           {/* Danh sách món */}
           <div className="px-4 py-3">
-            <p className="text-xs text-muted-foreground mb-2">Danh sách món</p>
+            <p className="text-xs text-muted-foreground mb-2">{t("Danh sách món")}</p>
             {monList.length === 0 ? (
-              <p className="text-xs text-muted-foreground/50 italic">Chưa có món nào</p>
+              <p className="text-xs text-muted-foreground/50 italic">{t("Chưa có món nào")}</p>
             ) : (
               <ul className="space-y-1 mb-2">
                 {monList.map((mon, i) => (
@@ -767,7 +769,7 @@ function MealCardInner({
               <div className="flex items-center gap-1.5 mt-1">
                 <input
                   className="flex-1 text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Thêm món..."
+                  placeholder={t("Thêm món...")}
                   value={newMon}
                   onChange={(e) => setNewMon(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddMon()}
@@ -782,17 +784,17 @@ function MealCardInner({
           {/* Tracking + actions */}
           <div className="px-4 py-2.5 bg-muted/10 border-t border-border">
             <div className="flex items-center mb-3">
-              <TrackingDot label="Tạo" time={null} active={true} />
+              <TrackingDot label={t("Tạo")} time={null} active={true} />
               <TrackingLine active={!!booking?.sent_at} />
-              <TrackingDot label="Gửi" time={booking?.sent_at} active={!!booking?.sent_at} by={booking?.sent_by} />
+              <TrackingDot label={t("Gửi")} time={booking?.sent_at} active={!!booking?.sent_at} by={booking?.sent_by} />
               <TrackingLine active={booking?.booking_status === "nh_xac_nhan"} />
-              <TrackingDot label="Xác nhận" time={null} active={booking?.booking_status === "nh_xac_nhan"} />
+              <TrackingDot label={t("Xác nhận")} time={null} active={booking?.booking_status === "nh_xac_nhan"} />
             </div>
 
             <div className="flex items-start gap-3">
               <div className="flex-1 space-y-1.5">
                 <Textarea
-                  placeholder="Ghi chú..."
+                  placeholder={t("Ghi chú...")}
                   value={ghiChu}
                   onChange={(e) => setGhiChu(e.target.value)}
                   onBlur={() => saveBooking({ ghi_chu: ghiChu })}
@@ -801,7 +803,7 @@ function MealCardInner({
                   rows={1}
                 />
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">Deadline:</span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{t("Deadline")}:</span>
                   <DatePicker
                     value={deadline}
                     onChange={(v) => { handleDeadlineChange(v); saveBooking({ deadline: v || null }); }}
@@ -813,7 +815,7 @@ function MealCardInner({
                 {(!booking || booking.booking_status === "chua_gui") && (
                   <>
                     <Button size="sm" className="h-7 text-xs" onClick={handleSend}>
-                      <Send className="h-3 w-3 mr-1" /> Gửi
+                      <Send className="h-3 w-3 mr-1" /> {t("Gửi")}
                     </Button>
                     <Button
                       size="sm"
@@ -822,7 +824,7 @@ function MealCardInner({
                       onClick={handleSendZalo}
                       disabled={updateMut.isPending || upsertMut.isPending}
                     >
-                      Gửi Zalo
+                      {t("Gửi Zalo")}
                     </Button>
                     <Button
                       size="sm"
@@ -831,24 +833,24 @@ function MealCardInner({
                       onClick={() => saveBooking({ booking_status: "khong_dat" })}
                       disabled={updateMut.isPending || upsertMut.isPending}
                     >
-                      Không đặt
+                      {t("Không đặt")}
                     </Button>
                   </>
                 )}
                 {booking?.booking_status === "da_gui" && (
                   <>
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleConfirm}>
-                      <Check className="h-3 w-3 mr-1" /> Xác nhận
+                      <Check className="h-3 w-3 mr-1" /> {t("Xác nhận")}
                     </Button>
                     {booking?.sent_at && (
                       <Button size="sm" variant="outline" className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
                         onClick={() => openEmailModal("update")}
-                        title="Gửi email cập nhật — thread vào mail booking cũ (Gmail group theo subject)">
-                        <Send className="h-3 w-3 mr-1" /> Gửi cập nhật
+                        title={t("Gửi email cập nhật — thread vào mail booking cũ (Gmail group theo subject)")}>
+                        <Send className="h-3 w-3 mr-1" /> {t("Gửi cập nhật")}
                       </Button>
                     )}
                     <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
-                      <X className="h-3 w-3 mr-1" /> Hủy
+                      <X className="h-3 w-3 mr-1" /> {t("Hủy")}
                     </Button>
                   </>
                 )}
@@ -857,29 +859,29 @@ function MealCardInner({
                     {booking?.sent_at && (
                       <Button size="sm" variant="outline" className="h-7 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
                         onClick={() => openEmailModal("update")}
-                        title="Gửi email cập nhật — thread vào mail booking cũ (Gmail group theo subject)">
-                        <Send className="h-3 w-3 mr-1" /> Gửi cập nhật
+                        title={t("Gửi email cập nhật — thread vào mail booking cũ (Gmail group theo subject)")}>
+                        <Send className="h-3 w-3 mr-1" /> {t("Gửi cập nhật")}
                       </Button>
                     )}
                     <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={handleCancel}>
-                      <X className="h-3 w-3 mr-1" /> Hủy
+                      <X className="h-3 w-3 mr-1" /> {t("Hủy")}
                     </Button>
                   </>
                 )}
                 {booking?.booking_status === "cho_xac_nhan_huy" && (
                   <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300"
                     onClick={() => saveBooking({ booking_status: "da_huy" })}>
-                    <Check className="h-3 w-3 mr-1" /> Xác nhận hủy
+                    <Check className="h-3 w-3 mr-1" /> {t("Xác nhận hủy")}
                   </Button>
                 )}
                 {booking?.booking_status === "da_huy" && (
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReset}>
-                    <RotateCcw className="h-3 w-3 mr-1" /> Đặt lại
+                    <RotateCcw className="h-3 w-3 mr-1" /> {t("Đặt lại")}
                   </Button>
                 )}
                 {booking?.booking_status === "khong_dat" && (
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReset}>
-                    <RotateCcw className="h-3 w-3 mr-1" /> Đặt lại
+                    <RotateCcw className="h-3 w-3 mr-1" /> {t("Đặt lại")}
                   </Button>
                 )}
               </div>
@@ -892,8 +894,8 @@ function MealCardInner({
       open={emailModalOpen}
       onOpenChange={setEmailModalOpen}
       title={emailMode === "update"
-        ? `Gửi email cập nhật ${buaAn === "trua" ? "ăn trưa" : "ăn tối"} (thread vào mail cũ)`
-        : `Gửi email đặt ${buaAn === "trua" ? "ăn trưa" : "ăn tối"}`}
+        ? `${t("Gửi email cập nhật")} ${buaAn === "trua" ? t("ăn trưa") : t("ăn tối")} (${t("thread vào mail cũ")})`
+        : `${t("Gửi email đặt")} ${buaAn === "trua" ? t("ăn trưa") : t("ăn tối")}`}
       to={emailTo}
       onToChange={setEmailTo}
       subject={emailSubject}
@@ -911,7 +913,7 @@ function MealCardInner({
     <Dialog open={zaloModalOpen} onOpenChange={setZaloModalOpen}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nội dung gửi Zalo</DialogTitle>
+          <DialogTitle>{t("Nội dung gửi Zalo")}</DialogTitle>
         </DialogHeader>
         <textarea
           readOnly
@@ -920,11 +922,11 @@ function MealCardInner({
           onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
         />
         <div className="flex justify-between gap-2 pt-1">
-          <Button variant="outline" onClick={() => { navigator.clipboard.writeText(zaloText); toast.success("Đã sao chép"); }}>
-            Sao chép
+          <Button variant="outline" onClick={() => { navigator.clipboard.writeText(zaloText); toast.success(t("Đã sao chép")); }}>
+            {t("Sao chép")}
           </Button>
           <Button onClick={handleConfirmZaloSent} disabled={updateMut.isPending || upsertMut.isPending}>
-            Đã gửi
+            {t("Đã gửi")}
           </Button>
         </div>
       </DialogContent>
