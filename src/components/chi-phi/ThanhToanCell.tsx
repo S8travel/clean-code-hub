@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { type DNTTRow } from "@/hooks/use-chi-phi";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function ThanhToanCell({ chiPhiId, dnttList }: Props) {
+  useTranslate();
   if (!chiPhiId) return <span className="text-xs text-muted-foreground">—</span>;
 
   const myDntt = dnttList.filter(
@@ -26,7 +28,7 @@ export default function ThanhToanCell({ chiPhiId, dnttList }: Props) {
         <div key={d.id} className="text-xs">
           {d.payment_status === "paid" ? (
             <div>
-              <Badge className="text-[10px] px-1.5 py-0 bg-primary">Đã TT</Badge>
+              <Badge className="text-[10px] px-1.5 py-0 bg-primary">{t("Đã TT")}</Badge>
               {d.thanh_toan_luc && (
                 <span className="ml-1 text-muted-foreground">
                   {format(new Date(d.thanh_toan_luc), "dd/MM")}
@@ -36,14 +38,14 @@ export default function ThanhToanCell({ chiPhiId, dnttList }: Props) {
           ) : (
             <div>
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-yellow-100 text-yellow-800 border-yellow-300">
-                Chờ UNC
+                {t("Chờ UNC")}
               </Badge>
               <span className="ml-1 font-medium">{fmt(d.so_tien - (d.paid_amount || 0))}</span>
             </div>
           )}
           {d.la_coc && (
             <span className="text-[9px] text-muted-foreground">
-              (Cọc{d.ty_le_coc ? ` ${d.ty_le_coc}%` : ""})
+              ({t("Cọc")}{d.ty_le_coc ? ` ${d.ty_le_coc}%` : ""})
             </span>
           )}
         </div>

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import type { DNTTRow } from "@/hooks/use-dntt";
 import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
 import { fmt } from "./ks-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 // Aggregate commit dialog (chốt chênh lệch sau OP edit so_phong/gia_phong/FOC)
 export interface AggCommitKSTarget {
@@ -59,14 +60,15 @@ export default function KSAggCommitModal({
   canTru: aggCanTru, onCanTruChange: setAggCanTru,
   submitting, onClose, onSubmit: handleAggCommit,
 }: Props) {
+  useTranslate();
   return (
     <Dialog open={!!aggCommit} onOpenChange={o => { if (!o) { onClose(); } }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="text-sm">
             {aggCommit && aggCommit.delta > 0
-              ? (aggCommitMode === "deposit" ? "Tạo ĐNTT cọc bổ sung" : "Tạo ĐNTT bổ sung")
-              : aggSurplusMode === "hoan_tien" ? "Ghi nhận hoàn tiền" : "Ghi nhận công nợ"}
+              ? (aggCommitMode === "deposit" ? t("Tạo ĐNTT cọc bổ sung") : t("Tạo ĐNTT bổ sung"))
+              : aggSurplusMode === "hoan_tien" ? t("Ghi nhận hoàn tiền") : t("Ghi nhận công nợ")}
           </DialogTitle>
         </DialogHeader>
         {aggCommit && (
@@ -74,40 +76,40 @@ export default function KSAggCommitModal({
             <p className="text-xs text-muted-foreground">{aggCommit.ksName}</p>
             <div className="space-y-1 text-xs border rounded px-2 py-1.5 bg-muted/30">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Tổng thực tế (KS):</span>
+                <span className="text-muted-foreground">{t("Tổng thực tế (KS)")}:</span>
                 <span className="font-medium tabular-nums">{fmt(aggCommit.sumActual)} ₫</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Đã thanh toán:</span>
+                <span className="text-muted-foreground">{t("Đã thanh toán")}:</span>
                 <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid)} ₫</span>
               </div>
               {aggCommit.groupCongNoCN > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">(−) Đã ghi nhận công nợ:</span>
+                  <span className="text-muted-foreground">{t("(−) Đã ghi nhận công nợ")}:</span>
                   <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoCN)} ₫</span>
                 </div>
               )}
               {aggCommit.groupCongNoHT > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">(−) Đã hoàn tiền:</span>
+                  <span className="text-muted-foreground">{t("(−) Đã hoàn tiền")}:</span>
                   <span className="font-medium tabular-nums">{fmt(aggCommit.groupCongNoHT)} ₫</span>
                 </div>
               )}
               {(aggCommit.groupCongNoCN > 0 || aggCommit.groupCongNoHT > 0) && (
                 <div className="flex justify-between border-t pt-1">
-                  <span className="text-muted-foreground">Còn cần thanh toán:</span>
+                  <span className="text-muted-foreground">{t("Còn cần thanh toán")}:</span>
                   <span className="font-medium tabular-nums">{fmt(aggCommit.sumPaid - aggCommit.groupCongNoCN - aggCommit.groupCongNoHT)} ₫</span>
                 </div>
               )}
               <div className="flex justify-between border-t pt-1">
-                <span className="text-muted-foreground">Chênh lệch còn lại:</span>
+                <span className="text-muted-foreground">{t("Chênh lệch còn lại")}:</span>
                 <span className={cn(
                   "font-semibold tabular-nums",
                   aggCommit.delta > 0 ? "text-orange-700" : "text-purple-700",
                 )}>
                   {aggCommit.delta > 0 ? "+" : "−"}{fmt(Math.abs(aggCommit.delta))} ₫
                   <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                    ({aggCommit.delta > 0 ? "thiếu, cần thanh toán thêm" : "thừa"})
+                    ({aggCommit.delta > 0 ? t("thiếu, cần thanh toán thêm") : t("thừa")})
                   </span>
                 </span>
               </div>
@@ -119,7 +121,7 @@ export default function KSAggCommitModal({
             )}
             {aggCommit.delta > 0 && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Hình thức tạo</Label>
+                <Label className="text-xs font-medium">{t("Hình thức tạo")}</Label>
                 <RadioGroup
                   value={aggCommitMode}
                   onValueChange={(v) => {
@@ -135,21 +137,21 @@ export default function KSAggCommitModal({
                   <div className="flex items-start gap-2">
                     <RadioGroupItem value="full" id="ks-agg-full" className="mt-0.5" />
                     <Label htmlFor="ks-agg-full" className="text-xs cursor-pointer leading-tight">
-                      <span className="font-medium">Toàn bộ — {fmt(aggCommit.delta)} ₫</span>
-                      <p className="text-muted-foreground font-normal">Thanh toán hết phần còn lại</p>
+                      <span className="font-medium">{t("Toàn bộ")} — {fmt(aggCommit.delta)} ₫</span>
+                      <p className="text-muted-foreground font-normal">{t("Thanh toán hết phần còn lại")}</p>
                     </Label>
                   </div>
                   <div className="flex items-start gap-2">
                     <RadioGroupItem value="deposit" id="ks-agg-deposit" className="mt-0.5" />
                     <Label htmlFor="ks-agg-deposit" className="text-xs cursor-pointer leading-tight">
-                      <span className="font-medium">Cọc thêm 1 phần</span>
-                      <p className="text-muted-foreground font-normal">Đánh dấu là cọc — có thể tạo cọc nhiều lần</p>
+                      <span className="font-medium">{t("Cọc thêm 1 phần")}</span>
+                      <p className="text-muted-foreground font-normal">{t("Đánh dấu là cọc — có thể tạo cọc nhiều lần")}</p>
                     </Label>
                   </div>
                 </RadioGroup>
                 {aggCommitMode === "deposit" && (
                   <div className="mt-1.5 space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">Số tiền cọc (tối đa {fmt(aggCommit.delta)} ₫)</Label>
+                    <Label className="text-[11px] text-muted-foreground">{t("Số tiền cọc")} ({t("tối đa")} {fmt(aggCommit.delta)} ₫)</Label>
                     <Input
                       type="number"
                       className="h-8 text-xs"
@@ -160,7 +162,7 @@ export default function KSAggCommitModal({
                     />
                     {aggDepositAmount > 0 && (
                       <p className="text-[10px] text-muted-foreground tabular-nums">
-                        Còn lại sau cọc này: <span className="font-medium text-foreground">{fmt(aggCommit.delta - aggDepositAmount)} ₫</span>
+                        {t("Còn lại sau cọc này")}: <span className="font-medium text-foreground">{fmt(aggCommit.delta - aggDepositAmount)} ₫</span>
                       </p>
                     )}
                   </div>
@@ -169,7 +171,7 @@ export default function KSAggCommitModal({
             )}
             {aggCommit.delta > 0 && aggCommit.nccId != null && (
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Cấn trừ công nợ NCC (optional)</Label>
+                <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
                 <KSCongNoPanel
                   nccId={aggCommit.nccId}
                   doanId={doanId}
@@ -186,16 +188,16 @@ export default function KSAggCommitModal({
                 />
                 {aggCanTru && aggCanTru.soTienCanTru > 0 && (
                   <p className="text-[10px] text-muted-foreground tabular-nums">
-                    DNTT sẽ tạo: <span className="font-medium text-foreground">{fmt(aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta)} ₫</span>
-                    {" · "}Cấn trừ: <span className="font-medium text-amber-700">{fmt(aggCanTru.soTienCanTru)} ₫</span>
-                    {" · "}Cash còn TT: <span className="font-medium text-foreground">{fmt((aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta) - aggCanTru.soTienCanTru)} ₫</span>
+                    {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta)} ₫</span>
+                    {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(aggCanTru.soTienCanTru)} ₫</span>
+                    {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt((aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta) - aggCanTru.soTienCanTru)} ₫</span>
                   </p>
                 )}
               </div>
             )}
             {aggCommit.delta < 0 && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Hình thức xử lý</Label>
+                <Label className="text-xs font-medium">{t("Hình thức xử lý")}</Label>
                 <RadioGroup
                   value={aggSurplusMode}
                   onValueChange={(v) => setAggSurplusMode(v as "con_du" | "hoan_tien")}
@@ -204,15 +206,15 @@ export default function KSAggCommitModal({
                   <div className="flex items-start gap-2">
                     <RadioGroupItem value="con_du" id="ks-agg-cn" className="mt-0.5" />
                     <Label htmlFor="ks-agg-cn" className="text-xs cursor-pointer leading-tight">
-                      <span className="font-medium">Ghi nhận công nợ</span>
-                      <p className="text-muted-foreground font-normal">NCC giữ tiền — có thể cấn trừ với DNTT khác cùng NCC</p>
+                      <span className="font-medium">{t("Ghi nhận công nợ")}</span>
+                      <p className="text-muted-foreground font-normal">{t("NCC giữ tiền — có thể cấn trừ với DNTT khác cùng NCC")}</p>
                     </Label>
                   </div>
                   <div className="flex items-start gap-2">
                     <RadioGroupItem value="hoan_tien" id="ks-agg-ht" className="mt-0.5" />
                     <Label htmlFor="ks-agg-ht" className="text-xs cursor-pointer leading-tight">
-                      <span className="font-medium">Ghi nhận hoàn tiền</span>
-                      <p className="text-muted-foreground font-normal">NCC trả lại tiền cash — không cấn trừ</p>
+                      <span className="font-medium">{t("Ghi nhận hoàn tiền")}</span>
+                      <p className="text-muted-foreground font-normal">{t("NCC trả lại tiền cash — không cấn trừ")}</p>
                     </Label>
                   </div>
                 </RadioGroup>
@@ -220,20 +222,20 @@ export default function KSAggCommitModal({
             )}
             {aggCommit.delta > 0 && (
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Ngày cần thanh toán</Label>
+                <Label className="text-xs font-medium">{t("Ngày cần thanh toán")}</Label>
                 <DatePicker className="h-8 text-xs w-full" value={aggNgayCan} onChange={setAggNgayCan} />
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Lý do (optional)</Label>
+              <Label className="text-xs font-medium">{t("Lý do (optional)")}</Label>
               <Textarea
                 className="text-xs min-h-[56px]"
                 value={aggReason}
                 onChange={e => setAggReason(e.target.value)}
                 placeholder={
                   aggCommit.delta > 0
-                    ? "VD: phụ thu giường phụ..."
-                    : "VD: 1 phòng không sử dụng..."
+                    ? t("VD: phụ thu giường phụ...")
+                    : t("VD: 1 phòng không sử dụng...")
                 }
               />
             </div>
@@ -242,7 +244,7 @@ export default function KSAggCommitModal({
         <DialogFooter>
           <Button variant="outline" size="sm" className="text-xs"
             onClick={onClose}>
-            Đóng
+            {t("Đóng")}
           </Button>
           <Button
             size="sm"
@@ -255,7 +257,7 @@ export default function KSAggCommitModal({
             disabled={submitting || !aggCommit}
             onClick={handleAggCommit}
           >
-            Xác nhận
+            {t("Xác nhận")}
           </Button>
         </DialogFooter>
       </DialogContent>

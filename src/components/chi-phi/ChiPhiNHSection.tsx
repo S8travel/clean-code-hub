@@ -11,6 +11,7 @@ import NHDnttModal from "./NHDnttModal";
 import NHAggCommitModal from "./NHAggCommitModal";
 import NHCancelModal from "./NHCancelModal";
 import { useNHSection } from "./use-nh-section";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   doanId: number;
@@ -32,6 +33,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   { doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "" },
   ref,
 ) {
+  useTranslate();
   const s = useNHSection({ doanId, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan });
   const {
     isLoading, meals, nhRowData, nhRowHandlers,
@@ -55,16 +57,16 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     getSelectedCount: () => selectedKeys.length,
   }), [buildSelectedEntries, selectedKeys.length, setSelectedKeys]);
 
-  if (isLoading) return <div className="text-sm text-muted-foreground">Đang tải nhà hàng...</div>;
+  if (isLoading) return <div className="text-sm text-muted-foreground">{t("Đang tải nhà hàng...")}</div>;
 
   if (meals.length === 0) {
     return (
       <div className="space-y-4">
         <h3 className="text-sm font-semibold flex items-center gap-2 bg-orange-50 border border-orange-100 text-orange-900 px-3 py-1.5 rounded-md">
-          🍽️ Nhà hàng
-          <Badge variant="secondary" className="text-xs">Điều tour</Badge>
+          🍽️ {t("Nhà hàng")}
+          <Badge variant="secondary" className="text-xs">{t("Điều tour")}</Badge>
         </h3>
-        <p className="text-sm text-muted-foreground">Chưa có nhà hàng trong lịch trình.</p>
+        <p className="text-sm text-muted-foreground">{t("Chưa có nhà hàng trong lịch trình.")}</p>
       </div>
     );
   }
@@ -77,8 +79,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
       {/* Header + toolbar */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-2 bg-orange-50 border border-orange-100 text-orange-900 px-3 py-1.5 rounded-md">
-          🍽️ Nhà hàng
-          <Badge variant="secondary" className="text-xs">Điều tour</Badge>
+          🍽️ {t("Nhà hàng")}
+          <Badge variant="secondary" className="text-xs">{t("Điều tour")}</Badge>
         </h3>
         {selectedKeys.length > 0 && (
           <div className="flex items-center gap-2">
@@ -88,10 +90,10 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
               onClick={handlePrintSelected}
             >
               <Printer className="h-3.5 w-3.5 mr-1" />
-              In ĐNTT ({selectedKeys.length})
+              {t("In ĐNTT")} ({selectedKeys.length})
             </Button>
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedKeys([])}>
-              Bỏ chọn
+              {t("Bỏ chọn")}
             </Button>
           </div>
         )}
@@ -123,16 +125,16 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                   className="h-3.5 w-3.5"
                 />
               </th>
-              <th className="px-3 py-2 text-center font-medium">Ngày</th>
-              <th className="px-3 py-2 text-left font-medium">Nhà hàng</th>
-              <th className="px-3 py-2 text-center font-medium">Bữa</th>
-              <th className="px-3 py-2 text-center font-medium">Số khách</th>
-              <th className="px-3 py-2 text-center font-medium">Đơn giá</th>
-              <th className="px-3 py-2 text-center font-medium">CK%</th>
-              <th className="px-3 py-2 text-right font-medium">Thành tiền</th>
-              <th className="px-2 py-2 text-center font-medium">Nguồn</th>
-              <th className="px-3 py-2 text-center font-medium">TT ĐNTT</th>
-              <th className="px-3 py-2 text-center font-medium">TT Thanh toán</th>
+              <th className="px-3 py-2 text-center font-medium">{t("Ngày")}</th>
+              <th className="px-3 py-2 text-left font-medium">{t("Nhà hàng")}</th>
+              <th className="px-3 py-2 text-center font-medium">{t("Bữa")}</th>
+              <th className="px-3 py-2 text-center font-medium">{t("Số khách")}</th>
+              <th className="px-3 py-2 text-center font-medium">{t("Đơn giá")}</th>
+              <th className="px-3 py-2 text-center font-medium">{t("CK%")}</th>
+              <th className="px-3 py-2 text-right font-medium">{t("Thành tiền")}</th>
+              <th className="px-2 py-2 text-center font-medium">{t("Nguồn")}</th>
+              <th className="px-3 py-2 text-center font-medium">{t("TT ĐNTT")}</th>
+              <th className="px-3 py-2 text-center font-medium">{t("TT Thanh toán")}</th>
               <th className="px-2 py-2" />
             </tr>
           </thead>

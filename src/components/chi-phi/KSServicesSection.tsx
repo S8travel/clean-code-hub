@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import KSServiceRowInput from "./KSServiceRowInput";
 import { dayLabel, type LocalKSRow } from "./ks-section-shared";
+import { t, useTranslate } from "@/lib/i18n";
 
 // ── Dịch vụ KS sub-section ──
 // Render flat table với group rows theo ngày. Nút "+ Thêm DV" trong mỗi day group
@@ -33,22 +34,23 @@ export default function KSServicesSection({
   onToggleNguoiTt?: (idx: number) => void;
   disabled?: boolean;
 }) {
+  useTranslate();
   return (
     <div className="mt-3 border-t border-border pt-2">
       <div className="flex items-center gap-2 px-1 py-0.5 mb-1">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          🍽️ Dịch vụ KS
+          🍽️ {t("Dịch vụ KS")}
         </span>
       </div>
       <Table>
         <TableHeader>
           <TableRow className="text-xs">
-            <TableHead className="w-[180px] h-auto py-1 px-2">Tên dịch vụ</TableHead>
-            <TableHead className="w-[80px] h-auto py-1 px-2">Loại</TableHead>
-            <TableHead className="w-[60px] h-auto py-1 px-2">SL</TableHead>
+            <TableHead className="w-[180px] h-auto py-1 px-2">{t("Tên dịch vụ")}</TableHead>
+            <TableHead className="w-[80px] h-auto py-1 px-2">{t("Loại")}</TableHead>
+            <TableHead className="w-[60px] h-auto py-1 px-2">{t("SL")}</TableHead>
             <TableHead className="w-[60px] h-auto py-1 px-2">FOC</TableHead>
-            <TableHead className="w-[110px] h-auto py-1 px-2">Đơn giá</TableHead>
-            <TableHead className="w-[110px] h-auto py-1 px-2">Thành tiền</TableHead>
+            <TableHead className="w-[110px] h-auto py-1 px-2">{t("Đơn giá")}</TableHead>
+            <TableHead className="w-[110px] h-auto py-1 px-2">{t("Thành tiền")}</TableHead>
             <TableHead className="w-[32px] h-auto py-1 px-2" />
           </TableRow>
         </TableHeader>
@@ -58,8 +60,8 @@ export default function KSServicesSection({
             const doanNgayId = ngayDateToDoanNgayId[dateStr] ?? dayRows[0]?.doan_ngay_id;
             const label =
               dateStr !== "unknown"
-                ? `Ngày ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`
-                : "Không xác định";
+                ? `${t("Ngày")} ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`
+                : t("Không xác định");
             return (
               <Fragment key={dateStr}>
                 <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
@@ -75,7 +77,7 @@ export default function KSServicesSection({
                         onClick={() => onAddMore(doanNgayId, dateStr, dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined)}
                       >
                         <Plus className="h-3 w-3 mr-0.5" />
-                        Thêm
+                        {t("Thêm")}
                       </Button>
                     )}
                   </TableCell>
