@@ -34,57 +34,7 @@
 </head>
 
   <body>
-    <!-- Patch removeChild/insertBefore to prevent React + Google Translate DOM conflict -->
-    <script>
-      (function() {
-        var _removeChild = Node.prototype.removeChild;
-        Node.prototype.removeChild = function(child) {
-          if (child.parentNode !== this) { return child; }
-          return _removeChild.call(this, child);
-        };
-        var _insertBefore = Node.prototype.insertBefore;
-        Node.prototype.insertBefore = function(newNode, refNode) {
-          if (refNode && refNode.parentNode !== this) { return newNode; }
-          return _insertBefore.call(this, newNode, refNode);
-        };
-      })();
-    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-
-    <!-- Google Translate -->
-    <div id="google_translate_element" style="position:absolute;left:-9999px;top:0;width:100px;height:30px;overflow:hidden"></div>
-    <script>
-      function googleTranslateElementInit() {
-        new google.translate.TranslateElement({
-          pageLanguage: 'vi',
-          includedLanguages: 'zh-TW',
-          autoDisplay: false,
-        }, 'google_translate_element');
-      }
-      // Loader có retry + fallback endpoint khi mạng VN reset connection đến Google
-      (function loadGT() {
-        var endpoints = [
-          'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit',
-          'https://translate.googleapis.com/translate_a/element.js?cb=googleTranslateElementInit',
-          'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit'
-        ];
-        var idx = 0;
-        function tryNext() {
-          if (idx >= endpoints.length) return;
-          var src = endpoints[idx++];
-          var s = document.createElement('script');
-          s.src = src;
-          s.async = true;
-          s.onerror = function () {
-            if (!(window.google && window.google.translate)) {
-              setTimeout(tryNext, 800);
-            }
-          };
-          document.head.appendChild(s);
-        }
-        tryNext();
-      })();
-    </script>
   </body>
 </html>
