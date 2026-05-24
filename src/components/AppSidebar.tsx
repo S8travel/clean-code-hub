@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
-import { t, useTranslate, notifyLanguageChange, startZhCorrectionObserver, stopZhCorrectionObserver } from "@/lib/i18n";
+import { t, useTranslate, notifyLanguageChange } from "@/lib/i18n";
 import {
   Sidebar,
   SidebarContent,
@@ -41,7 +41,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks/use-permissions";
 import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
@@ -52,7 +52,13 @@ import { useMyOverdueCount } from "@/hooks/use-lead-next-action";
 import { UserSettingsMenu } from "@/components/UserSettingsMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 
-// ── Google Translate button ──
+// ── Language toggle button (VI ↔ zh-TW) ──
+//
+// Trước đây kết hợp Google Translate widget — đã gỡ vì:
+// (1) GT đoán nhầm khá nhiều từ kỹ thuật (vd "Loại xe" → "男友");
+// (2) Race condition: GT chiếm DOM trước khi t() kịp re-render.
+// Giờ chỉ toggle cookie `googtrans=/vi/zh-TW` (giữ tên cũ để session cũ
+// không bị reset) → notifyLanguageChange → các component dùng t() tự re-render.
 
 function isTranslated(): boolean {
   return document.cookie.includes("googtrans=/vi/zh-TW");
@@ -62,7 +68,6 @@ function getAllDomainVariants(): (string | undefined)[] {
   const host = window.location.hostname;
   const parts = host.split(".");
   const variants: (string | undefined)[] = [undefined]; // host-only (no domain attr)
-  // Build every parent domain variant: crm.s8travel.com, .crm.s8travel.com, s8travel.com, .s8travel.com, com, .com
   for (let i = 0; i < parts.length; i++) {
     const d = parts.slice(i).join(".");
     if (!d) continue;
@@ -72,7 +77,7 @@ function getAllDomainVariants(): (string | undefined)[] {
   return variants;
 }
 
-function setGTCookie(value: string | null) {
+function setLangCookie(value: string | null) {
   const domains = getAllDomainVariants();
   const isSecure = window.location.protocol === "https:";
   const sameSiteAttr = `; SameSite=Lax${isSecure ? "; Secure" : ""}`;
@@ -87,77 +92,30 @@ function setGTCookie(value: string | null) {
         document.cookie = `googtrans=; path=${p}; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
       }
     }
-    for (const name of ["googtrans", "GOOGTRANS", "_googtrans"]) {
-      for (const d of domains) {
-        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${d ? `; domain=${d}` : ""}`;
-      }
-    }
-    try {
-      localStorage.removeItem("googtrans");
-      sessionStorage.removeItem("googtrans");
-    } catch { /* ignore */ }
   }
-}
-
-function triggerGTSelect(lang: string): boolean {
-  const select = document.querySelector("select.goog-te-combo") as HTMLSelectElement | null;
-  if (!select) return false;
-  select.value = lang;
-  select.dispatchEvent(new Event("change"));
-  return true;
 }
 
 function TranslateButton({ collapsed }: { collapsed: boolean }) {
   const [translated, setTranslated] = useState(isTranslated);
 
-  // On mount: if cookie says translated, trigger GT widget after it initializes
-  useEffect(() => {
-    if (!isTranslated()) return;
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      if (triggerGTSelect("zh-TW")) {
-        clearInterval(interval);
-      } else if (attempts >= 20) {
-        // GT widget never loaded – clear stale cookie
-        setGTCookie(null);
-        setTranslated(false);
-        clearInterval(interval);
-      }
-    }, 300);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleTranslate = () => {
-    setGTCookie("/vi/zh-TW");
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      if (triggerGTSelect("zh-TW")) {
-        setTranslated(true);
-        notifyLanguageChange();
-        startZhCorrectionObserver();
-        clearInterval(interval);
-      } else if (attempts >= 20) {
-        clearInterval(interval);
-        window.location.reload();
-      }
-    }, 300);
-  };
-
-  const handleRestore = () => {
-    setGTCookie(null);
-    stopZhCorrectionObserver();
-    setTimeout(() => window.location.reload(), 100);
+  const handleToggle = () => {
+    if (translated) {
+      setLangCookie(null);
+      setTranslated(false);
+    } else {
+      setLangCookie("/vi/zh-TW");
+      setTranslated(true);
+    }
+    notifyLanguageChange();
   };
 
   return (
     <button
       type="button"
-      onClick={translated ? handleRestore : handleTranslate}
+      onClick={handleToggle}
       title={translated ? t("Khôi phục tiếng Việt") : t("Dịch sang tiếng Trung (phồn thể)")}
       className={`
-        notranslate flex items-center justify-center rounded-md border text-[11px] font-semibold
+        flex items-center justify-center rounded-md border text-[11px] font-semibold
         transition-colors h-6 shrink-0
         ${collapsed ? "w-6 px-0" : "px-2 gap-1"}
         ${translated

@@ -2,21 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Hide Google Translate native UI */
-.goog-te-banner-frame,
-.goog-te-balloon-frame,
-#goog-gt-tt,
-.goog-tooltip,
-.goog-tooltip-content {
-  display: none !important;
-}
-body {
-  top: 0 !important;
-}
-.skiptranslate {
-  display: none !important;
-}
-
 @layer base {
   :root {
     /* Canvas xám lạnh rất nhạt (#F8FAFC) — để card trắng "nổi" lên, tạo chiều sâu */
