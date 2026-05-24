@@ -277,15 +277,15 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
             </div>
             {useSpecificDate ? (
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Ngày đi">
+                <Field label={t("Ngày đi")}>
                   <DatePicker value={form.ngay_di_du_kien ?? ""} onChange={(v) => set("ngay_di_du_kien", v)} className="w-full h-9" />
                 </Field>
-                <Field label="Ngày về">
+                <Field label={t("Ngày về")}>
                   <DatePicker value={form.ngay_ve_du_kien ?? ""} onChange={(v) => set("ngay_ve_du_kien", v)} className="w-full h-9" />
                 </Field>
               </div>
             ) : (
-              <Field label="Tháng (yyyy-MM)">
+              <Field label={t("Tháng (yyyy-MM)")}>
                 <Input value={form.thang_du_kien ?? ""} onChange={(e) => set("thang_du_kien", e.target.value)} placeholder="2026-09" />
               </Field>
             )}
@@ -293,28 +293,28 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
 
           {/* Chi tiết tour */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Số ngày">
+            <Field label={t("Số ngày")}>
               <Input type="number" min={1} value={form.so_ngay ?? ""} onChange={(e) => set("so_ngay", e.target.value ? parseInt(e.target.value) : null)} placeholder="5" className="tabular-nums" />
             </Field>
-            <Field label="Ngân sách/khách (VND)">
+            <Field label={t("Ngân sách/khách (VND)")}>
               <Input type="number" min={0} value={form.ngan_sach_per_khach ?? ""} onChange={(e) => set("ngan_sach_per_khach", e.target.value ? parseInt(e.target.value) : null)} placeholder="10,000,000" className="tabular-nums" />
             </Field>
           </div>
 
-          <Field label="Phong cách">
+          <Field label={t("Phong cách")}>
             <SearchableSelect options={PHONG_CACH_OPTS.map((o) => ({ value: o.value, label: t(o.label) }))} value={form.phong_cach ?? ""} onChange={(v) => set("phong_cach", v || null)} placeholder={t("Chọn phong cách")} />
           </Field>
 
-          <Field label="Yêu cầu đặc biệt">
+          <Field label={t("Yêu cầu đặc biệt")}>
             <Textarea value={form.yeu_cau_dac_biet ?? ""} onChange={(e) => set("yeu_cau_dac_biet", e.target.value)} rows={2} className="resize-none" />
           </Field>
 
           {/* Phân công */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Sales phụ trách">
+            <Field label={t("Sales phụ trách")}>
               <SearchableSelect options={userOptions} value={form.assigned_to ?? ""} onChange={(v) => set("assigned_to", v || null)} placeholder={t("Chọn sales")} />
             </Field>
-            <Field label="Follow-up tiếp">
+            <Field label={t("Follow-up tiếp")}>
               <DatePicker value={form.ngay_follow_up_tiep ?? ""} onChange={(v) => set("ngay_follow_up_tiep", v)} className="w-full h-9" />
             </Field>
           </div>

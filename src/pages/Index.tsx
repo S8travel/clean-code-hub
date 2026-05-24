@@ -295,7 +295,7 @@ export default function Index() {
       setDrawerOpen(false);
       setEditingDoan(null);
     } catch {
-      toast.error("Có lỗi xảy ra");
+      toast.error(t("Có lỗi xảy ra"));
     }
   };
 
@@ -416,10 +416,10 @@ export default function Index() {
       const name = deletingDoan.ten_doan;
       await deleteDoan.mutateAsync(deletingDoan.id);
       logActivity.mutate({ action: "xoa", table_name: "doan", record_id: deletingDoan.id, mo_ta: `Xóa đoàn ${name}` });
-      toast.success("Đã xoá đoàn");
+      toast.success(t("Đã xoá đoàn"));
       setDeletingDoan(null);
     } catch {
-      toast.error("Xoá thất bại");
+      toast.error(t("Xoá thất bại"));
     }
   };
 
@@ -572,7 +572,7 @@ export default function Index() {
 
           <Select value={diaDiemFilter} onValueChange={setDiaDiemFilter}>
             <SelectTrigger className="h-9 text-xs rounded-lg w-[140px]">
-              <span>{diaDiemFilter === "all" ? t("Tất cả ĐĐ") : diaDiemList?.find((d) => d.id.toString() === diaDiemFilter)?.ten ?? "Địa điểm"}</span>
+              <span>{diaDiemFilter === "all" ? t("Tất cả ĐĐ") : diaDiemList?.find((d) => d.id.toString() === diaDiemFilter)?.ten ?? t("Địa điểm")}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("Tất cả ĐĐ")}</SelectItem>
