@@ -34,6 +34,7 @@ import { useLeadDiemDen, useReplaceDiemDen, type LeadDiemDen } from "@/hooks/use
 import { useUserRoles } from "@/hooks/use-doan";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   leadId: number | null;
@@ -75,6 +76,7 @@ type Tab = "info" | "activity" | "tasks";
 type LeadLocalState = Record<string, string | number>;
 
 export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
+  useTranslate();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: lead, isLoading } = useLead(leadId);
@@ -120,12 +122,12 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
         doanData,
         currentUserId: user?.user_id ?? null,
       });
-      toast.success(`🎉 Đã tạo đoàn #${newDoan.id}`);
+      toast.success(`🎉 ${t("Đã tạo đoàn")} #${newDoan.id}`);
       setConfirmConvertOpen(false);
       onClose();
       navigate(`/doan/${newDoan.id}`);
     } catch (e: unknown) {
-      toast.error(errMsg(e) || "Lỗi khi tạo đoàn");
+      toast.error(errMsg(e) || t("Lỗi khi tạo đoàn"));
     }
   };
 
@@ -171,7 +173,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
     const val = value === "" ? null : value;
     if (val === cur || (val === null && cur === null)) return;
     updateLead.mutate({ id: lead.id, [key]: val }, {
-      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi khi lưu"),
+      onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi khi lưu")),
     });
   }, [lead, updateLead]);
 
@@ -185,7 +187,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const saveDiemDen = (list: string[]) => {
     if (!leadId) return;
     replaceDiemDen.mutate({ leadId, diemDenList: list }, {
-      onError: () => toast.error("Lỗi khi lưu điểm đến"),
+      onError: () => toast.error(t("Lỗi khi lưu điểm đến")),
     });
   };
 
@@ -203,8 +205,8 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
       ket_qua: activityKq || null,
       created_by: user?.user_id,
     }, {
-      onSuccess: () => { setActivityNd(""); setActivityKq(""); toast.success("Đã lưu hoạt động"); },
-      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi"),
+      onSuccess: () => { setActivityNd(""); setActivityKq(""); toast.success(t("Đã lưu hoạt động")); },
+      onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi")),
     });
   };
 
@@ -222,7 +224,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
       created_by: user?.user_id,
     }, {
       onSuccess: () => { setTaskMoTa(""); setTaskDeadline(""); },
-      onError: (e: unknown) => toast.error(errMsg(e) || "Lỗi"),
+      onError: (e: unknown) => toast.error(errMsg(e) || t("Lỗi")),
     });
   };
 
@@ -272,7 +274,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                     <a href={`tel:${lead.so_dien_thoai}`}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 text-xs font-medium transition-colors"
                       onClick={(e) => e.stopPropagation()}>
-                      <Phone className="h-3.5 w-3.5" /> Gọi
+                      <Phone className="h-3.5 w-3.5" /> {t("Gọi")}
                     </a>
                   )}
                   {lead.so_dien_thoai && (
@@ -305,12 +307,12 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                         disabled={convertLead.isPending}
                       >
                         <Trophy className="h-3.5 w-3.5" />
-                        Chốt deal
+                        {t("Chốt deal")}
                       </Button>
                     )}
                     {onEdit && (
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onEdit(lead)}>
-                        Sửa
+                        {t("Sửa")}
                       </Button>
                     )}
                   </div>
@@ -341,10 +343,10 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                     onValueChange={(v) => updateLead.mutate({ id: lead.id, assigned_to: v === "_none" ? null : v })}
                   >
                     <SelectTrigger className="h-7 w-auto text-xs max-w-[140px]">
-                      <SelectValue placeholder="Chưa phân công" />
+                      <SelectValue placeholder={t("Chưa phân công")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_none" className="text-xs">— Chưa phân công —</SelectItem>
+                      <SelectItem value="_none" className="text-xs">{t("— Chưa phân công —")}</SelectItem>
                       {userOptions.map((u) => (
                         <SelectItem key={u.value} value={u.value} className="text-xs">{u.label}</SelectItem>
                       ))}
@@ -380,12 +382,12 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
             {/* Tabs */}
             <div className="shrink-0 flex border-b">
-              {([["info", "📋 Thông tin"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([t, l]) => (
-                <button key={t} onClick={() => setActiveTab(t)}
+              {([["info", "📋 Thông tin"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([tab, l]) => (
+                <button key={tab} onClick={() => setActiveTab(tab)}
                   className={cn("flex-1 py-2.5 text-xs font-medium transition-colors",
-                    activeTab === t ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+                    activeTab === tab ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
                   )}>
-                  {l}
+                  {t(l)}
                 </button>
               ))}
             </div>
@@ -397,13 +399,13 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
               {activeTab === "info" && lead && (
                 <div className="p-5 space-y-5">
                   {/* Liên lạc */}
-                  <Section title="Liên lạc">
-                    <Field label="Họ tên">
+                  <Section title={t("Liên lạc")}>
+                    <Field label={t("Họ tên")}>
                       <Input value={local.ho_ten ?? ""} onChange={(e) => setL("ho_ten", e.target.value)}
                         onBlur={() => saveField("ho_ten", local.ho_ten)} />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="SĐT">
+                      <Field label={t("SĐT")}>
                         <Input value={local.so_dien_thoai ?? ""} onChange={(e) => setL("so_dien_thoai", e.target.value)}
                           onBlur={() => saveField("so_dien_thoai", local.so_dien_thoai)} />
                       </Field>
@@ -417,21 +419,21 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                         onBlur={() => saveField("facebook_url", local.facebook_url)}
                         placeholder="https://facebook.com/... hoặc https://m.me/..." />
                     </Field>
-                    <Field label="Nguồn">
+                    <Field label={t("Nguồn")}>
                       <SearchableSelect options={LEAD_NGUON_OPTS} value={lead.nguon ?? ""}
-                        onChange={(v) => updateLead.mutate({ id: lead.id, nguon: v })} placeholder="Chọn nguồn" />
+                        onChange={(v) => updateLead.mutate({ id: lead.id, nguon: v })} placeholder={t("Chọn nguồn")} />
                     </Field>
                   </Section>
 
                   {/* Tổ chức (B2B) */}
                   {isB2B && (
-                    <Section title="Tổ chức">
+                    <Section title={t("Tổ chức")}>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Tên tổ chức">
+                        <Field label={t("Tên tổ chức")}>
                           <Input value={local.ten_to_chuc ?? ""} onChange={(e) => setL("ten_to_chuc", e.target.value)}
                             onBlur={() => saveField("ten_to_chuc", local.ten_to_chuc)} />
                         </Field>
-                        <Field label="Chức vụ">
+                        <Field label={t("Chức vụ")}>
                           <Input value={local.chuc_vu ?? ""} onChange={(e) => setL("chuc_vu", e.target.value)}
                             onBlur={() => saveField("chuc_vu", local.chuc_vu)} />
                         </Field>
@@ -440,8 +442,8 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                   )}
 
                   {/* Nhu cầu */}
-                  <Section title="Nhu cầu">
-                    <Field label="Loại khách">
+                  <Section title={t("Nhu cầu")}>
+                    <Field label={t("Loại khách")}>
                       <div className="flex flex-wrap gap-1.5">
                         {LEAD_LOAI_KHACH_OPTS.map((o) => (
                           <button key={o.value} type="button"
@@ -455,22 +457,22 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       </div>
                     </Field>
 
-                    <Field label="Điểm đến">
+                    <Field label={t("Điểm đến")}>
                       <div className="flex gap-2">
                         <Input value={diemDenInput} onChange={(e) => setDiemDenInput(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === ",") {
                               e.preventDefault();
-                              const t = diemDenInput.trim();
-                              if (t && !localDiemDen.includes(t)) {
-                                const next = [...localDiemDen, t];
+                              const dd = diemDenInput.trim();
+                              if (dd && !localDiemDen.includes(dd)) {
+                                const next = [...localDiemDen, dd];
                                 setLocalDiemDen(next);
                                 saveDiemDen(next);
                               }
                               setDiemDenInput("");
                             }
                           }}
-                          placeholder="Nhật Bản... Enter để thêm" className="flex-1 text-xs h-8" />
+                          placeholder={t("Nhật Bản... Enter để thêm")} className="flex-1 text-xs h-8" />
                       </div>
                       {localDiemDen.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
@@ -489,13 +491,13 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                     </Field>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Người lớn">
+                      <Field label={t("Người lớn")}>
                         <Input type="number" min={0} value={local.so_nguoi_lon ?? 1}
                           onChange={(e) => setL("so_nguoi_lon", parseInt(e.target.value) || 0)}
                           onBlur={() => saveField("so_nguoi_lon", local.so_nguoi_lon)}
                           className="tabular-nums text-xs h-8" />
                       </Field>
-                      <Field label="Trẻ em">
+                      <Field label={t("Trẻ em")}>
                         <Input type="number" min={0} value={local.so_nguoi_em ?? 0}
                           onChange={(e) => setL("so_nguoi_em", parseInt(e.target.value) || 0)}
                           onBlur={() => saveField("so_nguoi_em", local.so_nguoi_em)}
@@ -504,12 +506,12 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Ngày đi">
+                      <Field label={t("Ngày đi")}>
                         <DatePicker value={String(local.ngay_di_du_kien ?? "")}
                           onChange={(v) => { setL("ngay_di_du_kien", v); saveField("ngay_di_du_kien", v); }}
                           className="w-full h-8 text-xs" />
                       </Field>
-                      <Field label="Ngày về">
+                      <Field label={t("Ngày về")}>
                         <DatePicker value={String(local.ngay_ve_du_kien ?? "")}
                           onChange={(v) => { setL("ngay_ve_du_kien", v); saveField("ngay_ve_du_kien", v); }}
                           className="w-full h-8 text-xs" />
@@ -517,13 +519,13 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Số ngày">
+                      <Field label={t("Số ngày")}>
                         <Input type="number" min={1} value={local.so_ngay ?? ""}
                           onChange={(e) => setL("so_ngay", e.target.value)}
                           onBlur={() => saveField("so_ngay", local.so_ngay ? parseInt(String(local.so_ngay)) : null)}
                           className="tabular-nums text-xs h-8" placeholder="5" />
                       </Field>
-                      <Field label="Ngân sách/khách">
+                      <Field label={t("Ngân sách/khách")}>
                         <Input type="number" min={0} value={local.ngan_sach_per_khach ?? ""}
                           onChange={(e) => setL("ngan_sach_per_khach", e.target.value)}
                           onBlur={() => saveField("ngan_sach_per_khach", local.ngan_sach_per_khach ? parseInt(String(local.ngan_sach_per_khach)) : null)}
@@ -531,14 +533,14 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       </Field>
                     </div>
 
-                    <Field label="Phong cách">
-                      <SearchableSelect options={[{ value: "", label: "— Chưa xác định —" }, ...LEAD_PHONG_CACH_OPTS]}
+                    <Field label={t("Phong cách")}>
+                      <SearchableSelect options={[{ value: "", label: t("— Chưa xác định —") }, ...LEAD_PHONG_CACH_OPTS]}
                         value={lead.phong_cach ?? ""}
                         onChange={(v) => updateLead.mutate({ id: lead.id, phong_cach: v || null })}
-                        placeholder="Chọn phong cách" />
+                        placeholder={t("Chọn phong cách")} />
                     </Field>
 
-                    <Field label="Yêu cầu đặc biệt">
+                    <Field label={t("Yêu cầu đặc biệt")}>
                       <Textarea value={local.yeu_cau_dac_biet ?? ""}
                         onChange={(e) => setL("yeu_cau_dac_biet", e.target.value)}
                         onBlur={() => saveField("yeu_cau_dac_biet", local.yeu_cau_dac_biet)}
@@ -547,21 +549,21 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                   </Section>
 
                   {/* Phân công */}
-                  <Section title="Phân công">
+                  <Section title={t("Phân công")}>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Ưu tiên">
+                      <Field label={t("Ưu tiên")}>
                         <SearchableSelect options={LEAD_UU_TIEN_OPTS}
                           value={lead.uu_tien ?? "trung_binh"}
                           onChange={(v) => updateLead.mutate({ id: lead.id, uu_tien: v })}
-                          placeholder="Chọn ưu tiên" />
+                          placeholder={t("Chọn ưu tiên")} />
                       </Field>
-                      <Field label="Follow-up tiếp">
+                      <Field label={t("Follow-up tiếp")}>
                         <DatePicker value={String(local.ngay_follow_up_tiep ?? "")}
                           onChange={(v) => { setL("ngay_follow_up_tiep", v); saveField("ngay_follow_up_tiep", v); }}
                           className="w-full h-8 text-xs" />
                       </Field>
                     </div>
-                    <Field label="Ghi chú">
+                    <Field label={t("Ghi chú")}>
                       <Textarea value={local.ghi_chu ?? ""}
                         onChange={(e) => setL("ghi_chu", e.target.value)}
                         onBlur={() => saveField("ghi_chu", local.ghi_chu)}
@@ -586,7 +588,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       {activityLoai === "goi_dien" && (
                         <select value={activityKq} onChange={(e) => setActivityKq(e.target.value)}
                           className="text-xs border rounded-md px-2 py-1 bg-background">
-                          <option value="">Kết quả...</option>
+                          <option value="">{t("Kết quả...")}</option>
                           {LEAD_KET_QUA_OPTS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                           ))}
@@ -594,16 +596,16 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       )}
                     </div>
                     <Textarea value={activityNd} onChange={(e) => setActivityNd(e.target.value)}
-                      placeholder="Nội dung tương tác..." rows={2} className="resize-none text-xs" />
+                      placeholder={t("Nội dung tương tác...")} rows={2} className="resize-none text-xs" />
                     <Button size="sm" className="w-full" onClick={submitActivity} disabled={!activityNd.trim() || createActivity.isPending}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Lưu hoạt động
+                      <Plus className="h-3.5 w-3.5 mr-1" /> {t("Lưu hoạt động")}
                     </Button>
                   </div>
 
                   {/* Timeline */}
                   <div className="space-y-3">
                     {activities.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-6">Chưa có hoạt động nào</p>
+                      <p className="text-xs text-muted-foreground text-center py-6">{t("Chưa có hoạt động nào")}</p>
                     )}
                     {activities.map((act) => (
                       <div key={act.id} className="flex gap-3">
@@ -624,7 +626,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                           )}
                           {act.ket_qua && (
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Kết quả: {LEAD_KET_QUA_OPTS.find((o) => o.value === act.ket_qua)?.label ?? act.ket_qua}
+                              {t("Kết quả:")} {LEAD_KET_QUA_OPTS.find((o) => o.value === act.ket_qua)?.label ?? act.ket_qua}
                             </p>
                           )}
                           <p className="text-[10px] text-muted-foreground mt-1">
@@ -644,7 +646,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                   <div className="rounded-lg border p-3 space-y-2">
                     <Input value={taskMoTa} onChange={(e) => setTaskMoTa(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && submitTask()}
-                      placeholder="Mô tả công việc... Enter để thêm" className="text-xs" />
+                      placeholder={t("Mô tả công việc... Enter để thêm")} className="text-xs" />
                     <div className="flex gap-2 items-center">
                       <DatePicker value={taskDeadline} onChange={setTaskDeadline} className="flex-1 h-8 text-xs" />
                       <Button size="sm" onClick={submitTask} disabled={!taskMoTa.trim() || createTask.isPending}>
@@ -656,7 +658,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                   {/* Task list */}
                   <div className="space-y-1.5">
                     {tasks.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-6">Không có task nào</p>
+                      <p className="text-xs text-muted-foreground text-center py-6">{t("Không có task nào")}</p>
                     )}
                     {tasks.map((task) => {
                       const deadlineOverdue = task.deadline && !task.hoan_thanh &&
@@ -685,7 +687,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                                 deadlineOverdue ? "text-red-500 font-medium" : "text-muted-foreground"
                               )}>
                                 {format(new Date(task.deadline), "dd/MM/yyyy")}
-                                {deadlineOverdue && " · Quá hạn"}
+                                {deadlineOverdue && ` · ${t("Quá hạn")}`}
                               </p>
                             )}
                           </div>
@@ -707,20 +709,20 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
           <AlertDialog open={confirmConvertOpen} onOpenChange={setConfirmConvertOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>🎉 Chốt deal — Tạo đoàn?</AlertDialogTitle>
+                <AlertDialogTitle>{t("🎉 Chốt deal — Tạo đoàn?")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Đoàn sẽ được tạo với thông tin từ lead "{lead?.ho_ten}".
-                  Bạn sẽ được chuyển sang trang chi tiết đoàn để bổ sung agent / địa điểm / lịch trình.
+                  {t("Đoàn sẽ được tạo với thông tin từ lead")} "{lead?.ho_ten}".
+                  {" "}{t("Bạn sẽ được chuyển sang trang chi tiết đoàn để bổ sung agent / địa điểm / lịch trình.")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel disabled={convertLead.isPending}>Hủy</AlertDialogCancel>
+                <AlertDialogCancel disabled={convertLead.isPending}>{t("Hủy")}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={(e) => { e.preventDefault(); handleChotDeal(); }}
                   disabled={convertLead.isPending}
                   className="bg-green-600 hover:bg-green-700"
                 >
-                  {convertLead.isPending ? "Đang tạo..." : "Tạo đoàn ngay"}
+                  {convertLead.isPending ? t("Đang tạo...") : t("Tạo đoàn ngay")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
