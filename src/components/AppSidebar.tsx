@@ -155,7 +155,7 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
     <button
       type="button"
       onClick={translated ? handleRestore : handleTranslate}
-      title={translated ? "Khôi phục tiếng Việt" : "Dịch sang tiếng Trung (phồn thể)"}
+      title={translated ? t("Khôi phục tiếng Việt") : t("Dịch sang tiếng Trung (phồn thể)")}
       className={`
         notranslate flex items-center justify-center rounded-md border text-[11px] font-semibold
         transition-colors h-6 shrink-0
