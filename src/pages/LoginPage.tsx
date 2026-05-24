@@ -7,8 +7,10 @@ import { Label } from "@/components/ui/label";
 import { externalSupabase } from "@/lib/supabase-external";
 import { setCurrentSession } from "@/hooks/use-current-user";
 import { toast } from "sonner";
+import { t, useTranslate } from "@/lib/i18n";
 
 export default function LoginPage() {
+  useTranslate();
   const navigate = useNavigate();
   const [inputEmail, setInputEmail] = useState("");
   const [inputPassword, setInputPassword] = useState("");
@@ -25,7 +27,7 @@ export default function LoginPage() {
         password: inputPassword,
       });
       if (error) {
-        toast.error("Email hoặc mật khẩu không đúng");
+        toast.error(t("Email hoặc mật khẩu không đúng"));
         setInputPassword("");
         return;
       }
@@ -48,7 +50,7 @@ export default function LoginPage() {
         />
         <div className="text-center text-white space-y-2">
           <h1 className="text-3xl font-bold tracking-wide">S8 TRAVEL</h1>
-          <p className="text-blue-200 text-sm">Hệ thống quản lý nội bộ</p>
+          <p className="text-blue-200 text-sm">{t("Hệ thống quản lý nội bộ")}</p>
         </div>
       </div>
 
@@ -66,8 +68,8 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-1">
-            <h2 className="text-2xl font-bold">Đăng nhập</h2>
-            <p className="text-sm text-muted-foreground">Nhập thông tin tài khoản để truy cập</p>
+            <h2 className="text-2xl font-bold">{t("Đăng nhập")}</h2>
+            <p className="text-sm text-muted-foreground">{t("Nhập thông tin tài khoản để truy cập")}</p>
           </div>
 
           <div className="space-y-4">
@@ -87,12 +89,12 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password">Mật khẩu</Label>
+              <Label htmlFor="password">{t("Mật khẩu")}</Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Nhập mật khẩu"
+                  placeholder={t("Nhập mật khẩu")}
                   value={inputPassword}
                   onChange={(e) => setInputPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}
@@ -115,12 +117,12 @@ export default function LoginPage() {
               onClick={handleLogin}
               disabled={!inputEmail.trim() || !inputPassword || isPending}
             >
-              {isPending ? "Đang kiểm tra..." : "Đăng nhập"}
+              {isPending ? t("Đang kiểm tra...") : t("Đăng nhập")}
             </Button>
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Liên hệ Admin nếu bạn chưa có tài khoản
+            {t("Liên hệ Admin nếu bạn chưa có tài khoản")}
           </p>
         </div>
       </div>

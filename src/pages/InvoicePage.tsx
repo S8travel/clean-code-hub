@@ -43,6 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { FileText, Upload, X, ReceiptText, MapPin, Users, TrendingUp, CheckCircle2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { t, useTranslate } from "@/lib/i18n";
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -159,7 +160,7 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
         className="gap-1.5"
       >
         <FileText className="h-3.5 w-3.5" />
-        Xem / Xuất Word
+        {t("Xem / Xuất Word")}
       </Button>
       <DieuTourWordPreviewModal
         open={showPreview}
@@ -200,10 +201,10 @@ function InvoiceDrawer({
             <section className="mb-6">
               <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                 <ReceiptText className="h-4 w-4 text-amber-600" />
-                Phát sinh giá
+                {t("Phát sinh giá")}
               </h3>
               {giaLogs.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">Không có phát sinh giá.</p>
+                <p className="text-xs text-muted-foreground italic">{t("Không có phát sinh giá.")}</p>
               ) : (
                 <div className="space-y-2">
                   {giaLogs.map((log) => (
@@ -221,7 +222,7 @@ function InvoiceDrawer({
                             {log.is_resolved && (
                               <Badge variant="outline" className="text-[10px] text-green-700 border-green-300 py-0 gap-0.5">
                                 <CheckCircle2 className="h-3 w-3" />
-                                {log.resolved_by_ten ?? "Đã xác nhận"}
+                                {log.resolved_by_ten ?? t("Đã xác nhận")}
                               </Badge>
                             )}
                           </div>
@@ -249,7 +250,7 @@ function InvoiceDrawer({
                             })}
                           >
                             <Circle className="h-3 w-3 mr-1" />
-                            Xác nhận
+                            {t("Xác nhận")}
                           </Button>
                         )}
                       </div>
@@ -263,7 +264,7 @@ function InvoiceDrawer({
             <section>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
                 <FileText className="h-4 w-4 text-blue-600" />
-                Lịch trình điều tour
+                {t("Lịch trình điều tour")}
               </h3>
               <InvoiceDieuTourSection doan={doan} />
             </section>
@@ -288,7 +289,7 @@ function TaiLieuChip({
     return (
       <span
         className="text-xs shrink-0 rounded px-2 py-1 bg-muted/60 text-muted-foreground/60"
-        title={`${title} — chưa có`}
+        title={`${title} — ${t("chưa có")}`}
       >
         {label}
       </span>
@@ -304,7 +305,7 @@ function TaiLieuChip({
         "text-xs shrink-0 rounded px-2 py-1 font-medium transition-colors cursor-pointer",
         cls,
       )}
-      title={`${title} — ${taiLieu.file_name || "Mở file"}`}
+      title={`${title} — ${taiLieu.file_name || t("Mở file")}`}
     >
       {label}
     </a>
@@ -354,7 +355,7 @@ function InvoiceDoanCard({
     setCurrency(val);
     upsert.mutate(
       { doan_id: doan.id, currency: val },
-      { onError: () => toast.error("Lỗi lưu") },
+      { onError: () => toast.error(t("Lỗi lưu")) },
     );
   };
 
@@ -366,8 +367,8 @@ function InvoiceDoanCard({
       upsert.mutate(
         { doan_id: doan.id, so_tien_thu: num, currency },
         {
-          onSuccess: () => toast.success("Đã lưu số tiền thu"),
-          onError: () => toast.error("Lỗi lưu số tiền thu"),
+          onSuccess: () => toast.success(t("Đã lưu số tiền thu")),
+          onError: () => toast.error(t("Lỗi lưu số tiền thu")),
         },
       );
     }
@@ -380,9 +381,9 @@ function InvoiceDoanCard({
     for (const file of files) {
       try {
         await upload.mutateAsync({ doanId: doan.id, file, currentFiles });
-        toast.success(`Đã upload ${file.name}`);
+        toast.success(`${t("Đã upload")} ${file.name}`);
       } catch {
-        toast.error(`Lỗi upload ${file.name}`);
+        toast.error(`${t("Lỗi upload")} ${file.name}`);
       }
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -393,8 +394,8 @@ function InvoiceDoanCard({
     deleteFile.mutate(
       { doanId: doan.id, fileUrl, currentFiles },
       {
-        onSuccess: () => toast.success("Đã xóa file"),
-        onError: () => toast.error("Lỗi xóa file"),
+        onSuccess: () => toast.success(t("Đã xóa file")),
+        onError: () => toast.error(t("Lỗi xóa file")),
       },
     );
   };
@@ -406,10 +407,10 @@ function InvoiceDoanCard({
     const tl = doan.so_khach_tl ?? 0;
     const total = lon + em1 + em2 + tl || doan.so_khach || 0;
     const parts: string[] = [];
-    if (lon > 0) parts.push(`${lon} NL`);
-    if (em1 > 0) parts.push(`${em1} E1`);
-    if (em2 > 0) parts.push(`${em2} E2`);
-    if (tl > 0) parts.push(`${tl} TL`);
+    if (lon > 0) parts.push(`${lon} ${t("NL")}`);
+    if (em1 > 0) parts.push(`${em1} ${t("E1")}`);
+    if (em2 > 0) parts.push(`${em2} ${t("E2")}`);
+    if (tl > 0) parts.push(`${tl} ${t("TL")}`);
     return parts.length > 0 ? `${total} (${parts.join(" + ")})` : `${total ?? 0}`;
   }, [doan]);
 
@@ -433,12 +434,12 @@ function InvoiceDoanCard({
                 doan.trang_thai === "huy" && "text-red-700 border-red-300",
               )}
             >
-              {TRANG_THAI_LABEL[doan.trang_thai] ?? doan.trang_thai}
+              {t(TRANG_THAI_LABEL[doan.trang_thai] ?? doan.trang_thai)}
             </Badge>
           )}
           {/* Báo giá + Hợp đồng — auto-link từ tab Tài liệu trong DoanDetail */}
-          <TaiLieuChip taiLieu={taiLieu?.bao_gia ?? null}  label="Báo giá"  title="Báo giá"  cls="bg-blue-100 text-blue-700 hover:bg-blue-200" />
-          <TaiLieuChip taiLieu={taiLieu?.hop_dong ?? null} label="Hợp đồng" title="Hợp đồng" cls="bg-emerald-100 text-emerald-700 hover:bg-emerald-200" />
+          <TaiLieuChip taiLieu={taiLieu?.bao_gia ?? null}  label={t("Báo giá")}  title={t("Báo giá")}  cls="bg-blue-100 text-blue-700 hover:bg-blue-200" />
+          <TaiLieuChip taiLieu={taiLieu?.hop_dong ?? null} label={t("Hợp đồng")} title={t("Hợp đồng")} cls="bg-emerald-100 text-emerald-700 hover:bg-emerald-200" />
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span>{doan.agents?.ten ?? "—"}</span>
@@ -459,13 +460,13 @@ function InvoiceDoanCard({
 
       {/* Chi phí TT */}
       <div className="shrink-0 text-right w-36">
-        <div className="text-[10px] text-muted-foreground">Chi phí TT</div>
-        <div className="text-sm font-semibold text-blue-700">{fmtVND(chiPhiThucTe)} đ</div>
+        <div className="text-[10px] text-muted-foreground">{t("Chi phí TT")}</div>
+        <div className="text-sm font-semibold text-blue-700">{fmtVND(chiPhiThucTe)} {t("đ")}</div>
       </div>
 
       {/* Số tiền thu + ngoại tệ */}
       <div className="shrink-0 w-60">
-        <div className="text-[10px] text-muted-foreground mb-0.5">Số tiền thu</div>
+        <div className="text-[10px] text-muted-foreground mb-0.5">{t("Số tiền thu")}</div>
         {invLoading ? (
           <Skeleton className="h-8 w-full" />
         ) : (
@@ -482,7 +483,7 @@ function InvoiceDoanCard({
             </Select>
             <Input
               className="h-8 text-sm flex-1 min-w-0"
-              placeholder="Số tiền..."
+              placeholder={t("Số tiền...")}
               value={isFocused ? rawValue : rawValue ? fmtVND(Number(rawValue)) : ""}
               onFocus={() => setIsFocused(true)}
               onChange={handleChange}
@@ -533,7 +534,7 @@ function InvoiceDoanCard({
           disabled={upload.isPending}
         >
           <Upload className="h-3 w-3" />
-          {upload.isPending ? "Đang upload..." : "Upload"}
+          {upload.isPending ? t("Đang upload...") : t("Upload")}
         </Button>
       </div>
     </div>
@@ -543,6 +544,7 @@ function InvoiceDoanCard({
 // ── InvoicePage ───────────────────────────────────────────────────────────────
 
 export default function InvoicePage() {
+  useTranslate();
   const canView = useRoleAtLeast("giam_doc");
   const { user } = useAuth();
 
@@ -618,10 +620,10 @@ export default function InvoicePage() {
       {/* Header */}
       <div className="flex items-center gap-2 flex-wrap">
         <TrendingUp className="h-5 w-5 text-blue-600 shrink-0" />
-        <h1 className="text-lg font-semibold">Đối soát chi phí</h1>
+        <h1 className="text-lg font-semibold">{t("Đối soát chi phí")}</h1>
         {pendingCount > 0 && (
           <Badge variant="outline" className="text-amber-700 border-amber-300 text-xs">
-            {pendingCount} chưa có số tiền thu
+            {pendingCount} {t("chưa có số tiền thu")}
           </Badge>
         )}
       </div>
@@ -630,10 +632,10 @@ export default function InvoicePage() {
       <div className="flex flex-wrap items-center gap-2">
         <Select value={agentFilter} onValueChange={setAgentFilter}>
           <SelectTrigger className="w-40 h-8 text-xs">
-            <span>{agentFilter === "all" ? "Tất cả agent" : agents.find((a) => String(a.id) === agentFilter)?.ten ?? "Agent"}</span>
+            <span>{agentFilter === "all" ? t("Tất cả agent") : agents.find((a) => String(a.id) === agentFilter)?.ten ?? t("Agent")}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tất cả agent</SelectItem>
+            <SelectItem value="all">{t("Tất cả agent")}</SelectItem>
             {agents.map((a) => (
               <SelectItem key={a.id} value={String(a.id)}>
                 {a.ten}
@@ -644,10 +646,10 @@ export default function InvoicePage() {
 
         <Select value={diadiemFilter} onValueChange={setDiadiemFilter}>
           <SelectTrigger className="w-40 h-8 text-xs">
-            <span>{diadiemFilter === "all" ? "Tất cả địa điểm" : diaDiems.find((d) => String(d.id) === diadiemFilter)?.ten ?? "Địa điểm"}</span>
+            <span>{diadiemFilter === "all" ? t("Tất cả địa điểm") : diaDiems.find((d) => String(d.id) === diadiemFilter)?.ten ?? t("Địa điểm")}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tất cả địa điểm</SelectItem>
+            <SelectItem value="all">{t("Tất cả địa điểm")}</SelectItem>
             {diaDiems.map((d) => (
               <SelectItem key={d.id} value={String(d.id)}>
                 {d.ten}
@@ -657,7 +659,7 @@ export default function InvoicePage() {
         </Select>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Ngày về</span>
+          <span className="text-xs text-muted-foreground">{t("Ngày về")}</span>
           <DatePicker value={fromDate} onChange={setFromDate} className="h-8 text-xs w-36" />
           <span className="text-xs text-muted-foreground">—</span>
           <DatePicker value={toDate} onChange={setToDate} className="h-8 text-xs w-36" />
@@ -675,7 +677,7 @@ export default function InvoicePage() {
               setToDate("");
             }}
           >
-            Xóa lọc
+            {t("Xóa lọc")}
           </Button>
         )}
       </div>
@@ -684,18 +686,18 @@ export default function InvoicePage() {
       <div className="flex flex-wrap gap-4 text-sm bg-muted/30 rounded-lg px-4 py-2.5">
         <span>
           <span className="font-semibold">{filteredDoan.length}</span>{" "}
-          <span className="text-muted-foreground">đoàn</span>
+          <span className="text-muted-foreground">{t("đoàn")}</span>
         </span>
         <span>
-          Tổng CPTT:{" "}
-          <span className="font-semibold text-blue-700">{fmtVND(totalCPTT)} đ</span>
+          {t("Tổng CPTT:")}{" "}
+          <span className="font-semibold text-blue-700">{fmtVND(totalCPTT)} {t("đ")}</span>
         </span>
         <span>
-          Đã thu VND:{" "}
-          <span className="font-semibold text-green-700">{fmtVND(totalDaThuVND)} đ</span>
+          {t("Đã thu VND:")}{" "}
+          <span className="font-semibold text-green-700">{fmtVND(totalDaThuVND)} {t("đ")}</span>
           {foreignCurrencyCount > 0 && (
             <span className="text-muted-foreground text-xs ml-1">
-              (+ {foreignCurrencyCount} ngoại tệ)
+              (+ {foreignCurrencyCount} {t("ngoại tệ")})
             </span>
           )}
         </span>
@@ -713,7 +715,7 @@ export default function InvoicePage() {
       {/* Empty state */}
       {!isLoading && filteredDoan.length === 0 && (
         <p className="text-sm text-muted-foreground italic text-center py-12">
-          Không có đoàn nào kết thúc phù hợp với bộ lọc.
+          {t("Không có đoàn nào kết thúc phù hợp với bộ lọc.")}
         </p>
       )}
 

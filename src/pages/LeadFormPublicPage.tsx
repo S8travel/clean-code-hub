@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { externalSupabase } from "@/lib/supabase-external";
 import { toast } from "sonner";
+import { t, useTranslate } from "@/lib/i18n";
 
 type LoaiTour = "outbound" | "noi_dia" | "inbound";
 
@@ -45,6 +46,7 @@ const LOAI_TOUR_OPTS: { value: LoaiTour; label: string }[] = [
 ];
 
 export default function LeadFormPublicPage() {
+  useTranslate();
   const [form, setForm] = useState<FormState>({ ...EMPTY });
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -78,7 +80,7 @@ export default function LeadFormPublicPage() {
         p_nguon:               "web_form",
       });
       if (error) {
-        toast.error("Không gửi được, vui lòng thử lại: " + error.message);
+        toast.error(t("Không gửi được, vui lòng thử lại") + ": " + error.message);
         return;
       }
       setDone(true);
@@ -92,16 +94,15 @@ export default function LeadFormPublicPage() {
       <div className="min-h-screen flex items-center justify-center bg-[#f5f8fc] p-6">
         <div className="w-full max-w-md bg-white rounded-xl shadow-md p-8 text-center space-y-4">
           <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto" />
-          <h1 className="text-2xl font-bold text-[#0a3d7c]">Cảm ơn anh/chị!</h1>
+          <h1 className="text-2xl font-bold text-[#0a3d7c]">{t("Cảm ơn anh/chị!")}</h1>
           <p className="text-sm text-muted-foreground">
-            Thông tin của anh/chị đã được ghi nhận. Bộ phận sales của S8 Travel sẽ
-            liên hệ trong vòng 24 giờ làm việc.
+            {t("Thông tin của anh/chị đã được ghi nhận. Bộ phận sales của S8 Travel sẽ liên hệ trong vòng 24 giờ làm việc.")}
           </p>
           <Button
             variant="outline"
             onClick={() => { setForm({ ...EMPTY }); setDone(false); }}
           >
-            Gửi yêu cầu khác
+            {t("Gửi yêu cầu khác")}
           </Button>
         </div>
       </div>
@@ -116,7 +117,7 @@ export default function LeadFormPublicPage() {
           <img src="/logo.jpg" alt="S8 Travel" className="w-12 h-12 rounded bg-white p-1 object-contain" />
           <div>
             <h1 className="text-xl font-bold">S8 TRAVEL</h1>
-            <p className="text-xs text-blue-200">Để lại thông tin — sales liên hệ trong 24h</p>
+            <p className="text-xs text-blue-200">{t("Để lại thông tin — sales liên hệ trong 24h")}</p>
           </div>
         </div>
       </header>
@@ -125,20 +126,20 @@ export default function LeadFormPublicPage() {
       <main className="flex-1 py-8 px-4 sm:px-8">
         <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md p-6 sm:p-8 space-y-5">
           <div>
-            <h2 className="text-lg font-bold text-[#0a3d7c]">Yêu cầu tư vấn tour</h2>
+            <h2 className="text-lg font-bold text-[#0a3d7c]">{t("Yêu cầu tư vấn tour")}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Vui lòng điền các trường có dấu <span className="text-red-500">*</span>
+              {t("Vui lòng điền các trường có dấu")} <span className="text-red-500">*</span>
             </p>
           </div>
 
           {/* Họ tên */}
           <div className="space-y-1.5">
-            <Label htmlFor="ho_ten">Họ và tên <span className="text-red-500">*</span></Label>
+            <Label htmlFor="ho_ten">{t("Họ và tên")} <span className="text-red-500">*</span></Label>
             <Input
               id="ho_ten"
               value={form.ho_ten}
               onChange={(e) => set("ho_ten", e.target.value)}
-              placeholder="Nguyễn Văn A"
+              placeholder={t("Nguyễn Văn A")}
               disabled={submitting}
             />
           </div>
@@ -146,7 +147,7 @@ export default function LeadFormPublicPage() {
           {/* SDT + Email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="sdt">Số điện thoại <span className="text-red-500">*</span></Label>
+              <Label htmlFor="sdt">{t("Số điện thoại")} <span className="text-red-500">*</span></Label>
               <Input
                 id="sdt"
                 type="tel"
@@ -169,12 +170,12 @@ export default function LeadFormPublicPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
-            Cần ít nhất số điện thoại hoặc email để sales liên hệ.
+            {t("Cần ít nhất số điện thoại hoặc email để sales liên hệ.")}
           </p>
 
           {/* Loại tour */}
           <div className="space-y-1.5">
-            <Label>Loại tour quan tâm <span className="text-red-500">*</span></Label>
+            <Label>{t("Loại tour quan tâm")} <span className="text-red-500">*</span></Label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {LOAI_TOUR_OPTS.map((o) => (
                 <button
@@ -189,7 +190,7 @@ export default function LeadFormPublicPage() {
                       : "bg-white text-slate-700 hover:bg-slate-50")
                   }
                 >
-                  {o.label}
+                  {t(o.label)}
                 </button>
               ))}
             </div>
@@ -197,12 +198,12 @@ export default function LeadFormPublicPage() {
 
           {/* Điểm đến */}
           <div className="space-y-1.5">
-            <Label htmlFor="diem_den">Điểm đến muốn đi</Label>
+            <Label htmlFor="diem_den">{t("Điểm đến muốn đi")}</Label>
             <Input
               id="diem_den"
               value={form.diem_den}
               onChange={(e) => set("diem_den", e.target.value)}
-              placeholder="VD: Đài Loan, Phú Quốc, Nhật Bản..."
+              placeholder={t("VD: Đài Loan, Phú Quốc, Nhật Bản...")}
               disabled={submitting}
             />
           </div>
@@ -210,7 +211,7 @@ export default function LeadFormPublicPage() {
           {/* Số khách */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="nl">Số người lớn</Label>
+              <Label htmlFor="nl">{t("Số người lớn")}</Label>
               <Input
                 id="nl"
                 type="number"
@@ -221,7 +222,7 @@ export default function LeadFormPublicPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ne">Số trẻ em</Label>
+              <Label htmlFor="ne">{t("Số trẻ em")}</Label>
               <Input
                 id="ne"
                 type="number"
@@ -236,14 +237,14 @@ export default function LeadFormPublicPage() {
           {/* Ngày đi / về */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Ngày đi dự kiến</Label>
+              <Label>{t("Ngày đi dự kiến")}</Label>
               <DatePicker
                 value={form.ngay_di}
                 onChange={(v) => set("ngay_di", v)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Ngày về dự kiến</Label>
+              <Label>{t("Ngày về dự kiến")}</Label>
               <DatePicker
                 value={form.ngay_ve}
                 onChange={(v) => set("ngay_ve", v)}
@@ -253,7 +254,7 @@ export default function LeadFormPublicPage() {
 
           {/* Ngân sách */}
           <div className="space-y-1.5">
-            <Label htmlFor="ns">Ngân sách dự kiến / khách (VND)</Label>
+            <Label htmlFor="ns">{t("Ngân sách dự kiến / khách (VND)")}</Label>
             <Input
               id="ns"
               inputMode="numeric"
@@ -266,13 +267,13 @@ export default function LeadFormPublicPage() {
 
           {/* Ghi chú */}
           <div className="space-y-1.5">
-            <Label htmlFor="gc">Ghi chú / yêu cầu thêm</Label>
+            <Label htmlFor="gc">{t("Ghi chú / yêu cầu thêm")}</Label>
             <Textarea
               id="gc"
               rows={3}
               value={form.ghi_chu}
               onChange={(e) => set("ghi_chu", e.target.value)}
-              placeholder="VD: Thích biển, ăn chay, đi cùng người lớn tuổi..."
+              placeholder={t("VD: Thích biển, ăn chay, đi cùng người lớn tuổi...")}
               disabled={submitting}
             />
           </div>
@@ -282,17 +283,17 @@ export default function LeadFormPublicPage() {
             disabled={!canSubmit}
             className="w-full h-11 bg-[#0a3d7c] hover:bg-[#0a3d7c]/90 text-base font-semibold"
           >
-            {submitting ? "Đang gửi..." : "Gửi yêu cầu tư vấn"}
+            {submitting ? t("Đang gửi...") : t("Gửi yêu cầu tư vấn")}
           </Button>
 
           <p className="text-center text-[11px] text-muted-foreground">
-            Thông tin của anh/chị chỉ dùng nội bộ để sales liên hệ tư vấn.
+            {t("Thông tin của anh/chị chỉ dùng nội bộ để sales liên hệ tư vấn.")}
           </p>
         </div>
       </main>
 
       <footer className="text-center text-xs text-muted-foreground py-4">
-        © S8 Travel · Hệ thống quản lý khách hàng
+        © S8 Travel · {t("Hệ thống quản lý khách hàng")}
       </footer>
     </div>
   );

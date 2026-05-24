@@ -42,6 +42,7 @@ import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
+import { t, useTranslate } from "@/lib/i18n";
 
 function TabBadge({ count }: { count: number }) {
   if (count === 0) return null;
@@ -53,6 +54,7 @@ function TabBadge({ count }: { count: number }) {
 }
 
 export default function DoanDetail() {
+  useTranslate();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const doanId = Number(id);
@@ -270,7 +272,7 @@ export default function DoanDetail() {
           const x = result?.thucTeClearCount ?? 0;
           if (x > 0) {
             toast.warning(
-              `Đã reset điều chỉnh thanh_tien_thuc_te trên ${x} chi phí do thay đổi số khách/đơn giá.`,
+              `${t("Đã reset điều chỉnh thanh_tien_thuc_te trên")} ${x} ${t("chi phí do thay đổi số khách/đơn giá.")}`,
               { duration: 6000 }
             );
           }
@@ -288,7 +290,7 @@ export default function DoanDetail() {
         },
         onError: (err: unknown) => {
           setSaveStatus("error");
-          toast.error(errMsg(err) || "Lỗi khi lưu");
+          toast.error(errMsg(err) || t("Lỗi khi lưu"));
           // Restore-on-error safety net: reset pending flag để init useEffect
           // (line 144) re-sync `days` từ DB khi data refetch về. Tránh UI bị
           // stuck ở state đã edit nhưng save fail (vd: xóa cảnh điểm có DNTT).
@@ -456,9 +458,9 @@ export default function DoanDetail() {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
         <Button variant="ghost" size="sm" onClick={() => navigate("/doan")}>
-          <ArrowLeft className="h-4 w-4 mr-1.5" /> Danh sách đoàn
+          <ArrowLeft className="h-4 w-4 mr-1.5" /> {t("Danh sách đoàn")}
         </Button>
-        <p className="mt-8 text-center text-muted-foreground">Không tìm thấy đoàn.</p>
+        <p className="mt-8 text-center text-muted-foreground">{t("Không tìm thấy đoàn.")}</p>
       </div>
     );
   }
@@ -473,14 +475,14 @@ export default function DoanDetail() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Button variant="ghost" size="sm" onClick={() => navigate("/doan")}>
-                  <ArrowLeft className="h-4 w-4 mr-1.5" /> Danh sách đoàn
+                  <ArrowLeft className="h-4 w-4 mr-1.5" /> {t("Danh sách đoàn")}
                 </Button>
                 <span className="text-muted-foreground">/</span>
                 <span className="font-semibold">{doan.ten_doan}</span>
               </div>
               <div className="flex items-center gap-2">
                 {!canEdit && (
-                  <span className="text-xs text-muted-foreground border rounded px-2 py-1">Chỉ xem</span>
+                  <span className="text-xs text-muted-foreground border rounded px-2 py-1">{t("Chỉ xem")}</span>
                 )}
                 {canEdit && saveStatus !== "idle" && (
                   <span className={cn(
@@ -490,24 +492,24 @@ export default function DoanDetail() {
                     saveStatus === "saved" && "text-green-600",
                     saveStatus === "error" && "text-red-600"
                   )}>
-                    {saveStatus === "pending" && "Chờ lưu…"}
-                    {saveStatus === "saving" && "Đang lưu..."}
-                    {saveStatus === "saved" && "✓ Đã lưu"}
-                    {saveStatus === "error" && "Lỗi lưu"}
+                    {saveStatus === "pending" && t("Chờ lưu…")}
+                    {saveStatus === "saving" && t("Đang lưu...")}
+                    {saveStatus === "saved" && t("✓ Đã lưu")}
+                    {saveStatus === "error" && t("Lỗi lưu")}
                   </span>
                 )}
               </div>
             </div>
 
             <TabsList>
-              <TabsTrigger value="dieu-tour">Điều Tour</TabsTrigger>
-              <TabsTrigger value="booking-ks">Booking KS<TabBadge count={bookingKSBadgeCount} /></TabsTrigger>
-              <TabsTrigger value="menu">Booking NH<TabBadge count={bookingNHBadgeCount} /></TabsTrigger>
-              <TabsTrigger value="booking-visa-xe">Visa & Xe</TabsTrigger>
-              <TabsTrigger value="booking-dv">Booking DV</TabsTrigger>
-              <TabsTrigger value="chi-phi">Chi phí<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
-              <TabsTrigger value="tai-lieu">Tài liệu</TabsTrigger>
-              <TabsTrigger value="log">Log</TabsTrigger>
+              <TabsTrigger value="dieu-tour">{t("Điều Tour")}</TabsTrigger>
+              <TabsTrigger value="booking-ks">{t("Booking KS")}<TabBadge count={bookingKSBadgeCount} /></TabsTrigger>
+              <TabsTrigger value="menu">{t("Booking NH")}<TabBadge count={bookingNHBadgeCount} /></TabsTrigger>
+              <TabsTrigger value="booking-visa-xe">{t("Visa & Xe")}</TabsTrigger>
+              <TabsTrigger value="booking-dv">{t("Booking DV")}</TabsTrigger>
+              <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
+              <TabsTrigger value="tai-lieu">{t("Tài liệu")}</TabsTrigger>
+              <TabsTrigger value="log">{t("Log")}</TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -525,7 +527,7 @@ export default function DoanDetail() {
                 disabled={days.length === 0}
               >
                 <FileDown className="h-3.5 w-3.5" />
-                Xuất Word
+                {t("Xuất Word")}
               </Button>
             </div>
             <CompanyHeader />
@@ -579,11 +581,11 @@ export default function DoanDetail() {
               doanId={doanId}
             />
             <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-              <h3 className="text-sm font-semibold flex items-center gap-1.5">📝 Ghi chú điều tour</h3>
+              <h3 className="text-sm font-semibold flex items-center gap-1.5">{t("📝 Ghi chú điều tour")}</h3>
               <Textarea
                 value={ghiChuDieuTour}
                 onChange={(e) => handleSetGhiChuDieuTour(e.target.value)}
-                placeholder="Nhập ghi chú..."
+                placeholder={t("Nhập ghi chú...")}
                 rows={4}
                 className="resize-none text-sm"
               />

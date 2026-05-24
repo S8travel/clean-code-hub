@@ -44,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { errMsg } from "@/lib/error";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -88,7 +89,7 @@ function ApprovalCell({
     const ten = row.huy_boi ? (userMap.get(row.huy_boi) ?? "—") : null;
     return (
       <TableCell className="text-xs">
-        <div className="text-gray-600 font-medium leading-tight">✗ Đã hủy{ten ? ` · ${ten}` : ""}</div>
+        <div className="text-gray-600 font-medium leading-tight">{t("✗ Đã hủy")}{ten ? ` · ${ten}` : ""}</div>
         {row.huy_luc && (
           <div className="text-muted-foreground">{format(new Date(row.huy_luc), "dd/MM HH:mm")}</div>
         )}
@@ -113,7 +114,7 @@ function ApprovalCell({
       const ten = row.tu_choi_boi ? (userMap.get(row.tu_choi_boi) ?? "—") : "—";
       return (
         <TableCell className="text-xs">
-          <div className="text-red-600 font-medium leading-tight">✗ Từ chối · {ten}</div>
+          <div className="text-red-600 font-medium leading-tight">{t("✗ Từ chối")} · {ten}</div>
           {row.tu_choi_luc && (
             <div className="text-muted-foreground">{format(new Date(row.tu_choi_luc), "dd/MM HH:mm")}</div>
           )}
@@ -122,7 +123,7 @@ function ApprovalCell({
     }
     // Legacy: ĐNTT cũ tu_choi không có tu_choi_cap → hiện ở cấp đầu chưa duyệt
     if (row.tu_choi_cap == null && level === 1) {
-      return <TableCell className="text-xs text-red-600 italic">Từ chối</TableCell>;
+      return <TableCell className="text-xs text-red-600 italic">{t("Từ chối")}</TableCell>;
     }
     return <TableCell className="text-xs text-muted-foreground">—</TableCell>;
   }
@@ -130,13 +131,13 @@ function ApprovalCell({
   // Bị chặn vì cấp trước chưa duyệt
   const blocked = level > 1 && !fields.prevLuc;
   if (blocked) {
-    return <TableCell className="text-xs text-muted-foreground italic">Chờ cấp trước</TableCell>;
+    return <TableCell className="text-xs text-muted-foreground italic">{t("Chờ cấp trước")}</TableCell>;
   }
 
   // Cấp đang chờ — kiểm tra quyền
   const canApprove = canApproveLevel(user, level);
   if (!canApprove) {
-    return <TableCell className="text-xs text-muted-foreground">Chờ duyệt</TableCell>;
+    return <TableCell className="text-xs text-muted-foreground">{t("Chờ duyệt")}</TableCell>;
   }
 
   return (
@@ -147,14 +148,14 @@ function ApprovalCell({
           className="h-6 px-2 text-xs text-green-600"
           onClick={() => onApprove(row.id, level)}
         >
-          <Check className="h-3 w-3 mr-1" /> Duyệt
+          <Check className="h-3 w-3 mr-1" /> {t("Duyệt")}
         </Button>
         <Button
           size="sm" variant="outline"
           className="h-6 px-2 text-xs text-red-600"
           onClick={() => onReject(row.id, level)}
         >
-          <X className="h-3 w-3 mr-1" /> Từ chối
+          <X className="h-3 w-3 mr-1" /> {t("Từ chối")}
         </Button>
       </div>
     </TableCell>
@@ -162,6 +163,7 @@ function ApprovalCell({
 }
 
 function DNTTPageContent() {
+  useTranslate();
   const navigate = useNavigate();
   const now = new Date();
   const [doanId, setDoanId] = useState<string>("");
@@ -304,27 +306,27 @@ function DNTTPageContent() {
 
   const handleApprove = (id: number, level: ApprovalLevel) => {
     if (!user?.user_id) {
-      toast({ title: "Chưa đăng nhập", variant: "destructive" });
+      toast({ title: t("Chưa đăng nhập"), variant: "destructive" });
       return;
     }
     approveMut.mutate({ id, level, userId: user.user_id }, {
       onSuccess: () => {
-        toast({ title: level === 3 ? "Đã duyệt cuối — ĐNTT chuyển sang đã duyệt" : `Đã duyệt cấp ${level}` });
+        toast({ title: level === 3 ? t("Đã duyệt cuối — ĐNTT chuyển sang đã duyệt") : `${t("Đã duyệt cấp")} ${level}` });
         logActivity.mutate({ action: "duyet", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Duyệt cấp ${level} ĐNTT #${id}` });
       },
-      onError: (e: unknown) => toast({ title: errMsg(e) || "Lỗi duyệt", variant: "destructive" }),
+      onError: (e: unknown) => toast({ title: errMsg(e) || t("Lỗi duyệt"), variant: "destructive" }),
     });
   };
 
   const handleRejectSubmit = () => {
     if (!rejectId || !rejectLevel) return;
     if (!user?.user_id) {
-      toast({ title: "Chưa đăng nhập", variant: "destructive" });
+      toast({ title: t("Chưa đăng nhập"), variant: "destructive" });
       return;
     }
     rejectMut.mutate({ id: rejectId, ghiChu: rejectReason, level: rejectLevel, userId: user.user_id }, {
       onSuccess: () => {
-        toast({ title: "Đã từ chối ĐNTT" });
+        toast({ title: t("Đã từ chối ĐNTT") });
         logActivity.mutate({ action: "tu_choi", table_name: "de_nghi_thanh_toan", record_id: rejectId, mo_ta: `Từ chối cấp ${rejectLevel} ĐNTT #${rejectId}` });
         setRejectId(null);
         setRejectLevel(null);
@@ -339,10 +341,10 @@ function DNTTPageContent() {
       { id: cancelTarget.id, mode: cancelTarget.isPaid ? cancelMode : undefined, userId: user?.user_id ?? null },
       {
         onSuccess: () => {
-          toast({ title: cancelTarget.isPaid ? "Đã hủy khoản thanh toán" : "Đã hủy đề nghị" });
+          toast({ title: cancelTarget.isPaid ? t("Đã hủy khoản thanh toán") : t("Đã hủy đề nghị") });
           setCancelTarget(null);
         },
-        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể hủy"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: t("Lỗi") + ": " + (errMsg(err) || t("Không thể hủy")), variant: "destructive" }),
       },
     );
   };
@@ -358,7 +360,7 @@ function DNTTPageContent() {
     const soTienThucTe = parseInt(adjustAmount.replace(/\D/g, ""), 10);
     if (isNaN(soTienThucTe) || soTienThucTe < 0) return;
     if (soTienThucTe === adjustTarget.so_tien) {
-      toast({ title: "Số tiền không thay đổi" });
+      toast({ title: t("Số tiền không thay đổi") });
       return;
     }
     adjustMut.mutate(
@@ -368,13 +370,13 @@ function DNTTPageContent() {
           if (!result) return;
           const delta = result.delta;
           if (delta > 0) {
-            toast({ title: `Đã tạo ĐNTT bổ sung ${fmt(delta)} VND — chờ duyệt` });
+            toast({ title: `${t("Đã tạo ĐNTT bổ sung")} ${fmt(delta)} VND — ${t("chờ duyệt")}` });
           } else {
-            toast({ title: `Đã ghi công nợ ${fmt(Math.abs(delta))} VND — xem tại trang Công nợ` });
+            toast({ title: `${t("Đã ghi công nợ")} ${fmt(Math.abs(delta))} VND — ${t("xem tại trang Công nợ")}` });
           }
           setAdjustTarget(null);
         },
-        onError: (err: unknown) => toast({ title: "Lỗi: " + (errMsg(err) || "Không thể điều chỉnh"), variant: "destructive" }),
+        onError: (err: unknown) => toast({ title: t("Lỗi") + ": " + (errMsg(err) || t("Không thể điều chỉnh")), variant: "destructive" }),
       },
     );
   };
@@ -383,7 +385,7 @@ function DNTTPageContent() {
     if (!deleteId) return;
     deleteMut.mutate(deleteId, {
       onSuccess: () => {
-        toast({ title: "Đã xóa ĐNTT" });
+        toast({ title: t("Đã xóa ĐNTT") });
         setDeleteId(null);
       },
     });
@@ -410,12 +412,12 @@ function DNTTPageContent() {
       const updated = data?.updated ?? 0;
       toast({
         title: total > 0
-          ? `Đã đồng bộ ${total} ĐNTT sang Sheet (${inserted} mới, ${updated} cập nhật)`
-          : "Không có ĐNTT nào trong bộ lọc hiện tại",
+          ? `${t("Đã đồng bộ")} ${total} ${t("ĐNTT sang Sheet")} (${inserted} ${t("mới")}, ${updated} ${t("cập nhật")})`
+          : t("Không có ĐNTT nào trong bộ lọc hiện tại"),
       });
     } catch (err: unknown) {
       toast({
-        title: "Lỗi đồng bộ Sheet: " + (errMsg(err) || "Vui lòng thử lại"),
+        title: t("Lỗi đồng bộ Sheet") + ": " + (errMsg(err) || t("Vui lòng thử lại")),
         variant: "destructive",
       });
     } finally {
@@ -426,17 +428,17 @@ function DNTTPageContent() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold">Đề nghị thanh toán</h1>
+        <h1 className="text-2xl font-bold">{t("Đề nghị thanh toán")}</h1>
         <Button
           variant="outline"
           size="sm"
           onClick={handleSyncSheet}
           disabled={syncing}
           className="gap-1.5"
-          title="Đồng bộ các ĐNTT theo bộ lọc hiện tại sang Google Sheet — tab Du chi"
+          title={t("Đồng bộ các ĐNTT theo bộ lọc hiện tại sang Google Sheet — tab Du chi")}
         >
           {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
-          {syncing ? "Đang đồng bộ..." : "Đồng bộ Sheet"}
+          {syncing ? t("Đang đồng bộ...") : t("Đồng bộ Sheet")}
         </Button>
       </div>
 
@@ -444,15 +446,15 @@ function DNTTPageContent() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Tổng ĐNTT", value: metrics.total, cls: "text-foreground",
-            sub: `${fmt(metrics.tongTien)} đ` },
+            sub: `${fmt(metrics.tongTien)} ${t("đ")}` },
           { label: "Chờ duyệt", value: metrics.choDuyet, cls: "text-yellow-600",
-            sub: `7 ngày tới: ${fmt(metrics.choDuyet7dTien)} đ` },
+            sub: `${t("7 ngày tới")}: ${fmt(metrics.choDuyet7dTien)} ${t("đ")}` },
           { label: "Đã duyệt", value: metrics.daDuyet, cls: "text-blue-600",
-            sub: `7 ngày qua: ${fmt(metrics.daDuyet7dTien)} đ` },
+            sub: `${t("7 ngày qua")}: ${fmt(metrics.daDuyet7dTien)} ${t("đ")}` },
         ].map(m => (
           <Card key={m.label}>
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">{m.label}</p>
+              <p className="text-sm text-muted-foreground">{t(m.label)}</p>
               <p className={cn("text-2xl font-bold", m.cls)}>{m.value}</p>
               <p className={cn("text-sm font-bold mt-0.5", m.cls)}>{m.sub}</p>
             </CardContent>
@@ -463,23 +465,23 @@ function DNTTPageContent() {
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-[200px]">
-          <label className="text-xs text-muted-foreground mb-1 block">Đoàn</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Đoàn")}</label>
           <SearchableSelect
             options={doanSelectOpts}
             value={doanId}
             onChange={setDoanId}
-            placeholder="Tất cả đoàn"
-            searchPlaceholder="Tìm đoàn..."
+            placeholder={t("Tất cả đoàn")}
+            searchPlaceholder={t("Tìm đoàn...")}
           />
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Từ ngày</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Từ ngày")}</label>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className={cn("w-[130px] justify-start text-left font-normal", !fromDate && "text-muted-foreground")}>
                 <CalendarIcon className="mr-1 h-4 w-4" />
-                {fromDate ? format(fromDate, "dd/MM/yyyy") : "Chọn"}
+                {fromDate ? format(fromDate, "dd/MM/yyyy") : t("Chọn")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -489,12 +491,12 @@ function DNTTPageContent() {
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Đến ngày</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Đến ngày")}</label>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className={cn("w-[130px] justify-start text-left font-normal", !toDate && "text-muted-foreground")}>
                 <CalendarIcon className="mr-1 h-4 w-4" />
-                {toDate ? format(toDate, "dd/MM/yyyy") : "Chọn"}
+                {toDate ? format(toDate, "dd/MM/yyyy") : t("Chọn")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -504,38 +506,38 @@ function DNTTPageContent() {
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Trạng thái duyệt</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Trạng thái duyệt")}</label>
           <Select value={trangThaiDuyet} onValueChange={v => setTrangThaiDuyet(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[140px]">
-              <span>{!trangThaiDuyet ? "Tất cả" : trangThaiDuyet === "cho_duyet" ? "Chờ duyệt" : trangThaiDuyet === "da_duyet" ? "Đã duyệt" : "Từ chối"}</span>
+              <span>{!trangThaiDuyet ? t("Tất cả") : trangThaiDuyet === "cho_duyet" ? t("Chờ duyệt") : trangThaiDuyet === "da_duyet" ? t("Đã duyệt") : t("Từ chối")}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="cho_duyet">Chờ duyệt</SelectItem>
-              <SelectItem value="da_duyet">Đã duyệt</SelectItem>
-              <SelectItem value="tu_choi">Từ chối</SelectItem>
+              <SelectItem value="all">{t("Tất cả")}</SelectItem>
+              <SelectItem value="cho_duyet">{t("Chờ duyệt")}</SelectItem>
+              <SelectItem value="da_duyet">{t("Đã duyệt")}</SelectItem>
+              <SelectItem value="tu_choi">{t("Từ chối")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground mb-1 block">Loại</label>
+          <label className="text-xs text-muted-foreground mb-1 block">{t("Loại")}</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[130px]">
-              <span>{!loai ? "Tất cả" : loai === "khach_san" ? "Khách sạn" : loai === "nha_hang" ? "Nhà hàng" : loai === "tra_truoc" ? "Trả trước" : "Dịch vụ"}</span>
+              <span>{!loai ? t("Tất cả") : loai === "khach_san" ? t("Khách sạn") : loai === "nha_hang" ? t("Nhà hàng") : loai === "tra_truoc" ? t("Trả trước") : t("Dịch vụ")}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="khach_san">Khách sạn</SelectItem>
-              <SelectItem value="nha_hang">Nhà hàng</SelectItem>
-              <SelectItem value="dich_vu">Dịch vụ</SelectItem>
-              <SelectItem value="tra_truoc">Trả trước</SelectItem>
+              <SelectItem value="all">{t("Tất cả")}</SelectItem>
+              <SelectItem value="khach_san">{t("Khách sạn")}</SelectItem>
+              <SelectItem value="nha_hang">{t("Nhà hàng")}</SelectItem>
+              <SelectItem value="dich_vu">{t("Dịch vụ")}</SelectItem>
+              <SelectItem value="tra_truoc">{t("Trả trước")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <Button variant="ghost" size="sm" onClick={resetFilters}>
-          <RotateCcw className="h-4 w-4 mr-1" /> Reset
+          <RotateCcw className="h-4 w-4 mr-1" /> {t("Reset")}
         </Button>
       </div>
 
@@ -544,23 +546,23 @@ function DNTTPageContent() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]">STT</TableHead>
-              <TableHead className="min-w-[120px]">Mã đoàn</TableHead>
-              <TableHead className="w-[60px]">Loại</TableHead>
-              <TableHead className="min-w-[180px]">Mô tả</TableHead>
-              <TableHead className="min-w-[110px] text-right">Số tiền</TableHead>
-              <TableHead className="w-[90px]">Ngày cần TT</TableHead>
-              <TableHead className="min-w-[140px]">Đề nghị</TableHead>
-              <TableHead className="min-w-[140px]">Kế toán trưởng</TableHead>
-              <TableHead className="w-[90px]">Ngày tạo</TableHead>
+              <TableHead className="w-[50px]">{t("STT")}</TableHead>
+              <TableHead className="min-w-[120px]">{t("Mã đoàn")}</TableHead>
+              <TableHead className="w-[60px]">{t("Loại")}</TableHead>
+              <TableHead className="min-w-[180px]">{t("Mô tả")}</TableHead>
+              <TableHead className="min-w-[110px] text-right">{t("Số tiền")}</TableHead>
+              <TableHead className="w-[90px]">{t("Ngày cần TT")}</TableHead>
+              <TableHead className="min-w-[140px]">{t("Đề nghị")}</TableHead>
+              <TableHead className="min-w-[140px]">{t("Kế toán trưởng")}</TableHead>
+              <TableHead className="w-[90px]">{t("Ngày tạo")}</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Đang tải...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">{t("Đang tải...")}</TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Không có dữ liệu</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">{t("Không có dữ liệu")}</TableCell></TableRow>
             ) : pageRows.map((row, idx) => {
               const lt = loaiLabel[row.loai] || { text: row.loai, color: "bg-muted text-muted-foreground" };
               const canTruRow = canTruMap[row.id];
@@ -577,7 +579,7 @@ function DNTTPageContent() {
                     </button>
                   </TableCell>
                   <TableCell>
-                    <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lt.color)}>{lt.text}</span>
+                    <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lt.color)}>{t(lt.text)}</span>
                   </TableCell>
                   <TableCell className="text-sm">{row.mo_ta}</TableCell>
                   <TableCell className="text-right font-medium">
@@ -597,26 +599,26 @@ function DNTTPageContent() {
                         <div className="space-y-0.5">
                           {canTru > 0 ? (
                             <div className="text-xs space-y-0.5">
-                              <div className="text-muted-foreground">Tổng: <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
-                              <div className="text-amber-600">Cấn trừ: −{fmt(canTru)}</div>
-                              <div className={cn("text-sm font-semibold", amountCls)}>Thực TT: {sign}{fmt(thucTT)}</div>
+                              <div className="text-muted-foreground">{t("Tổng:")} <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
+                              <div className="text-amber-600">{t("Cấn trừ:")} −{fmt(canTru)}</div>
+                              <div className={cn("text-sm font-semibold", amountCls)}>{t("Thực TT:")} {sign}{fmt(thucTT)}</div>
                             </div>
                           ) : (
                             <div className={amountCls}>{sign}{fmt(row.so_tien)}</div>
                           )}
                           {isThuHoi && (
                             <span className="inline-block text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                              Thu hồi
+                              {t("Thu hồi")}
                             </span>
                           )}
                           {row.la_coc && (
                             <span className="inline-block text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
-                              {row.ty_le_coc ? `Cọc ${row.ty_le_coc}%` : "Cọc"}
+                              {row.ty_le_coc ? `${t("Cọc")} ${row.ty_le_coc}%` : t("Cọc")}
                             </span>
                           )}
                           {!row.la_coc && cocSibling > 0 && (
                             <div className="text-[11px] text-muted-foreground font-normal">
-                              Đã cọc: <span className="text-amber-600 font-medium">{fmt(cocSibling)}</span>
+                              {t("Đã cọc:")} <span className="text-amber-600 font-medium">{fmt(cocSibling)}</span>
                             </div>
                           )}
                         </div>
@@ -663,18 +665,18 @@ function DNTTPageContent() {
                         </Button>
                       )}
                       {row.trang_thai_duyet === "da_duyet" && row.payment_status === "unpaid" && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Hủy đề nghị"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title={t("Hủy đề nghị")}
                           onClick={() => setCancelTarget({ id: row.id, isPaid: false, moTa: row.mo_ta || "ĐNTT" })}>
                           <Ban className="h-4 w-4" />
                         </Button>
                       )}
                       {row.payment_status === "paid" && row.trang_thai_duyet !== "da_huy" && (
                         <>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" title="Điều chỉnh sau thanh toán"
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" title={t("Điều chỉnh sau thanh toán")}
                             onClick={() => handleAdjustOpen(row)}>
                             <SlidersHorizontal className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-orange-500" title="Hủy thanh toán"
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-orange-500" title={t("Hủy thanh toán")}
                             onClick={() => { setCancelMode("hoan_tien"); setCancelTarget({ id: row.id, isPaid: true, moTa: row.mo_ta || "ĐNTT" }); }}>
                             <Ban className="h-4 w-4" />
                           </Button>
@@ -693,7 +695,7 @@ function DNTTPageContent() {
       {!isLoading && mainRows.length > 0 && (
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">
-            Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, mainRows.length)} / {mainRows.length}
+            {t("Hiển thị")} {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, mainRows.length)} / {mainRows.length}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -702,15 +704,15 @@ function DNTTPageContent() {
               className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
             >
               <ChevronLeft className="h-3 w-3" />
-              Trước
+              {t("Trước")}
             </button>
-            <span className="px-2 text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+            <span className="px-2 text-muted-foreground">{t("Trang")} {currentPage} / {totalPages}</span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
               className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
             >
-              Sau
+              {t("Sau")}
               <ChevronRight className="h-3 w-3" />
             </button>
           </div>
@@ -720,20 +722,20 @@ function DNTTPageContent() {
       {/* Reject dialog */}
       <Dialog open={rejectId !== null} onOpenChange={o => { if (!o) { setRejectId(null); setRejectLevel(null); } }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Từ chối ĐNTT</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("Từ chối ĐNTT")}</DialogTitle></DialogHeader>
           <div>
-            <label className="text-sm font-medium">Lý do từ chối</label>
+            <label className="text-sm font-medium">{t("Lý do từ chối")}</label>
             <Input
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
-              placeholder="Nhập lý do..."
+              placeholder={t("Nhập lý do...")}
               className="mt-1"
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setRejectId(null); setRejectLevel(null); }}>Hủy</Button>
+            <Button variant="outline" onClick={() => { setRejectId(null); setRejectLevel(null); }}>{t("Hủy")}</Button>
             <Button variant="destructive" onClick={handleRejectSubmit} disabled={!rejectReason.trim()}>
-              Xác nhận từ chối
+              {t("Xác nhận từ chối")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -743,12 +745,12 @@ function DNTTPageContent() {
       <AlertDialog open={deleteId !== null} onOpenChange={o => { if (!o) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xóa đề nghị thanh toán?</AlertDialogTitle>
-            <AlertDialogDescription>Thao tác này không thể hoàn tác.</AlertDialogDescription>
+            <AlertDialogTitle>{t("Xóa đề nghị thanh toán?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("Thao tác này không thể hoàn tác.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm}>Xóa</AlertDialogAction>
+            <AlertDialogCancel>{t("Hủy")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm}>{t("Xóa")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -757,22 +759,22 @@ function DNTTPageContent() {
       <Dialog open={!!adjustTarget} onOpenChange={o => { if (!o) setAdjustTarget(null); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Điều chỉnh sau thanh toán</DialogTitle>
+            <DialogTitle className="text-sm">{t("Điều chỉnh sau thanh toán")}</DialogTitle>
           </DialogHeader>
           {adjustTarget && (
             <div className="space-y-3 py-1 text-sm">
               <p className="text-muted-foreground text-xs">{adjustTarget.mo_ta}</p>
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Đã thanh toán:</span>
+                <span className="text-muted-foreground">{t("Đã thanh toán:")}</span>
                 <span className="font-semibold">{fmt(adjustTarget.so_tien)} VND</span>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">Số tiền thực tế</label>
+                <label className="text-xs font-medium">{t("Số tiền thực tế")}</label>
                 <Input
                   className="h-8 text-sm"
                   value={adjustAmount}
                   onChange={e => setAdjustAmount(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Nhập số tiền..."
+                  placeholder={t("Nhập số tiền...")}
                 />
               </div>
               {(() => {
@@ -785,25 +787,25 @@ function DNTTPageContent() {
                     delta > 0 ? "bg-yellow-50 text-yellow-700" : "bg-purple-50 text-purple-700"
                   )}>
                     {delta > 0
-                      ? `Thiếu ${fmt(delta)} VND → sẽ tạo ĐNTT bổ sung (chờ duyệt)`
-                      : `Thừa ${fmt(Math.abs(delta))} VND → sẽ ghi công nợ NCC`
+                      ? `${t("Thiếu")} ${fmt(delta)} VND → ${t("sẽ tạo ĐNTT bổ sung (chờ duyệt)")}`
+                      : `${t("Thừa")} ${fmt(Math.abs(delta))} VND → ${t("sẽ ghi công nợ NCC")}`
                     }
                   </div>
                 );
               })()}
               <div className="space-y-1">
-                <label className="text-xs font-medium">Lý do điều chỉnh</label>
+                <label className="text-xs font-medium">{t("Lý do điều chỉnh")}</label>
                 <Textarea
                   className="text-xs min-h-[60px]"
                   value={adjustReason}
                   onChange={e => setAdjustReason(e.target.value)}
-                  placeholder="VD: Giảm 2 phòng, khách huỷ..."
+                  placeholder={t("VD: Giảm 2 phòng, khách huỷ...")}
                 />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustTarget(null)}>Đóng</Button>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdjustTarget(null)}>{t("Đóng")}</Button>
             <Button
               size="sm" className="text-xs"
               onClick={handleAdjustSubmit}
@@ -813,7 +815,7 @@ function DNTTPageContent() {
                 parseInt(adjustAmount.replace(/\D/g, ""), 10) === adjustTarget?.so_tien
               }
             >
-              Xác nhận
+              {t("Xác nhận")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -824,39 +826,39 @@ function DNTTPageContent() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {cancelTarget?.isPaid ? "Hủy khoản thanh toán" : "Hủy đề nghị thanh toán"}
+              {cancelTarget?.isPaid ? t("Hủy khoản thanh toán") : t("Hủy đề nghị thanh toán")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <p className="text-xs text-muted-foreground">{cancelTarget?.moTa}</p>
             {cancelTarget?.isPaid ? (
               <div className="space-y-2">
-                <p className="text-xs font-medium">Hình thức xử lý sau khi hủy:</p>
+                <p className="text-xs font-medium">{t("Hình thức xử lý sau khi hủy:")}</p>
                 <RadioGroup value={cancelMode} onValueChange={v => setCancelMode(v as "cong_no" | "hoan_tien")} className="space-y-2">
                   <div className="flex items-start gap-2">
                     <RadioGroupItem value="hoan_tien" id="hoan" className="mt-0.5" />
                     <Label htmlFor="hoan" className="text-xs cursor-pointer">
-                      <span className="font-medium">Hoàn lại tiền</span>
-                      <p className="text-muted-foreground font-normal">Không ghi nhận công nợ, hoàn trả đầy đủ</p>
+                      <span className="font-medium">{t("Hoàn lại tiền")}</span>
+                      <p className="text-muted-foreground font-normal">{t("Không ghi nhận công nợ, hoàn trả đầy đủ")}</p>
                     </Label>
                   </div>
                   <div className="flex items-start gap-2">
                     <RadioGroupItem value="cong_no" id="cno" className="mt-0.5" />
                     <Label htmlFor="cno" className="text-xs cursor-pointer">
-                      <span className="font-medium">Cấn trừ công nợ</span>
-                      <p className="text-muted-foreground font-normal">Ghi nhận công nợ cho nhà cung cấp</p>
+                      <span className="font-medium">{t("Cấn trừ công nợ")}</span>
+                      <p className="text-muted-foreground font-normal">{t("Ghi nhận công nợ cho nhà cung cấp")}</p>
                     </Label>
                   </div>
                 </RadioGroup>
               </div>
             ) : (
-              <p className="text-xs">Đề nghị sẽ bị hủy, chi phí sẽ trở về trạng thái chưa gửi duyệt.</p>
+              <p className="text-xs">{t("Đề nghị sẽ bị hủy, chi phí sẽ trở về trạng thái chưa gửi duyệt.")}</p>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setCancelTarget(null)}>Đóng</Button>
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setCancelTarget(null)}>{t("Đóng")}</Button>
             <Button variant="destructive" size="sm" className="text-xs" onClick={handleCancelSubmit} disabled={cancelMut.isPending}>
-              Xác nhận hủy
+              {t("Xác nhận hủy")}
             </Button>
           </DialogFooter>
         </DialogContent>

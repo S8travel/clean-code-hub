@@ -20,9 +20,12 @@ import {
   useHoanUngList, useDeleteHoanUng, LOAI_CHI_HOAN_UNG_OPTS,
 } from "@/hooks/use-hoan-ung";
 import HoanUngForm from "@/components/hoan-ung/HoanUngForm";
+import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
+// Label tiếng Việt = key i18n — bọc t() tại nơi render (const ở module-level
+// chỉ chạy 1 lần nên không bọc t() ở đây).
 const TRANG_THAI_OPTS = [
   { value: "",          label: "Tất cả" },
   { value: "cho_duyet", label: "Chờ duyệt" },
@@ -44,6 +47,7 @@ const PAYMENT_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 export default function HoanUngPage() {
+  useTranslate();
   const { user } = useAuth();
   const [filterLoaiChi, setFilterLoaiChi] = useState("");
   const [filterTrangThai, setFilterTrangThai] = useState("");
@@ -88,8 +92,8 @@ export default function HoanUngPage() {
   const handleDelete = () => {
     if (deleteTarget == null) return;
     deleteMut.mutate(deleteTarget, {
-      onSuccess: () => { toast.success("Đã xóa yêu cầu"); setDeleteTarget(null); },
-      onError: (e: unknown) => toast.error("Lỗi: " + (errMsg(e) || "Không xóa được")),
+      onSuccess: () => { toast.success(t("Đã xóa yêu cầu")); setDeleteTarget(null); },
+      onError: (e: unknown) => toast.error(t("Lỗi: ") + (errMsg(e) || t("Không xóa được"))),
     });
   };
 
@@ -99,13 +103,13 @@ export default function HoanUngPage() {
       <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b bg-background">
         <div className="flex items-center gap-2">
           <Wallet className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold">Hoàn tiền tạm ứng</h1>
+          <h1 className="text-xl font-bold">{t("Hoàn tiền tạm ứng")}</h1>
           {!isLoading && (
             <span className="text-sm text-muted-foreground ml-1">({rows.length})</span>
           )}
         </div>
         <Button onClick={() => setFormOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" /> Tạo yêu cầu
+          <Plus className="h-4 w-4" /> {t("Tạo yêu cầu")}
         </Button>
       </div>
 
@@ -113,10 +117,10 @@ export default function HoanUngPage() {
       {rows.length > 0 && (
         <div className="shrink-0 px-6 pt-3 pb-1 grid grid-cols-4 gap-3">
           {[
-            { icon: FileText,     label: "Tổng yêu cầu",   value: rows.length,   cls: "text-foreground" },
-            { icon: Clock,        label: "Chờ duyệt",       value: totalCho,      cls: "text-amber-600" },
-            { icon: CheckCircle2, label: "Đã duyệt",        value: totalDuyet,    cls: "text-blue-600" },
-            { icon: Wallet,       label: "Đã hoàn",         value: totalPaid,     cls: "text-emerald-600" },
+            { icon: FileText,     label: t("Tổng yêu cầu"), value: rows.length,   cls: "text-foreground" },
+            { icon: Clock,        label: t("Chờ duyệt"),    value: totalCho,      cls: "text-amber-600" },
+            { icon: CheckCircle2, label: t("Đã duyệt"),     value: totalDuyet,    cls: "text-blue-600" },
+            { icon: Wallet,       label: t("Đã hoàn"),      value: totalPaid,     cls: "text-emerald-600" },
           ].map(({ icon: Icon, label, value, cls }) => (
             <div key={label} className="rounded-lg border border-border bg-card p-3">
               <div className="flex items-center gap-1.5 mb-1">
@@ -132,7 +136,7 @@ export default function HoanUngPage() {
       {/* Toolbar */}
       <div className="shrink-0 px-6 py-3 border-b bg-muted/20 flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Tìm mô tả, người ứng..."
+          placeholder={t("Tìm mô tả, người ứng...")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-8 text-xs w-[220px]"
@@ -140,23 +144,23 @@ export default function HoanUngPage() {
 
         <Select value={filterLoaiChi || "_all"} onValueChange={(v) => setFilterLoaiChi(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[160px]">
-            <SelectValue placeholder="Loại chi" />
+            <SelectValue placeholder={t("Loại chi")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all" className="text-xs">Tất cả loại chi</SelectItem>
+            <SelectItem value="_all" className="text-xs">{t("Tất cả loại chi")}</SelectItem>
             {LOAI_CHI_HOAN_UNG_OPTS.map((o) => (
-              <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+              <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={filterTrangThai || "_all"} onValueChange={(v) => setFilterTrangThai(v === "_all" ? "" : v)}>
           <SelectTrigger className="h-8 text-xs w-[140px]">
-            <SelectValue placeholder="Trạng thái" />
+            <SelectValue placeholder={t("Trạng thái")} />
           </SelectTrigger>
           <SelectContent>
             {TRANG_THAI_OPTS.map((o) => (
-              <SelectItem key={o.value || "_all"} value={o.value || "_all"} className="text-xs">{o.label}</SelectItem>
+              <SelectItem key={o.value || "_all"} value={o.value || "_all"} className="text-xs">{t(o.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -171,12 +175,12 @@ export default function HoanUngPage() {
               : "border-border hover:bg-muted",
           )}
         >
-          Của tôi
+          {t("Của tôi")}
         </button>
 
         {rows.length > 0 && (
           <span className="ml-auto text-xs text-muted-foreground">
-            Tổng (chờ + duyệt): <strong className="text-foreground tabular-nums">{fmt(tongTien)} ₫</strong>
+            {t("Tổng (chờ + duyệt): ")}<strong className="text-foreground tabular-nums">{fmt(tongTien)} ₫</strong>
           </span>
         )}
       </div>
@@ -184,25 +188,25 @@ export default function HoanUngPage() {
       {/* Table */}
       <div className="flex-1 overflow-auto">
         {isLoading ? (
-          <p className="text-center text-sm text-muted-foreground py-20">Đang tải...</p>
+          <p className="text-center text-sm text-muted-foreground py-20">{t("Đang tải...")}</p>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <Wallet className="h-10 w-10 mb-3 opacity-30" />
-            <p className="text-sm">Chưa có yêu cầu hoàn ứng nào</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">Bấm "Tạo yêu cầu" để bắt đầu</p>
+            <p className="text-sm">{t("Chưa có yêu cầu hoàn ứng nào")}</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">{t('Bấm "Tạo yêu cầu" để bắt đầu')}</p>
           </div>
         ) : (
           <table className="w-full text-xs">
             <thead className="bg-[#E6F1FB] sticky top-0">
               <tr>
                 <th className="py-1.5 px-2 w-6" />
-                <th className="py-1.5 px-2 text-left font-medium">Người ứng</th>
-                <th className="py-1.5 px-2 text-left font-medium">Mô tả</th>
-                <th className="py-1.5 px-2 text-center font-medium">Mục</th>
-                <th className="py-1.5 px-2 text-right font-medium">Tổng tiền</th>
-                <th className="py-1.5 px-2 text-center font-medium">Trạng thái</th>
-                <th className="py-1.5 px-2 text-center font-medium">Hoàn tiền</th>
-                <th className="py-1.5 px-2 text-center font-medium">Ngày tạo</th>
+                <th className="py-1.5 px-2 text-left font-medium">{t("Người ứng")}</th>
+                <th className="py-1.5 px-2 text-left font-medium">{t("Mô tả")}</th>
+                <th className="py-1.5 px-2 text-center font-medium">{t("Mục")}</th>
+                <th className="py-1.5 px-2 text-right font-medium">{t("Tổng tiền")}</th>
+                <th className="py-1.5 px-2 text-center font-medium">{t("Trạng thái")}</th>
+                <th className="py-1.5 px-2 text-center font-medium">{t("Hoàn tiền")}</th>
+                <th className="py-1.5 px-2 text-center font-medium">{t("Ngày tạo")}</th>
                 <th className="py-1.5 px-2 w-8" />
               </tr>
             </thead>
@@ -213,7 +217,6 @@ export default function HoanUngPage() {
                 const isMine = r.nguoi_ung_id === user?.user_id;
                 const canDelete = r.trang_thai_duyet === "tu_choi" && isMine;
                 const items = r.hoan_ung_items ?? [];
-                const isMulti = items.length > 1;
                 const isOpen = expanded.has(r.id);
                 return (
                   <Fragment key={r.id}>
@@ -244,7 +247,7 @@ export default function HoanUngPage() {
                       <td className="py-1.5 px-2 text-center">
                         {items.length > 0 ? (
                           <Badge variant="outline" className="text-[10px] font-normal">
-                            {items.length} mục
+                            {items.length} {t("mục")}
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -255,12 +258,12 @@ export default function HoanUngPage() {
                       </td>
                       <td className="py-1.5 px-2 text-center">
                         <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-medium", ttBadge.cls)}>
-                          {ttBadge.label}
+                          {t(ttBadge.label)}
                         </span>
                       </td>
                       <td className="py-1.5 px-2 text-center">
                         <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-medium", payBadge.cls)}>
-                          {payBadge.label}
+                          {t(payBadge.label)}
                         </span>
                       </td>
                       <td className="py-1.5 px-2 text-center text-muted-foreground whitespace-nowrap">
@@ -271,7 +274,7 @@ export default function HoanUngPage() {
                           <button
                             onClick={(e) => { e.stopPropagation(); setDeleteTarget(r.id); }}
                             className="text-muted-foreground hover:text-destructive p-1"
-                            title="Xóa (chỉ khi đã bị từ chối)"
+                            title={t("Xóa (chỉ khi đã bị từ chối)")}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -288,7 +291,7 @@ export default function HoanUngPage() {
                               return (
                                 <div key={idx} className="flex items-center gap-2 text-[11px] py-1 border-b border-border/30 last:border-0">
                                   <span className="text-muted-foreground w-4 shrink-0">{idx + 1}.</span>
-                                  <Badge variant="outline" className="text-[10px] font-normal shrink-0">{lcLabel}</Badge>
+                                  <Badge variant="outline" className="text-[10px] font-normal shrink-0">{t(lcLabel)}</Badge>
                                   <span className="flex-1 truncate">{it.mo_ta}</span>
                                   {it.hoa_don_url && (
                                     <a
@@ -298,7 +301,7 @@ export default function HoanUngPage() {
                                       onClick={(e) => e.stopPropagation()}
                                       className="text-blue-600 hover:underline inline-flex items-center gap-0.5 shrink-0"
                                     >
-                                      <FileText className="h-3 w-3" /> Hóa đơn
+                                      <FileText className="h-3 w-3" /> {t("Hóa đơn")}
                                     </a>
                                   )}
                                   <span className="tabular-nums font-medium w-[100px] text-right shrink-0">
@@ -326,19 +329,19 @@ export default function HoanUngPage() {
       <AlertDialog open={deleteTarget != null} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xóa yêu cầu hoàn ứng?</AlertDialogTitle>
+            <AlertDialogTitle>{t("Xóa yêu cầu hoàn ứng?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Yêu cầu đã từ chối sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.
+              {t("Yêu cầu đã từ chối sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>{t("Hủy")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={deleteMut.isPending}
               className="bg-destructive hover:bg-destructive/90"
             >
-              Xóa
+              {t("Xóa")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
