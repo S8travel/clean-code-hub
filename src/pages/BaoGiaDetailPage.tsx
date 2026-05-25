@@ -6,6 +6,7 @@ import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { ChuongTrinhTourSection } from "@/components/bao-gia/detail/ChuongTrinhTourSection";
+import { DichVuPhuTroSection } from "@/components/bao-gia/detail/DichVuPhuTroSection";
 import { TongHopChiPhiPanel } from "@/components/bao-gia/detail/TongHopChiPhiPanel";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 
@@ -91,6 +92,11 @@ export default function BaoGiaDetailPage() {
               saveKetQua={saveKetQua}
             />
             <ChuongTrinhTourSection
+              draft={draft}
+              updateDraftKetQua={updateDraftKetQua}
+              saveKetQua={saveKetQua}
+            />
+            <DichVuPhuTroSection
               draft={draft}
               updateDraftKetQua={updateDraftKetQua}
               saveKetQua={saveKetQua}

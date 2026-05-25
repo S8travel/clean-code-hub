@@ -37,10 +37,11 @@ export function DayPanel({
 }: Props) {
   const items = ket.items || [];
   // Item indices (theo ket.items[]) thuộc day này — giữ index thật để patch.
-  // Item KHÔNG có ngay_so → coi như Day 1 (back-compat).
+  // Item KHÔNG có ngay_so → coi như Day 1 (back-compat). ngay_so=0 = phụ trợ,
+  // KHÔNG hiển thị ở day nào — render bởi DichVuPhuTroSection.
   const dayItemIdxs = items
     .map((it, i) => ({ it, i }))
-    .filter(({ it }) => (it.ngay_so ?? 1) === dayIdx)
+    .filter(({ it }) => it.ngay_so !== 0 && (it.ngay_so ?? 1) === dayIdx)
     .sort((a, b) => LOAI_ORDER.indexOf(a.it.loai) - LOAI_ORDER.indexOf(b.it.loai));
 
   const patchItem = (idx: number, patch: Partial<BaoGiaItem>) => {

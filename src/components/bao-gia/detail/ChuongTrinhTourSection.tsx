@@ -21,9 +21,10 @@ export function ChuongTrinhTourSection({ draft, updateDraftKetQua, saveKetQua }:
   if (!ket) return null;
   const soNgay = Math.max(1, ket.so_ngay ?? 1);
 
-  // Day i có bao nhiêu item (cho badge counter ở tab).
+  // Day i có bao nhiêu item (cho badge counter ở tab). Loại ngay_so=0 (phụ trợ).
   const countByDay: Record<number, number> = {};
   (ket.items || []).forEach((it) => {
+    if (it.ngay_so === 0) return;
     const d = it.ngay_so ?? 1;
     countByDay[d] = (countByDay[d] || 0) + 1;
   });

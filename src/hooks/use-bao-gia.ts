@@ -57,6 +57,7 @@ export interface BaoGiaRow {
   // P3
   ma_bg: string | null;   // generated col — read-only, auto từ id
   lead_id: number | null; // FK → public.lead(id)
+  xe_loai_id: number | null; // FK → public.nha_xe_loai_xe(id) — xe mặc định cho tour
 }
 
 // ── Queries ──

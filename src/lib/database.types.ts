@@ -112,6 +112,7 @@ export type Database = {
           profit_usd: number | null
           tieu_de: string | null
           trang_thai: string | null
+          xe_loai_id: number | null
         }
         Insert: {
           created_at?: string | null
@@ -129,6 +130,7 @@ export type Database = {
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
+          xe_loai_id?: number | null
         }
         Update: {
           created_at?: string | null
@@ -146,6 +148,7 @@ export type Database = {
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
+          xe_loai_id?: number | null
         }
         Relationships: [
           {
@@ -153,6 +156,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "lead"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bao_gia_xe_loai_id_fkey"
+            columns: ["xe_loai_id"]
+            isOneToOne: false
+            referencedRelation: "nha_xe_loai_xe"
             referencedColumns: ["id"]
           },
         ]

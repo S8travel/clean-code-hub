@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { paxOf, fmtVnd } from "./helpers";
 import { LeadSelector } from "./LeadSelector";
+import { VehicleSelector } from "./VehicleSelector";
 
 interface Props {
   draft: BaoGiaRow;
@@ -34,7 +35,9 @@ export function ThongTinTourSection({
         Thông tin tour
       </h2>
       <div className="grid grid-cols-12 gap-3">
-        <div className="col-span-6">
+        {/* Row 1: Tên (5) | Số ngày (2) | Pax (2) | Tỷ giá (3) — tỷ giá rộng
+            hơn để icon + số 5 chữ số không bị che. */}
+        <div className="col-span-5">
           <Label className="text-xs text-slate-600">Tên chương trình *</Label>
           <Input
             value={ket?.ten_chuong_trinh ?? ""}
@@ -95,11 +98,13 @@ export function ThongTinTourSection({
             <Users className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
           </div>
         </div>
-        <div className="col-span-2">
+        <div className="col-span-3">
           <Label className="text-xs text-slate-600">Tỷ giá *</Label>
-          <div className="flex items-center gap-1 mt-1">
-            <Input value="VND" readOnly className="h-9 bg-slate-50 flex-1" />
-            <div className="relative flex-1">
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="inline-flex items-center px-2 h-9 rounded-md bg-slate-100 text-xs text-slate-600 font-medium shrink-0">
+              VND
+            </span>
+            <div className="relative flex-1 min-w-0">
               <Input
                 type="number"
                 value={draft.exchange_rate ?? 26000}
@@ -111,7 +116,7 @@ export function ThongTinTourSection({
                   const v = draft.exchange_rate;
                   if (v != null && v > 0 && v !== row.exchange_rate) saveField("exchange_rate", v);
                 }}
-                className="h-9 pr-7"
+                className="h-9 pr-7 w-full"
               />
               <ArrowRightLeft className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             </div>
@@ -119,6 +124,7 @@ export function ThongTinTourSection({
           <p className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{fmtVnd(draft.exchange_rate || 0)} VND/USD</p>
         </div>
 
+        {/* Row 2 */}
         <div className="col-span-3">
           <Label className="text-xs text-slate-600">Ngày khởi hành</Label>
           <Input
@@ -162,6 +168,18 @@ export function ThongTinTourSection({
           </div>
         </div>
 
+        {/* Row 3: Xe sử dụng full width — dropdown rộng + giá hiển thị kế bên */}
+        <div className="col-span-12">
+          <Label className="text-xs text-slate-600">Xe sử dụng</Label>
+          <div className="mt-1">
+            <VehicleSelector
+              xeLoaiId={draft.xe_loai_id}
+              onChange={(id) => saveField("xe_loai_id", id)}
+            />
+          </div>
+        </div>
+
+        {/* Row 4 */}
         <div className="col-span-6">
           <Label className="text-xs text-slate-600">Khách hàng (Lead)</Label>
           <div className="mt-1">
@@ -171,7 +189,6 @@ export function ThongTinTourSection({
             />
           </div>
         </div>
-
         <div className="col-span-6">
           <Label className="text-xs text-slate-600">Ghi chú</Label>
           <Input
