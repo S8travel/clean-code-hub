@@ -10,13 +10,15 @@ const item = (
   loai: ManualItem["loai"],
   gia: number | null,
   ten = "",
+  foc = 0,
 ): ManualItem => ({
-  id: `${loai}-${gia}-${ten}`,
+  id: `${loai}-${gia}-${ten}-${foc}`,
   ngay: 1,
   loai,
   mo_ta: ten || `${loai} item`,
   bang_gia_ten: ten,
   gia,
+  foc,
 });
 
 describe("calcBaoGia — hằng số (insurance/guide/tips)", () => {
@@ -180,6 +182,56 @@ describe("calcBaoGia — output structure", () => {
     ];
     const r = calcBaoGia(items, "T", 3, 24_000, 0);
     expect(r.items.map((x) => x.mo_ta)).toEqual(["Vé 1", "KS 1", "Bữa 1"]);
+  });
+});
+
+describe("calcBaoGia — FOC trừ khỏi multiplier", () => {
+  it("meal foc=1 → (pax-1) × gia thay vì pax × gia", () => {
+    const items = [item("meal", 100_000, "Bữa", 1)];
+    const r = calcBaoGia(items, "T", 3, 24_000, 0);
+    expect(r.case_16.meal).toBe(1_600_000); // (17 - 1) × 100k
+    expect(r.case_20.meal).toBe(2_000_000); // (21 - 1) × 100k
+  });
+
+  it("ticket foc=1 → (pax-1) × gia", () => {
+    const items = [item("ticket", 50_000, "Vé", 1)];
+    const r = calcBaoGia(items, "T", 3, 24_000, 0);
+    expect(r.case_16.ticket).toBe(800_000); // (17 - 1) × 50k
+    expect(r.case_20.ticket).toBe(1_000_000); // (21 - 1) × 50k
+  });
+
+  it("hotel foc=0.5 → (rooms-0.5) × gia (half-room FOC)", () => {
+    const items = [item("hotel", 1_000_000, "KS", 0.5)];
+    const r = calcBaoGia(items, "T", 3, 24_000, 0);
+    expect(r.case_16.hotel).toBe(8_500_000); // (9 - 0.5) × 1M
+    expect(r.case_20.hotel).toBe(10_500_000); // (11 - 0.5) × 1M
+  });
+
+  it("foc=0 hoặc undefined → giữ multiplier nguyên", () => {
+    const items = [
+      item("meal", 100_000, "Bữa 1", 0),
+      item("meal", 200_000, "Bữa 2"), // không truyền foc
+    ];
+    const r = calcBaoGia(items, "T", 3, 24_000, 0);
+    expect(r.case_16.meal).toBe(5_100_000); // 100k×17 + 200k×17
+  });
+
+  it("foc > multiplier → clamp 0 (không lỗ ngược)", () => {
+    const items = [item("meal", 100_000, "Bữa", 999)]; // foc lố
+    const r = calcBaoGia(items, "T", 3, 24_000, 0);
+    expect(r.case_16.meal).toBe(0);
+  });
+
+  it("transport KHÔNG áp FOC (lump-sum)", () => {
+    const items = [item("transport", 5_000_000, "Bus", 1)]; // foc bị bỏ qua
+    const r = calcBaoGia(items, "T", 3, 24_000, 0);
+    expect(r.case_16.transport).toBe(5_000_000);
+  });
+
+  it("FOC snapshot vào BaoGiaItem output", () => {
+    const items = [item("meal", 100_000, "M", 1)];
+    const r = calcBaoGia(items, "T", 3, 24_000, 0);
+    expect(r.items[0].foc).toBe(1);
   });
 });
 

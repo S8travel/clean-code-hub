@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useBaoGia, useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@/hooks/use-bao-gia";
 import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
+import { liveKetQua } from "@/components/bao-gia/detail/helpers";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { ChuongTrinhTourSection } from "@/components/bao-gia/detail/ChuongTrinhTourSection";
@@ -48,6 +49,12 @@ export default function BaoGiaDetailPage() {
     setDraft({ ...draft, [field]: value });
     update.mutate({ id: draft.id, [field]: value }, { onError: () => toast.error("Lỗi lưu") });
   };
+  // Save nhiều field cùng lúc (atomic) — vd xe_ten + xe_gia khi pick từ catalog.
+  // 2 saveField liên tiếp sẽ race local state vì closure stale.
+  const savePatch = (patch: Partial<BaoGiaRow>) => {
+    setDraft({ ...draft, ...patch });
+    update.mutate({ id: draft.id, ...patch }, { onError: () => toast.error("Lỗi lưu") });
+  };
   const saveKetQua = (next: BaoGiaKetQua) => {
     setDraft({ ...draft, ket_qua: next });
     update.mutate({ id: draft.id, ket_qua: next }, { onError: () => toast.error("Lỗi lưu") });
@@ -64,7 +71,11 @@ export default function BaoGiaDetailPage() {
   const handleExportPdf = async () => {
     if (!draft.ket_qua) return;
     try {
-      await exportBaoGiaWord(draft.ket_qua, draft.exchange_rate ?? 26000, draft.profit_usd ?? 0);
+      // Recompute case totals + giá trung bình từ items + xe_gia hiện tại
+      // → Word khớp với panel UI, không stale theo AI extract gốc.
+      const fresh = liveKetQua(draft);
+      if (!fresh) return;
+      await exportBaoGiaWord(fresh, draft.exchange_rate ?? 26000, draft.profit_usd ?? 0);
       toast.success("Đã xuất file Word!");
     } catch {
       toast.error("Lỗi xuất file");
@@ -89,6 +100,7 @@ export default function BaoGiaDetailPage() {
               updateDraftField={updateDraftField}
               updateDraftKetQua={updateDraftKetQua}
               saveField={saveField}
+              savePatch={savePatch}
               saveKetQua={saveKetQua}
             />
             <ChuongTrinhTourSection

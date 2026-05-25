@@ -109,10 +109,12 @@ export type Database = {
           ngay_di: string | null
           ngay_ve: string | null
           noi_dung_goc: string | null
+          phu_thu: number
           profit_usd: number | null
           tieu_de: string | null
           trang_thai: string | null
-          xe_loai_id: number | null
+          xe_gia: number | null
+          xe_ten: string | null
         }
         Insert: {
           created_at?: string | null
@@ -127,10 +129,12 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           noi_dung_goc?: string | null
+          phu_thu?: number
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
-          xe_loai_id?: number | null
+          xe_gia?: number | null
+          xe_ten?: string | null
         }
         Update: {
           created_at?: string | null
@@ -145,10 +149,12 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           noi_dung_goc?: string | null
+          phu_thu?: number
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
-          xe_loai_id?: number | null
+          xe_gia?: number | null
+          xe_ten?: string | null
         }
         Relationships: [
           {
@@ -156,13 +162,6 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "lead"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bao_gia_xe_loai_id_fkey"
-            columns: ["xe_loai_id"]
-            isOneToOne: false
-            referencedRelation: "nha_xe_loai_xe"
             referencedColumns: ["id"]
           },
         ]

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Plus, Trash2, Sparkles, Hotel, Utensils, Bus, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +6,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
-import { fmtVnd } from "./helpers";
+import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
+import { ServiceTypeahead } from "./ServiceTypeahead";
 
 type Loai = BaoGiaItem["loai"];
 
@@ -16,7 +16,7 @@ const LOAI_META: Record<Loai, { label: string; icon: React.ReactNode; tint: stri
   hotel:     { label: "Khách sạn",      icon: <Hotel className="h-3.5 w-3.5" />,    tint: "text-indigo-600 bg-indigo-50" },
   meal:      { label: "Ăn uống",        icon: <Utensils className="h-3.5 w-3.5" />, tint: "text-orange-600 bg-orange-50" },
   transport: { label: "Xe đưa đón",     icon: <Bus className="h-3.5 w-3.5" />,      tint: "text-cyan-600 bg-cyan-50" },
-  ticket:    { label: "Vé tham quan",   icon: <Ticket className="h-3.5 w-3.5" />,   tint: "text-rose-600 bg-rose-50" },
+  ticket:    { label: "Cảnh điểm",      icon: <Ticket className="h-3.5 w-3.5" />,   tint: "text-rose-600 bg-rose-50" },
 };
 const LOAI_ORDER: Loai[] = ["hotel", "meal", "transport", "ticket"];
 
@@ -30,6 +30,7 @@ interface Props {
 // Vd: SIM card, xe trung chuyển ngoài, nước dừa, phí visa... Lưu cùng items[]
 // nhưng filter bằng ngay_so=0 marker.
 export function DichVuPhuTroSection({ draft, updateDraftKetQua, saveKetQua }: Props) {
+  const { data: bangGia = [] } = useBangGiaDichVu();
   const ket = draft.ket_qua;
   if (!ket) return null;
   const items = ket.items || [];
@@ -72,7 +73,14 @@ export function DichVuPhuTroSection({ draft, updateDraftKetQua, saveKetQua }: Pr
           <ExtraRow
             key={i}
             item={it}
+            bangGia={bangGia}
             onChangeField={(field, value) => patchItem(i, { [field]: value })}
+            onPick={(ten, gia, foc) => {
+              const newItems = items.map((x, j) =>
+                j === i ? { ...x, mo_ta: ten, don_gia: gia, foc } : x,
+              );
+              saveKetQua({ ...ket, items: newItems });
+            }}
             onCommit={() => commitItem(i)}
             onDelete={() => deleteItem(i)}
           />
@@ -111,15 +119,16 @@ export function DichVuPhuTroSection({ draft, updateDraftKetQua, saveKetQua }: Pr
 
 /* ── Extra item row (identical UX với DayPanel ItemRow) ───────────────── */
 function ExtraRow({
-  item, onChangeField, onCommit, onDelete,
+  item, bangGia, onChangeField, onPick, onCommit, onDelete,
 }: {
   item: BaoGiaItem;
+  bangGia: ReturnType<typeof useBangGiaDichVu>["data"];
   onChangeField: <K extends keyof BaoGiaItem>(field: K, value: BaoGiaItem[K]) => void;
+  onPick: (ten: string, gia: number, foc: number) => void;
   onCommit: () => void;
   onDelete: () => void;
 }) {
   const meta = LOAI_META[item.loai];
-  const [donGiaStr, setDonGiaStr] = useState(String(item.don_gia ?? 0));
 
   return (
     <div className="grid grid-cols-12 gap-2 items-center py-1">
@@ -129,29 +138,43 @@ function ExtraRow({
         </span>
         <span className="truncate">{meta.label}</span>
       </div>
-      <Input
+      <ServiceTypeahead
         value={item.mo_ta}
-        onChange={(e) => onChangeField("mo_ta", e.target.value)}
-        onBlur={onCommit}
-        placeholder="Tên dịch vụ phụ trợ..."
-        className="col-span-5 h-9 text-xs"
+        onChangeText={(t) => onChangeField("mo_ta", t)}
+        onPick={onPick}
+        onCommit={onCommit}
+        loai={item.loai}
+        items={bangGia ?? []}
+        placeholder="Tìm hoặc gõ tên dịch vụ phụ trợ..."
+        className="col-span-6"
       />
       <Input
         type="number"
-        value={donGiaStr}
+        step="0.5"
+        min={0}
+        value={item.foc ?? 0}
         onChange={(e) => {
-          setDonGiaStr(e.target.value);
           const v = parseFloat(e.target.value);
-          if (!isNaN(v)) onChangeField("don_gia", v);
+          if (!isNaN(v) && v >= 0) onChangeField("foc", v);
+          else if (e.target.value === "") onChangeField("foc", 0);
+        }}
+        onBlur={onCommit}
+        placeholder="FOC"
+        title="FOC: số suất miễn phí (trừ khỏi multiplier khi tính tiền)"
+        className="col-span-1 h-9 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <Input
+        type="text"
+        inputMode="numeric"
+        value={(item.don_gia ?? 0) > 0 ? (item.don_gia ?? 0).toLocaleString("vi-VN") : ""}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/[^0-9]/g, "");
+          onChangeField("don_gia", digits ? parseInt(digits, 10) : 0);
         }}
         onBlur={onCommit}
         placeholder="Đơn giá"
-        className="col-span-2 h-9 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="col-span-2 h-9 text-xs text-right"
       />
-      <div className="col-span-2 text-right">
-        <div className="text-[10px] text-slate-500 uppercase tracking-wide">Thành tiền</div>
-        <div className="text-xs font-semibold text-slate-900 tabular-nums">{fmtVnd(item.don_gia)}</div>
-      </div>
       <Button
         variant="ghost"
         size="icon"

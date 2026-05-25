@@ -2,6 +2,7 @@
 // cost breakdown để các sub-components share consistent output.
 
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
+import { calcBaoGia, type ManualItem } from "@/lib/bao-gia-calc";
 
 export const fmtVnd = (n: number | null | undefined) =>
   Math.round(Number(n) || 0).toLocaleString("vi-VN");
@@ -48,37 +49,116 @@ export function itemsOfDay(items: BaoGiaItem[] | undefined, day: number): Record
   return groupItemsByLoai(filtered);
 }
 
-/** Cost breakdown — recompute theo live values. KHI user edit Pax / profit /
- *  xr, panel sẽ refresh ngay vì props đổi.
- *  - Cost vốn (hotel/meal/ticket/transport/guide/tips/insurance): vẫn lấy từ
- *    primary case (đã AI tính). Khi pax thay đổi sẽ stale tới P4.
- *  - Profit + price + biên: live recompute theo profit_usd * pax * xr. */
-export function costBreakdown(args: {
-  ket: BaoGiaKetQua | null;
-  exchangeRate: number;
-  profitUsd: number;
-  pax: number;
-}) {
-  const { ket, exchangeRate, profitUsd, pax } = args;
-  const c = primaryCase(ket);
-  if (!ket || !c) return null;
-  const tongVon = c.total_cost;
-  const profitVnd = Math.round(profitUsd * pax * exchangeRate);
+/** Live-recompute case_16 + case_20 + giá trung bình từ items[] + xe_gia +
+ *  draft fields. Trả về BaoGiaKetQua "tươi" để các tổng hợp (panel UI, Word
+ *  export) dùng chung — KHÔNG đọc case frozen từ AI extract.
+ *  Giữ nguyên `items[]` gốc (full metadata: ghi_chu, bua_an, ngay_so) +
+ *  giữ `guests` user đã nhập (calcBaoGia hardcode 16/20 trong CASES). */
+export function liveKetQua(draft: BaoGiaRow): BaoGiaKetQua | null {
+  const ket = draft.ket_qua;
+  if (!ket) return null;
+
+  const manualItems: ManualItem[] = (ket.items ?? []).map((it, i) => ({
+    id: `${i}`,
+    ngay: it.ngay_so ?? 1,
+    loai: it.loai,
+    mo_ta: it.mo_ta,
+    bang_gia_ten: it.mo_ta,
+    gia: it.don_gia,
+    foc: it.foc ?? 0,
+  }));
+
+  const phuThu = draft.phu_thu ?? 0;
+  const live = calcBaoGia(
+    manualItems,
+    ket.ten_chuong_trinh,
+    ket.so_ngay ?? 1,
+    draft.exchange_rate ?? 26000,
+    draft.profit_usd ?? 0,
+    draft.xe_gia ?? 0,
+    phuThu, // lump-sum vào transport
+  );
+
+  return {
+    ...ket,
+    items: ket.items, // KEEP original items (bao gồm bua_an, ghi_chu, ngay_so)
+    case_16: { ...live.case_16, guests: ket.case_16?.guests ?? live.case_16.guests },
+    case_20: { ...live.case_20, guests: ket.case_20?.guests ?? live.case_20.guests },
+    gia_trung_binh_vnd: live.gia_trung_binh_vnd,
+    gia_trung_binh_usd: live.gia_trung_binh_usd,
+  };
+}
+
+export interface CaseLine {
+  khach_san: number;
+  an_uong: number;
+  xe: number;
+  phu_thu_xe: number;
+  ve_tham_quan: number;
+  hdv: number;
+  khac: number;
+  tong_von: number;
+  profit_vnd: number;
+  gia_ban: number;
+  gia_ban_per_pax: number;
+  bien_loi_nhuan_pct: number;
+}
+
+function buildCase(c: BaoGiaCase, guests: number, phuThu: number, profitUsd: number, xr: number): CaseLine {
+  const tongVon = c.total_cost + phuThu;
+  const profitVnd = Math.round(profitUsd * guests * xr);
   const giaBan = tongVon + profitVnd;
   return {
     khach_san:   c.hotel,
     an_uong:     c.meal,
     xe:          c.transport,
+    phu_thu_xe:  phuThu,
     ve_tham_quan:c.ticket,
     hdv:         c.guide,
     khac:        c.tips + c.insurance,
     tong_von:    tongVon,
-    profit_target_usd: profitUsd,
     profit_vnd:  profitVnd,
-    phu_thu:     0,
     gia_ban:     giaBan,
-    gia_ban_per_pax: pax > 0 ? Math.round(giaBan / pax) : 0,
+    gia_ban_per_pax: guests > 0 ? Math.round(giaBan / guests) : 0,
     bien_loi_nhuan_pct: giaBan > 0 ? (profitVnd / giaBan) * 100 : 0,
+  };
+}
+
+/** Cost breakdown — 2 phương án 16/20 khách (hardcoded multipliers từ calcBaoGia).
+ *  GIÁ BÁN TOUR final = trung bình per-pax của 2 phương án. */
+export function costBreakdown(args: {
+  ket: BaoGiaKetQua | null;
+  exchangeRate: number;
+  profitUsd: number;
+  xeGia: number | null;
+  phuThu: number | null;
+}) {
+  const { ket, exchangeRate, profitUsd, xeGia } = args;
+  if (!ket) return null;
+
+  const manualItems: ManualItem[] = (ket.items ?? []).map((it, i) => ({
+    id: `${i}`, ngay: it.ngay_so ?? 1, loai: it.loai,
+    mo_ta: it.mo_ta, bang_gia_ten: it.mo_ta, gia: it.don_gia,
+    foc: it.foc ?? 0,
+  }));
+  // Truyền 0 cho phuThu trong calc — phụ thu hiển thị dòng riêng (KHÔNG gộp
+  // vào "Xe vận chuyển"). Cộng vào tổng cost vốn ngoài calc.
+  const live = calcBaoGia(
+    manualItems, ket.ten_chuong_trinh, ket.so_ngay ?? 1,
+    exchangeRate, profitUsd, xeGia ?? 0, 0,
+  );
+  const phuThuVal = args.phuThu ?? 0;
+  const case16 = buildCase(live.case_16, 16, phuThuVal, profitUsd, exchangeRate);
+  const case20 = buildCase(live.case_20, 20, phuThuVal, profitUsd, exchangeRate);
+  const giaBanTbPerPax = Math.round((case16.gia_ban_per_pax + case20.gia_ban_per_pax) / 2);
+  const bienTb = (case16.bien_loi_nhuan_pct + case20.bien_loi_nhuan_pct) / 2;
+  return {
+    case16,
+    case20,
+    profit_target_usd: profitUsd,
+    gia_ban_tb_per_pax: giaBanTbPerPax,
+    gia_ban_tb_per_pax_usd: exchangeRate > 0 ? giaBanTbPerPax / exchangeRate : 0,
+    bien_loi_nhuan_tb_pct: bienTb,
     exchange_rate: exchangeRate,
   };
 }

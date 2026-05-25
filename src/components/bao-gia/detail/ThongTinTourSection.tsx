@@ -12,13 +12,14 @@ interface Props {
   updateDraftField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
   updateDraftKetQua: (next: BaoGiaKetQua) => void;
   saveField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
+  savePatch: (patch: Partial<BaoGiaRow>) => void;
   saveKetQua: (next: BaoGiaKetQua) => void;
 }
 
 // Children fully controlled bởi draft từ parent. Mỗi keystroke → updateDraft*
 // (panel cost recompute live). Blur → save* persist DB.
 export function ThongTinTourSection({
-  draft, row, updateDraftField, updateDraftKetQua, saveField, saveKetQua,
+  draft, row, updateDraftField, updateDraftKetQua, saveField, savePatch, saveKetQua,
 }: Props) {
   const ket = draft.ket_qua;
   const pax = paxOf(ket);
@@ -173,10 +174,35 @@ export function ThongTinTourSection({
           <Label className="text-xs text-slate-600">Xe sử dụng</Label>
           <div className="mt-1">
             <VehicleSelector
-              xeLoaiId={draft.xe_loai_id}
-              onChange={(id) => saveField("xe_loai_id", id)}
+              xeTen={draft.xe_ten}
+              xeGia={draft.xe_gia}
+              onChange={(xeTen, xeGia) => {
+                if (xeTen === row.xe_ten && xeGia === row.xe_gia) return;
+                savePatch({ xe_ten: xeTen, xe_gia: xeGia });
+              }}
             />
           </div>
+        </div>
+
+        {/* Row 3b: Phụ thu lump-sum (cầu đường, transfer...) — KHÔNG × pax */}
+        <div className="col-span-12">
+          <Label className="text-xs text-slate-600">
+            Phụ thu <span className="text-[10px] text-slate-400 font-normal">(vé cầu đường, xe trung chuyển — tính 1 lần)</span>
+          </Label>
+          <Input
+            type="text"
+            inputMode="numeric"
+            value={(draft.phu_thu ?? 0) > 0 ? (draft.phu_thu ?? 0).toLocaleString("vi-VN") : ""}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/[^0-9]/g, "");
+              updateDraftField("phu_thu", digits ? parseInt(digits, 10) : 0);
+            }}
+            onBlur={() => {
+              if ((draft.phu_thu ?? 0) !== (row.phu_thu ?? 0)) saveField("phu_thu", draft.phu_thu ?? 0);
+            }}
+            className="h-9 mt-1 text-right"
+            placeholder="0"
+          />
         </div>
 
         {/* Row 4 */}

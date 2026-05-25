@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { MapPin, Utensils, Hotel, Bus, Ticket, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,17 +6,50 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
-import { fmtVnd } from "./helpers";
+import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
+import { ServiceTypeahead } from "./ServiceTypeahead";
 
 type Loai = BaoGiaItem["loai"];
+type BuaAn = "trua" | "toi";
 
-const LOAI_META: Record<Loai, { label: string; icon: React.ReactNode; tint: string }> = {
-  hotel:     { label: "Khách sạn",      icon: <Hotel className="h-3.5 w-3.5" />,    tint: "text-indigo-600 bg-indigo-50" },
-  meal:      { label: "Ăn uống",        icon: <Utensils className="h-3.5 w-3.5" />, tint: "text-orange-600 bg-orange-50" },
-  transport: { label: "Xe đưa đón",     icon: <Bus className="h-3.5 w-3.5" />,      tint: "text-cyan-600 bg-cyan-50" },
-  ticket:    { label: "Vé tham quan",   icon: <Ticket className="h-3.5 w-3.5" />,   tint: "text-rose-600 bg-rose-50" },
+// Meta cho icon/tint theo loai. Label động riêng (meal trua/toi khác nhau).
+const LOAI_META: Record<Loai, { icon: React.ReactNode; tint: string }> = {
+  hotel:     { icon: <Hotel className="h-3.5 w-3.5" />,    tint: "text-indigo-600 bg-indigo-50" },
+  meal:      { icon: <Utensils className="h-3.5 w-3.5" />, tint: "text-orange-600 bg-orange-50" },
+  transport: { icon: <Bus className="h-3.5 w-3.5" />,      tint: "text-cyan-600 bg-cyan-50" },
+  ticket:    { icon: <Ticket className="h-3.5 w-3.5" />,   tint: "text-rose-600 bg-rose-50" },
 };
-const LOAI_ORDER: Loai[] = ["hotel", "meal", "transport", "ticket"];
+
+function labelFor(item: Pick<BaoGiaItem, "loai" | "bua_an">): string {
+  if (item.loai === "meal") {
+    if (item.bua_an === "trua") return "Ăn trưa";
+    if (item.bua_an === "toi") return "Ăn tối";
+    return "Ăn uống";
+  }
+  if (item.loai === "ticket") return "Cảnh điểm";
+  if (item.loai === "hotel") return "Khách sạn";
+  return "Xe đưa đón";
+}
+
+// Add menu cho day items: Cảnh điểm → Ăn trưa → Ăn tối → Khách sạn.
+// Transport đã có VehicleSelector cấp tour → KHÔNG còn trong day menu.
+type AddOpt = { key: string; loai: Loai; bua_an?: BuaAn; label: string };
+const ADD_OPTIONS: AddOpt[] = [
+  { key: "ticket",    loai: "ticket", label: "Cảnh điểm" },
+  { key: "meal_trua", loai: "meal",   bua_an: "trua", label: "Ăn trưa" },
+  { key: "meal_toi",  loai: "meal",   bua_an: "toi",  label: "Ăn tối" },
+  { key: "hotel",     loai: "hotel",  label: "Khách sạn" },
+];
+
+// Sort key cho dayItemIdxs: cùng order với ADD_OPTIONS.
+function sortKey(item: Pick<BaoGiaItem, "loai" | "bua_an">): number {
+  if (item.loai === "ticket") return 0;
+  if (item.loai === "meal" && item.bua_an === "trua") return 1;
+  if (item.loai === "meal" && item.bua_an === "toi") return 2;
+  if (item.loai === "meal") return 3; // generic meal (back-compat)
+  if (item.loai === "hotel") return 4;
+  return 5; // transport (legacy) đẩy xuống cuối
+}
 
 interface Props {
   dayIdx: number;        // 1-based
@@ -35,6 +67,7 @@ export function DayPanel({
   dayIdx, cityLabel = "—", ket, isExpanded, onToggle,
   updateDraftKetQua, saveKetQua,
 }: Props) {
+  const { data: bangGia = [] } = useBangGiaDichVu();
   const items = ket.items || [];
   // Item indices (theo ket.items[]) thuộc day này — giữ index thật để patch.
   // Item KHÔNG có ngay_so → coi như Day 1 (back-compat). ngay_so=0 = phụ trợ,
@@ -42,7 +75,7 @@ export function DayPanel({
   const dayItemIdxs = items
     .map((it, i) => ({ it, i }))
     .filter(({ it }) => it.ngay_so !== 0 && (it.ngay_so ?? 1) === dayIdx)
-    .sort((a, b) => LOAI_ORDER.indexOf(a.it.loai) - LOAI_ORDER.indexOf(b.it.loai));
+    .sort((a, b) => sortKey(a.it) - sortKey(b.it));
 
   const patchItem = (idx: number, patch: Partial<BaoGiaItem>) => {
     const newItems = items.map((it, i) => i === idx ? { ...it, ...patch } : it);
@@ -54,8 +87,15 @@ export function DayPanel({
   const deleteItem = (idx: number) => {
     saveKetQua({ ...ket, items: items.filter((_, i) => i !== idx) });
   };
-  const addItem = (loai: Loai) => {
-    const newItem: BaoGiaItem = { loai, mo_ta: "", don_gia: 0, ghi_chu: "", ngay_so: dayIdx };
+  const addItem = (opt: AddOpt) => {
+    const newItem: BaoGiaItem = {
+      loai: opt.loai,
+      mo_ta: "",
+      don_gia: 0,
+      ghi_chu: "",
+      ngay_so: dayIdx,
+      ...(opt.bua_an ? { bua_an: opt.bua_an } : {}),
+    };
     saveKetQua({ ...ket, items: [...items, newItem] });
   };
 
@@ -85,7 +125,15 @@ export function DayPanel({
             <ItemRow
               key={i}
               item={it}
+              bangGia={bangGia}
               onChangeField={(field, value) => patchItem(i, { [field]: value })}
+              onPick={(ten, gia, foc) => {
+                // Patch mo_ta + don_gia + foc atomically — tránh 3 setState race
+                const newItems = items.map((x, j) =>
+                  j === i ? { ...x, mo_ta: ten, don_gia: gia, foc } : x,
+                );
+                saveKetQua({ ...ket, items: newItems });
+              }}
               onCommit={() => commitItem(i)}
               onDelete={() => deleteItem(i)}
             />
@@ -103,14 +151,14 @@ export function DayPanel({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                {LOAI_ORDER.map((loai) => {
-                  const meta = LOAI_META[loai];
+                {ADD_OPTIONS.map((opt) => {
+                  const meta = LOAI_META[opt.loai];
                   return (
-                    <DropdownMenuItem key={loai} onClick={() => addItem(loai)} className="gap-2">
+                    <DropdownMenuItem key={opt.key} onClick={() => addItem(opt)} className="gap-2">
                       <span className={cn("inline-flex items-center justify-center w-5 h-5 rounded", meta.tint)}>
                         {meta.icon}
                       </span>
-                      {meta.label}
+                      {opt.label}
                     </DropdownMenuItem>
                   );
                 })}
@@ -125,15 +173,17 @@ export function DayPanel({
 
 /* ── Item row (editable inline) ────────────────────────────────────── */
 function ItemRow({
-  item, onChangeField, onCommit, onDelete,
+  item, bangGia, onChangeField, onPick, onCommit, onDelete,
 }: {
   item: BaoGiaItem;
+  bangGia: ReturnType<typeof useBangGiaDichVu>["data"];
   onChangeField: <K extends keyof BaoGiaItem>(field: K, value: BaoGiaItem[K]) => void;
+  onPick: (ten: string, gia: number, foc: number) => void;
   onCommit: () => void;
   onDelete: () => void;
 }) {
   const meta = LOAI_META[item.loai];
-  const [donGiaStr, setDonGiaStr] = useState(String(item.don_gia ?? 0));
+  const label = labelFor(item);
 
   return (
     <div className="grid grid-cols-12 gap-2 items-center py-1">
@@ -141,31 +191,45 @@ function ItemRow({
         <span className={cn("inline-flex items-center justify-center w-7 h-7 rounded-md shrink-0", meta.tint)}>
           {meta.icon}
         </span>
-        <span className="truncate">{meta.label}</span>
+        <span className="truncate">{label}</span>
       </div>
-      <Input
+      <ServiceTypeahead
         value={item.mo_ta}
-        onChange={(e) => onChangeField("mo_ta", e.target.value)}
-        onBlur={onCommit}
-        placeholder="Tên dịch vụ / NCC..."
-        className="col-span-5 h-9 text-xs"
+        onChangeText={(t) => onChangeField("mo_ta", t)}
+        onPick={onPick}
+        onCommit={onCommit}
+        loai={item.loai}
+        items={bangGia ?? []}
+        placeholder="Tìm hoặc gõ tên dịch vụ..."
+        className="col-span-6"
       />
       <Input
         type="number"
-        value={donGiaStr}
+        step="0.5"
+        min={0}
+        value={item.foc ?? 0}
         onChange={(e) => {
-          setDonGiaStr(e.target.value);
           const v = parseFloat(e.target.value);
-          if (!isNaN(v)) onChangeField("don_gia", v);
+          if (!isNaN(v) && v >= 0) onChangeField("foc", v);
+          else if (e.target.value === "") onChangeField("foc", 0);
+        }}
+        onBlur={onCommit}
+        placeholder="FOC"
+        title="FOC: số suất miễn phí (trừ khỏi multiplier khi tính tiền)"
+        className="col-span-1 h-9 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <Input
+        type="text"
+        inputMode="numeric"
+        value={(item.don_gia ?? 0) > 0 ? (item.don_gia ?? 0).toLocaleString("vi-VN") : ""}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/[^0-9]/g, "");
+          onChangeField("don_gia", digits ? parseInt(digits, 10) : 0);
         }}
         onBlur={onCommit}
         placeholder="Đơn giá"
-        className="col-span-2 h-9 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="col-span-2 h-9 text-xs text-right"
       />
-      <div className="col-span-2 text-right">
-        <div className="text-[10px] text-slate-500 uppercase tracking-wide">Thành tiền</div>
-        <div className="text-xs font-semibold text-slate-900 tabular-nums">{fmtVnd(item.don_gia)}</div>
-      </div>
       <Button
         variant="ghost"
         size="icon"
