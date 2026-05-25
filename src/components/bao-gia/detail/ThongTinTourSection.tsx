@@ -1,54 +1,31 @@
-import { useEffect, useState } from "react";
 import { Users, ArrowRightLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@/hooks/use-bao-gia";
+import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { paxOf, fmtVnd } from "./helpers";
+import { LeadSelector } from "./LeadSelector";
 
 interface Props {
-  row: BaoGiaRow;
+  draft: BaoGiaRow;
+  row: BaoGiaRow;  // committed state (DB) — so sánh trước save tránh dirty save
+  updateDraftField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
+  updateDraftKetQua: (next: BaoGiaKetQua) => void;
+  saveField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
+  saveKetQua: (next: BaoGiaKetQua) => void;
 }
 
-// Wire 8 inputs persist qua useUpdateBaoGia, save on blur.
-// 5 field DB column: exchange_rate, profit_usd, ngay_di, ngay_ve, ghi_chu.
-// 3 field nằm trong ket_qua jsonb: ten_chuong_trinh, so_ngay, pax (update
-// đồng thời case_16.guests + case_20.guests cho consistent). Khi save jsonb
-// → merge với ket_qua hiện tại, KHÔNG overwrite các field khác.
-export function ThongTinTourSection({ row }: Props) {
-  const ket = row.ket_qua;
-  const update = useUpdateBaoGia();
+// Children fully controlled bởi draft từ parent. Mỗi keystroke → updateDraft*
+// (panel cost recompute live). Blur → save* persist DB.
+export function ThongTinTourSection({
+  draft, row, updateDraftField, updateDraftKetQua, saveField, saveKetQua,
+}: Props) {
+  const ket = draft.ket_qua;
+  const pax = paxOf(ket);
 
-  const [exchangeRate, setExchangeRate] = useState(String(row.exchange_rate ?? 26000));
-  const [profitUsd, setProfitUsd] = useState(String(row.profit_usd ?? 0));
-  const [ngayDi, setNgayDi] = useState(row.ngay_di ?? "");
-  const [ngayVe, setNgayVe] = useState(row.ngay_ve ?? "");
-  const [ghiChu, setGhiChu] = useState(row.ghi_chu ?? "");
-  const [tenCt, setTenCt] = useState(ket?.ten_chuong_trinh ?? "");
-  const [soNgay, setSoNgay] = useState(String(ket?.so_ngay ?? 0));
-  const [pax, setPax] = useState(String(paxOf(ket)));
-
-  useEffect(() => { setExchangeRate(String(row.exchange_rate ?? 26000)); }, [row.exchange_rate]);
-  useEffect(() => { setProfitUsd(String(row.profit_usd ?? 0)); }, [row.profit_usd]);
-  useEffect(() => { setNgayDi(row.ngay_di ?? ""); }, [row.ngay_di]);
-  useEffect(() => { setNgayVe(row.ngay_ve ?? ""); }, [row.ngay_ve]);
-  useEffect(() => { setGhiChu(row.ghi_chu ?? ""); }, [row.ghi_chu]);
-  useEffect(() => { setTenCt(ket?.ten_chuong_trinh ?? ""); }, [ket?.ten_chuong_trinh]);
-  useEffect(() => { setSoNgay(String(ket?.so_ngay ?? 0)); }, [ket?.so_ngay]);
-  useEffect(() => { setPax(String(paxOf(ket))); }, [ket]);
-
-  const save = (patch: Partial<BaoGiaRow>) => {
-    update.mutate(
-      { id: row.id, ...patch },
-      { onError: () => toast.error("Lỗi lưu") },
-    );
-  };
-
-  // Save 1 field trong ket_qua jsonb: merge với ket hiện tại + lưu nguyên cục.
-  const saveKetQua = (patch: Partial<BaoGiaKetQua>) => {
-    if (!ket) return;
-    const next: BaoGiaKetQua = { ...ket, ...patch };
-    save({ ket_qua: next });
+  // Helper: build new ket_qua object trên field jsonb đơn (không phải case)
+  const patchKetQua = (patch: Partial<BaoGiaKetQua>) => {
+    if (!ket) return null;
+    return { ...ket, ...patch };
   };
 
   return (
@@ -60,11 +37,15 @@ export function ThongTinTourSection({ row }: Props) {
         <div className="col-span-6">
           <Label className="text-xs text-slate-600">Tên chương trình *</Label>
           <Input
-            value={tenCt}
-            onChange={(e) => setTenCt(e.target.value)}
+            value={ket?.ten_chuong_trinh ?? ""}
+            onChange={(e) => {
+              const next = patchKetQua({ ten_chuong_trinh: e.target.value });
+              if (next) updateDraftKetQua(next);
+            }}
             onBlur={() => {
-              const v = tenCt.trim();
-              if (v && v !== ket?.ten_chuong_trinh) saveKetQua({ ten_chuong_trinh: v });
+              if (ket && ket.ten_chuong_trinh !== row.ket_qua?.ten_chuong_trinh) {
+                saveKetQua(ket);
+              }
             }}
             className="h-9 mt-1"
           />
@@ -74,11 +55,16 @@ export function ThongTinTourSection({ row }: Props) {
           <Input
             type="number"
             min={1}
-            value={soNgay}
-            onChange={(e) => setSoNgay(e.target.value)}
+            value={ket?.so_ngay ?? 0}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v) && v >= 1) {
+                const next = patchKetQua({ so_ngay: v });
+                if (next) updateDraftKetQua(next);
+              }
+            }}
             onBlur={() => {
-              const v = parseInt(soNgay, 10);
-              if (!isNaN(v) && v >= 1 && v !== ket?.so_ngay) saveKetQua({ so_ngay: v });
+              if (ket && ket.so_ngay !== row.ket_qua?.so_ngay) saveKetQua(ket);
             }}
             className="h-9 mt-1"
           />
@@ -90,20 +76,19 @@ export function ThongTinTourSection({ row }: Props) {
               type="number"
               min={1}
               value={pax}
-              onChange={(e) => setPax(e.target.value)}
-              onBlur={() => {
-                const v = parseInt(pax, 10);
-                if (!isNaN(v) && v >= 1 && v !== paxOf(ket) && ket) {
-                  // Update both case_16 + case_20 (cùng pax mới) để giữ
-                  // consistent với UI primary case. Cost numbers cũ sẽ stale
-                  // cho tới khi re-tính P3 engine.
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v) && v >= 1 && ket) {
                   const next: BaoGiaKetQua = {
                     ...ket,
                     case_16: ket.case_16 ? { ...ket.case_16, guests: v } : ket.case_16,
                     case_20: ket.case_20 ? { ...ket.case_20, guests: v } : ket.case_20,
                   };
-                  save({ ket_qua: next });
+                  updateDraftKetQua(next);
                 }
+              }}
+              onBlur={() => {
+                if (ket && paxOf(ket) !== paxOf(row.ket_qua)) saveKetQua(ket);
               }}
               className="h-9 pr-8"
             />
@@ -117,27 +102,32 @@ export function ThongTinTourSection({ row }: Props) {
             <div className="relative flex-1">
               <Input
                 type="number"
-                value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value)}
+                value={draft.exchange_rate ?? 26000}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (!isNaN(v)) updateDraftField("exchange_rate", v);
+                }}
                 onBlur={() => {
-                  const v = parseFloat(exchangeRate);
-                  if (!isNaN(v) && v > 0 && v !== row.exchange_rate) save({ exchange_rate: v });
+                  const v = draft.exchange_rate;
+                  if (v != null && v > 0 && v !== row.exchange_rate) saveField("exchange_rate", v);
                 }}
                 className="h-9 pr-7"
               />
               <ArrowRightLeft className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             </div>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{fmtVnd(parseFloat(exchangeRate) || 0)} VND/USD</p>
+          <p className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{fmtVnd(draft.exchange_rate || 0)} VND/USD</p>
         </div>
 
         <div className="col-span-3">
           <Label className="text-xs text-slate-600">Ngày khởi hành</Label>
           <Input
             type="date"
-            value={ngayDi}
-            onChange={(e) => setNgayDi(e.target.value)}
-            onBlur={() => { if (ngayDi !== (row.ngay_di ?? "")) save({ ngay_di: ngayDi || null }); }}
+            value={draft.ngay_di ?? ""}
+            onChange={(e) => updateDraftField("ngay_di", e.target.value || null)}
+            onBlur={() => {
+              if ((draft.ngay_di ?? null) !== (row.ngay_di ?? null)) saveField("ngay_di", draft.ngay_di);
+            }}
             className="h-9 mt-1"
           />
         </div>
@@ -145,9 +135,11 @@ export function ThongTinTourSection({ row }: Props) {
           <Label className="text-xs text-slate-600">Ngày kết thúc</Label>
           <Input
             type="date"
-            value={ngayVe}
-            onChange={(e) => setNgayVe(e.target.value)}
-            onBlur={() => { if (ngayVe !== (row.ngay_ve ?? "")) save({ ngay_ve: ngayVe || null }); }}
+            value={draft.ngay_ve ?? ""}
+            onChange={(e) => updateDraftField("ngay_ve", e.target.value || null)}
+            onBlur={() => {
+              if ((draft.ngay_ve ?? null) !== (row.ngay_ve ?? null)) saveField("ngay_ve", draft.ngay_ve);
+            }}
             className="h-9 mt-1"
           />
         </div>
@@ -156,11 +148,13 @@ export function ThongTinTourSection({ row }: Props) {
           <div className="flex items-center gap-1 mt-1">
             <Input
               type="number"
-              value={profitUsd}
-              onChange={(e) => setProfitUsd(e.target.value)}
+              value={draft.profit_usd ?? 0}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                if (!isNaN(v)) updateDraftField("profit_usd", v);
+              }}
               onBlur={() => {
-                const v = parseFloat(profitUsd);
-                if (!isNaN(v) && v !== row.profit_usd) save({ profit_usd: v });
+                if (draft.profit_usd !== row.profit_usd) saveField("profit_usd", draft.profit_usd);
               }}
               className="h-9 flex-1"
             />
@@ -168,13 +162,25 @@ export function ThongTinTourSection({ row }: Props) {
           </div>
         </div>
 
-        <div className="col-span-12">
+        <div className="col-span-6">
+          <Label className="text-xs text-slate-600">Khách hàng (Lead)</Label>
+          <div className="mt-1">
+            <LeadSelector
+              leadId={draft.lead_id}
+              onChange={(newId) => saveField("lead_id", newId)}
+            />
+          </div>
+        </div>
+
+        <div className="col-span-6">
           <Label className="text-xs text-slate-600">Ghi chú</Label>
           <Input
             placeholder="Nhập ghi chú nếu có..."
-            value={ghiChu}
-            onChange={(e) => setGhiChu(e.target.value)}
-            onBlur={() => { if (ghiChu !== (row.ghi_chu ?? "")) save({ ghi_chu: ghiChu || null }); }}
+            value={draft.ghi_chu ?? ""}
+            onChange={(e) => updateDraftField("ghi_chu", e.target.value || null)}
+            onBlur={() => {
+              if ((draft.ghi_chu ?? null) !== (row.ghi_chu ?? null)) saveField("ghi_chu", draft.ghi_chu);
+            }}
             className="h-9 mt-1"
           />
         </div>

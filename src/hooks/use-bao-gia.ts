@@ -7,6 +7,9 @@ export interface BaoGiaItem {
   mo_ta: string;
   don_gia: number;
   ghi_chu: string;
+  // P3 — day grouping. 1-based ngày trong tour. Items cũ chưa có sẽ default
+  // Day 1 khi render (groupItemsByDay).
+  ngay_so?: number;
 }
 
 export interface BaoGiaCase {
@@ -51,6 +54,9 @@ export interface BaoGiaRow {
   ngay_ve: string | null;
   ghi_chu: string | null;
   hieu_luc_ngay: number | null;
+  // P3
+  ma_bg: string | null;   // generated col — read-only, auto từ id
+  lead_id: number | null; // FK → public.lead(id)
 }
 
 // ── Queries ──

@@ -1,27 +1,63 @@
+import { useState } from "react";
 import { MapPin, Utensils, Hotel, Bus, Ticket, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { BaoGiaItem } from "@/hooks/use-bao-gia";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import type { BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 import { fmtVnd } from "./helpers";
+
+type Loai = BaoGiaItem["loai"];
+
+const LOAI_META: Record<Loai, { label: string; icon: React.ReactNode; tint: string }> = {
+  hotel:     { label: "Khách sạn",      icon: <Hotel className="h-3.5 w-3.5" />,    tint: "text-indigo-600 bg-indigo-50" },
+  meal:      { label: "Ăn uống",        icon: <Utensils className="h-3.5 w-3.5" />, tint: "text-orange-600 bg-orange-50" },
+  transport: { label: "Xe đưa đón",     icon: <Bus className="h-3.5 w-3.5" />,      tint: "text-cyan-600 bg-cyan-50" },
+  ticket:    { label: "Vé tham quan",   icon: <Ticket className="h-3.5 w-3.5" />,   tint: "text-rose-600 bg-rose-50" },
+};
+const LOAI_ORDER: Loai[] = ["hotel", "meal", "transport", "ticket"];
 
 interface Props {
   dayIdx: number;        // 1-based
-  cityLabel?: string;    // e.g. "Hà Nội Arrival"
-  hotelItems: BaoGiaItem[];
-  mealItems: BaoGiaItem[];
-  ticketItems: BaoGiaItem[];
-  transportItems: BaoGiaItem[];
+  cityLabel?: string;
+  ket: BaoGiaKetQua;
   isExpanded: boolean;
   onToggle: () => void;
+  // Mỗi item edit → tạo new ket_qua + push lên parent (live). Blur / delete /
+  // add → saveKetQua persist DB.
+  updateDraftKetQua: (next: BaoGiaKetQua) => void;
+  saveKetQua: (next: BaoGiaKetQua) => void;
 }
 
-// Một accordion day-card. Khi expanded hiển thị các nhóm dịch vụ (cảnh
-// điểm/ăn/KS/xe/vé). Read-only cho P1 — input chỉ để show layout.
 export function DayPanel({
-  dayIdx, cityLabel = "—",
-  hotelItems, mealItems, ticketItems, transportItems,
-  isExpanded, onToggle,
+  dayIdx, cityLabel = "—", ket, isExpanded, onToggle,
+  updateDraftKetQua, saveKetQua,
 }: Props) {
+  const items = ket.items || [];
+  // Item indices (theo ket.items[]) thuộc day này — giữ index thật để patch.
+  // Item KHÔNG có ngay_so → coi như Day 1 (back-compat).
+  const dayItemIdxs = items
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => (it.ngay_so ?? 1) === dayIdx)
+    .sort((a, b) => LOAI_ORDER.indexOf(a.it.loai) - LOAI_ORDER.indexOf(b.it.loai));
+
+  const patchItem = (idx: number, patch: Partial<BaoGiaItem>) => {
+    const newItems = items.map((it, i) => i === idx ? { ...it, ...patch } : it);
+    updateDraftKetQua({ ...ket, items: newItems });
+  };
+  const commitItem = (idx: number) => {
+    saveKetQua({ ...ket, items: items.map((it, i) => i === idx ? { ...it } : it) });
+  };
+  const deleteItem = (idx: number) => {
+    saveKetQua({ ...ket, items: items.filter((_, i) => i !== idx) });
+  };
+  const addItem = (loai: Loai) => {
+    const newItem: BaoGiaItem = { loai, mo_ta: "", don_gia: 0, ghi_chu: "", ngay_so: dayIdx };
+    saveKetQua({ ...ket, items: [...items, newItem] });
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
       <button
@@ -33,51 +69,52 @@ export function DayPanel({
           <span className="font-semibold text-blue-700">DAY {dayIdx}</span>
           <MapPin className="h-3.5 w-3.5 text-slate-400" />
           <span className="text-slate-700">{cityLabel}</span>
+          <span className="text-[11px] text-slate-400">· {dayItemIdxs.length} dịch vụ</span>
         </div>
         {isExpanded
           ? <ChevronDown className="h-4 w-4 text-slate-400" />
           : <ChevronRight className="h-4 w-4 text-slate-400" />}
       </button>
       {isExpanded && (
-        <div className="border-t border-slate-200 px-4 py-3 space-y-2">
-          {/* Cảnh điểm (dummy chips — schema chưa lưu cảnh điểm per ngày) */}
-          <Row
-            icon={<MapPin className="h-4 w-4 text-emerald-600" />}
-            label="Cảnh điểm"
-            rightContent={
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {/* P1 shell — chưa có dữ liệu cảnh điểm per ngày */}
-                <ChipPlaceholder>— chưa có dữ liệu</ChipPlaceholder>
-                <Button variant="outline" size="sm" className="h-6 text-xs px-2 gap-0.5">
-                  <Plus className="h-3 w-3" />
-                  Thêm
+        <div className="border-t border-slate-200 px-4 py-3 space-y-1.5">
+          {dayItemIdxs.length === 0 && (
+            <p className="text-xs text-slate-400 italic px-1">Chưa có dịch vụ cho ngày này.</p>
+          )}
+          {dayItemIdxs.map(({ it, i }) => (
+            <ItemRow
+              key={i}
+              item={it}
+              onChangeField={(field, value) => patchItem(i, { [field]: value })}
+              onCommit={() => commitItem(i)}
+              onDelete={() => deleteItem(i)}
+            />
+          ))}
+          <div className="pt-2 flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1 border-dashed text-slate-600 hover:bg-slate-50"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Thêm dịch vụ
                 </Button>
-              </div>
-            }
-          />
-
-          {/* Ăn trưa — show first meal item if any */}
-          <MealRow label="Ăn trưa" item={mealItems[0]} />
-          <MealRow label="Ăn tối"  item={mealItems[1]} />
-
-          {/* Khách sạn */}
-          <HotelRow item={hotelItems[0]} />
-
-          {/* Xe đưa đón */}
-          <TransportRow item={transportItems[0]} />
-
-          {/* Vé tham quan */}
-          <TicketRow item={ticketItems[0]} />
-
-          <div className="pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full h-9 text-xs gap-1 border-dashed text-slate-600 hover:bg-slate-50"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Thêm dịch vụ
-            </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {LOAI_ORDER.map((loai) => {
+                  const meta = LOAI_META[loai];
+                  return (
+                    <DropdownMenuItem key={loai} onClick={() => addItem(loai)} className="gap-2">
+                      <span className={cn("inline-flex items-center justify-center w-5 h-5 rounded", meta.tint)}>
+                        {meta.icon}
+                      </span>
+                      {meta.label}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       )}
@@ -85,154 +122,58 @@ export function DayPanel({
   );
 }
 
-/* ── Sub-rows ─────────────────────────────────────────────────────────── */
-
-function Row({
-  icon, label, rightContent,
+/* ── Item row (editable inline) ────────────────────────────────────── */
+function ItemRow({
+  item, onChangeField, onCommit, onDelete,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  rightContent: React.ReactNode;
+  item: BaoGiaItem;
+  onChangeField: <K extends keyof BaoGiaItem>(field: K, value: BaoGiaItem[K]) => void;
+  onCommit: () => void;
+  onDelete: () => void;
 }) {
+  const meta = LOAI_META[item.loai];
+  const [donGiaStr, setDonGiaStr] = useState(String(item.don_gia ?? 0));
+
   return (
-    <div className="flex items-start gap-3 py-1.5">
-      <div className="flex items-center gap-2 w-[110px] shrink-0 pt-1.5">
-        <span className="h-7 w-7 rounded-md bg-slate-100 inline-flex items-center justify-center">
-          {icon}
+    <div className="grid grid-cols-12 gap-2 items-center py-1">
+      <div className="col-span-2 flex items-center gap-1.5 text-xs font-medium text-slate-700 min-w-0">
+        <span className={cn("inline-flex items-center justify-center w-7 h-7 rounded-md shrink-0", meta.tint)}>
+          {meta.icon}
         </span>
-        <span className="text-xs font-medium text-slate-700">{label}</span>
+        <span className="truncate">{meta.label}</span>
       </div>
-      <div className="flex-1 min-w-0">{rightContent}</div>
+      <Input
+        value={item.mo_ta}
+        onChange={(e) => onChangeField("mo_ta", e.target.value)}
+        onBlur={onCommit}
+        placeholder="Tên dịch vụ / NCC..."
+        className="col-span-5 h-9 text-xs"
+      />
+      <Input
+        type="number"
+        value={donGiaStr}
+        onChange={(e) => {
+          setDonGiaStr(e.target.value);
+          const v = parseFloat(e.target.value);
+          if (!isNaN(v)) onChangeField("don_gia", v);
+        }}
+        onBlur={onCommit}
+        placeholder="Đơn giá"
+        className="col-span-2 h-9 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <div className="col-span-2 text-right">
+        <div className="text-[10px] text-slate-500 uppercase tracking-wide">Thành tiền</div>
+        <div className="text-xs font-semibold text-slate-900 tabular-nums">{fmtVnd(item.don_gia)}</div>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onDelete}
+        className="col-span-1 h-8 w-8 text-slate-400 hover:text-destructive"
+        title="Xoá dòng"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
     </div>
-  );
-}
-
-function MealRow({ label, item }: { label: string; item?: BaoGiaItem }) {
-  const total = (item?.don_gia ?? 0) * 3; // assume 3 bàn placeholder
-  return (
-    <Row
-      icon={<Utensils className="h-4 w-4 text-orange-600" />}
-      label={label}
-      rightContent={
-        <div className="grid grid-cols-12 gap-2 items-center">
-          <Input
-            value={item?.mo_ta || ""}
-            placeholder="Chọn nhà hàng..."
-            readOnly
-            className="col-span-5 h-9 bg-slate-50 text-xs"
-          />
-          <LabeledNum cls="col-span-2" label="Suất ăn" value={fmtVnd(item?.don_gia)} />
-          <LabeledNum cls="col-span-1" label="Số bàn" value="3" />
-          <LabeledNum cls="col-span-1" label="Markup" value="15 %" />
-          <div className="col-span-2 text-right">
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Thành tiền</div>
-            <div className="text-sm font-semibold text-slate-900 tabular-nums">{fmtVnd(total)}</div>
-          </div>
-          <Button variant="ghost" size="icon" className="col-span-1 h-8 w-8 text-slate-400 hover:text-destructive">
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      }
-    />
-  );
-}
-
-function HotelRow({ item }: { item?: BaoGiaItem }) {
-  return (
-    <Row
-      icon={<Hotel className="h-4 w-4 text-indigo-600" />}
-      label="Khách sạn"
-      rightContent={
-        <div className="grid grid-cols-12 gap-2 items-center">
-          <Input
-            value={item?.mo_ta || ""}
-            placeholder="Chọn khách sạn..."
-            readOnly
-            className="col-span-5 h-9 bg-slate-50 text-xs"
-          />
-          <LabeledNum cls="col-span-2" label="Hạng phòng" value="Deluxe" />
-          <LabeledNum cls="col-span-2" label="Số phòng" value="12" />
-          <div className="col-span-2 text-right">
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Thành tiền</div>
-            <div className="text-sm font-semibold text-slate-900 tabular-nums">{fmtVnd(item?.don_gia)}</div>
-          </div>
-          <Button variant="ghost" size="icon" className="col-span-1 h-8 w-8 text-slate-400 hover:text-destructive">
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      }
-    />
-  );
-}
-
-function TransportRow({ item }: { item?: BaoGiaItem }) {
-  return (
-    <Row
-      icon={<Bus className="h-4 w-4 text-cyan-600" />}
-      label="Xe đưa đón"
-      rightContent={
-        <div className="grid grid-cols-12 gap-2 items-center">
-          <Input
-            value={item?.mo_ta || ""}
-            placeholder="Chọn loại xe..."
-            readOnly
-            className="col-span-5 h-9 bg-slate-50 text-xs"
-          />
-          <LabeledNum cls="col-span-4" label="Thời gian" value="1 ngày" />
-          <div className="col-span-2 text-right">
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Thành tiền</div>
-            <div className="text-sm font-semibold text-slate-900 tabular-nums">{fmtVnd(item?.don_gia)}</div>
-          </div>
-          <Button variant="ghost" size="icon" className="col-span-1 h-8 w-8 text-slate-400 hover:text-destructive">
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      }
-    />
-  );
-}
-
-function TicketRow({ item }: { item?: BaoGiaItem }) {
-  return (
-    <Row
-      icon={<Ticket className="h-4 w-4 text-rose-600" />}
-      label="Vé tham quan"
-      rightContent={
-        <div className="grid grid-cols-12 gap-2 items-center">
-          <Input
-            value={item?.mo_ta || ""}
-            placeholder="Chọn vé..."
-            readOnly
-            className="col-span-5 h-9 bg-slate-50 text-xs"
-          />
-          <LabeledNum cls="col-span-2" label="Số lượng" value="25" />
-          <LabeledNum cls="col-span-2" label="Đơn giá" value={fmtVnd(item?.don_gia)} />
-          <div className="col-span-2 text-right">
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Thành tiền</div>
-            <div className="text-sm font-semibold text-slate-900 tabular-nums">{fmtVnd((item?.don_gia ?? 0) * 25)}</div>
-          </div>
-          <Button variant="ghost" size="icon" className="col-span-1 h-8 w-8 text-slate-400 hover:text-destructive">
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      }
-    />
-  );
-}
-
-function LabeledNum({ cls, label, value }: { cls: string; label: string; value: string }) {
-  return (
-    <div className={cls}>
-      <div className="text-[10px] text-slate-500 uppercase tracking-wide">{label}</div>
-      <div className="text-xs text-slate-800 tabular-nums mt-0.5">{value}</div>
-    </div>
-  );
-}
-
-function ChipPlaceholder({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 text-xs text-slate-400 italic">
-      {children}
-    </span>
   );
 }

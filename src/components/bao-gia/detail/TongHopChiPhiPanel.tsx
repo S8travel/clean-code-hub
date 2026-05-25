@@ -1,14 +1,22 @@
 import { RefreshCw, AlertTriangle, ChevronRight, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BaoGiaRow } from "@/hooks/use-bao-gia";
-import { costBreakdown, fmtVnd } from "./helpers";
+import { costBreakdown, fmtVnd, paxOf } from "./helpers";
 
 interface Props {
-  row: BaoGiaRow;
+  draft: BaoGiaRow;
 }
 
-export function TongHopChiPhiPanel({ row }: Props) {
-  const c = costBreakdown(row);
+// Live recompute từ draft: pax / profit / xr đổi → panel update ngay
+// (KHÔNG chờ blur save). Cost vốn (hotel/meal/...) vẫn từ case.total_cost
+// hiện có — stale khi pax đổi cho tới khi engine catalog-driven recompute.
+export function TongHopChiPhiPanel({ draft }: Props) {
+  const c = costBreakdown({
+    ket: draft.ket_qua,
+    exchangeRate: draft.exchange_rate ?? 26000,
+    profitUsd: draft.profit_usd ?? 0,
+    pax: paxOf(draft.ket_qua),
+  });
 
   return (
     <aside className="space-y-3 sticky top-4 self-start">

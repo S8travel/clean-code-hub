@@ -1,27 +1,32 @@
 import { useState } from "react";
-import { Copy, MoreHorizontal, Plus, GripVertical, MapPin } from "lucide-react";
+import { Copy, MoreHorizontal, Plus, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { BaoGiaRow } from "@/hooks/use-bao-gia";
-import { groupItemsByLoai } from "./helpers";
+import { toast } from "sonner";
+import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { DayPanel } from "./DayPanel";
 
 interface Props {
-  row: BaoGiaRow;
+  draft: BaoGiaRow;
+  updateDraftKetQua: (next: BaoGiaKetQua) => void;
+  saveKetQua: (next: BaoGiaKetQua) => void;
 }
 
 // 2-col layout: vertical day tabs (trái) + day accordions (phải).
-// Click day tab → expand đúng day đó, scroll vào view.
-export function ChuongTrinhTourSection({ row }: Props) {
-  const ket = row.ket_qua;
-  const soNgay = Math.max(1, ket?.so_ngay ?? 1);
+// Items được lưu trong ket_qua.items[] với items[].ngay_so. DayPanel filter
+// items theo dayIdx + render editable rows.
+export function ChuongTrinhTourSection({ draft, updateDraftKetQua, saveKetQua }: Props) {
+  const ket = draft.ket_qua;
   const [expandedDay, setExpandedDay] = useState(1);
+  if (!ket) return null;
+  const soNgay = Math.max(1, ket.so_ngay ?? 1);
 
-  const grouped = groupItemsByLoai(ket?.items);
-  // P1 shell — chưa có day grouping ở schema → mọi item dồn vào Day 1.
-  // Day 2..N hiển thị empty (placeholder rows trong DayPanel).
-
-  const dayLabels = Array.from({ length: soNgay }, (_, i) => `Ngày ${i + 1}`);
+  // Day i có bao nhiêu item (cho badge counter ở tab).
+  const countByDay: Record<number, number> = {};
+  (ket.items || []).forEach((it) => {
+    const d = it.ngay_so ?? 1;
+    countByDay[d] = (countByDay[d] || 0) + 1;
+  });
 
   return (
     <section className="bg-white border border-slate-200 rounded-lg p-4">
@@ -30,7 +35,12 @@ export function ChuongTrinhTourSection({ row }: Props) {
           Chương trình tour
         </h2>
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => toast.info("Sao chép ngày: tính năng đang phát triển")}
+          >
             <Copy className="h-3 w-3" />
             Sao chép ngày
           </Button>
@@ -43,9 +53,9 @@ export function ChuongTrinhTourSection({ row }: Props) {
       <div className="grid grid-cols-[180px_1fr] gap-3">
         {/* Day tabs (vertical) */}
         <div className="space-y-1.5">
-          {dayLabels.map((_, i) => {
-            const day = i + 1;
+          {Array.from({ length: soNgay }, (_, i) => i + 1).map((day) => {
             const active = expandedDay === day;
+            const count = countByDay[day] || 0;
             return (
               <button
                 key={day}
@@ -63,8 +73,7 @@ export function ChuongTrinhTourSection({ row }: Props) {
                     DAY {day}
                   </span>
                   <span className="text-[11px] text-slate-500 truncate w-full">
-                    {/* schema chưa có city per ngày */}
-                    {day === 1 ? "Bắt đầu" : "—"}
+                    {count} dịch vụ
                   </span>
                 </div>
                 <GripVertical className={cn("h-3.5 w-3.5 shrink-0", active ? "text-blue-400" : "text-slate-300")} />
@@ -75,6 +84,11 @@ export function ChuongTrinhTourSection({ row }: Props) {
             variant="outline"
             size="sm"
             className="w-full h-9 text-xs gap-1 border-dashed text-slate-600 hover:bg-slate-50"
+            onClick={() => {
+              // Tăng so_ngay +1; user có thể giảm bằng cách sửa ô Số ngày ở section trên.
+              saveKetQua({ ...ket, so_ngay: soNgay + 1 });
+              setExpandedDay(soNgay + 1);
+            }}
           >
             <Plus className="h-3.5 w-3.5" />
             Thêm ngày
@@ -83,31 +97,18 @@ export function ChuongTrinhTourSection({ row }: Props) {
 
         {/* Day panels */}
         <div className="space-y-2">
-          {dayLabels.map((_, i) => {
-            const day = i + 1;
-            return (
-              <DayPanel
-                key={day}
-                dayIdx={day}
-                cityLabel={day === 1 ? `${ket?.ten_chuong_trinh || "—"}`.split("–")[0]?.trim() : "—"}
-                // Day 1 nhận hết items (chưa có schema split-by-day).
-                // Day khác = empty.
-                hotelItems={day === 1 ? grouped.hotel : []}
-                mealItems={day === 1 ? grouped.meal : []}
-                ticketItems={day === 1 ? grouped.ticket : []}
-                transportItems={day === 1 ? grouped.transport : []}
-                isExpanded={expandedDay === day}
-                onToggle={() => setExpandedDay(day === expandedDay ? 0 : day)}
-              />
-            );
-          })}
-          {/* P1 note: data chưa phân theo ngày */}
-          {soNgay > 1 && (
-            <p className="text-[11px] text-slate-400 italic px-1 inline-flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              Dữ liệu chưa phân theo ngày — hiện gom về Day 1. P2 sẽ thêm `items[].ngay_so`.
-            </p>
-          )}
+          {Array.from({ length: soNgay }, (_, i) => i + 1).map((day) => (
+            <DayPanel
+              key={day}
+              dayIdx={day}
+              cityLabel={day === 1 ? `${ket.ten_chuong_trinh || "—"}`.split("–")[0]?.trim() : "—"}
+              ket={ket}
+              isExpanded={expandedDay === day}
+              onToggle={() => setExpandedDay(day === expandedDay ? 0 : day)}
+              updateDraftKetQua={updateDraftKetQua}
+              saveKetQua={saveKetQua}
+            />
+          ))}
         </div>
       </div>
     </section>

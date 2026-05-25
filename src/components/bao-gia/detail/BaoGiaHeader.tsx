@@ -23,7 +23,7 @@ export function BaoGiaHeader({ row, onSaveDraft, onExportPdf, onSendCustomer }: 
             <ChevronRight className="h-3 w-3 mx-1" />
             <Link to="/bao-gia" className="hover:text-slate-700">Báo giá</Link>
             <ChevronRight className="h-3 w-3 mx-1" />
-            <span className="text-slate-700 font-medium">{baoGiaCode(row.id)}</span>
+            <span className="text-slate-700 font-medium">{baoGiaCode(row)}</span>
           </nav>
         </div>
         <div className="flex items-center gap-3">
@@ -32,7 +32,7 @@ export function BaoGiaHeader({ row, onSaveDraft, onExportPdf, onSendCustomer }: 
             <span className={status.textCls}>{status.label}</span>
           </span>
           <span className="text-xs text-slate-500">
-            Mã báo giá: <span className="font-semibold text-slate-700">{baoGiaCode(row.id)}</span>
+            Mã báo giá: <span className="font-semibold text-slate-700">{baoGiaCode(row)}</span>
           </span>
           <span className="text-xs text-slate-500 inline-flex items-center gap-1">
             <Clock className="h-3 w-3" />
