@@ -64,32 +64,60 @@ function detectLoai(raw: string): BangGiaDichVu["loai"] {
   return "dich_vu";
 }
 
-export function parseExcelFile(buffer: ArrayBuffer): Omit<BangGiaDichVu, "id" | "created_at">[] {
+/** Trần giá hợp lệ cho 1 dòng bảng giá (10 tỷ VND/dòng — đủ cho mọi gói).
+ *  Giá vượt threshold = parse error (vd cell chứa nhiều giá trị nối nhau,
+ *  hoặc Excel scientific notation lỗi). Return null → bị filter ra. */
+const MAX_GIA_VND = 10_000_000_000;
+
+function parseGiaCell(raw: unknown): number | null {
+  if (raw == null) return null;
+  // Number type từ Excel — round (tránh float nhiễu) + giữ giá gốc.
+  if (typeof raw === "number" && isFinite(raw)) {
+    const v = Math.round(raw);
+    return v > 0 && v <= MAX_GIA_VND ? v : null;
+  }
+  // String: chỉ giữ digit. Vietnamese format "14.472.000" → "14472000".
+  const digits = String(raw).replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  // Số quá dài (> 11 ký tự = > 10 tỷ) → cell có lẽ chứa nhiều giá trị
+  // concat (vd "14472000" + "000002" do user merge cell). Reject.
+  if (digits.length > 11) return null;
+  const v = parseInt(digits, 10);
+  return v > 0 && v <= MAX_GIA_VND ? v : null;
+}
+
+export interface ParsedBangGia {
+  rows: Omit<BangGiaDichVu, "id" | "created_at">[];
+  skippedBadPrice: number;  // dòng có tên nhưng giá > 10 tỷ / không hợp lệ
+}
+
+export function parseExcelFile(buffer: ArrayBuffer): ParsedBangGia {
   const wb = XLSX.read(buffer, { type: "array" });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
 
-  return rows
-    .slice(1)
-    .map((row): Omit<BangGiaDichVu, "id" | "created_at"> | null => {
-      const loaiRaw = String(row[0] ?? "").trim();
-      const ten     = String(row[1] ?? "").trim();
-      const foc     = parseFloat(String(row[2] ?? "0").replace(/[^0-9.]/g, "")) || 0;
-      const giaStr  = String(row[3] ?? "").replace(/[^0-9]/g, "");
-      const gia     = giaStr ? parseInt(giaStr, 10) : null;
-      if (!ten || !gia) return null;
-      return { ten, loai: detectLoai(loaiRaw), gia, foc, active: true };
-    })
-    .filter((r): r is Omit<BangGiaDichVu, "id" | "created_at"> => r !== null);
+  const rows: Omit<BangGiaDichVu, "id" | "created_at">[] = [];
+  let skippedBadPrice = 0;
+  for (const row of rawRows.slice(1)) {
+    const loaiRaw = String(row[0] ?? "").trim();
+    const ten     = String(row[1] ?? "").trim();
+    const foc     = parseFloat(String(row[2] ?? "0").replace(/[^0-9.]/g, "")) || 0;
+    const gia     = parseGiaCell(row[3]);
+    if (!ten) continue;
+    if (gia == null) { skippedBadPrice++; continue; }
+    rows.push({ ten, loai: detectLoai(loaiRaw), gia, foc, active: true });
+  }
+  return { rows, skippedBadPrice };
 }
 
 // ── Parser: Tab-separated pricing file ─────────────────────────────────────
 // Format: Tên [TAB] FOC [TAB] Giá
 // Hai section: phần đầu (nhà hàng/dịch vụ) → phần khách sạn sau header "Chọn khách sạn"
 // Lưu ý: loai chỉ dùng để hiển thị UI, KHÔNG ảnh hưởng đến tính giá báo giá.
-export function parsePricingFile(text: string): Omit<BangGiaDichVu, "id" | "created_at">[] {
+export function parsePricingFile(text: string): ParsedBangGia {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const rows: Omit<BangGiaDichVu, "id" | "created_at">[] = [];
+  let skippedBadPrice = 0;
 
   let isHotelSection = false;
 
@@ -100,9 +128,7 @@ export function parsePricingFile(text: string): Omit<BangGiaDichVu, "id" | "crea
     if (!ten) continue;
 
     // Detect section header "Chọn khách sạn ..." → bật hotel section
-    // Dùng includes để không phụ thuộc vào encoding chính xác
     if (ten.toLowerCase().includes("ch") && ten.toLowerCase().includes("kh") && ten.toLowerCase().includes("s")) {
-      // "Chọn khách sạn" header
       if (cols.length >= 2 && (cols[1]?.includes("8") || cols[1]?.toLowerCase().includes("foc"))) {
         isHotelSection = true;
         continue;
@@ -112,21 +138,15 @@ export function parsePricingFile(text: string): Omit<BangGiaDichVu, "id" | "crea
     // Skip header rows (first row: "Dịch vụ / FOC / Giá")
     if (ten.toLowerCase().startsWith("d") && cols[1]?.toLowerCase().includes("foc")) continue;
 
-    // Parse FOC: col 1
     const focStr = (cols[1] ?? "").replace(/[^0-9.]/g, "");
     const foc = parseFloat(focStr) || 0;
 
-    // Parse Giá: col 2 — remove everything except digits
-    const giaStr = (cols[2] ?? "").replace(/[^0-9]/g, "");
-    const gia = giaStr ? parseInt(giaStr, 10) : null;
-
-    // Bỏ qua dòng không có giá
-    if (!gia) continue;
+    const gia = parseGiaCell(cols[2]);
+    if (gia == null) { skippedBadPrice++; continue; }
 
     const loai: BangGiaDichVu["loai"] = isHotelSection ? "hotel" : "nha_hang";
-
     rows.push({ ten, loai, gia, foc, active: true });
   }
 
-  return rows;
+  return { rows, skippedBadPrice };
 }
