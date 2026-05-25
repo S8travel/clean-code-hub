@@ -44,7 +44,7 @@ import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-// Subset thông tin đoàn mà section HDV cần (số khách + ngày + tên).
+// Subset thông tin đoàn mà section HDV cần (số khách + ngày + tên + tip overrides).
 export interface HDVDoanInfo {
   ten_doan?: string | null;
   so_khach?: number | null;
@@ -54,6 +54,10 @@ export interface HDVDoanInfo {
   so_khach_tl?: number | null;
   ngay_di?: string | null;
   ngay_ve?: string | null;
+  tip_rate?: number | null;
+  tip_so_khach_override?: number | null;
+  tip_so_ngay_override?: number | null;
+  tip_lump_sum?: number | null;
 }
 
 interface Props {
@@ -61,22 +65,31 @@ interface Props {
   doan?: HDVDoanInfo;
 }
 
-// Tính "Phải thu HDV" mặc định (giống logic mặc định ChiPhiPhasThuSection)
+// Tính "Phải thu HDV" — respect tip_* overrides từ doan (sync với
+// Điều tour > TipSection và Phải thu section).
 function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   if (!doan) return 0;
-  const soKhach =
+  const soKhachTotal =
     (doan.so_khach_lon ?? 0) + (doan.so_khach_em1 ?? 0) +
     (doan.so_khach_em2 ?? 0) + (doan.so_khach_tl ?? 0) ||
     doan.so_khach || 0;
-  const soNgay = doan.ngay_di && doan.ngay_ve
+  const soKhachTl = doan.so_khach_tl ?? 0;
+  const autoSoKhach = Math.max(0, soKhachTotal - soKhachTl); // T/L không đóng tip
+  const autoSoNgay = doan.ngay_di && doan.ngay_ve
     ? Math.max(1, Math.ceil((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
     : 0;
-  if (!soKhach || !soNgay) return 0;
-  const coTL = (doan.so_khach_tl ?? 0) > 0;
-  const tipDonGia = coTL ? 150 : 300;
+  const coTL = soKhachTl > 0;
+  const autoRate = coTL ? 150 : 300;
+
+  const effSoKhach = doan.tip_so_khach_override ?? autoSoKhach;
+  const effSoNgay = doan.tip_so_ngay_override ?? autoSoNgay;
+  const effRate = doan.tip_rate ?? autoRate;
+  if (!effSoKhach || !effSoNgay) return 0;
+
   const tyGiaStr = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
   const tyGia = tyGiaStr ? Number(tyGiaStr) : 800;
-  return soKhach * soNgay * tipDonGia * tyGia;
+  const tongNDT = doan.tip_lump_sum ?? (effSoKhach * effSoNgay * effRate);
+  return tongNDT * tyGia;
 }
 
 export default function ChiPhiHDVSection({ doanId, doan }: Props) {

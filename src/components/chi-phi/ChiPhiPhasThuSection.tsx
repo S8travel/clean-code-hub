@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,10 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { t, useTranslate } from "@/lib/i18n";
+import { useUpdateDoanTip } from "@/hooks/use-doan";
 import type { HDVDoanInfo } from "./ChiPhiHDVSection";
 
+// Default đơn giá NDT/khách/ngày khi không có override + theo có/không T/L.
 const NDT_TIP_CO_TL = 150;
 const NDT_TIP_KHONG_TL = 300;
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -21,23 +23,55 @@ interface ExtraRow { id: number; moTa: string; soTien: number; loaiTien: LoaiTie
 const LOAI_TIEN_LABEL: Record<LoaiTien, string> = { NDT: "NDT", "NT$": "NT$", "US$": "US$", USD: "USD", VND: "VND" };
 
 interface Props {
+  doanId: number;
   doan?: HDVDoanInfo;
 }
 
-export default function ChiPhiPhasThuSection({ doan }: Props) {
+export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
   useTranslate();
-  const soKhach =
+  const updateTip = useUpdateDoanTip();
+
+  // ── Tính auto từ doan ─────────────────────────────────────────────────────
+  const soKhachTotal =
     (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
     (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
     doan?.so_khach || 0;
-
-  const soNgay = doan?.ngay_di && doan?.ngay_ve
+  const soKhachTl = doan?.so_khach_tl ?? 0;
+  const autoSoKhach = Math.max(0, soKhachTotal - soKhachTl); // T/L không đóng tip
+  const autoSoNgay = doan?.ngay_di && doan?.ngay_ve
     ? Math.max(1, differenceInDays(parseISO(doan.ngay_ve), parseISO(doan.ngay_di)) + 1)
     : 0;
+  const coTL = soKhachTl > 0;
+  const autoRate = coTL ? NDT_TIP_CO_TL : NDT_TIP_KHONG_TL;
 
-  const coTL = (doan?.so_khach_tl ?? 0) > 0;
-  const defaultTipDonGia = coTL ? NDT_TIP_CO_TL : NDT_TIP_KHONG_TL;
+  // ── Effective = override ?? auto (sync 2 chiều với Điều tour > TipSection) ─
+  const effSoKhach = doan?.tip_so_khach_override ?? autoSoKhach;
+  const effSoNgay = doan?.tip_so_ngay_override ?? autoSoNgay;
+  const effRate = doan?.tip_rate ?? autoRate;
 
+  // ── Local input state (cho gõ mượt, sync khi doan đổi) ────────────────────
+  const [localSoKhach, setLocalSoKhach] = useState(String(effSoKhach || ""));
+  const [localSoNgay, setLocalSoNgay] = useState(String(effSoNgay || ""));
+  const [localRate, setLocalRate] = useState(effRate);
+  useEffect(() => { setLocalSoKhach(String(effSoKhach || "")); }, [effSoKhach]);
+  useEffect(() => { setLocalSoNgay(String(effSoNgay || "")); }, [effSoNgay]);
+  useEffect(() => { setLocalRate(effRate); }, [effRate]);
+
+  // Save handler: nếu giá trị mới = auto → set NULL (revert override),
+  // ngược lại lưu override. Tránh save khi không đổi.
+  const saveOverride = (field: "tip_so_khach_override" | "tip_so_ngay_override", val: number, autoVal: number, currentOverride: number | null | undefined) => {
+    const next = val === autoVal ? null : val;
+    if (next === (currentOverride ?? null)) return;
+    updateTip.mutate({ id: doanId, [field]: next });
+  };
+  const saveRate = (val: number) => {
+    const next = val === autoRate ? null : val;
+    if (next === (doan?.tip_rate ?? null)) return;
+    updateTip.mutate({ id: doanId, tip_rate: next });
+  };
+
+  // ── Tip currency + tỷ giá (local-only, không persist tới doan) ────────────
+  const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>("NDT");
   const [tyGia, setTyGia] = useState<number>(() => {
     const saved = localStorage.getItem("hdv_ty_gia_ndt");
     return saved ? Number(saved) : 800;
@@ -47,15 +81,15 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
     localStorage.setItem("hdv_ty_gia_ndt", String(v));
   };
 
-  const [tipDonGia, setTipDonGia] = useState(defaultTipDonGia);
-  const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>("NDT");
-  const [tipSoKhach, setTipSoKhach] = useState(soKhach);
-  const [tipSoNgay, setTipSoNgay] = useState(soNgay);
+  // ── Người thu (local — không có DB field) ─────────────────────────────────
   const [tipNguoiThu, setTipNguoiThu] = useState<NguoiThu>("hdv");
 
-  const tongTip = tipSoKhach * tipSoNgay * tipDonGia;
+  // ── Tổng tip (NDT + VND) — respect tip_lump_sum override (set ở TipSection) ─
+  const computedTip = effSoKhach * effSoNgay * effRate;
+  const tongTip = doan?.tip_lump_sum ?? computedTip;
   const tongVND = tongTip * tyGia;
 
+  // ── Extras (local) ─────────────────────────────────────────────────────────
   const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
   const addRow = () =>
     setExtraRows((prev) => [...prev, { id: Date.now(), moTa: "", soTien: 0, loaiTien: "NDT", tyGia, nguoiThu: "hdv" }]);
@@ -76,7 +110,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
     extraRows.filter((r) => r.nguoiThu === "hdv").reduce((s, r) => s + r.soTien * r.tyGia, 0);
   const ctTotalVND = totalVND - hdvTotalVND;
 
-  if (!soKhach || !soNgay) return null;
+  if (!effSoKhach || !effSoNgay) return null;
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -139,30 +173,51 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
               </td>
               <td className="px-2 py-2 text-center">
                 <Input
-                  type="number"
-                  value={tipSoKhach || ""}
-                  onChange={(e) => setTipSoKhach(Number(e.target.value) || 0)}
-                  className="h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto"
+                  type="text"
+                  inputMode="numeric"
+                  value={localSoKhach}
+                  onChange={(e) => setLocalSoKhach(e.target.value.replace(/\D/g, ""))}
+                  onBlur={() => {
+                    const v = localSoKhach ? Number(localSoKhach) : 0;
+                    saveOverride("tip_so_khach_override", v, autoSoKhach, doan?.tip_so_khach_override);
+                  }}
+                  className={cn(
+                    "h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto",
+                    doan?.tip_so_khach_override != null && "border-amber-300 text-amber-700",
+                  )}
+                  title={doan?.tip_so_khach_override != null ? `${t("Override")} (auto = ${autoSoKhach})` : t("Tự tính")}
                 />
               </td>
               <td className="px-2 py-2 text-center">
                 <Input
-                  type="number"
-                  value={tipSoNgay || ""}
-                  onChange={(e) => setTipSoNgay(Number(e.target.value) || 0)}
-                  className="h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto"
+                  type="text"
+                  inputMode="numeric"
+                  value={localSoNgay}
+                  onChange={(e) => setLocalSoNgay(e.target.value.replace(/\D/g, ""))}
+                  onBlur={() => {
+                    const v = localSoNgay ? Number(localSoNgay) : 0;
+                    saveOverride("tip_so_ngay_override", v, autoSoNgay, doan?.tip_so_ngay_override);
+                  }}
+                  className={cn(
+                    "h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto",
+                    doan?.tip_so_ngay_override != null && "border-amber-300 text-amber-700",
+                  )}
+                  title={doan?.tip_so_ngay_override != null ? `${t("Override")} (auto = ${autoSoNgay})` : t("Tự tính")}
                 />
               </td>
               <td className="px-3 py-2 text-center">
                 <div className="flex items-center gap-1 justify-center">
                   <DecimalInput
-                    value={tipDonGia}
-                    onChange={setTipDonGia}
-                    className="h-6 text-xs px-1.5 py-0 text-right w-[80px]"
+                    value={localRate}
+                    onChange={(v) => { setLocalRate(v); saveRate(v); }}
+                    className={cn(
+                      "h-6 text-xs px-1.5 py-0 text-right w-[80px]",
+                      doan?.tip_rate != null && "border-amber-300 text-amber-700",
+                    )}
                   />
                   <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)}>
                     <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
-                      <span>{tipLoaiTien}</span>
+                      <SelectValue>{tipLoaiTien}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="NDT">NDT</SelectItem>
@@ -234,7 +289,7 @@ export default function ChiPhiPhasThuSection({ doan }: Props) {
                       />
                       <Select value={row.loaiTien} onValueChange={(v) => handleLoaiTienChange(row.id, v as LoaiTien)}>
                         <SelectTrigger className="h-6 text-xs px-1.5 w-[56px]">
-                          <span>{row.loaiTien}</span>
+                          <SelectValue>{row.loaiTien}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="NDT">NDT</SelectItem>

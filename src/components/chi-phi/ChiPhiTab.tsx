@@ -43,6 +43,10 @@ export interface ChiPhiTabDoan {
     nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
   } | null;
   tang_pham?: unknown;
+  tip_rate?: number | null;
+  tip_so_khach_override?: number | null;
+  tip_so_ngay_override?: number | null;
+  tip_lump_sum?: number | null;
 }
 
 // Prop nhận vào: row `doan` từ useDoanList — các quan hệ join (`agents`, `xe`,
@@ -62,6 +66,10 @@ interface ChiPhiTabDoanInput {
   huong_dan_vien?: unknown;
   xe?: unknown;
   tang_pham?: unknown;
+  tip_rate?: number | null;
+  tip_so_khach_override?: number | null;
+  tip_so_ngay_override?: number | null;
+  tip_lump_sum?: number | null;
 }
 
 interface Props {
@@ -279,7 +287,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
         <ChiPhiHDVSection doanId={doanId} doan={doan} />
 
-        <ChiPhiPhasThuSection doan={doan} />
+        <ChiPhiPhasThuSection doanId={doanId} doan={doan} />
       </div>
 
       <DNTTNHPreviewModal
