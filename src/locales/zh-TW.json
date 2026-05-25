@@ -1968,5 +1968,20 @@
   "Tạo đoàn ngay": "立即建立團",
   "Có lỗi xảy ra": "發生錯誤",
   "Đã xoá đoàn": "已刪除團",
-  "Xoá thất bại": "刪除失敗"
+  "Xoá thất bại": "刪除失敗",
+  "Chỉ tạo ĐNTT cho khoản công ty trả. Đổi Nguồn sang \"Công ty\" trước.": "僅可為公司支付的款項建立付款申請。請先將「來源」切換為「公司」。",
+  "Vui lòng nhập tên người nhận hoàn ứng": "請輸入墊付款收款人姓名",
+  "Đã gửi ĐNTT gộp": "已送出合併付款申請",
+  "Không tìm thấy ĐNTT": "找不到付款申請",
+  "ĐNTT chưa có allocation — không in được": "付款申請尚無分配明細 — 無法列印",
+  "Đã xuất Giấy đề nghị hoàn ứng": "已匯出墊付款申請單",
+  "Lỗi xuất Word: ": "匯出 Word 錯誤：",
+  "ĐNTT gộp": "合併付款申請",
+  "Tạo đề nghị thanh toán gộp": "建立合併付款申請",
+  "Tên người nhận hoàn ứng": "墊付款收款人姓名",
+  "VD: Nguyễn Văn A": "例如：阮文 A",
+  "Để trống nếu trả tiền mặt": "若以現金支付請留空",
+  "Lý do (tùy chọn)": "原因（選填）",
+  "VD: Hoàn ứng chi phí phát sinh đoàn": "例如：歸還團隊發生費用",
+  "In Giấy đề nghị hoàn ứng (Word)": "列印墊付款申請單 (Word)"
 }
