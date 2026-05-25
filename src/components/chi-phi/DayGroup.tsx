@@ -44,6 +44,7 @@ export function DayGroup({
   onAddRoom,
   onAddService,
   disabled = false,
+  cpCommittedById,
 }: {
   dateStr: string;
   ngaySo?: number;
@@ -57,6 +58,10 @@ export function DayGroup({
   onAddRoom: () => void;
   onAddService: () => void;
   disabled?: boolean;
+  /** Row có chi_phi_id thuộc map = đã commit vào DNTT → khoá inline-edit dù
+   *  card đang ở chế độ thêm phát sinh. Row mới (id == null) hoặc id chưa
+   *  có DNTT → editable. */
+  cpCommittedById?: Record<number, boolean>;
 }) {
   useTranslate();
   const label =
@@ -89,12 +94,16 @@ export function DayGroup({
           )}
         </TableCell>
         <TableCell className="py-1 px-2 text-right">
-          {!disabled && <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />}
+          <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />
         </TableCell>
       </TableRow>
       {dayRows.map((row) => {
         const globalIdx = localRows.indexOf(row);
         const { rowFocDeduction } = calcRowFocBreakdown(row, dayRows, focKhach, focMien);
+        // Row mới (id == null) hoặc row chưa commit vào DNTT → editable.
+        // Row đã commit (so_tien_da_dntt > 0) → khoá theo lock của card.
+        const rowDisabled =
+          disabled && row.id != null && !!cpCommittedById?.[row.id];
         return (
           <KSRowInput
             key={`${row.doan_ngay_id}-${globalIdx}`}
@@ -104,7 +113,7 @@ export function DayGroup({
             onFieldChange={onFieldChange}
             onBlurSave={onBlurSave}
             onDelete={onDelete}
-            disabled={disabled}
+            disabled={rowDisabled}
           />
         );
       })}

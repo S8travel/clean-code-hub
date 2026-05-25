@@ -22,6 +22,7 @@ export default function KSServicesSection({
   onDelete,
   onToggleNguoiTt,
   disabled = false,
+  cpCommittedById,
 }: {
   serviceDayEntries: [string, LocalKSRow[]][];
   ngayDateToNgaySo: Record<string, number>;
@@ -33,6 +34,7 @@ export default function KSServicesSection({
   onDelete: (idx: number) => void;
   onToggleNguoiTt?: (idx: number) => void;
   disabled?: boolean;
+  cpCommittedById?: Record<number, boolean>;
 }) {
   useTranslate();
   return (
@@ -69,21 +71,21 @@ export default function KSServicesSection({
                     {label}
                   </TableCell>
                   <TableCell className="py-1 px-2 text-right">
-                    {!disabled && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
-                        onClick={() => onAddMore(doanNgayId, dateStr, dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined)}
-                      >
-                        <Plus className="h-3 w-3 mr-0.5" />
-                        {t("Thêm")}
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                      onClick={() => onAddMore(doanNgayId, dateStr, dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined)}
+                    >
+                      <Plus className="h-3 w-3 mr-0.5" />
+                      {t("Thêm")}
+                    </Button>
                   </TableCell>
                 </TableRow>
                 {dayRows.map((row) => {
                   const globalIdx = localRows.indexOf(row);
+                  const rowDisabled =
+                    disabled && row.id != null && !!cpCommittedById?.[row.id];
                   return (
                     <KSServiceRowInput
                       key={`svc-${row.doan_ngay_id}-${globalIdx}`}
@@ -93,7 +95,7 @@ export default function KSServicesSection({
                       onBlurSave={onBlurSave}
                       onDelete={onDelete}
                       onToggleNguoiTt={onToggleNguoiTt}
-                      disabled={disabled}
+                      disabled={rowDisabled}
                     />
                   );
                 })}
