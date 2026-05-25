@@ -253,19 +253,11 @@ export function useSaveHoaDonSoTien() {
         .eq("id", p.id);
       if (updErr) throw updErr;
 
-      if (hd == null) return { mismatch: false, notified: false };
-      const lech = Math.round(hd) - Math.round(p.dnttSoTien);
-      if (lech === 0) return { mismatch: false, notified: false };
+      const marker = `[HĐ#${p.id}]`;
+      const lech = hd == null ? 0 : Math.round(hd) - Math.round(p.dnttSoTien);
 
-      // Người giao = kế toán đang nhập. Đọc auth trực tiếp để tránh
-      // race (useAuth chưa resolve khi click nhanh) — giống fix tao_boi.
-      let nguoiGiao = p.nguoiGiao;
-      if (!nguoiGiao) {
-        const { data: au } = await externalSupabase.auth.getUser();
-        nguoiGiao = au?.user?.id ?? "";
-      }
-
-      // Người nhận: OP tạo DNTT → fallback OP phụ trách đoàn
+      // Người nhận: OP tạo DNTT → fallback OP phụ trách đoàn.
+      // Resolve sớm vì cả nhánh khớp lẫn lệch đều cần để tìm việc cũ.
       let recipient = p.taoBoi;
       if (!recipient && p.doanId) {
         const { data: d } = await externalSupabase
@@ -275,55 +267,123 @@ export function useSaveHoaDonSoTien() {
           .maybeSingle();
         recipient = d?.assigned_to ?? null;
       }
+
+      // Tìm việc cũ (open) cho HĐ này. Có thì update; không thì insert mới.
+      let existingCvId: number | null = null;
+      if (recipient) {
+        const { data: existed } = await externalSupabase
+          .from("cong_viec")
+          .select("id")
+          .eq("nguoi_nhan", recipient)
+          .ilike("mo_ta", `%${marker}%`)
+          .neq("trang_thai", "hoan_thanh")
+          .limit(1);
+        if (existed && existed.length > 0) existingCvId = existed[0].id;
+      }
+
+      // Mark thông báo cũ same dntt_id+loai là đã đọc trước khi insert mới —
+      // tránh OP thấy 2-3 thông báo lệch (số khác nhau) dồn trong chuông khi
+      // kế toán sửa HD nhiều lần. Giữ row (audit), chỉ không tính unread.
+      const markOldRead = async () => {
+        if (!recipient) return;
+        await externalSupabase
+          .from("thong_bao")
+          .update({ is_read: true })
+          .eq("user_id", recipient)
+          .eq("dntt_id", p.id)
+          .eq("loai", "giao_viec")
+          .eq("is_read", false);
+      };
+
+      // Nhánh KHỚP (lech == 0 hoặc HĐ clear): đóng việc cũ (nếu có) + thông
+      // báo "đã khớp" cho recipient để biết kế toán đã sửa. Không có việc cũ
+      // → no-op (HĐ đúng từ đầu, không cần báo).
+      if (hd == null || lech === 0) {
+        if (existingCvId && recipient) {
+          await externalSupabase
+            .from("cong_viec")
+            .update({
+              trang_thai: "hoan_thanh",
+              ghi_chu_ket_qua: `Kế toán đã sửa khớp số tiền: ${fmt(hd ?? 0)}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingCvId);
+          await markOldRead();
+          await externalSupabase.from("thong_bao").insert({
+            user_id: recipient,
+            cong_viec_id: existingCvId,
+            dntt_id: p.id,
+            loai: "giao_viec",
+            tieu_de: `✓ Hóa đơn đã khớp — ĐNTT #${p.id}`,
+            noi_dung: `HĐ ${fmt(hd ?? 0)} = ĐNTT ${fmt(p.dnttSoTien)}${p.tenDoan ? ` · ${p.tenDoan}` : ""}`,
+            is_read: false,
+          });
+          return { mismatch: false, notified: true };
+        }
+        return { mismatch: false, notified: false };
+      }
+
+      // Người giao = kế toán đang nhập. Đọc auth trực tiếp để tránh
+      // race (useAuth chưa resolve khi click nhanh) — giống fix tao_boi.
+      let nguoiGiao = p.nguoiGiao;
+      if (!nguoiGiao) {
+        const { data: au } = await externalSupabase.auth.getUser();
+        nguoiGiao = au?.user?.id ?? "";
+      }
+
       if (!recipient) return { mismatch: true, notified: false };
 
-      // Dedupe: đã có việc đang mở cho HĐ này chưa
-      const marker = `[HĐ#${p.id}]`;
-      const { data: existed } = await externalSupabase
-        .from("cong_viec")
-        .select("id")
-        .eq("nguoi_nhan", recipient)
-        .ilike("mo_ta", `%${marker}%`)
-        .neq("trang_thai", "hoan_thanh")
-        .limit(1);
-      if (existed && existed.length > 0) return { mismatch: true, notified: true };
-
-      const tieuDe = `Hóa đơn lệch số tiền — ĐNTT #${p.id}`;
       const moTa = `${marker} Hóa đơn nhập ${fmt(hd)} ≠ số tiền ĐNTT ${fmt(p.dnttSoTien)} ` +
         `(lệch ${lech > 0 ? "+" : ""}${fmt(lech)})${p.tenDoan ? ` · Đoàn ${p.tenDoan}` : ""}. ` +
         `Kiểm tra & xử lý.`;
+      const tbNoiDung = `HĐ ${fmt(hd)} ≠ ĐNTT ${fmt(p.dnttSoTien)} (lệch ${lech > 0 ? "+" : ""}${fmt(lech)})` +
+        `${p.tenDoan ? ` · ${p.tenDoan}` : ""}`;
 
-      const { data: cv, error: cvErr } = await externalSupabase
-        .from("cong_viec")
-        .insert({
-          tieu_de: tieuDe,
-          mo_ta: moTa,
-          doan_id: p.doanId || null,
-          nguoi_giao: nguoiGiao || null,
-          nguoi_nhan: recipient,
-          loai_viec: "thanh_toan",
-          do_uu_tien: "cao",
-          han_xu_ly: null,
-          trang_thai: "cho_nhan",
-        } as unknown as TablesInsert<"cong_viec">)
-        .select("id")
-        .single();
-      if (cvErr) throw cvErr;
+      let cvId = existingCvId;
+      if (cvId) {
+        // Việc cũ còn mở → update mo_ta phản ánh HĐ mới nhất, giữ trạng thái
+        const { error: cvUpdErr } = await externalSupabase
+          .from("cong_viec")
+          .update({ mo_ta: moTa, updated_at: new Date().toISOString() })
+          .eq("id", cvId);
+        if (cvUpdErr) throw cvUpdErr;
+      } else {
+        const tieuDe = `Hóa đơn lệch số tiền — ĐNTT #${p.id}`;
+        const { data: cv, error: cvErr } = await externalSupabase
+          .from("cong_viec")
+          .insert({
+            tieu_de: tieuDe,
+            mo_ta: moTa,
+            doan_id: p.doanId || null,
+            nguoi_giao: nguoiGiao || null,
+            nguoi_nhan: recipient,
+            loai_viec: "thanh_toan",
+            do_uu_tien: "cao",
+            han_xu_ly: null,
+            trang_thai: "cho_nhan",
+          } as unknown as TablesInsert<"cong_viec">)
+          .select("id")
+          .single();
+        if (cvErr) throw cvErr;
+        cvId = cv.id;
+      }
 
+      await markOldRead();
       await externalSupabase.from("thong_bao").insert({
         user_id: recipient,
-        cong_viec_id: cv.id,
+        cong_viec_id: cvId,
         dntt_id: p.id,
         loai: "giao_viec",
-        tieu_de: `⚠ Hóa đơn lệch — ĐNTT #${p.id}`,
-        noi_dung: `HĐ ${fmt(hd)} ≠ ĐNTT ${fmt(p.dnttSoTien)} (lệch ${lech > 0 ? "+" : ""}${fmt(lech)})` +
-          `${p.tenDoan ? ` · ${p.tenDoan}` : ""}`,
+        tieu_de: existingCvId
+          ? `⚠ Hóa đơn vẫn lệch — ĐNTT #${p.id}`
+          : `⚠ Hóa đơn lệch — ĐNTT #${p.id}`,
+        noi_dung: tbNoiDung,
         is_read: false,
       });
 
       return { mismatch: true, notified: true };
     },
-    onSuccess: (res, v) => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
       if (res.notified) {
         qc.invalidateQueries({ queryKey: ["cong_viec"] });
