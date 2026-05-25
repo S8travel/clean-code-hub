@@ -7,6 +7,16 @@ export interface BaoGiaItem {
   mo_ta: string;
   don_gia: number;
   ghi_chu: string;
+  // P3 — day grouping. 1-based ngày trong tour. Items cũ chưa có sẽ default
+  // Day 1 khi render (groupItemsByDay).
+  ngay_so?: number;
+  // Phân biệt bữa với loai='meal' (trưa/tối). Calc giữ nguyên (cả 2 cùng
+  // tính × pax). Item cũ không có field này sẽ hiển thị "Ăn uống" generic.
+  bua_an?: "trua" | "toi";
+  // FOC snapshot từ bang_gia_dich_vu (free portion/room). Trừ khỏi multiplier:
+  //   hotel: (rooms - foc) × gia,  meal/ticket: (pax - foc) × gia.
+  // Item cũ không có foc → mặc định 0 (không trừ).
+  foc?: number;
 }
 
 export interface BaoGiaCase {
@@ -51,6 +61,17 @@ export interface BaoGiaRow {
   ngay_ve: string | null;
   ghi_chu: string | null;
   hieu_luc_ngay: number | null;
+  // P3
+  ma_bg: string | null;   // generated col — read-only, auto từ id
+  lead_id: number | null; // FK → public.lead(id)
+  // Xe snapshot từ bang_gia_dich_vu (loai='xe'). KHÔNG còn FK — chọn từ bảng
+  // giá hoặc gõ free-text, snapshot ten+gia vào báo giá → re-import bảng
+  // giá không ảnh hưởng báo giá cũ. Match triết lý snapshot module chi phí.
+  xe_ten: string | null;
+  xe_gia: number | null;
+  // Phụ thu lump-sum: vé cầu đường, xe trung chuyển, các phí cố định khác.
+  // Tính 1 lần cho cả tour, KHÔNG nhân pax. Cộng vào tổng chi phí vốn.
+  phu_thu: number;
 }
 
 // ── Queries ──

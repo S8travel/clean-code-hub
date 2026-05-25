@@ -37,6 +37,7 @@ import {
 } from "@/hooks/use-bao-gia";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
 import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
+import { costBreakdown, liveKetQua } from "@/components/bao-gia/detail/helpers";
 import { toast } from "sonner";
 
 type ViewState =
@@ -50,11 +51,13 @@ const fmtUsd = (n: number) => n.toFixed(2);
 const LOAI_COLOR: Record<string, string> = {
   hotel: "bg-blue-100 text-blue-700",
   nha_hang: "bg-green-100 text-green-700",
+  xe: "bg-cyan-100 text-cyan-700",
   dich_vu: "bg-orange-100 text-orange-700",
 };
 const LOAI_LABEL: Record<string, string> = {
   hotel: "Khách sạn",
   nha_hang: "Nhà hàng",
+  xe: "Xe",
   dich_vu: "Dịch vụ",
 };
 
@@ -224,8 +227,8 @@ export default function BaoGiaPage() {
                 <thead>
                   <tr className="bg-[#E6F1FB]">
                     <th className="py-2 px-3 text-left font-semibold">Tên chương trình</th>
-                    <th className="py-2 px-3 text-right font-semibold">Giá TB (VND)</th>
-                    <th className="py-2 px-3 text-right font-semibold">Giá TB (USD)</th>
+                    <th className="py-2 px-3 text-right font-semibold">Giá TB / pax (VND)</th>
+                    <th className="py-2 px-3 text-right font-semibold">Giá TB / pax (USD)</th>
                     <th className="py-2 px-3 text-center font-semibold">Trạng thái</th>
                     <th className="py-2 px-3 text-right font-semibold">Ngày tạo</th>
                     <th className="py-2 px-3 text-center font-semibold">Thao tác</th>
@@ -233,15 +236,27 @@ export default function BaoGiaPage() {
                 </thead>
                 <tbody>
                   {list.map((row) => {
-                    const kq = row.ket_qua;
+                    // Live recompute giá TB 2 phương án (16+20 khách) — match
+                    // DETAIL panel "GIÁ BÁN TOUR (TB 2 phương án)", KHÔNG đọc
+                    // gia_trung_binh frozen từ AI extract.
+                    const xr = row.exchange_rate ?? 26000;
+                    const breakdown = costBreakdown({
+                      ket: row.ket_qua,
+                      exchangeRate: xr,
+                      profitUsd: row.profit_usd ?? 0,
+                      xeGia: row.xe_gia,
+                      phuThu: row.phu_thu,
+                    });
+                    const giaPaxVnd = breakdown?.gia_ban_tb_per_pax ?? null;
+                    const giaPaxUsd = breakdown?.gia_ban_tb_per_pax_usd ?? null;
                     return (
                       <tr key={row.id} className="border-t hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/bao-gia/${row.id}`)}>
                         <td className="py-2 px-3">
                           <span className="font-medium">{row.tieu_de || "(chưa có tên)"}</span>
-                          {kq && <span className="ml-2 text-muted-foreground">{kq.so_ngay} ngày</span>}
+                          {row.ket_qua && <span className="ml-2 text-muted-foreground">{row.ket_qua.so_ngay} ngày</span>}
                         </td>
-                        <td className="py-2 px-3 text-right font-medium text-blue-700">{kq ? fmt(kq.gia_trung_binh_vnd) : "—"}</td>
-                        <td className="py-2 px-3 text-right text-blue-700">{kq ? fmtUsd(kq.gia_trung_binh_usd) : "—"}</td>
+                        <td className="py-2 px-3 text-right font-medium text-blue-700">{giaPaxVnd != null ? fmt(giaPaxVnd) : "—"}</td>
+                        <td className="py-2 px-3 text-right text-blue-700">{giaPaxUsd != null ? fmtUsd(giaPaxUsd) : "—"}</td>
                         <td className="py-2 px-3 text-center">
                           <Badge variant={row.trang_thai === "final" ? "default" : "secondary"}>
                             {row.trang_thai === "final" ? "Chính thức" : "Nháp"}
@@ -252,9 +267,13 @@ export default function BaoGiaPage() {
                         </td>
                         <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-1 justify-center">
-                            {kq && (
+                            {row.ket_qua && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" title="Export Word"
-                                onClick={() => handleExportWord(kq, row.exchange_rate ?? 26000, row.profit_usd ?? 0)}>
+                                onClick={() => {
+                                  // Export với ket_qua live (case totals recompute) — match DETAIL
+                                  const fresh = liveKetQua(row) ?? row.ket_qua;
+                                  if (fresh) handleExportWord(fresh, row.exchange_rate ?? 26000, row.profit_usd ?? 0);
+                                }}>
                                 <FileDown className="h-3.5 w-3.5" />
                               </Button>
                             )}
@@ -297,6 +316,7 @@ export default function BaoGiaPage() {
                 <span className="ml-3">
                   (KS: {bangGia.filter(r => r.loai === "hotel").length} •
                   Ăn uống: {bangGia.filter(r => r.loai === "nha_hang").length} •
+                  Xe: {bangGia.filter(r => r.loai === "xe").length} •
                   Dịch vụ: {bangGia.filter(r => r.loai === "dich_vu").length})
                 </span>
               </p>

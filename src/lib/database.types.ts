@@ -104,12 +104,17 @@ export type Database = {
           hieu_luc_ngay: number | null
           id: number
           ket_qua: Json | null
+          lead_id: number | null
+          ma_bg: string | null
           ngay_di: string | null
           ngay_ve: string | null
           noi_dung_goc: string | null
+          phu_thu: number
           profit_usd: number | null
           tieu_de: string | null
           trang_thai: string | null
+          xe_gia: number | null
+          xe_ten: string | null
         }
         Insert: {
           created_at?: string | null
@@ -119,12 +124,17 @@ export type Database = {
           hieu_luc_ngay?: number | null
           id?: never
           ket_qua?: Json | null
+          lead_id?: number | null
+          ma_bg?: never
           ngay_di?: string | null
           ngay_ve?: string | null
           noi_dung_goc?: string | null
+          phu_thu?: number
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
+          xe_gia?: number | null
+          xe_ten?: string | null
         }
         Update: {
           created_at?: string | null
@@ -134,14 +144,27 @@ export type Database = {
           hieu_luc_ngay?: number | null
           id?: never
           ket_qua?: Json | null
+          lead_id?: number | null
+          ma_bg?: never
           ngay_di?: string | null
           ngay_ve?: string | null
           noi_dung_goc?: string | null
+          phu_thu?: number
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
+          xe_gia?: number | null
+          xe_ten?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bao_gia_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "lead"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       canh_diem: {
         Row: {

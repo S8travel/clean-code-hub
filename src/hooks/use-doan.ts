@@ -672,6 +672,29 @@ export function useDeleteDoan() {
   });
 }
 
+// Lightweight mutation cho tip fields (dùng từ ChiPhiPhasThuSection để sync 2 chiều
+// với Điều tour > TipSection). KHÔNG dùng useUpdateDoan vì nó kéo theo cascade
+// so_khach/ngay_di phức tạp không cần thiết cho tip-only update.
+export function useUpdateDoanTip() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...updates
+    }: {
+      id: number;
+      tip_rate?: number | null;
+      tip_so_khach_override?: number | null;
+      tip_so_ngay_override?: number | null;
+      tip_lump_sum?: number | null;
+    }) => {
+      const { error } = await externalSupabase.from("doan").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+  });
+}
+
 export function useCancelDoan() {
   const qc = useQueryClient();
   return useMutation({

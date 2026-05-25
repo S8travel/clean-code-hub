@@ -7,6 +7,9 @@ export interface ManualItem {
   mo_ta: string;
   bang_gia_ten: string;
   gia: number | null;
+  // FOC trừ khỏi multiplier (rooms cho hotel, pax cho meal/ticket).
+  // Default 0 nếu không khai báo.
+  foc?: number;
 }
 
 interface CaseConfig {
@@ -31,18 +34,20 @@ function calcCase(
 ): BaoGiaCase {
   const { guests, pax, rooms } = cfg;
 
+  // FOC trừ khỏi multiplier per item. clamp 0 để không lỗ ngược.
   const hotel = items
     .filter((i) => i.loai === "hotel" && i.gia)
-    .reduce((s, i) => s + i.gia! * rooms, 0);
+    .reduce((s, i) => s + Math.max(0, rooms - (i.foc ?? 0)) * i.gia!, 0);
 
   const meal = items
     .filter((i) => i.loai === "meal" && i.gia)
-    .reduce((s, i) => s + i.gia! * pax, 0);
+    .reduce((s, i) => s + Math.max(0, pax - (i.foc ?? 0)) * i.gia!, 0);
 
   const ticket = items
     .filter((i) => i.loai === "ticket" && i.gia)
-    .reduce((s, i) => s + i.gia! * pax, 0);
+    .reduce((s, i) => s + Math.max(0, pax - (i.foc ?? 0)) * i.gia!, 0);
 
+  // transport: lump-sum, KHÔNG áp FOC (catalog xe luôn foc=0).
   const transport = tienXe + tienPhuThu + items
     .filter((i) => (i.loai === "transport" || i.loai === "extra") && i.gia)
     .reduce((s, i) => s + i.gia!, 0);
@@ -75,7 +80,7 @@ export function calcBaoGia(
   const gia_trung_binh_vnd = Math.round((case_16.final_price_vnd + case_20.final_price_vnd) / 2);
   const gia_trung_binh_usd = (case_16.final_price_usd + case_20.final_price_usd) / 2;
 
-  // Map ManualItem → BaoGiaItem format
+  // Map ManualItem → BaoGiaItem format (giữ foc snapshot)
   const baoGiaItems = items
     .filter((i) => i.gia)
     .map((i) => ({
@@ -83,6 +88,7 @@ export function calcBaoGia(
       mo_ta: i.bang_gia_ten || i.mo_ta,
       don_gia: i.gia!,
       ghi_chu: "",
+      foc: i.foc ?? 0,
     }));
 
   return {

@@ -685,6 +685,7 @@
   "Mặc định = số khách − T/L": "預設 = 客數 − T/L",
   "T/L không đóng tip.": "T/L 不收小費。",
   "Lump sum override — không sync với số khách": "總額覆寫 — 不會隨客數同步",
+  "Override": "手動覆寫",
   "Tự tính": "自動計算",
   "Reset về auto-compute": "重設為自動計算",
   "Code đoàn": "團號",

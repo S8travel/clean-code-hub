@@ -1,25 +1,29 @@
 import { useRef, useState } from "react";
-import { Upload, Loader2, CheckCircle } from "lucide-react";
+import { Upload, Loader2, CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useImportBangGia, parsePricingFile, parseExcelFile } from "@/hooks/use-bang-gia-dich-vu";
+import {
+  useImportBangGia, parsePricingFile, parseExcelFile,
+  type ParsedBangGia,
+} from "@/hooks/use-bang-gia-dich-vu";
 import { toast } from "sonner";
 
 const LOAI_LABEL: Record<string, string> = {
   hotel: "Khách sạn",
   nha_hang: "Nhà hàng / DV ăn uống",
+  xe: "Xe / Vận chuyển",
   dich_vu: "Dịch vụ khác",
 };
 
 const LOAI_COLOR: Record<string, string> = {
   hotel: "bg-blue-100 text-blue-700",
   nha_hang: "bg-green-100 text-green-700",
+  xe: "bg-cyan-100 text-cyan-700",
   dich_vu: "bg-orange-100 text-orange-700",
 };
 
 export function BangGiaImport() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<ReturnType<typeof parsePricingFile> | null>(null);
+  const [preview, setPreview] = useState<ParsedBangGia | null>(null);
   const [dragging, setDragging] = useState(false);
   const { mutate: importRows, isPending } = useImportBangGia();
 
@@ -28,14 +32,20 @@ export function BangGiaImport() {
     const reader = new FileReader();
     if (isExcel) {
       reader.onload = (e) => {
-        const rows = parseExcelFile(e.target?.result as ArrayBuffer);
-        setPreview(rows);
+        const parsed = parseExcelFile(e.target?.result as ArrayBuffer);
+        setPreview(parsed);
+        if (parsed.skippedBadPrice > 0) {
+          toast.warning(`Bỏ qua ${parsed.skippedBadPrice} dòng do giá không hợp lệ (>10 tỷ hoặc cell lỗi)`);
+        }
       };
       reader.readAsArrayBuffer(file);
     } else {
       reader.onload = (e) => {
-        const rows = parsePricingFile(e.target?.result as string);
-        setPreview(rows);
+        const parsed = parsePricingFile(e.target?.result as string);
+        setPreview(parsed);
+        if (parsed.skippedBadPrice > 0) {
+          toast.warning(`Bỏ qua ${parsed.skippedBadPrice} dòng do giá không hợp lệ`);
+        }
       };
       reader.readAsText(file, "utf-8");
     }
@@ -50,7 +60,7 @@ export function BangGiaImport() {
 
   const handleImport = () => {
     if (!preview) return;
-    importRows(preview, {
+    importRows(preview.rows, {
       onSuccess: (count) => {
         toast.success(`Đã import ${count} dịch vụ vào bảng giá!`);
         setPreview(null);
@@ -61,9 +71,10 @@ export function BangGiaImport() {
 
   const stats = preview
     ? {
-        hotel: preview.filter((r) => r.loai === "hotel").length,
-        nha_hang: preview.filter((r) => r.loai === "nha_hang").length,
-        dich_vu: preview.filter((r) => r.loai === "dich_vu").length,
+        hotel: preview.rows.filter((r) => r.loai === "hotel").length,
+        nha_hang: preview.rows.filter((r) => r.loai === "nha_hang").length,
+        xe: preview.rows.filter((r) => r.loai === "xe").length,
+        dich_vu: preview.rows.filter((r) => r.loai === "dich_vu").length,
       }
     : null;
 
@@ -72,7 +83,7 @@ export function BangGiaImport() {
       <p className="text-xs text-muted-foreground">
         Upload file bảng giá định dạng <span className="font-medium text-foreground">Excel (.xlsx)</span> hoặc .txt/.tsv phân cách Tab. Hệ thống tự phân tích và lưu vào database.
         <br />
-        <span className="font-medium text-foreground">Excel:</span> 1 sheet, hàng 1 là tiêu đề, cột: <span className="font-medium text-foreground">Loại | Tên | FOC | Giá</span> (Loại: KS / NH / DV).
+        <span className="font-medium text-foreground">Excel:</span> 1 sheet, hàng 1 là tiêu đề, cột: <span className="font-medium text-foreground">Loại | Tên | FOC | Giá</span> (Loại: KS / NH / XE / DV).
         <br />
         <span className="font-medium text-foreground">Lưu ý:</span> Import mới sẽ thay thế toàn bộ bảng giá hiện tại.
       </p>
@@ -110,9 +121,21 @@ export function BangGiaImport() {
               </div>
             ))}
             <span className="text-xs text-muted-foreground ml-auto">
-              Tổng: <strong>{preview.length}</strong> dịch vụ
+              Tổng: <strong>{preview.rows.length}</strong> dịch vụ
             </span>
           </div>
+
+          {/* Skipped warning */}
+          {preview.skippedBadPrice > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>
+                Bỏ qua <strong>{preview.skippedBadPrice}</strong> dòng do giá không hợp lệ
+                (giá &gt; 10 tỷ VND/dòng hoặc cell chứa nhiều giá trị nối nhau).
+                Kiểm tra lại file gốc nếu cần.
+              </span>
+            </div>
+          )}
 
           {/* Preview table */}
           <div className="border rounded max-h-64 overflow-y-auto">
@@ -126,7 +149,7 @@ export function BangGiaImport() {
                 </tr>
               </thead>
               <tbody>
-                {preview.map((row, i) => (
+                {preview.rows.map((row, i) => (
                   <tr key={i} className="border-t hover:bg-muted/20">
                     <td className="py-1 px-2">{row.ten}</td>
                     <td className="py-1 px-2 text-center">
@@ -157,7 +180,7 @@ export function BangGiaImport() {
               ) : (
                 <>
                   <CheckCircle className="h-4 w-4 mr-1" />
-                  Xác nhận import {preview.length} mục
+                  Xác nhận import {preview.rows.length} mục
                 </>
               )}
             </Button>

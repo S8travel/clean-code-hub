@@ -440,6 +440,18 @@ function buildAutoDoc(
   const { case_16, case_20 } = ketQua;
   const HALF = Math.floor(CONTENT_W / 2);
 
+  // Giá / pax cho từng phương án + TB 2 phương án (khớp với DETAIL panel).
+  // case_X.total_cost đã include phu_thu (qua liveKetQua → calcBaoGia với
+  // tienPhuThu lump-sum vào transport).
+  const profit16 = Math.round(profitUsd * 16 * exchangeRate);
+  const profit20 = Math.round(profitUsd * 20 * exchangeRate);
+  const giaBan16 = (case_16?.total_cost ?? 0) + profit16;
+  const giaBan20 = (case_20?.total_cost ?? 0) + profit20;
+  const giaBan16PerPax = Math.round(giaBan16 / 16);
+  const giaBan20PerPax = Math.round(giaBan20 / 20);
+  const giaBanTbPerPax = Math.round((giaBan16PerPax + giaBan20PerPax) / 2);
+  const giaBanTbPerPaxUsd = exchangeRate > 0 ? giaBanTbPerPax / exchangeRate : 0;
+
   const headerTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     rows: [
@@ -606,9 +618,10 @@ function buildAutoDoc(
         children: [
           cell(
             [
-              p("GIÁ ĐỀ XUẤT (TRUNG BÌNH 2 PHƯƠNG ÁN)", { bold: true, size: 18, color: "FFFFFF", align: AlignmentType.CENTER }),
-              p(`${fmt(ketQua.gia_trung_binh_vnd)} VND / khách`, { bold: true, size: 32, color: "FFFFFF", align: AlignmentType.CENTER }),
-              p(`≈ ${fmtUsd(ketQua.gia_trung_binh_usd)} USD / khách`, { size: 20, color: "CCDDFF", align: AlignmentType.CENTER }),
+              p("GIÁ BÁN TOUR (TRUNG BÌNH 2 PHƯƠNG ÁN)", { bold: true, size: 18, color: "FFFFFF", align: AlignmentType.CENTER }),
+              p(`${fmt(giaBanTbPerPax)} VND / khách`, { bold: true, size: 32, color: "FFFFFF", align: AlignmentType.CENTER }),
+              p(`≈ ${fmtUsd(giaBanTbPerPaxUsd)} USD / khách`, { size: 20, color: "CCDDFF", align: AlignmentType.CENTER }),
+              p(`16 khách: ${fmt(giaBan16PerPax)} VND / pax  ·  20 khách: ${fmt(giaBan20PerPax)} VND / pax`, { size: 16, color: "CCDDFF", align: AlignmentType.CENTER }),
             ],
             { width: CONTENT_W, shading: RESULT_SHADING, margins: { top: 200, bottom: 200, left: 200, right: 200 } }
           ),
