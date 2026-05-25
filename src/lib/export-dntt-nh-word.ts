@@ -258,11 +258,13 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
       // Số khách — per row: dòng main = entry.so_khach (raw), dòng phát sinh = item.so_luong
       const soKhachRow = isFirst ? entry.so_khach : item.so_luong;
       cells.push(cell([p(String(soKhachRow), { size: 14 })], { width: COL_W[3] }));
-      // FOC — chỉ dòng main hiện FOC (extras không có FOC). Format "X免Y" nếu có cả 2.
+      // FOC — chỉ dòng main hiện FOC (extras không có FOC). In SỐ KHÁCH ĐƯỢC MIỄN
+      // đã tính: so_mien = floor(so_khach / foc_khach * foc_mien). Số nguyên, làm tròn xuống.
+      const focCount = isFirst && entry.foc_khach && entry.foc != null && entry.so_khach > 0
+        ? Math.floor((entry.so_khach / entry.foc_khach) * entry.foc)
+        : null;
       const focText = isFirst
-        ? (entry.foc_khach && entry.foc != null
-            ? `${entry.foc_khach}免${entry.foc}`
-            : entry.foc != null ? String(entry.foc) : "—")
+        ? (focCount != null ? String(focCount) : "—")
         : "—";
       cells.push(cell([p(focText, { size: 14 })], { width: COL_W[4] }));
 
