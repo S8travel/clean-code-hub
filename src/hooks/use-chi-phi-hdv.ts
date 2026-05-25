@@ -61,6 +61,7 @@ export interface HDVHoTroItem {
   don_gia: number;
   tien_cong_ty: number;
   tien_hdv: number;
+  nha_cung_cap_id: number | null;
 }
 
 export interface HDVSectionData {
@@ -130,7 +131,7 @@ export function useChiPhiHDVSection(doanId?: number) {
       // 3b. Load chi phí hỗ trợ HDV (công ty chi cho HDV)
       const { data: hoTroRows } = await externalSupabase
         .from("doan_chi_phi")
-        .select("id, mo_ta, loai, so_luong, don_gia, tien_cong_ty, tien_hdv")
+        .select("id, mo_ta, loai, so_luong, don_gia, tien_cong_ty, tien_hdv, nha_cung_cap_id")
         .eq("doan_id", doanId!)
         .eq("danh_muc", "hdv_ho_tro")
         .order("created_at", { ascending: true });
@@ -143,6 +144,7 @@ export function useChiPhiHDVSection(doanId?: number) {
         don_gia: r.don_gia ?? 0,
         tien_cong_ty: r.tien_cong_ty ?? 0,
         tien_hdv: r.tien_hdv ?? 0,
+        nha_cung_cap_id: r.nha_cung_cap_id ?? null,
       }));
       // tongHoTroHDV = tổng chi phí section (cả công ty + HDV trả). Số HDV
       // phải hoàn lại = chỉ phần HDV ứng trước (tien_hdv).
