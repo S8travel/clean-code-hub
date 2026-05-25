@@ -8,12 +8,14 @@ import { toast } from "sonner";
 const LOAI_LABEL: Record<string, string> = {
   hotel: "Khách sạn",
   nha_hang: "Nhà hàng / DV ăn uống",
+  xe: "Xe / Vận chuyển",
   dich_vu: "Dịch vụ khác",
 };
 
 const LOAI_COLOR: Record<string, string> = {
   hotel: "bg-blue-100 text-blue-700",
   nha_hang: "bg-green-100 text-green-700",
+  xe: "bg-cyan-100 text-cyan-700",
   dich_vu: "bg-orange-100 text-orange-700",
 };
 
@@ -63,6 +65,7 @@ export function BangGiaImport() {
     ? {
         hotel: preview.filter((r) => r.loai === "hotel").length,
         nha_hang: preview.filter((r) => r.loai === "nha_hang").length,
+        xe: preview.filter((r) => r.loai === "xe").length,
         dich_vu: preview.filter((r) => r.loai === "dich_vu").length,
       }
     : null;
@@ -72,7 +75,7 @@ export function BangGiaImport() {
       <p className="text-xs text-muted-foreground">
         Upload file bảng giá định dạng <span className="font-medium text-foreground">Excel (.xlsx)</span> hoặc .txt/.tsv phân cách Tab. Hệ thống tự phân tích và lưu vào database.
         <br />
-        <span className="font-medium text-foreground">Excel:</span> 1 sheet, hàng 1 là tiêu đề, cột: <span className="font-medium text-foreground">Loại | Tên | FOC | Giá</span> (Loại: KS / NH / DV).
+        <span className="font-medium text-foreground">Excel:</span> 1 sheet, hàng 1 là tiêu đề, cột: <span className="font-medium text-foreground">Loại | Tên | FOC | Giá</span> (Loại: KS / NH / XE / DV).
         <br />
         <span className="font-medium text-foreground">Lưu ý:</span> Import mới sẽ thay thế toàn bộ bảng giá hiện tại.
       </p>

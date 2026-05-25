@@ -50,11 +50,13 @@ const fmtUsd = (n: number) => n.toFixed(2);
 const LOAI_COLOR: Record<string, string> = {
   hotel: "bg-blue-100 text-blue-700",
   nha_hang: "bg-green-100 text-green-700",
+  xe: "bg-cyan-100 text-cyan-700",
   dich_vu: "bg-orange-100 text-orange-700",
 };
 const LOAI_LABEL: Record<string, string> = {
   hotel: "Khách sạn",
   nha_hang: "Nhà hàng",
+  xe: "Xe",
   dich_vu: "Dịch vụ",
 };
 
@@ -297,6 +299,7 @@ export default function BaoGiaPage() {
                 <span className="ml-3">
                   (KS: {bangGia.filter(r => r.loai === "hotel").length} •
                   Ăn uống: {bangGia.filter(r => r.loai === "nha_hang").length} •
+                  Xe: {bangGia.filter(r => r.loai === "xe").length} •
                   Dịch vụ: {bangGia.filter(r => r.loai === "dich_vu").length})
                 </span>
               </p>

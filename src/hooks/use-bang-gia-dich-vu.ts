@@ -5,7 +5,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 export interface BangGiaDichVu {
   id: number;
   ten: string;
-  loai: "hotel" | "nha_hang" | "dich_vu";
+  loai: "hotel" | "nha_hang" | "xe" | "dich_vu";
   gia: number | null;
   foc: number;
   active: boolean;
@@ -58,6 +58,8 @@ export function useImportBangGia() {
 function detectLoai(raw: string): BangGiaDichVu["loai"] {
   const n = raw.toLowerCase().trim();
   if (n === "ks" || n.includes("hotel") || n.startsWith("kh")) return "hotel";
+  // Xe phải check TRƯỚC nha_hang vì "nh" includes match rộng có thể nhầm.
+  if (n === "xe" || n === "transport" || n.includes("vận chuyển") || n.includes("van chuyen") || n.includes("vehicle")) return "xe";
   if (n === "nh" || n.includes("nh") || n.includes("nha") || n.includes("nhà")) return "nha_hang";
   return "dich_vu";
 }
