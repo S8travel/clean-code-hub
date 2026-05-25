@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { Plus, Trash2, FileDown, Printer, FileText, Settings } from "lucide-react";
@@ -58,6 +59,7 @@ const LOAI_LABEL: Record<string, string> = {
 };
 
 export default function BaoGiaPage() {
+  const navigate = useNavigate();
   const { data: list = [], isLoading } = useBaoGiaList();
   const { data: bangGia = [] } = useBangGiaDichVu();
   const createMutation = useCreateBaoGia();
@@ -233,7 +235,7 @@ export default function BaoGiaPage() {
                   {list.map((row) => {
                     const kq = row.ket_qua;
                     return (
-                      <tr key={row.id} className="border-t hover:bg-muted/20 cursor-pointer" onClick={() => setView({ mode: "view", row })}>
+                      <tr key={row.id} className="border-t hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/bao-gia/${row.id}`)}>
                         <td className="py-2 px-3">
                           <span className="font-medium">{row.tieu_de || "(chưa có tên)"}</span>
                           {kq && <span className="ml-2 text-muted-foreground">{kq.so_ngay} ngày</span>}
