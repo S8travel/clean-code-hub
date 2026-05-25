@@ -38,6 +38,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
     congNoByKs, hoanTienByKs,
     groupCongNoTotalByKs, groupCongNoCNByKs, groupCongNoHTByKs,
     thucTeOverrideById, canTruByDnttId,
+    cpCommittedById,
     toggledKsIds, selectedKsIds, dinhKyKsIds,
     editingDnttId, editAmount,
     doanId, updateDNTTPending,
@@ -336,6 +337,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                     onAddRoom={() => handleAddRow(ksId, doanNgayId, dateStr, refItemForDay)}
                     onAddService={() => handleAddRow(ksId, doanNgayId, dateStr, refItemForDay, "dich_vu_khac")}
                     disabled={isKsLocked}
+                    cpCommittedById={cpCommittedById}
                   />
                 );
               })}
@@ -381,6 +383,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
               onDelete={handleDelete}
               onToggleNguoiTt={handleToggleRowNguoiTt}
               disabled={isKsLocked}
+              cpCommittedById={cpCommittedById}
             />
           )}
         </div>}

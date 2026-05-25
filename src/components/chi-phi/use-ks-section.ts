@@ -1043,6 +1043,14 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   const allSelected = selectedKsIds.length === distinctKsIdsFromNgay.length && distinctKsIdsFromNgay.length > 0;
   const ksWithDnttSelected = selectedKsIds.filter((id) => activeDnttByKs[id]).length;
 
+  // Row đã commit vào DNTT (cho_duyet/da_duyet/paid) → khoá inline-edit, bắt user
+  // hủy DNTT trước. Row chưa commit (so_tien_da_dntt = 0) → editable, kể cả khi
+  // KS có row khác đã thanh toán — cho phép thêm phát sinh trên cùng card.
+  const cpCommittedById: Record<number, boolean> = {};
+  chiPhiRows.forEach((cp) => {
+    if (cp.id != null && (cp.so_tien_da_dntt ?? 0) > 0) cpCommittedById[cp.id] = true;
+  });
+
   // ── Clustered data + handlers cho <KSCard> ─────────────────────────────────
 
   const cardData: KSCardData = {
@@ -1052,6 +1060,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     congNoByKs, hoanTienByKs,
     groupCongNoTotalByKs, groupCongNoCNByKs, groupCongNoHTByKs,
     thucTeOverrideById, canTruByDnttId,
+    cpCommittedById,
     toggledKsIds, selectedKsIds, dinhKyKsIds,
     editingDnttId, editAmount,
     doanId,
@@ -1141,6 +1150,7 @@ export interface KSCardData {
   groupCongNoHTByKs: Record<number, number>;
   thucTeOverrideById: Map<number, number>;
   canTruByDnttId: Record<number, number>;
+  cpCommittedById: Record<number, boolean>;
   toggledKsIds: Set<number>;
   selectedKsIds: number[];
   dinhKyKsIds: Set<number>;
