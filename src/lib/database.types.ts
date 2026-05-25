@@ -100,8 +100,12 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           exchange_rate: number | null
+          ghi_chu: string | null
+          hieu_luc_ngay: number | null
           id: number
           ket_qua: Json | null
+          ngay_di: string | null
+          ngay_ve: string | null
           noi_dung_goc: string | null
           profit_usd: number | null
           tieu_de: string | null
@@ -111,8 +115,12 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           exchange_rate?: number | null
+          ghi_chu?: string | null
+          hieu_luc_ngay?: number | null
           id?: never
           ket_qua?: Json | null
+          ngay_di?: string | null
+          ngay_ve?: string | null
           noi_dung_goc?: string | null
           profit_usd?: number | null
           tieu_de?: string | null
@@ -122,8 +130,12 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           exchange_rate?: number | null
+          ghi_chu?: string | null
+          hieu_luc_ngay?: number | null
           id?: never
           ket_qua?: Json | null
+          ngay_di?: string | null
+          ngay_ve?: string | null
           noi_dung_goc?: string | null
           profit_usd?: number | null
           tieu_de?: string | null

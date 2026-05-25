@@ -46,6 +46,11 @@ export interface BaoGiaRow {
   trang_thai: string;
   created_at: string;
   created_by: string | null;
+  // Field P2 — trang chi tiết báo giá. Nullable trên row cũ vì mới migrate.
+  ngay_di: string | null;
+  ngay_ve: string | null;
+  ghi_chu: string | null;
+  hieu_luc_ngay: number | null;
 }
 
 // ── Queries ──

@@ -36,7 +36,7 @@ export function BaoGiaHeader({ row, onSaveDraft, onExportPdf, onSendCustomer }: 
           </span>
           <span className="text-xs text-slate-500 inline-flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            Hiệu lực: <span className="font-medium text-slate-700">7 ngày</span>
+            Hiệu lực: <span className="font-medium text-slate-700">{row.hieu_luc_ngay ?? 7} ngày</span>
           </span>
           <Button variant="outline" size="sm" onClick={onSaveDraft} className="h-8 gap-1.5">
             <Save className="h-3.5 w-3.5" />
