@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,9 +12,13 @@ import { t, useTranslate } from "@/lib/i18n";
 interface Props {
   userId: string;
   userName: string;
+  /** Task id từ deep-link (vd /my-job?cong_viec=123) — auto-mở popup chi tiết. */
+  initialTaskId?: number | null;
+  /** Gọi sau khi popup mở để clear param khỏi URL, tránh re-open khi user đóng. */
+  onConsumeInitialTask?: () => void;
 }
 
-export default function GiaoViecTab({ userId, userName }: Props) {
+export default function GiaoViecTab({ userId, userName, initialTaskId, onConsumeInitialTask }: Props) {
   useTranslate();
   const { data: tasks = [], isLoading } = useCongViecList(userId);
 
@@ -23,6 +27,19 @@ export default function GiaoViecTab({ userId, userName }: Props) {
   const [filterPriority, setFilterPriority] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+
+  // Deep-link từ thông báo: mở popup chi tiết task tương ứng. Chỉ switch view
+  // (received/sent) khi task khớp với user — nếu task nằm ngoài scope của user
+  // (filter loại bỏ) vẫn mở được popup vì selectedTask derive trực tiếp từ tasks.
+  useEffect(() => {
+    if (!initialTaskId || tasks.length === 0) return;
+    const target = tasks.find((t) => t.id === initialTaskId);
+    if (!target) return;
+    setSelectedId(initialTaskId);
+    if (target.nguoi_nhan === userId) setView("received");
+    else if (target.nguoi_giao === userId) setView("sent");
+    onConsumeInitialTask?.();
+  }, [initialTaskId, tasks, userId, onConsumeInitialTask]);
 
   // Always derive from fresh tasks so detail reflects latest state after mutations
   const selectedTask: CongViecRow | null =

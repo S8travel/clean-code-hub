@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, differenceInDays, startOfMonth, endOfMonth, parseISO, isToday, isBefore } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
@@ -212,7 +212,16 @@ function filterDNTTByScope(items: DNTTItem[], scope: Set<string>): DNTTItem[] {
 export default function MyJobPage() {
   useTranslate();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+
+  // Mở từ thông báo: /my-job?cong_viec=ID → switch sang tab Giao việc + auto-mở
+  // popup chi tiết. GiaoViecTab tự read param, mình chỉ cần force tab.
+  const congViecParam = searchParams.get("cong_viec");
+  const [activeTab, setActiveTab] = useState(congViecParam ? "giao-viec" : "tong-quan");
+  useEffect(() => {
+    if (congViecParam) setActiveTab("giao-viec");
+  }, [congViecParam]);
   const { data: allDoan = [], isLoading: loadingDoan } = useDoanList();
   const { data: td, isLoading: loadingTD } = useTheodoi();
 
@@ -502,7 +511,7 @@ export default function MyJobPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="tong-quan">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="h-9">
             <TabsTrigger value="tong-quan" className="text-xs">{t("Tổng quan")}</TabsTrigger>
             <TabsTrigger value="deadline" className="text-xs">
@@ -962,7 +971,16 @@ export default function MyJobPage() {
           {/* ── Tab Giao việc ─────────────────────────────────────────────── */}
           <TabsContent value="giao-viec">
             {uid && user?.ho_ten ? (
-              <GiaoViecTab userId={uid} userName={user.ho_ten} />
+              <GiaoViecTab
+                userId={uid}
+                userName={user.ho_ten}
+                initialTaskId={congViecParam ? Number(congViecParam) : null}
+                onConsumeInitialTask={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("cong_viec");
+                  setSearchParams(next, { replace: true });
+                }}
+              />
             ) : null}
           </TabsContent>
         </Tabs>
