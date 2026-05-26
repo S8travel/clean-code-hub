@@ -37,6 +37,7 @@ import {
 import { useUpdateDNTT } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
 import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
@@ -1230,6 +1231,7 @@ function HDVHoTroRow({
 
 function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo | null }) {
   const cancelMut = useCancelDNTT();
+  const { user } = useAuth();
 
   const isHuy = d.trang_thai_duyet === "da_huy";
   const isTuChoi = d.trang_thai_duyet === "tu_choi";
@@ -1238,15 +1240,16 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
   const isChoDuyet = d.trang_thai_duyet === "cho_duyet";
   const isQuyetToan = d.ref_loai === "hdv_quyet_toan";
 
-  const handlePrintQuyetToan = () => {
+  const handlePrintQuyetToan = async () => {
     if (!d.quyet_toan_data) {
       toast.error(t("Chưa có chi tiết quyết toán. Tạo lại quyết toán với form chi tiết để xuất Excel."));
       return;
     }
     try {
-      exportHDVQuyetToanExcel({
+      await exportHDVQuyetToanExcel({
         data: d.quyet_toan_data,
         hdv,
+        nguoiDeNghi: user?.ho_ten ?? "",
         ngayLap: d.created_at,
       });
     } catch (e: unknown) {
@@ -1340,6 +1343,7 @@ function CreateHDVPaymentModal({
 }: CreateModalProps) {
   const hdvName = hdv?.ten ?? "";
   const createMut = useCreateHDVPayment();
+  const { user } = useAuth();
   const isQT = refLoai === "hdv_quyet_toan";
 
   // Defaults từ doan
@@ -1432,12 +1436,13 @@ function CreateHDVPaymentModal({
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!isQT) return;
     try {
-      exportHDVQuyetToanExcel({
+      await exportHDVQuyetToanExcel({
         data: buildQuyetToanData(),
         hdv: hdv ?? null,
+        nguoiDeNghi: user?.ho_ten ?? "",
       });
       toast.success(t("Đã xuất file Excel"));
     } catch (e: unknown) {
