@@ -300,7 +300,9 @@ export default function LockPhongTheoKSView({ data }: Props) {
           (x) => x.lp.deadline && x.lp.deadline < TODAY && x.r.email_status !== "da_xac_nhan",
         ).length;
         const pct = total ? Math.round((daXN / total) * 100) : 0;
+        // Chỉ tính deadline của đoàn còn chờ xử lý — loại đoàn đã chốt (thanh_doan/da_huy)
         const earliestDl = allRows
+          .filter((x) => x.r.outcome_status !== "thanh_doan" && x.r.outcome_status !== "da_huy")
           .map((x) => x.lp.deadline)
           .filter((d): d is string => !!d)
           .sort()[0] ?? null;
