@@ -109,8 +109,8 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     <div className="p-6 max-w-2xl space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Chi tiết cảnh điểm</h2>
-        <Badge className={loai === "dich_vu" ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"}>
-          {loai === "dich_vu" ? "Dịch vụ" : "Cảnh điểm"}
+        <Badge className={loai === "dich_vu" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}>
+          {loai === "dich_vu" ? "Có gửi mail" : "Không gửi mail"}
         </Badge>
       </div>
 
@@ -123,11 +123,11 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           <Label className="text-xs">Loại</Label>
           <Select value={loai} onValueChange={setLoai}>
             <SelectTrigger className="h-9 text-sm">
-              <span>{loai === "canh_diem" ? "Cảnh điểm" : loai === "dich_vu" ? "Dịch vụ" : ""}</span>
+              <span>{loai === "canh_diem" ? "Không gửi mail" : loai === "dich_vu" ? "Có gửi mail" : ""}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="canh_diem">Cảnh điểm</SelectItem>
-              <SelectItem value="dich_vu">Dịch vụ</SelectItem>
+              <SelectItem value="canh_diem">Không gửi mail</SelectItem>
+              <SelectItem value="dich_vu">Có gửi mail</SelectItem>
             </SelectContent>
           </Select>
         </div>

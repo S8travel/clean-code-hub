@@ -1124,12 +1124,13 @@ export async function syncDieuTourToBookingDV(params: {
 }): Promise<{ synced: number; warnings: SyncWarning[] }> {
   const { doanId, days, canhDiemList, soKhach } = params;
 
-  // Collect co_phi + cong_ty items
+  // Collect co_phi + tag dich_vu items (KHÔNG phụ thuộc nguoi_thanh_toan —
+  // HDV trả cash vẫn cần gửi mail booking với NCC để giữ chỗ).
   const coPhiItems: { cd: CanhDiemItem; ngay_date: string }[] = [];
   for (const day of days) {
     for (const item of day.items) {
       const cd = canhDiemList.find((c) => c.id === item.canh_diem_id);
-      if (cd && cd.co_phi && cd.nguoi_thanh_toan === "cong_ty") {
+      if (cd && cd.co_phi && cd.loai === "dich_vu") {
         coPhiItems.push({ cd, ngay_date: day.ngay_date });
       }
     }
@@ -1343,7 +1344,7 @@ export async function checkPreSaveWarnings(params: {
     for (const dbItem of dbItems) {
       if (!currentCdIds.has(dbItem.canh_diem_id)) {
         const cd = canhDiemList.find((c) => c.id === dbItem.canh_diem_id);
-        if (!cd || !cd.co_phi || cd.nguoi_thanh_toan !== "cong_ty") continue;
+        if (!cd || !cd.co_phi || cd.loai !== "dich_vu") continue;
 
         const ncc = cd.dia_diem || cd.ten;
         const { data: bookingDv } = await externalSupabase
