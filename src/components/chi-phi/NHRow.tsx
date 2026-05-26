@@ -1,5 +1,5 @@
 import { format, subDays, parseISO } from "date-fns";
-import { Plus, Ban, Pencil, Check, X, CalendarClock } from "lucide-react";
+import { Plus, Ban, Check, X, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -394,13 +394,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                             </div>
                           );
                         })()}
-                        {d.trang_thai_duyet === "cho_duyet" && (
-                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-blue-500 hover:text-blue-600"
-                            title={t("Sửa số tiền")}
-                            onClick={() => { setEditingDnttId(d.id); setEditAmount(String(d.so_tien)); }}>
-                            <Pencil className="h-2.5 w-2.5" />
-                          </Button>
-                        )}
+                        {/* ĐNTT sai → hủy, KHÔNG sửa inline (gỡ pencil 2026-05-26) */}
                       </>
                     )}
                   </div>
@@ -409,7 +403,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
               {dnttMismatch !== 0 && (
                 <span
                   className="inline-flex items-center px-1 py-px rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
-                  title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.")}`}
+                  title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Hủy ĐNTT & tạo lại.")}`}
                 >
                   ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
                 </span>
