@@ -303,16 +303,23 @@ export default function NHRow({ meal, data, handlers }: Props) {
           </div>
         </td>
 
-        {/* CK% editable */}
+        {/* CK% editable + số tiền CK (absolute để input thẳng hàng các cell khác) */}
         <td className="px-2 py-2">
-          <div className="flex justify-center">
+          <div className="relative flex justify-center">
             {row ? (
-              <NHInput
-                value={row.chiet_khau_phan_tram}
-                onChange={(v) => handleChange(key, "chiet_khau_phan_tram", v)}
-                onBlur={() => handleSave(key)}
-                width="w-[48px]"
-              />
+              <>
+                <NHInput
+                  value={row.chiet_khau_phan_tram}
+                  onChange={(v) => handleChange(key, "chiet_khau_phan_tram", v)}
+                  onBlur={() => handleSave(key)}
+                  width="w-[48px]"
+                />
+                {chietKhauSoTien > 0 && (
+                  <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap pointer-events-none">
+                    −{fmt(chietKhauSoTien)}
+                  </span>
+                )}
+              </>
             ) : <span className="text-muted-foreground">—</span>}
           </div>
         </td>
