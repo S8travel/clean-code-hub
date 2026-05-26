@@ -7,12 +7,14 @@ import { useDoanList } from "@/hooks/use-doan";
  *
  * Rule chuẩn áp dụng MỌI trang:
  * - `role IN (admin, giam_doc)` → bypass mọi filter (xem hết)
+ * - `bo_phan = 'ke_toan'` → bypass VP filter (kế toán làm cho toàn công ty,
+ *   cross-VP), vẫn áp `phan_loai_tour` nếu set
  * - Khác:
  *   - `user.van_phong_id`: NULL = xem mọi VP; có giá trị = chỉ thấy đoàn cùng VP
  *   - `user.phan_loai_tour`: NULL = xem mọi loại; mảng = chỉ thấy `doan.thi_truong IN array`
  *
- * Cá nhân đặc biệt (vd Linh là TP kế toán cross-VP): set `van_phong_id=NULL`
- * + `phan_loai_tour=NULL` trên user_roles để bypass cả 2 filter.
+ * Cá nhân đặc biệt: set `van_phong_id=NULL` hoặc `phan_loai_tour=NULL`
+ * trên user_roles để bypass field tương ứng.
  *
  * Cách dùng:
  *   const scope = useDoanScope();
@@ -25,11 +27,13 @@ export function useDoanScope() {
   const { user } = useAuth();
   const role = user?.role ?? null;
   const isPrivileged = role === "admin" || role === "giam_doc";
+  const isKeToan = user?.bo_phan === "ke_toan";
 
   // Fetch list đoàn user được xem (đã apply VP + phan_loai_tour ở useDoanList)
   // Hook này luôn enabled → các trang dùng useDoanScope sẽ cache chung query.
   const phanLoaiTour = isPrivileged ? null : (user?.phan_loai_tour ?? null);
-  const vanPhongId = isPrivileged ? null : (user?.van_phong_id ?? null);
+  // Kế toán: bypass VP filter (làm toàn công ty cross-VP)
+  const vanPhongId = isPrivileged || isKeToan ? null : (user?.van_phong_id ?? null);
   const { data: scopedDoanRows = [], isLoading } = useDoanList(
     phanLoaiTour,
     vanPhongId,
