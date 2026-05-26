@@ -29,6 +29,7 @@ import {
   type HoaDonUNCRow, type TrangThaiDoc,
 } from "@/hooks/use-hoa-don-unc";
 import { useAuth } from "@/hooks/use-auth";
+import { useDoanScope } from "@/hooks/use-doan-scope";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import UncEmailModal from "@/components/hoa-don-unc/UncEmailModal";
 import BatchUncDialog from "@/components/hoa-don-unc/BatchUncDialog";
@@ -569,7 +570,9 @@ function HoaDonUNCPageContent() {
     trangThaiUNC: (trangThaiUNC || "all") as TrangThaiDoc | "all",
   }), [doanId, loai, trangThaiTT, trangThaiHD, trangThaiUNC]);
 
-  const { data: rows = [], isLoading } = useHoaDonUNCList(filters);
+  const { data: rowsRaw = [], isLoading } = useHoaDonUNCList(filters);
+  const scope = useDoanScope();
+  const rows = useMemo(() => scope.filterByDoanId(rowsRaw), [scope, rowsRaw]);
   const { data: summary } = useHoaDonUNCSummary();
   const { data: doanOpts = [] } = useDoanOptions();
 

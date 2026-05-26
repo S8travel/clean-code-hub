@@ -296,10 +296,15 @@ export function useCurrentUserProfile() {
   });
 }
 
-// Doan list — phanLoaiTour=null → no filter (admin/giám đốc); array → filter by loai_tour
-export function useDoanList(phanLoaiTour?: string[] | null) {
+// Doan list — phanLoaiTour=null → no filter (admin/giám đốc); array → filter by thi_truong.
+// vanPhongId=null → no filter; number → only doan có cùng van_phong_id.
+// SCOPE filter cả 2 áp dụng cùng lúc (caller pass từ useDoanScope).
+export function useDoanList(
+  phanLoaiTour?: string[] | null,
+  vanPhongId?: number | null,
+) {
   return useQuery({
-    queryKey: ["doan", phanLoaiTour ?? null],
+    queryKey: ["doan", phanLoaiTour ?? null, vanPhongId ?? null],
     staleTime: 30_000,
     queryFn: async () => {
       let query = externalSupabase
@@ -316,6 +321,9 @@ export function useDoanList(phanLoaiTour?: string[] | null) {
         `);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
         query = query.in("thi_truong", phanLoaiTour);
+      }
+      if (vanPhongId != null) {
+        query = query.eq("van_phong_id", vanPhongId);
       }
       const { data, error } = await query.order("ngay_di", { ascending: true });
       if (error) throw error;

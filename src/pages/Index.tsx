@@ -43,6 +43,7 @@ import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useUploadDoanTaiLieu } from "@/hooks/use-doan-tai-lieu";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
+import { useDoanScope } from "@/hooks/use-doan-scope";
 import { errMsg } from "@/lib/error";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
@@ -65,10 +66,11 @@ const LOAI_TOUR_OPTIONS = [
 export default function Index() {
   useTranslate(); // re-render khi đổi ngôn ngữ
   const { user: currentUser } = useAuth();
-  const phanLoaiTour = (currentUser?.role !== "admin" && currentUser?.role !== "giam_doc")
-    ? (currentUser?.phan_loai_tour ?? null)
-    : null;
-  const { data: groupsRaw, isLoading, error } = useDoanList(phanLoaiTour);
+  const scope = useDoanScope();
+  const { data: groupsRaw, isLoading, error } = useDoanList(
+    scope.phanLoaiTour,
+    scope.vanPhongId,
+  );
   const groups = groupsRaw as unknown as DoanRow[] | undefined;
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   useDoanRealtime();

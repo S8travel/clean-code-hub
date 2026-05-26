@@ -20,6 +20,7 @@ import CongNoDetailModal from "@/components/CongNoDetailModal";
 import { cn } from "@/lib/utils";
 import { useDoanOptions } from "@/hooks/use-dntt";
 import { useCongNoList, useUpdateCongNoStatus, useCreatePrepaidDNTT, type CongNoRow } from "@/hooks/use-cong-no";
+import { useDoanScope } from "@/hooks/use-doan-scope";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { toast } from "@/hooks/use-toast";
 import { errMsg } from "@/lib/error";
@@ -82,7 +83,9 @@ export default function CongNoPage() {
     doanId: doanId ? Number(doanId) : null,
   }), [doanId]);
 
-  const { data: allRows = [], isLoading } = useCongNoList(filters);
+  const { data: allRowsRaw = [], isLoading } = useCongNoList(filters);
+  const scope = useDoanScope();
+  const allRows = useMemo(() => scope.filterByDoanId(allRowsRaw), [scope, allRowsRaw]);
   const { data: doanOpts = [] } = useDoanOptions();
   const changeStatusMut = useUpdateCongNoStatus();
 

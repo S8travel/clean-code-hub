@@ -20,6 +20,7 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDoanList } from "@/hooks/use-doan";
+import { useDoanScope } from "@/hooks/use-doan-scope";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { useDNTTNeedingApproval } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
@@ -222,7 +223,11 @@ export default function MyJobPage() {
   useEffect(() => {
     if (congViecParam) setActiveTab("giao-viec");
   }, [congViecParam]);
-  const { data: allDoan = [], isLoading: loadingDoan } = useDoanList();
+  const scope = useDoanScope();
+  const { data: allDoan = [], isLoading: loadingDoan } = useDoanList(
+    scope.phanLoaiTour,
+    scope.vanPhongId,
+  );
   const { data: td, isLoading: loadingTD } = useTheodoi();
 
   const [search, setSearch] = useState("");
