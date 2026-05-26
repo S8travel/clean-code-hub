@@ -338,6 +338,15 @@ export function useApplySeriToDoan() {
         (existingNgay ?? []).map((r) => [r.ngay_so, r.id]),
       );
 
+      // Cần doan_nhom_id để INSERT row mới — lấy nhóm "Toàn đoàn" (thu_tu=1)
+      const { data: nhomDefault } = await externalSupabase
+        .from("doan_nhom")
+        .select("id")
+        .eq("doan_id", doanId)
+        .eq("thu_tu", 1)
+        .maybeSingle();
+      if (!nhomDefault) throw new Error("Đoàn chưa có nhóm mặc định — áp seri thất bại");
+
       const ngaySoToDoanNgayId = new Map<number, number>();
       for (const sn of seriNgayRows) {
         const d = new Date(baseDate);
@@ -367,7 +376,12 @@ export function useApplySeriToDoan() {
           // INSERT new
           const { data: inserted, error } = await externalSupabase
             .from("doan_ngay")
-            .insert({ doan_id: doanId, ngay_so: sn.ngay_so, ...seriFields })
+            .insert({
+              doan_id: doanId,
+              doan_nhom_id: nhomDefault.id,
+              ngay_so: sn.ngay_so,
+              ...seriFields,
+            })
             .select("id")
             .single();
           if (error) throw error;

@@ -113,6 +113,7 @@ export type Database = {
           profit_usd: number | null
           tieu_de: string | null
           trang_thai: string | null
+          vcb_rate: number | null
           xe_gia: number | null
           xe_ten: string | null
         }
@@ -133,6 +134,7 @@ export type Database = {
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
+          vcb_rate?: number | null
           xe_gia?: number | null
           xe_ten?: string | null
         }
@@ -153,6 +155,7 @@ export type Database = {
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
+          vcb_rate?: number | null
           xe_gia?: number | null
           xe_ten?: string | null
         }
@@ -1541,6 +1544,7 @@ export type Database = {
           an_trua_so_khach: number | null
           created_at: string | null
           doan_id: number | null
+          doan_nhom_id: number
           id: number
           khach_san_id: number | null
           ks_loai_phong: string | null
@@ -1562,6 +1566,7 @@ export type Database = {
           an_trua_so_khach?: number | null
           created_at?: string | null
           doan_id?: number | null
+          doan_nhom_id: number
           id?: number
           khach_san_id?: number | null
           ks_loai_phong?: string | null
@@ -1583,6 +1588,7 @@ export type Database = {
           an_trua_so_khach?: number | null
           created_at?: string | null
           doan_id?: number | null
+          doan_nhom_id?: number
           id?: number
           khach_san_id?: number | null
           ks_loai_phong?: string | null
@@ -1616,10 +1622,87 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "doan_ngay_doan_nhom_id_fkey"
+            columns: ["doan_nhom_id"]
+            isOneToOne: false
+            referencedRelation: "doan_nhom"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "doan_ngay_khach_san_id_fkey"
             columns: ["khach_san_id"]
             isOneToOne: false
             referencedRelation: "khach_san"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doan_nhom: {
+        Row: {
+          created_at: string
+          doan_id: number
+          ghi_chu: string | null
+          hdv_id: number | null
+          id: number
+          so_khach_em1: number | null
+          so_khach_em2: number | null
+          so_khach_lon: number | null
+          so_khach_tl: number | null
+          ten_nhom: string
+          thu_tu: number
+          updated_at: string
+          xe_id: number | null
+        }
+        Insert: {
+          created_at?: string
+          doan_id: number
+          ghi_chu?: string | null
+          hdv_id?: number | null
+          id?: number
+          so_khach_em1?: number | null
+          so_khach_em2?: number | null
+          so_khach_lon?: number | null
+          so_khach_tl?: number | null
+          ten_nhom: string
+          thu_tu?: number
+          updated_at?: string
+          xe_id?: number | null
+        }
+        Update: {
+          created_at?: string
+          doan_id?: number
+          ghi_chu?: string | null
+          hdv_id?: number | null
+          id?: number
+          so_khach_em1?: number | null
+          so_khach_em2?: number | null
+          so_khach_lon?: number | null
+          so_khach_tl?: number | null
+          ten_nhom?: string
+          thu_tu?: number
+          updated_at?: string
+          xe_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doan_nhom_doan_id_fkey"
+            columns: ["doan_id"]
+            isOneToOne: false
+            referencedRelation: "doan"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_nhom_hdv_id_fkey"
+            columns: ["hdv_id"]
+            isOneToOne: false
+            referencedRelation: "huong_dan_vien"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_nhom_xe_id_fkey"
+            columns: ["xe_id"]
+            isOneToOne: false
+            referencedRelation: "nha_xe_loai_xe"
             referencedColumns: ["id"]
           },
         ]

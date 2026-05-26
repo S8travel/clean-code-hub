@@ -34,6 +34,7 @@ import CompanyHeader from "@/components/dieu-tour/CompanyHeader";
 import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
 import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
 import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
+import DoanNhomTabs from "@/components/dieu-tour/DoanNhomTabs";
 import TipSection from "@/components/dieu-tour/TipSection";
 import BookingKSTab from "@/components/dieu-tour/BookingKSTab";
 import BookingNHTab from "@/components/booking-nh/BookingNHTab";
@@ -77,8 +78,10 @@ export default function DoanDetail() {
   const { data: nhaHangList = [] } = useNhaHang();
   const { data: khachSanList = [] } = useKhachSan();
   const { data: allSetMenus = [] } = useAllSetMenus();
-  const { data: dbNgayRows = [] } = useDoanNgayList(doanId || undefined);
-  const { data: dbNgayItems = [] } = useDoanNgayItems(doanId || undefined);
+  // Nhóm active cho tab Điều Tour (Phase 2). DoanNhomTabs auto-set khi nhóm list load.
+  const [activeNhomId, setActiveNhomId] = useState<number | null>(null);
+  const { data: dbNgayRows = [] } = useDoanNgayList(doanId || undefined, activeNhomId);
+  const { data: dbNgayItems = [] } = useDoanNgayItems(doanId || undefined, activeNhomId);
   const saveMutation = useSaveDieuTour();
   const { mutate: initDoanNgayMutate } = useInitDoanNgay();
 
@@ -232,6 +235,7 @@ export default function DoanDetail() {
     saveMutation.mutate(
       {
         doanId,
+        doanNhomId: activeNhomId,
         doanFields: {
           bang_don: bangDon || null,
           shopping,
@@ -303,7 +307,7 @@ export default function DoanDetail() {
         },
       }
     );
-  }, [doanId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
+  }, [doanId, activeNhomId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
 
   // Keep ref updated so timer always calls latest doSave
   doSaveRef.current = doSave;
@@ -518,6 +522,13 @@ export default function DoanDetail() {
 
           <fieldset disabled={!canEdit} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
           <TabsContent value="dieu-tour" className="mt-4 space-y-6">
+            {doanId != null && (
+              <DoanNhomTabs
+                doanId={doanId}
+                activeNhomId={activeNhomId}
+                onActiveNhomChange={setActiveNhomId}
+              />
+            )}
             <div className="flex justify-end print-hide">
               <Button
                 size="sm"
