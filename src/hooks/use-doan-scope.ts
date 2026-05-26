@@ -7,14 +7,14 @@ import { useDoanList } from "@/hooks/use-doan";
  *
  * Rule chuẩn áp dụng MỌI trang:
  * - `role IN (admin, giam_doc)` → bypass mọi filter (xem hết)
- * - `bo_phan = 'ke_toan'` → bypass VP filter (kế toán làm cho toàn công ty,
- *   cross-VP), vẫn áp `phan_loai_tour` nếu set
- * - Khác:
- *   - `user.van_phong_id`: NULL = xem mọi VP; có giá trị = chỉ thấy đoàn cùng VP
- *   - `user.phan_loai_tour`: NULL = xem mọi loại; mảng = chỉ thấy `doan.thi_truong IN array`
+ * - Khác → chỉ filter theo `phan_loai_tour`
+ *   (`NULL` = xem mọi loại; mảng = chỉ thấy `doan.thi_truong IN array`)
  *
- * Cá nhân đặc biệt: set `van_phong_id=NULL` hoặc `phan_loai_tour=NULL`
- * trên user_roles để bypass field tương ứng.
+ * Note: VP scope đã được gỡ — VP2 ↔ VP3 (và tương lai mọi VP) cross lẫn nhau.
+ * Cột `van_phong_id` trên user_roles giờ chỉ để gắn nhãn VP user thuộc về
+ * (vd auto-set khi tạo đoàn mới); KHÔNG dùng làm scope filter cho danh sách.
+ *
+ * Cá nhân đặc biệt: set `phan_loai_tour=NULL` trên user_roles để bypass.
  *
  * Cách dùng:
  *   const scope = useDoanScope();
@@ -27,13 +27,12 @@ export function useDoanScope() {
   const { user } = useAuth();
   const role = user?.role ?? null;
   const isPrivileged = role === "admin" || role === "giam_doc";
-  const isKeToan = user?.bo_phan === "ke_toan";
 
-  // Fetch list đoàn user được xem (đã apply VP + phan_loai_tour ở useDoanList)
+  // Fetch list đoàn user được xem (apply phan_loai_tour ở useDoanList).
   // Hook này luôn enabled → các trang dùng useDoanScope sẽ cache chung query.
   const phanLoaiTour = isPrivileged ? null : (user?.phan_loai_tour ?? null);
-  // Kế toán: bypass VP filter (làm toàn công ty cross-VP)
-  const vanPhongId = isPrivileged || isKeToan ? null : (user?.van_phong_id ?? null);
+  // VP filter đã bỏ — mọi user cross-VP.
+  const vanPhongId: number | null = null;
   const { data: scopedDoanRows = [], isLoading } = useDoanList(
     phanLoaiTour,
     vanPhongId,
