@@ -228,9 +228,9 @@ export function DailyBriefModal() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && close()}>
-      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh]">
         {/* Header */}
-        <div className="bg-gradient-to-br from-sky-100 via-blue-50 to-white px-6 pt-6 pb-5">
+        <div className="bg-gradient-to-br from-sky-100 via-blue-50 to-white px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-5 shrink-0">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
               <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -283,7 +283,7 @@ export function DailyBriefModal() {
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
+        <div className="px-4 py-4 sm:px-6 sm:py-5 space-y-4 sm:space-y-5 flex-1 min-h-0 overflow-y-auto">
           {/* Stat cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {cards.map((s) => (
@@ -358,12 +358,12 @@ export function DailyBriefModal() {
         </div>
 
         {/* Footer */}
-        <div className="border-t px-6 py-3 flex items-center justify-between gap-2 flex-wrap">
+        <div className="border-t px-4 py-2.5 sm:px-6 sm:py-3 flex items-center justify-between gap-2 flex-wrap shrink-0 bg-background">
           <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
             <Checkbox checked={dontShow} onCheckedChange={(v) => setDontShow(!!v)} />
             {t("Không hiển thị lại hôm nay")}
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button size="sm" variant="ghost" className="text-xs" onClick={close}>
               {t("Đóng")}
             </Button>
