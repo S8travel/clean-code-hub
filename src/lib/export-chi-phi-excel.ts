@@ -42,6 +42,11 @@ export interface ExportDoan {
     so_cho?: number | null;
     nha_xe?: { ten?: string | null } | null;
   } | null;
+  // Tip (phải thu) — override fields trên doan
+  tip_rate?: number | null;
+  tip_so_khach_override?: number | null;
+  tip_so_ngay_override?: number | null;
+  tip_lump_sum?: number | null;
 }
 
 /** Row ngày KS — export chỉ đọc các field này. */
@@ -69,6 +74,8 @@ interface ExportChiPhiDoanExcelParams {
   hdvData?: HDVSectionData | null;
   opName?: string;
   ksData?: { ngayRows: ExportKsNgayRow[]; khachSanMap: Record<number, ExportKsInfo> } | null;
+  /** Tỷ giá NDT → VND (lưu local trong UI). Default 800. */
+  tyGiaNdt?: number;
 }
 
 const encoder = new TextEncoder();
@@ -648,24 +655,24 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([cell("HÀNH TRÌNH TOUR", "title", 10)]);
   rows.push([cell("", "text", 10)]);
   rows.push([
-    cell("Đoàn (MA ĐOÀN)", "label"), cell(doan?.ten_doan || "—", "text", 4),
-    cell("Đón đoàn (BIEN DON DOAN)", "label"), cell(doan?.truong_doan || doan?.bang_don || "—", "text", 4),
+    cell("Đoàn", "label"), cell(doan?.ten_doan || "—", "text", 4),
+    cell("Đón đoàn", "label"), cell(doan?.truong_doan || doan?.bang_don || "—", "text", 4),
   ]);
   rows.push([
-    cell("Số khách (SO PAX)", "label"), cell(soKhachText, "text", 4),
-    cell("Ngày (NGAY)", "label"), cell(`${formatDateValue(doan?.ngay_di)} - ${formatDateValue(doan?.ngay_ve)}`, "text", 4),
+    cell("Số khách", "label"), cell(soKhachText, "text", 4),
+    cell("Ngày", "label"), cell(`${formatDateValue(doan?.ngay_di)} - ${formatDateValue(doan?.ngay_ve)}`, "text", 4),
   ]);
   rows.push([
-    cell("Hướng dẫn (HUONG DAN)", "label"), cell(getHdvText(doan, hdvData), "text", 4),
-    cell("Tính chất đoàn (T/C DOAN)", "label"), cell(shopText, "text", 4),
+    cell("Hướng dẫn", "label"), cell(getHdvText(doan, hdvData), "text", 4),
+    cell("Tính chất đoàn", "label"), cell(shopText, "text", 4),
   ]);
   rows.push([
-    cell("Nhà xe (NHA XE)", "label"), cell(getXeText(doan), "text", 4),
-    cell("Điều hành xe (DIEU HANH XE)", "label"), cell("—", "text", 4),
+    cell("Nhà xe", "label"), cell(getXeText(doan), "text", 4),
+    cell("Điều hành xe", "label"), cell("—", "text", 4),
   ]);
   rows.push([
-    cell("Quà tặng (QUA TANG)", "label"), cell(quaTang, "text", 4),
-    cell("Tính toán (OP)", "label"), cell(opName || "—", "text", 4),
+    cell("Quà tặng", "label"), cell(quaTang, "text", 4),
+    cell("Tính toán", "label"), cell(opName || "—", "text", 4),
   ]);
   rows.push([
     cell("Chuyến bay đón", "label"), cell(doan?.chuyen_bay_don || "—", "text", 4),
@@ -871,13 +878,53 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([cell("TỔNG SỐ TIỀN TT", "total", 7), cell("VND", "total"), cell(totalHdvDV, "total_number"), cell(totalCtyDV, "total_number")]);
   rows.push([cell("", "text", 10)]);
 
+  // ─── TIP 小費 ───
+  const TIP_RATE_CO_TL = 150;
+  const TIP_RATE_KHONG_TL = 300;
+  const soKhachTotal =
+    (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
+    (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
+    (doan?.so_khach ?? 0);
+  const soKhachTl = doan?.so_khach_tl ?? 0;
+  const autoTipSoKhach = Math.max(0, soKhachTotal - soKhachTl); // T/L không đóng tip
+  const autoTipSoNgay = doan?.ngay_di && doan?.ngay_ve
+    ? Math.max(1, Math.round((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
+    : 0;
+  const autoTipRate = soKhachTl > 0 ? TIP_RATE_CO_TL : TIP_RATE_KHONG_TL;
+  const tipSoKhach = doan?.tip_so_khach_override ?? autoTipSoKhach;
+  const tipSoNgay = doan?.tip_so_ngay_override ?? autoTipSoNgay;
+  const tipRate = doan?.tip_rate ?? autoTipRate;
+  const computedTipNdt = tipSoKhach * tipSoNgay * tipRate;
+  const tipNdt = doan?.tip_lump_sum ?? computedTipNdt;
+  const tyGiaNdt = params.tyGiaNdt ?? 800;
+  const tipVnd = tipNdt * tyGiaNdt;
+
+  rows.push([cell("TIP 小費", "section", 10)]);
+  rows.push([
+    cell("SỐ KHÁCH", "header"),
+    cell("SỐ NGÀY", "header"),
+    cell("ĐƠN GIÁ NDT/KHÁCH/NGÀY", "header", 3),
+    cell("TỶ GIÁ NDT", "header"),
+    cell("TỔNG NDT", "header", 2),
+    cell("TỔNG VND", "header", 2),
+  ]);
+  rows.push([
+    cell(tipSoKhach, "number"),
+    cell(tipSoNgay, "number"),
+    cell(tipRate, "number", 3),
+    cell(tyGiaNdt, "number"),
+    cell(tipNdt, "number", 2),
+    cell(tipVnd, "total_number", 2),
+  ]);
+  rows.push([cell("", "text", 10)]);
+
   // ─── SUMMARY ───
   const totalHdvAll = totalHdvKS + totalHdvNH + totalHdvVE + totalHdvDV;
   const totalCtyAll = totalCtyKS + totalCtyNH + totalCtyVE + totalCtyDV;
 
   rows.push([
     cell("TỔNG HDV CHI VND 總計", "section", 2), cell(totalHdvAll, "total_number", 3),
-    cell("TỔNG THU (VNĐ)", "label"), cell("—", "text", 4),
+    cell("TỔNG THU (VNĐ)", "label"), cell(tipVnd, "total_number", 4),
   ]);
   rows.push([
     cell("TỔNG CTY CHI VND 總計", "section", 2), cell(totalCtyAll, "total_number", 3),

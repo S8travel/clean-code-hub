@@ -198,6 +198,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
     try {
       setExportingExcel(true);
+      const tyGiaNdt = Number(localStorage.getItem("hdv_ty_gia_ndt") ?? "800") || 800;
       await exportChiPhiDoanExcel({
         doan,
         chiPhiRows,
@@ -205,6 +206,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         hdvData,
         opName,
         ksData,
+        tyGiaNdt,
       });
       toast.success(t("Đã xuất file Excel"));
     } catch (error: unknown) {
