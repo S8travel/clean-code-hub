@@ -823,7 +823,7 @@
   "Số tiền cọc": "訂金金額",
   "Số tiền cọc/cấn trừ": "訂金/沖抵金額",
   "Số tiền phải lớn hơn 0": "金額必須大於 0",
-  "Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.": "編輯 DNTT 金額（鉛筆）或取消並重建。",
+  "Hủy ĐNTT & tạo lại.": "取消付款申請並重建。",
   "Sửa số phòng / giá thực tế sau khi đã thanh toán. Sau khi lưu, hệ thống sẽ hiển thị chênh lệch (thiếu/thừa) ở dưới card KS để bạn xử lý (tạo ĐNTT bổ sung hoặc ghi nhận công nợ).": "付款後編輯實際房數 / 房價。儲存後系統將在飯店卡片下方顯示差額（短少/超出），供您處理（建立補充付款申請或記錄應付帳款）。",
   "Sửa số tiền": "編輯金額",
   "TT Thanh toán": "付款狀態",
