@@ -193,7 +193,7 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
   // Header row — 14 cột ("Tổng tiền" sau "Thành tiền")
   const headers = [
     "CODE\nĐOÀN", "NGÀY", "TÊN NHÀ HÀNG\n/ DỊCH VỤ", "Số\nkhách",
-    "FOC", "Đơn giá\n(gồm VAT)", "CK %", "Thành\ntiền", "Tổng\ntiền",
+    "FOC", "Đơn giá\n(gồm VAT)", "Chiết\nkhấu", "Thành\ntiền", "Tổng\ntiền",
     "Số tiền\ncọc", "Cấn\ntrừ", "Số tiền còn\nthanh toán", "Tài khoản\nthanh toán", "Ghi chú",
   ];
   rows.push(
@@ -270,9 +270,10 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
 
       // Đơn giá — per item
       cells.push(cell([p(item.don_gia > 0 ? fmt(item.don_gia) : "—", { size: 14 })], { width: COL_W[5] }));
-      // CK % — mỗi dòng hiện CK riêng
-      const ckText = itemCk > 0 ? `${itemCk}%` : "—";
-      cells.push(cell([p(ckText, { size: 14, color: itemCk > 0 ? "CC0000" : undefined })], { width: COL_W[6] }));
+      // Chiết khấu — in trực tiếp số tiền CK (VND) trong ngoặc, KHÔNG còn hiện %
+      const ckSoTien = grossThanhTien - thanhTien;
+      const ckText = ckSoTien > 0 ? `(${fmt(ckSoTien)})` : "—";
+      cells.push(cell([p(ckText, { size: 14, color: ckSoTien > 0 ? "CC0000" : undefined })], { width: COL_W[6] }));
       // Thành tiền — main đã trừ CK, extras gross
       cells.push(cell([p(thanhTien > 0 ? fmt(thanhTien) : "—", { bold: true, size: 14 })], { width: COL_W[7] }));
 
