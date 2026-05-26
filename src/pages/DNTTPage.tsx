@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useBoPhan, useRoleAtLeast } from "@/hooks/use-permissions";
+import { useDoanScope } from "@/hooks/use-doan-scope";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
 import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight, Loader2, Share2 } from "lucide-react";
@@ -181,7 +182,9 @@ function DNTTPageContent() {
     loai: loai || null,
   }), [doanId, fromDate, toDate, trangThaiDuyet, loai]);
 
-  const { data: rows = [], isLoading } = useDNTTList(filters);
+  const { data: rowsRaw = [], isLoading } = useDNTTList(filters);
+  const scope = useDoanScope();
+  const rows = useMemo(() => scope.filterByDoanId(rowsRaw), [scope, rowsRaw]);
   const { data: summary } = useDNTTSummary();
   const { data: doanOpts = [] } = useDoanOptions();
   const { user } = useAuth();

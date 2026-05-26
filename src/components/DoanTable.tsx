@@ -146,6 +146,8 @@ interface Props {
   onClone?: (doan: DoanRow) => void;
   onCancel?: (doan: DoanRow) => void;
   onDelete?: (doan: DoanRow) => void;
+  /** Hide actions menu (Sửa/Nhân bản/Hủy/Xóa) — vd cho kế toán chỉ xem */
+  canEdit?: boolean;
 }
 
 function Avatar({ name, label }: { name: string; label: string }) {
@@ -175,6 +177,7 @@ export function DoanTable({
   groups, isLoading,
   sortKey: sortKeyProp, sortDir: sortDirProp, onSortChange,
   onEdit, onClone, onCancel, onDelete,
+  canEdit = true,
 }: Props) {
   useTranslate();
   const navigate = useNavigate();
@@ -383,35 +386,37 @@ export function DoanTable({
                   : <span className="text-xs text-muted-foreground">—</span>}
               </div>
 
-              {/* Actions */}
-              <div className="px-1 py-3 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title={t("Thao tác")}>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-36">
-                    <DropdownMenuItem onClick={() => onEdit?.(g)}>
-                      <Pencil className="h-3.5 w-3.5 mr-2" /> {t("Sửa")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onClone?.(g)}>
-                      <Copy className="h-3.5 w-3.5 mr-2 text-sky-600" /> {t("Nhân bản")}
-                    </DropdownMenuItem>
-                    {g.trang_thai !== "huy" && (
-                      <DropdownMenuItem onClick={() => onCancel?.(g)}>
-                        <Ban className="h-3.5 w-3.5 mr-2 text-orange-500" /> {t("Hủy đoàn")}
+              {/* Actions — ẩn nếu canEdit=false (vd kế toán) */}
+              {canEdit && (
+                <div className="px-1 py-3 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title={t("Thao tác")}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36">
+                      <DropdownMenuItem onClick={() => onEdit?.(g)}>
+                        <Pencil className="h-3.5 w-3.5 mr-2" /> {t("Sửa")}
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => onDelete?.(g)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> {t("Xóa vĩnh viễn")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                      <DropdownMenuItem onClick={() => onClone?.(g)}>
+                        <Copy className="h-3.5 w-3.5 mr-2 text-sky-600" /> {t("Nhân bản")}
+                      </DropdownMenuItem>
+                      {g.trang_thai !== "huy" && (
+                        <DropdownMenuItem onClick={() => onCancel?.(g)}>
+                          <Ban className="h-3.5 w-3.5 mr-2 text-orange-500" /> {t("Hủy đoàn")}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => onDelete?.(g)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-2" /> {t("Xóa vĩnh viễn")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
             </div>
           </div>
         );

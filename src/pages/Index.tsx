@@ -43,6 +43,7 @@ import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useUploadDoanTaiLieu } from "@/hooks/use-doan-tai-lieu";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
+import { useDoanScope } from "@/hooks/use-doan-scope";
 import { errMsg } from "@/lib/error";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
@@ -65,10 +66,14 @@ const LOAI_TOUR_OPTIONS = [
 export default function Index() {
   useTranslate(); // re-render khi đổi ngôn ngữ
   const { user: currentUser } = useAuth();
-  const phanLoaiTour = (currentUser?.role !== "admin" && currentUser?.role !== "giam_doc")
-    ? (currentUser?.phan_loai_tour ?? null)
-    : null;
-  const { data: groupsRaw, isLoading, error } = useDoanList(phanLoaiTour);
+  const scope = useDoanScope();
+  // Kế toán: chỉ XEM ở danh sách đoàn — ẩn nút tạo + menu thao tác.
+  // admin/giam_doc luôn edit được dù bo_phan=ke_toan.
+  const canEditDoan = scope.isPrivileged || currentUser?.bo_phan !== "ke_toan";
+  const { data: groupsRaw, isLoading, error } = useDoanList(
+    scope.phanLoaiTour,
+    scope.vanPhongId,
+  );
   const groups = groupsRaw as unknown as DoanRow[] | undefined;
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   useDoanRealtime();
@@ -482,11 +487,13 @@ export default function Index() {
             <h1 className="text-base font-semibold notranslate">{t("Quản lý đoàn")}</h1>
             <Badge variant="secondary" className="text-xs tabular-nums">{filtered.length}</Badge>
           </div>
-          <Button onClick={openNew} className="active:scale-[0.98] transition-transform shrink-0"
-            style={{ backgroundColor: "hsl(213, 78%, 37%)" }}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            {t("Tạo đoàn mới")}
-          </Button>
+          {canEditDoan && (
+            <Button onClick={openNew} className="active:scale-[0.98] transition-transform shrink-0"
+              style={{ backgroundColor: "hsl(213, 78%, 37%)" }}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {t("Tạo đoàn mới")}
+            </Button>
+          )}
         </div>
 
         {/* DASHBOARD: thẻ thống kê */}
@@ -625,6 +632,7 @@ export default function Index() {
             onClone={handleClone}
             onCancel={handleOpenCancel}
             onDelete={handleOpenDelete}
+            canEdit={canEditDoan}
           />
         </div>
 

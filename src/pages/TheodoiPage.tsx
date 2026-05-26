@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { useDoanList } from "@/hooks/use-doan";
+import { useDoanScope } from "@/hooks/use-doan-scope";
 import { useDoanLogSuCo, useToggleResolved } from "@/hooks/use-doan-log";
 import { useMarkThongBaoRead } from "@/hooks/use-thong-bao";
 import { useAuth } from "@/hooks/use-auth";
@@ -159,7 +160,11 @@ export default function TheodoiPage() {
   const canView = useRoleAtLeast("truong_phong");
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: groups = [], isLoading: loadingDoan } = useDoanList();
+  const scope = useDoanScope();
+  const { data: groups = [], isLoading: loadingDoan } = useDoanList(
+    scope.phanLoaiTour,
+    scope.vanPhongId,
+  );
   const { data: assignUsers = [] } = useUserListForAssign();
   const allDoanIds = useMemo(
     () => (groups ?? []).map((g) => g.id),
