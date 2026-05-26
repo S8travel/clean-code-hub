@@ -571,6 +571,15 @@ export function useUpdateDoan() {
             (existingNgay || []).map((r) => [r.ngay_so, r.id])
           );
 
+          // Lấy nhóm "Toàn đoàn" (thu_tu=1) cho INSERT row mới (mở rộng ngày)
+          const { data: nhomDefault } = await externalSupabase
+            .from("doan_nhom")
+            .select("id")
+            .eq("doan_id", id)
+            .eq("thu_tu", 1)
+            .maybeSingle();
+          const defaultNhomId = nhomDefault?.id ?? null;
+
           // Update từng ngay_so có trong newRange → ngay_date + thu mới
           for (let i = 1; i <= newNumDays; i++) {
             const d = new Date(start);
@@ -584,9 +593,16 @@ export function useUpdateDoan() {
                 .update({ ngay_date: dateStr, thu: thuStr })
                 .eq("id", existingId);
             } else {
+              if (!defaultNhomId) continue; // không có nhóm → skip insert (sẽ không xảy ra với đoàn hợp lệ)
               await externalSupabase
                 .from("doan_ngay")
-                .insert({ doan_id: id, ngay_so: i, ngay_date: dateStr, thu: thuStr });
+                .insert({
+                  doan_id: id,
+                  doan_nhom_id: defaultNhomId,
+                  ngay_so: i,
+                  ngay_date: dateStr,
+                  thu: thuStr,
+                });
             }
           }
           // Rows vượt newNumDays (tour ngắn lại) → giữ lại, không tự xóa

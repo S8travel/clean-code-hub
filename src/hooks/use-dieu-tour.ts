@@ -146,32 +146,55 @@ export function useKhachSan() {
 }
 
 // ── Data hooks ──
-export function useDoanNgayList(doanId: number | undefined) {
+/**
+ * List doan_ngay của 1 đoàn, filter optional theo nhóm.
+ * - `doanNhomId=undefined` → fetch tất cả nhóm (legacy behavior, đoàn 1 nhóm OK)
+ * - `doanNhomId=number` → chỉ nhóm đó (Phase 2: UI tabs nhóm pass id active)
+ */
+export function useDoanNgayList(doanId: number | undefined, doanNhomId?: number | null) {
   return useQuery({
-    queryKey: ["doan_ngay", doanId],
+    queryKey: ["doan_ngay", doanId, doanNhomId ?? null],
     enabled: !!doanId,
     queryFn: async () => {
-      const { data, error } = await externalSupabase
+      let q = externalSupabase
         .from("doan_ngay")
         .select("*")
         .eq("doan_id", doanId!)
         .order("ngay_so");
+      if (doanNhomId != null) q = q.eq("doan_nhom_id", doanNhomId);
+      const { data, error } = await q;
       if (error) throw error;
       return data as DoanNgayRow[];
     },
   });
 }
 
-export function useDoanNgayItems(doanId: number | undefined) {
+/**
+ * List doan_ngay_item của 1 đoàn, filter optional theo nhóm (qua doan_ngay).
+ */
+export function useDoanNgayItems(doanId: number | undefined, doanNhomId?: number | null) {
   return useQuery({
-    queryKey: ["doan_ngay_item", doanId],
+    queryKey: ["doan_ngay_item", doanId, doanNhomId ?? null],
     enabled: !!doanId,
     queryFn: async () => {
-      const { data, error } = await externalSupabase
+      // Filter qua doan_ngay: lấy id của các ngày thuộc nhóm trước
+      let allowedNgayIds: number[] | null = null;
+      if (doanNhomId != null) {
+        const { data: ngayRows } = await externalSupabase
+          .from("doan_ngay")
+          .select("id")
+          .eq("doan_id", doanId!)
+          .eq("doan_nhom_id", doanNhomId);
+        allowedNgayIds = (ngayRows ?? []).map((r) => r.id);
+        if (allowedNgayIds.length === 0) return [] as DoanNgayItemRow[];
+      }
+      let q = externalSupabase
         .from("doan_ngay_item")
         .select("*")
         .eq("doan_id", doanId!)
         .order("thu_tu");
+      if (allowedNgayIds) q = q.in("doan_ngay_id", allowedNgayIds);
+      const { data, error } = await q;
       if (error) throw error;
       return data as DoanNgayItemRow[];
     },
@@ -271,6 +294,8 @@ export function mergeDaysWithDB(generated: DayLocal[], dbRows: DoanNgayRow[], db
 // ── Save mutation ──
 export interface SaveDieuTourPayload {
   doanId: number;
+  /** Nhóm active đang được save. Phase 2 UI tabs pass id của nhóm. Bỏ trống → mặc định nhóm thu_tu=1. */
+  doanNhomId?: number | null;
   doanFields: {
     bang_don?: string | null;
     shopping?: boolean | null;
@@ -304,6 +329,14 @@ export function useInitDoanNgay() {
       const { doanId, ngayDi, ngayVe } = params;
       const { data: existing } = await externalSupabase.from("doan_ngay").select("id").eq("doan_id", doanId).limit(1);
       if (existing && existing.length > 0) return;
+      // Lấy nhóm "Toàn đoàn" (thu_tu=1) — DB trigger đảm bảo đã có khi INSERT doan
+      const { data: nhomDefault } = await externalSupabase
+        .from("doan_nhom")
+        .select("id")
+        .eq("doan_id", doanId)
+        .eq("thu_tu", 1)
+        .maybeSingle();
+      if (!nhomDefault) throw new Error("Đoàn chưa có nhóm mặc định");
       const thuMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
       const parseUTC = (s: string) => {
         const [y, m, d] = s.split("-").map(Number);
@@ -311,12 +344,13 @@ export function useInitDoanNgay() {
       };
       const start = parseUTC(ngayDi);
       const end = parseUTC(ngayVe);
-      const rows: { doan_id: number; ngay_so: number; ngay_date: string; thu: string }[] = [];
+      const rows: { doan_id: number; doan_nhom_id: number; ngay_so: number; ngay_date: string; thu: string }[] = [];
       let i = 1;
       for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         const dateStr = d.toISOString().split("T")[0];
         rows.push({
           doan_id: doanId,
+          doan_nhom_id: nhomDefault.id,
           ngay_so: i++,
           ngay_date: dateStr,
           thu: thuMap[d.getUTCDay()],
@@ -488,7 +522,7 @@ export function useSaveDieuTour() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: SaveDieuTourPayload) => {
-      const { doanId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
+      const { doanId, doanNhomId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
 
       // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
       const counters = { thucTeClearCount: 0 };
@@ -612,11 +646,25 @@ export function useSaveDieuTour() {
         }
       }
 
+      // Cần doan_nhom_id để INSERT doan_ngay mới. Caller pass `doanNhomId` (UI tab active).
+      // Fallback: nhóm "Toàn đoàn" (thu_tu=1) cho backward-compat trang chưa wire.
+      let defaultDoanNhomId: number | null = doanNhomId ?? null;
+      if (defaultDoanNhomId == null) {
+        const { data: nhomDefault } = await externalSupabase
+          .from("doan_nhom")
+          .select("id")
+          .eq("doan_id", doanId)
+          .eq("thu_tu", 1)
+          .maybeSingle();
+        defaultDoanNhomId = nhomDefault?.id ?? null;
+      }
+
       // 2. Upsert doan_ngay — use upsert to handle both new and existing rows
       for (let idx = 0; idx < days.length; idx++) {
         const day = days[idx];
         const ngayPayload: TablesInsert<"doan_ngay"> = {
           doan_id: doanId,
+          doan_nhom_id: defaultDoanNhomId!,
           ngay_so: day.ngay_so,
           ngay_date: day.ngay_date,
           thu: day.thu,
@@ -1076,12 +1124,13 @@ export async function syncDieuTourToBookingDV(params: {
 }): Promise<{ synced: number; warnings: SyncWarning[] }> {
   const { doanId, days, canhDiemList, soKhach } = params;
 
-  // Collect co_phi + cong_ty items
+  // Collect co_phi + tag dich_vu items (KHÔNG phụ thuộc nguoi_thanh_toan —
+  // HDV trả cash vẫn cần gửi mail booking với NCC để giữ chỗ).
   const coPhiItems: { cd: CanhDiemItem; ngay_date: string }[] = [];
   for (const day of days) {
     for (const item of day.items) {
       const cd = canhDiemList.find((c) => c.id === item.canh_diem_id);
-      if (cd && cd.co_phi && cd.nguoi_thanh_toan === "cong_ty") {
+      if (cd && cd.co_phi && cd.loai === "dich_vu") {
         coPhiItems.push({ cd, ngay_date: day.ngay_date });
       }
     }
@@ -1295,7 +1344,7 @@ export async function checkPreSaveWarnings(params: {
     for (const dbItem of dbItems) {
       if (!currentCdIds.has(dbItem.canh_diem_id)) {
         const cd = canhDiemList.find((c) => c.id === dbItem.canh_diem_id);
-        if (!cd || !cd.co_phi || cd.nguoi_thanh_toan !== "cong_ty") continue;
+        if (!cd || !cd.co_phi || cd.loai !== "dich_vu") continue;
 
         const ncc = cd.dia_diem || cd.ten;
         const { data: bookingDv } = await externalSupabase
