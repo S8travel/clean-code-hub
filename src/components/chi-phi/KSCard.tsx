@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { Ban, ArrowRight, ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Check, X, CalendarClock } from "lucide-react";
+import { Ban, ArrowRight, ChevronDown, ChevronRight, SlidersHorizontal, Check, X, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -242,7 +242,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
             {dnttMismatch !== 0 && (
               <span
                 className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
-                title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Sửa DNTT.so_tien (Pencil) hoặc hủy & tạo lại.")}`}
+                title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Hủy ĐNTT & tạo lại.")}`}
               >
                 ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
               </span>
@@ -507,20 +507,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                           </>
                         ) : (
                           <>
-                            {isWaiting && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
-                                title={t("Sửa số tiền")}
-                                onClick={() => {
-                                  setEditingDnttId(dntt.id);
-                                  setEditAmount(String(dntt.so_tien));
-                                }}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                            )}
+                            {/* ĐNTT sai → hủy, KHÔNG sửa inline (gỡ pencil 2026-05-26) */}
                             {/* Per-DNTT "Điều chỉnh" cũ — REMOVED, replaced by aggregate footer button. */}
                             {!isPaid && (
                               <Button

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useInsertDNTT, useUpdateDNTT, type DNTTRow } from "@/hooks/use-chi-phi";
 import { t, useTranslate } from "@/lib/i18n";
@@ -187,12 +187,7 @@ export default function DNTTCell({
               >
                 {d.trang_thai_duyet === "da_duyet" ? t("Đã duyệt") : t("Chờ duyệt")} · {fmt(d.so_tien)}
               </Badge>
-              {d.trang_thai_duyet === "cho_duyet" && (
-                <Button size="icon" variant="ghost" className="h-5 w-5"
-                  onClick={() => { setEditingId(d.id); setEditAmount(String(d.so_tien)); }}>
-                  <Pencil className="h-3 w-3 text-muted-foreground" />
-                </Button>
-              )}
+              {/* ĐNTT sai → hủy, KHÔNG sửa inline (gỡ pencil 2026-05-26) */}
             </>
           )}
         </div>

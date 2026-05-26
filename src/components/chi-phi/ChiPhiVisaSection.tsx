@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { errMsg } from "@/lib/error";
-import { Check, Pencil, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
+import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -616,12 +616,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                                         </div>
                                       );
                                     })()}
-                                    {d.trang_thai_duyet === "cho_duyet" && (
-                                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-blue-500"
-                                        onClick={() => { setEditingId(d.id); setEditAmount(String(d.so_tien)); }}>
-                                        <Pencil className="h-3 w-3" />
-                                      </Button>
-                                    )}
+                                    {/* ĐNTT sai → hủy, KHÔNG sửa inline (gỡ pencil 2026-05-26) */}
                                   </>
                                 )}
                               </div>

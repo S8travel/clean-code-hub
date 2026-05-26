@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
-import { Check, Pencil, X, Ban, SlidersHorizontal } from "lucide-react";
+import { Check, X, Ban, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DecimalInput } from "@/components/ui/decimal-input";
@@ -431,12 +431,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                                   </div>
                                 );
                               })()}
-                              {d.trang_thai_duyet === "cho_duyet" && (
-                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-blue-500"
-                                  onClick={() => { setEditingId(d.id); setEditAmount(String(d.so_tien)); }}>
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              )}
+                              {/* ĐNTT sai → hủy, KHÔNG sửa inline (gỡ pencil 2026-05-26) */}
                             </>
                           )}
                         </div>
