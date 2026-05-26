@@ -1,12 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 
-export type DoanTaiLieuLoai = "bao_gia" | "hop_dong" | "danh_sach_khach";
+export type DoanTaiLieuLoai = "bao_gia" | "hop_dong" | "danh_sach_khach" | "khac";
 
+/** 3 loại fixed (1 file mỗi loại). 'khac' = tài liệu tùy chỉnh (nhiều file). */
 export const TAI_LIEU_LABEL: Record<DoanTaiLieuLoai, string> = {
   bao_gia: "Báo giá",
   hop_dong: "Hợp đồng",
   danh_sach_khach: "Danh sách khách",
+  khac: "Tài liệu khác",
 };
 
 export interface DoanTaiLieuRow {
@@ -17,6 +19,10 @@ export interface DoanTaiLieuRow {
   file_name: string | null;
   uploaded_at: string;
   uploaded_by: string | null;
+  /** Tên tài liệu — chỉ dùng khi loai='khac' (3 loại fixed dùng label cứng) */
+  ten: string | null;
+  /** Mô tả ngắn — chỉ dùng khi loai='khac' */
+  mo_ta: string | null;
 }
 
 const QK = "doan_tai_lieu";
@@ -66,12 +72,15 @@ export function useUploadDoanTaiLieu() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      doanId, loai, file, uploadedBy,
+      doanId, loai, file, uploadedBy, ten, moTa,
     }: {
       doanId: number;
       loai: DoanTaiLieuLoai;
       file: File;
       uploadedBy?: string | null;
+      /** Bắt buộc khi loai='khac', bị bỏ qua cho 3 loại fixed */
+      ten?: string | null;
+      moTa?: string | null;
     }) => {
       // Sanitize filename — Supabase Storage không cho ký tự đặc biệt
       const ext = (file.name.split(".").pop() ?? "bin").replace(/[^a-zA-Z0-9]/g, "");
@@ -84,21 +93,31 @@ export function useUploadDoanTaiLieu() {
 
       const { data: urlData } = externalSupabase.storage.from(BUCKET).getPublicUrl(path);
 
-      // Upsert vào bảng — UNIQUE(doan_id, loai) → replace nếu re-upload
-      const { error: upsertErr } = await externalSupabase
-        .from("doan_tai_lieu")
-        .upsert(
-          {
-            doan_id: doanId,
-            loai,
-            file_url: urlData.publicUrl,
-            file_name: file.name,
-            uploaded_by: uploadedBy ?? null,
-            uploaded_at: new Date().toISOString(),
-          },
-          { onConflict: "doan_id,loai" },
-        );
-      if (upsertErr) throw upsertErr;
+      const isKhac = loai === "khac";
+      const payload = {
+        doan_id: doanId,
+        loai,
+        file_url: urlData.publicUrl,
+        file_name: file.name,
+        uploaded_by: uploadedBy ?? null,
+        uploaded_at: new Date().toISOString(),
+        ten: isKhac ? (ten ?? null) : null,
+        mo_ta: isKhac ? (moTa ?? null) : null,
+      };
+
+      if (isKhac) {
+        // Loại 'khac' không UNIQUE → INSERT thêm row mới
+        const { error: insertErr } = await externalSupabase
+          .from("doan_tai_lieu")
+          .insert(payload);
+        if (insertErr) throw insertErr;
+      } else {
+        // 3 loại fixed: upsert replace (UNIQUE partial áp dụng)
+        const { error: upsertErr } = await externalSupabase
+          .from("doan_tai_lieu")
+          .upsert(payload, { onConflict: "doan_id,loai" });
+        if (upsertErr) throw upsertErr;
+      }
       return urlData.publicUrl;
     },
     onSuccess: (_, vars) => {
