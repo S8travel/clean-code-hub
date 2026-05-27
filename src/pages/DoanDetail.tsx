@@ -35,6 +35,7 @@ import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
 import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
 import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
 import DoanNhomTabs from "@/components/dieu-tour/DoanNhomTabs";
+import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import TipSection from "@/components/dieu-tour/TipSection";
 import BookingKSTab from "@/components/dieu-tour/BookingKSTab";
 import BookingNHTab from "@/components/booking-nh/BookingNHTab";
@@ -125,11 +126,20 @@ export default function DoanDetail() {
   // sẽ bị "phục hồi" từ booking NH cũ qua menuData.
   const menuFallbackAppliedRef = useRef<Set<number>>(new Set());
 
-  const soKhachLon = doan?.so_khach_lon ?? 0;
-  const soKhachEm1 = doan?.so_khach_em1 ?? 0;
-  const soKhachEm2 = doan?.so_khach_em2 ?? 0;
-  const soKhachTl = doan?.so_khach_tl ?? 0;
+  // Số khách hiển thị + tính toán: ưu tiên nhóm active (Phase 2+), fallback đoàn.
+  // (Save tour KHÔNG ghi đè doan.so_khach_* — DoanDrawer là chỗ chính edit số khách đoàn.)
+  const { data: nhomList = [] } = useDoanNhomList(doanId || undefined);
+  const activeNhom = activeNhomId != null ? nhomList.find((n) => n.id === activeNhomId) : null;
+  const soKhachLon = activeNhom?.so_khach_lon ?? doan?.so_khach_lon ?? 0;
+  const soKhachEm1 = activeNhom?.so_khach_em1 ?? doan?.so_khach_em1 ?? 0;
+  const soKhachEm2 = activeNhom?.so_khach_em2 ?? doan?.so_khach_em2 ?? 0;
+  const soKhachTl = activeNhom?.so_khach_tl ?? doan?.so_khach_tl ?? 0;
   const totalKhach = soKhachLon + soKhachEm1 + soKhachEm2 + soKhachTl;
+  // Giá trị đoàn-level để giữ trong save payload (không bị nhóm 2 overwrite)
+  const doanSoKhachLon = doan?.so_khach_lon ?? 0;
+  const doanSoKhachEm1 = doan?.so_khach_em1 ?? 0;
+  const doanSoKhachEm2 = doan?.so_khach_em2 ?? 0;
+  const doanSoKhachTl = doan?.so_khach_tl ?? 0;
 
   // Initialize from doan data — re-merge whenever DB data changes
   // NOTE: uses raw setDays (not handleSetDays) to avoid triggering auto-save on DB refetch
@@ -242,10 +252,12 @@ export default function DoanDetail() {
           truong_doan: truongDoan || null,
           chuyen_bay_don: chuyenBayDon || null,
           chuyen_bay_tien: chuyenBayTien || null,
-          so_khach_lon: soKhachLon,
-          so_khach_em1: soKhachEm1,
-          so_khach_em2: soKhachEm2,
-          so_khach_tl: soKhachTl,
+          // Dùng giá trị ĐOÀN (không phải nhóm active) — tránh overwrite tổng đoàn
+          // khi user save tour ở tab nhóm 2.
+          so_khach_lon: doanSoKhachLon,
+          so_khach_em1: doanSoKhachEm1,
+          so_khach_em2: doanSoKhachEm2,
+          so_khach_tl: doanSoKhachTl,
           co_tinh_suat_tl_nha_hang: coTinhSuatTLNhaHang,
           chu_thich_khach: chuThichKhach || null,
           tang_pham: gifts.length > 0 ? gifts : null,
@@ -307,7 +319,7 @@ export default function DoanDetail() {
         },
       }
     );
-  }, [doanId, activeNhomId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
+  }, [doanId, activeNhomId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, doanSoKhachLon, doanSoKhachEm1, doanSoKhachEm2, doanSoKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
 
   // Keep ref updated so timer always calls latest doSave
   doSaveRef.current = doSave;
