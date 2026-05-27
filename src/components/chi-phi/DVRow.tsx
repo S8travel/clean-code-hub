@@ -12,6 +12,7 @@ import { DVInput } from "./DVInput";
 import type { DVModalTarget } from "./DVDnttModal";
 import type { CancelTarget } from "./DVCancelModal";
 import type { AggCommitTarget } from "./DVAggCommitModal";
+import { type CanTruSelection } from "./KSCongNoPanel";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -71,7 +72,7 @@ export interface DVRowHandlers {
   setAggCommit: (v: AggCommitTarget | null) => void;
   setAggReason: (v: string) => void;
   setAggSurplusMode: (v: "con_du" | "hoan_tien") => void;
-  setAggCanTru: (v: null) => void;
+  setAggCanTru: (v: CanTruSelection[]) => void;
   setAggNgayCan: (v: string) => void;
   handleExtraChange: (mainId: number, idx: number, field: keyof LocalDVExtra, v: LocalDVExtra[keyof LocalDVExtra]) => void;
   handleExtraSave: (mainId: number, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => void;
@@ -530,7 +531,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 });
                 setAggReason("");
                 setAggSurplusMode("con_du");
-                setAggCanTru(null);
+                setAggCanTru([]);
                 if (effectiveDelta > 0 && ngayBatDau && row.ngay_so != null && row.ngay_so > 0) {
                   try {
                     const serviceDate = new Date(parseISO(ngayBatDau));

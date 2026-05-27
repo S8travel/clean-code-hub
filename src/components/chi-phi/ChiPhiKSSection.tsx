@@ -177,7 +177,6 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
       {/* Aggregate Commit Dialog — chốt chênh lệch sau OP edit so_phong/gia_phong/FOC */}
       <KSAggCommitModal
         target={aggCommit}
-        doanId={doanId}
         commitMode={aggCommitMode}
         onCommitModeChange={setAggCommitMode}
         depositAmount={aggDepositAmount}

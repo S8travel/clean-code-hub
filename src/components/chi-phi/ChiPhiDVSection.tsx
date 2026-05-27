@@ -143,7 +143,6 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
 
       <DVAggCommitModal
         target={aggCommit}
-        doanId={doanId}
         reason={aggReason}
         onReasonChange={setAggReason}
         ngayCan={aggNgayCan}
@@ -152,7 +151,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         onSurplusModeChange={setAggSurplusMode}
         canTru={aggCanTru}
         onCanTruChange={setAggCanTru}
-        onClose={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru(null); }}
+        onClose={() => { setAggCommit(null); setAggReason(""); setAggNgayCan(""); setAggSurplusMode("con_du"); setAggCanTru([]); }}
         onSubmit={handleAggCommit}
         submitting={insertPending}
       />

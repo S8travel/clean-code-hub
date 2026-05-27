@@ -18,6 +18,7 @@ import { NHFocEditor } from "./NHFocEditor";
 import NHExtraRow from "./NHExtraRow";
 import NHAggFooterRow from "./NHAggFooterRow";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
+import { type CanTruSelection } from "./KSCongNoPanel";
 import { type NHCancelTarget } from "./NHCancelModal";
 import { fmt, STATUS_LABEL, extraPrefix, type LocalNHRow, type LocalNHExtra } from "./nh-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
@@ -66,7 +67,7 @@ export interface NHRowHandlers {
   setAggCommit: (v: AggCommitNHTarget | null) => void;
   setAggReason: (v: string) => void;
   setAggSurplusMode: (v: "con_du" | "hoan_tien") => void;
-  setAggCanTru: (v: null) => void;
+  setAggCanTru: (v: CanTruSelection[]) => void;
   setAggNgayCan: (v: string) => void;
 }
 
@@ -532,7 +533,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
             });
             setAggReason("");
             setAggSurplusMode("con_du");
-            setAggCanTru(null);
+            setAggCanTru([]);
             if (effectiveDelta > 0 && meal.ngay_date) {
               try {
                 setAggNgayCan(format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"));

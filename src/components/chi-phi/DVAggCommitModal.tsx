@@ -5,7 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
-import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -23,15 +24,14 @@ export interface AggCommitTarget {
 
 interface Props {
   target: AggCommitTarget | null;
-  doanId: number;
   reason: string;
   onReasonChange: (v: string) => void;
   ngayCan: string;
   onNgayCanChange: (v: string) => void;
   surplusMode: "con_du" | "hoan_tien";
   onSurplusModeChange: (v: "con_du" | "hoan_tien") => void;
-  canTru: CanTruSelection | null;
-  onCanTruChange: (v: CanTruSelection | null) => void;
+  canTru: CanTruSelection[];
+  onCanTruChange: (v: CanTruSelection[]) => void;
   onClose: () => void;
   onSubmit: () => void;
   submitting: boolean;
@@ -40,7 +40,7 @@ interface Props {
 // Modal chốt chênh lệch sau điều chỉnh: tạo ĐNTT bổ sung (thiếu) hoặc ghi
 // công nợ / hoàn tiền (thừa). Tách từ ChiPhiDVSection.
 export default function DVAggCommitModal({
-  target, doanId, reason, onReasonChange, ngayCan, onNgayCanChange,
+  target, reason, onReasonChange, ngayCan, onNgayCanChange,
   surplusMode, onSurplusModeChange, canTru, onCanTruChange,
   onClose, onSubmit, submitting,
 }: Props) {
@@ -103,31 +103,27 @@ export default function DVAggCommitModal({
                 NCC: <span className="font-medium text-foreground">{target.paidDntt.ten_nha_cung_cap}</span>
               </div>
             )}
-            {target.delta > 0 && target.mainRow.nha_cung_cap_id != null && (
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
-                <KSCongNoPanel
-                  nccId={target.mainRow.nha_cung_cap_id}
-                  doanId={doanId}
-                  value={canTru}
-                  onChange={(v) => {
-                    // Cap soTienCanTru ≤ delta để không vượt quá phần thiếu
-                    if (v && target) {
-                      onCanTruChange({ ...v, soTienCanTru: Math.min(v.soTienCanTru, target.delta) });
-                    } else {
-                      onCanTruChange(v);
-                    }
-                  }}
-                />
-                {canTru && canTru.soTienCanTru > 0 && (
-                  <p className="text-[10px] text-muted-foreground tabular-nums">
-                    {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(target.delta)} ₫</span>
-                    {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(canTru.soTienCanTru)} ₫</span>
-                    {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt(target.delta - canTru.soTienCanTru)} ₫</span>
-                  </p>
-                )}
-              </div>
-            )}
+            {target.delta > 0 && target.mainRow.nha_cung_cap_id != null && (() => {
+              const totalCt = canTru.reduce((s, x) => s + x.soTienCanTru, 0);
+              return (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
+                  <KSCongNoMultiPanel
+                    nccId={target.mainRow.nha_cung_cap_id}
+                    value={canTru}
+                    onChange={onCanTruChange}
+                    maxAmount={target.delta}
+                  />
+                  {totalCt > 0 && (
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(target.delta)} ₫</span>
+                      {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(totalCt)} ₫</span>
+                      {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt(target.delta - totalCt)} ₫</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
             {target.delta < 0 && (
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">{t("Hình thức xử lý")}</Label>

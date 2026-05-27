@@ -13,8 +13,8 @@ import {
 } from "@/hooks/use-chi-phi";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
-import { usePaymentsByChiPhi } from "@/hooks/use-payments";
-import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
+import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
+import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentUserName } from "@/hooks/use-doan";
@@ -270,7 +270,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   const [aggReason, setAggReason] = useState("");
   const [aggNgayCan, setAggNgayCan] = useState("");
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
-  const [aggCanTru, setAggCanTru] = useState<CanTruSelection | null>(null);
+  const [aggCanTru, setAggCanTru] = useState<CanTruSelection[]>([]);
   // Cho phép cọc nhiều lần: mode "full" = toàn bộ delta, "deposit" = 1 phần (cọc tiếp).
   // la_coc=true khi mode="deposit".
   const [aggCommitMode, setAggCommitMode] = useState<"full" | "deposit">("full");
@@ -363,18 +363,24 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         });
         const newDnttId = newDntt?.id ?? null;
 
-        const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, dnttAmount) : 0;
-        if (canTruAmt > 0 && newDnttId && aggCanTru) {
-          const { error: payErr } = await externalSupabase.from("payments").insert({
-            dntt_id: newDnttId,
-            method: "can_tru",
-            so_tien: canTruAmt,
-            cong_no_id: aggCanTru.congNoId,
-            ghi_chu: `Cấn trừ từ đoàn: ${aggCanTru.tenDoan}`,
+        // Gộp nhiều cấn trừ cùng NCC — clamp tổng ≤ dnttAmount
+        const canTruItems: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
+        let ctRemain = dnttAmount;
+        for (const s of aggCanTru) {
+          if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
+          const amt = Math.min(s.soTienCanTru, ctRemain);
+          if (amt <= 0) continue;
+          canTruItems.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
+          ctRemain -= amt;
+        }
+        const canTruAmt = canTruItems.reduce((a, b) => a + b.soTien, 0);
+        if (canTruAmt > 0 && newDnttId) {
+          await createCanTruPayments({
+            dnttId: newDnttId,
+            consumingDoanLog: tenDoan || `#${doanId}`,
+            items: canTruItems,
+            recalcChiPhiIds: chiPhiIds.length > 0 ? chiPhiIds : undefined,
           });
-          if (payErr) throw payErr;
-          await appendCanTruLog(aggCanTru.congNoId, canTruAmt, tenDoan || `#${doanId}`);
-          if (chiPhiIds.length > 0) await recalcChiPhiStatus(chiPhiIds);
         }
 
         const successPrefix = isDepositMode ? "Đã tạo ĐNTT cọc bổ sung" : "Đã tạo ĐNTT bổ sung";
@@ -394,7 +400,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       setAggReason("");
       setAggNgayCan("");
       setAggSurplusMode("con_du");
-      setAggCanTru(null);
+      setAggCanTru([]);
       setAggCommitMode("full");
       setAggDepositAmount(0);
     } catch (err: unknown) {
@@ -857,7 +863,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   // closeAggCommit — reset toàn bộ state liên quan (verbatim từ inline onOpenChange + footer)
   const closeAggCommit = () => {
     setAggCommit(null); setAggReason(""); setAggNgayCan("");
-    setAggSurplusMode("con_du"); setAggCanTru(null);
+    setAggSurplusMode("con_du"); setAggCanTru([]);
     setAggCommitMode("full"); setAggDepositAmount(0);
   };
 
@@ -1174,7 +1180,7 @@ export interface KSCardHandlers {
   setCancelMode: (v: "cong_no" | "hoan_tien") => void;
   setKsAdjustTarget: (v: KSAdjustTarget | null) => void;
   setAggCommit: (v: AggCommitKSTarget | null) => void;
-  setAggCanTru: (v: CanTruSelection | null) => void;
+  setAggCanTru: (v: CanTruSelection[]) => void;
   setAggReason: (v: string) => void;
   setAggSurplusMode: (v: "con_du" | "hoan_tien") => void;
   setAggNgayCan: (v: string) => void;
