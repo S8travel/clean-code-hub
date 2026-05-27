@@ -72,6 +72,9 @@ export interface BaoGiaRow {
   // Phụ thu lump-sum: vé cầu đường, xe trung chuyển, các phí cố định khác.
   // Tính 1 lần cho cả tour, KHÔNG nhân pax. Cộng vào tổng chi phí vốn.
   phu_thu: number;
+  // Tỷ giá VCB (giá MUA USD) snapshot. Khác exchange_rate (báo giá rate quote
+  // khách) → tính chênh lệch tỷ giá cho biên lợi nhuận. NULL = bỏ qua.
+  vcb_rate: number | null;
 }
 
 // ── Queries ──

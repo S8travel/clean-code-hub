@@ -1,16 +1,9 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, Trash2, FileDown, Printer, FileText, Settings } from "lucide-react";
+import { Plus, Trash2, FileDown, FileText, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,27 +16,18 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { BaoGiaUpload } from "@/components/bao-gia/BaoGiaUpload";
-import { BaoGiaManual } from "@/components/bao-gia/BaoGiaManual";
-import { BaoGiaResultTable } from "@/components/bao-gia/BaoGiaResultTable";
 import { BangGiaImport } from "@/components/bao-gia/BangGiaImport";
 import {
   useBaoGiaList,
   useCreateBaoGia,
-  useUpdateBaoGia,
   useDeleteBaoGia,
+  type BaoGiaCase,
   type BaoGiaKetQua,
-  type BaoGiaRow,
 } from "@/hooks/use-bao-gia";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
 import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
-import { costBreakdown, liveKetQua } from "@/components/bao-gia/detail/helpers";
+import { costBreakdown, liveKetQua, defaultDayItems } from "@/components/bao-gia/detail/helpers";
 import { toast } from "sonner";
-
-type ViewState =
-  | { mode: "list" }
-  | { mode: "new-result"; ketQua: BaoGiaKetQua; fileName: string; exchangeRate: number; profitUsd: number }
-  | { mode: "view"; row: BaoGiaRow };
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 const fmtUsd = (n: number) => n.toFixed(2);
@@ -61,41 +45,50 @@ const LOAI_LABEL: Record<string, string> = {
   dich_vu: "Dịch vụ",
 };
 
+// Skeleton BaoGiaKetQua trống cho báo giá vừa tạo — user điền tại detail page.
+function emptyCase(guests: number): BaoGiaCase {
+  return {
+    guests,
+    pax: 0, rooms: 0,
+    hotel: 0, meal: 0, ticket: 0, transport: 0,
+    insurance: 0, guide: 0, tips: 0,
+    total_cost: 0, profit_vnd: 0,
+    final_price_vnd: 0, final_price_usd: 0,
+  };
+}
+function emptyKetQua(): BaoGiaKetQua {
+  return {
+    ten_chuong_trinh: "",
+    so_ngay: 1,
+    items: defaultDayItems(1),
+    case_16: emptyCase(16),
+    case_20: emptyCase(20),
+    gia_trung_binh_vnd: 0,
+    gia_trung_binh_usd: 0,
+  };
+}
+
 export default function BaoGiaPage() {
   const navigate = useNavigate();
   const { data: list = [], isLoading } = useBaoGiaList();
   const { data: bangGia = [] } = useBangGiaDichVu();
   const createMutation = useCreateBaoGia();
-  const updateMutation = useUpdateBaoGia();
   const deleteMutation = useDeleteBaoGia();
 
-  const [view, setView] = useState<ViewState>({ mode: "list" });
-  const [showUpload, setShowUpload] = useState(false);
-  const [showManual, setShowManual] = useState(false);
-
-  // ── New result from AI ───────────────────────────────────────────────────
-  const handleNewResult = (ketQua: BaoGiaKetQua, file: File, exchangeRate: number, profitUsd: number) => {
-    setShowUpload(false);
-    setView({ mode: "new-result", ketQua, fileName: file.name, exchangeRate, profitUsd });
-  };
-
-  const handleSave = async (trangThai: "draft" | "final") => {
-    if (view.mode !== "new-result") return;
-    const { ketQua, exchangeRate, profitUsd } = view;
+  const handleCreate = () => {
     createMutation.mutate(
-      { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: trangThai },
       {
-        onSuccess: () => { toast.success(trangThai === "final" ? "Đã lưu chính thức!" : "Đã lưu bản nháp!"); setView({ mode: "list" }); },
-        onError: () => toast.error("Lỗi lưu báo giá"),
-      }
+        tieu_de: "",
+        ket_qua: emptyKetQua(),
+        exchange_rate: 26000,
+        profit_usd: 15,
+        trang_thai: "draft",
+      },
+      {
+        onSuccess: ({ id }) => navigate(`/bao-gia/${id}`),
+        onError: () => toast.error("Lỗi tạo báo giá"),
+      },
     );
-  };
-
-  const handleFinalize = (row: BaoGiaRow) => {
-    updateMutation.mutate({ id: row.id, trang_thai: "final" }, {
-      onSuccess: () => toast.success("Đã lưu chính thức!"),
-      onError: () => toast.error("Lỗi cập nhật"),
-    });
   };
 
   const handleDelete = (id: number) => {
@@ -110,94 +103,14 @@ export default function BaoGiaPage() {
     catch { toast.error("Lỗi xuất Word"); }
   };
 
-  // ── Detail view ──────────────────────────────────────────────────────────
-  if (view.mode === "new-result" || view.mode === "view") {
-    const ketQua = view.mode === "new-result" ? view.ketQua : view.row.ket_qua!;
-    const exchangeRate = view.mode === "new-result" ? view.exchangeRate : (view.row.exchange_rate ?? 26000);
-    const profitUsd = view.mode === "new-result" ? view.profitUsd : (view.row.profit_usd ?? 0);
-    const isNew = view.mode === "new-result";
-
-    return (
-      <div className="p-4 max-w-5xl mx-auto space-y-4">
-        <div className="flex items-center justify-between no-print">
-          <Button variant="ghost" size="sm" onClick={() => setView({ mode: "list" })}>← Quay lại danh sách</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleExportWord(ketQua, exchangeRate, profitUsd)}>
-              <FileDown className="h-4 w-4 mr-1" />Export Word
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <Printer className="h-4 w-4 mr-1" />In / PDF
-            </Button>
-            {isNew && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => handleSave("draft")} disabled={createMutation.isPending}>Lưu nháp</Button>
-                <Button size="sm" onClick={() => handleSave("final")} disabled={createMutation.isPending}>Lưu chính thức</Button>
-              </>
-            )}
-            {view.mode === "view" && view.row.trang_thai === "draft" && (
-              <Button size="sm" onClick={() => handleFinalize(view.row)}>Lưu chính thức</Button>
-            )}
-          </div>
-        </div>
-        <div className="border rounded-lg p-4 print:border-0">
-          <BaoGiaResultTable ketQua={ketQua} />
-        </div>
-        <style>{`@media print { .no-print { display: none !important; } }`}</style>
-      </div>
-    );
-  }
-
-  // ── List + Management tabs ────────────────────────────────────────────────
   return (
     <div className="p-4 max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">Báo Giá Tour</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowManual(true)}>
-            <Plus className="h-4 w-4 mr-1" />Thủ công
-          </Button>
-          <Button size="sm" onClick={() => setShowUpload(true)}>
-            <Plus className="h-4 w-4 mr-1" />Tự động (từ file)
-          </Button>
-        </div>
+        <Button size="sm" onClick={handleCreate} disabled={createMutation.isPending}>
+          <Plus className="h-4 w-4 mr-1" />Tạo báo giá
+        </Button>
       </div>
-
-      <Dialog open={showUpload} onOpenChange={setShowUpload}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Tạo báo giá từ file chương trình</DialogTitle>
-          </DialogHeader>
-          {bangGia.length === 0 && (
-            <div className="text-xs bg-orange-50 border border-orange-200 rounded p-2 text-orange-700">
-              ⚠ Chưa có bảng giá nội bộ. Vui lòng import bảng giá trước (tab "Bảng Giá") để AI tra cứu đúng giá.
-            </div>
-          )}
-          <BaoGiaUpload onResult={handleNewResult} />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showManual} onOpenChange={setShowManual}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Báo giá thủ công</DialogTitle>
-          </DialogHeader>
-          <BaoGiaManual
-            onSave={(ketQua, exchangeRate, profitUsd, trangThai) => {
-              createMutation.mutate(
-                { tieu_de: ketQua.ten_chuong_trinh, ket_qua: ketQua, exchange_rate: exchangeRate, profit_usd: profitUsd, trang_thai: trangThai },
-                {
-                  onSuccess: () => {
-                    toast.success(trangThai === "final" ? "Đã lưu chính thức!" : "Đã lưu bản nháp!");
-                    setShowManual(false);
-                    setView({ mode: "list" });
-                  },
-                  onError: () => toast.error("Lỗi lưu báo giá"),
-                }
-              );
-            }}
-          />
-        </DialogContent>
-      </Dialog>
 
       <Tabs defaultValue="bao-gia">
         <TabsList>
@@ -219,7 +132,7 @@ export default function BaoGiaPage() {
             <div className="border-2 border-dashed rounded-lg p-12 text-center">
               <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
               <p className="text-sm font-medium">Chưa có báo giá nào</p>
-              <p className="text-xs text-muted-foreground mt-1">Nhấn "Tạo báo giá mới" để bắt đầu</p>
+              <p className="text-xs text-muted-foreground mt-1">Nhấn "Tạo báo giá" để bắt đầu</p>
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
@@ -246,6 +159,7 @@ export default function BaoGiaPage() {
                       profitUsd: row.profit_usd ?? 0,
                       xeGia: row.xe_gia,
                       phuThu: row.phu_thu,
+                      vcbRate: row.vcb_rate,
                     });
                     const giaPaxVnd = breakdown?.gia_ban_tb_per_pax ?? null;
                     const giaPaxUsd = breakdown?.gia_ban_tb_per_pax_usd ?? null;
