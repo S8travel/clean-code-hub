@@ -653,8 +653,20 @@ export default function DoanDetail() {
             />
           </TabsContent>
 
-          <TabsContent value="chi-phi" className="mt-4">
-            <ChiPhiTab doanId={doanId} doan={doan} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} />
+          <TabsContent value="chi-phi" className="mt-4 space-y-4">
+            {doanId != null && (
+              <DoanNhomTabs
+                doanId={doanId}
+                activeNhomId={activeNhomId}
+                onActiveNhomChange={setActiveNhomId}
+              />
+            )}
+            <ChiPhiTab
+              doanId={doanId}
+              doan={doan}
+              coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
+              activeNhomId={activeNhomId}
+            />
           </TabsContent>
 
           <TabsContent value="tai-lieu" className="mt-4">

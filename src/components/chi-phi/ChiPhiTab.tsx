@@ -2,6 +2,7 @@ import { useMemo, useState, useRef } from "react";
 import { FileSpreadsheet, Printer } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
+import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
 import { useUserRoles, useCurrentUserName } from "@/hooks/use-doan";
@@ -76,9 +77,11 @@ interface Props {
   doanId: number;
   doan: ChiPhiTabDoanInput;
   coTinhSuatTLNhaHang?: boolean;
+  /** ID nhóm active (Phase 2+). Khi có giá trị → tính số khách theo nhóm; null → theo đoàn. */
+  activeNhomId?: number | null;
 }
 
-export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang }: Props) {
+export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang, activeNhomId }: Props) {
   useTranslate();
   // Chuẩn hoá row đoàn về ChiPhiTabDoan (các quan hệ join có kiểu chính xác).
   const doan = doanInput as ChiPhiTabDoan;
@@ -92,27 +95,20 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   const dvSectionRef = useRef<ChiPhiDVSectionHandle>(null);
   const [combinedPreview, setCombinedPreview] = useState<NHDocData | null>(null);
   const { data: currentUserName = "" } = useCurrentUserName();
-  const soKhach =
-    (doan?.so_khach_lon ?? 0) +
-    (doan?.so_khach_em1 ?? 0) +
-    (doan?.so_khach_em2 ?? 0) +
-    (doan?.so_khach_tl ?? 0) ||
-    doan?.so_khach ||
-    0;
+
+  // Phase 2+: lấy số khách của nhóm active (nếu có), fallback về đoàn.
+  // Cho phép Vicky case: nhóm 1 (75 khách) chi phí khác nhóm 2 (25 khách).
+  const { data: nhomList = [] } = useDoanNhomList(doanId);
+  const activeNhom = activeNhomId != null ? nhomList.find((n) => n.id === activeNhomId) : null;
+  const sk_lon = activeNhom?.so_khach_lon ?? doan?.so_khach_lon ?? 0;
+  const sk_em1 = activeNhom?.so_khach_em1 ?? doan?.so_khach_em1 ?? 0;
+  const sk_em2 = activeNhom?.so_khach_em2 ?? doan?.so_khach_em2 ?? 0;
+  const sk_tl = activeNhom?.so_khach_tl ?? doan?.so_khach_tl ?? 0;
+  const soKhach = (sk_lon + sk_em1 + sk_em2 + sk_tl) || doan?.so_khach || 0;
 
   // Nhà hàng: TE 6-10 = 0.5 suất, TE <6 = miễn phí
-  const soKhachNH =
-    (doan?.so_khach_lon ?? 0) +
-    (doan?.so_khach_em1 ?? 0) * 0.5 +
-    (doan?.so_khach_tl ?? 0) ||
-    doan?.so_khach ||
-    0;
-
-  const soKhachNHKhongTL =
-    (doan?.so_khach_lon ?? 0) +
-    (doan?.so_khach_em1 ?? 0) * 0.5 ||
-    doan?.so_khach ||
-    0;
+  const soKhachNH = (sk_lon + sk_em1 * 0.5 + sk_tl) || doan?.so_khach || 0;
+  const soKhachNHKhongTL = (sk_lon + sk_em1 * 0.5) || doan?.so_khach || 0;
 
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
