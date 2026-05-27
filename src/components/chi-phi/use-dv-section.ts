@@ -152,7 +152,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
   const getRowEdit = (row: typeof dvRows[0]) =>
     editRow[row.id] ?? { so_luong: row.so_luong, don_gia: row.don_gia };
 
-  const handleRowChange = (id: number, field: "so_luong" | "don_gia", val: number) => {
+  const handleRowChange = (id: number | undefined, field: "so_luong" | "don_gia", val: number) => {
+    if (id == null) return; // row chưa save → bỏ qua (cần id để index editRow map)
     const base = dvRows.find(r => r.id === id);
     const cur = editRowRef.current;
     const existing = cur[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
