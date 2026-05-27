@@ -185,13 +185,16 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
       // col10 "Tổng tiền" — chung cho mọi layout
       cells.push(cell([p(fmt(tongTien), { bold: true, size: 14 })], { width: colWidths[10], rowSpan: totalRoomRows }));
       if (useCanTru) {
-        // col11 "Đã TT"; col12 "Cấn trừ"; col13 "Thanh toán"; col14 "Thông tin NH"; col15 "Ghi chú"
+        // col11 "Đã TT"; col12 "Cấn trừ"; col13 "Thanh toán" = soTien − cấn trừ
+        // (số tiền NCC thực nhận qua chuyển khoản, đã trừ phần cấn trừ công nợ);
+        // col14 "Thông tin NH"; col15 "Ghi chú"
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
         const canTruText = canTruTotal > 0 ? fmt(canTruTotal) : "—";
+        const thucChuyen = Math.max(0, soTien - canTruTotal);
         const noteText = canTruNote || "—";
         cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
         cells.push(cell([p(canTruText, { size: 14, color: canTruTotal > 0 ? "FF6600" : undefined })], { width: colWidths[12], rowSpan: totalRoomRows }));
-        cells.push(cell([p(fmt(soTien), { bold: true, size: 14 })], { width: colWidths[13], rowSpan: totalRoomRows }));
+        cells.push(cell([p(fmt(thucChuyen), { bold: true, size: 14 })], { width: colWidths[13], rowSpan: totalRoomRows }));
         cells.push(cell(bankChildren, { width: colWidths[14], rowSpan: totalRoomRows }));
         cells.push(cell([p(noteText, { size: 14, alignment: AlignmentType.LEFT })], { width: colWidths[15], rowSpan: totalRoomRows }));
       } else {
