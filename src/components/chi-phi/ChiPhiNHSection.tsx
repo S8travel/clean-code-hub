@@ -179,7 +179,6 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
 
       <NHAggCommitModal
         target={aggCommit}
-        doanId={doanId}
         reason={aggReason}
         onReasonChange={setAggReason}
         ngayCan={aggNgayCan}

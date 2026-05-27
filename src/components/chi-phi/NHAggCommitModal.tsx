@@ -7,7 +7,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import type { DNTTRow } from "@/hooks/use-dntt";
-import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import { fmt } from "./nh-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -27,15 +28,14 @@ export interface AggCommitNHTarget {
 
 interface Props {
   target: AggCommitNHTarget | null;
-  doanId: number;
   reason: string;
   onReasonChange: (v: string) => void;
   ngayCan: string;
   onNgayCanChange: (v: string) => void;
   surplusMode: "con_du" | "hoan_tien";
   onSurplusModeChange: (v: "con_du" | "hoan_tien") => void;
-  canTru: CanTruSelection | null;
-  onCanTruChange: (v: CanTruSelection | null) => void;
+  canTru: CanTruSelection[];
+  onCanTruChange: (v: CanTruSelection[]) => void;
   submitting: boolean;
   onClose: () => void;
   onSubmit: () => void;
@@ -43,7 +43,7 @@ interface Props {
 
 // Modal chốt chênh lệch sau điều chỉnh bữa ăn. Tách verbatim từ ChiPhiNHSection.
 export default function NHAggCommitModal({
-  target, doanId, reason, onReasonChange, ngayCan, onNgayCanChange,
+  target, reason, onReasonChange, ngayCan, onNgayCanChange,
   surplusMode, onSurplusModeChange, canTru, onCanTruChange,
   submitting, onClose, onSubmit,
 }: Props) {
@@ -106,31 +106,27 @@ export default function NHAggCommitModal({
                 NCC: <span className="font-medium text-foreground">{target.nccName}</span>
               </div>
             )}
-            {target.delta > 0 && target.nccId != null && (
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
-                <KSCongNoPanel
-                  nccId={target.nccId}
-                  doanId={doanId}
-                  value={canTru}
-                  onChange={(v) => {
-                    if (v && target) {
-                      const capped = Math.min(v.soTienCanTru, target.delta);
-                      onCanTruChange({ ...v, soTienCanTru: capped });
-                    } else {
-                      onCanTruChange(v);
-                    }
-                  }}
-                />
-                {canTru && canTru.soTienCanTru > 0 && (
-                  <p className="text-[10px] text-muted-foreground tabular-nums">
-                    {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(target.delta)} ₫</span>
-                    {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(canTru.soTienCanTru)} ₫</span>
-                    {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt(target.delta - canTru.soTienCanTru)} ₫</span>
-                  </p>
-                )}
-              </div>
-            )}
+            {target.delta > 0 && target.nccId != null && (() => {
+              const totalCt = canTru.reduce((s, x) => s + x.soTienCanTru, 0);
+              return (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
+                  <KSCongNoMultiPanel
+                    nccId={target.nccId}
+                    value={canTru}
+                    onChange={onCanTruChange}
+                    maxAmount={target.delta}
+                  />
+                  {totalCt > 0 && (
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(target.delta)} ₫</span>
+                      {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(totalCt)} ₫</span>
+                      {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt(target.delta - totalCt)} ₫</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
             {target.delta < 0 && (
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">{t("Hình thức xử lý")}</Label>

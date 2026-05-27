@@ -9,7 +9,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import type { DNTTRow } from "@/hooks/use-dntt";
-import KSCongNoPanel, { type CanTruSelection } from "./KSCongNoPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
+import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import { fmt } from "./ks-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -31,7 +32,6 @@ export interface AggCommitKSTarget {
 
 interface Props {
   target: AggCommitKSTarget | null;
-  doanId: number;
   commitMode: "full" | "deposit";
   onCommitModeChange: (v: "full" | "deposit") => void;
   depositAmount: number;
@@ -42,8 +42,8 @@ interface Props {
   onNgayCanChange: (v: string) => void;
   surplusMode: "con_du" | "hoan_tien";
   onSurplusModeChange: (v: "con_du" | "hoan_tien") => void;
-  canTru: CanTruSelection | null;
-  onCanTruChange: (v: CanTruSelection | null) => void;
+  canTru: CanTruSelection[];
+  onCanTruChange: (v: CanTruSelection[]) => void;
   submitting: boolean;
   onClose: () => void;
   onSubmit: () => void;
@@ -51,7 +51,7 @@ interface Props {
 
 // Modal chốt chênh lệch KS sau OP edit so_phong/gia_phong/FOC. Tách verbatim từ ChiPhiKSSection.
 export default function KSAggCommitModal({
-  target: aggCommit, doanId,
+  target: aggCommit,
   commitMode: aggCommitMode, onCommitModeChange: setAggCommitMode,
   depositAmount: aggDepositAmount, onDepositAmountChange: setAggDepositAmount,
   reason: aggReason, onReasonChange: setAggReason,
@@ -169,32 +169,28 @@ export default function KSAggCommitModal({
                 )}
               </div>
             )}
-            {aggCommit.delta > 0 && aggCommit.nccId != null && (
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
-                <KSCongNoPanel
-                  nccId={aggCommit.nccId}
-                  doanId={doanId}
-                  value={aggCanTru}
-                  onChange={(v) => {
-                    if (v && aggCommit) {
-                      const maxAmt = aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta;
-                      const capped = Math.min(v.soTienCanTru, maxAmt);
-                      setAggCanTru({ ...v, soTienCanTru: capped });
-                    } else {
-                      setAggCanTru(v);
-                    }
-                  }}
-                />
-                {aggCanTru && aggCanTru.soTienCanTru > 0 && (
-                  <p className="text-[10px] text-muted-foreground tabular-nums">
-                    {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta)} ₫</span>
-                    {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(aggCanTru.soTienCanTru)} ₫</span>
-                    {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt((aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta) - aggCanTru.soTienCanTru)} ₫</span>
-                  </p>
-                )}
-              </div>
-            )}
+            {aggCommit.delta > 0 && aggCommit.nccId != null && (() => {
+              const maxAmt = aggCommitMode === "deposit" ? aggDepositAmount : aggCommit.delta;
+              const totalCt = aggCanTru.reduce((s, x) => s + x.soTienCanTru, 0);
+              return (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
+                  <KSCongNoMultiPanel
+                    nccId={aggCommit.nccId}
+                    value={aggCanTru}
+                    onChange={setAggCanTru}
+                    maxAmount={maxAmt}
+                  />
+                  {totalCt > 0 && (
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(maxAmt)} ₫</span>
+                      {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(totalCt)} ₫</span>
+                      {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt(maxAmt - totalCt)} ₫</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
             {aggCommit.delta < 0 && (
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">{t("Hình thức xử lý")}</Label>

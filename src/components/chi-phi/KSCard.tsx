@@ -604,7 +604,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                     paidDntt: aggPaidDntt,
                     serviceDate: rows[0]?.ngay_date ?? null,
                   });
-                  setAggCanTru(null);
+                  setAggCanTru([]);
                   setAggReason("");
                   setAggSurplusMode("con_du");
                   // Default ngày cần TT cho delta > 0
