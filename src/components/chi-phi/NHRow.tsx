@@ -102,7 +102,11 @@ export default function NHRow({ meal, data, handlers }: Props) {
   const nh = nhaHangMap[meal.nha_hang_id];
   const selected = selectedKeys.includes(key);
 
-  const focResolvedRow = resolveNHFoc(row, nh);
+  // FOC snapshot đọc trực tiếp từ chi_phi (DB cache) — không qua localRows vì
+  // localRows chỉ init 1 lần, NHFocEditor cập nhật DB → cache invalidate mới reflect.
+  const mainCpForFoc = row?.id ? chiPhiRows.find((c) => c.id === row.id) : null;
+  const focSource = mainCpForFoc ?? row;
+  const focResolvedRow = resolveNHFoc(focSource, nh);
   const soKhachThucTe = row
     ? calcSoKhachThucTe(row.so_khach, focResolvedRow.foc_khach, focResolvedRow.foc_mien)
     : 0;
