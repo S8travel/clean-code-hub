@@ -270,9 +270,11 @@ export default function NHRow({ meal, data, handlers }: Props) {
                 {row.is_overridden && (
                   <span title={t("Đã override — không sync với Điều tour")} className="text-amber-500 text-[10px]">🔒</span>
                 )}
-                <span className="w-[20px] text-green-600 text-[10px]">
-                  {focMienSo > 0 ? `-${focMienSo}` : ""}
-                </span>
+                {focMienSo > 0 && (
+                  <span className="text-green-600 text-xs font-semibold whitespace-nowrap">
+                    (FOC -{focMienSo})
+                  </span>
+                )}
               </>
             ) : <span className="text-muted-foreground">—</span>}
           </div>
