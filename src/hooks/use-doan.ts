@@ -39,6 +39,17 @@ export interface Doan {
   tip_so_ngay_override: number | null;
   tip_so_khach_override: number | null;
   tip_lump_sum: number | null;
+  // Phải thu — Thu tiền đầu khách: per-pax × đơn giá (no nhân ngày)
+  dau_khach_rate: number | null;
+  dau_khach_currency: string | null;
+  dau_khach_ty_gia: number | null;
+  dau_khach_nguoi_thu: string | null;
+  dau_khach_so_khach_override: number | null;
+  // Phải thu — Thu tiền quỹ VP: lump-sum cho cả đoàn
+  quy_vp_amount: number | null;
+  quy_vp_currency: string | null;
+  quy_vp_ty_gia: number | null;
+  quy_vp_nguoi_thu: string | null;
   created_at?: string;
 }
 
@@ -478,6 +489,34 @@ export function useUpdateDoan() {
       let committedDnttAffected = 0;
 
       if (so_khach_changed) {
+        // 4.0. Cascade số khách sang nhóm thu_tu=1 (nhóm mặc định / "Toàn đoàn").
+        // Rule: khi user đổi số khách qua DoanDrawer, delta phải đẩy vào nhóm 1.
+        // Nhóm khác (vd "Nhóm golf") giữ nguyên — user phải dùng "Chia lại" modal nếu cần.
+        // Phép tính: nhom1.field_new = nhom1.field_old + (doan.field_new - doan.field_old)
+        const diffLon = (data.so_khach_lon ?? 0) - (oldDoan.so_khach_lon ?? 0);
+        const diffEm1 = (data.so_khach_em1 ?? 0) - (oldDoan.so_khach_em1 ?? 0);
+        const diffEm2 = (data.so_khach_em2 ?? 0) - (oldDoan.so_khach_em2 ?? 0);
+        const diffTl  = (data.so_khach_tl  ?? 0) - (oldDoan.so_khach_tl  ?? 0);
+        if (diffLon !== 0 || diffEm1 !== 0 || diffEm2 !== 0 || diffTl !== 0) {
+          const { data: nhom1 } = await externalSupabase
+            .from("doan_nhom")
+            .select("id, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl")
+            .eq("doan_id", id)
+            .eq("thu_tu", 1)
+            .maybeSingle();
+          if (nhom1) {
+            await externalSupabase
+              .from("doan_nhom")
+              .update({
+                so_khach_lon: Math.max(0, (nhom1.so_khach_lon ?? 0) + diffLon),
+                so_khach_em1: Math.max(0, (nhom1.so_khach_em1 ?? 0) + diffEm1),
+                so_khach_em2: Math.max(0, (nhom1.so_khach_em2 ?? 0) + diffEm2),
+                so_khach_tl: Math.max(0, (nhom1.so_khach_tl ?? 0) + diffTl),
+              })
+              .eq("id", nhom1.id);
+          }
+        }
+
         // 4a. Sync doan_ngay_item.so_luong cho items chưa customized (= old total)
         if (oldTotal > 0 && newTotal !== oldTotal) {
           await externalSupabase
@@ -674,6 +713,7 @@ export function useUpdateDoan() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["doan"] });
+      qc.invalidateQueries({ queryKey: ["doan_nhom", vars.id] });
       qc.invalidateQueries({ queryKey: ["doan_ngay", vars.id] });
       qc.invalidateQueries({ queryKey: ["doan_ngay_item", vars.id] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.id] });
@@ -711,6 +751,15 @@ export function useUpdateDoanTip() {
       tip_so_khach_override?: number | null;
       tip_so_ngay_override?: number | null;
       tip_lump_sum?: number | null;
+      dau_khach_rate?: number | null;
+      dau_khach_currency?: string | null;
+      dau_khach_ty_gia?: number | null;
+      dau_khach_nguoi_thu?: string | null;
+      dau_khach_so_khach_override?: number | null;
+      quy_vp_amount?: number | null;
+      quy_vp_currency?: string | null;
+      quy_vp_ty_gia?: number | null;
+      quy_vp_nguoi_thu?: string | null;
     }) => {
       const { error } = await externalSupabase.from("doan").update(updates).eq("id", id);
       if (error) throw error;
