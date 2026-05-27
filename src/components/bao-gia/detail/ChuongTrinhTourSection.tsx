@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { DayPanel } from "./DayPanel";
+import { defaultDayItems } from "./helpers";
 
 interface Props {
   draft: BaoGiaRow;
@@ -87,8 +88,14 @@ export function ChuongTrinhTourSection({ draft, updateDraftKetQua, saveKetQua }:
             className="w-full h-9 text-xs gap-1 border-dashed text-slate-600 hover:bg-slate-50"
             onClick={() => {
               // Tăng so_ngay +1; user có thể giảm bằng cách sửa ô Số ngày ở section trên.
-              saveKetQua({ ...ket, so_ngay: soNgay + 1 });
-              setExpandedDay(soNgay + 1);
+              // Mỗi ngày mới tự sinh 4 slot mặc định (cảnh điểm, ăn trưa, ăn tối, KS).
+              const newDay = soNgay + 1;
+              saveKetQua({
+                ...ket,
+                so_ngay: newDay,
+                items: [...(ket.items || []), ...defaultDayItems(newDay)],
+              });
+              setExpandedDay(newDay);
             }}
           >
             <Plus className="h-3.5 w-3.5" />

@@ -1,8 +1,12 @@
-import { Users, ArrowRightLeft } from "lucide-react";
+import { useState } from "react";
+import { Users, ArrowRightLeft, RefreshCw, Loader2, Check } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
-import { paxOf, fmtVnd } from "./helpers";
+import { useFetchExchangeRate, type VcbRate } from "@/hooks/use-exchange-rate";
+import { paxOf, fmtVnd, defaultDayItems } from "./helpers";
 import { LeadSelector } from "./LeadSelector";
 import { VehicleSelector } from "./VehicleSelector";
 
@@ -23,6 +27,32 @@ export function ThongTinTourSection({
 }: Props) {
   const ket = draft.ket_qua;
   const pax = paxOf(ket);
+  const fetchRate = useFetchExchangeRate();
+  // VCB rate transient — KHÔNG store DB. User xem rồi click "Áp dụng" để
+  // copy sang ô Tỷ giá chính (tự điền).
+  const [vcbRate, setVcbRate] = useState<VcbRate | null>(null);
+
+  const handleFetchVcb = () => {
+    fetchRate.mutate(undefined, {
+      onSuccess: (data) => {
+        setVcbRate(data);
+        const rate = Math.round(data.rate);
+        // Auto-save vcb_rate để costBreakdown tính chênh lệch tỷ giá ngay.
+        if (rate !== row.vcb_rate) saveField("vcb_rate", rate);
+        const note = data.cached ? " (cache)" : "";
+        toast.success(`VCB mua USD: ${rate.toLocaleString("vi-VN")} VND${note}`);
+      },
+      onError: (err) => toast.error(`Lỗi lấy tỷ giá VCB: ${err.message}`),
+    });
+  };
+
+  const applyVcbRate = () => {
+    if (!vcbRate) return;
+    const rate = Math.round(vcbRate.rate);
+    if (rate !== row.exchange_rate) saveField("exchange_rate", rate);
+    else updateDraftField("exchange_rate", rate);
+    toast.success(`Đã áp dụng tỷ giá ${rate.toLocaleString("vi-VN")} VND`);
+  };
 
   // Helper: build new ket_qua object trên field jsonb đơn (không phải case)
   const patchKetQua = (patch: Partial<BaoGiaKetQua>) => {
@@ -62,9 +92,19 @@ export function ThongTinTourSection({
             value={ket?.so_ngay ?? 0}
             onChange={(e) => {
               const v = parseInt(e.target.value, 10);
-              if (!isNaN(v) && v >= 1) {
-                const next = patchKetQua({ so_ngay: v });
-                if (next) updateDraftKetQua(next);
+              if (!isNaN(v) && v >= 1 && ket) {
+                // Tăng → append 4 default cho mỗi ngày mới; Giảm → giữ items
+                // các ngày bị "ẩn" (không xoá để user không mất data nếu lỡ tay).
+                const prevSoNgay = ket.so_ngay ?? 1;
+                let nextItems = ket.items ?? [];
+                if (v > prevSoNgay) {
+                  const appended = [...nextItems];
+                  for (let d = prevSoNgay + 1; d <= v; d++) {
+                    appended.push(...defaultDayItems(d));
+                  }
+                  nextItems = appended;
+                }
+                updateDraftKetQua({ ...ket, so_ngay: v, items: nextItems });
               }
             }}
             onBlur={() => {
@@ -123,6 +163,60 @@ export function ThongTinTourSection({
             </div>
           </div>
           <p className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{fmtVnd(draft.exchange_rate || 0)} VND/USD</p>
+        </div>
+
+        {/* Row 1b: Tỷ giá VCB (tham khảo — read-only, KHÔNG store DB).
+            Click ↻ fetch → hiển thị giá MUA USD VCB. Bấm "Áp dụng" copy sang
+            ô Tỷ giá chính ở trên. */}
+        <div className="col-span-12">
+          <Label className="text-xs text-slate-600">
+            Tỷ giá VCB <span className="text-[10px] text-slate-400 font-normal">(tham khảo — giá MUA USD)</span>
+          </Label>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="relative flex-1 max-w-[260px]">
+              <Input
+                readOnly
+                value={
+                  vcbRate
+                    ? Math.round(vcbRate.rate).toLocaleString("vi-VN") + " VND"
+                    : draft.vcb_rate
+                      ? Math.round(draft.vcb_rate).toLocaleString("vi-VN") + " VND"
+                      : "Chưa lấy — click ↻ để cập nhật"
+                }
+                className="h-9 pr-9 text-right bg-slate-50 cursor-default"
+              />
+              <button
+                type="button"
+                onClick={handleFetchVcb}
+                disabled={fetchRate.isPending}
+                title="Lấy giá MUA USD từ Vietcombank"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-40"
+              >
+                {fetchRate.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <RefreshCw className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!vcbRate}
+              onClick={applyVcbRate}
+              className="h-9 text-xs gap-1"
+              title="Copy tỷ giá VCB sang ô Tỷ giá ở trên"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Áp dụng
+            </Button>
+            {vcbRate && (
+              <span className="text-[10px] text-slate-500 ml-1">
+                {vcbRate.date}{vcbRate.cached ? " (cache)" : ""}
+                {" · "}TT: {Math.round(vcbRate.rate_transfer).toLocaleString("vi-VN")}
+                {" · "}Bán: {Math.round(vcbRate.rate_sell).toLocaleString("vi-VN")}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Row 2 */}

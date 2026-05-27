@@ -17,6 +17,7 @@ export function TongHopChiPhiPanel({ draft }: Props) {
     profitUsd: draft.profit_usd ?? 0,
     xeGia: draft.xe_gia,
     phuThu: draft.phu_thu,
+    vcbRate: draft.vcb_rate,
   });
 
   return (
@@ -63,6 +64,13 @@ export function TongHopChiPhiPanel({ draft }: Props) {
             v16={c?.case16.profit_vnd}
             v20={c?.case20.profit_vnd}
           />
+          {c?.vcb_rate && (
+            <CostRow
+              label={`Chênh lệch tỷ giá (VCB ${Math.round(c.vcb_rate).toLocaleString("vi-VN")} vs ${Math.round(c.exchange_rate).toLocaleString("vi-VN")})`}
+              v16={c.case16.chenh_lech_xr}
+              v20={c.case20.chenh_lech_xr}
+            />
+          )}
         </ul>
         <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-[1fr_auto_auto] gap-x-3 text-sm items-center">
           <span className="font-semibold text-slate-700">Giá bán tour</span>
