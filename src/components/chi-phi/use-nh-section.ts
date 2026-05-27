@@ -35,7 +35,7 @@ export function useNHSection({
   doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "",
 }: NHSectionParams) {
   const { data: nhData, isLoading } = useChiPhiNHSection(doanId);
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
@@ -107,6 +107,10 @@ export function useNHSection({
   useEffect(() => {
     if (!nhData || initializedRef.current) return;
     if (nhData.meals.length === 0) return;
+    // Wait cho chiPhiRows load xong — nếu init khi chiPhiRows còn rỗng (race
+    // condition do 2 query parallel), localRows[key].id sẽ undefined → handleDnttSubmit
+    // fall back vào INSERT chi phí mới → duplicate key vs row đã tồn tại trong DB.
+    if (chiPhiLoading) return;
 
     const nhChiPhi = chiPhiRows.filter((c) => c.danh_muc === "nha_hang");
     const rows: Record<string, LocalNHRow> = {};
@@ -190,7 +194,7 @@ export function useNHSection({
     if (dkSet.size > 0) setDinhKyKeys(dkSet);
 
     initializedRef.current = true;
-  }, [nhData, chiPhiRows, soKhachDefault]);
+  }, [nhData, chiPhiRows, soKhachDefault, chiPhiLoading]);
 
   // Chỉ reset khi doanId THỰC SỰ thay đổi, không chạy khi mount lần đầu
   const prevDoanIdRef = useRef(doanId);
@@ -644,32 +648,49 @@ export function useNHSection({
       const nh0 = nhData?.nhaHangMap[row.nha_hang_id];
       const nhName0 = nh0?.ten || "Nhà hàng";
       const buaStr0 = row.bua_an === "trua" ? "trưa" : "tối";
-      const focResolved0 = resolveNHFoc(row, nh0);
-      const skTT0 = calcSoKhachThucTe(row.so_khach, focResolved0.foc_khach, focResolved0.foc_mien);
-      const thanhTien0 = applyChietKhau(skTT0 * row.don_gia, row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? null);
-      try {
-        const saved = await upsertMut.mutateAsync({
-          doan_id: doanId,
-          ngay_so: row.ngay_so,
-          loai: "chi",
-          danh_muc: "nha_hang",
-          ref_doan_ngay_id: row.doan_ngay_id,
-          mo_ta: `${nhName0} (${buaStr0})`,
-          don_gia: row.don_gia,
-          so_luong: row.so_khach,
-          tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? thanhTien0 : 0,
-          tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? thanhTien0 : 0,
-          foc_khach_snapshot: focResolved0.foc_khach,
-          foc_mien_snapshot:  focResolved0.foc_mien,
-          chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
-        });
-        if (saved?.id) {
-          setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: saved.id } }));
-          row = { ...row, id: saved.id };
+      const expectedMoTa = `${nhName0} (${buaStr0})`;
+      // Defensive: lookup chi phí có sẵn trong DB. Trường hợp localRows lệch
+      // với DB (init race, hoặc cascade từ điều tour sau init) → reuse id thay
+      // vì INSERT (sẽ collide ux_doan_chi_phi_nh_unique).
+      const { data: existingCp } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id")
+        .eq("doan_id", doanId)
+        .eq("danh_muc", "nha_hang")
+        .eq("ref_doan_ngay_id", row.doan_ngay_id)
+        .eq("mo_ta", expectedMoTa)
+        .maybeSingle();
+      if (existingCp?.id) {
+        setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: existingCp.id } }));
+        row = { ...row, id: existingCp.id };
+      } else {
+        const focResolved0 = resolveNHFoc(row, nh0);
+        const skTT0 = calcSoKhachThucTe(row.so_khach, focResolved0.foc_khach, focResolved0.foc_mien);
+        const thanhTien0 = applyChietKhau(skTT0 * row.don_gia, row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? null);
+        try {
+          const saved = await upsertMut.mutateAsync({
+            doan_id: doanId,
+            ngay_so: row.ngay_so,
+            loai: "chi",
+            danh_muc: "nha_hang",
+            ref_doan_ngay_id: row.doan_ngay_id,
+            mo_ta: expectedMoTa,
+            don_gia: row.don_gia,
+            so_luong: row.so_khach,
+            tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? thanhTien0 : 0,
+            tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? thanhTien0 : 0,
+            foc_khach_snapshot: focResolved0.foc_khach,
+            foc_mien_snapshot:  focResolved0.foc_mien,
+            chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
+          });
+          if (saved?.id) {
+            setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: saved.id } }));
+            row = { ...row, id: saved.id };
+          }
+        } catch (err: unknown) {
+          toast.error("Lỗi lưu chi phí: " + (errMsg(err) || ""));
+          return;
         }
-      } catch (err: unknown) {
-        toast.error("Lỗi lưu chi phí: " + (errMsg(err) || ""));
-        return;
       }
     }
 
