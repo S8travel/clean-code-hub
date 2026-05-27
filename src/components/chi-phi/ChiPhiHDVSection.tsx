@@ -59,6 +59,15 @@ export interface HDVDoanInfo {
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
   tip_lump_sum?: number | null;
+  dau_khach_rate?: number | null;
+  dau_khach_currency?: string | null;
+  dau_khach_ty_gia?: number | null;
+  dau_khach_nguoi_thu?: string | null;
+  dau_khach_so_khach_override?: number | null;
+  quy_vp_amount?: number | null;
+  quy_vp_currency?: string | null;
+  quy_vp_ty_gia?: number | null;
+  quy_vp_nguoi_thu?: string | null;
 }
 
 interface Props {
@@ -66,8 +75,11 @@ interface Props {
   doan?: HDVDoanInfo;
 }
 
-// Tính "Phải thu HDV" — respect tip_* overrides từ doan (sync với
-// Điều tour > TipSection và Phải thu section).
+// Tính "Phải thu HDV" — tổng các khoản HDV thu hộ công ty:
+//   1. Tip (NDT × tỷ giá) — chỉ tính khi tip người thu = HDV (mặc định HDV thu)
+//   2. Thu tiền đầu khách (VND, pax × rate) — chỉ khi dau_khach_nguoi_thu='hdv'
+//   3. Thu tiền quỹ VP (VND lump-sum) — chỉ khi quy_vp_nguoi_thu='hdv'
+// Default cho 2 khoản mới: nguoi_thu='hdv'. Sync với ChiPhiPhasThuSection.
 function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   if (!doan) return 0;
   const soKhachTotal =
@@ -82,15 +94,32 @@ function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   const coTL = soKhachTl > 0;
   const autoRate = coTL ? 150 : 300;
 
+  // (1) Tip — default nguoi_thu = "hdv" (UI ChiPhiPhasThuSection)
+  let tipVND = 0;
   const effSoKhach = doan.tip_so_khach_override ?? autoSoKhach;
   const effSoNgay = doan.tip_so_ngay_override ?? autoSoNgay;
   const effRate = doan.tip_rate ?? autoRate;
-  if (!effSoKhach || !effSoNgay) return 0;
+  if (effSoKhach && effSoNgay) {
+    const tyGiaStr = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
+    const tyGia = tyGiaStr ? Number(tyGiaStr) : 800;
+    const tongNDT = doan.tip_lump_sum ?? (effSoKhach * effSoNgay * effRate);
+    tipVND = tongNDT * tyGia;
+  }
 
-  const tyGiaStr = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
-  const tyGia = tyGiaStr ? Number(tyGiaStr) : 800;
-  const tongNDT = doan.tip_lump_sum ?? (effSoKhach * effSoNgay * effRate);
-  return tongNDT * tyGia;
+  // (2) Thu tiền đầu khách — default 0 pax × 200.000 = 0. Currency hardcode VND.
+  const DK_DEFAULT_RATE = 200_000;
+  const dkNguoiThu = doan.dau_khach_nguoi_thu ?? "hdv";
+  const dkSoKhach = doan.dau_khach_so_khach_override ?? 0;
+  const dkRate = doan.dau_khach_rate ?? DK_DEFAULT_RATE;
+  const dkVND = dkNguoiThu === "hdv" ? dkSoKhach * dkRate : 0;
+
+  // (3) Thu tiền quỹ VP — default 200.000 VND lump-sum.
+  const VP_DEFAULT_AMOUNT = 200_000;
+  const vpNguoiThu = doan.quy_vp_nguoi_thu ?? "hdv";
+  const vpAmount = doan.quy_vp_amount ?? VP_DEFAULT_AMOUNT;
+  const vpVND = vpNguoiThu === "hdv" ? vpAmount : 0;
+
+  return tipVND + dkVND + vpVND;
 }
 
 export default function ChiPhiHDVSection({ doanId, doan }: Props) {
@@ -1374,16 +1403,27 @@ function CreateHDVPaymentModal({
   // Default = hôm nay + 2 ngày; null sort xuống cuối list ĐNTT page → user dễ bỏ sót.
   const [ngayCanTT, setNgayCanTT] = useState(format(addDays(new Date(), 2), "yyyy-MM-dd"));
 
+  // Pre-fill từ ChiPhiPhasThuSection (bảng chi phí "Phải thu") — đồng bộ
+  // với UI mà OP đã nhập. Tip skip T/L; đầu khách + quỹ VP dùng VND default
+  // 200k khi NULL.
+  const soKhachTl = doan?.so_khach_tl ?? 0;
+  const autoSoKhachKhongTL = Math.max(0, soKhachDefault - soKhachTl);
+  const tipSoKhachDefault = doan?.tip_so_khach_override ?? autoSoKhachKhongTL;
+  const tipDonGiaResolved = doan?.tip_rate ?? tipDonGiaDefault;
+  const dauKhachSoKhachDefault = doan?.dau_khach_so_khach_override ?? 0;
+  const dauKhachDonGiaDefault = doan?.dau_khach_rate ?? 200_000;
+  const quyVpDonGiaDefault = doan?.quy_vp_amount ?? 200_000;
+
   // Quyết toán state (7 fields theo form S8 BM02.1-20)
   const [tamUng, setTamUng] = useState(0);
   const [thuTrachNhiem, setThuTrachNhiem] = useState(0);
-  const [tipSoKhach, setTipSoKhach] = useState(soKhachDefault);
-  const [tipDonGia, setTipDonGia] = useState(tipDonGiaDefault);
+  const [tipSoKhach, setTipSoKhach] = useState(tipSoKhachDefault);
+  const [tipDonGia, setTipDonGia] = useState(tipDonGiaResolved);
   const [tipTyGia, setTipTyGia] = useState(tyGiaDefault);
-  const [dauKhachSoKhach, setDauKhachSoKhach] = useState(soKhachDefault);
-  const [dauKhachDonGia, setDauKhachDonGia] = useState(0);
+  const [dauKhachSoKhach, setDauKhachSoKhach] = useState(dauKhachSoKhachDefault);
+  const [dauKhachDonGia, setDauKhachDonGia] = useState(dauKhachDonGiaDefault);
   const [quyVpSoLuong, setQuyVpSoLuong] = useState(1);
-  const [quyVpDonGia, setQuyVpDonGia] = useState(0);
+  const [quyVpDonGia, setQuyVpDonGia] = useState(quyVpDonGiaDefault);
   const [thuBanOp, setThuBanOp] = useState(0);
   const [thuKhac, setThuKhac] = useState(0);
 

@@ -146,10 +146,11 @@ export function useChiPhiHDVSection(doanId?: number) {
         tien_hdv: r.tien_hdv ?? 0,
         nha_cung_cap_id: r.nha_cung_cap_id ?? null,
       }));
-      // tongHoTroHDV = tổng chi phí section (cả công ty + HDV trả). Số HDV
-      // phải hoàn lại = chỉ phần HDV ứng trước (tien_hdv).
+      // tongHoTroHDV = tổng chi phí section (cả công ty + HDV trả).
+      // CHÚ Ý: phần HDV ứng (tien_hdv) của các row hỗ trợ ĐÃ NẰM trong
+      // tongHdvChi (query bên trên không filter danh_muc, lấy mọi row có
+      // tien_hdv > 0). Đừng cộng riêng vào soConPhaiTra — sẽ double-count.
       const tongHoTroHDV = hoTroItems.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
-      const tongHdvUngHoTro = hoTroItems.reduce((s, r) => s + r.tien_hdv, 0);
 
       // 4. Load DNTT liên quan HDV (qua view có payment_status)
       const { data: dnttRows } = await externalSupabase
@@ -179,8 +180,9 @@ export function useChiPhiHDVSection(doanId?: number) {
         .filter((d) => d.payment_status !== "paid" && d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
         .reduce((s, d) => s + d.so_tien, 0);
 
-      // Công ty còn phải trả HDV = HDV chi hộ vendor + HDV ứng cho khoản hỗ trợ - đã tạm ứng
-      const soConPhaiTra = tongHdvChi + tongHdvUngHoTro - tamUngDaTT;
+      // Công ty còn phải trả HDV = tongHdvChi (đã gồm cả phần HDV ứng hỗ trợ
+      // do query lấy mọi row có tien_hdv > 0) − đã tạm ứng.
+      const soConPhaiTra = tongHdvChi - tamUngDaTT;
 
       const daQuyetToan = quyetToanList.some(
         (d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
