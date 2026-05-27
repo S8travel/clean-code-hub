@@ -38,9 +38,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
           />
         </div>
       </td>
-      {/* Col 4: empty */}
-      <td />
-      {/* Col 5: số lượng — căn trái, khớp dòng chính */}
+      {/* Col 4: số lượng — căn trái, khớp dòng chính */}
       <td className="px-3 py-1">
         <div className="flex items-center gap-1">
           <NHInput

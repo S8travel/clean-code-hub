@@ -224,9 +224,12 @@ export default function NHRow({ meal, data, handlers }: Props) {
           />
         </td>
 
-        {/* Ngày */}
+        {/* Ngày + Bữa (gộp 1 cột — bữa hiển thị ngay dưới ngày) */}
         <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap text-[11px]">
-          {dateLabel}
+          <div className="flex flex-col items-center gap-0.5 leading-tight">
+            <span>{dateLabel}</span>
+            <span className="text-foreground/80">{buaIcon} {buaLabel}</span>
+          </div>
         </td>
 
         {/* NH name */}
@@ -249,11 +252,6 @@ export default function NHRow({ meal, data, handlers }: Props) {
               focMien={focResolvedRow.foc_mien}
             />
           )}
-        </td>
-
-        {/* Bữa */}
-        <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap">
-          {buaIcon} {buaLabel}
         </td>
 
         {/* Số khách — editable inline; input căn trái cố định (🔒/FOC nằm sau) */}

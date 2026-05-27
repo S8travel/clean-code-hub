@@ -21,7 +21,7 @@ export default function NHAggFooterRow({
       "border-b border-border/50",
       effectiveDelta > 0 ? "bg-orange-50/50" : "bg-purple-50/50",
     )}>
-      <td colSpan={12} className="px-3 py-1.5">
+      <td colSpan={11} className="px-3 py-1.5">
         <div className="flex items-center justify-end gap-3 text-[11px]">
           <span className="text-muted-foreground">
             {t("Sau điều chỉnh")}:
