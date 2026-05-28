@@ -44,6 +44,7 @@ export interface ChiPhiTabDoan {
     nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
   } | null;
   tang_pham?: unknown;
+  thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
@@ -67,6 +68,7 @@ interface ChiPhiTabDoanInput {
   huong_dan_vien?: unknown;
   xe?: unknown;
   tang_pham?: unknown;
+  thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
@@ -110,10 +112,10 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   const soKhachNH = (sk_lon + sk_em1 * 0.5 + sk_tl) || doan?.so_khach || 0;
   const soKhachNHKhongTL = (sk_lon + sk_em1 * 0.5) || doan?.so_khach || 0;
 
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: chiPhiRows = [] } = useChiPhiList(doanId, activeNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
-  const { data: ksData } = useChiPhiKSData(doanId);
+  const { data: ksData } = useChiPhiKSData(doanId, activeNhomId);
   const { data: userRoles = [] } = useUserRoles();
   const opName = useMemo(() => {
     if (!doan?.assigned_to) return "—";
@@ -268,9 +270,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       <div className="space-y-6">
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} doanNhomId={activeNhomId} />
 
-        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} />
+        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} />
 
         <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
 

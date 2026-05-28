@@ -55,6 +55,7 @@ export interface HDVDoanInfo {
   so_khach_tl?: number | null;
   ngay_di?: string | null;
   ngay_ve?: string | null;
+  thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
@@ -70,6 +71,7 @@ interface Props {
 // Điều tour > TipSection và Phải thu section).
 function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   if (!doan) return 0;
+  if (doan.thu_tip === false) return 0; // bỏ tích "Thu tiền tip" ở Điều tour
   const soKhachTotal =
     (doan.so_khach_lon ?? 0) + (doan.so_khach_em1 ?? 0) +
     (doan.so_khach_em2 ?? 0) + (doan.so_khach_tl ?? 0) ||
