@@ -24,6 +24,7 @@ import {
   Users2,
   BarChart3,
   Target,
+  Ticket,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -175,6 +176,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Mẫu seri", url: "/quan-ly/seri", icon: LayoutTemplate, resource: "seri" },
       { title: "Visa", url: "/quan-ly/visa", icon: Stamp, resource: "danh_muc" },
       { title: "Nhà cung cấp", url: "/quan-ly/nha-cung-cap", icon: Package, resource: "danh_muc" },
+      { title: "Voucher", url: "/quan-ly/voucher", icon: Ticket, minRole: "admin" },
     ],
   },
   {

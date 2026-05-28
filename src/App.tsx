@@ -19,6 +19,7 @@ const NhaHangPage          = lazy(() => import("./pages/NhaHangPage.tsx"));
 const KhachSanPage         = lazy(() => import("./pages/KhachSanPage.tsx"));
 const CanhDiemPage         = lazy(() => import("./pages/CanhDiemPage.tsx"));
 const NhaCungCapPage       = lazy(() => import("./pages/NhaCungCapPage.tsx"));
+const VoucherPage          = lazy(() => import("./pages/VoucherPage.tsx"));
 const DNTTPage             = lazy(() => import("./pages/DNTTPage.tsx"));
 const CongNoPage           = lazy(() => import("./pages/CongNoPage.tsx"));
 const ThanhToanDinhKyPage  = lazy(() => import("./pages/ThanhToanDinhKyPage.tsx"));
@@ -88,6 +89,7 @@ const App = () => (
                 <Route path="/quan-ly/xe" element={<NhaXePage />} />
                 <Route path="/quan-ly/visa" element={<VisaPage />} />
                 <Route path="/quan-ly/nha-cung-cap" element={<NhaCungCapPage />} />
+                <Route path="/quan-ly/voucher" element={<VoucherPage />} />
                 <Route path="/de-nghi-thanh-toan" element={<DNTTPage />} />
                 <Route path="/hoan-ung" element={<HoanUngPage />} />
                 <Route path="/thanh-toan-dinh-ky" element={<ThanhToanDinhKyPage />} />
