@@ -29,32 +29,50 @@ interface Props {
   doan?: HDVDoanInfo;
 }
 
-// Tính "Phải thu HDV" — respect tip_* overrides từ doan (sync với
-// Điều tour > TipSection và Phải thu section).
+// Tính "Phải thu HDV" — phần HDV thu hộ: Tip + Đầu khách + Quỹ VP.
+// PHẢI KHỚP với ChiPhiPhasThuSection (mỗi khoản check nguoi_thu === 'hdv';
+// tip nguoi_thu mặc định 'hdv', local-only). Extras local KHÔNG tính (không persist).
 function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   if (!doan) return 0;
-  if (doan.thu_tip === false) return 0; // bỏ tích "Thu tiền tip" ở Điều tour
-  const soKhachTotal =
-    (doan.so_khach_lon ?? 0) + (doan.so_khach_em1 ?? 0) +
-    (doan.so_khach_em2 ?? 0) + (doan.so_khach_tl ?? 0) ||
-    doan.so_khach || 0;
-  const soKhachTl = doan.so_khach_tl ?? 0;
-  const autoSoKhach = Math.max(0, soKhachTotal - soKhachTl); // T/L không đóng tip
-  const autoSoNgay = doan.ngay_di && doan.ngay_ve
-    ? Math.max(1, Math.ceil((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
-    : 0;
-  const coTL = soKhachTl > 0;
-  const autoRate = coTL ? 150 : 300;
+  let total = 0;
 
-  const effSoKhach = doan.tip_so_khach_override ?? autoSoKhach;
-  const effSoNgay = doan.tip_so_ngay_override ?? autoSoNgay;
-  const effRate = doan.tip_rate ?? autoRate;
-  if (!effSoKhach || !effSoNgay) return 0;
+  // 1. Tip (HDV thu) — chỉ khi "Thu tiền tip" còn bật. NDT → VND qua tỷ giá.
+  if (doan.thu_tip !== false) {
+    const soKhachTotal =
+      (doan.so_khach_lon ?? 0) + (doan.so_khach_em1 ?? 0) +
+      (doan.so_khach_em2 ?? 0) + (doan.so_khach_tl ?? 0) ||
+      doan.so_khach || 0;
+    const soKhachTl = doan.so_khach_tl ?? 0;
+    const autoSoKhach = Math.max(0, soKhachTotal - soKhachTl); // T/L không đóng tip
+    const autoSoNgay = doan.ngay_di && doan.ngay_ve
+      ? Math.max(1, Math.ceil((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
+      : 0;
+    const coTL = soKhachTl > 0;
+    const autoRate = coTL ? 150 : 300;
+    const effSoKhach = doan.tip_so_khach_override ?? autoSoKhach;
+    const effSoNgay = doan.tip_so_ngay_override ?? autoSoNgay;
+    const effRate = doan.tip_rate ?? autoRate;
+    if (effSoKhach && effSoNgay) {
+      const tyGiaStr = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
+      const tyGia = tyGiaStr ? Number(tyGiaStr) : 800;
+      const tongNDT = doan.tip_lump_sum ?? (effSoKhach * effSoNgay * effRate);
+      total += tongNDT * tyGia;
+    }
+  }
 
-  const tyGiaStr = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
-  const tyGia = tyGiaStr ? Number(tyGiaStr) : 800;
-  const tongNDT = doan.tip_lump_sum ?? (effSoKhach * effSoNgay * effRate);
-  return tongNDT * tyGia;
+  // 2. Thu tiền đầu khách (HDV thu) — VND. Số khách default 0 → mặc định 0đ.
+  if ((doan.dau_khach_nguoi_thu ?? "hdv") === "hdv") {
+    const dkRate = doan.dau_khach_rate ?? 200_000;
+    const dkSoKhach = doan.dau_khach_so_khach_override ?? 0;
+    total += dkSoKhach * dkRate;
+  }
+
+  // 3. Thu tiền quỹ VP (HDV thu) — VND lump-sum, default 200k.
+  if ((doan.quy_vp_nguoi_thu ?? "hdv") === "hdv") {
+    total += doan.quy_vp_amount ?? 200_000;
+  }
+
+  return total;
 }
 
 export default function ChiPhiHDVSection({ doanId, doan }: Props) {
