@@ -140,6 +140,10 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!doan && !form.loai_tour) {
+      toast.error(t("Vui lòng chọn loại tuyến"));
+      return;
+    }
     const payload: DoanInsert = {
       ...form,
       so_khach: total,
@@ -249,7 +253,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 />
               </Field>
 
-              <Field label={t("Loại tuyến")}>
+              <Field label={t("Loại tuyến") + (!doan ? " *" : "")}>
                 <Select
                   value={form.loai_tour ?? "none"}
                   onValueChange={(v) => set("loai_tour", v === "none" ? null : (v as DoanInsert["loai_tour"]))}

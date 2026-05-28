@@ -331,7 +331,9 @@ export function useDoanList(
           van_phong:van_phong_id(id, ten)
         `);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
-        query = query.in("thi_truong", phanLoaiTour);
+        // Fail-open: đoàn CHƯA phân thị trường (thi_truong NULL) vẫn hiện cho mọi OP —
+        // tránh "biến mất" khi đoàn tạo thiếu phân loại (vd giám đốc tạo, hoặc clone từ nguồn NULL).
+        query = query.or(`thi_truong.in.(${phanLoaiTour.join(",")}),thi_truong.is.null`);
       }
       if (vanPhongId != null) {
         query = query.eq("van_phong_id", vanPhongId);
