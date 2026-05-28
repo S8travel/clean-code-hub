@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger,
 } from "@/components/ui/select";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -263,19 +263,10 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                           placeholder={t("Chọn cảnh điểm")}
                           className={`h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3${item.canh_diem_id ? " bg-blue-50 text-blue-900 font-medium" : ""}`}
                         />
-                        {selectedCanhDiem && (
-                          <>
-                            {selectedCanhDiem.khach_san_id && (
-                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 mt-0.5">
-                                🏨 {t("Day Use")}
-                              </span>
-                            )}
-                            {selectedCanhDiem.ghi_chu && (
-                              <p className="text-[13px] text-muted-foreground mt-0.5 whitespace-pre-wrap">
-                                {selectedCanhDiem.ghi_chu}
-                              </p>
-                            )}
-                          </>
+                        {selectedCanhDiem?.ghi_chu && (
+                          <p className="text-[13px] text-muted-foreground mt-0.5 whitespace-pre-wrap">
+                            {selectedCanhDiem.ghi_chu}
+                          </p>
                         )}
                         {noteOpen && (
                           <textarea
