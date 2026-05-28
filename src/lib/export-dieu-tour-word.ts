@@ -11,6 +11,7 @@ import {
   BorderStyle,
   ShadingType,
   VerticalAlign,
+  TableLayoutType,
 } from "docx";
 import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
@@ -21,6 +22,9 @@ import type { SetMenu } from "@/hooks/use-nha-hang";
 // ─── Constants ─────────────────────────────────────────────────────────────
 const BORDER     = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS    = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+// Border bảng lịch trình — ¾ pt (size tính theo 1/8 pt → 6 = ¾ pt).
+const SCHED_BORDER  = { style: BorderStyle.SINGLE, size: 6, color: "000000" };
+const SCHED_BORDERS = { top: SCHED_BORDER, bottom: SCHED_BORDER, left: SCHED_BORDER, right: SCHED_BORDER };
 const NO_BORDER  = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
 const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER };
 const HEADER_SHADING = { fill: "D9D9D9", type: ShadingType.CLEAR, color: "auto" };
@@ -413,11 +417,11 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
   const schedHeaderRow = new TableRow({
     tableHeader: true,
     children: [
-      cell([p("Ngày",      { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[0], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Chương trình", { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[1], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Ăn trưa",  { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[2], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Ăn tối",   { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[3], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Khách sạn",{ bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[4], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Ngày",      { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[0], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Chương trình", { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[1], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Ăn trưa",  { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[2], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Ăn tối",   { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[3], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Khách sạn",{ bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[4], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
     ],
   });
 
@@ -480,17 +484,19 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
 
     return new TableRow({
       children: [
-        cell(ngayParas,  { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER }),
-        cell(ctParas,    { width: SCHED_COL[1] }),
-        cell(truaParas,  { width: SCHED_COL[2] }),
-        cell(toiParas,   { width: SCHED_COL[3] }),
-        cell(ksParas,    { width: SCHED_COL[4] }),
+        cell(ngayParas,  { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+        cell(ctParas,    { width: SCHED_COL[1], borders: SCHED_BORDERS }),
+        cell(truaParas,  { width: SCHED_COL[2], borders: SCHED_BORDERS }),
+        cell(toiParas,   { width: SCHED_COL[3], borders: SCHED_BORDERS }),
+        cell(ksParas,    { width: SCHED_COL[4], borders: SCHED_BORDERS }),
       ],
     });
   });
 
   const schedTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: SCHED_COL,
+    layout: TableLayoutType.FIXED,
     rows: [schedHeaderRow, ...schedDataRows],
   });
 
@@ -662,11 +668,11 @@ function buildDocFromCells(
   const schedHeaderRow = new TableRow({
     tableHeader: true,
     children: [
-      cell([p("Ngày",       { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[0], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Chương trình",{ bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[1], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Ăn trưa",   { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[2], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Ăn tối",    { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[3], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-      cell([p("Khách sạn", { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[4], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+      cell([p("Ngày",       { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[0], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Chương trình",{ bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[1], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Ăn trưa",   { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[2], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Ăn tối",    { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[3], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
+      cell([p("Khách sạn", { bold: true, align: AlignmentType.CENTER, size: FS_H })], { width: SCHED_COL[4], shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }),
     ],
   });
 
@@ -692,17 +698,19 @@ function buildDocFromCells(
       cell(
         [p(formatDateShort(dc.ngay_date), { bold: true, align: AlignmentType.CENTER }),
          p(dc.thu, { align: AlignmentType.CENTER, color: "555555", size: FS_SM })],
-        { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER }
+        { width: SCHED_COL[0], vertAlign: VerticalAlign.CENTER, borders: SCHED_BORDERS }
       ),
-      cell(textToParasWithHeader(dc.chuongTrinh), { width: SCHED_COL[1] }),
-      cell(textToParasWithHeader(dc.anTrua),      { width: SCHED_COL[2] }),
-      cell(textToParasWithHeader(dc.anToi),       { width: SCHED_COL[3] }),
-      cell(textToParasWithHeader(dc.khachSan),    { width: SCHED_COL[4] }),
+      cell(textToParasWithHeader(dc.chuongTrinh), { width: SCHED_COL[1], borders: SCHED_BORDERS }),
+      cell(textToParasWithHeader(dc.anTrua),      { width: SCHED_COL[2], borders: SCHED_BORDERS }),
+      cell(textToParasWithHeader(dc.anToi),       { width: SCHED_COL[3], borders: SCHED_BORDERS }),
+      cell(textToParasWithHeader(dc.khachSan),    { width: SCHED_COL[4], borders: SCHED_BORDERS }),
     ],
   }));
 
   const schedTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: SCHED_COL,
+    layout: TableLayoutType.FIXED,
     rows: [schedHeaderRow, ...schedDataRows],
   });
 
