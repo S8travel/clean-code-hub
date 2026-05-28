@@ -233,105 +233,43 @@ export interface SeriApplyConflict {
   lines: string[];
 }
 
-/** Check một đoàn đã có lịch trình / booking / chi phí gì chưa
- *  trước khi áp dụng seri mới.
+/** Check trước khi áp seri mới: chỉ BLOCK khi đã commit với NCC.
+ *  - Booking NH `booking_status IN (da_gui, nh_xac_nhan)`: đã gửi mail NCC.
+ *  - Booking DV `booking_status = cho_xac_nhan`: đã gửi NCC chờ xác nhận.
+ *  - DNTT allocation (status != da_huy) trên chi phí NH/cảnh điểm: đã đề nghị TT.
  *
- *  Seri chỉ carry NH (ăn trưa/tối) và cảnh điểm. Các chi phí khác (KS, bảo
- *  hiểm, HDV hỗ trợ) độc lập với seri nên KHÔNG bị coi là conflict —
- *  applySeri không động vào chúng.
- *
- *  Multi-nhóm: applySeri target nhóm "Toàn đoàn" (thu_tu=1), nên check scope
- *  theo nhóm đó — KHÔNG đếm data của nhóm khác (sai nghiệp vụ + block user
- *  oan khi nhóm 1 trống nhưng nhóm 2 đã có data).
- *  doan_booking_dv là đoàn-level (không có FK nhóm) → giữ count toàn đoàn.
- */
+ *  Booking `chua_gui`/`chua_dat`/`da_huy` KHÔNG block — chưa committed.
+ *  Chi phí NH/cảnh điểm "trống" cũng KHÔNG block — applySeri wipe + replace. */
 export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyConflict> {
-  // Resolve nhóm target (thu_tu=1)
-  const { data: nhomDefault } = await externalSupabase
-    .from("doan_nhom")
-    .select("id")
-    .eq("doan_id", doanId)
-    .eq("thu_tu", 1)
-    .maybeSingle();
-  const nhomId = nhomDefault?.id ?? null;
-
-  // doan_ngay: scope theo nhóm nếu có (fallback đoàn-level cho data legacy)
-  let ngayQuery = externalSupabase
-    .from("doan_ngay")
-    .select("id, ngay_so, ngay_date, thanh_pho, an_trua_nha_hang_id, an_toi_nha_hang_id")
-    .eq("doan_id", doanId)
-    .order("ngay_so");
-  if (nhomId != null) ngayQuery = ngayQuery.eq("doan_nhom_id", nhomId);
-  const ngayRes = await ngayQuery;
-  const ngayRows = ngayRes.data ?? [];
-  const ngayIds = ngayRows.map((r) => r.id);
-
-  // Items / booking_nh / chi_phi scope theo nhóm-ngày để không đếm chéo nhóm
-  const [itemRes, nhRes, dvRes, cpRes] = await Promise.all([
-    ngayIds.length > 0
-      ? externalSupabase
-          .from("doan_ngay_item")
-          .select("doan_ngay_id")
-          .in("doan_ngay_id", ngayIds)
-      : Promise.resolve({ data: [] as { doan_ngay_id: number | null }[] }),
-    ngayIds.length > 0
-      ? externalSupabase
-          .from("doan_booking_nh")
-          .select("id", { count: "exact", head: true })
-          .in("doan_ngay_id", ngayIds)
-      : Promise.resolve({ count: 0 }),
-    // doan_booking_dv là đoàn-level — không scope được theo nhóm
+  const [nhRes, dvRes, allocRes] = await Promise.all([
+    externalSupabase
+      .from("doan_booking_nh")
+      .select("id", { count: "exact", head: true })
+      .eq("doan_id", doanId)
+      .in("booking_status", ["da_gui", "nh_xac_nhan"]),
     externalSupabase
       .from("doan_booking_dv")
       .select("id", { count: "exact", head: true })
-      .eq("doan_id", doanId),
-    // chi_phi NH / cảnh điểm: scope qua ref_doan_ngay_id (cả 2 danh mục đều set ref khi cascade)
-    ngayIds.length > 0
-      ? externalSupabase
-          .from("doan_chi_phi")
-          .select("id", { count: "exact", head: true })
-          .eq("doan_id", doanId)
-          .in("danh_muc", ["nha_hang", "canh_diem"])
-          .in("ref_doan_ngay_id", ngayIds)
-      : Promise.resolve({ count: 0 }),
+      .eq("doan_id", doanId)
+      .eq("booking_status", "cho_xac_nhan"),
+    // Allocation thuộc chi phí NH/cảnh điểm của đoàn này, với DNTT chưa hủy.
+    // !inner: chỉ trả allocation có chi_phi + dntt thỏa filter.
+    externalSupabase
+      .from("dntt_allocations")
+      .select("id, chi_phi:doan_chi_phi!inner(doan_id, danh_muc), dntt:de_nghi_thanh_toan!inner(trang_thai_duyet)", { count: "exact", head: true })
+      .eq("chi_phi.doan_id", doanId)
+      .in("chi_phi.danh_muc", ["nha_hang", "canh_diem"])
+      .neq("dntt.trang_thai_duyet", "da_huy"),
   ]);
 
   const lines: string[] = [];
-  const items = itemRes.data ?? [];
   const nhCount = nhRes.count ?? 0;
   const dvCount = dvRes.count ?? 0;
-  const cpCount = cpRes.count ?? 0;
+  const dnttCount = allocRes.count ?? 0;
 
-  // Items count per doan_ngay_id
-  const itemCountByNgayId = new Map<number, number>();
-  for (const it of items) {
-    if (it.doan_ngay_id == null) continue;
-    itemCountByNgayId.set(it.doan_ngay_id, (itemCountByNgayId.get(it.doan_ngay_id) ?? 0) + 1);
-  }
-
-  // Ngày conflict: có NH (trưa/tối) hoặc có items. KS-only thì OK.
-  type ConflictNgay = typeof ngayRows[number] & { itemCount: number };
-  const conflictNgay: ConflictNgay[] = [];
-  for (const r of ngayRows) {
-    const itemCount = itemCountByNgayId.get(r.id) ?? 0;
-    const hasNH = r.an_trua_nha_hang_id !== null || r.an_toi_nha_hang_id !== null;
-    if (hasNH || itemCount > 0) conflictNgay.push({ ...r, itemCount });
-  }
-
-  if (conflictNgay.length > 0) {
-    lines.push(`Lịch trình đã có ${conflictNgay.length} ngày trùng với seri:`);
-    for (const r of conflictNgay) {
-      const parts: string[] = [];
-      if (r.thanh_pho) parts.push(r.thanh_pho);
-      if (r.an_trua_nha_hang_id) parts.push("ăn trưa");
-      if (r.an_toi_nha_hang_id) parts.push("ăn tối");
-      if (r.itemCount > 0) parts.push(`${r.itemCount} cảnh điểm`);
-      lines.push(`  • Ngày ${r.ngay_so} (${r.ngay_date}) — ${parts.join(", ")}`);
-    }
-  }
-  if (nhCount > 0) lines.push(`${nhCount} booking nhà hàng`);
-  if (dvCount > 0) lines.push(`${dvCount} booking dịch vụ`);
-  if (cpCount > 0) lines.push(`${cpCount} chi phí (NH / cảnh điểm)`);
+  if (nhCount > 0) lines.push(`${nhCount} booking nhà hàng đã gửi NCC`);
+  if (dvCount > 0) lines.push(`${dvCount} booking dịch vụ đã gửi NCC`);
+  if (dnttCount > 0) lines.push(`${dnttCount} chi phí NH/cảnh điểm đã có ĐNTT (chưa hủy)`);
 
   return { hasConflict: lines.length > 0, lines };
 }
@@ -359,13 +297,7 @@ export function useApplySeriToDoan() {
       if (e1) throw e1;
       if (!seriNgayRows || seriNgayRows.length === 0) return;
 
-      const thuMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-      // UTC-safe parse để tránh timezone-shift bug
-      const [bY, bM, bD] = ngayDi.split("-").map(Number);
-      const baseDate = new Date(Date.UTC(bY, bM - 1, bD));
-
-      // 1b. Resolve nhóm target (thu_tu=1) — applySeri chỉ apply vào nhóm này.
-      //     Nhóm khác (nếu có) giữ nguyên dữ liệu.
+      // Resolve nhóm target (thu_tu=1) — applySeri chỉ apply vào nhóm này.
       const { data: nhomDefault } = await externalSupabase
         .from("doan_nhom")
         .select("id")
@@ -374,8 +306,29 @@ export function useApplySeriToDoan() {
         .maybeSingle();
       if (!nhomDefault) throw new Error("Đoàn chưa có nhóm mặc định — áp seri thất bại");
 
-      // 2. UPSERT doan_ngay per ngay_so — PER NHÓM (tránh trùng ngay_so giữa các nhóm
-      //    khiến UPDATE nhầm row nhóm khác).
+      // 1b. Wipe data NH/cảnh điểm cũ trước khi apply seri mới — pre-check
+      //     đã verify không có booking + DNTT (chưa hủy) → safe delete.
+      //     KS / bao_hiem / HDV / dich_vu / phi_khac giữ nguyên (độc lập với seri).
+      //     Xoá chi phí TRƯỚC items vì chi_phi.ref_doan_ngay_item_id ref items.
+      const { error: eDelCp } = await externalSupabase
+        .from("doan_chi_phi")
+        .delete()
+        .eq("doan_id", doanId)
+        .in("danh_muc", ["nha_hang", "canh_diem"]);
+      if (eDelCp) throw eDelCp;
+      const { error: eDelItem } = await externalSupabase
+        .from("doan_ngay_item")
+        .delete()
+        .eq("doan_id", doanId);
+      if (eDelItem) throw eDelItem;
+
+      const thuMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+      // UTC-safe parse để tránh timezone-shift bug
+      const [bY, bM, bD] = ngayDi.split("-").map(Number);
+      const baseDate = new Date(Date.UTC(bY, bM - 1, bD));
+
+      // 2. UPSERT doan_ngay per ngay_so — PER NHÓM target (tránh UPDATE nhầm
+      //    doan_ngay của nhóm khác cùng ngay_so). Preserve KS fields (seri ko carry KS).
       const { data: existingNgay, error: eExist } = await externalSupabase
         .from("doan_ngay")
         .select("id, ngay_so")

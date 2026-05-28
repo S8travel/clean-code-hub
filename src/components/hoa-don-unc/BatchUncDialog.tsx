@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Upload, X, FileCheck, AlertTriangle, Loader2, ScanText, FileText, Eye } from "lucide-react";
+import { Upload, X, FileCheck, AlertTriangle, Loader2, ScanText, FileText, Eye, Send, Check } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger,
 } from "@/components/ui/select";
@@ -13,6 +14,14 @@ import { toast } from "@/hooks/use-toast";
 import { useBatchUploadUNC, type HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
 import { isAmountMatch } from "@/lib/ocr-invoice";
 import { ocrUncSlip, normCode, type OcrUncResult } from "@/lib/ocr-unc";
+import { callSendBookingEmail } from "@/hooks/use-booking-dv";
+import { useCurrentUserProfile } from "@/hooks/use-doan";
+import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import {
+  resolveBookingEmail, buildUncEmailBody, buildUncEmailSubject,
+  getCanTruAmount, fileUncAsBase64, ccForLoai,
+  type EmailTarget,
+} from "@/lib/unc-email";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -40,10 +49,28 @@ interface Props {
   rows: HoaDonUNCRow[]; // ĐNTT đang thiếu UNC (trang_thai_unc='chua_co')
 }
 
+type SendStatus = "idle" | "sending" | "sent" | "skipped" | "failed";
+interface SendTarget {
+  rowId: number;
+  row: HoaDonUNCRow;
+  file: File;
+  email: string;
+  target: EmailTarget;
+  include: boolean;
+  status: SendStatus;
+  error?: string;
+}
+
 export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props) {
   useTranslate();
   const inputRef = useRef<HTMLInputElement>(null);
   const batchMut = useBatchUploadUNC();
+  const { data: userProfile } = useCurrentUserProfile();
+  const { email: currentUserEmail } = useCurrentUserEmail();
+  const [step, setStep] = useState<"pick" | "send">("pick");
+  const [sendTargets, setSendTargets] = useState<SendTarget[]>([]);
+  const [resolvingEmails, setResolvingEmails] = useState(false);
+  const [sending, setSending] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [assign, setAssign] = useState<Record<number, number | undefined>>({});
   const [reasons, setReasons] = useState<Record<number, Reason>>({});
@@ -241,11 +268,39 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
   const handleSave = () => {
     if (pairs.length === 0) { toast({ title: t("Chưa ghép file nào"), variant: "destructive" }); return; }
+    // Snapshot pairs trước khi mutate — saved rows sẽ disappear khỏi `rows` prop
+    // sau khi trang_thai_unc='da_co' (parent filter chỉ ĐNTT thiếu UNC).
+    const snapshot = pairs.map((p) => ({
+      rowId: p.id,
+      row: rows.find((r) => r.id === p.id)!,
+      file: p.file,
+    })).filter((s) => s.row);
     batchMut.mutate(pairs, {
-      onSuccess: ({ ok, failed, errors }) => {
+      onSuccess: async ({ ok, failed, errors }) => {
         if (failed === 0) {
           toast({ title: `${t("Đã gắn UNC cho")} ${ok} ĐNTT` });
-          handleClose();
+          // Switch sang step 2 — resolve email + cho user review trước khi gửi
+          setStep("send");
+          setResolvingEmails(true);
+          try {
+            const resolved = await Promise.all(
+              snapshot.map(async (s) => {
+                const target = await resolveBookingEmail(s.row);
+                return {
+                  ...s,
+                  email: target.email,
+                  target,
+                  include: !!target.email,
+                  status: "idle" as SendStatus,
+                };
+              }),
+            );
+            setSendTargets(resolved);
+          } catch (e: unknown) {
+            toast({ title: `${t("Lỗi tra email NCC")}: ${errMsg(e) || ""}`, variant: "destructive" });
+          } finally {
+            setResolvingEmails(false);
+          }
         } else {
           toast({
             title: `${t("Gắn")} ${ok} OK, ${failed} ${t("lỗi")}`,
@@ -257,6 +312,46 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       onError: (e: unknown) =>
         toast({ title: `${t("Lỗi")}: ${errMsg(e) || t("Không gắn được")}`, variant: "destructive" }),
     });
+  };
+
+  const handleSendAll = async () => {
+    const toSend = sendTargets.filter((s) => s.include && !!s.email && s.status !== "sent");
+    if (toSend.length === 0) { toast({ title: t("Không có email nào để gửi"), variant: "destructive" }); return; }
+    setSending(true);
+    let okCount = 0;
+    let failCount = 0;
+    try {
+      for (const tgt of toSend) {
+        setSendTargets((prev) => prev.map((s) => s.rowId === tgt.rowId ? { ...s, status: "sending" } : s));
+        try {
+          const canTruAmount = await getCanTruAmount(tgt.rowId);
+          const attachment = await fileUncAsBase64(tgt.file, tgt.row.ten_nha_cung_cap, tgt.rowId);
+          await callSendBookingEmail({
+            to: tgt.email,
+            cc: ccForLoai(tgt.row.loai),
+            subject: buildUncEmailSubject(tgt.row, tgt.target.bookingSubject),
+            html: buildUncEmailBody(tgt.row, canTruAmount, userProfile ?? null),
+            replyTo: userProfile?.email || currentUserEmail || undefined,
+            attachments: [attachment],
+          });
+          okCount++;
+          setSendTargets((prev) => prev.map((s) => s.rowId === tgt.rowId ? { ...s, status: "sent" } : s));
+        } catch (e: unknown) {
+          failCount++;
+          setSendTargets((prev) => prev.map((s) => s.rowId === tgt.rowId ? { ...s, status: "failed", error: errMsg(e) || "" } : s));
+        }
+      }
+      if (failCount === 0) {
+        toast({ title: `${t("Đã gửi mail UNC cho")} ${okCount} NCC` });
+      } else {
+        toast({
+          title: `${t("Gửi")} ${okCount} OK, ${failCount} ${t("lỗi")}`,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleClose = () => {
@@ -273,6 +368,10 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     ocrRef.current = {};
     assignRef.current = {};
     filesRef.current = [];
+    setStep("pick");
+    setSendTargets([]);
+    setResolvingEmails(false);
+    setSending(false);
     onClose();
   };
 
@@ -288,12 +387,172 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     return null;
   };
 
+  if (step === "send") {
+    const total = sendTargets.length;
+    const withEmail = sendTargets.filter((s) => !!s.email).length;
+    const selectedCount = sendTargets.filter((s) => s.include && !!s.email).length;
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Send className="h-4 w-4 text-blue-600" />
+              {t("Gửi mail UNC")} — {doanLabel}
+              <span className="text-xs font-normal text-muted-foreground">{t("(Bước 2/2)")}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
+            <p className="text-xs text-muted-foreground">
+              {t("Đã gắn UNC cho")} <strong>{total}</strong> {t("ĐNTT")}.
+              {" "}{withEmail}/{total} {t("có email NCC sẵn sàng gửi")}.
+              {withEmail < total && (
+                <span className="text-amber-700 ml-1">
+                  {t("Dòng không email sẽ skip — gửi tay sau qua nút mở từng row.")}
+                </span>
+              )}
+            </p>
+
+            {resolvingEmails ? (
+              <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t("Đang tra email NCC...")}
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-auto max-h-[55vh]">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50 sticky top-0">
+                    <tr>
+                      <th className="text-center p-2 font-medium w-[40px]">
+                        <Checkbox
+                          checked={sendTargets.every((s) => !s.email || s.include)}
+                          disabled={sending}
+                          onCheckedChange={(v) => {
+                            setSendTargets((prev) => prev.map((s) => ({
+                              ...s,
+                              include: !!s.email && !!v,
+                            })));
+                          }}
+                        />
+                      </th>
+                      <th className="text-left p-2 font-medium">{t("NCC / Nội dung")}</th>
+                      <th className="text-left p-2 font-medium w-[260px]">{t("Email NCC")}</th>
+                      <th className="text-center p-2 font-medium w-[100px]">{t("Trạng thái")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sendTargets.map((s) => (
+                      <tr key={s.rowId} className="border-t align-top">
+                        <td className="p-2 text-center">
+                          <Checkbox
+                            checked={s.include}
+                            disabled={!s.email || sending || s.status === "sent"}
+                            onCheckedChange={(v) => {
+                              setSendTargets((prev) => prev.map((x) =>
+                                x.rowId === s.rowId ? { ...x, include: !!v } : x));
+                            }}
+                          />
+                        </td>
+                        <td className="p-2">
+                          {s.row.ten_doan && (
+                            <div className="text-[11px] font-semibold text-blue-700">
+                              {s.row.ten_doan}
+                            </div>
+                          )}
+                          <div className="font-medium">
+                            {s.row.ten_nha_cung_cap || s.row.mo_ta || `ĐNTT #${s.rowId}`}
+                          </div>
+                          {s.row.mo_ta && s.row.ten_nha_cung_cap && (
+                            <div className="text-[10px] text-muted-foreground truncate max-w-[400px]" title={s.row.mo_ta}>
+                              {s.row.mo_ta}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {s.email ? (
+                            <div className="space-y-0.5">
+                              <input
+                                type="text"
+                                value={s.email}
+                                disabled={sending || s.status === "sent"}
+                                onChange={(e) => {
+                                  setSendTargets((prev) => prev.map((x) =>
+                                    x.rowId === s.rowId ? { ...x, email: e.target.value } : x));
+                                }}
+                                className="w-full h-7 text-xs px-2 border rounded bg-background disabled:opacity-60"
+                              />
+                              <div className="text-[10px] text-muted-foreground">
+                                {s.target.source === "booking" ? t("từ booking đã gửi") :
+                                  s.target.source === "ncc" ? t("từ danh mục NCC") :
+                                  t("không tìm thấy")}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-amber-700 inline-flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              {t("chưa có email")}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 text-center">
+                          {s.status === "idle" && <span className="text-muted-foreground text-[10px]">—</span>}
+                          {s.status === "sending" && (
+                            <span className="inline-flex items-center gap-1 text-blue-700 text-[11px]">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              {t("đang gửi")}
+                            </span>
+                          )}
+                          {s.status === "sent" && (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 text-[11px]">
+                              <Check className="h-3 w-3" />
+                              {t("đã gửi")}
+                            </span>
+                          )}
+                          {s.status === "failed" && (
+                            <span className="text-red-600 text-[10px]" title={s.error}>
+                              {t("lỗi")}: {(s.error || "").slice(0, 30)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="text-[11px] text-muted-foreground bg-muted/40 rounded px-2 py-1.5">
+              {t("Subject + Body dùng template mặc định (giống nút 'Gửi UNC' từng row).")}{" "}
+              {t("Cần sửa template riêng → đóng dialog rồi mở row đó.")}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={handleClose} disabled={sending}>
+              <X className="h-4 w-4 mr-1" /> {t("Đóng (bỏ qua gửi)")}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSendAll}
+              disabled={sending || resolvingEmails || selectedCount === 0}
+            >
+              {sending
+                ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {t("Đang gửi...")}</>
+                : <><Send className="h-4 w-4 mr-1" /> {t("Gửi")} {selectedCount} {t("email")}</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-base">
             {t("Gắn UNC nhanh")} — {doanLabel}
+            <span className="text-xs font-normal text-muted-foreground ml-2">{t("(Bước 1/2)")}</span>
           </DialogTitle>
         </DialogHeader>
 

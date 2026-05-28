@@ -18,6 +18,7 @@ import { NHFocEditor } from "./NHFocEditor";
 import NHExtraRow from "./NHExtraRow";
 import NHAggFooterRow from "./NHAggFooterRow";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
+import { type CanTruSelection } from "./KSCongNoPanel";
 import { type NHCancelTarget } from "./NHCancelModal";
 import { fmt, STATUS_LABEL, extraPrefix, type LocalNHRow, type LocalNHExtra } from "./nh-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
@@ -66,7 +67,7 @@ export interface NHRowHandlers {
   setAggCommit: (v: AggCommitNHTarget | null) => void;
   setAggReason: (v: string) => void;
   setAggSurplusMode: (v: "con_du" | "hoan_tien") => void;
-  setAggCanTru: (v: null) => void;
+  setAggCanTru: (v: CanTruSelection[]) => void;
   setAggNgayCan: (v: string) => void;
 }
 
@@ -101,7 +102,11 @@ export default function NHRow({ meal, data, handlers }: Props) {
   const nh = nhaHangMap[meal.nha_hang_id];
   const selected = selectedKeys.includes(key);
 
-  const focResolvedRow = resolveNHFoc(row, nh);
+  // FOC snapshot đọc trực tiếp từ chi_phi (DB cache) — không qua localRows vì
+  // localRows chỉ init 1 lần, NHFocEditor cập nhật DB → cache invalidate mới reflect.
+  const mainCpForFoc = row?.id ? chiPhiRows.find((c) => c.id === row.id) : null;
+  const focSource = mainCpForFoc ?? row;
+  const focResolvedRow = resolveNHFoc(focSource, nh);
   const soKhachThucTe = row
     ? calcSoKhachThucTe(row.so_khach, focResolvedRow.foc_khach, focResolvedRow.foc_mien)
     : 0;
@@ -223,9 +228,12 @@ export default function NHRow({ meal, data, handlers }: Props) {
           />
         </td>
 
-        {/* Ngày */}
+        {/* Ngày + Bữa (gộp 1 cột — bữa hiển thị ngay dưới ngày) */}
         <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap text-[11px]">
-          {dateLabel}
+          <div className="flex flex-col items-center gap-0.5 leading-tight">
+            <span>{dateLabel}</span>
+            <span className="text-foreground/80">{buaIcon} {buaLabel}</span>
+          </div>
         </td>
 
         {/* NH name */}
@@ -250,11 +258,6 @@ export default function NHRow({ meal, data, handlers }: Props) {
           )}
         </td>
 
-        {/* Bữa */}
-        <td className="px-3 py-2 text-center text-muted-foreground whitespace-nowrap">
-          {buaIcon} {buaLabel}
-        </td>
-
         {/* Số khách — editable inline; input căn trái cố định (🔒/FOC nằm sau) */}
         <td className="px-3 py-2">
           <div className="flex items-center gap-1">
@@ -269,9 +272,11 @@ export default function NHRow({ meal, data, handlers }: Props) {
                 {row.is_overridden && (
                   <span title={t("Đã override — không sync với Điều tour")} className="text-amber-500 text-[10px]">🔒</span>
                 )}
-                <span className="w-[20px] text-green-600 text-[10px]">
-                  {focMienSo > 0 ? `-${focMienSo}` : ""}
-                </span>
+                {focMienSo > 0 && (
+                  <span className="text-green-600 text-xs font-semibold whitespace-nowrap">
+                    (FOC -{focMienSo})
+                  </span>
+                )}
               </>
             ) : <span className="text-muted-foreground">—</span>}
           </div>
@@ -303,16 +308,23 @@ export default function NHRow({ meal, data, handlers }: Props) {
           </div>
         </td>
 
-        {/* CK% editable */}
+        {/* CK% editable + số tiền CK (absolute để input thẳng hàng các cell khác) */}
         <td className="px-2 py-2">
-          <div className="flex justify-center">
+          <div className="relative flex justify-center">
             {row ? (
-              <NHInput
-                value={row.chiet_khau_phan_tram}
-                onChange={(v) => handleChange(key, "chiet_khau_phan_tram", v)}
-                onBlur={() => handleSave(key)}
-                width="w-[48px]"
-              />
+              <>
+                <NHInput
+                  value={row.chiet_khau_phan_tram}
+                  onChange={(v) => handleChange(key, "chiet_khau_phan_tram", v)}
+                  onBlur={() => handleSave(key)}
+                  width="w-[48px]"
+                />
+                {chietKhauSoTien > 0 && (
+                  <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap pointer-events-none">
+                    −{fmt(chietKhauSoTien)}
+                  </span>
+                )}
+              </>
             ) : <span className="text-muted-foreground">—</span>}
           </div>
         </td>
@@ -525,7 +537,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
             });
             setAggReason("");
             setAggSurplusMode("con_du");
-            setAggCanTru(null);
+            setAggCanTru([]);
             if (effectiveDelta > 0 && meal.ngay_date) {
               try {
                 setAggNgayCan(format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"));

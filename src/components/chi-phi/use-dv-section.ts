@@ -7,7 +7,7 @@ import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteCh
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
-import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
+import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { useCurrentUserName } from "@/hooks/use-doan";
@@ -89,7 +89,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   // Surplus mode khi delta < 0 (thừa): NCC giữ tiền (con_du) hoặc NCC trả lại cash (hoan_tien)
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
   // Cấn trừ cong_no khi delta > 0 (thiếu): chọn cong_no NCC để giảm DNTT cash phần
-  const [aggCanTru, setAggCanTru] = useState<CanTruSelection | null>(null);
+  const [aggCanTru, setAggCanTru] = useState<CanTruSelection[]>([]);
 
   // Cancel dialog
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
@@ -154,7 +154,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   const getRowEdit = (row: typeof dvRows[0]) =>
     editRow[row.id] ?? { so_luong: row.so_luong, don_gia: row.don_gia };
 
-  const handleRowChange = (id: number, field: "so_luong" | "don_gia", val: number) => {
+  const handleRowChange = (id: number | undefined, field: "so_luong" | "don_gia", val: number) => {
+    if (id == null) return; // row chưa save → bỏ qua (cần id để index editRow map)
     const base = dvRows.find(r => r.id === id);
     const cur = editRowRef.current;
     const existing = cur[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
@@ -474,19 +475,24 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         });
         const newDnttId = newDntt?.id ?? null;
 
-        // Insert can_tru payment nếu user select cong_no
-        const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, absDelta) : 0;
-        if (canTruAmt > 0 && newDnttId && aggCanTru) {
-          const { error: payErr } = await externalSupabase.from("payments").insert({
-            dntt_id: newDnttId,
-            method: "can_tru",
-            so_tien: canTruAmt,
-            cong_no_id: aggCanTru.congNoId,
-            ghi_chu: `Cấn trừ từ đoàn: ${aggCanTru.tenDoan}`,
+        // Gộp nhiều cấn trừ cùng NCC — clamp tổng ≤ absDelta
+        const canTruItems: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
+        let ctRemain = absDelta;
+        for (const s of aggCanTru) {
+          if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
+          const amt = Math.min(s.soTienCanTru, ctRemain);
+          if (amt <= 0) continue;
+          canTruItems.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
+          ctRemain -= amt;
+        }
+        const canTruAmt = canTruItems.reduce((a, b) => a + b.soTien, 0);
+        if (canTruAmt > 0 && newDnttId) {
+          await createCanTruPayments({
+            dnttId: newDnttId,
+            consumingDoanLog: tenDoan || `#${doanId}`,
+            items: canTruItems,
+            recalcChiPhiIds: [mainRow.id],
           });
-          if (payErr) throw payErr;
-          await appendCanTruLog(aggCanTru.congNoId, canTruAmt, tenDoan || `#${doanId}`);
-          await recalcChiPhiStatus([mainRow.id]);
         }
 
         toast.success(
@@ -504,7 +510,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       setAggCommit(null);
       setAggReason("");
       setAggNgayCan("");
-      setAggCanTru(null);
+      setAggCanTru([]);
     } catch (err: unknown) {
       toast.error("Lỗi: " + (errMsg(err) || ""));
     }

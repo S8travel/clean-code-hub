@@ -16,6 +16,16 @@ export interface HDVDoanInfo {
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
   tip_lump_sum?: number | null;
+  // Phải thu — Thu tiền đầu khách + Quỹ VP (merge #84)
+  dau_khach_rate?: number | null;
+  dau_khach_currency?: string | null;
+  dau_khach_ty_gia?: number | null;
+  dau_khach_nguoi_thu?: string | null;
+  dau_khach_so_khach_override?: number | null;
+  quy_vp_amount?: number | null;
+  quy_vp_currency?: string | null;
+  quy_vp_ty_gia?: number | null;
+  quy_vp_nguoi_thu?: string | null;
 }
 
 export const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {

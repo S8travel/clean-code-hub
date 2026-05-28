@@ -34,7 +34,9 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
       const daTT = isFirst
         ? (la_coc ? fmt(soTien) : cocTotal > 0 ? `(${fmt(cocTotal)})` : "—")
         : "";
-      const thanhToanCol = isFirst ? (la_coc ? "—" : fmt(soTien)) : "";
+      // "Thanh toán" = soTien − cấn trừ (số tiền NCC thực nhận qua chuyển khoản).
+      const thucChuyen = Math.max(0, soTien - (canTruTotal ?? 0));
+      const thanhToanCol = isFirst ? (la_coc ? "—" : fmt(thucChuyen)) : "";
 
       const canTruCols = hasCanTru
         ? [

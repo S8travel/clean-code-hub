@@ -10,7 +10,7 @@ import {
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
-import { useCongNoList, appendCanTruLog, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
+import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
@@ -38,7 +38,7 @@ export function useNHSection({
   doanNhomId,
 }: NHSectionParams) {
   const { data: nhData, isLoading } = useChiPhiNHSection(doanId, doanNhomId);
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId, doanNhomId);
+  const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId, doanNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
@@ -81,7 +81,7 @@ export function useNHSection({
   // Surplus mode khi delta < 0 (thừa): NCC giữ tiền (con_du) hoặc NCC trả lại cash (hoan_tien)
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
   // Cấn trừ cong_no khi delta > 0 (thiếu): chọn cong_no NCC để giảm DNTT cash phần
-  const [aggCanTru, setAggCanTru] = useState<CanTruSelection | null>(null);
+  const [aggCanTru, setAggCanTru] = useState<CanTruSelection[]>([]);
 
   // Sửa ĐNTT chờ duyệt
   const updateDNTT = useUpdateDNTT();
@@ -110,6 +110,10 @@ export function useNHSection({
   useEffect(() => {
     if (!nhData || initializedRef.current) return;
     if (nhData.meals.length === 0) return;
+    // Wait cho chiPhiRows load xong — nếu init khi chiPhiRows còn rỗng (race
+    // condition do 2 query parallel), localRows[key].id sẽ undefined → handleDnttSubmit
+    // fall back vào INSERT chi phí mới → duplicate key vs row đã tồn tại trong DB.
+    if (chiPhiLoading) return;
 
     const nhChiPhi = chiPhiRows.filter((c) => c.danh_muc === "nha_hang");
     const rows: Record<string, LocalNHRow> = {};
@@ -193,7 +197,7 @@ export function useNHSection({
     if (dkSet.size > 0) setDinhKyKeys(dkSet);
 
     initializedRef.current = true;
-  }, [nhData, chiPhiRows, soKhachDefault]);
+  }, [nhData, chiPhiRows, soKhachDefault, chiPhiLoading]);
 
   // Chỉ reset khi doanId THỰC SỰ thay đổi, không chạy khi mount lần đầu
   const prevDoanIdRef = useRef(doanId);
@@ -647,32 +651,49 @@ export function useNHSection({
       const nh0 = nhData?.nhaHangMap[row.nha_hang_id];
       const nhName0 = nh0?.ten || "Nhà hàng";
       const buaStr0 = row.bua_an === "trua" ? "trưa" : "tối";
-      const focResolved0 = resolveNHFoc(row, nh0);
-      const skTT0 = calcSoKhachThucTe(row.so_khach, focResolved0.foc_khach, focResolved0.foc_mien);
-      const thanhTien0 = applyChietKhau(skTT0 * row.don_gia, row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? null);
-      try {
-        const saved = await upsertMut.mutateAsync({
-          doan_id: doanId,
-          ngay_so: row.ngay_so,
-          loai: "chi",
-          danh_muc: "nha_hang",
-          ref_doan_ngay_id: row.doan_ngay_id,
-          mo_ta: `${nhName0} (${buaStr0})`,
-          don_gia: row.don_gia,
-          so_luong: row.so_khach,
-          tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? thanhTien0 : 0,
-          tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? thanhTien0 : 0,
-          foc_khach_snapshot: focResolved0.foc_khach,
-          foc_mien_snapshot:  focResolved0.foc_mien,
-          chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
-        });
-        if (saved?.id) {
-          setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: saved.id } }));
-          row = { ...row, id: saved.id };
+      const expectedMoTa = `${nhName0} (${buaStr0})`;
+      // Defensive: lookup chi phí có sẵn trong DB. Trường hợp localRows lệch
+      // với DB (init race, hoặc cascade từ điều tour sau init) → reuse id thay
+      // vì INSERT (sẽ collide ux_doan_chi_phi_nh_unique).
+      const { data: existingCp } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id")
+        .eq("doan_id", doanId)
+        .eq("danh_muc", "nha_hang")
+        .eq("ref_doan_ngay_id", row.doan_ngay_id)
+        .eq("mo_ta", expectedMoTa)
+        .maybeSingle();
+      if (existingCp?.id) {
+        setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: existingCp.id } }));
+        row = { ...row, id: existingCp.id };
+      } else {
+        const focResolved0 = resolveNHFoc(row, nh0);
+        const skTT0 = calcSoKhachThucTe(row.so_khach, focResolved0.foc_khach, focResolved0.foc_mien);
+        const thanhTien0 = applyChietKhau(skTT0 * row.don_gia, row.chiet_khau_phan_tram ?? nh0?.chiet_khau_phan_tram ?? null);
+        try {
+          const saved = await upsertMut.mutateAsync({
+            doan_id: doanId,
+            ngay_so: row.ngay_so,
+            loai: "chi",
+            danh_muc: "nha_hang",
+            ref_doan_ngay_id: row.doan_ngay_id,
+            mo_ta: expectedMoTa,
+            don_gia: row.don_gia,
+            so_luong: row.so_khach,
+            tien_cong_ty: nh0?.nguoi_thanh_toan !== "hdv" ? thanhTien0 : 0,
+            tien_hdv: nh0?.nguoi_thanh_toan === "hdv" ? thanhTien0 : 0,
+            foc_khach_snapshot: focResolved0.foc_khach,
+            foc_mien_snapshot:  focResolved0.foc_mien,
+            chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
+          });
+          if (saved?.id) {
+            setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: saved.id } }));
+            row = { ...row, id: saved.id };
+          }
+        } catch (err: unknown) {
+          toast.error("Lỗi lưu chi phí: " + (errMsg(err) || ""));
+          return;
         }
-      } catch (err: unknown) {
-        toast.error("Lỗi lưu chi phí: " + (errMsg(err) || ""));
-        return;
       }
     }
 
@@ -844,18 +865,24 @@ export function useNHSection({
         });
         const newDnttId = newDntt?.id ?? null;
 
-        const canTruAmt = aggCanTru ? Math.min(aggCanTru.soTienCanTru, absDelta) : 0;
-        if (canTruAmt > 0 && newDnttId && aggCanTru) {
-          const { error: payErr } = await externalSupabase.from("payments").insert({
-            dntt_id: newDnttId,
-            method: "can_tru",
-            so_tien: canTruAmt,
-            cong_no_id: aggCanTru.congNoId,
-            ghi_chu: `Cấn trừ từ đoàn: ${aggCanTru.tenDoan}`,
+        // Gộp nhiều cấn trừ cùng NCC — clamp tổng ≤ absDelta
+        const canTruItems: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
+        let ctRemain = absDelta;
+        for (const s of aggCanTru) {
+          if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
+          const amt = Math.min(s.soTienCanTru, ctRemain);
+          if (amt <= 0) continue;
+          canTruItems.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
+          ctRemain -= amt;
+        }
+        const canTruAmt = canTruItems.reduce((a, b) => a + b.soTien, 0);
+        if (canTruAmt > 0 && newDnttId) {
+          await createCanTruPayments({
+            dnttId: newDnttId,
+            consumingDoanLog: tenDoan || `#${doanId}`,
+            items: canTruItems,
+            recalcChiPhiIds: [mainRow.id],
           });
-          if (payErr) throw payErr;
-          await appendCanTruLog(aggCanTru.congNoId, canTruAmt, tenDoan || `#${doanId}`);
-          await recalcChiPhiStatus([mainRow.id]);
         }
 
         toast.success(
@@ -873,7 +900,7 @@ export function useNHSection({
       setAggCommit(null);
       setAggReason("");
       setAggNgayCan("");
-      setAggCanTru(null);
+      setAggCanTru([]);
     } catch (err: unknown) {
       toast.error("Lỗi: " + (errMsg(err) || ""));
     }
@@ -1054,7 +1081,7 @@ export function useNHSection({
     handleAggCommit, insertPending: insertDNTT.isPending,
     closeAggCommit: () => {
       setAggCommit(null); setAggReason(""); setAggNgayCan("");
-      setAggSurplusMode("con_du"); setAggCanTru(null);
+      setAggSurplusMode("con_du"); setAggCanTru([]);
     },
     // Cancel modal
     cancelTarget, setCancelTarget, cancelMode, setCancelMode,

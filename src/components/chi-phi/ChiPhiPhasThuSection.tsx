@@ -93,6 +93,37 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
   const tongTip = showTipRow ? (doan?.tip_lump_sum ?? computedTip) : 0;
   const tongVND = tongTip * tyGia;
 
+  // ── "Thu tiền đầu khách" — per-pax × đơn giá. Currency luôn VND (tỷ giá = 1).
+  //    Default rate = 200.000. Số khách default = autoSoKhach (skip T/L) —
+  //    OP có thể override qua dau_khach_so_khach_override.
+  const DK_DEFAULT_RATE = 200_000;
+  const VP_DEFAULT_AMOUNT = 200_000;
+  const dkRate = doan?.dau_khach_rate ?? DK_DEFAULT_RATE;
+  const dkNguoiThu = (doan?.dau_khach_nguoi_thu ?? "hdv") as NguoiThu;
+  // Default = 0 — user phải nhập số khách thật khi muốn thu (không auto theo pax đoàn).
+  const dkAutoSoKhach = 0;
+  const dkEffSoKhach = doan?.dau_khach_so_khach_override ?? dkAutoSoKhach;
+  const [dkLocalRate, setDkLocalRate] = useState(dkRate);
+  const [dkLocalSoKhach, setDkLocalSoKhach] = useState(String(dkEffSoKhach || ""));
+  useEffect(() => { setDkLocalRate(dkRate); }, [dkRate]);
+  useEffect(() => { setDkLocalSoKhach(String(dkEffSoKhach || "")); }, [dkEffSoKhach]);
+  const dkTong = dkEffSoKhach * dkLocalRate;
+  const saveDk = (patch: Partial<{ dau_khach_rate: number | null; dau_khach_nguoi_thu: string | null; dau_khach_so_khach_override: number | null }>) =>
+    updateTip.mutate({ id: doanId, ...patch });
+  const saveDkSoKhach = (val: number) => {
+    const next = val === dkAutoSoKhach ? null : val;
+    if (next === (doan?.dau_khach_so_khach_override ?? null)) return;
+    saveDk({ dau_khach_so_khach_override: next });
+  };
+
+  // ── "Thu tiền quỹ VP" — lump-sum cho cả đoàn. Currency luôn VND. Default 200k.
+  const vpAmount = doan?.quy_vp_amount ?? VP_DEFAULT_AMOUNT;
+  const vpNguoiThu = (doan?.quy_vp_nguoi_thu ?? "hdv") as NguoiThu;
+  const [vpLocalAmount, setVpLocalAmount] = useState(vpAmount);
+  useEffect(() => { setVpLocalAmount(vpAmount); }, [vpAmount]);
+  const saveVp = (patch: Partial<{ quy_vp_amount: number | null; quy_vp_nguoi_thu: string | null }>) =>
+    updateTip.mutate({ id: doanId, ...patch });
+
   // ── Extras (local) ─────────────────────────────────────────────────────────
   const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
   const addRow = () =>
@@ -107,15 +138,17 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
     );
 
   const extraTotalVND = extraRows.reduce((s, r) => s + r.soTien * r.tyGia, 0);
-  const totalVND = tongVND + extraTotalVND;
+  // dkVND/vpVND đã = VND (currency hardcode VND → tỷ giá = 1)
+  const dkVND = dkTong;
+  const vpVND = vpLocalAmount;
+  const totalVND = tongVND + dkVND + vpVND + extraTotalVND;
 
   const hdvTotalVND =
     (showTipRow && tipNguoiThu === "hdv" ? tongVND : 0) +
+    (dkNguoiThu === "hdv" ? dkVND : 0) +
+    (vpNguoiThu === "hdv" ? vpVND : 0) +
     extraRows.filter((r) => r.nguoiThu === "hdv").reduce((s, r) => s + r.soTien * r.tyGia, 0);
   const ctTotalVND = totalVND - hdvTotalVND;
-
-  // Không thu tip & chưa có khoản phụ → ẩn cả section.
-  if (!showTipRow && extraRows.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -254,6 +287,105 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
               <td />
             </tr>
             )}
+
+            {/* Thu tiền đầu khách — pax × đơn giá VND (no nhân ngày, no tỷ giá) */}
+            <tr className="hover:bg-muted/20">
+              <td className="px-4 py-2.5 font-medium">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span>{t("Thu tiền đầu khách")}</span>
+                  <button
+                    onClick={() => saveDk({ dau_khach_nguoi_thu: dkNguoiThu === "cong_ty" ? "hdv" : "cong_ty" })}
+                    className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer",
+                      dkNguoiThu === "hdv"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200",
+                    )}
+                  >
+                    {dkNguoiThu === "hdv" ? t("HDV thu") : t("Công ty thu")}
+                  </button>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-center">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={dkLocalSoKhach}
+                  onChange={(e) => setDkLocalSoKhach(e.target.value.replace(/\D/g, ""))}
+                  onBlur={() => saveDkSoKhach(dkLocalSoKhach ? Number(dkLocalSoKhach) : 0)}
+                  className={cn(
+                    "h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto",
+                    doan?.dau_khach_so_khach_override != null && "border-amber-300 text-amber-700",
+                  )}
+                  title={doan?.dau_khach_so_khach_override != null ? `${t("Đã chỉnh tay")}` : t("Mặc định 0 — nhập số khách muốn thu")}
+                />
+              </td>
+              <td className="px-2 py-2 text-center text-muted-foreground">—</td>
+              <td className="px-3 py-2 text-center">
+                <div className="flex items-center gap-1 justify-center">
+                  <DecimalInput
+                    value={dkLocalRate}
+                    onChange={(v) => { setDkLocalRate(v); saveDk({ dau_khach_rate: v || null }); }}
+                    className="h-6 text-xs px-1.5 py-0 text-right w-[80px]"
+                  />
+                  <span className="text-[11px] text-muted-foreground w-[36px]">VND</span>
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
+                {dkTong > 0 ? `${fmt(dkTong)} VND` : "—"}
+              </td>
+              <td className="px-3 py-2.5 text-center text-muted-foreground text-[11px]">—</td>
+              <td className="px-4 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
+                {dkVND > 0 ? `${fmt(dkVND)} ₫` : "—"}
+              </td>
+              <td />
+            </tr>
+
+            {/* Thu tiền quỹ VP — lump-sum VND (no tỷ giá) */}
+            <tr className="hover:bg-muted/20">
+              <td className="px-4 py-2.5 font-medium">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span>{t("Thu tiền quỹ VP")}</span>
+                  <button
+                    onClick={() => saveVp({ quy_vp_nguoi_thu: vpNguoiThu === "cong_ty" ? "hdv" : "cong_ty" })}
+                    className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer",
+                      vpNguoiThu === "hdv"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200",
+                    )}
+                  >
+                    {vpNguoiThu === "hdv" ? t("HDV thu") : t("Công ty thu")}
+                  </button>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-center text-muted-foreground">—</td>
+              <td className="px-2 py-2 text-center text-muted-foreground">—</td>
+              <td className="px-3 py-2 text-center">
+                <div className="flex items-center gap-1 justify-center">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={vpLocalAmount || ""}
+                    onChange={(e) => setVpLocalAmount(Number(e.target.value.replace(/\D/g, "")) || 0)}
+                    onBlur={() => {
+                      if (vpLocalAmount !== vpAmount) saveVp({ quy_vp_amount: vpLocalAmount || null });
+                    }}
+                    className="h-6 text-xs px-1.5 py-0 text-right w-[80px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder={t("Số tiền")}
+                  />
+                  <span className="text-[11px] text-muted-foreground w-[36px]">VND</span>
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
+                {vpLocalAmount > 0 ? `${fmt(vpLocalAmount)} VND` : "—"}
+              </td>
+              <td className="px-3 py-2.5 text-center text-muted-foreground text-[11px]">—</td>
+              <td className="px-4 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
+                {vpVND > 0 ? `${fmt(vpVND)} ₫` : "—"}
+              </td>
+              <td />
+            </tr>
 
             {/* Extra rows */}
             {extraRows.map((row) => {

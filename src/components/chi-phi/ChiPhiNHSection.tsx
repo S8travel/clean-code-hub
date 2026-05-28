@@ -128,7 +128,6 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
               </th>
               <th className="px-3 py-2 text-center font-medium">{t("Ngày")}</th>
               <th className="px-3 py-2 text-left font-medium">{t("Nhà hàng")}</th>
-              <th className="px-3 py-2 text-center font-medium">{t("Bữa")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("Số khách")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("Đơn giá")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("CK%")}</th>
@@ -180,7 +179,6 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
 
       <NHAggCommitModal
         target={aggCommit}
-        doanId={doanId}
         reason={aggReason}
         onReasonChange={setAggReason}
         ngayCan={aggNgayCan}

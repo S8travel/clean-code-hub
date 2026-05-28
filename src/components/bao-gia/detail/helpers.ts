@@ -49,6 +49,17 @@ export function itemsOfDay(items: BaoGiaItem[] | undefined, day: number): Record
   return groupItemsByLoai(filtered);
 }
 
+/** 4 slot mặc định mỗi ngày: cảnh điểm, ăn trưa, ăn tối, khách sạn.
+ *  Empty rows (don_gia=0) — calcBaoGia bỏ qua items không có giá nên an toàn. */
+export function defaultDayItems(dayIdx: number): BaoGiaItem[] {
+  return [
+    { loai: "ticket", mo_ta: "", don_gia: 0, ghi_chu: "", ngay_so: dayIdx },
+    { loai: "meal", bua_an: "trua", mo_ta: "", don_gia: 0, ghi_chu: "", ngay_so: dayIdx },
+    { loai: "meal", bua_an: "toi",  mo_ta: "", don_gia: 0, ghi_chu: "", ngay_so: dayIdx },
+    { loai: "hotel", mo_ta: "", don_gia: 0, ghi_chu: "", ngay_so: dayIdx },
+  ];
+}
+
 /** Live-recompute case_16 + case_20 + giá trung bình từ items[] + xe_gia +
  *  draft fields. Trả về BaoGiaKetQua "tươi" để các tổng hợp (panel UI, Word
  *  export) dùng chung — KHÔNG đọc case frozen từ AI extract.
@@ -99,15 +110,20 @@ export interface CaseLine {
   khac: number;
   tong_von: number;
   profit_vnd: number;
+  chenh_lech_xr: number; // chênh lệch tỷ giá VCB vs báo giá rate
   gia_ban: number;
   gia_ban_per_pax: number;
-  bien_loi_nhuan_pct: number;
+  bien_loi_nhuan_pct: number; // = (profit + chenh_lech) / gia_ban × 100
 }
 
-function buildCase(c: BaoGiaCase, guests: number, phuThu: number, profitUsd: number, xr: number): CaseLine {
+function buildCase(c: BaoGiaCase, guests: number, phuThu: number, profitUsd: number, xr: number, vcbRate: number | null): CaseLine {
   const tongVon = c.total_cost + phuThu;
   const profitVnd = Math.round(profitUsd * guests * xr);
   const giaBan = tongVon + profitVnd;
+  // Chênh lệch tỷ giá: customer trả USD = gia_ban / xr; agency thực thu
+  // VND = USD × vcb_rate → chênh lệch = USD × (vcb − xr) = gia_ban × (vcb − xr) / xr.
+  // Dương khi vcb > xr (agency lời), âm khi vcb < xr (agency lỗ).
+  const chenhLech = vcbRate && xr > 0 ? Math.round(giaBan * (vcbRate - xr) / xr) : 0;
   return {
     khach_san:   c.hotel,
     an_uong:     c.meal,
@@ -118,9 +134,10 @@ function buildCase(c: BaoGiaCase, guests: number, phuThu: number, profitUsd: num
     khac:        c.tips + c.insurance,
     tong_von:    tongVon,
     profit_vnd:  profitVnd,
+    chenh_lech_xr: chenhLech,
     gia_ban:     giaBan,
     gia_ban_per_pax: guests > 0 ? Math.round(giaBan / guests) : 0,
-    bien_loi_nhuan_pct: giaBan > 0 ? (profitVnd / giaBan) * 100 : 0,
+    bien_loi_nhuan_pct: giaBan > 0 ? ((profitVnd + chenhLech) / giaBan) * 100 : 0,
   };
 }
 
@@ -132,8 +149,9 @@ export function costBreakdown(args: {
   profitUsd: number;
   xeGia: number | null;
   phuThu: number | null;
+  vcbRate: number | null;
 }) {
-  const { ket, exchangeRate, profitUsd, xeGia } = args;
+  const { ket, exchangeRate, profitUsd, xeGia, vcbRate } = args;
   if (!ket) return null;
 
   const manualItems: ManualItem[] = (ket.items ?? []).map((it, i) => ({
@@ -148,8 +166,8 @@ export function costBreakdown(args: {
     exchangeRate, profitUsd, xeGia ?? 0, 0,
   );
   const phuThuVal = args.phuThu ?? 0;
-  const case16 = buildCase(live.case_16, 16, phuThuVal, profitUsd, exchangeRate);
-  const case20 = buildCase(live.case_20, 20, phuThuVal, profitUsd, exchangeRate);
+  const case16 = buildCase(live.case_16, 16, phuThuVal, profitUsd, exchangeRate, vcbRate);
+  const case20 = buildCase(live.case_20, 20, phuThuVal, profitUsd, exchangeRate, vcbRate);
   const giaBanTbPerPax = Math.round((case16.gia_ban_per_pax + case20.gia_ban_per_pax) / 2);
   const bienTb = (case16.bien_loi_nhuan_pct + case20.bien_loi_nhuan_pct) / 2;
   return {
@@ -160,5 +178,6 @@ export function costBreakdown(args: {
     gia_ban_tb_per_pax_usd: exchangeRate > 0 ? giaBanTbPerPax / exchangeRate : 0,
     bien_loi_nhuan_tb_pct: bienTb,
     exchange_rate: exchangeRate,
+    vcb_rate: vcbRate,
   };
 }

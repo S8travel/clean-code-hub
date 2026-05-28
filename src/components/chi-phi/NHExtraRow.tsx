@@ -38,9 +38,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
           />
         </div>
       </td>
-      {/* Col 4: empty */}
-      <td />
-      {/* Col 5: số lượng — căn trái, khớp dòng chính */}
+      {/* Col 4: số lượng — căn trái, khớp dòng chính */}
       <td className="px-3 py-1">
         <div className="flex items-center gap-1">
           <NHInput
@@ -66,13 +64,23 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       </td>
       {/* Col 7: CK% riêng từng extra (suất trẻ em = CK; HDV phát sinh để 0) */}
       <td className="px-2 py-1">
-        <div className="flex justify-center">
+        <div className="relative flex justify-center">
           <NHInput
             value={extra.chiet_khau_phan_tram}
             onChange={(v) => onChange(mealKey, idx, "chiet_khau_phan_tram", v)}
             onBlur={() => onSave(mealKey, idx)}
             width="w-[48px]"
           />
+          {(() => {
+            const truocCK = extra.so_luong * extra.don_gia;
+            const sauCK = applyChietKhau(truocCK, extra.chiet_khau_phan_tram);
+            const ckSoTien = truocCK - sauCK;
+            return ckSoTien > 0 ? (
+              <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap pointer-events-none">
+                −{fmt(ckSoTien)}
+              </span>
+            ) : null;
+          })()}
         </div>
       </td>
       {/* Col 8: thành tiền (đã trừ CK) */}

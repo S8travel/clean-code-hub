@@ -73,11 +73,11 @@ function CanhDiemPageContent() {
               />
               <Select value={newLoai} onValueChange={setNewLoai}>
                 <SelectTrigger className="h-7 text-xs">
-                  <span>{newLoai === "canh_diem" ? t("Cảnh điểm") : newLoai === "dich_vu" ? t("Dịch vụ") : ""}</span>
+                  <span>{newLoai === "canh_diem" ? t("Không gửi mail") : newLoai === "dich_vu" ? t("Có gửi mail") : ""}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="canh_diem">{t("Cảnh điểm")}</SelectItem>
-                  <SelectItem value="dich_vu">{t("Dịch vụ")}</SelectItem>
+                  <SelectItem value="canh_diem">{t("Không gửi mail")}</SelectItem>
+                  <SelectItem value="dich_vu">{t("Có gửi mail")}</SelectItem>
                 </SelectContent>
               </Select>
 <div className="flex gap-1">
@@ -131,9 +131,9 @@ function CanhDiemPageContent() {
                     <span className="font-medium text-xs truncate">{cd.ten}</span>
                     <Badge variant="outline" className={cn(
                       "text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0",
-                      cd.loai === "dich_vu" ? "border-purple-300 text-purple-600" : "border-green-300 text-green-600"
+                      cd.loai === "dich_vu" ? "border-purple-300 text-purple-600" : "border-slate-300 text-slate-500"
                     )}>
-                      {cd.loai === "dich_vu" ? t("DV") : t("CĐ")}
+                      {cd.loai === "dich_vu" ? t("Có mail") : t("Không mail")}
                     </Badge>
                   </div>
                   {cd.dia_diem && (
