@@ -40,6 +40,19 @@ import { externalSupabase } from "@/lib/supabase-external";
 
 ---
 
+## 🔀 Git & Push — LUÔN qua Pull Request
+
+> **Không bao giờ push thẳng lên `main`.** Mọi thay đổi đẩy lên remote phải đi qua
+> Pull Request để CI kiểm tra TRƯỚC khi merge.
+
+- **Quy trình**: tạo nhánh mới → commit → `git push -u origin <branch>` → mở PR → đợi CI xanh → **squash merge** vào `main`.
+- **CI gate trên PR**: `npm run lint` (0 error), `npx tsc -b` (0 error), unit test. Push thẳng `main` bỏ qua gate này → dễ làm `main` đỏ.
+- **Commit message**: theo convention sẵn có — `feat(scope):`, `fix(scope):`, `refactor(scope):`, `docs:`...
+- **Squash merge**: GitHub gộp toàn bộ commit của nhánh thành 1 commit khi merge vào `main`
+  (lịch sử `main` = 1 dòng / PR, vd `fix(doan): ... (#NN)`). Các commit lẻ trong nhánh giữ lại ở PR để tra cứu.
+
+---
+
 ## 📊 Database Schema
 
 ### Đoàn tour (core)
