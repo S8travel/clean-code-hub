@@ -37,7 +37,7 @@ export default function KSCongNoMultiPanel({ nccId, value, onChange, maxAmount }
         ? t("Quỹ trả trước")
         : r.ten_doan ||
           extractDoanFromGhiChu(r.ghi_chu) ||
-          (r.doan_id ? `#${r.doan_id}` : t("Khoản dư"));
+          (r.doan_id ? `#${r.doan_id}` : r.ly_do || t("Khoản dư"));
       return {
         id: r.id,
         conLai: r.so_tien_con_lai,
