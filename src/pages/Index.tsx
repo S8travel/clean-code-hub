@@ -465,6 +465,12 @@ export default function Index() {
         chuyen_bay_don: doan.chuyen_bay_don,
         chuyen_bay_tien: doan.chuyen_bay_tien,
         assigned_to: doan.assigned_to,
+        // Copy scope fields — non-admin lọc danh sách theo thi_truong; thiếu → đoàn copy
+        // vô hình với người tạo (chỉ admin thấy). loai_tour/van_phong_id để filter + nhãn.
+        thi_truong: doan.thi_truong ?? null,
+        loai_tour: (doan.loai_tour ?? null) as DoanInsert["loai_tour"],
+        van_phong_id: doan.van_phong_id ?? null,
+        created_by: currentUser?.user_id ?? null,
         ghi_chu: doan.ghi_chu,
         trang_thai: "dang_chay",
         shopping: doan.shopping ?? false,

@@ -40,6 +40,8 @@ export interface DoanRow {
   ngay_di?: string | null;
   ngay_ve?: string | null;
   loai_tour?: string | null;
+  thi_truong?: string | null;
+  van_phong_id?: number | null;
   trang_thai?: string | null;
   agent_id?: number | null;
   agent_huy_id?: number | null;
