@@ -84,9 +84,13 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
   // ── Người thu (local — không có DB field) ─────────────────────────────────
   const [tipNguoiThu, setTipNguoiThu] = useState<NguoiThu>("hdv");
 
+  // ── Có thu tip không (bỏ tích "Thu tiền tip" ở Điều tour → ẩn dòng tip) ────
+  const thuTip = doan?.thu_tip ?? true;
+  const showTipRow = thuTip && effSoKhach > 0 && effSoNgay > 0;
+
   // ── Tổng tip (NDT + VND) — respect tip_lump_sum override (set ở TipSection) ─
   const computedTip = effSoKhach * effSoNgay * effRate;
-  const tongTip = doan?.tip_lump_sum ?? computedTip;
+  const tongTip = showTipRow ? (doan?.tip_lump_sum ?? computedTip) : 0;
   const tongVND = tongTip * tyGia;
 
   // ── "Thu tiền đầu khách" — per-pax × đơn giá. Currency luôn VND (tỷ giá = 1).
@@ -140,7 +144,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
   const totalVND = tongVND + dkVND + vpVND + extraTotalVND;
 
   const hdvTotalVND =
-    (tipNguoiThu === "hdv" ? tongVND : 0) +
+    (showTipRow && tipNguoiThu === "hdv" ? tongVND : 0) +
     (dkNguoiThu === "hdv" ? dkVND : 0) +
     (vpNguoiThu === "hdv" ? vpVND : 0) +
     extraRows.filter((r) => r.nguoiThu === "hdv").reduce((s, r) => s + r.soTien * r.tyGia, 0);
@@ -181,7 +185,8 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {/* Tip row */}
+            {/* Tip row — ẩn khi bỏ tích "Thu tiền tip" ở Điều tour */}
+            {showTipRow && (
             <tr className="hover:bg-muted/20">
               <td className="px-4 py-2.5 font-medium">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -281,6 +286,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
               </td>
               <td />
             </tr>
+            )}
 
             {/* Thu tiền đầu khách — pax × đơn giá VND (no nhân ngày, no tỷ giá) */}
             <tr className="hover:bg-muted/20">

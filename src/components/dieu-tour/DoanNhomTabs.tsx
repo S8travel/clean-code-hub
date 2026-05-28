@@ -1,30 +1,38 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Users, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import {
-  useDoanNhomList, useCreateDoanNhom, useUpdateDoanNhom, useDeleteDoanNhom,
+  useDoanNhomList, useDeleteDoanNhom,
   type DoanNhomRow,
 } from "@/hooks/use-doan-nhom";
+import SplitNhomModal from "./SplitNhomModal";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   doanId: number;
   activeNhomId: number | null;
   onActiveNhomChange: (id: number) => void;
+  /** Tổng số khách đoàn (target cho modal chia số) */
+  doanTotal: number;
+  doanSoKhachLon: number;
+  doanSoKhachEm1: number;
+  doanSoKhachEm2: number;
+  doanSoKhachTl: number;
 }
 
-export default function DoanNhomTabs({ doanId, activeNhomId, onActiveNhomChange }: Props) {
+export default function DoanNhomTabs({
+  doanId, activeNhomId, onActiveNhomChange,
+  doanTotal, doanSoKhachLon, doanSoKhachEm1, doanSoKhachEm2, doanSoKhachTl,
+}: Props) {
   useTranslate();
   const { data: nhomList = [] } = useDoanNhomList(doanId);
-  const createMut = useCreateDoanNhom();
-  const [editing, setEditing] = useState<DoanNhomRow | null>(null);
+  const [modalMode, setModalMode] = useState<"split" | "add" | "redistribute" | null>(null);
   const [deleting, setDeleting] = useState<DoanNhomRow | null>(null);
 
   // Auto-set active nhóm khi list load lần đầu
@@ -32,30 +40,39 @@ export default function DoanNhomTabs({ doanId, activeNhomId, onActiveNhomChange 
     onActiveNhomChange(nhomList[0].id);
   }
 
+  const openModal = (mode: "split" | "add" | "redistribute") => setModalMode(mode);
+
   // Ẩn tabs nếu chỉ có 1 nhóm (UX hệt đoàn cũ)
   if (nhomList.length <= 1) {
     return (
-      <div className="flex items-center justify-end print-hide">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs gap-1.5 border-dashed"
-          onClick={() => createMut.mutate(
-            { doanId },
-            {
-              onSuccess: (data) => {
-                onActiveNhomChange(data.id);
-                toast.success(t("Đã thêm nhóm mới"));
-              },
-              onError: (e) => toast.error(t("Lỗi thêm nhóm: ") + (errMsg(e) || "")),
-            },
-          )}
-          disabled={createMut.isPending}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t("Tách thành nhiều nhóm")}
-        </Button>
-      </div>
+      <>
+        <div className="flex items-center justify-end print-hide">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1.5 border-dashed"
+            onClick={() => openModal("split")}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("Tách thành nhiều nhóm")}
+          </Button>
+        </div>
+        {modalMode && (
+          <SplitNhomModal
+            doanId={doanId}
+            mode={modalMode}
+            doanTotal={doanTotal}
+            doanSoKhachLon={doanSoKhachLon}
+            doanSoKhachEm1={doanSoKhachEm1}
+            doanSoKhachEm2={doanSoKhachEm2}
+            doanSoKhachTl={doanSoKhachTl}
+            onClose={() => setModalMode(null)}
+            onSaved={(createdIds) => {
+              if (createdIds.length > 0) onActiveNhomChange(createdIds[0]);
+            }}
+          />
+        )}
+      </>
     );
   }
 
@@ -82,28 +99,17 @@ export default function DoanNhomTabs({ doanId, activeNhomId, onActiveNhomChange 
               {soKhachTong > 0 && (
                 <span className="text-[10px] text-muted-foreground">({soKhachTong})</span>
               )}
-              {isActive && (
+              {isActive && nhomList.length > 1 && (
                 <div className="flex items-center gap-0.5 ml-1.5">
                   <span
                     role="button"
                     tabIndex={0}
-                    className="h-4 w-4 rounded hover:bg-muted grid place-items-center cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); setEditing(nhom); }}
-                    title={t("Sửa nhóm")}
+                    className="h-4 w-4 rounded hover:bg-destructive/10 grid place-items-center cursor-pointer text-destructive"
+                    onClick={(e) => { e.stopPropagation(); setDeleting(nhom); }}
+                    title={t("Xóa nhóm")}
                   >
-                    <Pencil className="h-2.5 w-2.5" />
+                    <Trash2 className="h-2.5 w-2.5" />
                   </span>
-                  {nhomList.length > 1 && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      className="h-4 w-4 rounded hover:bg-destructive/10 grid place-items-center cursor-pointer text-destructive"
-                      onClick={(e) => { e.stopPropagation(); setDeleting(nhom); }}
-                      title={t("Xóa nhóm")}
-                    >
-                      <Trash2 className="h-2.5 w-2.5" />
-                    </span>
-                  )}
                 </div>
               )}
             </button>
@@ -113,149 +119,51 @@ export default function DoanNhomTabs({ doanId, activeNhomId, onActiveNhomChange 
           size="sm"
           variant="ghost"
           className="h-7 text-xs gap-1 ml-2 text-muted-foreground hover:text-primary"
-          onClick={() => createMut.mutate(
-            { doanId },
-            {
-              onSuccess: (data) => {
-                onActiveNhomChange(data.id);
-                toast.success(t("Đã thêm nhóm mới"));
-              },
-              onError: (e) => toast.error(t("Lỗi thêm nhóm: ") + (errMsg(e) || "")),
-            },
-          )}
-          disabled={createMut.isPending}
+          onClick={() => openModal("add")}
         >
           <Plus className="h-3 w-3" />
           {t("Thêm nhóm")}
         </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs gap-1 text-muted-foreground hover:text-primary"
+          onClick={() => openModal("redistribute")}
+          title={t("Chia lại số khách giữa các nhóm")}
+        >
+          <Pencil className="h-3 w-3" />
+          {t("Chia lại")}
+        </Button>
       </div>
 
-      {editing && (
-        <EditNhomModal
-          nhom={editing}
+      {modalMode && (
+        <SplitNhomModal
           doanId={doanId}
-          onClose={() => setEditing(null)}
+          mode={modalMode}
+          doanTotal={doanTotal}
+          doanSoKhachLon={doanSoKhachLon}
+          doanSoKhachEm1={doanSoKhachEm1}
+          doanSoKhachEm2={doanSoKhachEm2}
+          doanSoKhachTl={doanSoKhachTl}
+          onClose={() => setModalMode(null)}
+          onSaved={(createdIds) => {
+            if (createdIds.length > 0) onActiveNhomChange(createdIds[0]);
+          }}
         />
       )}
+
       {deleting && (
         <DeleteNhomConfirm
           nhom={deleting}
           doanId={doanId}
           onClose={() => setDeleting(null)}
           onDeleted={() => {
-            // Switch về nhóm đầu tiên còn lại
             const remaining = nhomList.find((n) => n.id !== deleting.id);
             if (remaining) onActiveNhomChange(remaining.id);
           }}
         />
       )}
     </>
-  );
-}
-
-function EditNhomModal({
-  nhom, doanId, onClose,
-}: {
-  nhom: DoanNhomRow;
-  doanId: number;
-  onClose: () => void;
-}) {
-  useTranslate();
-  const updateMut = useUpdateDoanNhom();
-  const [tenNhom, setTenNhom] = useState(nhom.ten_nhom);
-  const [soKhachLon, setSoKhachLon] = useState(String(nhom.so_khach_lon ?? ""));
-  const [soKhachEm1, setSoKhachEm1] = useState(String(nhom.so_khach_em1 ?? ""));
-  const [soKhachEm2, setSoKhachEm2] = useState(String(nhom.so_khach_em2 ?? ""));
-  const [soKhachTl, setSoKhachTl] = useState(String(nhom.so_khach_tl ?? ""));
-  const [ghiChu, setGhiChu] = useState(nhom.ghi_chu ?? "");
-
-  const handleSubmit = () => {
-    if (!tenNhom.trim()) {
-      toast.error(t("Tên nhóm không được trống"));
-      return;
-    }
-    const numOrNull = (s: string): number | null => {
-      const n = parseInt(s, 10);
-      return Number.isFinite(n) ? n : null;
-    };
-    updateMut.mutate(
-      {
-        id: nhom.id,
-        doanId,
-        updates: {
-          ten_nhom: tenNhom.trim(),
-          so_khach_lon: numOrNull(soKhachLon),
-          so_khach_em1: numOrNull(soKhachEm1),
-          so_khach_em2: numOrNull(soKhachEm2),
-          so_khach_tl: numOrNull(soKhachTl),
-          ghi_chu: ghiChu.trim() || null,
-        },
-      },
-      {
-        onSuccess: () => {
-          toast.success(t("Đã lưu nhóm"));
-          onClose();
-        },
-        onError: (e) => toast.error(t("Lỗi lưu nhóm: ") + (errMsg(e) || "")),
-      },
-    );
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("Sửa nhóm")}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-2">
-          <div className="space-y-1">
-            <label className="text-xs">{t("Tên nhóm")}</label>
-            <Input
-              value={tenNhom}
-              onChange={(e) => setTenNhom(e.target.value)}
-              placeholder={t("Vd: Tham quan 75 khách")}
-              className="h-8 text-sm"
-              autoFocus
-            />
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">{t("Khách lớn")}</label>
-              <Input type="number" value={soKhachLon} onChange={(e) => setSoKhachLon(e.target.value)} className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">{t("Em 1")}</label>
-              <Input type="number" value={soKhachEm1} onChange={(e) => setSoKhachEm1(e.target.value)} className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">{t("Em 2")}</label>
-              <Input type="number" value={soKhachEm2} onChange={(e) => setSoKhachEm2(e.target.value)} className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">{t("T/L")}</label>
-              <Input type="number" value={soKhachTl} onChange={(e) => setSoKhachTl(e.target.value)} className="h-8 text-xs" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs">{t("Ghi chú")}</label>
-            <Input
-              value={ghiChu}
-              onChange={(e) => setGhiChu(e.target.value)}
-              placeholder={t("Vd: Có 1 HDV tiếng Trung riêng")}
-              className="h-8 text-sm"
-            />
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={updateMut.isPending}>
-            <X className="h-3.5 w-3.5 mr-1" /> {t("Hủy")}
-          </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={updateMut.isPending}>
-            <Check className="h-3.5 w-3.5 mr-1" /> {t("Lưu")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

@@ -2,6 +2,7 @@ import { useMemo, useState, useRef } from "react";
 import { FileSpreadsheet, Printer } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
+import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
 import { useUserRoles, useCurrentUserName } from "@/hooks/use-doan";
@@ -43,6 +44,7 @@ export interface ChiPhiTabDoan {
     nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
   } | null;
   tang_pham?: unknown;
+  thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
@@ -66,6 +68,7 @@ interface ChiPhiTabDoanInput {
   huong_dan_vien?: unknown;
   xe?: unknown;
   tang_pham?: unknown;
+  thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
@@ -76,9 +79,11 @@ interface Props {
   doanId: number;
   doan: ChiPhiTabDoanInput;
   coTinhSuatTLNhaHang?: boolean;
+  /** ID nhóm active (Phase 2+). Khi có giá trị → tính số khách theo nhóm; null → theo đoàn. */
+  activeNhomId?: number | null;
 }
 
-export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang }: Props) {
+export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang, activeNhomId }: Props) {
   useTranslate();
   // Chuẩn hoá row đoàn về ChiPhiTabDoan (các quan hệ join có kiểu chính xác).
   const doan = doanInput as ChiPhiTabDoan;
@@ -92,32 +97,25 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   const dvSectionRef = useRef<ChiPhiDVSectionHandle>(null);
   const [combinedPreview, setCombinedPreview] = useState<NHDocData | null>(null);
   const { data: currentUserName = "" } = useCurrentUserName();
-  const soKhach =
-    (doan?.so_khach_lon ?? 0) +
-    (doan?.so_khach_em1 ?? 0) +
-    (doan?.so_khach_em2 ?? 0) +
-    (doan?.so_khach_tl ?? 0) ||
-    doan?.so_khach ||
-    0;
+
+  // Phase 2+: lấy số khách của nhóm active (nếu có), fallback về đoàn.
+  // Cho phép Vicky case: nhóm 1 (75 khách) chi phí khác nhóm 2 (25 khách).
+  const { data: nhomList = [] } = useDoanNhomList(doanId);
+  const activeNhom = activeNhomId != null ? nhomList.find((n) => n.id === activeNhomId) : null;
+  const sk_lon = activeNhom?.so_khach_lon ?? doan?.so_khach_lon ?? 0;
+  const sk_em1 = activeNhom?.so_khach_em1 ?? doan?.so_khach_em1 ?? 0;
+  const sk_em2 = activeNhom?.so_khach_em2 ?? doan?.so_khach_em2 ?? 0;
+  const sk_tl = activeNhom?.so_khach_tl ?? doan?.so_khach_tl ?? 0;
+  const soKhach = (sk_lon + sk_em1 + sk_em2 + sk_tl) || doan?.so_khach || 0;
 
   // Nhà hàng: TE 6-10 = 0.5 suất, TE <6 = miễn phí
-  const soKhachNH =
-    (doan?.so_khach_lon ?? 0) +
-    (doan?.so_khach_em1 ?? 0) * 0.5 +
-    (doan?.so_khach_tl ?? 0) ||
-    doan?.so_khach ||
-    0;
+  const soKhachNH = (sk_lon + sk_em1 * 0.5 + sk_tl) || doan?.so_khach || 0;
+  const soKhachNHKhongTL = (sk_lon + sk_em1 * 0.5) || doan?.so_khach || 0;
 
-  const soKhachNHKhongTL =
-    (doan?.so_khach_lon ?? 0) +
-    (doan?.so_khach_em1 ?? 0) * 0.5 ||
-    doan?.so_khach ||
-    0;
-
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: chiPhiRows = [] } = useChiPhiList(doanId, activeNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
-  const { data: ksData } = useChiPhiKSData(doanId);
+  const { data: ksData } = useChiPhiKSData(doanId, activeNhomId);
   const { data: userRoles = [] } = useUserRoles();
   const opName = useMemo(() => {
     if (!doan?.assigned_to) return "—";
@@ -272,9 +270,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       <div className="space-y-6">
         <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
 
-        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} doanNhomId={activeNhomId} />
 
-        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} />
+        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} />
 
         <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
 

@@ -24,12 +24,14 @@ interface DVSectionParams {
   doanId: number;
   tenDoan?: string;
   ngayBatDau?: string;
+  /** Filter chi phí theo nhóm — Phase 2+ */
+  doanNhomId?: number | null;
 }
 
 // Toàn bộ state + handler của tab Chi phí Dịch vụ.
 // Tách verbatim từ ChiPhiDVSection — component chỉ còn phần render.
-export function useDVSection({ doanId, tenDoan, ngayBatDau }: DVSectionParams) {
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSectionParams) {
+  const { data: chiPhiRows = [] } = useChiPhiList(doanId, doanNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });

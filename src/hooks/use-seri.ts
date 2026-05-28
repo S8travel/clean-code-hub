@@ -297,6 +297,15 @@ export function useApplySeriToDoan() {
       if (e1) throw e1;
       if (!seriNgayRows || seriNgayRows.length === 0) return;
 
+      // Resolve nhóm target (thu_tu=1) — applySeri chỉ apply vào nhóm này.
+      const { data: nhomDefault } = await externalSupabase
+        .from("doan_nhom")
+        .select("id")
+        .eq("doan_id", doanId)
+        .eq("thu_tu", 1)
+        .maybeSingle();
+      if (!nhomDefault) throw new Error("Đoàn chưa có nhóm mặc định — áp seri thất bại");
+
       // 1b. Wipe data NH/cảnh điểm cũ trước khi apply seri mới — pre-check
       //     đã verify không có booking + DNTT (chưa hủy) → safe delete.
       //     KS / bao_hiem / HDV / dich_vu / phi_khac giữ nguyên (độc lập với seri).
@@ -318,25 +327,17 @@ export function useApplySeriToDoan() {
       const [bY, bM, bD] = ngayDi.split("-").map(Number);
       const baseDate = new Date(Date.UTC(bY, bM - 1, bD));
 
-      // 2. UPSERT doan_ngay per ngay_so — preserve KS fields nếu doan đã book KS
-      //    (seri không carry KS, KS độc lập với seri).
+      // 2. UPSERT doan_ngay per ngay_so — PER NHÓM target (tránh UPDATE nhầm
+      //    doan_ngay của nhóm khác cùng ngay_so). Preserve KS fields (seri ko carry KS).
       const { data: existingNgay, error: eExist } = await externalSupabase
         .from("doan_ngay")
         .select("id, ngay_so")
-        .eq("doan_id", doanId);
+        .eq("doan_id", doanId)
+        .eq("doan_nhom_id", nhomDefault.id);
       if (eExist) throw eExist;
       const existingByNgaySo = new Map<number, number>(
         (existingNgay ?? []).map((r) => [r.ngay_so, r.id]),
       );
-
-      // Cần doan_nhom_id để INSERT row mới — lấy nhóm "Toàn đoàn" (thu_tu=1)
-      const { data: nhomDefault } = await externalSupabase
-        .from("doan_nhom")
-        .select("id")
-        .eq("doan_id", doanId)
-        .eq("thu_tu", 1)
-        .maybeSingle();
-      if (!nhomDefault) throw new Error("Đoàn chưa có nhóm mặc định — áp seri thất bại");
 
       const ngaySoToDoanNgayId = new Map<number, number>();
       for (const sn of seriNgayRows) {

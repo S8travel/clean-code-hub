@@ -110,6 +110,9 @@ export function useBookingKS(doanId: number | undefined) {
         const ks = ksMap.get(b.khach_san_id);
         const g = grouped.get(b.khach_san_id) || { dates: [], codes: [], dayUseDates: [] };
         const uniqueDayUse = [...new Set(g.dayUseDates)];
+        // Dedup ngày: 2 nhóm cùng KS cùng đêm → doan_ngay 2 rows cùng ngay_date.
+        // KS book chung cho cả đoàn → đếm số đêm DISTINCT (không nhân đôi theo nhóm).
+        const uniqueDates = [...new Set(g.dates)];
         return {
           ...b,
           khach_san_ten: ks?.ten || "—",
@@ -119,8 +122,8 @@ export function useBookingKS(doanId: number | undefined) {
           khach_san_dia_diem_zh: ks?.dia_diem_zh || null,
           khach_san_so_dien_thoai: ks?.so_dien_thoai || null,
           khach_san_website: ks?.website || null,
-          so_dem: g.dates.length,
-          ngay_dates: g.dates,
+          so_dem: uniqueDates.length,
+          ngay_dates: uniqueDates,
           day_use_dates: uniqueDayUse,
           ks_ma_codes: [...new Set(g.codes.filter(Boolean))],
           con_trong_dieu_tour: grouped.has(b.khach_san_id),

@@ -487,11 +487,23 @@ export function useUpdateDoan() {
 
       let thucTeClearCount = 0;
       let committedDnttAffected = 0;
+      let soKhachMultiNhomSkipped = false;
 
+      // Đoàn nhiều nhóm: số khách mỗi nhóm độc lập, quản lý qua SplitNhomModal
+      // ("Chia lại"). Cascade theo "tổng đoàn" sẽ ghi SAI chi phí nhóm-specific
+      // (vd NH chỉ 1 nhóm ăn → bị set = tổng đoàn). → SKIP cascade khi >1 nhóm,
+      // chỉ update field đoàn. Caller toast hướng dẫn user dùng "Chia lại".
+      let nhomCount = 1;
       if (so_khach_changed) {
-        // 4.0. Cascade số khách sang nhóm thu_tu=1 (nhóm mặc định / "Toàn đoàn").
-        // Rule: khi user đổi số khách qua DoanDrawer, delta phải đẩy vào nhóm 1.
-        // Nhóm khác (vd "Nhóm golf") giữ nguyên — user phải dùng "Chia lại" modal nếu cần.
+        const { count } = await externalSupabase
+          .from("doan_nhom")
+          .select("id", { count: "exact", head: true })
+          .eq("doan_id", id);
+        nhomCount = count ?? 1;
+        if (nhomCount > 1) soKhachMultiNhomSkipped = true;
+
+        // 4.0. Đẩy DELTA số khách vào nhóm thu_tu=1 ("Toàn đoàn"). Nhóm khác giữ
+        // nguyên — user dùng "Chia lại" modal nếu cần phân bổ lại.
         // Phép tính: nhom1.field_new = nhom1.field_old + (doan.field_new - doan.field_old)
         const diffLon = (data.so_khach_lon ?? 0) - (oldDoan.so_khach_lon ?? 0);
         const diffEm1 = (data.so_khach_em1 ?? 0) - (oldDoan.so_khach_em1 ?? 0);
@@ -516,7 +528,12 @@ export function useUpdateDoan() {
               .eq("id", nhom1.id);
           }
         }
+      }
 
+      // Cascade chi phí/item theo TỔNG ĐOÀN chỉ an toàn khi 1 nhóm. Đoàn nhiều
+      // nhóm: chi phí nhóm-specific (vd NH chỉ 1 nhóm ăn) sẽ bị set sai = tổng đoàn
+      // → SKIP, để SplitNhomModal "Chia lại" + save Điều Tour lo phần cập nhật.
+      if (so_khach_changed && nhomCount <= 1) {
         // 4a. Sync doan_ngay_item.so_luong cho items chưa customized (= old total)
         if (oldTotal > 0 && newTotal !== oldTotal) {
           await externalSupabase
@@ -709,7 +726,7 @@ export function useUpdateDoan() {
         }
       }
 
-      return { ...data, thucTeClearCount, committedDnttAffected };
+      return { ...data, thucTeClearCount, committedDnttAffected, soKhachMultiNhomSkipped };
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["doan"] });

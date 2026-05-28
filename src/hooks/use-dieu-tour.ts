@@ -566,10 +566,27 @@ export function useSaveDieuTour() {
         .update({ ...doanFields, so_khach })
         .eq("id", doanId);
 
+      // Resolve doan_nhom_id sớm — dùng cho mọi query existing-row & INSERT mới
+      // để tránh ghi đè cross-nhóm khi đoàn có nhiều nhóm.
+      let defaultDoanNhomId: number | null = doanNhomId ?? null;
+      if (defaultDoanNhomId == null) {
+        const { data: nhomDefault } = await externalSupabase
+          .from("doan_nhom")
+          .select("id")
+          .eq("doan_id", doanId)
+          .eq("thu_tu", 1)
+          .maybeSingle();
+        defaultDoanNhomId = nhomDefault?.id ?? null;
+      }
+      if (defaultDoanNhomId == null) {
+        throw new Error("Đoàn chưa có nhóm — không thể lưu điều tour");
+      }
+
       const { data: existingNgayRows } = await externalSupabase
         .from("doan_ngay")
         .select("id, ngay_so, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, thanh_pho")
-        .eq("doan_id", doanId);
+        .eq("doan_id", doanId)
+        .eq("doan_nhom_id", defaultDoanNhomId);
       type ExistingNgayRow = NonNullable<typeof existingNgayRows>[number];
       const existingByNgaySo = new Map<number, ExistingNgayRow>(
         (existingNgayRows ?? []).map((r) => [r.ngay_so, r]),
@@ -646,25 +663,13 @@ export function useSaveDieuTour() {
         }
       }
 
-      // Cần doan_nhom_id để INSERT doan_ngay mới. Caller pass `doanNhomId` (UI tab active).
-      // Fallback: nhóm "Toàn đoàn" (thu_tu=1) cho backward-compat trang chưa wire.
-      let defaultDoanNhomId: number | null = doanNhomId ?? null;
-      if (defaultDoanNhomId == null) {
-        const { data: nhomDefault } = await externalSupabase
-          .from("doan_nhom")
-          .select("id")
-          .eq("doan_id", doanId)
-          .eq("thu_tu", 1)
-          .maybeSingle();
-        defaultDoanNhomId = nhomDefault?.id ?? null;
-      }
-
       // 2. Upsert doan_ngay — use upsert to handle both new and existing rows
+      // defaultDoanNhomId đã resolve + guard non-null ở đầu hàm (~line 571)
       for (let idx = 0; idx < days.length; idx++) {
         const day = days[idx];
         const ngayPayload: TablesInsert<"doan_ngay"> = {
           doan_id: doanId,
-          doan_nhom_id: defaultDoanNhomId!,
+          doan_nhom_id: defaultDoanNhomId,
           ngay_so: day.ngay_so,
           ngay_date: day.ngay_date,
           thu: day.thu,
@@ -685,12 +690,14 @@ export function useSaveDieuTour() {
         if (doanNgayId) {
           await externalSupabase.from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
         } else {
-          // Try to find existing row by doan_id + ngay_so first
+          // Tìm existing row PER NHÓM — không filter doan_nhom_id sẽ trúng nhóm khác
+          // và overwrite dữ liệu nhóm 1 khi user save nhóm 2.
           const { data: existingRow } = await externalSupabase
             .from("doan_ngay")
             .select("id")
             .eq("doan_id", doanId)
             .eq("ngay_so", day.ngay_so)
+            .eq("doan_nhom_id", defaultDoanNhomId)
             .maybeSingle();
 
           if (existingRow) {
@@ -845,15 +852,40 @@ export function useSaveDieuTour() {
         // Day-use wrapper (canh_diem.khach_san_id != null): KHÔNG auto-tạo chi phí ở đây
         // — chi phí KS day-use được quản lý thủ công trong tab Chi phí (giống KS qua đêm)
         // để tránh overwrite don_gia/so_luong khi user save lại điều tour
+        //
+        // Approach A merge cross-nhóm: dedupe chi phí by (doan_id, danh_muc, ngay_so, mo_ta).
+        // 2 nhóm cùng cảnh điểm cùng ngày → 1 chi phí row, so_luong = SUM khách cả 2 nhóm.
         if (insertedItems.length > 0) {
+          // Pre-fetch all doan_ngay rows của đoàn ngày này (để aggregate so_luong cross-nhóm)
+          const { data: allNgayThisDay } = await externalSupabase
+            .from("doan_ngay")
+            .select("id")
+            .eq("doan_id", doanId)
+            .eq("ngay_so", day.ngay_so);
+          const allNgayIdsThisDay = (allNgayThisDay || []).map((r) => r.id);
+
           for (const item of insertedItems) {
             if (!item.co_phi) continue;
-            const cd = canhDiemList.find((c) => c.id === item.canh_diem_id);
+            if (item.canh_diem_id == null) continue;
+            const canhDiemId: number = item.canh_diem_id;
+            const cd = canhDiemList.find((c) => c.id === canhDiemId);
             if (cd?.khach_san_id) continue; // Day-use wrapper — managed in Chi phí section
-            const newSoLuong = item.so_luong ?? soKhach;
+            const moTa = cd?.ten ?? "";
             const newDonGia  = item.don_gia ?? 0;
-            const newTotal   = newDonGia * newSoLuong;
             const isHdv      = item.nguoi_thanh_toan === "hdv";
+
+            // Aggregate so_luong: sum doan_ngay_item.so_luong cross-nhóm cho same (canh_diem, ngày)
+            const { data: itemsForCD } = await externalSupabase
+              .from("doan_ngay_item")
+              .select("so_luong")
+              .eq("doan_id", doanId)
+              .eq("canh_diem_id", canhDiemId)
+              .in("doan_ngay_id", allNgayIdsThisDay.length > 0 ? allNgayIdsThisDay : [-1]);
+            const newSoLuong = (itemsForCD || []).reduce(
+              (s, it) => s + (it.so_luong ?? soKhach),
+              0,
+            ) || (item.so_luong ?? soKhach);
+            const newTotal = newDonGia * newSoLuong;
 
             const masterFields: TablesInsert<"doan_chi_phi"> = {
               doan_id: doanId,
@@ -862,7 +894,7 @@ export function useSaveDieuTour() {
               danh_muc: "canh_diem",
               ref_doan_ngay_item_id: item.id,
               ref_doan_ngay_id: doanNgayId,
-              mo_ta: cd?.ten ?? "",
+              mo_ta: moTa,
               nha_cung_cap_id: cd?.nha_cung_cap_id ?? null,
             };
             const pricingFields: TablesUpdate<"doan_chi_phi"> = {
@@ -872,23 +904,34 @@ export function useSaveDieuTour() {
               tien_hdv:     isHdv ? newTotal : 0,
             };
 
-            // HYBRID 2-way cascade:
-            // - is_overridden=true → CHỈ master metadata (giữ giá trị OP)
-            // - is_overridden=false → cascade full + clear thuc_te nếu so_luong/don_gia đổi
+            // Dedupe cross-nhóm: tìm existing theo (doan_id, danh_muc, ngay_so, mo_ta)
+            // thay vì ref_doan_ngay_item_id (vì mỗi nhóm có item.id riêng).
             const { data: existing } = await externalSupabase
               .from("doan_chi_phi")
               .select("id, so_luong, don_gia, is_overridden")
-              .eq("ref_doan_ngay_item_id", item.id)
+              .eq("doan_id", doanId)
+              .eq("danh_muc", "canh_diem")
+              .eq("ngay_so", day.ngay_so)
+              .eq("mo_ta", moTa)
               .maybeSingle();
 
             if (existing) {
               if (existing.is_overridden) {
+                // OP override → giữ so_luong/don_gia hiện tại, chỉ update master metadata
+                // (KHÔNG đổi ref_doan_ngay_item_id để giữ ref nhóm save đầu)
+                const masterOnly = { ...masterFields };
+                delete (masterOnly as Record<string, unknown>).ref_doan_ngay_item_id;
+                delete (masterOnly as Record<string, unknown>).ref_doan_ngay_id;
                 await externalSupabase.from("doan_chi_phi")
-                  .update(masterFields).eq("id", existing.id);
+                  .update(masterOnly).eq("id", existing.id);
               } else {
                 const soLuongChanged = Number(existing.so_luong) !== newSoLuong
                                     || Number(existing.don_gia)  !== newDonGia;
-                const updatePayload: TablesUpdate<"doan_chi_phi"> = { ...masterFields, ...pricingFields };
+                // Master metadata (không touch ref)
+                const masterOnly = { ...masterFields };
+                delete (masterOnly as Record<string, unknown>).ref_doan_ngay_item_id;
+                delete (masterOnly as Record<string, unknown>).ref_doan_ngay_id;
+                const updatePayload: TablesUpdate<"doan_chi_phi"> = { ...masterOnly, ...pricingFields };
                 if (soLuongChanged) {
                   updatePayload.thanh_tien_thuc_te = null;
                   counters.thucTeClearCount++;
@@ -943,20 +986,30 @@ export function useSaveDieuTour() {
                 chiet_khau_phan_tram_snapshot: mealItem?.chiet_khau_phan_tram ?? null,
               };
 
-              // Upsert: filter mo_ta để phân biệt trưa/tối (cùng doan_ngay).
+              // Approach A merge cross-nhóm: dedupe chi phí by (doan_id, danh_muc, ngay_so, mo_ta).
+              // Nếu 2 nhóm cùng NH-bữa-ngày → 1 chi phí row (ref_doan_ngay_id = nhóm save đầu).
+              // 2 nhóm khác NH cùng bữa-ngày → 2 chi phí rows (mo_ta khác nhau).
               const { data: existingRows } = await externalSupabase
                 .from("doan_chi_phi")
                 .select("id")
                 .eq("doan_id", doanId)
                 .eq("danh_muc", "nha_hang")
-                .eq("ref_doan_ngay_id", doanNgayId)
+                .eq("ngay_so", day.ngay_so)
                 .eq("mo_ta", moTaMeal)
                 .limit(1);
               const existing = existingRows?.[0];
               if (existing) {
-                // UPDATE: chỉ master metadata. KHÔNG touch tien_cong_ty/hdv
-                // (NH section quản lý qua handleSave khi user thật sự lưu).
-                await externalSupabase.from("doan_chi_phi").update(alwaysFields).eq("id", existing.id);
+                // UPDATE: chỉ master metadata, KHÔNG touch ref_doan_ngay_id
+                // (giữ ref của nhóm save đầu — display purpose).
+                const updateFields = {
+                  doan_id: doanId,
+                  ngay_so: day.ngay_so,
+                  loai: "chi" as const,
+                  danh_muc: "nha_hang",
+                  mo_ta: moTaMeal,
+                  nha_cung_cap_id: mealItem?.nha_cung_cap_id ?? null,
+                };
+                await externalSupabase.from("doan_chi_phi").update(updateFields).eq("id", existing.id);
               } else {
                 await externalSupabase.from("doan_chi_phi").insert({ ...alwaysFields, ...initialFields });
               }
