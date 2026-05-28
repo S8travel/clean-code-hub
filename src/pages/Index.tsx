@@ -243,6 +243,13 @@ export default function Index() {
             { duration: 10000 }
           );
         }
+        if (result?.soKhachMultiNhomSkipped) {
+          toast.warning(
+            `Đoàn có nhiều nhóm — đã đổi tổng số khách đoàn nhưng chi phí từng nhóm KHÔNG tự cập nhật. ` +
+            `Vào tab Điều Tour → "Chia lại" để phân bổ số khách cho từng nhóm.`,
+            { duration: 10000 }
+          );
+        }
         // FEATURE_DOAN_PERM_DISABLED: auto-grant khi sửa assigned_to
         // if (data.assigned_to && data.assigned_to !== editingDoan.assigned_to) {
         //   const assigneeName = userRolesMap.get(data.assigned_to) || "";

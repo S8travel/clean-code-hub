@@ -476,8 +476,23 @@ export function useUpdateDoan() {
 
       let thucTeClearCount = 0;
       let committedDnttAffected = 0;
+      let soKhachMultiNhomSkipped = false;
 
+      // Đoàn nhiều nhóm: số khách mỗi nhóm độc lập, quản lý qua SplitNhomModal
+      // ("Chia lại"). Cascade theo "tổng đoàn" sẽ ghi SAI chi phí nhóm-specific
+      // (vd NH chỉ 1 nhóm ăn → bị set = tổng đoàn). → SKIP cascade khi >1 nhóm,
+      // chỉ update field đoàn. Caller toast hướng dẫn user dùng "Chia lại".
+      let nhomCount = 1;
       if (so_khach_changed) {
+        const { count } = await externalSupabase
+          .from("doan_nhom")
+          .select("id", { count: "exact", head: true })
+          .eq("doan_id", id);
+        nhomCount = count ?? 1;
+        if (nhomCount > 1) soKhachMultiNhomSkipped = true;
+      }
+
+      if (so_khach_changed && nhomCount <= 1) {
         // 4a. Sync doan_ngay_item.so_luong cho items chưa customized (= old total)
         if (oldTotal > 0 && newTotal !== oldTotal) {
           await externalSupabase
@@ -670,7 +685,7 @@ export function useUpdateDoan() {
         }
       }
 
-      return { ...data, thucTeClearCount, committedDnttAffected };
+      return { ...data, thucTeClearCount, committedDnttAffected, soKhachMultiNhomSkipped };
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["doan"] });
