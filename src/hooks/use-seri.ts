@@ -238,28 +238,65 @@ export interface SeriApplyConflict {
  *
  *  Seri chỉ carry NH (ăn trưa/tối) và cảnh điểm. Các chi phí khác (KS, bảo
  *  hiểm, HDV hỗ trợ) độc lập với seri nên KHÔNG bị coi là conflict —
- *  applySeri không động vào chúng. */
+ *  applySeri không động vào chúng.
+ *
+ *  Multi-nhóm: applySeri target nhóm "Toàn đoàn" (thu_tu=1), nên check scope
+ *  theo nhóm đó — KHÔNG đếm data của nhóm khác (sai nghiệp vụ + block user
+ *  oan khi nhóm 1 trống nhưng nhóm 2 đã có data).
+ *  doan_booking_dv là đoàn-level (không có FK nhóm) → giữ count toàn đoàn.
+ */
 export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyConflict> {
-  const [ngayRes, itemRes, nhRes, dvRes, cpRes] = await Promise.all([
+  // Resolve nhóm target (thu_tu=1)
+  const { data: nhomDefault } = await externalSupabase
+    .from("doan_nhom")
+    .select("id")
+    .eq("doan_id", doanId)
+    .eq("thu_tu", 1)
+    .maybeSingle();
+  const nhomId = nhomDefault?.id ?? null;
+
+  // doan_ngay: scope theo nhóm nếu có (fallback đoàn-level cho data legacy)
+  let ngayQuery = externalSupabase
+    .from("doan_ngay")
+    .select("id, ngay_so, ngay_date, thanh_pho, an_trua_nha_hang_id, an_toi_nha_hang_id")
+    .eq("doan_id", doanId)
+    .order("ngay_so");
+  if (nhomId != null) ngayQuery = ngayQuery.eq("doan_nhom_id", nhomId);
+  const ngayRes = await ngayQuery;
+  const ngayRows = ngayRes.data ?? [];
+  const ngayIds = ngayRows.map((r) => r.id);
+
+  // Items / booking_nh / chi_phi scope theo nhóm-ngày để không đếm chéo nhóm
+  const [itemRes, nhRes, dvRes, cpRes] = await Promise.all([
+    ngayIds.length > 0
+      ? externalSupabase
+          .from("doan_ngay_item")
+          .select("doan_ngay_id")
+          .in("doan_ngay_id", ngayIds)
+      : Promise.resolve({ data: [] as { doan_ngay_id: number | null }[] }),
+    ngayIds.length > 0
+      ? externalSupabase
+          .from("doan_booking_nh")
+          .select("id", { count: "exact", head: true })
+          .in("doan_ngay_id", ngayIds)
+      : Promise.resolve({ count: 0 }),
+    // doan_booking_dv là đoàn-level — không scope được theo nhóm
     externalSupabase
-      .from("doan_ngay")
-      .select("id, ngay_so, ngay_date, thanh_pho, an_trua_nha_hang_id, an_toi_nha_hang_id")
-      .eq("doan_id", doanId)
-      .order("ngay_so"),
-    externalSupabase.from("doan_ngay_item").select("doan_ngay_id").eq("doan_id", doanId),
-    externalSupabase.from("doan_booking_nh").select("id", { count: "exact", head: true }).eq("doan_id", doanId),
-    externalSupabase.from("doan_booking_dv").select("id", { count: "exact", head: true }).eq("doan_id", doanId),
-    // Chỉ tính chi phí NH / cảnh điểm — đây là 2 danh mục seri carry.
-    // KS, bảo hiểm, HDV hỗ trợ độc lập với seri.
-    externalSupabase
-      .from("doan_chi_phi")
+      .from("doan_booking_dv")
       .select("id", { count: "exact", head: true })
-      .eq("doan_id", doanId)
-      .in("danh_muc", ["nha_hang", "canh_diem"]),
+      .eq("doan_id", doanId),
+    // chi_phi NH / cảnh điểm: scope qua ref_doan_ngay_id (cả 2 danh mục đều set ref khi cascade)
+    ngayIds.length > 0
+      ? externalSupabase
+          .from("doan_chi_phi")
+          .select("id", { count: "exact", head: true })
+          .eq("doan_id", doanId)
+          .in("danh_muc", ["nha_hang", "canh_diem"])
+          .in("ref_doan_ngay_id", ngayIds)
+      : Promise.resolve({ count: 0 }),
   ]);
 
   const lines: string[] = [];
-  const ngayRows = ngayRes.data ?? [];
   const items = itemRes.data ?? [];
   const nhCount = nhRes.count ?? 0;
   const dvCount = dvRes.count ?? 0;
@@ -327,18 +364,8 @@ export function useApplySeriToDoan() {
       const [bY, bM, bD] = ngayDi.split("-").map(Number);
       const baseDate = new Date(Date.UTC(bY, bM - 1, bD));
 
-      // 2. UPSERT doan_ngay per ngay_so — preserve KS fields nếu doan đã book KS
-      //    (seri không carry KS, KS độc lập với seri).
-      const { data: existingNgay, error: eExist } = await externalSupabase
-        .from("doan_ngay")
-        .select("id, ngay_so")
-        .eq("doan_id", doanId);
-      if (eExist) throw eExist;
-      const existingByNgaySo = new Map<number, number>(
-        (existingNgay ?? []).map((r) => [r.ngay_so, r.id]),
-      );
-
-      // Cần doan_nhom_id để INSERT row mới — lấy nhóm "Toàn đoàn" (thu_tu=1)
+      // 1b. Resolve nhóm target (thu_tu=1) — applySeri chỉ apply vào nhóm này.
+      //     Nhóm khác (nếu có) giữ nguyên dữ liệu.
       const { data: nhomDefault } = await externalSupabase
         .from("doan_nhom")
         .select("id")
@@ -346,6 +373,18 @@ export function useApplySeriToDoan() {
         .eq("thu_tu", 1)
         .maybeSingle();
       if (!nhomDefault) throw new Error("Đoàn chưa có nhóm mặc định — áp seri thất bại");
+
+      // 2. UPSERT doan_ngay per ngay_so — PER NHÓM (tránh trùng ngay_so giữa các nhóm
+      //    khiến UPDATE nhầm row nhóm khác).
+      const { data: existingNgay, error: eExist } = await externalSupabase
+        .from("doan_ngay")
+        .select("id, ngay_so")
+        .eq("doan_id", doanId)
+        .eq("doan_nhom_id", nhomDefault.id);
+      if (eExist) throw eExist;
+      const existingByNgaySo = new Map<number, number>(
+        (existingNgay ?? []).map((r) => [r.ngay_so, r.id]),
+      );
 
       const ngaySoToDoanNgayId = new Map<number, number>();
       for (const sn of seriNgayRows) {

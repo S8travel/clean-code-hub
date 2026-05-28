@@ -17,6 +17,7 @@ interface Props {
   doanId: number;
   tenDoan?: string;
   ngayBatDau?: string;
+  doanNhomId?: number | null;
 }
 
 export interface ChiPhiDVSectionHandle {
@@ -26,9 +27,9 @@ export interface ChiPhiDVSectionHandle {
 }
 
 // Tab Chi phí Dịch vụ — chỉ render. Toàn bộ state/logic ở useDVSection.
-const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau }, ref) {
+const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }, ref) {
   useTranslate();
-  const s = useDVSection({ doanId, tenDoan, ngayBatDau });
+  const s = useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId });
   const {
     dvRows, total, sortedDays, dvData, dvHandlers,
     selectedIds, setSelectedIds, buildSelectedEntries, handlePrintSelected,

@@ -41,24 +41,26 @@ interface NccBrief {
   ngan_hang: string | null;
 }
 
-export function useChiPhiNHSection(doanId?: number) {
+export function useChiPhiNHSection(doanId?: number, doanNhomId?: number | null) {
   return useQuery({
-    queryKey: ["chi_phi_nh_section", doanId],
+    queryKey: ["chi_phi_nh_section", doanId, doanNhomId ?? null],
     enabled: !!doanId,
     queryFn: async (): Promise<NHSectionData> => {
-      // 1. Load doan_ngay với NH
-      const { data: ngayRows, error: e1 } = await externalSupabase
+      // 1. Load doan_ngay với NH (filter theo nhóm nếu truyền vào)
+      let ngayQuery = externalSupabase
         .from("doan_ngay")
         .select("id, ngay_so, ngay_date, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id")
         .eq("doan_id", doanId!)
         .order("ngay_so", { ascending: true });
+      if (doanNhomId != null) ngayQuery = ngayQuery.eq("doan_nhom_id", doanNhomId);
+      const { data: ngayRows, error: e1 } = await ngayQuery;
       if (e1) throw e1;
 
       // 2. Collect meals
-      const meals: NHMealRow[] = [];
+      const rawMeals: NHMealRow[] = [];
       for (const r of ngayRows || []) {
         if (r.an_trua_nha_hang_id) {
-          meals.push({
+          rawMeals.push({
             doan_ngay_id: r.id,
             ngay_so: r.ngay_so,
             ngay_date: r.ngay_date ?? "",
@@ -69,7 +71,7 @@ export function useChiPhiNHSection(doanId?: number) {
           });
         }
         if (r.an_toi_nha_hang_id) {
-          meals.push({
+          rawMeals.push({
             doan_ngay_id: r.id,
             ngay_so: r.ngay_so,
             ngay_date: r.ngay_date ?? "",
@@ -80,6 +82,20 @@ export function useChiPhiNHSection(doanId?: number) {
           });
         }
       }
+
+      // Dedup khi 2 nhóm cùng NH cùng bữa cùng ngày → Approach A merge ra 1 chi_phi.
+      // Giữ doan_ngay_id THẤP NHẤT (nhóm save trước — match chi_phi.ref) để
+      // lookup `ref_doan_ngay_id === meal.doan_ngay_id` trong use-nh-section tìm ra row.
+      // (Trường hợp khác NH cùng bữa cùng ngày: key gồm nha_hang_id nên KHÔNG bị gộp.)
+      const dedupMap = new Map<string, NHMealRow>();
+      const sortedRaw = [...rawMeals].sort((a, b) => a.doan_ngay_id - b.doan_ngay_id);
+      for (const m of sortedRaw) {
+        const k = `${m.nha_hang_id}_${m.ngay_so}_${m.bua_an}`;
+        if (!dedupMap.has(k)) dedupMap.set(k, m);
+      }
+      const meals = [...dedupMap.values()].sort(
+        (a, b) => a.ngay_so - b.ngay_so || (a.bua_an === "trua" ? -1 : 1),
+      );
 
       if (meals.length === 0) return { meals: [], nhaHangMap: {} };
 

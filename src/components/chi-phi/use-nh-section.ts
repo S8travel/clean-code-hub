@@ -27,15 +27,18 @@ interface NHSectionParams {
   soKhachKhongTL?: number;
   coTinhSuatTLNhaHang?: boolean;
   tenDoan?: string;
+  /** Filter theo nhóm — Phase 2+ */
+  doanNhomId?: number | null;
 }
 
 // Toàn bộ state + effect + handler của tab Chi phí Nhà hàng.
 // Tách verbatim từ ChiPhiNHSection — component chỉ còn phần render.
 export function useNHSection({
   doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "",
+  doanNhomId,
 }: NHSectionParams) {
-  const { data: nhData, isLoading } = useChiPhiNHSection(doanId);
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: nhData, isLoading } = useChiPhiNHSection(doanId, doanNhomId);
+  const { data: chiPhiRows = [] } = useChiPhiList(doanId, doanNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });

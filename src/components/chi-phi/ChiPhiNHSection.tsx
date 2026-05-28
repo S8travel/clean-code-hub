@@ -19,6 +19,7 @@ interface Props {
   soKhachKhongTL?: number;
   coTinhSuatTLNhaHang?: boolean;
   tenDoan?: string;
+  doanNhomId?: number | null;
 }
 
 export interface ChiPhiNHSectionHandle {
@@ -30,11 +31,11 @@ export interface ChiPhiNHSectionHandle {
 
 // Tab Chi phí Nhà hàng — chỉ render. Toàn bộ state/logic ở useNHSection.
 const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhiNHSection(
-  { doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "" },
+  { doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "", doanNhomId },
   ref,
 ) {
   useTranslate();
-  const s = useNHSection({ doanId, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan });
+  const s = useNHSection({ doanId, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan, doanNhomId });
   const {
     isLoading, meals, nhRowData, nhRowHandlers,
     selectedKeys, setSelectedKeys, chiPhiRows, dnttList, congNoList,

@@ -117,9 +117,20 @@ interface NHBookingLite {
 
 // ── Queries ──
 
-export function useChiPhiList(doanId?: number) {
+/**
+ * List chi phí của đoàn, filter optional theo nhóm.
+ *
+ * Rule filter:
+ * - Chi phí có `ref_doan_ngay_id` (NH, DV extras `[dvps_]`/`[trua]`/`[toi]`):
+ *   thuộc nhóm theo doan_ngay.doan_nhom_id
+ * - Chi phí có `ref_doan_ngay_item_id` (cảnh điểm): thuộc nhóm theo
+ *   doan_ngay_item → doan_ngay → doan_nhom_id
+ * - Chi phí KHÔNG có ref (KS, Visa, Xe, Bảo hiểm, HDV): đoàn-level →
+ *   SHARE giữa các nhóm (hiển thị cho mọi tab nhóm)
+ */
+export function useChiPhiList(doanId?: number, doanNhomId?: number | null) {
   return useQuery({
-    queryKey: ["doan_chi_phi", doanId],
+    queryKey: ["doan_chi_phi", doanId, doanNhomId ?? null],
     enabled: !!doanId,
     queryFn: async () => {
       const { data, error } = await externalSupabase
@@ -128,7 +139,42 @@ export function useChiPhiList(doanId?: number) {
         .eq("doan_id", doanId!)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data as ChiPhiRow[];
+      const rows = (data ?? []) as ChiPhiRow[];
+      if (doanNhomId == null) return rows;
+
+      // Fetch mapping doan_ngay.id → doan_nhom_id
+      const { data: ngayRows } = await externalSupabase
+        .from("doan_ngay")
+        .select("id, doan_nhom_id")
+        .eq("doan_id", doanId!);
+      const ngayToNhom = new Map<number, number>();
+      (ngayRows ?? []).forEach((r) => {
+        if (r.doan_nhom_id != null) ngayToNhom.set(r.id, r.doan_nhom_id);
+      });
+
+      // Fetch mapping doan_ngay_item.id → doan_ngay_id (để chain → nhóm)
+      const { data: itemRows } = await externalSupabase
+        .from("doan_ngay_item")
+        .select("id, doan_ngay_id")
+        .eq("doan_id", doanId!);
+      const itemToNgay = new Map<number, number>();
+      (itemRows ?? []).forEach((r) => {
+        if (r.doan_ngay_id != null) itemToNgay.set(r.id, r.doan_ngay_id);
+      });
+
+      return rows.filter((cp) => {
+        // Chi phí có ref_doan_ngay_id (NH chính, extras NH/DV)
+        if (cp.ref_doan_ngay_id != null) {
+          return ngayToNhom.get(cp.ref_doan_ngay_id) === doanNhomId;
+        }
+        // Chi phí có ref_doan_ngay_item_id (cảnh điểm)
+        if (cp.ref_doan_ngay_item_id != null) {
+          const ngayId = itemToNgay.get(cp.ref_doan_ngay_item_id);
+          return ngayId != null && ngayToNhom.get(ngayId) === doanNhomId;
+        }
+        // Không có ref → đoàn-level (KS, Visa, Xe, Bảo hiểm, HDV) → share mọi nhóm
+        return true;
+      });
     },
   });
 }
@@ -152,18 +198,34 @@ export function useDNTTList(doanId?: number) {
 // KS data from doan_ngay + khach_san + nha_cung_cap
 // Also includes KS referenced in DNTT records (even if removed from tour schedule)
 // Bổ sung: KS day-use qua wrapper canh_diem.khach_san_id (lấy từ doan_ngay_item)
-export function useChiPhiKSData(doanId?: number) {
+export function useChiPhiKSData(doanId?: number, doanNhomId?: number | null) {
   return useQuery({
-    queryKey: ["chi_phi_ks_data", doanId],
+    queryKey: ["chi_phi_ks_data", doanId, doanNhomId ?? null],
     enabled: !!doanId,
     queryFn: async () => {
-      const { data: ngayRows, error: e1 } = await externalSupabase
+      let ngayQuery = externalSupabase
         .from("doan_ngay")
         .select("id, ngay_so, ngay_date, khach_san_id, ks_ma_code, ks_loai_phong")
         .eq("doan_id", doanId!)
         .not("khach_san_id", "is", null)
         .order("ngay_date", { ascending: true });
+      if (doanNhomId != null) ngayQuery = ngayQuery.eq("doan_nhom_id", doanNhomId);
+      const { data: rawNgayRows, error: e1 } = await ngayQuery;
       if (e1) throw e1;
+
+      // Dedup khi 2 nhóm cùng KS cùng ngày → 1 row hiển thị (gộp).
+      // Giữ doan_ngay_id thấp nhất (nhóm save trước). Khi khác KS cùng ngày
+      // → key (khach_san_id, ngay_date) khác → KHÔNG gộp.
+      const ksDedupMap = new Map<string, NonNullable<typeof rawNgayRows>[number]>();
+      const sortedKsRaw = [...(rawNgayRows ?? [])].sort((a, b) => a.id - b.id);
+      for (const r of sortedKsRaw) {
+        if (r.khach_san_id == null) continue;
+        const k = `${r.khach_san_id}_${r.ngay_date}`;
+        if (!ksDedupMap.has(k)) ksDedupMap.set(k, r);
+      }
+      const ngayRows = [...ksDedupMap.values()].sort(
+        (a, b) => (a.ngay_date ?? "").localeCompare(b.ngay_date ?? ""),
+      );
 
       // Also collect KS ids from DNTT records (hoan_tien/cong_no may reference removed KS)
       const { data: dnttRows } = await externalSupabase

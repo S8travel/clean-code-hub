@@ -539,6 +539,11 @@ export default function DoanDetail() {
                 doanId={doanId}
                 activeNhomId={activeNhomId}
                 onActiveNhomChange={setActiveNhomId}
+                doanTotal={doanSoKhachLon + doanSoKhachEm1 + doanSoKhachEm2 + doanSoKhachTl}
+                doanSoKhachLon={doanSoKhachLon}
+                doanSoKhachEm1={doanSoKhachEm1}
+                doanSoKhachEm2={doanSoKhachEm2}
+                doanSoKhachTl={doanSoKhachTl}
               />
             )}
             <div className="flex justify-end print-hide">
@@ -570,7 +575,7 @@ export default function DoanDetail() {
               soKhachEm1={soKhachEm1}
               soKhachEm2={soKhachEm2}
               soKhachTl={soKhachTl}
-              totalFromDoan={doan.so_khach ?? totalKhach}
+              totalFromDoan={totalKhach}
               chuThichKhach={chuThichKhach}
               setChuThichKhach={handleSetChuThichKhach}
               coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
@@ -665,19 +670,13 @@ export default function DoanDetail() {
             />
           </TabsContent>
 
-          <TabsContent value="chi-phi" className="mt-4 space-y-4">
-            {doanId != null && (
-              <DoanNhomTabs
-                doanId={doanId}
-                activeNhomId={activeNhomId}
-                onActiveNhomChange={setActiveNhomId}
-              />
-            )}
+          <TabsContent value="chi-phi" className="mt-4">
+            {/* Phase 3: KHÔNG hiện DoanNhomTabs ở Chi phí tab.
+                Chi phí query cả 2 nhóm gộp lại, merge same NH-bữa hoặc same cảnh điểm. */}
             <ChiPhiTab
               doanId={doanId}
               doan={doan}
               coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
-              activeNhomId={activeNhomId}
             />
           </TabsContent>
 

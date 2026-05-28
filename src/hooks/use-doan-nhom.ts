@@ -119,8 +119,14 @@ export function useUpdateDoanNhom() {
 }
 
 /**
- * Xóa nhóm. CASCADE sẽ xóa toàn bộ doan_ngay của nhóm đó (qua FK).
+ * Xóa nhóm. CASCADE sẽ xóa toàn bộ doan_ngay/doan_ngay_item của nhóm đó.
  * KHÔNG cho phép xóa nhóm cuối cùng (đoàn phải có ít nhất 1 nhóm).
+ *
+ * Defensive cleanup trước khi xóa: NULL ref_doan_ngay_id / ref_doan_ngay_item_id
+ * của doan_chi_phi trỏ vào nhóm này. FK 2 cột trên là NO ACTION → nếu không null
+ * trước, CASCADE chain (nhom → ngay → item) sẽ bị chặn FK violation.
+ * Chi phí gộp nhóm (Approach A) chỉ giữ 1 ref tới nhóm save đầu — sau khi xóa
+ * nhóm đó, ref orphan. Set NULL an toàn vì so_luong đã aggregate trong row.
  */
 export function useDeleteDoanNhom() {
   const qc = useQueryClient();
@@ -134,6 +140,31 @@ export function useDeleteDoanNhom() {
       if ((count ?? 0) <= 1) {
         throw new Error("Đoàn phải có ít nhất 1 nhóm — không thể xóa nhóm cuối cùng");
       }
+
+      // Null chi_phi refs trỏ vào doan_ngay/doan_ngay_item của nhóm sắp xóa
+      const { data: ngayRows } = await externalSupabase
+        .from("doan_ngay")
+        .select("id")
+        .eq("doan_nhom_id", params.id);
+      const ngayIds = (ngayRows ?? []).map((r) => r.id);
+      if (ngayIds.length > 0) {
+        const { data: itemRows } = await externalSupabase
+          .from("doan_ngay_item")
+          .select("id")
+          .in("doan_ngay_id", ngayIds);
+        const itemIds = (itemRows ?? []).map((r) => r.id);
+        if (itemIds.length > 0) {
+          await externalSupabase
+            .from("doan_chi_phi")
+            .update({ ref_doan_ngay_item_id: null })
+            .in("ref_doan_ngay_item_id", itemIds);
+        }
+        await externalSupabase
+          .from("doan_chi_phi")
+          .update({ ref_doan_ngay_id: null })
+          .in("ref_doan_ngay_id", ngayIds);
+      }
+
       const { error } = await externalSupabase
         .from("doan_nhom")
         .delete()
@@ -142,6 +173,9 @@ export function useDeleteDoanNhom() {
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: [QK, vars.doanId] });
+      qc.invalidateQueries({ queryKey: ["doan_ngay", vars.doanId] });
+      qc.invalidateQueries({ queryKey: ["doan_ngay_item", vars.doanId] });
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.doanId] });
     },
   });
 }
