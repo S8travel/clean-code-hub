@@ -41,6 +41,7 @@ import {
 import { externalSupabase } from "@/lib/supabase-external";
 import { useApplySeriToDoan } from "@/hooks/use-seri";
 import { useUploadDoanTaiLieu } from "@/hooks/use-doan-tai-lieu";
+import { useCloneDoan } from "@/hooks/use-clone-doan";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
 import { useDoanScope } from "@/hooks/use-doan-scope";
@@ -78,6 +79,7 @@ export default function Index() {
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   useDoanRealtime();
   const createDoan = useCreateDoan();
+  const cloneDoan = useCloneDoan();
   const uploadTaiLieu = useUploadDoanTaiLieu();
   const updateDoan = useUpdateDoan();
   const deleteDoan = useDeleteDoan();
@@ -475,11 +477,11 @@ export default function Index() {
         trang_thai: "dang_chay",
         shopping: doan.shopping ?? false,
       };
-      const created = await createDoan.mutateAsync(payload);
+      const created = await cloneDoan.mutateAsync({ payload, sourceDoanId: doan.id });
       if (created) {
         logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Nhân bản đoàn ${doan.ten_doan}` });
       }
-      toast.success("Đã nhân bản đoàn");
+      toast.success("Đã nhân bản đoàn (kèm chương trình)");
     } catch {
       toast.error("Nhân bản thất bại");
     }
