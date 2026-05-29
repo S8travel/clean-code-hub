@@ -24,9 +24,11 @@ import {
   Users2,
   BarChart3,
   Target,
+  ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { t, useTranslate, notifyLanguageChange } from "@/lib/i18n";
 import {
   Sidebar,
@@ -192,6 +194,18 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   },
 ];
 
+// Thu gọn/mở rộng từng nhóm menu — persist qua localStorage.
+const GROUP_COLLAPSE_KEY = "sidebar_collapsed_groups";
+
+function loadCollapsedGroups(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(GROUP_COLLAPSE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor = "bg-orange-500" }: { item: MenuItem; collapsed: boolean; isActive: boolean; badgeCount?: number; badgeColor?: string }) {
   const allowed = usePermission(item.resource ?? "doan", "view");
   const roleOk = useRoleAtLeast(item.minRole ?? "nhan_vien");
@@ -255,6 +269,30 @@ export function AppSidebar() {
   const leadBadge = (leadStats?.lead_moi_today ?? 0) + (leadStats?.follow_up_today ?? 0) + (leadStats?.follow_up_overdue ?? 0);
   const leadOverdue = (leadStats?.follow_up_overdue ?? 0) > 0;
 
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(loadCollapsedGroups);
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      try {
+        localStorage.setItem(GROUP_COLLAPSE_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return next;
+    });
+  };
+
+  const badgeFor = (url: string) =>
+    url === "/lock-phong" ? deadlineAlerts.length :
+    url === "/invoice" ? invoiceBadge :
+    url === "/theo-doi" ? suCoBadge :
+    url === "/my-job" ? giaoViecBadge :
+    url === "/viec-lead" ? viecLeadBadge :
+    url === "/leads" ? leadBadge : 0;
+  // Quá hạn → đỏ (urgent), còn lại → cam mặc định
+  const badgeColorFor = (url: string) =>
+    ((url === "/leads" && leadOverdue) || url === "/viec-lead") ? "bg-red-500" : "bg-orange-500";
+
   const isActive = (url: string) =>
     location.pathname === url || location.pathname.startsWith(url + "/");
 
@@ -282,38 +320,60 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {menuGroups.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel className="notranslate">{t(group.label)}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const badgeCount =
-                    item.url === "/lock-phong" ? deadlineAlerts.length :
-                    item.url === "/invoice" ? invoiceBadge :
-                    item.url === "/theo-doi" ? suCoBadge :
-                    item.url === "/my-job" ? giaoViecBadge :
-                    item.url === "/viec-lead" ? viecLeadBadge :
-                    item.url === "/leads" ? leadBadge : 0;
-                  // Quá hạn → đỏ (urgent), còn lại → cam mặc định
-                  const badgeColor =
-                    ((item.url === "/leads" && leadOverdue) || item.url === "/viec-lead")
-                      ? "bg-red-500" : "bg-orange-500";
-                  return (
-                    <MenuItemWrapper
-                      key={item.url}
-                      item={item}
-                      collapsed={collapsed}
-                      isActive={isActive(item.url)}
-                      badgeCount={badgeCount}
-                      badgeColor={badgeColor}
+        {menuGroups.map((group) => {
+          // Chỉ thu gọn khi sidebar đang mở rộng (icon mode đã ẩn label + items).
+          const groupCollapsed = !collapsed && !!collapsedGroups[group.label];
+          // Tổng badge của nhóm — hiện trên label khi thu gọn để không bỏ sót thông báo.
+          const groupBadgeTotal = group.items.reduce((s, it) => s + badgeFor(it.url), 0);
+          const groupHasRed = group.items.some(
+            (it) => badgeFor(it.url) > 0 && badgeColorFor(it.url) === "bg-red-500",
+          );
+          return (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel asChild>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  className="notranslate flex w-full items-center justify-between hover:text-sidebar-foreground"
+                  title={groupCollapsed ? t("Mở rộng") : t("Thu gọn")}
+                >
+                  <span className="notranslate">{t(group.label)}</span>
+                  <span className="flex items-center gap-1.5">
+                    {groupCollapsed && groupBadgeTotal > 0 && (
+                      <span
+                        className={cn(
+                          "min-w-[16px] h-[16px] rounded-full text-white text-[9px] font-bold flex items-center justify-center px-1",
+                          groupHasRed ? "bg-red-500" : "bg-orange-500",
+                        )}
+                      >
+                        {groupBadgeTotal}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={cn("h-3.5 w-3.5 transition-transform", groupCollapsed && "-rotate-90")}
                     />
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+                  </span>
+                </button>
+              </SidebarGroupLabel>
+              {!groupCollapsed && (
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((item) => (
+                      <MenuItemWrapper
+                        key={item.url}
+                        item={item}
+                        collapsed={collapsed}
+                        isActive={isActive(item.url)}
+                        badgeCount={badgeFor(item.url)}
+                        badgeColor={badgeColorFor(item.url)}
+                      />
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              )}
+            </SidebarGroup>
+          );
+        })}
       </SidebarContent>
 
       <SidebarFooter className="border-t p-2">
