@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { Plus, Trash2, Paperclip } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import {
@@ -31,12 +32,20 @@ interface DraftItem {
   loai_chi: string;
   mo_ta: string;
   so_tien: number | "";
+  ngay: string;               // ngày phát sinh chi phí (YYYY-MM-DD), default = hôm nay
   hoa_don_file: File | null;
   hoa_don_url: string | null;  // URL sau khi upload (cache giữa các lần submit fail)
 }
 
 function emptyItem(): DraftItem {
-  return { loai_chi: "", mo_ta: "", so_tien: "", hoa_don_file: null, hoa_don_url: null };
+  return {
+    loai_chi: "",
+    mo_ta: "",
+    so_tien: "",
+    ngay: format(new Date(), "yyyy-MM-dd"),
+    hoa_don_file: null,
+    hoa_don_url: null,
+  };
 }
 
 export default function HoanUngForm({ open, onClose }: Props) {
@@ -90,6 +99,7 @@ export default function HoanUngForm({ open, onClose }: Props) {
     if (items.length === 0) { toast.error("Cần ít nhất 1 dòng chi phí"); return; }
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
+      if (!it.ngay) { toast.error(`Dòng ${i + 1}: chọn ngày phát sinh`); return; }
       if (!it.loai_chi) { toast.error(`Dòng ${i + 1}: chọn loại chi`); return; }
       if (!it.mo_ta.trim()) { toast.error(`Dòng ${i + 1}: nhập mô tả`); return; }
       if (!it.so_tien || Number(it.so_tien) <= 0) { toast.error(`Dòng ${i + 1}: số tiền không hợp lệ`); return; }
@@ -121,6 +131,7 @@ export default function HoanUngForm({ open, onClose }: Props) {
           loai_chi: it.loai_chi,
           mo_ta: it.mo_ta.trim(),
           so_tien: Number(it.so_tien),
+          ngay: it.ngay || null,
           hoa_don_url: url ?? null,
         });
       }
@@ -194,7 +205,16 @@ export default function HoanUngForm({ open, onClose }: Props) {
                   )}
                 </div>
 
-                <div className="grid grid-cols-[160px_1fr] gap-2">
+                {/* Hàng 1: Ngày + Loại chi + Số tiền */}
+                <div className="grid grid-cols-[130px_1fr_130px] gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Ngày phát sinh *</Label>
+                    <DatePicker
+                      value={it.ngay}
+                      onChange={(v) => updateItem(idx, { ngay: v })}
+                      className="h-8 w-full text-xs px-2"
+                    />
+                  </div>
                   <div className="space-y-1">
                     <Label className="text-[11px]">Loại chi *</Label>
                     <Select value={it.loai_chi} onValueChange={(v) => updateItem(idx, { loai_chi: v })}>
@@ -223,43 +243,45 @@ export default function HoanUngForm({ open, onClose }: Props) {
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-[11px]">Mô tả chi tiết *</Label>
-                  <Textarea
-                    className="text-xs min-h-[44px] resize-none"
-                    value={it.mo_ta}
-                    onChange={(e) => updateItem(idx, { mo_ta: e.target.value })}
-                    placeholder="VD: Mua mực in HP + giấy A4..."
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[11px] flex items-center gap-1">
-                    <Paperclip className="h-3 w-3" /> Hóa đơn / chứng từ
-                  </Label>
-                  <Input
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,image/*"
-                    onChange={(e) => updateItem(idx, {
-                      hoa_don_file: e.target.files?.[0] ?? null,
-                      hoa_don_url: null,  // reset URL khi đổi file
-                    })}
-                    className="text-xs file:mr-2 file:py-1 file:px-2 file:text-xs h-8"
-                  />
-                  {it.hoa_don_file && (
-                    <p className="text-[10px] text-muted-foreground truncate">{it.hoa_don_file.name}</p>
-                  )}
-                  {it.hoa_don_url && !it.hoa_don_file && (
-                    <a
-                      href={it.hoa_don_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[10px] text-blue-600 hover:underline"
-                    >
-                      Đã upload — xem file
-                    </a>
-                  )}
+                {/* Hàng 2: Mô tả + Hóa đơn */}
+                <div className="grid grid-cols-[1fr_200px] gap-2 items-start">
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Mô tả chi tiết *</Label>
+                    <Textarea
+                      className="text-xs min-h-[44px] resize-none"
+                      value={it.mo_ta}
+                      onChange={(e) => updateItem(idx, { mo_ta: e.target.value })}
+                      placeholder="VD: Mua mực in HP + giấy A4..."
+                      rows={2}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] flex items-center gap-1">
+                      <Paperclip className="h-3 w-3" /> Hóa đơn
+                    </Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,image/*"
+                      onChange={(e) => updateItem(idx, {
+                        hoa_don_file: e.target.files?.[0] ?? null,
+                        hoa_don_url: null,  // reset URL khi đổi file
+                      })}
+                      className="text-xs file:mr-1 file:py-0.5 file:px-1.5 file:text-[10px] h-8"
+                    />
+                    {it.hoa_don_file && (
+                      <p className="text-[10px] text-muted-foreground truncate">{it.hoa_don_file.name}</p>
+                    )}
+                    {it.hoa_don_url && !it.hoa_don_file && (
+                      <a
+                        href={it.hoa_don_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-blue-600 hover:underline"
+                      >
+                        Đã upload — xem file
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
