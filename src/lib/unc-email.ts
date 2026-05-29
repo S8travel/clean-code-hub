@@ -31,16 +31,31 @@ function firstRel<T>(v: T | T[] | null | undefined): T | null {
   return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 }
 
-// DB email field có thể có nhiều email cách nhau bằng newline, dấu chấm phẩy,
-// hoặc Chinese fullwidth comma — UI Input 1 dòng làm chúng dán liền nhau →
-// Resend reject. Normalize về dạng "a@x.com, b@y.com".
+// 1 phần tử email thô → email sạch:
+//  - "Tên người <a@x.com>" → lấy phần trong <> (RFC display-name, OCR/clipboard hay dính)
+//  - bỏ dấu nháy " ' thừa
+//  - trim
+function extractEmail(raw: string): string {
+  let t = raw.trim().replace(/["']/g, "");
+  const lt = t.indexOf("<");
+  if (lt >= 0) {
+    t = t.slice(lt + 1);
+    const gt = t.indexOf(">");
+    if (gt >= 0) t = t.slice(0, gt);
+  }
+  return t.trim();
+}
+
+// DB email field có thể có nhiều email cách nhau bằng newline, tab, dấu chấm
+// phẩy, fullwidth comma, hoặc kèm tên người "Tên <email>" / dấu nháy — Resend
+// reject. Normalize về dạng "a@x.com, b@y.com" (chỉ giữ phần tử có '@').
 export function normalizeEmailList(s: string | null | undefined): string {
   if (!s) return "";
   return s
-    .replace(/[\n\r;，；]+/g, ",")
+    .replace(/[\n\r\t;，；]+/g, ",")
     .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean)
+    .map(extractEmail)
+    .filter((e) => e.includes("@"))
     .join(", ");
 }
 

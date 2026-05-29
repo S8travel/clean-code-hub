@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
+import { normalizeEmailList } from "@/lib/unc-email";
 import type { TablesUpdate } from "@/lib/database.types";
 
 export interface DichVuItem {
@@ -95,6 +96,9 @@ export async function callSendBookingEmail(params: {
   inReplyTo?: string;
   attachments?: Array<{ filename: string; content: string }>;
 }): Promise<string | null> {
+  // Chốt chặn cuối: chuẩn hóa `to` cho MỌI luồng (booking KS/NH/DV + UNC) —
+  // tách "Tên <email>", bỏ tab/nháy/fullwidth-comma, loại phần không phải email.
+  const to = normalizeEmailList(params.to);
   const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
     method: "POST",
     headers: {
@@ -102,7 +106,7 @@ export async function callSendBookingEmail(params: {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({ ...params, replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined }),
+    body: JSON.stringify({ ...params, to, replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined }),
   });
   if (!res.ok) {
     const errText = await res.text();
