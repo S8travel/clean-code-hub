@@ -17,6 +17,12 @@ describe("matchPaymentSource", () => {
     expect(matchPaymentSource("STK 0967686594 Long")).toBe("MB-0967686594 (Long)");
   });
 
+  it("OCR đọc sai số TK nhưng có tên 'VietinBank' → fallback VTB", () => {
+    // 111600925668 đọc thành "T11600925668" → số TK match fail, dùng tên NH.
+    const text = "VietinBank eFAST Nhanh 24/7\nCONG TY TNHH DU LICH S8\nS T11600925668\ndoan ABC";
+    expect(matchPaymentSource(text)).toBe("VTB-111600925668 (Công ty)");
+  });
+
   it("không có số TK nguồn nào trong list → null (để user chọn tay)", () => {
     // Số TK người nhận (NCC) — không nằm trong PAYMENT_SOURCES.
     expect(matchPaymentSource("Chuyen den 0101002336789 VCB Tan Phu Hung")).toBeNull();

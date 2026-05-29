@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useBatchUploadUNC, type HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
 import { useMarkPaidWithDate } from "@/hooks/use-dntt";
-import { isAmountMatch } from "@/lib/ocr-invoice";
-import { ocrUncSlip, normCode, type OcrUncResult } from "@/lib/ocr-unc";
+import { ocrUncSlip, type OcrUncResult } from "@/lib/ocr-unc";
+import { computeUncAssignments, uncAmountMatch } from "@/lib/ocr-unc-match";
 import { PAYMENT_SOURCE_LABELS, matchPaymentSource } from "@/lib/payment-sources";
 import { format } from "date-fns";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
@@ -28,6 +28,10 @@ import {
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
+
+// Số tiền THỰC chuyển trên UNC = so_tien ĐNTT − đã trả (cọc + cấn trừ).
+// Hóa đơn thì khớp so_tien gốc (flow khác).
+const conLai = (r: HoaDonUNCRow) => Math.max(0, r.so_tien - (r.paid_amount ?? 0));
 
 type Reason = "code" | "amount_ocr" | "manual";
 
@@ -88,6 +92,9 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const assignRef = useRef<Record<number, number | undefined>>({}); // mirror assign cho recompute
   const nguonRef = useRef<Record<number, string>>({});   // mirror nguonMap cho handleSave
   const runRef = useRef(0);                               // huỷ vòng cũ khi chọn lại / đóng
+  // rows fresh cho recompute() chạy trong runOcr async (tránh stale closure).
+  const rowsRef = useRef(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
 
   // Ghép lại toàn bộ (thuần, từ refs).
   //
@@ -100,87 +107,27 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const recompute = () => {
     const fs = filesRef.current;
     const ocr = ocrRef.current;
-    const manual = manualRef.current;
-    const prevA = assignRef.current;
-    const nextA: Record<number, number | undefined> = {};
-    const nextR: Record<number, Reason> = {};
-    const used = new Set<number>();
+    const currentRows = rowsRef.current; // FRESH — tránh stale closure trong runOcr async
 
-    // 1) Khoá các dòng user tự chọn
-    for (const r of rows) {
-      if (manual.has(r.id)) {
-        const fiPrev = prevA[r.id];
-        nextA[r.id] = fiPrev;
-        nextR[r.id] = "manual";
-        if (fiPrev !== undefined) used.add(fiPrev);
-      }
-    }
+    // manual map (rowId → fileIdx user tự chọn) để hàm thuần giữ nguyên.
+    const manualMap: Record<number, number | undefined> = {};
+    for (const id of manualRef.current) manualMap[id] = assignRef.current[id];
 
-    // 2) STRICT: mã đoàn trong ảnh + số tiền khớp
-    for (const r of rows) {
-      if (manual.has(r.id) || nextA[r.id] !== undefined) continue;
-      if (!r.ten_doan) continue;
-      // CHỈ lấy token mã đoàn đầu (trước dấu cách / "(") — ten_doan có thể
-      // kèm mô tả "(4 ngày…)" / "Test" mà nội dung UNC không có.
-      const codeTok = r.ten_doan.trim().split(/[\s(]/)[0];
-      const code = normCode(codeTok);
-      if (code.length < 4) continue;
-      for (let fi = 0; fi < fs.length; fi++) {
-        if (used.has(fi)) continue;
-        const o = ocr[fi];
-        if (!o || o.amount == null) continue;
-        if (!isAmountMatch(o.amount, r.so_tien)) continue;
-        if (!normCode(o.text).includes(code)) continue;
-        nextA[r.id] = fi; nextR[r.id] = "code"; used.add(fi);
-        break;
-      }
-    }
-
-    // 3) AMBIGUITY-SAFE amount-only: 1 row ↔ 1 file duy nhất theo số tiền.
-    //    Helper: với 1 row (đã chưa được match), đếm file ứng viên + đếm row
-    //    khác cùng số tiền. Chỉ match khi cả 2 đếm = 1.
-    const unmatchedRows = rows.filter((r) => !manual.has(r.id) && nextA[r.id] === undefined);
-
-    const tryAmountMatch = (
-      reason: "amount_ocr",
-      fileHasAmount: (fi: number, amount: number) => boolean,
-    ) => {
-      for (const r of unmatchedRows) {
-        if (nextA[r.id] !== undefined) continue;
-        // Đếm file ứng viên còn rảnh có cùng số tiền với r.so_tien
-        const candFiles: number[] = [];
-        for (let fi = 0; fi < fs.length; fi++) {
-          if (used.has(fi)) continue;
-          if (fileHasAmount(fi, r.so_tien)) candFiles.push(fi);
-        }
-        if (candFiles.length !== 1) continue; // 0 or >1 → ambiguous
-        const fi = candFiles[0];
-        // Đếm row khác (chưa match) muốn dùng cùng file này (cùng số tiền)
-        const rivalRows = unmatchedRows.filter(
-          (rr) => rr.id !== r.id && nextA[rr.id] === undefined
-            && fileHasAmount(fi, rr.so_tien),
-        );
-        if (rivalRows.length > 0) continue; // 1 file → nhiều row tranh → ambiguous
-        nextA[r.id] = fi; nextR[r.id] = reason; used.add(fi);
-      }
-    };
-
-    // CHỈ ghép theo OCR amount (BẮT BUỘC khớp số tiền). Không ghép theo tên
-    // file — số trong tên không đảm bảo đúng nội dung UNC, dễ sai khi nhiều
-    // UNC cùng số tiền. Mã đoàn (tier "code" ở trên) đã ưu tiên trước.
-    tryAmountMatch("amount_ocr", (fi, soTien) => {
-      const o = ocr[fi];
-      return !!o && o.amount != null && isAmountMatch(o.amount, soTien);
-    });
+    // Logic ghép tách ra lib (đã test): khớp số tiền (con_lai) BẮT BUỘC, ưu tiên mã đoàn.
+    const matchRows = currentRows.map((r) => ({
+      id: r.id, tenDoan: r.ten_doan, amount: conLai(r),
+    }));
+    const matchFiles = fs.map((_, i) => ocr[i] ?? { amount: null, text: "" });
+    const { assign: nextA, reasons: nextR } = computeUncAssignments(matchRows, matchFiles, manualMap);
 
     assignRef.current = nextA;
     setAssign(nextA);
-    setReasons(nextR);
+    setReasons(nextR as Record<number, Reason>);
 
     // Auto-match NGUỒN từ OCR text của file đã ghép. Giữ nguồn user đã chọn tay.
     const prevN = nguonRef.current;
     const nextN: Record<number, string> = {};
-    for (const r of rows) {
+    for (const r of currentRows) {
       const fi = nextA[r.id];
       if (fi === undefined) continue;
       if (manualNguonRef.current.has(r.id)) {
@@ -314,7 +261,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             const nguon = nguonRef.current[s.rowId];
             if (fi === undefined || !nguon) return false;
             const o = ocrRef.current[fi];
-            return !!o && o.amount != null && isAmountMatch(o.amount, s.row.so_tien);
+            return !!o && o.amount != null && uncAmountMatch(o.amount, conLai(s.row));
           });
           let paidOk = 0;
           let paidFail = 0;
@@ -789,7 +736,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                                   số tiền khớp → khi Lưu sẽ tự đánh dấu Đã TT. */}
                               {matched && (() => {
                                 const oAmt = ocrInfo[fi!]?.amount ?? null;
-                                const willPay = !!nguonMap[r.id] && oAmt != null && isAmountMatch(oAmt, r.so_tien);
+                                const willPay = !!nguonMap[r.id] && oAmt != null && uncAmountMatch(oAmt, conLai(r));
                                 return (
                                   <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                                     <Select
