@@ -513,7 +513,11 @@ export function useNHSection({
     const newSoKhach = sk || row.so_khach;
     const newDonGia  = meal?.gia_set_menu ?? row.don_gia;
     const isHdv = (nh?.nguoi_thanh_toan === "hdv");
-    const newTotal = newSoKhach * newDonGia;
+    // Trừ FOC + CK giống handleSave — trước đây dùng newSoKhach*newDonGia thô
+    // → tien_cong_ty không khớp "Thành tiền"/ĐNTT (cùng bug NHFocEditor).
+    const focResolved = resolveNHFoc(row, nh);
+    const soKhachThucTe = calcSoKhachThucTe(newSoKhach, focResolved.foc_khach, focResolved.foc_mien);
+    const newTotal = applyChietKhau(soKhachThucTe * newDonGia, row.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null);
     await externalSupabase.from("doan_chi_phi").update({
       so_luong: newSoKhach,
       don_gia:  newDonGia,

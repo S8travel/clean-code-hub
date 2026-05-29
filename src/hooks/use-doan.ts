@@ -3,6 +3,8 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
+import { calcSoKhachThucTe } from "@/lib/foc-calc";
+import { applyChietKhau } from "@/lib/chi-phi-calc";
 
 export interface Doan {
   id: number;
@@ -561,7 +563,7 @@ export function useUpdateDoan() {
         // Cho_duyet/da_duyet vẫn cascade — caller hiển thị warning toast + UI badge mismatch.
         const { data: chiPhis } = await externalSupabase
           .from("doan_chi_phi")
-          .select("id, danh_muc, mo_ta, so_luong, don_gia, tien_cong_ty, tien_hdv, is_overridden, trang_thai_thanh_toan, trang_thai_dntt")
+          .select("id, danh_muc, mo_ta, so_luong, don_gia, tien_cong_ty, tien_hdv, is_overridden, trang_thai_thanh_toan, trang_thai_dntt, foc_khach_snapshot, foc_mien_snapshot, chiet_khau_phan_tram_snapshot")
           .eq("doan_id", id)
           .in("danh_muc", ["canh_diem", "nha_hang", "bao_hiem"]);
 
@@ -585,7 +587,21 @@ export function useUpdateDoan() {
           if (td === "cho_duyet" || td === "da_duyet") committedDnttAffected++;
 
           const isHdv = Number(cp.tien_hdv) > 0;
-          const newTotalCp = newSoLuong * Number(cp.don_gia ?? 0);
+          // NH: PHẢI trừ FOC + CK (snapshot per-row) — trước đây dùng
+          // newSoLuong*don_gia thô → tien_cong_ty không khớp "Thành tiền"/ĐNTT
+          // (đều trừ FOC) → badge "DNTT lệch" ảo sau rebooking. canh_diem/bao_hiem
+          // không có FOC/CK → giữ công thức thô.
+          let newTotalCp: number;
+          if (cp.danh_muc === "nha_hang") {
+            const skTT = calcSoKhachThucTe(
+              newSoLuong,
+              cp.foc_khach_snapshot ?? null,
+              cp.foc_mien_snapshot ?? null,
+            );
+            newTotalCp = applyChietKhau(skTT * Number(cp.don_gia ?? 0), cp.chiet_khau_phan_tram_snapshot ?? null);
+          } else {
+            newTotalCp = newSoLuong * Number(cp.don_gia ?? 0);
+          }
           await externalSupabase.from("doan_chi_phi").update({
             so_luong: newSoLuong,
             tien_cong_ty: isHdv ? 0 : newTotalCp,
