@@ -232,6 +232,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           defaultLaThuHoi={netConPhaiTra < 0}
           doan={doan}
           tongHdvChi={tongHdvChi}
+          tamUngDaTT={tamUngDaTT}
           hdv={hdv}
           onClose={() => setShowQuyetToan(false)}
         />
