@@ -288,6 +288,11 @@ export default function HoanUngPage() {
                               return (
                                 <div key={idx} className="flex items-center gap-2 text-[11px] py-1 border-b border-border/30 last:border-0">
                                   <span className="text-muted-foreground w-4 shrink-0">{idx + 1}.</span>
+                                  {it.ngay && (
+                                    <span className="text-muted-foreground tabular-nums shrink-0">
+                                      {format(new Date(it.ngay), "dd/MM/yyyy")}
+                                    </span>
+                                  )}
                                   <Badge variant="outline" className="text-[10px] font-normal shrink-0">{lcLabel}</Badge>
                                   <span className="flex-1 truncate">{it.mo_ta}</span>
                                   {it.hoa_don_url && (

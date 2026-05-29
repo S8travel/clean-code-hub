@@ -17,6 +17,7 @@ export interface HoanUngItem {
   loai_chi: string;
   mo_ta: string;
   so_tien: number;
+  ngay?: string | null;        // ngày phát sinh chi phí (YYYY-MM-DD)
   hoa_don_url?: string | null;
 }
 
