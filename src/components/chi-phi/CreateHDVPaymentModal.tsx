@@ -33,13 +33,14 @@ interface CreateModalProps {
   // Quyết toán context — chỉ dùng cho hdv_quyet_toan
   doan?: HDVDoanInfo;
   tongHdvChi?: number;
+  tamUngDaTT?: number;   // tạm ứng đã trả → pre-fill ô "Tạm ứng" trong Tổng thu
   hdv?: HDVInfo | null;  // full info để in file (cần STK + ngân hàng)
   onClose: () => void;
 }
 
 export function CreateHDVPaymentModal({
   doanId, hdvId, refLoai, title, defaultSoTien, defaultLaThuHoi,
-  doan, tongHdvChi, hdv,
+  doan, tongHdvChi, tamUngDaTT, hdv,
   onClose,
 }: CreateModalProps) {
   const hdvName = hdv?.ten ?? "";
@@ -55,13 +56,32 @@ export function CreateHDVPaymentModal({
   const soNgayDefault = doan?.ngay_di && doan?.ngay_ve
     ? Math.max(1, Math.ceil((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
     : 0;
-  const coTL = (doan?.so_khach_tl ?? 0) > 0;
-  const tipDonGiaDefault = coTL ? 150 : 300;
+  const soKhachTl = doan?.so_khach_tl ?? 0;
+  const coTL = soKhachTl > 0;
   const tyGiaDefault = (() => {
     const s = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
     return s ? Number(s) : 800;
   })();
   const tongHdvChiVal = tongHdvChi ?? 0;
+
+  // ── Defaults "Tổng thu" — lấy từ doan để KHỚP bảng "Phải thu" + summary card
+  //    (netConPhaiTra). Mirror ChiPhiPhasThuSection / computeHdvPhaiThuVND.
+  // Tip: T/L không đóng tip → skip khỏi số khách; ẩn (=0) khi bỏ tích "Thu tiền tip".
+  const tipAutoSoKhach = Math.max(0, soKhachDefault - soKhachTl);
+  const tipSoKhachDefault = doan?.thu_tip === false
+    ? 0
+    : (doan?.tip_so_khach_override ?? tipAutoSoKhach);
+  const tipDonGiaDefault = doan?.tip_rate ?? (coTL ? 150 : 300);
+  // Đầu khách: số khách mặc định 0 (OP nhập tay), đơn giá mặc định 200k.
+  //   Chỉ tính vào Tổng thu khi HDV là người thu.
+  const dauKhachSoKhachDefault = (doan?.dau_khach_nguoi_thu ?? "hdv") === "hdv"
+    ? (doan?.dau_khach_so_khach_override ?? 0)
+    : 0;
+  const dauKhachDonGiaDefault = doan?.dau_khach_rate ?? 200_000;
+  // Quỹ VP: lump-sum, mặc định 200k. Chỉ tính khi HDV thu.
+  const quyVpDonGiaDefault = (doan?.quy_vp_nguoi_thu ?? "hdv") === "hdv"
+    ? (doan?.quy_vp_amount ?? 200_000)
+    : 0;
 
   // Common state
   const [soTien, setSoTien] = useState(defaultSoTien ?? 0);
@@ -76,15 +96,15 @@ export function CreateHDVPaymentModal({
   const [ngayCanTT, setNgayCanTT] = useState(format(addDays(new Date(), 2), "yyyy-MM-dd"));
 
   // Quyết toán state (7 fields theo form S8 BM02.1-20)
-  const [tamUng, setTamUng] = useState(0);
+  const [tamUng, setTamUng] = useState(tamUngDaTT ?? 0);
   const [thuTrachNhiem, setThuTrachNhiem] = useState(0);
-  const [tipSoKhach, setTipSoKhach] = useState(soKhachDefault);
+  const [tipSoKhach, setTipSoKhach] = useState(tipSoKhachDefault);
   const [tipDonGia, setTipDonGia] = useState(tipDonGiaDefault);
   const [tipTyGia, setTipTyGia] = useState(tyGiaDefault);
-  const [dauKhachSoKhach, setDauKhachSoKhach] = useState(soKhachDefault);
-  const [dauKhachDonGia, setDauKhachDonGia] = useState(0);
+  const [dauKhachSoKhach, setDauKhachSoKhach] = useState(dauKhachSoKhachDefault);
+  const [dauKhachDonGia, setDauKhachDonGia] = useState(dauKhachDonGiaDefault);
   const [quyVpSoLuong, setQuyVpSoLuong] = useState(1);
-  const [quyVpDonGia, setQuyVpDonGia] = useState(0);
+  const [quyVpDonGia, setQuyVpDonGia] = useState(quyVpDonGiaDefault);
   const [thuBanOp, setThuBanOp] = useState(0);
   const [thuKhac, setThuKhac] = useState(0);
 
