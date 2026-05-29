@@ -2,16 +2,17 @@ import { describe, it, expect } from "vitest";
 import { computeUncAssignments, type UncMatchRow } from "./ocr-unc-match";
 
 // Data thật đoàn VDA052206JX6 (9 ĐNTT thiếu UNC, paid=0 → amount = so_tien).
+// 575 & 579 CÙNG số tiền 4.590.000 + cùng đoàn → phân biệt bằng NCC.
 const ROWS: UncMatchRow[] = [
   { id: 571, tenDoan: "VDA052206JX6", amount: 5130000 },  // MADAM LAN
   { id: 572, tenDoan: "VDA052206JX6", amount: 5112720 },  // NGON THỊ HOA
   { id: 573, tenDoan: "VDA052206JX6", amount: 6800000 },  // Ý THẢO
   { id: 574, tenDoan: "VDA052206JX6", amount: 12210000 }, // SILK PATH
-  { id: 575, tenDoan: "VDA052206JX6", amount: 4590000 },  // HOA CHUỐI
+  { id: 575, tenDoan: "VDA052206JX6", amount: 4590000, nccName: "CÔNG TY TNHH MỘT THÀNH VIÊN THƯƠNG MẠI DỊCH VỤ PHÚ NGỌC" }, // HOA CHUỐI
   { id: 576, tenDoan: "VDA052206JX6", amount: 10200000 }, // ALL SEASON
   { id: 577, tenDoan: "VDA052206JX6", amount: 5202000 },  // LA CRIQUE
   { id: 578, tenDoan: "VDA052206JX6", amount: 5100000 },  // BRILLIANT
-  { id: 579, tenDoan: "VDA052206JX6", amount: 4590000 },  // ĐÀO TIÊN
+  { id: 579, tenDoan: "VDA052206JX6", amount: 4590000, nccName: "CÔNG TY TNHH MỘT THÀNH VIÊN THƯƠNG MẠI DỊCH VỤ ĐÀO LÊ" }, // ĐÀO TIÊN
 ];
 
 // OCR text thật của UNC MADAM LAN (rút gọn từ console).
@@ -34,21 +35,31 @@ describe("computeUncAssignments — bug đoàn VDA052206JX6", () => {
     expect(reasons[571]).toBe("code");
   });
 
-  it("nhiều UNC cùng số tiền khác mã đoàn → vẫn ghép đúng theo mã đoàn", () => {
-    // HOA CHUỐI (575) và ĐÀO TIÊN (579) cùng 4.590.000. File có mã đoàn + ghi
-    // "ĐÀO TIÊN" → phải ghép ĐÀO TIÊN, không phải HOA CHUỐI.
-    const daoTienText = `VietinBank eFAST
-4,590,000 VND
-S8 tt ... DAO LE - nh DAO TIEN 26/5 doan VDA052206JX6
-VDA052206JX6`;
+  it("cùng số tiền + cùng đoàn, KHÔNG có NCC → KHÔNG tự ghép (an toàn)", () => {
+    // HOA CHUỐI (575) & ĐÀO TIÊN (579) đều 4.590.000 cùng đoàn. 1 file, OCR
+    // không nhận diện được NCC → ambiguous → để user chọn tay (không ghép bừa).
+    const text = "VietinBank eFAST\n4,590,000 VND\ndoan VDA052206JX6";
+    const { assign } = computeUncAssignments(ROWS, [{ amount: 4590000, text }]);
+    expect(assign[575]).toBeUndefined();
+    expect(assign[579]).toBeUndefined();
+  });
+
+  it("cùng số tiền + cùng đoàn → phân biệt bằng TÊN NCC (người nhận)", () => {
+    // 2 file đều 4.590.000: 1 ghi ĐÀO LÊ (ĐÀO TIÊN), 1 ghi PHÚ NGỌC (HOA CHUỐI).
+    // OCR tên người nhận KHÔNG dấu → ghép đúng theo NCC.
+    const daoLeText = "VietinBank eFAST\n4,590,000 VND\nCONG TY TNHH MTV THUONG MAI DICH VU DAO LE\nnh DAO TIEN doan VDA052206JX6";
+    const phuNgocText = "VietinBank eFAST\n4,590,000 VND\nCONG TY TNHH MTV THUONG MAI DICH VU PHU NGOC\nnh HOA CHUOI doan VDA052206JX6";
     const { assign, reasons } = computeUncAssignments(
       ROWS,
-      [{ amount: 4590000, text: daoTienText }],
+      [
+        { amount: 4590000, text: daoLeText },   // file 0 = ĐÀO LÊ
+        { amount: 4590000, text: phuNgocText }, // file 1 = PHÚ NGỌC
+      ],
     );
-    // Cùng số tiền 2 dòng → tier code khớp theo mã đoàn; cả 2 cùng mã đoàn nên
-    // tier code gán dòng ĐẦU tiên khớp số tiền (HOA CHUỐI id 575 đứng trước).
-    // → minh hoạ vì sao cần TÊN nhà hàng để phân biệt (xem ghi chú dưới).
-    expect(reasons[assign[575] !== undefined ? 575 : 579]).toBe("code");
+    expect(assign[579]).toBe(0); // ĐÀO TIÊN (ĐÀO LÊ) ← file 0
+    expect(assign[575]).toBe(1); // HOA CHUỐI (PHÚ NGỌC) ← file 1
+    expect(reasons[579]).toBe("ncc");
+    expect(reasons[575]).toBe("ncc");
   });
 
   it("KHÔNG ghép chéo khi 2 dòng số tiền GẦN nhau (5.130.000 vs 5.112.720)", () => {
@@ -66,6 +77,24 @@ VDA052206JX6`;
     );
     expect(assign[571]).toBe(0); // MADAM LAN ← file 5.130.000
     expect(assign[572]).toBe(1); // NGON THỊ HOA ← file 5.112.720
+  });
+
+  it("mã đoàn có chữ 'I' (OCR normalize I→1) vẫn khớp 2 chiều", () => {
+    // ten_doan VDC052306IT6; OCR text biến IT6 → 1T6. codeNorm chuẩn hoá cả 2
+    // bên cùng cách nên vẫn ghép. Phân biệt 2 dòng cùng tiền bằng NCC.
+    const rows: UncMatchRow[] = [
+      { id: 1, tenDoan: "VDC052306IT6", amount: 4050000, nccName: "CÔNG TY TNHH MTV THƯƠNG MẠI DỊCH VỤ ĐÀO LÊ" },
+      { id: 2, tenDoan: "VDC052306IT6", amount: 4050000, nccName: "CÔNG TY TNHH MTV THƯƠNG MẠI DỊCH VỤ PHÚ NGỌC" },
+    ];
+    const daoLe = "VietinBank eFAST\n4,050,000 VND\nDICH VU DAO LE nh DAO TIEN doan VDC052306IT6";
+    const phuNgoc = "VietinBank eFAST\n4,050,000 VND\nDICH VU PHU NGOC nh HOA CHUOI doan VDC052306IT6";
+    const { assign, reasons } = computeUncAssignments(rows, [
+      { amount: 4050000, text: daoLe },
+      { amount: 4050000, text: phuNgoc },
+    ]);
+    expect(assign[1]).toBe(0); // ĐÀO LÊ
+    expect(assign[2]).toBe(1); // PHÚ NGỌC
+    expect(reasons[1]).toBe("ncc");
   });
 
   it("file không đọc được số tiền → không ghép", () => {

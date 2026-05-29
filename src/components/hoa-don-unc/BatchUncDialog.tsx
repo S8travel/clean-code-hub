@@ -33,7 +33,7 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 // Hóa đơn thì khớp so_tien gốc (flow khác).
 const conLai = (r: HoaDonUNCRow) => Math.max(0, r.so_tien - (r.paid_amount ?? 0));
 
-type Reason = "code" | "amount_ocr" | "manual";
+type Reason = "ncc" | "code" | "amount_ocr" | "manual";
 
 interface Props {
   open: boolean;
@@ -115,7 +115,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
     // Logic ghép tách ra lib (đã test): khớp số tiền (con_lai) BẮT BUỘC, ưu tiên mã đoàn.
     const matchRows = currentRows.map((r) => ({
-      id: r.id, tenDoan: r.ten_doan, amount: conLai(r),
+      id: r.id, tenDoan: r.ten_doan, amount: conLai(r), nccName: r.ten_nha_cung_cap,
     }));
     const matchFiles = fs.map((_, i) => ocr[i] ?? { amount: null, text: "" });
     const { assign: nextA, reasons: nextR } = computeUncAssignments(matchRows, matchFiles, manualMap);
@@ -382,6 +382,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const badge = (rowId: number) => {
     const r = reasons[rowId];
     if (assign[rowId] === undefined) return null;
+    if (r === "ncc")
+      return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{t("khớp mã đoàn + NCC")}</span>;
     if (r === "code")
       return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{t("khớp mã đoàn")}</span>;
     if (r === "amount_ocr")
