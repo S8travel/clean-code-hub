@@ -312,7 +312,11 @@ export function useNHSection({
         const dbRow = row.id ? chiPhiRows.find((cp) => cp.id === row.id) : null;
         const nh = nhData.nhaHangMap[meal.nha_hang_id];
         const targetDonGia = meal.gia_set_menu ?? dbRow?.don_gia ?? row.don_gia;
-        const targetSoLuong = dbRow?.so_luong ?? row.so_khach;
+        // ⚠️ KHÔNG sync so_khach từ dbRow.so_luong ở đây. Số khách của row
+        // non-override do effect `soKhachDefault` (= tổng khách đoàn / trừ T/L)
+        // quản lý. Nếu đè từ dbRow.so_luong, các row chưa từng lưu (DB giữ
+        // default so_luong=1) sẽ kéo so_khach về 1 mỗi khi chiPhiRows refetch
+        // (tức sau MỖI lần blur save bất kỳ row nào) → "số khách NH khác nhảy về 1".
         // FOC + chiết khấu: lấy từ snapshot CỦA TOUR (dbRow = doan_chi_phi),
         // KHÔNG đọc master. resolveNHChietKhau chỉ fallback master khi
         // snapshot null (legacy) — đúng hành vi init.
@@ -322,7 +326,6 @@ export function useNHSection({
         const targetCk = resolveNHChietKhau({ chiet_khau_phan_tram_snapshot: targetCkSnap }, nh);
         if (
           targetDonGia !== row.don_gia ||
-          targetSoLuong !== row.so_khach ||
           targetFocK !== (row.foc_khach_snapshot ?? null) ||
           targetFocM !== (row.foc_mien_snapshot ?? null) ||
           targetCkSnap !== (row.chiet_khau_phan_tram_snapshot ?? null) ||
@@ -331,7 +334,6 @@ export function useNHSection({
           next[key] = {
             ...row,
             don_gia: targetDonGia,
-            so_khach: targetSoLuong,
             foc_khach_snapshot: targetFocK,
             foc_mien_snapshot: targetFocM,
             chiet_khau_phan_tram_snapshot: targetCkSnap,
