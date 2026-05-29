@@ -12,8 +12,11 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useBatchUploadUNC, type HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
+import { useMarkPaidWithDate } from "@/hooks/use-dntt";
 import { isAmountMatch } from "@/lib/ocr-invoice";
 import { ocrUncSlip, normCode, type OcrUncResult } from "@/lib/ocr-unc";
+import { PAYMENT_SOURCE_LABELS, matchPaymentSource } from "@/lib/payment-sources";
+import { format } from "date-fns";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
@@ -26,21 +29,7 @@ import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-// Số "ứng viên" từ tên file (gộp ngăn cách nghìn lẫn số liền).
-function amountCandidates(name: string): Set<number> {
-  const set = new Set<number>();
-  const base = name.replace(/\.[a-z0-9]+$/i, "");
-  for (const m of base.matchAll(/[0-9][0-9.,]*[0-9]|[0-9]/g)) {
-    const raw = m[0];
-    const noSep = Number(raw.replace(/[.,]/g, ""));
-    if (Number.isFinite(noSep) && noSep > 0) set.add(noSep);
-    const plain = Number(raw.replace(/[^0-9]/g, ""));
-    if (Number.isFinite(plain) && plain > 0) set.add(plain);
-  }
-  return set;
-}
-
-type Reason = "code" | "amount_ocr" | "amount_file" | "manual";
+type Reason = "code" | "amount_ocr" | "manual";
 
 interface Props {
   open: boolean;
@@ -65,6 +54,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   useTranslate();
   const inputRef = useRef<HTMLInputElement>(null);
   const batchMut = useBatchUploadUNC();
+  const markPaidMut = useMarkPaidWithDate();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
   const [step, setStep] = useState<"pick" | "send">("pick");
@@ -74,6 +64,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const [files, setFiles] = useState<File[]>([]);
   const [assign, setAssign] = useState<Record<number, number | undefined>>({});
   const [reasons, setReasons] = useState<Record<number, Reason>>({});
+  // Nguồn TT per row (rowId → label nguồn) — auto match từ OCR, user sửa được.
+  const [nguonMap, setNguonMap] = useState<Record<number, string>>({});
   const [ocrProg, setOcrProg] = useState<{ running: boolean; done: number; total: number }>(
     { running: false, done: 0, total: 0 },
   );
@@ -90,9 +82,11 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
   // Refs cho vòng OCR (đăng ký 1 lần) đọc state mới nhất.
   const manualRef = useRef<Set<number>>(new Set());      // rowId user tự chọn → không auto đè
+  const manualNguonRef = useRef<Set<number>>(new Set()); // rowId user tự chọn NGUỒN → không auto đè
   const filesRef = useRef<File[]>([]);
   const ocrRef = useRef<Record<number, OcrUncResult>>({});
   const assignRef = useRef<Record<number, number | undefined>>({}); // mirror assign cho recompute
+  const nguonRef = useRef<Record<number, string>>({});   // mirror nguonMap cho handleSave
   const runRef = useRef(0);                               // huỷ vòng cũ khi chọn lại / đóng
 
   // Ghép lại toàn bộ (thuần, từ refs).
@@ -148,7 +142,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     const unmatchedRows = rows.filter((r) => !manual.has(r.id) && nextA[r.id] === undefined);
 
     const tryAmountMatch = (
-      reason: "amount_ocr" | "amount_file",
+      reason: "amount_ocr",
       fileHasAmount: (fi: number, amount: number) => boolean,
     ) => {
       for (const r of unmatchedRows) {
@@ -171,18 +165,32 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       }
     };
 
-    // OCR amount: dùng amount đã đọc từ ảnh
+    // CHỈ ghép theo OCR amount (BẮT BUỘC khớp số tiền). Không ghép theo tên
+    // file — số trong tên không đảm bảo đúng nội dung UNC, dễ sai khi nhiều
+    // UNC cùng số tiền. Mã đoàn (tier "code" ở trên) đã ưu tiên trước.
     tryAmountMatch("amount_ocr", (fi, soTien) => {
       const o = ocr[fi];
       return !!o && o.amount != null && isAmountMatch(o.amount, soTien);
     });
-    // Filename amount: dùng số trong tên file
-    tryAmountMatch("amount_file", (fi, soTien) =>
-      amountCandidates(fs[fi].name).has(Math.round(soTien)));
 
     assignRef.current = nextA;
     setAssign(nextA);
     setReasons(nextR);
+
+    // Auto-match NGUỒN từ OCR text của file đã ghép. Giữ nguồn user đã chọn tay.
+    const prevN = nguonRef.current;
+    const nextN: Record<number, string> = {};
+    for (const r of rows) {
+      const fi = nextA[r.id];
+      if (fi === undefined) continue;
+      if (manualNguonRef.current.has(r.id)) {
+        nextN[r.id] = prevN[r.id] ?? "";
+      } else {
+        nextN[r.id] = matchPaymentSource(ocr[fi]?.text ?? "") ?? "";
+      }
+    }
+    nguonRef.current = nextN;
+    setNguonMap(nextN);
   };
 
   const runOcr = async (fs: File[], myRun: number) => {
@@ -209,10 +217,13 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     const fs = Array.from(picked);
     const myRun = ++runRef.current;
     manualRef.current = new Set();
+    manualNguonRef.current = new Set();
     ocrRef.current = {};
     assignRef.current = {};
+    nguonRef.current = {};
     filesRef.current = fs;
     setFiles(fs);
+    setNguonMap({});
     setOcrInfo({});
     // Revoke URLs cũ + build preview URLs mới cho ảnh (PDF skip — không render
     // thumbnail bằng <img>).
@@ -224,8 +235,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       }
     }
     setPreviewUrls(urls);
-    recompute();          // ghép nhanh theo tên file ngay
-    runOcr(fs, myRun);    // rồi OCR refine nền
+    recompute();          // clear assign cũ — chưa ghép gì tới khi OCR đọc xong
+    runOcr(fs, myRun);    // OCR đọc số tiền → recompute() ghép dần (bắt buộc khớp số tiền)
   };
 
   // Cleanup URLs khi unmount
@@ -257,6 +268,22 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     assignRef.current = next;
     setAssign(next);
     setReasons((p) => ({ ...p, [rowId]: "manual" }));
+
+    // Đổi file → re-match nguồn theo file mới (bỏ manual nguồn cũ của row này).
+    manualNguonRef.current.delete(rowId);
+    const newNguon = fileIdx === undefined
+      ? ""
+      : (matchPaymentSource(ocrRef.current[fileIdx]?.text ?? "") ?? "");
+    const nextN = { ...nguonRef.current, [rowId]: newNguon };
+    nguonRef.current = nextN;
+    setNguonMap(nextN);
+  };
+
+  const setRowNguon = (rowId: number, nguon: string) => {
+    manualNguonRef.current.add(rowId);
+    const next = { ...nguonRef.current, [rowId]: nguon };
+    nguonRef.current = next;
+    setNguonMap(next);
   };
 
   const pairs = rows
@@ -279,6 +306,33 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       onSuccess: async ({ ok, failed, errors }) => {
         if (failed === 0) {
           toast({ title: `${t("Đã gắn UNC cho")} ${ok} ĐNTT` });
+
+          // Tự markPaid cho dòng CÓ NGUỒN + OCR số tiền KHỚP ĐNTT (an toàn).
+          const today = format(new Date(), "yyyy-MM-dd");
+          const toPay = snapshot.filter((s) => {
+            const fi = assignRef.current[s.rowId];
+            const nguon = nguonRef.current[s.rowId];
+            if (fi === undefined || !nguon) return false;
+            const o = ocrRef.current[fi];
+            return !!o && o.amount != null && isAmountMatch(o.amount, s.row.so_tien);
+          });
+          let paidOk = 0;
+          let paidFail = 0;
+          for (const s of toPay) {
+            try {
+              await markPaidMut.mutateAsync({
+                id: s.rowId, ngayThanhToan: today, nguon: nguonRef.current[s.rowId],
+              });
+              paidOk++;
+            } catch {
+              paidFail++;
+            }
+          }
+          if (paidOk > 0) toast({ title: `${t("Đã đánh dấu Đã TT")} ${paidOk} ĐNTT` });
+          if (paidFail > 0) {
+            toast({ title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`, variant: "destructive" });
+          }
+
           // Switch sang step 2 — resolve email + cho user review trước khi gửi
           setStep("send");
           setResolvingEmails(true);
@@ -359,14 +413,17 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     setFiles([]);
     setAssign({});
     setReasons({});
+    setNguonMap({});
     setOcrProg({ running: false, done: 0, total: 0 });
     setOcrInfo({});
     for (const u of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(u);
     setPreviewUrls({});
     setLightboxIdx(null);
     manualRef.current = new Set();
+    manualNguonRef.current = new Set();
     ocrRef.current = {};
     assignRef.current = {};
+    nguonRef.current = {};
     filesRef.current = [];
     setStep("pick");
     setSendTargets([]);
@@ -380,7 +437,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     if (assign[rowId] === undefined) return null;
     if (r === "code")
       return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{t("khớp mã đoàn")}</span>;
-    if (r === "amount_ocr" || r === "amount_file")
+    if (r === "amount_ocr")
       return <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">{t("khớp số tiền")}</span>;
     if (r === "manual")
       return <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{t("chọn tay")}</span>;
@@ -728,6 +785,39 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                                 </SelectContent>
                               </Select>
                               {badge(r.id)}
+                              {/* Nguồn TT — auto từ OCR, sửa được. Có nguồn + OCR
+                                  số tiền khớp → khi Lưu sẽ tự đánh dấu Đã TT. */}
+                              {matched && (() => {
+                                const oAmt = ocrInfo[fi!]?.amount ?? null;
+                                const willPay = !!nguonMap[r.id] && oAmt != null && isAmountMatch(oAmt, r.so_tien);
+                                return (
+                                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                    <Select
+                                      value={nguonMap[r.id] || "_none"}
+                                      onValueChange={(v) => setRowNguon(r.id, v === "_none" ? "" : v)}
+                                    >
+                                      <SelectTrigger className="h-6 text-[11px] w-[160px]">
+                                        <span className="truncate">{nguonMap[r.id] || t("Chọn nguồn")}</span>
+                                      </SelectTrigger>
+                                      <SelectContent className="max-w-[260px]">
+                                        <SelectItem value="_none" className="text-xs">{t("— Chưa chọn nguồn —")}</SelectItem>
+                                        {PAYMENT_SOURCE_LABELS.map((src) => (
+                                          <SelectItem key={src} value={src} className="text-xs">{src}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {willPay ? (
+                                      <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                        {t("sẽ đánh dấu Đã TT")}
+                                      </span>
+                                    ) : nguonMap[r.id] ? (
+                                      <span className="text-[10px] text-amber-600 whitespace-nowrap" title={t("OCR số tiền chưa khớp — chỉ gắn UNC, không tự đánh dấu TT")}>
+                                        {t("chỉ gắn UNC")}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </td>

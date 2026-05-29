@@ -12,16 +12,9 @@ import { t } from "@/lib/i18n";
 import { buildPaymentContent } from "./payment-content";
 import { DocCell } from "./DocCell";
 import { HoaDonAmountCell } from "./HoaDonAmountCell";
+import { PAYMENT_SOURCE_LABELS as PAYMENT_SOURCES } from "@/lib/payment-sources";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
-
-// Danh sách nguồn thanh toán (tài khoản công ty). Thêm option ở đây để xuất hiện trong dropdown.
-const PAYMENT_SOURCES: string[] = [
-  "MB-6612388123 (Cá nhân)",
-  "TECH-1231236868 (Công ty)",
-  "VTB-111600925668 (Công ty)",
-  "TCB-1902 0186 4550 12 (Cá nhân)",
-];
 
 const loaiLabel: Record<string, { textKey: string; color: string }> = {
   khach_san: { textKey: "KS", color: "bg-blue-100 text-blue-700" },
