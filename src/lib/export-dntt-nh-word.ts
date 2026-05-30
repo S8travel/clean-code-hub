@@ -110,6 +110,10 @@ export interface NHDocEntry {
   /** True khi đây là ĐNTT cọc (in cho mục đích "Đề nghị thanh toán tiền cọc").
    *  Ô "Số tiền còn thanh toán" hiển thị "(cọc)" + đỏ đậm. */
   la_coc?: boolean;
+  /** True khi 1 entry gộp NHIỀU dịch vụ (ĐNTT gộp). Cột TÊN render tên dịch vụ
+   *  theo TỪNG dòng (lấy từ item.ghi_chu), số khách theo từng dòng, cột Ghi chú bỏ;
+   *  các cột tổng/cọc/cấn trừ/cần thanh toán vẫn gộp (rowSpan) cho cả entry. */
+  multi_service?: boolean;
 }
 
 export interface NHDocData {
@@ -251,12 +255,18 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
       if (isFirst) {
         // NGÀY
         cells.push(cell([p(entry.ngay_date, { size: 14 })], { width: COL_W[1], rowSpan: itemCount }));
-        // TÊN NHÀ HÀNG
-        cells.push(cell([p(entry.ten_nh, { bold: true, size: 14 })], { width: COL_W[2], rowSpan: itemCount }));
+        // TÊN — entry đơn: 1 tên rowSpan. Gộp nhiều dịch vụ: render per-item bên dưới.
+        if (!entry.multi_service) {
+          cells.push(cell([p(entry.ten_nh, { bold: true, size: 14 })], { width: COL_W[2], rowSpan: itemCount }));
+        }
+      }
+      // TÊN — entry gộp: mỗi dòng = 1 dịch vụ (tên lấy từ item.ghi_chu).
+      if (entry.multi_service) {
+        cells.push(cell([p(item.ghi_chu || "—", { bold: true, size: 14 })], { width: COL_W[2] }));
       }
 
-      // Số khách — per row: dòng main = entry.so_khach (raw), dòng phát sinh = item.so_luong
-      const soKhachRow = isFirst ? entry.so_khach : item.so_luong;
+      // Số khách — gộp: per-item; entry đơn: dòng main = entry.so_khach, phát sinh = item.so_luong
+      const soKhachRow = entry.multi_service ? item.so_luong : (isFirst ? entry.so_khach : item.so_luong);
       cells.push(cell([p(String(soKhachRow), { size: 14 })], { width: COL_W[3] }));
       // FOC — chỉ dòng main hiện FOC (extras không có FOC). In SỐ KHÁCH ĐƯỢC MIỄN
       // đã tính: so_mien = floor(so_khach / foc_khach * foc_mien). Số nguyên, làm tròn xuống.
@@ -311,8 +321,8 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
         cells.push(cell(bankChildren, { width: COL_W[12], rowSpan: itemCount }));
       }
 
-      // Ghi chú — per item (cột cuối — idx 13)
-      cells.push(cell([p(item.ghi_chu || "—", { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[13] }));
+      // Ghi chú — entry gộp: bỏ (tên dịch vụ đã ở cột TÊN); entry đơn: item.ghi_chu
+      cells.push(cell([p(entry.multi_service ? "—" : (item.ghi_chu || "—"), { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[13] }));
 
       rows.push(new TableRow({ children: cells }));
     }
