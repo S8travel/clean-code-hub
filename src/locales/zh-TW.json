@@ -2067,6 +2067,7 @@
   "Tổng số khách các nhóm phải bằng tổng đoàn": "各分組客數合計必須等於團總數",
   "Phải có ít nhất 1 nhóm": "至少須有 1 個分組",
   "Đã lưu phân chia nhóm": "已儲存分組分配",
+  "chi phí cảnh điểm đang gắn ĐNTT bị đổi số khách — kiểm tra lại số tiền ĐNTT.": "筆景點費用已綁定付款申請但客數已變更 — 請重新檢查付款申請金額。",
   "Tổng các nhóm khớp với đoàn — sẵn sàng lưu": "各分組合計與團相符 — 可儲存",
   "Tổng các nhóm CHƯA khớp với đoàn — không thể lưu": "各分組合計與團不符 — 無法儲存"
 }

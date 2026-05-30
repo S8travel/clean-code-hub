@@ -185,14 +185,22 @@ export default function SplitNhomModal({
       }
 
       // 4. Re-aggregate doan_chi_phi cảnh điểm: so_luong = SUM cross-nhóm
-      //    cho cùng (mo_ta cảnh điểm, ngay_so). Skip is_overridden=true.
+      //    cho cùng (mo_ta cảnh điểm, ngay_so).
+      //    Skip is_overridden (OP tự quản) + paid/partial_paid (đã cọc/đã trả —
+      //    ghi đè sẽ mất dấu cam kết → ĐNTT khoản còn lại tính sai). Giống cascade
+      //    rebooking ở use-doan.ts. ĐNTT cho_duyet/da_duyet vẫn cascade nhưng đếm
+      //    lại để cảnh báo OP (số tiền ĐNTT cũ không còn khớp số khách mới).
+      let committedDnttAffected = 0;
+      const idsToRecalc: number[] = [];
       const { data: cpCanhDiem } = await externalSupabase
         .from("doan_chi_phi")
-        .select("id, mo_ta, ngay_so, don_gia, is_overridden, tien_hdv, tien_cong_ty")
+        .select("id, mo_ta, ngay_so, so_luong, don_gia, is_overridden, tien_hdv, tien_cong_ty, trang_thai_thanh_toan, trang_thai_dntt")
         .eq("doan_id", doanId)
         .eq("danh_muc", "canh_diem");
       for (const cp of cpCanhDiem ?? []) {
         if (cp.is_overridden) continue;
+        const tt = cp.trang_thai_thanh_toan;
+        if (tt === "paid" || tt === "partial_paid") continue;
         if (!cp.mo_ta || cp.ngay_so == null) continue;
         const { data: ngayMatch } = await externalSupabase
           .from("doan_ngay")
@@ -212,8 +220,11 @@ export default function SplitNhomModal({
         });
         if (matchedItems.length === 0) continue;
         const newSoLuong = matchedItems.reduce((s, it) => s + (Number(it.so_luong) || 0), 0);
+        if (Number(cp.so_luong) === newSoLuong) continue; // không đổi → khỏi update
         const newTotal = (cp.don_gia ?? 0) * newSoLuong;
         const isHdv = (cp.tien_hdv ?? 0) > 0 && (cp.tien_cong_ty ?? 0) === 0;
+        const td = cp.trang_thai_dntt;
+        if (td === "cho_duyet" || td === "da_duyet") committedDnttAffected++;
         await externalSupabase
           .from("doan_chi_phi")
           .update({
@@ -223,6 +234,11 @@ export default function SplitNhomModal({
             thanh_tien_thuc_te: null,
           })
           .eq("id", cp.id);
+        idsToRecalc.push(cp.id);
+      }
+      // Recalc trạng thái thanh toán cho các row vừa đổi (dùng SUM payments, giống use-doan.ts)
+      if (idsToRecalc.length > 0) {
+        await externalSupabase.rpc("recalc_chi_phi_payment_status", { p_chi_phi_ids: idsToRecalc });
       }
 
       // 5. Invalidate cascade queries
@@ -250,6 +266,12 @@ export default function SplitNhomModal({
       }
 
       toast.success(t("Đã lưu phân chia nhóm"));
+      if (committedDnttAffected > 0) {
+        toast.warning(
+          `${committedDnttAffected} ${t("chi phí cảnh điểm đang gắn ĐNTT bị đổi số khách — kiểm tra lại số tiền ĐNTT.")}`,
+          { duration: 6000 },
+        );
+      }
       onSaved?.(createdIds);
       onClose();
     } catch (e: unknown) {
