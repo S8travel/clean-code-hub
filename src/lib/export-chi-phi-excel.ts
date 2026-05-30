@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { saveAs } from "file-saver";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
+import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive, calcTipNDT } from "@/lib/tip-calc";
 
 type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note" | "total" | "total_number";
 
@@ -878,23 +879,19 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([cell("TỔNG SỐ TIỀN TT", "total", 7), cell("VND", "total"), cell(totalHdvDV, "total_number"), cell(totalCtyDV, "total_number")]);
   rows.push([cell("", "text", 10)]);
 
-  // ─── TIP 小費 ───
-  const TIP_RATE_CO_TL = 150;
-  const TIP_RATE_KHONG_TL = 300;
+  // ─── TIP 小費 ─── (logic tách ở lib/tip-calc.ts — có unit test)
   const soKhachTotal =
     (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
     (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
     (doan?.so_khach ?? 0);
   const soKhachTl = doan?.so_khach_tl ?? 0;
-  const autoTipSoKhach = Math.max(0, soKhachTotal - soKhachTl); // T/L không đóng tip
-  const autoTipSoNgay = doan?.ngay_di && doan?.ngay_ve
-    ? Math.max(1, Math.round((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
-    : 0;
-  const autoTipRate = soKhachTl > 0 ? TIP_RATE_CO_TL : TIP_RATE_KHONG_TL;
+  const autoTipSoKhach = defaultTipSoKhach(soKhachTotal, soKhachTl); // T/L không đóng tip
+  const autoTipSoNgay = tipDaysInclusive(doan?.ngay_di, doan?.ngay_ve);
+  const autoTipRate = defaultTipRate(soKhachTl);
   const tipSoKhach = doan?.tip_so_khach_override ?? autoTipSoKhach;
   const tipSoNgay = doan?.tip_so_ngay_override ?? autoTipSoNgay;
   const tipRate = doan?.tip_rate ?? autoTipRate;
-  const computedTipNdt = tipSoKhach * tipSoNgay * tipRate;
+  const computedTipNdt = calcTipNDT({ soKhach: tipSoKhach, soNgay: tipSoNgay, rate: tipRate });
   const tipNdt = doan?.tip_lump_sum ?? computedTipNdt;
   const tyGiaNdt = params.tyGiaNdt ?? 800;
   const tipVnd = tipNdt * tyGiaNdt;

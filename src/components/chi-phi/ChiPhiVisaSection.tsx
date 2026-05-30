@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { computeVisaVnd } from "@/lib/visa-calc";
 import { toast } from "sonner";
 import {
   useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi,
@@ -23,16 +24,6 @@ import {
 const CURRENCIES = ["USD", "RMB", "NT"] as const;
 type Currency = (typeof CURRENCIES)[number];
 
-// Quy đổi raw → VND: SL × max(0, ĐG×tỷ_giá − CK_VND). Chiết khấu là số VND
-// trừ TRÊN MỖI ĐƠN VỊ (rồi nhân số lượng), KHÔNG phải % và KHÔNG phải trừ
-// 1 lần. VND-only đoàn (USD ty_gia=1) cũng OK. `ckVnd` lưu ở cột
-// chiet_khau_pct (numeric) — tên cột giữ nguyên, ngữ nghĩa đổi sang VND/đơn vị
-// (chỉ visa dùng cột này, không đụng nơi khác).
-function computeVnd(soLuong: number, donGiaRaw: number, tyGia: number, ckVnd: number): number {
-  const grossPerUnit = donGiaRaw * (tyGia || 0);
-  const netPerUnit = Math.max(0, grossPerUnit - (ckVnd || 0));
-  return Math.round(soLuong * netPerUnit);
-}
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
@@ -79,7 +70,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
 
   const selectedLoai = loaiVisaList.find((l) => String(l.id) === loaiVisaId);
   const selectedDonVi = donViList.find((d) => String(d.id) === donViId);
-  const previewVnd = computeVnd(1, donGiaRaw, tyGia, ckVnd);
+  const previewVnd = computeVisaVnd(1, donGiaRaw, tyGia, ckVnd);
 
   const handleAdd = async () => {
     if (!loaiVisaId) { toast.warning(t("Vui lòng chọn loại visa")); return; }
@@ -269,7 +260,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       local.chiet_khau_pct === initial.chiet_khau_pct;
     if (unchanged) return;
     // CK VND trừ trên mỗi đơn vị → don_gia = net 1 đơn vị, total = SL × don_gia.
-    const donGiaVnd = computeVnd(1, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
+    const donGiaVnd = computeVisaVnd(1, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
     const total = local.so_luong * donGiaVnd;
     const isHDV = row.tien_hdv > 0;
     upsertMut.mutate({
@@ -433,7 +424,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
             <tbody className="divide-y divide-border">
               {visaRows.map((row) => {
                 const local = getRowEdit(row);
-                const thanhTienLocal = computeVnd(local.so_luong, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
+                const thanhTienLocal = computeVisaVnd(local.so_luong, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
 
                 const allDntts = dnttList.filter(
                   (d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id,

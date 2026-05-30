@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatThousands, parseThousands } from "@/lib/utils";
+import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive, calcTipNDT } from "@/lib/tip-calc";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
@@ -27,17 +28,6 @@ interface Props {
   onTipLumpSumChange: (v: number | null) => void;
 }
 
-function daysBetween(start: string, end: string): number {
-  try {
-    const s = new Date(start + "T00:00:00");
-    const e = new Date(end + "T00:00:00");
-    const diff = Math.round((e.getTime() - s.getTime()) / 86_400_000);
-    return Math.max(0, diff + 1);
-  } catch {
-    return 0;
-  }
-}
-
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
 export default function TipSection({
@@ -46,17 +36,17 @@ export default function TipSection({
   onThuTipChange, onTipRateChange, onTipSoNgayOverrideChange, onTipSoKhachOverrideChange, onTipLumpSumChange,
 }: Props) {
   useTranslate();
-  // Auto-suggest values
-  const autoRate = soKhachTl > 0 ? 150 : 300;
-  const autoSoNgay = ngayDi && ngayVe ? daysBetween(ngayDi, ngayVe) : 0;
+  // Auto-suggest values (logic tách ở lib/tip-calc.ts — có unit test)
+  const autoRate = defaultTipRate(soKhachTl);
+  const autoSoNgay = tipDaysInclusive(ngayDi, ngayVe);
   // T/L không đóng tip → mặc định trừ ra
-  const autoSoKhach = Math.max(0, soKhach - soKhachTl);
+  const autoSoKhach = defaultTipSoKhach(soKhach, soKhachTl);
 
   // Effective values used for compute
   const effectiveRate = tipRate ?? autoRate;
   const effectiveSoNgay = tipSoNgayOverride ?? autoSoNgay;
   const effectiveSoKhach = tipSoKhachOverride ?? autoSoKhach;
-  const autoTotal = effectiveSoKhach * effectiveSoNgay * effectiveRate;
+  const autoTotal = calcTipNDT({ soKhach: effectiveSoKhach, soNgay: effectiveSoNgay, rate: effectiveRate });
   const displayTotal = tipLumpSum ?? autoTotal;
   const isOverridden = tipLumpSum != null;
 

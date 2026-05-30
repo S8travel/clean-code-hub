@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import type { QuyetToanData } from "@/hooks/use-chi-phi-hdv";
+import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
 
 interface ExportInput {
   data: QuyetToanData;
@@ -47,19 +48,26 @@ export async function exportHDVQuyetToanExcel({ data, hdv, nguoiDeNghi, ngayLap 
   const tipDonGia = data.thu_tip?.don_gia_nt ?? 0;
   const tipTyGia = data.thu_tip?.ty_gia ?? 0;
   const soNgay = data.so_ngay_doan ?? 0;
-  const thuTipVnd = tipSoKhach * tipDonGia * soNgay * tipTyGia;
   const dauKhachSL = data.thu_dau_khach?.so_khach ?? 0;
   const dauKhachDG = data.thu_dau_khach?.don_gia ?? 0;
-  const thuDauKhachVnd = dauKhachSL * dauKhachDG;
   const quyVpSL = data.thu_quy_vp?.so_luong ?? 0;
   const quyVpDG = data.thu_quy_vp?.don_gia ?? 0;
-  const thuQuyVpVnd = quyVpSL * quyVpDG;
   const thuBanOp = data.thu_ban_op ?? 0;
   const thuKhac = data.thu_khac ?? 0;
   const tongQuyetToan = data.tong_hdv_chi ?? 0;
 
-  const tongThu = tamUng + thuTrachNhiem + thuTipVnd + thuDauKhachVnd + thuQuyVpVnd + thuBanOp + thuKhac;
-  const conPhaiThanhToan = tongQuyetToan - tongThu;
+  // Logic tổng thu / còn phải TT tách ở lib/quyet-toan-hdv-calc.ts — có unit test,
+  // dùng chung với CreateHDVPaymentModal để màn hình & file in luôn khớp.
+  const { thuTipVnd, thuDauKhachVnd, thuQuyVpVnd, tongThu, conPhaiThanhToan } = calcQuyetToanHDV({
+    tamUng,
+    thuTrachNhiem,
+    tip: { soKhach: tipSoKhach, donGiaNT: tipDonGia, soNgay, tyGia: tipTyGia },
+    dauKhach: { soKhach: dauKhachSL, donGia: dauKhachDG },
+    quyVp: { soLuong: quyVpSL, donGia: quyVpDG },
+    thuBanOp,
+    thuKhac,
+    tongHdvChi: tongQuyetToan,
+  });
 
   const tenHdv = data.ten_hdv ?? hdv?.ten ?? "";
   // Người đề nghị = user đang đăng nhập (kế toán), KHÔNG phải HDV
