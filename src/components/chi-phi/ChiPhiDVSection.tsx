@@ -1,5 +1,5 @@
-import { forwardRef, useImperativeHandle } from "react";
-import { Printer } from "lucide-react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { Printer, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -7,8 +7,10 @@ import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import DVDnttModal from "./DVDnttModal";
 import DVCancelModal from "./DVCancelModal";
 import DVAggCommitModal from "./DVAggCommitModal";
+import DVGopDnttModal from "./DVGopDnttModal";
 import DVRow from "./DVRow";
 import { useDVSection } from "./use-dv-section";
+import { groupGopByNcc } from "@/lib/dntt-gop-calc";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -50,6 +52,10 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
     getSelectedCount: () => selectedIds.length,
   }), [buildSelectedEntries, selectedIds.length, setSelectedIds]);
 
+  const [showGop, setShowGop] = useState(false);
+  // Số nhóm dịch vụ cùng NCC có thể gộp (≥2 dòng công ty trả, còn phần chưa ĐNTT).
+  const gopGroupCount = useMemo(() => groupGopByNcc(dvRows).length, [dvRows]);
+
   // Empty state — return SAU mọi hook (Rules of Hooks).
   if (dvRows.length === 0) {
     return (
@@ -78,6 +84,12 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
                 {t("Bỏ chọn")}
               </Button>
             </>
+          )}
+          {gopGroupCount > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowGop(true)}>
+              <Layers className="h-3.5 w-3.5 mr-1" />
+              {t("ĐNTT gộp NCC")} ({gopGroupCount})
+            </Button>
           )}
           <span className="text-xs text-muted-foreground">{t("Tổng")}: {fmt(total)} ₫</span>
         </div>
@@ -170,6 +182,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         open={!!previewDVData}
         data={previewDVData}
         onClose={() => setPreviewDVData(null)}
+      />
+
+      <DVGopDnttModal
+        open={showGop}
+        onClose={() => setShowGop(false)}
+        doanId={doanId}
+        tenDoan={tenDoan}
+        dvRows={dvRows}
       />
     </div>
   );
