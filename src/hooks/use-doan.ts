@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
+import { resolveNhom1SoKhach } from "@/lib/doan-nhom-sync";
 
 export interface Doan {
   id: number;
@@ -521,14 +522,32 @@ export function useUpdateDoan() {
             .eq("thu_tu", 1)
             .maybeSingle();
           if (nhom1) {
+            // 1 nhóm → SET nhóm "Toàn đoàn" = đoàn (hết drift cũ); nhiều nhóm → dồn
+            // delta vào nhóm 1 để giữ tổng = đoàn. (logic tách ở lib/doan-nhom-sync.ts)
+            const nhom1New = resolveNhom1SoKhach({
+              nhomCount,
+              nhom1: {
+                so_khach_lon: nhom1.so_khach_lon ?? 0,
+                so_khach_em1: nhom1.so_khach_em1 ?? 0,
+                so_khach_em2: nhom1.so_khach_em2 ?? 0,
+                so_khach_tl: nhom1.so_khach_tl ?? 0,
+              },
+              doanOld: {
+                so_khach_lon: oldDoan.so_khach_lon ?? 0,
+                so_khach_em1: oldDoan.so_khach_em1 ?? 0,
+                so_khach_em2: oldDoan.so_khach_em2 ?? 0,
+                so_khach_tl: oldDoan.so_khach_tl ?? 0,
+              },
+              doanNew: {
+                so_khach_lon: data.so_khach_lon ?? 0,
+                so_khach_em1: data.so_khach_em1 ?? 0,
+                so_khach_em2: data.so_khach_em2 ?? 0,
+                so_khach_tl: data.so_khach_tl ?? 0,
+              },
+            });
             await externalSupabase
               .from("doan_nhom")
-              .update({
-                so_khach_lon: Math.max(0, (nhom1.so_khach_lon ?? 0) + diffLon),
-                so_khach_em1: Math.max(0, (nhom1.so_khach_em1 ?? 0) + diffEm1),
-                so_khach_em2: Math.max(0, (nhom1.so_khach_em2 ?? 0) + diffEm2),
-                so_khach_tl: Math.max(0, (nhom1.so_khach_tl ?? 0) + diffTl),
-              })
+              .update(nhom1New)
               .eq("id", nhom1.id);
           }
         }

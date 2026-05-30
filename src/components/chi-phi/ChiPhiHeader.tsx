@@ -5,6 +5,8 @@ interface ChiPhiHeaderDoan {
   ten_doan?: string | null;
   agents?: { ten?: string | null } | null;
   so_khach_lon?: number | null;
+  so_khach_em1?: number | null;
+  so_khach_em2?: number | null;
   so_khach_tl?: number | null;
   ngay_di?: string | null;
   ngay_ve?: string | null;
@@ -25,7 +27,16 @@ export default function ChiPhiHeader({ doan, opName }: Props) {
     { label: "Agent", value: doan.agents?.ten || "—" },
     {
       label: t("Số khách"),
-      value: `${doan.so_khach_lon || 0} NL · ${doan.so_khach_tl || 0} TL · FOC`,
+      // Hiển thị TỔNG + breakdown đủ 4 hạng (khớp card đoàn). Trước đây chỉ NL+TL
+      // (thiếu TE 50%/free) nên lệch với các nơi khác.
+      value: (() => {
+        const lon = doan.so_khach_lon || 0;
+        const em1 = doan.so_khach_em1 || 0;
+        const em2 = doan.so_khach_em2 || 0;
+        const tl = doan.so_khach_tl || 0;
+        const tong = lon + em1 + em2 + tl;
+        return `${tong} (${lon} NL · ${em1} TE50% · ${em2} free · ${tl} T/L)`;
+      })(),
     },
     {
       label: t("Ngày"),
