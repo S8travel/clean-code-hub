@@ -1,6 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { startOfMonth, endOfMonth, subMonths, addMonths, format, addDays } from "date-fns";
+import {
+  buildMonthCols, countVisibleMonths, buildBreakdown, sumRows, rowTotalKhach,
+} from "@/lib/dashboard-breakdown";
+
+// Số tháng tối đa hiển thị ở bảng Agent/Miền (tháng này + 3 tháng sau).
+// Tháng cuối rỗng sẽ bị trim, nhưng luôn giữ tối thiểu MONTHS_MIN cột.
+const MONTHS_MAX = 4;
+const MONTHS_MIN = 3;
 
 // Local-aware format để tránh timezone-shift bug ở UTC+7
 const fmt = (d: Date) => format(d, "yyyy-MM-dd");
@@ -14,12 +22,6 @@ export function useDashboardStats() {
       const todayStr = fmt(today);
       const monthStart = fmt(startOfMonth(today));
       const monthEnd = fmt(endOfMonth(today));
-      const nextMonthStart = fmt(startOfMonth(addMonths(today, 1)));
-      const nextMonthEnd = fmt(endOfMonth(addMonths(today, 1)));
-      const monthLabels = {
-        tm: format(today, "MM/yyyy"),
-        nm: format(addMonths(today, 1), "MM/yyyy"),
-      };
       const next14 = fmt(addDays(today, 14));
       const next7 = fmt(addDays(today, 7));
       const sixMonthsAgo = fmt(startOfMonth(subMonths(today, 5)));
@@ -172,31 +174,28 @@ export function useDashboardStats() {
       );
       const recentDNTT = dnttList.filter((d) => d.payment_status !== "paid").slice(0, 8);
 
-      // ── Agent breakdown ───────────────────────────────────────────────────────
-      // Tháng này / tháng sau (theo ngay_di)
-      const inThisMonth = (d: DoanRow) => !!d.ngay_di && d.ngay_di >= monthStart && d.ngay_di <= monthEnd;
-      const inNextMonth = (d: DoanRow) => !!d.ngay_di && d.ngay_di >= nextMonthStart && d.ngay_di <= nextMonthEnd;
+      // ── Cột tháng cho bảng Agent/Miền (tháng này + tháng sau, ≥3 ≤4) ─────────
+      const skipDoan = (d: DoanRow) => d.trang_thai === "huy";
+      const allMonthCols = buildMonthCols(today, MONTHS_MAX);
+      const visibleMonths = countVisibleMonths(
+        doanList, allMonthCols, (d) => d.ngay_di, skipDoan, MONTHS_MIN,
+      );
+      const monthCols = allMonthCols.slice(0, visibleMonths);
+      const monthColLabels = monthCols.map((c) => c.label);
 
+      // ── Agent breakdown ───────────────────────────────────────────────────────
       const agentNameMap = new Map(agentList.map((a) => [a.id, a.ten]));
-      const agentMap = new Map<number, { name: string; tmDoan: number; tmKhach: number; nmDoan: number; nmKhach: number }>();
-      for (const d of doanList) {
-        if (!d.agent_id || d.trang_thai === "huy") continue;
-        const isTm = inThisMonth(d);
-        const isNm = inNextMonth(d);
-        if (!isTm && !isNm) continue;
-        const g = guestCount(d);
-        const prev = agentMap.get(d.agent_id) ?? { name: agentNameMap.get(d.agent_id) || "—", tmDoan: 0, tmKhach: 0, nmDoan: 0, nmKhach: 0 };
-        agentMap.set(d.agent_id, {
-          ...prev,
-          tmDoan: prev.tmDoan + (isTm ? 1 : 0),
-          tmKhach: prev.tmKhach + (isTm ? g : 0),
-          nmDoan: prev.nmDoan + (isNm ? 1 : 0),
-          nmKhach: prev.nmKhach + (isNm ? g : 0),
-        });
-      }
-      const topAgents = [...agentMap.values()]
-        .sort((a, b) => (b.tmKhach + b.nmKhach) - (a.tmKhach + a.nmKhach))
+      const agentRows = buildBreakdown(doanList, monthCols, {
+        getKey: (d) => d.agent_id,
+        getName: (d) => agentNameMap.get(d.agent_id!) || "—",
+        getNgayDi: (d) => d.ngay_di,
+        getKhach: (d) => guestCount(d),
+        skip: skipDoan,
+      });
+      const topAgents = agentRows
+        .sort((a, b) => rowTotalKhach(b) - rowTotalKhach(a))
         .slice(0, 8);
+      const agentTotal = sumRows(topAgents, monthCols.length);
 
       // ── Địa điểm breakdown ────────────────────────────────────────────────────
       const ddNameMap = new Map(diaDiemList.map((d) => [d.id, d.ten]));
@@ -211,38 +210,20 @@ export function useDashboardStats() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 8);
 
-      // ── Miền breakdown (dia_diem.mien) — tháng này + tháng sau ───────────────
-      const mienMap = new Map<string, { name: string; tmDoan: number; tmKhach: number; nmDoan: number; nmKhach: number }>();
-      for (const d of doanList) {
-        if (!d.dia_diem_id || d.trang_thai === "huy") continue;
-        const isTm = inThisMonth(d);
-        const isNm = inNextMonth(d);
-        if (!isTm && !isNm) continue;
-        const g = guestCount(d);
-        const mien = ddMienMap.get(d.dia_diem_id) || "Khác";
-        const prev = mienMap.get(mien) ?? { name: mien, tmDoan: 0, tmKhach: 0, nmDoan: 0, nmKhach: 0 };
-        mienMap.set(mien, {
-          ...prev,
-          tmDoan: prev.tmDoan + (isTm ? 1 : 0),
-          tmKhach: prev.tmKhach + (isTm ? g : 0),
-          nmDoan: prev.nmDoan + (isNm ? 1 : 0),
-          nmKhach: prev.nmKhach + (isNm ? g : 0),
-        });
-      }
+      // ── Miền breakdown (dia_diem.mien) ───────────────────────────────────────
+      const mienRows = buildBreakdown(doanList, monthCols, {
+        getKey: (d) => (d.dia_diem_id ? (ddMienMap.get(d.dia_diem_id) || "Khác") : null),
+        getName: (d) => ddMienMap.get(d.dia_diem_id!) || "Khác",
+        getNgayDi: (d) => d.ngay_di,
+        getKhach: (d) => guestCount(d),
+        skip: skipDoan,
+      });
       // Thứ tự cố định Bắc → Trung → Nam → Khác
       const MIEN_ORDER = ["Bắc", "Trung", "Nam", "Khác"];
-      const topMien = [...mienMap.values()].sort(
+      const topMien = mienRows.sort(
         (a, b) => MIEN_ORDER.indexOf(a.name) - MIEN_ORDER.indexOf(b.name),
       );
-      const mienTotal = topMien.reduce(
-        (acc, m) => ({
-          tmDoan: acc.tmDoan + m.tmDoan,
-          tmKhach: acc.tmKhach + m.tmKhach,
-          nmDoan: acc.nmDoan + m.nmDoan,
-          nmKhach: acc.nmKhach + m.nmKhach,
-        }),
-        { tmDoan: 0, tmKhach: 0, nmDoan: 0, nmKhach: 0 },
-      );
+      const mienTotal = sumRows(topMien, monthCols.length);
 
       // ── Công nợ phải trả NCC (còn dư) ────────────────────────────────────────
       const congNoNCCAmount = congNoList.reduce((s, c) => s + Number(c.so_tien_con_lai || 0), 0);
@@ -305,10 +286,11 @@ export function useDashboardStats() {
         monthlyCostData,
         statusBreakdown,
         topAgents,
+        agentTotal,
         topDiaDiem,
         topMien,
         mienTotal,
-        monthLabels,
+        monthColLabels,
         // Dòng tiền
         congNoNCCAmount,
         congNoNCCCount,
