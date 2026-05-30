@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ProtectedLayout } from "@/components/ProtectedLayout";
+import { useVersionCheck } from "@/lib/version-check";
 
 // EAGER — entry / core pages dùng liên tục
 import LoginPage from "./pages/LoginPage.tsx";
@@ -63,10 +64,17 @@ function RouteFallback() {
   );
 }
 
+// Theo dõi deploy mới → ép tải lại (no-op trong dev). Render null.
+function VersionWatcher() {
+  useVersionCheck();
+  return null;
+}
+
 const App = () => (
   <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <VersionWatcher />
         <Toaster />
         <Sonner />
         <BrowserRouter>

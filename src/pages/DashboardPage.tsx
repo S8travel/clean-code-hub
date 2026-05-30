@@ -102,8 +102,8 @@ function BreakdownTable({
           <tr>
             {monthLabels.map((m) => (
               <Fragment key={m}>
-                <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
-                <th className="text-right font-semibold px-3 py-1.5">Khách</th>
+                <th className="text-right font-semibold px-2 py-1.5 border-l border-border">{t("Đoàn")}</th>
+                <th className="text-right font-semibold px-3 py-1.5">{t("Khách")}</th>
               </Fragment>
             ))}
           </tr>
@@ -123,7 +123,7 @@ function BreakdownTable({
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-            <td className="px-4 py-2">Tổng</td>
+            <td className="px-4 py-2">{t("Tổng")}</td>
             {total.cells.map((c, i) => (
               <Fragment key={i}>
                 <td className="px-2 py-2 text-right tabular-nums border-l border-border">{c.doan || "—"}</td>
@@ -377,7 +377,7 @@ function DashboardPageContent() {
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu")}</div>
             ) : (
               <BreakdownTable
-                firstColLabel="Agent"
+                firstColLabel={t("Agent")}
                 monthLabels={monthLabels}
                 rows={data.topAgents}
                 total={data.agentTotal}
@@ -396,7 +396,7 @@ function DashboardPageContent() {
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu")}</div>
             ) : (
               <BreakdownTable
-                firstColLabel="Miền"
+                firstColLabel={t("Miền")}
                 monthLabels={monthLabels}
                 rows={data.topMien}
                 total={data.mienTotal}
