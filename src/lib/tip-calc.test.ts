@@ -5,6 +5,7 @@ import {
   defaultTipRate,
   defaultTipSoKhach,
   tipDaysInclusive,
+  shouldCollectTip,
   calcTipNDT,
   calcTipVND,
 } from "./tip-calc";
@@ -51,6 +52,22 @@ describe("tipDaysInclusive", () => {
   });
   it("chấp nhận chuỗi có phần giờ (cắt còn ngày)", () => {
     expect(tipDaysInclusive("2026-05-21T09:30:00", "2026-05-23T18:00:00")).toBe(3);
+  });
+});
+
+describe("shouldCollectTip", () => {
+  it("thu_tip=false → KHÔNG thu tip (dù có khách & ngày)", () => {
+    expect(shouldCollectTip(false, 24, 8)).toBe(false);
+  });
+  it("thu_tip null/undefined → mặc định CÓ thu (nếu khách & ngày > 0)", () => {
+    expect(shouldCollectTip(null, 24, 8)).toBe(true);
+    expect(shouldCollectTip(undefined, 24, 8)).toBe(true);
+    expect(shouldCollectTip(true, 24, 8)).toBe(true);
+  });
+  it("không có khách hoặc không có ngày → không thu", () => {
+    expect(shouldCollectTip(true, 0, 8)).toBe(false);
+    expect(shouldCollectTip(true, 24, 0)).toBe(false);
+    expect(shouldCollectTip(null, 0, 0)).toBe(false);
   });
 });
 

@@ -36,6 +36,21 @@ export function tipDaysInclusive(
   return Math.max(1, Math.round((e - s) / 86_400_000) + 1);
 }
 
+/**
+ * Có thu tip cho đoàn này không.
+ * - `thuTip` = `doan.thu_tip`; mặc định TRUE khi null/undefined (chỉ tắt khi user
+ *   bỏ tích "Thu tiền tip" ở Điều tour → thu_tip = false).
+ * - Vẫn cần số khách & số ngày > 0 mới có tip để hiện.
+ * Dùng chung cho UI (ChiPhiPhasThuSection) lẫn export Excel để khỏi lệch nhau.
+ */
+export function shouldCollectTip(
+  thuTip: boolean | null | undefined,
+  soKhach: number,
+  soNgay: number,
+): boolean {
+  return (thuTip ?? true) && soKhach > 0 && soNgay > 0;
+}
+
 /** Tổng tip theo NDT (chưa quy đổi tỷ giá). */
 export function calcTipNDT(input: { soKhach: number; soNgay: number; rate: number }): number {
   return input.soKhach * input.soNgay * input.rate;
