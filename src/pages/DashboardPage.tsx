@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -76,6 +77,66 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Bảng số đoàn & khách theo tháng (dùng chung cho Agent + Miền).
+// monthLabels động (3–4 tháng), mỗi tháng = 2 cột Đoàn/Khách. Có hàng Tổng.
+type BreakdownCell = { doan: number; khach: number };
+type BreakdownRowT = { name: string; cells: BreakdownCell[] };
+function BreakdownTable({
+  firstColLabel, monthLabels, rows, total,
+}: {
+  firstColLabel: string;
+  monthLabels: string[];
+  rows: BreakdownRowT[];
+  total: BreakdownRowT;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-[10px] uppercase text-muted-foreground tracking-wider">
+          <tr>
+            <th rowSpan={2} className="text-left font-semibold px-4 py-2 align-bottom">{firstColLabel}</th>
+            {monthLabels.map((m) => (
+              <th key={m} colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">{m}</th>
+            ))}
+          </tr>
+          <tr>
+            {monthLabels.map((m) => (
+              <Fragment key={m}>
+                <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
+                <th className="text-right font-semibold px-3 py-1.5">Khách</th>
+              </Fragment>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r) => (
+            <tr key={r.name} className="hover:bg-muted/30 transition-colors">
+              <td className="px-4 py-2 font-medium truncate max-w-[140px]">{r.name}</td>
+              {r.cells.map((c, i) => (
+                <Fragment key={i}>
+                  <td className="px-2 py-2 text-right tabular-nums border-l border-border">{c.doan || "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{c.khach ? c.khach.toLocaleString() : "—"}</td>
+                </Fragment>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+            <td className="px-4 py-2">Tổng</td>
+            {total.cells.map((c, i) => (
+              <Fragment key={i}>
+                <td className="px-2 py-2 text-right tabular-nums border-l border-border">{c.doan || "—"}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-[hsl(var(--brand))]">{c.khach ? c.khach.toLocaleString() : "—"}</td>
+              </Fragment>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 const TOOLTIP_STYLE = {
   fontSize: 12,
   background: "hsl(var(--card))",
@@ -135,7 +196,7 @@ function DashboardPageContent() {
   const today = format(new Date(), "EEEE, dd/MM/yyyy", { locale: vi });
   const doanGrowth = growthPct(data.thisMonthDoanCount, data.lastMonthDoanCount);
   const khachGrowth = growthPct(data.thisMonthGuests, data.lastMonthGuests);
-  const mLabels = data.monthLabels;
+  const monthLabels = data.monthColLabels;
 
   return (
     <div className="p-5 space-y-6 max-w-[1400px] mx-auto">
@@ -300,9 +361,9 @@ function DashboardPageContent() {
         </div>
       </div>
 
-      {/* ── Thống kê đoàn (tháng này + tháng sau) ── */}
+      {/* ── Thống kê đoàn (theo tháng) ── */}
       <div>
-        <SectionTitle>{t("Thống kê đoàn — tháng này & tháng sau")}</SectionTitle>
+        <SectionTitle>{t("Thống kê đoàn — theo tháng")}</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Theo Agent */}
@@ -313,36 +374,14 @@ function DashboardPageContent() {
               </p>
             </div>
             {data.topAgents.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu 2 tháng này")}</div>
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu")}</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-[10px] uppercase text-muted-foreground tracking-wider">
-                    <tr>
-                      <th rowSpan={2} className="text-left font-semibold px-4 py-2 align-bottom">Agent</th>
-                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng này · {mLabels.tm}</th>
-                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng sau · {mLabels.nm}</th>
-                    </tr>
-                    <tr>
-                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
-                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
-                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
-                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {data.topAgents.map((a) => (
-                      <tr key={a.name} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-2 font-medium truncate max-w-[140px]">{a.name}</td>
-                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{a.tmDoan || "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{a.tmKhach ? a.tmKhach.toLocaleString() : "—"}</td>
-                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{a.nmDoan || "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{a.nmKhach ? a.nmKhach.toLocaleString() : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <BreakdownTable
+                firstColLabel="Agent"
+                monthLabels={monthLabels}
+                rows={data.topAgents}
+                total={data.agentTotal}
+              />
             )}
           </div>
 
@@ -354,45 +393,14 @@ function DashboardPageContent() {
               </p>
             </div>
             {data.topMien.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu 2 tháng này")}</div>
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("Chưa có dữ liệu")}</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-[10px] uppercase text-muted-foreground tracking-wider">
-                    <tr>
-                      <th rowSpan={2} className="text-left font-semibold px-4 py-2 align-bottom">Miền</th>
-                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng này · {mLabels.tm}</th>
-                      <th colSpan={2} className="text-center font-semibold px-2 py-1.5 border-l border-border">Tháng sau · {mLabels.nm}</th>
-                    </tr>
-                    <tr>
-                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
-                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
-                      <th className="text-right font-semibold px-2 py-1.5 border-l border-border">Đoàn</th>
-                      <th className="text-right font-semibold px-3 py-1.5">Khách</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {data.topMien.map((m) => (
-                      <tr key={m.name} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-2 font-medium">{m.name}</td>
-                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{m.tmDoan || "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{m.tmKhach ? m.tmKhach.toLocaleString() : "—"}</td>
-                        <td className="px-2 py-2 text-right tabular-nums border-l border-border">{m.nmDoan || "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[hsl(var(--brand))]">{m.nmKhach ? m.nmKhach.toLocaleString() : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                      <td className="px-4 py-2">Tổng</td>
-                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">{data.mienTotal.tmDoan}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-[hsl(var(--brand))]">{data.mienTotal.tmKhach.toLocaleString()}</td>
-                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">{data.mienTotal.nmDoan}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-[hsl(var(--brand))]">{data.mienTotal.nmKhach.toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <BreakdownTable
+                firstColLabel="Miền"
+                monthLabels={monthLabels}
+                rows={data.topMien}
+                total={data.mienTotal}
+              />
             )}
           </div>
         </div>
