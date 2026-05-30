@@ -59,6 +59,8 @@ export interface DVRowHandlers {
   getRowEdit: (row: ChiPhiRow) => { so_luong: number; don_gia: number };
   getDateLabel: (ngaySo: number | null) => string;
   setSelectedIds: (updater: (prev: number[]) => number[]) => void;
+  /** Tích/bỏ tích 1 dòng → kéo theo cả nhóm cùng ĐNTT gộp. */
+  toggleSelectRow: (rowId: number, checked: boolean) => void;
   handleRowChange: (id: number | undefined, field: "so_luong" | "don_gia", v: number) => void;
   handleRowSave: (row: ChiPhiRow) => void;
   handleResetOverride: (row: ChiPhiRow) => void;
@@ -98,7 +100,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
     upsertMut, updateDNTT,
   } = data;
   const {
-    getRowEdit, getDateLabel, setSelectedIds, handleRowChange, handleRowSave,
+    getRowEdit, getDateLabel, setSelectedIds, toggleSelectRow, handleRowChange, handleRowSave,
     handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
@@ -199,7 +201,8 @@ export default function DVRow({ row, day, data, handlers }: Props) {
           checked={isSelected}
           onCheckedChange={(v) => {
             if (!row.id) return;
-            setSelectedIds(prev => v ? [...prev, row.id!] : prev.filter(id => id !== row.id));
+            // Tích 1 dòng → kéo theo cả nhóm cùng ĐNTT gộp (xem toggleSelectRow).
+            toggleSelectRow(row.id, !!v);
           }}
           className="h-3.5 w-3.5"
         />
