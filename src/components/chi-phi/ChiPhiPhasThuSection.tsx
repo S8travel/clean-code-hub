@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { shouldCollectTip } from "@/lib/tip-calc";
 import { t, useTranslate } from "@/lib/i18n";
 import { useUpdateDoanTip } from "@/hooks/use-doan";
 import type { HDVDoanInfo } from "./ChiPhiHDVSection";
@@ -85,8 +86,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
   const [tipNguoiThu, setTipNguoiThu] = useState<NguoiThu>("hdv");
 
   // ── Có thu tip không (bỏ tích "Thu tiền tip" ở Điều tour → ẩn dòng tip) ────
-  const thuTip = doan?.thu_tip ?? true;
-  const showTipRow = thuTip && effSoKhach > 0 && effSoNgay > 0;
+  const showTipRow = shouldCollectTip(doan?.thu_tip, effSoKhach, effSoNgay);
 
   // ── Tổng tip (NDT + VND) — respect tip_lump_sum override (set ở TipSection) ─
   const computedTip = effSoKhach * effSoNgay * effRate;
