@@ -32,7 +32,7 @@ export interface LocalDVExtra {
 }
 
 // Shape tối thiểu — chỉ các field DVRow đụng tới.
-interface DVPaymentLite { chi_phi_id: number | null; method: string; payment_so_tien: number }
+interface DVPaymentLite { chi_phi_id: number | null; dntt_id: number; method: string; payment_so_tien: number }
 interface DVCongNoLite { dntt_goc_id: number | null; trang_thai: string; so_tien_con_lai: number; so_tien_goc: number | null }
 
 /** Dữ liệu dùng chung — gom cụm để khỏi truyền 30 props rời. */
@@ -44,6 +44,8 @@ export interface DVRowData {
   allDvRows: ChiPhiRow[];
   dvCdMap: ReturnType<typeof useDVCanhDiemMap>;
   canTruByDnttId: Record<number, number>;
+  /** chi_phi_id → (dntt_id → so_tien allocation). Map dòng → ĐNTT (kể cả ĐNTT gộp). */
+  allocByChiPhi: Map<number, Map<number, number>>;
   selectedIds: number[];
   editingId: number | null;
   editAmount: string;
@@ -92,7 +94,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   useTranslate();
   const {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
-    canTruByDnttId, selectedIds, editingId, editAmount, ngayBatDau,
+    canTruByDnttId, allocByChiPhi, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   } = data;
   const {
@@ -108,17 +110,28 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   const thanhTienLocal = local.so_luong * local.don_gia;
   const nguoiTt = row.tien_hdv > 0 ? "hdv" : "cong_ty";
 
+  // Map dòng → ĐNTT qua ALLOCATION (không chỉ ref_id) → dòng nằm trong ĐNTT gộp
+  // (ref_id trỏ dòng khác) vẫn nhận diện đúng ĐNTT của mình.
+  const myAllocByDntt = (row.id != null ? allocByChiPhi.get(row.id) : undefined) ?? new Map<number, number>();
   const allDntts = dnttList.filter(
-    d => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id,
+    d => d.ref_loai === "doan_chi_phi" && (myAllocByDntt.has(d.id) || d.ref_id === row.id),
   );
+  // Phần allocation của DÒNG NÀY trong 1 ĐNTT (gộp → chỉ phần của dòng, không phải cả ĐNTT).
+  const allocAmt = (d: DNTTRow): number => myAllocByDntt.get(d.id) ?? Number(d.so_tien);
+  // Tiền đã trả của DÒNG NÀY cho 1 ĐNTT (payment_so_tien đã pro-rate per-allocation).
+  const paidForDntt = (d: DNTTRow): number =>
+    paymentsList
+      .filter(p => p.dntt_id === d.id && p.chi_phi_id === row.id)
+      .reduce((s, p) => s + p.payment_so_tien, 0);
   const activeDntts = allDntts.filter(
     d => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
   );
   const rejectedDntts = allDntts.filter(d => d.trang_thai_duyet === "tu_choi");
   const paidDntts = activeDntts.filter(d => d.payment_status === "paid");
   const pendingDntts = activeDntts.filter(d => d.payment_status !== "paid");
-  const daTT = activeDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
-  const daDeNghi = pendingDntts.reduce((s, d) => s + (d.so_tien - (d.paid_amount || 0)), 0);
+  // Per-dòng (allocation-based) thay vì cả ĐNTT → ĐNTT gộp hiển thị đúng phần của dòng.
+  const daTT = row.so_tien_da_tt ?? 0;
+  const daDeNghi = pendingDntts.reduce((s, d) => s + Math.max(0, allocAmt(d) - paidForDntt(d)), 0);
   const thanhTien = row.tien_cong_ty;
   const rowExtras = extrasMap[row.id!] || [];
   const extrasCtTotal = rowExtras
@@ -158,7 +171,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   );
   const groupChiPhi = [row, ...extraChiPhiRows];
   const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
-  const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+  // Cam kết ĐNTT của CẢ NHÓM (main + extras) theo allocation per-dòng (so_tien_da_dntt),
+  // KHÔNG phải tổng so_tien của ĐNTT (ĐNTT gộp gồm nhiều dòng khác NCC chung).
+  const sumCommitted = groupChiPhi.reduce((s, r) => s + (r.so_tien_da_dntt ?? 0), 0);
   const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
     sumActual, sumPaid, sumCommitted, groupCongNoTotal,
   });
@@ -279,7 +294,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 <div key={d.id} className="flex items-center gap-0.5">
                   {isRejected ? (
                     <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                      {t(statusInfo.textKey)} · {fmt(d.so_tien)}
+                      {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
                     </span>
                   ) : editingId === d.id ? (
                     <>
@@ -304,11 +319,11 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                     <>
                       {(() => {
                         const ct = canTruByDnttId[d.id] || 0;
-                        const thucTT = Math.max(0, d.so_tien - ct);
+                        const thucTT = Math.max(0, allocAmt(d) - ct);
                         return (
                           <div className="inline-flex flex-col items-start gap-0.5">
                             <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                              {t(statusInfo.textKey)} · {fmt(d.so_tien)}
+                              {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
                               {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
                             </span>
                             {ct > 0 && (
@@ -351,7 +366,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 </span>
               ) : (
                 <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                  {t("Chờ UNC")} · {fmt(d.so_tien - (d.paid_amount || 0))}
+                  {t("Chờ UNC")} · {fmt(Math.max(0, allocAmt(d) - paidForDntt(d)))}
                 </span>
               )}
             </div>

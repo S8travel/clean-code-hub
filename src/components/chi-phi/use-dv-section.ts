@@ -3,7 +3,7 @@ import { format, subDays, parseISO, addDays } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
-import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
+import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi, useDNTTAllocationsByDoan } from "@/hooks/use-chi-phi";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
@@ -35,6 +35,19 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
+  const { data: allocRows = [] } = useDNTTAllocationsByDoan(doanId);
+
+  // chi_phi_id → (dntt_id → so_tien). Map dòng → các ĐNTT allocate vào nó
+  // (gồm ĐNTT gộp ref_id 1 dòng nhưng allocate cho nhiều dòng cùng NCC).
+  const allocByChiPhi = useMemo(() => {
+    const m = new Map<number, Map<number, number>>();
+    for (const a of allocRows) {
+      let inner = m.get(a.chi_phi_id);
+      if (!inner) { inner = new Map<number, number>(); m.set(a.chi_phi_id, inner); }
+      inner.set(a.dntt_id, (inner.get(a.dntt_id) ?? 0) + a.so_tien);
+    }
+    return m;
+  }, [allocRows]);
 
   const canTruByDnttId = useMemo(() => {
     // payment_so_tien đã pro-rate per-allocation trong usePaymentsByChiPhi.
@@ -668,7 +681,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
   const dvData: DVRowData = {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
-    canTruByDnttId, selectedIds, editingId, editAmount, ngayBatDau,
+    canTruByDnttId, allocByChiPhi, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   };
   const dvHandlers: DVRowHandlers = {

@@ -628,6 +628,7 @@ export function useInsertDNTT() {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", v.doan_id] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", v.doan_id] });
+      qc.invalidateQueries({ queryKey: ["dntt_allocations_by_doan", v.doan_id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       const loai = (v.loai as string | null | undefined) ?? "";
       const soTien = (v.so_tien as number | null | undefined) ?? 0;
@@ -648,6 +649,33 @@ export function useDNTTAllocations(dnttId: number | null | undefined) {
         .eq("dntt_id", dnttId!);
       if (error) throw error;
       return data as { id: number; chi_phi_id: number; so_tien: number; ghi_chu: string | null; created_at: string }[];
+    },
+  });
+}
+
+/** Allocations (chi_phi_id → dntt_id, so_tien) cho TẤT CẢ chi phí của 1 đoàn.
+ *  Dùng để map 1 dòng chi phí → các ĐNTT phân bổ vào nó (kể cả ĐNTT gộp nhiều dòng,
+ *  vì ĐNTT gộp chỉ ref_id 1 dòng nhưng allocate cho nhiều). */
+export interface DnttAllocByDoan { chi_phi_id: number; dntt_id: number; so_tien: number }
+export function useDNTTAllocationsByDoan(doanId?: number) {
+  return useQuery({
+    queryKey: ["dntt_allocations_by_doan", doanId],
+    enabled: !!doanId,
+    queryFn: async (): Promise<DnttAllocByDoan[]> => {
+      const { data: cps } = await externalSupabase
+        .from("doan_chi_phi").select("id").eq("doan_id", doanId!);
+      const ids = (cps ?? []).map((c) => c.id);
+      if (ids.length === 0) return [];
+      const { data, error } = await externalSupabase
+        .from("dntt_allocations")
+        .select("chi_phi_id, dntt_id, so_tien")
+        .in("chi_phi_id", ids);
+      if (error) throw error;
+      return (data ?? []).map((a) => ({
+        chi_phi_id: a.chi_phi_id as number,
+        dntt_id: a.dntt_id as number,
+        so_tien: Number(a.so_tien),
+      }));
     },
   });
 }
