@@ -69,11 +69,12 @@ export function blockWeekendDate(val: string): string {
   }
 }
 
+// Trích MỌI email hợp lệ trong chuỗi → "a@x.com, b@y.com".
+// Bỏ tên người, dấu < >, dấu nháy, và mọi phân cách (, ; xuống dòng tab khoảng
+// trắng). Resend chỉ chấp nhận "email" thuần (hoặc "Name <email>") nên KHÔNG
+// được giữ token kiểu "<a@x.com>" — regex chỉ bắt phần địa chỉ.
 export function normalizeEmails(raw: string | null | undefined): string {
   if (!raw) return "";
-  return raw
-    .split(/[,;\s\n]+/)
-    .map((e) => e.trim())
-    .filter((e) => e.includes("@"))
-    .join(", ");
+  const found = raw.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? [];
+  return [...new Set(found)].join(", ");
 }
