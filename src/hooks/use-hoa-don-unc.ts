@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { TablesInsert } from "@/lib/database.types";
+import { formatHoaDonLechMoTa } from "@/lib/hoa-don-lech";
 
 export type TrangThaiDoc = "chua_co" | "da_co" | "khong_can";
 
@@ -244,13 +245,15 @@ export function useSaveHoaDonSoTien() {
       const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN") + " ₫";
       const hd = p.hoaDonSoTien;
 
-      const { error: updErr } = await externalSupabase
+      const { data: dnttRow, error: updErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .update({
           hoa_don_so_tien: hd,
           trang_thai_hoa_don: hd != null ? "da_co" : "chua_co",
         })
-        .eq("id", p.id);
+        .eq("id", p.id)
+        .select("loai, mo_ta, ten_nha_cung_cap")
+        .single();
       if (updErr) throw updErr;
 
       const marker = `[HĐ#${p.id}]`;
@@ -333,9 +336,17 @@ export function useSaveHoaDonSoTien() {
 
       if (!recipient) return { mismatch: true, notified: false };
 
-      const moTa = `${marker} Hóa đơn nhập ${fmt(hd)} ≠ số tiền ĐNTT ${fmt(p.dnttSoTien)} ` +
-        `(lệch ${lech > 0 ? "+" : ""}${fmt(lech)})${p.tenDoan ? ` · Đoàn ${p.tenDoan}` : ""}. ` +
-        `Kiểm tra & xử lý.`;
+      // Message ghi RÕ ĐNTT đó cho dịch vụ gì (loại + mô tả). Bắt đầu bằng marker
+      // [HĐ#id] để dedupe ilike vẫn khớp.
+      const moTa = formatHoaDonLechMoTa({
+        id: p.id,
+        hoaDon: hd,
+        dnttSoTien: p.dnttSoTien,
+        loai: dnttRow?.loai,
+        dnttMoTa: dnttRow?.mo_ta,
+        ncc: dnttRow?.ten_nha_cung_cap,
+        tenDoan: p.tenDoan,
+      });
       const tbNoiDung = `HĐ ${fmt(hd)} ≠ ĐNTT ${fmt(p.dnttSoTien)} (lệch ${lech > 0 ? "+" : ""}${fmt(lech)})` +
         `${p.tenDoan ? ` · ${p.tenDoan}` : ""}`;
 
