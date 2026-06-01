@@ -10,6 +10,7 @@ import {
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
+import { buildCanTruNote } from "@/lib/can-tru-note";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -974,15 +975,16 @@ export function useNHSection({
         // Cấn trừ: tổng can_tru payments — của ĐNTT đang in (nếu có) hoặc cả meal.
         const nccId = nh.nha_cung_cap_id ?? null;
         let canTruAmount = 0;
+        let canTruNote: string | undefined;
         if (nccId && !canTruShownByNcc[nccId] && chiPhiId) {
-          canTruAmount = activeDntt
-            ? paymentsList
-                .filter((p) => p.dntt_id === activeDntt.id && p.method === "can_tru")
-                .reduce((s, p) => s + p.payment_so_tien, 0)
-            : paymentsList
-                .filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru")
-                .reduce((s, p) => s + p.payment_so_tien, 0);
-          if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
+          const canTruPays = activeDntt
+            ? paymentsList.filter((p) => p.dntt_id === activeDntt.id && p.method === "can_tru")
+            : paymentsList.filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru");
+          canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
+          if (canTruAmount > 0) {
+            canTruShownByNcc[nccId] = true;
+            canTruNote = buildCanTruNote(canTruPays); // "Cấn trừ từ đoàn: <nguồn>"
+          }
         }
 
         // Số tiền cần thanh toán: có pending → đúng so_tien ĐNTT đó (trừ cấn trừ nếu
@@ -1007,6 +1009,7 @@ export function useNHSection({
           tai_khoan_thanh_toan: nh.tai_khoan_thanh_toan || null,
           so_tien_coc: soCoc,
           can_tru: canTruAmount,
+          can_tru_note: canTruNote,
           so_tien_con_tt: soTienConTT,
           la_coc: !!activeDntt?.la_coc,
         });

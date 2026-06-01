@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import type { DnttLump } from "@/lib/can-tru-lump";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
@@ -43,9 +44,10 @@ export interface DVRowData {
   congNoList: DVCongNoLite[];
   allDvRows: ChiPhiRow[];
   dvCdMap: ReturnType<typeof useDVCanhDiemMap>;
-  canTruByDnttId: Record<number, number>;
   /** chi_phi_id → (dntt_id → so_tien allocation). Map dòng → ĐNTT (kể cả ĐNTT gộp). */
   allocByChiPhi: Map<number, Map<number, number>>;
+  /** dntt_id → lump cấn trừ/tiền mặt theo từng chi_phi (dồn vào dòng đầu) — chỉ hiển thị. */
+  lumpedByDntt: Map<number, DnttLump>;
   selectedIds: number[];
   editingId: number | null;
   editAmount: string;
@@ -96,7 +98,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   useTranslate();
   const {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
-    canTruByDnttId, allocByChiPhi, selectedIds, editingId, editAmount, ngayBatDau,
+    allocByChiPhi, lumpedByDntt, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   } = data;
   const {
@@ -125,6 +127,10 @@ export default function DVRow({ row, day, data, handlers }: Props) {
     paymentsList
       .filter(p => p.dntt_id === d.id && p.chi_phi_id === row.id)
       .reduce((s, p) => s + p.payment_so_tien, 0);
+  // Lump cấn trừ HIỂN THỊ của dòng này cho 1 ĐNTT — đã dồn vào dòng đầu (display-only),
+  // KHÔNG pro-rata. undefined nếu ĐNTT không có cấn trừ (→ dùng paidForDntt như cũ).
+  const lumpFor = (d: DNTTRow) => (row.id != null ? lumpedByDntt.get(d.id)?.rows.get(row.id) : undefined);
+  const canTruNoteFor = (d: DNTTRow): string | undefined => lumpedByDntt.get(d.id)?.canTruNote;
   const activeDntts = allDntts.filter(
     d => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
   );
@@ -321,8 +327,11 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                   ) : (
                     <>
                       {(() => {
-                        const ct = canTruByDnttId[d.id] || 0;
-                        const thucTT = Math.max(0, allocAmt(d) - ct);
+                        // Cấn trừ dồn vào dòng đầu (lump): chỉ dòng gánh cấn trừ mới hiện CT → TT.
+                        const lump = lumpFor(d);
+                        const ct = lump?.canTru ?? 0;
+                        // TT = còn phải trả (sau cấn trừ & tiền mặt đã trả) — KHỚP cột "Chờ UNC".
+                        const thucTT = lump?.choUNC ?? Math.max(0, allocAmt(d) - ct);
                         return (
                           <div className="inline-flex flex-col items-start gap-0.5">
                             <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
@@ -330,7 +339,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                               {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
                             </span>
                             {ct > 0 && (
-                              <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap">
+                              <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap" title={canTruNoteFor(d)}>
                                 CT {fmt(ct)} → TT {fmt(thucTT)}
                               </span>
                             )}
@@ -369,7 +378,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 </span>
               ) : (
                 <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                  {t("Chờ UNC")} · {fmt(Math.max(0, allocAmt(d) - paidForDntt(d)))}
+                  {/* Lump: ĐNTT có cấn trừ → còn lại = alloc − cấn trừ dồn − tiền mặt (tương ứng cột CT).
+                      ĐNTT không cấn trừ → giữ logic cũ (alloc − đã trả pro-rata). */}
+                  {t("Chờ UNC")} · {fmt(lumpFor(d)?.choUNC ?? Math.max(0, allocAmt(d) - paidForDntt(d)))}
                 </span>
               )}
             </div>
