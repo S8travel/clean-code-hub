@@ -2085,5 +2085,12 @@
   "Đã lưu phân chia nhóm": "已儲存分組分配",
   "chi phí cảnh điểm đang gắn ĐNTT bị đổi số khách — kiểm tra lại số tiền ĐNTT.": "筆景點費用已綁定付款申請但客數已變更 — 請重新檢查付款申請金額。",
   "Tổng các nhóm khớp với đoàn — sẵn sàng lưu": "各分組合計與團相符 — 可儲存",
-  "Tổng các nhóm CHƯA khớp với đoàn — không thể lưu": "各分組合計與團不符 — 無法儲存"
+  "Tổng các nhóm CHƯA khớp với đoàn — không thể lưu": "各分組合計與團不符 — 無法儲存",
+  "Tip lái xe": "司機小費",
+  "Tip lái xe tham khảo (VND)": "司機小費參考（VND）",
+  "MT: miền Trung · PQ: Phú Quốc · MN: miền Nam · 16C/35C/45C: số chỗ xe": "MT：中部 · PQ：富國 · MN：南部 · 16C/35C/45C：座位數",
+  "Không xóa được quà đã có ĐNTT": "已有付款申請的贈品無法刪除",
+  "Xe 7C = xe 16C · Xe 29C = xe 35C": "7C車 = 16C車 · 29C車 = 35C車",
+  "LMS 29S Long Hiền = 300K": "LMS 29S Long Hiền = 300K",
+  "LMS 9S miền Nam = miền Trung = 200K": "LMS 9S 南部 = 中部 = 200K"
 }
