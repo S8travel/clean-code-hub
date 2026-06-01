@@ -191,13 +191,23 @@ function getSoKhach(doan: ExportDoan): number {
   );
 }
 
-function getSoKhachText(doan: ExportDoan): string {
+/**
+ * Text "Số khách" cho export — khớp breakdown hiển thị trên trang điều tour
+ * (NL · TE 50% · TE free · T/L · Tổng). Bỏ qua category = 0 cho gọn.
+ * VD: "49 khách (42 NL, 5 TE 50%, 1 TE free, 1 TL)".
+ */
+export function getSoKhachText(doan: ExportDoan): string {
   const total = getSoKhach(doan);
-  const adults = doan?.so_khach_lon ?? 0;
+  const lon = doan?.so_khach_lon ?? 0;
+  const em1 = doan?.so_khach_em1 ?? 0; // TE 50%
+  const em2 = doan?.so_khach_em2 ?? 0; // TE free
   const tl = doan?.so_khach_tl ?? 0;
-  const em1 = doan?.so_khach_em1 ?? 0;
-  const em2 = doan?.so_khach_em2 ?? 0;
-  return `${total} khách (${adults} NL, ${tl} TL, ${em1} TE1, ${em2} TE2)`;
+  const parts: string[] = [];
+  if (lon) parts.push(`${lon} NL`);
+  if (em1) parts.push(`${em1} TE 50%`);
+  if (em2) parts.push(`${em2} TE free`);
+  if (tl) parts.push(`${tl} TL`);
+  return parts.length ? `${total} khách (${parts.join(", ")})` : `${total} khách`;
 }
 
 function getXeText(doan: ExportDoan): string {
@@ -648,7 +658,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   const rows: SheetCell[][] = [];
 
   // ─── HEADER ───
-  const soKhachText = `${doan?.so_khach_lon ?? 0}+${doan?.so_khach_tl ?? 0}TL`;
+  const soKhachText = getSoKhachText(doan);
   const quaTang = Array.isArray(doan?.tang_pham)
     ? (doan.tang_pham as string[]).join(", ")
     : doan?.tang_pham ? String(doan.tang_pham) : "—";
