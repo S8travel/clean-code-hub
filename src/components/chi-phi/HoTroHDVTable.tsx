@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { errMsg } from "@/lib/error";
@@ -28,6 +28,7 @@ import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
 import { t } from "@/lib/i18n";
 import { useCancelDNTT, type HDVHoTroItem } from "@/hooks/use-chi-phi-hdv";
 import type { HDVDoanInfo, KhacModalItem, KhacModalTarget, KhacCancelTarget } from "./hdv-shared";
+import { resolveHoTroNguoiTt, isTipLaiXeRow, TIP_LAI_XE_MO_TA } from "./hdv-shared";
 import { HDVHoTroRow } from "./HDVHoTroRow";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -93,6 +94,13 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems }: {
     return m;
   }, [paymentsList]);
 
+  // Thứ tự hiển thị: row "Tip lái xe" luôn lên đầu, còn lại giữ thứ tự created_at.
+  const orderedItems = useMemo(() => {
+    const tip = hoTroItems.filter((i) => isTipLaiXeRow(i.mo_ta));
+    const rest = hoTroItems.filter((i) => !isTipLaiXeRow(i.mo_ta));
+    return [...tip, ...rest];
+  }, [hoTroItems]);
+
   // Multi-select cho ĐNTT gộp
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   // Cleanup selectedIds khi row trở thành non-selectable (vừa tạo ĐNTT, đổi sang HDV...)
@@ -157,9 +165,38 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems }: {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
 
-  // Default người trả: HDV (HDV ứng tiền trước, công ty hoàn lại sau)
-  const resolveNguoiTt = (item: HDVHoTroItem): "cong_ty" | "hdv" =>
-    item.tien_hdv > 0 ? "hdv" : (item.tien_cong_ty > 0 ? "cong_ty" : "hdv");
+  // Default người trả — mặc định HDV (ứng trước), trừ row đã có tien_cong_ty (xem hdv-shared).
+  const resolveNguoiTt = resolveHoTroNguoiTt;
+
+  // Tip lái xe luôn có sẵn mỗi đoàn: nếu chưa có → tự tạo 1 row (đơn giá 0, OP
+  // nhập sau). Guard theo doanId để không tạo trùng trong lúc chờ refetch; lỗi
+  // thì reset cho phép thử lại lần render sau.
+  const tipEnsuredForDoanRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!doanId) return;
+    if (hoTroItems.some((i) => isTipLaiXeRow(i.mo_ta))) {
+      tipEnsuredForDoanRef.current = doanId;
+      return;
+    }
+    if (tipEnsuredForDoanRef.current === doanId) return;
+    tipEnsuredForDoanRef.current = doanId;
+    upsertMut
+      .mutateAsync({
+        doan_id: doanId,
+        danh_muc: "hdv_ho_tro",
+        loai: "khac",
+        mo_ta: TIP_LAI_XE_MO_TA,
+        so_luong: 1,
+        don_gia: 0,
+        tien_cong_ty: 0,
+        tien_hdv: 0,
+      })
+      .then(() => invalidate())
+      .catch(() => {
+        if (tipEnsuredForDoanRef.current === doanId) tipEnsuredForDoanRef.current = null;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doanId, hoTroItems]);
 
   // Save handler — row component pass full payload sync via ref → đảm bảo
   // value mới nhất, không bị stale closure khi user blur xong chuyển tab.
@@ -451,10 +488,11 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems }: {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {hoTroItems.map((item) => (
+            {orderedItems.map((item) => (
               <HDVHoTroRow
                 key={item.id}
                 item={item}
+                isTipLaiXe={isTipLaiXeRow(item.mo_ta)}
                 dnttList={dnttList}
                 congNoList={congNoList}
                 canTruByDnttId={canTruByDnttId}

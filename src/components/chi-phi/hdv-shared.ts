@@ -53,6 +53,52 @@ export interface CongNoLite {
   so_tien_con_lai: number;
 }
 
+// ── Quà tặng khách (auto từ Điều tour) ──────────────────────────────────────
+// Tick quà ở Điều tour (doan.tang_pham) → tự thêm 1 row hdv_ho_tro
+// "{Quà} tặng khách" (HDV mang theo, nguồn mặc định HDV). Bỏ tick → xóa row.
+// Đơn giá mặc định / khách khi tick quà (OP sửa lại được). Quà không có trong
+// map → 0 → OP nhập tay. Túi xách / Mũ lưỡi trai / Quạt: chưa có giá → 0.
+export const GIFT_MO_TA_SUFFIX = "tặng khách";
+export const GIFT_DON_GIA: Record<string, number> = {
+  Sim: 75_000,
+  Nón: 20_000,
+  Ảnh: 10_000,
+  Dầu: 8_000,
+  Nước: 2_500,
+};
+export const giftMoTa = (gift: string): string => `${gift} ${GIFT_MO_TA_SUFFIX}`;
+export const isGiftRow = (moTa: string | null | undefined): boolean =>
+  !!moTa && moTa.trim().endsWith(GIFT_MO_TA_SUFFIX);
+
+// ── Tip lái xe (luôn có sẵn mỗi đoàn) ────────────────────────────────────────
+// Auto-ensure 1 row hdv_ho_tro "Tip lái xe" cho mọi đoàn. Hover → bảng giá
+// tham khảo theo số chỗ xe (16C/35C/45C) × miền (MT/PQ/MN).
+export const TIP_LAI_XE_MO_TA = "Tip lái xe";
+export const isTipLaiXeRow = (moTa: string | null | undefined): boolean =>
+  (moTa ?? "").trim() === TIP_LAI_XE_MO_TA;
+export const TIP_LAI_XE_REF: { seats: string; mt: number; pq: number; mn: number }[] = [
+  { seats: "16C", mt: 150_000, pq: 200_000, mn: 200_000 },
+  { seats: "35C", mt: 200_000, pq: 250_000, mn: 250_000 },
+  { seats: "45C", mt: 250_000, pq: 300_000, mn: 300_000 },
+];
+// Chú thích thêm (quy đổi loại xe + tuyến đặc biệt) — hiển thị dưới bảng giá.
+export const TIP_LAI_XE_NOTES: string[] = [
+  "Xe 7C = xe 16C · Xe 29C = xe 35C",
+  "LMS 29S Long Hiền = 300K",
+  "LMS 9S miền Nam = miền Trung = 200K",
+];
+
+// Nguồn (người trả) mặc định cho 1 row "Khác": HDV ứng trước, công ty hoàn sau.
+//   tien_hdv > 0 → HDV · tien_cong_ty > 0 → Công ty · cả 2 = 0 → HDV (mặc định).
+// (Quà tặng khách + tip lái xe cũng mặc định HDV; OP đổi sang Công ty khi cần.)
+export function resolveHoTroNguoiTt(
+  item: { tien_cong_ty: number; tien_hdv: number },
+): "cong_ty" | "hdv" {
+  if (item.tien_hdv > 0) return "hdv";
+  if (item.tien_cong_ty > 0) return "cong_ty";
+  return "hdv";
+}
+
 export interface KhacModalItem {
   chiPhiId: number;
   thanhTien: number;
