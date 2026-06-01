@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { errMsg } from "@/lib/error";
 import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -224,7 +224,15 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
   // Lưu raw don_gia (theo tien_te_loai) + ty_gia + ck%. Khi save, compute VND
   // và lưu vào don_gia / tien_cong_ty (consistent với section khác).
   type RowEdit = { so_luong: number; don_gia_raw: number; tien_te_loai: Currency; ty_gia: number; chiet_khau_pct: number };
+  // editRowRef = source-of-truth cho blur callback (DecimalInput commit onChange +
+  // gọi onBlur qua setTimeout → đọc editRow từ closure sẽ lấy giá CŨ). editRow state
+  // chỉ để render. Xem decimal-input.tsx onBlur.
+  const editRowRef = useRef<Record<number, RowEdit>>({});
   const [editRow, setEditRow] = useState<Record<number, RowEdit>>({});
+  const commitEditRow = (next: Record<number, RowEdit>) => {
+    editRowRef.current = next;
+    setEditRow(next);
+  };
 
   // Init edit state từ row. don_gia_raw từ DB cột riêng (không reverse-engineer
   // VND để tránh mất giá trị khi tỷ giá chưa nhập). Visa cũ chưa có don_gia_raw
@@ -241,15 +249,14 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
     editRow[row.id] ?? initialEdit(row);
 
   const handleRowChange = (id: number, patch: Partial<RowEdit>) => {
-    setEditRow((prev) => {
-      const base = visaRows.find((r) => r.id === id);
-      const existing = prev[id] ?? (base ? initialEdit(base) : { so_luong: 0, don_gia_raw: 0, tien_te_loai: "USD" as Currency, ty_gia: 0, chiet_khau_pct: 0 });
-      return { ...prev, [id]: { ...existing, ...patch } };
-    });
+    const base = visaRows.find((r) => r.id === id);
+    const existing = editRowRef.current[id] ?? (base ? initialEdit(base) : { so_luong: 0, don_gia_raw: 0, tien_te_loai: "USD" as Currency, ty_gia: 0, chiet_khau_pct: 0 });
+    commitEditRow({ ...editRowRef.current, [id]: { ...existing, ...patch } });
   };
 
   const handleRowSave = (row: typeof visaRows[0]) => {
-    const local = editRow[row.id];
+    // Đọc qua ref, KHÔNG đọc editRow closure (DecimalInput defer onBlur qua setTimeout).
+    const local = editRowRef.current[row.id];
     if (!local) return;
     const initial = initialEdit(row);
     const unchanged =
@@ -275,7 +282,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       ty_gia: local.ty_gia || null,
       chiet_khau_pct: local.chiet_khau_pct || null,
     }, {
-      onSuccess: () => setEditRow((prev) => { const next = { ...prev }; delete next[row.id]; return next; }),
+      onSuccess: () => { const next = { ...editRowRef.current }; delete next[row.id]; commitEditRow(next); },
     });
   };
 
