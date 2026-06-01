@@ -182,6 +182,56 @@ số 1 của nghiệp vụ: "đoàn đã đi xong, ai sửa danh mục → loạ
   `chi_phi.thanh_tien` (user edit được). `thanh_tien_thuc_te` set ABSOLUTE qua
   `proRataInts`, KHÔNG cộng dồn delta.
 
+#### 5.3.1 Sơ đồ trạng thái — ĐNTT & công nợ
+
+**ĐNTT** (`de_nghi_thanh_toan`): trục DUYỆT (`trang_thai_duyet`) tách rời trục TRẢ
+TIỀN (`payment_status` derived). Hủy có thể xảy ra cả khi đã trả 1 phần.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> cho_duyet : tạo ĐNTT
+  cho_duyet --> da_duyet : duyệt đủ 3 cấp
+  cho_duyet --> tu_choi : từ chối
+  cho_duyet --> da_huy : hủy
+  da_duyet --> da_huy : hủy
+  tu_choi --> [*]
+  da_huy --> [*]
+  note right of cho_duyet
+    Nguồn tạo: tab Chi phí · gộp theo NCC · thanh toán định kỳ
+    3 cấp duyệt: TP.ĐH (auto-pass cấp 1) → … → KTTT
+  end note
+  note right of da_duyet
+    payment_status đọc qua VIEW dntt_with_payment_status (= SUM payments),
+    KHÔNG set tay:  unpaid → partial → paid
+    payment.method = cash | can_tru
+    can_tru: rút 1 cong_no của đoàn khác cùng NCC
+    Hủy/điều chỉnh sau khi đã trả → sinh cong_no (sơ đồ dưới)
+  end note
+  note left of tu_choi
+    Terminal — không hồi sinh. Thử lại = TẠO ĐNTT MỚI.
+  end note
+```
+
+**Công nợ** (`cong_no`): sinh từ trả thừa / điều chỉnh giảm / hủy ĐNTT đã có
+payment; tiêu bằng cấn trừ (`payment.method=can_tru`) hoặc NCC hoàn tiền mặt.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> con_du : sinh công nợ
+  con_du --> da_can_tru : cấn trừ hết
+  con_du --> da_hoan_tien : NCC hoàn tiền
+  da_can_tru --> con_du : rollback xóa payment
+  da_can_tru --> [*]
+  da_hoan_tien --> [*]
+  note right of con_du
+    Sinh từ: trả thừa / điều chỉnh giảm chi phí / hủy ĐNTT đã có payment.
+    so_tien_con_lai = so_tien_goc - SUM(payments can_tru)  [VIEW cong_no_with_status]
+    loai = phat_sinh | tra_truoc (quỹ trả trước NCC)
+  end note
+```
+
 ### 5.4 FOC (free of charge)
 - **KS theo phòng × ĐÊM, KHÔNG nhân `so_dem`** (mỗi LocalKSRow = 1 đêm). Công
   thức display (`calcFocDeduction`) và lưu DB (`handleBlurSave`) PHẢI giống hệt.
