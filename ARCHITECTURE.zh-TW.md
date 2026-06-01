@@ -32,7 +32,7 @@ flowchart TB
     feUI --- feMod
   end
 
-  subgraph SB["Supabase (lflsbwoqzmbknzdpaequ)"]
+  subgraph SB["Supabase"]
     auth["Auth JWT<br/>anon · authenticated · service_role<br/>user_roles · 外洩密碼防護 已啟用"]
     api["Data API PostgREST + RLS<br/>RPC · VIEW security_invoker"]
     edge["Edge Functions (Deno)<br/>send-booking-email · ai-chat<br/>sync-dntt / chi-phi / du-chi → Sheet<br/>xuat-word-dntt-ks · change-password"]
