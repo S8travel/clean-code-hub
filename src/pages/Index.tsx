@@ -45,6 +45,7 @@ import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
 import { useDoanScope } from "@/hooks/use-doan-scope";
 import { MultiSelect } from "@/components/MultiSelect";
+import { doanMatchesSearch } from "@/lib/doan-search";
 import { errMsg } from "@/lib/error";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
@@ -186,14 +187,13 @@ export default function Index() {
   const filtered = useMemo(() => {
     if (!groups) return [];
     return groups.filter((g) => {
-      if (search) {
-        const q = search.toLowerCase();
+      if (search.trim()) {
+        // Bỏ qua dấu cách (user hay copy-paste mã đoàn kèm khoảng trắng).
         const opName = doanOpMap?.get(g.id)?.ten || "";
-        const match =
-          g.ten_doan?.toLowerCase().includes(q) ||
-          g.huong_dan_vien?.ten?.toLowerCase().includes(q) ||
-          g.agents?.ten?.toLowerCase().includes(q) ||
-          opName.toLowerCase().includes(q);
+        const match = doanMatchesSearch(
+          { tenDoan: g.ten_doan, hdv: g.huong_dan_vien?.ten, agent: g.agents?.ten, op: opName },
+          search,
+        );
         if (!match) return false;
       }
 
