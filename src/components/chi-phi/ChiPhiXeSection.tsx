@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,8 +69,16 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   const cancelMut = useCancelDNTT();
   const adjustMut = useCreateAdjustment();
 
-  // Inline row edit
+  // Inline row edit. editRowRef = source-of-truth cho blur callback; editRow (state)
+  // chỉ để render. DecimalInput commit onChange + gọi onBlur qua setTimeout, nên đọc
+  // editRow từ closure trong handleRowSave sẽ lấy giá trị CŨ (chưa có giá vừa gõ) →
+  // phải đọc qua ref đồng bộ. (Xem decimal-input.tsx onBlur.)
+  const editRowRef = useRef<Record<number, { so_luong: number; don_gia: number }>>({});
   const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
+  const commitEditRow = (next: Record<number, { so_luong: number; don_gia: number }>) => {
+    editRowRef.current = next;
+    setEditRow(next);
+  };
 
   // Inline edit ĐNTT amount
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -109,15 +117,15 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     editRow[row.id] ?? { so_luong: row.so_luong, don_gia: row.don_gia };
 
   const handleRowChange = (id: number, field: "so_luong" | "don_gia", val: number) => {
-    setEditRow((prev) => {
-      const base = xeRows.find((r) => r.id === id);
-      const existing = prev[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
-      return { ...prev, [id]: { ...existing, [field]: val } };
-    });
+    const base = xeRows.find((r) => r.id === id);
+    const existing = editRowRef.current[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
+    commitEditRow({ ...editRowRef.current, [id]: { ...existing, [field]: val } });
   };
 
   const handleRowSave = (row: typeof xeRows[0]) => {
-    const local = editRow[row.id];
+    // Đọc qua ref, KHÔNG đọc editRow closure: DecimalInput commit onChange rồi gọi
+    // onBlur qua setTimeout → closure editRow lúc render chưa có giá vừa gõ → bỏ save.
+    const local = editRowRef.current[row.id];
     if (!local) return;
     if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
     const total = local.so_luong * local.don_gia;
@@ -130,7 +138,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       tien_cong_ty: isHDV ? 0 : total,
       tien_hdv: isHDV ? total : 0,
     }, {
-      onSuccess: () => setEditRow((prev) => { const next = { ...prev }; delete next[row.id]; return next; }),
+      onSuccess: () => { const next = { ...editRowRef.current }; delete next[row.id]; commitEditRow(next); },
     });
   };
 

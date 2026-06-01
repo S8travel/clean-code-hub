@@ -7,6 +7,8 @@ import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteCh
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
+import { buildCanTruNote } from "@/lib/can-tru-note";
+import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -49,16 +51,6 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     return m;
   }, [allocRows]);
 
-  const canTruByDnttId = useMemo(() => {
-    // payment_so_tien đã pro-rate per-allocation trong usePaymentsByChiPhi.
-    // KHÔNG dedupe theo payment_id (sẽ mất share của các allocs còn lại).
-    const m: Record<number, number> = {};
-    paymentsList.forEach((p) => {
-      if (p.method !== "can_tru") return;
-      m[p.dntt_id] = (m[p.dntt_id] || 0) + p.payment_so_tien;
-    });
-    return m;
-  }, [paymentsList]);
   const { data: currentUserName = "" } = useCurrentUserName();
   const insertDNTT = useInsertDNTT();
   const updateDNTT = useUpdateDNTT();
@@ -172,6 +164,46 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     }
     return m;
   }, [allocRows]);
+
+  // ── Lump cấn trừ theo ĐNTT (CHỈ hiển thị) ──────────────────────────────────
+  // Dồn cấn trừ của 1 ĐNTT gộp vào DÒNG ĐẦU (theo thứ tự hiển thị) thay vì pro-rata,
+  // để OP thấy 1 con số tổng rõ ràng (khớp số khoản công nợ đã cấn). KHÔNG đụng
+  // paidForDntt / daDeNghi / agg-delta — đó là logic, lump chỉ là tầng hiển thị.
+  const lumpedByDntt = useMemo(() => {
+    // 1. Tổng cấn trừ + tiền mặt + payments cấn trừ (cho note nguồn) theo từng ĐNTT.
+    const agg = new Map<number, { canTru: number; cash: number; ctPays: { ghi_chu: string | null }[] }>();
+    for (const p of paymentsList) {
+      let t = agg.get(p.dntt_id);
+      if (!t) { t = { canTru: 0, cash: 0, ctPays: [] }; agg.set(p.dntt_id, t); }
+      if (p.method === "can_tru") { t.canTru += p.payment_so_tien; t.ctPays.push({ ghi_chu: p.ghi_chu }); }
+      else if (p.method === "cash") { t.cash += p.payment_so_tien; }
+    }
+    // 2. Member rows mỗi ĐNTT theo ĐÚNG thứ tự hiển thị (ngày tăng dần, trong ngày giữ thứ tự dvRows).
+    // ⚠ PHẢI khớp thứ tự render (sortedDays bên dưới) để cấn trừ dồn đúng dòng hiển thị ĐẦU.
+    // sort theo ngay_so là stable → trong cùng ngày giữ thứ tự dvRows, y hệt byDay/sortedDays.
+    const ordered = [...dvRows].sort((a, b) => (a.ngay_so ?? 0) - (b.ngay_so ?? 0));
+    const members = new Map<number, { chiPhiId: number; alloc: number }[]>();
+    for (const row of ordered) {
+      if (row.id == null) continue;
+      const inner = allocByChiPhi.get(row.id);
+      if (!inner) continue;
+      for (const [dnttId, alloc] of inner) {
+        if (!members.has(dnttId)) members.set(dnttId, []);
+        members.get(dnttId)!.push({ chiPhiId: row.id, alloc });
+      }
+    }
+    // 3. Waterfall — CHỈ build cho ĐNTT có cấn trừ (không cấn trừ → DVRow giữ logic cũ).
+    const out = new Map<number, DnttLump>();
+    for (const [dnttId, mem] of members) {
+      const t = agg.get(dnttId);
+      if (!t || t.canTru <= 0) continue;
+      const lumps = lumpCanTruCash(mem.map((m) => m.alloc), t.canTru, t.cash);
+      const rows = new Map<number, LumpRow>();
+      mem.forEach((m, i) => rows.set(m.chiPhiId, lumps[i]));
+      out.set(dnttId, { rows, canTruNote: buildCanTruNote(t.ctPays) });
+    }
+    return out;
+  }, [dvRows, allocByChiPhi, paymentsList]);
   const activeDnttIdSet = useMemo(
     () => new Set(
       dnttList
@@ -673,11 +705,16 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
         // Cấn trừ: hiện 1 lần / NCC.
         let canTruAmount = 0;
+        let canTruNote: string | undefined;
         if (nccId && !canTruShownByNcc[nccId]) {
-          canTruAmount = dntt
-            ? paymentsList.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru").reduce((s, p) => s + p.payment_so_tien, 0)
-            : grows.reduce((s, { row }) => s + paymentsList.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru").reduce((a, p) => a + p.payment_so_tien, 0), 0);
-          if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
+          const canTruPays = dntt
+            ? paymentsList.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
+            : grows.flatMap(({ row }) => paymentsList.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru"));
+          canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
+          if (canTruAmount > 0) {
+            canTruShownByNcc[nccId] = true;
+            canTruNote = buildCanTruNote(canTruPays); // "Cấn trừ từ đoàn: <nguồn>"
+          }
         }
 
         // Cọc đã trả — chỉ khi nhóm CHƯA có ĐNTT pending (như logic cũ per-dòng).
@@ -709,6 +746,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           ncc: nccFinal,
           so_tien_coc: soCoc,
           can_tru: canTruAmount,
+          can_tru_note: canTruNote,
           so_tien_con_tt: soTienConTT,
           la_coc: !!dntt?.la_coc,
           multi_service: isGop,
@@ -740,7 +778,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
   const dvData: DVRowData = {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
-    canTruByDnttId, allocByChiPhi, selectedIds, editingId, editAmount, ngayBatDau,
+    allocByChiPhi, lumpedByDntt, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   };
   const dvHandlers: DVRowHandlers = {
