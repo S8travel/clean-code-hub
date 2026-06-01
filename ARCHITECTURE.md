@@ -10,6 +10,76 @@
 
 ---
 
+## 🗺️ Sơ đồ kiến trúc tổng thể
+
+> Bird's-eye view: client → Supabase (Auth / Data API+RLS / Edge Functions /
+> Storage / pg_cron) → Postgres + dịch vụ ngoài. Quan hệ bảng chi tiết xem §4.
+> Cập nhật 2026-06-01 (sau đợt siết bảo mật theo Security Advisor: view
+> `security_invoker`, khóa list bucket cho `anon`, bật leaked-password,
+> revoke EXECUTE hàm nội bộ).
+
+```mermaid
+flowchart TB
+  subgraph USERS["Người dùng"]
+    staff["Nhân viên<br/>admin · điều hành · kế toán · viewer"]
+    guest["Khách (công khai)"]
+  end
+
+  subgraph FE["Frontend — React 18 + TS + Vite (SPA tĩnh)"]
+    feUI["UI Tailwind + shadcn/ui · Router v6 · sonner<br/>TanStack Query v5 · export docx/xlsx"]
+    feMod["Module: Đoàn/Điều tour · Booking KS/NH/DV/Visa/Xe<br/>Chi phí → ĐNTT → Thanh toán → Công nợ · Định kỳ · Hóa đơn/UNC<br/>Lead · Báo giá · Voucher · HDV · Dashboard · Danh mục"]
+    feUI --- feMod
+  end
+
+  subgraph SB["Supabase (lflsbwoqzmbknzdpaequ)"]
+    auth["Auth JWT<br/>anon · authenticated · service_role<br/>user_roles · leaked-pw bật"]
+    api["Data API PostgREST + RLS<br/>RPC · VIEW security_invoker"]
+    edge["Edge Functions (Deno)<br/>send-booking-email · ai-chat<br/>sync-dntt / chi-phi / du-chi → Sheet<br/>xuat-word-dntt-ks · change-password"]
+    db[("PostgreSQL — RLS bật")]
+    storage[("Storage<br/>dntt-documents · doan-files<br/>list khóa anon")]
+    cron["pg_cron + pg_net<br/>sync 30' / tuần · lead followup<br/>escalation · nhắc việc"]
+    trig["Triggers / RPC nội bộ<br/>notify duyệt · recalc TT<br/>auto nhóm · cấn trừ"]
+  end
+
+  subgraph DBD["Postgres — nhóm bảng nghiệp vụ"]
+    d1["Tour<br/>doan · doan_ngay(_item) · doan_nhom · seri_tour*"]
+    d2["Booking<br/>doan_booking_ks/nh/dv · doan_ks_dem"]
+    d3["Tiền<br/>doan_chi_phi · de_nghi_thanh_toan · payments<br/>cong_no · dntt_allocations + VIEW *_with_status"]
+    d4["Danh mục<br/>khach_san · nha_hang · canh_diem · nha_xe*<br/>nha_cung_cap · visa*"]
+    d5["Lead<br/>lead · activity / task / campaign"]
+    d6["Voucher & Hệ thống<br/>voucher* · user_roles · doan_permissions<br/>thong_bao · cong_viec · audit"]
+  end
+
+  subgraph EXT["Dịch vụ ngoài"]
+    resend["Resend<br/>email giao dịch"]
+    sheets["Google Sheets API<br/>báo cáo ĐNTT / chi phí"]
+    ai["AI provider<br/>(ai-chat)"]
+    hibp["HaveIBeenPwned<br/>mật khẩu rò rỉ"]
+  end
+
+  staff -->|HTTPS| FE
+  FE -->|"supabase-js (anon key)"| auth
+  FE -->|REST / Realtime| api
+  FE -->|Storage SDK| storage
+  FE -->|invoke| edge
+  guest -->|"/lead-form (anon RPC)"| api
+  storage -. "public URL (link email)" .-> guest
+
+  api --> db
+  db --- DBD
+  edge -->|"service_role (bypass RLS)"| db
+  cron --> edge
+  cron --> trig
+  trig --> db
+
+  edge --> resend
+  edge --> sheets
+  edge --> ai
+  auth -. "kiểm mật khẩu" .-> hibp
+```
+
+---
+
 ## 1. Hệ thống là gì
 
 CRM nội bộ điều hành tour cho S8 Travel: quản lý **lead → báo giá → đoàn tour →
