@@ -107,17 +107,29 @@ Chi tiết file → `CLAUDE.md`.
   còn auto-expose qua API → **bắt buộc kèm GRANT + RLS** trong migration (template
   ở `CLAUDE.md`). `ALTER TABLE` (thêm cột/index/trigger) **không cần** grant.
 - **RLS:** hầu hết bảng dùng policy kiểu `auth.uid() IS NOT NULL` cho `ALL`
-  (đăng nhập là thao tác được). Phân quyền thật nằm ở **tầng UI**
-  (`use-permissions`, `user_roles.role/bo_phan`), KHÔNG ở RLS.
+  (đăng nhập là thao tác được). Phân quyền thật (hiện tại) nằm ở **tầng UI**
+  (`use-permissions`, `user_roles.role/bo_phan`). Đang dịch dần sang RLS chặt
+  per-user: VIEW tiền (`dntt_with_payment_status`/`cong_no_with_status`/
+  `voucher_with_status`) đã chuyển **`security_invoker`** (2026-06-01) để sẵn
+  sàng; còn 7 bảng dùng policy `USING(true)` cho `ALL` chờ siết (§11).
+- **Siết bảo mật 2026-06-01 (Supabase Security Advisor):** revoke `EXECUTE` hàm
+  nội bộ/cron khỏi `anon`; cố định `search_path`; khóa **list** 2 bucket storage
+  cho `anon` (chỉ còn `getPublicUrl` công khai); bật leaked-password. Chi tiết +
+  việc còn lại (#5 RLS) → memory `project_security_advisor_hardening`.
 - **Generated columns:** `doan_chi_phi.thanh_tien`, `doan_ngay_item.thanh_tien`
   là GENERATED → **destructure bỏ trước khi insert/update**, không bao giờ ghi.
 - **RPC quan trọng:** `recalc_chi_phi_payment_status` — nguồn DUY NHẤT tính
   `doan_chi_phi.trang_thai_thanh_toan` (dựa SUM(payments)), KHÔNG set tay.
-- **Edge Functions:** `send-booking-email` (Resend, mọi mail booking/UNC),
-  `xuat-word-booking-ks`, `xuat-word-dntt-ks`, `process-bao-gia` +
-  `extract-chuong-trinh` (AI báo giá), `sync-dntt-to-sheet`, `ai-chat`,
-  `extract-chuong-trinh`, `Change-password`. **Không có** cron lead automation
-  (playbook chưa triển khai — xem §11).
+- **Edge Functions (Deno)** — thực tế trong `supabase/functions/`:
+  `send-booking-email` (Resend, mọi mail booking/UNC), `ai-chat`,
+  `xuat-word-dntt-ks`, `get-exchange-rate`, `Change-password`, + 3 hàm đồng bộ
+  Google Sheet: `sync-dntt-to-sheet` · `sync-chi-phi-to-sheet` ·
+  `sync-dntt-du-chi-to-sheet`. (DB query trong edge fn dùng `service_role` →
+  `BYPASSRLS`, nên `security_invoker` view không ảnh hưởng.)
+- **pg_cron + pg_net** (job chạy bằng `postgres`): `lead_followup_daily` (1h),
+  `remind_pv_phancong_daily` (2h), `doan_booking_escalation_daily` (2h30),
+  `sync-dntt-to-sheet` (mỗi 30'), `sync-chi-phi-weekly` (9h thứ 5). Riêng lead
+  **auto-send** (Zalo/email playbook) thì CHƯA — xem §11.
 - **Realtime publication — CẠM BẪY LỚN:** `postgres_changes` chỉ nhận event nếu
   bảng nằm trong publication `supabase_realtime`. DB này ban đầu KHÔNG add bảng
   nào → mọi `useRealtime*` cũ là **code chết**. Đã thêm: `thong_bao`,
@@ -233,8 +245,14 @@ stateDiagram-v2
 ```
 
 ### 5.4 FOC (free of charge)
-- **KS theo phòng × ĐÊM, KHÔNG nhân `so_dem`** (mỗi LocalKSRow = 1 đêm). Công
-  thức display (`calcFocDeduction`) và lưu DB (`handleBlurSave`) PHẢI giống hệt.
+- **KS — Option A: `foc_count` NHẬP TAY per-row, KHÔNG auto-pool theo ngày.**
+  `rowFocDeduction = foc_count × gia_phong`; `tien_cong_ty = (so_luong −
+  foc_count) × gia_phong` (`calcRowFocBreakdown`/`calcTotalKS` trong
+  `lib/foc-calc.ts`). Bỏ auto-pool cũ vì pool phân bổ theo bình quân giá → mix
+  loại phòng (vd 30 twn + 1 sgl nâng hạng) làm FOC dính nhầm phòng giá cao, vượt
+  giá trị thực. UI chỉ hiện **gợi ý** 16免1 (`calcFocSuggestion`, info-only) —
+  OP tự gán `foc_count` vào phòng giá thấp nhất. `foc_*_snapshot` vẫn lưu nhưng
+  CHỈ để tính gợi ý (`resolveKSFoc`), KHÔNG còn dùng tính tiền.
 - **NH theo khách:** `so_mien = floor(so_khach/foc_khach)*foc_mien`,
   `thanh_tien = (so_khach - so_mien) * don_gia`.
 - Người trả: `cong_ty` → `tien_cong_ty=thanh_tien, tien_hdv=0`; `hdv` → ngược
@@ -328,11 +346,18 @@ trừ: mail phải tách Tổng / Cấn trừ / Thực chuyển khoản.
 - Memo-row `useState(prop)` → phải có external-sync (§7.1).
 - `||` với số có thể = 0 → dùng `??`.
 - Migration `CREATE TABLE` → kèm GRANT + RLS.
-- Verify trước push: `npx tsc --noEmit -p tsconfig.json` + `npx vite build`.
+- Verify trước push: `npm run lint` (0 error) + **`npx tsc -b`** (0 error —
+  KHÔNG dùng `tsc -p tsconfig.json`, nó check 0 file) + unit test. CI gate ở PR.
 - Push chỉ khi user yêu cầu; KHÔNG commit `.claude/settings.json`, file lạ.
 
 ## 11. Nợ kỹ thuật / hướng mở rộng
 
+- **Siết RLS per-user (#5)** — 7 bảng còn `USING(true)` cho `ALL`
+  (`voucher`/`voucher_su_dung`, `doan_nhom`, `doan_tai_lieu`,
+  `lead_cadence/_next_action/_template`): cần chốt "role nào sửa bảng nào" rồi
+  siết. VIEW tiền đã `security_invoker` sẵn sàng. (memory
+  `project_security_advisor_hardening`)
+- **Voucher** Phase 2 (nút "Dùng voucher" ở NH/DV) — thiết kế đã chốt, chưa code.
 - **Báo giá revamp** (đã chốt thiết kế, chưa code) — memory.
 - **i18n** còn nhiều module chưa wrap (GT lo tạm) — memory.
 - **Lead Playbook** (`LEAD_PLAYBOOK.md`) = CHƯA triển khai, đã bị thay bằng
