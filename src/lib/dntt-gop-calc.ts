@@ -94,3 +94,44 @@ export function sumSelected(items: GopAllocItem[], selectedIds: ReadonlySet<numb
     .filter((i) => selectedIds.has(i.chi_phi_id))
     .reduce((s, i) => s + i.remaining, 0);
 }
+
+// ── Cấn trừ công nợ khi tạo ĐNTT gộp ──────────────────────────────────────────
+// Cùng NCC có thể đang giữ tiền (công nợ còn dư) → cho cấn trừ vào ĐNTT gộp.
+
+/** 1 lựa chọn cấn trừ (cấu trúc khớp CanTruSelection ở UI, giữ lib thuần). */
+export interface CanTruPick {
+  congNoId: number;
+  soTienConLai: number;
+  soTienCanTru: number;
+  tenDoan: string;
+}
+
+/** 1 dòng payload payment cấn trừ cho createCanTruPayments. */
+export interface CanTruPaymentItem {
+  congNoId: number;
+  soTien: number;
+  sourceTenDoan: string;
+}
+
+/**
+ * Chuẩn hoá danh sách cấn trừ trước khi tạo payment:
+ *  - bỏ dòng ≤ 0; clamp mỗi dòng ≤ số dư công nợ (soTienConLai);
+ *  - clamp TỔNG ≤ maxAmount (= số tiền ĐNTT) — cắt greedy theo thứ tự, KHÔNG cấn quá tiền ĐNTT.
+ * Trả payload sẵn cho createCanTruPayments (sourceTenDoan = đoàn nguồn công nợ).
+ */
+export function buildCanTruPaymentItems(
+  selections: CanTruPick[],
+  maxAmount: number,
+): CanTruPaymentItem[] {
+  const out: CanTruPaymentItem[] = [];
+  let acc = 0;
+  const cap = Math.max(0, maxAmount);
+  for (const s of selections) {
+    if (acc >= cap) break;
+    const amt = Math.min(s.soTienCanTru, s.soTienConLai, cap - acc);
+    if (amt <= 0) continue;
+    out.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
+    acc += amt;
+  }
+  return out;
+}
