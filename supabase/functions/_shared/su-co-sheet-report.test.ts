@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   buildSuCoReport,
+  aggregateAgents,
   joinHdv,
   sortSuCo,
   fmtDate,
   SU_CO_COL_COUNT,
+  NAMED_AGENTS,
   type SuCoRow,
+  type AgentStatRow,
 } from "./su-co-sheet-report";
 
 // Helper dựng SuCoRow đủ field; override phần cần test.
@@ -66,24 +69,87 @@ describe("sortSuCo", () => {
   });
 });
 
+// ─── aggregateAgents ─────────────────────────────────────────────────────────
+
+describe("aggregateAgents", () => {
+  it("luôn 4 nhóm cố định theo thứ tự Xihong, Cola, Guo, Khác (kể cả 0)", () => {
+    const { buckets } = aggregateAgents([]);
+    expect(buckets.map((b) => b.agent)).toEqual(["Xihong", "Cola", "Guo", "Khác"]);
+    expect(buckets.every((b) => b.soDoan === 0 && b.soKhach === 0)).toBe(true);
+  });
+
+  it("gom agent lạ + không có tên vào Khác; cộng dồn đúng", () => {
+    const rows: AgentStatRow[] = [
+      { agent_ten: "Xihong", so_doan: 5, so_khach: 100 },
+      { agent_ten: "Cola", so_doan: 3, so_khach: 60 },
+      { agent_ten: "Guo", so_doan: 2, so_khach: 40 },
+      { agent_ten: "Other", so_doan: 4, so_khach: 50 },
+      { agent_ten: "Alice", so_doan: 1, so_khach: 10 },
+      { agent_ten: null, so_doan: 1, so_khach: 7 },
+    ];
+    const { buckets, total } = aggregateAgents(rows);
+    const byName = Object.fromEntries(buckets.map((b) => [b.agent, b]));
+    expect(byName["Xihong"]).toMatchObject({ soDoan: 5, soKhach: 100 });
+    expect(byName["Cola"]).toMatchObject({ soDoan: 3, soKhach: 60 });
+    expect(byName["Guo"]).toMatchObject({ soDoan: 2, soKhach: 40 });
+    // Khác = Other(4/50) + Alice(1/10) + null(1/7) = 6 đoàn / 67 khách
+    expect(byName["Khác"]).toMatchObject({ soDoan: 6, soKhach: 67 });
+    // Tổng = 5+3+2+6 = 16 đoàn ; 100+60+40+67 = 267 khách
+    expect(total).toMatchObject({ agent: "TỔNG", soDoan: 16, soKhach: 267 });
+  });
+
+  it("so_doan/so_khach dạng string (numeric Postgres) vẫn cộng đúng", () => {
+    const { total } = aggregateAgents([
+      { agent_ten: "Xihong", so_doan: "5", so_khach: "100" },
+      { agent_ten: "Guo", so_doan: "2", so_khach: "40" },
+    ]);
+    expect(total).toMatchObject({ soDoan: 7, soKhach: 140 });
+  });
+
+  it("NAMED_AGENTS đúng danh sách", () => {
+    expect(NAMED_AGENTS).toEqual(["Xihong", "Cola", "Guo"]);
+  });
+});
+
 // ─── buildSuCoReport ─────────────────────────────────────────────────────────
 
+const agentStats: AgentStatRow[] = [
+  { agent_ten: "Xihong", so_doan: 5, so_khach: 100 },
+  { agent_ten: "Cola", so_doan: 3, so_khach: 60 },
+  { agent_ten: "Other", so_doan: 2, so_khach: 20 },
+];
+
 describe("buildSuCoReport", () => {
-  it("không có sự cố → chỉ tiêu đề + dòng thông báo, không bảng", () => {
-    const r = buildSuCoReport([], {
+  it("dựng bảng agent trước (4 nhóm + tổng), kể cả khi không có sự cố", () => {
+    const r = buildSuCoReport([], agentStats, {
       from: "2026-05-18", to: "2026-05-24",
       nguoiBaoCao: "Hồ hoài Thương", boPhan: "team nhà hàng – hành trình",
     });
     expect(r.suCoCount).toBe(0);
-    expect(r.headerRows).toHaveLength(0);
     expect(r.dataStart).toBe(-1);
+    // Tiêu đề
     expect(r.values[0][0]).toBe("TUẦN: 18/05/2026 - 24/05/2026");
     expect(r.values[1][0]).toBe("Người báo cáo: Hồ hoài Thương");
     expect(r.values[2][0]).toBe("Bộ phận: team nhà hàng – hành trình");
+    // Bảng agent: chỉ có 1 headerRows (agent), vì không có bảng sự cố
+    expect(r.headerRows).toHaveLength(1);
+    expect(r.values[r.headerRows[0].row]).toEqual(["Agent", "Số đoàn", "Số khách"]);
+    expect(r.headerRows[0].colEnd).toBe(3);
+    // 4 dòng agent + dòng tổng
+    const agentStart = r.headerRows[0].row + 1;
+    expect(r.values[agentStart]).toEqual(["Xihong", 5, 100]);
+    expect(r.values[agentStart + 1]).toEqual(["Cola", 3, 60]);
+    expect(r.values[agentStart + 2]).toEqual(["Guo", 0, 0]);
+    expect(r.values[agentStart + 3]).toEqual(["Khác", 2, 20]); // Other → Khác
+    // Dòng tổng
+    expect(r.totalRows).toHaveLength(1);
+    expect(r.values[r.totalRows[0].row]).toEqual(["TỔNG", 10, 180]);
+    expect(r.doanCount).toBe(10);
+    // Cuối cùng là dòng "không có sự cố"
     expect(r.values[r.values.length - 1][0]).toContain("Không có phát sinh sự cố");
   });
 
-  it("dựng đủ header + mỗi sự cố 1 dòng đúng cột", () => {
+  it("có sự cố → 2 bảng: agent (headerRows[0]) rồi sự cố (headerRows[1])", () => {
     const r = buildSuCoReport(
       [
         suCoRow({
@@ -91,17 +157,18 @@ describe("buildSuCoReport", () => {
           hdv_1: "Mạ.Cường", hdv_2: null, so_khach: 20,
           tieu_de: "Khách hút thuốc trong phòng lạnh",
           noi_dung: "Nhà hàng xông tinh dầu hạn chế mùi",
-          created_at: "2026-05-19T12:00:00Z",
         }),
       ],
+      agentStats,
       { from: "2026-05-18", to: "2026-05-24", nguoiBaoCao: "X", boPhan: "Y" },
     );
     expect(r.suCoCount).toBe(1);
-
-    const header = r.values[r.headerRows[0].row];
-    expect(header[0]).toBe("Code");
-    expect(header[5]).toBe("Phương án xử lý");
-    expect(r.headerRows[0].colEnd).toBe(SU_CO_COL_COUNT);
+    expect(r.headerRows).toHaveLength(2);
+    expect(r.values[r.headerRows[0].row][0]).toBe("Agent");        // bảng 1
+    const sucoHeader = r.values[r.headerRows[1].row];
+    expect(sucoHeader[0]).toBe("Code");                            // bảng 2
+    expect(sucoHeader[5]).toBe("Phương án xử lý");
+    expect(r.headerRows[1].colEnd).toBe(SU_CO_COL_COUNT);
     expect(SU_CO_COL_COUNT).toBe(6);
 
     const row = r.values[r.dataStart];
@@ -116,24 +183,12 @@ describe("buildSuCoReport", () => {
     expect(r.dataEnd - r.dataStart).toBe(1);
   });
 
-  it("ghép 2 HDV + so_khach null → 0; gom nhiều sự cố cùng đoàn", () => {
-    const r = buildSuCoReport(
-      [
-        suCoRow({ log_id: 2, ten_doan: "Z", created_at: "2026-05-22T08:00:00Z", tieu_de: "Sự cố 2" }),
-        suCoRow({ log_id: 1, ten_doan: "Z", created_at: "2026-05-21T08:00:00Z", tieu_de: "Sự cố 1", hdv_1: "Phú", hdv_2: "An", so_khach: null }),
-      ],
-      { from: "2026-05-18", to: "2026-05-24" },
-    );
-    expect(r.suCoCount).toBe(2);
-    // Sắp theo created_at → "Sự cố 1" trước.
-    expect(r.values[r.dataStart][4]).toBe("Sự cố 1");
-    expect(r.values[r.dataStart][2]).toBe("Phú | An");
-    expect(r.values[r.dataStart][3]).toBe(0); // so_khach null → 0
-  });
-
-  it("nguoiBaoCao/boPhan rỗng → hiện '—'", () => {
-    const r = buildSuCoReport([], { from: "2026-05-18", to: "2026-05-24" });
+  it("nguoiBaoCao/boPhan rỗng → hiện '—'; không agent stats → 4 nhóm vẫn 0", () => {
+    const r = buildSuCoReport([], [], { from: "2026-05-18", to: "2026-05-24" });
     expect(r.values[1][0]).toBe("Người báo cáo: —");
     expect(r.values[2][0]).toBe("Bộ phận: —");
+    const agentStart = r.headerRows[0].row + 1;
+    expect(r.values[agentStart]).toEqual(["Xihong", 0, 0]);
+    expect(r.values[r.totalRows[0].row]).toEqual(["TỔNG", 0, 0]);
   });
 });

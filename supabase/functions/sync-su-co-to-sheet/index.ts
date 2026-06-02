@@ -20,12 +20,14 @@ import {
   buildSuCoReport,
   SU_CO_COL_COUNT,
   type SuCoRow,
+  type AgentStatRow,
   type SuCoReport,
 } from "../_shared/su-co-sheet-report.ts";
 
 // ── Hằng số ─────────────────────────────────────────────────────────────────
 const LAST_COL = SU_CO_COL_COUNT; // số cột bảng (A..F)
 const COLOR_HEADER = { red: 0.902, green: 0.945, blue: 0.984 }; // #E6F1FB
+const COLOR_TOTAL = { red: 0.949, green: 0.949, blue: 0.949 }; // #F2F2F2 (dòng tổng)
 // Bề rộng cột (px): Code, OP, HDV, Số khách, Vấn đề, Phương án.
 const COL_WIDTHS = [150, 130, 120, 70, 360, 360];
 
@@ -89,6 +91,17 @@ function buildFormatRequests(sheetId: number, report: SuCoReport): Record<string
           },
         },
         fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
+      },
+    });
+  }
+
+  // Dòng tổng (bảng agent) — in đậm + nền nhạt.
+  for (const t of report.totalRows) {
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: t.row, endRowIndex: t.row + 1, startColumnIndex: 0, endColumnIndex: t.colEnd },
+        cell: { userEnteredFormat: { backgroundColor: COLOR_TOTAL, textFormat: { bold: true } } },
+        fields: "userEnteredFormat(backgroundColor,textFormat)",
       },
     });
   }
@@ -202,8 +215,13 @@ serve(async (req) => {
     if (error) throw new Error(`RPC get_su_co_weekly: ${error.message}`);
     const rows = (data ?? []) as SuCoRow[];
 
+    // Thống kê đoàn theo agent (đoàn dang_chay overlap tuần) cho bảng tổng hợp.
+    const { data: agentData, error: agentErr } = await supabase.rpc("get_doan_agent_weekly", { p_from: from, p_to: to });
+    if (agentErr) throw new Error(`RPC get_doan_agent_weekly: ${agentErr.message}`);
+    const agentStats = (agentData ?? []) as AgentStatRow[];
+
     // ── Dựng báo cáo ──
-    const report = buildSuCoReport(rows, { from, to, nguoiBaoCao: NGUOI_BAO_CAO, boPhan: BO_PHAN });
+    const report = buildSuCoReport(rows, agentStats, { from, to, nguoiBaoCao: NGUOI_BAO_CAO, boPhan: BO_PHAN });
 
     // ── Ghi Google Sheet: tab mới tên = khoảng tuần ──
     const accessToken = await getAccessToken(saJson);
