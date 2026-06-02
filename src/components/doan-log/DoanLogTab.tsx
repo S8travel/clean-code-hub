@@ -182,7 +182,9 @@ export default function DoanLogTab({ doanId }: Props) {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">{t("Tiêu đề *")}</Label>
+                <Label className="text-xs">
+                  {loai === "su_co" ? t("Vấn đề phát sinh") : t("Tiêu đề")} *
+                </Label>
                 <Input
                   value={tieuDe}
                   onChange={(e) => setTieuDe(e.target.value)}
@@ -191,7 +193,9 @@ export default function DoanLogTab({ doanId }: Props) {
                 />
               </div>
               <div>
-                <Label className="text-xs">{t("Nội dung chi tiết")}</Label>
+                <Label className="text-xs">
+                  {loai === "su_co" ? t("Phương án xử lý") : t("Nội dung chi tiết")}
+                </Label>
                 <Textarea
                   value={noiDung}
                   onChange={(e) => setNoiDung(e.target.value)}
