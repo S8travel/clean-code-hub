@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { dnttDichVuLabel, formatHoaDonLechMoTa } from "./hoa-don-lech";
+import {
+  dnttDichVuLabel,
+  formatHoaDonLechMoTa,
+  calcHoaDonExpectedTotal,
+  calcHoaDonLech,
+} from "./hoa-don-lech";
 
 describe("dnttDichVuLabel", () => {
   it("ghép nhãn loại + mô tả", () => {
@@ -46,5 +51,35 @@ describe("formatHoaDonLechMoTa", () => {
     const s = formatHoaDonLechMoTa({ id: 7, hoaDon: 100_000, dnttSoTien: 100_001 });
     expect(s.startsWith("[HĐ#7] Hóa đơn nhập")).toBe(true);
     expect(s).not.toContain("· Đoàn");
+  });
+});
+
+describe("calcHoaDonExpectedTotal / calcHoaDonLech", () => {
+  it("không tách cọc (cocSibling=0) → mốc = chính so_tien", () => {
+    expect(calcHoaDonExpectedTotal(159_400_000)).toBe(159_400_000);
+    expect(calcHoaDonLech(159_400_000, 159_400_000)).toBe(0);
+  });
+
+  it("ca thực tế Ambassador Cruise: 159.4M còn lại + 164M cọc, HĐ gộp 323.4M → KHỚP", () => {
+    const soTien = 159_400_000;
+    const daCoc = 164_000_000;
+    expect(calcHoaDonExpectedTotal(soTien, daCoc)).toBe(323_400_000);
+    expect(calcHoaDonLech(323_400_000, soTien, daCoc)).toBe(0);
+  });
+
+  it("nhập đúng phần ĐNTT còn lại (bỏ qua cọc) → vẫn lệch âm = phần cọc", () => {
+    expect(calcHoaDonLech(159_400_000, 159_400_000, 164_000_000)).toBe(-164_000_000);
+  });
+
+  it("HĐ gộp lớn hơn tổng → lệch dương", () => {
+    expect(calcHoaDonLech(330_000_000, 159_400_000, 164_000_000)).toBe(6_600_000);
+  });
+
+  it("cocSibling âm (dữ liệu rác) bị clamp về 0", () => {
+    expect(calcHoaDonExpectedTotal(100_000, -50_000)).toBe(100_000);
+  });
+
+  it("làm tròn 2 vế trước khi trừ (tránh sai số thập phân)", () => {
+    expect(calcHoaDonLech(100_000.4, 100_000.2, 0)).toBe(0);
   });
 });
