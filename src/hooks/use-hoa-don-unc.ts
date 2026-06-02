@@ -203,9 +203,12 @@ export function useUploadDNTTDoc() {
       const ext = file.name.split(".").pop() ?? "bin";
       const path = `${id}/${loaiDoc}/${Date.now()}.${ext}`;
 
+      // KHÔNG dùng upsert: path luôn duy nhất (timestamp). upsert=true bật nhánh
+      // INSERT…ON CONFLICT DO UPDATE → đụng UPDATE policy của bucket → lỗi RLS
+      // "new row violates row-level security policy". Insert thuần là đủ.
       const { error: uploadErr } = await externalSupabase.storage
         .from("dntt-documents")
-        .upload(path, file, { upsert: true });
+        .upload(path, file);
       if (uploadErr) throw uploadErr;
 
       const { data: urlData } = externalSupabase.storage
@@ -421,7 +424,7 @@ export function useBatchUploadUNC() {
           const path = `${id}/unc/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
           const { error: upErr } = await externalSupabase.storage
             .from("dntt-documents")
-            .upload(path, file, { upsert: true });
+            .upload(path, file); // path duy nhất → KHÔNG upsert (tránh lỗi RLS nhánh UPDATE)
           if (upErr) throw new Error(`ĐNTT #${id}: ${upErr.message}`);
           const { data: urlData } = externalSupabase.storage
             .from("dntt-documents")
