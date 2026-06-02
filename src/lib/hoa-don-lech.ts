@@ -31,6 +31,23 @@ export function dnttDichVuLabel(
 const fmtVnd = (n: number) => Math.round(n).toLocaleString("vi-VN") + " ₫";
 
 /**
+ * Mốc so sánh hóa đơn cho 1 dòng ĐNTT khi chi phí bị tách nhiều ĐNTT (cọc nhiều lần).
+ * NCC xuất 1 HÓA ĐƠN GỘP cho cả chi phí → phải so với TỔNG chi phí, không so từng ĐNTT.
+ *
+ *   mốc = so_tien (ĐNTT còn lại) + cocSibling (tổng đã cọc qua ĐNTT cọc anh em cùng ref)
+ *
+ * `cocSibling = 0` (chi phí không tách cọc) → mốc = chính so_tien (giữ hành vi cũ).
+ */
+export function calcHoaDonExpectedTotal(soTien: number, cocSibling = 0): number {
+  return Math.round(soTien) + Math.round(Math.max(0, cocSibling));
+}
+
+/** Lệch hóa đơn = số HĐ nhập − mốc so sánh (tổng chi phí). > 0 dư, < 0 thiếu. */
+export function calcHoaDonLech(hoaDon: number, soTien: number, cocSibling = 0): number {
+  return Math.round(hoaDon) - calcHoaDonExpectedTotal(soTien, cocSibling);
+}
+
+/**
  * Mô tả việc lệch. Bắt đầu bằng marker `[HĐ#<id>]` (để dedupe ilike), kèm dịch vụ.
  * VD: "[HĐ#604] Dịch vụ: [Gộp] Vinwonder… — Hóa đơn nhập 3.400.000 ₫ ≠ số tiền ĐNTT
  *      3.600.000 ₫ (lệch -200.000 ₫) · Đoàn VDC053005BR6. Kiểm tra & xử lý."

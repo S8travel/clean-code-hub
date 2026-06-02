@@ -154,7 +154,7 @@ export function HoaDonUNCRow({
         )}
       </TableCell>
       <TableCell>
-        <HoaDonAmountCell row={row} />
+        <HoaDonAmountCell row={row} cocSibling={cocSibling} />
       </TableCell>
       <TableCell>
         <DocCell

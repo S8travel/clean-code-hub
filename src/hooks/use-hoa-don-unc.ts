@@ -151,7 +151,9 @@ export function useHoaDonUNCSummary() {
       const [chuaTT, daTT, thieuHD, thieuUNC] = await Promise.all([
         base().neq("payment_status", "paid"),
         base().eq("payment_status", "paid"),
-        base().eq("payment_status", "paid").eq("trang_thai_hoa_don", "chua_co"),
+        // Dòng cọc KHÔNG cần hóa đơn riêng — NCC xuất 1 HĐ gộp cho cả chi phí
+        // ở dòng ĐNTT còn lại. Loại la_coc khỏi đếm "thiếu hóa đơn".
+        base().eq("payment_status", "paid").eq("trang_thai_hoa_don", "chua_co").eq("la_coc", false),
         base().eq("payment_status", "paid").eq("trang_thai_unc", "chua_co"),
       ]);
       return {
