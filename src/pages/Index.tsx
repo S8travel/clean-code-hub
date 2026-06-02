@@ -387,8 +387,12 @@ export default function Index() {
   const checkDoanCancelable = async (doanId: number): Promise<string[]> => {
     const [ks, nh, dv, dntt] = await Promise.all([
       externalSupabase.from("doan_booking_ks").select("ks_dat_truoc_status, ks_final_status").eq("doan_id", doanId),
-      // NH: gồm cả nh_xac_nhan (đã xác nhận) — chỉ chua_gui/da_huy/cho_xac_nhan_huy/khong_dat mới cho xóa
-      externalSupabase.from("doan_booking_nh").select("id").eq("doan_id", doanId).in("booking_status", ["da_gui", "nh_xac_nhan"]),
+      // NH + Du thuyền (cùng bảng doan_booking_nh): lấy đủ trạng thái để phân biệt
+      //   - nhà hàng thường: dùng booking_status
+      //   - du thuyền (tau_ngay/tau_dem): đặt/hủy qua dat_truoc_status/final_status (2 pha như KS)
+      externalSupabase.from("doan_booking_nh")
+        .select("id, booking_status, dat_truoc_status, final_status, nha_hang:nha_hang_id(loai)")
+        .eq("doan_id", doanId),
       externalSupabase.from("doan_booking_dv").select("id").eq("doan_id", doanId).in("booking_status", ["cho_xac_nhan", "da_xac_nhan"]),
       externalSupabase.from("de_nghi_thanh_toan").select("id").eq("doan_id", doanId).not("trang_thai_duyet", "in", '("tu_choi","da_huy")'),
     ]);
@@ -410,7 +414,36 @@ export default function Index() {
       (r.ks_final_status && r.ks_final_status !== "chua_gui");
     const activeKS = (ks.data ?? []).filter((r) => !isKsCancelled(r) && isKsSent(r)).length;
     if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn đã gửi mail chưa hủy`);
-    if ((nh.data ?? []).length > 0) errors.push(`Booking NH: còn ${nh.data!.length} bữa chưa hủy`);
+
+    // NH vs Du thuyền (cùng bảng doan_booking_nh):
+    //  - Nhà hàng thường: dùng booking_status (da_gui/nh_xac_nhan = chưa hủy).
+    //  - Du thuyền (tau_ngay/tau_dem): đặt/hủy qua dat_truoc_status/final_status 2 pha (như KS,
+    //    giá trị KHÔNG có tiền tố ks_). Hủy đi qua final_status nên booking_status có thể vẫn
+    //    'da_gui' → KHÔNG được dùng booking_status cho du thuyền (gây chặn nhầm khi hủy đoàn).
+    type NhStatusRow = {
+      booking_status: string | null;
+      dat_truoc_status: string | null;
+      final_status: string | null;
+      nha_hang: { loai: string | null } | { loai: string | null }[] | null;
+    };
+    const nhLoai = (r: NhStatusRow) =>
+      (Array.isArray(r.nha_hang) ? r.nha_hang[0]?.loai : r.nha_hang?.loai) ?? null;
+    const isTau = (r: NhStatusRow) => nhLoai(r) === "tau_ngay" || nhLoai(r) === "tau_dem";
+    const tauCancelStates = ["cho_xac_nhan_huy", "xac_nhan_huy"];
+    const isTauCancelled = (r: NhStatusRow) =>
+      r.final_status
+        ? tauCancelStates.includes(r.final_status)
+        : r.dat_truoc_status != null && tauCancelStates.includes(r.dat_truoc_status);
+    const isTauSent = (r: NhStatusRow) =>
+      (r.dat_truoc_status != null && r.dat_truoc_status !== "chua_gui") ||
+      (r.final_status != null && r.final_status !== "chua_gui");
+    const nhRows = (nh.data ?? []) as unknown as NhStatusRow[];
+    const activeNH = nhRows.filter(
+      (r) => !isTau(r) && (r.booking_status === "da_gui" || r.booking_status === "nh_xac_nhan"),
+    ).length;
+    const activeTau = nhRows.filter((r) => isTau(r) && !isTauCancelled(r) && isTauSent(r)).length;
+    if (activeNH > 0) errors.push(`Booking NH: còn ${activeNH} bữa chưa hủy`);
+    if (activeTau > 0) errors.push(`Booking Tàu/Du thuyền: còn ${activeTau} chuyến chưa hủy`);
     if ((dv.data ?? []).length > 0) errors.push(`Booking DV: còn ${dv.data!.length} dịch vụ chưa hủy`);
     if ((dntt.data ?? []).length > 0) errors.push(`ĐNTT: còn ${dntt.data!.length} phiếu chưa hủy`);
     return errors;
