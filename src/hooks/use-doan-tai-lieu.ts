@@ -90,7 +90,7 @@ export function useUploadDoanTaiLieu() {
 
       const { error: uploadErr } = await externalSupabase.storage
         .from(BUCKET)
-        .upload(path, file, { upsert: true, contentType: file.type || undefined });
+        .upload(path, file, { contentType: file.type || undefined }); // path duy nhất → KHÔNG upsert (tránh lỗi RLS nhánh UPDATE policy)
       if (uploadErr) throw uploadErr;
 
       const { data: urlData } = externalSupabase.storage.from(BUCKET).getPublicUrl(path);
