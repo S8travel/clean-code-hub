@@ -55,7 +55,7 @@ export function buildUpdateEmailHtml(opts: {
     <div style="padding:20px 24px">
       ${buildUpdateBanner()}
       ${buildUpdateNoteCallout(opts.note)}
-      <p style="margin:0 0 6px;font-size:14px">${escapeHtml(opts.greeting)}</p>
+      ${opts.greeting ? `<p style="margin:0 0 6px;font-size:14px">${escapeHtml(opts.greeting)}</p>` : ""}
       <p style="margin:0 0 14px;color:#475569;font-size:14px">${escapeHtml(opts.intro)}</p>
       ${opts.keyFieldsHtml}
       <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;font-style:italic">${escapeHtml(refLine)}</p>

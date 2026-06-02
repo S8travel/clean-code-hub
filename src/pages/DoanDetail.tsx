@@ -301,8 +301,14 @@ export default function DoanDetail() {
               canhDiemList,
               soKhach: totalKhach || doan?.so_khach || 0,
             });
-          } catch {
-            // Sync booking DV failed silently — chính flow lưu đoàn vẫn pass
+          } catch (e) {
+            // Lưu đoàn VẪN thành công, nhưng BÁO cho user biết sync Booking DV lỗi.
+            // (Trước đây nuốt im lặng → dịch vụ không hiện ở tab Booking DV mà không ai hay.)
+            console.error("syncDieuTourToBookingDV failed:", e);
+            toast.warning(
+              `${t("Đồng bộ Booking DV thất bại")}: ${errMsg(e) || t("Thử lưu lại điều tour")}`,
+              { duration: 6000 },
+            );
           }
         },
         onError: (err: unknown) => {
