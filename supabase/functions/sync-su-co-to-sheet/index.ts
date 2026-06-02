@@ -1,11 +1,12 @@
 // Edge function: xuất báo cáo "Phát sinh sự cố" theo tuần sang Google Sheet.
 //
-// Trigger: pg_cron '0 1 * * 1' (1h UTC thứ 2 = 8h00 thứ 2 giờ VN) → báo cáo
-//          tuần TRƯỚC (thứ 2 → CN). Gọi tay được: POST { from, to }.
+// Trigger: pg_cron '0 1 * * 6' (1h UTC thứ 7 = 8h00 thứ 7 giờ VN) → báo cáo
+//          TUẦN VỪA KẾT THÚC (thứ 7 tuần trước → thứ 6 hôm qua, 7 ngày).
+//          Gọi tay được: POST { from, to }.
 // Auth:    verify_jwt=false (xem supabase/config.toml) + header 'x-cron-secret'
 //          phải khớp env SU_CO_CRON_SECRET → chặn người lạ gọi.
-// Hành vi: CHỈ ĐỌC DB (RPC get_su_co_weekly) + GHI Google Sheet (tab mới mỗi
-//          tuần). KHÔNG đụng dữ liệu nghiệp vụ → rủi ro thấp.
+// Hành vi: CHỈ ĐỌC DB (RPC get_su_co_weekly: đoàn dang_chay có lịch overlap tuần)
+//          + GHI Google Sheet (tab mới mỗi tuần). KHÔNG đụng dữ liệu nghiệp vụ.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -39,12 +40,10 @@ function shiftDate(ymd: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
-/** Tuần TRƯỚC (thứ 2 → CN) so với `ymd`. Mon=0..Sun=6. */
-function prevWeekRange(ymd: string): { from: string; to: string } {
-  const d = new Date(`${ymd}T00:00:00Z`);
-  const daysSinceMonday = (d.getUTCDay() + 6) % 7; // Mon=0
-  const thisMonday = shiftDate(ymd, -daysSinceMonday);
-  return { from: shiftDate(thisMonday, -7), to: shiftDate(thisMonday, -1) };
+/** Tuần VỪA KẾT THÚC = 7 ngày trước hôm chạy: [ymd-7, ymd-1].
+ *  Cron chạy thứ 7 → thứ 7 tuần trước (ymd-7) đến thứ 6 hôm qua (ymd-1). */
+function reportWeekRange(ymd: string): { from: string; to: string } {
+  return { from: shiftDate(ymd, -7), to: shiftDate(ymd, -1) };
 }
 /** Nhãn tab Sheet — KHÔNG dùng '/' (ký tự cấm trong tên tab). VD "Tuần 18.05-24.05.2026". */
 function tabLabel(from: string, to: string): string {
@@ -192,7 +191,7 @@ serve(async (req) => {
       }
     }
     if (!from || !to) {
-      const w = prevWeekRange(vnToday());
+      const w = reportWeekRange(vnToday());
       from = w.from;
       to = w.to;
     }

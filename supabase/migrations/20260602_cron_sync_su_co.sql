@@ -1,5 +1,6 @@
--- pg_cron: tự động gọi edge function sync-su-co-to-sheet sáng thứ 2 hàng tuần.
--- '0 1 * * 1' = 1h UTC thứ 2 = 8h00 thứ 2 giờ VN → báo cáo tuần TRƯỚC (T2 → CN).
+-- pg_cron: tự động gọi edge function sync-su-co-to-sheet sáng thứ 7 hàng tuần.
+-- '0 1 * * 6' = 1h UTC thứ 7 = 8h00 thứ 7 giờ VN → báo cáo TUẦN VỪA KẾT THÚC
+-- (thứ 7 tuần trước → thứ 6 hôm qua, 7 ngày). Edge fn tự tính khoảng khi body rỗng.
 --
 -- ⚠️ ÁP MIGRATION NÀY SAU CÙNG. Trước khi áp, phải:
 --   1. Đã deploy edge function sync-su-co-to-sheet (verify_jwt = false).
@@ -25,7 +26,7 @@ END $$;
 
 SELECT cron.schedule(
   'sync-su-co-weekly',
-  '0 1 * * 1',
+  '0 1 * * 6',
   $cron$
   SELECT net.http_post(
     url     := 'https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1/sync-su-co-to-sheet',
