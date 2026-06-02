@@ -24,7 +24,7 @@ export async function uploadInlineImage(blob: Blob): Promise<string> {
   const { error } = await externalSupabase.storage
     .from(BUCKET)
     .upload(path, blob, {
-      upsert: true,
+      // KHÔNG upsert: path duy nhất; upsert=true gây lỗi RLS (nhánh UPDATE policy bucket).
       contentType: blob.type || "image/png",
       cacheControl: "31536000",
     });
