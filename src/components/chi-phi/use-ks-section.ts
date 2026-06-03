@@ -28,6 +28,7 @@ import {
   resolveKSFoc,
 } from "@/lib/foc-calc";
 import { fmt, fmtDateDisplay, buildKSRowFromCp, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
+import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
 import { type KSCancelTarget } from "./KSCancelModal";
 
@@ -124,13 +125,9 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       rowsByDayKey.get(k)!.push(r);
     });
 
-    const roomEntries: { name: string; so_luong: number; don_gia: number; so_dem: number; ci: string; co: string; foc_count: number }[] = ksRows.map((r) => {
+    // 1 entry / đêm (ngày ISO để gộp), giữ FOC pro-rata theo từng đêm.
+    const nightEntries: KSRoomNight[] = ksRows.map((r) => {
       const ngayDate = ngayDateMap[r.doan_ngay_id] || r.ngay_date || r.ci || "";
-      const coDate = ngayDate ? new Date(ngayDate + "T00:00:00") : null;
-      if (coDate) coDate.setDate(coDate.getDate() + 1);
-      const coStr = coDate
-        ? `${coDate.getDate()}/${coDate.getMonth() + 1}/${coDate.getFullYear()}`
-        : "";
       const sameDay = rowsByDayKey.get(r.ngay_date || "") || [];
       // Rooms: FOC pro-rata. Services: foc_count manual của row.
       const focCount = isKSRoomRow(r)
@@ -140,12 +137,22 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         name: r.loai_phong || (isKSRoomRow(r) ? "Phòng KS" : "Dịch vụ KS"),
         so_luong: r.so_phong,
         don_gia: r.gia_phong,
-        so_dem: r.so_dem,
-        ci: fmtDateDisplay(ngayDate),
-        co: coStr,
         foc_count: focCount,
+        so_dem: r.so_dem || 1,
+        ngayDate,
       };
     });
+    // Gộp đêm liên tiếp cùng cơ cấu phòng → 1 dòng (như bản booking). Tổng tiền không đổi.
+    const roomEntries: { name: string; so_luong: number; don_gia: number; so_dem: number; ci: string; co: string; foc_count: number }[] =
+      mergeConsecutiveKSNights(nightEntries).map((m) => ({
+        name: m.name,
+        so_luong: m.so_luong,
+        don_gia: m.don_gia,
+        so_dem: m.so_dem,
+        ci: m.ngayDate ? fmtDateDisplay(m.ngayDate) : "",
+        co: m.ngayDate ? fmtDateDisplay(addDaysIso(m.ngayDate, m.so_dem)) : "",
+        foc_count: m.foc_count,
+      }));
     if (roomEntries.length === 0) roomEntries.push({ name: "—", so_luong: 1, don_gia: 0, so_dem: 1, ci: "", co: "", foc_count: 0 });
 
     // Dates (overall range)
