@@ -1279,6 +1279,7 @@ export type Database = {
           trang_thai_dntt: string | null
           trang_thai_thanh_toan: string | null
           ty_gia: number | null
+          vat_pct: number | null
         }
         Insert: {
           chiet_khau_pct?: number | null
@@ -1315,6 +1316,7 @@ export type Database = {
           trang_thai_dntt?: string | null
           trang_thai_thanh_toan?: string | null
           ty_gia?: number | null
+          vat_pct?: number | null
         }
         Update: {
           chiet_khau_pct?: number | null
@@ -1351,6 +1353,7 @@ export type Database = {
           trang_thai_dntt?: string | null
           trang_thai_thanh_toan?: string | null
           ty_gia?: number | null
+          vat_pct?: number | null
         }
         Relationships: [
           {

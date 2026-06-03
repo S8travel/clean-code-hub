@@ -73,6 +73,8 @@ export interface ChiPhiRow {
   ty_gia: number | null;
   chiet_khau_pct: number | null;
   don_gia_raw: number | null;
+  // VAT % (xe). NULL=không VAT. don_gia = round(don_gia_raw*(1+vat_pct/100)).
+  vat_pct: number | null;
 }
 
 // NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).
