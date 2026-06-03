@@ -175,6 +175,7 @@ export function useNHSection({
           don_gia: cp.don_gia,
           nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
           chiet_khau_phan_tram: cp.chiet_khau_phan_tram_snapshot ?? 0,
+          trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
         }));
       }
     }
@@ -287,6 +288,7 @@ export function useNHSection({
             don_gia: cp.don_gia,
             nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
             chiet_khau_phan_tram: cp.chiet_khau_phan_tram_snapshot ?? 0,
+            trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
           }));
           changed = true;
         }

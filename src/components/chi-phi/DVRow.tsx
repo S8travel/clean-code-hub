@@ -9,7 +9,8 @@ import type { DnttLump } from "@/lib/can-tru-lump";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
-import { HoaDonCell } from "./HoaDonBadge";
+import { HoaDonCell, HoaDonChiPhiBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { DVInput } from "./DVInput";
 import type { DVModalTarget } from "./DVDnttModal";
 import type { CancelTarget } from "./DVCancelModal";
@@ -31,6 +32,8 @@ export interface LocalDVExtra {
   so_luong: number;
   don_gia: number;
   nguoi_tt: "cong_ty" | "hdv";
+  /** Trạng thái hóa đơn (dòng extra HDV trả) — badge bấm tay. NULL=chua_co. */
+  trang_thai_hoa_don?: string | null;
 }
 
 // Shape tối thiểu — chỉ các field DVRow đụng tới.
@@ -407,10 +410,10 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
         )}
       </td>
 
-      {/* Hóa đơn */}
+      {/* Hóa đơn — dòng công ty: theo ĐNTT; dòng HDV trả: theo chi_phi (kế toán bấm tay). */}
       <td className="px-2 py-2.5 align-top text-center">
         {nguoiTt === "hdv"
-          ? <span className="text-[10px] text-muted-foreground">—</span>
+          ? <HoaDonChiPhiBadge chiPhiId={row.id!} trangThai={(row.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc} />
           : <HoaDonCell dntts={activeDntts} />}
       </td>
 
@@ -519,7 +522,17 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
             {extra.nguoi_tt === "cong_ty" ? t("Công ty") : t("HDV")}
           </button>
         </td>
-        <td colSpan={3} /> {/* TT ĐNTT + TT Thanh toán + Hóa đơn */}
+        <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
+        {/* Hóa đơn — extra HDV trả → badge riêng. Đọc trang_thai_hoa_don từ allDvRows
+            (tươi) vì extrasMap chỉ init 1 lần, không reconcile sau khi đổi badge. */}
+        <td className="px-2 py-1.5 text-center">
+          {extra.nguoi_tt === "hdv" && extra.id != null && (
+            <HoaDonChiPhiBadge
+              chiPhiId={extra.id}
+              trangThai={(allDvRows.find((r) => r.id === extra.id)?.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc}
+            />
+          )}
+        </td>
         {/* Delete */}
         <td className="px-2 py-1.5 text-right">
           <button

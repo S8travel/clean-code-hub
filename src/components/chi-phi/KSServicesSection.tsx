@@ -56,6 +56,7 @@ export default function KSServicesSection({
             <TableHead className="w-[60px] h-auto py-1 px-2">FOC</TableHead>
             <TableHead className="w-[110px] h-auto py-1 px-2">{t("Đơn giá")}</TableHead>
             <TableHead className="w-[110px] h-auto py-1 px-2">{t("Thành tiền")}</TableHead>
+            <TableHead className="w-[100px] h-auto py-1 px-2 text-center">{t("Hóa đơn")}</TableHead>
             <TableHead className="w-[32px] h-auto py-1 px-2" />
           </TableRow>
         </TableHeader>
@@ -70,7 +71,7 @@ export default function KSServicesSection({
             return (
               <Fragment key={dateStr}>
                 <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
-                  <TableCell colSpan={6} className="py-1 px-2 text-xs font-medium">
+                  <TableCell colSpan={7} className="py-1 px-2 text-xs font-medium">
                     {label}
                   </TableCell>
                   <TableCell className="py-1 px-2 text-right">

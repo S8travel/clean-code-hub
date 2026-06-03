@@ -76,6 +76,8 @@ export interface ChiPhiRow {
   don_gia_raw: number | null;
   // VAT % (xe). NULL=không VAT. don_gia = round(don_gia_raw*(1+vat_pct/100)).
   vat_pct: number | null;
+  // Trạng thái hóa đơn cho dòng HDV trả (không có ĐNTT). NULL=chua_co.
+  trang_thai_hoa_don: string | null;
 }
 
 // NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).
@@ -589,6 +591,26 @@ export function useDeleteChiPhi() {
     onError: (err: unknown) => {
       // Toast mặc định cho mọi caller (nhiều handleDelete không có onError riêng).
       toast.error(errMsg(err) || "Không xóa được chi phí");
+    },
+  });
+}
+
+// Đổi trạng thái hóa đơn của 1 dòng chi phí HDV trả (NH/DV/KS, không có ĐNTT).
+// KHÔNG qua lockGuard — theo dõi hóa đơn thuộc luồng thanh toán, không phải con số.
+export function useUpdateChiPhiHoaDon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, value }: { id: number; value: "chua_co" | "da_co" | "khong_can" }) => {
+      const { error } = await externalSupabase
+        .from("doan_chi_phi")
+        .update({ trang_thai_hoa_don: value })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_nh_section"] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_ks_data"] });
     },
   });
 }

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { LocalKSRow, KSLoaiRow } from "./ks-section-shared";
+import { HoaDonChiPhiBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -165,6 +167,12 @@ export default memo(function KSServiceRowInput({
             </button>
           )}
         </div>
+      </TableCell>
+      {/* Hóa đơn — dòng HDV trả: badge bấm tay (mặc định Chưa có). Dòng công ty: theo ĐNTT của KS. */}
+      <TableCell className="py-0.5 px-2 text-center">
+        {row.is_hdv && row.id != null
+          ? <HoaDonChiPhiBadge chiPhiId={row.id} trangThai={(row.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc} />
+          : <span className="text-[10px] text-muted-foreground">—</span>}
       </TableCell>
       <TableCell className="py-0.5 px-2">
         {!disabled && (

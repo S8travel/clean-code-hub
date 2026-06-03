@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import type { QuyetToanData } from "@/hooks/use-chi-phi-hdv";
 import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
+import { docTienBangChu } from "@/lib/so-tien-bang-chu";
 
 interface ExportInput {
   data: QuyetToanData;
@@ -321,10 +322,16 @@ export async function exportHDVQuyetToanExcel({ data, hdv, nguoiDeNghi, ngayLap 
   ws.getCell(conRowIdx, 7).border = BORDER_THIN;
   ws.getCell(conRowIdx, 7).fill = HEADER_FILL;
 
-  // ===== Tổng số tiền label (row 27) =====
+  // ===== Tổng số tiền (bằng chữ) — row 27 =====
+  // Số tiền bằng chữ = "Còn phải thanh toán" (số tiền quyết toán cuối cùng).
   const sumLabelIdx = conRowIdx + 2; // row 27
   ws.getCell(sumLabelIdx, 1).value = "Tổng số tiền:";
   ws.getCell(sumLabelIdx, 1).font = { name: "Calibri", size: 11, italic: true };
+  ws.mergeCells(sumLabelIdx, 2, sumLabelIdx, 7);
+  const bangChuCell = ws.getCell(sumLabelIdx, 2);
+  bangChuCell.value = docTienBangChu(conPhaiThanhToan);
+  bangChuCell.font = { name: "Calibri", size: 11, italic: true, bold: true };
+  bangChuCell.alignment = { vertical: "middle", horizontal: "left" };
 
   // ===== Signature header row (row 28) =====
   // Layout: 5 người ký phân thành 5 nhóm cột (mỗi nhóm merge để đủ chỗ chữ dài)
