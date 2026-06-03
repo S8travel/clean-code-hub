@@ -34,6 +34,37 @@ export function serializeRoomValues(values: string[]): string {
   return meaningful.join("\n");
 }
 
+// Chuẩn hoá giá trị phòng để SO SÁNH gom đêm (KHÔNG dùng để hiển thị).
+// Bỏ mọi khoảng trắng + viết hoa → "11 TWIN" và "11TWIN" coi là cùng loại phòng.
+export function normalizeRoomValue(value: string): string {
+  return value.replace(/\s+/g, "").toUpperCase();
+}
+
+export type NightGroup = { startDate: string; endDate: string; soDem: number; value: string };
+
+// Gộp các đêm liên tiếp có cùng loại phòng (so theo normalizeRoomValue) → 1 block
+// check-in/check-out. Đêm không liền nhau HOẶC khác loại phòng → tách block riêng.
+// value của group GIỮ NGUYÊN chuỗi gốc của đêm đầu tiên (để hiển thị).
+export function groupConsecutiveNights(dates: string[], values: string[]): NightGroup[] {
+  const groups: NightGroup[] = [];
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
+    const value = values[i] ?? "";
+    const last = groups[groups.length - 1];
+    if (
+      last &&
+      normalizeRoomValue(last.value) === normalizeRoomValue(value) &&
+      nextDateStr(last.endDate) === date
+    ) {
+      last.endDate = date;
+      last.soDem += 1;
+    } else {
+      groups.push({ startDate: date, endDate: date, soDem: 1, value });
+    }
+  }
+  return groups;
+}
+
 export function getRoomInfoForDate(
   raw: string | null | undefined,
   dates: string[],

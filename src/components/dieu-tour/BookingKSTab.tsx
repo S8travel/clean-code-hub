@@ -35,6 +35,7 @@ import TauNgayCard from "@/components/booking-ks/TauNgayCard";
 import {
   expandRoomValues,
   getBookingRoomDates,
+  groupConsecutiveNights,
   nextDateStr,
   serializeRoomValues,
 } from "@/lib/booking-ks-rooms";
@@ -321,25 +322,6 @@ function BookingKSCard({
   const datTruocRoomText = serializeRoomValues(soPhongByNight);
   const finalRoomText = serializeRoomValues(soPhongFinalByNight);
   const preferredRoomText = finalRoomText || datTruocRoomText || row.ks_final || row.ks_dat_truoc || "";
-
-  // Gộp các đêm liên tiếp có cùng số phòng → 1 block check-in/check-out.
-  // Đêm không liên tiếp HOẶC số phòng khác → tách block riêng.
-  type NightGroup = { startDate: string; endDate: string; soDem: number; value: string };
-  const groupConsecutiveNights = (dates: string[], values: string[]): NightGroup[] => {
-    const groups: NightGroup[] = [];
-    for (let i = 0; i < dates.length; i++) {
-      const date = dates[i];
-      const value = values[i] ?? "";
-      const last = groups[groups.length - 1];
-      if (last && last.value === value && nextDateStr(last.endDate) === date) {
-        last.endDate = date;
-        last.soDem += 1;
-      } else {
-        groups.push({ startDate: date, endDate: date, soDem: 1, value });
-      }
-    }
-    return groups;
-  };
 
   const roomRowsHtml = () => {
     if (roomDates.length === 0) {
