@@ -9,11 +9,11 @@ import { dayLabel, type LocalKSRow } from "./ks-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
 
 /* ── Add buttons cụm (Phòng + Dịch vụ) cho header ngày ── */
-export function DayAddButtons({ onAddRoom, onAddService }: { onAddRoom: () => void; onAddService: () => void }) {
+export function DayAddButtons({ onAddRoom, onAddService, disabled = false }: { onAddRoom: () => void; onAddService: () => void; disabled?: boolean }) {
   useTranslate();
   return (
     <div className="inline-flex items-center gap-0.5 whitespace-nowrap">
-      <Button variant="ghost" size="sm" className="h-6 text-xs px-1.5" onClick={onAddRoom}>
+      <Button variant="ghost" size="sm" className="h-6 text-xs px-1.5" onClick={onAddRoom} disabled={disabled}>
         <Plus className="h-3 w-3 mr-0.5" />
         {t("Phòng")}
       </Button>
@@ -22,6 +22,7 @@ export function DayAddButtons({ onAddRoom, onAddService }: { onAddRoom: () => vo
         size="sm"
         className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
         onClick={onAddService}
+        disabled={disabled}
       >
         <Plus className="h-3 w-3 mr-0.5" />
         {t("Dịch vụ")}
@@ -44,6 +45,7 @@ export function DayGroup({
   onAddRoom,
   onAddService,
   disabled = false,
+  locked = false,
   cpCommittedById,
 }: {
   dateStr: string;
@@ -58,6 +60,8 @@ export function DayGroup({
   onAddRoom: () => void;
   onAddService: () => void;
   disabled?: boolean;
+  /** Đoàn đã quyết toán → khóa CỨNG mọi dòng (không phụ thuộc cpCommittedById). */
+  locked?: boolean;
   /** Row có chi_phi_id thuộc map = đã commit vào DNTT → khoá inline-edit dù
    *  card đang ở chế độ thêm phát sinh. Row mới (id == null) hoặc id chưa
    *  có DNTT → editable. */
@@ -94,7 +98,7 @@ export function DayGroup({
           )}
         </TableCell>
         <TableCell className="py-1 px-2 text-right">
-          <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />
+          <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} disabled={locked} />
         </TableCell>
       </TableRow>
       {dayRows.map((row) => {
@@ -103,7 +107,7 @@ export function DayGroup({
         // Row mới (id == null) hoặc row chưa commit vào DNTT → editable.
         // Row đã commit (so_tien_da_dntt > 0) → khoá theo lock của card.
         const rowDisabled =
-          disabled && row.id != null && !!cpCommittedById?.[row.id];
+          locked || (disabled && row.id != null && !!cpCommittedById?.[row.id]);
         return (
           <KSRowInput
             key={`${row.doan_ngay_id}-${globalIdx}`}
@@ -123,13 +127,15 @@ export function DayGroup({
 
 /* ── Empty day header ── */
 export function EmptyDayHeader({
-  dateStr, ngaySo, isDayUse, onAddRoom, onAddService,
+  dateStr, ngaySo, isDayUse, onAddRoom, onAddService, locked = false,
 }: {
   dateStr: string;
   ngaySo?: number;
   isDayUse?: boolean;
   onAddRoom: () => void;
   onAddService: () => void;
+  /** Đoàn đã quyết toán → khóa nút thêm phòng/dịch vụ. */
+  locked?: boolean;
 }) {
   useTranslate();
   const label = `${t("Ngày")} ${ngaySo ?? "?"} · ${format(new Date(dateStr), "dd/MM")} (${dayLabel(dateStr)})`;
@@ -144,7 +150,7 @@ export function EmptyDayHeader({
         )}
       </TableCell>
       <TableCell className="py-1 px-2 text-right">
-        <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} />
+        <DayAddButtons onAddRoom={onAddRoom} onAddService={onAddService} disabled={locked} />
       </TableCell>
     </TableRow>
   );

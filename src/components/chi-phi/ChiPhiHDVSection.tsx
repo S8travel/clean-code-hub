@@ -29,6 +29,8 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 interface Props {
   doanId: number;
   doan?: HDVDoanInfo;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 // Tính "Phải thu HDV" — phần HDV thu hộ: Tip + Đầu khách + Quỹ VP.
@@ -77,7 +79,7 @@ function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   return total;
 }
 
-export default function ChiPhiHDVSection({ doanId, doan }: Props) {
+export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props) {
   useTranslate();
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
@@ -212,7 +214,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
       </div>
 
       {/* ── Chi phí công ty hỗ trợ HDV ── */}
-      <HoTroHDVTable doanId={doanId} doan={doan} hoTroItems={hoTroItems} />
+      <HoTroHDVTable doanId={doanId} doan={doan} hoTroItems={hoTroItems} locked={locked} />
 
       {/* Modals */}
       {showTamUng && (

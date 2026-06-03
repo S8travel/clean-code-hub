@@ -37,10 +37,12 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 // Mỗi row độc lập: SL × Đơn giá. Nguồn = "Công ty" → có thể tạo ĐNTT cho NCC
 // (template tương tự nhà hàng: full/cọc + ngày cần TT). Nguồn = "HDV" → HDV
 // tự ứng, không cần ĐNTT.
-export function HoTroHDVTable({ doanId, doan, hoTroItems }: {
+export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
   doanId: number;
   doan?: HDVDoanInfo;
   hoTroItems: HDVHoTroItem[];
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }) {
   const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
@@ -455,7 +457,7 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems }: {
               {t("ĐNTT gộp")} ({selectedIds.length} · {fmt(selectedTotal)} ₫)
             </Button>
           )}
-          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleAdd} disabled={addingRow}>
+          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleAdd} disabled={addingRow || locked}>
             <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
           </Button>
         </div>
@@ -517,6 +519,7 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems }: {
                 onOpenCancel={(target) => { setCancelMode("hoan_tien"); setCancelTarget(target); }}
                 onPrintDntt={handlePrintDntt}
                 updatePending={updateDNTT.isPending}
+                locked={locked}
               />
             ))}
           </tbody>

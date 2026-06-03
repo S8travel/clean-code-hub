@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
+import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
 import { errMsg } from "@/lib/error";
@@ -440,6 +441,7 @@ export function useChiPhiNHData(doanId?: number) {
 export function useUpdateChiPhiActual() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async (args: {
       id: number;
@@ -451,6 +453,7 @@ export function useUpdateChiPhiActual() {
       // DV không truyền → fallback newTotal = so_luong * don_gia.
       total_override?: number;
     }) => {
+      lockGuard(args.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
       const newTotal = args.total_override ?? args.so_luong * args.don_gia;
       // Detect isHdv từ row hiện tại
       const { data: cur } = await externalSupabase
@@ -493,8 +496,10 @@ export function useUpdateChiPhiActual() {
 export function useUpsertChiPhi() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async (payload: Partial<ChiPhiRow> & { doan_id: number }) => {
+      lockGuard(payload.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
       // thanh_tien là generated column — loại trước khi insert/update.
       const { thanh_tien, ...clean } = payload;
       void thanh_tien;
@@ -536,8 +541,10 @@ export function useUpsertChiPhi() {
 export function useDeleteChiPhi() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
+      lockGuard(doanId); // đoàn đã quyết toán → chặn (trừ admin)
       // GUARD: chặn xóa chi phí đang nằm trong ĐNTT chưa hủy.
       // dntt_allocations.chi_phi_id FK = ON DELETE CASCADE → xóa chi phí sẽ xóa
       // luôn allocation (kể cả của ĐNTT cọc đã thanh toán) → mất dấu phần đã

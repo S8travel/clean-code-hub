@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
@@ -522,9 +523,13 @@ export async function checkKhachSanDeletable(
 export function useSaveDieuTour() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async (payload: SaveDieuTourPayload) => {
       const { doanId, doanNhomId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
+
+      // Đoàn đã quyết toán → lưu điều tour sẽ cascade sửa chi phí → chặn (trừ admin).
+      lockGuard(doanId);
 
       // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
       const counters = { thucTeClearCount: 0 };

@@ -12,6 +12,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import {
   useDoanNhomList, useCreateDoanNhom, useUpdateDoanNhom, useDeleteDoanNhom,
 } from "@/hooks/use-doan-nhom";
+import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
 import { useQueryClient } from "@tanstack/react-query";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -54,6 +55,8 @@ export default function SplitNhomModal({
 }: Props) {
   useTranslate();
   const qc = useQueryClient();
+  // Đoàn đã quyết toán → chia/gộp nhóm sẽ ghi lại so_luong chi phí → khóa (trừ admin).
+  const locked = useChiPhiLocked(doanId);
   const { data: nhomList = [] } = useDoanNhomList(doanId);
   const createMut = useCreateDoanNhom();
   const updateMut = useUpdateDoanNhom();
@@ -112,6 +115,10 @@ export default function SplitNhomModal({
   };
 
   const handleSubmit = async () => {
+    if (locked) {
+      toast.error(t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được."));
+      return;
+    }
     if (!allMatch) {
       toast.error(t("Tổng số khách các nhóm phải bằng tổng đoàn"));
       return;

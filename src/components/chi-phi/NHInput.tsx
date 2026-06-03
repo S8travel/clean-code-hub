@@ -4,7 +4,7 @@ import { DecimalInput } from "@/components/ui/decimal-input";
 
 // Ô nhập số nhỏ inline cho bảng chi phí nhà hàng. Tách verbatim từ ChiPhiNHSection.
 export function NHInput({
-  value, onChange, onBlur, width = "w-[72px]", money = false, decimal = false,
+  value, onChange, onBlur, width = "w-[72px]", money = false, decimal = false, disabled = false,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -14,6 +14,8 @@ export function NHInput({
   money?: boolean;
   /** Cho phép số thập phân (đơn giá). Focus → raw "1500.5"; blur → "1.500,5". */
   decimal?: boolean;
+  /** Đoàn đã quyết toán → khóa (trừ admin). */
+  disabled?: boolean;
 }) {
   // Hook phải gọi vô điều kiện TRƯỚC mọi return sớm (Rules of Hooks).
   const formatVN = (n: number) => (n ? n.toLocaleString("vi-VN") : "");
@@ -26,6 +28,7 @@ export function NHInput({
         value={value}
         onChange={onChange}
         onBlur={onBlur}
+        disabled={disabled}
         className={`h-7 text-xs ${width} text-right`}
       />
     );
@@ -35,6 +38,7 @@ export function NHInput({
       type={money ? "text" : "number"}
       inputMode="numeric"
       value={local}
+      disabled={disabled}
       onChange={(e) => {
         if (money) {
           const digits = e.target.value.replace(/\D/g, "");

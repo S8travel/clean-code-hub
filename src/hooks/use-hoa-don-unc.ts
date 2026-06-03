@@ -184,7 +184,11 @@ export function useUpdateDocStatus() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
+      // Badge trạng thái hóa đơn ở tab Chi phí đọc qua ["de_nghi_thanh_toan", doanId].
+      qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
+    },
   });
 }
 

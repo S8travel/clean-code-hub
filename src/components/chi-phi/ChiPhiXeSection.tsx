@@ -44,9 +44,11 @@ interface XeInfo {
 interface Props {
   doanId: number;
   xe: XeInfo | null;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
-export default function ChiPhiXeSection({ doanId, xe }: Props) {
+export default function ChiPhiXeSection({ doanId, xe, locked = false }: Props) {
   useTranslate();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -291,7 +293,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
         </div>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-xs text-muted-foreground">{t("Tổng:")} {fmt(total)} ₫</span>}
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleAddXe} disabled={upsertMut.isPending}>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleAddXe} disabled={upsertMut.isPending || locked}>
             + {t("Thêm")}
           </Button>
         </div>
@@ -379,6 +381,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           type="number"
                           min={0}
                           value={local.so_luong ?? ""}
+                          disabled={locked}
                           onChange={(e) => handleRowChange(row.id, "so_luong", e.target.value === "" ? 0 : Number(e.target.value))}
                           onBlur={() => handleRowSave(row)}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
@@ -394,6 +397,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           value={local.don_gia_raw}
                           onChange={(v) => handleRowChange(row.id, "don_gia_raw", v)}
                           onBlur={() => handleRowSave(row)}
+                          disabled={locked}
                           className="h-6 text-xs px-1.5 py-0 text-right w-[112px]"
                         />
                       </div>
@@ -406,6 +410,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           type="number"
                           min={0}
                           value={local.vat_pct ?? ""}
+                          disabled={locked}
                           onChange={(e) => handleRowChange(row.id, "vat_pct", e.target.value === "" ? 0 : Number(e.target.value))}
                           onBlur={() => handleRowSave(row)}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
@@ -423,7 +428,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                     <td className="px-2 py-2.5 text-center">
                       <button
                         onClick={() => handleToggleNguoiTt(row)}
-                        disabled={upsertMut.isPending}
+                        disabled={upsertMut.isPending || locked}
                         className={cn(
                           "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
                           nguoiTt === "cong_ty"
@@ -583,12 +588,13 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                         )}
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
                           title={t("Thêm phụ phí")}
+                          disabled={locked}
                           onClick={() => openAddExtra(row.id)}>
                           <Plus className="h-3 w-3" />
                         </Button>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
                           onClick={() => deleteMut.mutate({ id: row.id, doanId }, { onSuccess: () => toast.success(t("Đã xóa")) })}
-                          disabled={deleteMut.isPending}>
+                          disabled={deleteMut.isPending || locked}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -636,7 +642,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                               = {fmt(calcXeThanhTien(extraFields.so_luong, extraFields.don_gia_raw, extraFields.vat_pct))} ₫
                             </span>
                           )}
-                          <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending}>{t("Lưu")}</Button>
+                          <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending || locked}>{t("Lưu")}</Button>
                           <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setAddExtraForId(null)}>{t("Hủy")}</Button>
                         </div>
                       </td>
