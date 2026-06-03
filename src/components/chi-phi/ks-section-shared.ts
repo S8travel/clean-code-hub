@@ -50,6 +50,7 @@ export interface LocalKSRow {
   loai_row?: KSLoaiRow;  // default 'phong' nếu không set
   foc_count?: number;    // dùng cho service rows (OP tự điền)
   is_hdv?: boolean;      // dòng dịch vụ HDV trả (tien_hdv>0) — ngoài tổng KS/ĐNTT
+  trang_thai_hoa_don?: string | null; // dòng dịch vụ HDV trả: badge hóa đơn (kế toán bấm tay)
 }
 
 // Ngày của đoàn — chỉ field mà buildKSRowFromCp đọc.
@@ -94,6 +95,7 @@ export function buildKSRowFromCp(
       loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
       foc_count: Number(cp.foc_count ?? 0),
       is_hdv: (cp.tien_hdv ?? 0) > 0,
+      trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
     } as LocalKSRow;
   }
   const ngay = ngayMap[cp.ref_doan_ngay_id!];
@@ -120,5 +122,6 @@ export function buildKSRowFromCp(
     loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
     foc_count: Number(cp.foc_count ?? 0),
     is_hdv: (cp.tien_hdv ?? 0) > 0,
+    trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
   } as LocalKSRow;
 }

@@ -118,6 +118,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         so_luong: row.so_luong,
         don_gia: row.don_gia,
         nguoi_tt: (row.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
+        trang_thai_hoa_don: row.trang_thai_hoa_don ?? null,
       });
     }
     return map;

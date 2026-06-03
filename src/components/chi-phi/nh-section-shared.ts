@@ -50,4 +50,6 @@ export interface LocalNHExtra {
   /** CK% riêng của dòng phát sinh — áp per dòng (suất trẻ em = menu chính cần CK;
    *  HDV phát sinh để 0). Lưu vào doan_chi_phi.chiet_khau_phan_tram_snapshot. */
   chiet_khau_phan_tram: number;
+  /** Trạng thái hóa đơn (dòng extra HDV trả) — badge bấm tay. NULL=chua_co. */
+  trang_thai_hoa_don?: string | null;
 }

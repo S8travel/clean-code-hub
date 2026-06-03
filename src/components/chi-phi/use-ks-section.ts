@@ -653,6 +653,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
             (a.foc_mien_snapshot ?? null) !== (b.foc_mien_snapshot ?? null) ||
             Number(a.foc_count ?? 0) !== Number(b.foc_count ?? 0) ||
             (a.loai_row ?? "phong") !== (b.loai_row ?? "phong") ||
+            (a.trang_thai_hoa_don ?? null) !== (b.trang_thai_hoa_don ?? null) ||
             a.thanh_tien !== b.thanh_tien ||
             a.ngay_date !== b.ngay_date
           ) { same = false; break; }

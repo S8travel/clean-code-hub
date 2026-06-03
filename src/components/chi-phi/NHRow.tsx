@@ -17,7 +17,8 @@ import { NHInput } from "./NHInput";
 import { NHFocEditor } from "./NHFocEditor";
 import NHExtraRow from "./NHExtraRow";
 import NHAggFooterRow from "./NHAggFooterRow";
-import { HoaDonCell } from "./HoaDonBadge";
+import { HoaDonCell, HoaDonChiPhiBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -465,7 +466,9 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
         {/* Hóa đơn */}
         <td className="px-2 py-1 align-top text-center">
           {nguoiTtMain === "hdv"
-            ? <span className="text-[10px] text-muted-foreground">—</span>
+            ? (row?.id != null
+                ? <HoaDonChiPhiBadge chiPhiId={row.id} trangThai={(mainCpForFoc?.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc} />
+                : <span className="text-[10px] text-muted-foreground">—</span>)
             : <HoaDonCell dntts={activeDntts} />}
         </td>
 
@@ -527,6 +530,7 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
           onSave={handleExtraSave}
           onDelete={handleExtraDelete}
           locked={locked}
+          trangThaiHoaDon={extra.id != null ? (chiPhiRows.find((c) => c.id === extra.id)?.trang_thai_hoa_don ?? null) : null}
         />
       ))}
 

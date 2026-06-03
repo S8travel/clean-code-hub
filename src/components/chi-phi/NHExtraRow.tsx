@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { NHInput } from "./NHInput";
+import { HoaDonChiPhiBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { fmt, type LocalNHExtra } from "./nh-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -16,10 +18,12 @@ interface Props {
   onDelete: (key: string, idx: number) => void;
   /** Đoàn đã quyết toán → khóa (trừ admin). */
   locked?: boolean;
+  /** Trạng thái hóa đơn TƯƠI đọc từ chiPhiRows (extrasMap init-once, không reconcile). */
+  trangThaiHoaDon?: string | null;
 }
 
 // 1 dòng dịch vụ phát sinh của bữa ăn. Tách verbatim từ NHRow.
-export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete, locked = false }: Props) {
+export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete, locked = false, trangThaiHoaDon = null }: Props) {
   useTranslate();
   return (
     <tr className="border-b border-border/50 last:border-b-0 bg-muted/20">
@@ -118,8 +122,12 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       </td>
       {/* Col 10: empty */}
       <td />
-      {/* Col Hóa đơn: empty (extra không có ĐNTT riêng) */}
-      <td />
+      {/* Col Hóa đơn: extra HDV trả → badge riêng (kế toán bấm tay). Extra công ty gộp nhóm → trống. */}
+      <td className="px-2 py-1 text-center">
+        {extra.nguoi_tt === "hdv" && extra.id != null && (
+          <HoaDonChiPhiBadge chiPhiId={extra.id} trangThai={(trangThaiHoaDon ?? "chua_co") as TrangThaiDoc} />
+        )}
+      </td>
       {/* Col 11: delete */}
       <td className="px-2 py-1">
         <div className="flex justify-end">
