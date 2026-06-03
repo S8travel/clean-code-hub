@@ -247,6 +247,39 @@ export type Database = {
           },
         ]
       }
+      chuyen_bay: {
+        Row: {
+          id: number
+          ma_bay: string
+          hang_bay: string | null
+          chang: string | null
+          gio_di: string | null
+          gio_den: string | null
+          ghi_chu: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          ma_bay: string
+          hang_bay?: string | null
+          chang?: string | null
+          gio_di?: string | null
+          gio_den?: string | null
+          ghi_chu?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          ma_bay?: string
+          hang_bay?: string | null
+          chang?: string | null
+          gio_di?: string | null
+          gio_den?: string | null
+          ghi_chu?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       cong_no: {
         Row: {
           created_at: string | null
