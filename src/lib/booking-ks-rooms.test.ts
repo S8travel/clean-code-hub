@@ -7,6 +7,8 @@ import {
   serializeRoomValues,
   getRoomInfoForDate,
   getPreferredRoomInfoForDate,
+  normalizeRoomValue,
+  groupConsecutiveNights,
 } from "./booking-ks-rooms";
 
 describe("getBookingRoomDates", () => {
@@ -187,6 +189,68 @@ describe("getPreferredRoomInfoForDate", () => {
 
   it("cả hai đều null → ''", () => {
     expect(getPreferredRoomInfoForDate(null, null, dates, "2026-01-01")).toBe("");
+  });
+});
+
+describe("normalizeRoomValue", () => {
+  it("bỏ khoảng trắng giữa + viết hoa", () => {
+    expect(normalizeRoomValue("11 TWIN")).toBe("11TWIN");
+    expect(normalizeRoomValue("11TWIN")).toBe("11TWIN");
+  });
+  it("'11 TWIN' và '11TWIN' chuẩn hoá bằng nhau", () => {
+    expect(normalizeRoomValue("11 TWIN")).toBe(normalizeRoomValue("11TWIN"));
+  });
+  it("khác hoa/thường vẫn bằng nhau", () => {
+    expect(normalizeRoomValue("2 twn")).toBe(normalizeRoomValue("2 TWN"));
+  });
+  it("mix loại phòng — bỏ mọi khoảng trắng vẫn so khớp", () => {
+    expect(normalizeRoomValue("2 TWN + 1 SGL")).toBe(normalizeRoomValue("2TWN+1SGL"));
+  });
+});
+
+describe("groupConsecutiveNights", () => {
+  it("3 đêm liền nhau cùng loại phòng → 1 lượt", () => {
+    const groups = groupConsecutiveNights(
+      ["2026-09-17", "2026-09-18", "2026-09-19"],
+      ["11 TWIN", "11 TWIN", "11 TWIN"],
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ startDate: "2026-09-17", endDate: "2026-09-19", soDem: 3 });
+  });
+
+  it("cùng loại phòng nhưng KHÁC khoảng trắng → vẫn gom 1 lượt (bug 26/09)", () => {
+    // "11 TWIN" (2 đêm) + "11TWIN" (1 đêm) liền nhau → trước đây tách 2 lượt
+    const groups = groupConsecutiveNights(
+      ["2026-09-17", "2026-09-18", "2026-09-19"],
+      ["11 TWIN", "11 TWIN", "11TWIN"],
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ startDate: "2026-09-17", endDate: "2026-09-19", soDem: 3 });
+    expect(groups[0].value).toBe("11 TWIN"); // hiển thị giữ chuỗi gốc đêm đầu
+  });
+
+  it("khác loại phòng thật → tách lượt", () => {
+    const groups = groupConsecutiveNights(
+      ["2026-09-17", "2026-09-18", "2026-09-19"],
+      ["11 TWIN", "11 TWIN", "10 TWIN + 1 SGL"],
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ soDem: 2 });
+    expect(groups[1]).toMatchObject({ startDate: "2026-09-19", soDem: 1 });
+  });
+
+  it("đêm KHÔNG liền nhau (gap) → tách lượt dù cùng loại phòng", () => {
+    const groups = groupConsecutiveNights(
+      ["2026-09-17", "2026-09-18", "2026-09-20"],
+      ["11 TWIN", "11 TWIN", "11 TWIN"],
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ endDate: "2026-09-18", soDem: 2 });
+    expect(groups[1]).toMatchObject({ startDate: "2026-09-20", soDem: 1 });
+  });
+
+  it("rỗng → []", () => {
+    expect(groupConsecutiveNights([], [])).toEqual([]);
   });
 });
 
