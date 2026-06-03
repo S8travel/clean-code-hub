@@ -22,6 +22,7 @@ export default function KSServicesSection({
   onDelete,
   onToggleNguoiTt,
   disabled = false,
+  locked = false,
   cpCommittedById,
 }: {
   serviceDayEntries: [string, LocalKSRow[]][];
@@ -34,6 +35,8 @@ export default function KSServicesSection({
   onDelete: (idx: number) => void;
   onToggleNguoiTt?: (idx: number) => void;
   disabled?: boolean;
+  /** Đoàn đã quyết toán → khóa CỨNG mọi dòng + nút thêm (không phụ thuộc cpCommittedById). */
+  locked?: boolean;
   cpCommittedById?: Record<number, boolean>;
 }) {
   useTranslate();
@@ -75,6 +78,7 @@ export default function KSServicesSection({
                       variant="ghost"
                       size="sm"
                       className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                      disabled={locked}
                       onClick={() => onAddMore(doanNgayId, dateStr, dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined)}
                     >
                       <Plus className="h-3 w-3 mr-0.5" />
@@ -85,7 +89,7 @@ export default function KSServicesSection({
                 {dayRows.map((row) => {
                   const globalIdx = localRows.indexOf(row);
                   const rowDisabled =
-                    disabled && row.id != null && !!cpCommittedById?.[row.id];
+                    locked || (disabled && row.id != null && !!cpCommittedById?.[row.id]);
                   return (
                     <KSServiceRowInput
                       key={`svc-${row.doan_ngay_id}-${globalIdx}`}

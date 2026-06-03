@@ -3,6 +3,7 @@ import type { DNTTRow } from "@/hooks/use-dntt";
 import type { CongNoRow } from "@/hooks/use-cong-no";
 import type { NHMealRow } from "@/hooks/use-chi-phi-nh";
 import { fmt, STATUS_LABEL, parseNHMoTa } from "./nh-section-shared";
+import { HoaDonCell } from "./HoaDonBadge";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
@@ -33,7 +34,7 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
   return (
     <>
       <tr>
-        <td colSpan={11} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
+        <td colSpan={12} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
           {t("Không còn trong lịch trình điều tour")}
         </td>
       </tr>
@@ -113,6 +114,9 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
                   <span className="text-[10px] text-muted-foreground">—</span>
                 )}
               </div>
+            </td>
+            <td className="px-2 py-1.5 align-top text-center">
+              <HoaDonCell dntts={cpActiveDntts} />
             </td>
             <td />
           </tr>

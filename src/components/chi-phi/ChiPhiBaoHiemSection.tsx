@@ -40,9 +40,11 @@ interface Props {
   soKhach: number;
   ngayDi: string | null;
   ngayVe: string | null;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
-export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }: Props) {
+export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, locked = false }: Props) {
   useTranslate();
   const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -341,7 +343,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                     onChange={(e) => { dirtyRef.current = true; setSoLuong(Number(e.target.value) || 0); }}
                     onBlur={handleSave}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                    disabled={saving}
+                    disabled={saving || locked}
                     className="h-6 text-xs px-1.5 py-0 text-center w-[64px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
@@ -355,7 +357,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
                     onChange={(v) => { dirtyRef.current = true; setDonGia(v); }}
                     onBlur={handleSave}
                     placeholder="0"
-                    disabled={saving}
+                    disabled={saving || locked}
                     className="h-6 text-xs px-1.5 py-0 text-right w-[112px]"
                   />
                 </div>
@@ -370,7 +372,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe }
               <td className="px-2 py-2.5 text-center">
                 <button
                   onClick={handleToggleNguoiTt}
-                  disabled={upsertMut.isPending || !existing}
+                  disabled={upsertMut.isPending || !existing || locked}
                   className={cn(
                     "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
                     nguoiTt === "cong_ty"

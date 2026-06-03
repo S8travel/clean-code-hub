@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { DayLocal, DayItemLocal } from "@/hooks/use-dieu-tour";
 import type { TablesInsert } from "@/lib/database.types";
+import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 
 // ── Types ──
 
@@ -278,6 +279,7 @@ export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyC
 
 export function useApplySeriToDoan() {
   const qc = useQueryClient();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async ({
       doanId,
@@ -288,6 +290,8 @@ export function useApplySeriToDoan() {
       seriId: number;
       ngayDi: string; // "yyyy-MM-dd"
     }) => {
+      // Đoàn đã quyết toán → áp seri ghi đè chi phí → chặn (trừ admin).
+      lockGuard(doanId);
       // 1. Fetch seri ngay
       const { data: seriNgayRows, error: e1 } = await externalSupabase
         .from("seri_tour_ngay")

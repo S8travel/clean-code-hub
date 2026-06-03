@@ -23,6 +23,7 @@ export function HDVHoTroRow({
   isSelectable, isSelected, onToggleSelect,
   editingId, editAmount, updatePending,
   onOpenModal, onStartEdit, onCancelEdit, onEditAmountChange, onSaveEdit, onOpenCancel, onPrintDntt,
+  locked = false,
 }: {
   item: HDVHoTroItem;
   isTipLaiXe: boolean;
@@ -49,6 +50,8 @@ export function HDVHoTroRow({
   onSaveEdit: (id: number) => void;
   onOpenCancel: (target: KhacCancelTarget) => void;
   onPrintDntt: (dnttId: number) => void;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }) {
   const [moTa, setMoTaState] = useState(item.mo_ta ?? "");
   const [soLuong, setSoLuongState] = useState(item.so_luong);
@@ -187,6 +190,7 @@ export function HDVHoTroRow({
           <Input
             type="text"
             value={moTa}
+            disabled={locked}
             onChange={(e) => setMoTa(e.target.value)}
             onBlur={triggerSave}
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
@@ -199,6 +203,7 @@ export function HDVHoTroRow({
         <Input
           type="number"
           value={soLuong || ""}
+          disabled={locked}
           onChange={(e) => setSoLuong(Number(e.target.value) || 0)}
           onBlur={triggerSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
@@ -210,6 +215,7 @@ export function HDVHoTroRow({
           value={donGia}
           onChange={setDonGia}
           onBlur={triggerSave}
+          disabled={locked}
           className="h-6 text-xs px-1.5 py-0 text-right w-28 ml-auto"
         />
       </td>
@@ -220,7 +226,7 @@ export function HDVHoTroRow({
       <td className="px-2 py-2 text-center">
         <button
           onClick={handleToggleNguoiTt}
-          disabled={pending}
+          disabled={pending || locked}
           className={cn(
             "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
             nguoiTt === "cong_ty"
@@ -366,7 +372,7 @@ export function HDVHoTroRow({
               size="icon" variant="ghost"
               className="h-6 w-6 text-muted-foreground hover:text-destructive"
               onClick={() => onDelete(item.id)}
-              disabled={pending}
+              disabled={pending || locked}
             >
               <Trash2 className="h-3 w-3" />
             </Button>

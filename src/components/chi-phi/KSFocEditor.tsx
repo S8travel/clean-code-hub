@@ -8,13 +8,14 @@ import { t, useTranslate } from "@/lib/i18n";
 // Edit FOC snapshot per-tour. Blur-save → update tất cả chi_phi rows của KS này
 // trong đoàn hiện tại. Master không thay đổi.
 export default function KSFocEditor({
-  doanId, ksId, rowIds, focKhach, focMien,
+  doanId, ksId, rowIds, focKhach, focMien, disabled = false,
 }: {
   doanId: number;
   ksId: number;
   rowIds: number[];
   focKhach: number | null;
   focMien: number | null;
+  disabled?: boolean;
 }) {
   useTranslate();
   const qc = useQueryClient();
@@ -26,6 +27,7 @@ export default function KSFocEditor({
   useEffect(() => { setM(focMien != null ? String(focMien) : ""); }, [focMien]);
 
   const save = async () => {
+    if (disabled) return; // đoàn đã quyết toán → khóa (trừ admin)
     // Parse: chuỗi rỗng → null; số hợp lệ (kể cả 0) → number
     const parseNum = (s: string): number | null => {
       const tr = s.trim();
@@ -61,22 +63,24 @@ export default function KSFocEditor({
         value={k}
         onChange={(e) => setK(e.target.value)}
         onBlur={save}
+        disabled={disabled}
         type="number"
         min={0}
         step="any"
         placeholder="—"
-        className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
+        className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background disabled:opacity-60 disabled:cursor-not-allowed"
       />
       <span>免</span>
       <input
         value={m}
         onChange={(e) => setM(e.target.value)}
         onBlur={save}
+        disabled={disabled}
         type="number"
         min={0}
         step="any"
         placeholder="—"
-        className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
+        className="w-9 h-6 px-1 text-xs text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </span>
   );

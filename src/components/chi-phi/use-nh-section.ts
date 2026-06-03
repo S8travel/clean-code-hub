@@ -521,14 +521,23 @@ export function useNHSection({
     const focResolved = resolveNHFoc(row, nh);
     const soKhachThucTe = calcSoKhachThucTe(newSoKhach, focResolved.foc_khach, focResolved.foc_mien);
     const newTotal = applyChietKhau(soKhachThucTe * newDonGia, row.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null);
-    await externalSupabase.from("doan_chi_phi").update({
-      so_luong: newSoKhach,
-      don_gia:  newDonGia,
-      tien_cong_ty: isHdv ? 0 : newTotal,
-      tien_hdv:     isHdv ? newTotal : 0,
-      is_overridden: false,
-      thanh_tien_thuc_te: null,
-    }).eq("id", row.id);
+    // Route qua upsertMut (KHÔNG raw update) để tự hưởng lockGuard — đoàn đã
+    // quyết toán + non-admin → ném lỗi, không sửa được con số chi phí.
+    try {
+      await upsertMut.mutateAsync({
+        id: row.id,
+        doan_id: doanId,
+        so_luong: newSoKhach,
+        don_gia:  newDonGia,
+        tien_cong_ty: isHdv ? 0 : newTotal,
+        tien_hdv:     isHdv ? newTotal : 0,
+        is_overridden: false,
+        thanh_tien_thuc_te: null,
+      });
+    } catch (err: unknown) {
+      toast.error(errMsg(err) || "Lỗi reset");
+      return;
+    }
     // Cập nhật localRows NGAY để UI reflect — query invalidate
     // không tự đè localRows (local state independent của chiPhiRows).
     setLocalRows((prev) => ({
