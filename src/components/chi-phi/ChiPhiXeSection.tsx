@@ -21,6 +21,7 @@ import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-d
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT } from "@/lib/xe-calc";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -73,9 +74,11 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   // chỉ để render. DecimalInput commit onChange + gọi onBlur qua setTimeout, nên đọc
   // editRow từ closure trong handleRowSave sẽ lấy giá trị CŨ (chưa có giá vừa gõ) →
   // phải đọc qua ref đồng bộ. (Xem decimal-input.tsx onBlur.)
-  const editRowRef = useRef<Record<number, { so_luong: number; don_gia: number }>>({});
-  const [editRow, setEditRow] = useState<Record<number, { so_luong: number; don_gia: number }>>({});
-  const commitEditRow = (next: Record<number, { so_luong: number; don_gia: number }>) => {
+  // don_gia_raw = đơn giá CHƯA VAT (ô nhập); vat_pct = % VAT. Thành tiền = applyVat(raw,vat)*SL.
+  type XeRowEdit = { so_luong: number; don_gia_raw: number; vat_pct: number };
+  const editRowRef = useRef<Record<number, XeRowEdit>>({});
+  const [editRow, setEditRow] = useState<Record<number, XeRowEdit>>({});
+  const commitEditRow = (next: Record<number, XeRowEdit>) => {
     editRowRef.current = next;
     setEditRow(next);
   };
@@ -103,7 +106,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
 
   // Add extra (phụ phí) inline form
   const [addExtraForId, setAddExtraForId] = useState<number | null>(null);
-  const [extraFields, setExtraFields] = useState({ mo_ta: "", so_luong: 1, don_gia: 0 });
+  const [extraFields, setExtraFields] = useState({ mo_ta: "", so_luong: 1, don_gia_raw: 0, vat_pct: XE_VAT_DEFAULT });
 
   const xeRows = chiPhiRows.filter((r) => r.danh_muc === "xe");
   const total = xeRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
@@ -113,12 +116,18 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     : null;
 
   // ── Row edit helpers ──────────────────────────────────────────────────────
-  const getRowEdit = (row: typeof xeRows[0]) =>
-    editRow[row.id] ?? { so_luong: row.so_luong, don_gia: row.don_gia };
+  // Dòng cũ: don_gia_raw null → fallback don_gia (giá cũ); vat_pct null → 0 (không VAT,
+  // tiền giữ nguyên). Dòng mới handleAddXe set vat_pct = XE_VAT_DEFAULT.
+  const rowEditInit = (row: typeof xeRows[0]): XeRowEdit => ({
+    so_luong: row.so_luong,
+    don_gia_raw: row.don_gia_raw ?? row.don_gia,
+    vat_pct: row.vat_pct ?? 0,
+  });
+  const getRowEdit = (row: typeof xeRows[0]) => editRow[row.id] ?? rowEditInit(row);
 
-  const handleRowChange = (id: number, field: "so_luong" | "don_gia", val: number) => {
+  const handleRowChange = (id: number, field: keyof XeRowEdit, val: number) => {
     const base = xeRows.find((r) => r.id === id);
-    const existing = editRowRef.current[id] ?? { so_luong: base?.so_luong ?? 0, don_gia: base?.don_gia ?? 0 };
+    const existing = editRowRef.current[id] ?? (base ? rowEditInit(base) : { so_luong: 0, don_gia_raw: 0, vat_pct: 0 });
     commitEditRow({ ...editRowRef.current, [id]: { ...existing, [field]: val } });
   };
 
@@ -127,14 +136,19 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
     // onBlur qua setTimeout → closure editRow lúc render chưa có giá vừa gõ → bỏ save.
     const local = editRowRef.current[row.id];
     if (!local) return;
-    if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
-    const total = local.so_luong * local.don_gia;
+    const init = rowEditInit(row);
+    if (local.so_luong === init.so_luong && local.don_gia_raw === init.don_gia_raw && local.vat_pct === init.vat_pct) return;
+    // don_gia lưu DB = giá đã gồm VAT → thanh_tien (generated) + tien_cong_ty đều gồm VAT.
+    const donGia = applyVat(local.don_gia_raw, local.vat_pct);
+    const total = calcXeThanhTien(local.so_luong, local.don_gia_raw, local.vat_pct);
     const isHDV = row.tien_hdv > 0;
     upsertMut.mutate({
       id: row.id,
       doan_id: doanId,
       so_luong: local.so_luong,
-      don_gia: local.don_gia,
+      don_gia: donGia,
+      don_gia_raw: local.don_gia_raw,
+      vat_pct: local.vat_pct,
       tien_cong_ty: isHDV ? 0 : total,
       tien_hdv: isHDV ? total : 0,
     }, {
@@ -143,7 +157,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   };
 
   const handleToggleNguoiTt = (row: typeof xeRows[0]) => {
-    const total = row.so_luong * row.don_gia;
+    // don_gia đã gồm VAT → total = SL × don_gia. (Giữ nguyên tổng khi đổi nguồn.)
+    const total = row.tien_cong_ty + row.tien_hdv;
     const next = row.tien_hdv > 0 ? "cong_ty" : "hdv";
     upsertMut.mutate({
       id: row.id,
@@ -164,21 +179,24 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
   // ── Extra (phụ phí) ───────────────────────────────────────────────────────
   const openAddExtra = (rowId: number) => {
     setAddExtraForId(rowId);
-    setExtraFields({ mo_ta: "", so_luong: 1, don_gia: 0 });
+    setExtraFields({ mo_ta: "", so_luong: 1, don_gia_raw: 0, vat_pct: XE_VAT_DEFAULT });
   };
 
   const handleSaveExtra = () => {
     if (!addExtraForId) return;
     const parent = xeRows.find((r) => r.id === addExtraForId);
     if (!extraFields.mo_ta.trim()) { toast.warning(t("Nhập mô tả phụ phí")); return; }
-    if (extraFields.don_gia <= 0) { toast.warning(t("Đơn giá phải lớn hơn 0")); return; }
-    const total = extraFields.so_luong * extraFields.don_gia;
+    if (extraFields.don_gia_raw <= 0) { toast.warning(t("Đơn giá phải lớn hơn 0")); return; }
+    const donGia = applyVat(extraFields.don_gia_raw, extraFields.vat_pct);
+    const total = calcXeThanhTien(extraFields.so_luong, extraFields.don_gia_raw, extraFields.vat_pct);
     upsertMut.mutate({
       doan_id: doanId,
       danh_muc: "xe",
       loai: "xe",
       mo_ta: extraFields.mo_ta.trim(),
-      don_gia: extraFields.don_gia,
+      don_gia: donGia,
+      don_gia_raw: extraFields.don_gia_raw,
+      vat_pct: extraFields.vat_pct,
       so_luong: extraFields.so_luong,
       tien_cong_ty: total,
       tien_hdv: 0,
@@ -201,6 +219,8 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
       loai: "xe",
       mo_ta: xeLabel,
       don_gia: 0,
+      don_gia_raw: 0,
+      vat_pct: XE_VAT_DEFAULT,
       so_luong: 1,
       tien_cong_ty: 0,
       tien_hdv: 0,
@@ -288,6 +308,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
               <col />
               <col style={{ width: "60px" }} />
               <col style={{ width: "110px" }} />
+              <col style={{ width: "64px" }} />
               <col style={{ width: "120px" }} />
               <col style={{ width: "76px" }} />
               <col style={{ width: "180px" }} />
@@ -299,6 +320,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                 <th className="text-left px-4 py-2.5">{t("Mô tả")}</th>
                 <th className="text-center px-2 py-2.5">{t("SL")}</th>
                 <th className="text-center px-3 py-2.5">{t("Đơn giá")}</th>
+                <th className="text-center px-2 py-2.5">{t("VAT %")}</th>
                 <th className="text-right px-3 py-2.5">{t("Thành tiền")}</th>
                 <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
                 <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
@@ -309,7 +331,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
             <tbody className="divide-y divide-border">
               {xeRows.map((row) => {
                 const local = getRowEdit(row);
-                const thanhTienLocal = local.so_luong * local.don_gia;
+                const thanhTienLocal = calcXeThanhTien(local.so_luong, local.don_gia_raw, local.vat_pct);
 
                 const allDntts = dnttList.filter(
                   (d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id,
@@ -365,14 +387,29 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                       </div>
                     </td>
 
-                    {/* Đơn giá */}
+                    {/* Đơn giá (chưa VAT) */}
                     <td className="px-3 py-2.5">
                       <div className="flex justify-center">
                         <DecimalInput
-                          value={local.don_gia}
-                          onChange={(v) => handleRowChange(row.id, "don_gia", v)}
+                          value={local.don_gia_raw}
+                          onChange={(v) => handleRowChange(row.id, "don_gia_raw", v)}
                           onBlur={() => handleRowSave(row)}
                           className="h-6 text-xs px-1.5 py-0 text-right w-[112px]"
+                        />
+                      </div>
+                    </td>
+
+                    {/* VAT % */}
+                    <td className="px-2 py-2.5">
+                      <div className="flex justify-center">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={local.vat_pct ?? ""}
+                          onChange={(e) => handleRowChange(row.id, "vat_pct", e.target.value === "" ? 0 : Number(e.target.value))}
+                          onBlur={() => handleRowSave(row)}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                          className="h-6 text-xs px-1.5 py-0 text-center w-[48px]"
                         />
                       </div>
                     </td>
@@ -559,7 +596,7 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                   </tr>
                   {addExtraForId === row.id && (
                     <tr className="bg-amber-50/60 border-b border-dashed border-amber-200">
-                      <td colSpan={8} className="px-4 py-2">
+                      <td colSpan={9} className="px-4 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ {t("Phụ phí")}</span>
                           <Input
@@ -580,14 +617,23 @@ export default function ChiPhiXeSection({ doanId, xe }: Props) {
                           />
                           <span className="text-[10px] text-muted-foreground shrink-0">×</span>
                           <DecimalInput
-                            value={extraFields.don_gia}
-                            onChange={(v) => setExtraFields((p) => ({ ...p, don_gia: v }))}
+                            value={extraFields.don_gia_raw}
+                            onChange={(v) => setExtraFields((p) => ({ ...p, don_gia_raw: v }))}
                             placeholder={t("Đơn giá")}
                             className="h-6 text-xs w-28 text-right"
                           />
-                          {extraFields.don_gia > 0 && (
+                          <span className="text-[10px] text-muted-foreground shrink-0">+VAT</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder={t("VAT %")}
+                            className="h-6 text-xs w-14 text-center"
+                            value={extraFields.vat_pct ?? ""}
+                            onChange={(e) => setExtraFields((p) => ({ ...p, vat_pct: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                          />
+                          {extraFields.don_gia_raw > 0 && (
                             <span className="text-xs font-semibold text-primary shrink-0">
-                              = {fmt(extraFields.so_luong * extraFields.don_gia)} ₫
+                              = {fmt(calcXeThanhTien(extraFields.so_luong, extraFields.don_gia_raw, extraFields.vat_pct))} ₫
                             </span>
                           )}
                           <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending}>{t("Lưu")}</Button>
