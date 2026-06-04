@@ -1154,11 +1154,19 @@ export function useNHSection({
           }
         }
 
-        // Số tiền cần thanh toán: có pending → đúng so_tien ĐNTT đó (trừ cấn trừ nếu
-        // có); không có → in phần còn lại = tổng meal − cọc đã trả − cấn trừ.
+        // Phần suất chính trả bằng voucher (payment method='voucher' của ĐNTT đang in)
+        // → cộng vào cột Cấn trừ + trừ khỏi "số tiền còn thanh toán" (chỉ in phần cash).
+        const voucherAmount = activeDntt
+          ? paymentsList
+              .filter((p) => p.dntt_id === activeDntt.id && p.method === "voucher")
+              .reduce((s, p) => s + p.payment_so_tien, 0)
+          : 0;
+
+        // Số tiền cần thanh toán: có pending → đúng so_tien ĐNTT đó (trừ cấn trừ + voucher);
+        // không có → in phần còn lại = tổng meal − cọc đã trả − cấn trừ − voucher.
         const soTienConTT = activeDntt
-          ? Math.max(0, activeDntt.so_tien - canTruAmount)
-          : Math.max(0, totalEntry - soCoc - canTruAmount);
+          ? Math.max(0, activeDntt.so_tien - canTruAmount - voucherAmount)
+          : Math.max(0, totalEntry - soCoc - canTruAmount - voucherAmount);
 
         // Format ngay_date
         const d = new Date(row.ngay_date + "T00:00:00");
@@ -1177,6 +1185,7 @@ export function useNHSection({
           so_tien_coc: soCoc,
           can_tru: canTruAmount,
           can_tru_note: canTruNote,
+          voucher_amount: voucherAmount,
           so_tien_con_tt: soTienConTT,
           la_coc: !!activeDntt?.la_coc,
         });
