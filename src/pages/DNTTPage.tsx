@@ -289,6 +289,25 @@ function DNTTPageContent() {
     },
   });
 
+  // Load payment 'voucher' (phần suất chính trả bằng voucher) → hiển thị breakdown
+  // "Voucher / Cần TT thêm" cho ĐNTT có phủ voucher.
+  const { data: voucherByDntt = {} as Record<number, number> } = useQuery({
+    queryKey: ["dntt-voucher-payments", visibleDnttIds.join(",")],
+    enabled: visibleDnttIds.length > 0,
+    queryFn: async () => {
+      const { data } = await externalSupabase
+        .from("payments")
+        .select("dntt_id, so_tien")
+        .eq("method", "voucher")
+        .in("dntt_id", visibleDnttIds);
+      const m: Record<number, number> = {};
+      (data || []).forEach((p) => {
+        m[p.dntt_id] = (m[p.dntt_id] || 0) + Number(p.so_tien);
+      });
+      return m;
+    },
+  });
+
   // Metric cards luôn hiển thị tổng toàn DB, không phụ thuộc filter của list bên dưới.
   const metrics = {
     total: summary?.total ?? 0,
@@ -596,17 +615,19 @@ function DNTTPageContent() {
                         ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
                         : 0;
                       const canTru = canTruByDntt[row.id] || 0;
-                      const thucTT = Math.max(0, row.so_tien - canTru);
+                      const voucher = voucherByDntt[row.id] || 0;
+                      const thucTT = Math.max(0, row.so_tien - canTru - voucher);
                       const isThuHoi = (row.ghi_chu || "").includes("[Thu hồi]");
                       const sign = isThuHoi ? "-" : "";
                       const amountCls = isThuHoi ? "text-blue-600" : "";
                       return (
                         <div className="space-y-0.5">
-                          {canTru > 0 ? (
+                          {canTru > 0 || voucher > 0 ? (
                             <div className="text-xs space-y-0.5">
                               <div className="text-muted-foreground">{t("Tổng")}: <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
-                              <div className="text-amber-600">{t("Cấn trừ")}: −{fmt(canTru)}</div>
-                              <div className={cn("text-sm font-semibold", amountCls)}>{t("Thực TT")}: {sign}{fmt(thucTT)}</div>
+                              {voucher > 0 && <div className="text-purple-600">{t("Voucher")}: −{fmt(voucher)}</div>}
+                              {canTru > 0 && <div className="text-amber-600">{t("Cấn trừ")}: −{fmt(canTru)}</div>}
+                              <div className={cn("text-sm font-semibold", amountCls)}>{t("Cần TT thêm")}: {sign}{fmt(thucTT)}</div>
                             </div>
                           ) : (
                             <div className={amountCls}>{sign}{fmt(row.so_tien)}</div>

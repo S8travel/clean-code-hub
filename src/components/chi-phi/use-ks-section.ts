@@ -183,7 +183,17 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       .map((cp) => cp.id!)
       .filter(Boolean);
     void ksChiPhiIds; // legacy — không còn dùng vì canTruTotal lấy theo dntt_id
-    const canTruNote = canTruTotal > 0 ? "Cấn trừ công nợ" : "";
+    // Nguồn cấn trừ: ghi_chu payment can_tru đã lưu sẵn "Cấn trừ từ đoàn: <tên đoàn
+    // nguồn>". Dedupe (1 payment lặp nhiều dòng do pro-rata per allocation). Fallback
+    // "Cấn trừ công nợ" cho payment cũ thiếu ghi_chu.
+    const canTruSrcNotes = [...new Set(
+      paymentsList
+        .filter((p) => p.dntt_id === dnttId && p.method === "can_tru" && p.ghi_chu)
+        .map((p) => p.ghi_chu!.trim()),
+    )];
+    const canTruNote = canTruTotal > 0
+      ? (canTruSrcNotes.length > 0 ? canTruSrcNotes.join("; ") : "Cấn trừ công nợ")
+      : "";
 
     const focDisplay =
       ks.foc_khach && ks.foc_mien ? `${ks.foc_khach}/${ks.foc_mien}` : "—";

@@ -594,15 +594,19 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
           const nccId = row.nha_cung_cap_id ?? null;
           let canTruAmount = 0;
+          let canTruNote = "";
           if (nccId && !canTruShownByNcc[nccId]) {
-            canTruAmount = pendingDntt
-              ? paymentsList
-                  .filter((p) => p.dntt_id === pendingDntt.id && p.method === "can_tru")
-                  .reduce((s, p) => s + p.payment_so_tien, 0)
-              : paymentsList
-                  .filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru")
-                  .reduce((s, p) => s + p.payment_so_tien, 0);
-            if (canTruAmount > 0) canTruShownByNcc[nccId] = true;
+            const ctPays = pendingDntt
+              ? paymentsList.filter((p) => p.dntt_id === pendingDntt.id && p.method === "can_tru")
+              : paymentsList.filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru");
+            canTruAmount = ctPays.reduce((s, p) => s + p.payment_so_tien, 0);
+            if (canTruAmount > 0) {
+              canTruShownByNcc[nccId] = true;
+              // Nguồn cấn trừ từ ghi_chu payment ("Cấn trừ từ đoàn: X") — dedupe.
+              canTruNote = [...new Set(
+                ctPays.map((p) => p.ghi_chu?.trim()).filter((s): s is string => !!s),
+              )].join("; ");
+            }
           }
 
           // Pending → in đúng so_tien ĐNTT đó (trừ cấn trừ); không có → còn lại.
@@ -635,6 +639,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
             ncc: nccFinal,
             so_tien_coc: soCoc,
             can_tru: canTruAmount,
+            can_tru_note: canTruNote || undefined,
             so_tien_con_tt: soTienConTT,
             la_coc: !!pendingDntt?.la_coc,
             tai_khoan_thanh_toan: row.ref_doan_ngay_item_id

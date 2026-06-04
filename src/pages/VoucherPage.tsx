@@ -6,9 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,7 +14,7 @@ import { AccessDenied } from "@/components/PermissionGate";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import {
   useVoucherList, useCreateVoucher, useUpdateVoucher, useDeleteVoucher,
-  useVoucherRedemptions, useUndoRedemption, type VoucherRow,
+  useVoucherRedemptions, useUndoRedemption, type VoucherRow, type VoucherLoai,
 } from "@/hooks/use-voucher";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -28,8 +26,9 @@ interface FormState {
   ten: string;
   so_luong: string;
   ghi_chu: string;
+  loai: VoucherLoai;
 }
-const EMPTY_FORM: FormState = { id: null, nha_cung_cap_id: null, ten: "", so_luong: "", ghi_chu: "" };
+const EMPTY_FORM: FormState = { id: null, nha_cung_cap_id: null, ten: "", so_luong: "", ghi_chu: "", loai: "mua" };
 
 function VoucherPageContent() {
   useTranslate();
@@ -60,6 +59,7 @@ function VoucherPageContent() {
       ten: v.ten ?? "",
       so_luong: String(v.so_luong ?? 0),
       ghi_chu: v.ghi_chu ?? "",
+      loai: v.loai ?? "mua",
     });
 
   const handleSave = async () => {
@@ -82,6 +82,7 @@ function VoucherPageContent() {
           ten,
           so_luong: soLuong,
           ghi_chu: form.ghi_chu.trim() || null,
+          loai: form.loai,
         });
         toast.success(t("Đã cập nhật voucher"));
       } else {
@@ -90,6 +91,7 @@ function VoucherPageContent() {
           ten,
           so_luong: soLuong,
           ghi_chu: form.ghi_chu.trim() || null,
+          loai: form.loai,
         });
         toast.success(t("Đã tạo voucher"));
       }
@@ -172,7 +174,15 @@ function VoucherPageContent() {
               filtered.map((v) => (
                 <tr key={v.id} className={cn("border-t hover:bg-muted/30", !v.active && "opacity-50")}>
                   <td className="py-2 px-3">
-                    <div className="font-medium">{v.ten}</div>
+                    <div className="font-medium flex items-center gap-1.5">
+                      {v.ten}
+                      <span className={cn(
+                        "px-1 py-px rounded text-[9px] font-medium",
+                        v.loai === "tang" ? "bg-pink-100 text-pink-700" : "bg-sky-100 text-sky-700",
+                      )}>
+                        {v.loai === "tang" ? t("Tặng") : t("Mua")}
+                      </span>
+                    </div>
                     {v.ghi_chu && <div className="text-[11px] text-muted-foreground">{v.ghi_chu}</div>}
                   </td>
                   <td className="py-2 px-3 text-muted-foreground">{v.ten_ncc || "—"}</td>
@@ -230,21 +240,15 @@ function VoucherPageContent() {
             <div className="space-y-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium">{t("Nhà cung cấp")}</label>
-                <Select
+                <SearchableSelect
+                  options={nccList.map((ncc) => ({ value: String(ncc.id), label: ncc.ten }))}
                   value={form.nha_cung_cap_id != null ? String(form.nha_cung_cap_id) : ""}
-                  onValueChange={(val) => setForm({ ...form, nha_cung_cap_id: val ? Number(val) : null })}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder={t("Chọn nhà cung cấp")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nccList.map((ncc) => (
-                      <SelectItem key={ncc.id} value={String(ncc.id)} className="text-xs">
-                        {ncc.ten}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(val) => setForm({ ...form, nha_cung_cap_id: val ? Number(val) : null })}
+                  placeholder={t("Chọn nhà cung cấp")}
+                  searchPlaceholder={t("Tìm nhà cung cấp...")}
+                  emptyText={t("Không tìm thấy")}
+                  className="h-8 text-xs"
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium">{t("Tên / mô tả voucher")} *</label>
@@ -263,6 +267,31 @@ function VoucherPageContent() {
                   onChange={(e) => setForm({ ...form, so_luong: e.target.value })}
                   className="h-8 text-xs"
                 />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">{t("Loại voucher")}</label>
+                <div className="flex gap-2">
+                  {(["mua", "tang"] as VoucherLoai[]).map((lo) => (
+                    <button
+                      key={lo}
+                      type="button"
+                      onClick={() => setForm({ ...form, loai: lo })}
+                      className={cn(
+                        "flex-1 h-8 rounded-md border text-xs font-medium transition-colors",
+                        form.loai === lo
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted border-border",
+                      )}
+                    >
+                      {lo === "mua" ? t("Mua (có hóa đơn)") : t("Được tặng (không HĐ)")}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {form.loai === "mua"
+                    ? t("Khi dùng sẽ tạo ĐNTT 'đã trả bằng voucher' để nhập hóa đơn.")
+                    : t("Voucher tặng — khi dùng không phát sinh hóa đơn.")}
+                </p>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium">{t("Ghi chú")}</label>

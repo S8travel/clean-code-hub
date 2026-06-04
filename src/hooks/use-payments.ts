@@ -147,6 +147,8 @@ export interface PaymentByChiPhi {
   payment_so_tien: number;
   cong_no_id: number | null;
   ngay_thanh_toan: string;
+  /** Ghi chú payment — với can_tru = "Cấn trừ từ đoàn: <tên đoàn nguồn>". */
+  ghi_chu: string | null;
 }
 
 // Returns payments allocated to each chi_phi_id of a doan.
@@ -223,6 +225,7 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
             payment_so_tien: shares[i],
             cong_no_id: p.cong_no_id,
             ngay_thanh_toan: p.ngay_thanh_toan,
+            ghi_chu: p.ghi_chu ?? null,
           });
         }
       }

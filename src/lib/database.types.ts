@@ -3783,6 +3783,7 @@ export type Database = {
           created_at: string | null
           ghi_chu: string | null
           id: number
+          loai: string
           nha_cung_cap_id: number | null
           ngay_tao: string | null
           so_luong: number
@@ -3793,6 +3794,7 @@ export type Database = {
           created_at?: string | null
           ghi_chu?: string | null
           id?: number
+          loai?: string
           nha_cung_cap_id?: number | null
           ngay_tao?: string | null
           so_luong?: number
@@ -3803,6 +3805,7 @@ export type Database = {
           created_at?: string | null
           ghi_chu?: string | null
           id?: number
+          loai?: string
           nha_cung_cap_id?: number | null
           ngay_tao?: string | null
           so_luong?: number
@@ -3822,6 +3825,7 @@ export type Database = {
         Row: {
           chi_phi_id: number | null
           created_at: string | null
+          dntt_id: number | null
           doan_id: number | null
           gia_tri: number
           ghi_chu: string | null
@@ -3834,6 +3838,7 @@ export type Database = {
         Insert: {
           chi_phi_id?: number | null
           created_at?: string | null
+          dntt_id?: number | null
           doan_id?: number | null
           gia_tri?: number
           ghi_chu?: string | null
@@ -3846,6 +3851,7 @@ export type Database = {
         Update: {
           chi_phi_id?: number | null
           created_at?: string | null
+          dntt_id?: number | null
           doan_id?: number | null
           gia_tri?: number
           ghi_chu?: string | null
@@ -3884,6 +3890,13 @@ export type Database = {
             referencedRelation: "doan_chi_phi"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "voucher_su_dung_dntt_id_fkey"
+            columns: ["dntt_id"]
+            isOneToOne: false
+            referencedRelation: "de_nghi_thanh_toan"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -3894,6 +3907,7 @@ export type Database = {
           created_at: string | null
           ghi_chu: string | null
           id: number | null
+          loai: string | null
           nha_cung_cap_id: number | null
           ngay_tao: string | null
           so_luong: number | null

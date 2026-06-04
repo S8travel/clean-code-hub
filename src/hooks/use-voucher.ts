@@ -3,6 +3,8 @@ import { externalSupabase } from "@/lib/supabase-external";
 
 // Voucher GIÁ-BIẾN-THIÊN (1 voucher đổi 1 bữa/DV, giá trị = giá lúc dùng).
 // Theo dõi SỐ LƯỢNG (không quy tiền) — khác cong_no. Tồn = so_luong - SUM(đã dùng).
+export type VoucherLoai = "mua" | "tang";
+
 export interface VoucherRow {
   id: number;
   nha_cung_cap_id: number | null;
@@ -10,6 +12,9 @@ export interface VoucherRow {
   so_luong: number | null;
   ghi_chu: string | null;
   active: boolean | null;
+  // 'mua' = mua sỉ (NCC vẫn xuất hóa đơn khi dùng → tạo ĐNTT voucher để nhập HĐ)
+  // 'tang' = được tặng (không hóa đơn)
+  loai: VoucherLoai;
   ngay_tao: string | null;
   // Derived from view
   so_luong_da_dung: number;
@@ -26,6 +31,7 @@ export interface VoucherRedemptionRow {
   chi_phi_id: number | null;
   so_luong: number;
   gia_tri: number;
+  dntt_id: number | null;
   ngay_dung: string | null;
   ghi_chu: string | null;
   // Joined
@@ -78,10 +84,10 @@ export function useRedemptionsByDoan(doanId: number | null | undefined) {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("voucher_su_dung")
-        .select("*, voucher:voucher_id(ten)")
+        .select("*, voucher:voucher_id(ten, loai)")
         .eq("doan_id", doanId!);
       if (error) throw error;
-      return (data || []) as (VoucherRedemptionRow & { voucher?: { ten?: string | null } | null })[];
+      return (data || []) as (VoucherRedemptionRow & { voucher?: { ten?: string | null; loai?: string | null } | null })[];
     },
   });
 }
@@ -114,6 +120,7 @@ export function useCreateVoucher() {
       ten: string;
       so_luong: number;
       ghi_chu?: string | null;
+      loai?: VoucherLoai;
     }) => {
       const { data, error } = await externalSupabase
         .from("voucher")
@@ -140,6 +147,7 @@ export function useUpdateVoucher() {
       so_luong?: number;
       ghi_chu?: string | null;
       active?: boolean;
+      loai?: VoucherLoai;
     }) => {
       const { error } = await externalSupabase.from("voucher").update(updates).eq("id", id);
       if (error) throw error;

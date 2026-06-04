@@ -1,5 +1,5 @@
 import { format, subDays, parseISO } from "date-fns";
-import { Plus, Ban, Check, X, CalendarClock } from "lucide-react";
+import { Plus, Ban, Check, X, CalendarClock, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +12,8 @@ import type { CongNoRow } from "@/hooks/use-cong-no";
 import { calcSoKhachThucTe, resolveNHFoc } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { canApplyVoucher, type CoveredInfo } from "@/lib/voucher";
+import { type VoucherTarget } from "./DungVoucherModal";
 import CatalogHoverCard from "./CatalogHoverCard";
 import { NHInput } from "./NHInput";
 import { NHFocEditor } from "./NHFocEditor";
@@ -38,6 +40,8 @@ export interface NHRowData {
   editingDnttId: number | null;
   editAmount: string;
   doanId: number;
+  /** chi_phi_id → voucher đã phủ (badge 🎟 + khóa input). */
+  redemptionByChiPhiId: Record<number, CoveredInfo>;
   upsertPending: boolean;
   updateDNTTPending: boolean;
 }
@@ -69,6 +73,8 @@ export interface NHRowHandlers {
   setAggSurplusMode: (v: "con_du" | "hoan_tien") => void;
   setAggCanTru: (v: CanTruSelection[]) => void;
   setAggNgayCan: (v: string) => void;
+  onOpenVoucher: (target: VoucherTarget) => void;
+  onRemoveVoucher: (chiPhiId: number) => void;
 }
 
 interface Props {
@@ -84,7 +90,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
   const {
     localRows, extrasMap, nhaHangMap, selectedKeys, dinhKyKeys, dnttList,
     paymentsList, congNoList, chiPhiRows, canTruByDnttId, editingDnttId,
-    editAmount, doanId, upsertPending, updateDNTTPending,
+    editAmount, doanId, redemptionByChiPhiId, upsertPending, updateDNTTPending,
   } = data;
   const {
     setSelectedKeys, handleChange, handleSave, handleToggleNguoiTtNH,
@@ -93,7 +99,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
     setEditingDnttId, setEditAmount, setCancelMode, setCancelTarget,
     setDnttAlreadyPaid, setDnttModalMode, setDnttDepositAmount, setDnttNgayCan,
     setDnttModalKey, setAggCommit, setAggReason, setAggSurplusMode,
-    setAggCanTru, setAggNgayCan,
+    setAggCanTru, setAggNgayCan, onOpenVoucher, onRemoveVoucher,
   } = handlers;
 
   const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
@@ -115,6 +121,16 @@ export default function NHRow({ meal, data, handlers }: Props) {
   // Extras: mỗi dòng áp CK% riêng (suất trẻ em = menu chính cần CK).
   const extrasTotal = extras.reduce(
     (s, e) => s + applyChietKhau(e.so_luong * e.don_gia, e.chiet_khau_phan_tram),
+    0,
+  );
+  // Phần phát sinh CÔNG TY phải trả (loại HDV) — dùng để quyết định còn gì cần
+  // tạo ĐNTT khi suất chính đã phủ voucher (công ty = 0). CHỈ tính extra ĐÃ LƯU
+  // (có id) → nút ĐNTT chỉ hiện khi thật sự có dòng để allocate (tránh hiện nút
+  // rồi bấm vào báo lỗi với extra chưa blur-save).
+  const companyExtrasTotal = extras.reduce(
+    (s, e) => (e.nguoi_tt !== "hdv" && e.id != null)
+      ? s + applyChietKhau(e.so_luong * e.don_gia, e.chiet_khau_phan_tram)
+      : s,
     0,
   );
   const totalTruocCK = mainTotal + extrasTotal;
@@ -209,6 +225,17 @@ export default function NHRow({ meal, data, handlers }: Props) {
     ? calcDnttMismatch({ sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn })
     : 0;
 
+  // ── Voucher: chỉ suất chính, chỉ khi chưa có ĐNTT + công ty ────────────────
+  // MUA → suất chính giữ giá trị (ĐNTT gồm đủ); TẶNG → miễn phí (loại khỏi ĐNTT).
+  const voucherInfo = row?.id != null ? redemptionByChiPhiId[row.id] : undefined;
+  const isVoucherCovered = !!voucherInfo;
+  const isVoucherCoveredTang = voucherInfo?.voucherLoai === "tang";
+  const voucherEligible = canApplyVoucher({
+    nguoiTt: nguoiTtMain,
+    activeDnttCount: activeDntts.length,
+    hasChiPhiId: row?.id != null,
+  });
+
   return (
     <>
       {/* Main meal row */}
@@ -263,13 +290,17 @@ export default function NHRow({ meal, data, handlers }: Props) {
           <div className="flex items-center gap-1">
             {row ? (
               <>
-                <NHInput
-                  value={row.so_khach}
-                  onChange={(v) => handleChange(key, "so_khach", v)}
-                  onBlur={() => handleSave(key)}
-                  width="w-[56px]"
-                />
-                {row.is_overridden && (
+                {isVoucherCovered ? (
+                  <span className="w-[56px] text-center tabular-nums">{row.so_khach}</span>
+                ) : (
+                  <NHInput
+                    value={row.so_khach}
+                    onChange={(v) => handleChange(key, "so_khach", v)}
+                    onBlur={() => handleSave(key)}
+                    width="w-[56px]"
+                  />
+                )}
+                {row.is_overridden && !isVoucherCovered && (
                   <span title={t("Đã override — không sync với Điều tour")} className="text-amber-500 text-[10px]">🔒</span>
                 )}
                 {focMienSo > 0 && (
@@ -286,6 +317,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
         <td className="px-3 py-2">
           <div className="flex items-center gap-1">
             {row ? (
+              isVoucherCovered ? (
+                <span className="w-[112px] text-right tabular-nums">{fmt(row.don_gia)}</span>
+              ) : (
               <>
                 <NHInput
                   value={row.don_gia}
@@ -304,6 +338,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   >↺</button>
                 )}
               </>
+              )
             ) : <span className="text-muted-foreground">—</span>}
           </div>
         </td>
@@ -312,6 +347,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
         <td className="px-2 py-2">
           <div className="relative flex justify-center">
             {row ? (
+              isVoucherCovered ? (
+                <span className="w-[48px] text-center tabular-nums">{row.chiet_khau_phan_tram || 0}</span>
+              ) : (
               <>
                 <NHInput
                   value={row.chiet_khau_phan_tram}
@@ -325,6 +363,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   </span>
                 )}
               </>
+              )
             ) : <span className="text-muted-foreground">—</span>}
           </div>
         </td>
@@ -339,9 +378,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
           {row && (
             <button
               onClick={() => handleToggleNguoiTtNH(key)}
-              disabled={upsertPending}
+              disabled={upsertPending || isVoucherCovered}
               className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
+                "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border disabled:opacity-60 disabled:cursor-not-allowed",
                 nguoiTtMain === "cong_ty"
                   ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200"
                   : "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200"
@@ -356,10 +395,17 @@ export default function NHRow({ meal, data, handlers }: Props) {
         <td className="px-2 py-1 align-top text-center">
           {nguoiTtMain === "hdv" ? (
             <span className="text-[10px] text-muted-foreground">—</span>
-          ) : activeDntts.length === 0 ? (
-            <span className="text-[10px] text-muted-foreground">—</span>
           ) : (
             <div className="flex flex-col gap-0.5 items-center">
+              {isVoucherCovered && (
+                <span className="inline-flex items-center gap-1 px-1 py-px rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap"
+                  title={voucherInfo?.voucherTen || undefined}>
+                  <Ticket className="h-3 w-3" /> {t("Voucher")}
+                </span>
+              )}
+              {!isVoucherCovered && activeDntts.length === 0 && (
+                <span className="text-[10px] text-muted-foreground">—</span>
+              )}
               {activeDntts.map(d => {
                 const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
                 return (
@@ -478,14 +524,17 @@ export default function NHRow({ meal, data, handlers }: Props) {
               </Button>
             )}
             <Button variant="ghost" size="sm"
+              disabled={isVoucherCovered}
               className={cn("h-7 text-xs px-2 gap-1", isMealDinhKy ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
               onClick={() => handleToggleDinhKyNH(key)}
               title={isMealDinhKy ? t("Đang định kỳ — bấm để bỏ") : t("Đặt thanh toán định kỳ")}>
               <CalendarClock className="h-3.5 w-3.5" />
               {isMealDinhKy && t("Định kỳ")}
             </Button>
-            {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length === 0 && !!row && (
+            {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length === 0 && !!row &&
+             (!isVoucherCoveredTang || companyExtrasTotal > 0) && (
               <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
+                title={isVoucherCovered ? t("Tạo ĐNTT cho phần phát sinh (suất chính đã dùng voucher)") : undefined}
                 onClick={() => {
                   setDnttAlreadyPaid(0);
                   setDnttModalMode("full");
@@ -496,6 +545,27 @@ export default function NHRow({ meal, data, handlers }: Props) {
                 {t("ĐNTT")}
               </Button>
             )}
+            {/* Voucher: dùng (đủ điều kiện) / gỡ (đã phủ). Chỉ suất chính. */}
+            {isVoucherCovered ? (
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-purple-600 hover:text-purple-700"
+                title={t("Gỡ voucher")}
+                onClick={() => row?.id != null && onRemoveVoucher(row.id)}>
+                <Ticket className="h-3.5 w-3.5" />
+              </Button>
+            ) : voucherEligible && !isMealDinhKy ? (
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-purple-600"
+                title={t("Dùng voucher")}
+                onClick={() => onOpenVoucher({
+                  chiPhiId: row!.id!,
+                  nccId: nh?.nha_cung_cap_id ?? null,
+                  nccName: nh?.ten_ncc ?? nh?.ten ?? null,
+                  itemName: `${nh?.ten || t("Nhà hàng")} · ${dateLabel} ${buaLabel}`,
+                  coverValue: mainThanhTien,
+                  soVe: soKhachThucTe,
+                })}>
+                <Ticket className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
             {/* "ĐNTT bổ sung" cũ — REMOVED, replaced by aggregate footer button (showAggBtn) */}
           </div>
         </td>

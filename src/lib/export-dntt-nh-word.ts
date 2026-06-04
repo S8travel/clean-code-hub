@@ -106,6 +106,8 @@ export interface NHDocEntry {
   tai_khoan_thanh_toan: string | null;
   so_tien_coc: number;
   can_tru: number;
+  /** Nguồn cấn trừ — "Cấn trừ từ đoàn: X" (in dưới số tiền cấn trừ). */
+  can_tru_note?: string;
   so_tien_con_tt: number;
   /** True khi đây là ĐNTT cọc (in cho mục đích "Đề nghị thanh toán tiền cọc").
    *  Ô "Số tiền còn thanh toán" hiển thị "(cọc)" + đỏ đậm. */
@@ -290,11 +292,19 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
             width: COL_W[9], rowSpan: itemCount,
           }),
         );
-        // Cấn trừ
+        // Cấn trừ (+ nguồn đoàn dưới số tiền)
         cells.push(
-          cell([p(entry.can_tru > 0 ? fmt(entry.can_tru) : "—", { size: 14, color: entry.can_tru > 0 ? "FF6600" : undefined })], {
-            width: COL_W[10], rowSpan: itemCount,
-          }),
+          cell(
+            entry.can_tru > 0
+              ? [
+                  p(fmt(entry.can_tru), { size: 14, color: "FF6600" }),
+                  ...(entry.can_tru_note
+                    ? [p(entry.can_tru_note, { size: 11, color: "808080", italic: true })]
+                    : []),
+                ]
+              : [p("—", { size: 14 })],
+            { width: COL_W[10], rowSpan: itemCount },
+          ),
         );
         // Số tiền còn TT — la_coc → kèm "(cọc)" để rõ tính chất khoản này
         const conTTText = entry.so_tien_con_tt > 0 ? fmt(entry.so_tien_con_tt) : "—";

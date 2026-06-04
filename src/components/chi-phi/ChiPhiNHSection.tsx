@@ -10,6 +10,7 @@ import NHOrphanRows from "./NHOrphanRows";
 import NHDnttModal from "./NHDnttModal";
 import NHAggCommitModal from "./NHAggCommitModal";
 import NHCancelModal from "./NHCancelModal";
+import DungVoucherModal from "./DungVoucherModal";
 import { useNHSection } from "./use-nh-section";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -49,6 +50,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     handleAggCommit, insertPending, closeAggCommit,
     cancelTarget, setCancelTarget, cancelMode, setCancelMode,
     handleCancelSubmit, cancelPending,
+    voucherTarget, handleApplyVoucher, closeVoucher, voucherSubmitting,
   } = s;
 
   // Expose imperative API cho ChiPhiTab (in DNTT gộp NH + DV).
@@ -205,6 +207,13 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         open={!!previewNHData}
         data={previewNHData}
         onClose={() => setPreviewNHData(null)}
+      />
+
+      <DungVoucherModal
+        target={voucherTarget}
+        onClose={closeVoucher}
+        onSelect={handleApplyVoucher}
+        submitting={voucherSubmitting}
       />
     </div>
   );
