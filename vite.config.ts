@@ -1,8 +1,30 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+
+// ID build duy nhất mỗi lần build (timestamp). Inject vào bundle (__APP_VERSION__)
+// + ghi ra /version.json để client poll → phát hiện deploy mới và tự tải lại.
+const BUILD_ID = Date.now().toString();
+
+// Emit dist/version.json (filesystem-served, Vercel rewrite không đụng tới file thật).
+function emitVersionJson(): Plugin {
+  return {
+    name: "emit-version-json",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: JSON.stringify({ version: BUILD_ID }),
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode: _mode }) => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(BUILD_ID),
+  },
   server: {
     host: "::",
     port: 8080,
@@ -10,7 +32,7 @@ export default defineConfig(({ mode: _mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react()],
+  plugins: [react(), emitVersionJson()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

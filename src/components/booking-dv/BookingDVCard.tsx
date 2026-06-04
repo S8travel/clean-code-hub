@@ -207,7 +207,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
         { label: "HDV", value: formatHdvsForEmail(doanHdvs) },
       ]);
       return buildUpdateEmailHtml({
-        greeting: `Kính gửi ${nccName},`,
+        greeting: "", // bỏ lời chào (DV gom theo NCC; không kính gửi)
         intro: `Cập nhật booking dịch vụ đoàn ${tenDoan}:`,
         keyFieldsHtml: keyFields,
         note,
@@ -238,7 +238,6 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
     </div>
 
     <div style="padding:28px 32px">
-      <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${nccName}</strong>,</p>
       <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt dịch vụ cho đoàn <strong>${tenDoan}</strong>:</p>
 
       <p style="margin:0 0 12px;font-size:14px;color:#475569"><strong>HDV:</strong> ${formatHdvsForEmail(doanHdvs)}</p>
@@ -341,8 +340,6 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   };
 
   const buildMailtoBody = () => [
-    `KÃ­nh gá»­i ${tenNCC || row.ten_nha_cung_cap},`,
-    "",
     `S8 Travel xin Ä‘áº·t dá»‹ch vá»¥ cho Ä‘oÃ n ${tenDoan}:`,
     "",
     ...dvSorted.map((d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khÃ¡ch)`),
@@ -362,8 +359,6 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   const handleMailtoFallback = () => {
     const mailtoBody = buildMailtoBody();
     const bodyText = [
-      `Kính gửi ${tenNCC || row.ten_nha_cung_cap},`,
-      "",
       `S8 Travel xin đặt dịch vụ cho đoàn ${tenDoan}:`,
       "",
       ...dvSorted.map((d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khách)`),
@@ -392,12 +387,9 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   };
 
   const buildZaloText = () => {
-    const nccName = tenNCC || row.ten_nha_cung_cap || "Quý đối tác";
     const userName = userProfile?.ho_ten || currentUserName;
     const phone = userProfile?.so_dien_thoai;
     const parts: string[] = [
-      `Kính gửi ${nccName},`,
-      "",
       `Công ty TNHH Du lịch S8 xin đặt dịch vụ cho đoàn ${tenDoan}:`,
       "",
       ...dvSorted.map((d) => `- ${fmtDay(d.ngay_date)}: ${d.ten_dv} (${d.so_khach} khách)`),

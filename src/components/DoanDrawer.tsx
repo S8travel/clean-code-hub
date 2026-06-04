@@ -21,6 +21,7 @@ import {
 } from "@/hooks/use-doan";
 import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
+import { useChuyenBayList, formatChuyenBay, chuyenBayLabel } from "@/hooks/use-chuyen-bay";
 import { useSeriList, checkSeriApplyConflict } from "@/hooks/use-seri";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -91,6 +92,9 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   const { data: xeList } = useXeList();
   const { data: userRoles } = useUserRoles();
   const { data: seriList = [] } = useSeriList();
+  const { data: chuyenBayList = [] } = useChuyenBayList();
+  // Option chọn nhanh chuyến bay từ danh mục → điền text snapshot vào ô (vẫn sửa được).
+  const chuyenBayOptions = chuyenBayList.map((cb) => ({ value: formatChuyenBay(cb), label: chuyenBayLabel(cb) }));
 
   useEffect(() => {
     externalSupabase.auth.getUser().then(({ data }) => {
@@ -140,6 +144,10 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!doan && !form.loai_tour) {
+      toast.error(t("Vui lòng chọn loại tuyến"));
+      return;
+    }
     const payload: DoanInsert = {
       ...form,
       so_khach: total,
@@ -249,7 +257,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 />
               </Field>
 
-              <Field label={t("Loại tuyến")}>
+              <Field label={t("Loại tuyến") + (!doan ? " *" : "")}>
                 <Select
                   value={form.loai_tour ?? "none"}
                   onValueChange={(v) => set("loai_tour", v === "none" ? null : (v as DoanInsert["loai_tour"]))}
@@ -389,6 +397,15 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
               </Field>
 
               <Field label={t("Chuyến Bay Đến")}>
+                {chuyenBayOptions.length > 0 && (
+                  <SearchableSelect
+                    options={chuyenBayOptions}
+                    value=""
+                    onChange={(v) => v && set("chuyen_bay_don", v)}
+                    placeholder={t("Chọn từ danh mục chuyến bay...")}
+                    className="mb-1.5"
+                  />
+                )}
                 <Input
                   value={form.chuyen_bay_don ?? ""}
                   onChange={(e) => set("chuyen_bay_don", e.target.value)}
@@ -397,6 +414,15 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                 />
               </Field>
               <Field label={t("Chuyến Bay Tiễn")}>
+                {chuyenBayOptions.length > 0 && (
+                  <SearchableSelect
+                    options={chuyenBayOptions}
+                    value=""
+                    onChange={(v) => v && set("chuyen_bay_tien", v)}
+                    placeholder={t("Chọn từ danh mục chuyến bay...")}
+                    className="mb-1.5"
+                  />
+                )}
                 <Input
                   value={form.chuyen_bay_tien ?? ""}
                   onChange={(e) => set("chuyen_bay_tien", e.target.value)}

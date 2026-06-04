@@ -3,7 +3,7 @@ import { DecimalInput } from "@/components/ui/decimal-input";
 import { cn } from "@/lib/utils";
 
 // Ô nhập số nhỏ inline cho bảng chi phí dịch vụ (giống NHInput của tab NH).
-export function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, decimal = false }: {
+export function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = false, decimal = false, disabled = false }: {
   value: number;
   onChange: (v: number) => void;
   onBlur: () => void;
@@ -12,6 +12,8 @@ export function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = f
   money?: boolean;
   /** Cho phép số thập phân (đơn giá). Focus → raw "1500.5"; blur → "1.500,5". */
   decimal?: boolean;
+  /** Đoàn đã quyết toán → khóa (trừ admin). */
+  disabled?: boolean;
 }) {
   if (decimal) {
     return (
@@ -19,6 +21,7 @@ export function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = f
         value={value}
         onChange={onChange}
         onBlur={onBlur}
+        disabled={disabled}
         className={cn("h-6 text-xs px-1.5 py-0 text-right", width)}
       />
     );
@@ -29,6 +32,7 @@ export function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = f
         type="text"
         inputMode="numeric"
         value={value != null ? value.toLocaleString("vi-VN") : ""}
+        disabled={disabled}
         onChange={(e) => {
           const digits = e.target.value.replace(/\D/g, "");
           onChange(digits ? Number(digits) : 0);
@@ -44,6 +48,7 @@ export function DVInput({ value, onChange, onBlur, width = "w-[60px]", money = f
       type="number"
       min={0}
       value={value ?? ""}
+      disabled={disabled}
       onChange={e => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
       onBlur={onBlur}
       onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}

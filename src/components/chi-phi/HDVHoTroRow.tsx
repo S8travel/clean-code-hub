@@ -6,8 +6,10 @@ import { DecimalInput } from "@/components/ui/decimal-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { HDVHoTroItem } from "@/hooks/use-chi-phi-hdv";
 import { STATUS_LABEL, type DnttLite, type CongNoLite, type KhacCancelTarget } from "./hdv-shared";
+import { resolveHoTroNguoiTt, TIP_LAI_XE_REF, TIP_LAI_XE_NOTES } from "./hdv-shared";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -16,13 +18,15 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 // triggerSave (gọi qua setTimeout từ DecimalInput.onBlur) đọc value mới nhất,
 // không bị stale closure khi user blur xong chuyển tab.
 export function HDVHoTroRow({
-  item, pending, onSave, onDelete,
+  item, isTipLaiXe, pending, onSave, onDelete,
   dnttList, congNoList, canTruByDnttId, rowDnttIds,
   isSelectable, isSelected, onToggleSelect,
   editingId, editAmount, updatePending,
   onOpenModal, onStartEdit, onCancelEdit, onEditAmountChange, onSaveEdit, onOpenCancel, onPrintDntt,
+  locked = false,
 }: {
   item: HDVHoTroItem;
+  isTipLaiXe: boolean;
   pending: boolean;
   onSave: (
     id: number,
@@ -46,14 +50,13 @@ export function HDVHoTroRow({
   onSaveEdit: (id: number) => void;
   onOpenCancel: (target: KhacCancelTarget) => void;
   onPrintDntt: (dnttId: number) => void;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }) {
-  const initialNguoiTt = (it: HDVHoTroItem): "cong_ty" | "hdv" =>
-    it.tien_hdv > 0 ? "hdv" : it.tien_cong_ty > 0 ? "cong_ty" : "hdv";
-
   const [moTa, setMoTaState] = useState(item.mo_ta ?? "");
   const [soLuong, setSoLuongState] = useState(item.so_luong);
   const [donGia, setDonGiaState] = useState(item.don_gia);
-  const [nguoiTt, setNguoiTtState] = useState<"cong_ty" | "hdv">(initialNguoiTt(item));
+  const [nguoiTt, setNguoiTtState] = useState<"cong_ty" | "hdv">(resolveHoTroNguoiTt(item));
 
   // Ref mirror — sync update để triggerSave luôn đọc giá trị mới nhất.
   const stateRef = useRef({ moTa, soLuong, donGia, nguoiTt });
@@ -70,7 +73,7 @@ export function HDVHoTroRow({
   useEffect(() => {
     if (lastSyncedKeyRef.current !== externalKey) {
       lastSyncedKeyRef.current = externalKey;
-      const newNguoi = initialNguoiTt(item);
+      const newNguoi = resolveHoTroNguoiTt(item);
       stateRef.current = {
         moTa: item.mo_ta ?? "",
         soLuong: item.so_luong,
@@ -96,7 +99,7 @@ export function HDVHoTroRow({
   };
 
   const itemMoTa = item.mo_ta ?? "";
-  const curNguoiTt = initialNguoiTt(item);
+  const curNguoiTt = resolveHoTroNguoiTt(item);
   const isDirty =
     soLuong !== item.so_luong ||
     donGia !== item.don_gia ||
@@ -140,20 +143,67 @@ export function HDVHoTroRow({
         />
       </td>
       <td className="px-3 py-2">
-        <Input
-          type="text"
-          value={moTa}
-          onChange={(e) => setMoTa(e.target.value)}
-          onBlur={triggerSave}
-          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-          placeholder={t("VD: Công tác phí, Tiền ngủ, ...")}
-          className="h-7 text-xs"
-        />
+        {isTipLaiXe ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-sm font-semibold underline decoration-dotted decoration-muted-foreground/60 underline-offset-2 cursor-help">
+                {t("Tip lái xe")}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="p-0">
+              <div className="text-[11px]">
+                <div className="px-2 py-1 font-semibold border-b bg-muted/40">
+                  {t("Tip lái xe tham khảo (VND)")}
+                </div>
+                <table className="text-[11px]">
+                  <thead>
+                    <tr className="text-muted-foreground">
+                      <th className="px-2 py-0.5 text-left font-medium" />
+                      <th className="px-2 py-0.5 text-right font-medium">MT</th>
+                      <th className="px-2 py-0.5 text-right font-medium">PQ</th>
+                      <th className="px-2 py-0.5 text-right font-medium">MN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TIP_LAI_XE_REF.map((r) => (
+                      <tr key={r.seats}>
+                        <td className="px-2 py-0.5 text-left font-medium">{r.seats}</td>
+                        <td className="px-2 py-0.5 text-right tabular-nums">{fmt(r.mt)}</td>
+                        <td className="px-2 py-0.5 text-right tabular-nums">{fmt(r.pq)}</td>
+                        <td className="px-2 py-0.5 text-right tabular-nums">{fmt(r.mn)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="px-2 py-1 border-t space-y-0.5">
+                  {TIP_LAI_XE_NOTES.map((note) => (
+                    <p key={note} className="text-[10px] leading-tight">{t(note)}</p>
+                  ))}
+                </div>
+                <div className="px-2 py-1 text-[10px] text-muted-foreground border-t">
+                  {t("MT: miền Trung · PQ: Phú Quốc · MN: miền Nam · 16C/35C/45C: số chỗ xe")}
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Input
+            type="text"
+            value={moTa}
+            disabled={locked}
+            onChange={(e) => setMoTa(e.target.value)}
+            onBlur={triggerSave}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+            placeholder={t("VD: Công tác phí, Tiền ngủ, ...")}
+            className="h-7 text-xs"
+          />
+        )}
       </td>
       <td className="px-4 py-2 text-right">
         <Input
           type="number"
           value={soLuong || ""}
+          disabled={locked}
           onChange={(e) => setSoLuong(Number(e.target.value) || 0)}
           onBlur={triggerSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
@@ -165,6 +215,7 @@ export function HDVHoTroRow({
           value={donGia}
           onChange={setDonGia}
           onBlur={triggerSave}
+          disabled={locked}
           className="h-6 text-xs px-1.5 py-0 text-right w-28 ml-auto"
         />
       </td>
@@ -175,7 +226,7 @@ export function HDVHoTroRow({
       <td className="px-2 py-2 text-center">
         <button
           onClick={handleToggleNguoiTt}
-          disabled={pending}
+          disabled={pending || locked}
           className={cn(
             "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
             nguoiTt === "cong_ty"
@@ -316,14 +367,16 @@ export function HDVHoTroRow({
               {t("ĐNTT")}
             </Button>
           )}
-          <Button
-            size="icon" variant="ghost"
-            className="h-6 w-6 text-muted-foreground hover:text-destructive"
-            onClick={() => onDelete(item.id)}
-            disabled={pending}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          {!isTipLaiXe && (
+            <Button
+              size="icon" variant="ghost"
+              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              onClick={() => onDelete(item.id)}
+              disabled={pending || locked}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       </td>
     </tr>

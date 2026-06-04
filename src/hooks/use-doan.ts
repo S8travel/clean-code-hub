@@ -3,6 +3,10 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
+import { calcSoKhachThucTe } from "@/lib/foc-calc";
+import { applyChietKhau } from "@/lib/chi-phi-calc";
+import { resolveNhom1SoKhach } from "@/lib/doan-nhom-sync";
+import { isChiPhiLocked } from "@/lib/chi-phi-lock";
 
 export interface Doan {
   id: number;
@@ -331,7 +335,9 @@ export function useDoanList(
           van_phong:van_phong_id(id, ten)
         `);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
-        query = query.in("thi_truong", phanLoaiTour);
+        // Fail-open: đoàn CHƯA phân thị trường (thi_truong NULL) vẫn hiện cho mọi OP —
+        // tránh "biến mất" khi đoàn tạo thiếu phân loại (vd giám đốc tạo, hoặc clone từ nguồn NULL).
+        query = query.or(`thi_truong.in.(${phanLoaiTour.join(",")}),thi_truong.is.null`);
       }
       if (vanPhongId != null) {
         query = query.eq("van_phong_id", vanPhongId);
@@ -460,6 +466,7 @@ export function useCreateDoan() {
 export function useUpdateDoan() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   return useMutation({
     mutationFn: async ({ id, ...updates }: DoanInsert & { id: number }) => {
       // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem + diff log
@@ -472,6 +479,16 @@ export function useUpdateDoan() {
 
       const oldTotal = (oldDoan.so_khach_lon ?? 0) + (oldDoan.so_khach_em1 ?? 0)
                     + (oldDoan.so_khach_em2 ?? 0) + (oldDoan.so_khach_tl ?? 0);
+
+      // Đoàn đã quyết toán: đổi số khách sẽ cascade sửa chi phí → chặn (trừ admin).
+      // Field khác (ghi chú, agent…) vẫn cho sửa.
+      const soKhachKeysGuard = ["so_khach_lon", "so_khach_em1", "so_khach_em2", "so_khach_tl"] as const;
+      const soKhachChangedGuard = soKhachKeysGuard.some(
+        (k) => updates[k] !== undefined && updates[k] !== oldDoan[k],
+      );
+      if (soKhachChangedGuard && isChiPhiLocked(user?.role ?? null, qtPaidSet ?? null, id)) {
+        throw new Error("Đoàn đã quyết toán — không thể đổi số khách (ảnh hưởng chi phí). Chỉ admin mới sửa được.");
+      }
 
       // 2. UPDATE doan
       const { data, error } = await externalSupabase.from("doan").update(updates).eq("id", id).select().single();
@@ -517,14 +534,32 @@ export function useUpdateDoan() {
             .eq("thu_tu", 1)
             .maybeSingle();
           if (nhom1) {
+            // 1 nhóm → SET nhóm "Toàn đoàn" = đoàn (hết drift cũ); nhiều nhóm → dồn
+            // delta vào nhóm 1 để giữ tổng = đoàn. (logic tách ở lib/doan-nhom-sync.ts)
+            const nhom1New = resolveNhom1SoKhach({
+              nhomCount,
+              nhom1: {
+                so_khach_lon: nhom1.so_khach_lon ?? 0,
+                so_khach_em1: nhom1.so_khach_em1 ?? 0,
+                so_khach_em2: nhom1.so_khach_em2 ?? 0,
+                so_khach_tl: nhom1.so_khach_tl ?? 0,
+              },
+              doanOld: {
+                so_khach_lon: oldDoan.so_khach_lon ?? 0,
+                so_khach_em1: oldDoan.so_khach_em1 ?? 0,
+                so_khach_em2: oldDoan.so_khach_em2 ?? 0,
+                so_khach_tl: oldDoan.so_khach_tl ?? 0,
+              },
+              doanNew: {
+                so_khach_lon: data.so_khach_lon ?? 0,
+                so_khach_em1: data.so_khach_em1 ?? 0,
+                so_khach_em2: data.so_khach_em2 ?? 0,
+                so_khach_tl: data.so_khach_tl ?? 0,
+              },
+            });
             await externalSupabase
               .from("doan_nhom")
-              .update({
-                so_khach_lon: Math.max(0, (nhom1.so_khach_lon ?? 0) + diffLon),
-                so_khach_em1: Math.max(0, (nhom1.so_khach_em1 ?? 0) + diffEm1),
-                so_khach_em2: Math.max(0, (nhom1.so_khach_em2 ?? 0) + diffEm2),
-                so_khach_tl: Math.max(0, (nhom1.so_khach_tl ?? 0) + diffTl),
-              })
+              .update(nhom1New)
               .eq("id", nhom1.id);
           }
         }
@@ -559,7 +594,7 @@ export function useUpdateDoan() {
         // Cho_duyet/da_duyet vẫn cascade — caller hiển thị warning toast + UI badge mismatch.
         const { data: chiPhis } = await externalSupabase
           .from("doan_chi_phi")
-          .select("id, danh_muc, mo_ta, so_luong, don_gia, tien_cong_ty, tien_hdv, is_overridden, trang_thai_thanh_toan, trang_thai_dntt")
+          .select("id, danh_muc, mo_ta, so_luong, don_gia, tien_cong_ty, tien_hdv, is_overridden, trang_thai_thanh_toan, trang_thai_dntt, foc_khach_snapshot, foc_mien_snapshot, chiet_khau_phan_tram_snapshot")
           .eq("doan_id", id)
           .in("danh_muc", ["canh_diem", "nha_hang", "bao_hiem"]);
 
@@ -583,7 +618,21 @@ export function useUpdateDoan() {
           if (td === "cho_duyet" || td === "da_duyet") committedDnttAffected++;
 
           const isHdv = Number(cp.tien_hdv) > 0;
-          const newTotalCp = newSoLuong * Number(cp.don_gia ?? 0);
+          // NH: PHẢI trừ FOC + CK (snapshot per-row) — trước đây dùng
+          // newSoLuong*don_gia thô → tien_cong_ty không khớp "Thành tiền"/ĐNTT
+          // (đều trừ FOC) → badge "DNTT lệch" ảo sau rebooking. canh_diem/bao_hiem
+          // không có FOC/CK → giữ công thức thô.
+          let newTotalCp: number;
+          if (cp.danh_muc === "nha_hang") {
+            const skTT = calcSoKhachThucTe(
+              newSoLuong,
+              cp.foc_khach_snapshot ?? null,
+              cp.foc_mien_snapshot ?? null,
+            );
+            newTotalCp = applyChietKhau(skTT * Number(cp.don_gia ?? 0), cp.chiet_khau_phan_tram_snapshot ?? null);
+          } else {
+            newTotalCp = newSoLuong * Number(cp.don_gia ?? 0);
+          }
           await externalSupabase.from("doan_chi_phi").update({
             so_luong: newSoLuong,
             tien_cong_ty: isHdv ? 0 : newTotalCp,

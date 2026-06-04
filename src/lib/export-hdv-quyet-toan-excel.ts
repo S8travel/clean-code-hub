@@ -1,6 +1,8 @@
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import type { QuyetToanData } from "@/hooks/use-chi-phi-hdv";
+import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
+import { docTienBangChu } from "@/lib/so-tien-bang-chu";
 
 interface ExportInput {
   data: QuyetToanData;
@@ -47,19 +49,26 @@ export async function exportHDVQuyetToanExcel({ data, hdv, nguoiDeNghi, ngayLap 
   const tipDonGia = data.thu_tip?.don_gia_nt ?? 0;
   const tipTyGia = data.thu_tip?.ty_gia ?? 0;
   const soNgay = data.so_ngay_doan ?? 0;
-  const thuTipVnd = tipSoKhach * tipDonGia * soNgay * tipTyGia;
   const dauKhachSL = data.thu_dau_khach?.so_khach ?? 0;
   const dauKhachDG = data.thu_dau_khach?.don_gia ?? 0;
-  const thuDauKhachVnd = dauKhachSL * dauKhachDG;
   const quyVpSL = data.thu_quy_vp?.so_luong ?? 0;
   const quyVpDG = data.thu_quy_vp?.don_gia ?? 0;
-  const thuQuyVpVnd = quyVpSL * quyVpDG;
   const thuBanOp = data.thu_ban_op ?? 0;
   const thuKhac = data.thu_khac ?? 0;
   const tongQuyetToan = data.tong_hdv_chi ?? 0;
 
-  const tongThu = tamUng + thuTrachNhiem + thuTipVnd + thuDauKhachVnd + thuQuyVpVnd + thuBanOp + thuKhac;
-  const conPhaiThanhToan = tongQuyetToan - tongThu;
+  // Logic tổng thu / còn phải TT tách ở lib/quyet-toan-hdv-calc.ts — có unit test,
+  // dùng chung với CreateHDVPaymentModal để màn hình & file in luôn khớp.
+  const { thuTipVnd, thuDauKhachVnd, thuQuyVpVnd, tongThu, conPhaiThanhToan } = calcQuyetToanHDV({
+    tamUng,
+    thuTrachNhiem,
+    tip: { soKhach: tipSoKhach, donGiaNT: tipDonGia, soNgay, tyGia: tipTyGia },
+    dauKhach: { soKhach: dauKhachSL, donGia: dauKhachDG },
+    quyVp: { soLuong: quyVpSL, donGia: quyVpDG },
+    thuBanOp,
+    thuKhac,
+    tongHdvChi: tongQuyetToan,
+  });
 
   const tenHdv = data.ten_hdv ?? hdv?.ten ?? "";
   // Người đề nghị = user đang đăng nhập (kế toán), KHÔNG phải HDV
@@ -313,10 +322,16 @@ export async function exportHDVQuyetToanExcel({ data, hdv, nguoiDeNghi, ngayLap 
   ws.getCell(conRowIdx, 7).border = BORDER_THIN;
   ws.getCell(conRowIdx, 7).fill = HEADER_FILL;
 
-  // ===== Tổng số tiền label (row 27) =====
+  // ===== Tổng số tiền (bằng chữ) — row 27 =====
+  // Số tiền bằng chữ = "Còn phải thanh toán" (số tiền quyết toán cuối cùng).
   const sumLabelIdx = conRowIdx + 2; // row 27
   ws.getCell(sumLabelIdx, 1).value = "Tổng số tiền:";
   ws.getCell(sumLabelIdx, 1).font = { name: "Calibri", size: 11, italic: true };
+  ws.mergeCells(sumLabelIdx, 2, sumLabelIdx, 7);
+  const bangChuCell = ws.getCell(sumLabelIdx, 2);
+  bangChuCell.value = docTienBangChu(conPhaiThanhToan);
+  bangChuCell.font = { name: "Calibri", size: 11, italic: true, bold: true };
+  bangChuCell.alignment = { vertical: "middle", horizontal: "left" };
 
   // ===== Signature header row (row 28) =====
   // Layout: 5 người ký phân thành 5 nhóm cột (mỗi nhóm merge để đủ chỗ chữ dài)

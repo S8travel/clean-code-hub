@@ -19,6 +19,8 @@ import { NHInput } from "./NHInput";
 import { NHFocEditor } from "./NHFocEditor";
 import NHExtraRow from "./NHExtraRow";
 import NHAggFooterRow from "./NHAggFooterRow";
+import { HoaDonCell, HoaDonChiPhiBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -81,11 +83,13 @@ interface Props {
   meal: NHMealRow;
   data: NHRowData;
   handlers: NHRowHandlers;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 // 1 bữa ăn: dòng chính + dòng phát sinh + dòng aggregate footer.
 // Tách verbatim từ ChiPhiNHSection — giữ nguyên 100% logic/hành vi.
-export default function NHRow({ meal, data, handlers }: Props) {
+export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   useTranslate();
   const {
     localRows, extrasMap, nhaHangMap, selectedKeys, dinhKyKeys, dnttList,
@@ -281,6 +285,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
               rowId={row.id}
               focKhach={focResolvedRow.foc_khach}
               focMien={focResolvedRow.foc_mien}
+              disabled={locked}
             />
           )}
         </td>
@@ -298,6 +303,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                     onChange={(v) => handleChange(key, "so_khach", v)}
                     onBlur={() => handleSave(key)}
                     width="w-[56px]"
+                    disabled={locked}
                   />
                 )}
                 {row.is_overridden && !isVoucherCovered && (
@@ -328,8 +334,9 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   width="w-[112px]"
                   money
                   decimal
+                  disabled={locked}
                 />
-                {row.is_overridden && row.id != null && (
+                {row.is_overridden && row.id != null && !locked && (
                   <button
                     type="button"
                     onClick={() => handleResetOverrideNH(key)}
@@ -356,6 +363,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
                   onChange={(v) => handleChange(key, "chiet_khau_phan_tram", v)}
                   onBlur={() => handleSave(key)}
                   width="w-[48px]"
+                  disabled={locked}
                 />
                 {chietKhauSoTien > 0 && (
                   <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap pointer-events-none">
@@ -378,7 +386,7 @@ export default function NHRow({ meal, data, handlers }: Props) {
           {row && (
             <button
               onClick={() => handleToggleNguoiTtNH(key)}
-              disabled={upsertPending || isVoucherCovered}
+              disabled={upsertPending || isVoucherCovered || locked}
               className={cn(
                 "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border disabled:opacity-60 disabled:cursor-not-allowed",
                 nguoiTtMain === "cong_ty"
@@ -501,11 +509,21 @@ export default function NHRow({ meal, data, handlers }: Props) {
           )}
         </td>
 
+        {/* Hóa đơn */}
+        <td className="px-2 py-1 align-top text-center">
+          {nguoiTtMain === "hdv"
+            ? (row?.id != null
+                ? <HoaDonChiPhiBadge chiPhiId={row.id} trangThai={(mainCpForFoc?.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc} />
+                : <span className="text-[10px] text-muted-foreground">—</span>)
+            : <HoaDonCell dntts={activeDntts} />}
+        </td>
+
         {/* Actions */}
         <td className="px-2 py-1.5">
           <div className="flex items-center gap-1 justify-end">
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
               title={t("Thêm dịch vụ phát sinh")}
+              disabled={locked}
               onClick={() => addExtra(key)}>
               <Plus className="h-3 w-3" />
             </Button>
@@ -581,6 +599,8 @@ export default function NHRow({ meal, data, handlers }: Props) {
           onChange={handleExtraChange}
           onSave={handleExtraSave}
           onDelete={handleExtraDelete}
+          locked={locked}
+          trangThaiHoaDon={extra.id != null ? (chiPhiRows.find((c) => c.id === extra.id)?.trang_thai_hoa_don ?? null) : null}
         />
       ))}
 

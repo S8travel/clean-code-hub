@@ -44,8 +44,8 @@ export function useDoanTaiLieuList(doanId?: number | null) {
 }
 
 /**
- * Bulk-fetch tài liệu cho nhiều đoàn (cho HoaDonUNCPage hiện báo giá / hợp đồng).
- * Trả map: doan_id → { loai → row }
+ * Bulk-fetch tài liệu cho nhiều đoàn (cho InvoicePage hiện báo giá / hợp đồng).
+ * Trả map: doan_id → row[] (loại bao_gia/khac có thể nhiều row/đoàn).
  */
 export function useDoanTaiLieuByDoanIds(doanIds: number[]) {
   const ids = [...new Set(doanIds.filter((id): id is number => id != null))].sort();
@@ -58,10 +58,12 @@ export function useDoanTaiLieuByDoanIds(doanIds: number[]) {
         .select("*")
         .in("doan_id", ids);
       if (error) throw error;
-      const map = new Map<number, Partial<Record<DoanTaiLieuLoai, DoanTaiLieuRow>>>();
+      const map = new Map<number, DoanTaiLieuRow[]>();
       (data ?? []).forEach((r) => {
-        if (!map.has(r.doan_id)) map.set(r.doan_id, {});
-        map.get(r.doan_id)![r.loai as DoanTaiLieuLoai] = r as DoanTaiLieuRow;
+        const row = r as DoanTaiLieuRow;
+        const arr = map.get(row.doan_id);
+        if (arr) arr.push(row);
+        else map.set(row.doan_id, [row]);
       });
       return map;
     },
@@ -88,12 +90,14 @@ export function useUploadDoanTaiLieu() {
 
       const { error: uploadErr } = await externalSupabase.storage
         .from(BUCKET)
-        .upload(path, file, { upsert: true, contentType: file.type || undefined });
+        .upload(path, file, { contentType: file.type || undefined }); // path duy nhất → KHÔNG upsert (tránh lỗi RLS nhánh UPDATE policy)
       if (uploadErr) throw uploadErr;
 
       const { data: urlData } = externalSupabase.storage.from(BUCKET).getPublicUrl(path);
 
       const isKhac = loai === "khac";
+      // bao_gia + khac: nhiều file/đoàn (append). hop_dong + danh_sach_khach: 1 file (replace).
+      const isMultiFile = loai === "bao_gia" || isKhac;
       const payload = {
         doan_id: doanId,
         loai,
@@ -105,18 +109,37 @@ export function useUploadDoanTaiLieu() {
         mo_ta: isKhac ? (moTa ?? null) : null,
       };
 
-      if (isKhac) {
-        // Loại 'khac' không UNIQUE → INSERT thêm row mới
+      if (isMultiFile) {
+        // Không UNIQUE → INSERT thêm row mới (append)
         const { error: insertErr } = await externalSupabase
           .from("doan_tai_lieu")
           .insert(payload);
         if (insertErr) throw insertErr;
       } else {
-        // 3 loại fixed: upsert replace (UNIQUE partial áp dụng)
-        const { error: upsertErr } = await externalSupabase
+        // hop_dong + danh_sach_khach: 1 file/loại (replace). UNIQUE là PARTIAL
+        // index (doan_id, loai) WHERE loai IN ('hop_dong','danh_sach_khach') —
+        // supabase-js .upsert({onConflict}) KHÔNG truyền được partial predicate
+        // cho PostgREST → Postgres báo 42P10 ("no unique or exclusion constraint
+        // matching the ON CONFLICT spec"). → select → update/insert thủ công.
+        const { data: existing, error: selErr } = await externalSupabase
           .from("doan_tai_lieu")
-          .upsert(payload, { onConflict: "doan_id,loai" });
-        if (upsertErr) throw upsertErr;
+          .select("id")
+          .eq("doan_id", doanId)
+          .eq("loai", loai)
+          .maybeSingle();
+        if (selErr) throw selErr;
+        if (existing) {
+          const { error: updErr } = await externalSupabase
+            .from("doan_tai_lieu")
+            .update(payload)
+            .eq("id", existing.id);
+          if (updErr) throw updErr;
+        } else {
+          const { error: insErr } = await externalSupabase
+            .from("doan_tai_lieu")
+            .insert(payload);
+          if (insErr) throw insErr;
+        }
       }
       return urlData.publicUrl;
     },

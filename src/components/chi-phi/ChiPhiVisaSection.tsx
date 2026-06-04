@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { errMsg } from "@/lib/error";
 import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { computeVisaVnd } from "@/lib/visa-calc";
 import { toast } from "sonner";
 import {
   useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi,
@@ -23,16 +24,6 @@ import {
 const CURRENCIES = ["USD", "RMB", "NT"] as const;
 type Currency = (typeof CURRENCIES)[number];
 
-// Quy đổi raw → VND: SL × max(0, ĐG×tỷ_giá − CK_VND). Chiết khấu là số VND
-// trừ TRÊN MỖI ĐƠN VỊ (rồi nhân số lượng), KHÔNG phải % và KHÔNG phải trừ
-// 1 lần. VND-only đoàn (USD ty_gia=1) cũng OK. `ckVnd` lưu ở cột
-// chiet_khau_pct (numeric) — tên cột giữ nguyên, ngữ nghĩa đổi sang VND/đơn vị
-// (chỉ visa dùng cột này, không đụng nơi khác).
-function computeVnd(soLuong: number, donGiaRaw: number, tyGia: number, ckVnd: number): number {
-  const grossPerUnit = donGiaRaw * (tyGia || 0);
-  const netPerUnit = Math.max(0, grossPerUnit - (ckVnd || 0));
-  return Math.round(soLuong * netPerUnit);
-}
 import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
@@ -54,11 +45,13 @@ interface CancelTarget { dnttId: number; isPaid: boolean }
 
 interface Props {
   doanId: number;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 // ── Add visa row form ──────────────────────────────────────────────────────────
 
-function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }) {
+function AddVisaRow({ doanId, onAdded, locked = false }: { doanId: number; onAdded: () => void; locked?: boolean }) {
   const { data: donViList = [] } = useDonViVisaList();
   const [donViId, setDonViId] = useState("");
   const [loaiVisaId, setLoaiVisaId] = useState("");
@@ -79,7 +72,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
 
   const selectedLoai = loaiVisaList.find((l) => String(l.id) === loaiVisaId);
   const selectedDonVi = donViList.find((d) => String(d.id) === donViId);
-  const previewVnd = computeVnd(1, donGiaRaw, tyGia, ckVnd);
+  const previewVnd = computeVisaVnd(1, donGiaRaw, tyGia, ckVnd);
 
   const handleAdd = async () => {
     if (!loaiVisaId) { toast.warning(t("Vui lòng chọn loại visa")); return; }
@@ -138,7 +131,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
         <div>
           <Label className="text-xs">{t("Đơn giá")} ({currency})</Label>
           <div className="flex gap-1">
-            <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
+            <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)} disabled={locked}>
               <SelectTrigger className="h-7 text-xs w-[68px]">
                 <SelectValue />
               </SelectTrigger>
@@ -146,16 +139,16 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
                 {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
-            <DecimalInput value={donGiaRaw} onChange={setDonGiaRaw} className="h-7 text-xs flex-1 text-right" />
+            <DecimalInput value={donGiaRaw} onChange={setDonGiaRaw} disabled={locked} className="h-7 text-xs flex-1 text-right" />
           </div>
         </div>
         <div>
           <Label className="text-xs">{t("Tỷ giá")} (1 {currency} = ? VND)</Label>
-          <DecimalInput value={tyGia} onChange={setTyGia} className="h-7 text-xs text-right" />
+          <DecimalInput value={tyGia} onChange={setTyGia} disabled={locked} className="h-7 text-xs text-right" />
         </div>
         <div>
           <Label className="text-xs">{t("Chiết khấu (VND)")}</Label>
-          <DecimalInput value={ckVnd} onChange={setCkVnd} className="h-7 text-xs text-right" />
+          <DecimalInput value={ckVnd} onChange={setCkVnd} disabled={locked} className="h-7 text-xs text-right" />
         </div>
         <div>
           <Label className="text-xs">{t("Thành tiền (VND)")}</Label>
@@ -165,7 +158,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
         </div>
       </div>
       <div className="flex justify-end gap-2">
-        <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={upsertMut.isPending}>
+        <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={upsertMut.isPending || locked}>
           {t("Thêm")}
         </Button>
       </div>
@@ -175,7 +168,7 @@ function AddVisaRow({ doanId, onAdded }: { doanId: number; onAdded: () => void }
 
 // ── Main section ───────────────────────────────────────────────────────────────
 
-export default function ChiPhiVisaSection({ doanId }: Props) {
+export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
   useTranslate();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -233,7 +226,15 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
   // Lưu raw don_gia (theo tien_te_loai) + ty_gia + ck%. Khi save, compute VND
   // và lưu vào don_gia / tien_cong_ty (consistent với section khác).
   type RowEdit = { so_luong: number; don_gia_raw: number; tien_te_loai: Currency; ty_gia: number; chiet_khau_pct: number };
+  // editRowRef = source-of-truth cho blur callback (DecimalInput commit onChange +
+  // gọi onBlur qua setTimeout → đọc editRow từ closure sẽ lấy giá CŨ). editRow state
+  // chỉ để render. Xem decimal-input.tsx onBlur.
+  const editRowRef = useRef<Record<number, RowEdit>>({});
   const [editRow, setEditRow] = useState<Record<number, RowEdit>>({});
+  const commitEditRow = (next: Record<number, RowEdit>) => {
+    editRowRef.current = next;
+    setEditRow(next);
+  };
 
   // Init edit state từ row. don_gia_raw từ DB cột riêng (không reverse-engineer
   // VND để tránh mất giá trị khi tỷ giá chưa nhập). Visa cũ chưa có don_gia_raw
@@ -250,15 +251,14 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
     editRow[row.id] ?? initialEdit(row);
 
   const handleRowChange = (id: number, patch: Partial<RowEdit>) => {
-    setEditRow((prev) => {
-      const base = visaRows.find((r) => r.id === id);
-      const existing = prev[id] ?? (base ? initialEdit(base) : { so_luong: 0, don_gia_raw: 0, tien_te_loai: "USD" as Currency, ty_gia: 0, chiet_khau_pct: 0 });
-      return { ...prev, [id]: { ...existing, ...patch } };
-    });
+    const base = visaRows.find((r) => r.id === id);
+    const existing = editRowRef.current[id] ?? (base ? initialEdit(base) : { so_luong: 0, don_gia_raw: 0, tien_te_loai: "USD" as Currency, ty_gia: 0, chiet_khau_pct: 0 });
+    commitEditRow({ ...editRowRef.current, [id]: { ...existing, ...patch } });
   };
 
   const handleRowSave = (row: typeof visaRows[0]) => {
-    const local = editRow[row.id];
+    // Đọc qua ref, KHÔNG đọc editRow closure (DecimalInput defer onBlur qua setTimeout).
+    const local = editRowRef.current[row.id];
     if (!local) return;
     const initial = initialEdit(row);
     const unchanged =
@@ -269,7 +269,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       local.chiet_khau_pct === initial.chiet_khau_pct;
     if (unchanged) return;
     // CK VND trừ trên mỗi đơn vị → don_gia = net 1 đơn vị, total = SL × don_gia.
-    const donGiaVnd = computeVnd(1, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
+    const donGiaVnd = computeVisaVnd(1, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
     const total = local.so_luong * donGiaVnd;
     const isHDV = row.tien_hdv > 0;
     upsertMut.mutate({
@@ -284,7 +284,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       ty_gia: local.ty_gia || null,
       chiet_khau_pct: local.chiet_khau_pct || null,
     }, {
-      onSuccess: () => setEditRow((prev) => { const next = { ...prev }; delete next[row.id]; return next; }),
+      onSuccess: () => { const next = { ...editRowRef.current }; delete next[row.id]; commitEditRow(next); },
     });
   };
 
@@ -395,7 +395,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
         <span className="text-sm font-semibold text-indigo-900">🛂 {t("Visa")}</span>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-xs text-muted-foreground">{t("Tổng:")} {fmt(total)} ₫</span>}
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(!showAdd)}>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(!showAdd)} disabled={locked}>
             + {t("Thêm")}
           </Button>
         </div>
@@ -433,7 +433,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
             <tbody className="divide-y divide-border">
               {visaRows.map((row) => {
                 const local = getRowEdit(row);
-                const thanhTienLocal = computeVnd(local.so_luong, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
+                const thanhTienLocal = computeVisaVnd(local.so_luong, local.don_gia_raw, local.ty_gia, local.chiet_khau_pct);
 
                 const allDntts = dnttList.filter(
                   (d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id,
@@ -480,6 +480,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                         <Input
                           type="number"
                           min={0}
+                          disabled={locked}
                           value={local.so_luong ?? ""}
                           onChange={(e) => handleRowChange(row.id, { so_luong: e.target.value === "" ? 0 : Number(e.target.value) })}
                           onBlur={() => handleRowSave(row)}
@@ -494,6 +495,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                       <div className="flex items-center gap-1 justify-center">
                         <Select
                           value={local.tien_te_loai}
+                          disabled={locked}
                           onValueChange={(v) => { handleRowChange(row.id, { tien_te_loai: v as Currency }); handleRowSave({ ...row, tien_te_loai: v }); }}
                         >
                           <SelectTrigger className="h-6 text-[10px] px-1.5 py-0 w-[58px]">
@@ -505,6 +507,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                         </Select>
                         <DecimalInput
                           value={local.don_gia_raw}
+                          disabled={locked}
                           onChange={(v) => handleRowChange(row.id, { don_gia_raw: v })}
                           onBlur={() => handleRowSave(row)}
                           className="h-6 text-xs px-1.5 py-0 text-right w-[100px]"
@@ -517,6 +520,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                       <div className="flex justify-center">
                         <DecimalInput
                           value={local.ty_gia}
+                          disabled={locked}
                           onChange={(v) => handleRowChange(row.id, { ty_gia: v })}
                           onBlur={() => handleRowSave(row)}
                           className="h-6 text-xs px-1.5 py-0 text-right w-[88px]"
@@ -531,6 +535,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                           type="number"
                           min={0}
                           step="any"
+                          disabled={locked}
                           value={local.chiet_khau_pct || ""}
                           onChange={(e) => handleRowChange(row.id, { chiet_khau_pct: Number(e.target.value) || 0 })}
                           onBlur={() => handleRowSave(row)}
@@ -549,7 +554,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                     <td className="px-2 py-2.5 text-center">
                       <button
                         onClick={() => handleToggleNguoiTt(row)}
-                        disabled={upsertMut.isPending}
+                        disabled={upsertMut.isPending || locked}
                         className={cn(
                           "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
                           nguoiTt === "cong_ty"
@@ -709,12 +714,13 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                         )}
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
                           title={t("Thêm phụ phí")}
+                          disabled={locked}
                           onClick={() => openAddExtra(row.id)}>
                           <Plus className="h-3 w-3" />
                         </Button>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
                           onClick={() => deleteMut.mutate({ id: row.id, doanId }, { onSuccess: () => toast.success(t("Đã xóa")) })}
-                          disabled={deleteMut.isPending}>
+                          disabled={deleteMut.isPending || locked}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -727,6 +733,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                           <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ {t("Phụ phí")}</span>
                           <Input
                             autoFocus
+                            disabled={locked}
                             placeholder={t("Mô tả (vd: Mất visa, Phí bổ sung)")}
                             className="h-6 text-xs flex-1 min-w-[160px]"
                             value={extraFields.mo_ta}
@@ -736,6 +743,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                           <Input
                             type="number"
                             min={0}
+                            disabled={locked}
                             placeholder={t("SL")}
                             className="h-6 text-xs w-14 text-center"
                             value={extraFields.so_luong ?? ""}
@@ -744,6 +752,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                           <span className="text-[10px] text-muted-foreground shrink-0">×</span>
                           <DecimalInput
                             value={extraFields.don_gia}
+                            disabled={locked}
                             onChange={(v) => setExtraFields((p) => ({ ...p, don_gia: v }))}
                             placeholder={t("Đơn giá")}
                             className="h-6 text-xs w-28 text-right"
@@ -753,7 +762,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
                               = {fmt(extraFields.so_luong * extraFields.don_gia)} ₫
                             </span>
                           )}
-                          <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending}>{t("Lưu")}</Button>
+                          <Button size="sm" className="h-6 text-xs px-2" onClick={handleSaveExtra} disabled={upsertMut.isPending || locked}>{t("Lưu")}</Button>
                           <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setAddExtraForId(null)}>{t("Hủy")}</Button>
                         </div>
                       </td>
@@ -772,7 +781,7 @@ export default function ChiPhiVisaSection({ doanId }: Props) {
       )}
 
       {showAdd && (
-        <AddVisaRow doanId={doanId} onAdded={() => setShowAdd(false)} />
+        <AddVisaRow doanId={doanId} onAdded={() => setShowAdd(false)} locked={locked} />
       )}
 
       {/* ĐNTT Modal */}

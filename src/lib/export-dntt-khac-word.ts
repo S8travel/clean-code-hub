@@ -197,7 +197,7 @@ export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<v
   const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 240, after: 80 },
-    children: [new TextRun({ noProof: true, text: "GIẤY ĐỀ NGHỊ HOÀN ỨNG", font: "Arial", size: 36, bold: true })],
+    children: [new TextRun({ noProof: true, text: "ĐỀ NGHỊ THANH TOÁN", font: "Arial", size: 36, bold: true })],
   });
 
   // ── 3. Info block — Kính gửi + Người đề nghị + Lý do + Mã đoàn ───────────
@@ -227,7 +227,7 @@ export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<v
     }));
   }
   const lyDoLine = (lyDo && lyDo.trim())
-    || `Hoàn ứng chi phí phát sinh đoàn ${maDoan}${tenDoan && tenDoan !== maDoan ? ` — ${tenDoan}` : ""}`.trim();
+    || `Thanh toán chi phí phát sinh đoàn ${maDoan}${tenDoan && tenDoan !== maDoan ? ` — ${tenDoan}` : ""}`.trim();
   infoParas.push(new Paragraph({
     alignment: AlignmentType.LEFT,
     spacing: { before: 40, after: 40 },
@@ -395,5 +395,5 @@ export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<v
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `${sanitize(`GiayDeNghiHoanUng_${maDoan || tenNguoiNhan}`)}.docx`);
+  saveAs(blob, `${sanitize(`DeNghiThanhToan_${maDoan || tenNguoiNhan}`)}.docx`);
 }

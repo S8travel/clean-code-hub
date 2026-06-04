@@ -5,9 +5,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import type { DnttLump } from "@/lib/can-tru-lump";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import CatalogHoverCard from "./CatalogHoverCard";
+import { HoaDonCell, HoaDonChiPhiBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { DVInput } from "./DVInput";
 import type { DVModalTarget } from "./DVDnttModal";
 import type { CancelTarget } from "./DVCancelModal";
@@ -29,10 +32,12 @@ export interface LocalDVExtra {
   so_luong: number;
   don_gia: number;
   nguoi_tt: "cong_ty" | "hdv";
+  /** Trạng thái hóa đơn (dòng extra HDV trả) — badge bấm tay. NULL=chua_co. */
+  trang_thai_hoa_don?: string | null;
 }
 
 // Shape tối thiểu — chỉ các field DVRow đụng tới.
-interface DVPaymentLite { chi_phi_id: number | null; method: string; payment_so_tien: number }
+interface DVPaymentLite { chi_phi_id: number | null; dntt_id: number; method: string; payment_so_tien: number }
 interface DVCongNoLite { dntt_goc_id: number | null; trang_thai: string; so_tien_con_lai: number; so_tien_goc: number | null }
 
 /** Dữ liệu dùng chung — gom cụm để khỏi truyền 30 props rời. */
@@ -43,7 +48,10 @@ export interface DVRowData {
   congNoList: DVCongNoLite[];
   allDvRows: ChiPhiRow[];
   dvCdMap: ReturnType<typeof useDVCanhDiemMap>;
-  canTruByDnttId: Record<number, number>;
+  /** chi_phi_id → (dntt_id → so_tien allocation). Map dòng → ĐNTT (kể cả ĐNTT gộp). */
+  allocByChiPhi: Map<number, Map<number, number>>;
+  /** dntt_id → lump cấn trừ/tiền mặt theo từng chi_phi (dồn vào dòng đầu) — chỉ hiển thị. */
+  lumpedByDntt: Map<number, DnttLump>;
   selectedIds: number[];
   editingId: number | null;
   editAmount: string;
@@ -57,6 +65,8 @@ export interface DVRowHandlers {
   getRowEdit: (row: ChiPhiRow) => { so_luong: number; don_gia: number };
   getDateLabel: (ngaySo: number | null) => string;
   setSelectedIds: (updater: (prev: number[]) => number[]) => void;
+  /** Tích/bỏ tích 1 dòng → kéo theo cả nhóm cùng ĐNTT gộp. */
+  toggleSelectRow: (rowId: number, checked: boolean) => void;
   handleRowChange: (id: number | undefined, field: "so_luong" | "don_gia", v: number) => void;
   handleRowSave: (row: ChiPhiRow) => void;
   handleResetOverride: (row: ChiPhiRow) => void;
@@ -84,19 +94,21 @@ interface Props {
   day: number;
   data: DVRowData;
   handlers: DVRowHandlers;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 // 1 dòng chi phí dịch vụ: dòng chính + dòng phát sinh + dòng aggregate footer.
 // Tách verbatim từ ChiPhiDVSection — giữ nguyên 100% logic/hành vi.
-export default function DVRow({ row, day, data, handlers }: Props) {
+export default function DVRow({ row, day, data, handlers, locked = false }: Props) {
   useTranslate();
   const {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
-    canTruByDnttId, selectedIds, editingId, editAmount, ngayBatDau,
+    allocByChiPhi, lumpedByDntt, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   } = data;
   const {
-    getRowEdit, getDateLabel, setSelectedIds, handleRowChange, handleRowSave,
+    getRowEdit, getDateLabel, setSelectedIds, toggleSelectRow, handleRowChange, handleRowSave,
     handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
@@ -108,17 +120,32 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   const thanhTienLocal = local.so_luong * local.don_gia;
   const nguoiTt = row.tien_hdv > 0 ? "hdv" : "cong_ty";
 
+  // Map dòng → ĐNTT qua ALLOCATION (không chỉ ref_id) → dòng nằm trong ĐNTT gộp
+  // (ref_id trỏ dòng khác) vẫn nhận diện đúng ĐNTT của mình.
+  const myAllocByDntt = (row.id != null ? allocByChiPhi.get(row.id) : undefined) ?? new Map<number, number>();
   const allDntts = dnttList.filter(
-    d => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id,
+    d => d.ref_loai === "doan_chi_phi" && (myAllocByDntt.has(d.id) || d.ref_id === row.id),
   );
+  // Phần allocation của DÒNG NÀY trong 1 ĐNTT (gộp → chỉ phần của dòng, không phải cả ĐNTT).
+  const allocAmt = (d: DNTTRow): number => myAllocByDntt.get(d.id) ?? Number(d.so_tien);
+  // Tiền đã trả của DÒNG NÀY cho 1 ĐNTT (payment_so_tien đã pro-rate per-allocation).
+  const paidForDntt = (d: DNTTRow): number =>
+    paymentsList
+      .filter(p => p.dntt_id === d.id && p.chi_phi_id === row.id)
+      .reduce((s, p) => s + p.payment_so_tien, 0);
+  // Lump cấn trừ HIỂN THỊ của dòng này cho 1 ĐNTT — đã dồn vào dòng đầu (display-only),
+  // KHÔNG pro-rata. undefined nếu ĐNTT không có cấn trừ (→ dùng paidForDntt như cũ).
+  const lumpFor = (d: DNTTRow) => (row.id != null ? lumpedByDntt.get(d.id)?.rows.get(row.id) : undefined);
+  const canTruNoteFor = (d: DNTTRow): string | undefined => lumpedByDntt.get(d.id)?.canTruNote;
   const activeDntts = allDntts.filter(
     d => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi",
   );
   const rejectedDntts = allDntts.filter(d => d.trang_thai_duyet === "tu_choi");
   const paidDntts = activeDntts.filter(d => d.payment_status === "paid");
   const pendingDntts = activeDntts.filter(d => d.payment_status !== "paid");
-  const daTT = activeDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
-  const daDeNghi = pendingDntts.reduce((s, d) => s + (d.so_tien - (d.paid_amount || 0)), 0);
+  // Per-dòng (allocation-based) thay vì cả ĐNTT → ĐNTT gộp hiển thị đúng phần của dòng.
+  const daTT = row.so_tien_da_tt ?? 0;
+  const daDeNghi = pendingDntts.reduce((s, d) => s + Math.max(0, allocAmt(d) - paidForDntt(d)), 0);
   const thanhTien = row.tien_cong_ty;
   const rowExtras = extrasMap[row.id!] || [];
   const extrasCtTotal = rowExtras
@@ -158,7 +185,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
   );
   const groupChiPhi = [row, ...extraChiPhiRows];
   const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
-  const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+  // Cam kết ĐNTT của CẢ NHÓM (main + extras) theo allocation per-dòng (so_tien_da_dntt),
+  // KHÔNG phải tổng so_tien của ĐNTT (ĐNTT gộp gồm nhiều dòng khác NCC chung).
+  const sumCommitted = groupChiPhi.reduce((s, r) => s + (r.so_tien_da_dntt ?? 0), 0);
   const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
     sumActual, sumPaid, sumCommitted, groupCongNoTotal,
   });
@@ -184,7 +213,8 @@ export default function DVRow({ row, day, data, handlers }: Props) {
           checked={isSelected}
           onCheckedChange={(v) => {
             if (!row.id) return;
-            setSelectedIds(prev => v ? [...prev, row.id!] : prev.filter(id => id !== row.id));
+            // Tích 1 dòng → kéo theo cả nhóm cùng ĐNTT gộp (xem toggleSelectRow).
+            toggleSelectRow(row.id, !!v);
           }}
           className="h-3.5 w-3.5"
         />
@@ -214,6 +244,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             onChange={v => handleRowChange(row.id, "so_luong", v)}
             onBlur={() => handleRowSave(row)}
             width="w-[44px]"
+            disabled={locked}
           />
           {row.is_overridden && (
             <span title={t("Đã override — không sync với Điều tour")} className="text-amber-500 text-[10px]">🔒</span>
@@ -231,8 +262,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
             width="w-[112px]"
             money
             decimal
+            disabled={locked}
           />
-          {row.is_overridden && (
+          {row.is_overridden && !locked && (
             <button
               type="button"
               onClick={() => handleResetOverride(row)}
@@ -252,7 +284,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
       <td className="px-2 py-2.5 text-center">
         <button
           onClick={() => handleToggleNguoiTt(row)}
-          disabled={upsertMut.isPending}
+          disabled={upsertMut.isPending || locked}
           className={cn(
             "px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-colors border",
             nguoiTt === "cong_ty"
@@ -279,7 +311,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 <div key={d.id} className="flex items-center gap-0.5">
                   {isRejected ? (
                     <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                      {t(statusInfo.textKey)} · {fmt(d.so_tien)}
+                      {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
                     </span>
                   ) : editingId === d.id ? (
                     <>
@@ -303,16 +335,19 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                   ) : (
                     <>
                       {(() => {
-                        const ct = canTruByDnttId[d.id] || 0;
-                        const thucTT = Math.max(0, d.so_tien - ct);
+                        // Cấn trừ dồn vào dòng đầu (lump): chỉ dòng gánh cấn trừ mới hiện CT → TT.
+                        const lump = lumpFor(d);
+                        const ct = lump?.canTru ?? 0;
+                        // TT = còn phải trả (sau cấn trừ & tiền mặt đã trả) — KHỚP cột "Chờ UNC".
+                        const thucTT = lump?.choUNC ?? Math.max(0, allocAmt(d) - ct);
                         return (
                           <div className="inline-flex flex-col items-start gap-0.5">
                             <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                              {t(statusInfo.textKey)} · {fmt(d.so_tien)}
+                              {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
                               {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
                             </span>
                             {ct > 0 && (
-                              <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap">
+                              <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap" title={canTruNoteFor(d)}>
                                 CT {fmt(ct)} → TT {fmt(thucTT)}
                               </span>
                             )}
@@ -351,7 +386,9 @@ export default function DVRow({ row, day, data, handlers }: Props) {
                 </span>
               ) : (
                 <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                  {t("Chờ UNC")} · {fmt(d.so_tien - (d.paid_amount || 0))}
+                  {/* Lump: ĐNTT có cấn trừ → còn lại = alloc − cấn trừ dồn − tiền mặt (tương ứng cột CT).
+                      ĐNTT không cấn trừ → giữ logic cũ (alloc − đã trả pro-rata). */}
+                  {t("Chờ UNC")} · {fmt(lumpFor(d)?.choUNC ?? Math.max(0, allocAmt(d) - paidForDntt(d)))}
                 </span>
               )}
             </div>
@@ -371,6 +408,13 @@ export default function DVRow({ row, day, data, handlers }: Props) {
           )}
         </div>
         )}
+      </td>
+
+      {/* Hóa đơn — dòng công ty: theo ĐNTT; dòng HDV trả: theo chi_phi (kế toán bấm tay). */}
+      <td className="px-2 py-2.5 align-top text-center">
+        {nguoiTt === "hdv"
+          ? <HoaDonChiPhiBadge chiPhiId={row.id!} trangThai={(row.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc} />
+          : <HoaDonCell dntts={activeDntts} />}
       </td>
 
       {/* Actions */}
@@ -396,6 +440,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
           </Button>
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             title={t("Thêm dịch vụ phát sinh")}
+            disabled={locked}
             onClick={() => handleExtraAdd(row.id!)}>
             <Plus className="h-3 w-3" />
           </Button>
@@ -422,6 +467,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
               className="h-6 text-xs px-1.5 py-0 flex-1"
               placeholder={t("Tên dịch vụ phát sinh...")}
               value={extra.mo_ta}
+              disabled={locked}
               onChange={(e) => handleExtraChange(row.id!, idx, "mo_ta", e.target.value)}
               onBlur={() => handleExtraSave(row.id!, idx)}
             />
@@ -435,6 +481,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
               onChange={v => handleExtraChange(row.id!, idx, "so_luong", v)}
               onBlur={() => handleExtraSave(row.id!, idx)}
               width="w-[44px]"
+              disabled={locked}
             />
           </div>
         </td>
@@ -448,6 +495,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
               width="w-[112px]"
               money
               decimal
+              disabled={locked}
             />
           </div>
         </td>
@@ -458,6 +506,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
         {/* Ai trả */}
         <td className="px-2 py-1.5 text-center">
           <button
+            disabled={locked}
             onClick={() => {
               const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
               handleExtraChange(row.id!, idx, "nguoi_tt", next);
@@ -474,11 +523,22 @@ export default function DVRow({ row, day, data, handlers }: Props) {
           </button>
         </td>
         <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
+        {/* Hóa đơn — extra HDV trả → badge riêng. Đọc trang_thai_hoa_don từ allDvRows
+            (tươi) vì extrasMap chỉ init 1 lần, không reconcile sau khi đổi badge. */}
+        <td className="px-2 py-1.5 text-center">
+          {extra.nguoi_tt === "hdv" && extra.id != null && (
+            <HoaDonChiPhiBadge
+              chiPhiId={extra.id}
+              trangThai={(allDvRows.find((r) => r.id === extra.id)?.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc}
+            />
+          )}
+        </td>
         {/* Delete */}
         <td className="px-2 py-1.5 text-right">
           <button
+            disabled={locked}
             onClick={() => handleExtraDelete(row.id!, idx)}
-            className="text-destructive hover:text-destructive/80 p-0.5"
+            className="text-destructive hover:text-destructive/80 p-0.5 disabled:opacity-40"
           >
             <Trash2 className="h-3 w-3" />
           </button>
@@ -490,7 +550,7 @@ export default function DVRow({ row, day, data, handlers }: Props) {
       <tr key={`agg-${row.id}`} className={cn(
         effectiveDelta > 0 ? "bg-orange-50/50" : "bg-purple-50/50"
       )}>
-        <td colSpan={10} className="px-3 py-1.5">
+        <td colSpan={11} className="px-3 py-1.5">
           <div className="flex items-center justify-end gap-3 text-[11px]">
             <span className="text-muted-foreground">
               {t("Sau điều chỉnh")}:

@@ -10,6 +10,7 @@ import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { BOOKING_CC, type BookingCcType } from "@/lib/booking-cc";
+import { normalizeEmailList } from "@/lib/unc-email";
 import type { HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -34,19 +35,6 @@ function fmtVnd(n: number): string {
 // Supabase joined relation có thể trả object hoặc array — lấy phần tử đầu.
 function firstRel<T>(v: T | T[] | null | undefined): T | null {
   return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
-}
-
-// DB email field có thể có nhiều email cách nhau bằng newline, dấu chấm phẩy,
-// hoặc Chinese fullwidth comma — UI Input 1 dòng làm chúng dán liền nhau →
-// Resend reject. Normalize về dạng "a@x.com, b@y.com".
-function normalizeEmailList(s: string | null | undefined): string {
-  if (!s) return "";
-  return s
-    .replace(/[\n\r;，；]+/g, ",")
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean)
-    .join(", ");
 }
 
 // Chọn email từ danh mục khi NCC có nhiều record (nhiều NH/KS cùng 1 NCC):

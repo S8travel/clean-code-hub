@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ProtectedLayout } from "@/components/ProtectedLayout";
+import { useVersionCheck } from "@/lib/version-check";
 
 // EAGER — entry / core pages dùng liên tục
 import LoginPage from "./pages/LoginPage.tsx";
@@ -18,6 +19,7 @@ import DoanDetail from "./pages/DoanDetail.tsx";
 const NhaHangPage          = lazy(() => import("./pages/NhaHangPage.tsx"));
 const KhachSanPage         = lazy(() => import("./pages/KhachSanPage.tsx"));
 const CanhDiemPage         = lazy(() => import("./pages/CanhDiemPage.tsx"));
+const ChuyenBayPage        = lazy(() => import("./pages/ChuyenBayPage.tsx"));
 const NhaCungCapPage       = lazy(() => import("./pages/NhaCungCapPage.tsx"));
 const VoucherPage          = lazy(() => import("./pages/VoucherPage.tsx"));
 const DNTTPage             = lazy(() => import("./pages/DNTTPage.tsx"));
@@ -64,10 +66,17 @@ function RouteFallback() {
   );
 }
 
+// Theo dõi deploy mới → ép tải lại (no-op trong dev). Render null.
+function VersionWatcher() {
+  useVersionCheck();
+  return null;
+}
+
 const App = () => (
   <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <VersionWatcher />
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -86,6 +95,7 @@ const App = () => (
                 <Route path="/quan-ly/nha-hang" element={<NhaHangPage />} />
                 <Route path="/quan-ly/khach-san" element={<KhachSanPage />} />
                 <Route path="/quan-ly/canh-diem" element={<CanhDiemPage />} />
+                <Route path="/quan-ly/chuyen-bay" element={<ChuyenBayPage />} />
                 <Route path="/quan-ly/xe" element={<NhaXePage />} />
                 <Route path="/quan-ly/visa" element={<VisaPage />} />
                 <Route path="/quan-ly/nha-cung-cap" element={<NhaCungCapPage />} />

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
+import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
 import { errMsg } from "@/lib/error";
@@ -73,6 +74,10 @@ export interface ChiPhiRow {
   ty_gia: number | null;
   chiet_khau_pct: number | null;
   don_gia_raw: number | null;
+  // VAT % (xe). NULL=không VAT. don_gia = round(don_gia_raw*(1+vat_pct/100)).
+  vat_pct: number | null;
+  // Trạng thái hóa đơn cho dòng HDV trả (không có ĐNTT). NULL=chua_co.
+  trang_thai_hoa_don: string | null;
 }
 
 // NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).
@@ -438,6 +443,7 @@ export function useChiPhiNHData(doanId?: number) {
 export function useUpdateChiPhiActual() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async (args: {
       id: number;
@@ -449,6 +455,7 @@ export function useUpdateChiPhiActual() {
       // DV không truyền → fallback newTotal = so_luong * don_gia.
       total_override?: number;
     }) => {
+      lockGuard(args.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
       const newTotal = args.total_override ?? args.so_luong * args.don_gia;
       // Detect isHdv từ row hiện tại
       const { data: cur } = await externalSupabase
@@ -491,8 +498,10 @@ export function useUpdateChiPhiActual() {
 export function useUpsertChiPhi() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async (payload: Partial<ChiPhiRow> & { doan_id: number }) => {
+      lockGuard(payload.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
       // thanh_tien là generated column — loại trước khi insert/update.
       const { thanh_tien, ...clean } = payload;
       void thanh_tien;
@@ -534,8 +543,10 @@ export function useUpsertChiPhi() {
 export function useDeleteChiPhi() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
+      lockGuard(doanId); // đoàn đã quyết toán → chặn (trừ admin)
       // GUARD: chặn xóa chi phí đang nằm trong ĐNTT chưa hủy.
       // dntt_allocations.chi_phi_id FK = ON DELETE CASCADE → xóa chi phí sẽ xóa
       // luôn allocation (kể cả của ĐNTT cọc đã thanh toán) → mất dấu phần đã
@@ -584,6 +595,26 @@ export function useDeleteChiPhi() {
   });
 }
 
+// Đổi trạng thái hóa đơn của 1 dòng chi phí HDV trả (NH/DV/KS, không có ĐNTT).
+// KHÔNG qua lockGuard — theo dõi hóa đơn thuộc luồng thanh toán, không phải con số.
+export function useUpdateChiPhiHoaDon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, value }: { id: number; value: "chua_co" | "da_co" | "khong_can" }) => {
+      const { error } = await externalSupabase
+        .from("doan_chi_phi")
+        .update({ trang_thai_hoa_don: value })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_nh_section"] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_ks_data"] });
+    },
+  });
+}
+
 export interface AllocationRow {
   chi_phi_id: number;
   so_tien: number;
@@ -628,6 +659,7 @@ export function useInsertDNTT() {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", v.doan_id] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", v.doan_id] });
+      qc.invalidateQueries({ queryKey: ["dntt_allocations_by_doan", v.doan_id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       const loai = (v.loai as string | null | undefined) ?? "";
       const soTien = (v.so_tien as number | null | undefined) ?? 0;
@@ -648,6 +680,33 @@ export function useDNTTAllocations(dnttId: number | null | undefined) {
         .eq("dntt_id", dnttId!);
       if (error) throw error;
       return data as { id: number; chi_phi_id: number; so_tien: number; ghi_chu: string | null; created_at: string }[];
+    },
+  });
+}
+
+/** Allocations (chi_phi_id → dntt_id, so_tien) cho TẤT CẢ chi phí của 1 đoàn.
+ *  Dùng để map 1 dòng chi phí → các ĐNTT phân bổ vào nó (kể cả ĐNTT gộp nhiều dòng,
+ *  vì ĐNTT gộp chỉ ref_id 1 dòng nhưng allocate cho nhiều). */
+export interface DnttAllocByDoan { chi_phi_id: number; dntt_id: number; so_tien: number }
+export function useDNTTAllocationsByDoan(doanId?: number) {
+  return useQuery({
+    queryKey: ["dntt_allocations_by_doan", doanId],
+    enabled: !!doanId,
+    queryFn: async (): Promise<DnttAllocByDoan[]> => {
+      const { data: cps } = await externalSupabase
+        .from("doan_chi_phi").select("id").eq("doan_id", doanId!);
+      const ids = (cps ?? []).map((c) => c.id);
+      if (ids.length === 0) return [];
+      const { data, error } = await externalSupabase
+        .from("dntt_allocations")
+        .select("chi_phi_id, dntt_id, so_tien")
+        .in("chi_phi_id", ids);
+      if (error) throw error;
+      return (data ?? []).map((a) => ({
+        chi_phi_id: a.chi_phi_id as number,
+        dntt_id: a.dntt_id as number,
+        so_tien: Number(a.so_tien),
+      }));
     },
   });
 }

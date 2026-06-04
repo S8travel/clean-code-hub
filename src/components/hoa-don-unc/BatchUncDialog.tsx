@@ -12,8 +12,11 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useBatchUploadUNC, type HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
-import { isAmountMatch } from "@/lib/ocr-invoice";
-import { ocrUncSlip, normCode, type OcrUncResult } from "@/lib/ocr-unc";
+import { useMarkPaidWithDate } from "@/hooks/use-dntt";
+import { ocrUncSlip, type OcrUncResult } from "@/lib/ocr-unc";
+import { computeUncAssignments, uncAmountMatch } from "@/lib/ocr-unc-match";
+import { PAYMENT_SOURCE_LABELS, matchPaymentSource } from "@/lib/payment-sources";
+import { format } from "date-fns";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
@@ -26,21 +29,11 @@ import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
-// Số "ứng viên" từ tên file (gộp ngăn cách nghìn lẫn số liền).
-function amountCandidates(name: string): Set<number> {
-  const set = new Set<number>();
-  const base = name.replace(/\.[a-z0-9]+$/i, "");
-  for (const m of base.matchAll(/[0-9][0-9.,]*[0-9]|[0-9]/g)) {
-    const raw = m[0];
-    const noSep = Number(raw.replace(/[.,]/g, ""));
-    if (Number.isFinite(noSep) && noSep > 0) set.add(noSep);
-    const plain = Number(raw.replace(/[^0-9]/g, ""));
-    if (Number.isFinite(plain) && plain > 0) set.add(plain);
-  }
-  return set;
-}
+// Số tiền THỰC chuyển trên UNC = so_tien ĐNTT − đã trả (cọc + cấn trừ).
+// Hóa đơn thì khớp so_tien gốc (flow khác).
+const conLai = (r: HoaDonUNCRow) => Math.max(0, r.so_tien - (r.paid_amount ?? 0));
 
-type Reason = "code" | "amount_ocr" | "amount_file" | "manual";
+type Reason = "ncc" | "code" | "amount_ocr" | "manual";
 
 interface Props {
   open: boolean;
@@ -65,6 +58,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   useTranslate();
   const inputRef = useRef<HTMLInputElement>(null);
   const batchMut = useBatchUploadUNC();
+  const markPaidMut = useMarkPaidWithDate();
   const { data: userProfile } = useCurrentUserProfile();
   const { email: currentUserEmail } = useCurrentUserEmail();
   const [step, setStep] = useState<"pick" | "send">("pick");
@@ -74,6 +68,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const [files, setFiles] = useState<File[]>([]);
   const [assign, setAssign] = useState<Record<number, number | undefined>>({});
   const [reasons, setReasons] = useState<Record<number, Reason>>({});
+  // Nguồn TT per row (rowId → label nguồn) — auto match từ OCR, user sửa được.
+  const [nguonMap, setNguonMap] = useState<Record<number, string>>({});
   const [ocrProg, setOcrProg] = useState<{ running: boolean; done: number; total: number }>(
     { running: false, done: 0, total: 0 },
   );
@@ -90,10 +86,15 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
   // Refs cho vòng OCR (đăng ký 1 lần) đọc state mới nhất.
   const manualRef = useRef<Set<number>>(new Set());      // rowId user tự chọn → không auto đè
+  const manualNguonRef = useRef<Set<number>>(new Set()); // rowId user tự chọn NGUỒN → không auto đè
   const filesRef = useRef<File[]>([]);
   const ocrRef = useRef<Record<number, OcrUncResult>>({});
   const assignRef = useRef<Record<number, number | undefined>>({}); // mirror assign cho recompute
+  const nguonRef = useRef<Record<number, string>>({});   // mirror nguonMap cho handleSave
   const runRef = useRef(0);                               // huỷ vòng cũ khi chọn lại / đóng
+  // rows fresh cho recompute() chạy trong runOcr async (tránh stale closure).
+  const rowsRef = useRef(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
 
   // Ghép lại toàn bộ (thuần, từ refs).
   //
@@ -106,83 +107,37 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const recompute = () => {
     const fs = filesRef.current;
     const ocr = ocrRef.current;
-    const manual = manualRef.current;
-    const prevA = assignRef.current;
-    const nextA: Record<number, number | undefined> = {};
-    const nextR: Record<number, Reason> = {};
-    const used = new Set<number>();
+    const currentRows = rowsRef.current; // FRESH — tránh stale closure trong runOcr async
 
-    // 1) Khoá các dòng user tự chọn
-    for (const r of rows) {
-      if (manual.has(r.id)) {
-        const fiPrev = prevA[r.id];
-        nextA[r.id] = fiPrev;
-        nextR[r.id] = "manual";
-        if (fiPrev !== undefined) used.add(fiPrev);
-      }
-    }
+    // manual map (rowId → fileIdx user tự chọn) để hàm thuần giữ nguyên.
+    const manualMap: Record<number, number | undefined> = {};
+    for (const id of manualRef.current) manualMap[id] = assignRef.current[id];
 
-    // 2) STRICT: mã đoàn trong ảnh + số tiền khớp
-    for (const r of rows) {
-      if (manual.has(r.id) || nextA[r.id] !== undefined) continue;
-      if (!r.ten_doan) continue;
-      // CHỈ lấy token mã đoàn đầu (trước dấu cách / "(") — ten_doan có thể
-      // kèm mô tả "(4 ngày…)" / "Test" mà nội dung UNC không có.
-      const codeTok = r.ten_doan.trim().split(/[\s(]/)[0];
-      const code = normCode(codeTok);
-      if (code.length < 4) continue;
-      for (let fi = 0; fi < fs.length; fi++) {
-        if (used.has(fi)) continue;
-        const o = ocr[fi];
-        if (!o || o.amount == null) continue;
-        if (!isAmountMatch(o.amount, r.so_tien)) continue;
-        if (!normCode(o.text).includes(code)) continue;
-        nextA[r.id] = fi; nextR[r.id] = "code"; used.add(fi);
-        break;
-      }
-    }
-
-    // 3) AMBIGUITY-SAFE amount-only: 1 row ↔ 1 file duy nhất theo số tiền.
-    //    Helper: với 1 row (đã chưa được match), đếm file ứng viên + đếm row
-    //    khác cùng số tiền. Chỉ match khi cả 2 đếm = 1.
-    const unmatchedRows = rows.filter((r) => !manual.has(r.id) && nextA[r.id] === undefined);
-
-    const tryAmountMatch = (
-      reason: "amount_ocr" | "amount_file",
-      fileHasAmount: (fi: number, amount: number) => boolean,
-    ) => {
-      for (const r of unmatchedRows) {
-        if (nextA[r.id] !== undefined) continue;
-        // Đếm file ứng viên còn rảnh có cùng số tiền với r.so_tien
-        const candFiles: number[] = [];
-        for (let fi = 0; fi < fs.length; fi++) {
-          if (used.has(fi)) continue;
-          if (fileHasAmount(fi, r.so_tien)) candFiles.push(fi);
-        }
-        if (candFiles.length !== 1) continue; // 0 or >1 → ambiguous
-        const fi = candFiles[0];
-        // Đếm row khác (chưa match) muốn dùng cùng file này (cùng số tiền)
-        const rivalRows = unmatchedRows.filter(
-          (rr) => rr.id !== r.id && nextA[rr.id] === undefined
-            && fileHasAmount(fi, rr.so_tien),
-        );
-        if (rivalRows.length > 0) continue; // 1 file → nhiều row tranh → ambiguous
-        nextA[r.id] = fi; nextR[r.id] = reason; used.add(fi);
-      }
-    };
-
-    // OCR amount: dùng amount đã đọc từ ảnh
-    tryAmountMatch("amount_ocr", (fi, soTien) => {
-      const o = ocr[fi];
-      return !!o && o.amount != null && isAmountMatch(o.amount, soTien);
-    });
-    // Filename amount: dùng số trong tên file
-    tryAmountMatch("amount_file", (fi, soTien) =>
-      amountCandidates(fs[fi].name).has(Math.round(soTien)));
+    // Logic ghép tách ra lib (đã test): khớp số tiền (con_lai) BẮT BUỘC, ưu tiên mã đoàn.
+    const matchRows = currentRows.map((r) => ({
+      id: r.id, tenDoan: r.ten_doan, amount: conLai(r), nccName: r.ten_nha_cung_cap,
+    }));
+    const matchFiles = fs.map((_, i) => ocr[i] ?? { amount: null, text: "" });
+    const { assign: nextA, reasons: nextR } = computeUncAssignments(matchRows, matchFiles, manualMap);
 
     assignRef.current = nextA;
     setAssign(nextA);
-    setReasons(nextR);
+    setReasons(nextR as Record<number, Reason>);
+
+    // Auto-match NGUỒN từ OCR text của file đã ghép. Giữ nguồn user đã chọn tay.
+    const prevN = nguonRef.current;
+    const nextN: Record<number, string> = {};
+    for (const r of currentRows) {
+      const fi = nextA[r.id];
+      if (fi === undefined) continue;
+      if (manualNguonRef.current.has(r.id)) {
+        nextN[r.id] = prevN[r.id] ?? "";
+      } else {
+        nextN[r.id] = matchPaymentSource(ocr[fi]?.text ?? "") ?? "";
+      }
+    }
+    nguonRef.current = nextN;
+    setNguonMap(nextN);
   };
 
   const runOcr = async (fs: File[], myRun: number) => {
@@ -209,10 +164,13 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     const fs = Array.from(picked);
     const myRun = ++runRef.current;
     manualRef.current = new Set();
+    manualNguonRef.current = new Set();
     ocrRef.current = {};
     assignRef.current = {};
+    nguonRef.current = {};
     filesRef.current = fs;
     setFiles(fs);
+    setNguonMap({});
     setOcrInfo({});
     // Revoke URLs cũ + build preview URLs mới cho ảnh (PDF skip — không render
     // thumbnail bằng <img>).
@@ -224,8 +182,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       }
     }
     setPreviewUrls(urls);
-    recompute();          // ghép nhanh theo tên file ngay
-    runOcr(fs, myRun);    // rồi OCR refine nền
+    recompute();          // clear assign cũ — chưa ghép gì tới khi OCR đọc xong
+    runOcr(fs, myRun);    // OCR đọc số tiền → recompute() ghép dần (bắt buộc khớp số tiền)
   };
 
   // Cleanup URLs khi unmount
@@ -257,6 +215,22 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     assignRef.current = next;
     setAssign(next);
     setReasons((p) => ({ ...p, [rowId]: "manual" }));
+
+    // Đổi file → re-match nguồn theo file mới (bỏ manual nguồn cũ của row này).
+    manualNguonRef.current.delete(rowId);
+    const newNguon = fileIdx === undefined
+      ? ""
+      : (matchPaymentSource(ocrRef.current[fileIdx]?.text ?? "") ?? "");
+    const nextN = { ...nguonRef.current, [rowId]: newNguon };
+    nguonRef.current = nextN;
+    setNguonMap(nextN);
+  };
+
+  const setRowNguon = (rowId: number, nguon: string) => {
+    manualNguonRef.current.add(rowId);
+    const next = { ...nguonRef.current, [rowId]: nguon };
+    nguonRef.current = next;
+    setNguonMap(next);
   };
 
   const pairs = rows
@@ -279,6 +253,35 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       onSuccess: async ({ ok, failed, errors }) => {
         if (failed === 0) {
           toast({ title: `${t("Đã gắn UNC cho")} ${ok} ĐNTT` });
+
+          // Tự markPaid cho dòng đã gắn file + ĐÃ CHỌN NGUỒN. KHÔNG đòi OCR số
+          // tiền khớp tuyệt đối: nguồn (auto từ OCR hoặc chọn tay) là xác nhận
+          // của user; số tiền payment luôn = con_lai do server tính
+          // (so_tien − đã trả), KHÔNG lấy theo số OCR đọc. Số tiền OCR lệch chỉ
+          // là cảnh báo (badge), không chặn đánh dấu TT.
+          const today = format(new Date(), "yyyy-MM-dd");
+          const toPay = snapshot.filter((s) => {
+            const fi = assignRef.current[s.rowId];
+            const nguon = nguonRef.current[s.rowId];
+            return fi !== undefined && !!nguon;
+          });
+          let paidOk = 0;
+          let paidFail = 0;
+          for (const s of toPay) {
+            try {
+              await markPaidMut.mutateAsync({
+                id: s.rowId, ngayThanhToan: today, nguon: nguonRef.current[s.rowId],
+              });
+              paidOk++;
+            } catch {
+              paidFail++;
+            }
+          }
+          if (paidOk > 0) toast({ title: `${t("Đã đánh dấu Đã TT")} ${paidOk} ĐNTT` });
+          if (paidFail > 0) {
+            toast({ title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`, variant: "destructive" });
+          }
+
           // Switch sang step 2 — resolve email + cho user review trước khi gửi
           setStep("send");
           setResolvingEmails(true);
@@ -359,14 +362,17 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     setFiles([]);
     setAssign({});
     setReasons({});
+    setNguonMap({});
     setOcrProg({ running: false, done: 0, total: 0 });
     setOcrInfo({});
     for (const u of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(u);
     setPreviewUrls({});
     setLightboxIdx(null);
     manualRef.current = new Set();
+    manualNguonRef.current = new Set();
     ocrRef.current = {};
     assignRef.current = {};
+    nguonRef.current = {};
     filesRef.current = [];
     setStep("pick");
     setSendTargets([]);
@@ -378,9 +384,11 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const badge = (rowId: number) => {
     const r = reasons[rowId];
     if (assign[rowId] === undefined) return null;
+    if (r === "ncc")
+      return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{t("khớp mã đoàn + NCC")}</span>;
     if (r === "code")
       return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{t("khớp mã đoàn")}</span>;
-    if (r === "amount_ocr" || r === "amount_file")
+    if (r === "amount_ocr")
       return <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">{t("khớp số tiền")}</span>;
     if (r === "manual")
       return <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{t("chọn tay")}</span>;
@@ -664,7 +672,15 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                           )}
                         </td>
                         <td className="p-2 text-right tabular-nums font-semibold">
-                          {fmt(r.so_tien)}
+                          {/* Hiện số tiền UNC THỰC chuyển (con_lai = so_tien − đã
+                              cọc/cấn trừ) — khớp với số OCR đọc. Nếu đã trả trước
+                              thì chú thích tổng + đã trả cho rõ. */}
+                          {fmt(conLai(r))}
+                          {(r.paid_amount ?? 0) > 0 && (
+                            <div className="text-[10px] font-normal text-muted-foreground whitespace-nowrap">
+                              {t("Tổng")} {fmt(r.so_tien)} · {t("đã trả")} {fmt(r.paid_amount)}
+                            </div>
+                          )}
                         </td>
                         <td className="p-2">
                           <div className="flex items-start gap-1.5">
@@ -728,6 +744,45 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                                 </SelectContent>
                               </Select>
                               {badge(r.id)}
+                              {/* Nguồn TT — auto từ OCR, sửa được. CÓ NGUỒN → khi
+                                  Lưu sẽ tự đánh dấu Đã TT (số tiền OCR lệch chỉ
+                                  cảnh báo, không chặn). */}
+                              {matched && (() => {
+                                const oAmt = ocrInfo[fi!]?.amount ?? null;
+                                // Có nguồn → sẽ đánh dấu Đã TT khi Lưu (không phụ
+                                // thuộc OCR số tiền). Lệch số tiền OCR chỉ cảnh báo.
+                                const willPay = !!nguonMap[r.id];
+                                const amountMismatch =
+                                  willPay && !(oAmt != null && uncAmountMatch(oAmt, conLai(r)));
+                                return (
+                                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                    <Select
+                                      value={nguonMap[r.id] || "_none"}
+                                      onValueChange={(v) => setRowNguon(r.id, v === "_none" ? "" : v)}
+                                    >
+                                      <SelectTrigger className="h-6 text-[11px] w-[160px]">
+                                        <span className="truncate">{nguonMap[r.id] || t("Chọn nguồn")}</span>
+                                      </SelectTrigger>
+                                      <SelectContent className="max-w-[260px]">
+                                        <SelectItem value="_none" className="text-xs">{t("— Chưa chọn nguồn —")}</SelectItem>
+                                        {PAYMENT_SOURCE_LABELS.map((src) => (
+                                          <SelectItem key={src} value={src} className="text-xs">{src}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {willPay && (
+                                      <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                        {t("sẽ đánh dấu Đã TT")}
+                                      </span>
+                                    )}
+                                    {amountMismatch && (
+                                      <span className="text-[10px] text-amber-600 whitespace-nowrap" title={t("OCR đọc số tiền chưa khớp số cần thanh toán — vẫn đánh dấu TT theo nguồn đã chọn, kiểm tra lại file nếu cần")}>
+                                        {t("⚠ số tiền OCR lệch")}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </td>

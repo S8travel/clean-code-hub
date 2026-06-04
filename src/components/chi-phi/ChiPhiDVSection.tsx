@@ -1,5 +1,5 @@
-import { forwardRef, useImperativeHandle } from "react";
-import { Printer } from "lucide-react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { Printer, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -7,8 +7,10 @@ import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import DVDnttModal from "./DVDnttModal";
 import DVCancelModal from "./DVCancelModal";
 import DVAggCommitModal from "./DVAggCommitModal";
+import DVGopDnttModal from "./DVGopDnttModal";
 import DVRow from "./DVRow";
 import { useDVSection } from "./use-dv-section";
+import { groupGopByNcc } from "@/lib/dntt-gop-calc";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -18,6 +20,8 @@ interface Props {
   tenDoan?: string;
   ngayBatDau?: string;
   doanNhomId?: number | null;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 export interface ChiPhiDVSectionHandle {
@@ -27,7 +31,7 @@ export interface ChiPhiDVSectionHandle {
 }
 
 // Tab Chi phí Dịch vụ — chỉ render. Toàn bộ state/logic ở useDVSection.
-const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }, ref) {
+const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId, locked = false }, ref) {
   useTranslate();
   const s = useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId });
   const {
@@ -49,6 +53,10 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
     clearSelection: () => setSelectedIds([]),
     getSelectedCount: () => selectedIds.length,
   }), [buildSelectedEntries, selectedIds.length, setSelectedIds]);
+
+  const [showGop, setShowGop] = useState(false);
+  // Số nhóm dịch vụ cùng NCC có thể gộp (≥2 dòng công ty trả, còn phần chưa ĐNTT).
+  const gopGroupCount = useMemo(() => groupGopByNcc(dvRows).length, [dvRows]);
 
   // Empty state — return SAU mọi hook (Rules of Hooks).
   if (dvRows.length === 0) {
@@ -79,6 +87,12 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
               </Button>
             </>
           )}
+          {gopGroupCount > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowGop(true)}>
+              <Layers className="h-3.5 w-3.5 mr-1" />
+              {t("ĐNTT gộp NCC")} ({gopGroupCount})
+            </Button>
+          )}
           <span className="text-xs text-muted-foreground">{t("Tổng")}: {fmt(total)} ₫</span>
         </div>
       </div>
@@ -95,6 +109,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
             <col style={{ width: "76px" }} />
             <col style={{ width: "180px" }} />
             <col style={{ width: "140px" }} />
+            <col style={{ width: "104px" }} />
             <col style={{ width: "130px" }} />
           </colgroup>
           <thead>
@@ -114,13 +129,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
               <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
               <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
               <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
+              <th className="text-center px-2 py-2.5">{t("Hóa đơn")}</th>
               <th className="px-2 py-2.5" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {sortedDays.map(([day, rows]) =>
               rows.map((row) => (
-                <DVRow key={row.id} row={row} day={day} data={dvData} handlers={dvHandlers} />
+                <DVRow key={row.id} row={row} day={day} data={dvData} handlers={dvHandlers} locked={locked} />
               )),
             )}
           </tbody>
@@ -170,6 +186,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         open={!!previewDVData}
         data={previewDVData}
         onClose={() => setPreviewDVData(null)}
+      />
+
+      <DVGopDnttModal
+        open={showGop}
+        onClose={() => setShowGop(false)}
+        doanId={doanId}
+        tenDoan={tenDoan}
+        dvRows={dvRows}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { shouldCollectTip } from "@/lib/tip-calc";
 import { t, useTranslate } from "@/lib/i18n";
 import { useUpdateDoanTip } from "@/hooks/use-doan";
 import type { HDVDoanInfo } from "./ChiPhiHDVSection";
@@ -25,9 +26,11 @@ const LOAI_TIEN_LABEL: Record<LoaiTien, string> = { NDT: "NDT", "NT$": "NT$", "U
 interface Props {
   doanId: number;
   doan?: HDVDoanInfo;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
-export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
+export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: Props) {
   useTranslate();
   const updateTip = useUpdateDoanTip();
 
@@ -85,8 +88,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
   const [tipNguoiThu, setTipNguoiThu] = useState<NguoiThu>("hdv");
 
   // ── Có thu tip không (bỏ tích "Thu tiền tip" ở Điều tour → ẩn dòng tip) ────
-  const thuTip = doan?.thu_tip ?? true;
-  const showTipRow = thuTip && effSoKhach > 0 && effSoNgay > 0;
+  const showTipRow = shouldCollectTip(doan?.thu_tip, effSoKhach, effSoNgay);
 
   // ── Tổng tip (NDT + VND) — respect tip_lump_sum override (set ở TipSection) ─
   const computedTip = effSoKhach * effSoNgay * effRate;
@@ -165,7 +167,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
               )}
             </div>
           )}
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addRow}>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addRow} disabled={locked}>
             <Plus className="h-3 w-3 mr-1" /> {t("Thêm")}
           </Button>
         </div>
@@ -199,8 +201,9 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                   </span>
                   <button
                     onClick={() => setTipNguoiThu((v) => v === "cong_ty" ? "hdv" : "cong_ty")}
+                    disabled={locked}
                     className={cn(
-                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer",
+                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
                       tipNguoiThu === "hdv"
                         ? "bg-amber-50 text-amber-700 border-amber-200"
                         : "bg-blue-50 text-blue-700 border-blue-200",
@@ -220,6 +223,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                     const v = localSoKhach ? Number(localSoKhach) : 0;
                     saveOverride("tip_so_khach_override", v, autoSoKhach, doan?.tip_so_khach_override);
                   }}
+                  disabled={locked}
                   className={cn(
                     "h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto",
                     doan?.tip_so_khach_override != null && "border-amber-300 text-amber-700",
@@ -237,6 +241,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                     const v = localSoNgay ? Number(localSoNgay) : 0;
                     saveOverride("tip_so_ngay_override", v, autoSoNgay, doan?.tip_so_ngay_override);
                   }}
+                  disabled={locked}
                   className={cn(
                     "h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto",
                     doan?.tip_so_ngay_override != null && "border-amber-300 text-amber-700",
@@ -249,12 +254,13 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                   <DecimalInput
                     value={localRate}
                     onChange={(v) => { setLocalRate(v); saveRate(v); }}
+                    disabled={locked}
                     className={cn(
                       "h-6 text-xs px-1.5 py-0 text-right w-[80px]",
                       doan?.tip_rate != null && "border-amber-300 text-amber-700",
                     )}
                   />
-                  <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)}>
+                  <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)} disabled={locked}>
                     <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
                       <SelectValue>{tipLoaiTien}</SelectValue>
                     </SelectTrigger>
@@ -277,6 +283,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                     type="number"
                     value={tyGia || ""}
                     onChange={(e) => handleTyGiaChange(Number(e.target.value) || 0)}
+                    disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
                   />
                 </div>
@@ -295,8 +302,9 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                   <span>{t("Thu tiền đầu khách")}</span>
                   <button
                     onClick={() => saveDk({ dau_khach_nguoi_thu: dkNguoiThu === "cong_ty" ? "hdv" : "cong_ty" })}
+                    disabled={locked}
                     className={cn(
-                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer",
+                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
                       dkNguoiThu === "hdv"
                         ? "bg-amber-50 text-amber-700 border-amber-200"
                         : "bg-blue-50 text-blue-700 border-blue-200",
@@ -313,6 +321,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                   value={dkLocalSoKhach}
                   onChange={(e) => setDkLocalSoKhach(e.target.value.replace(/\D/g, ""))}
                   onBlur={() => saveDkSoKhach(dkLocalSoKhach ? Number(dkLocalSoKhach) : 0)}
+                  disabled={locked}
                   className={cn(
                     "h-6 text-xs px-1.5 py-0 text-center w-[48px] mx-auto",
                     doan?.dau_khach_so_khach_override != null && "border-amber-300 text-amber-700",
@@ -326,6 +335,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                   <DecimalInput
                     value={dkLocalRate}
                     onChange={(v) => { setDkLocalRate(v); saveDk({ dau_khach_rate: v || null }); }}
+                    disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-right w-[80px]"
                   />
                   <span className="text-[11px] text-muted-foreground w-[36px]">VND</span>
@@ -348,8 +358,9 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                   <span>{t("Thu tiền quỹ VP")}</span>
                   <button
                     onClick={() => saveVp({ quy_vp_nguoi_thu: vpNguoiThu === "cong_ty" ? "hdv" : "cong_ty" })}
+                    disabled={locked}
                     className={cn(
-                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer",
+                      "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
                       vpNguoiThu === "hdv"
                         ? "bg-amber-50 text-amber-700 border-amber-200"
                         : "bg-blue-50 text-blue-700 border-blue-200",
@@ -371,6 +382,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                     onBlur={() => {
                       if (vpLocalAmount !== vpAmount) saveVp({ quy_vp_amount: vpLocalAmount || null });
                     }}
+                    disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-right w-[80px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder={t("Số tiền")}
                   />
@@ -398,14 +410,16 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                       <Input
                         value={row.moTa}
                         onChange={(e) => updateRow(row.id, "moTa", e.target.value)}
+                        disabled={locked}
                         className="h-6 text-xs px-1.5"
                         placeholder={t("Mô tả khoản thu...")}
                         autoFocus
                       />
                       <button
                         onClick={() => updateRow(row.id, "nguoiThu", row.nguoiThu === "cong_ty" ? "hdv" : "cong_ty")}
+                        disabled={locked}
                         className={cn(
-                          "shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer whitespace-nowrap",
+                          "shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed",
                           row.nguoiThu === "hdv"
                             ? "bg-amber-50 text-amber-700 border-amber-200"
                             : "bg-blue-50 text-blue-700 border-blue-200",
@@ -423,10 +437,11 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                         type="number"
                         value={row.soTien || ""}
                         onChange={(e) => updateRow(row.id, "soTien", Number(e.target.value) || 0)}
+                        disabled={locked}
                         className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
                         placeholder="0"
                       />
-                      <Select value={row.loaiTien} onValueChange={(v) => handleLoaiTienChange(row.id, v as LoaiTien)}>
+                      <Select value={row.loaiTien} onValueChange={(v) => handleLoaiTienChange(row.id, v as LoaiTien)} disabled={locked}>
                         <SelectTrigger className="h-6 text-xs px-1.5 w-[56px]">
                           <SelectValue>{row.loaiTien}</SelectValue>
                         </SelectTrigger>
@@ -449,7 +464,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                         type="number"
                         value={isVND ? 1 : (row.tyGia || "")}
                         onChange={(e) => !isVND && updateRow(row.id, "tyGia", Number(e.target.value) || 0)}
-                        disabled={isVND}
+                        disabled={isVND || locked}
                         className="h-6 text-xs px-1.5 py-0 text-center w-[72px] disabled:opacity-50"
                       />
                     </div>
@@ -462,6 +477,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan }: Props) {
                       size="icon" variant="ghost"
                       className="h-6 w-6 text-muted-foreground hover:text-destructive"
                       onClick={() => removeRow(row.id)}
+                      disabled={locked}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>

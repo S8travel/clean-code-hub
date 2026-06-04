@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { saveAs } from "file-saver";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
+import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive, calcTipNDT, shouldCollectTip } from "@/lib/tip-calc";
 
 type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note" | "total" | "total_number";
 
@@ -43,6 +44,7 @@ export interface ExportDoan {
     nha_xe?: { ten?: string | null } | null;
   } | null;
   // Tip (phải thu) — override fields trên doan
+  thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
@@ -189,13 +191,23 @@ function getSoKhach(doan: ExportDoan): number {
   );
 }
 
-function getSoKhachText(doan: ExportDoan): string {
+/**
+ * Text "Số khách" cho export — khớp breakdown hiển thị trên trang điều tour
+ * (NL · TE 50% · TE free · T/L · Tổng). Bỏ qua category = 0 cho gọn.
+ * VD: "49 khách (42 NL, 5 TE 50%, 1 TE free, 1 TL)".
+ */
+export function getSoKhachText(doan: ExportDoan): string {
   const total = getSoKhach(doan);
-  const adults = doan?.so_khach_lon ?? 0;
+  const lon = doan?.so_khach_lon ?? 0;
+  const em1 = doan?.so_khach_em1 ?? 0; // TE 50%
+  const em2 = doan?.so_khach_em2 ?? 0; // TE free
   const tl = doan?.so_khach_tl ?? 0;
-  const em1 = doan?.so_khach_em1 ?? 0;
-  const em2 = doan?.so_khach_em2 ?? 0;
-  return `${total} khách (${adults} NL, ${tl} TL, ${em1} TE1, ${em2} TE2)`;
+  const parts: string[] = [];
+  if (lon) parts.push(`${lon} NL`);
+  if (em1) parts.push(`${em1} TE 50%`);
+  if (em2) parts.push(`${em2} TE free`);
+  if (tl) parts.push(`${tl} TL`);
+  return parts.length ? `${total} khách (${parts.join(", ")})` : `${total} khách`;
 }
 
 function getXeText(doan: ExportDoan): string {
@@ -646,7 +658,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   const rows: SheetCell[][] = [];
 
   // ─── HEADER ───
-  const soKhachText = `${doan?.so_khach_lon ?? 0}+${doan?.so_khach_tl ?? 0}TL`;
+  const soKhachText = getSoKhachText(doan);
   const quaTang = Array.isArray(doan?.tang_pham)
     ? (doan.tang_pham as string[]).join(", ")
     : doan?.tang_pham ? String(doan.tang_pham) : "—";
@@ -689,11 +701,33 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     cell("HDV TT 導遊付款", "header"), cell("CTY TT 公司付款", "header"),
   ]);
 
-  // KS: chỉ hiển thị tên KS theo từng ngày (lấy từ doan_ngay), KHÔNG hiển thị chi phí cụ thể
+  // KS: mỗi đêm 1 dòng (lịch từ doan_ngay) + GỘP chi phí phòng vào CÙNG dòng.
+  // Chi phí KS (doan_chi_phi) trỏ về đúng đêm qua ref_doan_ngay_id (ngày check-in =
+  // đêm ở KS đó) → map cost (SL/FOC/đơn giá/tiền) lên dòng lịch tương ứng. Mỗi đêm
+  // có thể >1 khoản (phòng + dịch vụ) → khoản đầu inline, khoản thêm xuống dòng phụ.
+  let totalHdvKS = 0, totalCtyKS = 0;
+  const ksCostByNgay = new Map<number, ChiPhiRow[]>();
+  const ksCostNoRef: ChiPhiRow[] = [];
+  for (const row of ksRows) {
+    totalHdvKS += row.tien_hdv || 0;
+    totalCtyKS += row.tien_cong_ty || 0;
+    if (row.ref_doan_ngay_id != null) {
+      const arr = ksCostByNgay.get(row.ref_doan_ngay_id) || [];
+      arr.push(row);
+      ksCostByNgay.set(row.ref_doan_ngay_id, arr);
+    } else {
+      ksCostNoRef.push(row);
+    }
+  }
+  const focFromRow = (row: ChiPhiRow): string =>
+    row.foc_khach_snapshot && row.foc_mien_snapshot
+      ? `${row.foc_khach_snapshot}免${row.foc_mien_snapshot}` : "";
+
   const ksNgayRows = (ksData?.ngayRows || []).filter((n) => n.khach_san_id);
   const ksNgaySorted = [...ksNgayRows].sort((a, b) =>
     (a.ngay_date || "").localeCompare(b.ngay_date || ""),
   );
+  const consumedNgayIds = new Set<number>();
   for (const ngayRow of ksNgaySorted) {
     const ks = ngayRow.khach_san_id != null
       ? ksData?.khachSanMap?.[ngayRow.khach_san_id]
@@ -704,7 +738,15 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     if (coDateRaw) coDateRaw.setDate(coDateRaw.getDate() + 1);
     const coDateStr = coDateRaw ? format(coDateRaw, "dd/MM/yyyy") : "—";
     const bookingCode = ngayRow?.ks_ma_code || "code đoàn";
-    const focText = ks?.foc_khach && ks?.foc_mien ? `${ks.foc_khach}免${ks.foc_mien}` : "—";
+
+    const costs = ngayRow.id != null ? (ksCostByNgay.get(ngayRow.id) || []) : [];
+    if (ngayRow.id != null) consumedNgayIds.add(ngayRow.id);
+    const main = costs[0];
+    const focText = main
+      ? (focFromRow(main) || "—")
+      : (ks?.foc_khach && ks?.foc_mien ? `${ks.foc_khach}免${ks.foc_mien}` : "—");
+    const hdvAmt = main?.tien_hdv || 0;
+    const ctyAmt = main?.tien_cong_ty || 0;
 
     rows.push([
       cell(ciDateStr),
@@ -712,23 +754,60 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell(ngayRow?.ks_loai_phong || "—"),
       cell(ciDateStr),
       cell(coDateStr),
-      cell(""),       // ROOMS — ẩn chi phí
+      main ? cell(main.so_luong || 0, "number") : cell(""),  // ROOMS
       cell(focText),
-      cell(""),       // PRICE — ẩn chi phí
-      cell(bookingCode),
-      cell(""),       // CTY TT — ẩn chi phí
+      main ? cell(main.don_gia || 0, "number") : cell(""),   // PRICE
+      // HDV TT: tiền nếu HDV trả; ngược lại giữ code đặt phòng (KS thường CTY trả)
+      hdvAmt > 0 ? cell(hdvAmt, "number") : cell(bookingCode),
+      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),        // CTY TT
+    ]);
+
+    // Khoản phụ cùng đêm (loại phòng 2 / dịch vụ) → dòng phụ ngay dưới.
+    for (const extra of costs.slice(1)) {
+      const exHdv = extra.tien_hdv || 0;
+      const exCty = extra.tien_cong_ty || 0;
+      rows.push([
+        cell(""), cell(""),
+        cell((extra.mo_ta || "").trim() || "—", "text"),
+        cell(""), cell(""),
+        cell(extra.so_luong || 0, "number"),
+        cell(focFromRow(extra) || "—"),
+        cell(extra.don_gia || 0, "number"),
+        exHdv > 0 ? cell(exHdv, "number") : cell(""),
+        exCty > 0 ? cell(exCty, "number") : cell(""),
+      ]);
+    }
+  }
+
+  // Khoản KS không map được vào lịch (không ref / đêm bị gộp nhóm) — vẫn in để
+  // không sót + đã nằm trong tổng.
+  const ksLeftover = [...ksCostNoRef];
+  for (const [ngayId, arr] of [...ksCostByNgay.entries()]) {
+    if (!consumedNgayIds.has(ngayId)) ksLeftover.push(...arr);
+  }
+  for (const row of ksLeftover) {
+    const hdvAmt = row.tien_hdv || 0;
+    const ctyAmt = row.tien_cong_ty || 0;
+    rows.push([
+      cell("—"), cell("—"),
+      cell((row.mo_ta || "").trim() || "Phòng", "text"),
+      cell("—"), cell("—"),
+      cell(row.so_luong || 0, "number"),
+      cell(focFromRow(row) || "—"),
+      cell(row.don_gia || 0, "number"),
+      hdvAmt > 0 ? cell(hdvAmt, "number") : cell(""),
+      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),
     ]);
   }
-  if (ksNgaySorted.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
-  rows.push([cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"), cell(""), cell("")]);
-  rows.push([cell("", "text", 10)]);
 
-  // KS chi phí KHÔNG hiển thị chi tiết, nhưng vẫn cộng vào TỔNG HDV / CTY ở SUMMARY cuối sheet
-  let totalHdvKS = 0, totalCtyKS = 0;
-  for (const row of ksRows) {
-    totalHdvKS += row.tien_hdv || 0;
-    totalCtyKS += row.tien_cong_ty || 0;
+  if (ksNgaySorted.length === 0 && ksRows.length === 0) {
+    rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
   }
+  rows.push([
+    cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"),
+    cell(totalHdvKS, "total_number"), cell(totalCtyKS, "total_number"),
+  ]);
+  rows.push([cell("", "text", 10)]);
 
   // ─── NHÀ HÀNG ───
   // Mỗi chi phí 1 hàng. Trưa/tối tách hàng riêng. 2 cột cuối HDV TT / CTY TT
@@ -878,45 +957,46 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([cell("TỔNG SỐ TIỀN TT", "total", 7), cell("VND", "total"), cell(totalHdvDV, "total_number"), cell(totalCtyDV, "total_number")]);
   rows.push([cell("", "text", 10)]);
 
-  // ─── TIP 小費 ───
-  const TIP_RATE_CO_TL = 150;
-  const TIP_RATE_KHONG_TL = 300;
+  // ─── TIP 小費 ─── (logic tách ở lib/tip-calc.ts — có unit test)
   const soKhachTotal =
     (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
     (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
     (doan?.so_khach ?? 0);
   const soKhachTl = doan?.so_khach_tl ?? 0;
-  const autoTipSoKhach = Math.max(0, soKhachTotal - soKhachTl); // T/L không đóng tip
-  const autoTipSoNgay = doan?.ngay_di && doan?.ngay_ve
-    ? Math.max(1, Math.round((new Date(doan.ngay_ve).getTime() - new Date(doan.ngay_di).getTime()) / 86400000) + 1)
-    : 0;
-  const autoTipRate = soKhachTl > 0 ? TIP_RATE_CO_TL : TIP_RATE_KHONG_TL;
+  const autoTipSoKhach = defaultTipSoKhach(soKhachTotal, soKhachTl); // T/L không đóng tip
+  const autoTipSoNgay = tipDaysInclusive(doan?.ngay_di, doan?.ngay_ve);
+  const autoTipRate = defaultTipRate(soKhachTl);
   const tipSoKhach = doan?.tip_so_khach_override ?? autoTipSoKhach;
   const tipSoNgay = doan?.tip_so_ngay_override ?? autoTipSoNgay;
   const tipRate = doan?.tip_rate ?? autoTipRate;
-  const computedTipNdt = tipSoKhach * tipSoNgay * tipRate;
+  const computedTipNdt = calcTipNDT({ soKhach: tipSoKhach, soNgay: tipSoNgay, rate: tipRate });
   const tipNdt = doan?.tip_lump_sum ?? computedTipNdt;
   const tyGiaNdt = params.tyGiaNdt ?? 800;
-  const tipVnd = tipNdt * tyGiaNdt;
+  // Tôn trọng "Thu tiền tip": bỏ tích ở Điều tour (doan.thu_tip=false) → KHÔNG in
+  // section TIP và tip = 0 trong "Tổng thu" (mirror ChiPhiPhasThuSection.showTipRow).
+  const showTip = shouldCollectTip(doan?.thu_tip, tipSoKhach, tipSoNgay);
+  const tipVnd = showTip ? tipNdt * tyGiaNdt : 0;
 
-  rows.push([cell("TIP 小費", "section", 10)]);
-  rows.push([
-    cell("SỐ KHÁCH", "header"),
-    cell("SỐ NGÀY", "header"),
-    cell("ĐƠN GIÁ NDT/KHÁCH/NGÀY", "header", 3),
-    cell("TỶ GIÁ NDT", "header"),
-    cell("TỔNG NDT", "header", 2),
-    cell("TỔNG VND", "header", 2),
-  ]);
-  rows.push([
-    cell(tipSoKhach, "number"),
-    cell(tipSoNgay, "number"),
-    cell(tipRate, "number", 3),
-    cell(tyGiaNdt, "number"),
-    cell(tipNdt, "number", 2),
-    cell(tipVnd, "total_number", 2),
-  ]);
-  rows.push([cell("", "text", 10)]);
+  if (showTip) {
+    rows.push([cell("TIP 小費", "section", 10)]);
+    rows.push([
+      cell("SỐ KHÁCH", "header"),
+      cell("SỐ NGÀY", "header"),
+      cell("ĐƠN GIÁ NDT/KHÁCH/NGÀY", "header", 3),
+      cell("TỶ GIÁ NDT", "header"),
+      cell("TỔNG NDT", "header", 2),
+      cell("TỔNG VND", "header", 2),
+    ]);
+    rows.push([
+      cell(tipSoKhach, "number"),
+      cell(tipSoNgay, "number"),
+      cell(tipRate, "number", 3),
+      cell(tyGiaNdt, "number"),
+      cell(tipNdt, "number", 2),
+      cell(tipVnd, "total_number", 2),
+    ]);
+    rows.push([cell("", "text", 10)]);
+  }
 
   // ─── SUMMARY ───
   const totalHdvAll = totalHdvKS + totalHdvNH + totalHdvVE + totalHdvDV;

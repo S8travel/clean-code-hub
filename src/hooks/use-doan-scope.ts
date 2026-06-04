@@ -54,7 +54,9 @@ export function useDoanScope() {
       return list.filter((d) => {
         if (vanPhongId != null && d.van_phong_id !== vanPhongId) return false;
         if (phanLoaiTour && phanLoaiTour.length > 0) {
-          if (!d.thi_truong || !phanLoaiTour.includes(d.thi_truong)) return false;
+          // Fail-open: thi_truong NULL/rỗng (chưa phân loại) → vẫn hiện; chỉ ẩn khi
+          // ĐÃ phân loại nhưng không thuộc scope của user.
+          if (d.thi_truong && !phanLoaiTour.includes(d.thi_truong)) return false;
         }
         return true;
       });

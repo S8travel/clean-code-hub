@@ -15,6 +15,8 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
+import { exportHDVTamUngExcel } from "@/lib/export-hdv-tam-ung-excel";
+import { tipDaysInclusive } from "@/lib/tip-calc";
 import { t, useTranslate } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./hdv-shared";
 import { HoTroHDVTable } from "./HoTroHDVTable";
@@ -27,6 +29,8 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 interface Props {
   doanId: number;
   doan?: HDVDoanInfo;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 // Tính "Phải thu HDV" — phần HDV thu hộ: Tip + Đầu khách + Quỹ VP.
@@ -75,7 +79,7 @@ function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   return total;
 }
 
-export default function ChiPhiHDVSection({ doanId, doan }: Props) {
+export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props) {
   useTranslate();
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
@@ -183,7 +187,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
             </div>
             <div className="divide-y divide-border">
               {tamUngList.map((d) => (
-                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} />
+                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} doan={doan} />
               ))}
             </div>
           </div>
@@ -197,7 +201,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
             </div>
             <div className="divide-y divide-border">
               {quyetToanList.map((d) => (
-                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} />
+                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} doan={doan} />
               ))}
             </div>
           </div>
@@ -210,7 +214,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
       </div>
 
       {/* ── Chi phí công ty hỗ trợ HDV ── */}
-      <HoTroHDVTable doanId={doanId} doan={doan} hoTroItems={hoTroItems} />
+      <HoTroHDVTable doanId={doanId} doan={doan} hoTroItems={hoTroItems} locked={locked} />
 
       {/* Modals */}
       {showTamUng && (
@@ -232,6 +236,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
           defaultLaThuHoi={netConPhaiTra < 0}
           doan={doan}
           tongHdvChi={tongHdvChi}
+          tamUngDaTT={tamUngDaTT}
           hdv={hdv}
           onClose={() => setShowQuyetToan(false)}
         />
@@ -249,7 +254,7 @@ export default function ChiPhiHDVSection({ doanId, doan }: Props) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo | null }) {
+function HDVDNTTCard({ d, hdv, doan }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo | null; doan?: HDVDoanInfo }) {
   const cancelMut = useCancelDNTT();
   const { user } = useAuth();
 
@@ -259,6 +264,30 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
   const isDaDuyet = d.trang_thai_duyet === "da_duyet";
   const isChoDuyet = d.trang_thai_duyet === "cho_duyet";
   const isQuyetToan = d.ref_loai === "hdv_quyet_toan";
+  const isTamUng = d.ref_loai === "hdv_tam_ung";
+
+  const handlePrintTamUng = async () => {
+    const soKhach =
+      (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
+      (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) || (doan?.so_khach ?? 0);
+    const soNgay = tipDaysInclusive(doan?.ngay_di, doan?.ngay_ve);
+    try {
+      await exportHDVTamUngExcel({
+        maDoan: doan?.ten_doan ?? "",
+        tenHdv: hdv?.ten ?? "",
+        soKhach,
+        soNgay,
+        soTien: d.so_tien,
+        // NỘI DUNG để mặc định "Tạm ứng đoàn <maDoan> - HDV <tenHdv>"
+        ghiChu: d.ghi_chu ?? undefined,
+        nguoiDeNghi: user?.ho_ten ?? "",
+        hdv,
+        ngayLap: d.created_at,
+      });
+    } catch (e: unknown) {
+      toast.error(t("Lỗi xuất Excel: ") + (errMsg(e) || ""));
+    }
+  };
 
   const handlePrintQuyetToan = async () => {
     if (!d.quyet_toan_data) {
@@ -301,6 +330,17 @@ function HDVDNTTCard({ d, hdv }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo |
             className="h-6 text-xs"
             onClick={handlePrintQuyetToan}
             title={t("In Giấy đề nghị quyết toán (Excel)")}
+          >
+            <FileText className="h-3 w-3 mr-1" /> {t("In")}
+          </Button>
+        )}
+
+        {isTamUng && !isHuy && !isTuChoi && (
+          <Button
+            size="sm" variant="ghost"
+            className="h-6 text-xs"
+            onClick={handlePrintTamUng}
+            title={t("In Giấy đề nghị tạm ứng (Excel)")}
           >
             <FileText className="h-3 w-3 mr-1" /> {t("In")}
           </Button>

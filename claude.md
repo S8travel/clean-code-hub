@@ -40,6 +40,19 @@ import { externalSupabase } from "@/lib/supabase-external";
 
 ---
 
+## 🔀 Git & Push — LUÔN qua Pull Request
+
+> **Không bao giờ push thẳng lên `main`.** Mọi thay đổi đẩy lên remote phải đi qua
+> Pull Request để CI kiểm tra TRƯỚC khi merge.
+
+- **Quy trình**: tạo nhánh mới → commit → `git push -u origin <branch>` → mở PR → đợi CI xanh → **squash merge** vào `main`.
+- **CI gate trên PR**: `npm run lint` (0 error), `npx tsc -b` (0 error), unit test. Push thẳng `main` bỏ qua gate này → dễ làm `main` đỏ.
+- **Commit message**: theo convention sẵn có — `feat(scope):`, `fix(scope):`, `refactor(scope):`, `docs:`...
+- **Squash merge**: GitHub gộp toàn bộ commit của nhánh thành 1 commit khi merge vào `main`
+  (lịch sử `main` = 1 dòng / PR, vd `fix(doan): ... (#NN)`). Các commit lẻ trong nhánh giữ lại ở PR để tra cứu.
+
+---
+
 ## 📊 Database Schema
 
 ### Đoàn tour (core)
@@ -100,7 +113,8 @@ doan_booking_dv
 doan_chi_phi
   id, doan_id, ngay_so
   loai: 'chi'|...
-  danh_muc: 'khach_san'|'nha_hang'|'canh_diem'|'dich_vu'|'phi_khac'
+  danh_muc: 'khach_san'|'nha_hang'|'canh_diem'|'bao_hiem'|'hdv_ho_tro'|'xe'|'visa'
+    ← DV (dịch vụ) lưu danh_muc='canh_diem' + loai='dich_vu'. KHÔNG có 'dich_vu'/'phi_khac' là danh_muc.
   ref_doan_ngay_id, ref_doan_ngay_item_id
   mo_ta, don_gia, so_luong
   thanh_tien        ← GENERATED, KHÔNG insert
@@ -256,7 +270,7 @@ src/
 │   ├── use-visa.ts
 │   └── use-doan.ts
 ├── pages/
-│   ├── DoanDetail.tsx        # trang chính, tabs: Điều Tour, Booking KS, Menu, DV, Chi phí, ĐNTT
+│   ├── DoanDetail.tsx        # trang chính, tabs: Điều Tour, Booking KS, Booking NH, Visa & Xe, Booking DV, Chi phí, Tài liệu, Log
 │   ├── Index.tsx             # danh sách đoàn
 │   ├── DashboardPage.tsx
 │   ├── DNTTPage.tsx          # kế toán duyệt ĐNTT toàn hệ thống
@@ -281,23 +295,36 @@ src/
 ---
 
 ## 🔄 Routes
+> Nguồn: `src/App.tsx`. Public = không cần đăng nhập; còn lại bọc trong `ProtectedLayout`.
 ```
-/                       → Index (danh sách đoàn)
-/doan/:id               → DoanDetail (tabs: Điều Tour, Booking KS, Menu, Booking DV, Chi phí, Đề nghị TT)
+# Public
+/login                  → LoginPage
+/lead-form              → LeadFormPublicPage (form nhận lead công khai)
+
+# Protected
+/                       → redirect → /my-job
+/my-job                 → MyJobPage (landing)
+/dashboard              → DashboardPage
+/doan                   → Index (danh sách đoàn)
+/doan/:id               → DoanDetail (tabs: Điều Tour, Booking KS, Booking NH,
+                          Visa & Xe, Booking DV, Chi phí, Tài liệu, Log)
 /de-nghi-thanh-toan     → DNTTPage (kế toán duyệt)
+/hoan-ung               → HoanUngPage
+/thanh-toan-dinh-ky     → ThanhToanDinhKyPage
 /cong-no                → CongNoPage
 /hoa-don-unc            → HoaDonUNCPage
-/thanh-toan-dinh-ky     → ThanhToanDinhKyPage
-/quan-ly/nha-hang
-/quan-ly/khach-san
-/quan-ly/canh-diem
-/quan-ly/nha-cung-cap
-/quan-ly/nha-xe
-/quan-ly/hdv
-/quan-ly/seri
-/quan-ly/visa
-/nguoi-dung
-/login
+/theo-doi               → TheodoiPage
+/xep-hdv                → XepHDVPage
+/lock-phong             → LockPhongPage
+/invoice                → InvoicePage
+/bao-gia                → BaoGiaPage
+/bao-gia/:id            → BaoGiaDetailPage
+/settings/teams         → TeamAssignmentPage
+/leads                  → LeadsPage (list + kanban)
+/viec-lead              → ViecLeadPage
+/leads/bao-cao          → LeadReportPage
+/quan-ly/nha-hang  /quan-ly/khach-san  /quan-ly/canh-diem  /quan-ly/xe (NhaXePage)
+/quan-ly/visa  /quan-ly/nha-cung-cap  /quan-ly/hdv  /quan-ly/seri  /quan-ly/nguoi-dung
 ```
 
 ---
@@ -548,7 +575,7 @@ trang_thai_thanh_toan: 'unpaid' | 'partial_paid' | 'paid'
 - Footer per group commit button (tính `delta = sumActual_company - sumPaid_company`):
   - `delta > 0` → INSERT dntt loai='dich_vu'/'nha_hang', mo_ta='[Bổ sung] ...', cho_duyet
   - `delta < 0` → INSERT cong_no với so_tien_goc=abs(delta), trang_thai='con_du'
-- Xem section "🔄 Source of Truth Pattern" → workflow #3 cho UX detail.
+- Xem section "🔄 HYBRID Pattern: Điều tour ↔ Chi phí" → workflow #3 cho UX detail.
 
 **KS section + legacy use** (`useCreateAdjustment`):
 ```
@@ -759,18 +786,23 @@ CREATE POLICY "auth_all" ON public.ten_bang
 - **Lý do tắt:** Chuyển sang dùng team-based permission (`user_roles.role` + `role_permissions`)
 - **Files liên quan:**
   - `src/pages/DoanDetail.tsx` — `canEdit` logic (hiện = `true`)
-  - `src/components/DoanTable.tsx` — nút PermissionDialog (key icon) + state permDoan
   - `src/pages/Index.tsx` — 2 khối auto-add permission khi create/edit doan, import `useAddDoanPermission`
-- **Để bật lại:** tìm tag `FEATURE_DOAN_PERM_DISABLED` trong 3 files trên, bỏ comment các dòng bị comment và xóa `const canEdit = true`
+  - (DoanTable.tsx đã gỡ sạch ref permission — không còn nút PermissionDialog/state permDoan.
+    `PermissionDialog.tsx` + `PermissionPopover.tsx` hiện orphan, chưa xoá.)
+- **Để bật lại:** tìm tag `FEATURE_DOAN_PERM_DISABLED` trong 2 files trên, bỏ comment các dòng bị comment và xóa `const canEdit = true`
 - **Không bị ảnh hưởng:** hiển thị OP (cột OP, filter OP, field "Phân cho"), MyJobPage, `use-permissions.ts`
 
 ---
 
-## 🆕 Module Lead Management (đang phát triển)
+## 🆕 Module Lead Management (đã ship — production)
 
 ### Mục đích
 Quản lý khách hàng tiềm năng cho thị trường outbound + nội địa.
 Lead = khách chưa chốt thành đoàn. Khi chốt → tạo `doan` và link.
+
+> ⚠️ Tên bảng DB là **số ít**: `lead`, `lead_activity`, `lead_task`, `lead_next_action`,
+> `lead_cadence`, `lead_campaign`, `lead_diem_den`, `lead_template`. (Query key React Query
+> thì dùng số nhiều `["leads"]` — đừng nhầm với tên bảng.)
 
 ### Phạm vi
 - Tiếp nhận lead từ nhiều nguồn (FB, Zalo, hotline, web, referral)
@@ -796,19 +828,21 @@ moi → da_lien_he → dang_tu_van → da_bao_gia
 - Mất khách bắt buộc nhập lý do
 - Chốt deal → tạo đoàn → set lead.doan_id
 
-### Tích hợp với module hiện có
-- `leads.sales_phu_trach` → `user_roles.user_id` (chỉ user `bo_phan = 'dieu_hanh'`)
-- `leads.doan_id` → `doan.id` (set khi chốt deal)
-- `leads.nguoi_gioi_thieu_id` → self-reference (referral chain)
+### Tích hợp với module hiện có (cột thực tế bảng `lead`)
+- `lead.assigned_to` → `user_roles.user_id` (sales phụ trách; user `bo_phan = 'dieu_hanh'`)
+- `lead.doan_id` → `doan.id` (set khi chốt deal)
+- `lead.referral_lead_id` → self-reference `lead.id` (referral chain)
+- `lead.campaign_id` → `lead_campaign.id`
 
-### Routes
-/leads                 → trang quản lý lead (list + kanban)
-/leads/:id             → chi tiết lead (hoặc dùng drawer)
+### Routes (xem App.tsx — KHÔNG có `/leads/:id`, chi tiết mở qua LeadDrawer)
+/leads                 → LeadsPage (list + kanban)
+/viec-lead             → ViecLeadPage (việc cần làm / next action)
+/leads/bao-cao         → LeadReportPage
+/lead-form             → LeadFormPublicPage (public, qua RPC create_lead_from_form)
 
-### Query Keys
-["leads", filters?]
+### Query Keys (thực tế trong use-leads.ts)
+["leads", filter?]
 ["lead", id]
 ["lead_activities", leadId]
-["lead_tasks", leadId]
-["my_lead_tasks", userId]
-["lead_nguon"]
+["lead_next_action", leadId]
+["my_next_actions"]

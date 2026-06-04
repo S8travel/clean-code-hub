@@ -3,6 +3,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { getChiPhiIdsForDNTT, recalcChiPhiStatus, type PaymentRow } from "@/hooks/use-dntt";
 import { appendCanTruLog } from "@/hooks/use-cong-no";
 import { proRataInts } from "@/lib/pro-rata";
+import { canTruGhiChu } from "@/lib/can-tru-note";
 
 /**
  * Tạo NHIỀU payment can_tru cho 1 ĐNTT (cấn trừ nhiều cong_no cùng NCC 1 lúc).
@@ -24,7 +25,7 @@ export async function createCanTruPayments(opts: {
       method: "can_tru",
       so_tien: it.soTien,
       cong_no_id: it.congNoId,
-      ghi_chu: `Cấn trừ từ đoàn: ${it.sourceTenDoan}`,
+      ghi_chu: canTruGhiChu(it.sourceTenDoan),
     });
     if (error) throw error;
     await appendCanTruLog(it.congNoId, it.soTien, opts.consumingDoanLog);

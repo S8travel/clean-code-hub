@@ -13,7 +13,7 @@ import {
   useUploadInvoiceFile,
   useDeleteInvoiceFile,
 } from "@/hooks/use-doan-invoice";
-import { useDoanTaiLieuByDoanIds, type DoanTaiLieuRow, type DoanTaiLieuLoai } from "@/hooks/use-doan-tai-lieu";
+import { useDoanTaiLieuByDoanIds, type DoanTaiLieuRow } from "@/hooks/use-doan-tai-lieu";
 import { useDoanLogList, useToggleResolved } from "@/hooks/use-doan-log";
 import {
   useCanhDiem,
@@ -324,9 +324,11 @@ function InvoiceDoanCard({
 }: {
   doan: DoanWithRel;
   chiPhiThucTe: number;
-  taiLieu: Partial<Record<DoanTaiLieuLoai, DoanTaiLieuRow>> | null;
+  taiLieu: DoanTaiLieuRow[] | null;
   onCardClick: () => void;
 }) {
+  const baoGiaList = taiLieu?.filter((r) => r.loai === "bao_gia") ?? [];
+  const hopDong = taiLieu?.find((r) => r.loai === "hop_dong") ?? null;
   useTranslate();
   const { data: invoiceData, isLoading: invLoading } = useDoanInvoiceData(doan.id);
   const upsert = useUpsertDoanInvoice();
@@ -440,9 +442,21 @@ function InvoiceDoanCard({
               {t(TRANG_THAI_LABEL[doan.trang_thai] ?? doan.trang_thai)}
             </Badge>
           )}
-          {/* Báo giá + Hợp đồng — auto-link từ tab Tài liệu trong DoanDetail */}
-          <TaiLieuChip taiLieu={taiLieu?.bao_gia ?? null}  label={t("Báo giá")}  title={t("Báo giá")}  cls="bg-blue-100 text-blue-700 hover:bg-blue-200" />
-          <TaiLieuChip taiLieu={taiLieu?.hop_dong ?? null} label={t("Hợp đồng")} title={t("Hợp đồng")} cls="bg-emerald-100 text-emerald-700 hover:bg-emerald-200" />
+          {/* Báo giá (nhiều file) + Hợp đồng — auto-link từ tab Tài liệu trong DoanDetail */}
+          {baoGiaList.length > 0 ? (
+            baoGiaList.map((bg, i) => (
+              <TaiLieuChip
+                key={bg.id}
+                taiLieu={bg}
+                label={baoGiaList.length > 1 ? `${t("Báo giá")} ${i + 1}` : t("Báo giá")}
+                title={t("Báo giá")}
+                cls="bg-blue-100 text-blue-700 hover:bg-blue-200"
+              />
+            ))
+          ) : (
+            <TaiLieuChip taiLieu={null} label={t("Báo giá")} title={t("Báo giá")} cls="bg-blue-100 text-blue-700 hover:bg-blue-200" />
+          )}
+          <TaiLieuChip taiLieu={hopDong} label={t("Hợp đồng")} title={t("Hợp đồng")} cls="bg-emerald-100 text-emerald-700 hover:bg-emerald-200" />
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span>{doan.agents?.ten ?? "—"}</span>

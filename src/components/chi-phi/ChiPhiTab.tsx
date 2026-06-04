@@ -2,6 +2,7 @@ import { useMemo, useState, useRef } from "react";
 import { FileSpreadsheet, Printer } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
+import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
 import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
@@ -112,6 +113,8 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   const soKhachNH = (sk_lon + sk_em1 * 0.5 + sk_tl) || doan?.so_khach || 0;
   const soKhachNHKhongTL = (sk_lon + sk_em1 * 0.5) || doan?.so_khach || 0;
 
+  // Đoàn đã quyết toán → khóa sửa CON SỐ chi phí (trừ admin). Luồng thanh toán giữ nguyên.
+  const locked = useChiPhiLocked(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId, activeNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
@@ -241,6 +244,14 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
       <ChiPhiHeader doan={doan} opName={opName} />
 
+      {/* ── Banner khóa quyết toán ── */}
+      {locked && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 flex items-center gap-2 text-sm text-amber-800">
+          <span className="text-base">🔒</span>
+          <span>{t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được số liệu. (Vẫn dùng được nút thanh toán / hóa đơn.)")}</span>
+        </div>
+      )}
+
       {/* ── Summary bar ── */}
       {hasData && (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -268,26 +279,27 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       )}
 
       <div className="space-y-6">
-        <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} locked={locked} />
 
-        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} doanNhomId={activeNhomId} />
+        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} doanNhomId={activeNhomId} locked={locked} />
 
-        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} />
+        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} locked={locked} />
 
-        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
+        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} locked={locked} />
 
-        <ChiPhiVisaSection doanId={doanId} />
+        <ChiPhiVisaSection doanId={doanId} locked={locked} />
 
         <ChiPhiBaoHiemSection
           doanId={doanId}
           soKhach={soKhach}
           ngayDi={doan?.ngay_di ?? null}
           ngayVe={doan?.ngay_ve ?? null}
+          locked={locked}
         />
 
-        <ChiPhiHDVSection doanId={doanId} doan={doan} />
+        <ChiPhiHDVSection doanId={doanId} doan={doan} locked={locked} />
 
-        <ChiPhiPhasThuSection doanId={doanId} doan={doan} />
+        <ChiPhiPhasThuSection doanId={doanId} doan={doan} locked={locked} />
       </div>
 
       <DNTTNHPreviewModal

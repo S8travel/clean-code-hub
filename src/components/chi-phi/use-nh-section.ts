@@ -10,6 +10,7 @@ import {
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
+import { buildCanTruNote } from "@/lib/can-tru-note";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useRedemptionsByDoan, useRedeemVoucher, useUndoRedemption, type VoucherRow } from "@/hooks/use-voucher";
 import { buildRedemptionMap } from "@/lib/voucher";
@@ -184,6 +185,7 @@ export function useNHSection({
           don_gia: cp.don_gia,
           nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
           chiet_khau_phan_tram: cp.chiet_khau_phan_tram_snapshot ?? 0,
+          trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
         }));
       }
     }
@@ -296,6 +298,7 @@ export function useNHSection({
             don_gia: cp.don_gia,
             nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
             chiet_khau_phan_tram: cp.chiet_khau_phan_tram_snapshot ?? 0,
+            trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
           }));
           changed = true;
         }
@@ -322,7 +325,11 @@ export function useNHSection({
         const dbRow = row.id ? chiPhiRows.find((cp) => cp.id === row.id) : null;
         const nh = nhData.nhaHangMap[meal.nha_hang_id];
         const targetDonGia = meal.gia_set_menu ?? dbRow?.don_gia ?? row.don_gia;
-        const targetSoLuong = dbRow?.so_luong ?? row.so_khach;
+        // ⚠️ KHÔNG sync so_khach từ dbRow.so_luong ở đây. Số khách của row
+        // non-override do effect `soKhachDefault` (= tổng khách đoàn / trừ T/L)
+        // quản lý. Nếu đè từ dbRow.so_luong, các row chưa từng lưu (DB giữ
+        // default so_luong=1) sẽ kéo so_khach về 1 mỗi khi chiPhiRows refetch
+        // (tức sau MỖI lần blur save bất kỳ row nào) → "số khách NH khác nhảy về 1".
         // FOC + chiết khấu: lấy từ snapshot CỦA TOUR (dbRow = doan_chi_phi),
         // KHÔNG đọc master. resolveNHChietKhau chỉ fallback master khi
         // snapshot null (legacy) — đúng hành vi init.
@@ -332,7 +339,6 @@ export function useNHSection({
         const targetCk = resolveNHChietKhau({ chiet_khau_phan_tram_snapshot: targetCkSnap }, nh);
         if (
           targetDonGia !== row.don_gia ||
-          targetSoLuong !== row.so_khach ||
           targetFocK !== (row.foc_khach_snapshot ?? null) ||
           targetFocM !== (row.foc_mien_snapshot ?? null) ||
           targetCkSnap !== (row.chiet_khau_phan_tram_snapshot ?? null) ||
@@ -341,7 +347,6 @@ export function useNHSection({
           next[key] = {
             ...row,
             don_gia: targetDonGia,
-            so_khach: targetSoLuong,
             foc_khach_snapshot: targetFocK,
             foc_mien_snapshot: targetFocM,
             chiet_khau_phan_tram_snapshot: targetCkSnap,
@@ -527,15 +532,28 @@ export function useNHSection({
     const newSoKhach = sk || row.so_khach;
     const newDonGia  = meal?.gia_set_menu ?? row.don_gia;
     const isHdv = (nh?.nguoi_thanh_toan === "hdv");
-    const newTotal = newSoKhach * newDonGia;
-    await externalSupabase.from("doan_chi_phi").update({
-      so_luong: newSoKhach,
-      don_gia:  newDonGia,
-      tien_cong_ty: isHdv ? 0 : newTotal,
-      tien_hdv:     isHdv ? newTotal : 0,
-      is_overridden: false,
-      thanh_tien_thuc_te: null,
-    }).eq("id", row.id);
+    // Trừ FOC + CK giống handleSave — trước đây dùng newSoKhach*newDonGia thô
+    // → tien_cong_ty không khớp "Thành tiền"/ĐNTT (cùng bug NHFocEditor).
+    const focResolved = resolveNHFoc(row, nh);
+    const soKhachThucTe = calcSoKhachThucTe(newSoKhach, focResolved.foc_khach, focResolved.foc_mien);
+    const newTotal = applyChietKhau(soKhachThucTe * newDonGia, row.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null);
+    // Route qua upsertMut (KHÔNG raw update) để tự hưởng lockGuard — đoàn đã
+    // quyết toán + non-admin → ném lỗi, không sửa được con số chi phí.
+    try {
+      await upsertMut.mutateAsync({
+        id: row.id,
+        doan_id: doanId,
+        so_luong: newSoKhach,
+        don_gia:  newDonGia,
+        tien_cong_ty: isHdv ? 0 : newTotal,
+        tien_hdv:     isHdv ? newTotal : 0,
+        is_overridden: false,
+        thanh_tien_thuc_te: null,
+      });
+    } catch (err: unknown) {
+      toast.error(errMsg(err) || "Lỗi reset");
+      return;
+    }
     // Cập nhật localRows NGAY để UI reflect — query invalidate
     // không tự đè localRows (local state independent của chiPhiRows).
     setLocalRows((prev) => ({
@@ -1124,18 +1142,15 @@ export function useNHSection({
         // Cấn trừ: tổng can_tru payments — của ĐNTT đang in (nếu có) hoặc cả meal.
         const nccId = nh.nha_cung_cap_id ?? null;
         let canTruAmount = 0;
-        let canTruNote = "";
+        let canTruNote: string | undefined;
         if (nccId && !canTruShownByNcc[nccId] && chiPhiId) {
-          const ctPays = activeDntt
+          const canTruPays = activeDntt
             ? paymentsList.filter((p) => p.dntt_id === activeDntt.id && p.method === "can_tru")
             : paymentsList.filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru");
-          canTruAmount = ctPays.reduce((s, p) => s + p.payment_so_tien, 0);
+          canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
           if (canTruAmount > 0) {
             canTruShownByNcc[nccId] = true;
-            // Nguồn cấn trừ từ ghi_chu payment ("Cấn trừ từ đoàn: X") — dedupe.
-            canTruNote = [...new Set(
-              ctPays.map((p) => p.ghi_chu?.trim()).filter((s): s is string => !!s),
-            )].join("; ");
+            canTruNote = buildCanTruNote(canTruPays); // "Cấn trừ từ đoàn: <nguồn>"
           }
         }
 
@@ -1161,7 +1176,7 @@ export function useNHSection({
           tai_khoan_thanh_toan: nh.tai_khoan_thanh_toan || null,
           so_tien_coc: soCoc,
           can_tru: canTruAmount,
-          can_tru_note: canTruNote || undefined,
+          can_tru_note: canTruNote,
           so_tien_con_tt: soTienConTT,
           la_coc: !!activeDntt?.la_coc,
         });

@@ -94,6 +94,17 @@ describe("normalizeEmails", () => {
   it("handles mixed delimiters", () => {
     expect(normalizeEmails("a@x.com; b@y.com\nc@z.com")).toBe("a@x.com, b@y.com, c@z.com");
   });
+
+  it("tách 'Tên người <email>' → chỉ lấy email (Resend reject token có < >)", () => {
+    expect(normalizeEmails("BW PREMIER MANAGER <sales10@bwpremier.com>, DIRECTOR <cdos@bwpremier.com>"))
+      .toBe("sales10@bwpremier.com, cdos@bwpremier.com");
+    expect(normalizeEmails("<sales10@bwpremier.com>, <reservation@bwpremier.com>"))
+      .toBe("sales10@bwpremier.com, reservation@bwpremier.com");
+  });
+
+  it("bỏ dấu nháy + loại email trùng", () => {
+    expect(normalizeEmails('"Lê Thị" <a@x.com>, a@x.com, b@y.com')).toBe("a@x.com, b@y.com");
+  });
 });
 
 describe("cn", () => {
