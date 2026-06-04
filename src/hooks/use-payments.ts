@@ -144,7 +144,7 @@ export interface PaymentByChiPhi {
   dntt_so_tien: number;
   alloc_so_tien: number;
   payment_id: number;
-  method: "cash" | "can_tru";
+  method: "cash" | "can_tru" | "voucher";
   payment_so_tien: number;
   cong_no_id: number | null;
   ngay_thanh_toan: string;
@@ -222,7 +222,7 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
             dntt_so_tien: dnttSoTien[p.dntt_id] || 1,
             alloc_so_tien: Number(alloc.so_tien),
             payment_id: p.id,
-            method: p.method as "cash" | "can_tru",
+            method: p.method as "cash" | "can_tru" | "voucher",
             payment_so_tien: shares[i],
             cong_no_id: p.cong_no_id,
             ngay_thanh_toan: p.ngay_thanh_toan,
