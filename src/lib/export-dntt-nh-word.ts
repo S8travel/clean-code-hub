@@ -303,7 +303,7 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
             width: COL_W[9], rowSpan: itemCount,
           }),
         );
-        // Cấn trừ
+        // Cấn trừ (nguồn đoàn in ở cột Ghi chú — xem dưới)
         cells.push(
           cell([p(entry.can_tru > 0 ? fmt(entry.can_tru) : "—", { size: 14, color: entry.can_tru > 0 ? "FF6600" : undefined })], {
             width: COL_W[10], rowSpan: itemCount,

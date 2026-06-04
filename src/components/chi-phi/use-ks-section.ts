@@ -29,6 +29,7 @@ import {
 } from "@/lib/foc-calc";
 import { fmt, fmtDateDisplay, buildKSRowFromCp, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
+import { buildCanTruNote } from "@/lib/can-tru-note";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
 import { type KSCancelTarget } from "./KSCancelModal";
 
@@ -190,7 +191,12 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       .map((cp) => cp.id!)
       .filter(Boolean);
     void ksChiPhiIds; // legacy — không còn dùng vì canTruTotal lấy theo dntt_id
-    const canTruNote = canTruTotal > 0 ? "Cấn trừ công nợ" : "";
+    // Nguồn cấn trừ "Cấn trừ từ đoàn: <nguồn>" (buildCanTruNote — đồng bộ NH/DV).
+    // Fallback "Cấn trừ công nợ" cho payment cũ thiếu ghi_chu.
+    const canTruPays = paymentsList.filter((p) => p.dntt_id === dnttId && p.method === "can_tru");
+    const canTruNote = canTruTotal > 0
+      ? (buildCanTruNote(canTruPays) ?? "Cấn trừ công nợ")
+      : "";
 
     const focDisplay =
       ks.foc_khach && ks.foc_mien ? `${ks.foc_khach}/${ks.foc_mien}` : "—";

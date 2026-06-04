@@ -3816,8 +3816,155 @@ export type Database = {
         }
         Relationships: []
       }
+      voucher: {
+        Row: {
+          active: boolean
+          created_at: string | null
+          ghi_chu: string | null
+          id: number
+          loai: string
+          nha_cung_cap_id: number | null
+          ngay_tao: string | null
+          so_luong: number
+          ten: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string | null
+          ghi_chu?: string | null
+          id?: number
+          loai?: string
+          nha_cung_cap_id?: number | null
+          ngay_tao?: string | null
+          so_luong?: number
+          ten: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string | null
+          ghi_chu?: string | null
+          id?: number
+          loai?: string
+          nha_cung_cap_id?: number | null
+          ngay_tao?: string | null
+          so_luong?: number
+          ten?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voucher_nha_cung_cap_id_fkey"
+            columns: ["nha_cung_cap_id"]
+            isOneToOne: false
+            referencedRelation: "nha_cung_cap"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voucher_su_dung: {
+        Row: {
+          chi_phi_id: number | null
+          created_at: string | null
+          dntt_id: number | null
+          doan_id: number | null
+          gia_tri: number
+          ghi_chu: string | null
+          id: number
+          ngay_dung: string | null
+          so_luong: number
+          tao_boi: string | null
+          voucher_id: number
+        }
+        Insert: {
+          chi_phi_id?: number | null
+          created_at?: string | null
+          dntt_id?: number | null
+          doan_id?: number | null
+          gia_tri?: number
+          ghi_chu?: string | null
+          id?: number
+          ngay_dung?: string | null
+          so_luong?: number
+          tao_boi?: string | null
+          voucher_id: number
+        }
+        Update: {
+          chi_phi_id?: number | null
+          created_at?: string | null
+          dntt_id?: number | null
+          doan_id?: number | null
+          gia_tri?: number
+          ghi_chu?: string | null
+          id?: number
+          ngay_dung?: string | null
+          so_luong?: number
+          tao_boi?: string | null
+          voucher_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voucher_su_dung_voucher_id_fkey"
+            columns: ["voucher_id"]
+            isOneToOne: false
+            referencedRelation: "voucher"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_su_dung_voucher_id_fkey"
+            columns: ["voucher_id"]
+            isOneToOne: false
+            referencedRelation: "voucher_with_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_su_dung_doan_id_fkey"
+            columns: ["doan_id"]
+            isOneToOne: false
+            referencedRelation: "doan"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_su_dung_chi_phi_id_fkey"
+            columns: ["chi_phi_id"]
+            isOneToOne: false
+            referencedRelation: "doan_chi_phi"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_su_dung_dntt_id_fkey"
+            columns: ["dntt_id"]
+            isOneToOne: false
+            referencedRelation: "de_nghi_thanh_toan"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
+      voucher_with_status: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          ghi_chu: string | null
+          id: number | null
+          loai: string | null
+          nha_cung_cap_id: number | null
+          ngay_tao: string | null
+          so_luong: number | null
+          so_luong_con_lai: number | null
+          so_luong_da_dung: number | null
+          ten: string | null
+          tong_gia_tri_da_dung: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voucher_nha_cung_cap_id_fkey"
+            columns: ["nha_cung_cap_id"]
+            isOneToOne: false
+            referencedRelation: "nha_cung_cap"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cong_no_with_status: {
         Row: {
           created_at: string | null

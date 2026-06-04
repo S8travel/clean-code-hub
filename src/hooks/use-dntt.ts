@@ -393,6 +393,10 @@ export function useRejectDNTT() {
         .eq("id", id);
       if (error) throw error;
 
+      // Dọn payment 'voucher' (phần suất chính trả bằng voucher) — ĐNTT bị từ chối
+      // thì khoản này không còn hiệu lực, tránh payment mồ côi.
+      await externalSupabase.from("payments").delete().eq("dntt_id", id).eq("method", "voucher");
+
       const chiPhiIds = await getChiPhiIdsForDNTT(id);
       await recalcChiPhiStatus(chiPhiIds);
       return dntt.doan_id as number;
@@ -597,6 +601,14 @@ export function useCancelDNTT() {
               .eq("id", cnId);
           }
         }
+      }
+
+      // Xóa payment 'voucher' (phần suất chính trả bằng voucher) — hủy ĐNTT thì
+      // khoản này không còn hiệu lực, tránh payment mồ côi. (Không tạo cong_no:
+      // voucher đã trả trước, gỡ/hủy chỉ trả dòng về trạng thái chưa thanh toán.)
+      const voucherPaymentIds = allPayments.filter((p) => p.method === "voucher").map((p) => p.id);
+      if (voucherPaymentIds.length > 0) {
+        await externalSupabase.from("payments").delete().in("id", voucherPaymentIds);
       }
 
       const { error } = await externalSupabase
