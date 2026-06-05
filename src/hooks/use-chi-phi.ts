@@ -5,6 +5,7 @@ import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
+import { buildChiPhiChangeList } from "@/lib/chi-phi-diff";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
 import { errMsg } from "@/lib/error";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
@@ -507,6 +508,12 @@ export function useUpsertChiPhi() {
       void thanh_tien;
       if (clean.id) {
         const { id, ...rest } = clean;
+        // Snapshot giá trị cũ TRƯỚC update để audit log dựng "cũ → mới".
+        const { data: oldRow } = await externalSupabase
+          .from("doan_chi_phi")
+          .select("so_luong, don_gia, tien_cong_ty, tien_hdv, foc_count, thanh_tien_thuc_te")
+          .eq("id", id)
+          .maybeSingle();
         const { data, error } = await externalSupabase
           .from("doan_chi_phi")
           .update(rest as TablesUpdate<"doan_chi_phi">)
@@ -514,7 +521,7 @@ export function useUpsertChiPhi() {
           .select("id")
           .single();
         if (error) throw error;
-        return data;
+        return { id: data.id, old: oldRow ?? null };
       } else {
         const { data, error } = await externalSupabase
           .from("doan_chi_phi")
@@ -522,7 +529,7 @@ export function useUpsertChiPhi() {
           .select("id")
           .single();
         if (error) throw error;
-        return data;
+        return { id: data.id, old: null };
       }
     },
     onSuccess: (data, variables) => {
@@ -532,9 +539,11 @@ export function useUpsertChiPhi() {
       const isNew = !variables.id;
       const dm = DANH_MUC_LABEL[variables.danh_muc ?? ""] ?? (variables.danh_muc ?? "");
       const tien = (variables.tien_cong_ty ?? 0) + (variables.tien_hdv ?? 0);
+      const changes = buildChiPhiChangeList(data?.old, variables);
       const moTa = isNew
         ? `Thêm chi phí ${dm}${variables.mo_ta ? ": " + variables.mo_ta : ""} — ${fmtVND(tien)}`
-        : `Cập nhật chi phí ${dm}${variables.mo_ta ? ": " + variables.mo_ta : ""}`;
+        : `Cập nhật chi phí ${dm}${variables.mo_ta ? ": " + variables.mo_ta : ""}` +
+          (changes.length ? ` (${changes.join(", ")})` : "");
       log({ doan_id: variables.doan_id, action: isNew ? "tao" : "sua", table_name: "doan_chi_phi", record_id: data?.id, mo_ta: moTa });
     },
   });

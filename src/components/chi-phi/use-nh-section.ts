@@ -8,6 +8,7 @@ import {
   useChiPhiList, useUpsertChiPhi, useDeleteChiPhi, useDNTTList, useInsertDNTT,
 } from "@/hooks/use-chi-phi";
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
+import { useAuditLogger } from "@/hooks/use-activity-log";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { buildCanTruNote } from "@/lib/can-tru-note";
@@ -68,6 +69,7 @@ export function useNHSection({
   const { data: currentUserName = "" } = useCurrentUserName();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
+  const auditLog = useAuditLogger();
   const cancelMut = useCancelDNTT();
   const insertDNTT = useInsertDNTT();
   const qc = useQueryClient();
@@ -910,6 +912,13 @@ export function useNHSection({
         });
         if (error) throw error;
         await recalcChiPhiStatus([mainRow.id]);
+        auditLog({
+          doan_id: doanId,
+          action: "tao",
+          table_name: "cong_no",
+          record_id: mainRow.id,
+          mo_ta: `Ghi nhận ${lyDoLabel} ${absDelta.toLocaleString("vi-VN")} ₫ — bữa ăn ${nhName ?? ""}${nccName ? " (NCC " + nccName + ")" : ""}`,
+        });
         toast.success(
           aggSurplusMode === "hoan_tien"
             ? `Đã ghi nhận hoàn tiền ${absDelta.toLocaleString("vi-VN")} ₫`
@@ -1013,6 +1022,13 @@ export function useNHSection({
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", doanId] });
       qc.invalidateQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] });
+      auditLog({
+        doan_id: doanId,
+        action: "sua",
+        table_name: "doan_chi_phi",
+        record_id: target.chiPhiId,
+        mo_ta: `Dùng voucher ${isTang ? "(tặng)" : "(mua)"} cho ${target.itemName} — ${target.coverValue.toLocaleString("vi-VN")} ₫`,
+      });
       toast.success("Đã dùng voucher");
       setVoucherTarget(null);
     } catch (err: unknown) {
@@ -1072,6 +1088,13 @@ export function useNHSection({
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      auditLog({
+        doan_id: doanId,
+        action: "sua",
+        table_name: "doan_chi_phi",
+        record_id: chiPhiId,
+        mo_ta: `Gỡ voucher khỏi bữa ăn (khôi phục ${info.giaTri.toLocaleString("vi-VN")} ₫)`,
+      });
       toast.success("Đã gỡ voucher");
     } catch (err: unknown) {
       toast.error("Lỗi: " + (errMsg(err) || "Không gỡ được voucher"));

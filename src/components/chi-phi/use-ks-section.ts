@@ -28,6 +28,7 @@ import {
   resolveKSFoc,
 } from "@/lib/foc-calc";
 import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
+import { useAuditLogger } from "@/hooks/use-activity-log";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
@@ -73,6 +74,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
+  const auditLog = useAuditLogger();
   const cancelMut = useCancelDNTT();
   const insertDNTT = useInsertDNTT();
   const { data: currentUserName = "" } = useCurrentUserName();
@@ -321,6 +323,13 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         });
         if (error) throw error;
         if (chiPhiIds.length > 0) await recalcChiPhiStatus(chiPhiIds);
+        auditLog({
+          doan_id: doanId,
+          action: "tao",
+          table_name: "cong_no",
+          record_id: chiPhiIds[0] ?? null,
+          mo_ta: `Ghi nhận ${lyDoLabel} ${fmt(absDelta)} ₫ — KS ${ksName ?? ""}${nccName ? " (NCC " + nccName + ")" : ""}`,
+        });
         toast.success(
           aggSurplusMode === "hoan_tien"
             ? `Đã ghi nhận hoàn tiền ${fmt(absDelta)} ₫`
