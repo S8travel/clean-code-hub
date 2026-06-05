@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeEmailList, computeUncAmounts } from "./unc-email";
+import { normalizeEmailList, computeUncAmounts, ccForLoai } from "./unc-email";
 
 describe("normalizeEmailList", () => {
   it("giữ nguyên email đơn / nhiều email chuẩn", () => {
@@ -43,6 +43,29 @@ describe("normalizeEmailList", () => {
   it("null/rỗng → chuỗi rỗng", () => {
     expect(normalizeEmailList(null)).toBe("");
     expect(normalizeEmailList("")).toBe("");
+  });
+});
+
+describe("ccForLoai (UNC)", () => {
+  it("KHÔNG bao giờ CC s8travel.hddt@gmail.com cho mọi loại", () => {
+    for (const loai of ["khach_san", "nha_hang", "dich_vu", "xe", "visa", "dinh_ky", "khac", ""]) {
+      expect(ccForLoai(loai)).not.toContain("s8travel.hddt@gmail.com");
+    }
+  });
+
+  it("vẫn giữ CC điều hành (op1/op2) cho KS/NH/DV", () => {
+    expect(ccForLoai("khach_san")).toEqual(["s8travel.op2@gmail.com"]);
+    expect(ccForLoai("nha_hang")).toEqual(["s8travel.op1@gmail.com"]);
+    expect(ccForLoai("dich_vu")).toEqual(["s8travel.op1@gmail.com"]);
+  });
+
+  it("xe/visa chỉ có hddt → sau khi lọc còn rỗng", () => {
+    expect(ccForLoai("xe")).toEqual([]);
+    expect(ccForLoai("visa")).toEqual([]);
+  });
+
+  it("loại không xác định → rỗng (không fallback về hddt)", () => {
+    expect(ccForLoai("khac")).toEqual([]);
   });
 });
 

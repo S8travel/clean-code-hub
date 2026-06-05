@@ -83,6 +83,10 @@ function fmtDate(s: string | null | undefined): string {
   }
 }
 
+// UNC: KHÔNG CC hòm hóa đơn s8travel.hddt@gmail.com nữa (yêu cầu 2026-06) — vẫn
+// giữ trong BOOKING_CC cho luồng booking, chỉ lọc ở riêng luồng gửi UNC.
+const UNC_CC_EXCLUDE = "s8travel.hddt@gmail.com";
+
 export function ccForLoai(loai: string): readonly string[] {
   const k: BookingCcType | null =
     loai === "khach_san" ? "ks" :
@@ -90,7 +94,8 @@ export function ccForLoai(loai: string): readonly string[] {
     loai === "dich_vu"   ? "dv" :
     loai === "xe"        ? "xe" :
     loai === "visa"      ? "visa" : null;
-  return k ? BOOKING_CC[k] : ["s8travel.hddt@gmail.com"];
+  const base = k ? BOOKING_CC[k] : [UNC_CC_EXCLUDE];
+  return base.filter((e) => e.toLowerCase() !== UNC_CC_EXCLUDE);
 }
 
 export async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
