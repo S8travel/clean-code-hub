@@ -1,6 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import AiChat from "@/components/AiChat";
+import QuickActions from "@/components/quick-actions/QuickActions";
 import { InstallPWA } from "@/components/InstallPWA";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +21,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="flex-1 min-w-0">{children}</main>
         </div>
       </div>
-      <AiChat />
+      <QuickActions />
       <InstallPWA />
     </SidebarProvider>
   );
