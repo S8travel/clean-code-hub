@@ -1,5 +1,43 @@
 import { describe, it, expect } from "vitest";
-import { applyChietKhau, calcNHThanhTien } from "./chi-phi-calc";
+import { applyChietKhau, calcNHThanhTien, calcDnttPriorPaid, type DnttPaidLite } from "./chi-phi-calc";
+
+// ─── calcDnttPriorPaid ───────────────────────────────────────────────────────
+// Cột "Số tiền cọc" / "Đã thanh toán" bản in ĐNTT NH/DV = Σ paid_amount của các
+// ĐNTT KHÁC đã trả (cọc HOẶC trả 1 phần qua ĐNTT non-cọc).
+
+describe("calcDnttPriorPaid", () => {
+  const d = (over: Partial<DnttPaidLite> = {}): DnttPaidLite => ({
+    id: 1,
+    trang_thai_duyet: "da_duyet",
+    paid_amount: 0,
+    ...over,
+  });
+
+  it("cộng paid_amount của ĐNTT non-cọc đã trả 1 phần (bug gốc) + loại ĐNTT đang in", () => {
+    // #743 đã trả 58.760.000 (la_coc=false), đang in #858 còn lại → cọc = 58.760.000.
+    const list = [d({ id: 743, paid_amount: 58_760_000 }), d({ id: 858, paid_amount: 0 })];
+    expect(calcDnttPriorPaid(list, 858)).toBe(58_760_000);
+  });
+
+  it("loại ĐNTT đã hủy / từ chối", () => {
+    const list = [
+      d({ id: 1, paid_amount: 10_000_000, trang_thai_duyet: "da_huy" }),
+      d({ id: 2, paid_amount: 20_000_000, trang_thai_duyet: "tu_choi" }),
+      d({ id: 3, paid_amount: 30_000_000 }),
+    ];
+    expect(calcDnttPriorPaid(list, 999)).toBe(30_000_000);
+  });
+
+  it("gộp nhiều ĐNTT đã trả (cọc + bổ sung)", () => {
+    const list = [d({ id: 1, paid_amount: 40_000_000 }), d({ id: 2, paid_amount: 10_000_000 })];
+    expect(calcDnttPriorPaid(list, 999)).toBe(50_000_000);
+  });
+
+  it("paid_amount thiếu → coi như 0", () => {
+    const list = [{ id: 1, trang_thai_duyet: "da_duyet" } as DnttPaidLite];
+    expect(calcDnttPriorPaid(list, 999)).toBe(0);
+  });
+});
 
 // ─── applyChietKhau ──────────────────────────────────────────────────────────
 

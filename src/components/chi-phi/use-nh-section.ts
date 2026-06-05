@@ -18,7 +18,7 @@ import type { VoucherTarget } from "./DungVoucherModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
-import { applyChietKhau } from "@/lib/chi-phi-calc";
+import { applyChietKhau, calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -1131,10 +1131,13 @@ export function useNHSection({
           0,
         );
 
-        // Cọc đã thanh toán thực sự (paid) — chỉ trừ khi KHÔNG có ĐNTT pending.
-        // Có pending → in chính ĐNTT đó (so_tien của nó), không trừ cọc paid khác.
+        // "Số tiền cọc" = tiền đã thanh toán TRƯỚC qua các ĐNTT KHÁC của bữa này
+        // (cọc HOẶC trả 1 phần). Dùng paid_amount THỰC TẾ + KHÔNG lọc la_coc —
+        // trả 1 phần thường ghi qua ĐNTT non-cọc (la_coc=false). Có pending → vẫn
+        // cộng paid_amount của các ĐNTT khác (không phải cái đang in); KHÔNG còn ép 0
+        // (trước đây ép 0 → cột hiện "—" dù đã thanh toán 1 phần).
         const soCoc = activeDntt
-          ? 0
+          ? calcDnttPriorPaid(mealDntts, activeDntt.id)
           : mealDntts
               .filter((d) => d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
               .reduce((s, d) => s + d.so_tien, 0);
