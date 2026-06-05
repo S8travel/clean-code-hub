@@ -92,6 +92,13 @@ export function buildAuditLogger(userId: string | null | undefined, hoTen: strin
   };
 }
 
+// ── Hook tiện dụng: trả về logger fire-and-forget gắn sẵn user hiện tại ──
+// Dùng trong các section (KS/NH/DV) để khỏi lặp useAuth + buildAuditLogger.
+export function useAuditLogger() {
+  const { user } = useAuth();
+  return buildAuditLogger(user?.user_id, user?.ho_ten);
+}
+
 // ── Hook để đọc log (cho admin) ──
 export function useActivityLogList(filters: ActivityLogFilters = {}) {
   return useQuery({

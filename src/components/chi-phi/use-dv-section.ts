@@ -4,6 +4,7 @@ import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi, useDNTTAllocationsByDoan } from "@/hooks/use-chi-phi";
+import { useAuditLogger } from "@/hooks/use-activity-log";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
@@ -57,6 +58,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   const updateDNTT = useUpdateDNTT();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
+  const auditLog = useAuditLogger();
   const cancelMut = useCancelDNTT();
   const qc = useQueryClient();
   const dvCdMap = useDVCanhDiemMap(doanId);
@@ -545,6 +547,13 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         });
         if (error) throw error;
         await recalcChiPhiStatus([mainRow.id]);
+        auditLog({
+          doan_id: doanId,
+          action: "tao",
+          table_name: "cong_no",
+          record_id: mainRow.id,
+          mo_ta: `Ghi nhận ${lyDoLabel} ${fmt(absDelta)} ₫ — dịch vụ ${mainRow.mo_ta || ""}${paidDntt?.ten_nha_cung_cap ? " (NCC " + paidDntt.ten_nha_cung_cap + ")" : ""}`,
+        });
         toast.success(
           aggSurplusMode === "hoan_tien"
             ? `Đã ghi nhận hoàn tiền ${fmt(absDelta)} ₫`
