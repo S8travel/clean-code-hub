@@ -8,6 +8,7 @@ import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { buildCanTruNote } from "@/lib/can-tru-note";
+import { calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
@@ -718,12 +719,30 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           }
         }
 
-        // Cọc đã trả — chỉ khi nhóm CHƯA có ĐNTT pending (như logic cũ per-dòng).
-        const soCoc = dntt
-          ? 0
-          : grows.reduce((s, { row }) => s + dnttList
-              .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id && d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
-              .reduce((a, d) => a + d.so_tien, 0), 0);
+        // "Số tiền cọc" = tiền đã thanh toán TRƯỚC cho nhóm này. Có ĐNTT pending →
+        // Σ paid_amount THỰC TẾ của các ĐNTT KHÁC (cọc HOẶC trả 1 phần) liên kết tới
+        // các dòng trong nhóm — qua allocation HOẶC ref_id, mỗi ĐNTT đếm 1 lần (Set)
+        // để không nhân đôi khi gộp. KHÔNG lọc la_coc (trả 1 phần thường la_coc=false).
+        // Trước đây ép 0 khi có pending → cột hiện "—" dù đã thanh toán 1 phần.
+        let soCoc: number;
+        if (dntt) {
+          const priorDnttIds = new Set<number>();
+          for (const { row } of grows) {
+            const allocs = allocByChiPhi.get(row.id!);
+            if (allocs) for (const id of allocs.keys()) priorDnttIds.add(id);
+            dnttList
+              .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id)
+              .forEach((d) => priorDnttIds.add(d.id));
+          }
+          const priorDntts = [...priorDnttIds]
+            .map((id) => activeDnttById.get(id))
+            .filter((d): d is DNTTLite => !!d);
+          soCoc = calcDnttPriorPaid(priorDntts, dntt.id);
+        } else {
+          soCoc = grows.reduce((s, { row }) => s + dnttList
+            .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id && d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
+            .reduce((a, d) => a + d.so_tien, 0), 0);
+        }
 
         // ĐNTT (gộp/đơn) → in đúng số tiền ĐNTT (trừ cấn trừ), 1 khoản. Chưa có → còn lại.
         const soTienConTT = dntt

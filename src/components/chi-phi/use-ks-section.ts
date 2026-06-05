@@ -27,7 +27,7 @@ import {
   calcRowFocBreakdown,
   resolveKSFoc,
 } from "@/lib/foc-calc";
-import { fmt, fmtDateDisplay, buildKSRowFromCp, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
+import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
@@ -171,14 +171,10 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     const ngayRow = ksData.ngayRows.find((r) => r.khach_san_id === ksId);
     const codeKS = ngayRow?.ks_ma_code || "";
 
-    // cocTotal: cọc đã thanh toán đủ (paid)
-    const cocTotal = dnttList
-      .filter((d) => {
-        if (d.id === dnttId) return false;
-        if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-        return d.la_coc && d.payment_status === "paid" && d.ref_loai === "khach_san" && d.ref_id === ksId;
-      })
-      .reduce((sum, d) => sum + d.so_tien, 0);
+    // cocTotal: tiền KS đã thanh toán qua các ĐNTT KHÁC (cọc HOẶC trả 1 phần).
+    // Dùng paid_amount thực tế + KHÔNG lọc la_coc — trả 1 phần thường ghi qua ĐNTT
+    // non-cọc (la_coc=false), lọc la_coc sẽ bỏ sót → cột "Đã thanh toán" hiện "—".
+    const cocTotal = calcKSPaidTotal(dnttList, dnttId, ksId);
 
     // canTru: tổng can_tru payments của ĐNTT đang preview
     const canTruTotal = canTruByDnttId[dnttId] || 0;
