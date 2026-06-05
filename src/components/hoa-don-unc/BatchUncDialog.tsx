@@ -242,12 +242,18 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
   const handleSave = () => {
     if (pairs.length === 0) { toast({ title: t("Chưa ghép file nào"), variant: "destructive" }); return; }
+    // Dừng vòng OCR đang chạy → recompute KHÔNG đè assign/nguonRef trong lúc lưu.
+    runRef.current++;
     // Snapshot pairs trước khi mutate — saved rows sẽ disappear khỏi `rows` prop
     // sau khi trang_thai_unc='da_co' (parent filter chỉ ĐNTT thiếu UNC).
+    // CHỐT NGUỒN NGAY LÚC BẤM LƯU (đồng bộ) — KHÔNG đọc nguonRef trong onSuccess
+    // async vì nó có thể bị recompute (OCR)/refetch reset → toPay rỗng → bỏ markPaid
+    // dù badge "sẽ đánh dấu Đã TT" đã hiện.
     const snapshot = pairs.map((p) => ({
       rowId: p.id,
       row: rows.find((r) => r.id === p.id)!,
       file: p.file,
+      nguon: nguonRef.current[p.id] ?? "",
     })).filter((s) => s.row);
     batchMut.mutate(pairs, {
       onSuccess: async ({ ok, failed, errors }) => {
@@ -260,26 +266,29 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
           // (so_tien − đã trả), KHÔNG lấy theo số OCR đọc. Số tiền OCR lệch chỉ
           // là cảnh báo (badge), không chặn đánh dấu TT.
           const today = format(new Date(), "yyyy-MM-dd");
-          const toPay = snapshot.filter((s) => {
-            const fi = assignRef.current[s.rowId];
-            const nguon = nguonRef.current[s.rowId];
-            return fi !== undefined && !!nguon;
-          });
+          // Dòng có nguồn (đã chốt lúc bấm Lưu) → đánh dấu Đã TT.
+          const toPay = snapshot.filter((s) => !!s.nguon);
           let paidOk = 0;
           let paidFail = 0;
+          const paidErrors: string[] = [];
           for (const s of toPay) {
             try {
               await markPaidMut.mutateAsync({
-                id: s.rowId, ngayThanhToan: today, nguon: nguonRef.current[s.rowId],
+                id: s.rowId, ngayThanhToan: today, nguon: s.nguon,
               });
               paidOk++;
-            } catch {
+            } catch (e: unknown) {
               paidFail++;
+              paidErrors.push(`#${s.rowId}: ${errMsg(e) || String(e)}`);
             }
           }
           if (paidOk > 0) toast({ title: `${t("Đã đánh dấu Đã TT")} ${paidOk} ĐNTT` });
           if (paidFail > 0) {
-            toast({ title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`, variant: "destructive" });
+            toast({
+              title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`,
+              description: paidErrors.slice(0, 2).join(" · "),
+              variant: "destructive",
+            });
           }
 
           // Switch sang step 2 — resolve email + cho user review trước khi gửi
