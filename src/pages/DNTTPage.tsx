@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { useBoPhan, useRoleAtLeast } from "@/hooks/use-permissions";
 import { useDoanScope } from "@/hooks/use-doan-scope";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
@@ -166,10 +166,11 @@ function ApprovalCell({
 function DNTTPageContent() {
   useTranslate();
   const navigate = useNavigate();
-  const now = new Date();
   const [doanId, setDoanId] = useState<string>("");
-  const [fromDate, setFromDate] = useState<Date | undefined>(startOfMonth(now));
-  const [toDate, setToDate] = useState<Date | undefined>(endOfMonth(now));
+  // Mặc định KHÔNG giới hạn ngày → xem TẤT CẢ ĐNTT (tránh ẩn nhầm ĐNTT tạo tháng
+  // trước nhưng đến hạn TT tháng này). User tự đặt khoảng ngày khi cần.
+  const [fromDate, setFromDate] = useState<Date | undefined>(undefined);
+  const [toDate, setToDate] = useState<Date | undefined>(undefined);
   const [trangThaiDuyet, setTrangThaiDuyet] = useState("cho_duyet");
   const [loai, setLoai] = useState("");
 
@@ -320,8 +321,8 @@ function DNTTPageContent() {
 
   const resetFilters = () => {
     setDoanId("");
-    setFromDate(startOfMonth(now));
-    setToDate(endOfMonth(now));
+    setFromDate(undefined);
+    setToDate(undefined);
     setTrangThaiDuyet("");
     setLoai("");
   };
