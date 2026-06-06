@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import { saveAs } from "file-saver";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
-import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive, calcTipNDT, shouldCollectTip } from "@/lib/tip-calc";
+import { computePhaiThu } from "@/lib/phai-thu-calc";
 
 type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note" | "total" | "total_number";
 
@@ -43,12 +43,21 @@ export interface ExportDoan {
     so_cho?: number | null;
     nha_xe?: { ten?: string | null } | null;
   } | null;
-  // Tip (phải thu) — override fields trên doan
+  // Phải thu — Tip + Thu tiền đầu khách + Thu tiền quỹ VP (override fields trên doan)
   thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
   tip_lump_sum?: number | null;
+  tip_currency?: string | null;
+  tip_nguoi_thu?: string | null;
+  tip_ty_gia?: number | null;
+  dau_khach_rate?: number | null;
+  dau_khach_nguoi_thu?: string | null;
+  dau_khach_so_khach_override?: number | null;
+  quy_vp_amount?: number | null;
+  quy_vp_nguoi_thu?: string | null;
+  phai_thu_extras?: unknown;
 }
 
 /** Row ngày KS — export chỉ đọc các field này. */
@@ -957,44 +966,38 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([cell("TỔNG SỐ TIỀN TT", "total", 7), cell("VND", "total"), cell(totalHdvDV, "total_number"), cell(totalCtyDV, "total_number")]);
   rows.push([cell("", "text", 10)]);
 
-  // ─── TIP 小費 ─── (logic tách ở lib/tip-calc.ts — có unit test)
-  const soKhachTotal =
-    (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
-    (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
-    (doan?.so_khach ?? 0);
-  const soKhachTl = doan?.so_khach_tl ?? 0;
-  const autoTipSoKhach = defaultTipSoKhach(soKhachTotal, soKhachTl); // T/L không đóng tip
-  const autoTipSoNgay = tipDaysInclusive(doan?.ngay_di, doan?.ngay_ve);
-  const autoTipRate = defaultTipRate(soKhachTl);
-  const tipSoKhach = doan?.tip_so_khach_override ?? autoTipSoKhach;
-  const tipSoNgay = doan?.tip_so_ngay_override ?? autoTipSoNgay;
-  const tipRate = doan?.tip_rate ?? autoTipRate;
-  const computedTipNdt = calcTipNDT({ soKhach: tipSoKhach, soNgay: tipSoNgay, rate: tipRate });
-  const tipNdt = doan?.tip_lump_sum ?? computedTipNdt;
+  // ─── PHẢI THU 應收 ─── (Tip + Thu tiền đầu khách + Thu tiền quỹ VP + thu thêm tay)
+  // Logic tách ở lib/phai-thu-calc.ts (có unit test). Extras đã persist trong
+  // doan.phai_thu_extras → tự xuất qua phaiThu.items.
   const tyGiaNdt = params.tyGiaNdt ?? 800;
-  // Tôn trọng "Thu tiền tip": bỏ tích ở Điều tour (doan.thu_tip=false) → KHÔNG in
-  // section TIP và tip = 0 trong "Tổng thu" (mirror ChiPhiPhasThuSection.showTipRow).
-  const showTip = shouldCollectTip(doan?.thu_tip, tipSoKhach, tipSoNgay);
-  const tipVnd = showTip ? tipNdt * tyGiaNdt : 0;
+  const phaiThu = computePhaiThu(doan, tyGiaNdt);
+  const phaiThuShown = phaiThu.items.filter((it) => it.show);
 
-  if (showTip) {
-    rows.push([cell("TIP 小費", "section", 10)]);
+  if (phaiThuShown.length > 0) {
+    rows.push([cell("PHẢI THU 應收", "section", 10)]);
     rows.push([
+      cell("MỤC 項目", "header", 2),
       cell("SỐ KHÁCH", "header"),
       cell("SỐ NGÀY", "header"),
-      cell("ĐƠN GIÁ NDT/KHÁCH/NGÀY", "header", 3),
-      cell("TỶ GIÁ NDT", "header"),
-      cell("TỔNG NDT", "header", 2),
-      cell("TỔNG VND", "header", 2),
+      cell("ĐƠN GIÁ", "header", 2),
+      cell("TỶ GIÁ", "header"),
+      cell("NGƯỜI THU", "header"),
+      cell("THÀNH TIỀN VND", "header", 2),
     ]);
-    rows.push([
-      cell(tipSoKhach, "number"),
-      cell(tipSoNgay, "number"),
-      cell(tipRate, "number", 3),
-      cell(tyGiaNdt, "number"),
-      cell(tipNdt, "number", 2),
-      cell(tipVnd, "total_number", 2),
-    ]);
+    for (const it of phaiThuShown) {
+      rows.push([
+        cell(it.label, "text", 2),
+        it.soKhach == null ? cell("—") : cell(it.soKhach, "number"),
+        it.soNgay == null ? cell("—") : cell(it.soNgay, "number"),
+        cell(`${it.donGia.toLocaleString("vi-VN")} ${it.donViGoc}`, "text", 2),
+        cell(it.tyGia, "number"),
+        cell(it.nguoiThu === "hdv" ? "HDV thu" : "Công ty thu"),
+        cell(it.thanhTienVND, "total_number", 2),
+      ]);
+    }
+    rows.push([cell("Trong đó HDV thu (VND)", "total", 8), cell(phaiThu.hdvVND, "total_number", 2)]);
+    rows.push([cell("Trong đó Công ty thu (VND)", "total", 8), cell(phaiThu.ctyVND, "total_number", 2)]);
+    rows.push([cell("TỔNG PHẢI THU (VND)", "total", 8), cell(phaiThu.totalVND, "total_number", 2)]);
     rows.push([cell("", "text", 10)]);
   }
 
@@ -1004,11 +1007,11 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 
   rows.push([
     cell("TỔNG HDV CHI VND 總計", "section", 2), cell(totalHdvAll, "total_number", 3),
-    cell("TỔNG THU (VNĐ)", "label"), cell(tipVnd, "total_number", 4),
+    cell("TỔNG PHẢI THU (VNĐ)", "label"), cell(phaiThu.totalVND, "total_number", 4),
   ]);
   rows.push([
     cell("TỔNG CTY CHI VND 總計", "section", 2), cell(totalCtyAll, "total_number", 3),
-    cell("TỔNG THU TIỀN ĐOÀN (VNĐ)", "label"), cell("—", "text", 4),
+    cell("TRONG ĐÓ HDV THU (VNĐ)", "label"), cell(phaiThu.hdvVND, "total_number", 4),
   ]);
 
   return {
@@ -1021,6 +1024,8 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows, dnttList, hdvData, opName } = params;
   const activeRows = chiPhiRows.filter(isActiveChiPhi);
+  const phaiThu = computePhaiThu(doan, params.tyGiaNdt ?? 800);
+  const phaiThuShown = phaiThu.items.filter((it) => it.show);
 
   const companyRows = COMPANY_CATEGORY_ORDER.map(({ key, label }) => {
     const duTru = sumBy(activeRows, (row) => row.danh_muc === key, (row) => row.tien_cong_ty || 0);
@@ -1087,7 +1092,20 @@ function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
         cell(hdvData?.daQuyetToan ? "Có" : "Không"),
       ],
       [cell("", "text", 6)],
-      [cell("Ghi chú: file này chưa bao gồm phần 'Phải thu' đang tính tạm trên giao diện HDV.", "note", 6)],
+      [cell("PHẢI THU (TIP + ĐẦU KHÁCH + QUỸ VP)", "section", 6)],
+      [cell("Khoản thu", "header"), cell("Người thu", "header"), cell("Thành tiền (VND)", "header"), cell("", "header"), cell("", "header"), cell("", "header")],
+      ...(phaiThuShown.length > 0
+        ? phaiThuShown.map((it) => [
+            cell(it.label),
+            cell(it.nguoiThu === "hdv" ? "HDV thu" : "Công ty thu"),
+            cell(it.thanhTienVND, "number"),
+            cell("", "text"),
+            cell("", "text"),
+            cell("", "text"),
+          ])
+        : [[cell("(Không có khoản phải thu)", "note", 6)]]),
+      [cell("HDV thu", "label"), cell("", "text"), cell(phaiThu.hdvVND, "number"), cell("Công ty thu", "label"), cell(phaiThu.ctyVND, "number"), cell("", "text")],
+      [cell("Tổng phải thu", "label"), cell("", "text"), cell(phaiThu.totalVND, "number"), cell("", "text"), cell("", "text"), cell("", "text")],
     ],
   };
 }

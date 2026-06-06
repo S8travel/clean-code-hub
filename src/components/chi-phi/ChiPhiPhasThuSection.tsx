@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { shouldCollectTip } from "@/lib/tip-calc";
+import { parsePhaiThuExtras, type PhaiThuExtra } from "@/lib/phai-thu-calc";
 import { t, useTranslate } from "@/lib/i18n";
 import { useUpdateDoanTip } from "@/hooks/use-doan";
 import type { HDVDoanInfo } from "./ChiPhiHDVSection";
@@ -73,19 +74,31 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
     updateTip.mutate({ id: doanId, tip_rate: next });
   };
 
-  // ── Tip currency + tỷ giá (local-only, không persist tới doan) ────────────
-  const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>("NDT");
-  const [tyGia, setTyGia] = useState<number>(() => {
-    const saved = localStorage.getItem("hdv_ty_gia_ndt");
-    return saved ? Number(saved) : 800;
-  });
-  const handleTyGiaChange = (v: number) => {
-    setTyGia(v);
-    localStorage.setItem("hdv_ty_gia_ndt", String(v));
+  // ── Tip currency (persist doan.tip_currency) ──────────────────────────────
+  const effTipCurrency = (doan?.tip_currency ?? "NDT") as LoaiTien;
+  const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>(effTipCurrency);
+  useEffect(() => { setTipLoaiTien(effTipCurrency); }, [effTipCurrency]);
+  const handleTipCurrencyChange = (v: LoaiTien) => {
+    setTipLoaiTien(v);
+    if (v !== (doan?.tip_currency ?? "NDT")) updateTip.mutate({ id: doanId, tip_currency: v });
   };
 
-  // ── Người thu (local — không có DB field) ─────────────────────────────────
-  const [tipNguoiThu, setTipNguoiThu] = useState<NguoiThu>("hdv");
+  // ── Tip tỷ giá (persist doan.tip_ty_gia; localStorage chỉ làm default cho đoàn mới) ─
+  const effTyGia = doan?.tip_ty_gia ?? (Number(localStorage.getItem("hdv_ty_gia_ndt")) || 800);
+  const [tyGia, setTyGia] = useState<number>(effTyGia || 800);
+  useEffect(() => { setTyGia(effTyGia || 800); }, [effTyGia]);
+  const handleTyGiaChange = (v: number) => {
+    setTyGia(v);
+    localStorage.setItem("hdv_ty_gia_ndt", String(v)); // seed default cho đoàn mới
+  };
+  const saveTyGia = (v: number) => {
+    if (v !== (doan?.tip_ty_gia ?? null)) updateTip.mutate({ id: doanId, tip_ty_gia: v || null });
+  };
+
+  // ── Người thu tip (persist doan.tip_nguoi_thu) ────────────────────────────
+  const tipNguoiThu = (doan?.tip_nguoi_thu ?? "hdv") as NguoiThu;
+  const toggleTipNguoiThu = () =>
+    updateTip.mutate({ id: doanId, tip_nguoi_thu: tipNguoiThu === "cong_ty" ? "hdv" : "cong_ty" });
 
   // ── Có thu tip không (bỏ tích "Thu tiền tip" ở Điều tour → ẩn dòng tip) ────
   const showTipRow = shouldCollectTip(doan?.thu_tip, effSoKhach, effSoNgay);
@@ -126,18 +139,54 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
   const saveVp = (patch: Partial<{ quy_vp_amount: number | null; quy_vp_nguoi_thu: string | null }>) =>
     updateTip.mutate({ id: doanId, ...patch });
 
-  // ── Extras (local) ─────────────────────────────────────────────────────────
-  const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
-  const addRow = () =>
-    setExtraRows((prev) => [...prev, { id: Date.now(), moTa: "", soTien: 0, loaiTien: "NDT", tyGia, nguoiThu: "hdv" }]);
+  // ── Extras (persist doan.phai_thu_extras) ─────────────────────────────────
+  // Local state cho gõ mượt; persist toàn mảng xuống DB khi blur/đổi/thêm/xóa.
+  // lastSavedRef = JSON đã lưu gần nhất → phân biệt thay đổi external (tab khác)
+  // với chính ta vừa lưu, tránh clobber khi đang gõ.
+  const extrasFromDoan = (): ExtraRow[] =>
+    parsePhaiThuExtras(doan?.phai_thu_extras).map((e, i) => ({ id: i + 1, ...e }));
+  const serverExtrasJson = JSON.stringify(parsePhaiThuExtras(doan?.phai_thu_extras));
+  const lastSavedRef = useRef(serverExtrasJson);
+  const [extraRows, setExtraRows] = useState<ExtraRow[]>(extrasFromDoan);
+  useEffect(() => {
+    // Chỉ re-sync khi server đổi do nguồn khác (không phải lần lưu của chính ta).
+    if (serverExtrasJson !== lastSavedRef.current) {
+      lastSavedRef.current = serverExtrasJson;
+      setExtraRows(parsePhaiThuExtras(doan?.phai_thu_extras).map((e, i) => ({ id: i + 1, ...e })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverExtrasJson]);
+
+  const persistExtras = (rows: ExtraRow[]) => {
+    const payload: PhaiThuExtra[] = rows.map(({ id: _id, ...r }) => r);
+    const json = JSON.stringify(payload);
+    if (json === lastSavedRef.current) return;
+    lastSavedRef.current = json;
+    updateTip.mutate({ id: doanId, phai_thu_extras: payload });
+  };
+
+  const addRow = () => {
+    const next: ExtraRow = { id: Date.now(), moTa: "", soTien: 0, loaiTien: "NDT", tyGia, nguoiThu: "hdv" };
+    setExtraRows((prev) => [...prev, next]);
+  };
   const removeRow = (id: number) =>
-    setExtraRows((prev) => prev.filter((r) => r.id !== id));
+    setExtraRows((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      persistExtras(next);
+      return next;
+    });
+  // updateRow: chỉ cập nhật local (persist qua onBlur / commit riêng).
   const updateRow = <K extends keyof Omit<ExtraRow, "id">>(id: number, field: K, val: ExtraRow[K]) =>
     setExtraRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
+  // commitRow: persist toàn mảng (gọi onBlur input / sau khi đổi select/toggle).
+  const commitRow = (id: number, patch: Partial<Omit<ExtraRow, "id">>) =>
+    setExtraRows((prev) => {
+      const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r));
+      persistExtras(next);
+      return next;
+    });
   const handleLoaiTienChange = (id: number, val: LoaiTien) =>
-    setExtraRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, loaiTien: val, tyGia: val === "VND" ? 1 : r.tyGia } : r))
-    );
+    commitRow(id, { loaiTien: val, ...(val === "VND" ? { tyGia: 1 } : {}) });
 
   const extraTotalVND = extraRows.reduce((s, r) => s + r.soTien * r.tyGia, 0);
   // dkVND/vpVND đã = VND (currency hardcode VND → tỷ giá = 1)
@@ -200,7 +249,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                     {coTL ? t("Có T/L") : t("Không T/L")}
                   </span>
                   <button
-                    onClick={() => setTipNguoiThu((v) => v === "cong_ty" ? "hdv" : "cong_ty")}
+                    onClick={toggleTipNguoiThu}
                     disabled={locked}
                     className={cn(
                       "px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
@@ -260,7 +309,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                       doan?.tip_rate != null && "border-amber-300 text-amber-700",
                     )}
                   />
-                  <Select value={tipLoaiTien} onValueChange={(v) => setTipLoaiTien(v as LoaiTien)} disabled={locked}>
+                  <Select value={tipLoaiTien} onValueChange={(v) => handleTipCurrencyChange(v as LoaiTien)} disabled={locked}>
                     <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
                       <SelectValue>{tipLoaiTien}</SelectValue>
                     </SelectTrigger>
@@ -283,6 +332,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                     type="number"
                     value={tyGia || ""}
                     onChange={(e) => handleTyGiaChange(Number(e.target.value) || 0)}
+                    onBlur={() => saveTyGia(tyGia)}
                     disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
                   />
@@ -410,13 +460,14 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                       <Input
                         value={row.moTa}
                         onChange={(e) => updateRow(row.id, "moTa", e.target.value)}
+                        onBlur={() => commitRow(row.id, { moTa: row.moTa })}
                         disabled={locked}
                         className="h-6 text-xs px-1.5"
                         placeholder={t("Mô tả khoản thu...")}
                         autoFocus
                       />
                       <button
-                        onClick={() => updateRow(row.id, "nguoiThu", row.nguoiThu === "cong_ty" ? "hdv" : "cong_ty")}
+                        onClick={() => commitRow(row.id, { nguoiThu: row.nguoiThu === "cong_ty" ? "hdv" : "cong_ty" })}
                         disabled={locked}
                         className={cn(
                           "shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed",
@@ -437,6 +488,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                         type="number"
                         value={row.soTien || ""}
                         onChange={(e) => updateRow(row.id, "soTien", Number(e.target.value) || 0)}
+                        onBlur={() => commitRow(row.id, { soTien: row.soTien })}
                         disabled={locked}
                         className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
                         placeholder="0"
@@ -464,6 +516,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                         type="number"
                         value={isVND ? 1 : (row.tyGia || "")}
                         onChange={(e) => !isVND && updateRow(row.id, "tyGia", Number(e.target.value) || 0)}
+                        onBlur={() => !isVND && commitRow(row.id, { tyGia: row.tyGia })}
                         disabled={isVND || locked}
                         className="h-6 text-xs px-1.5 py-0 text-center w-[72px] disabled:opacity-50"
                       />

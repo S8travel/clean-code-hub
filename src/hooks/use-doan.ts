@@ -817,6 +817,10 @@ export function useUpdateDoanTip() {
       tip_so_khach_override?: number | null;
       tip_so_ngay_override?: number | null;
       tip_lump_sum?: number | null;
+      tip_currency?: string | null;
+      tip_nguoi_thu?: string | null;
+      tip_ty_gia?: number | null;
+      phai_thu_extras?: unknown;
       dau_khach_rate?: number | null;
       dau_khach_currency?: string | null;
       dau_khach_ty_gia?: number | null;
