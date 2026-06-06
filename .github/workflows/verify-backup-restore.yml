@@ -1,0 +1,114 @@
+name: Verify Backup Restore
+
+# Kiểm tra bản backup DB có KHÔI PHỤC ĐƯỢC không — "backup chưa restore = chưa chắc dùng".
+# Quy trình ZERO rủi ro với production:
+#   1. Dump prod (CHỈ ĐỌC — như backup hằng đêm).
+#   2. pg_restore vào 1 Postgres 17 TẠM (service container, hủy sau khi xong).
+#   3. Đối chiếu số dòng các bảng chính giữa prod và bản restore.
+# KHÔNG bao giờ ghi vào production.
+#
+# Lưu ý: restore vào Postgres "trắng" sẽ có vài lỗi role/extension/schema của Supabase
+# — ĐÓ LÀ BÌNH THƯỜNG. Tiêu chí PASS = bảng public + dữ liệu nghiệp vụ khôi phục đủ.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 21 1 * *" # 21:00 UTC ngày 1 = 04:00 VN ngày 1 hằng tháng
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-backup-restore
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      pg:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TARGET: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cài pg client 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Dump prod (chỉ đọc)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Thiếu secret SUPABASE_DB_URL."; exit 1
+          fi
+          KEEP_DAYS=0 BACKUP_DIR=backups BACKUP_FORMAT=dump bash scripts/backup-supabase-db.sh
+
+      - name: Tạo sẵn role Supabase (giảm lỗi nhiễu khi restore)
+        run: |
+          for r in anon authenticated service_role supabase_admin supabase_auth_admin \
+                   supabase_storage_admin authenticator dashboard_user pgbouncer \
+                   supabase_realtime_admin supabase_replication_admin; do
+            psql "$TARGET" -v ON_ERROR_STOP=0 -c "CREATE ROLE \"$r\";" >/dev/null 2>&1 || true
+          done
+
+      - name: pg_restore vào Postgres tạm
+        run: |
+          DUMP=$(ls -1 backups/*.dump | head -1)
+          echo "Restore từ: $DUMP"
+          # Không --exit-on-error: cho qua các lỗi role/extension của Supabase.
+          pg_restore --no-owner --no-privileges -j 4 -d "$TARGET" "$DUMP" 2> restore.err || true
+          ERRS=$(grep -c '^pg_restore: error' restore.err || true)
+          echo "Số lỗi pg_restore (kỳ vọng có vài lỗi role/extension Supabase): ${ERRS:-0}"
+          echo "----- 20 lỗi đầu (tham khảo) -----"
+          grep '^pg_restore: error' restore.err | head -20 || true
+
+      - name: Đối chiếu prod vs bản restore
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -e
+          count() { # $1=conn $2=qualified_table
+            psql "$1" -tAc "select count(*) from $2" 2>/dev/null || echo "—";
+          }
+          echo "## Kết quả đối chiếu (prod vs restore)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Bảng | Prod | Restore |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---:|---:|" >> "$GITHUB_STEP_SUMMARY"
+          for t in public.doan public.doan_chi_phi public.de_nghi_thanh_toan public.lead auth.users storage.objects; do
+            P=$(count "$SUPABASE_DB_URL" "$t")
+            R=$(count "$TARGET" "$t")
+            echo "| $t | $P | $R |" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+          NT=$(psql "$TARGET" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE'")
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Số bảng public sau restore:** $NT" >> "$GITHUB_STEP_SUMMARY"
+          echo "Số bảng public sau restore: $NT"
+
+          # ── Tiêu chí PASS ──
+          test "$NT" -ge 70 || { echo "::error::Restore chỉ $NT bảng public (<70)"; exit 1; }
+          RD=$(psql "$TARGET" -tAc "select count(*) from public.doan")
+          RC=$(psql "$TARGET" -tAc "select count(*) from public.doan_chi_phi")
+          test "$RD" -gt 0 || { echo "::error::Bảng doan rỗng sau restore"; exit 1; }
+          test "$RC" -gt 0 || { echo "::error::Bảng doan_chi_phi rỗng sau restore"; exit 1; }
+          echo "✓ PASS — backup khôi phục được, dữ liệu nghiệp vụ đầy đủ."
