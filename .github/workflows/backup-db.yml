@@ -1,0 +1,59 @@
+name: Backup Supabase DB
+
+# Sao lưu toàn bộ DB Supabase định kỳ, lưu file dump dưới dạng artifact
+# (tải về từ tab Actions → run → Artifacts). Chạy độc lập, không cần máy bạn bật.
+#
+# YÊU CẦU: thêm secret repo `SUPABASE_DB_URL` (Settings → Secrets and variables →
+# Actions → New repository secret). Dùng SESSION POOLER URI (IPv4, hợp CI):
+#   postgresql://postgres.lflsbwoqzmbknzdpaequ:<MẬT-KHẨU>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres
+# (Dashboard → Project Settings → Database → Connection string → Session pooler.)
+
+on:
+  schedule:
+    - cron: "0 19 * * *" # 19:00 UTC = 02:00 giờ VN mỗi ngày
+  workflow_dispatch: {} # cho phép bấm chạy tay
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-db
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cài pg_dump 17 (khớp Postgres của Supabase)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Dump DB
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Thiếu secret SUPABASE_DB_URL — thêm ở Settings → Secrets → Actions."
+            exit 1
+          fi
+          # KEEP_DAYS=0: không tự xoá trong CI (mỗi run là máy mới); retention do artifact lo.
+          KEEP_DAYS=0 BACKUP_DIR=backups BACKUP_FORMAT=dump bash scripts/backup-supabase-db.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-db-backup-${{ github.run_id }}
+          path: backups/*.dump
+          retention-days: 14
+          if-no-files-found: error
