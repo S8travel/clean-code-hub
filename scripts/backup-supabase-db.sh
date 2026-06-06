@@ -50,6 +50,7 @@ dump_with_pg_dump() {
     echo "✓ Xong: $out"
     echo "  Khôi phục: pg_restore --no-owner -d \"\$SUPABASE_DB_URL\" \"$out\""
   fi
+  DUMP_OUT="$out"
   return 0
 }
 
@@ -62,16 +63,34 @@ dump_with_cli() {
   supabase db dump --db-url "$SUPABASE_DB_URL" -f "$out"
   gzip -9 "$out"
   echo "✓ Xong: ${out}.gz"
+  DUMP_OUT="${out}.gz"
   return 0
 }
 
-if ! dump_with_pg_dump; then
-  if ! dump_with_cli; then
-    echo "✗ Không tìm thấy 'pg_dump' lẫn 'supabase' CLI. Cài một trong hai:" >&2
-    echo "  - pg_dump:  Ubuntu 'sudo apt install postgresql-client' | macOS 'brew install libpq'" >&2
-    echo "  - Supabase CLI: https://supabase.com/docs/guides/cli" >&2
+# Chọn công cụ TRƯỚC rồi mới gọi dumper trực tiếp (KHÔNG gọi trong `if !` — làm
+# vậy bash tắt `set -e` bên trong hàm → pg_dump lỗi vẫn "thành công", ghi file rác).
+# Gọi trực tiếp: set -e còn hiệu lực → pg_dump lỗi sẽ abort cả script.
+DUMP_OUT=""
+if command -v pg_dump >/dev/null 2>&1; then
+  dump_with_pg_dump
+elif command -v supabase >/dev/null 2>&1; then
+  dump_with_cli
+else
+  echo "✗ Không tìm thấy 'pg_dump' lẫn 'supabase' CLI. Cài một trong hai:" >&2
+  echo "  - pg_dump:  Ubuntu 'sudo apt install postgresql-client' | macOS 'brew install libpq'" >&2
+  echo "  - Supabase CLI: https://supabase.com/docs/guides/cli" >&2
+  exit 1
+fi
+
+# Chốt chặn: file dump quá nhỏ (< 1KB) = gần như rỗng → coi như lỗi, đừng để
+# tưởng nhầm là đã sao lưu. (DB thật luôn lớn hơn nhiều.)
+if [[ -n "$DUMP_OUT" && -f "$DUMP_OUT" ]]; then
+  SIZE=$(wc -c < "$DUMP_OUT")
+  if [[ "$SIZE" -lt 1024 ]]; then
+    echo "✗ File dump chỉ $SIZE bytes — gần như rỗng. Sao lưu THẤT BẠI (kiểm tra log pg_dump phía trên)." >&2
     exit 1
   fi
+  echo "  Kích thước: $SIZE bytes"
 fi
 
 # Dọn backup cũ hơn KEEP_DAYS ngày.
