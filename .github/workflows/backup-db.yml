@@ -37,7 +37,12 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          pg_dump --version
+          # Runner sẵn có pg_dump 16 trong PATH → ép dùng binary 17 ở bước sau.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          # Kiểm tra binary 17 thật sự (server Supabase là PG17, mismatch sẽ fail dump).
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_dump --version | grep -q ' 17\.' \
+            || { echo "::error::pg_dump không phải v17"; exit 1; }
 
       - name: Dump DB
         env:
