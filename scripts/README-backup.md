@@ -69,7 +69,58 @@ Hoặc bằng CLI: `gh secret set SUPABASE_DB_URL` rồi dán URI.
 Tạo Task chạy `bash` (Git Bash/WSL) gọi script theo lịch, với biến môi trường
 `SUPABASE_DB_URL` đặt sẵn trong Task.
 
+---
+
+# Sao lưu FILE Storage (hóa đơn/UNC/ảnh) lên Google Drive
+
+> ⚠️ `pg_dump` **KHÔNG** sao lưu nội dung file đã upload (chỉ có metadata). File thật
+> nằm trong Supabase Storage (~308 MB, chủ yếu bucket `dntt-documents`). Supabase
+> backup (kể cả Pro) cũng KHÔNG gồm file Storage → phải sao lưu riêng.
+
+Workflow `.github/workflows/backup-storage.yml` chạy **hằng tuần** (03:00 CN giờ VN)
++ bấm tay được. Dùng `rclone copy` (**chỉ thêm, không xoá** — file bị xoá/hack ở
+Supabase vẫn còn trong backup) từ Supabase (S3 endpoint) → Google Drive folder
+`s8-supabase-backup/`.
+
+Cần **1 secret repo `RCLONE_CONF`** = nội dung `rclone.conf` có 2 remote. Làm 1 lần:
+
+### B1. Lấy Supabase Storage S3 key
+Dashboard → **Project Settings → Storage → S3 Connection** → **New access key**.
+Ghi lại: `access key id`, `secret`, endpoint
+`https://lflsbwoqzmbknzdpaequ.storage.supabase.co/storage/v1/s3`, region `ap-northeast-2`.
+
+### B2. Cài rclone trên máy + tạo 2 remote
+Cài rclone (https://rclone.org/downloads/), chạy `rclone config`:
+- Remote tên **`supabase`**, type `s3`, provider `Other`, dán access key/secret,
+  region `ap-northeast-2`, endpoint như trên.
+- Remote tên **`gdrive`**, type `drive`, để trống client_id/secret (Enter), scope
+  chọn `drive`, rồi `y` để mở trình duyệt đăng nhập Google + cho phép (bước này CẦN
+  máy có trình duyệt — không làm trên CI được).
+
+> Tên 2 remote phải đúng `supabase` và `gdrive` (workflow gọi theo tên này).
+
+### B3. Bổ sung dòng path-style cho remote supabase
+Mở file config (`rclone config file` để biết đường dẫn), trong mục `[supabase]` thêm:
+```
+force_path_style = true
+```
+
+### B4. Test thử local
+```
+rclone lsd supabase:                 # phải liệt kê các bucket
+rclone copy supabase:doan-files gdrive:s8-supabase-backup/doan-files -v
+```
+
+### B5. Đưa config thành secret
+`rclone config file` → mở file đó, copy **toàn bộ** nội dung → GitHub repo →
+**Settings → Secrets and variables → Actions → New repository secret**, tên
+`RCLONE_CONF`, dán vào. Xong → bấm **Actions → Backup Supabase Storage → Run workflow**.
+
+---
+
 ## Lưu ý bảo mật
 
 - Thư mục `backups/` đã được thêm vào `.gitignore` — **không bao giờ commit**.
 - File dump chứa **dữ liệu thật**; lưu nơi an toàn, cân nhắc mã hoá khi sao lưu xa.
+- Secret `SUPABASE_DB_URL`, `RCLONE_CONF` chứa thông tin nhạy cảm — chỉ để trong
+  GitHub Secrets, KHÔNG commit vào repo.
