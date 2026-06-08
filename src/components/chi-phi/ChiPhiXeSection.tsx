@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
-import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus } from "lucide-react";
+import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Plus, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -20,8 +20,12 @@ import type { DNTTRow } from "@/hooks/use-chi-phi";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
+import { useCurrentUserName } from "@/hooks/use-doan";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT } from "@/lib/xe-calc";
+import { externalSupabase } from "@/lib/supabase-external";
+import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
+import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
@@ -38,22 +42,31 @@ interface CancelTarget { dnttId: number; isPaid: boolean }
 interface XeInfo {
   ten_xe?: string | null;
   so_cho?: number | null;
-  nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
+  nha_xe?: {
+    ten?: string | null;
+    nha_cung_cap_id?: number | null;
+    /** Thông tin TK ngân hàng nhà xe (multi-line) → in vào ĐNTT. */
+    tai_khoan_thanh_toan?: string | null;
+  } | null;
 }
 
 interface Props {
   doanId: number;
   xe: XeInfo | null;
+  tenDoan?: string;
+  /** Ngày bắt đầu đoàn (YYYY-MM-DD) — dùng làm ngày mặc định trên ĐNTT in. */
+  ngayBatDau?: string;
   /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
   locked?: boolean;
 }
 
-export default function ChiPhiXeSection({ doanId, xe, locked = false }: Props) {
+export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locked = false }: Props) {
   useTranslate();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
+  const { data: currentUserName = "" } = useCurrentUserName();
 
   const canTruByDnttId = useMemo(() => {
     // payment_so_tien đã pro-rate per-allocation trong usePaymentsByChiPhi.
@@ -110,8 +123,13 @@ export default function ChiPhiXeSection({ doanId, xe, locked = false }: Props) {
   const [addExtraForId, setAddExtraForId] = useState<number | null>(null);
   const [extraFields, setExtraFields] = useState({ mo_ta: "", so_luong: 1, don_gia_raw: 0, vat_pct: XE_VAT_DEFAULT });
 
+  // In ĐNTT (Word) — preview modal dùng chung mẫu với Dịch vụ
+  const [previewData, setPreviewData] = useState<NHDocData | null>(null);
+
   const xeRows = chiPhiRows.filter((r) => r.danh_muc === "xe");
   const total = xeRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
+  // Dòng xe công ty trả → mới in được ĐNTT (HDV trả thì không qua flow này).
+  const companyXeRows = xeRows.filter((r) => r.tien_cong_ty > 0);
 
   const xeLabel = xe
     ? [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} ${t("chỗ")}` : ""].filter(Boolean).join(" · ")
@@ -233,6 +251,89 @@ export default function ChiPhiXeSection({ doanId, xe, locked = false }: Props) {
     });
   };
 
+  // ── In ĐNTT (Word) ────────────────────────────────────────────────────────
+  // Lấy mẫu của Dịch vụ: build entries từ các dòng xe công ty trả (gộp theo NCC),
+  // mở DNTTNHPreviewModal để xem/sửa rồi xuất Word. Dùng cho đoàn thanh toán xe
+  // trực tiếp (cần tờ ĐNTT giấy, không bắt buộc qua flow duyệt).
+  const handlePrintDNTT = async () => {
+    if (companyXeRows.length === 0) {
+      toast.warning(t("Không có dòng xe công ty trả để in ĐNTT"));
+      return;
+    }
+    try {
+      const nccIds = Array.from(
+        new Set(companyXeRows.map((r) => r.nha_cung_cap_id).filter((x): x is number => x != null)),
+      );
+      const nccMap: Record<number, { ten: string; so_tai_khoan?: string; ngan_hang?: string }> = {};
+      if (nccIds.length > 0) {
+        const { data: nccs } = await externalSupabase
+          .from("nha_cung_cap")
+          .select("id, ten, so_tai_khoan, ngan_hang")
+          .in("id", nccIds);
+        for (const ncc of nccs ?? []) {
+          nccMap[ncc.id] = {
+            ten: ncc.ten,
+            so_tai_khoan: ncc.so_tai_khoan ?? undefined,
+            ngan_hang: ncc.ngan_hang ?? undefined,
+          };
+        }
+      }
+      // Ngày bắt đầu đoàn (YYYY-MM-DD) → DD/MM/YYYY làm ngày mặc định (user sửa được).
+      const ngayLabel = ngayBatDau && /^\d{4}-\d{2}-\d{2}/.test(ngayBatDau)
+        ? ngayBatDau.slice(0, 10).split("-").reverse().join("/")
+        : "";
+
+      // Gộp các dòng xe theo NCC (null → key 0) → 1 entry/NCC.
+      const groups = new Map<number, typeof companyXeRows>();
+      for (const r of companyXeRows) {
+        const key = r.nha_cung_cap_id ?? 0;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(r);
+      }
+
+      // TK ngân hàng nhà xe (nhập ở trang Nhà xe) — ưu tiên in lên ĐNTT thay vì NCC.
+      const xeNccKey = xe?.nha_xe?.nha_cung_cap_id ?? 0;
+      const xeTktt = xe?.nha_xe?.tai_khoan_thanh_toan?.trim() || null;
+
+      const entries: NHDocEntry[] = [];
+      for (const [key, grows] of groups) {
+        const isGop = grows.length > 1;
+        const ncc = key !== 0 ? (nccMap[key] ?? null) : null;
+        // don_gia đã gồm VAT → so_luong*don_gia = tien_cong_ty (Word không áp CK cho xe).
+        const items = grows.map((r) => ({
+          so_luong: r.so_luong,
+          don_gia: r.don_gia,
+          ghi_chu: isGop ? (r.mo_ta || t("Xe")) : "",
+        }));
+        const totalCty = grows.reduce((s, r) => s + r.tien_cong_ty, 0);
+        entries.push({
+          ngay_date: ngayLabel,
+          ten_nh: ncc?.ten ?? xeLabel ?? grows[0].mo_ta ?? t("Xe"),
+          so_khach: grows.reduce((s, r) => s + r.so_luong, 0),
+          foc_khach: null,
+          foc: null,
+          items,
+          ncc,
+          // Nhóm thuộc đúng nhà xe → dùng TK nhà xe; nhóm NCC khác → để Word fallback ncc.
+          tai_khoan_thanh_toan: key === xeNccKey ? xeTktt : null,
+          so_tien_coc: 0,
+          can_tru: 0,
+          so_tien_con_tt: totalCty,
+          la_coc: false,
+          multi_service: isGop,
+        });
+      }
+
+      setPreviewData({
+        doan: { ten_doan: tenDoan || String(doanId) },
+        entries,
+        nguoiDeNghi: currentUserName,
+      });
+    } catch (err: unknown) {
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
+    }
+  };
+
   // ── ĐNTT handlers ─────────────────────────────────────────────────────────
   const openModal = (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null) => {
     setModal({ chiPhiId, thanhTien, moTa, nccId });
@@ -293,6 +394,12 @@ export default function ChiPhiXeSection({ doanId, xe, locked = false }: Props) {
         </div>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-xs text-muted-foreground">{t("Tổng:")} {fmt(total)} ₫</span>}
+          {companyXeRows.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handlePrintDNTT}>
+              <Printer className="h-3.5 w-3.5" />
+              {t("In ĐNTT")}
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleAddXe} disabled={upsertMut.isPending || locked}>
             + {t("Thêm")}
           </Button>
@@ -655,6 +762,13 @@ export default function ChiPhiXeSection({ doanId, xe, locked = false }: Props) {
           </table>
         </div>
       )}
+
+      {/* In ĐNTT (Word) — preview + xuất, dùng chung modal với Dịch vụ */}
+      <DNTTNHPreviewModal
+        open={!!previewData}
+        data={previewData}
+        onClose={() => setPreviewData(null)}
+      />
 
       {/* ĐNTT Modal */}
       <Dialog open={!!modal} onOpenChange={(v) => { if (!v) setModal(null); }}>
