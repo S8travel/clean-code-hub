@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ const TRANG_THAI_CFG: Record<string, { labelKey: string; cls: string }> = {
   khong_can:  { labelKey: "Không cần",  cls: "text-muted-foreground" },
 };
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <p className="text-[10px] text-muted-foreground">{label}</p>
@@ -156,7 +157,24 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
             {task.han_xu_ly && (
               <InfoRow label={t("Hạn xử lý")} value={format(parseISO(task.han_xu_ly), "dd/MM/yyyy")} />
             )}
-            {task.ten_doan && <InfoRow label={t("Đoàn")} value={task.ten_doan} />}
+            {task.ten_doan && (
+              <InfoRow
+                label={t("Đoàn")}
+                value={
+                  task.doan_id ? (
+                    <Link
+                      to={`/doan/${task.doan_id}`}
+                      onClick={handleClose}
+                      className="text-primary hover:underline"
+                    >
+                      {task.ten_doan}
+                    </Link>
+                  ) : (
+                    task.ten_doan
+                  )
+                }
+              />
+            )}
           </div>
 
           {/* Description */}

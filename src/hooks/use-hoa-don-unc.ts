@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { TablesInsert } from "@/lib/database.types";
+import { formatHoaDonLechMoTa } from "@/lib/hoa-don-lech";
 
 export type TrangThaiDoc = "chua_co" | "da_co" | "khong_can";
 
@@ -150,7 +151,9 @@ export function useHoaDonUNCSummary() {
       const [chuaTT, daTT, thieuHD, thieuUNC] = await Promise.all([
         base().neq("payment_status", "paid"),
         base().eq("payment_status", "paid"),
-        base().eq("payment_status", "paid").eq("trang_thai_hoa_don", "chua_co"),
+        // Dòng cọc KHÔNG cần hóa đơn riêng — NCC xuất 1 HĐ gộp cho cả chi phí
+        // ở dòng ĐNTT còn lại. Loại la_coc khỏi đếm "thiếu hóa đơn".
+        base().eq("payment_status", "paid").eq("trang_thai_hoa_don", "chua_co").eq("la_coc", false),
         base().eq("payment_status", "paid").eq("trang_thai_unc", "chua_co"),
       ]);
       return {
@@ -181,7 +184,11 @@ export function useUpdateDocStatus() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
+      // Badge trạng thái hóa đơn ở tab Chi phí đọc qua ["de_nghi_thanh_toan", doanId].
+      qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
+    },
   });
 }
 
@@ -200,9 +207,12 @@ export function useUploadDNTTDoc() {
       const ext = file.name.split(".").pop() ?? "bin";
       const path = `${id}/${loaiDoc}/${Date.now()}.${ext}`;
 
+      // KHÔNG dùng upsert: path luôn duy nhất (timestamp). upsert=true bật nhánh
+      // INSERT…ON CONFLICT DO UPDATE → đụng UPDATE policy của bucket → lỗi RLS
+      // "new row violates row-level security policy". Insert thuần là đủ.
       const { error: uploadErr } = await externalSupabase.storage
         .from("dntt-documents")
-        .upload(path, file, { upsert: true });
+        .upload(path, file);
       if (uploadErr) throw uploadErr;
 
       const { data: urlData } = externalSupabase.storage
@@ -244,13 +254,15 @@ export function useSaveHoaDonSoTien() {
       const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN") + " ₫";
       const hd = p.hoaDonSoTien;
 
-      const { error: updErr } = await externalSupabase
+      const { data: dnttRow, error: updErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .update({
           hoa_don_so_tien: hd,
           trang_thai_hoa_don: hd != null ? "da_co" : "chua_co",
         })
-        .eq("id", p.id);
+        .eq("id", p.id)
+        .select("loai, mo_ta, ten_nha_cung_cap")
+        .single();
       if (updErr) throw updErr;
 
       const marker = `[HĐ#${p.id}]`;
@@ -333,9 +345,17 @@ export function useSaveHoaDonSoTien() {
 
       if (!recipient) return { mismatch: true, notified: false };
 
-      const moTa = `${marker} Hóa đơn nhập ${fmt(hd)} ≠ số tiền ĐNTT ${fmt(p.dnttSoTien)} ` +
-        `(lệch ${lech > 0 ? "+" : ""}${fmt(lech)})${p.tenDoan ? ` · Đoàn ${p.tenDoan}` : ""}. ` +
-        `Kiểm tra & xử lý.`;
+      // Message ghi RÕ ĐNTT đó cho dịch vụ gì (loại + mô tả). Bắt đầu bằng marker
+      // [HĐ#id] để dedupe ilike vẫn khớp.
+      const moTa = formatHoaDonLechMoTa({
+        id: p.id,
+        hoaDon: hd,
+        dnttSoTien: p.dnttSoTien,
+        loai: dnttRow?.loai,
+        dnttMoTa: dnttRow?.mo_ta,
+        ncc: dnttRow?.ten_nha_cung_cap,
+        tenDoan: p.tenDoan,
+      });
       const tbNoiDung = `HĐ ${fmt(hd)} ≠ ĐNTT ${fmt(p.dnttSoTien)} (lệch ${lech > 0 ? "+" : ""}${fmt(lech)})` +
         `${p.tenDoan ? ` · ${p.tenDoan}` : ""}`;
 
@@ -408,7 +428,7 @@ export function useBatchUploadUNC() {
           const path = `${id}/unc/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
           const { error: upErr } = await externalSupabase.storage
             .from("dntt-documents")
-            .upload(path, file, { upsert: true });
+            .upload(path, file); // path duy nhất → KHÔNG upsert (tránh lỗi RLS nhánh UPDATE)
           if (upErr) throw new Error(`ĐNTT #${id}: ${upErr.message}`);
           const { data: urlData } = externalSupabase.storage
             .from("dntt-documents")

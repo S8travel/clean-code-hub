@@ -1,7 +1,8 @@
 import { useMemo, useState, useRef } from "react";
-import { FileSpreadsheet, Printer } from "lucide-react";
+import { FileSpreadsheet, Printer, ChevronDown } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
+import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
 import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
@@ -18,6 +19,12 @@ import ChiPhiPhasThuSection from "./ChiPhiPhasThuSection";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import type { NHDocData } from "@/lib/export-dntt-nh-word";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
 import { toast } from "sonner";
@@ -41,7 +48,7 @@ export interface ChiPhiTabDoan {
   xe?: {
     ten_xe?: string | null;
     so_cho?: number | null;
-    nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
+    nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null; tai_khoan_thanh_toan?: string | null } | null;
   } | null;
   tang_pham?: unknown;
   thu_tip?: boolean | null;
@@ -112,6 +119,8 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   const soKhachNH = (sk_lon + sk_em1 * 0.5 + sk_tl) || doan?.so_khach || 0;
   const soKhachNHKhongTL = (sk_lon + sk_em1 * 0.5) || doan?.so_khach || 0;
 
+  // Đoàn đã quyết toán → khóa sửa CON SỐ chi phí (trừ admin). Luồng thanh toán giữ nguyên.
+  const locked = useChiPhiLocked(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId, activeNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
@@ -188,7 +197,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
     }
   };
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (mode: "full" | "hdv" = "full") => {
     if (chiPhiRows.length === 0 && dnttList.length === 0) {
       toast.error(t("Chưa có dữ liệu chi phí để xuất Excel"));
       return;
@@ -205,6 +214,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         opName,
         ksData,
         tyGiaNdt,
+        mode,
       });
       toast.success(t("Đã xuất file Excel"));
     } catch (error: unknown) {
@@ -227,19 +237,39 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
           <Printer className="h-3.5 w-3.5" />
           {t("In ĐNTT gộp NH + DV")}
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8 text-xs gap-1.5"
-          onClick={handleExportExcel}
-          disabled={exportingExcel || isHDVLoading}
-        >
-          <FileSpreadsheet className="h-3.5 w-3.5" />
-          {exportingExcel ? t("Đang xuất...") : t("Xuất Excel")}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              disabled={exportingExcel || isHDVLoading}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              {exportingExcel ? t("Đang xuất...") : t("Xuất Excel")}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleExportExcel("hdv")}>
+              {t("In cho HDV")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExportExcel("full")}>
+              {t("In tổng hợp")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <ChiPhiHeader doan={doan} opName={opName} />
+
+      {/* ── Banner khóa quyết toán ── */}
+      {locked && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 flex items-center gap-2 text-sm text-amber-800">
+          <span className="text-base">🔒</span>
+          <span>{t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được số liệu. (Vẫn dùng được nút thanh toán / hóa đơn.)")}</span>
+        </div>
+      )}
 
       {/* ── Summary bar ── */}
       {hasData && (
@@ -268,26 +298,27 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       )}
 
       <div className="space-y-6">
-        <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} />
+        <ChiPhiKSSection doanId={doanId} soKhach={soKhach} tenDoan={doan?.ten_doan || ""} locked={locked} />
 
-        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} doanNhomId={activeNhomId} />
+        <ChiPhiNHSection ref={nhSectionRef} doanId={doanId} soKhachDefault={soKhachNH} soKhachKhongTL={soKhachNHKhongTL} coTinhSuatTLNhaHang={coTinhSuatTLNhaHang} tenDoan={doan?.ten_doan || ""} doanNhomId={activeNhomId} locked={locked} />
 
-        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} />
+        <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} locked={locked} />
 
-        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} />
+        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} locked={locked} />
 
-        <ChiPhiVisaSection doanId={doanId} />
+        <ChiPhiVisaSection doanId={doanId} locked={locked} />
 
         <ChiPhiBaoHiemSection
           doanId={doanId}
           soKhach={soKhach}
           ngayDi={doan?.ngay_di ?? null}
           ngayVe={doan?.ngay_ve ?? null}
+          locked={locked}
         />
 
-        <ChiPhiHDVSection doanId={doanId} doan={doan} />
+        <ChiPhiHDVSection doanId={doanId} doan={doan} locked={locked} />
 
-        <ChiPhiPhasThuSection doanId={doanId} doan={doan} />
+        <ChiPhiPhasThuSection doanId={doanId} doan={doan} locked={locked} />
       </div>
 
       <DNTTNHPreviewModal

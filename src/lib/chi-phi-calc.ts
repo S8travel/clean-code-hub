@@ -21,6 +21,26 @@ export function applyChietKhau(
   return Math.round(truocCK * (1 - ck / 100));
 }
 
+export interface DnttPaidLite {
+  id: number;
+  trang_thai_duyet: string;
+  paid_amount?: number;
+}
+
+/**
+ * Tổng tiền đã thanh toán TRƯỚC qua các ĐNTT KHÁC trong `dntts` (cọc HOẶC trả 1
+ * phần): Σ `paid_amount` của mọi ĐNTT có `id !== currentId`, loại ĐNTT đã hủy /
+ * từ chối. KHÔNG lọc `la_coc` — trả 1 phần thường ghi qua ĐNTT non-cọc.
+ * `dntts` phải được lọc sẵn theo phạm vi (cùng bữa / cùng chi phí / cùng KS) trước khi gọi.
+ * Dùng cho cột "Số tiền cọc" / "Đã thanh toán" của bản in ĐNTT NH/DV.
+ */
+export function calcDnttPriorPaid(dntts: DnttPaidLite[], currentId: number | null): number {
+  return dntts
+    .filter((d) => d.id !== currentId
+      && d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
+    .reduce((s, d) => s + (d.paid_amount ?? 0), 0);
+}
+
 /**
  * Thành tiền 1 bữa ăn nhà hàng (phần main, CHƯA gồm extras):
  * số khách thực tế sau FOC × đơn giá, rồi áp chiết khấu theo Mức A.

@@ -20,6 +20,8 @@ interface Props {
   tenDoan?: string;
   ngayBatDau?: string;
   doanNhomId?: number | null;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 export interface ChiPhiDVSectionHandle {
@@ -29,7 +31,7 @@ export interface ChiPhiDVSectionHandle {
 }
 
 // Tab Chi phí Dịch vụ — chỉ render. Toàn bộ state/logic ở useDVSection.
-const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }, ref) {
+const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId, locked = false }, ref) {
   useTranslate();
   const s = useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId });
   const {
@@ -107,6 +109,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
             <col style={{ width: "76px" }} />
             <col style={{ width: "180px" }} />
             <col style={{ width: "140px" }} />
+            <col style={{ width: "104px" }} />
             <col style={{ width: "130px" }} />
           </colgroup>
           <thead>
@@ -126,13 +129,14 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
               <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
               <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
               <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
+              <th className="text-center px-2 py-2.5">{t("Hóa đơn")}</th>
               <th className="px-2 py-2.5" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {sortedDays.map(([day, rows]) =>
               rows.map((row) => (
-                <DVRow key={row.id} row={row} day={day} data={dvData} handlers={dvHandlers} />
+                <DVRow key={row.id} row={row} day={day} data={dvData} handlers={dvHandlers} locked={locked} />
               )),
             )}
           </tbody>

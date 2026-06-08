@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { NHInput } from "./NHInput";
+import { HoaDonChiPhiBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { fmt, type LocalNHExtra } from "./nh-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -14,10 +16,14 @@ interface Props {
   onChange: (key: string, idx: number, field: keyof LocalNHExtra, value: string | number) => void;
   onSave: (key: string, idx: number, nguoiTtOverride?: "cong_ty" | "hdv") => void;
   onDelete: (key: string, idx: number) => void;
+  /** Đoàn đã quyết toán → khóa (trừ admin). */
+  locked?: boolean;
+  /** Trạng thái hóa đơn TƯƠI đọc từ chiPhiRows (extrasMap init-once, không reconcile). */
+  trangThaiHoaDon?: string | null;
 }
 
 // 1 dòng dịch vụ phát sinh của bữa ăn. Tách verbatim từ NHRow.
-export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete }: Props) {
+export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete, locked = false, trangThaiHoaDon = null }: Props) {
   useTranslate();
   return (
     <tr className="border-b border-border/50 last:border-b-0 bg-muted/20">
@@ -32,6 +38,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
           <Input
             placeholder={t("Dịch vụ phát sinh")}
             value={extra.mo_ta}
+            disabled={locked}
             onChange={(e) => onChange(mealKey, idx, "mo_ta", e.target.value)}
             onBlur={() => onSave(mealKey, idx)}
             className="h-6 text-xs flex-1"
@@ -46,6 +53,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
             onChange={(v) => onChange(mealKey, idx, "so_luong", v)}
             onBlur={() => onSave(mealKey, idx)}
             width="w-[56px]"
+            disabled={locked}
           />
         </div>
       </td>
@@ -59,6 +67,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
             width="w-[112px]"
             money
             decimal
+            disabled={locked}
           />
         </div>
       </td>
@@ -70,6 +79,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
             onChange={(v) => onChange(mealKey, idx, "chiet_khau_phan_tram", v)}
             onBlur={() => onSave(mealKey, idx)}
             width="w-[48px]"
+            disabled={locked}
           />
           {(() => {
             const truocCK = extra.so_luong * extra.don_gia;
@@ -94,6 +104,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       {/* Col 9: Ai trả — toggle giống main row */}
       <td className="px-2 py-1 text-center">
         <button
+          disabled={locked}
           onClick={() => {
             const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
             onChange(mealKey, idx, "nguoi_tt", next);
@@ -111,10 +122,16 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       </td>
       {/* Col 10: empty */}
       <td />
+      {/* Col Hóa đơn: extra HDV trả → badge riêng (kế toán bấm tay). Extra công ty gộp nhóm → trống. */}
+      <td className="px-2 py-1 text-center">
+        {extra.nguoi_tt === "hdv" && extra.id != null && (
+          <HoaDonChiPhiBadge chiPhiId={extra.id} trangThai={(trangThaiHoaDon ?? "chua_co") as TrangThaiDoc} />
+        )}
+      </td>
       {/* Col 11: delete */}
       <td className="px-2 py-1">
         <div className="flex justify-end">
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onDelete(mealKey, idx)}>
+          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={locked} onClick={() => onDelete(mealKey, idx)}>
             <Trash2 className="h-3 w-3 text-destructive" />
           </Button>
         </div>

@@ -242,42 +242,53 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
 
   const handleSave = () => {
     if (pairs.length === 0) { toast({ title: t("Chưa ghép file nào"), variant: "destructive" }); return; }
+    // Dừng vòng OCR đang chạy → recompute KHÔNG đè assign/nguonRef trong lúc lưu.
+    runRef.current++;
     // Snapshot pairs trước khi mutate — saved rows sẽ disappear khỏi `rows` prop
     // sau khi trang_thai_unc='da_co' (parent filter chỉ ĐNTT thiếu UNC).
+    // CHỐT NGUỒN NGAY LÚC BẤM LƯU (đồng bộ) — KHÔNG đọc nguonRef trong onSuccess
+    // async vì nó có thể bị recompute (OCR)/refetch reset → toPay rỗng → bỏ markPaid
+    // dù badge "sẽ đánh dấu Đã TT" đã hiện.
     const snapshot = pairs.map((p) => ({
       rowId: p.id,
       row: rows.find((r) => r.id === p.id)!,
       file: p.file,
+      nguon: nguonRef.current[p.id] ?? "",
     })).filter((s) => s.row);
     batchMut.mutate(pairs, {
       onSuccess: async ({ ok, failed, errors }) => {
         if (failed === 0) {
           toast({ title: `${t("Đã gắn UNC cho")} ${ok} ĐNTT` });
 
-          // Tự markPaid cho dòng CÓ NGUỒN + OCR số tiền KHỚP ĐNTT (an toàn).
+          // Tự markPaid cho dòng đã gắn file + ĐÃ CHỌN NGUỒN. KHÔNG đòi OCR số
+          // tiền khớp tuyệt đối: nguồn (auto từ OCR hoặc chọn tay) là xác nhận
+          // của user; số tiền payment luôn = con_lai do server tính
+          // (so_tien − đã trả), KHÔNG lấy theo số OCR đọc. Số tiền OCR lệch chỉ
+          // là cảnh báo (badge), không chặn đánh dấu TT.
           const today = format(new Date(), "yyyy-MM-dd");
-          const toPay = snapshot.filter((s) => {
-            const fi = assignRef.current[s.rowId];
-            const nguon = nguonRef.current[s.rowId];
-            if (fi === undefined || !nguon) return false;
-            const o = ocrRef.current[fi];
-            return !!o && o.amount != null && uncAmountMatch(o.amount, conLai(s.row));
-          });
+          // Dòng có nguồn (đã chốt lúc bấm Lưu) → đánh dấu Đã TT.
+          const toPay = snapshot.filter((s) => !!s.nguon);
           let paidOk = 0;
           let paidFail = 0;
+          const paidErrors: string[] = [];
           for (const s of toPay) {
             try {
               await markPaidMut.mutateAsync({
-                id: s.rowId, ngayThanhToan: today, nguon: nguonRef.current[s.rowId],
+                id: s.rowId, ngayThanhToan: today, nguon: s.nguon,
               });
               paidOk++;
-            } catch {
+            } catch (e: unknown) {
               paidFail++;
+              paidErrors.push(`#${s.rowId}: ${errMsg(e) || String(e)}`);
             }
           }
           if (paidOk > 0) toast({ title: `${t("Đã đánh dấu Đã TT")} ${paidOk} ĐNTT` });
           if (paidFail > 0) {
-            toast({ title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`, variant: "destructive" });
+            toast({
+              title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`,
+              description: paidErrors.slice(0, 2).join(" · "),
+              variant: "destructive",
+            });
           }
 
           // Switch sang step 2 — resolve email + cho user review trước khi gửi
@@ -670,7 +681,15 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                           )}
                         </td>
                         <td className="p-2 text-right tabular-nums font-semibold">
-                          {fmt(r.so_tien)}
+                          {/* Hiện số tiền UNC THỰC chuyển (con_lai = so_tien − đã
+                              cọc/cấn trừ) — khớp với số OCR đọc. Nếu đã trả trước
+                              thì chú thích tổng + đã trả cho rõ. */}
+                          {fmt(conLai(r))}
+                          {(r.paid_amount ?? 0) > 0 && (
+                            <div className="text-[10px] font-normal text-muted-foreground whitespace-nowrap">
+                              {t("Tổng")} {fmt(r.so_tien)} · {t("đã trả")} {fmt(r.paid_amount)}
+                            </div>
+                          )}
                         </td>
                         <td className="p-2">
                           <div className="flex items-start gap-1.5">
@@ -734,11 +753,16 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                                 </SelectContent>
                               </Select>
                               {badge(r.id)}
-                              {/* Nguồn TT — auto từ OCR, sửa được. Có nguồn + OCR
-                                  số tiền khớp → khi Lưu sẽ tự đánh dấu Đã TT. */}
+                              {/* Nguồn TT — auto từ OCR, sửa được. CÓ NGUỒN → khi
+                                  Lưu sẽ tự đánh dấu Đã TT (số tiền OCR lệch chỉ
+                                  cảnh báo, không chặn). */}
                               {matched && (() => {
                                 const oAmt = ocrInfo[fi!]?.amount ?? null;
-                                const willPay = !!nguonMap[r.id] && oAmt != null && uncAmountMatch(oAmt, conLai(r));
+                                // Có nguồn → sẽ đánh dấu Đã TT khi Lưu (không phụ
+                                // thuộc OCR số tiền). Lệch số tiền OCR chỉ cảnh báo.
+                                const willPay = !!nguonMap[r.id];
+                                const amountMismatch =
+                                  willPay && !(oAmt != null && uncAmountMatch(oAmt, conLai(r)));
                                 return (
                                   <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                                     <Select
@@ -755,15 +779,16 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
                                         ))}
                                       </SelectContent>
                                     </Select>
-                                    {willPay ? (
+                                    {willPay && (
                                       <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded whitespace-nowrap">
                                         {t("sẽ đánh dấu Đã TT")}
                                       </span>
-                                    ) : nguonMap[r.id] ? (
-                                      <span className="text-[10px] text-amber-600 whitespace-nowrap" title={t("OCR số tiền chưa khớp — chỉ gắn UNC, không tự đánh dấu TT")}>
-                                        {t("chỉ gắn UNC")}
+                                    )}
+                                    {amountMismatch && (
+                                      <span className="text-[10px] text-amber-600 whitespace-nowrap" title={t("OCR đọc số tiền chưa khớp số cần thanh toán — vẫn đánh dấu TT theo nguồn đã chọn, kiểm tra lại file nếu cần")}>
+                                        {t("⚠ số tiền OCR lệch")}
                                       </span>
-                                    ) : null}
+                                    )}
                                   </div>
                                 );
                               })()}

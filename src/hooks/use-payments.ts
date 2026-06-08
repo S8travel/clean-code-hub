@@ -3,6 +3,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { getChiPhiIdsForDNTT, recalcChiPhiStatus, type PaymentRow } from "@/hooks/use-dntt";
 import { appendCanTruLog } from "@/hooks/use-cong-no";
 import { proRataInts } from "@/lib/pro-rata";
+import { canTruGhiChu } from "@/lib/can-tru-note";
 
 /**
  * Tạo NHIỀU payment can_tru cho 1 ĐNTT (cấn trừ nhiều cong_no cùng NCC 1 lúc).
@@ -24,7 +25,7 @@ export async function createCanTruPayments(opts: {
       method: "can_tru",
       so_tien: it.soTien,
       cong_no_id: it.congNoId,
-      ghi_chu: `Cấn trừ từ đoàn: ${it.sourceTenDoan}`,
+      ghi_chu: canTruGhiChu(it.sourceTenDoan),
     });
     if (error) throw error;
     await appendCanTruLog(it.congNoId, it.soTien, opts.consumingDoanLog);
@@ -143,10 +144,12 @@ export interface PaymentByChiPhi {
   dntt_so_tien: number;
   alloc_so_tien: number;
   payment_id: number;
-  method: "cash" | "can_tru";
+  method: "cash" | "can_tru" | "voucher";
   payment_so_tien: number;
   cong_no_id: number | null;
   ngay_thanh_toan: string;
+  /** Ghi chú payment — với can_tru = "Cấn trừ từ đoàn: <tên đoàn nguồn>". */
+  ghi_chu: string | null;
 }
 
 // Returns payments allocated to each chi_phi_id of a doan.
@@ -219,10 +222,11 @@ export function usePaymentsByChiPhi(doanId: number | null | undefined) {
             dntt_so_tien: dnttSoTien[p.dntt_id] || 1,
             alloc_so_tien: Number(alloc.so_tien),
             payment_id: p.id,
-            method: p.method as "cash" | "can_tru",
+            method: p.method as "cash" | "can_tru" | "voucher",
             payment_so_tien: shares[i],
             cong_no_id: p.cong_no_id,
             ngay_thanh_toan: p.ngay_thanh_toan,
+            ghi_chu: p.ghi_chu ?? null,
           });
         }
       }

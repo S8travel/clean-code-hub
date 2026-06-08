@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
@@ -407,7 +408,9 @@ export async function checkCanhDiemDeletable(
     }
   }
   if (options) {
-    const ncc = options.canhDiem.dia_diem || options.canhDiem.ten;
+    // Khóa Booking DV gom theo NCC (đồng bộ dvGroupName trong sync).
+    const nccNameById = await fetchNccNames([options.canhDiem.nha_cung_cap_id]);
+    const ncc = dvGroupName(options.canhDiem, nccNameById);
     const { data: bookingDv } = await externalSupabase
       .from("doan_booking_dv")
       .select("id, booking_status")
@@ -520,9 +523,13 @@ export async function checkKhachSanDeletable(
 export function useSaveDieuTour() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lockGuard = useChiPhiLockGuard();
   return useMutation({
     mutationFn: async (payload: SaveDieuTourPayload) => {
       const { doanId, doanNhomId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
+
+      // Đoàn đã quyết toán → lưu điều tour sẽ cascade sửa chi phí → chặn (trừ admin).
+      lockGuard(doanId);
 
       // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
       const counters = { thucTeClearCount: 0 };
@@ -1169,6 +1176,29 @@ export interface SyncWarning {
   services: string[];
 }
 
+/**
+ * Tên nhóm Booking DV = gom theo NHÀ CUNG CẤP.
+ *   - Cảnh điểm có nha_cung_cap_id → dùng TÊN NCC (nccNameById).
+ *   - Chưa gắn NCC → fallback TÊN DỊCH VỤ (mỗi dịch vụ 1 nhóm).
+ * KHÔNG gom theo dia_diem nữa (trước đây gom theo địa điểm gây "Kính gửi Phú Quốc").
+ * Dùng chung cho: sync, pre-save warning, checkCanhDiemDeletable → phải nhất quán.
+ */
+export function dvGroupName(
+  cd: { nha_cung_cap_id: number | null; ten: string },
+  nccNameById: Map<number, string>,
+): string {
+  const nccTen = cd.nha_cung_cap_id != null ? nccNameById.get(cd.nha_cung_cap_id) : undefined;
+  return (nccTen && nccTen.trim()) || cd.ten;
+}
+
+/** Lấy map id→ten cho danh sách NCC id (lọc null/trùng). Rỗng → map rỗng. */
+async function fetchNccNames(ids: (number | null | undefined)[]): Promise<Map<number, string>> {
+  const uniq = [...new Set(ids.filter((x): x is number => x != null))];
+  if (uniq.length === 0) return new Map();
+  const { data } = await externalSupabase.from("nha_cung_cap").select("id, ten").in("id", uniq);
+  return new Map((data ?? []).map((n) => [n.id, n.ten ?? ""]));
+}
+
 export async function syncDieuTourToBookingDV(params: {
   doanId: number;
   days: DayLocal[];
@@ -1206,13 +1236,14 @@ export async function syncDieuTourToBookingDV(params: {
     return { synced: 0, warnings: [] };
   }
 
-  // Group by dia_diem (fallback to ten)
+  // Gom theo NHÀ CUNG CẤP (fallback tên dịch vụ khi cảnh điểm chưa gắn NCC).
+  const nccNameById = await fetchNccNames(coPhiItems.map(({ cd }) => cd.nha_cung_cap_id));
   const groups = new Map<
     string,
     { email: string | null; dichVu: { ten_dv: string; ngay_date: string; so_khach: number; don_gia: number }[] }
   >();
   for (const { cd, ngay_date } of coPhiItems) {
-    const ncc = cd.dia_diem || cd.ten;
+    const ncc = dvGroupName(cd, nccNameById);
     if (!groups.has(ncc)) groups.set(ncc, { email: cd.email, dichVu: [] });
     groups.get(ncc)!.dichVu.push({
       ten_dv: cd.ten,
@@ -1320,6 +1351,11 @@ export async function checkPreSaveWarnings(params: {
   const { doanId, days, dbNgayRows, dbNgayItems, canhDiemList, nhaHangList, khachSanList } = params;
   const warnings: PreSaveWarning[] = [];
 
+  // NCC name map cho khóa Booking DV (gom theo NCC, đồng bộ dvGroupName trong sync).
+  const dvNccNameById = await fetchNccNames(
+    canhDiemList.filter((c) => c.loai === "dich_vu").map((c) => c.nha_cung_cap_id),
+  );
+
   // Build lookup maps
   const dbRowByNgaySo = new Map<number, DoanNgayRow>();
   for (const r of dbNgayRows) dbRowByNgaySo.set(r.ngay_so, r);
@@ -1399,7 +1435,7 @@ export async function checkPreSaveWarnings(params: {
         const cd = canhDiemList.find((c) => c.id === dbItem.canh_diem_id);
         if (!cd || !cd.co_phi || cd.loai !== "dich_vu") continue;
 
-        const ncc = cd.dia_diem || cd.ten;
+        const ncc = dvGroupName(cd, dvNccNameById);
         const { data: bookingDv } = await externalSupabase
           .from("doan_booking_dv")
           .select("id, booking_status")

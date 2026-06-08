@@ -21,10 +21,12 @@ interface Props {
   doanId: number;
   soKhach?: number;
   tenDoan?: string;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 // Tab Chi phí Khách sạn — chỉ render. Toàn bộ state/logic ở useKSSection.
-export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: Props) {
+export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", locked = false }: Props) {
   useTranslate();
   const s = useKSSection({ doanId, soKhach, tenDoan });
   const {
@@ -120,7 +122,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "" }: P
 
       {/* Render từng KS có trong doan_ngay (không phụ thuộc localRows nữa) */}
       {distinctKsIdsFromNgay.map((ksId) => (
-        <KSCard key={ksId} ksId={ksId} data={cardData} handlers={cardHandlers} />
+        <KSCard key={ksId} ksId={ksId} data={cardData} handlers={cardHandlers} locked={locked} />
       ))}
 
       {/* "Điều chỉnh" modal — per-booking, sửa so_phong/gia_phong nhiều row sau khi paid */}

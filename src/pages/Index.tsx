@@ -12,7 +12,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { DoanTable, type DoanRow } from "@/components/DoanTable";
 import { DoanDrawer } from "@/components/DoanDrawer";
@@ -33,7 +32,7 @@ import {
   THI_TRUONG_OPTS,
   // useAddDoanPermission, // FEATURE_DOAN_PERM_DISABLED
 } from "@/hooks/use-doan";
-import { computeDoanStatus, type DoanStatus } from "@/lib/doan-status";
+import { computeDoanStatus } from "@/lib/doan-status";
 import type { DoanInsert } from "@/hooks/use-doan";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -45,6 +44,8 @@ import { useCloneDoan } from "@/hooks/use-clone-doan";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useAuth } from "@/hooks/use-auth";
 import { useDoanScope } from "@/hooks/use-doan-scope";
+import { MultiSelect } from "@/components/MultiSelect";
+import { doanMatchesSearch } from "@/lib/doan-search";
 import { errMsg } from "@/lib/error";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
@@ -138,7 +139,15 @@ export default function Index() {
     return map;
   }, [userRoles]);
 
-  const hasFilters = search || dateFrom || dateTo || agentFilter !== "all" || diaDiemFilter !== "all" || trangThaiFilter !== "all" || loaiTourFilter !== "all";
+  // Multi-select: filter lưu CSV ids trong URL ("all"/"" = không lọc). Rỗng = tất cả.
+  const parseSel = (v: string) => (v && v !== "all" ? v.split(",") : []);
+  const agentSel = parseSel(agentFilter);
+  const diaDiemSel = parseSel(diaDiemFilter);
+  const loaiTourSel = parseSel(loaiTourFilter);
+  const trangThaiSel = parseSel(trangThaiFilter);
+  const toCsv = (v: string[]) => (v.length ? v.join(",") : "all");
+
+  const hasFilters = !!search || !!dateFrom || !!dateTo || agentSel.length > 0 || diaDiemSel.length > 0 || trangThaiSel.length > 0 || loaiTourSel.length > 0;
 
   const clearFilters = () => {
     filterState.clear();
@@ -178,14 +187,13 @@ export default function Index() {
   const filtered = useMemo(() => {
     if (!groups) return [];
     return groups.filter((g) => {
-      if (search) {
-        const q = search.toLowerCase();
+      if (search.trim()) {
+        // Bỏ qua dấu cách (user hay copy-paste mã đoàn kèm khoảng trắng).
         const opName = doanOpMap?.get(g.id)?.ten || "";
-        const match =
-          g.ten_doan?.toLowerCase().includes(q) ||
-          g.huong_dan_vien?.ten?.toLowerCase().includes(q) ||
-          g.agents?.ten?.toLowerCase().includes(q) ||
-          opName.toLowerCase().includes(q);
+        const match = doanMatchesSearch(
+          { tenDoan: g.ten_doan, hdv: g.huong_dan_vien?.ten, agent: g.agents?.ten, op: opName },
+          search,
+        );
         if (!match) return false;
       }
 
@@ -194,13 +202,15 @@ export default function Index() {
       if (dateTo && g.ngay_di) { if (g.ngay_di > dateTo) return false; }
       if ((dateFrom || dateTo) && !g.ngay_di) return false;
 
-      if (agentFilter !== "all" && g.agent_id?.toString() !== agentFilter) return false;
-      if (diaDiemFilter !== "all" && g.dia_diem_id?.toString() !== diaDiemFilter) return false;
-      if (loaiTourFilter !== "all" && (g.loai_tour ?? null) !== loaiTourFilter) return false;
+      const aid = g.agent_id?.toString();
+      if (agentSel.length && (aid == null || !agentSel.includes(aid))) return false;
+      const did = g.dia_diem_id?.toString();
+      if (diaDiemSel.length && (did == null || !diaDiemSel.includes(did))) return false;
+      if (loaiTourSel.length && !loaiTourSel.includes(g.loai_tour ?? "")) return false;
 
-      if (trangThaiFilter !== "all") {
+      if (trangThaiSel.length) {
         const status = computeDoanStatus(g, qtPaidSet ?? null);
-        if (status !== (trangThaiFilter as DoanStatus)) return false;
+        if (!trangThaiSel.includes(status)) return false;
       }
 
       if (quickTab !== "all") {
@@ -377,8 +387,12 @@ export default function Index() {
   const checkDoanCancelable = async (doanId: number): Promise<string[]> => {
     const [ks, nh, dv, dntt] = await Promise.all([
       externalSupabase.from("doan_booking_ks").select("ks_dat_truoc_status, ks_final_status").eq("doan_id", doanId),
-      // NH: gồm cả nh_xac_nhan (đã xác nhận) — chỉ chua_gui/da_huy/cho_xac_nhan_huy/khong_dat mới cho xóa
-      externalSupabase.from("doan_booking_nh").select("id").eq("doan_id", doanId).in("booking_status", ["da_gui", "nh_xac_nhan"]),
+      // NH + Du thuyền (cùng bảng doan_booking_nh): lấy đủ trạng thái để phân biệt
+      //   - nhà hàng thường: dùng booking_status
+      //   - du thuyền (tau_ngay/tau_dem): đặt/hủy qua dat_truoc_status/final_status (2 pha như KS)
+      externalSupabase.from("doan_booking_nh")
+        .select("id, booking_status, dat_truoc_status, final_status, nha_hang:nha_hang_id(loai)")
+        .eq("doan_id", doanId),
       externalSupabase.from("doan_booking_dv").select("id").eq("doan_id", doanId).in("booking_status", ["cho_xac_nhan", "da_xac_nhan"]),
       externalSupabase.from("de_nghi_thanh_toan").select("id").eq("doan_id", doanId).not("trang_thai_duyet", "in", '("tu_choi","da_huy")'),
     ]);
@@ -400,7 +414,36 @@ export default function Index() {
       (r.ks_final_status && r.ks_final_status !== "chua_gui");
     const activeKS = (ks.data ?? []).filter((r) => !isKsCancelled(r) && isKsSent(r)).length;
     if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn đã gửi mail chưa hủy`);
-    if ((nh.data ?? []).length > 0) errors.push(`Booking NH: còn ${nh.data!.length} bữa chưa hủy`);
+
+    // NH vs Du thuyền (cùng bảng doan_booking_nh):
+    //  - Nhà hàng thường: dùng booking_status (da_gui/nh_xac_nhan = chưa hủy).
+    //  - Du thuyền (tau_ngay/tau_dem): đặt/hủy qua dat_truoc_status/final_status 2 pha (như KS,
+    //    giá trị KHÔNG có tiền tố ks_). Hủy đi qua final_status nên booking_status có thể vẫn
+    //    'da_gui' → KHÔNG được dùng booking_status cho du thuyền (gây chặn nhầm khi hủy đoàn).
+    type NhStatusRow = {
+      booking_status: string | null;
+      dat_truoc_status: string | null;
+      final_status: string | null;
+      nha_hang: { loai: string | null } | { loai: string | null }[] | null;
+    };
+    const nhLoai = (r: NhStatusRow) =>
+      (Array.isArray(r.nha_hang) ? r.nha_hang[0]?.loai : r.nha_hang?.loai) ?? null;
+    const isTau = (r: NhStatusRow) => nhLoai(r) === "tau_ngay" || nhLoai(r) === "tau_dem";
+    const tauCancelStates = ["cho_xac_nhan_huy", "xac_nhan_huy"];
+    const isTauCancelled = (r: NhStatusRow) =>
+      r.final_status
+        ? tauCancelStates.includes(r.final_status)
+        : r.dat_truoc_status != null && tauCancelStates.includes(r.dat_truoc_status);
+    const isTauSent = (r: NhStatusRow) =>
+      (r.dat_truoc_status != null && r.dat_truoc_status !== "chua_gui") ||
+      (r.final_status != null && r.final_status !== "chua_gui");
+    const nhRows = (nh.data ?? []) as unknown as NhStatusRow[];
+    const activeNH = nhRows.filter(
+      (r) => !isTau(r) && (r.booking_status === "da_gui" || r.booking_status === "nh_xac_nhan"),
+    ).length;
+    const activeTau = nhRows.filter((r) => isTau(r) && !isTauCancelled(r) && isTauSent(r)).length;
+    if (activeNH > 0) errors.push(`Booking NH: còn ${activeNH} bữa chưa hủy`);
+    if (activeTau > 0) errors.push(`Booking Tàu/Du thuyền: còn ${activeTau} chuyến chưa hủy`);
     if ((dv.data ?? []).length > 0) errors.push(`Booking DV: còn ${dv.data!.length} dịch vụ chưa hủy`);
     if ((dntt.data ?? []).length > 0) errors.push(`ĐNTT: còn ${dntt.data!.length} phiếu chưa hủy`);
     return errors;
@@ -580,51 +623,37 @@ export default function Index() {
             <DatePicker value={dateTo} onChange={setDateTo} placeholder={t("Đến ngày")} className="h-9 text-xs rounded-lg w-[145px]" align="start" />
           </div>
 
-          <Select value={agentFilter} onValueChange={setAgentFilter}>
-            <SelectTrigger className="h-9 text-xs rounded-lg w-[140px]">
-              <span>{agentFilter === "all" ? t("Tất cả Agent") : agents?.find((a) => a.id.toString() === agentFilter)?.ten ?? "Agent"}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("Tất cả Agent")}</SelectItem>
-              {agents?.map((a) => (
-                <SelectItem key={a.id} value={a.id.toString()}>{a.ten}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            allLabel={t("Tất cả Agent")}
+            options={(agents ?? []).map((a) => ({ value: a.id.toString(), label: a.ten }))}
+            value={agentSel}
+            onChange={(v) => setAgentFilter(toCsv(v))}
+            className="h-9 text-xs w-[140px]"
+          />
 
-          <Select value={diaDiemFilter} onValueChange={setDiaDiemFilter}>
-            <SelectTrigger className="h-9 text-xs rounded-lg w-[140px]">
-              <span>{diaDiemFilter === "all" ? t("Tất cả ĐĐ") : diaDiemList?.find((d) => d.id.toString() === diaDiemFilter)?.ten ?? t("Địa điểm")}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("Tất cả ĐĐ")}</SelectItem>
-              {diaDiemList?.map((d) => (
-                <SelectItem key={d.id} value={d.id.toString()}>{d.ten}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            allLabel={t("Tất cả ĐĐ")}
+            options={(diaDiemList ?? []).map((d) => ({ value: d.id.toString(), label: d.ten }))}
+            value={diaDiemSel}
+            onChange={(v) => setDiaDiemFilter(toCsv(v))}
+            className="h-9 text-xs w-[140px]"
+          />
 
-          <Select value={loaiTourFilter} onValueChange={setLoaiTourFilter}>
-            <SelectTrigger className="h-9 text-xs rounded-lg w-[130px]">
-              <span>{t(LOAI_TOUR_OPTIONS.find((o) => o.value === loaiTourFilter)?.label ?? "Loại tuyến")}</span>
-            </SelectTrigger>
-            <SelectContent>
-              {LOAI_TOUR_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            allLabel={t("Tất cả tuyến")}
+            options={LOAI_TOUR_OPTIONS.filter((o) => o.value !== "all").map((o) => ({ value: o.value, label: t(o.label) }))}
+            value={loaiTourSel}
+            onChange={(v) => setLoaiTourFilter(toCsv(v))}
+            className="h-9 text-xs w-[130px]"
+          />
 
-          <Select value={trangThaiFilter} onValueChange={setTrangThaiFilter}>
-            <SelectTrigger className="h-9 text-xs rounded-lg w-[130px]">
-              <span>{t(TRANG_THAI_OPTIONS.find((o) => o.value === trangThaiFilter)?.label ?? "Trạng thái")}</span>
-            </SelectTrigger>
-            <SelectContent>
-              {TRANG_THAI_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            allLabel={t("Tất cả")}
+            options={TRANG_THAI_OPTIONS.filter((o) => o.value !== "all").map((o) => ({ value: o.value, label: t(o.label) }))}
+            value={trangThaiSel}
+            onChange={(v) => setTrangThaiFilter(toCsv(v))}
+            className="h-9 text-xs w-[130px]"
+          />
 
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-xs text-muted-foreground hover:text-foreground">

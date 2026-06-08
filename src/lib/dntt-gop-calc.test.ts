@@ -6,7 +6,9 @@ import {
   gopLabel,
   groupGopByNcc,
   sumSelected,
+  buildCanTruPaymentItems,
   type GopDvRow,
+  type CanTruPick,
 } from "./dntt-gop-calc";
 
 const row = (p: Partial<GopDvRow>): GopDvRow => ({
@@ -109,5 +111,49 @@ describe("sumSelected", () => {
     expect(sumSelected(items, new Set([1]))).toBe(1_000_000);
     expect(sumSelected(items, new Set([1, 2]))).toBe(3_000_000);
     expect(sumSelected(items, new Set())).toBe(0);
+  });
+});
+
+describe("buildCanTruPaymentItems", () => {
+  const pick = (p: Partial<CanTruPick>): CanTruPick => ({
+    congNoId: 1,
+    soTienConLai: 1_000_000,
+    soTienCanTru: 1_000_000,
+    tenDoan: "Đoàn A",
+    ...p,
+  });
+
+  it("map sang payload payment (congNoId, soTien, sourceTenDoan)", () => {
+    const out = buildCanTruPaymentItems(
+      [pick({ congNoId: 7, soTienCanTru: 500_000, tenDoan: "VDC052705BR6" })],
+      1_000_000,
+    );
+    expect(out).toEqual([{ congNoId: 7, soTien: 500_000, sourceTenDoan: "VDC052705BR6" }]);
+  });
+
+  it("clamp tổng ≤ maxAmount (số tiền ĐNTT) — cắt greedy, không cấn quá", () => {
+    // Tổng chọn 4.131.000 nhưng ĐNTT chỉ 3.000.000 → cấn đủ dòng 1, cắt dòng 2.
+    const out = buildCanTruPaymentItems(
+      [
+        pick({ congNoId: 47, soTienConLai: 3_591_000, soTienCanTru: 3_591_000 }),
+        pick({ congNoId: 48, soTienConLai: 540_000, soTienCanTru: 540_000 }),
+      ],
+      3_000_000,
+    );
+    expect(out).toEqual([{ congNoId: 47, soTien: 3_000_000, sourceTenDoan: "Đoàn A" }]);
+    expect(out.reduce((s, i) => s + i.soTien, 0)).toBe(3_000_000);
+  });
+
+  it("clamp mỗi dòng ≤ số dư công nợ", () => {
+    const out = buildCanTruPaymentItems(
+      [pick({ soTienConLai: 200_000, soTienCanTru: 999_999 })],
+      1_000_000,
+    );
+    expect(out[0].soTien).toBe(200_000);
+  });
+
+  it("bỏ dòng ≤ 0 và không sinh payload khi maxAmount = 0", () => {
+    expect(buildCanTruPaymentItems([pick({ soTienCanTru: 0 })], 1_000_000)).toEqual([]);
+    expect(buildCanTruPaymentItems([pick({})], 0)).toEqual([]);
   });
 });

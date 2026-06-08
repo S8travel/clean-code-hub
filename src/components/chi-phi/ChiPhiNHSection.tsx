@@ -10,6 +10,7 @@ import NHOrphanRows from "./NHOrphanRows";
 import NHDnttModal from "./NHDnttModal";
 import NHAggCommitModal from "./NHAggCommitModal";
 import NHCancelModal from "./NHCancelModal";
+import DungVoucherModal from "./DungVoucherModal";
 import { useNHSection } from "./use-nh-section";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -20,6 +21,8 @@ interface Props {
   coTinhSuatTLNhaHang?: boolean;
   tenDoan?: string;
   doanNhomId?: number | null;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 export interface ChiPhiNHSectionHandle {
@@ -31,7 +34,7 @@ export interface ChiPhiNHSectionHandle {
 
 // Tab Chi phí Nhà hàng — chỉ render. Toàn bộ state/logic ở useNHSection.
 const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhiNHSection(
-  { doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "", doanNhomId },
+  { doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "", doanNhomId, locked = false },
   ref,
 ) {
   useTranslate();
@@ -49,6 +52,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     handleAggCommit, insertPending, closeAggCommit,
     cancelTarget, setCancelTarget, cancelMode, setCancelMode,
     handleCancelSubmit, cancelPending,
+    voucherTarget, handleApplyVoucher, closeVoucher, voucherSubmitting,
   } = s;
 
   // Expose imperative API cho ChiPhiTab (in DNTT gộp NH + DV).
@@ -115,6 +119,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
             <col className="w-[70px]" />
             <col className="w-[180px]" />
             <col className="w-[150px]" />
+            <col className="w-[104px]" />
             <col className="w-[100px]" />
           </colgroup>
           <thead>
@@ -135,6 +140,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
               <th className="px-2 py-2 text-center font-medium">{t("Nguồn")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("TT ĐNTT")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("TT Thanh toán")}</th>
+              <th className="px-2 py-2 text-center font-medium">{t("Hóa đơn")}</th>
               <th className="px-2 py-2" />
             </tr>
           </thead>
@@ -145,6 +151,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
                 meal={meal}
                 data={nhRowData}
                 handlers={nhRowHandlers}
+                locked={locked}
               />
             ))}
             <NHOrphanRows
@@ -205,6 +212,13 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         open={!!previewNHData}
         data={previewNHData}
         onClose={() => setPreviewNHData(null)}
+      />
+
+      <DungVoucherModal
+        target={voucherTarget}
+        onClose={closeVoucher}
+        onSelect={handleApplyVoucher}
+        submitting={voucherSubmitting}
       />
     </div>
   );

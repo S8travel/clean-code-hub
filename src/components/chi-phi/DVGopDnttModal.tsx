@@ -12,10 +12,33 @@ import { errMsg } from "@/lib/error";
 import { cn } from "@/lib/utils";
 import { useInsertDNTT, type ChiPhiRow } from "@/hooks/use-chi-phi";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
-import { groupGopByNcc, sumSelected, type GopNccGroup } from "@/lib/dntt-gop-calc";
+import { createCanTruPayments } from "@/hooks/use-payments";
+import { useCongNoByNCC } from "@/hooks/use-cong-no";
+import { groupGopByNcc, sumSelected, buildCanTruPaymentItems, type GopNccGroup } from "@/lib/dntt-gop-calc";
+import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
+import { type CanTruSelection } from "./KSCongNoPanel";
+import { useQueryClient } from "@tanstack/react-query";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
+
+/** Khối cấn trừ công nợ cho 1 nhóm NCC — tự ẩn khi NCC không có công nợ còn dư. */
+function GopCanTruSection({
+  nccId, value, onChange, maxAmount,
+}: {
+  nccId: number;
+  value: CanTruSelection[];
+  onChange: (v: CanTruSelection[]) => void;
+  maxAmount: number;
+}) {
+  const { data: congNoList = [] } = useCongNoByNCC(nccId);
+  if (congNoList.length === 0) return null;
+  return (
+    <div className="px-3 py-2 border-t border-border">
+      <KSCongNoMultiPanel nccId={nccId} value={value} onChange={onChange} maxAmount={maxAmount} />
+    </div>
+  );
+}
 
 interface Props {
   open: boolean;
@@ -26,8 +49,9 @@ interface Props {
   dvRows: ChiPhiRow[];
 }
 
-export default function DVGopDnttModal({ open, onClose, doanId, dvRows }: Props) {
+export default function DVGopDnttModal({ open, onClose, doanId, tenDoan, dvRows }: Props) {
   useTranslate();
+  const qc = useQueryClient();
   const insertDNTT = useInsertDNTT();
   const { data: nccList = [] } = useNhaCungCapList();
   const nccById = useMemo(() => {
@@ -42,10 +66,13 @@ export default function DVGopDnttModal({ open, onClose, doanId, dvRows }: Props)
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [ngayCan, setNgayCan] = useState("");
   const [submittingNcc, setSubmittingNcc] = useState<number | null>(null);
+  // Cấn trừ công nợ theo NCC (mỗi nhóm 1 danh sách) — chọn khoản dư cùng NCC để trừ vào ĐNTT.
+  const [canTruByNcc, setCanTruByNcc] = useState<Record<number, CanTruSelection[]>>({});
 
   useEffect(() => {
     if (!open) return;
     setSelected(new Set(groups.flatMap((g) => g.items.map((i) => i.chi_phi_id))));
+    setCanTruByNcc({});
   }, [open, groups]);
 
   const toggle = (id: number) =>
@@ -62,9 +89,11 @@ export default function DVGopDnttModal({ open, onClose, doanId, dvRows }: Props)
     if (soTien <= 0) { toast.error(t("Tổng tiền gộp phải lớn hơn 0")); return; }
     const ncc = nccById.get(group.nccId);
     const nccTen = ncc?.ten ?? `NCC #${group.nccId}`;
+    // Cấn trừ: clamp tổng ≤ số tiền ĐNTT, không cấn quá.
+    const canTruItems = buildCanTruPaymentItems(canTruByNcc[group.nccId] ?? [], soTien);
     setSubmittingNcc(group.nccId);
     try {
-      await insertDNTT.mutateAsync({
+      const created = await insertDNTT.mutateAsync({
         doan_id: doanId,
         loai: "dich_vu",
         mo_ta: `[Gộp] ${nccTen}: ${items.map((i) => i.label).join(", ")}`.slice(0, 500),
@@ -77,7 +106,28 @@ export default function DVGopDnttModal({ open, onClose, doanId, dvRows }: Props)
         ngay_can_thanh_toan: ngayCan || null,
         allocations: items.map((i) => ({ chi_phi_id: i.chi_phi_id, so_tien: i.remaining })),
       });
-      toast.success(t("Đã tạo ĐNTT gộp cho") + ` ${nccTen}`);
+
+      // Sau khi có ĐNTT → ghi nhận cấn trừ công nợ (payment method='can_tru').
+      let canTruTotal = 0;
+      if (created?.id && canTruItems.length > 0) {
+        canTruTotal = await createCanTruPayments({
+          dnttId: created.id,
+          consumingDoanLog: tenDoan || `#${doanId}`,
+          items: canTruItems,
+          recalcChiPhiIds: items.map((i) => i.chi_phi_id),
+        });
+        // createCanTruPayments ghi thẳng payments/cong_no → tự invalidate các query liên quan.
+        qc.invalidateQueries({ queryKey: ["cong-no"] });
+        qc.invalidateQueries({ queryKey: ["cong-no-by-ncc"] });
+        qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
+        qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+        qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+      }
+      setCanTruByNcc((prev) => { const n = { ...prev }; delete n[group.nccId]; return n; });
+      toast.success(
+        t("Đã tạo ĐNTT gộp cho") + ` ${nccTen}` +
+        (canTruTotal > 0 ? ` · ${t("đã cấn trừ")} ${fmt(canTruTotal)} ₫` : ""),
+      );
       // dvRows sẽ refresh (insertDNTT invalidate doan_chi_phi) → nhóm này biến mất.
     } catch (e: unknown) {
       toast.error(t("Lỗi tạo ĐNTT gộp: ") + (errMsg(e) || ""));
@@ -148,6 +198,12 @@ export default function DVGopDnttModal({ open, onClose, doanId, dvRows }: Props)
                       </label>
                     ))}
                   </div>
+                  <GopCanTruSection
+                    nccId={group.nccId}
+                    value={canTruByNcc[group.nccId] ?? []}
+                    onChange={(v) => setCanTruByNcc((prev) => ({ ...prev, [group.nccId]: v }))}
+                    maxAmount={selTotal}
+                  />
                   <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/20 border-t border-border">
                     <span className="text-xs text-muted-foreground">
                       {t("Đã chọn")} {selCount}/{group.items.length} · <b className="text-foreground">{fmt(selTotal)} ₫</b>

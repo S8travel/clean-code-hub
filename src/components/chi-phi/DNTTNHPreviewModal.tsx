@@ -30,7 +30,7 @@ function computeCkAmount(entry: EditableEntry): number {
 function computeConTT(entry: EditableEntry): number {
   const total = entry.items.reduce((s, i) => s + i.so_luong * i.don_gia, 0);
   const ck = computeCkAmount(entry);
-  return Math.max(0, total - ck - entry.so_tien_coc - entry.can_tru);
+  return Math.max(0, total - ck - entry.so_tien_coc - entry.can_tru - (entry.voucher_amount ?? 0));
 }
 
 export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
@@ -195,6 +195,12 @@ export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
                   </div>
                 </div>
 
+                {/* Voucher (phần suất chính trả bằng voucher) — read-only, đã trừ vào "còn TT" */}
+                {(entry.voucher_amount ?? 0) > 0 && (
+                  <div className="text-xs text-purple-700 bg-purple-50 rounded px-2 py-1">
+                    🎟 {t("Trả bằng voucher")}: <span className="font-semibold tabular-nums">{(entry.voucher_amount ?? 0).toLocaleString("vi-VN")} ₫</span> — {t("đã cộng vào Cấn trừ khi in")}
+                  </div>
+                )}
                 {/* Cọc / cấn trừ / còn TT */}
                 <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1">

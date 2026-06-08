@@ -6,7 +6,9 @@ import { t } from "@/lib/i18n";
 // Phát hiện deploy mới → ép người đang mở tab tải lại.
 // Client poll /version.json (file thật, no-store) so với __APP_VERSION__ baked
 // trong bundle. Khác → toast đếm ngược COUNTDOWN_S giây rồi tự reload (có nút
-// "Tải lại ngay"). KHÔNG dùng service worker (xem memory PWA risk).
+// "Tải lại ngay"). Đây là cơ chế báo bản mới DUY NHẤT cho user.
+// PWA service worker (vite-plugin-pwa) chạy network-first / KHÔNG precache
+// index.html → navigation luôn ra mạng, không che mất luồng version.json này.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const POLL_MS = 3 * 60_000; // poll mỗi 3 phút

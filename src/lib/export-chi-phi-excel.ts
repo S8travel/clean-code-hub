@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import { saveAs } from "file-saver";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
-import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive, calcTipNDT, shouldCollectTip } from "@/lib/tip-calc";
+import { computePhaiThu } from "@/lib/phai-thu-calc";
 
 type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note" | "total" | "total_number";
 
@@ -43,12 +43,21 @@ export interface ExportDoan {
     so_cho?: number | null;
     nha_xe?: { ten?: string | null } | null;
   } | null;
-  // Tip (phải thu) — override fields trên doan
+  // Phải thu — Tip + Thu tiền đầu khách + Thu tiền quỹ VP (override fields trên doan)
   thu_tip?: boolean | null;
   tip_rate?: number | null;
   tip_so_khach_override?: number | null;
   tip_so_ngay_override?: number | null;
   tip_lump_sum?: number | null;
+  tip_currency?: string | null;
+  tip_nguoi_thu?: string | null;
+  tip_ty_gia?: number | null;
+  dau_khach_rate?: number | null;
+  dau_khach_nguoi_thu?: string | null;
+  dau_khach_so_khach_override?: number | null;
+  quy_vp_amount?: number | null;
+  quy_vp_nguoi_thu?: string | null;
+  phai_thu_extras?: unknown;
 }
 
 /** Row ngày KS — export chỉ đọc các field này. */
@@ -78,6 +87,12 @@ interface ExportChiPhiDoanExcelParams {
   ksData?: { ngayRows: ExportKsNgayRow[]; khachSanMap: Record<number, ExportKsInfo> } | null;
   /** Tỷ giá NDT → VND (lưu local trong UI). Default 800. */
   tyGiaNdt?: number;
+  /**
+   * Chế độ xuất:
+   * - "full" (mặc định): đủ 4 sheet (Hành trình + Tổng hợp + Chi tiết + Thanh toán).
+   * - "hdv": chỉ sheet Hành trình (in cho HDV).
+   */
+  mode?: "full" | "hdv";
 }
 
 const encoder = new TextEncoder();
@@ -191,13 +206,23 @@ function getSoKhach(doan: ExportDoan): number {
   );
 }
 
-function getSoKhachText(doan: ExportDoan): string {
+/**
+ * Text "Số khách" cho export — khớp breakdown hiển thị trên trang điều tour
+ * (NL · TE 50% · TE free · T/L · Tổng). Bỏ qua category = 0 cho gọn.
+ * VD: "49 khách (42 NL, 5 TE 50%, 1 TE free, 1 TL)".
+ */
+export function getSoKhachText(doan: ExportDoan): string {
   const total = getSoKhach(doan);
-  const adults = doan?.so_khach_lon ?? 0;
+  const lon = doan?.so_khach_lon ?? 0;
+  const em1 = doan?.so_khach_em1 ?? 0; // TE 50%
+  const em2 = doan?.so_khach_em2 ?? 0; // TE free
   const tl = doan?.so_khach_tl ?? 0;
-  const em1 = doan?.so_khach_em1 ?? 0;
-  const em2 = doan?.so_khach_em2 ?? 0;
-  return `${total} khách (${adults} NL, ${tl} TL, ${em1} TE1, ${em2} TE2)`;
+  const parts: string[] = [];
+  if (lon) parts.push(`${lon} NL`);
+  if (em1) parts.push(`${em1} TE 50%`);
+  if (em2) parts.push(`${em2} TE free`);
+  if (tl) parts.push(`${tl} TL`);
+  return parts.length ? `${total} khách (${parts.join(", ")})` : `${total} khách`;
 }
 
 function getXeText(doan: ExportDoan): string {
@@ -619,6 +644,8 @@ function createZipBlob(files: Array<{ name: string; content: string }>): Blob {
 
 function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows, hdvData, opName, ksData } = params;
+  // In cho HDV: ẩn đơn giá phòng khách sạn (HDV không cần thấy giá KS).
+  const hideKsPrice = params.mode === "hdv";
 
   const ngayRowById: Record<number, ExportKsNgayRow> = {};
   (ksData?.ngayRows || []).forEach((r) => { if (r.id != null) ngayRowById[r.id] = r; });
@@ -648,7 +675,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   const rows: SheetCell[][] = [];
 
   // ─── HEADER ───
-  const soKhachText = `${doan?.so_khach_lon ?? 0}+${doan?.so_khach_tl ?? 0}TL`;
+  const soKhachText = getSoKhachText(doan);
   const quaTang = Array.isArray(doan?.tang_pham)
     ? (doan.tang_pham as string[]).join(", ")
     : doan?.tang_pham ? String(doan.tang_pham) : "—";
@@ -687,7 +714,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([
     cell("DATE日期", "header"), cell("KHÁCH SẠN 飯店", "header"), cell("LOẠI PHÒNG", "header"),
     cell("C/I 入境", "header"), cell("C/O 出境", "header"), cell("ROOMS 數量", "header"),
-    cell("FOC 16免1", "header"), cell("PRICE 價格", "header"),
+    cell("FOC 16免1", "header"), cell(hideKsPrice ? "" : "PRICE 價格", "header"),
     cell("HDV TT 導遊付款", "header"), cell("CTY TT 公司付款", "header"),
   ]);
 
@@ -746,10 +773,11 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell(coDateStr),
       main ? cell(main.so_luong || 0, "number") : cell(""),  // ROOMS
       cell(focText),
-      main ? cell(main.don_gia || 0, "number") : cell(""),   // PRICE
-      // HDV TT: tiền nếu HDV trả; ngược lại giữ code đặt phòng (KS thường CTY trả)
-      hdvAmt > 0 ? cell(hdvAmt, "number") : cell(bookingCode),
-      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),        // CTY TT
+      hideKsPrice || !main ? cell("") : cell(main.don_gia || 0, "number"),   // PRICE
+      // HDV TT: in cho HDV → luôn giữ code đặt phòng (ẩn tiền). Bình thường:
+      // tiền nếu HDV trả; ngược lại giữ code đặt phòng (KS thường CTY trả).
+      hideKsPrice ? cell(bookingCode) : (hdvAmt > 0 ? cell(hdvAmt, "number") : cell(bookingCode)),
+      hideKsPrice ? cell("") : (ctyAmt > 0 ? cell(ctyAmt, "number") : cell("")),  // CTY TT
     ]);
 
     // Khoản phụ cùng đêm (loại phòng 2 / dịch vụ) → dòng phụ ngay dưới.
@@ -762,9 +790,9 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
         cell(""), cell(""),
         cell(extra.so_luong || 0, "number"),
         cell(focFromRow(extra) || "—"),
-        cell(extra.don_gia || 0, "number"),
-        exHdv > 0 ? cell(exHdv, "number") : cell(""),
-        exCty > 0 ? cell(exCty, "number") : cell(""),
+        hideKsPrice ? cell("") : cell(extra.don_gia || 0, "number"),
+        hideKsPrice ? cell("") : (exHdv > 0 ? cell(exHdv, "number") : cell("")),
+        hideKsPrice ? cell("") : (exCty > 0 ? cell(exCty, "number") : cell("")),
       ]);
     }
   }
@@ -784,19 +812,22 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell("—"), cell("—"),
       cell(row.so_luong || 0, "number"),
       cell(focFromRow(row) || "—"),
-      cell(row.don_gia || 0, "number"),
-      hdvAmt > 0 ? cell(hdvAmt, "number") : cell(""),
-      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),
+      hideKsPrice ? cell("") : cell(row.don_gia || 0, "number"),
+      hideKsPrice ? cell("") : (hdvAmt > 0 ? cell(hdvAmt, "number") : cell("")),
+      hideKsPrice ? cell("") : (ctyAmt > 0 ? cell(ctyAmt, "number") : cell("")),
     ]);
   }
 
   if (ksNgaySorted.length === 0 && ksRows.length === 0) {
     rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
   }
-  rows.push([
-    cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"),
-    cell(totalHdvKS, "total_number"), cell(totalCtyKS, "total_number"),
-  ]);
+  // In cho HDV: ẩn dòng tổng tiền KS (HDV không cần thấy chi phí khách sạn).
+  if (!hideKsPrice) {
+    rows.push([
+      cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"),
+      cell(totalHdvKS, "total_number"), cell(totalCtyKS, "total_number"),
+    ]);
+  }
   rows.push([cell("", "text", 10)]);
 
   // ─── NHÀ HÀNG ───
@@ -947,44 +978,38 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([cell("TỔNG SỐ TIỀN TT", "total", 7), cell("VND", "total"), cell(totalHdvDV, "total_number"), cell(totalCtyDV, "total_number")]);
   rows.push([cell("", "text", 10)]);
 
-  // ─── TIP 小費 ─── (logic tách ở lib/tip-calc.ts — có unit test)
-  const soKhachTotal =
-    (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
-    (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
-    (doan?.so_khach ?? 0);
-  const soKhachTl = doan?.so_khach_tl ?? 0;
-  const autoTipSoKhach = defaultTipSoKhach(soKhachTotal, soKhachTl); // T/L không đóng tip
-  const autoTipSoNgay = tipDaysInclusive(doan?.ngay_di, doan?.ngay_ve);
-  const autoTipRate = defaultTipRate(soKhachTl);
-  const tipSoKhach = doan?.tip_so_khach_override ?? autoTipSoKhach;
-  const tipSoNgay = doan?.tip_so_ngay_override ?? autoTipSoNgay;
-  const tipRate = doan?.tip_rate ?? autoTipRate;
-  const computedTipNdt = calcTipNDT({ soKhach: tipSoKhach, soNgay: tipSoNgay, rate: tipRate });
-  const tipNdt = doan?.tip_lump_sum ?? computedTipNdt;
+  // ─── PHẢI THU 應收 ─── (Tip + Thu tiền đầu khách + Thu tiền quỹ VP + thu thêm tay)
+  // Logic tách ở lib/phai-thu-calc.ts (có unit test). Extras đã persist trong
+  // doan.phai_thu_extras → tự xuất qua phaiThu.items.
   const tyGiaNdt = params.tyGiaNdt ?? 800;
-  // Tôn trọng "Thu tiền tip": bỏ tích ở Điều tour (doan.thu_tip=false) → KHÔNG in
-  // section TIP và tip = 0 trong "Tổng thu" (mirror ChiPhiPhasThuSection.showTipRow).
-  const showTip = shouldCollectTip(doan?.thu_tip, tipSoKhach, tipSoNgay);
-  const tipVnd = showTip ? tipNdt * tyGiaNdt : 0;
+  const phaiThu = computePhaiThu(doan, tyGiaNdt);
+  const phaiThuShown = phaiThu.items.filter((it) => it.show);
 
-  if (showTip) {
-    rows.push([cell("TIP 小費", "section", 10)]);
+  if (phaiThuShown.length > 0) {
+    rows.push([cell("PHẢI THU 應收", "section", 10)]);
     rows.push([
+      cell("MỤC 項目", "header", 2),
       cell("SỐ KHÁCH", "header"),
       cell("SỐ NGÀY", "header"),
-      cell("ĐƠN GIÁ NDT/KHÁCH/NGÀY", "header", 3),
-      cell("TỶ GIÁ NDT", "header"),
-      cell("TỔNG NDT", "header", 2),
-      cell("TỔNG VND", "header", 2),
+      cell("ĐƠN GIÁ", "header", 2),
+      cell("TỶ GIÁ", "header"),
+      cell("NGƯỜI THU", "header"),
+      cell("THÀNH TIỀN VND", "header", 2),
     ]);
-    rows.push([
-      cell(tipSoKhach, "number"),
-      cell(tipSoNgay, "number"),
-      cell(tipRate, "number", 3),
-      cell(tyGiaNdt, "number"),
-      cell(tipNdt, "number", 2),
-      cell(tipVnd, "total_number", 2),
-    ]);
+    for (const it of phaiThuShown) {
+      rows.push([
+        cell(it.label, "text", 2),
+        it.soKhach == null ? cell("—") : cell(it.soKhach, "number"),
+        it.soNgay == null ? cell("—") : cell(it.soNgay, "number"),
+        cell(`${it.donGia.toLocaleString("vi-VN")} ${it.donViGoc}`, "text", 2),
+        cell(it.tyGia, "number"),
+        cell(it.nguoiThu === "hdv" ? "HDV thu" : "Công ty thu"),
+        cell(it.thanhTienVND, "total_number", 2),
+      ]);
+    }
+    rows.push([cell("Trong đó HDV thu (VND)", "total", 8), cell(phaiThu.hdvVND, "total_number", 2)]);
+    rows.push([cell("Trong đó Công ty thu (VND)", "total", 8), cell(phaiThu.ctyVND, "total_number", 2)]);
+    rows.push([cell("TỔNG PHẢI THU (VND)", "total", 8), cell(phaiThu.totalVND, "total_number", 2)]);
     rows.push([cell("", "text", 10)]);
   }
 
@@ -994,11 +1019,11 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 
   rows.push([
     cell("TỔNG HDV CHI VND 總計", "section", 2), cell(totalHdvAll, "total_number", 3),
-    cell("TỔNG THU (VNĐ)", "label"), cell(tipVnd, "total_number", 4),
+    cell("TỔNG PHẢI THU (VNĐ)", "label"), cell(phaiThu.totalVND, "total_number", 4),
   ]);
   rows.push([
     cell("TỔNG CTY CHI VND 總計", "section", 2), cell(totalCtyAll, "total_number", 3),
-    cell("TỔNG THU TIỀN ĐOÀN (VNĐ)", "label"), cell("—", "text", 4),
+    cell("TRONG ĐÓ HDV THU (VNĐ)", "label"), cell(phaiThu.hdvVND, "total_number", 4),
   ]);
 
   return {
@@ -1011,6 +1036,8 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows, dnttList, hdvData, opName } = params;
   const activeRows = chiPhiRows.filter(isActiveChiPhi);
+  const phaiThu = computePhaiThu(doan, params.tyGiaNdt ?? 800);
+  const phaiThuShown = phaiThu.items.filter((it) => it.show);
 
   const companyRows = COMPANY_CATEGORY_ORDER.map(({ key, label }) => {
     const duTru = sumBy(activeRows, (row) => row.danh_muc === key, (row) => row.tien_cong_ty || 0);
@@ -1077,7 +1104,20 @@ function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
         cell(hdvData?.daQuyetToan ? "Có" : "Không"),
       ],
       [cell("", "text", 6)],
-      [cell("Ghi chú: file này chưa bao gồm phần 'Phải thu' đang tính tạm trên giao diện HDV.", "note", 6)],
+      [cell("PHẢI THU (TIP + ĐẦU KHÁCH + QUỸ VP)", "section", 6)],
+      [cell("Khoản thu", "header"), cell("Người thu", "header"), cell("Thành tiền (VND)", "header"), cell("", "header"), cell("", "header"), cell("", "header")],
+      ...(phaiThuShown.length > 0
+        ? phaiThuShown.map((it) => [
+            cell(it.label),
+            cell(it.nguoiThu === "hdv" ? "HDV thu" : "Công ty thu"),
+            cell(it.thanhTienVND, "number"),
+            cell("", "text"),
+            cell("", "text"),
+            cell("", "text"),
+          ])
+        : [[cell("(Không có khoản phải thu)", "note", 6)]]),
+      [cell("HDV thu", "label"), cell("", "text"), cell(phaiThu.hdvVND, "number"), cell("Công ty thu", "label"), cell(phaiThu.ctyVND, "number"), cell("", "text")],
+      [cell("Tổng phải thu", "label"), cell("", "text"), cell(phaiThu.totalVND, "number"), cell("", "text"), cell("", "text"), cell("", "text")],
     ],
   };
 }
@@ -1206,12 +1246,15 @@ function buildThanhToanSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 }
 
 export async function exportChiPhiDoanExcel(params: ExportChiPhiDoanExcelParams) {
-  const sheets = [
-    buildHanhTrinhSheet(params),
-    buildSummarySheet(params),
-    buildChiTietSheet(params),
-    buildThanhToanSheet(params),
-  ];
+  // "hdv" → chỉ in sheet Hành trình; "full" (mặc định) → đủ 4 sheet.
+  const sheets = params.mode === "hdv"
+    ? [buildHanhTrinhSheet(params)]
+    : [
+        buildHanhTrinhSheet(params),
+        buildSummarySheet(params),
+        buildChiTietSheet(params),
+        buildThanhToanSheet(params),
+      ];
 
   const files = [
     { name: "[Content_Types].xml", content: buildContentTypesXml(sheets) },
@@ -1229,5 +1272,6 @@ export async function exportChiPhiDoanExcel(params: ExportChiPhiDoanExcelParams)
 
   const blob = createZipBlob(files);
   const baseName = sanitizeFilename(params.doan?.ten_doan || `doan_${params.doan?.id ?? "chi_phi"}`) || "chi_phi_doan";
-  saveAs(blob, `${baseName}_chi_phi_doan.xlsx`);
+  const suffix = params.mode === "hdv" ? "hanh_trinh_hdv" : "chi_phi_doan";
+  saveAs(blob, `${baseName}_${suffix}.xlsx`);
 }

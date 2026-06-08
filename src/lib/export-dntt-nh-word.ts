@@ -106,6 +106,12 @@ export interface NHDocEntry {
   tai_khoan_thanh_toan: string | null;
   so_tien_coc: number;
   can_tru: number;
+  /** Ghi chú nguồn cấn trừ — vd "Cấn trừ từ đoàn: VDC052705BR6". In ở cột Ghi chú
+   *  (dòng đầu của entry) khi can_tru > 0. */
+  can_tru_note?: string;
+  /** Phần suất chính trả bằng voucher → cộng vào cột Cấn trừ + trừ khỏi "còn TT".
+   *  Dòng chính ghi chú "Voucher". */
+  voucher_amount?: number;
   so_tien_con_tt: number;
   /** True khi đây là ĐNTT cọc (in cho mục đích "Đề nghị thanh toán tiền cọc").
    *  Ô "Số tiền còn thanh toán" hiển thị "(cọc)" + đỏ đậm. */
@@ -300,9 +306,10 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
             width: COL_W[9], rowSpan: itemCount,
           }),
         );
-        // Cấn trừ
+        // Cấn trừ = công nợ cấn trừ + phần trả bằng voucher (nguồn/loại in ở cột Ghi chú).
+        const tongCanTru = entry.can_tru + (entry.voucher_amount ?? 0);
         cells.push(
-          cell([p(entry.can_tru > 0 ? fmt(entry.can_tru) : "—", { size: 14, color: entry.can_tru > 0 ? "FF6600" : undefined })], {
+          cell([p(tongCanTru > 0 ? fmt(tongCanTru) : "—", { size: 14, color: tongCanTru > 0 ? "FF6600" : undefined })], {
             width: COL_W[10], rowSpan: itemCount,
           }),
         );
@@ -321,8 +328,14 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
         cells.push(cell(bankChildren, { width: COL_W[12], rowSpan: itemCount }));
       }
 
-      // Ghi chú — entry gộp: bỏ (tên dịch vụ đã ở cột TÊN); entry đơn: item.ghi_chu
-      cells.push(cell([p(entry.multi_service ? "—" : (item.ghi_chu || "—"), { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[13] }));
+      // Ghi chú — entry gộp: bỏ tên (đã ở cột TÊN); entry đơn: item.ghi_chu.
+      // Dòng ĐẦU: ghi "Voucher" (nếu suất chính trả bằng voucher) + nguồn cấn trừ.
+      const baseNote = isFirst && (entry.voucher_amount ?? 0) > 0
+        ? "Voucher"
+        : (entry.multi_service ? "" : (item.ghi_chu || ""));
+      const noteParts = [baseNote, isFirst && entry.can_tru_note ? entry.can_tru_note : ""].filter(Boolean);
+      const ghiChuText = noteParts.length > 0 ? noteParts.join(" · ") : "—";
+      cells.push(cell([p(ghiChuText, { size: 13, alignment: AlignmentType.LEFT })], { width: COL_W[13] }));
 
       rows.push(new TableRow({ children: cells }));
     }

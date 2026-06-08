@@ -4,6 +4,7 @@ import {
   UtensilsCrossed,
   Hotel,
   Car,
+  Plane,
   MapPin,
   UserCheck,
   Users,
@@ -24,6 +25,7 @@ import {
   Users2,
   BarChart3,
   Target,
+  Ticket,
   ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -172,18 +174,20 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Nhà hàng", url: "/quan-ly/nha-hang", icon: UtensilsCrossed, resource: "danh_muc" },
       { title: "Khách sạn", url: "/quan-ly/khach-san", icon: Hotel, resource: "danh_muc" },
       { title: "Xe", url: "/quan-ly/xe", icon: Car, resource: "danh_muc" },
+      { title: "Chuyến bay", url: "/quan-ly/chuyen-bay", icon: Plane, resource: "danh_muc" },
       { title: "Cảnh điểm", url: "/quan-ly/canh-diem", icon: MapPin, resource: "danh_muc" },
       { title: "Hướng dẫn viên", url: "/quan-ly/hdv", icon: UserCheck, resource: "danh_muc" },
       { title: "Mẫu seri", url: "/quan-ly/seri", icon: LayoutTemplate, resource: "seri" },
       { title: "Visa", url: "/quan-ly/visa", icon: Stamp, resource: "danh_muc" },
       { title: "Nhà cung cấp", url: "/quan-ly/nha-cung-cap", icon: Package, resource: "danh_muc" },
+      { title: "Voucher", url: "/quan-ly/voucher", icon: Ticket, minRole: "admin" },
     ],
   },
   {
     label: "HỆ THỐNG",
     items: [
       { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, resource: "dntt", boPhanOnly: "ke_toan", minRole: "giam_doc" },
-      { title: "Hoàn tiền tạm ứng", url: "/hoan-ung", icon: Wallet },
+      { title: "Chi phí văn phòng", url: "/hoan-ung", icon: Wallet },
       { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock, resource: "thanh_toan_dk" },
       { title: "Thanh Toán, Hóa Đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc", boPhanOnly: "ke_toan" },
       { title: "Công nợ", url: "/cong-no", icon: Wallet, resource: "cong_no" },

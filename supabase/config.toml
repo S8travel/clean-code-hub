@@ -4,3 +4,8 @@ project_id = "utrljiwwvohkdztwwchs"
 # Bảo vệ bằng header 'x-cron-secret' khớp env CHI_PHI_CRON_SECRET (xem index.ts).
 [functions.sync-chi-phi-to-sheet]
 verify_jwt = false
+
+# sync-su-co-to-sheet cũng được gọi bởi pg_cron → tắt verify_jwt.
+# Bảo vệ bằng header 'x-cron-secret' khớp env SU_CO_CRON_SECRET (xem index.ts).
+[functions.sync-su-co-to-sheet]
+verify_jwt = false

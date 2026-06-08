@@ -166,7 +166,7 @@ export default function HoanUngForm({ open, onClose }: Props) {
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col p-0 gap-0">
         <SheetHeader className="px-6 py-4 border-b shrink-0">
-          <SheetTitle>Yêu cầu hoàn tiền tạm ứng</SheetTitle>
+          <SheetTitle>Yêu cầu chi phí văn phòng</SheetTitle>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">

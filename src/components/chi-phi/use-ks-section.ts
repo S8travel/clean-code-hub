@@ -27,7 +27,10 @@ import {
   calcRowFocBreakdown,
   resolveKSFoc,
 } from "@/lib/foc-calc";
-import { fmt, fmtDateDisplay, buildKSRowFromCp, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
+import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
+import { useAuditLogger } from "@/hooks/use-activity-log";
+import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
+import { buildCanTruNote } from "@/lib/can-tru-note";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
 import { type KSCancelTarget } from "./KSCancelModal";
 
@@ -71,6 +74,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   const qc = useQueryClient();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
+  const auditLog = useAuditLogger();
   const cancelMut = useCancelDNTT();
   const insertDNTT = useInsertDNTT();
   const { data: currentUserName = "" } = useCurrentUserName();
@@ -124,13 +128,9 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       rowsByDayKey.get(k)!.push(r);
     });
 
-    const roomEntries: { name: string; so_luong: number; don_gia: number; so_dem: number; ci: string; co: string; foc_count: number }[] = ksRows.map((r) => {
+    // 1 entry / đêm (ngày ISO để gộp), giữ FOC pro-rata theo từng đêm.
+    const nightEntries: KSRoomNight[] = ksRows.map((r) => {
       const ngayDate = ngayDateMap[r.doan_ngay_id] || r.ngay_date || r.ci || "";
-      const coDate = ngayDate ? new Date(ngayDate + "T00:00:00") : null;
-      if (coDate) coDate.setDate(coDate.getDate() + 1);
-      const coStr = coDate
-        ? `${coDate.getDate()}/${coDate.getMonth() + 1}/${coDate.getFullYear()}`
-        : "";
       const sameDay = rowsByDayKey.get(r.ngay_date || "") || [];
       // Rooms: FOC pro-rata. Services: foc_count manual của row.
       const focCount = isKSRoomRow(r)
@@ -140,12 +140,22 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         name: r.loai_phong || (isKSRoomRow(r) ? "Phòng KS" : "Dịch vụ KS"),
         so_luong: r.so_phong,
         don_gia: r.gia_phong,
-        so_dem: r.so_dem,
-        ci: fmtDateDisplay(ngayDate),
-        co: coStr,
         foc_count: focCount,
+        so_dem: r.so_dem || 1,
+        ngayDate,
       };
     });
+    // Gộp đêm liên tiếp cùng cơ cấu phòng → 1 dòng (như bản booking). Tổng tiền không đổi.
+    const roomEntries: { name: string; so_luong: number; don_gia: number; so_dem: number; ci: string; co: string; foc_count: number }[] =
+      mergeConsecutiveKSNights(nightEntries).map((m) => ({
+        name: m.name,
+        so_luong: m.so_luong,
+        don_gia: m.don_gia,
+        so_dem: m.so_dem,
+        ci: m.ngayDate ? fmtDateDisplay(m.ngayDate) : "",
+        co: m.ngayDate ? fmtDateDisplay(addDaysIso(m.ngayDate, m.so_dem)) : "",
+        foc_count: m.foc_count,
+      }));
     if (roomEntries.length === 0) roomEntries.push({ name: "—", so_luong: 1, don_gia: 0, so_dem: 1, ci: "", co: "", foc_count: 0 });
 
     // Dates (overall range)
@@ -163,14 +173,10 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     const ngayRow = ksData.ngayRows.find((r) => r.khach_san_id === ksId);
     const codeKS = ngayRow?.ks_ma_code || "";
 
-    // cocTotal: cọc đã thanh toán đủ (paid)
-    const cocTotal = dnttList
-      .filter((d) => {
-        if (d.id === dnttId) return false;
-        if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
-        return d.la_coc && d.payment_status === "paid" && d.ref_loai === "khach_san" && d.ref_id === ksId;
-      })
-      .reduce((sum, d) => sum + d.so_tien, 0);
+    // cocTotal: tiền KS đã thanh toán qua các ĐNTT KHÁC (cọc HOẶC trả 1 phần).
+    // Dùng paid_amount thực tế + KHÔNG lọc la_coc — trả 1 phần thường ghi qua ĐNTT
+    // non-cọc (la_coc=false), lọc la_coc sẽ bỏ sót → cột "Đã thanh toán" hiện "—".
+    const cocTotal = calcKSPaidTotal(dnttList, dnttId, ksId);
 
     // canTru: tổng can_tru payments của ĐNTT đang preview
     const canTruTotal = canTruByDnttId[dnttId] || 0;
@@ -183,7 +189,12 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       .map((cp) => cp.id!)
       .filter(Boolean);
     void ksChiPhiIds; // legacy — không còn dùng vì canTruTotal lấy theo dntt_id
-    const canTruNote = canTruTotal > 0 ? "Cấn trừ công nợ" : "";
+    // Nguồn cấn trừ "Cấn trừ từ đoàn: <nguồn>" (buildCanTruNote — đồng bộ NH/DV).
+    // Fallback "Cấn trừ công nợ" cho payment cũ thiếu ghi_chu.
+    const canTruPays = paymentsList.filter((p) => p.dntt_id === dnttId && p.method === "can_tru");
+    const canTruNote = canTruTotal > 0
+      ? (buildCanTruNote(canTruPays) ?? "Cấn trừ công nợ")
+      : "";
 
     const focDisplay =
       ks.foc_khach && ks.foc_mien ? `${ks.foc_khach}/${ks.foc_mien}` : "—";
@@ -312,6 +323,13 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         });
         if (error) throw error;
         if (chiPhiIds.length > 0) await recalcChiPhiStatus(chiPhiIds);
+        auditLog({
+          doan_id: doanId,
+          action: "tao",
+          table_name: "cong_no",
+          record_id: chiPhiIds[0] ?? null,
+          mo_ta: `Ghi nhận ${lyDoLabel} ${fmt(absDelta)} ₫ — KS ${ksName ?? ""}${nccName ? " (NCC " + nccName + ")" : ""}`,
+        });
         toast.success(
           aggSurplusMode === "hoan_tien"
             ? `Đã ghi nhận hoàn tiền ${fmt(absDelta)} ₫`
@@ -646,6 +664,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
             (a.foc_mien_snapshot ?? null) !== (b.foc_mien_snapshot ?? null) ||
             Number(a.foc_count ?? 0) !== Number(b.foc_count ?? 0) ||
             (a.loai_row ?? "phong") !== (b.loai_row ?? "phong") ||
+            (a.trang_thai_hoa_don ?? null) !== (b.trang_thai_hoa_don ?? null) ||
             a.thanh_tien !== b.thanh_tien ||
             a.ngay_date !== b.ngay_date
           ) { same = false; break; }

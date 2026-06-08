@@ -83,6 +83,10 @@ function fmtDate(s: string | null | undefined): string {
   }
 }
 
+// UNC: KHÔNG CC hòm hóa đơn s8travel.hddt@gmail.com nữa (yêu cầu 2026-06) — vẫn
+// giữ trong BOOKING_CC cho luồng booking, chỉ lọc ở riêng luồng gửi UNC.
+const UNC_CC_EXCLUDE = "s8travel.hddt@gmail.com";
+
 export function ccForLoai(loai: string): readonly string[] {
   const k: BookingCcType | null =
     loai === "khach_san" ? "ks" :
@@ -90,7 +94,8 @@ export function ccForLoai(loai: string): readonly string[] {
     loai === "dich_vu"   ? "dv" :
     loai === "xe"        ? "xe" :
     loai === "visa"      ? "visa" : null;
-  return k ? BOOKING_CC[k] : ["s8travel.hddt@gmail.com"];
+  const base = k ? BOOKING_CC[k] : [UNC_CC_EXCLUDE];
+  return base.filter((e) => e.toLowerCase() !== UNC_CC_EXCLUDE);
 }
 
 export async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
@@ -210,6 +215,35 @@ export async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarge
   return { email: "", threadId: null, bookingSubject: null, source: "none" };
 }
 
+export interface UncAmountBreakdown {
+  /** Tổng tiền ĐNTT (so_tien gốc). */
+  soTien: number;
+  /** Đã thanh toán trước bằng tiền (cọc) — KHÔNG gồm phần cấn trừ. */
+  daCoc: number;
+  /** Đã cấn trừ vào công nợ giữa hai bên. */
+  canTru: number;
+  /** Số tiền THỰC chuyển khoản theo UNC này = soTien − đã trả trước. */
+  conLai: number;
+  /** Có cọc / cấn trừ trước đó → cần hiện breakdown thay vì 1 dòng số tiền. */
+  hasDeduction: boolean;
+}
+
+// Tách số tiền hiển thị trên mail UNC. paidBefore = tổng đã ghi nhận TRƯỚC
+// UNC này (gồm cọc tiền mặt + cấn trừ); canTru ⊆ paidBefore. Clamp để các dòng
+// cộng lại đúng bằng tổng (tránh số âm / vượt khi dữ liệu lệch).
+export function computeUncAmounts(
+  soTien: number,
+  paidBefore: number,
+  canTru: number,
+): UncAmountBreakdown {
+  const total = Math.max(0, soTien || 0);
+  const paid = Math.max(0, Math.min(paidBefore || 0, total));
+  const ct = Math.max(0, Math.min(canTru || 0, paid));
+  const daCoc = Math.max(0, paid - ct);
+  const conLai = Math.max(0, total - paid);
+  return { soTien: total, daCoc, canTru: ct, conLai, hasDeduction: paid > 0 };
+}
+
 // Lấy số tiền cấn trừ công nợ của 1 DNTT (= sum payments method='can_tru').
 export async function getCanTruAmount(dnttId: number): Promise<number> {
   const { data } = await externalSupabase
@@ -239,15 +273,26 @@ export function buildUncEmailBody(
     ? `<br>• Đoàn: <strong>${row.ten_doan}</strong>${codeKs}`
     : (showCodeKs ? `<br>• Code KS: <strong>${codeKsRaw}</strong>` : "");
   const ngayTT = fmtDate(row.ngay_can_thanh_toan);
-  const hasCanTru = canTruAmount > 0;
-  const thucChuyen = Math.max(0, (row.so_tien ?? 0) - canTruAmount);
-  const amountLines = hasCanTru
-    ? `• Tổng tiền cần thanh toán: <strong>${fmtVnd(row.so_tien)}</strong><br>
-  • Cấn trừ công nợ: <strong style="color:#0a3d7c">− ${fmtVnd(canTruAmount)}</strong><br>
-  • Số tiền chuyển khoản (theo UNC đính kèm): <strong style="color:#dc2626">${fmtVnd(thucChuyen)}</strong><br>`
-    : `• Số tiền: <strong style="color:#dc2626">${fmtVnd(row.so_tien)}</strong><br>`;
-  const canTruNote = hasCanTru
-    ? `<p>Lưu ý: trong tổng tiền trên, <strong>${fmtVnd(canTruAmount)}</strong> đã được cấn trừ vào công nợ giữa hai bên. Số tiền S8 thực chuyển khoản theo ủy nhiệm chi đính kèm là <strong>${fmtVnd(thucChuyen)}</strong>.</p>`
+  // UNC chỉ chuyển phần CÒN LẠI (so_tien − đã cọc/cấn trừ trước), không phải
+  // toàn bộ so_tien ĐNTT. paid_amount của row = đã ghi nhận trước UNC này.
+  const { soTien, daCoc, canTru: ct, conLai, hasDeduction } = computeUncAmounts(
+    row.so_tien ?? 0,
+    row.paid_amount ?? 0,
+    canTruAmount,
+  );
+  const amountLines = hasDeduction
+    ? [
+        `• Tổng tiền cần thanh toán: <strong>${fmtVnd(soTien)}</strong>`,
+        daCoc > 0 ? `• Đã thanh toán trước: <strong style="color:#0a3d7c">− ${fmtVnd(daCoc)}</strong>` : null,
+        ct > 0 ? `• Cấn trừ công nợ: <strong style="color:#0a3d7c">− ${fmtVnd(ct)}</strong>` : null,
+        `• Số tiền chuyển khoản (theo UNC đính kèm): <strong style="color:#dc2626">${fmtVnd(conLai)}</strong>`,
+      ].filter(Boolean).join("<br>\n  ") + "<br>"
+    : `• Số tiền: <strong style="color:#dc2626">${fmtVnd(soTien)}</strong><br>`;
+  const noteParts: string[] = [];
+  if (daCoc > 0) noteParts.push(`<strong>${fmtVnd(daCoc)}</strong> đã thanh toán trước đó`);
+  if (ct > 0) noteParts.push(`<strong>${fmtVnd(ct)}</strong> đã được cấn trừ vào công nợ giữa hai bên`);
+  const canTruNote = noteParts.length > 0
+    ? `<p>Lưu ý: trong tổng tiền trên, ${noteParts.join(" và ")}. Số tiền S8 thực chuyển khoản theo ủy nhiệm chi đính kèm là <strong>${fmtVnd(conLai)}</strong>.</p>`
     : "";
   const heading = row.ten_doan
     ? `S8 Travel xin gửi ủy nhiệm chi cho đoàn <strong>${row.ten_doan}</strong>:`

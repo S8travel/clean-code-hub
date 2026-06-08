@@ -10,6 +10,76 @@
 
 ---
 
+## 🗺️ Sơ đồ kiến trúc tổng thể
+
+> Bird's-eye view: client → Supabase (Auth / Data API+RLS / Edge Functions /
+> Storage / pg_cron) → Postgres + dịch vụ ngoài. Quan hệ bảng chi tiết xem §4.
+> Cập nhật 2026-06-01 (sau đợt siết bảo mật theo Security Advisor: view
+> `security_invoker`, khóa list bucket cho `anon`, bật leaked-password,
+> revoke EXECUTE hàm nội bộ).
+
+```mermaid
+flowchart TB
+  subgraph USERS["Người dùng"]
+    staff["Nhân viên<br/>admin · điều hành · kế toán · viewer"]
+    guest["Khách (công khai)"]
+  end
+
+  subgraph FE["Frontend — React 18 + TS + Vite (SPA tĩnh)"]
+    feUI["UI Tailwind + shadcn/ui · Router v6 · sonner<br/>TanStack Query v5 · export docx/xlsx"]
+    feMod["Module: Đoàn/Điều tour · Booking KS/NH/DV/Visa/Xe<br/>Chi phí → ĐNTT → Thanh toán → Công nợ · Định kỳ · Hóa đơn/UNC<br/>Lead · Báo giá · Voucher · HDV · Dashboard · Danh mục"]
+    feUI --- feMod
+  end
+
+  subgraph SB["Supabase (lflsbwoqzmbknzdpaequ)"]
+    auth["Auth JWT<br/>anon · authenticated · service_role<br/>user_roles · leaked-pw bật"]
+    api["Data API PostgREST + RLS<br/>RPC · VIEW security_invoker"]
+    edge["Edge Functions (Deno)<br/>send-booking-email · ai-chat<br/>sync-dntt / chi-phi / du-chi → Sheet<br/>xuat-word-dntt-ks · change-password"]
+    db[("PostgreSQL — RLS bật")]
+    storage[("Storage<br/>dntt-documents · doan-files<br/>list khóa anon")]
+    cron["pg_cron + pg_net<br/>sync 30' / tuần · lead followup<br/>escalation · nhắc việc"]
+    trig["Triggers / RPC nội bộ<br/>notify duyệt · recalc TT<br/>auto nhóm · cấn trừ"]
+  end
+
+  subgraph DBD["Postgres — nhóm bảng nghiệp vụ"]
+    d1["Tour<br/>doan · doan_ngay(_item) · doan_nhom · seri_tour*"]
+    d2["Booking<br/>doan_booking_ks/nh/dv · doan_ks_dem"]
+    d3["Tiền<br/>doan_chi_phi · de_nghi_thanh_toan · payments<br/>cong_no · dntt_allocations + VIEW *_with_status"]
+    d4["Danh mục<br/>khach_san · nha_hang · canh_diem · nha_xe*<br/>nha_cung_cap · visa*"]
+    d5["Lead<br/>lead · activity / task / campaign"]
+    d6["Voucher & Hệ thống<br/>voucher* · user_roles · doan_permissions<br/>thong_bao · cong_viec · audit"]
+  end
+
+  subgraph EXT["Dịch vụ ngoài"]
+    resend["Resend<br/>email giao dịch"]
+    sheets["Google Sheets API<br/>báo cáo ĐNTT / chi phí"]
+    ai["AI provider<br/>(ai-chat)"]
+    hibp["HaveIBeenPwned<br/>mật khẩu rò rỉ"]
+  end
+
+  staff -->|HTTPS| FE
+  FE -->|"supabase-js (anon key)"| auth
+  FE -->|REST / Realtime| api
+  FE -->|Storage SDK| storage
+  FE -->|invoke| edge
+  guest -->|"/lead-form (anon RPC)"| api
+  storage -. "public URL (link email)" .-> guest
+
+  api --> db
+  db --- DBD
+  edge -->|"service_role (bypass RLS)"| db
+  cron --> edge
+  cron --> trig
+  trig --> db
+
+  edge --> resend
+  edge --> sheets
+  edge --> ai
+  auth -. "kiểm mật khẩu" .-> hibp
+```
+
+---
+
 ## 1. Hệ thống là gì
 
 CRM nội bộ điều hành tour cho S8 Travel: quản lý **lead → báo giá → đoàn tour →
@@ -37,17 +107,29 @@ Chi tiết file → `CLAUDE.md`.
   còn auto-expose qua API → **bắt buộc kèm GRANT + RLS** trong migration (template
   ở `CLAUDE.md`). `ALTER TABLE` (thêm cột/index/trigger) **không cần** grant.
 - **RLS:** hầu hết bảng dùng policy kiểu `auth.uid() IS NOT NULL` cho `ALL`
-  (đăng nhập là thao tác được). Phân quyền thật nằm ở **tầng UI**
-  (`use-permissions`, `user_roles.role/bo_phan`), KHÔNG ở RLS.
+  (đăng nhập là thao tác được). Phân quyền thật (hiện tại) nằm ở **tầng UI**
+  (`use-permissions`, `user_roles.role/bo_phan`). Đang dịch dần sang RLS chặt
+  per-user: VIEW tiền (`dntt_with_payment_status`/`cong_no_with_status`/
+  `voucher_with_status`) đã chuyển **`security_invoker`** (2026-06-01) để sẵn
+  sàng; còn 7 bảng dùng policy `USING(true)` cho `ALL` chờ siết (§11).
+- **Siết bảo mật 2026-06-01 (Supabase Security Advisor):** revoke `EXECUTE` hàm
+  nội bộ/cron khỏi `anon`; cố định `search_path`; khóa **list** 2 bucket storage
+  cho `anon` (chỉ còn `getPublicUrl` công khai); bật leaked-password. Chi tiết +
+  việc còn lại (#5 RLS) → memory `project_security_advisor_hardening`.
 - **Generated columns:** `doan_chi_phi.thanh_tien`, `doan_ngay_item.thanh_tien`
   là GENERATED → **destructure bỏ trước khi insert/update**, không bao giờ ghi.
 - **RPC quan trọng:** `recalc_chi_phi_payment_status` — nguồn DUY NHẤT tính
   `doan_chi_phi.trang_thai_thanh_toan` (dựa SUM(payments)), KHÔNG set tay.
-- **Edge Functions:** `send-booking-email` (Resend, mọi mail booking/UNC),
-  `xuat-word-booking-ks`, `xuat-word-dntt-ks`, `process-bao-gia` +
-  `extract-chuong-trinh` (AI báo giá), `sync-dntt-to-sheet`, `ai-chat`,
-  `extract-chuong-trinh`, `Change-password`. **Không có** cron lead automation
-  (playbook chưa triển khai — xem §11).
+- **Edge Functions (Deno)** — thực tế trong `supabase/functions/`:
+  `send-booking-email` (Resend, mọi mail booking/UNC), `ai-chat`,
+  `xuat-word-dntt-ks`, `get-exchange-rate`, `Change-password`, + 3 hàm đồng bộ
+  Google Sheet: `sync-dntt-to-sheet` · `sync-chi-phi-to-sheet` ·
+  `sync-dntt-du-chi-to-sheet`. (DB query trong edge fn dùng `service_role` →
+  `BYPASSRLS`, nên `security_invoker` view không ảnh hưởng.)
+- **pg_cron + pg_net** (job chạy bằng `postgres`): `lead_followup_daily` (1h),
+  `remind_pv_phancong_daily` (2h), `doan_booking_escalation_daily` (2h30),
+  `sync-dntt-to-sheet` (mỗi 30'), `sync-chi-phi-weekly` (9h thứ 5). Riêng lead
+  **auto-send** (Zalo/email playbook) thì CHƯA — xem §11.
 - **Realtime publication — CẠM BẪY LỚN:** `postgres_changes` chỉ nhận event nếu
   bảng nằm trong publication `supabase_realtime`. DB này ban đầu KHÔNG add bảng
   nào → mọi `useRealtime*` cũ là **code chết**. Đã thêm: `thong_bao`,
@@ -112,9 +194,65 @@ số 1 của nghiệp vụ: "đoàn đã đi xong, ai sửa danh mục → loạ
   `chi_phi.thanh_tien` (user edit được). `thanh_tien_thuc_te` set ABSOLUTE qua
   `proRataInts`, KHÔNG cộng dồn delta.
 
+#### 5.3.1 Sơ đồ trạng thái — ĐNTT & công nợ
+
+**ĐNTT** (`de_nghi_thanh_toan`): trục DUYỆT (`trang_thai_duyet`) tách rời trục TRẢ
+TIỀN (`payment_status` derived). Hủy có thể xảy ra cả khi đã trả 1 phần.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> cho_duyet : tạo ĐNTT
+  cho_duyet --> da_duyet : duyệt đủ 3 cấp
+  cho_duyet --> tu_choi : từ chối
+  cho_duyet --> da_huy : hủy
+  da_duyet --> da_huy : hủy
+  tu_choi --> [*]
+  da_huy --> [*]
+  note right of cho_duyet
+    Nguồn tạo: tab Chi phí · gộp theo NCC · thanh toán định kỳ
+    3 cấp duyệt: TP.ĐH (auto-pass cấp 1) → … → KTTT
+  end note
+  note right of da_duyet
+    payment_status đọc qua VIEW dntt_with_payment_status (= SUM payments),
+    KHÔNG set tay:  unpaid → partial → paid
+    payment.method = cash | can_tru
+    can_tru: rút 1 cong_no của đoàn khác cùng NCC
+    Hủy/điều chỉnh sau khi đã trả → sinh cong_no (sơ đồ dưới)
+  end note
+  note left of tu_choi
+    Terminal — không hồi sinh. Thử lại = TẠO ĐNTT MỚI.
+  end note
+```
+
+**Công nợ** (`cong_no`): sinh từ trả thừa / điều chỉnh giảm / hủy ĐNTT đã có
+payment; tiêu bằng cấn trừ (`payment.method=can_tru`) hoặc NCC hoàn tiền mặt.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> con_du : sinh công nợ
+  con_du --> da_can_tru : cấn trừ hết
+  con_du --> da_hoan_tien : NCC hoàn tiền
+  da_can_tru --> con_du : rollback xóa payment
+  da_can_tru --> [*]
+  da_hoan_tien --> [*]
+  note right of con_du
+    Sinh từ: trả thừa / điều chỉnh giảm chi phí / hủy ĐNTT đã có payment.
+    so_tien_con_lai = so_tien_goc - SUM(payments can_tru)  [VIEW cong_no_with_status]
+    loai = phat_sinh | tra_truoc (quỹ trả trước NCC)
+  end note
+```
+
 ### 5.4 FOC (free of charge)
-- **KS theo phòng × ĐÊM, KHÔNG nhân `so_dem`** (mỗi LocalKSRow = 1 đêm). Công
-  thức display (`calcFocDeduction`) và lưu DB (`handleBlurSave`) PHẢI giống hệt.
+- **KS — Option A: `foc_count` NHẬP TAY per-row, KHÔNG auto-pool theo ngày.**
+  `rowFocDeduction = foc_count × gia_phong`; `tien_cong_ty = (so_luong −
+  foc_count) × gia_phong` (`calcRowFocBreakdown`/`calcTotalKS` trong
+  `lib/foc-calc.ts`). Bỏ auto-pool cũ vì pool phân bổ theo bình quân giá → mix
+  loại phòng (vd 30 twn + 1 sgl nâng hạng) làm FOC dính nhầm phòng giá cao, vượt
+  giá trị thực. UI chỉ hiện **gợi ý** 16免1 (`calcFocSuggestion`, info-only) —
+  OP tự gán `foc_count` vào phòng giá thấp nhất. `foc_*_snapshot` vẫn lưu nhưng
+  CHỈ để tính gợi ý (`resolveKSFoc`), KHÔNG còn dùng tính tiền.
 - **NH theo khách:** `so_mien = floor(so_khach/foc_khach)*foc_mien`,
   `thanh_tien = (so_khach - so_mien) * don_gia`.
 - Người trả: `cong_ty` → `tien_cong_ty=thanh_tien, tien_hdv=0`; `hdv` → ngược
@@ -208,11 +346,18 @@ trừ: mail phải tách Tổng / Cấn trừ / Thực chuyển khoản.
 - Memo-row `useState(prop)` → phải có external-sync (§7.1).
 - `||` với số có thể = 0 → dùng `??`.
 - Migration `CREATE TABLE` → kèm GRANT + RLS.
-- Verify trước push: `npx tsc --noEmit -p tsconfig.json` + `npx vite build`.
+- Verify trước push: `npm run lint` (0 error) + **`npx tsc -b`** (0 error —
+  KHÔNG dùng `tsc -p tsconfig.json`, nó check 0 file) + unit test. CI gate ở PR.
 - Push chỉ khi user yêu cầu; KHÔNG commit `.claude/settings.json`, file lạ.
 
 ## 11. Nợ kỹ thuật / hướng mở rộng
 
+- **Siết RLS per-user (#5)** — 7 bảng còn `USING(true)` cho `ALL`
+  (`voucher`/`voucher_su_dung`, `doan_nhom`, `doan_tai_lieu`,
+  `lead_cadence/_next_action/_template`): cần chốt "role nào sửa bảng nào" rồi
+  siết. VIEW tiền đã `security_invoker` sẵn sàng. (memory
+  `project_security_advisor_hardening`)
+- **Voucher** Phase 2 (nút "Dùng voucher" ở NH/DV) — thiết kế đã chốt, chưa code.
 - **Báo giá revamp** (đã chốt thiết kế, chưa code) — memory.
 - **i18n** còn nhiều module chưa wrap (GT lo tạm) — memory.
 - **Lead Playbook** (`LEAD_PLAYBOOK.md`) = CHƯA triển khai, đã bị thay bằng

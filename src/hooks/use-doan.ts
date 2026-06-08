@@ -6,6 +6,7 @@ import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { resolveNhom1SoKhach } from "@/lib/doan-nhom-sync";
+import { isChiPhiLocked } from "@/lib/chi-phi-lock";
 
 export interface Doan {
   id: number;
@@ -330,7 +331,7 @@ export function useDoanList(
           dia_diem:dia_diem_id(ten),
           huong_dan_vien:huong_dan_vien!huong_dan_vien_id(id, ten, so_dien_thoai),
           huong_dan_vien_2:huong_dan_vien!huong_dan_vien_id_2(id, ten, so_dien_thoai),
-          xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id)),
+          xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
           van_phong:van_phong_id(id, ten)
         `);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
@@ -465,6 +466,7 @@ export function useCreateDoan() {
 export function useUpdateDoan() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
   return useMutation({
     mutationFn: async ({ id, ...updates }: DoanInsert & { id: number }) => {
       // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem + diff log
@@ -477,6 +479,16 @@ export function useUpdateDoan() {
 
       const oldTotal = (oldDoan.so_khach_lon ?? 0) + (oldDoan.so_khach_em1 ?? 0)
                     + (oldDoan.so_khach_em2 ?? 0) + (oldDoan.so_khach_tl ?? 0);
+
+      // Đoàn đã quyết toán: đổi số khách sẽ cascade sửa chi phí → chặn (trừ admin).
+      // Field khác (ghi chú, agent…) vẫn cho sửa.
+      const soKhachKeysGuard = ["so_khach_lon", "so_khach_em1", "so_khach_em2", "so_khach_tl"] as const;
+      const soKhachChangedGuard = soKhachKeysGuard.some(
+        (k) => updates[k] !== undefined && updates[k] !== oldDoan[k],
+      );
+      if (soKhachChangedGuard && isChiPhiLocked(user?.role ?? null, qtPaidSet ?? null, id)) {
+        throw new Error("Đoàn đã quyết toán — không thể đổi số khách (ảnh hưởng chi phí). Chỉ admin mới sửa được.");
+      }
 
       // 2. UPDATE doan
       const { data, error } = await externalSupabase.from("doan").update(updates).eq("id", id).select().single();
@@ -805,6 +817,10 @@ export function useUpdateDoanTip() {
       tip_so_khach_override?: number | null;
       tip_so_ngay_override?: number | null;
       tip_lump_sum?: number | null;
+      tip_currency?: string | null;
+      tip_nguoi_thu?: string | null;
+      tip_ty_gia?: number | null;
+      phai_thu_extras?: unknown;
       dau_khach_rate?: number | null;
       dau_khach_currency?: string | null;
       dau_khach_ty_gia?: number | null;

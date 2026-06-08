@@ -99,7 +99,7 @@ export default function HoanUngPage() {
       <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b bg-background">
         <div className="flex items-center gap-2">
           <Wallet className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold">Hoàn tiền tạm ứng</h1>
+          <h1 className="text-xl font-bold">Chi phí văn phòng</h1>
           {!isLoading && (
             <span className="text-sm text-muted-foreground ml-1">({rows.length})</span>
           )}

@@ -30,6 +30,7 @@ import { useAllSetMenus } from "@/hooks/use-nha-hang";
 import { useBookingKS } from "@/hooks/use-booking-ks";
 import { useBookingNH } from "@/hooks/use-booking-nh";
 import { useChiPhiList, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi-phi";
+import { giftMoTa, GIFT_DON_GIA } from "@/components/chi-phi/hdv-shared";
 import CompanyHeader from "@/components/dieu-tour/CompanyHeader";
 import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
 import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
@@ -300,8 +301,14 @@ export default function DoanDetail() {
               canhDiemList,
               soKhach: totalKhach || doan?.so_khach || 0,
             });
-          } catch {
-            // Sync booking DV failed silently — chính flow lưu đoàn vẫn pass
+          } catch (e) {
+            // Lưu đoàn VẪN thành công, nhưng BÁO cho user biết sync Booking DV lỗi.
+            // (Trước đây nuốt im lặng → dịch vụ không hiện ở tab Booking DV mà không ai hay.)
+            console.error("syncDieuTourToBookingDV failed:", e);
+            toast.warning(
+              `${t("Đồng bộ Booking DV thất bại")}: ${errMsg(e) || t("Thử lưu lại điều tour")}`,
+              { duration: 6000 },
+            );
           }
         },
         onError: (err: unknown) => {
@@ -343,40 +350,47 @@ export default function DoanDetail() {
   const handleSetChuyenBayTien = useCallback((v: string) => { setChuyenBayTien(v); scheduleSave(); }, [scheduleSave]);
   const handleSetChuThichKhach = useCallback((v: string) => { setChuThichKhach(v); scheduleSave(); }, [scheduleSave]);
   const handleSetCoTinhSuatTLNhaHang = useCallback((v: boolean) => { setCoTinhSuatTLNhaHang(v); scheduleSave(); }, [scheduleSave]);
-  // Sim trong tặng phẩm = công ty hỗ trợ HDV (75k/khách).
-  // Insert thành row "hdv_ho_tro" để hiện trong section "CHI PHÍ CÔNG TY HỖ TRỢ HDV".
-  // Không qua DNTT — quyết toán qua flow hdv_quyet_toan.
+  // Quà tặng = HDV mang theo cho khách. Tick quà ở Điều tour → tự thêm 1 row
+  // "hdv_ho_tro" "{Quà} tặng khách" để hiện trong section "Khác" của Chi phí
+  // HDV; bỏ tick → xóa row. Đơn giá mặc định / khách theo GIFT_DON_GIA (quà
+  // chưa có giá → 0, OP nhập sau). Nguồn mặc định HDV (HDV ứng, quyết toán sau).
   const handleSetGifts = useCallback((next: string[]) => {
-    const SIM_MO_TA = "Sim tặng khách";
-    const SIM_DON_GIA = 75_000;
-    const hadSim = gifts.includes("Sim");
-    const hasSim = next.includes("Sim");
+    const prev = gifts;
     setGifts(next);
     scheduleSave();
     if (!doanId) return;
     const invalidateHdv = () =>
       queryClient.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
-    if (!hadSim && hasSim) {
-      const soKhach = totalKhach || doan?.so_khach || 0;
-      const exists = chiPhiRows.some((c) => c.mo_ta === SIM_MO_TA && c.danh_muc === "hdv_ho_tro");
-      if (!exists && soKhach > 0) {
-        upsertChiPhi.mutate({
-          doan_id: doanId,
-          mo_ta: SIM_MO_TA,
-          danh_muc: "hdv_ho_tro",
-          loai: "khac",
-          so_luong: soKhach,
-          don_gia: SIM_DON_GIA,
-          tien_cong_ty: SIM_DON_GIA * soKhach,
-          tien_hdv: 0,
-        }, { onSuccess: invalidateHdv });
-      }
-    } else if (hadSim && !hasSim) {
-      const simRow = chiPhiRows.find((c) => c.mo_ta === SIM_MO_TA && c.danh_muc === "hdv_ho_tro");
-      if (simRow) {
+    const added = next.filter((g) => !prev.includes(g));
+    const removed = prev.filter((g) => !next.includes(g));
+    const soKhach = totalKhach || doan?.so_khach || 0;
+    for (const gift of added) {
+      const moTa = giftMoTa(gift);
+      const exists = chiPhiRows.some((c) => c.mo_ta === moTa && c.danh_muc === "hdv_ho_tro");
+      if (exists || soKhach <= 0) continue;
+      const donGia = GIFT_DON_GIA[gift] ?? 0;
+      upsertChiPhi.mutate({
+        doan_id: doanId,
+        mo_ta: moTa,
+        danh_muc: "hdv_ho_tro",
+        loai: "khac",
+        so_luong: soKhach,
+        don_gia: donGia,
+        tien_cong_ty: 0,
+        tien_hdv: donGia * soKhach,
+      }, { onSuccess: invalidateHdv });
+    }
+    for (const gift of removed) {
+      const moTa = giftMoTa(gift);
+      const row = chiPhiRows.find((c) => c.mo_ta === moTa && c.danh_muc === "hdv_ho_tro");
+      if (row) {
         deleteChiPhi.mutate(
-          { id: simRow.id, doanId, mo_ta: simRow.mo_ta, danh_muc: simRow.danh_muc },
-          { onSuccess: invalidateHdv },
+          { id: row.id, doanId, mo_ta: row.mo_ta, danh_muc: row.danh_muc },
+          {
+            onSuccess: invalidateHdv,
+            // Row đã nằm trong ĐNTT → useDeleteChiPhi chặn (giữ row). Báo OP.
+            onError: (e: unknown) => toast.error(errMsg(e) || t("Không xóa được quà đã có ĐNTT")),
+          },
         );
       }
     }

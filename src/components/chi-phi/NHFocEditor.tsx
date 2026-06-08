@@ -8,12 +8,13 @@ import { t, useTranslate } from "@/lib/i18n";
 // Edit FOC snapshot per-row (mỗi meal). Master không thay đổi.
 // Tách verbatim từ ChiPhiNHSection.
 export function NHFocEditor({
-  doanId, rowId, focKhach, focMien,
+  doanId, rowId, focKhach, focMien, disabled = false,
 }: {
   doanId: number;
   rowId: number;
   focKhach: number | null;
   focMien: number | null;
+  disabled?: boolean;
 }) {
   useTranslate();
   const qc = useQueryClient();
@@ -26,6 +27,7 @@ export function NHFocEditor({
   useEffect(() => { setM(display(focMien)); }, [focMien]);
 
   const save = async () => {
+    if (disabled) return; // đoàn đã quyết toán → khóa (trừ admin)
     // User clear ô → lưu 0 (KHÔNG null) để resolveNHFoc trust snapshot, KHÔNG
     // fallback về master (master có thể còn FOC, gây -1 dù user đã clear).
     const parse = (s: string): number => {
@@ -82,20 +84,22 @@ export function NHFocEditor({
         value={k}
         onChange={(e) => setK(e.target.value)}
         onBlur={save}
+        disabled={disabled}
         type="number"
         min={0}
         placeholder="—"
-        className="w-7 h-5 px-0.5 text-[10px] text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
+        className="w-7 h-5 px-0.5 text-[10px] text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background disabled:opacity-60 disabled:cursor-not-allowed"
       />
       <span>免</span>
       <input
         value={m}
         onChange={(e) => setM(e.target.value)}
         onBlur={save}
+        disabled={disabled}
         type="number"
         min={0}
         placeholder="—"
-        className="w-7 h-5 px-0.5 text-[10px] text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
+        className="w-7 h-5 px-0.5 text-[10px] text-center border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </div>
   );

@@ -27,6 +27,35 @@ export const dayLabel = (dateStr: string) => {
   return dayNames[getDay(d)];
 };
 
+// ĐNTT KS đã thanh toán (cọc / 1 phần) cho cột "Đã thanh toán" của bản in ĐNTT.
+export interface KSPaidDnttInfo {
+  id: number;
+  trang_thai_duyet: string;
+  ref_loai: string | null;
+  ref_id: number | null;
+  paid_amount: number;
+}
+
+// Tổng tiền KS đã thanh toán qua các ĐNTT KHÁC của cùng khách sạn (cọc HOẶC trả 1
+// phần). Dùng cho cột "Đã thanh toán" / "Đã cọc" trên bản in ĐNTT KS.
+//   - Tính theo `paid_amount` THỰC TẾ (view dntt_with_payment_status), KHÔNG theo so_tien.
+//   - Loại ĐNTT đang in (currentDnttId) + ĐNTT đã hủy / từ chối.
+//   - KHÔNG lọc theo `la_coc`: trả 1 phần thường ghi qua ĐNTT non-cọc (la_coc=false),
+//     nếu lọc la_coc sẽ bỏ sót phần đã trả → cột hiện "—" dù đã thanh toán.
+export function calcKSPaidTotal(
+  dnttList: KSPaidDnttInfo[],
+  currentDnttId: number,
+  ksId: number,
+): number {
+  return dnttList
+    .filter((d) => {
+      if (d.id === currentDnttId) return false;
+      if (d.trang_thai_duyet === "da_huy" || d.trang_thai_duyet === "tu_choi") return false;
+      return d.ref_loai === "khach_san" && d.ref_id === ksId;
+    })
+    .reduce((sum, d) => sum + (d.paid_amount || 0), 0);
+}
+
 export type KSLoaiRow = "phong" | "dich_vu_an" | "dich_vu_ve" | "dich_vu_khac";
 
 export interface LocalKSRow {
@@ -50,6 +79,7 @@ export interface LocalKSRow {
   loai_row?: KSLoaiRow;  // default 'phong' nếu không set
   foc_count?: number;    // dùng cho service rows (OP tự điền)
   is_hdv?: boolean;      // dòng dịch vụ HDV trả (tien_hdv>0) — ngoài tổng KS/ĐNTT
+  trang_thai_hoa_don?: string | null; // dòng dịch vụ HDV trả: badge hóa đơn (kế toán bấm tay)
 }
 
 // Ngày của đoàn — chỉ field mà buildKSRowFromCp đọc.
@@ -94,6 +124,7 @@ export function buildKSRowFromCp(
       loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
       foc_count: Number(cp.foc_count ?? 0),
       is_hdv: (cp.tien_hdv ?? 0) > 0,
+      trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
     } as LocalKSRow;
   }
   const ngay = ngayMap[cp.ref_doan_ngay_id!];
@@ -120,5 +151,6 @@ export function buildKSRowFromCp(
     loai_row: (cp.loai_row as KSLoaiRow) ?? "phong",
     foc_count: Number(cp.foc_count ?? 0),
     is_hdv: (cp.tien_hdv ?? 0) > 0,
+    trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
   } as LocalKSRow;
 }

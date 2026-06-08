@@ -18,6 +18,8 @@ import KSServicesSection from "./KSServicesSection";
 import KSFocEditor from "./KSFocEditor";
 import KSCodeEditor from "./KSCodeEditor";
 import { fmt, STATUS_LABEL, type LocalKSRow } from "./ks-section-shared";
+import { HoaDonBadge } from "./HoaDonBadge";
+import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import type { KSCardData, KSCardHandlers } from "./use-ks-section";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -25,11 +27,13 @@ interface Props {
   ksId: number;
   data: KSCardData;
   handlers: KSCardHandlers;
+  /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
+  locked?: boolean;
 }
 
 // 1 card khách sạn: phòng + dịch vụ + thanh toán section.
 // Tách verbatim từ ChiPhiKSSection — giữ nguyên 100% logic/hành vi.
-export default function KSCard({ ksId, data, handlers }: Props) {
+export default function KSCard({ ksId, data, handlers, locked = false }: Props) {
   useTranslate();
   const {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
@@ -258,6 +262,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
               rowIds={rows.map((r) => r.id).filter((id): id is number => id != null)}
               focKhach={ksFoc.foc_khach}
               focMien={ksFoc.foc_mien}
+              disabled={locked}
             />
             <Button
               variant="ghost"
@@ -337,6 +342,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                     onAddRoom={() => handleAddRow(ksId, doanNgayId, dateStr, refItemForDay)}
                     onAddService={() => handleAddRow(ksId, doanNgayId, dateStr, refItemForDay, "dich_vu_khac")}
                     disabled={isKsLocked}
+                    locked={locked}
                     cpCommittedById={cpCommittedById}
                   />
                 );
@@ -351,6 +357,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                     ngaySo={r.ngay_so}
                     onAddRoom={() => handleAddRow(ksId, r.id, r.ngay_date)}
                     onAddService={() => handleAddRow(ksId, r.id, r.ngay_date, undefined, "dich_vu_khac")}
+                    locked={locked}
                   />
                 ))}
               {Object.entries(dayUseItemMap)
@@ -363,6 +370,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                     isDayUse
                     onAddRoom={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, Number(itemIdStr))}
                     onAddService={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, undefined, "dich_vu_khac")}
+                    locked={locked}
                   />
                 ))}
             </TableBody>
@@ -383,6 +391,7 @@ export default function KSCard({ ksId, data, handlers }: Props) {
               onDelete={handleDelete}
               onToggleNguoiTt={handleToggleRowNguoiTt}
               disabled={isKsLocked}
+              locked={locked}
               cpCommittedById={cpCommittedById}
             />
           )}
@@ -467,6 +476,10 @@ export default function KSCard({ ksId, data, handlers }: Props) {
                             : isApproved ? t("Đã duyệt")
                             : "—"}
                         </span>
+                        <HoaDonBadge
+                          dnttId={dntt.id}
+                          trangThai={(dntt.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc}
+                        />
                         {dntt.ngay_can_thanh_toan && (
                           <span
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 text-[10px] font-medium"
@@ -630,8 +643,9 @@ export default function KSCard({ ksId, data, handlers }: Props) {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 ml-auto">
               {/* Điều chỉnh — chỉ hiện khi đã có DNTT paid (giống NH/DV pattern).
-                  Mở modal cho phép sửa so_phong/gia_phong nhiều row trong booking. */}
-              {isKsLocked && (
+                  Mở modal cho phép sửa so_phong/gia_phong nhiều row trong booking.
+                  Ẩn khi đoàn đã quyết toán (Điều chỉnh = sửa cost) — trừ admin. */}
+              {isKsLocked && !locked && (
                 <Button
                   variant="ghost"
                   size="sm"
