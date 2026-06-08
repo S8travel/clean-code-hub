@@ -187,7 +187,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "HỆ THỐNG",
     items: [
       { title: "Đề nghị thanh toán", url: "/de-nghi-thanh-toan", icon: CreditCard, resource: "dntt", boPhanOnly: "ke_toan", minRole: "giam_doc" },
-      { title: "Hoàn tiền tạm ứng", url: "/hoan-ung", icon: Wallet },
+      { title: "Chi phí văn phòng", url: "/hoan-ung", icon: Wallet },
       { title: "Thanh toán định kỳ", url: "/thanh-toan-dinh-ky", icon: CalendarClock, resource: "thanh_toan_dk" },
       { title: "Thanh Toán, Hóa Đơn & UNC", url: "/hoa-don-unc", icon: FileStack, resource: "hoa_don_unc", boPhanOnly: "ke_toan" },
       { title: "Công nợ", url: "/cong-no", icon: Wallet, resource: "cong_no" },
