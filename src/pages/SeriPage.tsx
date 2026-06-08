@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
-import { Plus, Pencil, Trash2, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -188,8 +188,11 @@ function SeriPageContent() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Left: seri list */}
-      <div className="w-64 shrink-0 border-r flex flex-col h-full">
+      {/* Left: seri list — full-width mobile, ẩn khi đã chọn (mobile) */}
+      <div className={cn(
+        "w-full md:w-64 shrink-0 border-r flex-col h-full",
+        selectedSeri ? "hidden md:flex" : "flex",
+      )}>
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h1 className="text-sm font-semibold">{t("Mẫu seri")}</h1>
           <Button size="sm" className="h-7 text-xs px-2.5" onClick={openCreate}>
@@ -256,10 +259,22 @@ function SeriPageContent() {
         </div>
       </div>
 
-      {/* Right: schedule table */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      {/* Right: schedule table — ẩn trên mobile khi chưa chọn */}
+      <div className={cn(
+        "flex-1 overflow-hidden flex-col",
+        selectedSeri ? "flex" : "hidden md:flex",
+      )}>
         {selectedSeri ? (
-          <SeriDetail key={selectedSeri.id} seri={selectedSeri} />
+          <>
+            {/* Nút quay lại list — chỉ mobile */}
+            <button
+              onClick={() => setSelectedId(null)}
+              className="md:hidden shrink-0 flex items-center gap-1 px-3 py-2.5 border-b bg-card text-sm font-medium"
+            >
+              <ChevronLeft className="h-4 w-4" /> {t("Mẫu seri")}
+            </button>
+            <SeriDetail key={selectedSeri.id} seri={selectedSeri} />
+          </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
             {t("Chọn một mẫu seri để chỉnh sửa lịch trình")}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Trash2, Save, UserCheck, MapPin } from "lucide-react";
+import { Plus, Search, Trash2, Save, UserCheck, MapPin, ChevronLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -161,8 +161,11 @@ function HDVPageContent() {
 
   return (
     <div className="flex h-[calc(100vh-3rem)] overflow-hidden">
-      {/* ── Left: danh sách ── */}
-      <div className="w-72 shrink-0 border-r flex flex-col bg-card">
+      {/* ── Left: danh sách — full-width mobile, ẩn khi đã chọn (mobile) ── */}
+      <div className={cn(
+        "w-full md:w-72 shrink-0 border-r flex-col bg-card",
+        selected ? "hidden md:flex" : "flex",
+      )}>
         <div className="p-3 border-b space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-sm">{t("Hướng dẫn viên")}</h2>
@@ -254,9 +257,9 @@ function HDVPageContent() {
         </ScrollArea>
       </div>
 
-      {/* ── Right: chi tiết ── */}
+      {/* ── Right: chi tiết — ẩn trên mobile khi chưa chọn ── */}
       {!selected ? (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground text-sm">
           <div className="text-center space-y-2">
             <UserCheck className="h-10 w-10 mx-auto opacity-30" />
             <p>{t("Chọn một hướng dẫn viên để xem chi tiết")}</p>
@@ -264,6 +267,13 @@ function HDVPageContent() {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
+          {/* Nút quay lại list — chỉ mobile */}
+          <button
+            onClick={() => setSelectedId(null)}
+            className="md:hidden sticky top-0 z-10 flex items-center gap-1 px-3 py-2.5 border-b bg-card text-sm font-medium w-full"
+          >
+            <ChevronLeft className="h-4 w-4" /> {t("Hướng dẫn viên")}
+          </button>
           <div className="max-w-2xl mx-auto p-6 space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
