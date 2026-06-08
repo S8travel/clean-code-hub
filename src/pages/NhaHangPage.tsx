@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ChevronLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,8 +48,11 @@ function NhaHangPageContent() {
 
   return (
     <div className="flex h-[calc(100vh-3rem)] overflow-hidden">
-      {/* LEFT — List */}
-      <div className="w-80 shrink-0 border-r flex flex-col bg-card">
+      {/* LEFT — List: full-width mobile, ẩn khi đã chọn (mobile); cạnh trái cố định ở desktop */}
+      <div className={cn(
+        "w-full md:w-80 shrink-0 border-r flex-col bg-card",
+        selected ? "hidden md:flex" : "flex",
+      )}>
         <div className="p-3 border-b space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-sm">{t("Nhà hàng")}</h2>
@@ -123,13 +126,25 @@ function NhaHangPageContent() {
         </ScrollArea>
       </div>
 
-      {/* RIGHT — Detail */}
-      <div className="flex-1 overflow-auto">
+      {/* RIGHT — Detail: ẩn trên mobile khi chưa chọn; 2 cột ở desktop */}
+      <div className={cn(
+        "flex-1 overflow-auto flex-col",
+        selected ? "flex" : "hidden md:flex",
+      )}>
         {selected ? (
-          <NhaHangDetail
-            nhaHang={selected}
-            onDeleted={() => setSelectedId(null)}
-          />
+          <>
+            {/* Nút quay lại list — chỉ mobile */}
+            <button
+              onClick={() => setSelectedId(null)}
+              className="md:hidden sticky top-0 z-10 flex items-center gap-1 px-3 py-2.5 border-b bg-card text-sm font-medium"
+            >
+              <ChevronLeft className="h-4 w-4" /> {t("Nhà hàng")}
+            </button>
+            <NhaHangDetail
+              nhaHang={selected}
+              onDeleted={() => setSelectedId(null)}
+            />
+          </>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
             {t("Chọn nhà hàng để xem chi tiết")}
