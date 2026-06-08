@@ -48,7 +48,7 @@ export interface ChiPhiTabDoan {
   xe?: {
     ten_xe?: string | null;
     so_cho?: number | null;
-    nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null } | null;
+    nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null; tai_khoan_thanh_toan?: string | null } | null;
   } | null;
   tang_pham?: unknown;
   thu_tip?: boolean | null;
@@ -304,7 +304,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
         <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} locked={locked} />
 
-        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} locked={locked} />
+        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} locked={locked} />
 
         <ChiPhiVisaSection doanId={doanId} locked={locked} />
 
