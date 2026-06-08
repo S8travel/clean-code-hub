@@ -87,6 +87,12 @@ interface ExportChiPhiDoanExcelParams {
   ksData?: { ngayRows: ExportKsNgayRow[]; khachSanMap: Record<number, ExportKsInfo> } | null;
   /** Tỷ giá NDT → VND (lưu local trong UI). Default 800. */
   tyGiaNdt?: number;
+  /**
+   * Chế độ xuất:
+   * - "full" (mặc định): đủ 4 sheet (Hành trình + Tổng hợp + Chi tiết + Thanh toán).
+   * - "hdv": chỉ sheet Hành trình (in cho HDV).
+   */
+  mode?: "full" | "hdv";
 }
 
 const encoder = new TextEncoder();
@@ -638,6 +644,8 @@ function createZipBlob(files: Array<{ name: string; content: string }>): Blob {
 
 function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows, hdvData, opName, ksData } = params;
+  // In cho HDV: ẩn đơn giá phòng khách sạn (HDV không cần thấy giá KS).
+  const hideKsPrice = params.mode === "hdv";
 
   const ngayRowById: Record<number, ExportKsNgayRow> = {};
   (ksData?.ngayRows || []).forEach((r) => { if (r.id != null) ngayRowById[r.id] = r; });
@@ -706,7 +714,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   rows.push([
     cell("DATE日期", "header"), cell("KHÁCH SẠN 飯店", "header"), cell("LOẠI PHÒNG", "header"),
     cell("C/I 入境", "header"), cell("C/O 出境", "header"), cell("ROOMS 數量", "header"),
-    cell("FOC 16免1", "header"), cell("PRICE 價格", "header"),
+    cell("FOC 16免1", "header"), cell(hideKsPrice ? "" : "PRICE 價格", "header"),
     cell("HDV TT 導遊付款", "header"), cell("CTY TT 公司付款", "header"),
   ]);
 
@@ -765,10 +773,11 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell(coDateStr),
       main ? cell(main.so_luong || 0, "number") : cell(""),  // ROOMS
       cell(focText),
-      main ? cell(main.don_gia || 0, "number") : cell(""),   // PRICE
-      // HDV TT: tiền nếu HDV trả; ngược lại giữ code đặt phòng (KS thường CTY trả)
-      hdvAmt > 0 ? cell(hdvAmt, "number") : cell(bookingCode),
-      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),        // CTY TT
+      hideKsPrice || !main ? cell("") : cell(main.don_gia || 0, "number"),   // PRICE
+      // HDV TT: in cho HDV → luôn giữ code đặt phòng (ẩn tiền). Bình thường:
+      // tiền nếu HDV trả; ngược lại giữ code đặt phòng (KS thường CTY trả).
+      hideKsPrice ? cell(bookingCode) : (hdvAmt > 0 ? cell(hdvAmt, "number") : cell(bookingCode)),
+      hideKsPrice ? cell("") : (ctyAmt > 0 ? cell(ctyAmt, "number") : cell("")),  // CTY TT
     ]);
 
     // Khoản phụ cùng đêm (loại phòng 2 / dịch vụ) → dòng phụ ngay dưới.
@@ -781,9 +790,9 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
         cell(""), cell(""),
         cell(extra.so_luong || 0, "number"),
         cell(focFromRow(extra) || "—"),
-        cell(extra.don_gia || 0, "number"),
-        exHdv > 0 ? cell(exHdv, "number") : cell(""),
-        exCty > 0 ? cell(exCty, "number") : cell(""),
+        hideKsPrice ? cell("") : cell(extra.don_gia || 0, "number"),
+        hideKsPrice ? cell("") : (exHdv > 0 ? cell(exHdv, "number") : cell("")),
+        hideKsPrice ? cell("") : (exCty > 0 ? cell(exCty, "number") : cell("")),
       ]);
     }
   }
@@ -803,19 +812,22 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
       cell("—"), cell("—"),
       cell(row.so_luong || 0, "number"),
       cell(focFromRow(row) || "—"),
-      cell(row.don_gia || 0, "number"),
-      hdvAmt > 0 ? cell(hdvAmt, "number") : cell(""),
-      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),
+      hideKsPrice ? cell("") : cell(row.don_gia || 0, "number"),
+      hideKsPrice ? cell("") : (hdvAmt > 0 ? cell(hdvAmt, "number") : cell("")),
+      hideKsPrice ? cell("") : (ctyAmt > 0 ? cell(ctyAmt, "number") : cell("")),
     ]);
   }
 
   if (ksNgaySorted.length === 0 && ksRows.length === 0) {
     rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
   }
-  rows.push([
-    cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"),
-    cell(totalHdvKS, "total_number"), cell(totalCtyKS, "total_number"),
-  ]);
+  // In cho HDV: ẩn dòng tổng tiền KS (HDV không cần thấy chi phí khách sạn).
+  if (!hideKsPrice) {
+    rows.push([
+      cell("TỔNG SỐ TIỀN TT KHÁCH SẠN", "total", 7), cell("VND", "total"),
+      cell(totalHdvKS, "total_number"), cell(totalCtyKS, "total_number"),
+    ]);
+  }
   rows.push([cell("", "text", 10)]);
 
   // ─── NHÀ HÀNG ───
@@ -1234,12 +1246,15 @@ function buildThanhToanSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 }
 
 export async function exportChiPhiDoanExcel(params: ExportChiPhiDoanExcelParams) {
-  const sheets = [
-    buildHanhTrinhSheet(params),
-    buildSummarySheet(params),
-    buildChiTietSheet(params),
-    buildThanhToanSheet(params),
-  ];
+  // "hdv" → chỉ in sheet Hành trình; "full" (mặc định) → đủ 4 sheet.
+  const sheets = params.mode === "hdv"
+    ? [buildHanhTrinhSheet(params)]
+    : [
+        buildHanhTrinhSheet(params),
+        buildSummarySheet(params),
+        buildChiTietSheet(params),
+        buildThanhToanSheet(params),
+      ];
 
   const files = [
     { name: "[Content_Types].xml", content: buildContentTypesXml(sheets) },
@@ -1257,5 +1272,6 @@ export async function exportChiPhiDoanExcel(params: ExportChiPhiDoanExcelParams)
 
   const blob = createZipBlob(files);
   const baseName = sanitizeFilename(params.doan?.ten_doan || `doan_${params.doan?.id ?? "chi_phi"}`) || "chi_phi_doan";
-  saveAs(blob, `${baseName}_chi_phi_doan.xlsx`);
+  const suffix = params.mode === "hdv" ? "hanh_trinh_hdv" : "chi_phi_doan";
+  saveAs(blob, `${baseName}_${suffix}.xlsx`);
 }

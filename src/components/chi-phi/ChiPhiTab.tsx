@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from "react";
-import { FileSpreadsheet, Printer } from "lucide-react";
+import { FileSpreadsheet, Printer, ChevronDown } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
 import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
@@ -19,6 +19,12 @@ import ChiPhiPhasThuSection from "./ChiPhiPhasThuSection";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import type { NHDocData } from "@/lib/export-dntt-nh-word";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
 import { toast } from "sonner";
@@ -191,7 +197,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
     }
   };
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (mode: "full" | "hdv" = "full") => {
     if (chiPhiRows.length === 0 && dnttList.length === 0) {
       toast.error(t("Chưa có dữ liệu chi phí để xuất Excel"));
       return;
@@ -208,6 +214,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         opName,
         ksData,
         tyGiaNdt,
+        mode,
       });
       toast.success(t("Đã xuất file Excel"));
     } catch (error: unknown) {
@@ -230,16 +237,28 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
           <Printer className="h-3.5 w-3.5" />
           {t("In ĐNTT gộp NH + DV")}
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8 text-xs gap-1.5"
-          onClick={handleExportExcel}
-          disabled={exportingExcel || isHDVLoading}
-        >
-          <FileSpreadsheet className="h-3.5 w-3.5" />
-          {exportingExcel ? t("Đang xuất...") : t("Xuất Excel")}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              disabled={exportingExcel || isHDVLoading}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              {exportingExcel ? t("Đang xuất...") : t("Xuất Excel")}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleExportExcel("hdv")}>
+              {t("In cho HDV")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExportExcel("full")}>
+              {t("In tổng hợp")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <ChiPhiHeader doan={doan} opName={opName} />
