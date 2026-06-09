@@ -19,7 +19,7 @@
 -- 1a. Cột scope đa-VP (ALTER → không cần GRANT lại)
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE public.user_roles
-  ADD COLUMN IF NOT EXISTS van_phong_ids integer[] NULL;
+  ADD COLUMN IF NOT EXISTS van_phong_ids bigint[] NULL;  -- bigint khớp van_phong_id (bigint)
 
 COMMENT ON COLUMN public.user_roles.van_phong_ids IS
   'Các VP user được TRUY CẬP (đọc+ghi trong scope; xem/sửa tùy ACTION layer). '
@@ -49,9 +49,9 @@ WHERE van_phong_id IS NULL AND lower(email) IN (
 --     riêng (không có user active). Guard `van_phong_ids IS NULL` → idempotent,
 --     KHÔNG đè chỉnh tay sau này. Admin tinh chỉnh từng user qua trang Người dùng.
 -- ─────────────────────────────────────────────────────────────────────────────
-UPDATE public.user_roles SET van_phong_ids = ARRAY[3]  -- HN → xem thêm ĐN
+UPDATE public.user_roles SET van_phong_ids = ARRAY[3]::bigint[]  -- HN → xem thêm ĐN
 WHERE active AND van_phong_id = 2 AND van_phong_ids IS NULL;
-UPDATE public.user_roles SET van_phong_ids = ARRAY[2]  -- ĐN → xem thêm HN
+UPDATE public.user_roles SET van_phong_ids = ARRAY[2]::bigint[]  -- ĐN → xem thêm HN
 WHERE active AND van_phong_id = 3 AND van_phong_ids IS NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -87,11 +87,11 @@ $$;
 -- 2c. Tập VP user được truy cập = van_phong_ids ∪ {van_phong_id}.
 --     COALESCE 2 vế vì `NULL || mảng` = NULL. Rỗng → không thấy đoàn nào.
 CREATE OR REPLACE FUNCTION public.current_user_vp_scope()
-RETURNS integer[]
+RETURNS bigint[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public', 'pg_temp'
 AS $$
-  SELECT COALESCE(ur.van_phong_ids, '{}'::integer[])
-       || COALESCE(ARRAY[ur.van_phong_id], '{}'::integer[])
+  SELECT COALESCE(ur.van_phong_ids, '{}'::bigint[])
+       || COALESCE(ARRAY[ur.van_phong_id], '{}'::bigint[])
   FROM public.user_roles ur
   WHERE ur.user_id = auth.uid() AND ur.active
   LIMIT 1;
@@ -99,7 +99,7 @@ $$;
 
 -- 2d. Truy cập được 1 VP cụ thể (target = doan.van_phong_id)?
 --     target NULL → chỉ cross-VP (đoàn chưa gán VP = privileged-only).
-CREATE OR REPLACE FUNCTION public.can_access_van_phong(target integer)
+CREATE OR REPLACE FUNCTION public.can_access_van_phong(target bigint)
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public', 'pg_temp'
 AS $$
@@ -107,10 +107,16 @@ AS $$
       OR (target IS NOT NULL AND target = ANY(public.current_user_vp_scope()));
 $$;
 
-GRANT EXECUTE ON FUNCTION public.current_user_cross_vp()       TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.current_user_is_accounting()  TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.current_user_vp_scope()       TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.can_access_van_phong(integer) TO authenticated, service_role;
+-- Chỉ authenticated + service_role được EXECUTE. REVOKE anon/PUBLIC (helper RLS nội bộ,
+-- anon không cần — RLS bảng đoàn vốn chặn anon) — khớp hardening 20260601.
+GRANT  EXECUTE ON FUNCTION public.current_user_cross_vp()      TO authenticated, service_role;
+GRANT  EXECUTE ON FUNCTION public.current_user_is_accounting() TO authenticated, service_role;
+GRANT  EXECUTE ON FUNCTION public.current_user_vp_scope()      TO authenticated, service_role;
+GRANT  EXECUTE ON FUNCTION public.can_access_van_phong(bigint) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.current_user_cross_vp()      FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.current_user_is_accounting() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.current_user_vp_scope()      FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.can_access_van_phong(bigint) FROM anon, PUBLIC;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. Policy: bảng `doan` (van_phong_id trực tiếp)

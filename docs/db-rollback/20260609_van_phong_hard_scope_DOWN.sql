@@ -27,8 +27,8 @@ BEGIN
   END LOOP;
 END $$;
 
--- 2. Drop helper functions.
-DROP FUNCTION IF EXISTS public.can_access_van_phong(int);
+-- 2. Drop helper functions. (signature bigint — khớp van_phong_id kiểu bigint)
+DROP FUNCTION IF EXISTS public.can_access_van_phong(bigint);
 DROP FUNCTION IF EXISTS public.current_user_vp_scope();
 DROP FUNCTION IF EXISTS public.current_user_is_accounting();
 DROP FUNCTION IF EXISTS public.current_user_cross_vp();
