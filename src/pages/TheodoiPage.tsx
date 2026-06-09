@@ -163,7 +163,7 @@ export default function TheodoiPage() {
   const scope = useDoanScope();
   const { data: groups = [], isLoading: loadingDoan } = useDoanList(
     scope.phanLoaiTour,
-    scope.vanPhongId,
+    scope.vanPhongIds,
   );
   const { data: assignUsers = [] } = useUserListForAssign();
   const allDoanIds = useMemo(

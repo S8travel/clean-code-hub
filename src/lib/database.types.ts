@@ -3556,6 +3556,7 @@ export type Database = {
           so_dien_thoai: string | null
           user_id: string
           van_phong_id: number | null
+          van_phong_ids: number[] | null
         }
         Insert: {
           active?: boolean
@@ -3573,6 +3574,7 @@ export type Database = {
           so_dien_thoai?: string | null
           user_id: string
           van_phong_id?: number | null
+          van_phong_ids?: number[] | null
         }
         Update: {
           active?: boolean
@@ -3590,6 +3592,7 @@ export type Database = {
           so_dien_thoai?: string | null
           user_id?: string
           van_phong_id?: number | null
+          van_phong_ids?: number[] | null
         }
         Relationships: [
           {

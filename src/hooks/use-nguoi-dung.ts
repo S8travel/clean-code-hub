@@ -13,6 +13,7 @@ export interface UserRoleRow {
   so_dien_thoai: string | null;
   bo_phan: BoPhan | null;
   van_phong_id: number | null;
+  van_phong_ids: number[] | null;
   phan_loai_tour: string[] | null;
   ghi_chu: string | null;
   active: boolean;

@@ -98,6 +98,11 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
   const handleChotDeal = async () => {
     if (!lead) return;
+    // Tường cứng theo VP: đoàn đóng dấu VP nhà người chốt. Chưa có VP → đoàn mồ côi.
+    if (user?.van_phong_id == null) {
+      toast.error(t("Tài khoản chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin."));
+      return;
+    }
     const firstDiemDen = (lead.diem_den ?? [])[0]?.diem_den ?? "";
     const tenDoan = `Đoàn ${lead.ho_ten}${firstDiemDen ? " - " + firstDiemDen : ""}`;
     const ghiChu = `Tạo từ lead #${lead.id}.${lead.yeu_cau_dac_biet ? " " + lead.yeu_cau_dac_biet : ""}`;

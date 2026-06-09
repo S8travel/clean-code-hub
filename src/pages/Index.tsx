@@ -74,7 +74,7 @@ export default function Index() {
   const canEditDoan = scope.isPrivileged || currentUser?.bo_phan !== "ke_toan";
   const { data: groupsRaw, isLoading, error } = useDoanList(
     scope.phanLoaiTour,
-    scope.vanPhongId,
+    scope.vanPhongIds,
   );
   const groups = groupsRaw as unknown as DoanRow[] | undefined;
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
@@ -304,6 +304,15 @@ export default function Index() {
         }
         toast.success("Đã cập nhật đoàn");
       } else {
+        // Tường cứng theo VP: đoàn được đóng dấu VP nhà người tạo. Người tạo chưa có
+        // VP nhà → đoàn sẽ là van_phong_id=NULL → chỉ privileged thấy, OP không thấy.
+        // Chặn sớm thay vì tạo "đoàn mồ côi".
+        if (currentUser?.van_phong_id == null) {
+          toast.error(
+            "Tài khoản của bạn chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin để gán VP nhà.",
+          );
+          return;
+        }
         const markets = currentUser?.phan_loai_tour ?? null;
         if (markets && markets.length > 1) {
           setPendingCreate({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null });
