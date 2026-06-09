@@ -312,14 +312,15 @@ export function useCurrentUserProfile() {
 }
 
 // Doan list — phanLoaiTour=null → no filter (admin/giám đốc); array → filter by thi_truong.
-// vanPhongId=null → no filter; number → only doan có cùng van_phong_id.
+// vanPhongIds=null/undefined → no filter (cross-VP); mảng → chỉ doan có van_phong_id ∈ mảng.
 // SCOPE filter cả 2 áp dụng cùng lúc (caller pass từ useDoanScope).
+// LƯU Ý: filter VP ở đây CHỈ để UX (list gọn); enforce thật là RLS tường cứng (DB).
 export function useDoanList(
   phanLoaiTour?: string[] | null,
-  vanPhongId?: number | null,
+  vanPhongIds?: number[] | null,
 ) {
   return useQuery({
-    queryKey: ["doan", phanLoaiTour ?? null, vanPhongId ?? null],
+    queryKey: ["doan", phanLoaiTour ?? null, vanPhongIds ?? null],
     staleTime: 30_000,
     queryFn: async () => {
       let query = externalSupabase
@@ -339,8 +340,8 @@ export function useDoanList(
         // tránh "biến mất" khi đoàn tạo thiếu phân loại (vd giám đốc tạo, hoặc clone từ nguồn NULL).
         query = query.or(`thi_truong.in.(${phanLoaiTour.join(",")}),thi_truong.is.null`);
       }
-      if (vanPhongId != null) {
-        query = query.eq("van_phong_id", vanPhongId);
+      if (vanPhongIds && vanPhongIds.length > 0) {
+        query = query.in("van_phong_id", vanPhongIds);
       }
       const { data, error } = await query.order("ngay_di", { ascending: true });
       if (error) throw error;

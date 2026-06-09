@@ -20,6 +20,7 @@ import {
 import { THI_TRUONG_OPTS } from "@/hooks/use-doan";
 import { type VanPhongRow } from "@/hooks/use-van-phong";
 import { useLogActivity } from "@/hooks/use-activity-log";
+import { useAuth } from "@/hooks/use-auth";
 import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
@@ -35,6 +36,7 @@ const formFrom = (u: UserRoleRow): DetailForm => ({
   role: u.role,
   bo_phan: u.bo_phan,
   van_phong_id: u.van_phong_id,
+  van_phong_ids: u.van_phong_ids,
   phan_loai_tour: u.phan_loai_tour,
   so_dien_thoai: u.so_dien_thoai,
   ghi_chu: u.ghi_chu,
@@ -51,6 +53,9 @@ interface Props {
 // Parent remounts via key={selected.id} → form khởi tạo từ initializer, không cần effect sync.
 export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
   useTranslate();
+  const { user: me } = useAuth();
+  // Chỉ admin/giám đốc được cấp quyền truy cập đa-VP cho NV.
+  const canGrantVp = me?.role === "admin" || me?.role === "giam_doc";
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
   const logActivity = useLogActivity();
@@ -218,6 +223,45 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
               </SelectContent>
             </Select>
           </div>
+
+          {canGrantVp && (
+            <div className="col-span-2 space-y-1.5">
+              <Label className="text-xs">{t("Văn phòng được truy cập")}</Label>
+              {(form.role === "admin" || form.role === "giam_doc") ? (
+                <p className="text-[11px] text-muted-foreground py-1">
+                  {t("Admin / giám đốc đã thấy mọi văn phòng — không cần gán.")}
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 py-1">
+                    {vanPhongList.map((vp) => {
+                      const isHome = vp.id === form.van_phong_id;
+                      const checked = isHome || (form.van_phong_ids ?? []).includes(vp.id);
+                      return (
+                        <label key={vp.id} className="flex items-center gap-1.5 cursor-pointer text-sm">
+                          <Checkbox
+                            checked={checked}
+                            disabled={isHome}
+                            onCheckedChange={(v) => {
+                              const current = form.van_phong_ids ?? [];
+                              const next = v
+                                ? [...current, vp.id]
+                                : current.filter((x) => x !== vp.id);
+                              set("van_phong_ids", next.length > 0 ? next : null);
+                            }}
+                          />
+                          {vp.ten}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("VP nhà (ở trên) luôn được truy cập. Tích thêm VP khác để xem/sửa chéo.")}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="col-span-2 space-y-1.5">
             <Label className="text-xs">{t("Mảng phụ trách")}</Label>

@@ -226,7 +226,7 @@ export default function MyJobPage() {
   const scope = useDoanScope();
   const { data: allDoan = [], isLoading: loadingDoan } = useDoanList(
     scope.phanLoaiTour,
-    scope.vanPhongId,
+    scope.vanPhongIds,
   );
   const { data: td, isLoading: loadingTD } = useTheodoi();
 
