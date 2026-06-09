@@ -20,6 +20,8 @@ import { LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS } from "@/hooks/use-leads";
 import { useVanPhongList } from "@/hooks/use-van-phong";
 import { useTemplateStats } from "@/hooks/use-lead-template";
 import { t, useTranslate } from "@/lib/i18n";
+import { useRoleAtLeast } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 
 const TPL_CHANNEL_LABEL: Record<string, string> = {
   email: "Email", zalo: "Zalo", call_script: "Kịch bản gọi",
@@ -28,7 +30,14 @@ const TPL_CHANNEL_LABEL: Record<string, string> = {
 const FUNNEL_ORDER = ["moi", "da_lien_he", "dang_tu_van", "da_bao_gia", "cho_chot", "chot_deal"];
 const PIE_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6"];
 
+// Báo cáo = chỉ giám đốc trở lên (dữ liệu tổng toàn hệ thống, lead không scope theo VP).
 export default function LeadReportPage() {
+  const canView = useRoleAtLeast("giam_doc");
+  if (!canView) return <AccessDenied />;
+  return <LeadReportPageContent />;
+}
+
+function LeadReportPageContent() {
   useTranslate();
   const nav = useNavigate();
   const { data: vps = [] } = useVanPhongList();
