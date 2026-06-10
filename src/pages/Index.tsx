@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { t, useTranslate } from "@/lib/i18n";
 import { useDoanListFilters } from "@/hooks/use-doan-list-filters";
-import { Plus, Search, X, ChevronLeft, ChevronRight, CalendarClock, Bus, Activity, CheckCircle2 } from "lucide-react";
+import { Plus, Search, X, ChevronLeft, ChevronRight, CalendarClock, Bus, Activity, CheckCircle2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDoanScope } from "@/hooks/use-doan-scope";
 import { MultiSelect } from "@/components/MultiSelect";
 import { doanMatchesSearch } from "@/lib/doan-search";
+import { exportDoanListExcel } from "@/lib/export-doan-list-excel";
 import { errMsg } from "@/lib/error";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
@@ -234,6 +235,43 @@ export default function Index() {
   const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
   const showFrom = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
   const showTo = Math.min(page * pageSize, filtered.length);
+
+  // Xuất Excel toàn bộ đoàn theo filter + sort hiện tại (mọi trang, không chỉ trang đang xem)
+  const handleExportExcel = () => {
+    const sorted = [...filtered].sort((a, b) => {
+      // Cùng comparator với DoanTable — sortKey ∈ ten_doan|ngay_di|ngay_ve (đều string)
+      const va = String(a[sortKey] ?? "");
+      const vb = String(b[sortKey] ?? "");
+      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    const opNameByDoanId = new Map<number, string>();
+    doanOpMap?.forEach((v, id) => opNameByDoanId.set(id, v.ten));
+
+    const fmtD = (d: string) => d.split("-").reverse().join("/");
+    const parts: string[] = [];
+    const tabLabel = {
+      all: "", dang_chay: "Chờ xác nhận", sap_khoi_hanh: "Sắp khởi hành",
+      dang_dien_ra: "Đang diễn ra", hoan_thanh: "Hoàn thành",
+      da_quyet_toan: "Đã quyết toán", huy: "Đã huỷ",
+    }[quickTab];
+    if (tabLabel) parts.push(tabLabel);
+    if (search.trim()) parts.push(`Tìm: "${search.trim()}"`);
+    if (dateFrom || dateTo) parts.push(`Ngày đón ${dateFrom ? fmtD(dateFrom) : "…"} – ${dateTo ? fmtD(dateTo) : "…"}`);
+    if (agentSel.length) parts.push(`Agent: ${agentSel.map((id) => agents?.find((a) => a.id.toString() === id)?.ten ?? id).join(", ")}`);
+    if (diaDiemSel.length) parts.push(`ĐĐ: ${diaDiemSel.map((id) => diaDiemList?.find((d) => d.id.toString() === id)?.ten ?? id).join(", ")}`);
+    if (loaiTourSel.length) parts.push(loaiTourSel.map((v) => LOAI_TOUR_OPTIONS.find((o) => o.value === v)?.label ?? v).join(", "));
+    if (trangThaiSel.length) parts.push(trangThaiSel.map((v) => TRANG_THAI_OPTIONS.find((o) => o.value === v)?.label ?? v).join(", "));
+
+    exportDoanListExcel({
+      items: sorted,
+      opNameByDoanId,
+      qtPaidSet: qtPaidSet ?? null,
+      filterSummary: parts.join(" · "),
+    });
+    toast.success(`Đã xuất ${sorted.length} đoàn ra Excel`);
+  };
 
   const handleSave = async (data: DoanInsert) => {
     try {
@@ -680,6 +718,16 @@ export default function Index() {
               {t("Xoá lọc")}
             </Button>
           )}
+
+          <Button
+            variant="outline" size="sm" onClick={handleExportExcel}
+            disabled={filtered.length === 0}
+            className="h-9 text-xs ml-auto"
+            title={t("Tải danh sách đoàn theo bộ lọc hiện tại")}
+          >
+            <Download className="h-3.5 w-3.5 mr-1" />
+            {t("Xuất Excel")}
+          </Button>
         </div>
 
         {/* TABLE */}
