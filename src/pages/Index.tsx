@@ -272,7 +272,17 @@ export default function Index() {
         // Đổi "OP phụ trách" (assigned_to) → giao lại việc phân việc pv_nh_dv
         // cho người đó. Cột OP ở danh sách đoàn đọc từ cong_viec (useDoanOpMap)
         // nên phải reassign thì danh sách mới hiển thị OP mới.
-        if (data.assigned_to && data.assigned_to !== editingDoan.assigned_to) {
+        // Đoàn có assigned_to sẵn nhưng chưa có việc pv_nh_dv (bỏ trống mục
+        // "Nhà hàng & DV" lúc tạo, chốt deal từ lead...) → chọn lại CÙNG OP trong
+        // drawer cũng phải tạo việc, nếu không danh sách kẹt "OP: chưa phân".
+        // Admin thì giữ điều kiện "đổi mới giao" — assignPvItem đánh dấu khong_can
+        // (không hiện ở cột OP), gọi lặp sẽ insert trùng row khong_can.
+        const currentOpUid = doanOpMap?.get(editingDoan.id)?.user_id ?? null;
+        const targetIsAdmin = (userRoles ?? []).some(
+          (u) => u.user_id === data.assigned_to && u.role === "admin",
+        );
+        const opChanged = data.assigned_to !== editingDoan.assigned_to;
+        if (data.assigned_to && (opChanged || (!currentOpUid && !targetIsAdmin))) {
           try {
             await assignPvItem.mutateAsync({
               doanId: editingDoan.id,
