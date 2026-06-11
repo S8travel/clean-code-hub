@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck, BellRing, BellOff } from "lucide-react";
 import { toast } from "sonner";
@@ -108,12 +108,37 @@ export function NotificationBell({ userId }: Props) {
   const markAll = useMarkAllRead();
   const markOne = useMarkOneRead();
 
-  // Realtime subscribe (one-shot per user) + popup desktop khi click thì điều hướng
-  useRealtimeThongBao(userId, (tb) => {
-    if (!tb.is_read) markOne.mutate(tb.id);
-    const url = targetUrl(tb);
-    if (url) nav(url);
+  // Realtime subscribe (one-shot per user) + popup desktop khi click thì điều hướng.
+  // targetUrl truyền thêm để đường SW (Android) nhúng URL đích vào notification data.
+  useRealtimeThongBao(
+    userId,
+    (tb) => {
+      if (!tb.is_read) markOne.mutate(tb.id);
+      const url = targetUrl(tb);
+      if (url) nav(url);
+    },
+    targetUrl,
+  );
+
+  // Notification bắn qua SW (Android PWA): click → sw-notify.js postMessage về
+  // trang đang mở. Ref để listener (đăng ký 1 lần) luôn dùng nav/markOne mới nhất.
+  const navRef = useRef(nav);
+  const markOneRef = useRef(markOne.mutate);
+  useEffect(() => {
+    navRef.current = nav;
+    markOneRef.current = markOne.mutate;
   });
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; id?: number; url?: string } | null;
+      if (!d || d.type !== "THONG_BAO_CLICK") return;
+      if (typeof d.id === "number") markOneRef.current(d.id);
+      if (d.url && d.url !== "/") navRef.current(d.url);
+    };
+    navigator.serviceWorker.addEventListener("message", onMsg);
+    return () => navigator.serviceWorker.removeEventListener("message", onMsg);
+  }, []);
 
   const toggleDesktop = async () => {
     if (desktopOn) {
