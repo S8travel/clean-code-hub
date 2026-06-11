@@ -10,14 +10,41 @@ describe("buildChiPhiChangeList", () => {
     expect(out).toEqual(["Đơn giá: 2.000.000 → 2.500.000"]);
   });
 
-  it("đổi nhiều field → nhiều dòng theo thứ tự field", () => {
+  it("đổi input → CHỈ ghi input, ẩn tiền công ty (hệ quả suy ra)", () => {
     const out = buildChiPhiChangeList(
       { so_luong: 30, don_gia: 2_000_000, tien_cong_ty: 60_000_000 },
       { so_luong: 31, don_gia: 2_000_000, tien_cong_ty: 62_000_000 },
     );
+    expect(out).toEqual(["Số lượng: 30 → 31"]);
+  });
+
+  it("đổi CK% (case GODA/THE PARADISE) → ghi đúng Chiết khấu 0 → 9, ẩn tiền", () => {
+    const out = buildChiPhiChangeList(
+      { chiet_khau_phan_tram_snapshot: 0, tien_cong_ty: 2_246_400 },
+      { chiet_khau_phan_tram_snapshot: 9, tien_cong_ty: 2_044_224 },
+    );
+    expect(out).toEqual(["Chiết khấu (%): 0 → 9"]);
+  });
+
+  it("toggle người thanh toán (chỉ tiền đổi, không input nào đổi) → vẫn ghi derived", () => {
+    const out = buildChiPhiChangeList(
+      { tien_cong_ty: 3_000_000, tien_hdv: 0 },
+      { tien_cong_ty: 0, tien_hdv: 3_000_000 },
+    );
     expect(out).toEqual([
-      "Số lượng: 30 → 31",
-      "Tiền công ty: 60.000.000 → 62.000.000",
+      "Tiền công ty: 3.000.000 → 0",
+      "Tiền HDV: 0 → 3.000.000",
+    ]);
+  });
+
+  it("visa: đổi tỷ giá → ghi tỷ giá, ẩn tiền công ty", () => {
+    const out = buildChiPhiChangeList(
+      { ty_gia: 26_450, don_gia: 714_150, tien_cong_ty: 714_150 },
+      { ty_gia: 26_500, don_gia: 715_500, tien_cong_ty: 715_500 },
+    );
+    expect(out).toEqual([
+      "Đơn giá: 714.150 → 715.500",
+      "Tỷ giá: 26.450 → 26.500",
     ]);
   });
 

@@ -511,7 +511,9 @@ export function useUpsertChiPhi() {
         // Snapshot giá trị cũ TRƯỚC update để audit log dựng "cũ → mới".
         const { data: oldRow } = await externalSupabase
           .from("doan_chi_phi")
-          .select("so_luong, don_gia, tien_cong_ty, tien_hdv, foc_count, thanh_tien_thuc_te")
+          .select(
+            "so_luong, don_gia, don_gia_raw, ty_gia, chiet_khau_phan_tram_snapshot, chiet_khau_pct, tien_cong_ty, tien_hdv, foc_count, thanh_tien_thuc_te",
+          )
           .eq("id", id)
           .maybeSingle();
         const { data, error } = await externalSupabase
