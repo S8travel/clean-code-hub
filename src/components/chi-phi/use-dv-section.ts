@@ -103,9 +103,17 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
-  // Split main rows vs extras
-  const allDvRows = chiPhiRows.filter((r) => r.danh_muc === "canh_diem");
-  const dvRows = allDvRows.filter((r) => !r.mo_ta?.match(/^\[dvps_\d+\] /));
+  // Split main rows vs extras. Memo theo chiPhiRows — identity ổn định để
+  // DVGopDnttModal không reset tick chọn mỗi lần parent re-render (groups
+  // useMemo + useEffect [open, groups] phụ thuộc identity của mảng này).
+  const allDvRows = useMemo(
+    () => chiPhiRows.filter((r) => r.danh_muc === "canh_diem"),
+    [chiPhiRows],
+  );
+  const dvRows = useMemo(
+    () => allDvRows.filter((r) => !r.mo_ta?.match(/^\[dvps_\d+\] /)),
+    [allDvRows],
+  );
 
   // Build dbExtrasMap from DB
   const dbExtrasMap = useMemo(() => {
