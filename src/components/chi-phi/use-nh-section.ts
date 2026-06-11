@@ -827,6 +827,11 @@ export function useNHSection({
         // KHÔNG gắn voucher_su_dung.dntt_id (model mới): gỡ voucher tìm payment
         // 'voucher' qua ref_id=chi_phi, KHÔNG xóa ĐNTT. dntt_id chỉ còn cho legacy
         // (ĐNTT voucher cũ ref_loai='voucher') → tránh gỡ xóa nhầm ĐNTT bữa.
+        // BẮT BUỘC invalidate payments — app tắt refetchOnWindowFocus nên cache
+        // không tự refresh: thiếu dòng này, bấm In ĐNTT ngay sau khi tạo sẽ thấy
+        // voucherAmount=0 → "Số tiền còn thanh toán" in ĐỦ tiền (không trừ voucher).
+        qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
+        qc.invalidateQueries({ queryKey: ["payments-by-doan", doanId] });
       }
 
       const allIds = [row.id, ...extras.filter((e) => e.id).map((e) => e.id!)];
