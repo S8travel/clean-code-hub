@@ -17,11 +17,16 @@ export interface AggCongNoRow {
 }
 
 /**
- * Tổng thực tế & đã trả của 1 nhóm chi phí — CHỈ tính dòng công ty thanh toán
- * (`tien_cong_ty > 0`; loại dòng HDV trả và dòng 0đ).
- * - `sumActual`: ưu tiên `thanh_tien_thuc_te` (giá trị đã điều chỉnh thực tế),
- *   fallback `tien_cong_ty`.
- * - `sumPaid`: tổng `so_tien_da_tt` (số đã thanh toán thật, do RPC tính).
+ * Tổng thực tế & đã trả của 1 nhóm chi phí.
+ * - `sumActual`: CHỈ dòng công ty thanh toán (`tien_cong_ty > 0`; loại dòng HDV
+ *   trả và dòng 0đ). Ưu tiên `thanh_tien_thuc_te` (đã điều chỉnh), fallback
+ *   `tien_cong_ty`.
+ * - `sumPaid`: tổng `so_tien_da_tt` trên TẤT CẢ dòng — tiền đã trả là lịch sử,
+ *   không biến mất khi dòng bị sửa về 0đ/chuyển HDV sau khi trả. Lọc theo
+ *   `tien_cong_ty > 0` ở vế này từng làm delta sai 2 hướng: mất dấu tiền trả
+ *   thừa (footer ẩn nút công nợ) hoặc gợi ý "Thanh toán bổ sung" trùng tiền.
+ *   Dòng HDV thuần / suất voucher-tặng 0đ không có allocation → da_tt = 0,
+ *   cộng cả vào cũng không nhiễu.
  */
 export function sumCompanyChiPhi(
   rows: AggChiPhiRow[],
@@ -32,7 +37,7 @@ export function sumCompanyChiPhi(
       (s, c) => s + Number(c.thanh_tien_thuc_te ?? c.tien_cong_ty ?? 0),
       0,
     ),
-    sumPaid: company.reduce((s, c) => s + Number(c.so_tien_da_tt ?? 0), 0),
+    sumPaid: rows.reduce((s, c) => s + Number(c.so_tien_da_tt ?? 0), 0),
   };
 }
 

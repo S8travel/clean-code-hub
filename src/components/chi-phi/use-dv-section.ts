@@ -164,7 +164,9 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     byDay.get(day)!.push(row);
   }
   const sortedDays = [...byDay.entries()].sort((a, b) => a[0] - b[0]);
-  const total = dvRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
+  // Tổng header: tính CẢ extras (allDvRows) — phụ thu là chi phí thật của đoàn,
+  // bỏ sót làm Tổng lệch với số ĐNTT gộp (main + phụ thu) → user tưởng dup tiền.
+  const total = allDvRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
 
   // ── ĐNTT gộp: map ĐNTT → các dòng + chọn-theo-nhóm ─────────────────────────
   // dntt_id → các chi_phi được allocate (để tích 1 dòng kéo theo cả nhóm cùng ĐNTT).

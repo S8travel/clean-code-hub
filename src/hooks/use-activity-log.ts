@@ -80,15 +80,22 @@ export function useDoanActivityLog(doanId: number | undefined) {
 // ── Fire-and-forget audit log (dùng trong onSuccess của mutations) ──
 export function buildAuditLogger(userId: string | null | undefined, hoTen: string | null | undefined) {
   return (vars: { doan_id: number; action: ActivityAction; table_name: string; record_id?: number | string | null; mo_ta: string }) => {
-    externalSupabase.from("activity_log").insert({
-      user_id: userId ?? null,
-      ho_ten: hoTen ?? null,
-      doan_id: vars.doan_id,
-      action: vars.action,
-      table_name: vars.table_name,
-      record_id: vars.record_id != null ? String(vars.record_id) : null,
-      mo_ta: vars.mo_ta,
-    });
+    // PostgrestBuilder là thenable LAZY: không await/.then thì request KHÔNG BAO GIỜ
+    // được gửi. Trước đây thiếu .then → toàn bộ log chi phí im lặng không ghi gì.
+    void externalSupabase
+      .from("activity_log")
+      .insert({
+        user_id: userId ?? null,
+        ho_ten: hoTen ?? null,
+        doan_id: vars.doan_id,
+        action: vars.action,
+        table_name: vars.table_name,
+        record_id: vars.record_id != null ? String(vars.record_id) : null,
+        mo_ta: vars.mo_ta,
+      })
+      .then(({ error }) => {
+        if (error) console.warn("[audit-log] ghi thất bại:", error.message);
+      });
   };
 }
 
