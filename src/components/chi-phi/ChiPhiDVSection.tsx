@@ -56,7 +56,8 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
 
   const [showGop, setShowGop] = useState(false);
   // Số nhóm dịch vụ cùng NCC có thể gộp (≥2 dòng công ty trả, còn phần chưa ĐNTT).
-  const gopGroupCount = useMemo(() => groupGopByNcc(dvRows).length, [dvRows]);
+  // Truyền CẢ extras (allDvRows) — tiền phụ thu được cộng vào item của dòng main.
+  const gopGroupCount = useMemo(() => groupGopByNcc(dvData.allDvRows).length, [dvData.allDvRows]);
 
   // Empty state — return SAU mọi hook (Rules of Hooks).
   if (dvRows.length === 0) {
@@ -193,7 +194,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         onClose={() => setShowGop(false)}
         doanId={doanId}
         tenDoan={tenDoan}
-        dvRows={dvRows}
+        dvRows={dvData.allDvRows}
       />
     </div>
   );

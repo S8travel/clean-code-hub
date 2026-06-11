@@ -533,10 +533,13 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
             />
           )}
         </td>
-        {/* Delete */}
+        {/* Delete — khóa khi nhóm còn ĐNTT hiệu lực: tiền extra đã nằm trong alloc
+            của main (per-row/gộp), xóa row sẽ làm committed lệch khỏi thực tế.
+            Muốn bỏ → sửa SL/đơn giá về 0 (footer aggregate tự tính công nợ). */}
         <td className="px-2 py-1.5 text-right">
           <button
-            disabled={locked}
+            disabled={locked || activeDntts.length > 0}
+            title={activeDntts.length > 0 ? t("Nhóm còn ĐNTT hiệu lực — sửa SL/đơn giá về 0 thay vì xóa") : undefined}
             onClick={() => handleExtraDelete(row.id!, idx)}
             className="text-destructive hover:text-destructive/80 p-0.5 disabled:opacity-40"
           >

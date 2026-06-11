@@ -45,7 +45,8 @@ interface Props {
   onClose: () => void;
   doanId: number;
   tenDoan?: string;
-  /** Các dòng dịch vụ chính (danh_muc='canh_diem', không phải extras). */
+  /** TOÀN BỘ dòng dịch vụ (danh_muc='canh_diem'), gồm cả extras [dvps_<id>] —
+   * tiền extra được groupGopByNcc cộng vào item của dòng main. */
   dvRows: ChiPhiRow[];
 }
 
@@ -96,7 +97,9 @@ export default function DVGopDnttModal({ open, onClose, doanId, tenDoan, dvRows 
       const created = await insertDNTT.mutateAsync({
         doan_id: doanId,
         loai: "dich_vu",
-        mo_ta: `[Gộp] ${nccTen}: ${items.map((i) => i.label).join(", ")}`.slice(0, 500),
+        mo_ta: `[Gộp] ${nccTen}: ${items
+          .map((i) => i.label + (i.extraCount > 0 ? ` (+${i.extraCount} phụ thu)` : ""))
+          .join(", ")}`.slice(0, 500),
         nha_cung_cap_id: group.nccId,
         so_tien: soTien,
         la_coc: false,
@@ -193,6 +196,9 @@ export default function DVGopDnttModal({ open, onClose, doanId, tenDoan, dvRows 
                         <span className="flex-1 truncate">
                           {i.ngay_so ? <span className="text-muted-foreground mr-1">N{i.ngay_so}</span> : null}
                           {i.label}
+                          {i.extraCount > 0 && (
+                            <span className="text-muted-foreground"> (+{i.extraCount} {t("phụ thu")})</span>
+                          )}
                         </span>
                         <span className="font-medium tabular-nums">{fmt(i.remaining)} ₫</span>
                       </label>

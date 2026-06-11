@@ -8,6 +8,9 @@
 //  - "Gộp phần còn lại": alloc mỗi dòng = phần CHƯA ĐNTT = company − so_tien_da_dntt (>0),
 //    nên dòng đã cọc/đã ĐNTT một phần vẫn gộp được phần còn lại.
 //  - Bỏ qua dòng thanh_toan_dinh_ky (đã có flow gộp định kỳ riêng) và dòng không có NCC.
+//  - Extras (mo_ta prefix [dvps_<mainId>]) GỘP VÀO item của main: tiền extra cộng vào
+//    remaining, allocation vẫn trỏ 1 dòng main — khớp pattern ĐNTT per-row (DVRow truyền
+//    totalTienCt = main + extras, alloc dồn vào main).
 
 export interface GopDvRow {
   id: number;
@@ -26,6 +29,8 @@ export interface GopAllocItem {
   label: string;
   ngay_so: number | null;
   remaining: number;
+  /** Số dòng phụ thu (extras) đã gộp tiền vào item này. */
+  extraCount: number;
 }
 
 export interface GopNccGroup {
@@ -60,21 +65,62 @@ export function gopLabel(moTa: string | null): string {
   return (moTa ?? "").replace(/^\[dvps_\d+\]\s*/, "").trim() || "Dịch vụ";
 }
 
+/** id dòng main nếu là extra ([dvps_<mainId>] ...), null nếu là dòng main. */
+export function extraParentId(moTa: string | null): number | null {
+  const m = (moTa ?? "").match(/^\[dvps_(\d+)\]\s*/);
+  return m ? Number(m[1]) : null;
+}
+
 /**
  * Gom các dòng DV đủ điều kiện theo nha_cung_cap_id.
- * Chỉ trả nhóm có >= minRows dòng (mặc định 2 — gộp chỉ có nghĩa khi ≥2 dịch vụ).
+ * `rows` nhận CẢ main lẫn extras — extra được cộng tiền vào item của main
+ * (NCC + ngày lấy theo main; extra mồ côi / HDV trả / định kỳ thì bỏ qua).
+ * Chỉ trả nhóm có >= minRows item (mặc định 2 — gộp chỉ có nghĩa khi ≥2 dịch vụ).
  * Item trong nhóm sắp theo ngay_so tăng dần.
  */
 export function groupGopByNcc(rows: GopDvRow[], minRows = 2): GopNccGroup[] {
-  const map = new Map<number, GopAllocItem[]>();
+  const extrasByMain = new Map<number, GopDvRow[]>();
+  const mains: GopDvRow[] = [];
   for (const r of rows) {
-    if (!isGopEligible(r)) continue;
-    const nccId = r.nha_cung_cap_id as number;
+    const pid = extraParentId(r.mo_ta);
+    if (pid != null) {
+      if (!extrasByMain.has(pid)) extrasByMain.set(pid, []);
+      extrasByMain.get(pid)!.push(r);
+    } else {
+      mains.push(r);
+    }
+  }
+
+  const map = new Map<number, GopAllocItem[]>();
+  for (const r of mains) {
+    // Điều kiện theo dòng main: có NCC, công ty trả, không định kỳ.
+    if (r.nha_cung_cap_id == null || r.thanh_toan_dinh_ky || (r.tien_hdv ?? 0) !== 0) continue;
+    const allExtras = extrasByMain.get(r.id) ?? [];
+    // Vế TIỀN PHẢI TRẢ: chỉ extras công ty đang trả, còn giá trị.
+    const moneyExtras = allExtras.filter(
+      (e) => (e.tien_hdv ?? 0) === 0 && !e.thanh_toan_dinh_ky && companyAmount(e) > 0,
+    );
+    // Remaining tính trên CẢ NHÓM (main + extras) vì per-row ĐNTT dồn alloc vào main
+    // → so_tien_da_dntt của main có thể đã bao gồm tiền extras.
+    const company = companyAmount(r) + moneyExtras.reduce((s, e) => s + companyAmount(e), 0);
+    // Vế ĐÃ CAM KẾT: trừ theo TẤT CẢ extras không-định-kỳ — kể cả extra đã sửa về 0 /
+    // chuyển HDV SAU khi nằm trong ĐNTT (commitment lịch sử vẫn còn, bỏ sót → remaining
+    // PHỒNG → đề nghị thừa tiền). Extra định kỳ loại cả 2 vế (thuộc flow định kỳ riêng).
+    const daDntt =
+      (r.so_tien_da_dntt ?? 0) +
+      allExtras
+        .filter((e) => !e.thanh_toan_dinh_ky)
+        .reduce((s, e) => s + (e.so_tien_da_dntt ?? 0), 0);
+    const remaining = Math.max(0, company - daDntt);
+    if (company <= 0 || remaining <= 0) continue;
+
+    const nccId = r.nha_cung_cap_id;
     const item: GopAllocItem = {
       chi_phi_id: r.id,
       label: gopLabel(r.mo_ta),
       ngay_so: r.ngay_so,
-      remaining: remainingForGop(r),
+      remaining,
+      extraCount: moneyExtras.length,
     };
     if (!map.has(nccId)) map.set(nccId, []);
     map.get(nccId)!.push(item);
