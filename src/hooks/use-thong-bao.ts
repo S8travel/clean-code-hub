@@ -116,14 +116,21 @@ export function useMarkOneRead() {
 //  - invalidate queries (chuông in-app cập nhật ngay)
 //  - bắn popup desktop (Tier 1, chỉ khi user đã bật & không focus app)
 // onClickNotif: callback khi user click vào popup desktop (điều hướng).
+// getNotifUrl: resolve URL đích cho đường SW (Android — click xử lý trong SW,
+// không gọi được onClickNotif).
 export function useRealtimeThongBao(
   userId: string | null | undefined,
   onClickNotif?: (row: ThongBaoRow) => void,
+  getNotifUrl?: (row: ThongBaoRow) => string | null,
 ) {
   const qc = useQueryClient();
   // Ref để channel callback (đăng ký 1 lần) luôn gọi handler mới nhất.
   const cbRef = useRef(onClickNotif);
-  useEffect(() => { cbRef.current = onClickNotif; }, [onClickNotif]);
+  const urlRef = useRef(getNotifUrl);
+  useEffect(() => {
+    cbRef.current = onClickNotif;
+    urlRef.current = getNotifUrl;
+  }, [onClickNotif, getNotifUrl]);
 
   useQuery({
     queryKey: [QK, "realtime_sub", userId],
@@ -144,7 +151,12 @@ export function useRealtimeThongBao(
             const row = payload.new as ThongBaoRow | undefined;
             if (row?.id) {
               showDesktopNotif(
-                { id: row.id, title: row.tieu_de, body: row.noi_dung },
+                {
+                  id: row.id,
+                  title: row.tieu_de,
+                  body: row.noi_dung,
+                  url: urlRef.current?.(row) ?? null,
+                },
                 () => cbRef.current?.(row),
               );
             }
