@@ -21,6 +21,9 @@ dev-dist
 # Backup database Supabase (chứa dữ liệu thật — TUYỆT ĐỐI không commit)
 /backups/
 
+# VAPID private key cho Web Push (paste vào secret edge fn, KHÔNG commit)
+vapid-keys.local.json
+
 # Claude Code — settings cá nhân/local (KHÔNG commit — có thể chứa key/lệnh nhạy cảm)
 .claude/settings.local.json
 
