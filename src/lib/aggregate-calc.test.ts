@@ -46,6 +46,22 @@ describe("sumCompanyChiPhi", () => {
     ];
     expect(sumCompanyChiPhi(rows)).toEqual({ sumActual: 3_500_000, sumPaid: 3_000_000 });
   });
+
+  it("dòng sửa về 0đ SAU khi đã trả → sumPaid VẪN tính (chỉ loại khỏi sumActual)", () => {
+    // Hủy dịch vụ đã thanh toán đủ: sửa SL về 0 (flow chuẩn, không xóa row).
+    const rows = [{ tien_cong_ty: 0, so_tien_da_tt: 5_000_000 }];
+    expect(sumCompanyChiPhi(rows)).toEqual({ sumActual: 0, sumPaid: 5_000_000 });
+    // → delta = −5M → footer hiện "Ghi nhận công nợ" thay vì ẩn mất dấu tiền thừa.
+  });
+
+  it("main về 0đ nhưng nhóm còn extra có giá → không gợi ý trả trùng phần đã trả", () => {
+    const rows = [
+      { tien_cong_ty: 0, so_tien_da_tt: 12_000_000 },   // main đã trả cả nhóm, sau đó về 0
+      { tien_cong_ty: 2_000_000, so_tien_da_tt: 0 },     // extra còn giá
+    ];
+    // sumActual = 2M, sumPaid = 12M → delta = −10M (thừa) — KHÔNG phải +2M (thiếu ảo)
+    expect(sumCompanyChiPhi(rows)).toEqual({ sumActual: 2_000_000, sumPaid: 12_000_000 });
+  });
 });
 
 // ─── splitGroupCongNo ────────────────────────────────────────────────────────

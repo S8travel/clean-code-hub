@@ -335,7 +335,7 @@ export default function Index() {
             );
           }
         }
-        logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
+        logActivity.mutate({ action: "sua", table_name: "doan", record_id: editingDoan.id, doan_id: editingDoan.id, mo_ta: `Sửa đoàn ${data.ten_doan ?? editingDoan.ten_doan}` });
         // Áp dụng seri mới nếu user vừa chọn seri khác. DoanDrawer đã pre-check conflict,
         // nên ở đây chắc chắn đoàn không có lịch trình / booking / chi phí.
         if (data.seri_id && data.seri_id !== editingDoan.seri_id && data.ngay_di) {
@@ -409,7 +409,7 @@ export default function Index() {
     try {
       const created = await createDoan.mutateAsync(p);
       if (created) {
-        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Tạo đoàn ${p.ten_doan}` });
+        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, doan_id: created.id, mo_ta: `Tạo đoàn ${p.ten_doan}` });
         if (baoGiaFile) {
           // Lưu báo giá vào Tài liệu của đoàn (mục Báo giá) — liên kết với tab Tài liệu DoanDetail
           try {
@@ -529,7 +529,7 @@ export default function Index() {
     try {
       const name = deletingDoan.ten_doan;
       await deleteDoan.mutateAsync(deletingDoan.id);
-      logActivity.mutate({ action: "xoa", table_name: "doan", record_id: deletingDoan.id, mo_ta: `Xóa đoàn ${name}` });
+      logActivity.mutate({ action: "xoa", table_name: "doan", record_id: deletingDoan.id, doan_id: deletingDoan.id, mo_ta: `Xóa đoàn ${name}` });
       toast.success(t("Đã xoá đoàn"));
       setDeletingDoan(null);
     } catch {
@@ -579,7 +579,7 @@ export default function Index() {
       };
       const created = await cloneDoan.mutateAsync({ payload, sourceDoanId: doan.id });
       if (created) {
-        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, mo_ta: `Nhân bản đoàn ${doan.ten_doan}` });
+        logActivity.mutate({ action: "tao", table_name: "doan", record_id: created.id, doan_id: created.id, mo_ta: `Nhân bản đoàn ${doan.ten_doan}` });
       }
       toast.success("Đã nhân bản đoàn (kèm chương trình)");
     } catch {

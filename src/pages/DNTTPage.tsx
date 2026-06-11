@@ -335,7 +335,7 @@ function DNTTPageContent() {
     approveMut.mutate({ id, level, userId: user.user_id }, {
       onSuccess: () => {
         toast({ title: level === 3 ? t("Đã duyệt cuối — ĐNTT chuyển sang đã duyệt") : `${t("Đã duyệt cấp")} ${level}` });
-        logActivity.mutate({ action: "duyet", table_name: "de_nghi_thanh_toan", record_id: id, mo_ta: `Duyệt cấp ${level} ĐNTT #${id}` });
+        logActivity.mutate({ action: "duyet", table_name: "de_nghi_thanh_toan", record_id: id, doan_id: rows.find((r) => r.id === id)?.doan_id ?? null, mo_ta: `Duyệt cấp ${level} ĐNTT #${id}` });
       },
       onError: (e: unknown) => toast({ title: errMsg(e) || t("Lỗi duyệt"), variant: "destructive" }),
     });
@@ -350,7 +350,7 @@ function DNTTPageContent() {
     rejectMut.mutate({ id: rejectId, ghiChu: rejectReason, level: rejectLevel, userId: user.user_id }, {
       onSuccess: () => {
         toast({ title: t("Đã từ chối ĐNTT") });
-        logActivity.mutate({ action: "tu_choi", table_name: "de_nghi_thanh_toan", record_id: rejectId, mo_ta: `Từ chối cấp ${rejectLevel} ĐNTT #${rejectId}` });
+        logActivity.mutate({ action: "tu_choi", table_name: "de_nghi_thanh_toan", record_id: rejectId, doan_id: rows.find((r) => r.id === rejectId)?.doan_id ?? null, mo_ta: `Từ chối cấp ${rejectLevel} ĐNTT #${rejectId}` });
         setRejectId(null);
         setRejectLevel(null);
         setRejectReason("");
