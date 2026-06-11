@@ -9,6 +9,7 @@ import {
   disableDesktopNotif,
   desktopNotifPermission,
 } from "@/lib/desktop-notify";
+import { subscribePush, unsubscribePush } from "@/lib/push-notify";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
@@ -144,6 +145,7 @@ export function NotificationBell({ userId }: Props) {
     if (desktopOn) {
       disableDesktopNotif();
       setDesktopOn(false);
+      void unsubscribePush(); // gỡ Web Push cho máy này (best-effort)
       toast.success(t("Đã tắt thông báo desktop"));
       return;
     }
@@ -157,9 +159,20 @@ export function NotificationBell({ userId }: Props) {
     }
     const ok = await enableDesktopNotif();
     setDesktopOn(ok);
-    if (ok) toast.success(t("Đã bật thông báo desktop"));
-    else toast.error(t("Chưa cấp quyền thông báo"));
+    if (ok) {
+      toast.success(t("Đã bật thông báo desktop"));
+      // Web Push (app đóng vẫn nhận) — optional: fail im lặng thì vẫn còn Tier-1
+      if (userId) void subscribePush(userId);
+    } else {
+      toast.error(t("Chưa cấp quyền thông báo"));
+    }
   };
+
+  // Refresh push subscription mỗi lần vào app: push service có thể xoay endpoint,
+  // và last_seen_at giúp dọn subscription chết lâu ngày. Chỉ chạy khi toggle đang bật.
+  useEffect(() => {
+    if (userId && desktopNotifEnabled()) void subscribePush(userId);
+  }, [userId]);
 
   // Filter theo tab + lấy 15 cái mới nhất
   const filtered = useMemo(() => {
