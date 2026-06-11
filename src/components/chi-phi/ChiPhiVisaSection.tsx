@@ -21,7 +21,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
-const CURRENCIES = ["USD", "RMB", "NT"] as const;
+// VND: tỷ giá khóa = 1 (đơn giá nhập trực tiếp VND), không cho sửa ô tỷ giá.
+const CURRENCIES = ["VND", "USD", "RMB", "NT"] as const;
 type Currency = (typeof CURRENCIES)[number];
 
 import type { DNTTRow } from "@/hooks/use-chi-phi";
@@ -131,7 +132,11 @@ function AddVisaRow({ doanId, onAdded, locked = false }: { doanId: number; onAdd
         <div>
           <Label className="text-xs">{t("Đơn giá")} ({currency})</Label>
           <div className="flex gap-1">
-            <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)} disabled={locked}>
+            <Select
+              value={currency}
+              onValueChange={(v) => { setCurrency(v as Currency); if (v === "VND") setTyGia(1); }}
+              disabled={locked}
+            >
               <SelectTrigger className="h-7 text-xs w-[68px]">
                 <SelectValue />
               </SelectTrigger>
@@ -144,7 +149,7 @@ function AddVisaRow({ doanId, onAdded, locked = false }: { doanId: number; onAdd
         </div>
         <div>
           <Label className="text-xs">{t("Tỷ giá")} (1 {currency} = ? VND)</Label>
-          <DecimalInput value={tyGia} onChange={setTyGia} disabled={locked} className="h-7 text-xs text-right" />
+          <DecimalInput value={tyGia} onChange={setTyGia} disabled={locked || currency === "VND"} className="h-7 text-xs text-right" />
         </div>
         <div>
           <Label className="text-xs">{t("Chiết khấu (VND)")}</Label>
@@ -496,7 +501,12 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                         <Select
                           value={local.tien_te_loai}
                           disabled={locked}
-                          onValueChange={(v) => { handleRowChange(row.id, { tien_te_loai: v as Currency }); handleRowSave({ ...row, tien_te_loai: v }); }}
+                          onValueChange={(v) => {
+                            handleRowChange(row.id, v === "VND"
+                              ? { tien_te_loai: v as Currency, ty_gia: 1 }
+                              : { tien_te_loai: v as Currency });
+                            handleRowSave({ ...row, tien_te_loai: v });
+                          }}
                         >
                           <SelectTrigger className="h-6 text-[10px] px-1.5 py-0 w-[58px]">
                             <SelectValue />
@@ -520,7 +530,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                       <div className="flex justify-center">
                         <DecimalInput
                           value={local.ty_gia}
-                          disabled={locked}
+                          disabled={locked || local.tien_te_loai === "VND"}
                           onChange={(v) => handleRowChange(row.id, { ty_gia: v })}
                           onBlur={() => handleRowSave(row)}
                           className="h-6 text-xs px-1.5 py-0 text-right w-[88px]"
