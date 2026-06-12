@@ -102,6 +102,20 @@ function hashStr(s: string): number {
 function badgeColor(name: string) { return PALETTE[hashStr(name) % PALETTE.length]; }
 function avatarBg(name: string) { return AVATAR_BG[hashStr(name) % AVATAR_BG.length]; }
 
+// Nền pastel nhẹ phân biệt theo nhà xe (cột Loại xe)
+const XE_PALETTE = [
+  "bg-blue-50 text-blue-800", "bg-emerald-50 text-emerald-800",
+  "bg-amber-50 text-amber-800", "bg-purple-50 text-purple-800",
+  "bg-pink-50 text-pink-800", "bg-cyan-50 text-cyan-800",
+  "bg-orange-50 text-orange-800", "bg-indigo-50 text-indigo-800",
+  "bg-lime-50 text-lime-800", "bg-rose-50 text-rose-800",
+  "bg-teal-50 text-teal-800", "bg-violet-50 text-violet-800",
+];
+function xeBg(nhaXeTen: string | null | undefined): string {
+  if (!nhaXeTen) return "bg-muted/60";
+  return XE_PALETTE[hashStr(nhaXeTen) % XE_PALETTE.length];
+}
+
 // Trạng thái giàu: huỷ / hoàn thành / đang diễn ra / sắp khởi hành / đang chạy
 function richStatus(g: DoanRow, qtPaidSet: Set<number> | null) {
   const base = computeDoanStatus(g, qtPaidSet ?? null);
@@ -376,7 +390,11 @@ export function DoanTable({
               <div className="px-3 py-3 flex flex-col justify-center min-w-0">
                 <p className="text-[10px] text-muted-foreground">{t("Loại xe")}</p>
                 {xe
-                  ? <p className="text-xs leading-snug line-clamp-2" title={xe}>{xe}</p>
+                  ? (
+                    <div className={cn("mt-0.5 w-fit max-w-full rounded-md px-1.5 py-1", xeBg(g.xe?.nha_xe?.ten))}>
+                      <p className="text-xs leading-snug line-clamp-2" title={xe}>{xe}</p>
+                    </div>
+                  )
                   : <span className="text-xs text-muted-foreground">—</span>}
               </div>
 
