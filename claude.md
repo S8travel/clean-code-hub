@@ -304,6 +304,7 @@ src/
 # Protected
 /                       → redirect → /my-job
 /my-job                 → MyJobPage (landing)
+/thong-bao              → ThongBaoPage (tất cả thông báo — đích nút "Xem tất cả" ở chuông)
 /dashboard              → DashboardPage
 /doan                   → Index (danh sách đoàn)
 /doan/:id               → DoanDetail (tabs: Điều Tour, Booking KS, Booking NH,

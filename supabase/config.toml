@@ -9,3 +9,8 @@ verify_jwt = false
 # Bảo vệ bằng header 'x-cron-secret' khớp env SU_CO_CRON_SECRET (xem index.ts).
 [functions.sync-su-co-to-sheet]
 verify_jwt = false
+
+# send-push duoc goi boi trigger pg_net tren INSERT thong_bao (khong co user JWT)
+# -> tat verify_jwt. Bao ve bang header 'x-push-secret' khop env PUSH_WEBHOOK_SECRET.
+[functions.send-push]
+verify_jwt = false

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck, BellRing, BellOff } from "lucide-react";
 import { toast } from "sonner";
@@ -9,13 +9,16 @@ import {
   disableDesktopNotif,
   desktopNotifPermission,
 } from "@/lib/desktop-notify";
+import { subscribePush, unsubscribePush } from "@/lib/push-notify";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { formatDistanceToNow, isToday, isYesterday, isThisWeek } from "date-fns";
-import { vi } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import {
+  TAB_FILTER, iconFor, groupByTime, targetUrl,
+  fmtThongBaoTime, fmtThongBaoRelative,
+} from "@/lib/thong-bao-utils";
 import {
   useThongBaoList,
   useThongBaoTotalUnread,
@@ -28,71 +31,6 @@ import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   userId: string | null | undefined;
-}
-
-const ICON_BY_LOAI: Record<string, string> = {
-  // Deadline
-  deadline:                  "🔥",
-  deadline_lock_phong:       "🔥",
-  deadline_booking:          "🔥",
-  // Công việc
-  giao_viec:                 "💼",
-  thong_tin_doan:            "🔄",
-  dntt_can_duyet:            "✅",
-  // Tiền / Invoice
-  gia:                       "💰",
-  // Sự cố
-  su_co:                     "⚠️",
-  // Lead
-  lead_moi:                  "🆕",
-  lead_chuyen_giao:          "👥",
-  lead_qua_han:              "🔥",
-  lead_follow_up_today:      "⏰",
-  lead_lanh:                 "🥶",
-};
-
-const TAB_FILTER: Record<string, (loai: string) => boolean> = {
-  all:       () => true,
-  deadline:  (l) => l.startsWith("deadline") || l === "lead_qua_han" || l === "lead_follow_up_today",
-  cong_viec: (l) => l === "giao_viec" || l === "dntt_can_duyet" || l === "thong_tin_doan",
-  khac:      (l) => !l.startsWith("deadline") && l !== "giao_viec" && l !== "dntt_can_duyet" && l !== "thong_tin_doan" && l !== "lead_qua_han" && l !== "lead_follow_up_today",
-};
-
-function iconFor(loai: string) {
-  return ICON_BY_LOAI[loai] ?? "🔔";
-}
-
-function groupByTime(items: ThongBaoRow[]) {
-  const groups: { label: string; items: ThongBaoRow[] }[] = [
-    { label: t("Hôm nay"),   items: [] },
-    { label: t("Hôm qua"),   items: [] },
-    { label: t("Tuần này"),  items: [] },
-    { label: t("Cũ hơn"),    items: [] },
-  ];
-  for (const it of items) {
-    const d = new Date(it.created_at);
-    if (isToday(d))           groups[0].items.push(it);
-    else if (isYesterday(d))  groups[1].items.push(it);
-    else if (isThisWeek(d))   groups[2].items.push(it);
-    else                      groups[3].items.push(it);
-  }
-  return groups.filter((g) => g.items.length > 0);
-}
-
-function targetUrl(tb: ThongBaoRow): string | null {
-  const { loai, doan_id, cong_viec_id } = tb;
-  if (loai.startsWith("deadline") && doan_id) return `/doan/${doan_id}`;
-  if (loai === "giao_viec" && cong_viec_id)   return `/my-job?cong_viec=${cong_viec_id}`;
-  // Hủy đoàn: trigger tạo thong_bao loai='giao_viec' KHÔNG kèm cong_viec_id
-  // (task tạo riêng) → fallback về trang đoàn để OP thấy & đi hủy dịch vụ.
-  if (loai === "giao_viec" && doan_id)        return `/doan/${doan_id}`;
-  if (loai === "dntt_can_duyet")              return `/de-nghi-thanh-toan`;
-  if (loai === "su_co" && doan_id)            return `/doan/${doan_id}?tab=log`;
-  if (loai.startsWith("lead_"))               return `/leads`;
-  if (loai === "gia" && doan_id)              return `/doan/${doan_id}`;
-  // Đổi số khách/ngày/địa điểm (trigger fn_doan_phanviec_events)
-  if (loai === "thong_tin_doan" && doan_id)   return `/doan/${doan_id}`;
-  return null;
 }
 
 export function NotificationBell({ userId }: Props) {
@@ -108,17 +46,43 @@ export function NotificationBell({ userId }: Props) {
   const markAll = useMarkAllRead();
   const markOne = useMarkOneRead();
 
-  // Realtime subscribe (one-shot per user) + popup desktop khi click thì điều hướng
-  useRealtimeThongBao(userId, (tb) => {
-    if (!tb.is_read) markOne.mutate(tb.id);
-    const url = targetUrl(tb);
-    if (url) nav(url);
+  // Realtime subscribe (one-shot per user) + popup desktop khi click thì điều hướng.
+  // targetUrl truyền thêm để đường SW (Android) nhúng URL đích vào notification data.
+  useRealtimeThongBao(
+    userId,
+    (tb) => {
+      if (!tb.is_read) markOne.mutate(tb.id);
+      const url = targetUrl(tb);
+      if (url) nav(url);
+    },
+    targetUrl,
+  );
+
+  // Notification bắn qua SW (Android PWA): click → sw-notify.js postMessage về
+  // trang đang mở. Ref để listener (đăng ký 1 lần) luôn dùng nav/markOne mới nhất.
+  const navRef = useRef(nav);
+  const markOneRef = useRef(markOne.mutate);
+  useEffect(() => {
+    navRef.current = nav;
+    markOneRef.current = markOne.mutate;
   });
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; id?: number; url?: string } | null;
+      if (!d || d.type !== "THONG_BAO_CLICK") return;
+      if (typeof d.id === "number") markOneRef.current(d.id);
+      if (d.url && d.url !== "/") navRef.current(d.url);
+    };
+    navigator.serviceWorker.addEventListener("message", onMsg);
+    return () => navigator.serviceWorker.removeEventListener("message", onMsg);
+  }, []);
 
   const toggleDesktop = async () => {
     if (desktopOn) {
       disableDesktopNotif();
       setDesktopOn(false);
+      void unsubscribePush(); // gỡ Web Push cho máy này (best-effort)
       toast.success(t("Đã tắt thông báo desktop"));
       return;
     }
@@ -132,9 +96,20 @@ export function NotificationBell({ userId }: Props) {
     }
     const ok = await enableDesktopNotif();
     setDesktopOn(ok);
-    if (ok) toast.success(t("Đã bật thông báo desktop"));
-    else toast.error(t("Chưa cấp quyền thông báo"));
+    if (ok) {
+      toast.success(t("Đã bật thông báo desktop"));
+      // Web Push (app đóng vẫn nhận) — optional: fail im lặng thì vẫn còn Tier-1
+      if (userId) void subscribePush(userId);
+    } else {
+      toast.error(t("Chưa cấp quyền thông báo"));
+    }
   };
+
+  // Refresh push subscription mỗi lần vào app: push service có thể xoay endpoint,
+  // và last_seen_at giúp dọn subscription chết lâu ngày. Chỉ chạy khi toggle đang bật.
+  useEffect(() => {
+    if (userId && desktopNotifEnabled()) void subscribePush(userId);
+  }, [userId]);
 
   // Filter theo tab + lấy 15 cái mới nhất
   const filtered = useMemo(() => {
@@ -257,8 +232,8 @@ export function NotificationBell({ userId }: Props) {
                               {tb.noi_dung}
                             </p>
                           )}
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {formatDistanceToNow(new Date(tb.created_at), { addSuffix: true, locale: vi })}
+                          <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
+                            {fmtThongBaoTime(tb.created_at)} · {fmtThongBaoRelative(tb.created_at)}
                           </p>
                         </div>
                       </button>

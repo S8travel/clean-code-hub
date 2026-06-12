@@ -1,6 +1,9 @@
-// Web Notifications (popup desktop) cho thông báo realtime — Tier 1 (chỉ foreground).
-// Không service worker, không server push: chỉ hiện khi trình duyệt đang chạy
-// và app mở ở 1 tab bất kỳ. Lựa chọn bật/tắt lưu ở localStorage theo máy.
+// Web Notifications (popup desktop/mobile) cho thông báo realtime — Tier 1 (chỉ foreground).
+// Không server push: chỉ hiện khi trình duyệt/PWA đang chạy và app mở ở 1 tab.
+// Desktop: new Notification() trực tiếp. Android (PWA/Chrome): constructor bị cấm
+// ở page context → fallback registration.showNotification() qua service worker
+// (click xử lý ở public/sw-notify.js → postMessage về trang).
+// Lựa chọn bật/tắt lưu ở localStorage theo máy.
 
 const LS_KEY = "desktop_notif_enabled";
 
@@ -44,6 +47,9 @@ export interface DesktopNotifPayload {
   id: number | string;
   title: string;
   body?: string | null;
+  // Đích điều hướng khi click — bắt buộc truyền cho đường SW (Android),
+  // vì notificationclick chạy trong SW, không gọi được callback của trang.
+  url?: string | null;
 }
 
 // Hiện 1 popup desktop. Tự bỏ qua nếu chưa bật / chưa cấp quyền,
@@ -63,6 +69,24 @@ export function showDesktopNotif(p: DesktopNotifPayload, onClick?: () => void) {
       onClick?.();
     };
   } catch {
-    /* vài trình duyệt chặn new Notification() ngoài service worker — bỏ qua */
+    // Android Chrome throw TypeError với new Notification() ở page context —
+    // hiện qua service worker thay thế. Click xử lý ở public/sw-notify.js.
+    void showViaServiceWorker(p);
+  }
+}
+
+async function showViaServiceWorker(p: DesktopNotifPayload) {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return; // dev không đăng ký SW (devOptions.enabled=false)
+    await reg.showNotification(p.title, {
+      body: p.body ?? undefined,
+      icon: "/logo.jpg",
+      tag: `thongbao-${p.id}`,
+      data: { id: p.id, url: p.url ?? "/" },
+    });
+  } catch {
+    /* SW chưa active hoặc bị chặn — bỏ qua, chuông in-app vẫn còn */
   }
 }

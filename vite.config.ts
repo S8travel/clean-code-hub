@@ -64,7 +64,10 @@ export default defineConfig(({ mode: _mode }) => ({
         // Precache CHỈ asset tĩnh content-hashed (JS/CSS/icon/font) → load nhanh, an
         // toàn (đổi nội dung = đổi tên file). KHÔNG precache index.html.
         globPatterns: ["**/*.{js,css,png,svg,woff,woff2}"],
-        globIgnores: ["**/version.json"],
+        globIgnores: ["**/version.json", "sw-push.js"],
+        // Handler push (Web Push từ edge fn send-push) + notificationclick.
+        // Xem public/sw-push.js.
+        importScripts: ["sw-push.js"],
         // Bỏ qua chunk khổng lồ (tesseract/xlsx/docx…) — app không cần offline.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // index.html LUÔN ra network (luôn mới khi online); offline thì không mở —
