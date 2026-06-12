@@ -39,6 +39,29 @@ describe("computePhaiThu", () => {
     expect(vp.thanhTienVND).toBe(QUY_VP_DEFAULT_AMOUNT);
   });
 
+  it("quỹ VP: null = chưa nhập → default 200k; 0 = đã xóa → KHÔNG in (bug Excel 2026-06-12)", () => {
+    // null (đoàn mới) → gợi ý mặc định 200k
+    const chuaNhap = computePhaiThu({ quy_vp_amount: null }, 800);
+    const vpDefault = chuaNhap.items.find((i) => i.key === "quy_vp")!;
+    expect(vpDefault.show).toBe(true);
+    expect(vpDefault.thanhTienVND).toBe(QUY_VP_DEFAULT_AMOUNT);
+
+    // 0 (user xóa trống ô tiền — UI lưu 0, KHÔNG lưu null) → ẩn khỏi export
+    const daXoa = computePhaiThu({ quy_vp_amount: 0 }, 800);
+    const vpXoa = daXoa.items.find((i) => i.key === "quy_vp")!;
+    expect(vpXoa.show).toBe(false);
+    expect(daXoa.totalVND).toBe(0);
+
+    // đầu khách rate=0 (đã xóa) + có khách → vẫn 0, không rơi về default 200k
+    const dkXoa = computePhaiThu(
+      { dau_khach_rate: 0, dau_khach_so_khach_override: 7, quy_vp_amount: 0 },
+      800,
+    );
+    const dk = dkXoa.items.find((i) => i.key === "dau_khach")!;
+    expect(dk.show).toBe(false);
+    expect(dk.thanhTienVND).toBe(0);
+  });
+
   it("khớp screenshot: 18 khách, 6 ngày, 150 NDT override, tỷ giá 800 → tip 12.960.000đ", () => {
     const r = computePhaiThu(
       {

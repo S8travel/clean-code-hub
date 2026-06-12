@@ -384,7 +384,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                 <div className="flex items-center gap-1 justify-center">
                   <DecimalInput
                     value={dkLocalRate}
-                    onChange={(v) => { setDkLocalRate(v); saveDk({ dau_khach_rate: v || null }); }}
+                    onChange={(v) => { setDkLocalRate(v); saveDk({ dau_khach_rate: v }); }}
                     disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-right w-[80px]"
                   />
@@ -430,7 +430,10 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                     value={vpLocalAmount || ""}
                     onChange={(e) => setVpLocalAmount(Number(e.target.value.replace(/\D/g, "")) || 0)}
                     onBlur={() => {
-                      if (vpLocalAmount !== vpAmount) saveVp({ quy_vp_amount: vpLocalAmount || null });
+                      // Lưu cả 0 (đã xóa → không thu). KHÔNG lưu null khi xóa trống:
+                      // null nghĩa là "chưa nhập" → computePhaiThu rơi về mặc định
+                      // 200k → Excel in lại khoản user vừa xóa (bug 2026-06-12).
+                      if (vpLocalAmount !== vpAmount) saveVp({ quy_vp_amount: vpLocalAmount });
                     }}
                     disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-right w-[80px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
