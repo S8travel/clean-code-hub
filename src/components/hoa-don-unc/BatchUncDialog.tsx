@@ -256,69 +256,81 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       nguon: nguonRef.current[p.id] ?? "",
     })).filter((s) => s.row);
     batchMut.mutate(pairs, {
-      onSuccess: async ({ ok, failed, errors }) => {
+      onSuccess: async ({ ok, failed, errors, okIds }) => {
         if (failed === 0) {
           toast({ title: `${t("Đã gắn UNC cho")} ${ok} ĐNTT` });
-
-          // Tự markPaid cho dòng đã gắn file + ĐÃ CHỌN NGUỒN. KHÔNG đòi OCR số
-          // tiền khớp tuyệt đối: nguồn (auto từ OCR hoặc chọn tay) là xác nhận
-          // của user; số tiền payment luôn = con_lai do server tính
-          // (so_tien − đã trả), KHÔNG lấy theo số OCR đọc. Số tiền OCR lệch chỉ
-          // là cảnh báo (badge), không chặn đánh dấu TT.
-          const today = format(new Date(), "yyyy-MM-dd");
-          // Dòng có nguồn (đã chốt lúc bấm Lưu) → đánh dấu Đã TT.
-          const toPay = snapshot.filter((s) => !!s.nguon);
-          let paidOk = 0;
-          let paidFail = 0;
-          const paidErrors: string[] = [];
-          for (const s of toPay) {
-            try {
-              await markPaidMut.mutateAsync({
-                id: s.rowId, ngayThanhToan: today, nguon: s.nguon,
-              });
-              paidOk++;
-            } catch (e: unknown) {
-              paidFail++;
-              paidErrors.push(`#${s.rowId}: ${errMsg(e) || String(e)}`);
-            }
-          }
-          if (paidOk > 0) toast({ title: `${t("Đã đánh dấu Đã TT")} ${paidOk} ĐNTT` });
-          if (paidFail > 0) {
-            toast({
-              title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`,
-              description: paidErrors.slice(0, 2).join(" · "),
-              variant: "destructive",
-            });
-          }
-
-          // Switch sang step 2 — resolve email + cho user review trước khi gửi
-          setStep("send");
-          setResolvingEmails(true);
-          try {
-            const resolved = await Promise.all(
-              snapshot.map(async (s) => {
-                const target = await resolveBookingEmail(s.row);
-                return {
-                  ...s,
-                  email: target.email,
-                  target,
-                  include: !!target.email,
-                  status: "idle" as SendStatus,
-                };
-              }),
-            );
-            setSendTargets(resolved);
-          } catch (e: unknown) {
-            toast({ title: `${t("Lỗi tra email NCC")}: ${errMsg(e) || ""}`, variant: "destructive" });
-          } finally {
-            setResolvingEmails(false);
-          }
         } else {
+          // VẪN xử lý tiếp phần gắn OK — trước đây 1 dòng lỗi là bỏ qua markPaid
+          // + gửi mail của CẢ LÔ → user phải xác nhận TT tay, mail không đi.
+          // Dòng lỗi giữ trang_thai_unc='chua_co' → mở lại "Gắn UNC nhanh" làm tiếp.
           toast({
             title: `${t("Gắn")} ${ok} OK, ${failed} ${t("lỗi")}`,
             description: errors.slice(0, 3).join("; "),
             variant: "destructive",
           });
+        }
+        if (ok === 0) return; // không gắn được dòng nào → ở lại bước 1
+
+        const okSet = new Set(okIds);
+        const okSnapshot = snapshot.filter((s) => okSet.has(s.rowId));
+
+        // Tự markPaid cho dòng đã gắn file OK + ĐÃ CHỌN NGUỒN. KHÔNG đòi OCR số
+        // tiền khớp tuyệt đối: nguồn (auto từ OCR hoặc chọn tay) là xác nhận
+        // của user; số tiền payment luôn = con_lai do server tính
+        // (so_tien − đã trả), KHÔNG lấy theo số OCR đọc. Số tiền OCR lệch chỉ
+        // là cảnh báo (badge), không chặn đánh dấu TT.
+        const today = format(new Date(), "yyyy-MM-dd");
+        // Dòng có nguồn (đã chốt lúc bấm Lưu) → đánh dấu Đã TT.
+        const toPay = okSnapshot.filter((s) => !!s.nguon);
+        let paidOk = 0;
+        let paidFail = 0;
+        const paidErrors: string[] = [];
+        for (const s of toPay) {
+          try {
+            await markPaidMut.mutateAsync({
+              id: s.rowId, ngayThanhToan: today, nguon: s.nguon,
+            });
+            paidOk++;
+          } catch (e: unknown) {
+            paidFail++;
+            paidErrors.push(`#${s.rowId}: ${errMsg(e) || String(e)}`);
+          }
+        }
+        if (paidOk > 0) toast({ title: `${t("Đã đánh dấu Đã TT")} ${paidOk} ĐNTT` });
+        if (paidFail > 0) {
+          toast({
+            title: `${paidFail} ${t("ĐNTT đánh dấu TT lỗi")}`,
+            description: paidErrors.slice(0, 2).join(" · "),
+            variant: "destructive",
+          });
+        }
+
+        // Switch sang step 2 — resolve email rồi TỰ GỬI luôn (yêu cầu user
+        // 2026-06-12: gắn xong phải gửi mail tự động, không bắt bấm "Gửi").
+        // Bảng step 2 vẫn hiện để theo dõi trạng thái + sửa email/retry dòng lỗi.
+        setStep("send");
+        setResolvingEmails(true);
+        try {
+          const resolved = await Promise.all(
+            okSnapshot.map(async (s) => {
+              const target = await resolveBookingEmail(s.row);
+              return {
+                ...s,
+                email: target.email,
+                target,
+                include: !!target.email,
+                status: "idle" as SendStatus,
+              };
+            }),
+          );
+          setSendTargets(resolved);
+          setResolvingEmails(false);
+          const autoSend = resolved.filter((s) => s.include && !!s.email);
+          if (autoSend.length > 0) await sendList(autoSend);
+        } catch (e: unknown) {
+          toast({ title: `${t("Lỗi tra email NCC")}: ${errMsg(e) || ""}`, variant: "destructive" });
+        } finally {
+          setResolvingEmails(false);
         }
       },
       onError: (e: unknown) =>
@@ -326,9 +338,9 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     });
   };
 
-  const handleSendAll = async () => {
-    const toSend = sendTargets.filter((s) => s.include && !!s.email && s.status !== "sent");
-    if (toSend.length === 0) { toast({ title: t("Không có email nào để gửi"), variant: "destructive" }); return; }
+  // Lõi gửi mail — dùng cho cả auto-send (ngay sau khi gắn) lẫn nút "Gửi" (retry
+  // dòng lỗi / dòng vừa sửa email). Cập nhật trạng thái per-row qua rowId.
+  const sendList = async (toSend: SendTarget[]) => {
     setSending(true);
     let okCount = 0;
     let failCount = 0;
@@ -364,6 +376,12 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSendAll = async () => {
+    const toSend = sendTargets.filter((s) => s.include && !!s.email && s.status !== "sent");
+    if (toSend.length === 0) { toast({ title: t("Không có email nào để gửi"), variant: "destructive" }); return; }
+    await sendList(toSend);
   };
 
   const handleClose = () => {

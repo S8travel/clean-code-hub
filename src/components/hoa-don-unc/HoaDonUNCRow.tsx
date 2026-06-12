@@ -129,9 +129,11 @@ export function HoaDonUNCRow({
           </div>
         ) : (
           <div className="flex flex-col gap-1">
+            {/* Chọn nguồn = tự xác nhận TT luôn (page gọi markPaid trong onSelectNguon). */}
             <Select
               value={selectedNguon}
               onValueChange={onSelectNguon}
+              disabled={markPaidPending}
             >
               <SelectTrigger className="h-7 px-2 text-xs w-[160px]">
                 <span>{selectedNguon || t("Chọn nguồn")}</span>
@@ -142,14 +144,17 @@ export function HoaDonUNCRow({
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              size="sm"
-              className="h-7 px-2 text-xs"
-              disabled={markPaidPending || !selectedNguon}
-              onClick={onMarkPaid}
-            >
-              {t("Xác nhận TT")}
-            </Button>
+            {/* Retry khi auto-confirm lỗi (chọn lại cùng nguồn không fire onValueChange) */}
+            {selectedNguon && (
+              <Button
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={markPaidPending}
+                onClick={onMarkPaid}
+              >
+                {markPaidPending ? t("Đang xác nhận...") : t("Xác nhận TT")}
+              </Button>
+            )}
           </div>
         )}
       </TableCell>

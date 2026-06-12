@@ -421,7 +421,7 @@ export function useBatchUploadUNC() {
   return useMutation({
     mutationFn: async (
       pairs: { id: number; file: File }[],
-    ): Promise<{ ok: number; failed: number; errors: string[] }> => {
+    ): Promise<{ ok: number; failed: number; errors: string[]; okIds: number[] }> => {
       const results = await Promise.allSettled(
         pairs.map(async ({ id, file }) => {
           const ext = file.name.split(".").pop() ?? "bin";
@@ -438,12 +438,18 @@ export function useBatchUploadUNC() {
             .update({ unc_url: urlData.publicUrl, trang_thai_unc: "da_co" })
             .eq("id", id);
           if (updErr) throw new Error(`ĐNTT #${id}: ${updErr.message}`);
+          return id;
         }),
       );
+      // okIds: caller cần biết DÒNG NÀO gắn OK để vẫn markPaid + gửi mail phần
+      // đó khi lô có dòng lỗi (1 dòng lỗi không được làm hỏng cả lô).
+      const okIds = results
+        .filter((r): r is PromiseFulfilledResult<number> => r.status === "fulfilled")
+        .map((r) => r.value);
       const errors = results
         .filter((r): r is PromiseRejectedResult => r.status === "rejected")
         .map((r) => String(r.reason?.message ?? r.reason));
-      return { ok: results.length - errors.length, failed: errors.length, errors };
+      return { ok: okIds.length, failed: errors.length, errors, okIds };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hoa-don-unc"] }),
   });

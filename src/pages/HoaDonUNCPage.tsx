@@ -319,7 +319,12 @@ function HoaDonUNCPageContent() {
                   cocSibling={cocSibling}
                   paidNguon={nguonByDntt[row.id]}
                   selectedNguon={nguonMap[row.id] ?? ""}
-                  onSelectNguon={(v) => setNguonMap(prev => ({ ...prev, [row.id]: v }))}
+                  onSelectNguon={(v) => {
+                    setNguonMap(prev => ({ ...prev, [row.id]: v }));
+                    // Chọn nguồn = xác nhận TT luôn (yêu cầu user 2026-06-12,
+                    // khỏi bấm thêm nút). Nút "Xác nhận TT" giữ làm retry khi lỗi.
+                    handleMarkPaid(row.id, v);
+                  }}
                   onMarkPaid={() => handleMarkPaid(row.id, nguonMap[row.id])}
                   markPaidPending={markPaidMut.isPending}
                   onUncUploaded={(r, url) =>
