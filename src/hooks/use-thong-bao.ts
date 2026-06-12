@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { externalSupabase } from "@/lib/supabase-external";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { showDesktopNotif } from "@/lib/desktop-notify";
 
 export interface ThongBaoRow {
@@ -35,6 +35,40 @@ export function useThongBaoList(userId: string | null | undefined) {
       if (error) throw error;
       return data as ThongBaoRow[];
     },
+  });
+}
+
+const PAGE_SIZE = 30;
+
+// Trang "Tất cả thông báo" — phân trang server-side theo tab.
+// Điều kiện loai phải khớp TAB_FILTER (src/lib/thong-bao-utils.ts) — sửa 1 bên thì sửa cả 2.
+export function useThongBaoInfinite(userId: string | null | undefined, tab: string) {
+  return useInfiniteQuery({
+    queryKey: [QK, "infinite", userId, tab],
+    enabled: !!userId,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      let q = externalSupabase
+        .from("thong_bao")
+        .select("*", { count: "exact" })
+        .eq("user_id", userId!);
+      if (tab === "deadline") {
+        q = q.or("loai.like.deadline%,loai.in.(lead_qua_han,lead_follow_up_today)");
+      } else if (tab === "cong_viec") {
+        q = q.in("loai", ["giao_viec", "dntt_can_duyet", "thong_tin_doan"]);
+      } else if (tab === "khac") {
+        q = q
+          .not("loai", "like", "deadline%")
+          .not("loai", "in", "(giao_viec,dntt_can_duyet,thong_tin_doan,lead_qua_han,lead_follow_up_today)");
+      }
+      const { data, error, count } = await q
+        .order("created_at", { ascending: false })
+        .range(pageParam, pageParam + PAGE_SIZE - 1);
+      if (error) throw error;
+      return { rows: (data ?? []) as ThongBaoRow[], total: count ?? 0, offset: pageParam };
+    },
+    getNextPageParam: (last) =>
+      last.offset + PAGE_SIZE < last.total ? last.offset + PAGE_SIZE : undefined,
   });
 }
 

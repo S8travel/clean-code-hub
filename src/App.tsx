@@ -44,6 +44,7 @@ const LeadReportPage       = lazy(() => import("./pages/LeadReportPage.tsx"));
 const ViecLeadPage         = lazy(() => import("./pages/ViecLeadPage.tsx"));
 const LeadFormPublicPage   = lazy(() => import("./pages/LeadFormPublicPage.tsx"));
 const HoanUngPage          = lazy(() => import("./pages/HoanUngPage.tsx"));
+const ThongBaoPage         = lazy(() => import("./pages/ThongBaoPage.tsx"));
 const NotFound             = lazy(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient({
@@ -111,6 +112,7 @@ const App = () => (
                 <Route path="/theo-doi" element={<TheodoiPage />} />
                 <Route path="/xep-hdv" element={<XepHDVPage />} />
                 <Route path="/my-job" element={<MyJobPage />} />
+                <Route path="/thong-bao" element={<ThongBaoPage />} />
                 <Route path="/lock-phong" element={<LockPhongPage />} />
                 <Route path="/invoice" element={<InvoicePage />} />
                 <Route path="/bao-gia" element={<BaoGiaPage />} />

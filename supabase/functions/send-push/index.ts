@@ -25,7 +25,7 @@ interface ThongBaoRecord {
   cong_viec_id: number | null;
 }
 
-// Bản sao của targetUrl trong src/components/NotificationBell.tsx — sửa bên đó
+// Bản sao của targetUrl trong src/lib/thong-bao-utils.ts — sửa bên đó
 // thì sửa cả đây (edge fn không import được code src/).
 function targetUrl(tb: ThongBaoRecord): string {
   const { loai, doan_id, cong_viec_id } = tb;
