@@ -310,8 +310,40 @@ export function useApplySeriToDoan() {
         .maybeSingle();
       if (!nhomDefault) throw new Error("Đoàn chưa có nhóm mặc định — áp seri thất bại");
 
-      // 1b. Wipe data NH/cảnh điểm cũ trước khi apply seri mới — pre-check
-      //     đã verify không có booking + DNTT (chưa hủy) → safe delete.
+      // 1a. BACKSTOP: KHÔNG xóa chi phí NH/cảnh điểm đã thanh toán / có ĐNTT hiệu lực.
+      //     checkSeriApplyConflict ở DoanDrawer là pre-check UX (client, tách rời);
+      //     đây là tường chót TRONG mutation — mọi caller đều qua. DELETE bên dưới
+      //     CASCADE xoá dntt_allocations → MẤT DẤU cọc đã trả nếu lọt (vi phạm rule
+      //     "KHÔNG xóa chi phí đã nằm trong ĐNTT"). Chạy trước mọi DELETE/UPDATE.
+      const { data: cpExisting, error: eCpCheck } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id, mo_ta, so_tien_da_tt")
+        .eq("doan_id", doanId)
+        .in("danh_muc", ["nha_hang", "canh_diem"]);
+      if (eCpCheck) throw eCpCheck;
+      if (cpExisting && cpExisting.length > 0) {
+        // 1 query lấy chi_phi_id có ĐNTT hiệu lực (tránh N+1)
+        const cpIds = cpExisting.map((r) => r.id);
+        const { data: allocRows, error: eAlloc } = await externalSupabase
+          .from("dntt_allocations")
+          .select("chi_phi_id, dntt:de_nghi_thanh_toan!inner(trang_thai_duyet)")
+          .in("chi_phi_id", cpIds)
+          .not("dntt.trang_thai_duyet", "in", "(da_huy,tu_choi)");
+        if (eAlloc) throw eAlloc;
+        const dnttChiPhiIds = new Set((allocRows ?? []).map((a) => a.chi_phi_id));
+        const blocked = cpExisting
+          .filter((cp) => Number(cp.so_tien_da_tt ?? 0) > 0 || dnttChiPhiIds.has(cp.id))
+          .map((cp) => `"${cp.mo_ta}"${dnttChiPhiIds.has(cp.id) ? " (có ĐNTT)" : " (đã thanh toán)"}`);
+        if (blocked.length > 0) {
+          throw new Error(
+            `Không thể áp seri: đoàn còn chi phí đã thanh toán/có ĐNTT: ${blocked.join("; ")}. ` +
+            `Hủy ĐNTT liên quan trước khi áp seri mới.`,
+          );
+        }
+      }
+
+      // 1b. Wipe data NH/cảnh điểm cũ trước khi apply seri mới — backstop 1a + pre-check
+      //     DoanDrawer đã verify không có booking + DNTT (chưa hủy) → safe delete.
       //     KS / bao_hiem / HDV / dich_vu / phi_khac giữ nguyên (độc lập với seri).
       //     Xoá chi phí TRƯỚC items vì chi_phi.ref_doan_ngay_item_id ref items.
       const { error: eDelCp } = await externalSupabase

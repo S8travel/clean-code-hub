@@ -294,6 +294,22 @@ export default function DoanDetail() {
             );
           }
 
+          // Cleanup NH mồ côi sau đổi chương trình (NH đổi ngày / thay NH / bỏ bữa)
+          const orphanDeleted = result?.nhOrphanDeleted ?? 0;
+          if (orphanDeleted > 0) {
+            toast.info(
+              `${t("Đã dọn")} ${orphanDeleted} ${t("dòng chi phí nhà hàng cũ không còn trong chương trình.")}`,
+              { duration: 6000 }
+            );
+          }
+          const orphanKept = result?.nhOrphanKept ?? 0;
+          if (orphanKept > 0) {
+            toast.warning(
+              `${orphanKept} ${t("dòng chi phí nhà hàng cũ còn ĐNTT/voucher — cần xử lý ở tab Chi phí trước khi in.")}`,
+              { duration: 8000 }
+            );
+          }
+
           try {
             await syncDieuTourToBookingDV({
               doanId,
@@ -621,6 +637,7 @@ export default function DoanDetail() {
               nhaHangList={nhaHangList}
               khachSanList={khachSanList}
               doanId={doanId}
+              allowDayMutation={false}
             />
             <div className="rounded-lg border border-border bg-card p-3 space-y-2">
               <h3 className="text-sm font-semibold flex items-center gap-1.5">📝 {t("Ghi chú điều tour")}</h3>

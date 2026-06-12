@@ -36,6 +36,7 @@ interface Props {
   dayLabel?: string;
   doanId?: number; // optional: SeriPage không có doanId, các check NH/KS sẽ skip
   lockKhachSan?: boolean; // mẫu seri: khoá cột khách sạn
+  allowRemove?: boolean; // false (ngữ cảnh đoàn): ẩn nút xóa ngày — số ngày điều khiển qua ngày đi/về ở Sửa đoàn
 }
 
 // Wrapper hỗ trợ kéo-thả sort cho 1 dòng cảnh điểm. Children-as-function để
@@ -162,7 +163,7 @@ function SetMenuSelect({
   );
 }
 
-export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId, lockKhachSan }: Props) {
+export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId, lockKhachSan, allowRemove = true }: Props) {
   useTranslate();
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
@@ -577,11 +578,13 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
         )}
       </div>
 
-      {/* XÓA */}
+      {/* XÓA — ẩn ở ngữ cảnh đoàn (số ngày điều khiển qua ngày đi/về ở Sửa đoàn) */}
       <div className="flex items-start justify-center pt-3 print-hide">
-        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={onRemove}>
-          <X className="h-3.5 w-3.5" />
-        </Button>
+        {allowRemove && (
+          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={onRemove}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   );

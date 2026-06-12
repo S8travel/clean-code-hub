@@ -375,8 +375,9 @@ export default function Index() {
       }
       setDrawerOpen(false);
       setEditingDoan(null);
-    } catch {
-      toast.error(t("Có lỗi xảy ra"));
+    } catch (err: unknown) {
+      // Hiện message cụ thể của guard (vd rút ngắn ngày cắt mất bữa đã trả) thay vì nuốt.
+      toast.error(errMsg(err) || t("Có lỗi xảy ra"));
     }
   };
 

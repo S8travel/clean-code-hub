@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
+import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
+import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 // ── Lookup types ──
@@ -366,22 +368,8 @@ export function useInitDoanNgay() {
     },
   });
 }
-// Lấy DNTT id còn ACTIVE (loại bỏ da_huy/tu_choi) cho 1 chi_phi.
-// Allocation của DNTT đã hủy vẫn lưu trong DB cho audit nhưng không được phép chặn xóa.
-async function getActiveDnttIdsForChiPhi(chiPhiId: number): Promise<number[]> {
-  const { data: rawAllocs } = await externalSupabase
-    .from("dntt_allocations")
-    .select("dntt_id")
-    .eq("chi_phi_id", chiPhiId);
-  if (!rawAllocs || rawAllocs.length === 0) return [];
-  const dnttIds = [...new Set(rawAllocs.map((a) => a.dntt_id))];
-  const { data: activeDntts } = await externalSupabase
-    .from("de_nghi_thanh_toan")
-    .select("id")
-    .in("id", dnttIds)
-    .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
-  return (activeDntts ?? []).map((d) => d.id);
-}
+// getActiveDnttIdsForChiPhi: chuyển sang @/lib/dntt-guard (dùng chung cho use-doan,
+// use-doan-nhom — tránh circular import). Import ở đầu file.
 
 // Pre-check trước khi user xóa cảnh điểm khỏi điều tour.
 //   1. chi_phi liên kết đã có dntt_allocations ACTIVE → block (data integrity)
@@ -393,17 +381,24 @@ export async function checkCanhDiemDeletable(
 ): Promise<{ ok: boolean; reason?: string }> {
   const { data: cpRow } = await externalSupabase
     .from("doan_chi_phi")
-    .select("id, mo_ta")
+    .select("id, mo_ta, so_tien_da_tt")
     .eq("ref_doan_ngay_item_id", itemId)
     .maybeSingle();
   if (cpRow) {
     const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+    const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
     if (activeDnttIds.length > 0) {
       const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
-      const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
       return {
         ok: false,
         reason: `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`,
+      };
+    }
+    // Đã trả tiền nhưng ĐNTT đã hủy (so_tien_da_tt còn > 0) → vẫn chặn xóa.
+    if (Number(cpRow.so_tien_da_tt ?? 0) > 0) {
+      return {
+        ok: false,
+        reason: `Không thể xóa "${cdName}" — đã thanh toán. Xử lý công nợ/hoàn tiền trước khi gỡ khỏi tour.`,
       };
     }
   }
@@ -443,7 +438,7 @@ export async function checkNhaHangDeletable(
   // 1. chi_phi NH cho bữa này
   const { data: cpRows } = await externalSupabase
     .from("doan_chi_phi")
-    .select("id, mo_ta")
+    .select("id, mo_ta, so_tien_da_tt")
     .eq("ref_doan_ngay_id", doanNgayId)
     .eq("danh_muc", "nha_hang");
   const cpRow = (cpRows || []).find((r) => typeof r.mo_ta === "string" && r.mo_ta.endsWith(mealSuffix));
@@ -454,6 +449,13 @@ export async function checkNhaHangDeletable(
       return {
         ok: false,
         reason: `Không thể xóa "${nhaHangTen} (${buaLabel})" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`,
+      };
+    }
+    // Đã trả tiền nhưng ĐNTT đã hủy (so_tien_da_tt còn > 0) → vẫn chặn đổi/xóa NH.
+    if (Number(cpRow.so_tien_da_tt ?? 0) > 0) {
+      return {
+        ok: false,
+        reason: `Không thể xóa "${nhaHangTen} (${buaLabel})" — đã thanh toán. Xử lý công nợ/hoàn tiền trước khi gỡ khỏi tour.`,
       };
     }
   }
@@ -532,7 +534,77 @@ export function useSaveDieuTour() {
       lockGuard(doanId);
 
       // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
-      const counters = { thucTeClearCount: 0 };
+      const counters = { thucTeClearCount: 0, nhOrphanDeleted: 0, nhOrphanKept: 0 };
+
+      // Resolve doan_nhom_id sớm — dùng cho backstop bên dưới + mọi query existing-row
+      // & INSERT mới (tránh ghi đè cross-nhóm khi đoàn có nhiều nhóm).
+      let defaultDoanNhomId: number | null = doanNhomId ?? null;
+      if (defaultDoanNhomId == null) {
+        const { data: nhomDefault } = await externalSupabase
+          .from("doan_nhom")
+          .select("id")
+          .eq("doan_id", doanId)
+          .eq("thu_tu", 1)
+          .maybeSingle();
+        defaultDoanNhomId = nhomDefault?.id ?? null;
+      }
+      if (defaultDoanNhomId == null) {
+        throw new Error("Đoàn chưa có nhóm — không thể lưu điều tour");
+      }
+
+      // ── BACKSTOP: KHÔNG cho gỡ NH đã thanh toán / có ĐNTT khỏi chương trình ──
+      // Chạy TRƯỚC mọi ghi DB (update doan, upsert doan_ngay) → khi throw thì chưa
+      // đụng gì; caller onError refetch → days revert sạch (không nhấp nháy half-saved).
+      // So theo Ô BỮA còn nhà hàng hay không (KHÔNG so tên → đổi tên NH trong danh mục
+      // không bị chặn nhầm). Gộp cả ngày của nhóm khác (chi phí NH merge cross-nhóm).
+      // CHỈ chặn khi CHÍNH lần lưu này gỡ bữa (slot CŨ có NH → MỚI trống). Orphan đã
+      // tồn tại từ trước (slot cũ đã trống) KHÔNG chặn — nếu không, 1 orphan cũ sẽ
+      // khoá cứng mọi lần lưu điều tour về sau; để tab Chi phí xử lý orphan cũ.
+      {
+        const { data: allDbDays, error: eDays } = await externalSupabase
+          .from("doan_ngay")
+          .select("ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id, doan_nhom_id")
+          .eq("doan_id", doanId);
+        if (eDays) throw eDays; // fail-safe: không verify được thì KHÔNG cho lưu
+        const oldOccupied = buildOccupiedMealSlots(allDbDays ?? []);
+        const otherNhomDays = (allDbDays ?? []).filter((d) => d.doan_nhom_id !== defaultDoanNhomId);
+        const newOccupied = buildOccupiedMealSlots([
+          ...days.map((d) => ({
+            ngay_so: d.ngay_so,
+            an_trua_nha_hang_id: d.an_trua_nha_hang_id,
+            an_toi_nha_hang_id: d.an_toi_nha_hang_id,
+          })),
+          ...otherNhomDays,
+        ]);
+        const { data: nhCps, error: eNhCps } = await externalSupabase
+          .from("doan_chi_phi")
+          .select("id, ngay_so, mo_ta, so_tien_da_tt")
+          .eq("doan_id", doanId)
+          .eq("danh_muc", "nha_hang");
+        if (eNhCps) throw eNhCps; // fail-safe
+        // removed = chi phí NH có slot KHÔNG còn trong chương trình mới...
+        const removed = findRemovedPaidNhChiPhi(nhCps ?? [], newOccupied);
+        const blocked: string[] = [];
+        for (const cp of removed) {
+          // ...nhưng CHỈ xét nếu slot đó TRƯỚC khi lưu vẫn còn NH (lần lưu này mới gỡ).
+          const slot = nhChiPhiSlot(cp.ngay_so, cp.mo_ta);
+          if (!slot || !oldOccupied.has(slot)) continue;
+          const paid = Number(cp.so_tien_da_tt ?? 0) > 0;
+          const activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
+          if (paid || activeDnttIds.length > 0) {
+            const tag = activeDnttIds.length > 0
+              ? ` (ĐNTT ${activeDnttIds.map((i) => `#${i}`).join(", ")})`
+              : " (đã thanh toán)";
+            blocked.push(`"${cp.mo_ta}"${tag}`);
+          }
+        }
+        if (blocked.length > 0) {
+          throw new Error(
+            `Không thể gỡ khỏi chương trình bữa ăn đã thanh toán/có ĐNTT: ${blocked.join("; ")}. ` +
+            `Hủy ĐNTT liên quan trước, hoặc giữ nhà hàng trong lịch trình.`,
+          );
+        }
+      }
 
       // Pre-check DNTT trước khi delete chi_phi linked với doan_ngay_item.
       // Nếu chi_phi có dntt_allocations → THROW error tiếng Việt cụ thể (DNTT id + tên cảnh điểm).
@@ -540,16 +612,22 @@ export function useSaveDieuTour() {
       const deleteChiPhiByItemIdSafe = async (itemId: number) => {
         const { data: cpRow } = await externalSupabase
           .from("doan_chi_phi")
-          .select("id, mo_ta")
+          .select("id, mo_ta, so_tien_da_tt")
           .eq("ref_doan_ngay_item_id", itemId)
           .maybeSingle();
         if (!cpRow) return;
+        const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
         const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
         if (activeDnttIds.length > 0) {
           const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
-          const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
           throw new Error(
             `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`
+          );
+        }
+        // Đã trả tiền nhưng ĐNTT đã hủy (so_tien_da_tt > 0) → vẫn chặn xóa (mất dấu đã trả).
+        if (Number(cpRow.so_tien_da_tt ?? 0) > 0) {
+          throw new Error(
+            `Không thể xóa "${cdName}" — đã thanh toán. Xử lý công nợ/hoàn tiền trước khi gỡ khỏi tour.`
           );
         }
         await externalSupabase.from("doan_chi_phi").delete().eq("id", cpRow.id);
@@ -573,22 +651,7 @@ export function useSaveDieuTour() {
         .update({ ...doanFields, so_khach })
         .eq("id", doanId);
 
-      // Resolve doan_nhom_id sớm — dùng cho mọi query existing-row & INSERT mới
-      // để tránh ghi đè cross-nhóm khi đoàn có nhiều nhóm.
-      let defaultDoanNhomId: number | null = doanNhomId ?? null;
-      if (defaultDoanNhomId == null) {
-        const { data: nhomDefault } = await externalSupabase
-          .from("doan_nhom")
-          .select("id")
-          .eq("doan_id", doanId)
-          .eq("thu_tu", 1)
-          .maybeSingle();
-        defaultDoanNhomId = nhomDefault?.id ?? null;
-      }
-      if (defaultDoanNhomId == null) {
-        throw new Error("Đoàn chưa có nhóm — không thể lưu điều tour");
-      }
-
+      // defaultDoanNhomId đã resolve + guard non-null ở đầu mutationFn (trước backstop).
       const { data: existingNgayRows } = await externalSupabase
         .from("doan_ngay")
         .select("id, ngay_so, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, thanh_pho")
@@ -1024,6 +1087,53 @@ export function useSaveDieuTour() {
           }
         }
       }
+
+      // 5b. Dọn chi phí NH mồ côi sau đổi chương trình.
+      // Cascade bước 5 chỉ insert/update theo (ngay_so, mo_ta) — NH đổi ngày / thay NH
+      // khác / bỏ bữa thì dòng cũ kẹt lại vĩnh viễn (vô hình trên UI nhưng vẫn in ra
+      // Excel → double). Đối chiếu với chương trình của MỌI nhóm (đoàn-nhóm merge chi
+      // phí cross-nhóm), không chỉ nhóm đang lưu.
+      {
+        const { data: allNgayRows } = await externalSupabase
+          .from("doan_ngay")
+          .select("ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id")
+          .eq("doan_id", doanId);
+        const { keys: expectedNhKeys, hasUnknownNh } = buildExpectedNhKeys(
+          allNgayRows ?? [],
+          nhNameMap,
+        );
+        // NH trong chương trình không còn trong catalog → không build được key chuẩn,
+        // mọi dòng của NH đó sẽ bị coi nhầm là mồ côi → bỏ qua cleanup cho an toàn.
+        if (!hasUnknownNh) {
+          const { data: nhCpRows } = await externalSupabase
+            .from("doan_chi_phi")
+            .select("id, ngay_so, mo_ta")
+            .eq("doan_id", doanId)
+            .eq("danh_muc", "nha_hang");
+          const orphans = findOrphanNhChiPhi(nhCpRows ?? [], expectedNhKeys);
+          for (const cp of orphans) {
+            // Còn ĐNTT hiệu lực → giữ lại cho luồng điều chỉnh/công nợ, báo caller toast.
+            const activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
+            if (activeDnttIds.length > 0) {
+              counters.nhOrphanKept++;
+              continue;
+            }
+            // Đang được voucher phủ → xóa sẽ mồ côi voucher_su_dung (FK SET NULL).
+            const { data: voucherRefs } = await externalSupabase
+              .from("voucher_su_dung")
+              .select("id")
+              .eq("chi_phi_id", cp.id)
+              .limit(1);
+            if (voucherRefs && voucherRefs.length > 0) {
+              counters.nhOrphanKept++;
+              continue;
+            }
+            await externalSupabase.from("doan_chi_phi").delete().eq("id", cp.id);
+            counters.nhOrphanDeleted++;
+          }
+        }
+      }
+
       for (const day of days) {
         if (!day.id) continue;
         for (const bua of ["trua", "toi"] as const) {
