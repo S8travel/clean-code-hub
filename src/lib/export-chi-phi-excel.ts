@@ -1025,6 +1025,20 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     cell("TỔNG CTY CHI VND 總計", "section", 2), cell(totalCtyAll, "total_number", 3),
     cell("TRONG ĐÓ HDV THU (VNĐ)", "label"), cell(phaiThu.hdvVND, "total_number", 4),
   ]);
+  // Còn lại thanh toán cho HDV = tổng HDV chi − HDV thu − tạm ứng đã TT.
+  // Âm = HDV phải hoàn lại công ty. Kèm ô tạm ứng bên phải để đọc được phép tính.
+  const tamUngDaTT = hdvData?.tamUngDaTT ?? 0;
+  const conLaiTraHdv = totalHdvAll - phaiThu.hdvVND - tamUngDaTT;
+  rows.push([
+    cell(
+      conLaiTraHdv >= 0
+        ? "CÒN LẠI THANH TOÁN CHO HDV 尚需支付導遊"
+        : "HDV HOÀN LẠI CÔNG TY 導遊退回公司",
+      "section", 2,
+    ),
+    cell(Math.abs(conLaiTraHdv), "total_number", 3),
+    cell("TẠM ỨNG HDV ĐÃ TT (VNĐ)", "label"), cell(tamUngDaTT, "total_number", 4),
+  ]);
 
   return {
     name: "Hanh Trinh",
