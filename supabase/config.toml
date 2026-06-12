@@ -14,3 +14,8 @@ verify_jwt = false
 # -> tat verify_jwt. Bao ve bang header 'x-push-secret' khop env PUSH_WEBHOOK_SECRET.
 [functions.send-push]
 verify_jwt = false
+
+# fb-lead-webhook được Facebook gọi (không có user JWT) → tắt verify_jwt.
+# Bảo vệ: FB_VERIFY_TOKEN (đăng ký) + chữ ký X-Hub-Signature-256 (FB_APP_SECRET).
+[functions.fb-lead-webhook]
+verify_jwt = false
