@@ -135,8 +135,24 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     return map;
   }, [allDvRows]);
 
-  // Init extrasMap from DB (once)
   const extrasInitRef = useRef(false);
+
+  // Reset khi doanId THỰC SỰ đổi — KHÔNG chạy lần mount đầu, và phải KHAI BÁO
+  // TRƯỚC effect init. DoanDetail đã fetch sẵn ["doan_chi_phi", doanId, null]
+  // → section mount với cache ấm → init set extrasMap ngay commit đầu; nếu reset
+  // chạy SAU nó ở cùng commit sẽ wipe mất, và dbExtrasMap không đổi identity nữa
+  // (structural sharing) nên init không bao giờ chạy lại → extras "biến mất".
+  // Đổi đoàn khi data đoàn mới đã có cache cũng cần thứ tự reset-trước-init này.
+  const prevDoanIdRef = useRef(doanId);
+  useEffect(() => {
+    if (prevDoanIdRef.current === doanId) return;
+    prevDoanIdRef.current = doanId;
+    extrasInitRef.current = false;
+    setExtrasMap({});
+    setSelectedIds([]);
+  }, [doanId]);
+
+  // Init extrasMap from DB (once)
   useEffect(() => {
     if (extrasInitRef.current) return;
     if (Object.keys(dbExtrasMap).length === 0 && allDvRows.some(r => !r.mo_ta?.match(/^\[dvps_\d+\] /))) {
@@ -148,13 +164,6 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     setExtrasMap(dbExtrasMap);
     extrasInitRef.current = true;
   }, [dbExtrasMap]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Reset when doanId changes
-  useEffect(() => {
-    extrasInitRef.current = false;
-    setExtrasMap({});
-    setSelectedIds([]);
-  }, [doanId]);
 
   // Nhóm theo ngày
   const byDay = new Map<number, typeof dvRows>();
