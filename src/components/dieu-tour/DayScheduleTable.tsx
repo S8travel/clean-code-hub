@@ -15,9 +15,11 @@ interface Props {
   doanId?: number; // truyền xuống DayRow để pre-check khi xóa NH/KS/cảnh điểm
   /** Khoá cột Khách sạn (ẩn select + chú thích) — dùng cho mẫu seri. */
   lockKhachSan?: boolean;
+  /** false (ngữ cảnh đoàn): ẩn nút Thêm/Xóa ngày — số ngày điều khiển qua ngày đi/về ở Sửa đoàn. Mặc định true (seri). */
+  allowDayMutation?: boolean;
 }
 
-export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId, lockKhachSan }: Props) {
+export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId, lockKhachSan, allowDayMutation = true }: Props) {
   useTranslate();
   const canhDiemOptions = useMemo(() =>
     canhDiemList.map((c) => ({
@@ -115,17 +117,20 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
             dayLabel={getDayLabel ? getDayLabel(day, i) : undefined}
             doanId={doanId}
             lockKhachSan={lockKhachSan}
+            allowRemove={allowDayMutation}
           />
         ))}
       </div>
-      {/* Add day */}
-      <button
-        type="button"
-        onClick={handleAddDay}
-        className="w-full py-2.5 border border-dashed border-border rounded-b-lg text-sm text-muted-foreground hover:border-foreground hover:text-foreground transition-colors print-hide"
-      >
-        <Plus className="inline h-4 w-4 mr-1" /> {t("Thêm ngày")}
-      </button>
+      {/* Add day — ẩn ở ngữ cảnh đoàn (số ngày điều khiển qua ngày đi/về ở Sửa đoàn) */}
+      {allowDayMutation && (
+        <button
+          type="button"
+          onClick={handleAddDay}
+          className="w-full py-2.5 border border-dashed border-border rounded-b-lg text-sm text-muted-foreground hover:border-foreground hover:text-foreground transition-colors print-hide"
+        >
+          <Plus className="inline h-4 w-4 mr-1" /> {t("Thêm ngày")}
+        </button>
+      )}
       </div>
       </div>
     </div>

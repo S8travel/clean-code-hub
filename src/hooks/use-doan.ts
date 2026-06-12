@@ -7,6 +7,7 @@ import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { resolveNhom1SoKhach } from "@/lib/doan-nhom-sync";
 import { isChiPhiLocked } from "@/lib/chi-phi-lock";
+import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
 
 export interface Doan {
   id: number;
@@ -489,6 +490,74 @@ export function useUpdateDoan() {
       );
       if (soKhachChangedGuard && isChiPhiLocked(user?.role ?? null, qtPaidSet ?? null, id)) {
         throw new Error("Đoàn đã quyết toán — không thể đổi số khách (ảnh hưởng chi phí). Chỉ admin mới sửa được.");
+      }
+
+      // 1b. GUARD rút ngắn ngày tour: KHÔNG được cắt mất ngày đang có chi phí đã
+      // trả / có ĐNTT, hoặc booking nhà hàng đã gửi. Chạy TRƯỚC mọi ghi DB → throw
+      // = chưa đụng gì (caller hiển thị lỗi, không lưu). Số ngày = (ngay_ve - ngay_di + 1).
+      {
+        const newNgayDi = updates.ngay_di ?? oldDoan.ngay_di;
+        const newNgayVe = updates.ngay_ve ?? oldDoan.ngay_ve;
+        const datesChanged =
+          (updates.ngay_di !== undefined && updates.ngay_di !== oldDoan.ngay_di) ||
+          (updates.ngay_ve !== undefined && updates.ngay_ve !== oldDoan.ngay_ve);
+        if (datesChanged && newNgayDi && newNgayVe) {
+          const parseUTC = (s: string) => {
+            const [y, m, d] = s.split("-").map(Number);
+            return Date.UTC(y, m - 1, d);
+          };
+          const newNumDays = Math.max(
+            0,
+            Math.round((parseUTC(newNgayVe) - parseUTC(newNgayDi)) / 86400000) + 1,
+          );
+          const { data: droppedDays, error: eDropped } = await externalSupabase
+            .from("doan_ngay")
+            .select("id, ngay_so")
+            .eq("doan_id", id)
+            .gt("ngay_so", newNumDays);
+          if (eDropped) throw eDropped; // fail-safe: không verify được thì KHÔNG cho rút ngắn
+          if (droppedDays && droppedDays.length > 0) {
+            const droppedNgaySo = [...new Set(droppedDays.map((r) => r.ngay_so))];
+            const droppedNgayIds = droppedDays.map((r) => r.id);
+            const blocked: string[] = [];
+
+            // (a) Chi phí có tiền cam kết (đã trả / ĐNTT hiệu lực) trên ngày bị cắt
+            const { data: cpRows, error: eCp } = await externalSupabase
+              .from("doan_chi_phi")
+              .select("id, ngay_so, mo_ta, so_tien_da_tt")
+              .eq("doan_id", id)
+              .in("ngay_so", droppedNgaySo);
+            if (eCp) throw eCp; // fail-safe
+            for (const cp of cpRows ?? []) {
+              const paid = Number(cp.so_tien_da_tt ?? 0) > 0;
+              const activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
+              if (paid || activeDnttIds.length > 0) {
+                const tag = activeDnttIds.length > 0
+                  ? ` (ĐNTT ${activeDnttIds.map((i) => `#${i}`).join(", ")})`
+                  : " (đã thanh toán)";
+                blocked.push(`ngày ${cp.ngay_so} "${cp.mo_ta}"${tag}`);
+              }
+            }
+
+            // (b) Booking nhà hàng đã gửi / NH xác nhận trên ngày bị cắt
+            const { data: bkNh, error: eBk } = await externalSupabase
+              .from("doan_booking_nh")
+              .select("id, booking_status")
+              .in("doan_ngay_id", droppedNgayIds)
+              .in("booking_status", ["da_gui", "nh_xac_nhan"]);
+            if (eBk) throw eBk; // fail-safe
+            if (bkNh && bkNh.length > 0) {
+              blocked.push(`${bkNh.length} booking nhà hàng đã gửi`);
+            }
+
+            if (blocked.length > 0) {
+              throw new Error(
+                `Không thể rút ngắn ngày tour: ngày ${droppedNgaySo.sort((a, b) => a - b).join(", ")} còn ràng buộc — ${blocked.join("; ")}. ` +
+                `Hủy ĐNTT/booking và gỡ các bữa khỏi những ngày đó trước khi rút ngắn.`,
+              );
+            }
+          }
+        }
       }
 
       // 2. UPDATE doan

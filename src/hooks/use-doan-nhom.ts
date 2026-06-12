@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
+import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
 
 /**
  * Hook quản lý nhóm trong đoàn (1 đoàn → N nhóm).
@@ -141,18 +142,65 @@ export function useDeleteDoanNhom() {
         throw new Error("Đoàn phải có ít nhất 1 nhóm — không thể xóa nhóm cuối cùng");
       }
 
-      // Null chi_phi refs trỏ vào doan_ngay/doan_ngay_item của nhóm sắp xóa
-      const { data: ngayRows } = await externalSupabase
+      // Lấy ngày + item của nhóm sắp xóa (dùng cho cả GUARD lẫn null-refs bên dưới)
+      const { data: ngayRows, error: eNgay } = await externalSupabase
         .from("doan_ngay")
         .select("id")
         .eq("doan_nhom_id", params.id);
+      if (eNgay) throw eNgay; // fail-safe: không verify được thì KHÔNG cho xóa nhóm
       const ngayIds = (ngayRows ?? []).map((r) => r.id);
+      const { data: itemRows, error: eItem } = ngayIds.length > 0
+        ? await externalSupabase
+            .from("doan_ngay_item")
+            .select("id")
+            .in("doan_ngay_id", ngayIds)
+        : { data: [] as { id: number }[], error: null };
+      if (eItem) throw eItem; // fail-safe
+      const itemIds = (itemRows ?? []).map((r) => r.id);
+
+      // GUARD: xóa nhóm sẽ CASCADE xóa doan_ngay + NULL ref chi phí → mất dấu cam kết.
+      // Chặn nếu nhóm còn chi phí đã trả / có ĐNTT hiệu lực, hoặc booking NH đã gửi.
+      // Chạy TRƯỚC mọi ghi DB → throw = chưa đụng gì.
       if (ngayIds.length > 0) {
-        const { data: itemRows } = await externalSupabase
-          .from("doan_ngay_item")
-          .select("id")
-          .in("doan_ngay_id", ngayIds);
-        const itemIds = (itemRows ?? []).map((r) => r.id);
+        const refOr = [
+          `ref_doan_ngay_id.in.(${ngayIds.join(",")})`,
+          ...(itemIds.length > 0 ? [`ref_doan_ngay_item_id.in.(${itemIds.join(",")})`] : []),
+        ].join(",");
+        const { data: cpRows, error: eCp } = await externalSupabase
+          .from("doan_chi_phi")
+          .select("id, mo_ta, so_tien_da_tt")
+          .or(refOr);
+        if (eCp) throw eCp; // fail-safe
+        const blocked: string[] = [];
+        for (const cp of cpRows ?? []) {
+          const paid = Number(cp.so_tien_da_tt ?? 0) > 0;
+          const activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
+          if (paid || activeDnttIds.length > 0) {
+            const tag = activeDnttIds.length > 0
+              ? ` (ĐNTT ${activeDnttIds.map((i) => `#${i}`).join(", ")})`
+              : " (đã thanh toán)";
+            blocked.push(`"${cp.mo_ta}"${tag}`);
+          }
+        }
+        const { data: bkNh, error: eBk } = await externalSupabase
+          .from("doan_booking_nh")
+          .select("id, booking_status")
+          .in("doan_ngay_id", ngayIds)
+          .in("booking_status", ["da_gui", "nh_xac_nhan"]);
+        if (eBk) throw eBk; // fail-safe
+        if (bkNh && bkNh.length > 0) {
+          blocked.push(`${bkNh.length} booking nhà hàng đã gửi`);
+        }
+        if (blocked.length > 0) {
+          throw new Error(
+            `Không thể xóa nhóm: còn ràng buộc — ${blocked.join("; ")}. ` +
+            `Hủy ĐNTT/booking liên quan trước khi xóa nhóm.`,
+          );
+        }
+      }
+
+      // Null chi_phi refs trỏ vào doan_ngay/doan_ngay_item của nhóm sắp xóa
+      if (ngayIds.length > 0) {
         if (itemIds.length > 0) {
           await externalSupabase
             .from("doan_chi_phi")
