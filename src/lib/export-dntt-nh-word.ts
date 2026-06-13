@@ -343,6 +343,33 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
     firstEntry = false;
   }
 
+  // ── Dòng TỔNG CỘNG: cộng tiền của TẤT CẢ khối → 1 con số cần chuyển.
+  // Quan trọng khi 1 giấy đề nghị gồm nhiều NH/DV (vd thanh toán gộp cùng NCC):
+  // trước đây mỗi khối hiện tổng riêng, không có số tổng chung.
+  {
+    const sumW = (a: number, b: number) => COL_W.slice(a, b).reduce((s, w) => s + w, 0);
+    const sumE = (f: (e: NHDocEntry) => number) => entries.reduce((s, e) => s + f(e), 0);
+    const gTongTien = sumE((e) => calcNHEntryTotal(e.items));
+    const gCoc = sumE((e) => e.so_tien_coc);
+    const gCanTru = sumE((e) => e.can_tru + (e.voucher_amount ?? 0));
+    const gConTT = sumE((e) => e.so_tien_con_tt);
+    const numCell = (v: number, w: number, bold = false, color?: string) =>
+      cell([p(v > 0 ? fmt(v) : "—", { size: 14, bold, color })], { width: w, shading: GRAY });
+    rows.push(
+      new TableRow({
+        children: [
+          cell([p("TỔNG CỘNG", { bold: true, size: 14, alignment: AlignmentType.RIGHT })],
+            { width: sumW(0, 8), columnSpan: 8, shading: GRAY }),
+          numCell(gTongTien, COL_W[8], true),               // Tổng tiền
+          numCell(gCoc, COL_W[9]),                           // Số tiền cọc
+          numCell(gCanTru, COL_W[10]),                       // Cấn trừ
+          numCell(gConTT, COL_W[11], true, "CC0000"),        // Số tiền còn thanh toán
+          cell([p("", { size: 13 })], { width: sumW(12, 14), columnSpan: 2, shading: GRAY }),
+        ],
+      }),
+    );
+  }
+
   const table = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     columnWidths: COL_W,
