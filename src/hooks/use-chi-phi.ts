@@ -484,6 +484,9 @@ export function useUpdateChiPhiActual() {
     onSuccess: (data, vars) => {
       markChiPhiSavedLocally(vars.doan_id);
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", vars.doan_id] });
+      // tien_hdv đổi → quyết toán HDV (chi_phi_hdv_section) phải refetch, nếu không
+      // "Tổng quyết toán (HDV chi)" trong modal bị cũ (vd thêm nước HDV trả ở NH).
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", vars.doan_id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       log({
         doan_id: vars.doan_id,
@@ -537,6 +540,8 @@ export function useUpsertChiPhi() {
     onSuccess: (data, variables) => {
       markChiPhiSavedLocally(variables.doan_id);
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", variables.doan_id] });
+      // Mọi thay đổi chi phí (gồm extras NH/DV HDV trả) → refetch quyết toán HDV.
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", variables.doan_id] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       const isNew = !variables.id;
       const dm = DANH_MUC_LABEL[variables.danh_muc ?? ""] ?? (variables.danh_muc ?? "");
@@ -595,6 +600,8 @@ export function useDeleteChiPhi() {
     onSuccess: ({ doanId, id, mo_ta, danh_muc }) => {
       markChiPhiSavedLocally(doanId);
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      // Xóa chi phí HDV trả (vd extra nước) → refetch quyết toán HDV.
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
       const log = buildAuditLogger(user?.user_id, user?.ho_ten);
       const dm = DANH_MUC_LABEL[danh_muc ?? ""] ?? (danh_muc ?? "");
       log({ doan_id: doanId, action: "xoa", table_name: "doan_chi_phi", record_id: id, mo_ta: `Xóa chi phí ${dm}${mo_ta ? ": " + mo_ta : ""}` });

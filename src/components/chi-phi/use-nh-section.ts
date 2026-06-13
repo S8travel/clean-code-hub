@@ -1027,6 +1027,7 @@ export function useNHSection({
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", doanId] });
       qc.invalidateQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] }); // voucher zero tien_hdv → refetch quyết toán HDV
       auditLog({
         doan_id: doanId,
         action: "sua",
@@ -1089,6 +1090,7 @@ export function useNHSection({
       qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
       qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", doanId] });
       qc.invalidateQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] }); // khôi phục tien_hdv → refetch quyết toán HDV
       qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
