@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { format, addDays } from "date-fns";
 import { FileDown } from "lucide-react";
 import { toast } from "sonner";
@@ -23,7 +23,7 @@ import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
 import { t } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./hdv-shared";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface CreateModalProps {
   doanId: number;
@@ -57,6 +57,9 @@ export function CreateHDVPaymentModal({
     doan?.so_khach || 0;
   const soNgayDefault = tipDaysInclusive(doan?.ngay_di, doan?.ngay_ve);
   const soKhachTl = doan?.so_khach_tl ?? 0;
+  // "Số khách" trên giấy đề nghị quyết toán = số khách THỰC, KHÔNG tính T/L
+  // (T/L không tính suất). Khớp số khách tip (cũng trừ T/L qua defaultTipSoKhach).
+  const soKhachThuc = Math.max(0, soKhachDefault - soKhachTl);
   const tyGiaDefault = (() => {
     const s = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
     return s ? Number(s) : 800;
@@ -86,7 +89,7 @@ export function CreateHDVPaymentModal({
   const [soTien, setSoTien] = useState(defaultSoTien ?? 0);
   const [moTa, setMoTa] = useState(
     isQT
-      ? `${t("Quyết toán HDV")} ${hdvName} ${soKhachDefault}p ${soNgayDefault}`.replace(/\s+/g, " ").trim()
+      ? `${t("Quyết toán HDV")} ${hdvName} ${soKhachThuc}p ${soNgayDefault}`.replace(/\s+/g, " ").trim()
       : t("Tạm ứng cho hướng dẫn viên"),
   );
   const [ghiChu, setGhiChu] = useState("");
@@ -139,7 +142,7 @@ export function CreateHDVPaymentModal({
     tong_hdv_chi: tongHdvChiVal,
     ma_doan: doan?.ten_doan ?? "",
     ten_hdv: hdvName,
-    so_khach_doan: soKhachDefault,
+    so_khach_doan: soKhachThuc,
     so_ngay_doan: soNgayDefault,
     ten_nguoi_de_nghi: hdvName,
   });
@@ -197,7 +200,7 @@ export function CreateHDVPaymentModal({
                 </div>
                 <div>
                   <Label className="text-[11px] text-muted-foreground">{t("Số khách")}</Label>
-                  <p className="font-medium">{soKhachDefault}</p>
+                  <p className="font-medium">{soKhachThuc}</p>
                 </div>
                 <div>
                   <Label className="text-[11px] text-muted-foreground">{t("Số ngày")}</Label>
