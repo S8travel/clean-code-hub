@@ -10,10 +10,10 @@ import { calcHoaDonExpectedTotal, calcHoaDonLech } from "@/lib/hoa-don-lech";
 import { t, useTranslate } from "@/lib/i18n";
 
 // Cột "Hóa đơn": nhập SỐ TIỀN hóa đơn (thay upload ảnh). Lưu xong so với
-// TỔNG chi phí (so_tien + đã cọc) — vì NCC xuất 1 HĐ gộp cho cả chi phí dù
-// đã tách nhiều ĐNTT (cọc nhiều lần). Lệch bất kỳ → tạo việc ưu tiên cao +
-// chuông cho OP. `cocSibling` = tổng đã cọc qua ĐNTT cọc anh em cùng ref.
-export function HoaDonAmountCell({ row, cocSibling = 0 }: { row: HoaDonUNCRow; cocSibling?: number }) {
+// TỔNG chi phí — vì NCC xuất 1 HĐ gộp cho cả chi phí dù đã tách nhiều ĐNTT
+// (cọc + [Bổ sung] phát sinh sau). Lệch bất kỳ → tạo việc ưu tiên cao + chuông
+// cho OP. `siblingTotal` = tổng so_tien MỌI ĐNTT khác cùng ref (cọc + bổ sung).
+export function HoaDonAmountCell({ row, siblingTotal = 0 }: { row: HoaDonUNCRow; siblingTotal?: number }) {
   useTranslate();
   const { user } = useAuth();
   const saveMut = useSaveHoaDonSoTien();
@@ -27,10 +27,10 @@ export function HoaDonAmountCell({ row, cocSibling = 0 }: { row: HoaDonUNCRow; c
     setEditing((row.hoa_don_so_tien ?? 0) <= 0);
   }, [row.hoa_don_so_tien]);
 
-  // Mốc so sánh = tổng cả chi phí (so_tien dòng này + phần đã cọc anh em).
-  const expectedTotal = calcHoaDonExpectedTotal(row.so_tien, cocSibling);
-  const hasCoc = cocSibling > 0;
-  const lech = entered ? calcHoaDonLech(row.hoa_don_so_tien!, row.so_tien, cocSibling) : 0;
+  // Mốc so sánh = tổng cả chi phí (so_tien dòng này + mọi ĐNTT khác cùng ref).
+  const expectedTotal = calcHoaDonExpectedTotal(row.so_tien, siblingTotal);
+  const hasSibling = siblingTotal > 0;
+  const lech = entered ? calcHoaDonLech(row.hoa_don_so_tien!, row.so_tien, siblingTotal) : 0;
 
   const handleConfirm = () => {
     const next = val > 0 ? val : null;
@@ -97,12 +97,12 @@ export function HoaDonAmountCell({ row, cocSibling = 0 }: { row: HoaDonUNCRow; c
         </div>
         {lech === 0 ? (
           <span className="text-[10px] text-emerald-600 font-medium">
-            ✓ {hasCoc ? t("Khớp tổng chi phí") : t("Khớp số tiền DNTT")}
+            ✓ {hasSibling ? t("Khớp tổng chi phí") : t("Khớp số tiền DNTT")}
           </span>
         ) : (
           <span
             className="text-[10px] text-red-600 font-medium"
-            title={`HĐ ${Math.round(row.hoa_don_so_tien!).toLocaleString("vi-VN")} ₫ vs ${hasCoc ? t("tổng chi phí") : "DNTT"} ${expectedTotal.toLocaleString("vi-VN")} ₫`}
+            title={`HĐ ${Math.round(row.hoa_don_so_tien!).toLocaleString("vi-VN")} ₫ vs ${hasSibling ? t("tổng chi phí") : "DNTT"} ${expectedTotal.toLocaleString("vi-VN")} ₫`}
           >
             ⚠ {t("Lệch")} {lech > 0 ? "+" : ""}{lech.toLocaleString("vi-VN")} ₫
           </span>
@@ -133,9 +133,9 @@ export function HoaDonAmountCell({ row, cocSibling = 0 }: { row: HoaDonUNCRow; c
             : <Check className="h-3.5 w-3.5" />}
         </Button>
       </div>
-      {hasCoc ? (
+      {hasSibling ? (
         <span className="text-[10px] text-amber-600">
-          {t("Nhập tổng cả chi phí (gồm cọc)")}: {expectedTotal.toLocaleString("vi-VN")} ₫
+          {t("Nhập tổng cả chi phí (gồm cọc + bổ sung)")}: {expectedTotal.toLocaleString("vi-VN")} ₫
         </span>
       ) : !entered ? (
         <span className="text-[10px] text-muted-foreground">{t("Chưa nhập hóa đơn")}</span>

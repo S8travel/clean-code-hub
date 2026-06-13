@@ -75,6 +75,15 @@ describe("calcHoaDonExpectedTotal / calcHoaDonLech", () => {
     expect(calcHoaDonLech(330_000_000, 159_400_000, 164_000_000)).toBe(6_600_000);
   });
 
+  it("ca VHC: sibling gồm CỌC + BỔ SUNG (phát sinh), không chỉ cọc → mốc đủ", () => {
+    // Dòng nhập HĐ = nước 1.65tr; anh em = cọc 10tr + [Bổ sung] 108.26tr = 118.26tr.
+    const soTien = 1_650_000;
+    const sibling = 10_000_000 + 108_260_000; // gồm bổ sung — trước đây bỏ sót
+    expect(calcHoaDonExpectedTotal(soTien, sibling)).toBe(119_910_000);
+    expect(calcHoaDonLech(119_910_000, soTien, sibling)).toBe(0);
+    expect(calcHoaDonLech(119_860_000, soTien, sibling)).toBe(-50_000); // không phải +108tr giả
+  });
+
   it("cocSibling âm (dữ liệu rác) bị clamp về 0", () => {
     expect(calcHoaDonExpectedTotal(100_000, -50_000)).toBe(100_000);
   });

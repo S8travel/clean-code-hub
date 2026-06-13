@@ -29,7 +29,10 @@ interface Props {
   row: HoaDonRow;
   stt: number;
   canTru: number;
+  /** Cọc đã trả của anh em cùng ref — hiển thị "Đã cọc". */
   cocSibling: number;
+  /** Tổng so_tien MỌI ĐNTT khác cùng ref (cọc + bổ sung) — mốc so sánh hóa đơn gộp. */
+  siblingTotal: number;
   paidNguon?: string;
   selectedNguon: string;
   onSelectNguon: (v: string) => void;
@@ -39,7 +42,7 @@ interface Props {
 }
 
 export function HoaDonUNCRow({
-  row, stt, canTru, cocSibling, paidNguon,
+  row, stt, canTru, cocSibling, siblingTotal, paidNguon,
   selectedNguon, onSelectNguon, onMarkPaid, markPaidPending, onUncUploaded,
 }: Props) {
   const lt = loaiLabel[row.loai];
@@ -159,7 +162,7 @@ export function HoaDonUNCRow({
         )}
       </TableCell>
       <TableCell>
-        <HoaDonAmountCell row={row} cocSibling={cocSibling} />
+        <HoaDonAmountCell row={row} siblingTotal={siblingTotal} />
       </TableCell>
       <TableCell>
         <DocCell
