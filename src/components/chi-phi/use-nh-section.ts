@@ -20,6 +20,7 @@ import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
 import { applyChietKhau, calcDnttPriorPaid } from "@/lib/chi-phi-calc";
+import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -736,11 +737,6 @@ export function useNHSection({
     const nh = nhData?.nhaHangMap[row.nha_hang_id];
     const focResolved = resolveNHFoc(row, nh);
     const soKhachThucTe = calcSoKhachThucTe(row.so_khach, focResolved.foc_khach, focResolved.foc_mien);
-    const mainTotalTruocCK = soKhachThucTe * row.don_gia;
-    // Extras công ty — mỗi dòng áp CK riêng. HDV extras loại trừ (HDV trả tiền mặt).
-    const extrasTotal = extras
-      .filter((e) => e.nguoi_tt !== "hdv")
-      .reduce((s, e) => s + applyChietKhau(e.so_luong * e.don_gia, e.chiet_khau_phan_tram), 0);
     const ckPct = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
     // Voucher: TẶNG → suất chính miễn phí, loại khỏi ĐNTT (chỉ phát sinh).
     //          MUA → suất chính GIỮ giá trị (đã trả bằng voucher) → ĐNTT gồm đủ,
@@ -748,8 +744,14 @@ export function useNHSection({
     const redInfo = redemptionByChiPhiId[row.id];
     const isCoveredTang = redInfo?.voucherLoai === "tang";
     const isCoveredMua = redInfo?.voucherLoai === "mua";
-    const mainContribution = isCoveredTang ? 0 : applyChietKhau(mainTotalTruocCK, ckPct);
-    const totalBua = mainContribution + extrasTotal;
+    // Số tiền ĐNTT — DÙNG CHUNG calcNHDnttAmount (khớp NHDnttModal preview, hết
+    // drift CK phát sinh). mainContribution = suất chính sau CK (0 nếu voucher tặng).
+    const { netCompany: totalBua, mainNet: mainContribution } = calcNHDnttAmount({
+      mainGrossAfterFoc: soKhachThucTe * row.don_gia,
+      mainCkPct: ckPct,
+      mainCovered: isCoveredTang,
+      extras,
+    });
     // Số tiền chưa đề nghị (trừ phần đã cọc + thanh toán trước)
     const effectiveTotalBua = Math.max(0, totalBua - dnttAlreadyPaid);
     const isBSMode = effectiveTotalBua <= 0;
@@ -1272,6 +1274,10 @@ export function useNHSection({
   const dnttModalRow = dnttModalKey ? (localRows[dnttModalKey] ?? null) : null;
   const dnttModalExtras = dnttModalKey ? (extrasMap[dnttModalKey] ?? []) : [];
   const dnttModalNh = dnttModalRow ? nhaHangMap[dnttModalRow.nha_hang_id] : undefined;
+  // Voucher TẶNG phủ suất chính → loại khỏi ĐNTT (cho preview khớp handleDnttSubmit).
+  const dnttModalCovered = dnttModalRow?.id != null
+    ? redemptionByChiPhiId[dnttModalRow.id]?.voucherLoai === "tang"
+    : false;
   const dnttModalCanTru = dnttModalKey ? (canTruByMeal[dnttModalKey] ?? []) : [];
   const setDnttModalCanTru = (v: CanTruSelection[]) => {
     if (dnttModalKey) setCanTruByMeal((prev) => ({ ...prev, [dnttModalKey]: v }));
@@ -1286,7 +1292,7 @@ export function useNHSection({
     buildSelectedEntries, handlePrintSelected,
     previewNHData, setPreviewNHData,
     // DNTT modal
-    dnttModalRow, dnttModalExtras, dnttModalNh,
+    dnttModalRow, dnttModalExtras, dnttModalNh, dnttModalCovered,
     dnttModalMode, setDnttModalMode,
     dnttDepositAmount, setDnttDepositAmount,
     dnttAlreadyPaid,

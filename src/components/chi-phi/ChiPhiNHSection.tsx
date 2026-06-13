@@ -43,7 +43,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     isLoading, meals, nhRowData, nhRowHandlers,
     selectedKeys, setSelectedKeys, chiPhiRows, dnttList, congNoList,
     buildSelectedEntries, handlePrintSelected, previewNHData, setPreviewNHData,
-    dnttModalRow, dnttModalExtras, dnttModalNh, dnttModalMode, setDnttModalMode,
+    dnttModalRow, dnttModalExtras, dnttModalNh, dnttModalCovered, dnttModalMode, setDnttModalMode,
     dnttDepositAmount, setDnttDepositAmount, dnttAlreadyPaid,
     dnttBsAmount, setDnttBsAmount, dnttNgayCan, setDnttNgayCan,
     dnttModalCanTru, setDnttModalCanTru, dnttSubmitting, handleDnttSubmit, closeDnttModal,
@@ -180,6 +180,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         canTru={dnttModalCanTru}
         onCanTruChange={setDnttModalCanTru}
         submitting={dnttSubmitting}
+        mainCovered={dnttModalCovered}
         onClose={closeDnttModal}
         onSubmit={handleDnttSubmit}
       />
