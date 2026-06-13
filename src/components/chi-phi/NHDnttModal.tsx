@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { calcSoKhachThucTe, resolveNHFoc } from "@/lib/foc-calc";
-import { applyChietKhau } from "@/lib/chi-phi-calc";
+import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
 import type { NhaHangDetail } from "@/hooks/use-chi-phi-nh";
 import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import { type CanTruSelection } from "./KSCongNoPanel";
@@ -28,6 +28,8 @@ interface Props {
   canTru: CanTruSelection[];
   onCanTruChange: (v: CanTruSelection[]) => void;
   submitting: boolean;
+  /** Voucher TẶNG phủ suất chính → loại khỏi ĐNTT (khớp handleDnttSubmit). */
+  mainCovered?: boolean;
   onClose: () => void;
   onSubmit: () => void;
 }
@@ -36,7 +38,7 @@ interface Props {
 export default function NHDnttModal({
   row, extras, nh, mode, onModeChange, depositAmount, onDepositAmountChange,
   alreadyPaid, bsAmount, onBsAmountChange, ngayCan, onNgayCanChange,
-  canTru, onCanTruChange, submitting, onClose, onSubmit,
+  canTru, onCanTruChange, submitting, mainCovered, onClose, onSubmit,
 }: Props) {
   useTranslate();
   if (!row) return null;
@@ -45,18 +47,10 @@ export default function NHDnttModal({
   const mainTotalModal = soKhachThucTe * row.don_gia;
   const allExtrasTotalModal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
   const hdvExtrasTotalModal = extras.filter(e => e.nguoi_tt === "hdv").reduce((s, e) => s + e.so_luong * e.don_gia, 0);
-  const extrasGrossCompany = allExtrasTotalModal - hdvExtrasTotalModal;
-  // CK: row override → master. Phát sinh áp CK riêng TỪNG dòng (Mức A) — KHỚP
-  // handleDnttSubmit để preview = số ĐNTT thật. Trước đây cộng gross các dòng
-  // phát sinh → bỏ sót CK của chúng → tổng lệch (vd 11.980.000 thay vì 11.970.000).
   const ckPctModal = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
-  const mainThanhTienModal = applyChietKhau(mainTotalModal, ckPctModal);
-  const extrasNetCompany = extras
-    .filter((e) => e.nguoi_tt !== "hdv")
-    .reduce((s, e) => s + applyChietKhau(e.so_luong * e.don_gia, e.chiet_khau_phan_tram), 0);
-  const grossBuaModal = mainTotalModal + extrasGrossCompany;
-  const totalBua = mainThanhTienModal + extrasNetCompany;
-  const chietKhauModal = grossBuaModal - totalBua;
+  // Số tiền ĐNTT — DÙNG CHUNG calcNHDnttAmount (khớp handleDnttSubmit, hết drift CK phát sinh).
+  const { grossCompany: grossBuaModal, chietKhau: chietKhauModal, netCompany: totalBua } =
+    calcNHDnttAmount({ mainGrossAfterFoc: mainTotalModal, mainCkPct: ckPctModal, mainCovered, extras });
   const effectiveTotalBua = Math.max(0, totalBua - alreadyPaid);
   const isBSMode = effectiveTotalBua <= 0;
   const soTien = isBSMode ? bsAmount : (mode === "full" ? effectiveTotalBua : depositAmount);
