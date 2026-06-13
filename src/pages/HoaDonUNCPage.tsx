@@ -118,42 +118,57 @@ function HoaDonUNCPageContent() {
     return [...set];
   }, [mainRows]);
 
-  type CocDnttRow = {
+  type SiblingDnttRow = {
     id: number;
     doan_id: number | null;
     ref_loai: string | null;
     ref_id: number | null;
+    so_tien: number | null;
     paid_amount: number | null;
+    la_coc: boolean | null;
   };
-  const { data: cocDntts = [] as CocDnttRow[] } = useQuery({
-    queryKey: ["hoadon-unc-coc-siblings", refTriples.join(",")],
+  // Lấy MỌI ĐNTT hiệu lực cùng (đoàn, ref) — NCC xuất 1 hóa đơn gộp cho cả chi phí
+  // dù tách nhiều ĐNTT (cọc + [Bổ sung] phát sinh). Trước đây chỉ lấy la_coc=true
+  // → mốc so sánh hóa đơn bỏ sót ĐNTT bổ sung → báo lệch giả.
+  const { data: siblingDntts = [] as SiblingDnttRow[] } = useQuery({
+    queryKey: ["hoadon-unc-ref-siblings", refTriples.join(",")],
     enabled: refTriples.length > 0,
-    queryFn: async (): Promise<CocDnttRow[]> => {
+    queryFn: async (): Promise<SiblingDnttRow[]> => {
       const doanIds = [...new Set(refTriples.map((p) => Number(p.split("|")[0])).filter(Number.isFinite))];
       const refLoais = [...new Set(refTriples.map((p) => p.split("|")[1]))];
       const refIds = [...new Set(refTriples.map((p) => Number(p.split("|")[2])).filter(Number.isFinite))];
       if (doanIds.length === 0 || refLoais.length === 0 || refIds.length === 0) return [];
       const { data } = await externalSupabase
         .from("dntt_with_payment_status")
-        .select("id, doan_id, ref_loai, ref_id, paid_amount")
-        .eq("la_coc", true)
+        .select("id, doan_id, ref_loai, ref_id, so_tien, paid_amount, la_coc")
         .in("doan_id", doanIds)
         .in("ref_loai", refLoais)
         .in("ref_id", refIds)
         .not("trang_thai_duyet", "eq", "da_huy")
         .not("trang_thai_duyet", "eq", "tu_choi");
       const validKeys = new Set(refTriples);
-      return ((data || []) as CocDnttRow[]).filter((d) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`));
+      return ((data || []) as SiblingDnttRow[]).filter((d) => validKeys.has(`${d.doan_id}|${d.ref_loai}|${d.ref_id}`));
     },
   });
+  // Cọc đã trả (cho hiển thị "Đã cọc") — chỉ ĐNTT la_coc, theo paid_amount.
   const cocByRef = useMemo(() => {
     const m: Record<string, number> = {};
-    cocDntts.forEach((d) => {
+    siblingDntts.forEach((d) => {
+      if (!d.la_coc) return;
       const k = `${d.doan_id}|${d.ref_loai}|${d.ref_id}`;
       m[k] = (m[k] || 0) + (d.paid_amount || 0);
     });
     return m;
-  }, [cocDntts]);
+  }, [siblingDntts]);
+  // Tổng so_tien MỌI ĐNTT cùng ref (mốc so sánh hóa đơn gộp — gồm cọc + bổ sung).
+  const refSoTienByRef = useMemo(() => {
+    const m: Record<string, number> = {};
+    siblingDntts.forEach((d) => {
+      const k = `${d.doan_id}|${d.ref_loai}|${d.ref_id}`;
+      m[k] = (m[k] || 0) + (d.so_tien || 0);
+    });
+    return m;
+  }, [siblingDntts]);
 
   // Metric cards luôn hiển thị tổng toàn DB, không phụ thuộc filter của list bên dưới.
   const metrics = {
@@ -310,6 +325,10 @@ function HoaDonUNCPageContent() {
               const cocSibling = refKey
                 ? Math.max(0, (cocByRef[refKey] || 0) - (row.la_coc ? (row.paid_amount || 0) : 0))
                 : 0;
+              // Mốc so sánh hóa đơn = tổng MỌI ĐNTT cùng ref (gồm bổ sung) − dòng này.
+              const siblingTotal = refKey
+                ? Math.max(0, (refSoTienByRef[refKey] || 0) - (row.so_tien || 0))
+                : 0;
               return (
                 <HoaDonUNCTableRow
                   key={row.id}
@@ -317,6 +336,7 @@ function HoaDonUNCPageContent() {
                   stt={(currentPage - 1) * PAGE_SIZE + idx + 1}
                   canTru={canTruByDntt[row.id] || 0}
                   cocSibling={cocSibling}
+                  siblingTotal={siblingTotal}
                   paidNguon={nguonByDntt[row.id]}
                   selectedNguon={nguonMap[row.id] ?? ""}
                   onSelectNguon={(v) => {
