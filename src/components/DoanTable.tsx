@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { DoanFlagField } from "@/hooks/use-doan";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -49,6 +51,8 @@ export interface DoanRow {
   huong_dan_vien_id?: number | null;
   xe_id?: number | null;
   xe_da_huy?: boolean | null;
+  da_check_quyet_toan?: boolean | null;
+  da_thu_visa?: boolean | null;
   seri_id?: number | null;
   assigned_to?: string | null;
   shopping?: boolean | null;
@@ -165,6 +169,9 @@ interface Props {
   onDelete?: (doan: DoanRow) => void;
   /** Hide actions menu (Sửa/Nhân bản/Hủy/Xóa) — vd cho kế toán chỉ xem */
   canEdit?: boolean;
+  /** Cho phép tick cờ "Đã duyệt QT" / "Đã thu visa" (kế toán + admin). */
+  canTickFlags?: boolean;
+  onToggleFlag?: (doanId: number, field: DoanFlagField, value: boolean) => void;
 }
 
 function Avatar({ name, label }: { name: string; label: string }) {
@@ -195,6 +202,7 @@ export function DoanTable({
   sortKey: sortKeyProp, sortDir: sortDirProp, onSortChange,
   onEdit, onClone, onCancel, onDelete,
   canEdit = true,
+  canTickFlags = false, onToggleFlag,
 }: Props) {
   useTranslate();
   const navigate = useNavigate();
@@ -270,7 +278,7 @@ export function DoanTable({
       </div>
 
       <div className="overflow-x-auto">
-      <div className="space-y-2.5 min-w-[1548px]">
+      <div className="space-y-2.5 min-w-[1538px]">
       {sorted.map((g) => {
         const st = richStatus(g, qtPaidSet ?? null);
         const StIcon = st.icon;
@@ -298,7 +306,7 @@ export function DoanTable({
               g.trang_thai === "huy" && "opacity-70",
             )}
           >
-            <div className="grid grid-cols-[300px_210px_120px_170px_260px_220px_minmax(180px,1fr)_88px] items-stretch divide-x divide-gray-200">
+            <div className="grid grid-cols-[300px_210px_90px_170px_260px_150px_minmax(130px,1fr)_140px_88px] items-stretch divide-x divide-gray-200">
               {/* 1. Trạng thái + Mã đoàn (giữ nguyên) */}
               <div className="flex items-center gap-3 px-4 py-3 min-w-0">
                 <div className="flex flex-col items-center w-14 shrink-0 text-center">
@@ -411,6 +419,35 @@ export function DoanTable({
                 {g.ghi_chu
                   ? <p className="text-xs line-clamp-3 leading-snug" title={g.ghi_chu}>{g.ghi_chu}</p>
                   : <span className="text-xs text-muted-foreground">—</span>}
+              </div>
+
+              {/* 9. Cờ tay kế toán: Đã duyệt QT / Đã thu visa */}
+              <div
+                className="px-2 py-3 flex flex-col justify-center gap-2 min-w-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {([
+                  { field: "da_check_quyet_toan" as const, label: t("Đã check QT"), checked: !!g.da_check_quyet_toan },
+                  { field: "da_thu_visa" as const, label: t("Đã thu visa"), checked: !!g.da_thu_visa },
+                ]).map((c) => (
+                  <label
+                    key={c.field}
+                    className={cn(
+                      "flex items-center gap-1.5 text-[11px] leading-tight",
+                      canTickFlags ? "cursor-pointer" : "cursor-default",
+                    )}
+                  >
+                    <Checkbox
+                      checked={c.checked}
+                      disabled={!canTickFlags}
+                      onCheckedChange={(v) => onToggleFlag?.(g.id, c.field, v === true)}
+                      className="h-3.5 w-3.5 shrink-0 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                    />
+                    <span className={c.checked ? "text-emerald-700 font-medium" : "text-muted-foreground"}>
+                      {c.label}
+                    </span>
+                  </label>
+                ))}
               </div>
 
               {/* Actions — ẩn nếu canEdit=false (vd kế toán) */}

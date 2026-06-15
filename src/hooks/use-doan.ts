@@ -56,6 +56,9 @@ export interface Doan {
   quy_vp_currency: string | null;
   quy_vp_ty_gia: number | null;
   quy_vp_nguoi_thu: string | null;
+  // Cờ tay (kế toán/admin) — checklist ở danh sách đoàn
+  da_check_quyet_toan: boolean | null;
+  da_thu_visa: boolean | null;
   created_at?: string;
 }
 
@@ -907,6 +910,36 @@ export function useUpdateDoanTip() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+  });
+}
+
+// Toggle cờ tay (da_check_quyet_toan / da_thu_visa) ở danh sách đoàn.
+// Update nhẹ + optimistic (không cascade, không reload cả list) cho mượt khi tick.
+export type DoanFlagField = "da_check_quyet_toan" | "da_thu_visa";
+export function useToggleDoanFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, field, value }: { id: number; field: DoanFlagField; value: boolean }) => {
+      const { error } = await externalSupabase.from("doan").update({ [field]: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, field, value }) => {
+      await qc.cancelQueries({ queryKey: ["doan"] });
+      const prev = qc.getQueriesData({ queryKey: ["doan"] });
+      qc.setQueriesData({ queryKey: ["doan"] }, (old: unknown) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((d) =>
+          d && typeof d === "object" && (d as { id?: number }).id === id
+            ? { ...(d as object), [field]: value }
+            : d,
+        );
+      });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      ctx?.prev?.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => { qc.invalidateQueries({ queryKey: ["doan"] }); },
   });
 }
 
