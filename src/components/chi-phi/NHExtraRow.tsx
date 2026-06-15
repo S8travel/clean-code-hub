@@ -85,7 +85,10 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
             const truocCK = extra.so_luong * extra.don_gia;
             const sauCK = applyChietKhau(truocCK, extra.chiet_khau_phan_tram);
             const ckSoTien = truocCK - sauCK;
-            return ckSoTien > 0 ? (
+            // Chỉ hiện khi CK% > 0 thật. Nếu CK% = 0 mà đơn giá lẻ, ckSoTien chỉ là
+            // phần dư làm tròn thành tiền (vd 25000,92×12=300011,04 → −0,04), KHÔNG
+            // phải chiết khấu — không hiện để khỏi gây hiểu nhầm là có CK.
+            return extra.chiet_khau_phan_tram > 0 && ckSoTien > 0 ? (
               <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap pointer-events-none">
                 −{fmt(ckSoTien)}
               </span>
