@@ -11,6 +11,7 @@ export const DOAN_LIST_DEFAULTS = {
   diaDiemFilter: "all",
   trangThaiFilter: "all",
   loaiTourFilter: "all",
+  xeFilter: "all",
   page: "1",
   sortKey: "ngay_di",
   sortDir: "asc",

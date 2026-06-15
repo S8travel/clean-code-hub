@@ -31,6 +31,10 @@ import { t, useTranslate } from "@/lib/i18n";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
+// Giá trị giả cho mục "Đã hủy xe" (xe_id là FK nên không nhét id thật được).
+// Chọn mục này → xe_da_huy=true + xe_id=null.
+const XE_HUY_VALUE = "__xe_huy__";
+
 const LOAI_TOUR_OPTS = [
   { value: "inbound", label: "Inbound" },
   { value: "outbound", label: "Outbound" },
@@ -46,6 +50,7 @@ const EMPTY_FORM: DoanInsert = {
   huong_dan_vien_id: null,
   huong_dan_vien_id_2: null,
   xe_id: null,
+  xe_da_huy: false,
   seri_id: null,
   chuyen_bay_don: "",
   chuyen_bay_tien: "",
@@ -122,6 +127,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         huong_dan_vien_id: num(doan.huong_dan_vien_id),
         huong_dan_vien_id_2: num(doan.huong_dan_vien_id_2),
         xe_id: num(doan.xe_id),
+        xe_da_huy: doan.xe_da_huy === true,
         seri_id: seriId,
         chuyen_bay_don: str(doan.chuyen_bay_don) || "",
         chuyen_bay_tien: str(doan.chuyen_bay_tien) || "",
@@ -188,13 +194,22 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   const hdvOptions = useMemo(() =>
     [{ value: "", label: t("— Không có —") }, ...(hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten }))], [hdv]);
 
-  const xeOptions = useMemo(() =>
-    (xeList ?? []).map((x) => {
-      const nhaXe = x.nha_xe?.ten ?? "";
-      const socho = x.so_cho ? `${x.so_cho} chỗ` : "";
-      const parts = [nhaXe, x.ten_xe, socho].filter(Boolean);
-      return { value: x.id.toString(), label: parts.join(" · ") };
-    }), [xeList]);
+  const xeOptions = useMemo(() => {
+    const huyOpt = {
+      value: XE_HUY_VALUE,
+      label: t("Đã hủy xe"),
+      className: "bg-red-100 text-red-700 font-medium",
+    };
+    return [
+      huyOpt,
+      ...(xeList ?? []).map((x) => {
+        const nhaXe = x.nha_xe?.ten ?? "";
+        const socho = x.so_cho ? `${x.so_cho} chỗ` : "";
+        const parts = [nhaXe, x.ten_xe, socho].filter(Boolean);
+        return { value: x.id.toString(), label: parts.join(" · ") };
+      }),
+    ];
+  }, [xeList]);
 
   const seriOptions = useMemo(() =>
     seriList.map((s) => ({ value: s.id.toString(), label: s.ten_seri })), [seriList]);
@@ -368,8 +383,14 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
               <Field label={t("Xe")}>
                 <SearchableSelect
                   options={xeOptions}
-                  value={form.xe_id?.toString() || ""}
-                  onChange={(v) => set("xe_id", v ? parseInt(v) : null)}
+                  value={form.xe_da_huy ? XE_HUY_VALUE : form.xe_id?.toString() || ""}
+                  onChange={(v) =>
+                    setForm((prev) =>
+                      v === XE_HUY_VALUE
+                        ? { ...prev, xe_da_huy: true, xe_id: null }
+                        : { ...prev, xe_da_huy: false, xe_id: v ? parseInt(v) : null },
+                    )
+                  }
                   placeholder={t("Chọn xe")}
                 />
               </Field>

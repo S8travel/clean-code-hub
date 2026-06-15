@@ -66,6 +66,9 @@ const LOAI_TOUR_OPTIONS = [
   { value: "noi_dia", label: "Nội địa" },
 ];
 
+// Giá trị giả cho mục "Đã hủy xe" trong bộ lọc nhà xe (lọc đoàn có xe_da_huy=true).
+const XE_HUY_FILTER_VALUE = "__xe_huy__";
+
 export default function Index() {
   useTranslate(); // re-render khi đổi ngôn ngữ
   const { user: currentUser } = useAuth();
@@ -118,6 +121,7 @@ export default function Index() {
   const diaDiemFilter = filterState.get("diaDiemFilter");
   const trangThaiFilter = filterState.get("trangThaiFilter");
   const loaiTourFilter = filterState.get("loaiTourFilter");
+  const xeFilter = filterState.get("xeFilter");
   const page = parseInt(filterState.get("page"), 10) || 1;
   const sortKey = filterState.get("sortKey");
   const sortDir = filterState.get("sortDir") as "asc" | "desc";
@@ -130,6 +134,7 @@ export default function Index() {
   const setDiaDiemFilter = (v: string) => filterState.set({ diaDiemFilter: v, page: "1" });
   const setTrangThaiFilter = (v: string) => filterState.set({ trangThaiFilter: v, page: "1" });
   const setLoaiTourFilter = (v: string) => filterState.set({ loaiTourFilter: v, page: "1" });
+  const setXeFilter = (v: string) => filterState.set({ xeFilter: v, page: "1" });
   const setPage = (v: number) => filterState.set({ page: String(v) });
   const setSort = (k: string, d: "asc" | "desc") => filterState.set({ sortKey: k, sortDir: d });
 
@@ -146,9 +151,27 @@ export default function Index() {
   const diaDiemSel = parseSel(diaDiemFilter);
   const loaiTourSel = parseSel(loaiTourFilter);
   const trangThaiSel = parseSel(trangThaiFilter);
+  const xeSel = parseSel(xeFilter);
   const toCsv = (v: string[]) => (v.length ? v.join(",") : "all");
 
-  const hasFilters = !!search || !!dateFrom || !!dateTo || agentSel.length > 0 || diaDiemSel.length > 0 || trangThaiSel.length > 0 || loaiTourSel.length > 0;
+  // Bộ lọc nhà xe: liệt kê các nhà xe đang xuất hiện trong danh sách + mục "Đã hủy xe".
+  const xeFilterOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const g of groups ?? []) {
+      const id = g.xe?.nha_xe?.id;
+      const ten = g.xe?.nha_xe?.ten;
+      if (id != null && ten) byId.set(id.toString(), ten);
+    }
+    const real = [...byId.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "vi"));
+    return [
+      { value: XE_HUY_FILTER_VALUE, label: t("Đã hủy xe"), className: "text-red-700 font-medium" },
+      ...real,
+    ];
+  }, [groups]);
+
+  const hasFilters = !!search || !!dateFrom || !!dateTo || agentSel.length > 0 || diaDiemSel.length > 0 || trangThaiSel.length > 0 || loaiTourSel.length > 0 || xeSel.length > 0;
 
   const clearFilters = () => {
     filterState.clear();
@@ -209,6 +232,13 @@ export default function Index() {
       if (diaDiemSel.length && (did == null || !diaDiemSel.includes(did))) return false;
       if (loaiTourSel.length && !loaiTourSel.includes(g.loai_tour ?? "")) return false;
 
+      if (xeSel.length) {
+        const nhaXeId = g.xe?.nha_xe?.id?.toString();
+        const matchHuy = xeSel.includes(XE_HUY_FILTER_VALUE) && g.xe_da_huy === true;
+        const matchNhaXe = nhaXeId != null && xeSel.includes(nhaXeId);
+        if (!matchHuy && !matchNhaXe) return false;
+      }
+
       if (trangThaiSel.length) {
         const status = computeDoanStatus(g, qtPaidSet ?? null);
         if (!trangThaiSel.includes(status)) return false;
@@ -227,7 +257,7 @@ export default function Index() {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, doanOpMap, qtPaidSet, quickTab]);
+  }, [groups, search, dateFrom, dateTo, agentFilter, diaDiemFilter, trangThaiFilter, loaiTourFilter, xeFilter, doanOpMap, qtPaidSet, quickTab]);
 
   // Page reset đã tích hợp trong setSearch/setDateFrom/... helpers ở trên
 
@@ -263,6 +293,7 @@ export default function Index() {
     if (diaDiemSel.length) parts.push(`ĐĐ: ${diaDiemSel.map((id) => diaDiemList?.find((d) => d.id.toString() === id)?.ten ?? id).join(", ")}`);
     if (loaiTourSel.length) parts.push(loaiTourSel.map((v) => LOAI_TOUR_OPTIONS.find((o) => o.value === v)?.label ?? v).join(", "));
     if (trangThaiSel.length) parts.push(trangThaiSel.map((v) => TRANG_THAI_OPTIONS.find((o) => o.value === v)?.label ?? v).join(", "));
+    if (xeSel.length) parts.push(`Xe: ${xeSel.map((v) => xeFilterOptions.find((o) => o.value === v)?.label ?? v).join(", ")}`);
 
     exportDoanListExcel({
       items: sorted,
@@ -711,6 +742,14 @@ export default function Index() {
             value={trangThaiSel}
             onChange={(v) => setTrangThaiFilter(toCsv(v))}
             className="h-9 text-xs w-[130px]"
+          />
+
+          <MultiSelect
+            allLabel={t("Tất cả nhà xe")}
+            options={xeFilterOptions}
+            value={xeSel}
+            onChange={(v) => setXeFilter(toCsv(v))}
+            className="h-9 text-xs w-[140px]"
           />
 
           {hasFilters && (

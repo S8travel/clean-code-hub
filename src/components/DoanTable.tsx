@@ -48,6 +48,7 @@ export interface DoanRow {
   dia_diem_id?: number | null;
   huong_dan_vien_id?: number | null;
   xe_id?: number | null;
+  xe_da_huy?: boolean | null;
   seri_id?: number | null;
   assigned_to?: string | null;
   shopping?: boolean | null;
@@ -63,7 +64,7 @@ export interface DoanRow {
   agents?: { ten?: string | null } | null;
   agent_huy?: { ten?: string | null } | null;
   dia_diem?: { ten?: string | null } | null;
-  xe?: { ten_xe?: string | null; so_cho?: number | null; nha_xe?: { ten?: string | null } | null } | null;
+  xe?: { ten_xe?: string | null; so_cho?: number | null; nha_xe?: { id?: number | null; ten?: string | null } | null } | null;
   [key: string]: unknown;
 }
 
@@ -389,7 +390,13 @@ export function DoanTable({
               {/* 7. Loại xe */}
               <div className="px-3 py-3 flex flex-col justify-center min-w-0">
                 <p className="text-[10px] text-muted-foreground">{t("Loại xe")}</p>
-                {xe
+                {g.xe_da_huy
+                  ? (
+                    <div className="mt-0.5 w-fit max-w-full rounded-md px-1.5 py-1 bg-red-100">
+                      <p className="text-xs leading-snug font-medium text-red-700">{t("Đã hủy xe")}</p>
+                    </div>
+                  )
+                  : xe
                   ? (
                     <div className={cn("mt-0.5 w-fit max-w-full rounded-md px-1.5 py-1", xeBg(g.xe?.nha_xe?.ten))}>
                       <p className="text-xs leading-snug line-clamp-2" title={xe}>{xe}</p>
