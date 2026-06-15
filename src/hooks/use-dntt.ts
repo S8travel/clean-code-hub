@@ -518,6 +518,7 @@ export function useMarkPaidWithDate() {
  */
 export function useCancelDNTT() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, mode, userId }: { id: number; mode?: "cong_no" | "hoan_tien"; userId?: string | null }) => {
       const { data: dntt, error: fetchErr } = await externalSupabase
@@ -616,7 +617,9 @@ export function useCancelDNTT() {
         .update({
           trang_thai_duyet: "da_huy",
           ghi_chu: mode === "cong_no" ? "Cấn trừ công nợ" : mode === "hoan_tien" ? "Hoàn lại tiền" : null,
-          huy_boi: userId ?? null,
+          // Caller có thể truyền userId; nếu không, fallback về user đang đăng nhập
+          // → mọi đường hủy đều ghi lại người hủy (trước đây nhiều caller bỏ trống → huy_boi NULL).
+          huy_boi: userId ?? user?.user_id ?? null,
           huy_luc: new Date().toISOString(),
         })
         .eq("id", id);
