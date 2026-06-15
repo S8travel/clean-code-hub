@@ -25,6 +25,7 @@ import {
   useUpdateDoan,
   useDeleteDoan,
   useCancelDoan,
+  useToggleDoanFlag,
   useAgents,
   useDiaDiem,
   useUserRoles,
@@ -76,6 +77,8 @@ export default function Index() {
   // Kế toán: chỉ XEM ở danh sách đoàn — ẩn nút tạo + menu thao tác.
   // admin/giam_doc luôn edit được dù bo_phan=ke_toan.
   const canEditDoan = scope.isPrivileged || currentUser?.bo_phan !== "ke_toan";
+  // Cờ "Đã duyệt QT" / "Đã thu visa": chỉ kế toán + admin/giám đốc được tick.
+  const canTickFlags = scope.isPrivileged || currentUser?.bo_phan === "ke_toan";
   const { data: groupsRaw, isLoading, error } = useDoanList(
     scope.phanLoaiTour,
     scope.vanPhongIds,
@@ -89,6 +92,7 @@ export default function Index() {
   const updateDoan = useUpdateDoan();
   const deleteDoan = useDeleteDoan();
   const cancelDoan = useCancelDoan();
+  const toggleFlag = useToggleDoanFlag();
   // const addPerm = useAddDoanPermission(); // FEATURE_DOAN_PERM_DISABLED
   const applySeri = useApplySeriToDoan();
   const assignPvItem = useAssignPvItem();
@@ -784,6 +788,13 @@ export default function Index() {
             onCancel={handleOpenCancel}
             onDelete={handleOpenDelete}
             canEdit={canEditDoan}
+            canTickFlags={canTickFlags}
+            onToggleFlag={(doanId, field, value) => {
+              toggleFlag.mutate(
+                { id: doanId, field, value },
+                { onError: (e: unknown) => toast.error(errMsg(e) || t("Cập nhật thất bại")) },
+              );
+            }}
           />
         </div>
 
