@@ -20,6 +20,8 @@ import {
 export interface MultiSelectOption {
   value: string;
   label: string;
+  /** Class tuỳ chỉnh cho nhãn option (vd chữ đỏ cho "Đã hủy xe"). */
+  className?: string;
 }
 
 interface Props {
@@ -107,7 +109,7 @@ export function MultiSelect({
                     checked={selected.has(option.value)}
                     className="mr-2 h-4 w-4 pointer-events-none"
                   />
-                  <span className="truncate">{option.label}</span>
+                  <span className={cn("truncate", option.className)}>{option.label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

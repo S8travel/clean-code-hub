@@ -18,6 +18,7 @@ export interface Doan {
   huong_dan_vien_id: number | null;
   huong_dan_vien_id_2: number | null;
   xe_id: number | null;
+  xe_da_huy: boolean | null;
   seri_id: number | null;
   chuyen_bay_don: string | null;
   chuyen_bay_tien: string | null;
@@ -75,6 +76,7 @@ export interface DoanInsert {
   huong_dan_vien_id?: number | null;
   huong_dan_vien_id_2?: number | null;
   xe_id?: number | null;
+  xe_da_huy?: boolean | null;
   seri_id?: number | null;
   chuyen_bay_don?: string | null;
   chuyen_bay_tien?: string | null;

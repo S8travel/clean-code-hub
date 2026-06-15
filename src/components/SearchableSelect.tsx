@@ -19,6 +19,8 @@ import {
 export interface SelectOption {
   value: string;
   label: string;
+  /** Class tuỳ chỉnh cho dòng option (vd nền đỏ cho "Đã hủy xe"). Cũng phản chiếu lên nút trigger khi đang chọn. */
+  className?: string;
 }
 
 interface Props {
@@ -55,7 +57,8 @@ export function SearchableSelect({
     if (autoOpen) setOpen(true);
   }, [autoOpen]);
 
-  const selectedLabel = options.find((o) => o.value === value)?.label;
+  const selectedOption = options.find((o) => o.value === value);
+  const selectedLabel = selectedOption?.label;
 
   const filtered = search
     ? options.filter((o) => o.label?.toLowerCase().includes(search.toLowerCase()))
@@ -79,7 +82,7 @@ export function SearchableSelect({
             className
           )}
         >
-          <span className="truncate text-left">{selectedLabel || placeholder}</span>
+          <span className={cn("truncate text-left rounded px-1 -mx-1", selectedOption?.className)}>{selectedLabel || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -97,6 +100,7 @@ export function SearchableSelect({
                 <CommandItem
                   key={option.value}
                   value={option.value}
+                  className={option.className}
                   onSelect={() => {
                     onChange(option.value === value ? "" : option.value);
                     setOpen(false);
