@@ -365,7 +365,9 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                   width="w-[48px]"
                   disabled={locked}
                 />
-                {chietKhauSoTien > 0 && (
+                {/* Chỉ hiện khi CK% > 0 thật; CK% = 0 + đơn giá lẻ → chietKhauSoTien
+                    chỉ là phần dư làm tròn, không phải chiết khấu → không hiện. */}
+                {ckPhanTram > 0 && chietKhauSoTien > 0 && (
                   <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap pointer-events-none">
                     −{fmt(chietKhauSoTien)}
                   </span>
