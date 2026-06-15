@@ -10,6 +10,7 @@ import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dn
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { calcDnttPriorPaid } from "@/lib/chi-phi-calc";
+import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
@@ -477,6 +478,40 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const fullAmount = baseAmount;
     if (fullAmount <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
     if (dvModalMode === "deposit" && dvDepositAmount >= thanhTien) { toast.error("Số tiền cọc phải nhỏ hơn tổng tiền"); return; }
+
+    // Guard chống tạo ĐNTT TRÙNG (vd bấm "Tạo ĐNTT" 2 lần) — xem use-nh-section.
+    // Chỉ check ở chế độ full (cọc là chủ ý nên bỏ qua).
+    if (dvModalMode === "full") {
+      const { data: allocRows } = await externalSupabase
+        .from("dntt_allocations")
+        .select("dntt_id, so_tien")
+        .eq("chi_phi_id", chiPhiId);
+      const dnttIds = [...new Set((allocRows ?? []).map((a) => a.dntt_id))];
+      let committed = 0;
+      if (dnttIds.length > 0) {
+        const { data: dnttRows } = await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .select("id, trang_thai_duyet")
+          .in("id", dnttIds);
+        const activeIds = new Set(
+          (dnttRows ?? [])
+            .filter((d) => d.trang_thai_duyet !== "da_huy")
+            .map((d) => d.id),
+        );
+        committed = (allocRows ?? [])
+          .filter((a) => activeIds.has(a.dntt_id))
+          .reduce((s, a) => s + Number(a.so_tien || 0), 0);
+      }
+      if (wouldOverCommit(committed, fullAmount, thanhTien)) {
+        const ok = window.confirm(
+          `Dịch vụ "${moTa || ""}" đã có ĐNTT (chưa hủy) tổng ${committed.toLocaleString("vi-VN")} ₫.\n` +
+            `Tạo thêm ${fullAmount.toLocaleString("vi-VN")} ₫ nữa sẽ vượt chi phí ${thanhTien.toLocaleString("vi-VN")} ₫ ` +
+            `— có thể bị TRÙNG. Bạn có chắc muốn tiếp tục?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     try {
       const mainRecord = await insertDNTT.mutateAsync({
         doan_id: doanId,
