@@ -27,11 +27,17 @@ import {
   type LockPhongDisplay,
 } from "@/hooks/use-lock-phong";
 import { t, useTranslate } from "@/lib/i18n";
+import {
+  addDaysISO,
+  subDaysISO,
+  computeDeadline,
+  shiftWeekendToFriday,
+} from "@/lib/lock-phong-deadline";
 
 // ── Helpers ──
 
 function calcDeadline(ngayXuatPhat: string): string {
-  return subDaysISO(ngayXuatPhat, 45);
+  return shiftWeekendToFriday(subDaysISO(ngayXuatPhat, 45));
 }
 
 // ── Schemas ──
@@ -178,24 +184,6 @@ const emptyCreateRow = (): CreateRow => ({
   ghi_chu: "",
 });
 
-function addOneDay(yyyymmdd: string): string {
-  return addDaysISO(yyyymmdd, 1);
-}
-
-// UTC-safe để tránh timezone-shift bug ở Vietnam (UTC+7)
-function addDaysISO(yyyymmdd: string, days: number): string {
-  if (!yyyymmdd) return "";
-  const [y, m, d] = yyyymmdd.split("-").map(Number);
-  if (!y || !m || !d) return "";
-  const date = new Date(Date.UTC(y, m - 1, d));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function subDaysISO(yyyymmdd: string, days: number): string {
-  if (!yyyymmdd || !days) return "";
-  return addDaysISO(yyyymmdd, -days);
-}
 
 // Parse 1 cell ngày → "yyyy-MM-dd" (chấp nhận Excel serial, ISO, dd/MM/yyyy)
 function parseDateCell(v: unknown): string {
@@ -275,7 +263,7 @@ function CreateForm({
     setRows((prev) => prev.map((r, i) => {
       if (i !== idx) return r;
       const next: CreateRow = { ...r, check_in: v };
-      if (v && daysToDeadline > 0) next.deadline = subDaysISO(v, daysToDeadline);
+      if (v && daysToDeadline > 0) next.deadline = computeDeadline(v, daysToDeadline);
       return next;
     }));
   };
@@ -285,7 +273,7 @@ function CreateForm({
     setDaysToDeadline(n);
     setRows((prev) => prev.map((r) => {
       if (!r.check_in || n <= 0) return r;
-      return { ...r, deadline: subDaysISO(r.check_in, n) };
+      return { ...r, deadline: computeDeadline(r.check_in, n) };
     }));
   };
 
@@ -325,7 +313,7 @@ function CreateForm({
           cau_hinh_phong,
           tinh_trang_phong,
           code_ncc,
-          deadline: check_in && daysToDeadline > 0 ? subDaysISO(check_in, daysToDeadline) : "",
+          deadline: check_in && daysToDeadline > 0 ? computeDeadline(check_in, daysToDeadline) : "",
           ghi_chu,
         });
       }
@@ -370,7 +358,7 @@ function CreateForm({
     setSubmitting(true);
     try {
       for (const r of validRows) {
-        const deadline = r.deadline || subDaysISO(r.check_in, daysToDeadline);
+        const deadline = r.deadline || computeDeadline(r.check_in, daysToDeadline);
         await createMut.mutateAsync({
           header: {
             ten_seri: tenSeri || "",
