@@ -21,6 +21,7 @@ import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
 import { applyChietKhau, calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
+import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -757,6 +758,41 @@ export function useNHSection({
     const isBSMode = effectiveTotalBua <= 0;
     const soTien = isBSMode ? dnttBsAmount : (dnttModalMode === "full" ? effectiveTotalBua : dnttDepositAmount);
     if (soTien <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
+
+    // Guard chống tạo ĐNTT TRÙNG (vd bấm "Tạo ĐNTT" 2 lần): query commitment thật
+    // (allocation từ ĐNTT chưa hủy) của nhóm bữa; nếu tạo thêm full sẽ vượt chi phí
+    // → confirm. Chỉ check ở chế độ full (cọc/bổ sung là chủ ý nên bỏ qua).
+    if (dnttModalMode === "full" && !isBSMode) {
+      const guardIds = [row.id, ...extras.filter((e) => e.id).map((e) => e.id!)];
+      const { data: allocRows } = await externalSupabase
+        .from("dntt_allocations")
+        .select("dntt_id, so_tien")
+        .in("chi_phi_id", guardIds);
+      const dnttIds = [...new Set((allocRows ?? []).map((a) => a.dntt_id))];
+      let committed = 0;
+      if (dnttIds.length > 0) {
+        const { data: dnttRows } = await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .select("id, trang_thai_duyet")
+          .in("id", dnttIds);
+        const activeIds = new Set(
+          (dnttRows ?? [])
+            .filter((d) => d.trang_thai_duyet !== "da_huy")
+            .map((d) => d.id),
+        );
+        committed = (allocRows ?? [])
+          .filter((a) => activeIds.has(a.dntt_id))
+          .reduce((s, a) => s + Number(a.so_tien || 0), 0);
+      }
+      if (wouldOverCommit(committed, soTien, totalBua)) {
+        const ok = window.confirm(
+          `Bữa "${nh?.ten ?? ""}" đã có ĐNTT (chưa hủy) tổng ${committed.toLocaleString("vi-VN")} ₫.\n` +
+            `Tạo thêm ${soTien.toLocaleString("vi-VN")} ₫ nữa sẽ vượt chi phí ${totalBua.toLocaleString("vi-VN")} ₫ ` +
+            `— có thể bị TRÙNG. Bạn có chắc muốn tiếp tục?`,
+        );
+        if (!ok) return;
+      }
+    }
 
     setDnttSubmitting(true);
     try {
