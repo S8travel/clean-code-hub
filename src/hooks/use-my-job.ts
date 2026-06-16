@@ -203,7 +203,10 @@ export function useMarkDeadlineDone() {
       }
     },
     onSuccess: () => {
+      // Deadline hiển thị từ 2 query (phân việc + booking mình tự gửi/tạo) — phải
+      // invalidate cả 2, nếu không item vẫn nằm lại dù RPC đã set deadline_done_at.
       qc.invalidateQueries({ queryKey: ["my_deadlines"] });
+      qc.invalidateQueries({ queryKey: ["my_created_deadlines"] });
     },
   });
 }
