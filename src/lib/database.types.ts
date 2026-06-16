@@ -4232,6 +4232,10 @@ export type Database = {
         Args: { p_chi_phi_ids: number[] }
         Returns: undefined
       }
+      remap_nha_hang_theo_ngay: {
+        Args: { p_doan_id: number; p_mapping: Json }
+        Returns: Json
+      }
       update_lead_status: {
         Args: {
           p_created_by?: string
