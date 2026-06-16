@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 
 export interface DeadlineItem {
-  type: "ks" | "nh" | "dv";
+  type: "ks" | "nh" | "dv";       // type HIỂN THỊ (icon) — tàu ngày = "ks"
+  rpcType: "ks" | "nh" | "dv";    // bảng NGUỒN thật để route mark_deadline_done
+                                  // (tàu ngày lưu ở doan_booking_nh → "nh")
   bookingId: number;
   doanId: number;
   doanName: string;
@@ -34,6 +36,16 @@ function asNamed(rel: unknown): { ten: string | null; loai?: string | null } | n
   const o = Array.isArray(rel) ? rel[0] : rel;
   if (o == null || typeof o !== "object") return null;
   return o as { ten: string | null; loai?: string | null };
+}
+
+// Map loai nhà hàng → (type hiển thị, rpcType bảng nguồn).
+// Tàu ngày (du thuyền) hiển thị icon "KS" nhưng vẫn lưu ở doan_booking_nh nên
+// mark_deadline_done PHẢI route "nh". Nhầm → UPDATE doan_booking_ks 0 rows → lỗi.
+export function nhDeadlineTypes(loai: string | null | undefined): {
+  type: "ks" | "nh";
+  rpcType: "nh";
+} {
+  return { type: loai === "tau_ngay" ? "ks" : "nh", rpcType: "nh" };
 }
 
 export function useMyDeadlines(doanIds: number[]) {
@@ -71,6 +83,7 @@ export function useMyDeadlines(doanIds: number[]) {
         if (isDoanHuy(row) || !ksSent(row)) continue;
         items.push({
           type: "ks",
+          rpcType: "ks",
           bookingId: row.id,
           doanId: row.doan_id,
           doanName: asJoined(row.doan)?.ten_doan ?? "",
@@ -85,7 +98,7 @@ export function useMyDeadlines(doanIds: number[]) {
         const buaLabel = row.bua_an === "trua" ? "Trưa" : "Tối";
         const loai = asNamed(row.nha_hang)?.loai ?? "nha_hang";
         items.push({
-          type: loai === "tau_ngay" ? "ks" : "nh",
+          ...nhDeadlineTypes(loai),   // luôn ở doan_booking_nh, kể cả tàu ngày
           bookingId: row.id,
           doanId: row.doan_id,
           doanName: asJoined(row.doan)?.ten_doan ?? "",
@@ -99,6 +112,7 @@ export function useMyDeadlines(doanIds: number[]) {
         if (isDoanHuy(row) || !dvSent(row)) continue;
         items.push({
           type: "dv",
+          rpcType: "dv",
           bookingId: row.id,
           doanId: row.doan_id,
           doanName: asJoined(row.doan)?.ten_doan ?? "",
@@ -142,7 +156,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         if (isDoanHuy(row) || !ksSent(row)) continue;
         if (![row.ks_final_sent_by, row.ks_dat_truoc_sent_by].some((v) => norm(v) === me)) continue;
         items.push({
-          type: "ks", bookingId: row.id, doanId: row.doan_id,
+          type: "ks", rpcType: "ks", bookingId: row.id, doanId: row.doan_id,
           doanName: asJoined(row.doan)?.ten_doan ?? "",
           label: asNamed(row.khach_san)?.ten ?? "Khách sạn",
           deadline: row.deadline ?? "", status: row.ks_final_status,
@@ -154,7 +168,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         const buaLabel = row.bua_an === "trua" ? "Trưa" : "Tối";
         const loai = asNamed(row.nha_hang)?.loai ?? "nha_hang";
         items.push({
-          type: loai === "tau_ngay" ? "ks" : "nh", bookingId: row.id, doanId: row.doan_id,
+          ...nhDeadlineTypes(loai), bookingId: row.id, doanId: row.doan_id,
           doanName: asJoined(row.doan)?.ten_doan ?? "",
           label: `${asNamed(row.nha_hang)?.ten ?? (loai === "tau_ngay" ? "Tàu ngày" : "Nhà hàng")} (${buaLabel})`,
           deadline: row.deadline ?? "", status: row.booking_status,
@@ -164,7 +178,7 @@ export function useMyCreatedBookingDeadlines(hoTen: string | null | undefined) {
         if (isDoanHuy(row) || !dvSent(row)) continue;
         if (norm(row.sent_by) !== me) continue;
         items.push({
-          type: "dv", bookingId: row.id, doanId: row.doan_id,
+          type: "dv", rpcType: "dv", bookingId: row.id, doanId: row.doan_id,
           doanName: asJoined(row.doan)?.ten_doan ?? "",
           label: row.ten_nha_cung_cap ?? "", deadline: row.deadline ?? "", status: row.booking_status,
         });
@@ -189,7 +203,10 @@ export function useMarkDeadlineDone() {
       }
     },
     onSuccess: () => {
+      // Deadline hiển thị từ 2 query (phân việc + booking mình tự gửi/tạo) — phải
+      // invalidate cả 2, nếu không item vẫn nằm lại dù RPC đã set deadline_done_at.
       qc.invalidateQueries({ queryKey: ["my_deadlines"] });
+      qc.invalidateQueries({ queryKey: ["my_created_deadlines"] });
     },
   });
 }

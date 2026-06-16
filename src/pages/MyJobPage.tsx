@@ -335,7 +335,9 @@ export default function MyJobPage() {
     );
     const map = new Map<string, DeadlineItem>();
     for (const it of [...pvPart, ...createdDeadlines]) {
-      map.set(`${it.type}-${it.bookingId}`, it);
+      // Key theo BẢNG NGUỒN thật (rpcType) — id ks/nh là 2 sequence riêng, có thể
+      // trùng số → key theo display type sẽ gộp nhầm tàu ngày (nh) với ks.
+      map.set(`${it.rpcType}-${it.bookingId}`, it);
     }
     return [...map.values()].sort((a, b) => a.deadline.localeCompare(b.deadline));
   }, [pvDeadlines, pvScope, createdDeadlines]);
@@ -913,7 +915,7 @@ export default function MyJobPage() {
                           : `${t("Còn")} ${daysLeft} ${t("ngày")}`;
                         return (
                           <div
-                            key={`${item.type}-${item.bookingId}`}
+                            key={`${item.rpcType}-${item.bookingId}`}
                             role="button"
                             tabIndex={0}
                             onClick={() => navigate(`/doan/${item.doanId}`)}
@@ -951,7 +953,7 @@ export default function MyJobPage() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 markDone.mutate(
-                                  { type: item.type, bookingId: item.bookingId },
+                                  { type: item.rpcType, bookingId: item.bookingId },
                                   {
                                     onSuccess: () => toast.success(t("Đã đánh dấu xong")),
                                     onError: (err: unknown) => toast.error(errMsg(err) || t("Lỗi đánh dấu")),
