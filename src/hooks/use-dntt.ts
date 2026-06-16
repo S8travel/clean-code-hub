@@ -507,6 +507,61 @@ export function useMarkPaidWithDate() {
   });
 }
 
+// Resolve NCC để tạo cong_no khi hủy ĐNTT. Ưu tiên NCC trên chính ĐNTT; nếu
+// trống thì truy theo ref: KS/NH/cảnh điểm đọc cột `ten`; dịch vụ/chi phí
+// (ref_loai='doan_chi_phi') đọc `nha_cung_cap_id` trên doan_chi_phi (NCC nằm ở
+// chi phí, snapshot từ canh_diem.nha_cung_cap_id). Trả {id, ten} — id=null nếu
+// không resolve được (chi phí chưa gắn NCC).
+async function resolveNccForCancel(dntt: {
+  nha_cung_cap_id: number | null;
+  ten_nha_cung_cap: string | null;
+  ref_loai: string | null;
+  ref_id: number | null;
+}): Promise<{ id: number | null; ten: string | null }> {
+  let nccId: number | null = dntt.nha_cung_cap_id;
+  let nccTen: string | null = dntt.ten_nha_cung_cap;
+  if (!nccId && dntt.ref_loai && dntt.ref_id) {
+    if (dntt.ref_loai === "doan_chi_phi") {
+      const { data } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("mo_ta, nha_cung_cap_id, nha_cung_cap:nha_cung_cap_id(ten)")
+        .eq("id", dntt.ref_id)
+        .maybeSingle();
+      if (data) {
+        const r = data as {
+          mo_ta: string | null;
+          nha_cung_cap_id: number | null;
+          nha_cung_cap: { ten: string | null } | null;
+        };
+        nccId = r.nha_cung_cap_id ?? null;
+        nccTen = r.nha_cung_cap?.ten ?? r.mo_ta ?? null;
+      }
+    } else {
+      const table = dntt.ref_loai === "khach_san" ? "khach_san"
+        : dntt.ref_loai === "nha_hang" ? "nha_hang"
+        : dntt.ref_loai === "canh_diem" ? "canh_diem"
+        : null;
+      if (table) {
+        const { data } = await externalSupabase
+          .from(table)
+          .select("ten, nha_cung_cap_id, nha_cung_cap:nha_cung_cap_id(ten)")
+          .eq("id", dntt.ref_id)
+          .maybeSingle();
+        if (data) {
+          const r = data as {
+            ten: string | null;
+            nha_cung_cap_id: number | null;
+            nha_cung_cap: { ten: string | null } | null;
+          };
+          nccId = r.nha_cung_cap_id ?? null;
+          nccTen = r.nha_cung_cap?.ten ?? r.ten ?? null;
+        }
+      }
+    }
+  }
+  return { id: nccId, ten: nccTen };
+}
+
 /**
  * Hủy DNTT:
  * - mode = undefined: hủy trước khi thanh toán cash → xóa các can_tru payments để khôi phục cong_no nguồn
@@ -527,6 +582,29 @@ export function useCancelDNTT() {
         .eq("id", id)
         .single();
       if (fetchErr) throw fetchErr;
+
+      // 0) Validate SỚM (trước mọi ghi/xóa): hủy mode='cong_no' có cash đã trả mà
+      // KHÔNG resolve được NCC → công nợ tạo ra sẽ không bao giờ cấn trừ được
+      // (useCongNoByNCC lọc theo nha_cung_cap_id). Chặn ngay từ đầu để không rơi vào
+      // trạng thái nửa vời (ĐNTT đã huỷ nhưng công nợ mồ côi NCC, tiền treo lửng).
+      if (mode === "cong_no") {
+        const { data: pmtsForCheck } = await externalSupabase
+          .from("payments")
+          .select("method, so_tien")
+          .eq("dntt_id", id);
+        const cashForCheck = (pmtsForCheck || [])
+          .filter((p) => p.method === "cash")
+          .reduce((s, p) => s + Number(p.so_tien), 0);
+        if (cashForCheck > 0) {
+          const ncc = await resolveNccForCancel(dntt);
+          if (!ncc.id) {
+            throw new Error(
+              "Chi phí chưa gắn nhà cung cấp — công nợ tạo ra sẽ không cấn trừ được. " +
+              "Gắn NCC cho dịch vụ/chi phí rồi hủy lại (hoặc chọn 'Hoàn tiền' nếu NCC trả lại tiền mặt).",
+            );
+          }
+        }
+      }
 
       // 1) Reverse adjustment artifacts: cong_no records do adjustment tạo (dntt_goc_id = id)
       //    Cũng xóa thanh_tien_thuc_te trên chi_phi linked
@@ -626,39 +704,15 @@ export function useCancelDNTT() {
       if (error) throw error;
 
       // Nếu đã có cash payment và user chọn mode → tạo cong_no record (chỉ phần cash).
-      // DNTT cọc KS/NH thường không có nha_cung_cap_id (vì NCC info nằm ở master
-      // KS/NH master) → lookup từ ref. Cong_no có nha_cung_cap_id nullable nên
-      // ngay cả khi không tìm được NCC vẫn tạo record để audit.
+      // NCC resolve qua helper (DNTT → ref KS/NH/cảnh điểm/dịch vụ). Với mode='cong_no'
+      // NCC đã được validate ở bước 0; 'hoan_tien' chỉ là record audit nên NCC có thể null.
       if (mode && cashPaid > 0) {
-        let nccId: number | null = dntt.nha_cung_cap_id;
-        let nccTen: string | null = dntt.ten_nha_cung_cap;
-        if (!nccId && dntt.ref_loai && dntt.ref_id) {
-          const table = dntt.ref_loai === "khach_san" ? "khach_san"
-            : dntt.ref_loai === "nha_hang" ? "nha_hang"
-            : dntt.ref_loai === "canh_diem" ? "canh_diem"
-            : null;
-          if (table) {
-            const { data: refRow } = await externalSupabase
-              .from(table)
-              .select("ten, nha_cung_cap_id, nha_cung_cap:nha_cung_cap_id(ten)")
-              .eq("id", dntt.ref_id)
-              .maybeSingle();
-            if (refRow) {
-              const r = refRow as {
-                ten: string | null;
-                nha_cung_cap_id: number | null;
-                nha_cung_cap: { ten: string | null } | null;
-              };
-              nccId = r.nha_cung_cap_id ?? null;
-              nccTen = r.nha_cung_cap?.ten ?? r.ten ?? null;
-            }
-          }
-        }
+        const ncc = await resolveNccForCancel(dntt);
         const { error: cnErr } = await externalSupabase.from("cong_no").insert({
           doan_id: dntt.doan_id,
           dntt_goc_id: id,
-          nha_cung_cap_id: nccId,
-          ten_nha_cung_cap: nccTen,
+          nha_cung_cap_id: ncc.id,
+          ten_nha_cung_cap: ncc.ten,
           so_tien_goc: cashPaid,
           trang_thai: mode === "hoan_tien" ? "da_hoan_tien" : "con_du",
           ly_do: `Hủy ĐNTT #${id}: ${dntt.mo_ta || ""}`.trim(),

@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileDown } from "lucide-react";
+import { ArrowLeft, FileDown, CalendarCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +46,7 @@ import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
+import RemapNgayModal from "@/components/dieu-tour/RemapNgayModal";
 
 function TabBadge({ count }: { count: number }) {
   if (count === 0) return null;
@@ -115,6 +116,7 @@ export default function DoanDetail() {
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("dieu-tour");
   const [showWordPreview, setShowWordPreview] = useState(false);
+  const [showRemap, setShowRemap] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
   const queryClient = useQueryClient();
 
@@ -576,7 +578,18 @@ export default function DoanDetail() {
                 doanSoKhachTl={doanSoKhachTl}
               />
             )}
-            <div className="flex justify-end print-hide">
+            <div className="flex justify-end gap-2 print-hide">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => setShowRemap(true)}
+                disabled={days.length === 0}
+                title="Dời nhà hàng đã đặt sang ngày khác, giữ nguyên booking & thanh toán"
+              >
+                <CalendarCog className="h-3.5 w-3.5" />
+                Xếp lại NH theo ngày
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -655,6 +668,9 @@ export default function DoanDetail() {
               onClose={() => setShowWordPreview(false)}
               onGhiChuSave={handleSetGhiChuDieuTour}
             />
+            {doanId != null && (
+              <RemapNgayModal doanId={doanId} open={showRemap} onClose={() => setShowRemap(false)} />
+            )}
           </TabsContent>
 
           <TabsContent value="booking-ks" className="mt-4">
