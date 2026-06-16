@@ -88,7 +88,7 @@ export function DailyBriefModal() {
     const seen = new Set<string>();
     const out: DeadlineItem[] = [];
     for (const d of [...pvDl, ...createdDl]) {
-      const k = `${d.type}-${d.bookingId}`;
+      const k = `${d.rpcType}-${d.bookingId}`;
       if (seen.has(k)) continue;
       seen.add(k);
       out.push(d);
