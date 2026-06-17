@@ -544,21 +544,25 @@ function MealCardInner({
   };
 
   const handleSendViaServer = async () => {
-    if (!booking?.id) {
-      // Upsert booking trước nếu chưa có
-      await new Promise<void>((resolve) => {
-        upsertMut.mutate({
+    setSending(true);
+    try {
+      // `booking` là prop từ query cha — sau upsert nó KHÔNG refetch kịp trong
+      // cùng async call này. Phải lấy id/thread từ row trả về của mutateAsync,
+      // KHÔNG đọc lại booking?.id (sẽ vẫn undefined → "Chưa có booking ID").
+      let bookingId = booking?.id;
+      let threadId: string | null | undefined = booking?.email_thread_id;
+      if (!bookingId) {
+        const created = await upsertMut.mutateAsync({
           doan_id: doanId, doan_ngay_id: doanNgayId, bua_an: buaAn,
           nha_hang_id: nhaHangId, mon_an_snapshot: monList, ghi_chu: ghiChu,
           booking_status: "chua_gui",
-        }, { onSuccess: () => resolve(), onError: () => resolve() });
-      });
-    }
-    setSending(true);
-    try {
-      if (!booking?.id) throw new Error("Chưa có booking ID");
+        });
+        bookingId = created?.id;
+        threadId = created?.email_thread_id;
+      }
+      if (!bookingId) throw new Error("Chưa có booking ID");
       await sendEmailMut.mutateAsync({
-        bookingId: booking.id, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: booking.email_thread_id,
+        bookingId, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: threadId,
         mode: emailMode,
         mailContentHash: hashMailContent(buildMailFields()),
         mailSentSnapshot: buildMailFields(),
