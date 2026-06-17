@@ -290,7 +290,8 @@ export function DoanTable({
         const hdvName = lookup(g.huong_dan_vien, "ten");
         const agentName = g.agents?.ten || "—";
         const agentHuy = g.agent_huy?.ten as string | undefined;
-        const xe = xeLabel(g.xe);
+        // Ghép nhãn xe chính + xe phụ (đoàn 2 xe) để list không giấu xe phụ.
+        const xe = [g.xe, g.xe_2].map((x) => xeLabel(x)).filter(Boolean).join(" | ") || null;
         const diaDiem = lookup(g.dia_diem, "ten");
         const lon = g.so_khach_lon ?? 0;
         const em1 = g.so_khach_em1 ?? 0;

@@ -146,10 +146,12 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
   // đúng NCC của từng nhóm (trước đây chỉ lấy xe 1 → xe 2 NCC khác thiếu STK).
   const xeTkttByNcc = useMemo(() => {
     const m: Record<number, string> = {};
+    // Xe 1 ưu tiên: nếu 2 xe trùng NCC (cùng nhà cung cấp) thì giữ STK xe 1,
+    // KHÔNG để xe 2 ghi đè (xác định, tránh nhảy STK theo thứ tự).
     for (const x of [xe, xe2]) {
       const ncc = x?.nha_xe?.nha_cung_cap_id;
       const tk = x?.nha_xe?.tai_khoan_thanh_toan?.trim();
-      if (ncc != null && tk) m[ncc] = tk;
+      if (ncc != null && tk && m[ncc] == null) m[ncc] = tk;
     }
     return m;
   }, [xe, xe2]);
@@ -514,7 +516,7 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
                     <td className="px-4 py-2.5 font-medium">
                       {xe2Label && row.xe_id != null && (
                         <span className="mr-1.5 px-1 py-px rounded text-[9px] font-medium bg-green-100 text-green-700 align-middle">
-                          {row.xe_id === (xe2?.id ?? -1) ? t("Xe 2") : t("Xe 1")}
+                          {xe2?.id != null && row.xe_id === xe2.id ? t("Xe 2") : t("Xe 1")}
                         </span>
                       )}
                       {row.mo_ta || "—"}
