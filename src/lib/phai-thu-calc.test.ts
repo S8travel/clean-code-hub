@@ -220,6 +220,83 @@ describe("computePhaiThu", () => {
     expect(tip.tyGia).toBe(TY_GIA_NDT_DEFAULT);
     expect(tip.thanhTienVND).toBe(20 * TY_GIA_NDT_DEFAULT);
   });
+
+  // ── #3: tip default currency theo loai_tour ──────────────────────────────
+  it("loai_tour='noi_dia' → tip mặc định VND (tỷ giá 1, không quy đổi)", () => {
+    const r = computePhaiThu(
+      { loai_tour: "noi_dia", so_khach: 4, so_khach_tl: 0, ngay_di: "2026-05-01", ngay_ve: "2026-05-01", tip_rate: 50000, quy_vp_amount: 0 },
+      800,
+    );
+    const tip = r.items.find((i) => i.key === "tip")!;
+    expect(tip.donViGoc).toBe("VND");
+    expect(tip.tyGia).toBe(1);
+    expect(tip.thanhTienVND).toBe(4 * 1 * 50000); // KHÔNG nhân 800
+  });
+
+  it("loai_tour outbound/inbound/null → tip mặc định NDT (giữ hành vi cũ)", () => {
+    for (const lt of ["outbound", "inbound", null, undefined] as const) {
+      const r = computePhaiThu(
+        { loai_tour: lt, so_khach: 2, so_khach_tl: 0, ngay_di: "2026-05-01", ngay_ve: "2026-05-01", tip_rate: 10, quy_vp_amount: 0 },
+        800,
+      );
+      const tip = r.items.find((i) => i.key === "tip")!;
+      expect(tip.donViGoc).toBe("NDT");
+      expect(tip.thanhTienVND).toBe(2 * 1 * 10 * 800);
+    }
+  });
+
+  it("noi_dia nhưng tip_currency đã chọn NDT → tôn trọng lựa chọn (quy đổi)", () => {
+    const r = computePhaiThu(
+      { loai_tour: "noi_dia", so_khach: 2, so_khach_tl: 0, ngay_di: "2026-05-01", ngay_ve: "2026-05-01", tip_rate: 10, tip_currency: "NDT", quy_vp_amount: 0 },
+      800,
+    );
+    const tip = r.items.find((i) => i.key === "tip")!;
+    expect(tip.donViGoc).toBe("NDT");
+    expect(tip.thanhTienVND).toBe(2 * 1 * 10 * 800);
+  });
+
+  // ── #4: đầu khách / quỹ VP có currency + tỷ giá riêng ─────────────────────
+  it("đầu khách ngoại tệ: quy đổi theo dau_khach_ty_gia", () => {
+    const r = computePhaiThu(
+      {
+        thu_tip: false, quy_vp_amount: 0,
+        dau_khach_rate: 50, dau_khach_so_khach_override: 10,
+        dau_khach_currency: "USD", dau_khach_ty_gia: 25000,
+      },
+      800,
+    );
+    const dk = r.items.find((i) => i.key === "dau_khach")!;
+    expect(dk.donViGoc).toBe("USD");
+    expect(dk.tongGoc).toBe(10 * 50);          // 500 USD
+    expect(dk.tyGia).toBe(25000);
+    expect(dk.thanhTienVND).toBe(10 * 50 * 25000);
+  });
+
+  it("quỹ VP ngoại tệ thiếu tỷ giá riêng → fallback tỷ giá tip base", () => {
+    const r = computePhaiThu(
+      { thu_tip: false, quy_vp_amount: 100, quy_vp_currency: "NDT", tip_ty_gia: 3500 },
+      800,
+    );
+    const vp = r.items.find((i) => i.key === "quy_vp")!;
+    expect(vp.donViGoc).toBe("NDT");
+    expect(vp.tyGia).toBe(3500); // fallback tyGiaTipBase (tip_ty_gia)
+    expect(vp.thanhTienVND).toBe(100 * 3500);
+  });
+
+  it("đầu khách/quỹ VP mặc định (không currency) → VND, tỷ giá 1 (giữ hành vi cũ)", () => {
+    const r = computePhaiThu(
+      { thu_tip: false, dau_khach_rate: 200000, dau_khach_so_khach_override: 3, quy_vp_amount: 200000 },
+      800,
+    );
+    const dk = r.items.find((i) => i.key === "dau_khach")!;
+    const vp = r.items.find((i) => i.key === "quy_vp")!;
+    expect(dk.donViGoc).toBe("VND");
+    expect(dk.tyGia).toBe(1);
+    expect(dk.thanhTienVND).toBe(600000);
+    expect(vp.donViGoc).toBe("VND");
+    expect(vp.tyGia).toBe(1);
+    expect(vp.thanhTienVND).toBe(200000);
+  });
 });
 
 describe("parsePhaiThuExtras", () => {

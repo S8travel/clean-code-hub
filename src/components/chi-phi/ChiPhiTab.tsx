@@ -14,6 +14,7 @@ import ChiPhiDVSection, { type ChiPhiDVSectionHandle } from "./ChiPhiDVSection";
 import ChiPhiBaoHiemSection from "./ChiPhiBaoHiemSection";
 import ChiPhiXeSection from "./ChiPhiXeSection";
 import ChiPhiVisaSection from "./ChiPhiVisaSection";
+import ChiPhiVeMayBaySection from "./ChiPhiVeMayBaySection";
 import ChiPhiHDVSection from "./ChiPhiHDVSection";
 import ChiPhiPhasThuSection from "./ChiPhiPhasThuSection";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
@@ -26,15 +27,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { tourProfile } from "@/lib/tour-profile";
 import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 // Thông tin đoàn ChiPhiTab + các section con đọc (số khách, ngày, agent, HDV, xe…).
 export interface ChiPhiTabDoan {
   ten_doan?: string | null;
+  loai_tour?: string | null;
   assigned_to?: string | null;
   so_khach?: number | null;
   so_khach_lon?: number | null;
@@ -63,6 +66,7 @@ export interface ChiPhiTabDoan {
 // nên nhận `unknown` ở các trường đó rồi chuẩn hoá về ChiPhiTabDoan bên trong.
 interface ChiPhiTabDoanInput {
   ten_doan?: string | null;
+  loai_tour?: string | null;
   assigned_to?: string | null;
   so_khach?: number | null;
   so_khach_lon?: number | null;
@@ -306,7 +310,15 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
         <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} locked={locked} />
 
-        <ChiPhiVisaSection doanId={doanId} locked={locked} />
+        {/* Visa — ẩn cho tour nội địa (xem tourProfile), khớp BookingVisaXeTab. */}
+        {tourProfile(doan?.loai_tour).showVisa && (
+          <ChiPhiVisaSection doanId={doanId} locked={locked} />
+        )}
+
+        {/* Vé máy bay — chỉ outbound + nội địa (xem tourProfile). Inbound ẩn. */}
+        {tourProfile(doan?.loai_tour).showVeMayBay && (
+          <ChiPhiVeMayBaySection doanId={doanId} locked={locked} />
+        )}
 
         <ChiPhiBaoHiemSection
           doanId={doanId}

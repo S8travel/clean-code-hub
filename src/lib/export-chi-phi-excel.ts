@@ -43,6 +43,8 @@ export interface ExportDoan {
     so_cho?: number | null;
     nha_xe?: { ten?: string | null } | null;
   } | null;
+  // Loại tour — tip mặc định VND cho nội địa (computePhaiThu đọc field này).
+  loai_tour?: string | null;
   // Phải thu — Tip + Thu tiền đầu khách + Thu tiền quỹ VP (override fields trên doan)
   thu_tip?: boolean | null;
   tip_rate?: number | null;
@@ -53,9 +55,13 @@ export interface ExportDoan {
   tip_nguoi_thu?: string | null;
   tip_ty_gia?: number | null;
   dau_khach_rate?: number | null;
+  dau_khach_currency?: string | null;
+  dau_khach_ty_gia?: number | null;
   dau_khach_nguoi_thu?: string | null;
   dau_khach_so_khach_override?: number | null;
   quy_vp_amount?: number | null;
+  quy_vp_currency?: string | null;
+  quy_vp_ty_gia?: number | null;
   quy_vp_nguoi_thu?: string | null;
   phai_thu_extras?: unknown;
 }
@@ -103,6 +109,7 @@ const DANH_MUC_LABELS: Record<string, string> = {
   canh_diem: "Dịch vụ",
   xe: "Xe",
   visa: "Visa",
+  ve_may_bay: "Vé máy bay",
   bao_hiem: "Bảo hiểm",
 };
 
@@ -162,6 +169,7 @@ const COMPANY_CATEGORY_ORDER = [
   { key: "canh_diem", label: "Dịch vụ" },
   { key: "xe", label: "Xe" },
   { key: "visa", label: "Visa" },
+  { key: "ve_may_bay", label: "Vé máy bay" },
   { key: "bao_hiem", label: "Bảo hiểm" },
 ];
 

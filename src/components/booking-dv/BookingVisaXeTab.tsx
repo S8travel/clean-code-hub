@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import BookingXeCard from "./BookingXeCard";
 import BookingVisaCard from "./BookingVisaCard";
 import type { DieuTourExportData } from "@/lib/export-dieu-tour-word";
+import { tourProfile, type LoaiTour } from "@/lib/tour-profile";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface XeInfo {
@@ -31,17 +32,20 @@ interface Props {
   soKhachTl?: number;
   xe?: XeInfo | null;
   dieuTourExportData?: DieuTourExportData | null;
+  /** Loại tour — nội địa ẩn phần Visa (xem tourProfile). DB trả string thô. */
+  loaiTour?: LoaiTour | string | null;
 }
 
 export default function BookingVisaXeTab({
   doanId, tenDoan, ngayDi, ngayVe, chuyenBayDon, chuyenBayTien,
   hdvName, soKhach, soKhachLon = 0, soKhachEm1 = 0, soKhachEm2 = 0, soKhachTl = 0,
-  xe, dieuTourExportData,
+  xe, dieuTourExportData, loaiTour,
 }: Props) {
   useTranslate();
+  const showVisa = tourProfile(loaiTour).showVisa;
   const { data: xeBooking, isLoading: xeLoading } = useBookingXe(doanId);
   const { data: visaList = [], isLoading: visaLoading } = useBookingVisaList(doanId);
-  const { data: donViVisaList = [] } = useDonViVisaList();
+  const { data: donViVisaList = [] } = useDonViVisaList(showVisa);
   const insertVisa = useInsertBookingVisa();
 
   if (xeLoading || visaLoading) {
@@ -74,7 +78,8 @@ export default function BookingVisaXeTab({
         />
       </div>
 
-      {/* ── Section: Visa ────────────────────────────────────────────── */}
+      {/* ── Section: Visa (ẩn cho tour nội địa — xem tourProfile) ─────── */}
+      {showVisa && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{t("Visa")}</h3>
@@ -110,6 +115,7 @@ export default function BookingVisaXeTab({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

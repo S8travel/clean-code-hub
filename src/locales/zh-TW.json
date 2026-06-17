@@ -1,5 +1,12 @@
 {
   "_note": "Key = chuỗi tiếng Việt gốc (natural key). Value = bản dịch phồn thể (zh-TW). Phase 0 seed — mở rộng dần theo từng module. Sửa value để chỉnh bản dịch.",
+  "Vé máy bay": "機票",
+  "Chặng / Mô tả": "航段／說明",
+  "Chặng / Mô tả *": "航段／說明 *",
+  "Nhập chặng / mô tả vé": "請輸入航段／機票說明",
+  "Đã thêm vé máy bay": "已新增機票",
+  "VD: HAN-NRT khứ hồi, vé đoàn 20 khách": "例：HAN-NRT 來回，20人團體票",
+  "Bấm \"+ Thêm\" để thêm chi phí vé máy bay.": "點擊「+ 新增」以新增機票費用。",
   "(Bước 1/2)": "（步驟 1/2）",
   "(Bước 2/2)": "（步驟 2/2）",
   "Cần sửa template riêng → đóng dialog rồi mở row đó.": "如需修改個別模板 → 關閉對話框後打開該行。",

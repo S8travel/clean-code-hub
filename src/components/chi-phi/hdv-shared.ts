@@ -4,6 +4,8 @@
 // Subset thông tin đoàn mà các sub-component HDV cần (số khách + ngày + tên + tip overrides).
 export interface HDVDoanInfo {
   ten_doan?: string | null;
+  // Loại tour — tip mặc định VND cho nội địa (xem tourProfile / computePhaiThu).
+  loai_tour?: string | null;
   so_khach?: number | null;
   so_khach_lon?: number | null;
   so_khach_em1?: number | null;
