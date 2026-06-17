@@ -90,7 +90,13 @@ interface ExportChiPhiDoanExcelParams {
   dnttList: DNTTRow[];
   hdvData?: HDVSectionData | null;
   opName?: string;
-  ksData?: { ngayRows: ExportKsNgayRow[]; khachSanMap: Record<number, ExportKsInfo> } | null;
+  ksData?: {
+    ngayRows: ExportKsNgayRow[];
+    khachSanMap: Record<number, ExportKsInfo>;
+    // Map item_id → KS day-use (KS dùng trong ngày qua wrapper cảnh điểm). Hook
+    // useChiPhiKSData đã trả; cần để tách day-use khỏi KS qua đêm (giống app).
+    dayUseItemMap?: Record<number, { khach_san_id: number; ngay_date: string; canh_diem_ten?: string }>;
+  } | null;
   /** Tỷ giá NDT → VND (lưu local trong UI). Default 800. */
   tyGiaNdt?: number;
   /**
@@ -102,6 +108,50 @@ interface ExportChiPhiDoanExcelParams {
 }
 
 const encoder = new TextEncoder();
+
+export interface KsDayUseGroup { ksId: number; ngayDate: string; canhDiemTen: string; rows: ChiPhiRow[] }
+export interface KsRowGrouping {
+  ksCostByNgay: Map<number, ChiPhiRow[]>;
+  ksCostNoRef: ChiPhiRow[];
+  dayUseGroups: Map<string, KsDayUseGroup>;
+  totalHdvKS: number;
+  totalCtyKS: number;
+}
+
+/**
+ * Phân loại chi phí KS thành 3 nhóm: (1) theo đêm qua `ref_doan_ngay_id`,
+ * (2) DAY-USE (KS dùng trong ngày qua wrapper cảnh điểm — `ref_doan_ngay_item_id`
+ * ∈ dayUseItemMap), (3) không ref. Day-use mang CẢ ref_doan_ngay_id LẪN
+ * ref_doan_ngay_item_id → PHẢI ưu tiên item_id (giống app `buildKSRowFromCp`),
+ * nếu không sẽ bị nhét nhầm vào KS qua đêm cùng ngày. Tách ra hàm thuần để test.
+ */
+export function groupKsRows(
+  ksRows: ChiPhiRow[],
+  dayUseItemMap: Record<number, { khach_san_id: number; ngay_date: string; canh_diem_ten?: string }>,
+): KsRowGrouping {
+  let totalHdvKS = 0, totalCtyKS = 0;
+  const ksCostByNgay = new Map<number, ChiPhiRow[]>();
+  const ksCostNoRef: ChiPhiRow[] = [];
+  const dayUseGroups = new Map<string, KsDayUseGroup>();
+  for (const row of ksRows) {
+    totalHdvKS += row.tien_hdv || 0;
+    totalCtyKS += row.tien_cong_ty || 0;
+    const du = row.ref_doan_ngay_item_id != null ? dayUseItemMap[row.ref_doan_ngay_item_id] : undefined;
+    if (du) {
+      const key = `${du.khach_san_id}|${du.ngay_date}`;
+      const g = dayUseGroups.get(key) || { ksId: du.khach_san_id, ngayDate: du.ngay_date, canhDiemTen: du.canh_diem_ten || "", rows: [] };
+      g.rows.push(row);
+      dayUseGroups.set(key, g);
+    } else if (row.ref_doan_ngay_id != null) {
+      const arr = ksCostByNgay.get(row.ref_doan_ngay_id) || [];
+      arr.push(row);
+      ksCostByNgay.set(row.ref_doan_ngay_id, arr);
+    } else {
+      ksCostNoRef.push(row);
+    }
+  }
+  return { ksCostByNgay, ksCostNoRef, dayUseGroups, totalHdvKS, totalCtyKS };
+}
 
 const DANH_MUC_LABELS: Record<string, string> = {
   khach_san: "Khách sạn",
@@ -730,20 +780,10 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   // Chi phí KS (doan_chi_phi) trỏ về đúng đêm qua ref_doan_ngay_id (ngày check-in =
   // đêm ở KS đó) → map cost (SL/FOC/đơn giá/tiền) lên dòng lịch tương ứng. Mỗi đêm
   // có thể >1 khoản (phòng + dịch vụ) → khoản đầu inline, khoản thêm xuống dòng phụ.
-  let totalHdvKS = 0, totalCtyKS = 0;
-  const ksCostByNgay = new Map<number, ChiPhiRow[]>();
-  const ksCostNoRef: ChiPhiRow[] = [];
-  for (const row of ksRows) {
-    totalHdvKS += row.tien_hdv || 0;
-    totalCtyKS += row.tien_cong_ty || 0;
-    if (row.ref_doan_ngay_id != null) {
-      const arr = ksCostByNgay.get(row.ref_doan_ngay_id) || [];
-      arr.push(row);
-      ksCostByNgay.set(row.ref_doan_ngay_id, arr);
-    } else {
-      ksCostNoRef.push(row);
-    }
-  }
+  // Gom KS theo đêm / day-use / không-ref (xem groupKsRows — day-use phải tách
+  // khỏi đêm qua, nếu không bị nhét nhầm vào KS qua đêm cùng ngày).
+  const { ksCostByNgay, ksCostNoRef, dayUseGroups, totalHdvKS, totalCtyKS } =
+    groupKsRows(ksRows, ksData?.dayUseItemMap || {});
   const focFromRow = (row: ChiPhiRow): string =>
     row.foc_khach_snapshot && row.foc_mien_snapshot
       ? `${row.foc_khach_snapshot}免${row.foc_mien_snapshot}` : "";
@@ -776,7 +816,9 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     rows.push([
       cell(ciDateStr),
       cell(hotelName),
-      cell(ngayRow?.ks_loai_phong || "—"),
+      // LOẠI PHÒNG: ưu tiên mô tả phòng booking thật (giống app dùng cp.mo_ta),
+      // fallback ks_loai_phong (template điều tour) khi đêm chưa có chi phí.
+      cell((main?.mo_ta || "").trim() || ngayRow?.ks_loai_phong || "—"),
       cell(ciDateStr),
       cell(coDateStr),
       main ? cell(main.so_luong || 0, "number") : cell(""),  // ROOMS
@@ -790,6 +832,45 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
 
     // Khoản phụ cùng đêm (loại phòng 2 / dịch vụ) → dòng phụ ngay dưới.
     for (const extra of costs.slice(1)) {
+      const exHdv = extra.tien_hdv || 0;
+      const exCty = extra.tien_cong_ty || 0;
+      rows.push([
+        cell(""), cell(""),
+        cell((extra.mo_ta || "").trim() || "—", "text"),
+        cell(""), cell(""),
+        cell(extra.so_luong || 0, "number"),
+        cell(focFromRow(extra) || "—"),
+        hideKsPrice ? cell("") : cell(extra.don_gia || 0, "number"),
+        hideKsPrice ? cell("") : (exHdv > 0 ? cell(exHdv, "number") : cell("")),
+        hideKsPrice ? cell("") : (exCty > 0 ? cell(exCty, "number") : cell("")),
+      ]);
+    }
+  }
+
+  // ─── Day-use (KS dùng trong ngày) — block riêng, KHÔNG lẫn vào đêm qua ─────
+  // Hiển thị giống app: tên KS (hoặc tên cảnh điểm) + "(Day Use)", C/I = C/O,
+  // loại phòng = mô tả booking thật. Vẫn nằm trong tổng KS (không lệch grand-total).
+  const dayUseSorted = [...dayUseGroups.values()].sort((a, b) => (a.ngayDate || "").localeCompare(b.ngayDate || ""));
+  for (const g of dayUseSorted) {
+    const ks = ksData?.khachSanMap?.[g.ksId];
+    const name = `${ks?.ten || g.canhDiemTen || "—"} (Day Use)`;
+    const dateStr = g.ngayDate ? formatDateValue(g.ngayDate) : "—";
+    const main = g.rows[0];
+    const hdvAmt = main?.tien_hdv || 0;
+    const ctyAmt = main?.tien_cong_ty || 0;
+    rows.push([
+      cell(dateStr),
+      cell(name),
+      cell((main?.mo_ta || "").trim() || "Day Use"),
+      cell(dateStr),
+      cell(dateStr),
+      main ? cell(main.so_luong || 0, "number") : cell(""),
+      cell(focFromRow(main) || "—"),
+      hideKsPrice || !main ? cell("") : cell(main.don_gia || 0, "number"),
+      hideKsPrice ? cell("") : (hdvAmt > 0 ? cell(hdvAmt, "number") : cell("")),
+      hideKsPrice ? cell("") : (ctyAmt > 0 ? cell(ctyAmt, "number") : cell("")),
+    ]);
+    for (const extra of g.rows.slice(1)) {
       const exHdv = extra.tien_hdv || 0;
       const exCty = extra.tien_cong_ty || 0;
       rows.push([
