@@ -22,7 +22,7 @@ import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import {
   resolveBookingEmail, buildUncEmailBody, buildUncEmailSubject,
-  getCanTruAmount, fileUncAsBase64, ccForLoai,
+  getCanTruAmount, fileUncAsBase64, readFileBase64, uncAttachmentFromBase64, ccForLoai,
   type EmailTarget,
 } from "@/lib/unc-email";
 import { t, useTranslate } from "@/lib/i18n";
@@ -52,6 +52,8 @@ interface SendTarget {
   include: boolean;
   status: SendStatus;
   error?: string;
+  /** base64 đọc sẵn lúc pick — gửi mail dùng cái này, fallback đọc File nếu thiếu. */
+  fileB64?: { b64: string; ext: string };
 }
 
 export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props) {
@@ -89,6 +91,9 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
   const manualNguonRef = useRef<Set<number>>(new Set()); // rowId user tự chọn NGUỒN → không auto đè
   const filesRef = useRef<File[]>([]);
   const ocrRef = useRef<Record<number, OcrUncResult>>({});
+  // Base64 đọc SỚM lúc pick (fileIdx → {b64,ext}) — gửi mail dùng cái này thay vì
+  // đọc lại File muộn (File có thể "chết" sau OCR+upload → NotFoundError).
+  const fileB64Ref = useRef<Record<number, { b64: string; ext: string }>>({});
   const assignRef = useRef<Record<number, number | undefined>>({}); // mirror assign cho recompute
   const nguonRef = useRef<Record<number, string>>({});   // mirror nguonMap cho handleSave
   const runRef = useRef(0);                               // huỷ vòng cũ khi chọn lại / đóng
@@ -166,10 +171,18 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     manualRef.current = new Set();
     manualNguonRef.current = new Set();
     ocrRef.current = {};
+    fileB64Ref.current = {};
     assignRef.current = {};
     nguonRef.current = {};
     filesRef.current = fs;
     setFiles(fs);
+    // Đọc base64 NGAY (song song OCR) — file đang tươi, tránh đọc lại lúc gửi bị lỗi.
+    void (async () => {
+      for (let i = 0; i < fs.length; i++) {
+        if (runRef.current !== myRun) return;
+        try { fileB64Ref.current[i] = await readFileBase64(fs[i]); } catch { /* để fallback đọc File lúc gửi */ }
+      }
+    })();
     setNguonMap({});
     setOcrInfo({});
     // Revoke URLs cũ + build preview URLs mới cho ảnh (PDF skip — không render
@@ -253,6 +266,8 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
       rowId: p.id,
       row: rows.find((r) => r.id === p.id)!,
       file: p.file,
+      // base64 đọc sẵn (fileIdx = assignRef[p.id]) — đính kèm mail an toàn.
+      fileB64: fileB64Ref.current[assignRef.current[p.id] ?? -1],
       nguon: nguonRef.current[p.id] ?? "",
     })).filter((s) => s.row);
     batchMut.mutate(pairs, {
@@ -349,7 +364,10 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
         setSendTargets((prev) => prev.map((s) => s.rowId === tgt.rowId ? { ...s, status: "sending" } : s));
         try {
           const canTruAmount = await getCanTruAmount(tgt.rowId);
-          const attachment = await fileUncAsBase64(tgt.file, tgt.row.ten_nha_cung_cap, tgt.rowId);
+          // Ưu tiên base64 đọc sẵn lúc pick (an toàn); chỉ đọc lại File khi thiếu.
+          const attachment = tgt.fileB64
+            ? uncAttachmentFromBase64(tgt.fileB64.b64, tgt.fileB64.ext, tgt.row.ten_nha_cung_cap, tgt.rowId)
+            : await fileUncAsBase64(tgt.file, tgt.row.ten_nha_cung_cap, tgt.rowId);
           await callSendBookingEmail({
             to: tgt.email,
             cc: ccForLoai(tgt.row.loai),
@@ -398,6 +416,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
     manualRef.current = new Set();
     manualNguonRef.current = new Set();
     ocrRef.current = {};
+    fileB64Ref.current = {};
     assignRef.current = {};
     nguonRef.current = {};
     filesRef.current = [];

@@ -357,3 +357,17 @@ export async function fileUncAsBase64(file: File, ncc: string | null, id: number
   const ext = file.name.split(".").pop() || "pdf";
   return { filename: uncFilename(ncc, id, ext), content: bytesToBase64(new Uint8Array(buf)) };
 }
+
+/** Đọc File → base64 NGAY lúc chọn (file còn "tươi"). Gọi muộn (sau OCR + upload
+ *  + thời gian dài) thì file.arrayBuffer() có thể ném DOMException
+ *  "A requested file or directory could not be found" → giữ base64 sẵn để gửi. */
+export async function readFileBase64(file: File): Promise<{ b64: string; ext: string }> {
+  const buf = await file.arrayBuffer();
+  const ext = file.name.split(".").pop() || "pdf";
+  return { b64: bytesToBase64(new Uint8Array(buf)), ext };
+}
+
+/** Dựng attachment từ base64 đã đọc sẵn (không đụng lại File). */
+export function uncAttachmentFromBase64(b64: string, ext: string, ncc: string | null, id: number) {
+  return { filename: uncFilename(ncc, id, ext), content: b64 };
+}
