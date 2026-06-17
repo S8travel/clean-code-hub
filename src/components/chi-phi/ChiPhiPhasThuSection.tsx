@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { shouldCollectTip } from "@/lib/tip-calc";
 import { parsePhaiThuExtras, type PhaiThuExtra } from "@/lib/phai-thu-calc";
+import { tourProfile } from "@/lib/tour-profile";
 import { t, useTranslate } from "@/lib/i18n";
 import { useUpdateDoanTip } from "@/hooks/use-doan";
 import type { HDVDoanInfo } from "./ChiPhiHDVSection";
@@ -17,7 +18,7 @@ import type { HDVDoanInfo } from "./ChiPhiHDVSection";
 // Default đơn giá NDT/khách/ngày khi không có override + theo có/không T/L.
 const NDT_TIP_CO_TL = 150;
 const NDT_TIP_KHONG_TL = 300;
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 type LoaiTien = "NDT" | "NT$" | "US$" | "USD" | "VND";
 type NguoiThu = "cong_ty" | "hdv";
@@ -75,12 +76,14 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
   };
 
   // ── Tip currency (persist doan.tip_currency) ──────────────────────────────
-  const effTipCurrency = (doan?.tip_currency ?? "NDT") as LoaiTien;
+  // Mặc định theo loại tour (nội địa → VND); đoàn đã chọn thì giữ. KHỚP computePhaiThu.
+  const defaultTipCurrency = tourProfile(doan?.loai_tour).defaultTipCurrency as LoaiTien;
+  const effTipCurrency = (doan?.tip_currency ?? defaultTipCurrency) as LoaiTien;
   const [tipLoaiTien, setTipLoaiTien] = useState<LoaiTien>(effTipCurrency);
   useEffect(() => { setTipLoaiTien(effTipCurrency); }, [effTipCurrency]);
   const handleTipCurrencyChange = (v: LoaiTien) => {
     setTipLoaiTien(v);
-    if (v !== (doan?.tip_currency ?? "NDT")) updateTip.mutate({ id: doanId, tip_currency: v });
+    if (v !== effTipCurrency) updateTip.mutate({ id: doanId, tip_currency: v });
   };
 
   // ── Tip tỷ giá (persist doan.tip_ty_gia; localStorage chỉ làm default cho đoàn mới) ─
@@ -106,7 +109,8 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
   // ── Tổng tip (NDT + VND) — respect tip_lump_sum override (set ở TipSection) ─
   const computedTip = effSoKhach * effSoNgay * effRate;
   const tongTip = showTipRow ? (doan?.tip_lump_sum ?? computedTip) : 0;
-  const tongVND = tongTip * tyGia;
+  // VND → không quy đổi (tỷ giá 1). KHỚP computePhaiThu (tipTyGia = VND ? 1 : base).
+  const tongVND = tongTip * (effTipCurrency === "VND" ? 1 : tyGia);
 
   // ── "Thu tiền đầu khách" — per-pax × đơn giá. Currency luôn VND (tỷ giá = 1).
   //    Default rate = 200.000. Số khách default = autoSoKhach (skip T/L) —
@@ -118,26 +122,50 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
   // Default = 0 — user phải nhập số khách thật khi muốn thu (không auto theo pax đoàn).
   const dkAutoSoKhach = 0;
   const dkEffSoKhach = doan?.dau_khach_so_khach_override ?? dkAutoSoKhach;
+  // Currency + tỷ giá riêng (mặc định VND/1). Non-VND fallback tỷ giá = tip tỷ giá.
+  // KHỚP computePhaiThu (single source) để UI / Excel / quyết toán HDV không lệch.
+  const dkCurrency = (doan?.dau_khach_currency ?? "VND") as LoaiTien;
+  const dkEffTyGia = dkCurrency === "VND" ? 1 : (doan?.dau_khach_ty_gia && doan.dau_khach_ty_gia > 0 ? doan.dau_khach_ty_gia : tyGia);
   const [dkLocalRate, setDkLocalRate] = useState(dkRate);
   const [dkLocalSoKhach, setDkLocalSoKhach] = useState(String(dkEffSoKhach || ""));
+  const [dkLocalTyGia, setDkLocalTyGia] = useState(dkEffTyGia);
   useEffect(() => { setDkLocalRate(dkRate); }, [dkRate]);
   useEffect(() => { setDkLocalSoKhach(String(dkEffSoKhach || "")); }, [dkEffSoKhach]);
+  useEffect(() => { setDkLocalTyGia(dkEffTyGia); }, [dkEffTyGia]);
   const dkTong = dkEffSoKhach * dkLocalRate;
-  const saveDk = (patch: Partial<{ dau_khach_rate: number | null; dau_khach_nguoi_thu: string | null; dau_khach_so_khach_override: number | null }>) =>
+  const saveDk = (patch: Partial<{ dau_khach_rate: number | null; dau_khach_nguoi_thu: string | null; dau_khach_so_khach_override: number | null; dau_khach_currency: string | null; dau_khach_ty_gia: number | null }>) =>
     updateTip.mutate({ id: doanId, ...patch });
+  const handleDkCurrencyChange = (v: LoaiTien) => {
+    if (v === dkCurrency) return;
+    if (v === "VND") { saveDk({ dau_khach_currency: v, dau_khach_ty_gia: null }); return; }
+    // Pin tỷ giá cụ thể ngay khi chọn ngoại tệ (giữ rate cũ nếu đang non-VND,
+    // else dùng tỷ giá base) → KHÔNG để null rồi UI/Excel fallback 2 nguồn lệch nhau.
+    const pinned = dkCurrency !== "VND" && dkLocalTyGia > 0 ? dkLocalTyGia : tyGia;
+    saveDk({ dau_khach_currency: v, dau_khach_ty_gia: pinned > 0 ? pinned : null });
+  };
   const saveDkSoKhach = (val: number) => {
     const next = val === dkAutoSoKhach ? null : val;
     if (next === (doan?.dau_khach_so_khach_override ?? null)) return;
     saveDk({ dau_khach_so_khach_override: next });
   };
 
-  // ── "Thu tiền quỹ VP" — lump-sum cho cả đoàn. Currency luôn VND. Default 200k.
+  // ── "Thu tiền quỹ VP" — lump-sum cho cả đoàn. Currency riêng (mặc định VND). Default 200k.
   const vpAmount = doan?.quy_vp_amount ?? VP_DEFAULT_AMOUNT;
   const vpNguoiThu = (doan?.quy_vp_nguoi_thu ?? "hdv") as NguoiThu;
+  const vpCurrency = (doan?.quy_vp_currency ?? "VND") as LoaiTien;
+  const vpEffTyGia = vpCurrency === "VND" ? 1 : (doan?.quy_vp_ty_gia && doan.quy_vp_ty_gia > 0 ? doan.quy_vp_ty_gia : tyGia);
   const [vpLocalAmount, setVpLocalAmount] = useState(vpAmount);
+  const [vpLocalTyGia, setVpLocalTyGia] = useState(vpEffTyGia);
   useEffect(() => { setVpLocalAmount(vpAmount); }, [vpAmount]);
-  const saveVp = (patch: Partial<{ quy_vp_amount: number | null; quy_vp_nguoi_thu: string | null }>) =>
+  useEffect(() => { setVpLocalTyGia(vpEffTyGia); }, [vpEffTyGia]);
+  const saveVp = (patch: Partial<{ quy_vp_amount: number | null; quy_vp_nguoi_thu: string | null; quy_vp_currency: string | null; quy_vp_ty_gia: number | null }>) =>
     updateTip.mutate({ id: doanId, ...patch });
+  const handleVpCurrencyChange = (v: LoaiTien) => {
+    if (v === vpCurrency) return;
+    if (v === "VND") { saveVp({ quy_vp_currency: v, quy_vp_ty_gia: null }); return; }
+    const pinned = vpCurrency !== "VND" && vpLocalTyGia > 0 ? vpLocalTyGia : tyGia;
+    saveVp({ quy_vp_currency: v, quy_vp_ty_gia: pinned > 0 ? pinned : null });
+  };
 
   // ── Extras (persist doan.phai_thu_extras) ─────────────────────────────────
   // Local state cho gõ mượt; persist toàn mảng xuống DB khi blur/đổi/thêm/xóa.
@@ -189,9 +217,9 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
     commitRow(id, { loaiTien: val, ...(val === "VND" ? { tyGia: 1 } : {}) });
 
   const extraTotalVND = extraRows.reduce((s, r) => s + r.soTien * r.tyGia, 0);
-  // dkVND/vpVND đã = VND (currency hardcode VND → tỷ giá = 1)
-  const dkVND = dkTong;
-  const vpVND = vpLocalAmount;
+  // dkVND/vpVND quy đổi theo currency riêng (VND → tỷ giá 1). KHỚP computePhaiThu.
+  const dkVND = dkTong * dkLocalTyGia;
+  const vpVND = vpLocalAmount * vpLocalTyGia;
   const totalVND = tongVND + dkVND + vpVND + extraTotalVND;
 
   const hdvTotalVND =
@@ -388,13 +416,39 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                     disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-right w-[80px]"
                   />
-                  <span className="text-[11px] text-muted-foreground w-[36px]">VND</span>
+                  <Select value={dkCurrency} onValueChange={(v) => handleDkCurrencyChange(v as LoaiTien)} disabled={locked}>
+                    <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
+                      <SelectValue>{dkCurrency}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="VND">VND</SelectItem>
+                      <SelectItem value="NDT">NDT</SelectItem>
+                      <SelectItem value="NT$">NT$</SelectItem>
+                      <SelectItem value="US$">US$</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </td>
               <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
-                {dkTong > 0 ? `${fmt(dkTong)} VND` : "—"}
+                {dkTong > 0 ? `${fmt(dkTong)} ${LOAI_TIEN_LABEL[dkCurrency]}` : "—"}
               </td>
-              <td className="px-3 py-2.5 text-center text-muted-foreground text-[11px]">—</td>
+              <td className="px-3 py-2.5">
+                {dkCurrency === "VND" ? (
+                  <div className="text-center text-muted-foreground text-[11px]">—</div>
+                ) : (
+                  <div className="flex justify-center">
+                    <Input
+                      type="number"
+                      value={dkLocalTyGia || ""}
+                      onChange={(e) => setDkLocalTyGia(Number(e.target.value) || 0)}
+                      onBlur={() => { if (dkLocalTyGia !== (doan?.dau_khach_ty_gia ?? 0)) saveDk({ dau_khach_ty_gia: dkLocalTyGia || null }); }}
+                      disabled={locked}
+                      className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
+                    />
+                  </div>
+                )}
+              </td>
               <td className="px-4 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
                 {dkVND > 0 ? `${fmt(dkVND)} ₫` : "—"}
               </td>
@@ -439,13 +493,39 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                     className="h-6 text-xs px-1.5 py-0 text-right w-[80px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder={t("Số tiền")}
                   />
-                  <span className="text-[11px] text-muted-foreground w-[36px]">VND</span>
+                  <Select value={vpCurrency} onValueChange={(v) => handleVpCurrencyChange(v as LoaiTien)} disabled={locked}>
+                    <SelectTrigger className="h-6 text-xs px-1.5 w-[52px]">
+                      <SelectValue>{vpCurrency}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="VND">VND</SelectItem>
+                      <SelectItem value="NDT">NDT</SelectItem>
+                      <SelectItem value="NT$">NT$</SelectItem>
+                      <SelectItem value="US$">US$</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </td>
               <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
-                {vpLocalAmount > 0 ? `${fmt(vpLocalAmount)} VND` : "—"}
+                {vpLocalAmount > 0 ? `${fmt(vpLocalAmount)} ${LOAI_TIEN_LABEL[vpCurrency]}` : "—"}
               </td>
-              <td className="px-3 py-2.5 text-center text-muted-foreground text-[11px]">—</td>
+              <td className="px-3 py-2.5">
+                {vpCurrency === "VND" ? (
+                  <div className="text-center text-muted-foreground text-[11px]">—</div>
+                ) : (
+                  <div className="flex justify-center">
+                    <Input
+                      type="number"
+                      value={vpLocalTyGia || ""}
+                      onChange={(e) => setVpLocalTyGia(Number(e.target.value) || 0)}
+                      onBlur={() => { if (vpLocalTyGia !== (doan?.quy_vp_ty_gia ?? 0)) saveVp({ quy_vp_ty_gia: vpLocalTyGia || null }); }}
+                      disabled={locked}
+                      className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
+                    />
+                  </div>
+                )}
+              </td>
               <td className="px-4 py-2.5 text-right font-semibold text-primary whitespace-nowrap">
                 {vpVND > 0 ? `${fmt(vpVND)} ₫` : "—"}
               </td>

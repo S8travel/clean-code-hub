@@ -89,11 +89,12 @@ const UNC_CC_EXCLUDE = "s8travel.hddt@gmail.com";
 
 export function ccForLoai(loai: string): readonly string[] {
   const k: BookingCcType | null =
-    loai === "khach_san" ? "ks" :
-    loai === "nha_hang"  ? "nh" :
-    loai === "dich_vu"   ? "dv" :
-    loai === "xe"        ? "xe" :
-    loai === "visa"      ? "visa" : null;
+    loai === "khach_san"  ? "ks" :
+    loai === "nha_hang"   ? "nh" :
+    loai === "dich_vu"    ? "dv" :
+    loai === "ve_may_bay" ? "dv" :   // vé máy bay đi cùng nhóm CC dịch vụ
+    loai === "xe"         ? "xe" :
+    loai === "visa"       ? "visa" : null;
   const base = k ? BOOKING_CC[k] : [UNC_CC_EXCLUDE];
   return base.filter((e) => e.toLowerCase() !== UNC_CC_EXCLUDE);
 }

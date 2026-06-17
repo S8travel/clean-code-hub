@@ -10,6 +10,7 @@
 // ChiPhiPhasThuSection + computeHdvPhaiThuVND (ChiPhiHDVSection).
 
 import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive, calcTipNDT, shouldCollectTip } from "./tip-calc";
+import { tourProfile } from "./tour-profile";
 
 /** Đơn giá / số tiền mặc định khi đoàn chưa nhập (mirror ChiPhiPhasThuSection). */
 export const DAU_KHACH_DEFAULT_RATE = 200_000;
@@ -39,6 +40,8 @@ export interface PhaiThuDoanInput {
   so_khach_tl?: number | null;
   ngay_di?: string | null;
   ngay_ve?: string | null;
+  // Loại tour — quyết định loại tiền mặc định của Tip (nội địa → VND).
+  loai_tour?: string | null;
   // Tip
   thu_tip?: boolean | null;
   tip_rate?: number | null;
@@ -48,12 +51,16 @@ export interface PhaiThuDoanInput {
   tip_currency?: string | null;
   tip_nguoi_thu?: string | null;
   tip_ty_gia?: number | null;
-  // Đầu khách
+  // Đầu khách (currency + tỷ giá riêng — mặc định VND/1)
   dau_khach_rate?: number | null;
+  dau_khach_currency?: string | null;
+  dau_khach_ty_gia?: number | null;
   dau_khach_nguoi_thu?: string | null;
   dau_khach_so_khach_override?: number | null;
-  // Quỹ VP
+  // Quỹ VP (currency + tỷ giá riêng — mặc định VND/1)
   quy_vp_amount?: number | null;
+  quy_vp_currency?: string | null;
+  quy_vp_ty_gia?: number | null;
   quy_vp_nguoi_thu?: string | null;
   // Extras (thu thêm tay)
   phai_thu_extras?: unknown;
@@ -153,20 +160,32 @@ export function computePhaiThu(
   const tipSoKhach = doan.tip_so_khach_override ?? autoTipSoKhach;
   const tipSoNgay = doan.tip_so_ngay_override ?? autoTipSoNgay;
   const tipRate = doan.tip_rate ?? autoTipRate;
-  const tipCurrency = normLoaiTien(doan.tip_currency, "NDT");
+  // Loại tiền mặc định của tip theo loại tour (nội địa → VND); đoàn đã chọn thì giữ.
+  const defaultTipCurrency = tourProfile(doan.loai_tour).defaultTipCurrency;
+  const tipCurrency = normLoaiTien(doan.tip_currency, defaultTipCurrency);
   const tipTyGia = tipCurrency === "VND" ? 1 : tyGiaTipBase;
   const tipNguoiThu = normNguoiThu(doan.tip_nguoi_thu);
   const showTip = shouldCollectTip(doan.thu_tip, tipSoKhach, tipSoNgay);
   const tipNdt = doan.tip_lump_sum ?? calcTipNDT({ soKhach: tipSoKhach, soNgay: tipSoNgay, rate: tipRate });
   const tipVnd = showTip ? tipNdt * tipTyGia : 0;
 
-  // ── 2. Thu tiền đầu khách (VND, không nhân ngày, không tỷ giá) ─────────────
+  // ── 2. Thu tiền đầu khách (currency riêng, không nhân ngày) ────────────────
   const dkRate = doan.dau_khach_rate ?? DAU_KHACH_DEFAULT_RATE;
   const dkSoKhach = doan.dau_khach_so_khach_override ?? 0;
-  const dkTong = dkSoKhach * dkRate;
+  const dkTongGoc = dkSoKhach * dkRate;
+  const dkCurrency = normLoaiTien(doan.dau_khach_currency, "VND");
+  const dkTyGia = dkCurrency === "VND"
+    ? 1
+    : (doan.dau_khach_ty_gia && doan.dau_khach_ty_gia > 0 ? doan.dau_khach_ty_gia : tyGiaTipBase);
+  const dkVnd = dkTongGoc * dkTyGia;
 
-  // ── 3. Thu tiền quỹ VP (VND lump-sum) ─────────────────────────────────────
+  // ── 3. Thu tiền quỹ VP (currency riêng, lump-sum) ──────────────────────────
   const vpAmount = doan.quy_vp_amount ?? QUY_VP_DEFAULT_AMOUNT;
+  const vpCurrency = normLoaiTien(doan.quy_vp_currency, "VND");
+  const vpTyGia = vpCurrency === "VND"
+    ? 1
+    : (doan.quy_vp_ty_gia && doan.quy_vp_ty_gia > 0 ? doan.quy_vp_ty_gia : tyGiaTipBase);
+  const vpVnd = vpAmount * vpTyGia;
 
   const items: PhaiThuItem[] = [
     {
@@ -188,12 +207,12 @@ export function computePhaiThu(
       soKhach: dkSoKhach,
       soNgay: null,
       donGia: dkRate,
-      donViGoc: "VND",
-      tongGoc: dkTong,
-      tyGia: 1,
-      thanhTienVND: dkTong,
+      donViGoc: dkCurrency,
+      tongGoc: dkTongGoc,
+      tyGia: dkTyGia,
+      thanhTienVND: dkVnd,
       nguoiThu: normNguoiThu(doan.dau_khach_nguoi_thu),
-      show: dkTong > 0,
+      show: dkVnd > 0,
     },
     {
       key: "quy_vp",
@@ -201,12 +220,12 @@ export function computePhaiThu(
       soKhach: null,
       soNgay: null,
       donGia: vpAmount,
-      donViGoc: "VND",
+      donViGoc: vpCurrency,
       tongGoc: vpAmount,
-      tyGia: 1,
-      thanhTienVND: vpAmount,
+      tyGia: vpTyGia,
+      thanhTienVND: vpVnd,
       nguoiThu: normNguoiThu(doan.quy_vp_nguoi_thu),
-      show: vpAmount > 0,
+      show: vpVnd > 0,
     },
   ];
 

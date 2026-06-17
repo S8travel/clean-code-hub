@@ -29,9 +29,10 @@ const QK_LOAI = "loai_visa_list";
 
 // ── Đơn vị visa ──
 
-export function useDonViVisaList() {
+export function useDonViVisaList(enabled = true) {
   return useQuery<DonViVisa[]>({
     queryKey: [QK],
+    enabled,
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("don_vi_visa")

@@ -706,6 +706,7 @@ export default function DoanDetail() {
               soKhachTl={soKhachTl}
               xe={doan.xe ?? null}
               dieuTourExportData={dieuTourExportData}
+              loaiTour={doan.loai_tour}
             />
           </TabsContent>
 
