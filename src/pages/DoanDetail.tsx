@@ -448,6 +448,7 @@ export default function DoanDetail() {
       tenDoan: doan.ten_doan ?? "",
       hdv: hdvDisplayStr,
       xe: doan.xe ?? null,
+      xe_2: doan.xe_2 ?? null,
       ngayDi: doan.ngay_di ?? null,
       ngayVe: doan.ngay_ve ?? null,
       bangDon,

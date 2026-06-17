@@ -31,6 +31,7 @@ interface DoanInfo {
   huong_dan_vien?: HdvInfo | null;
   huong_dan_vien_2?: HdvInfo | null;
   xe?: XeInfo | null;
+  xe_2?: XeInfo | null;
   ngay_di: string | null;
   ngay_ve: string | null;
 }
@@ -112,7 +113,20 @@ export default function DoanInfoSection({
             })()}
           </Row>
           <Row label={t("Xe")} icon={Bus}>
-            <span>{xeLabel(doan.xe)}</span>
+            {(() => {
+              const parts = [doan.xe, doan.xe_2].filter(Boolean).map(xeLabel);
+              if (parts.length === 0) return <span>—</span>;
+              return (
+                <span className="break-words">
+                  {parts.map((p, i) => (
+                    <span key={i}>
+                      {i > 0 && <span className="text-muted-foreground/60 mx-1.5">|</span>}
+                      {p}
+                    </span>
+                  ))}
+                </span>
+              );
+            })()}
           </Row>
           {/* Ngày đón + chuyến bay đón inline */}
           <div className="flex items-center gap-2">
