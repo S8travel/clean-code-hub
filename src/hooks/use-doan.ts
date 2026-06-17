@@ -19,6 +19,8 @@ export interface Doan {
   huong_dan_vien_id_2: number | null;
   xe_id: number | null;
   xe_da_huy: boolean | null;
+  xe_id_2: number | null;
+  xe_da_huy_2: boolean | null;
   seri_id: number | null;
   chuyen_bay_don: string | null;
   chuyen_bay_tien: string | null;
@@ -80,6 +82,8 @@ export interface DoanInsert {
   huong_dan_vien_id_2?: number | null;
   xe_id?: number | null;
   xe_da_huy?: boolean | null;
+  xe_id_2?: number | null;
+  xe_da_huy_2?: boolean | null;
   seri_id?: number | null;
   chuyen_bay_don?: string | null;
   chuyen_bay_tien?: string | null;
@@ -338,7 +342,8 @@ export function useDoanList(
           dia_diem:dia_diem_id(ten),
           huong_dan_vien:huong_dan_vien!huong_dan_vien_id(id, ten, so_dien_thoai),
           huong_dan_vien_2:huong_dan_vien!huong_dan_vien_id_2(id, ten, so_dien_thoai),
-          xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
+          xe:nha_xe_loai_xe!xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
+          xe_2:nha_xe_loai_xe!xe_id_2(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
           van_phong:van_phong_id(id, ten)
         `);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
@@ -479,7 +484,7 @@ export function useUpdateDoan() {
       // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem + diff log
       const { data: oldDoan, error: oldErr } = await externalSupabase
         .from("doan")
-        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, xe_id, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
+        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, xe_id, xe_id_2, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
         .eq("id", id)
         .single();
       if (oldErr) throw oldErr;
@@ -825,6 +830,7 @@ export function useUpdateDoan() {
         ["huong_dan_vien_id", "HDV"],
         ["huong_dan_vien_id_2", "HDV phụ"],
         ["xe_id", "xe"],
+        ["xe_id_2", "xe phụ"],
         ["seri_id", "seri tour"],
         ["van_phong_id", "văn phòng"],
       ];

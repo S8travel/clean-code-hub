@@ -162,9 +162,12 @@ export default function Index() {
   const xeFilterOptions = useMemo(() => {
     const byId = new Map<string, string>();
     for (const g of groups ?? []) {
-      const id = g.xe?.nha_xe?.id;
-      const ten = g.xe?.nha_xe?.ten;
-      if (id != null && ten) byId.set(id.toString(), ten);
+      // Gom nhà xe của CẢ xe chính lẫn xe phụ → lọc theo nhà xe phụ vẫn ra đoàn.
+      for (const x of [g.xe, g.xe_2]) {
+        const id = x?.nha_xe?.id;
+        const ten = x?.nha_xe?.ten;
+        if (id != null && ten) byId.set(id.toString(), ten);
+      }
     }
     const real = [...byId.entries()]
       .map(([value, label]) => ({ value, label }))
@@ -237,9 +240,11 @@ export default function Index() {
       if (loaiTourSel.length && !loaiTourSel.includes(g.loai_tour ?? "")) return false;
 
       if (xeSel.length) {
-        const nhaXeId = g.xe?.nha_xe?.id?.toString();
-        const matchHuy = xeSel.includes(XE_HUY_FILTER_VALUE) && g.xe_da_huy === true;
-        const matchNhaXe = nhaXeId != null && xeSel.includes(nhaXeId);
+        // Khớp nhà xe của cả xe chính lẫn xe phụ.
+        const nhaXeIds = [g.xe?.nha_xe?.id, g.xe_2?.nha_xe?.id]
+          .filter((x): x is number => x != null).map((x) => x.toString());
+        const matchHuy = xeSel.includes(XE_HUY_FILTER_VALUE) && (g.xe_da_huy === true || g.xe_da_huy_2 === true);
+        const matchNhaXe = nhaXeIds.some((id) => xeSel.includes(id));
         if (!matchHuy && !matchNhaXe) return false;
       }
 
@@ -592,6 +597,7 @@ export default function Index() {
         dia_diem_id: doan.dia_diem_id,
         huong_dan_vien_id: doan.huong_dan_vien_id,
         xe_id: doan.xe_id,
+        xe_id_2: doan.xe_id_2,
         seri_id: doan.seri_id,
         so_khach: doan.so_khach,
         so_khach_lon: doan.so_khach_lon,

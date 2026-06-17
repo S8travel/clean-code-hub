@@ -79,6 +79,8 @@ export interface ChiPhiRow {
   vat_pct: number | null;
   // Trạng thái hóa đơn cho dòng HDV trả (không có ĐNTT). NULL=chua_co.
   trang_thai_hoa_don: string | null;
+  // Tag chi phí xe thuộc loại xe nào (doan.xe_id / xe_id_2) — tách báo cáo theo xe.
+  xe_id: number | null;
 }
 
 // NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).

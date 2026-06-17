@@ -706,6 +706,7 @@ export type Database = {
           truong_doan: string | null
           van_phong_id: number | null
           xe_id: number | null
+          xe_id_2: number | null
         }
         Insert: {
           agent_huy_id?: number | null
@@ -753,6 +754,7 @@ export type Database = {
           truong_doan?: string | null
           van_phong_id?: number | null
           xe_id?: number | null
+          xe_id_2?: number | null
         }
         Update: {
           agent_huy_id?: number | null
@@ -800,6 +802,7 @@ export type Database = {
           truong_doan?: string | null
           van_phong_id?: number | null
           xe_id?: number | null
+          xe_id_2?: number | null
         }
         Relationships: [
           {
@@ -868,6 +871,13 @@ export type Database = {
           {
             foreignKeyName: "doan_xe_id_fkey"
             columns: ["xe_id"]
+            isOneToOne: false
+            referencedRelation: "nha_xe_loai_xe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_xe_id_2_fkey"
+            columns: ["xe_id_2"]
             isOneToOne: false
             referencedRelation: "nha_xe_loai_xe"
             referencedColumns: ["id"]
@@ -1314,6 +1324,7 @@ export type Database = {
           ty_gia: number | null
           vat_pct: number | null
           trang_thai_hoa_don: string | null
+          xe_id: number | null
         }
         Insert: {
           chiet_khau_pct?: number | null
@@ -1352,6 +1363,7 @@ export type Database = {
           ty_gia?: number | null
           vat_pct?: number | null
           trang_thai_hoa_don?: string | null
+          xe_id?: number | null
         }
         Update: {
           chiet_khau_pct?: number | null
@@ -1432,6 +1444,13 @@ export type Database = {
             columns: ["ref_doan_ngay_item_id"]
             isOneToOne: false
             referencedRelation: "doan_ngay_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_chi_phi_xe_id_fkey"
+            columns: ["xe_id"]
+            isOneToOne: false
+            referencedRelation: "nha_xe_loai_xe"
             referencedColumns: ["id"]
           },
         ]

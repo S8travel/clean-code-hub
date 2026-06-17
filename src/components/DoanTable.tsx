@@ -51,6 +51,8 @@ export interface DoanRow {
   huong_dan_vien_id?: number | null;
   xe_id?: number | null;
   xe_da_huy?: boolean | null;
+  xe_id_2?: number | null;
+  xe_da_huy_2?: boolean | null;
   da_check_quyet_toan?: boolean | null;
   da_thu_visa?: boolean | null;
   seri_id?: number | null;
@@ -69,6 +71,7 @@ export interface DoanRow {
   agent_huy?: { ten?: string | null } | null;
   dia_diem?: { ten?: string | null } | null;
   xe?: { ten_xe?: string | null; so_cho?: number | null; nha_xe?: { id?: number | null; ten?: string | null } | null } | null;
+  xe_2?: { ten_xe?: string | null; so_cho?: number | null; nha_xe?: { id?: number | null; ten?: string | null } | null } | null;
   [key: string]: unknown;
 }
 

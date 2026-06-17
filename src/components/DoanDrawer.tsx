@@ -51,6 +51,8 @@ const EMPTY_FORM: DoanInsert = {
   huong_dan_vien_id_2: null,
   xe_id: null,
   xe_da_huy: false,
+  xe_id_2: null,
+  xe_da_huy_2: false,
   seri_id: null,
   chuyen_bay_don: "",
   chuyen_bay_tien: "",
@@ -128,6 +130,8 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         huong_dan_vien_id_2: num(doan.huong_dan_vien_id_2),
         xe_id: num(doan.xe_id),
         xe_da_huy: doan.xe_da_huy === true,
+        xe_id_2: num(doan.xe_id_2),
+        xe_da_huy_2: doan.xe_da_huy_2 === true,
         seri_id: seriId,
         chuyen_bay_don: str(doan.chuyen_bay_don) || "",
         chuyen_bay_tien: str(doan.chuyen_bay_tien) || "",
@@ -393,6 +397,26 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   }
                   placeholder={t("Chọn xe")}
                 />
+              </Field>
+
+              <Field label={t("Xe phụ (tuỳ chọn)")}>
+                <SearchableSelect
+                  options={xeOptions.filter((o) => o.value === XE_HUY_VALUE || o.value !== form.xe_id?.toString())}
+                  value={form.xe_da_huy_2 ? XE_HUY_VALUE : form.xe_id_2?.toString() || ""}
+                  onChange={(v) =>
+                    setForm((prev) =>
+                      v === XE_HUY_VALUE
+                        ? { ...prev, xe_da_huy_2: true, xe_id_2: null }
+                        : { ...prev, xe_da_huy_2: false, xe_id_2: v ? parseInt(v) : null },
+                    )
+                  }
+                  placeholder={t("Chọn xe phụ (đoàn cần 2 xe)")}
+                />
+                {(form.xe_id_2 || form.xe_da_huy_2) && !form.xe_id && !form.xe_da_huy && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    {t("Có xe phụ mà chưa có xe chính — nên gán xe chính trước.")}
+                  </p>
+                )}
               </Field>
 
               <Field label={t("Mẫu seri (áp dụng chương trình)")}>

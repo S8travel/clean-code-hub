@@ -154,6 +154,12 @@ function xeLabel(xe: XeExportInfo | null | undefined): string {
   return parts.join(" · ") || "—";
 }
 
+// Ghép nhãn xe chính + xe phụ bằng " | " (đoàn dùng 2 nhà xe).
+function xeLabelAll(xe: XeExportInfo | null | undefined, xe2: XeExportInfo | null | undefined): string {
+  const parts = [xe, xe2].filter(Boolean).map((x) => xeLabel(x));
+  return parts.length ? parts.join(" | ") : "—";
+}
+
 // ─── Data interfaces ─────────────────────────────────────────────────────────
 export interface DieuTourExportData {
   days: DayLocal[];
@@ -163,6 +169,7 @@ export interface DieuTourExportData {
   tenDoan: string;
   hdv: string;
   xe: XeExportInfo | null;
+  xe_2?: XeExportInfo | null;
   ngayDi: string | null;
   ngayVe: string | null;
   bangDon: string;
@@ -263,7 +270,7 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
 export async function exportDieuTourWord(data: DieuTourExportData) {
   const {
     days, canhDiemList, nhaHangList, khachSanList,
-    tenDoan, hdv, xe, ngayDi, ngayVe,
+    tenDoan, hdv, xe, xe_2, ngayDi, ngayVe,
     bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
     soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
     chuThichKhach, gifts, ghiChuDieuTour,
@@ -363,7 +370,7 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
     // Row 3: Xe | T/L
     new TableRow({ children: [
       cell([p("Xe:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([p(xeLabel(xe))], { width: VW }),
+      cell([p(xeLabelAll(xe, xe_2))], { width: VW }),
       cell([p("T/L:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell([p(truongDoan || "—")], { width: VW_R }),
     ]}),
@@ -554,7 +561,7 @@ function buildDocFromCells(
   logoData: ArrayBuffer | null = null,
 ): import("docx").Document {
   const {
-    tenDoan, hdv, xe, ngayDi, ngayVe,
+    tenDoan, hdv, xe, xe_2, ngayDi, ngayVe,
     bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
     soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
     chuThichKhach, gifts, thuTip, tipRate,
@@ -628,7 +635,7 @@ function buildDocFromCells(
     ]}),
     new TableRow({ children: [
       cell([p("Xe:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
-      cell([p(xeLabel(xe))], { width: VW }),
+      cell([p(xeLabelAll(xe, xe_2))], { width: VW }),
       cell([p("T/L:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell([p(truongDoan || "—")], { width: VW_R }),
     ]}),

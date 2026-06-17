@@ -1,5 +1,10 @@
 {
   "_note": "Key = chuỗi tiếng Việt gốc (natural key). Value = bản dịch phồn thể (zh-TW). Phase 0 seed — mở rộng dần theo từng module. Sửa value để chỉnh bản dịch.",
+  "Xe 1": "車輛 1",
+  "Xe 2": "車輛 2",
+  "Xe phụ (tuỳ chọn)": "副車（選填）",
+  "Chọn xe phụ (đoàn cần 2 xe)": "選擇副車（團需 2 輛車）",
+  "Có xe phụ mà chưa có xe chính — nên gán xe chính trước.": "已有副車但尚未指定主車 — 應先指定主車。",
   "Vé máy bay": "機票",
   "Chặng / Mô tả": "航段／說明",
   "Chặng / Mô tả *": "航段／說明 *",
