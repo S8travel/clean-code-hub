@@ -2,6 +2,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { upsertBookingNHByDayMeal } from "./use-booking-nh";
 
 export interface TauNgayDisplayRow {
   booking_id: number | null;
@@ -133,10 +134,8 @@ export function useUpdateBookingTau() {
           .eq("id", booking_id);
         if (error) throw error;
       } else {
-        const { error } = await externalSupabase
-          .from("doan_booking_nh")
-          .upsert({ doan_ngay_id, doan_id, bua_an, nha_hang_id, ...fields }, { onConflict: "doan_ngay_id,bua_an" });
-        if (error) throw error;
+        // ON CONFLICT KHÔNG dùng được với UNIQUE deferrable (xem upsertBookingNHByDayMeal)
+        await upsertBookingNHByDayMeal({ doan_ngay_id, doan_id, bua_an, nha_hang_id, ...fields });
       }
     },
     onSuccess: (_, v) => {

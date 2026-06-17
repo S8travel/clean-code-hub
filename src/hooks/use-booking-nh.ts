@@ -158,16 +158,41 @@ export function useBookingNH(doanId: number | undefined) {
   });
 }
 
+// Upsert 1 row booking NH theo (doan_ngay_id, bua_an) — KHÔNG dùng ON CONFLICT.
+// Migration remap NH (20260616) đổi UNIQUE(doan_ngay_id, bua_an) sang DEFERRABLE;
+// Postgres KHÔNG cho dùng constraint deferrable làm arbiter của ON CONFLICT
+// (SQLSTATE 55000) → `.upsert({onConflict})` văng lỗi. Làm thủ công:
+// select-by-(doan_ngay_id, bua_an) → update nếu có, insert nếu chưa. Trả về row.
+export async function upsertBookingNHByDayMeal(
+  row: Partial<BookingNHRow> & { doan_ngay_id: number; bua_an: string; doan_id: number },
+) {
+  const { data: existing, error: selErr } = await externalSupabase
+    .from("doan_booking_nh")
+    .select("id")
+    .eq("doan_ngay_id", row.doan_ngay_id)
+    .eq("bua_an", row.bua_an)
+    .maybeSingle();
+  if (selErr) throw selErr;
+
+  const builder = existing
+    ? externalSupabase
+        .from("doan_booking_nh")
+        .update(row as unknown as TablesUpdate<"doan_booking_nh">)
+        .eq("id", existing.id)
+    : externalSupabase
+        .from("doan_booking_nh")
+        .insert(row as unknown as TablesInsert<"doan_booking_nh">);
+
+  const { data, error } = await builder.select().single();
+  if (error) throw error;
+  return data;
+}
+
 export function useUpsertBookingNH() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (row: Partial<BookingNHRow> & { doan_ngay_id: number; bua_an: string; doan_id: number }) => {
-      const { data, error } = await externalSupabase
-        .from("doan_booking_nh")
-        .upsert(row as unknown as TablesInsert<"doan_booking_nh">, { onConflict: "doan_ngay_id,bua_an" })
-        .select()
-        .single();
-      if (error) throw error;
+      const data = await upsertBookingNHByDayMeal(row);
 
       // Sync set_menu_id sang doan_ngay (tránh cascade Điều tour kéo cũ về)
       if ("set_menu_id" in row) {
