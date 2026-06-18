@@ -23,6 +23,9 @@ import type { DoanInsert } from "@/hooks/use-doan";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useChuyenBayList, formatChuyenBay, chuyenBayLabel } from "@/hooks/use-chuyen-bay";
 import { useSeriList, checkSeriApplyConflict } from "@/hooks/use-seri";
+import { useVanPhongList } from "@/hooks/use-van-phong";
+import { useAuth } from "@/hooks/use-auth";
+import { resolveVpScope } from "@/hooks/use-doan-scope";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -45,6 +48,7 @@ const EMPTY_FORM: DoanInsert = {
   ten_doan: "",
   loai_tour: null,
   thi_truong: null,
+  van_phong_id: null,
   agent_id: null,
   dia_diem_id: null,
   huong_dan_vien_id: null,
@@ -96,6 +100,14 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
   const { data: hdv } = useHuongDanVien();
   const { data: xeList } = useXeList();
   const { data: userRoles } = useUserRoles();
+  const { user: currentUser } = useAuth();
+  const { data: vanPhongList = [] } = useVanPhongList();
+  // Cross-VP (admin/giám đốc) chọn được mọi VP; còn lại chỉ trong scope của mình.
+  const isCrossVp = currentUser?.role === "admin" || currentUser?.role === "giam_doc";
+  const vpScope = useMemo(
+    () => resolveVpScope(currentUser?.van_phong_ids, currentUser?.van_phong_id),
+    [currentUser?.van_phong_ids, currentUser?.van_phong_id],
+  );
   const { data: seriList = [] } = useSeriList();
   const { data: chuyenBayList = [] } = useChuyenBayList();
   // Option chọn nhanh chuyến bay từ danh mục → điền text snapshot vào ô (vẫn sửa được).
@@ -122,6 +134,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         ten_doan: str(doan.ten_doan) || "",
         loai_tour: (str(doan.loai_tour) ?? null) as DoanInsert["loai_tour"],
         thi_truong: str(doan.thi_truong),
+        van_phong_id: num(doan.van_phong_id),
         agent_id: num(doan.agent_id),
         dia_diem_id: num(doan.dia_diem_id),
         huong_dan_vien_id: num(doan.huong_dan_vien_id),
@@ -142,16 +155,26 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
       });
       setOriginalSeriId(seriId);
     } else {
-      setForm({ ...EMPTY_FORM, assigned_to: null, seri_id: null });
+      // Đoàn mới: mặc định VP nhà của người tạo (vẫn đổi được nếu cross-VP).
+      setForm({ ...EMPTY_FORM, assigned_to: null, seri_id: null, van_phong_id: currentUser?.van_phong_id ?? null });
       setOriginalSeriId(null);
     }
     setConflictLines(null);
-  }, [doan, open, currentUserId]);
+  }, [doan, open, currentUserId, currentUser?.van_phong_id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!doan && !form.loai_tour) {
       toast.error(t("Vui lòng chọn loại tuyến"));
+      return;
+    }
+    if (!doan && !form.van_phong_id) {
+      // Dropdown rỗng + non-cross = tài khoản chưa được gán VP → hướng dẫn cụ thể.
+      toast.error(
+        vanPhongOptions.length === 0 && !isCrossVp
+          ? t("Tài khoản chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin.")
+          : t("Vui lòng chọn Văn phòng"),
+      );
       return;
     }
     const payload: DoanInsert = {
@@ -213,6 +236,15 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
 
   const seriOptions = useMemo(() =>
     seriList.map((s) => ({ value: s.id.toString(), label: s.ten_seri })), [seriList]);
+
+  // VP chọn được: cross-VP → mọi VP active; còn lại → VP trong scope. Luôn kèm VP
+  // đang chọn (kể cả inactive) để edit mode hiển thị đúng nhãn.
+  const vanPhongOptions = useMemo(() => {
+    const selected = form.van_phong_id;
+    return vanPhongList
+      .filter((v) => (isCrossVp ? v.active : vpScope.includes(v.id)) || v.id === selected)
+      .map((v) => ({ value: v.id.toString(), label: v.ten }));
+  }, [vanPhongList, isCrossVp, vpScope, form.van_phong_id]);
 
   const userOptions = useMemo(() =>
     [{ value: "", label: t("— Chưa phân —") },
@@ -287,6 +319,15 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
+              </Field>
+
+              <Field label={t("Văn phòng") + (!doan ? " *" : "")}>
+                <SearchableSelect
+                  options={vanPhongOptions}
+                  value={form.van_phong_id?.toString() || ""}
+                  onChange={(v) => set("van_phong_id", v ? parseInt(v) : null)}
+                  placeholder={t("Chọn văn phòng")}
+                />
               </Field>
 
               <div className="grid grid-cols-2 gap-4">

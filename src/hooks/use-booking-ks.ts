@@ -3,6 +3,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import type { KhachSanItem } from "./use-dieu-tour";
 import type { TablesUpdate } from "@/lib/database.types";
+import { useDoanLockGuard } from "@/hooks/use-doan-lock";
+
+// Lấy doan_id của 1 booking để check khóa (đoàn đã KTT-duyệt quyết toán → khóa sửa).
+async function fetchBookingKSDoanId(id: number): Promise<number | null> {
+  const { data } = await externalSupabase
+    .from("doan_booking_ks")
+    .select("doan_id")
+    .eq("id", id)
+    .single();
+  return data?.doan_id ?? null;
+}
 
 export interface BookingKSRow {
   id: number;
@@ -136,8 +147,10 @@ export function useBookingKS(doanId: number | undefined) {
 // Update a single booking row field
 export function useUpdateBookingKS() {
   const qc = useQueryClient();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async ({ id, fields }: { id: number; fields: Partial<BookingKSRow> }) => {
+      lockGuard(await fetchBookingKSDoanId(id));
       const { error } = await externalSupabase
         .from("doan_booking_ks")
         .update(fields as TablesUpdate<"doan_booking_ks">)
@@ -153,8 +166,10 @@ export function useUpdateBookingKS() {
 // Delete a booking row
 export function useDeleteBookingKS() {
   const qc = useQueryClient();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async (id: number) => {
+      lockGuard(await fetchBookingKSDoanId(id));
       const { error } = await externalSupabase
         .from("doan_booking_ks")
         .delete()

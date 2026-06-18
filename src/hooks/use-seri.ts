@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { DayLocal, DayItemLocal } from "@/hooks/use-dieu-tour";
 import type { TablesInsert } from "@/lib/database.types";
-import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
+import { useDoanLockGuard } from "@/hooks/use-doan-lock";
 
 // ── Types ──
 
@@ -279,7 +279,7 @@ export async function checkSeriApplyConflict(doanId: number): Promise<SeriApplyC
 
 export function useApplySeriToDoan() {
   const qc = useQueryClient();
-  const lockGuard = useChiPhiLockGuard();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async ({
       doanId,

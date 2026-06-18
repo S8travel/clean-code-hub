@@ -2,7 +2,7 @@ import { useMemo, useState, useRef } from "react";
 import { FileSpreadsheet, Printer, ChevronDown } from "lucide-react";
 import { errMsg } from "@/lib/error";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
-import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
+import { useDoanLocked } from "@/hooks/use-doan-lock";
 import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
@@ -123,8 +123,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   const soKhachNH = (sk_lon + sk_em1 * 0.5 + sk_tl) || doan?.so_khach || 0;
   const soKhachNHKhongTL = (sk_lon + sk_em1 * 0.5) || doan?.so_khach || 0;
 
-  // Đoàn đã quyết toán → khóa sửa CON SỐ chi phí (trừ admin). Luồng thanh toán giữ nguyên.
-  const locked = useChiPhiLocked(doanId);
+  // Đoàn đã khóa (KTT duyệt quyết toán) → khóa sửa toàn bộ nghiệp vụ (trừ admin).
+  // Luồng thanh toán (tất toán ĐNTT đã duyệt) giữ nguyên.
+  const locked = useDoanLocked(doanId);
   const { data: chiPhiRows = [] } = useChiPhiList(doanId, activeNhomId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
@@ -267,13 +268,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
       <ChiPhiHeader doan={doan} opName={opName} />
 
-      {/* ── Banner khóa quyết toán ── */}
-      {locked && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 flex items-center gap-2 text-sm text-amber-800">
-          <span className="text-base">🔒</span>
-          <span>{t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được số liệu. (Vẫn dùng được nút thanh toán / hóa đơn.)")}</span>
-        </div>
-      )}
+      {/* Banner khóa quyết toán hiển thị ở cấp đoàn (DoanQuyetToanLockBar trong DoanDetail). */}
 
       {/* ── Summary bar ── */}
       {hasData && (

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import { normalizeEmailList } from "@/lib/unc-email";
 import type { TablesUpdate } from "@/lib/database.types";
+import { useDoanLockGuard } from "@/hooks/use-doan-lock";
 
 export interface DichVuItem {
   ten_dv: string;
@@ -49,12 +50,14 @@ export function useBookingDVList(doanId: number | undefined) {
 
 export function useUpdateBookingDV() {
   const qc = useQueryClient();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async (params: {
       id: number;
       doan_id: number;
       updates: Record<string, unknown>;
     }) => {
+      lockGuard(params.doan_id);
       const { error } = await externalSupabase
         .from("doan_booking_dv")
         .update(params.updates as TablesUpdate<"doan_booking_dv">)
@@ -69,8 +72,10 @@ export function useUpdateBookingDV() {
 
 export function useDeleteBookingDV() {
   const qc = useQueryClient();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async (params: { id: number; doan_id: number }) => {
+      lockGuard(params.doan_id);
       const { error } = await externalSupabase
         .from("doan_booking_dv")
         .delete()

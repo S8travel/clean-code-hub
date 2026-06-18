@@ -12,7 +12,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import {
   useDoanNhomList, useCreateDoanNhom, useUpdateDoanNhom, useDeleteDoanNhom,
 } from "@/hooks/use-doan-nhom";
-import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
+import { useDoanLocked } from "@/hooks/use-doan-lock";
 import { useQueryClient } from "@tanstack/react-query";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -56,7 +56,7 @@ export default function SplitNhomModal({
   useTranslate();
   const qc = useQueryClient();
   // Đoàn đã quyết toán → chia/gộp nhóm sẽ ghi lại so_luong chi phí → khóa (trừ admin).
-  const locked = useChiPhiLocked(doanId);
+  const locked = useDoanLocked(doanId);
   const { data: nhomList = [] } = useDoanNhomList(doanId);
   const createMut = useCreateDoanNhom();
   const updateMut = useUpdateDoanNhom();

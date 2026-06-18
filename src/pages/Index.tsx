@@ -387,25 +387,27 @@ export default function Index() {
         }
         toast.success("Đã cập nhật đoàn");
       } else {
-        // Tường cứng theo VP: đoàn được đóng dấu VP nhà người tạo. Người tạo chưa có
-        // VP nhà → đoàn sẽ là van_phong_id=NULL → chỉ privileged thấy, OP không thấy.
+        // Tường cứng theo VP: đoàn được đóng dấu VP người tạo CHỌN trong drawer
+        // (mặc định = VP nhà). Không chọn VP → đoàn van_phong_id=NULL → OP không thấy.
         // Chặn sớm thay vì tạo "đoàn mồ côi".
-        if (currentUser?.van_phong_id == null) {
+        if (data.van_phong_id == null) {
           toast.error(
-            "Tài khoản của bạn chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin để gán VP nhà.",
+            currentUser?.van_phong_id == null && !scope.isPrivileged
+              ? "Tài khoản của bạn chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin để gán VP nhà."
+              : "Vui lòng chọn Văn phòng cho đoàn.",
           );
           return;
         }
         const markets = currentUser?.phan_loai_tour ?? null;
         if (markets && markets.length > 1) {
-          setPendingCreate({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null });
+          setPendingCreate({ ...data, shopping: false });
           return;
         }
         const thi_truong = markets && markets.length === 1 ? markets[0] : null;
         // KHÔNG tạo đoàn ngay — chỉ tạo sau khi xác nhận phân việc
         setDrawerOpen(false);
         setEditingDoan(null);
-        openPhanViec({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null, thi_truong });
+        openPhanViec({ ...data, shopping: false, thi_truong });
         return;
       }
       setDrawerOpen(false);

@@ -6,7 +6,7 @@ import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { resolveNhom1SoKhach } from "@/lib/doan-nhom-sync";
-import { isChiPhiLocked } from "@/lib/chi-phi-lock";
+import { isDoanLocked } from "@/lib/doan-lock";
 import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
 
 export interface Doan {
@@ -264,6 +264,39 @@ export function useDoanQuyetToanPaidSet() {
   });
 }
 
+// Set doan_id của các đoàn BỊ KHÓA: có ĐNTT quyết toán HDV đã KTT-duyệt
+// (ref_loai='hdv_quyet_toan' + trang_thai_duyet='da_duyet', tức KTT duyệt cấp 3) VÀ
+// admin CHƯA mở khóa (doan.quyet_toan_mo_khoa=false). Dùng cho khóa toàn đoàn
+// (useDoanLocked/useDoanLockGuard). KHÁC với useDoanQuyetToanPaidSet (paid) dùng cho
+// trạng thái hiển thị "Đã quyết toán".
+export function useDoanQuyetToanLockedSet() {
+  return useQuery({
+    queryKey: ["doan-qt-locked-set"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("dntt_with_payment_status")
+        .select("doan_id")
+        .eq("ref_loai", "hdv_quyet_toan")
+        .eq("trang_thai_duyet", "da_duyet");
+      if (error) throw error;
+      const approved = [
+        ...new Set((data ?? []).map((d) => d.doan_id).filter((x): x is number => x != null)),
+      ];
+      if (approved.length === 0) return new Set<number>();
+      // Loại các đoàn admin đã mở khóa tạm → vẫn editable.
+      const { data: unlocked, error: e2 } = await externalSupabase
+        .from("doan")
+        .select("id")
+        .in("id", approved)
+        .eq("quyet_toan_mo_khoa", true);
+      if (e2) throw e2;
+      const unlockedSet = new Set((unlocked ?? []).map((d) => d.id));
+      return new Set(approved.filter((id) => !unlockedSet.has(id)));
+    },
+  });
+}
+
 export function useUserRoles() {
   return useQuery({
     queryKey: ["user_roles"],
@@ -473,7 +506,7 @@ export function useCreateDoan() {
 export function useUpdateDoan() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
+  const { data: lockedSet } = useDoanQuyetToanLockedSet();
   return useMutation({
     mutationFn: async ({ id, ...updates }: DoanInsert & { id: number }) => {
       // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem + diff log
@@ -487,14 +520,25 @@ export function useUpdateDoan() {
       const oldTotal = (oldDoan.so_khach_lon ?? 0) + (oldDoan.so_khach_em1 ?? 0)
                     + (oldDoan.so_khach_em2 ?? 0) + (oldDoan.so_khach_tl ?? 0);
 
-      // Đoàn đã quyết toán: đổi số khách sẽ cascade sửa chi phí → chặn (trừ admin).
-      // Field khác (ghi chú, agent…) vẫn cho sửa.
-      const soKhachKeysGuard = ["so_khach_lon", "so_khach_em1", "so_khach_em2", "so_khach_tl"] as const;
-      const soKhachChangedGuard = soKhachKeysGuard.some(
+      // Đoàn đã khóa (KTT duyệt quyết toán): chặn sửa MỌI field nghiệp vụ (số khách,
+      // ngày, agent, HDV, xe, seri, chuyến bay, loại tuyến…). VẪN cho phép cập nhật cờ
+      // kế toán hậu quyết toán (da_check_quyet_toan, da_thu_visa), phân OP, trạng thái,
+      // ghi chú — và việc admin mở khóa (đi qua mutation riêng). Trừ admin.
+      // Hủy đoàn (trang_thai/agent_huy_id/ly_do_huy) KHÔNG nằm đây — chặn riêng ở
+      // useCancelDoan. Cờ kế toán (da_check_quyet_toan/da_thu_visa), phân OP, ghi chú
+      // → vẫn cho cập nhật sau quyết toán.
+      const LOCK_GUARDED_FIELDS = [
+        "ten_doan", "agent_id", "dia_diem_id", "huong_dan_vien_id",
+        "huong_dan_vien_id_2", "xe_id", "seri_id", "chuyen_bay_don", "chuyen_bay_tien",
+        "so_khach_lon", "so_khach_em1", "so_khach_em2", "so_khach_tl",
+        "ngay_di", "ngay_ve", "ghi_chu_dieu_tour", "loai_tour", "thi_truong", "shopping",
+        "van_phong_id",
+      ] as const;
+      const guardedChanged = LOCK_GUARDED_FIELDS.some(
         (k) => updates[k] !== undefined && updates[k] !== oldDoan[k],
       );
-      if (soKhachChangedGuard && isChiPhiLocked(user?.role ?? null, qtPaidSet ?? null, id)) {
-        throw new Error("Đoàn đã quyết toán — không thể đổi số khách (ảnh hưởng chi phí). Chỉ admin mới sửa được.");
+      if (guardedChanged && isDoanLocked(user?.role ?? null, lockedSet ?? null, id)) {
+        throw new Error("Đoàn đã quyết toán (KTT đã duyệt) — đã khóa. Cần admin mở khóa mới sửa được.");
       }
 
       // 1b. GUARD rút ngắn ngày tour: KHÔNG được cắt mất ngày đang có chi phí đã
@@ -945,8 +989,14 @@ export function useToggleDoanFlag() {
 
 export function useCancelDoan() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const { data: lockedSet } = useDoanQuyetToanLockedSet();
   return useMutation({
     mutationFn: async (id: number) => {
+      // Đoàn đã khóa quyết toán → không cho hủy (trừ admin mở khóa).
+      if (isDoanLocked(user?.role ?? null, lockedSet ?? null, id)) {
+        throw new Error("Đoàn đã quyết toán (KTT đã duyệt) — đã khóa. Cần admin mở khóa mới hủy được.");
+      }
       const { error } = await externalSupabase
         .from("doan")
         .update({ trang_thai: "huy" })
@@ -954,5 +1004,89 @@ export function useCancelDoan() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+  });
+}
+
+// Trạng thái khóa quyết toán của 1 đoàn (cho banner + nút admin trên DoanDetail).
+// kttApproved: có ĐNTT quyết toán HDV đã KTT-duyệt (da_duyet). moKhoa: admin đã mở khóa tạm.
+export interface DoanLockInfo {
+  kttApproved: boolean;
+  moKhoa: boolean;
+  moKhoaBoi: string | null;
+  moKhoaLuc: string | null;
+  moKhoaLyDo: string | null;
+}
+export function useDoanLockInfo(doanId?: number | null) {
+  return useQuery({
+    queryKey: ["doan-lock-info", doanId],
+    enabled: !!doanId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<DoanLockInfo> => {
+      const [dnttRes, doanRes] = await Promise.all([
+        externalSupabase
+          .from("dntt_with_payment_status")
+          .select("id")
+          .eq("doan_id", doanId!)
+          .eq("ref_loai", "hdv_quyet_toan")
+          .eq("trang_thai_duyet", "da_duyet")
+          .limit(1),
+        externalSupabase
+          .from("doan")
+          .select("quyet_toan_mo_khoa, quyet_toan_mo_khoa_boi, quyet_toan_mo_khoa_luc, quyet_toan_mo_khoa_ly_do")
+          .eq("id", doanId!)
+          .single(),
+      ]);
+      if (dnttRes.error) throw dnttRes.error;
+      if (doanRes.error) throw doanRes.error;
+      return {
+        kttApproved: (dnttRes.data ?? []).length > 0,
+        moKhoa: doanRes.data?.quyet_toan_mo_khoa ?? false,
+        moKhoaBoi: doanRes.data?.quyet_toan_mo_khoa_boi ?? null,
+        moKhoaLuc: doanRes.data?.quyet_toan_mo_khoa_luc ?? null,
+        moKhoaLyDo: doanRes.data?.quyet_toan_mo_khoa_ly_do ?? null,
+      };
+    },
+  });
+}
+
+// Admin mở khóa / khóa lại đoàn đã quyết toán (KTT đã duyệt). Chỉ admin.
+// moKhoa=true → đoàn editable lại; false → khóa lại theo trạng thái KTT-duyệt.
+export function useToggleQuyetToanMoKhoa() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async ({ doanId, moKhoa, lyDo }: { doanId: number; moKhoa: boolean; lyDo: string }) => {
+      if (user?.role !== "admin") {
+        throw new Error("Chỉ admin mới được mở khóa / khóa lại đoàn đã quyết toán.");
+      }
+      if (moKhoa && !lyDo.trim()) {
+        throw new Error("Vui lòng nhập lý do mở khóa.");
+      }
+      const { error } = await externalSupabase
+        .from("doan")
+        .update({
+          quyet_toan_mo_khoa: moKhoa,
+          quyet_toan_mo_khoa_boi: user?.user_id ?? null,
+          quyet_toan_mo_khoa_luc: new Date().toISOString(),
+          quyet_toan_mo_khoa_ly_do: moKhoa ? lyDo.trim() : null,
+        })
+        .eq("id", doanId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["doan-qt-locked-set"] });
+      qc.invalidateQueries({ queryKey: ["doan-lock-info", v.doanId] });
+      qc.invalidateQueries({ queryKey: ["doan"] });
+      const log = buildAuditLogger(user?.user_id, user?.ho_ten);
+      log({
+        doan_id: v.doanId,
+        action: "sua",
+        table_name: "doan",
+        record_id: v.doanId,
+        mo_ta: v.moKhoa
+          ? `Admin MỞ KHÓA đoàn đã quyết toán. Lý do: ${v.lyDo.trim()}`
+          : "Admin KHÓA LẠI đoàn đã quyết toán",
+      });
+    },
   });
 }

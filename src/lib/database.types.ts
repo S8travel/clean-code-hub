@@ -687,6 +687,10 @@ export type Database = {
           ngay_di: string | null
           ngay_ve: string | null
           nh_escalate_level: number
+          quyet_toan_mo_khoa: boolean
+          quyet_toan_mo_khoa_boi: string | null
+          quyet_toan_mo_khoa_luc: string | null
+          quyet_toan_mo_khoa_ly_do: string | null
           seri_id: number | null
           shopping: boolean | null
           so_khach: number | null
@@ -734,6 +738,10 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           nh_escalate_level?: number
+          quyet_toan_mo_khoa?: boolean
+          quyet_toan_mo_khoa_boi?: string | null
+          quyet_toan_mo_khoa_luc?: string | null
+          quyet_toan_mo_khoa_ly_do?: string | null
           seri_id?: number | null
           shopping?: boolean | null
           so_khach?: number | null
@@ -781,6 +789,10 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           nh_escalate_level?: number
+          quyet_toan_mo_khoa?: boolean
+          quyet_toan_mo_khoa_boi?: string | null
+          quyet_toan_mo_khoa_luc?: string | null
+          quyet_toan_mo_khoa_ly_do?: string | null
           seri_id?: number | null
           shopping?: boolean | null
           so_khach?: number | null

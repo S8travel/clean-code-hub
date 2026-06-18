@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
-import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
+import { useDoanLockGuard } from "@/hooks/use-doan-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { buildChiPhiChangeList } from "@/lib/chi-phi-diff";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
@@ -444,7 +444,7 @@ export function useChiPhiNHData(doanId?: number) {
 export function useUpdateChiPhiActual() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const lockGuard = useChiPhiLockGuard();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async (args: {
       id: number;
@@ -502,7 +502,7 @@ export function useUpdateChiPhiActual() {
 export function useUpsertChiPhi() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const lockGuard = useChiPhiLockGuard();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async (payload: Partial<ChiPhiRow> & { doan_id: number }) => {
       lockGuard(payload.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
@@ -559,7 +559,7 @@ export function useUpsertChiPhi() {
 export function useDeleteChiPhi() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const lockGuard = useChiPhiLockGuard();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
       lockGuard(doanId); // đoàn đã quyết toán → chặn (trừ admin)

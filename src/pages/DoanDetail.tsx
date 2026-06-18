@@ -11,7 +11,8 @@ import { t, useTranslate } from "@/lib/i18n";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDoanList, useDoanDetailRealtime } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
+import { useDoanList, useDoanDetailRealtime, useDoanLockInfo } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
+import { DoanQuyetToanLockBar } from "@/components/doan/DoanQuyetToanLockBar";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useCanhDiem,
@@ -71,11 +72,16 @@ export default function DoanDetail() {
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
   // FEATURE_DOAN_PERM_DISABLED: tạm tắt per-tour permission, dùng team-based thay thế
-  // Bật lại: bỏ comment 3 dòng dưới và xóa dòng `const canEdit = true`
+  // Bật lại: bỏ comment 3 dòng dưới và xóa dòng `const canEditBase = true`
   // const { data: doanPerms = [] } = useDoanPermissions(doanId || null);
   // const myPerm = doanPerms.find((p) => p.user_id === currentUser?.user_id);
-  // const canEdit = isAdmin || doanPerms.length === 0 || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
-  const canEdit = true;
+  // const canEditBase = isAdmin || doanPerms.length === 0 || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
+  const canEditBase = true;
+  // Khóa toàn đoàn khi KTT duyệt quyết toán HDV (admin chưa mở khóa). Admin luôn sửa được.
+  // fieldset[disabled] bên dưới disable toàn bộ control mọi tab; guard ở hook là lớp chặn thật.
+  const { data: lockInfo } = useDoanLockInfo(doanId || null);
+  const doanLocked = !!lockInfo && lockInfo.kttApproved && !lockInfo.moKhoa && !isAdmin;
+  const canEdit = canEditBase && !doanLocked;
 
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();
@@ -563,6 +569,8 @@ export default function DoanDetail() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+
+          {doanId != null && <DoanQuyetToanLockBar doanId={doanId} />}
 
           <fieldset disabled={!canEdit} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
           <TabsContent value="dieu-tour" className="mt-4 space-y-6">

@@ -2,6 +2,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import type { Json, TablesInsert, TablesUpdate } from "@/lib/database.types";
+import { useDoanLockGuard } from "@/hooks/use-doan-lock";
 
 export interface BookingNHRow {
   id: number;
@@ -190,8 +191,10 @@ export async function upsertBookingNHByDayMeal(
 
 export function useUpsertBookingNH() {
   const qc = useQueryClient();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async (row: Partial<BookingNHRow> & { doan_ngay_id: number; bua_an: string; doan_id: number }) => {
+      lockGuard(row.doan_id);
       const data = await upsertBookingNHByDayMeal(row);
 
       // Sync set_menu_id sang doan_ngay (tránh cascade Điều tour kéo cũ về)
@@ -213,8 +216,10 @@ export function useUpsertBookingNH() {
 
 export function useUpdateBookingNH() {
   const qc = useQueryClient();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async ({ id, doan_id, ...fields }: Partial<BookingNHRow> & { id: number; doan_id: number }) => {
+      lockGuard(doan_id);
       const { error } = await externalSupabase
         .from("doan_booking_nh")
         .update(fields as unknown as TablesUpdate<"doan_booking_nh">)
@@ -247,8 +252,10 @@ export function useUpdateBookingNH() {
 
 export function useDeleteBookingNH() {
   const qc = useQueryClient();
+  const lockGuard = useDoanLockGuard();
   return useMutation({
     mutationFn: async ({ id, doan_id }: { id: number; doan_id: number }) => {
+      lockGuard(doan_id);
       const { error } = await externalSupabase
         .from("doan_booking_nh")
         .delete()
