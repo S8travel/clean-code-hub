@@ -1249,6 +1249,7 @@ export type Database = {
           sent_at: string | null
           sent_by: string | null
           updated_at: string | null
+          xe_id: number | null
         }
         Insert: {
           booking_status?: string
@@ -1262,6 +1263,7 @@ export type Database = {
           sent_at?: string | null
           sent_by?: string | null
           updated_at?: string | null
+          xe_id?: number | null
         }
         Update: {
           booking_status?: string
@@ -1275,13 +1277,21 @@ export type Database = {
           sent_at?: string | null
           sent_by?: string | null
           updated_at?: string | null
+          xe_id?: number | null
         }
         Relationships: [
           {
             foreignKeyName: "doan_booking_xe_doan_id_fkey"
             columns: ["doan_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "doan"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_booking_xe_xe_id_fkey"
+            columns: ["xe_id"]
+            isOneToOne: false
+            referencedRelation: "nha_xe_loai_xe"
             referencedColumns: ["id"]
           },
         ]

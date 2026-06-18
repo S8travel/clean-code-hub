@@ -146,8 +146,9 @@ export default function BookingXeCard({
   const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(status);
   const isDirty = isActive && isMailDirty(booking?.sent_at, booking?.mail_content_hash, buildMailFields());
 
+  // xe_id BẮT BUỘC để upsert đúng booking của nhà xe này (mỗi xe 1 booking).
   const save = (updates: Partial<BookingXeRow>) =>
-    upsert.mutate({ doan_id: doanId, ...updates });
+    upsert.mutate({ doan_id: doanId, xe_id: xe?.id ?? null, ...updates });
 
   const handleDeadlineChange = (val: string) => {
     const corrected = blockWeekendDate(val);

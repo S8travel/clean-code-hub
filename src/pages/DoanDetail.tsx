@@ -706,6 +706,7 @@ export default function DoanDetail() {
               soKhachEm2={soKhachEm2}
               soKhachTl={soKhachTl}
               xe={doan.xe ?? null}
+              xe2={doan.xe_2 ?? null}
               dieuTourExportData={dieuTourExportData}
               loaiTour={doan.loai_tour}
             />

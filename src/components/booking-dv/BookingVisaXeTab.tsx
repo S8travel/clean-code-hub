@@ -31,6 +31,8 @@ interface Props {
   soKhachEm2?: number;
   soKhachTl?: number;
   xe?: XeInfo | null;
+  /** Xe phụ (nhà xe thứ 2) — đoàn dùng 2 xe. */
+  xe2?: XeInfo | null;
   dieuTourExportData?: DieuTourExportData | null;
   /** Loại tour — nội địa ẩn phần Visa (xem tourProfile). DB trả string thô. */
   loaiTour?: LoaiTour | string | null;
@@ -39,11 +41,14 @@ interface Props {
 export default function BookingVisaXeTab({
   doanId, tenDoan, ngayDi, ngayVe, chuyenBayDon, chuyenBayTien,
   hdvName, soKhach, soKhachLon = 0, soKhachEm1 = 0, soKhachEm2 = 0, soKhachTl = 0,
-  xe, dieuTourExportData, loaiTour,
+  xe, xe2, dieuTourExportData, loaiTour,
 }: Props) {
   useTranslate();
   const showVisa = tourProfile(loaiTour).showVisa;
-  const { data: xeBooking, isLoading: xeLoading } = useBookingXe(doanId);
+  const { data: xeBookings = [], isLoading: xeLoading } = useBookingXe(doanId);
+  // Mỗi nhà xe 1 booking (lọc theo xe_id của loại xe).
+  const bookingForXe = (x: XeInfo | null | undefined) =>
+    xeBookings.find((b) => b.xe_id === (x?.id ?? -1)) ?? null;
   const { data: visaList = [], isLoading: visaLoading } = useBookingVisaList(doanId);
   const { data: donViVisaList = [] } = useDonViVisaList(showVisa);
   const insertVisa = useInsertBookingVisa();
@@ -60,7 +65,7 @@ export default function BookingVisaXeTab({
 
   return (
     <div className="space-y-6">
-      {/* ── Section: Xe ─────────────────────────────────────────────── */}
+      {/* ── Section: Xe (mỗi nhà xe 1 card — đặt/gửi mail/trạng thái riêng) ── */}
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{t("Xe")}</h3>
         <BookingXeCard
@@ -73,9 +78,24 @@ export default function BookingVisaXeTab({
           hdvTen={hdvName}
           soKhach={soKhach}
           xe={xe ?? null}
-          booking={xeBooking ?? null}
+          booking={bookingForXe(xe)}
           exportData={dieuTourExportData ?? null}
         />
+        {xe2 && (
+          <BookingXeCard
+            doanId={doanId}
+            tenDoan={tenDoan}
+            ngayDi={ngayDi ?? null}
+            ngayVe={ngayVe ?? null}
+            chuyenBayDon={chuyenBayDon}
+            chuyenBayTien={chuyenBayTien}
+            hdvTen={hdvName}
+            soKhach={soKhach}
+            xe={xe2}
+            booking={bookingForXe(xe2)}
+            exportData={dieuTourExportData ?? null}
+          />
+        )}
       </div>
 
       {/* ── Section: Visa (ẩn cho tour nội địa — xem tourProfile) ─────── */}
