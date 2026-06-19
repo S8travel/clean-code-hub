@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildRedemptionMap, canApplyVoucher, type RedemptionLike } from "./voucher";
+import {
+  buildRedemptionMap,
+  canApplyVoucher,
+  resolveVoucherPrintAmount,
+  type RedemptionLike,
+} from "./voucher";
 
 describe("buildRedemptionMap", () => {
   it("map chi_phi_id → thông tin voucher (tên + loại + dnttId)", () => {
@@ -59,5 +64,46 @@ describe("canApplyVoucher", () => {
 
   it("chưa lưu chi phí (không có id) → không được áp", () => {
     expect(canApplyVoucher({ nguoiTt: "cong_ty", activeDnttCount: 0, hasChiPhiId: false })).toBe(false);
+  });
+});
+
+describe("resolveVoucherPrintAmount", () => {
+  it("mua + payment khớp giaTri → trừ đúng phần voucher", () => {
+    expect(
+      resolveVoucherPrintAmount({ voucherLoai: "mua", redeemGiaTri: 10281600, paymentVoucherAmount: 10281600 }),
+    ).toBe(10281600);
+  });
+
+  it("mua + cache payments STALE (=0) → vẫn trừ theo giaTri (fix tàu Sea Octopus)", () => {
+    expect(
+      resolveVoucherPrintAmount({ voucherLoai: "mua", redeemGiaTri: 10281600, paymentVoucherAmount: 0 }),
+    ).toBe(10281600);
+  });
+
+  it("mua + payment lớn hơn giaTri → lấy payment (max 2 chiều)", () => {
+    expect(
+      resolveVoucherPrintAmount({ voucherLoai: "mua", redeemGiaTri: 9000000, paymentVoucherAmount: 9500000 }),
+    ).toBe(9500000);
+  });
+
+  it("tang → 0 (suất chính đã bị loại khỏi bản in, không trừ thêm)", () => {
+    expect(
+      resolveVoucherPrintAmount({ voucherLoai: "tang", redeemGiaTri: 1200000, paymentVoucherAmount: 0 }),
+    ).toBe(0);
+  });
+
+  it("không có voucher → trả về payment voucher (thường 0)", () => {
+    expect(
+      resolveVoucherPrintAmount({ voucherLoai: null, redeemGiaTri: 0, paymentVoucherAmount: 0 }),
+    ).toBe(0);
+  });
+
+  it("giaTri null/âm → bỏ qua, không trừ âm", () => {
+    expect(
+      resolveVoucherPrintAmount({ voucherLoai: "mua", redeemGiaTri: null, paymentVoucherAmount: 0 }),
+    ).toBe(0);
+    expect(
+      resolveVoucherPrintAmount({ voucherLoai: "mua", redeemGiaTri: -5, paymentVoucherAmount: 0 }),
+    ).toBe(0);
   });
 });

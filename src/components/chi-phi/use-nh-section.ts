@@ -14,7 +14,7 @@ import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments"
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useRedemptionsByDoan, useRedeemVoucher, useUndoRedemption, type VoucherRow } from "@/hooks/use-voucher";
-import { buildRedemptionMap } from "@/lib/voucher";
+import { buildRedemptionMap, resolveVoucherPrintAmount } from "@/lib/voucher";
 import type { VoucherTarget } from "./DungVoucherModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -1225,13 +1225,24 @@ export function useNHSection({
           }
         }
 
-        // Phần suất chính trả bằng voucher (payment method='voucher' của ĐNTT đang in)
-        // → cộng vào cột Cấn trừ + trừ khỏi "số tiền còn thanh toán" (chỉ in phần cash).
-        const voucherAmount = activeDntt
+        // Phần suất chính trả bằng voucher → cộng vào cột Cấn trừ + trừ khỏi "số
+        // tiền còn thanh toán" (chỉ in phần cash). NGUỒN CHUẨN = redemption map
+        // (voucher_su_dung), KHÔNG chỉ dựa payment method='voucher': cache
+        // payments-by-chi-phi hay stale lúc bấm In (hoặc payment voucher chưa kịp
+        // ghi) → trước đây bản in QUÊN trừ voucher, in đủ tiền (vd tàu Sea Octopus
+        // ĐNTT 16.3tr nhưng phải in còn 6tr cash). resolveVoucherPrintAmount lấy
+        // max(payment, giaTri) cho voucher 'mua' → cache-independent.
+        const voucherPayAmount = activeDntt
           ? paymentsList
               .filter((p) => p.dntt_id === activeDntt.id && p.method === "voucher")
               .reduce((s, p) => s + p.payment_so_tien, 0)
           : 0;
+        const redInfoPrint = chiPhiId != null ? redemptionByChiPhiId[chiPhiId] : undefined;
+        const voucherAmount = resolveVoucherPrintAmount({
+          voucherLoai: redInfoPrint?.voucherLoai ?? null,
+          redeemGiaTri: redInfoPrint?.giaTri,
+          paymentVoucherAmount: voucherPayAmount,
+        });
 
         // Số tiền cần thanh toán: có pending → đúng so_tien ĐNTT đó (trừ cấn trừ + voucher);
         // không có → in phần còn lại = tổng meal − cọc đã trả − cấn trừ − voucher.
