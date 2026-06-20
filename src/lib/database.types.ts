@@ -176,6 +176,8 @@ export type Database = {
           dia_diem: string | null
           don_vi: string | null
           email: string | null
+          foc_khach: number | null
+          foc_mien: number | null
           ghi_chu: string | null
           gia_mac_dinh: number | null
           icon: string | null
@@ -196,6 +198,8 @@ export type Database = {
           dia_diem?: string | null
           don_vi?: string | null
           email?: string | null
+          foc_khach?: number | null
+          foc_mien?: number | null
           ghi_chu?: string | null
           gia_mac_dinh?: number | null
           icon?: string | null
@@ -216,6 +220,8 @@ export type Database = {
           dia_diem?: string | null
           don_vi?: string | null
           email?: string | null
+          foc_khach?: number | null
+          foc_mien?: number | null
           ghi_chu?: string | null
           gia_mac_dinh?: number | null
           icon?: string | null

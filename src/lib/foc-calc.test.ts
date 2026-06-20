@@ -7,6 +7,7 @@ import {
   resolveKSFoc,
   calcSoKhachThucTe,
   resolveNHFoc,
+  resolveDVFoc,
   resolveNHChietKhau,
   type KSFocRow,
 } from "./foc-calc";
@@ -224,6 +225,31 @@ describe("resolveNHFoc", () => {
   });
   it("snapshot = 0 hợp lệ → trust snapshot", () => {
     expect(resolveNHFoc({ foc_khach_snapshot: 0, foc_mien_snapshot: 0 }, nh))
+      .toEqual({ foc_khach: 0, foc_mien: 0 });
+  });
+});
+
+// ─── resolveDVFoc ────────────────────────────────────────────────────────────
+
+describe("resolveDVFoc", () => {
+  const cd = { foc_khach: 15, foc_mien: 1 };
+
+  it("row null → dùng master canh_diem", () => {
+    expect(resolveDVFoc(null, cd)).toEqual({ foc_khach: 15, foc_mien: 1 });
+  });
+  it("row không có snapshot → dùng master", () => {
+    expect(resolveDVFoc({ foc_khach_snapshot: null, foc_mien_snapshot: null }, cd))
+      .toEqual({ foc_khach: 15, foc_mien: 1 });
+  });
+  it("master null → {null, null}", () => {
+    expect(resolveDVFoc(null, null)).toEqual({ foc_khach: null, foc_mien: null });
+  });
+  it("row có snapshot → ưu tiên snapshot (lock per-tour)", () => {
+    expect(resolveDVFoc({ foc_khach_snapshot: 20, foc_mien_snapshot: 2 }, cd))
+      .toEqual({ foc_khach: 20, foc_mien: 2 });
+  });
+  it("snapshot = 0 hợp lệ (OP clear) → trust snapshot, KHÔNG fallback master", () => {
+    expect(resolveDVFoc({ foc_khach_snapshot: 0, foc_mien_snapshot: 0 }, cd))
       .toEqual({ foc_khach: 0, foc_mien: 0 });
   });
 });

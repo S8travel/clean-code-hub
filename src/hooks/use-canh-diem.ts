@@ -9,6 +9,8 @@ export interface CanhDiem {
   gia_mac_dinh: number | null;
   don_vi: string | null;
   co_phi: boolean | null;
+  foc_khach: number | null;
+  foc_mien: number | null;
   ghi_chu: string | null;
   thong_tin_chung: string | null;
   nguoi_thanh_toan: string | null;

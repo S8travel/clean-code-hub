@@ -37,6 +37,8 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   const [coPhi, setCoPhi] = useState(false);
   const [giaMacDinh, setGiaMacDinh] = useState("");
   const [donVi, setDonVi] = useState("");
+  const [focKhach, setFocKhach] = useState("");
+  const [focMien, setFocMien] = useState("");
   const [nguoiThanhToan, setNguoiThanhToan] = useState("");
   const [email, setEmail] = useState("");
   const [taiKhoanThanhToan, setTaiKhoanThanhToan] = useState("");
@@ -54,6 +56,8 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     setCoPhi(canhDiem.co_phi ?? false);
     setGiaMacDinh(canhDiem.gia_mac_dinh?.toString() || "");
     setDonVi(canhDiem.don_vi || "");
+    setFocKhach(canhDiem.foc_khach?.toString() || "");
+    setFocMien(canhDiem.foc_mien?.toString() || "");
     setNguoiThanhToan(canhDiem.nguoi_thanh_toan || "");
     setEmail(canhDiem.email || "");
     setTaiKhoanThanhToan(canhDiem.tai_khoan_thanh_toan || "");
@@ -80,6 +84,8 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           co_phi: coPhi,
           gia_mac_dinh: coPhi && giaMacDinh ? Number(giaMacDinh) : null,
           don_vi: coPhi ? donVi || null : null,
+          foc_khach: coPhi && focKhach ? Number(focKhach) : null,
+          foc_mien: coPhi && focMien ? Number(focMien) : null,
           nguoi_thanh_toan: coPhi ? nguoiThanhToan || null : null,
           email: email || null,
           tai_khoan_thanh_toan: taiKhoanThanhToan || null,
@@ -169,6 +175,27 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
                 <SelectItem value="hdv">Hướng dẫn viên</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-xs flex items-center gap-2">
+              FOC (miễn phí)
+              <span className="text-[11px] font-normal text-muted-foreground italic">
+                cứ X khách miễn Y suất — mặc định khi tạo chi phí (sửa lại được ở tour)
+              </span>
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number" min={0} value={focKhach}
+                onChange={(e) => setFocKhach(e.target.value)}
+                placeholder="X khách" className="h-9 text-sm w-28"
+              />
+              <span className="text-sm text-muted-foreground">免</span>
+              <Input
+                type="number" min={0} value={focMien}
+                onChange={(e) => setFocMien(e.target.value)}
+                placeholder="Y suất" className="h-9 text-sm w-28"
+              />
+            </div>
           </div>
         </div>
       )}

@@ -189,6 +189,8 @@ export interface CanhDiemInfo {
   loai: string | null;
   co_phi: boolean | null;
   gia_mac_dinh: number | null;
+  foc_khach: number | null;
+  foc_mien: number | null;
   dia_diem: string | null;
   ghi_chu: string | null;
   thong_tin_chung: string | null;
@@ -206,7 +208,7 @@ export function useDVCanhDiemMap(doanId?: number): Record<number, CanhDiemInfo> 
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("doan_ngay_item")
-        .select("id, canh_diem:canh_diem_id(id, ten, loai, co_phi, gia_mac_dinh, dia_diem, ghi_chu, thong_tin_chung, so_dien_thoai, email, nguoi_thanh_toan)")
+        .select("id, canh_diem:canh_diem_id(id, ten, loai, co_phi, gia_mac_dinh, foc_khach, foc_mien, dia_diem, ghi_chu, thong_tin_chung, so_dien_thoai, email, nguoi_thanh_toan)")
         .eq("doan_id", doanId!);
       if (error) throw error;
       const map: Record<number, CanhDiemInfo> = {};

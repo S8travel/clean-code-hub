@@ -122,6 +122,27 @@ export function resolveNHFoc(
   };
 }
 
+// ─── Dịch vụ / cảnh điểm (FOC theo công thức floor số khách, mirror nhà hàng) ──
+
+// Resolve FOC dịch vụ: snapshot trên row (lock per-tour) > master canh_diem.
+// Cùng cấu trúc resolveNHFoc nhưng master là canh_diem.foc_*. Tách riêng để
+// đặt tên đúng ngữ nghĩa (DV ≠ NH) và để 2 nhánh có thể rẽ sau này nếu cần.
+export function resolveDVFoc(
+  row: { foc_khach_snapshot?: number | null; foc_mien_snapshot?: number | null } | null | undefined,
+  cd: { foc_khach: number | null; foc_mien: number | null } | null | undefined,
+): { foc_khach: number | null; foc_mien: number | null } {
+  if (row && (row.foc_khach_snapshot != null || row.foc_mien_snapshot != null)) {
+    return {
+      foc_khach: row.foc_khach_snapshot ?? null,
+      foc_mien:  row.foc_mien_snapshot  ?? null,
+    };
+  }
+  return {
+    foc_khach: cd?.foc_khach ?? null,
+    foc_mien:  cd?.foc_mien  ?? null,
+  };
+}
+
 // Resolve chiết khấu nhà hàng: snapshot > master. Lock per-tour.
 // Lưu ý: snapshot = 0 là giá trị HỢP LỆ (OP clear ô) → KHÔNG fallback master.
 export function resolveNHChietKhau(
