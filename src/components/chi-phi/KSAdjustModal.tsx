@@ -16,7 +16,7 @@ import { type LocalKSRow } from "./ks-section-shared";
 import { isKSRoomRow } from "@/lib/foc-calc";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface Props {
   open: boolean;

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useVoucherByNCC, type VoucherRow } from "@/hooks/use-voucher";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 /** Dòng chi phí đang muốn đổi voucher. coverValue = giá trị công ty sẽ ghi nhận. */
 export interface VoucherTarget {

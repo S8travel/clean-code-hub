@@ -4,7 +4,7 @@
 import { format, getDay } from "date-fns";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 
-export const fmt = (n: number) => n.toLocaleString("vi-VN");
+export const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 export function fmtDateDisplay(d: string) {
   if (!d) return "—";

@@ -10,7 +10,7 @@ import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 export interface AggCommitTarget {
   mainRow: ChiPhiRow;

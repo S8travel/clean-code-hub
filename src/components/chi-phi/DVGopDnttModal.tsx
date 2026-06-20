@@ -20,7 +20,7 @@ import { type CanTruSelection } from "./KSCongNoPanel";
 import { useQueryClient } from "@tanstack/react-query";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 /** Khối cấn trừ công nợ cho 1 nhóm NCC — tự ẩn khi NCC không có công nợ còn dư. */
 function GopCanTruSection({

@@ -6,7 +6,7 @@ import { AlertCircle } from "lucide-react";
 import type { CanTruSelection } from "./KSCongNoPanel";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 function extractDoanFromGhiChu(ghi_chu: string | null | undefined): string | null {
   if (!ghi_chu) return null;

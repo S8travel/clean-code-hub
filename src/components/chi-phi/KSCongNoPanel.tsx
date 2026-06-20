@@ -7,7 +7,7 @@ import {
 import { AlertCircle } from "lucide-react";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 // Khoản dư cũ chưa link doan (data legacy import) lưu mã đoàn vào ghi_chu
 // theo format "Đoàn: <ma>". Extract ra để hiển thị thân thiện.
