@@ -522,7 +522,10 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           .in("id", dnttIds);
         const activeIds = new Set(
           (dnttRows ?? [])
-            .filter((d) => d.trang_thai_duyet !== "da_huy")
+            // Loại cả da_huy LẪN tu_choi — ĐNTT từ chối là record chết, RPC
+            // recalc cũng loại nó khỏi so_tien_da_dntt. Nếu chỉ loại da_huy →
+            // sau khi từ chối ĐNTT, tạo lại bị cảnh báo "TRÙNG" ảo.
+            .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
             .map((d) => d.id),
         );
         committed = (allocRows ?? [])
