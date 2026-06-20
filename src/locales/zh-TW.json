@@ -913,6 +913,8 @@
   "Phòng": "房",
   "Reset override → sync lại từ Điều tour lần save tới": "重設覆寫 → 下次儲存時從排團同步",
   "Reset override → sync lại từ Điều tour ngay": "重設覆寫 → 立即從排團同步",
+  "Áp FOC": "套用 FOC",
+  "Áp FOC từ danh mục cảnh điểm vào chi phí (tính lại tiền)": "從景點目錄套用 FOC 到費用（重新計算金額）",
   "SL": "數量",
   "Sau điều chỉnh": "調整後",
   "Số phòng miễn phí (OP tự nhập). Gợi ý 16免1 hiện ở header ngày.": "免費房數（OP 自行輸入）。提示 16免1 顯示在日期表頭。",

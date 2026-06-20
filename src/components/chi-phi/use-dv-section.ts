@@ -285,9 +285,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const local = editRowRef.current[row.id];
     if (!local) return;
     if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
-    // FOC dịch vụ: tien tính trên số khách SAU TRỪ FOC (snapshot trên row > master).
-    const cdMaster = row.ref_doan_ngay_item_id ? dvCdMap[row.ref_doan_ngay_item_id] : null;
-    const foc = resolveDVFoc(row, cdMaster);
+    // FOC dịch vụ: tien tính trên số khách SAU TRỪ FOC (chỉ snapshot trên row).
+    const foc = resolveDVFoc(row);
     const billed = calcSoKhachThucTe(local.so_luong, foc.foc_khach, foc.foc_mien);
     const total = billed * local.don_gia;
     const isHDV = row.tien_hdv > 0;
@@ -330,8 +329,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const newSoLuong = item.so_luong ?? 0;
     const newDonGia  = item.don_gia ?? 0;
     // Reset giữ nguyên FOC snapshot trên row → tính lại tien theo FOC cho khớp cascade.
-    const cdMaster = row.ref_doan_ngay_item_id ? dvCdMap[row.ref_doan_ngay_item_id] : null;
-    const foc = resolveDVFoc(row, cdMaster);
+    const foc = resolveDVFoc(row);
     const billed = calcSoKhachThucTe(newSoLuong, foc.foc_khach, foc.foc_mien);
     const newTotal = billed * newDonGia;
     upsertMut.mutate({
@@ -343,6 +341,25 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       tien_hdv:     isHdv ? newTotal : 0,
       is_overridden: false,
       thanh_tien_thuc_te: null,
+    });
+  };
+
+  // Áp FOC từ master canh_diem vào 1 dòng đoàn cũ (chưa có snapshot): ghi snapshot +
+  // tính lại tien_cong_ty/hdv NGAY (1 lần, có chủ đích) → display/ĐNTT/aggregate khớp.
+  const handleApplyMasterFoc = (row: typeof dvRows[0], focKhach: number, focMien: number) => {
+    const billed = calcSoKhachThucTe(row.so_luong, focKhach, focMien);
+    const total = billed * row.don_gia;
+    const isHdv = row.tien_hdv > 0;
+    upsertMut.mutate({
+      id: row.id,
+      doan_id: doanId,
+      foc_khach_snapshot: focKhach,
+      foc_mien_snapshot: focMien,
+      tien_cong_ty: isHdv ? 0 : total,
+      tien_hdv:     isHdv ? total : 0,
+      thanh_tien_thuc_te: null,
+    }, {
+      onSuccess: () => toast.success(`Đã áp FOC ${focKhach}免${focMien} — đã tính lại tiền`),
     });
   };
 
@@ -833,9 +850,9 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           // sẽ lấy tên dịch vụ per-dòng từ item.ghi_chu (multi_service).
           ten_nh: isGop ? (nccFinal?.ten ?? "Gộp dịch vụ") : (first.mo_ta || "Dịch vụ"),
           so_khach: isGop ? first.so_luong : soKhachSum,
-          // FOC dịch vụ của dòng main (snapshot > master canh_diem) — in cột "miễn".
+          // FOC dịch vụ của dòng main (chỉ snapshot — khớp tien_cong_ty in bản ĐNTT).
           ...(() => {
-            const f = resolveDVFoc(first, first.ref_doan_ngay_item_id ? dvCdMap[first.ref_doan_ngay_item_id] : null);
+            const f = resolveDVFoc(first);
             return { foc_khach: f.foc_khach, foc: f.foc_mien };
           })(),
           items,
@@ -879,7 +896,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   };
   const dvHandlers: DVRowHandlers = {
     getRowEdit, getDateLabel, setSelectedIds, toggleSelectRow, handleRowChange, handleRowSave,
-    handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
+    handleResetOverride, handleApplyMasterFoc, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
     setAggSurplusMode, setAggCanTru, setAggNgayCan,
