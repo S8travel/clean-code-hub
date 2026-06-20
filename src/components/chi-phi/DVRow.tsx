@@ -73,6 +73,7 @@ export interface DVRowHandlers {
   handleRowChange: (id: number | undefined, field: "so_luong" | "don_gia", v: number) => void;
   handleRowSave: (row: ChiPhiRow) => void;
   handleResetOverride: (row: ChiPhiRow) => void;
+  handleApplyMasterFoc: (row: ChiPhiRow, focKhach: number, focMien: number) => void;
   handleToggleNguoiTt: (row: ChiPhiRow) => void;
   setEditAmount: (v: string) => void;
   setEditingId: (v: number | null) => void;
@@ -112,7 +113,7 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   } = data;
   const {
     getRowEdit, getDateLabel, setSelectedIds, toggleSelectRow, handleRowChange, handleRowSave,
-    handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
+    handleResetOverride, handleApplyMasterFoc, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
     setAggSurplusMode, setAggCanTru, setAggNgayCan,
@@ -120,14 +121,23 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   } = handlers;
 
   const local = getRowEdit(row);
-  // FOC dịch vụ: snapshot trên row > master canh_diem. Thành tiền hiển thị = số
-  // khách SAU TRỪ FOC × đơn giá (khớp tien_cong_ty đã tính ở handleRowSave/cascade).
-  const cdMaster = row.ref_doan_ngay_item_id ? dvCdMap[row.ref_doan_ngay_item_id] : null;
-  const focResolved = resolveDVFoc(row, cdMaster);
+  // FOC dịch vụ: CHỈ đọc snapshot trên row (không fallback master) → Thành tiền hiển
+  // thị KHỚP tien_cong_ty đã lưu (đã trừ FOC ở handleRowSave/cascade/áp danh mục).
+  const focResolved = resolveDVFoc(row);
   const billedSoLuong = calcSoKhachThucTe(local.so_luong, focResolved.foc_khach, focResolved.foc_mien);
   const focMienSo = local.so_luong - billedSoLuong;
   const thanhTienLocal = billedSoLuong * local.don_gia;
   const nguoiTt = row.tien_hdv > 0 ? "hdv" : "cong_ty";
+
+  // Đoàn cũ (tạo trước khi cảnh điểm có FOC) → chưa có snapshot. Nếu master canh_diem
+  // CÓ FOC → gợi ý nút "áp" để snapshot + tính lại tien (1 lần, có chủ đích). KHÔNG
+  // tự lấy master vào compute (tránh phantom FOC: hiển thị có nhưng tien_cong_ty chưa trừ).
+  const cdMaster = row.ref_doan_ngay_item_id ? dvCdMap[row.ref_doan_ngay_item_id] : null;
+  const hasFocSnapshot = row.foc_khach_snapshot != null || row.foc_mien_snapshot != null;
+  const masterFocKhach = cdMaster?.foc_khach ?? null;
+  const masterFocMien = cdMaster?.foc_mien ?? null;
+  const canSuggestMasterFoc =
+    !hasFocSnapshot && !!masterFocKhach && !!masterFocMien && !locked;
 
   // Map dòng → ĐNTT qua ALLOCATION (không chỉ ref_id) → dòng nằm trong ĐNTT gộp
   // (ref_id trỏ dòng khác) vẫn nhận diện đúng ĐNTT của mình.
@@ -251,6 +261,17 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
             focMien={focResolved.foc_mien}
             disabled={locked}
           />
+        )}
+        {canSuggestMasterFoc && row.id != null && (
+          <button
+            type="button"
+            onClick={() => handleApplyMasterFoc(row, masterFocKhach!, masterFocMien!)}
+            disabled={upsertMut.isPending}
+            title={t("Áp FOC từ danh mục cảnh điểm vào chi phí (tính lại tiền)")}
+            className="ml-1 mt-0.5 inline-flex items-center rounded border border-amber-300 bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {t("Áp FOC")} {masterFocKhach}免{masterFocMien}
+          </button>
         )}
       </td>
 

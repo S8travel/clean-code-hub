@@ -124,22 +124,18 @@ export function resolveNHFoc(
 
 // ─── Dịch vụ / cảnh điểm (FOC theo công thức floor số khách, mirror nhà hàng) ──
 
-// Resolve FOC dịch vụ: snapshot trên row (lock per-tour) > master canh_diem.
-// Cùng cấu trúc resolveNHFoc nhưng master là canh_diem.foc_*. Tách riêng để
-// đặt tên đúng ngữ nghĩa (DV ≠ NH) và để 2 nhánh có thể rẽ sau này nếu cần.
+// Resolve FOC dịch vụ cho COMPUTE/HIỂN THỊ: CHỈ đọc snapshot trên row (lock per-tour).
+// KHÔNG fallback master canh_diem — nếu fallback, đoàn cũ (chưa snapshot) sẽ HIỂN THỊ
+// FOC từ master nhưng `tien_cong_ty` lưu trong DB lại là gross (chưa tính lại) → ĐNTT
+// + aggregate đọc tien_cong_ty thành ra "không nhận FOC", lệch với phần hiển thị.
+// Master chỉ dùng làm DEFAULT lúc điều tour cascade INSERT (snapshot + tính tien 1 lần)
+// hoặc khi OP bấm "áp FOC từ danh mục" — cả 2 đều ghi snapshot + tính lại tien cùng lúc.
 export function resolveDVFoc(
   row: { foc_khach_snapshot?: number | null; foc_mien_snapshot?: number | null } | null | undefined,
-  cd: { foc_khach: number | null; foc_mien: number | null } | null | undefined,
 ): { foc_khach: number | null; foc_mien: number | null } {
-  if (row && (row.foc_khach_snapshot != null || row.foc_mien_snapshot != null)) {
-    return {
-      foc_khach: row.foc_khach_snapshot ?? null,
-      foc_mien:  row.foc_mien_snapshot  ?? null,
-    };
-  }
   return {
-    foc_khach: cd?.foc_khach ?? null,
-    foc_mien:  cd?.foc_mien  ?? null,
+    foc_khach: row?.foc_khach_snapshot ?? null,
+    foc_mien:  row?.foc_mien_snapshot  ?? null,
   };
 }
 
