@@ -698,10 +698,11 @@ export function useUpdateDoan() {
           if (td === "cho_duyet" || td === "da_duyet") committedDnttAffected++;
 
           const isHdv = Number(cp.tien_hdv) > 0;
-          // NH: PHẢI trừ FOC + CK (snapshot per-row) — trước đây dùng
-          // newSoLuong*don_gia thô → tien_cong_ty không khớp "Thành tiền"/ĐNTT
-          // (đều trừ FOC) → badge "DNTT lệch" ảo sau rebooking. canh_diem/bao_hiem
-          // không có FOC/CK → giữ công thức thô.
+          // PHẢI trừ FOC khi rebooking, nếu không tien_cong_ty (gross) sẽ KHÔNG khớp
+          // "Thành tiền"/ĐNTT (đều trừ FOC) → modal/đối soát đọc số gross sai.
+          // - NH: trừ FOC + CK (snapshot per-row).
+          // - DV (canh_diem): trừ FOC (snapshot per-row) từ 2026-06-20, KHÔNG có CK.
+          // - bao_hiem: không FOC → giữ công thức thô.
           let newTotalCp: number;
           if (cp.danh_muc === "nha_hang") {
             const skTT = calcSoKhachThucTe(
@@ -710,6 +711,13 @@ export function useUpdateDoan() {
               cp.foc_mien_snapshot ?? null,
             );
             newTotalCp = applyChietKhau(skTT * Number(cp.don_gia ?? 0), cp.chiet_khau_phan_tram_snapshot ?? null);
+          } else if (cp.danh_muc === "canh_diem") {
+            const skTT = calcSoKhachThucTe(
+              newSoLuong,
+              cp.foc_khach_snapshot ?? null,
+              cp.foc_mien_snapshot ?? null,
+            );
+            newTotalCp = skTT * Number(cp.don_gia ?? 0);
           } else {
             newTotalCp = newSoLuong * Number(cp.don_gia ?? 0);
           }
