@@ -87,18 +87,21 @@ function vnWordsToNumber(phrase: string): number | null {
     .filter((w) => w !== "linh" && w !== "le"); // lẻ/linh = 0 chục — bỏ
   let total = 0;
   let group = 0;
-  let cur = 0;
+  // cur = null khi CHƯA gặp chữ số (vd "trăm" đứng 1 mình do OCR rớt số → ngầm 1).
+  // cur = 0 khi gặp "không" (vd "không trăm" = 0 trăm, KHÔNG phải 1 trăm). Dùng
+  // (cur ?? 1) thay (cur || 1) để phân biệt 2 ca này — nếu không "không trăm" ra 100.
+  let cur: number | null = null;
   let sawAny = false;
   for (const w of toks) {
     if (w in VN_UNIT) { cur = VN_UNIT[w]; sawAny = true; }
-    else if (w === "muoi" || w === "muop") { group += (cur || 1) * 10; cur = 0; sawAny = true; }
-    else if (w === "tram") { group += (cur || 1) * 100; cur = 0; sawAny = true; }
-    else if (w === "nghin" || w === "ngan") { total += (group + cur) * 1_000; group = 0; cur = 0; }
-    else if (w === "trieu") { total += (group + cur) * 1_000_000; group = 0; cur = 0; }
-    else if (w === "ty" || w === "ti") { total += (group + cur) * 1_000_000_000; group = 0; cur = 0; }
+    else if (w === "muoi" || w === "muop") { group += (cur ?? 1) * 10; cur = null; sawAny = true; }
+    else if (w === "tram") { group += (cur ?? 1) * 100; cur = null; sawAny = true; }
+    else if (w === "nghin" || w === "ngan") { total += (group + (cur ?? 0)) * 1_000; group = 0; cur = null; }
+    else if (w === "trieu") { total += (group + (cur ?? 0)) * 1_000_000; group = 0; cur = null; }
+    else if (w === "ty" || w === "ti") { total += (group + (cur ?? 0)) * 1_000_000_000; group = 0; cur = null; }
     else if (w === "dong" || w === "chan" || w === "vnd" || w === "vnđ") break;
   }
-  total += group + cur;
+  total += group + (cur ?? 0);
   return sawAny && total > 0 ? total : null;
 }
 
@@ -190,24 +193,15 @@ export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
     amount = sep[0] ?? null;
   }
 
-  // 3) Rule MỚI — CHỈ khi chứng từ có nhãn "Số tiền bằng chữ:" (mẫu Giấy báo
-  // nợ / Debit Advice). Đọc số từ chữ → miễn nhiễm lỗi OCR chữ số (55→155).
-  // KHÔNG đụng rule cũ: UNC eFAST app KHÔNG có nhãn này → words=null → vẫn
-  // dùng số đọc ở (1)/(2). Hai rule chạy song song.
-  const wordsAmount = parseAmountInWords(raw);
+  // 3) Số tiền bằng CHỮ là số tiền CHUẨN — OCR chữ tiếng Việt ổn định hơn chữ số
+  // (chữ số hay bị viền/nhiễu đọc nhầm: 3↔5, thêm/mất "1"). Thử nhãn "Số tiền bằng
+  // chữ:" (Giấy báo nợ) trước, rồi tới "<words> đồng" (UNC eFAST KHÔNG có nhãn nhưng
+  // luôn có dòng số viết bằng chữ kết bằng "đồng"). Đọc được CHỮ hợp lệ → ƯU TIÊN,
+  // ghi đè số đọc ở (1)/(2) — KỂ CẢ khi 2 bên LỆCH nhau (đó chính là lúc chữ số OCR
+  // sai). Không đọc được chữ → giữ số ở (1)/(2).
+  const wordsAmount = parseAmountInWords(raw) ?? parseAmountFromDongWord(raw);
   if (wordsAmount != null && wordsAmount >= MIN_AMOUNT && wordsAmount <= MAX_AMOUNT) {
     amount = wordsAmount;
-  }
-
-  // 4) FALLBACK cuối — khi 1/2/3 đều fail: trích từ "<words> đồng".
-  // UNC eFAST không có "bằng chữ" label nhưng luôn có dòng amount-in-words
-  // kết bằng "đồng". Bắt mọi mismatch separator OCR (vd "29.600,000" → ?,
-  // "7128,000" → ?) bằng cách đọc chữ.
-  if (amount == null) {
-    const dongAmount = parseAmountFromDongWord(raw);
-    if (dongAmount != null && dongAmount >= MIN_AMOUNT && dongAmount <= MAX_AMOUNT) {
-      amount = dongAmount;
-    }
   }
 
   return { amount, text };

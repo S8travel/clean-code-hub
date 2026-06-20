@@ -46,6 +46,12 @@ describe("parseAmountInWords — đọc 'Số tiền bằng chữ: <…> đồng
     const text = "Số tiền bằng chữ: một trăm sóu mươi nghìn đồng";
     expect(parseAmountInWords(text)).toBe(160_000);
   });
+
+  it("'không trăm' = 0 trăm (KHÔNG phải 1 trăm)", () => {
+    // Ba triệu KHÔNG TRĂM hai mươi bốn nghìn = 3.024.000 (không phải 3.124.000)
+    const text = "Số tiền bằng chữ: ba triệu không trăm hai mươi bốn nghìn đồng";
+    expect(parseAmountInWords(text)).toBe(3_024_000);
+  });
 });
 
 describe("parseAmountFromDongWord — fallback không cần nhãn 'bằng chữ'", () => {
@@ -73,5 +79,14 @@ describe("parseAmountFromDongWord — fallback không cần nhãn 'bằng chữ'
   it("KHÔNG nhầm 'CÔNG TY' thành 'đồng' (fuzzy match có guard)", () => {
     // "cong" cách "dong" 1 ký tự — rawToks dùng lastIndexOf("dong") không fuzzy
     expect(parseAmountFromDongWord("CONG TY TNHH ABC")).toBeNull();
+  });
+
+  it("'không trăm' qua đường 'đồng' (UNC eFAST không nhãn) = 3.024.000", () => {
+    // Ca thực tế: OCR đọc chữ số nhầm 3→5 (5.024.000), nhưng đọc CHỮ đúng.
+    // "hơi" OCR sai của "hai" → fuzzy map về "hai".
+    const text =
+      "S8 tt CTCP du lich ABC code 291726 doan AGENT-ELU-HAN5D-0623 " +
+      "Ba triệu không trăm hơi mươi bốn nghìn đồng";
+    expect(parseAmountFromDongWord(text)).toBe(3_024_000);
   });
 });
