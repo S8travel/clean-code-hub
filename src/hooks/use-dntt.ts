@@ -368,6 +368,37 @@ export function useApproveDNTT() {
 // Từ chối: track ai/khi nào/cấp nào reject. Cấp đã duyệt trước đó GIỮ NGUYÊN
 // để UI vẫn show "✓ Tên + thời gian" cho cấp đã pass — chỉ cấp bị reject hiện
 // "✗ Từ chối + Tên + thời gian", các cấp sau hiện "—".
+// Khôi phục cong_no nguồn khi ĐNTT bị từ chối/hủy: xóa can_tru payments + xóa log
+// cấn trừ + reset trạng thái cong_no 'da_can_tru' → 'con_du'. Nếu giữ lại can_tru
+// payment trên ĐNTT chết → cong_no nguồn bị kẹt (so_tien_da_dung tính từ payments).
+async function releaseCanTruPayments(
+  canTruPayments: Array<{ id: number; so_tien: number | string; cong_no_id: number | null }>,
+  tenDoan: string,
+): Promise<void> {
+  if (canTruPayments.length === 0) return;
+  const ids = canTruPayments.map((p) => p.id);
+  const affectedCongNoIds = [
+    ...new Set(canTruPayments.filter((p) => p.cong_no_id != null).map((p) => p.cong_no_id as number)),
+  ];
+  const { removeCanTruLog } = await import("@/hooks/use-cong-no");
+  for (const p of canTruPayments) {
+    if (p.cong_no_id != null && tenDoan) {
+      await removeCanTruLog(p.cong_no_id, Number(p.so_tien), tenDoan);
+    }
+  }
+  await externalSupabase.from("payments").delete().in("id", ids);
+  for (const cnId of affectedCongNoIds) {
+    const { data: cnRow } = await externalSupabase
+      .from("cong_no_with_status")
+      .select("so_tien_con_lai, trang_thai")
+      .eq("id", cnId)
+      .single();
+    if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
+      await externalSupabase.from("cong_no").update({ trang_thai: "con_du" }).eq("id", cnId);
+    }
+  }
+}
+
 export function useRejectDNTT() {
   const qc = useQueryClient();
   return useMutation({
@@ -393,6 +424,22 @@ export function useRejectDNTT() {
         .eq("id", id);
       if (error) throw error;
 
+      // Dọn cấn trừ (can_tru) — KHÔNG chỉ voucher. ĐNTT từ chối thì cấn trừ không
+      // còn hiệu lực; nếu giữ → cong_no nguồn kẹt + đối soát sai. Mirror useCancelDNTT.
+      let tenDoan = "";
+      if (dntt.doan_id) {
+        const { data: doanRow } = await externalSupabase
+          .from("doan").select("ten_doan").eq("id", dntt.doan_id).single();
+        tenDoan = doanRow?.ten_doan || `#${dntt.doan_id}`;
+      }
+      const { data: rejPayments } = await externalSupabase
+        .from("payments").select("id, method, so_tien, cong_no_id").eq("dntt_id", id);
+      await releaseCanTruPayments(
+        (rejPayments || [])
+          .filter((p) => p.method === "can_tru")
+          .map((p) => ({ id: p.id, so_tien: p.so_tien, cong_no_id: p.cong_no_id })),
+        tenDoan,
+      );
       // Dọn payment 'voucher' (phần suất chính trả bằng voucher) — ĐNTT bị từ chối
       // thì khoản này không còn hiệu lực, tránh payment mồ côi.
       await externalSupabase.from("payments").delete().eq("dntt_id", id).eq("method", "voucher");

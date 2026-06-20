@@ -777,7 +777,10 @@ export function useNHSection({
           .in("id", dnttIds);
         const activeIds = new Set(
           (dnttRows ?? [])
-            .filter((d) => d.trang_thai_duyet !== "da_huy")
+            // Loại cả da_huy LẪN tu_choi — ĐNTT từ chối là record chết (RPC recalc
+            // cũng loại). Nếu chỉ loại da_huy → từ chối ĐNTT rồi tạo lại bị cảnh
+            // báo "TRÙNG" ảo (vd voucher cấn trừ → từ chối → sửa lại).
+            .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
             .map((d) => d.id),
         );
         committed = (allocRows ?? [])
