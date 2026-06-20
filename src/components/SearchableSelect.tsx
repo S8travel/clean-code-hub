@@ -35,6 +35,8 @@ interface Props {
   autoOpen?: boolean;
   /** Gọi khi popover đóng (kể cả đóng mà không chọn) — để parent thoát chế độ chọn */
   onClose?: () => void;
+  /** Khoá chọn (vd chỉ 1 lựa chọn hợp lệ) — trigger không bấm được */
+  disabled?: boolean;
 }
 
 export function SearchableSelect({
@@ -47,6 +49,7 @@ export function SearchableSelect({
   className,
   autoOpen = false,
   onClose,
+  disabled = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -76,6 +79,7 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
           className={cn(
             "w-full justify-between rounded-lg font-normal",
             !value && "text-muted-foreground",

@@ -66,3 +66,26 @@ export function canApplyVoucher(params: {
     params.hasChiPhiId
   );
 }
+
+/**
+ * Số tiền voucher trừ khỏi "Số tiền còn thanh toán" khi IN ĐNTT nhà hàng/dịch vụ.
+ *
+ * - Voucher 'tang': suất chính bị LOẠI khỏi bản in (không in dòng chính) → KHÔNG
+ *   trừ thêm ở đây (trả 0).
+ * - Voucher 'mua': suất chính trả bằng voucher → trừ phần đó khỏi cash phải trả.
+ *   NGUỒN CHUẨN = `redeemGiaTri` (giá trị ghi nhận lúc đổi voucher, lưu ở
+ *   voucher_su_dung). KHÔNG chỉ dựa payment method='voucher' vì cache
+ *   `payments-by-chi-phi` hay STALE lúc bấm In (app tắt refetchOnWindowFocus),
+ *   hoặc payment 'voucher' chưa kịp ghi → bản in QUÊN trừ voucher, in đủ tiền.
+ *   Lấy `max()` với payment để robust cả 2 chiều (vẫn đúng nếu payment > giaTri).
+ */
+export function resolveVoucherPrintAmount(params: {
+  voucherLoai?: "mua" | "tang" | null;
+  /** giá trị suất chính ghi nhận lúc đổi voucher 'mua' (voucher_su_dung.gia_tri). */
+  redeemGiaTri?: number | null;
+  /** tổng payment method='voucher' của ĐNTT đang in (có thể 0 nếu cache stale). */
+  paymentVoucherAmount: number;
+}): number {
+  const redeem = params.voucherLoai === "mua" ? Math.max(0, params.redeemGiaTri ?? 0) : 0;
+  return Math.max(params.paymentVoucherAmount, redeem);
+}
