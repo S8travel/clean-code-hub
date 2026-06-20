@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { useInsertDNTT, useUpdateDNTT, type DNTTRow } from "@/hooks/use-chi-phi";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface Props {
   chiPhiId: number | undefined;

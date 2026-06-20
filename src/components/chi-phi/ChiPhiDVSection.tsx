@@ -13,7 +13,7 @@ import { useDVSection } from "./use-dv-section";
 import { groupGopByNcc } from "@/lib/dntt-gop-calc";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface Props {
   doanId: number;

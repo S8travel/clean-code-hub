@@ -11,7 +11,7 @@ import type { HDVHoTroItem } from "@/hooks/use-chi-phi-hdv";
 import { STATUS_LABEL, type DnttLite, type CongNoLite, type KhacCancelTarget } from "./hdv-shared";
 import { resolveHoTroNguoiTt, TIP_LAI_XE_REF, TIP_LAI_XE_NOTES } from "./hdv-shared";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 // Row hỗ trợ HDV — local state với ref mirror.
 // Lift state vào row giúp keystroke không re-render bảng. Ref mirror đảm bảo

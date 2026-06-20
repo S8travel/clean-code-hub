@@ -31,7 +31,7 @@ import type { HDVDoanInfo, KhacModalItem, KhacModalTarget, KhacCancelTarget } fr
 import { resolveHoTroNguoiTt, isTipLaiXeRow, TIP_LAI_XE_MO_TA } from "./hdv-shared";
 import { HDVHoTroRow } from "./HDVHoTroRow";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 // ── Chi phí "Khác" (cũ: Hướng dẫn viên) ─────────────────────────────────────
 // Mỗi row độc lập: SL × Đơn giá. Nguồn = "Công ty" → có thể tạo ĐNTT cho NCC

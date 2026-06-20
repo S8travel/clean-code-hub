@@ -34,7 +34,7 @@ import { useDonViVisaList, useLoaiVisaList } from "@/hooks/use-visa";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
   cho_duyet: { textKey: "Chờ duyệt ĐNTT", cls: "bg-yellow-100 text-yellow-700" },

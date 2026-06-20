@@ -25,7 +25,7 @@ import { CreateHDVPaymentModal } from "./CreateHDVPaymentModal";
 
 export type { HDVDoanInfo } from "./hdv-shared";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface Props {
   doanId: number;

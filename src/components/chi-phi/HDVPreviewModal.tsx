@@ -7,7 +7,7 @@ import type { HDVSectionData, HDVDNTTRow } from "@/hooks/use-chi-phi-hdv";
 import { exportHDVStatsExcel } from "@/lib/export-hdv-stats-excel";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 const DNTT_STATUS_LABEL: Record<string, string> = {
   cho_duyet: "Chờ duyệt",

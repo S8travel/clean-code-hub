@@ -8,7 +8,7 @@ import { FileDown } from "lucide-react";
 import { exportDNTTNHWordFromData, type NHDocData, type NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface Props {
   open: boolean;
@@ -198,7 +198,7 @@ export default function DNTTNHPreviewModal({ open, data, onClose }: Props) {
                 {/* Voucher (phần suất chính trả bằng voucher) — read-only, đã trừ vào "còn TT" */}
                 {(entry.voucher_amount ?? 0) > 0 && (
                   <div className="text-xs text-purple-700 bg-purple-50 rounded px-2 py-1">
-                    🎟 {t("Trả bằng voucher")}: <span className="font-semibold tabular-nums">{(entry.voucher_amount ?? 0).toLocaleString("vi-VN")} ₫</span> — {t("đã cộng vào Cấn trừ khi in")}
+                    🎟 {t("Trả bằng voucher")}: <span className="font-semibold tabular-nums">{fmt(entry.voucher_amount ?? 0)} ₫</span> — {t("đã cộng vào Cấn trừ khi in")}
                   </div>
                 )}
                 {/* Cọc / cấn trừ / còn TT */}

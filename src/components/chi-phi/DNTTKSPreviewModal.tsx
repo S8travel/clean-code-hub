@@ -9,7 +9,7 @@ import { exportDNTTKSWordFromData, exportDNTTKSBatchWordFromData } from "@/lib/e
 import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface Props {
   open: boolean;

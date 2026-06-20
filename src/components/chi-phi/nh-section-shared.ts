@@ -1,7 +1,7 @@
 // Helpers + types dùng chung cho tab Chi phí Nhà hàng.
 // Tách verbatim từ ChiPhiNHSection để hook / row / modal / shell cùng dùng.
 
-export const fmt = (n: number) => n.toLocaleString("vi-VN");
+export const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 export const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
   cho_duyet:     { textKey: "Chờ duyệt",  cls: "bg-yellow-100 text-yellow-700" },
