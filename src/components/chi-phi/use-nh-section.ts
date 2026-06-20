@@ -796,6 +796,39 @@ export function useNHSection({
 
     setDnttSubmitting(true);
     try {
+      // Đồng bộ chi_phi MAIN với giá trị live TRƯỚC khi tạo ĐNTT. Với NH, giá nằm ở
+      // set menu/booking, `doan_chi_phi.don_gia` mặc định 0 cho tới khi OP blur dòng
+      // (handleSave). Nếu OP tạo ĐNTT mà chưa từng blur (hoặc nhánh reuse-id ở trên
+      // chỉ gán id, không lưu giá trị) → tien_cong_ty lưu = 0 trong khi ĐNTT cam kết
+      // số live → aggregate đọc 0 → badge "DNTT lệch". Sync để giá trị lưu khớp ĐNTT.
+      // Chỉ sync khi công ty trả + không phải voucher tặng (tặng = suất chính 0đ).
+      const nguoiTtMain = row.nguoi_tt ?? (nh?.nguoi_thanh_toan !== "hdv" ? "cong_ty" : "hdv");
+      if (row.id && nguoiTtMain === "cong_ty" && !isCoveredTang) {
+        const mainThanhTienSync = applyChietKhau(soKhachThucTe * row.don_gia, ckPct);
+        const { data: dbMain } = await externalSupabase
+          .from("doan_chi_phi")
+          .select("don_gia, tien_cong_ty, so_luong")
+          .eq("id", row.id)
+          .maybeSingle();
+        if (dbMain && (
+          Number(dbMain.don_gia ?? 0) !== Number(row.don_gia) ||
+          Number(dbMain.tien_cong_ty ?? 0) !== mainThanhTienSync ||
+          Number(dbMain.so_luong ?? 0) !== row.so_khach
+        )) {
+          await upsertMut.mutateAsync({
+            id: row.id,
+            doan_id: doanId,
+            don_gia: row.don_gia,
+            so_luong: row.so_khach,
+            tien_cong_ty: mainThanhTienSync,
+            tien_hdv: 0,
+            foc_khach_snapshot: focResolved.foc_khach,
+            foc_mien_snapshot: focResolved.foc_mien,
+            chiet_khau_phan_tram_snapshot: row.chiet_khau_phan_tram,
+            thanh_tien_thuc_te: null,
+          });
+        }
+      }
       const nhName = nh?.ten || "Nhà hàng";
       const buaLabel = row.bua_an === "trua" ? "trưa" : "tối";
       const dateLabel = row.ngay_date
