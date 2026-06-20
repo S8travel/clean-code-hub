@@ -784,8 +784,13 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         let thanhTienSum = 0;
         for (const { row } of grows) {
           const rowExtras = (extrasMap[row.id!] ?? []).filter((e) => e.nguoi_tt !== "hdv" && e.don_gia > 0);
+          // Số lượng IN cho dòng chính = SAU TRỪ FOC (giống NH dùng soLuongThuc) → cột
+          // "Thành tiền" trong Word = so_luong_thuc × đơn giá khớp màn hình. Cột "Số khách"
+          // vẫn in gross qua entry.so_khach; cột FOC in số miễn riêng.
+          const rowFoc = resolveDVFoc(row);
+          const rowBilled = calcSoKhachThucTe(row.so_luong, rowFoc.foc_khach, rowFoc.foc_mien);
           // Gộp → ghi tên dịch vụ vào ghi_chu (vì ten_nh dùng cho tên NCC chung).
-          items.push({ so_luong: row.so_luong, don_gia: row.don_gia, ghi_chu: isGop ? (row.mo_ta || "Dịch vụ") : "" });
+          items.push({ so_luong: rowBilled, don_gia: row.don_gia, ghi_chu: isGop ? (row.mo_ta || "Dịch vụ") : "" });
           items.push(...rowExtras.map((e) => ({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta || "" })));
           soKhachSum += row.so_luong;
           thanhTienSum += row.tien_cong_ty + rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
