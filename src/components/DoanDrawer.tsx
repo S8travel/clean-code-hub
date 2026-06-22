@@ -44,10 +44,17 @@ const LOAI_TOUR_OPTS = [
   { value: "noi_dia", label: "Nội địa" },
 ] as const;
 
+// Kiểu gom khách — trục RIÊNG, khác loai_tour. Ghép → quản lý roster khách lẻ.
+const KIEU_GOM_OPTS = [
+  { value: "tron_goi", label: "Trọn gói" },
+  { value: "ghep", label: "Khách ghép" },
+] as const;
+
 const EMPTY_FORM: DoanInsert = {
   ten_doan: "",
   van_phong_id: null,
   loai_tour: null,
+  kieu_gom: null,
   thi_truong: null,
   agent_id: null,
   dia_diem_id: null,
@@ -140,6 +147,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: P
         ten_doan: str(doan.ten_doan) || "",
         van_phong_id: num(doan.van_phong_id),
         loai_tour: (str(doan.loai_tour) ?? null) as DoanInsert["loai_tour"],
+        kieu_gom: str(doan.kieu_gom),
         thi_truong: str(doan.thi_truong),
         agent_id: num(doan.agent_id),
         dia_diem_id: num(doan.dia_diem_id),
@@ -325,6 +333,23 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: P
                   <SelectContent>
                     <SelectItem value="none">{t("— Chưa phân loại —")}</SelectItem>
                     {LOAI_TOUR_OPTS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label={t("Kiểu gom khách")}>
+                <Select
+                  value={form.kieu_gom ?? "none"}
+                  onValueChange={(v) => set("kieu_gom", v === "none" ? null : v)}
+                >
+                  <SelectTrigger className="rounded-lg h-10">
+                    <span>{!form.kieu_gom ? t("— Chưa phân loại —") : t(KIEU_GOM_OPTS.find((o) => o.value === form.kieu_gom)?.label ?? "")}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("— Chưa phân loại —")}</SelectItem>
+                    {KIEU_GOM_OPTS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
                     ))}
                   </SelectContent>

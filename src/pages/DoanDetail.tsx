@@ -43,6 +43,7 @@ import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
 import BookingVisaXeTab from "@/components/booking-dv/BookingVisaXeTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
+import { KhachLeTab } from "@/components/dieu-tour/KhachLeTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
@@ -556,6 +557,9 @@ export default function DoanDetail() {
               <TabsTrigger value="menu">{t("Booking NH")}<TabBadge count={bookingNHBadgeCount} /></TabsTrigger>
               <TabsTrigger value="booking-visa-xe">{t("Visa & Xe")}</TabsTrigger>
               <TabsTrigger value="booking-dv">{t("Booking DV")}</TabsTrigger>
+              {doan?.kieu_gom === "ghep" && (
+                <TabsTrigger value="khach-le">{t("Khách lẻ")}</TabsTrigger>
+              )}
               <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
               <TabsTrigger value="tai-lieu">{t("Tài liệu")}</TabsTrigger>
               <TabsTrigger value="log">{t("Log")}</TabsTrigger>
@@ -737,6 +741,14 @@ export default function DoanDetail() {
           <TabsContent value="log" className="mt-4">
             <DoanLogTab doanId={doanId} />
           </TabsContent>
+
+          {doan?.kieu_gom === "ghep" && (
+            <TabsContent value="khach-le" className="mt-4">
+              {doanId != null && (
+                <KhachLeTab doanId={doanId} canEdit={canEdit} />
+              )}
+            </TabsContent>
+          )}
           </fieldset>
         </div>
       </Tabs>
