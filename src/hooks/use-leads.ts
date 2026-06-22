@@ -41,6 +41,7 @@ export interface Lead {
   ngay_lien_he_cuoi: string | null;
   referral_lead_id: number | null;
   doan_id: number | null;
+  khach_hang_id: number | null;
   ghi_chu: string | null;
   created_by: string | null;
   created_at: string;
@@ -76,6 +77,7 @@ export interface LeadInsert {
   assigned_to?: string | null;
   ngay_follow_up_tiep?: string | null;
   referral_lead_id?: number | null;
+  khach_hang_id?: number | null;
   ghi_chu?: string | null;
   created_by?: string | null;
 }
