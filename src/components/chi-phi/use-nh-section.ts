@@ -1184,8 +1184,16 @@ export function useNHSection({
 
   // ── Print handler ─────────────────────────────────────────────────────────
 
-  const buildSelectedEntries = useCallback((): NHDocEntry[] | undefined => {
+  const buildSelectedEntries = useCallback((
+    pmtsArg?: typeof paymentsList,
+    redMapArg?: typeof redemptionByChiPhiId,
+  ): NHDocEntry[] | undefined => {
     if (!nhData || selectedKeys.length === 0) return undefined;
+    // Nguồn cấn trừ/voucher cho bản in — ưu tiên dữ liệu tươi (refetch lúc bấm In),
+    // fallback cache. Cache payments-by-chi-phi dễ stale ngay sau khi cấn trừ
+    // (vd voucher qua công nợ) → trước đây bản in QUÊN trừ cấn trừ, in đủ tiền.
+    const pmts = pmtsArg ?? paymentsList;
+    const redMap = redMapArg ?? redemptionByChiPhiId;
     const entries: NHDocEntry[] = [];
     const canTruShownByNcc: Record<number, boolean> = {};
 
@@ -1204,7 +1212,7 @@ export function useNHSection({
         const items: NHDocEntry["items"] = [];
         const mainCkPct = row.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
         // Voucher TẶNG → suất chính miễn phí, KHÔNG in. MUA → giữ (đã trả bằng voucher).
-        const coveredTangPrint = row.id != null && redemptionByChiPhiId[row.id]?.voucherLoai === "tang";
+        const coveredTangPrint = row.id != null && redMap[row.id]?.voucherLoai === "tang";
         if (!coveredTangPrint && row.don_gia > 0) {
           items.push({ so_luong: soLuongThuc, don_gia: row.don_gia, ghi_chu: "", chiet_khau_phan_tram: mainCkPct });
         }
@@ -1252,8 +1260,8 @@ export function useNHSection({
         let canTruNote: string | undefined;
         if (nccId && !canTruShownByNcc[nccId] && chiPhiId) {
           const canTruPays = activeDntt
-            ? paymentsList.filter((p) => p.dntt_id === activeDntt.id && p.method === "can_tru")
-            : paymentsList.filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru");
+            ? pmts.filter((p) => p.dntt_id === activeDntt.id && p.method === "can_tru")
+            : pmts.filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru");
           canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
           if (canTruAmount > 0) {
             canTruShownByNcc[nccId] = true;
@@ -1269,11 +1277,11 @@ export function useNHSection({
         // ĐNTT 16.3tr nhưng phải in còn 6tr cash). resolveVoucherPrintAmount lấy
         // max(payment, giaTri) cho voucher 'mua' → cache-independent.
         const voucherPayAmount = activeDntt
-          ? paymentsList
+          ? pmts
               .filter((p) => p.dntt_id === activeDntt.id && p.method === "voucher")
               .reduce((s, p) => s + p.payment_so_tien, 0)
           : 0;
-        const redInfoPrint = chiPhiId != null ? redemptionByChiPhiId[chiPhiId] : undefined;
+        const redInfoPrint = chiPhiId != null ? redMap[chiPhiId] : undefined;
         const voucherAmount = resolveVoucherPrintAmount({
           voucherLoai: redInfoPrint?.voucherLoai ?? null,
           redeemGiaTri: redInfoPrint?.giaTri,
@@ -1312,9 +1320,22 @@ export function useNHSection({
     return entries;
   }, [nhData, selectedKeys, dnttList, paymentsList, redemptionByChiPhiId]);
 
-  const handlePrintSelected = () => {
+  const handlePrintSelected = async () => {
     try {
-      const entries = buildSelectedEntries();
+      // Refetch tươi cấn trừ (payments) + voucher (redemptions) TRƯỚC khi dựng bản in.
+      // Cache payments-by-chi-phi hay stale ngay sau khi cấn trừ qua công nợ
+      // (vd voucher) → bản in trước đây ra "Cấn trừ = 0" và in đủ tiền dù đã cấn trừ.
+      await Promise.all([
+        qc.refetchQueries({ queryKey: ["payments-by-chi-phi", doanId] }),
+        qc.refetchQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] }),
+      ]);
+      const freshPmts =
+        (qc.getQueryData(["payments-by-chi-phi", doanId]) as typeof paymentsList) ?? paymentsList;
+      const freshRedeem = qc.getQueryData(["voucher-su-dung-by-doan", doanId]) as
+        | typeof redemptions
+        | undefined;
+      const freshRedMap = freshRedeem ? buildRedemptionMap(freshRedeem) : redemptionByChiPhiId;
+      const entries = buildSelectedEntries(freshPmts, freshRedMap);
       if (!entries || entries.length === 0) {
         toast.error("Không có dữ liệu để xuất");
         return;
