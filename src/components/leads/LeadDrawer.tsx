@@ -139,7 +139,9 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
     }
   };
 
-  const canChotDeal = lead && lead.trang_thai !== "chot_deal" && lead.trang_thai !== "mat_khach";
+  // Hiện nút Chốt deal khi lead CHƯA có đoàn (kể cả lead đã chot_deal nhưng mồ côi
+  // đoàn — vd kéo kanban kiểu cũ). Ẩn khi đã có đoàn hoặc mất khách.
+  const canChotDeal = lead && lead.trang_thai !== "mat_khach" && !lead.doan_id;
 
   const [activeTab, setActiveTab] = useState<Tab>("info");
 
