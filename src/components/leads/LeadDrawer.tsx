@@ -17,17 +17,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  useLead, useUpdateLead, useUpdateLeadStatus, useConvertLeadToDoan,
+  useLead, useUpdateLead, useUpdateLeadStatus,
   LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS, LEAD_LOAI_KHACH_OPTS,
   LEAD_PHONG_CACH_OPTS, LEAD_UU_TIEN_OPTS,
   type Lead, type LeadInsert, type LeadTrangThai,
 } from "@/hooks/use-leads";
-import type { DoanInsert } from "@/hooks/use-doan";
+import { ChotDealDialog } from "@/components/leads/ChotDealDialog";
 import { useLeadActivities, useCreateActivity, LEAD_ACTIVITY_LOAI_OPTS, LEAD_KET_QUA_OPTS } from "@/hooks/use-lead-activities";
 import { useLeadTasks, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/use-lead-tasks";
 import { useLeadDiemDen, useReplaceDiemDen, type LeadDiemDen } from "@/hooks/use-lead-diem-den";
@@ -94,50 +89,9 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const toggleTask = useToggleTask();
   const deleteTask = useDeleteTask();
   const replaceDiemDen = useReplaceDiemDen();
-  const convertLead = useConvertLeadToDoan();
 
-  const [confirmConvertOpen, setConfirmConvertOpen] = useState(false);
-
-  const handleChotDeal = async () => {
-    if (!lead) return;
-    // Tường cứng theo VP: đoàn đóng dấu VP nhà người chốt. Chưa có VP → đoàn mồ côi.
-    if (user?.van_phong_id == null) {
-      toast.error(t("Tài khoản chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin."));
-      return;
-    }
-    const firstDiemDen = (lead.diem_den ?? [])[0]?.diem_den ?? "";
-    const tenDoan = `Đoàn ${lead.ho_ten}${firstDiemDen ? " - " + firstDiemDen : ""}`;
-    const ghiChu = `Tạo từ lead #${lead.id}.${lead.yeu_cau_dac_biet ? " " + lead.yeu_cau_dac_biet : ""}`;
-
-    const doanData: DoanInsert = {
-      ten_doan: tenDoan,
-      loai_tour: lead.loai_tour as "outbound" | "noi_dia",
-      so_khach: (lead.so_nguoi_lon ?? 0) + (lead.so_nguoi_em ?? 0),
-      so_khach_lon: lead.so_nguoi_lon ?? 0,
-      so_khach_em1: lead.so_nguoi_em ?? 0,
-      ngay_di: lead.ngay_di_du_kien,
-      ngay_ve: lead.ngay_ve_du_kien,
-      assigned_to: lead.assigned_to,
-      van_phong_id: user?.van_phong_id ?? null,
-      khach_hang_id: lead.khach_hang_id ?? null,
-      ghi_chu: ghiChu,
-      trang_thai: "dang_chay",
-    };
-
-    try {
-      const newDoan = await convertLead.mutateAsync({
-        leadId: lead.id,
-        doanData,
-        currentUserId: user?.user_id ?? null,
-      });
-      toast.success(`🎉 ${t("Đã tạo đoàn")} #${newDoan.id}`);
-      setConfirmConvertOpen(false);
-      onClose();
-      navigate(`/doan/${newDoan.id}`);
-    } catch (e: unknown) {
-      toast.error(errMsg(e) || t("Lỗi khi tạo đoàn"));
-    }
-  };
+  // Modal chốt deal (2 lựa chọn: tạo đoàn mới / ghép đoàn có sẵn).
+  const [chotDealOpen, setChotDealOpen] = useState(false);
 
   // Hiện nút Chốt deal khi lead CHƯA có đoàn (kể cả lead đã chot_deal nhưng mồ côi
   // đoàn — vd kéo kanban kiểu cũ). Ẩn khi đã có đoàn hoặc mất khách.
@@ -313,8 +267,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       <Button
                         size="sm"
                         className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => setConfirmConvertOpen(true)}
-                        disabled={convertLead.isPending}
+                        onClick={() => setChotDealOpen(true)}
                       >
                         <Trophy className="h-3.5 w-3.5" />
                         {t("Chốt deal")}
@@ -758,28 +711,17 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
             </div>
           </motion.div>
 
-          {/* Confirm: Tạo đoàn từ lead */}
-          <AlertDialog open={confirmConvertOpen} onOpenChange={setConfirmConvertOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{t("🎉 Chốt deal — Tạo đoàn?")}</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t("Đoàn sẽ được tạo với thông tin từ lead")} "{lead?.ho_ten}".
-                  {" "}{t("Bạn sẽ được chuyển sang trang chi tiết đoàn để bổ sung agent / địa điểm / lịch trình.")}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={convertLead.isPending}>{t("Hủy")}</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => { e.preventDefault(); handleChotDeal(); }}
-                  disabled={convertLead.isPending}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {convertLead.isPending ? t("Đang tạo...") : t("Tạo đoàn ngay")}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {/* Chốt deal: chọn tạo đoàn mới / ghép đoàn có sẵn */}
+          <ChotDealDialog
+            lead={lead ?? null}
+            open={chotDealOpen}
+            onClose={() => setChotDealOpen(false)}
+            onDone={(doanId) => {
+              setChotDealOpen(false);
+              onClose();
+              navigate(`/doan/${doanId}`);
+            }}
+          />
         </>
       )}
     </AnimatePresence>

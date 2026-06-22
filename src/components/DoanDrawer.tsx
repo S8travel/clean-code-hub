@@ -83,9 +83,11 @@ interface Props {
   onClose: () => void;
   onSave: (data: DoanInsert) => void;
   isSaving: boolean;
+  /** Giá trị điền sẵn khi TẠO MỚI (doan=null) — vd chốt deal từ lead. */
+  prefill?: Partial<DoanInsert>;
 }
 
-export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
+export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: Props) {
   useTranslate();
   const [form, setForm] = useState<DoanInsert>({ ...EMPTY_FORM });
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -162,11 +164,18 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
       setOriginalSeriId(seriId);
     } else {
       // Tạo mới: mặc định VP nhà của người tạo (OP 1 VP → cố định; cross-VP đổi được).
-      setForm({ ...EMPTY_FORM, assigned_to: null, seri_id: null, van_phong_id: defaultVanPhongId });
+      // prefill (vd chốt deal từ lead) ghi đè default — vẫn sửa được trên form.
+      setForm({
+        ...EMPTY_FORM,
+        assigned_to: null,
+        seri_id: null,
+        van_phong_id: defaultVanPhongId,
+        ...(prefill ?? {}),
+      });
       setOriginalSeriId(null);
     }
     setConflictLines(null);
-  }, [doan, open, currentUserId, defaultVanPhongId]);
+  }, [doan, open, currentUserId, defaultVanPhongId, prefill]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

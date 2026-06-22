@@ -322,3 +322,63 @@ export function useConvertLeadToDoan() {
     },
   });
 }
+
+// Ghép lead vào ĐOÀN CÓ SẴN (không tạo đoàn mới): set lead.doan_id + chot_deal.
+// Nếu đoàn chưa gắn khách → gán khách của lead làm khách chính (để lịch sử khách
+// thấy đoàn này). Số khách/chi phí của đoàn KHÔNG tự đổi — OP tự điều chỉnh.
+export function useAttachLeadToDoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      leadId,
+      doanId,
+      khachHangId,
+      currentUserId,
+    }: {
+      leadId: number;
+      doanId: number;
+      khachHangId: number | null;
+      currentUserId: string | null;
+    }) => {
+      const { error: leadErr } = await externalSupabase
+        .from("lead")
+        .update({ doan_id: doanId, trang_thai: "chot_deal" })
+        .eq("id", leadId);
+      if (leadErr) throw leadErr;
+
+      if (khachHangId != null) {
+        const { data: d } = await externalSupabase
+          .from("doan")
+          .select("khach_hang_id")
+          .eq("id", doanId)
+          .maybeSingle();
+        if (d && d.khach_hang_id == null) {
+          await externalSupabase
+            .from("doan")
+            .update({ khach_hang_id: khachHangId })
+            .eq("id", doanId);
+        }
+      }
+
+      await externalSupabase.from("lead_activity").insert({
+        lead_id: leadId,
+        loai: "doi_trang_thai",
+        trang_thai_cu: null,
+        trang_thai_moi: "chot_deal",
+        noi_dung: `Chốt deal → ghép vào đoàn #${doanId}`,
+        created_by: currentUserId,
+      });
+
+      return doanId;
+    },
+    onSuccess: async (_, vars) => {
+      await syncNextAction(vars.leadId).catch(() => {});
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["lead", vars.leadId] });
+      qc.invalidateQueries({ queryKey: ["lead_activities", vars.leadId] });
+      qc.invalidateQueries({ queryKey: ["my_next_actions"] });
+      qc.invalidateQueries({ queryKey: ["doan"] });
+      qc.invalidateQueries({ queryKey: ["khach_hang"] });
+    },
+  });
+}
