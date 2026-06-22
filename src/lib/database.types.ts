@@ -688,6 +688,7 @@ export type Database = {
           huong_dan_vien_id_2: number | null
           id: number
           khach_hang_id: number | null
+          kieu_gom: string | null
           ks_escalate_level: number
           loai_tour: string | null
           ly_do_huy: string | null
@@ -737,6 +738,7 @@ export type Database = {
           huong_dan_vien_id_2?: number | null
           id?: never
           khach_hang_id?: number | null
+          kieu_gom?: string | null
           ks_escalate_level?: number
           loai_tour?: string | null
           ly_do_huy?: string | null
@@ -786,6 +788,7 @@ export type Database = {
           huong_dan_vien_id_2?: number | null
           id?: never
           khach_hang_id?: number | null
+          kieu_gom?: string | null
           ks_escalate_level?: number
           loai_tour?: string | null
           ly_do_huy?: string | null
@@ -1515,6 +1518,82 @@ export type Database = {
             columns: ["doan_id"]
             isOneToOne: true
             referencedRelation: "doan"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doan_khach_le: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          da_thu: number
+          doan_id: number
+          gia_ban: number
+          ghi_chu: string | null
+          ho_ten: string
+          id: number
+          khach_hang_id: number | null
+          lead_id: number | null
+          so_dien_thoai: string | null
+          so_khach_em1: number
+          so_khach_em2: number
+          so_khach_lon: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          da_thu?: number
+          doan_id: number
+          gia_ban?: number
+          ghi_chu?: string | null
+          ho_ten: string
+          id?: never
+          khach_hang_id?: number | null
+          lead_id?: number | null
+          so_dien_thoai?: string | null
+          so_khach_em1?: number
+          so_khach_em2?: number
+          so_khach_lon?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          da_thu?: number
+          doan_id?: number
+          gia_ban?: number
+          ghi_chu?: string | null
+          ho_ten?: string
+          id?: never
+          khach_hang_id?: number | null
+          lead_id?: number | null
+          so_dien_thoai?: string | null
+          so_khach_em1?: number
+          so_khach_em2?: number
+          so_khach_lon?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doan_khach_le_doan_id_fkey"
+            columns: ["doan_id"]
+            isOneToOne: false
+            referencedRelation: "doan"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_khach_le_khach_hang_id_fkey"
+            columns: ["khach_hang_id"]
+            isOneToOne: false
+            referencedRelation: "khach_hang"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_khach_le_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "lead"
             referencedColumns: ["id"]
           },
         ]

@@ -27,6 +27,7 @@ type DoanPickRow = {
   ngay_di: string | null;
   ngay_ve: string | null;
   trang_thai: string | null;
+  kieu_gom: string | null;
 };
 
 function fmtD(s: string | null): string {
@@ -68,9 +69,12 @@ export function ChotDealDialog({ lead, open, onClose, onDone }: Props) {
     };
   }, [lead, user?.van_phong_id]);
 
-  // Picker: chỉ đoàn đang chạy, kèm ngày để phân biệt.
+  // Picker: chỉ đoàn GHÉP đang chạy (roster là nguồn số khách → không ghi đè đoàn
+  // trọn gói). Kèm ngày để phân biệt.
   const doanOptions = useMemo(() => {
-    const rows = (doanListRaw as DoanPickRow[]).filter((d) => d.trang_thai === "dang_chay");
+    const rows = (doanListRaw as DoanPickRow[]).filter(
+      (d) => d.trang_thai === "dang_chay" && d.kieu_gom === "ghep",
+    );
     return rows.map((d) => {
       const range = d.ngay_di ? `${fmtD(d.ngay_di)}→${fmtD(d.ngay_ve)}` : "";
       return { value: String(d.id), label: `${d.ten_doan ?? `Đoàn #${d.id}`}${range ? ` · ${range}` : ""}` };
@@ -140,11 +144,11 @@ export function ChotDealDialog({ lead, open, onClose, onDone }: Props) {
             >
               <Link2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
               <span>
-                <span className="block text-sm font-semibold">Ghép vào đoàn có sẵn</span>
+                <span className="block text-sm font-semibold">Ghép vào đoàn ghép có sẵn</span>
                 <span className="block text-xs text-muted-foreground">
                   {doanOptions.length === 0
-                    ? "Chưa có đoàn đang chạy để ghép."
-                    : "Gắn khách vào một đoàn đang chạy. Số khách/chi phí của đoàn tự điều chỉnh sau."}
+                    ? "Chưa có đoàn ghép đang chạy. Tạo đoàn (Kiểu gom = Khách ghép) trước."
+                    : "Thêm khách vào roster Khách lẻ của 1 đoàn ghép. Số khách đoàn tự cộng."}
                 </span>
               </span>
             </button>
@@ -166,8 +170,8 @@ export function ChotDealDialog({ lead, open, onClose, onDone }: Props) {
               onChange={setAttachId}
               placeholder="Chọn đoàn..."
             />
-            <p className="text-xs text-amber-600">
-              Lưu ý: số khách & chi phí của đoàn KHÔNG tự cộng — vào đoàn chỉnh tay nếu cần.
+            <p className="text-xs text-muted-foreground">
+              Khách vào roster "Khách lẻ" của đoàn, số khách đoàn tự cộng. Giá bán nhập sau ở tab Khách lẻ.
             </p>
           </div>
           <DialogFooter>
