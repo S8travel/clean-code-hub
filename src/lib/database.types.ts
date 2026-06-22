@@ -687,6 +687,7 @@ export type Database = {
           huong_dan_vien_id: number | null
           huong_dan_vien_id_2: number | null
           id: number
+          khach_hang_id: number | null
           ks_escalate_level: number
           loai_tour: string | null
           ly_do_huy: string | null
@@ -735,6 +736,7 @@ export type Database = {
           huong_dan_vien_id?: number | null
           huong_dan_vien_id_2?: number | null
           id?: never
+          khach_hang_id?: number | null
           ks_escalate_level?: number
           loai_tour?: string | null
           ly_do_huy?: string | null
@@ -783,6 +785,7 @@ export type Database = {
           huong_dan_vien_id?: number | null
           huong_dan_vien_id_2?: number | null
           id?: never
+          khach_hang_id?: number | null
           ks_escalate_level?: number
           loai_tour?: string | null
           ly_do_huy?: string | null
@@ -823,6 +826,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doan_khach_hang_id_fkey"
+            columns: ["khach_hang_id"]
+            isOneToOne: false
+            referencedRelation: "khach_hang"
             referencedColumns: ["id"]
           },
           {
@@ -2019,6 +2029,102 @@ export type Database = {
         }
         Relationships: []
       }
+      khach_hang: {
+        Row: {
+          assigned_to: string | null
+          chuc_vu: string | null
+          created_at: string
+          created_by: string | null
+          dia_chi: string | null
+          dia_chi_xuat_hd: string | null
+          do_not_contact: boolean
+          do_not_contact_reason: string | null
+          email: string | null
+          facebook_url: string | null
+          ghi_chu: string | null
+          gioi_tinh: string | null
+          ho_ten: string
+          id: number
+          loai: string
+          ma_so_thue: string | null
+          mon_kieng_di_ung: string | null
+          ngay_sinh: string | null
+          nguoi_dai_dien: string | null
+          nguon_dau: string | null
+          phong_cach: string | null
+          sdt_norm: string | null
+          so_dien_thoai: string | null
+          so_thich: string | null
+          tags: string[]
+          ten_to_chuc: string | null
+          updated_at: string
+          van_phong_id: number | null
+          zalo: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          chuc_vu?: string | null
+          created_at?: string
+          created_by?: string | null
+          dia_chi?: string | null
+          dia_chi_xuat_hd?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          email?: string | null
+          facebook_url?: string | null
+          ghi_chu?: string | null
+          gioi_tinh?: string | null
+          ho_ten: string
+          id?: never
+          loai?: string
+          ma_so_thue?: string | null
+          mon_kieng_di_ung?: string | null
+          ngay_sinh?: string | null
+          nguoi_dai_dien?: string | null
+          nguon_dau?: string | null
+          phong_cach?: string | null
+          sdt_norm?: never
+          so_dien_thoai?: string | null
+          so_thich?: string | null
+          tags?: string[]
+          ten_to_chuc?: string | null
+          updated_at?: string
+          van_phong_id?: number | null
+          zalo?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          chuc_vu?: string | null
+          created_at?: string
+          created_by?: string | null
+          dia_chi?: string | null
+          dia_chi_xuat_hd?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          email?: string | null
+          facebook_url?: string | null
+          ghi_chu?: string | null
+          gioi_tinh?: string | null
+          ho_ten?: string
+          id?: never
+          loai?: string
+          ma_so_thue?: string | null
+          mon_kieng_di_ung?: string | null
+          ngay_sinh?: string | null
+          nguoi_dai_dien?: string | null
+          nguon_dau?: string | null
+          phong_cach?: string | null
+          sdt_norm?: never
+          so_dien_thoai?: string | null
+          so_thich?: string | null
+          tags?: string[]
+          ten_to_chuc?: string | null
+          updated_at?: string
+          van_phong_id?: number | null
+          zalo?: string | null
+        }
+        Relationships: []
+      }
       khach_san: {
         Row: {
           created_at: string | null
@@ -2099,6 +2205,7 @@ export type Database = {
           ghi_chu: string | null
           ho_ten: string
           id: number
+          khach_hang_id: number | null
           last_touched_at: string | null
           loai_khach: string | null
           loai_tour: string
@@ -2137,6 +2244,7 @@ export type Database = {
           ghi_chu?: string | null
           ho_ten: string
           id?: never
+          khach_hang_id?: number | null
           last_touched_at?: string | null
           loai_khach?: string | null
           loai_tour: string
@@ -2175,6 +2283,7 @@ export type Database = {
           ghi_chu?: string | null
           ho_ten?: string
           id?: never
+          khach_hang_id?: number | null
           last_touched_at?: string | null
           loai_khach?: string | null
           loai_tour?: string
@@ -2212,6 +2321,13 @@ export type Database = {
             columns: ["doan_id"]
             isOneToOne: false
             referencedRelation: "doan"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_khach_hang_id_fkey"
+            columns: ["khach_hang_id"]
+            isOneToOne: false
+            referencedRelation: "khach_hang"
             referencedColumns: ["id"]
           },
           {
@@ -4011,6 +4127,43 @@ export type Database = {
       }
     }
     Views: {
+      khach_hang_with_stats: {
+        Row: {
+          assigned_to: string | null
+          chuc_vu: string | null
+          created_at: string | null
+          created_by: string | null
+          dia_chi: string | null
+          dia_chi_xuat_hd: string | null
+          do_not_contact: boolean | null
+          do_not_contact_reason: string | null
+          email: string | null
+          facebook_url: string | null
+          ghi_chu: string | null
+          gioi_tinh: string | null
+          ho_ten: string | null
+          id: number | null
+          lan_lien_he_gan_nhat: string | null
+          loai: string | null
+          ma_so_thue: string | null
+          mon_kieng_di_ung: string | null
+          ngay_sinh: string | null
+          nguoi_dai_dien: string | null
+          nguon_dau: string | null
+          phong_cach: string | null
+          sdt_norm: string | null
+          so_dien_thoai: string | null
+          so_doan: number | null
+          so_lead: number | null
+          so_thich: string | null
+          tags: string[] | null
+          ten_to_chuc: string | null
+          updated_at: string | null
+          van_phong_id: number | null
+          zalo: string | null
+        }
+        Relationships: []
+      }
       voucher_with_status: {
         Row: {
           active: boolean | null

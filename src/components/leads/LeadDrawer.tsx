@@ -32,6 +32,7 @@ import { useLeadActivities, useCreateActivity, LEAD_ACTIVITY_LOAI_OPTS, LEAD_KET
 import { useLeadTasks, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/use-lead-tasks";
 import { useLeadDiemDen, useReplaceDiemDen, type LeadDiemDen } from "@/hooks/use-lead-diem-den";
 import { useUserRoles } from "@/hooks/use-doan";
+import { useKhachHang } from "@/hooks/use-khach-hang";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
 import { t, useTranslate } from "@/lib/i18n";
@@ -69,7 +70,7 @@ const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 // Ref ổn định cho default rỗng — tránh tạo [] mới mỗi render (loop effect).
 const EMPTY_DIEM_DEN: LeadDiemDen[] = [];
 
-type Tab = "info" | "activity" | "tasks";
+type Tab = "info" | "khachhang" | "activity" | "tasks";
 
 // State cục bộ cho các field blur-save trong tab Thông tin.
 // Giá trị có thể là string (text input) hoặc number (input số) tùy field.
@@ -84,6 +85,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const { data: tasks = [] } = useLeadTasks(leadId);
   const { data: diemDenList = EMPTY_DIEM_DEN } = useLeadDiemDen(leadId);
   const { data: userRoles = [] } = useUserRoles();
+  const { data: khachHang } = useKhachHang(lead?.khach_hang_id ?? null);
 
   const updateLead = useUpdateLead();
   const updateStatus = useUpdateLeadStatus();
@@ -117,6 +119,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
       ngay_ve: lead.ngay_ve_du_kien,
       assigned_to: lead.assigned_to,
       van_phong_id: user?.van_phong_id ?? null,
+      khach_hang_id: lead.khach_hang_id ?? null,
       ghi_chu: ghiChu,
       trang_thai: "dang_chay",
     };
@@ -387,7 +390,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
             {/* Tabs */}
             <div className="shrink-0 flex border-b">
-              {([["info", "📋 Thông tin"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([tab, l]) => (
+              {([["info", "📋 Thông tin"], ["khachhang", "👤 Khách hàng"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([tab, l]) => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className={cn("flex-1 py-2.5 text-xs font-medium transition-colors",
                     activeTab === tab ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
@@ -399,6 +402,49 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
             {/* Tab content */}
             <div className="flex-1 overflow-y-auto">
+
+              {/* ── Tab: Khách hàng ── */}
+              {activeTab === "khachhang" && lead && (
+                <div className="p-5 space-y-4">
+                  {lead.khach_hang_id && khachHang ? (
+                    <>
+                      <div className="rounded-md border p-3 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-sm truncate">{khachHang.ho_ten}</p>
+                          <span className="shrink-0 text-[10px] px-1.5 py-px rounded-full bg-muted">
+                            {khachHang.loai === "to_chuc" ? "Tổ chức" : "Cá nhân"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {khachHang.so_dien_thoai || "—"}
+                          {khachHang.email ? ` · ${khachHang.email}` : ""}
+                        </p>
+                        {khachHang.loai === "to_chuc" && khachHang.ten_to_chuc && (
+                          <p className="text-xs text-muted-foreground">{khachHang.ten_to_chuc}</p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-md border bg-muted/30 px-2 py-1.5 text-center">
+                          <p className="text-[10px] text-muted-foreground">Số lead</p>
+                          <p className="text-sm font-semibold">{khachHang.so_lead ?? 0}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 px-2 py-1.5 text-center">
+                          <p className="text-[10px] text-muted-foreground">Số đoàn</p>
+                          <p className="text-sm font-semibold">{khachHang.so_doan ?? 0}</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/khach-hang")}>
+                        Mở trang khách hàng
+                      </Button>
+                      <p className="text-[11px] text-muted-foreground">
+                        Hồ sơ doanh nghiệp, sở thích &amp; lịch sử đơn quản lý ở trang Khách hàng.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Lead chưa liên kết khách hàng.</p>
+                  )}
+                </div>
+              )}
 
               {/* ── Tab: Thông tin ── */}
               {activeTab === "info" && lead && (
