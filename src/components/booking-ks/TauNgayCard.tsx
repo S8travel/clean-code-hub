@@ -78,15 +78,21 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
 
+  // id booking vừa tạo (row prop chưa kịp refetch) → cho phép mở modal & gửi mail
+  // ngay trong 1 lần bấm thay vì bắt user bấm lại.
+  const [localBookingId, setLocalBookingId] = useState<number | null>(null);
+  const effectiveBookingId = row.booking_id ?? localBookingId;
+
   useEffect(() => {
     setSelectedSetMenu(row.set_menu_id);
     setDeadline(row.deadline || "");
+    setLocalBookingId(null); // row đã refetch → ưu tiên row.booking_id
   }, [row.booking_id, row.set_menu_id, row.deadline]);
 
   const save = async (fields: Partial<TauNgayDisplayRow>) => {
     try {
       await updateMut.mutateAsync({
-        booking_id: row.booking_id,
+        booking_id: effectiveBookingId,
         doan_ngay_id: row.doan_ngay_id,
         doan_id: row.doan_id,
         bua_an: row.bua_an,
@@ -107,9 +113,9 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   };
 
   const ensureBookingExists = async (): Promise<boolean> => {
-    if (row.booking_id) return true;
+    if (effectiveBookingId) return true;
     try {
-      await updateMut.mutateAsync({
+      const newId = await updateMut.mutateAsync({
         booking_id: null,
         doan_ngay_id: row.doan_ngay_id,
         doan_id: row.doan_id,
@@ -120,8 +126,8 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         dat_truoc_status: "chua_gui",
         final_status: "chua_gui",
       });
-      toast.info(t("Đã tạo booking — vui lòng thử gửi lại"));
-      return false;
+      setLocalBookingId(newId); // dùng ngay cho gửi mail, khỏi đợi refetch
+      return true;
     } catch {
       toast.error(t("Lỗi tạo booking"));
       return false;
@@ -213,11 +219,11 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   };
 
   const handleSendViaServer = async () => {
-    if (!row.booking_id) { toast.error(t("Cần lưu booking trước khi gửi email")); return; }
+    if (!effectiveBookingId) { toast.error(t("Cần lưu booking trước khi gửi email")); return; }
     setSending(true);
     try {
       await sendEmailMut.mutateAsync({
-        bookingId: row.booking_id,
+        bookingId: effectiveBookingId,
         doanId: row.doan_id,
         to: emailTo,
         subject: emailSubject,
