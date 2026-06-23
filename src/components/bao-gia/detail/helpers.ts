@@ -2,7 +2,7 @@
 // cost breakdown để các sub-components share consistent output.
 
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
-import { calcBaoGia, type ManualItem } from "@/lib/bao-gia-calc";
+import { calcBaoGia, calcTiers, type ManualItem } from "@/lib/bao-gia-calc";
 
 export const fmtVnd = (n: number | null | undefined) =>
   Math.round(Number(n) || 0).toLocaleString("vi-VN");
@@ -207,4 +207,39 @@ export function costBreakdown(args: {
     exchange_rate: exchangeRate,
     vcb_rate: vcbRate,
   };
+}
+
+// ── Ma trận giá nhiều bậc ────────────────────────────────────────────────────
+
+/** Danh sách số khách mỗi bậc. Vắng/rỗng → mặc định [16, 20] (back-compat). */
+export function tierGuestsOf(ket: BaoGiaKetQua | null | undefined): number[] {
+  const g = ket?.tier_guests;
+  if (g && g.length > 0) return [...g].sort((a, b) => a - b);
+  return [16, 20];
+}
+
+export interface TierLine {
+  guests: number;
+  line: CaseLine;
+}
+
+/** Live ma trận giá theo từng bậc số khách (tier_guests). Mỗi bậc → CaseLine
+ *  (breakdown vốn + giá bán/khách). Dùng chung calc với panel 2-case. */
+export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
+  const ket = draft.ket_qua;
+  if (!ket) return [];
+  const guestsList = tierGuestsOf(ket);
+  const manualItems: ManualItem[] = (ket.items ?? []).map((it, i) => ({
+    id: `${i}`, ngay: it.ngay_so ?? 1, loai: it.loai,
+    mo_ta: it.mo_ta, bang_gia_ten: it.mo_ta, gia: it.don_gia, foc: it.foc ?? 0,
+  }));
+  const xr = draft.exchange_rate ?? 26000;
+  const profitUsd = draft.profit_usd ?? 0;
+  const phuThu = draft.phu_thu ?? 0;
+  // phuThu = 0 trong calc (hiển thị dòng riêng), cộng ngoài qua buildCase — KHỚP costBreakdown.
+  const cases = calcTiers(manualItems, ket.so_ngay ?? 1, xr, profitUsd, guestsList, draft.xe_gia ?? 0, 0);
+  return cases.map((c) => ({
+    guests: c.guests,
+    line: buildCase(c, c.guests, phuThu, profitUsd, xr, draft.vcb_rate ?? null),
+  }));
 }

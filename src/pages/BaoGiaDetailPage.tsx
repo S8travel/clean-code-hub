@@ -8,6 +8,7 @@ import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { ChuongTrinhTourSection } from "@/components/bao-gia/detail/ChuongTrinhTourSection";
 import { DichVuPhuTroSection } from "@/components/bao-gia/detail/DichVuPhuTroSection";
+import { TierMatrixSection } from "@/components/bao-gia/detail/TierMatrixSection";
 import { TongHopChiPhiPanel } from "@/components/bao-gia/detail/TongHopChiPhiPanel";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 
@@ -113,6 +114,7 @@ export default function BaoGiaDetailPage() {
               updateDraftKetQua={updateDraftKetQua}
               saveKetQua={saveKetQua}
             />
+            <TierMatrixSection draft={draft} saveKetQua={saveKetQua} />
           </div>
           <TongHopChiPhiPanel draft={draft} />
         </div>
