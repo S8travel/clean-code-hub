@@ -89,3 +89,53 @@ export function resolveVoucherPrintAmount(params: {
   const redeem = params.voucherLoai === "mua" ? Math.max(0, params.redeemGiaTri ?? 0) : 0;
   return Math.max(params.paymentVoucherAmount, redeem);
 }
+
+/**
+ * Tổng giá trị các dòng phủ voucher loại 'mua' trong 1 nhóm bữa (lọc theo chi_phi_id).
+ * Dùng khi tạo ĐNTT BỔ SUNG cho phát sinh: (1) ghi payment method='voucher' = `total`
+ * để phần vé "mua" được đánh dấu trả-bằng-voucher (không đòi cash); (2) `perChiPhi` để
+ * tách allocation phần voucher về ĐÚNG dòng phủ → recalc quy `so_tien_da_dntt`/`so_tien_da_tt`
+ * về dòng đó (chặn áp voucher lần 2 + gỡ voucher dò được ĐNTT qua allocation).
+ * Voucher 'tang' KHÔNG tính (suất 0đ, đã loại khỏi ĐNTT).
+ */
+export function sumGroupVoucherMua(
+  chiPhiIds: number[],
+  redemptionMap: Record<number, CoveredInfo>,
+): { total: number; perChiPhi: { chiPhiId: number; giaTri: number }[] } {
+  const perChiPhi: { chiPhiId: number; giaTri: number }[] = [];
+  let total = 0;
+  for (const id of chiPhiIds) {
+    const r = redemptionMap[id];
+    if (r?.voucherLoai === "mua" && r.giaTri > 0) {
+      perChiPhi.push({ chiPhiId: id, giaTri: r.giaTri });
+      total += r.giaTri;
+    }
+  }
+  return { total, perChiPhi };
+}
+
+/**
+ * Allocation cho ĐNTT bổ sung (footer aggregate) khi nhóm có dòng phủ voucher 'mua'.
+ * Allocate giá trị MỖI dòng phát sinh chưa-chốt về ĐÚNG chi_phi của nó (cả voucher
+ * lẫn cash) → recalc quy `so_tien_da_dntt`/`so_tien_da_tt` về từng dòng (đúng trạng
+ * thái per-dòng + delete-guard bảo vệ). Phần dư (vd điều chỉnh dòng chính) → dòng chính.
+ * Bất biến: Σ so_tien === absDelta. `lines` rỗng → [{main, absDelta}] (hành vi footer cũ).
+ * Clamp khi Σ giá-trị dòng > absDelta (giá đổi sau redeem) → cắt, không vượt tổng.
+ */
+export function buildAggAllocations(
+  absDelta: number,
+  mainChiPhiId: number,
+  lines: { chiPhiId: number; soTien: number }[],
+): { chi_phi_id: number; so_tien: number }[] {
+  const allocs: { chi_phi_id: number; so_tien: number }[] = [];
+  let remaining = absDelta;
+  for (const e of lines) {
+    if (remaining <= 0) break;
+    const amt = Math.min(e.soTien, remaining);
+    if (amt <= 0) continue;
+    allocs.push({ chi_phi_id: e.chiPhiId, so_tien: amt });
+    remaining -= amt;
+  }
+  if (remaining > 0) allocs.push({ chi_phi_id: mainChiPhiId, so_tien: remaining });
+  return allocs;
+}
