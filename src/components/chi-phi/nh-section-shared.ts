@@ -15,6 +15,11 @@ export const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
 // Extra rows được nhận diện bằng prefix này trong cột mo_ta.
 export const extraPrefix = (bua: "trua" | "toi") => `[${bua}] `;
 
+// 1 chi_phi nhà hàng là DÒNG PHÁT SINH (extra) khi mo_ta mang prefix [trua]/[toi].
+// Dùng để phân biệt với suất chính (mo_ta = "NH (trưa)"). Khớp đúng output extraPrefix.
+export const isNHExtra = (moTa: string | null | undefined): boolean =>
+  !!moTa && (moTa.startsWith(extraPrefix("trua")) || moTa.startsWith(extraPrefix("toi")));
+
 // Parse "NH Name (trưa/tối)" → { name, bua }
 export function parseNHMoTa(moTa: string | null): { name: string; bua: string; buaIcon: string } {
   if (!moTa) return { name: "—", bua: "—", buaIcon: "" };
