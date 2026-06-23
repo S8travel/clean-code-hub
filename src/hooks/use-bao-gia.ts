@@ -93,6 +93,22 @@ export function useBaoGiaList() {
   });
 }
 
+export function useBaoGiaByLead(leadId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["bao_gia", "by-lead", leadId],
+    enabled: !!leadId,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("bao_gia")
+        .select("*")
+        .eq("lead_id", leadId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as BaoGiaRow[];
+    },
+  });
+}
+
 export function useBaoGia(id?: number) {
   return useQuery({
     queryKey: ["bao_gia", id],

@@ -83,6 +83,19 @@ export default function LeadsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
 
+  // Deep-link /leads?lead=:id → mở drawer lead đó (vd back-link từ trang báo giá).
+  useEffect(() => {
+    const leadParam = searchParams.get("lead");
+    if (!leadParam) return;
+    const lid = Number(leadParam);
+    if (lid) {
+      setSelectedLeadId(lid);
+      setDetailOpen(true);
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openDetail = (lead: Lead) => {
     setSelectedLeadId(lead.id);
     setDetailOpen(true);
