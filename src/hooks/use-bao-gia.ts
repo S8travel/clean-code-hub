@@ -44,6 +44,9 @@ export interface BaoGiaKetQua {
   case_20: BaoGiaCase;
   gia_trung_binh_vnd: number;
   gia_trung_binh_usd: number;
+  // Ma trận giá nhiều bậc — danh sách SỐ KHÁCH mỗi bậc. Vắng/rỗng → mặc định
+  // [16, 20] (back-compat 2 mức cũ). Giá mỗi bậc tính live qua calcTiers.
+  tier_guests?: number[];
 }
 
 export interface BaoGiaRow {

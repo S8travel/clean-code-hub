@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcBaoGia, type ManualItem } from "./bao-gia-calc";
+import { calcBaoGia, calcTier, calcTiers, tierConfig, type ManualItem } from "./bao-gia-calc";
 
 // CASES (hard-coded trong calcBaoGia):
 //   case_16: { guests: 16, pax: 17, rooms: 9 }
@@ -262,5 +262,54 @@ describe("calcBaoGia — kịch bản nghiệp vụ thực tế", () => {
     expect(r.case_16.profit_vnd).toBe(16_000_000); // 40 × 25k × 16
     // final = round((55.91M + 16M) / 16) = round(4_494_375) = 4_494_375
     expect(r.case_16.final_price_vnd).toBe(4_494_375);
+  });
+});
+
+describe("tierConfig — số khách → pax/phòng (khớp 2 mức cũ)", () => {
+  it("16 khách → pax 17, phòng 9", () => {
+    expect(tierConfig(16)).toEqual({ guests: 16, pax: 17, rooms: 9 });
+  });
+  it("20 khách → pax 21, phòng 11", () => {
+    expect(tierConfig(20)).toEqual({ guests: 20, pax: 21, rooms: 11 });
+  });
+  it("pax = khách + 1 HDV; phòng = ceil(khách/2) + 1", () => {
+    expect(tierConfig(10)).toEqual({ guests: 10, pax: 11, rooms: 6 });
+    expect(tierConfig(15)).toEqual({ guests: 15, pax: 16, rooms: 9 });
+  });
+});
+
+describe("calcTier / calcTiers — ma trận nhiều bậc", () => {
+  const items: ManualItem[] = [
+    item("hotel", 1_000_000, "KS"),
+    item("meal", 200_000, "Ăn"),
+    item("ticket", 100_000, "Vé"),
+  ];
+
+  it("calcTier(16) khớp case_16 của calcBaoGia (refactor không đổi hành vi)", () => {
+    const tier = calcTier(items, 1, 26_000, 0, 16);
+    expect(tier).toEqual(calcBaoGia(items, "T", 1, 26_000, 0).case_16);
+  });
+  it("calcTier(20) khớp case_20", () => {
+    const tier = calcTier(items, 1, 26_000, 0, 20);
+    expect(tier).toEqual(calcBaoGia(items, "T", 1, 26_000, 0).case_20);
+  });
+
+  it("calcTiers trả 1 case mỗi bậc, đúng số khách + thứ tự", () => {
+    const cases = calcTiers(items, 1, 26_000, 0, [10, 16, 25]);
+    expect(cases.map((c) => c.guests)).toEqual([10, 16, 25]);
+  });
+
+  it("giá/khách bậc 16 = 1,031,250 (16.5M / 16)", () => {
+    const c = calcTier(items, 1, 26_000, 0, 16);
+    expect(c.total_cost).toBe(16_500_000);
+    expect(c.final_price_vnd).toBe(1_031_250);
+  });
+
+  it("nhóm đông hơn → giá/khách GIẢM (chi phí cố định chia đều)", () => {
+    const [c10, c20, c30] = calcTiers(items, 1, 26_000, 0, [10, 20, 30]);
+    expect(c10.final_price_vnd).toBeGreaterThan(c20.final_price_vnd);
+    expect(c20.final_price_vnd).toBeGreaterThan(c30.final_price_vnd);
+    expect(c10.final_price_vnd).toBe(1_110_000);
+    expect(c30.final_price_vnd).toBe(970_000);
   });
 });
