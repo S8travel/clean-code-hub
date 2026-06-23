@@ -25,6 +25,7 @@ import {
   type BaoGiaKetQua,
 } from "@/hooks/use-bao-gia";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
+import { useLeadsList } from "@/hooks/use-leads";
 import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
 import { costBreakdown, liveKetQua, defaultDayItems } from "@/components/bao-gia/detail/helpers";
 import { toast } from "sonner";
@@ -72,8 +73,13 @@ export default function BaoGiaPage() {
   const navigate = useNavigate();
   const { data: list = [], isLoading } = useBaoGiaList();
   const { data: bangGia = [] } = useBangGiaDichVu();
+  const { data: leads = [] } = useLeadsList();
   const createMutation = useCreateBaoGia();
   const deleteMutation = useDeleteBaoGia();
+
+  // Map lead_id → tên khách (hiển thị cột "Khách" trong list báo giá).
+  const leadName: Record<number, string> = {};
+  leads.forEach((l) => { leadName[l.id] = l.ho_ten; });
 
   const handleCreate = () => {
     createMutation.mutate(
@@ -140,6 +146,7 @@ export default function BaoGiaPage() {
                 <thead>
                   <tr className="bg-[#E6F1FB]">
                     <th className="py-2 px-3 text-left font-semibold">Tên chương trình</th>
+                    <th className="py-2 px-3 text-left font-semibold">Khách (Lead)</th>
                     <th className="py-2 px-3 text-right font-semibold">Giá TB / pax (VND)</th>
                     <th className="py-2 px-3 text-right font-semibold">Giá TB / pax (USD)</th>
                     <th className="py-2 px-3 text-center font-semibold">Trạng thái</th>
@@ -168,6 +175,9 @@ export default function BaoGiaPage() {
                         <td className="py-2 px-3">
                           <span className="font-medium">{row.tieu_de || "(chưa có tên)"}</span>
                           {row.ket_qua && <span className="ml-2 text-muted-foreground">{row.ket_qua.so_ngay} ngày</span>}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {row.lead_id != null ? (leadName[row.lead_id] ?? `Lead #${row.lead_id}`) : "—"}
                         </td>
                         <td className="py-2 px-3 text-right font-medium text-blue-700">{giaPaxVnd != null ? fmt(giaPaxVnd) : "—"}</td>
                         <td className="py-2 px-3 text-right text-blue-700">{giaPaxUsd != null ? fmtUsd(giaPaxUsd) : "—"}</td>

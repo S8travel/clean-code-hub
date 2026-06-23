@@ -60,6 +60,33 @@ export function defaultDayItems(dayIdx: number): BaoGiaItem[] {
   ];
 }
 
+/** Case trống (giá 0) — báo giá vừa tạo, user điền ở detail page. */
+export function emptyBaoGiaCase(guests: number): BaoGiaCase {
+  return {
+    guests, pax: 0, rooms: 0,
+    hotel: 0, meal: 0, ticket: 0, transport: 0,
+    insurance: 0, guide: 0, tips: 0,
+    total_cost: 0, profit_vnd: 0,
+    final_price_vnd: 0, final_price_usd: 0,
+  };
+}
+
+/** Skeleton ket_qua trống cho báo giá mới (N ngày, 4 slot/ngày). Dùng chung
+ *  cho "Tạo báo giá" ở trang Báo giá lẫn tab Báo giá trong Lead. */
+export function emptyBaoGiaKetQua(soNgay = 1, tenChuongTrinh = ""): BaoGiaKetQua {
+  const days = Math.max(1, soNgay);
+  const items = Array.from({ length: days }, (_, i) => defaultDayItems(i + 1)).flat();
+  return {
+    ten_chuong_trinh: tenChuongTrinh,
+    so_ngay: days,
+    items,
+    case_16: emptyBaoGiaCase(16),
+    case_20: emptyBaoGiaCase(20),
+    gia_trung_binh_vnd: 0,
+    gia_trung_binh_usd: 0,
+  };
+}
+
 /** Live-recompute case_16 + case_20 + giá trung bình từ items[] + xe_gia +
  *  draft fields. Trả về BaoGiaKetQua "tươi" để các tổng hợp (panel UI, Word
  *  export) dùng chung — KHÔNG đọc case frozen từ AI extract.

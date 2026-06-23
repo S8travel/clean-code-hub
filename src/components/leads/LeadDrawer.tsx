@@ -30,6 +30,7 @@ import { useUserRoles } from "@/hooks/use-doan";
 import { useKhachHang } from "@/hooks/use-khach-hang";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
+import { LeadBaoGiaTab } from "@/components/leads/LeadBaoGiaTab";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
@@ -65,7 +66,7 @@ const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 // Ref ổn định cho default rỗng — tránh tạo [] mới mỗi render (loop effect).
 const EMPTY_DIEM_DEN: LeadDiemDen[] = [];
 
-type Tab = "info" | "khachhang" | "activity" | "tasks";
+type Tab = "info" | "khachhang" | "baogia" | "activity" | "tasks";
 
 // State cục bộ cho các field blur-save trong tab Thông tin.
 // Giá trị có thể là string (text input) hoặc number (input số) tùy field.
@@ -345,7 +346,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
             {/* Tabs */}
             <div className="shrink-0 flex border-b">
-              {([["info", "📋 Thông tin"], ["khachhang", "👤 Khách hàng"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([tab, l]) => (
+              {([["info", "📋 Thông tin"], ["khachhang", "👤 Khách hàng"], ["baogia", "💰 Báo giá"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([tab, l]) => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className={cn("flex-1 py-2.5 text-xs font-medium transition-colors",
                     activeTab === tab ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
@@ -400,6 +401,9 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                   )}
                 </div>
               )}
+
+              {/* ── Tab: Báo giá ── */}
+              {activeTab === "baogia" && lead && <LeadBaoGiaTab lead={lead} />}
 
               {/* ── Tab: Thông tin ── */}
               {activeTab === "info" && lead && (
