@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useBaoGia, useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@/hooks/use-bao-gia";
 import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
-import { liveKetQua } from "@/components/bao-gia/detail/helpers";
+import { liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { ChuongTrinhTourSection } from "@/components/bao-gia/detail/ChuongTrinhTourSection";
@@ -69,18 +71,37 @@ export default function BaoGiaDetailPage() {
     setDraft((d) => d ? { ...d, ket_qua: next } : d);
   };
 
+  const isSent = draft.trang_thai === "sent";
+
   const handleExportPdf = async () => {
     if (!draft.ket_qua) return;
     try {
-      // Recompute case totals + giá trung bình từ items + xe_gia hiện tại
-      // → Word khớp với panel UI, không stale theo AI extract gốc.
+      // Recompute case totals từ items + xe_gia hiện tại → Word khớp panel UI.
       const fresh = liveKetQua(draft);
       if (!fresh) return;
-      await exportBaoGiaWord(fresh, draft.exchange_rate ?? 26000, draft.profit_usd ?? 0);
+      const xr = draft.exchange_rate ?? 26000;
+      // Bảng giá theo số khách (ma trận thật) — khớp section ma trận trên màn hình.
+      const tiers = liveTierBreakdown(draft).map((t) => ({
+        guests: t.guests,
+        gia_ban_vnd: t.line.gia_ban_per_pax,
+        gia_ban_usd: xr > 0 ? t.line.gia_ban_per_pax / xr : 0,
+      }));
+      await exportBaoGiaWord(fresh, xr, draft.profit_usd ?? 0, undefined, tiers);
       toast.success("Đã xuất file Word!");
     } catch {
       toast.error("Lỗi xuất file");
     }
+  };
+
+  // Gửi khách = chốt giá (freeze): trạng thái 'sent', khóa chỉnh sửa. Mở lại được.
+  const handleSend = () => {
+    if (isSent) return;
+    saveField("trang_thai", "sent");
+    toast.success("Đã gửi khách — báo giá đã chốt giá (khóa sửa).");
+  };
+  const handleReopen = () => {
+    saveField("trang_thai", "draft");
+    toast.info("Đã mở lại để chỉnh sửa.");
   };
   const todo = (label: string) => toast.info(`${label}: tính năng đang phát triển`);
 
@@ -90,9 +111,18 @@ export default function BaoGiaDetailPage() {
         row={draft}
         onSaveDraft={() => todo("Lưu nháp")}
         onExportPdf={handleExportPdf}
-        onSendCustomer={() => todo("Gửi khách hàng")}
+        onSendCustomer={handleSend}
       />
       <div className="flex-1 px-4 py-4">
+        {isSent && (
+          <div className="max-w-[1400px] mx-auto mb-3 flex items-center justify-between gap-2 rounded-md border border-violet-200 bg-violet-50 px-4 py-2">
+            <span className="inline-flex items-center gap-1.5 text-xs text-violet-800">
+              <Lock className="h-3.5 w-3.5" /> Báo giá đã gửi khách — đã chốt giá, khóa chỉnh sửa.
+            </span>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReopen}>Mở lại để sửa</Button>
+          </div>
+        )}
+        <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
         <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
           <div className="space-y-4 min-w-0">
             <ThongTinTourSection
@@ -118,6 +148,7 @@ export default function BaoGiaDetailPage() {
           </div>
           <TongHopChiPhiPanel draft={draft} />
         </div>
+        </fieldset>
       </div>
       <BaoGiaFooter
         onSaveDraft={() => todo("Lưu nháp")}

@@ -25,6 +25,13 @@ export interface ManualDayData {
   khachSan: { bang_gia_ten: string; gia: number | null };
 }
 
+// 1 bậc giá (số khách → giá bán/khách) cho bảng ma trận trong Word.
+export interface TierPrice {
+  guests: number;
+  gia_ban_vnd: number;
+  gia_ban_usd: number;
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 const BORDER    = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS   = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
@@ -112,11 +119,12 @@ export async function exportBaoGiaWord(
   ketQua: BaoGiaKetQua,
   exchangeRate: number,
   profitUsd: number,
-  manualDays?: ManualDayData[]
+  manualDays?: ManualDayData[],
+  tiers?: TierPrice[]
 ) {
   const doc = manualDays
     ? buildManualDoc(ketQua, exchangeRate, profitUsd, manualDays)
-    : buildAutoDoc(ketQua, exchangeRate, profitUsd);
+    : buildAutoDoc(ketQua, exchangeRate, profitUsd, tiers);
 
   const blob = await Packer.toBlob(doc);
   const safeName =
@@ -435,6 +443,7 @@ function buildAutoDoc(
   ketQua: BaoGiaKetQua,
   exchangeRate: number,
   profitUsd: number,
+  tiers?: TierPrice[],
 ): Document {
   const today = new Date().toLocaleDateString("vi-VN");
   const { case_16, case_20 } = ketQua;
@@ -630,6 +639,49 @@ function buildAutoDoc(
     ],
   });
 
+  // Bảng giá theo số khách (ma trận thật) — 1 cột/bậc, giá bán/khách VND + USD.
+  const buildTierTable = (ts: TierPrice[]): Table => {
+    const LABEL_W = 2600;
+    const baseW = Math.floor((CONTENT_W - LABEL_W) / ts.length);
+    const colW = ts.map((_, i) => (i === ts.length - 1 ? CONTENT_W - LABEL_W - baseW * (ts.length - 1) : baseW));
+    return new Table({
+      width: { size: CONTENT_W, type: WidthType.DXA },
+      rows: [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            cell([p("Số khách", { bold: true })], { width: LABEL_W, shading: HEADER_SHADING }),
+            ...ts.map((t, i) =>
+              cell([p(`${t.guests} khách`, { bold: true, align: AlignmentType.CENTER })], { width: colW[i], shading: HEADER_SHADING }),
+            ),
+          ],
+        }),
+        new TableRow({
+          children: [
+            cell([p("Giá / khách (VND)", { bold: true, color: "FFFFFF" })], { width: LABEL_W, shading: BLUE_SHADING }),
+            ...ts.map((t, i) =>
+              cell([p(fmt(t.gia_ban_vnd), { bold: true, align: AlignmentType.CENTER, color: "FFFFFF", size: 24 })], { width: colW[i], shading: BLUE_SHADING }),
+            ),
+          ],
+        }),
+        new TableRow({
+          children: [
+            cell([p("Giá / khách (USD)", { bold: true })], { width: LABEL_W, shading: HEADER_SHADING }),
+            ...ts.map((t, i) =>
+              cell([p(`≈ ${fmtUsd(t.gia_ban_usd)}`, { align: AlignmentType.CENTER })], { width: colW[i] }),
+            ),
+          ],
+        }),
+      ],
+    });
+  };
+
+  // Có tiers → hiện BẢNG GIÁ THEO SỐ KHÁCH (thay so-sánh-2-phương-án + kết luận).
+  const priceSection =
+    tiers && tiers.length > 0
+      ? [sectionLabel("III. BẢNG GIÁ THEO SỐ KHÁCH"), buildTierTable(tiers)]
+      : [sectionLabel("III. SO SÁNH 2 PHƯƠNG ÁN (16 VÀ 20 KHÁCH)"), compareTable, spacer(), conclusionTable];
+
   return new Document({
     sections: [
       {
@@ -651,10 +703,7 @@ function buildAutoDoc(
           sectionLabel("II. CHI PHÍ CỐ ĐỊNH"),
           fixedCostTable,
           spacer(),
-          sectionLabel("III. SO SÁNH 2 PHƯƠNG ÁN (16 VÀ 20 KHÁCH)"),
-          compareTable,
-          spacer(),
-          conclusionTable,
+          ...priceSection,
         ],
       },
     ],
