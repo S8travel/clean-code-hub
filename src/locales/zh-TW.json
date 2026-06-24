@@ -2110,6 +2110,8 @@
   "ĐNTT chưa có allocation — không in được": "付款申請尚無分配明細 — 無法列印",
   "Đã xuất Giấy đề nghị hoàn ứng": "已匯出墊付款申請單",
   "Lỗi xuất Word: ": "匯出 Word 錯誤：",
+  "In đề nghị thanh toán": "列印付款申請單",
+  "Đã xuất Giấy đề nghị thanh toán": "已匯出付款申請單",
   "ĐNTT gộp": "合併付款申請",
   "Tạo đề nghị thanh toán gộp": "建立合併付款申請",
   "Tên người nhận hoàn ứng": "墊付款收款人姓名",
