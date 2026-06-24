@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye, Plus } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye, Plus, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -30,6 +30,7 @@ import {
   type DinhKyDNTTRow,
 } from "@/hooks/use-thanh-toan-dinh-ky";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
+import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
 import { errMsg } from "@/lib/error";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -462,6 +463,9 @@ export default function ThanhToanDinhKyPage() {
               <MonthGroupCard
                 key={mg.monthKey}
                 monthGroup={mg}
+                nccTen={ncc.nccTen}
+                nccStk={ncc.nccStk}
+                nccNganHang={ncc.nccNganHang}
                 onCreateDNTT={() => openCreateDialogForMonth(ncc, mg)}
               />
             ))}
@@ -619,9 +623,15 @@ export default function ThanhToanDinhKyPage() {
 // Header: summary tháng + nút Tạo ĐNTT. Expand: list chi phí theo đoàn + list ĐNTT của tháng.
 function MonthGroupCard({
   monthGroup,
+  nccTen,
+  nccStk,
+  nccNganHang,
   onCreateDNTT,
 }: {
   monthGroup: MonthGroup;
+  nccTen: string;
+  nccStk: string | null;
+  nccNganHang: string | null;
   onCreateDNTT: () => void;
 }) {
   useTranslate();
@@ -629,6 +639,42 @@ function MonthGroupCard({
   const [expanded, setExpanded] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DNTTRow | null>(null);
   const [viewTarget, setViewTarget] = useState<DNTTRow | null>(null);
+  const [printingId, setPrintingId] = useState<number | null>(null);
+
+  // In Giấy đề nghị thanh toán cho NCC (Word) — reuse mẫu ĐNTT khác.
+  // NCC = đơn vị thụ hưởng (chủ tài khoản); ô "Người đề nghị" để trống cho NV ký.
+  // Nội dung gọn 1 dòng "Thanh toán công nợ tháng .." (KHÔNG liệt kê từng đoàn),
+  // số tiền = tổng ĐNTT (d.so_tien). Tháng lấy từ monthKey (luôn tiếng Việt,
+  // KHÔNG dùng monthLabel vì label phụ thuộc locale t("Tháng")).
+  const handlePrint = async (d: DinhKyDNTTRow) => {
+    setPrintingId(d.id);
+    try {
+      let noiDung = "Thanh toán công nợ";
+      if (monthGroup.monthKey !== "khong_thang") {
+        const [y, m] = monthGroup.monthKey.split("-");
+        noiDung = `Thanh toán công nợ tháng ${parseInt(m, 10)}/${y}`;
+      }
+      await exportDnttKhacHoanUngWord({
+        maDoan: "",
+        tenNguoiNhan: nccTen || d.ten_nha_cung_cap || "—",
+        soTaiKhoan: nccStk,
+        nganHang: nccNganHang,
+        lyDo: d.mo_ta || t("Thanh toán định kỳ"),
+        nhanLabel: "Đơn vị thụ hưởng",
+        tenNguoiDeNghi: "",
+        hinhThuc: "chuyen_khoan", // trả NCC định kỳ luôn là chuyển khoản
+        items: [{ mo_ta: noiDung, so_luong: 1, don_gia: d.so_tien, thanh_tien: d.so_tien }],
+        ngayLap: d.created_at,
+        ngayCanThanhToan: d.ngay_can_thanh_toan,
+      });
+      toast.success(t("Đã xuất Giấy đề nghị thanh toán"));
+    } catch (e: unknown) {
+      toast.error(t("Lỗi xuất Word: ") + (errMsg(e) || ""));
+    } finally {
+      // Chỉ nhả nút của chính ĐNTT này — tránh bật lại nút ĐNTT khác đang in.
+      setPrintingId((prev) => (prev === d.id ? null : prev));
+    }
+  };
 
   const fmtRange = (min?: string | null, max?: string | null) => {
     if (!min && !max) return null;
@@ -761,6 +807,15 @@ function MonthGroupCard({
                       <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0", ttInfo.cls)}>
                         {t(ttInfo.textKey)}
                       </span>
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-6 px-1.5 shrink-0"
+                        title={t("In đề nghị thanh toán")}
+                        disabled={printingId === d.id}
+                        onClick={() => handlePrint(d)}
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         variant="ghost" size="sm"
                         className="h-6 px-1.5 shrink-0"
