@@ -54,6 +54,7 @@ const loaiLabel: Record<string, { textKey: string; color: string }> = {
   nha_hang: { textKey: "NH", color: "bg-orange-100 text-orange-700" },
   dich_vu: { textKey: "DV", color: "bg-purple-100 text-purple-700" },
   tra_truoc: { textKey: "Trả trước", color: "bg-amber-100 text-amber-700" },
+  dinh_ky: { textKey: "Định kỳ", color: "bg-teal-100 text-teal-700" },
 };
 
 // Shape của ĐNTT cọc sibling đọc từ dntt_with_payment_status (subset cột).
@@ -547,7 +548,7 @@ function DNTTPageContent() {
           <label className="text-xs text-muted-foreground mb-1 block">{t("Loại")}</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[130px]">
-              <span>{!loai ? t("Tất cả") : loai === "khach_san" ? t("Khách sạn") : loai === "nha_hang" ? t("Nhà hàng") : loai === "tra_truoc" ? t("Trả trước") : t("Dịch vụ")}</span>
+              <span>{!loai ? t("Tất cả") : loai === "khach_san" ? t("Khách sạn") : loai === "nha_hang" ? t("Nhà hàng") : loai === "tra_truoc" ? t("Trả trước") : loai === "dinh_ky" ? t("Định kỳ") : t("Dịch vụ")}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("Tất cả")}</SelectItem>
@@ -555,6 +556,7 @@ function DNTTPageContent() {
               <SelectItem value="nha_hang">{t("Nhà hàng")}</SelectItem>
               <SelectItem value="dich_vu">{t("Dịch vụ")}</SelectItem>
               <SelectItem value="tra_truoc">{t("Trả trước")}</SelectItem>
+              <SelectItem value="dinh_ky">{t("Định kỳ")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -596,12 +598,20 @@ function DNTTPageContent() {
                 <TableRow key={row.id}>
                   <TableCell className="text-center">{(currentPage - 1) * PAGE_SIZE + idx + 1}</TableCell>
                   <TableCell>
-                    <button
-                      className="text-primary hover:underline text-left font-medium"
-                      onClick={() => navigate(`/doan/${row.doan_id}`)}
-                    >
-                      {row.ten_doan}
-                    </button>
+                    {row.doan_id != null ? (
+                      <button
+                        className="text-primary hover:underline text-left font-medium"
+                        onClick={() => navigate(`/doan/${row.doan_id}`)}
+                      >
+                        {row.ten_doan}
+                      </button>
+                    ) : (
+                      // ĐNTT định kỳ gộp nhiều đoàn (doan_id=null) → không có mã đoàn,
+                      // hiển thị tên NCC để nhận diện thay vì nút trống dẫn tới /doan/null.
+                      <span className="font-medium text-muted-foreground">
+                        {row.ten_ncc || t("Định kỳ")}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lCls)}>{lTxt}</span>
