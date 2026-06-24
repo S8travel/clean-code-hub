@@ -105,7 +105,9 @@ export default function HoanUngPage() {
     });
     exportDnttKhacHoanUngWord({
       maDoan: "",
-      tenNguoiNhan: r.nguoi_ung_ho_ten || r.ten_nha_cung_cap || "—",
+      // Chủ tài khoản = "Họ tên" user nhập (ten_nha_cung_cap), KHÔNG phải tên
+      // tài khoản đăng nhập (nguoi_ung_ho_ten) — user có thể nhận hộ người khác.
+      tenNguoiNhan: r.ten_nha_cung_cap || r.nguoi_ung_ho_ten || "—",
       soTaiKhoan: r.so_tai_khoan,
       nganHang: r.ngan_hang,
       lyDo: `Hoàn ứng chi phí văn phòng${r.mo_ta ? ` — ${r.mo_ta}` : ""}`,
