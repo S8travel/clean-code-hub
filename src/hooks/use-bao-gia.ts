@@ -148,6 +148,50 @@ export function useCreateBaoGia() {
   });
 }
 
+// Nhân bản 1 báo giá → bản nháp mới (giữ lịch trình + giá + ma trận bậc).
+// ma_bg/id/created_at để DB tự sinh; trạng thái về draft; gắn lead mới (hoặc bỏ trống).
+export function useCloneBaoGia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, leadId }: { id: number; leadId?: number | null }) => {
+      const { data: src, error: e1 } = await externalSupabase
+        .from("bao_gia")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (e1) throw e1;
+      const s = src as BaoGiaRow;
+      const payload: Omit<Partial<BaoGiaRow>, "id" | "created_at"> = {
+        tieu_de: s.tieu_de ? `${s.tieu_de} (sao chép)` : s.tieu_de,
+        noi_dung_goc: s.noi_dung_goc,
+        ket_qua: s.ket_qua,
+        exchange_rate: s.exchange_rate,
+        profit_usd: s.profit_usd,
+        ngay_di: s.ngay_di,
+        ngay_ve: s.ngay_ve,
+        ghi_chu: s.ghi_chu,
+        hieu_luc_ngay: s.hieu_luc_ngay,
+        xe_ten: s.xe_ten,
+        xe_gia: s.xe_gia,
+        phu_thu: s.phu_thu,
+        vcb_rate: s.vcb_rate,
+        trang_thai: "draft",
+        lead_id: leadId ?? null,
+      };
+      const { data, error } = await externalSupabase
+        .from("bao_gia")
+        .insert(payload as unknown as TablesInsert<"bao_gia">)
+        .select("id")
+        .single();
+      if (error) throw error;
+      return data as { id: number };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bao_gia"] });
+    },
+  });
+}
+
 export function useUpdateBaoGia() {
   const qc = useQueryClient();
   return useMutation({

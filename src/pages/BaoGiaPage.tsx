@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, Trash2, FileDown, FileText, Settings } from "lucide-react";
+import { Plus, Trash2, FileDown, FileText, Settings, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -20,6 +20,7 @@ import { BangGiaImport } from "@/components/bao-gia/BangGiaImport";
 import {
   useBaoGiaList,
   useCreateBaoGia,
+  useCloneBaoGia,
   useDeleteBaoGia,
   type BaoGiaCase,
   type BaoGiaKetQua,
@@ -75,7 +76,18 @@ export default function BaoGiaPage() {
   const { data: bangGia = [] } = useBangGiaDichVu();
   const { data: leads = [] } = useLeadsList();
   const createMutation = useCreateBaoGia();
+  const cloneMutation = useCloneBaoGia();
   const deleteMutation = useDeleteBaoGia();
+
+  const handleClone = (id: number) => {
+    cloneMutation.mutate(
+      { id },
+      {
+        onSuccess: ({ id: newId }) => { toast.success("Đã nhân bản"); navigate(`/bao-gia/${newId}`); },
+        onError: () => toast.error("Lỗi nhân bản"),
+      },
+    );
+  };
 
   // Map lead_id → tên khách (hiển thị cột "Khách" trong list báo giá).
   const leadName: Record<number, string> = {};
@@ -191,6 +203,10 @@ export default function BaoGiaPage() {
                         </td>
                         <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-1 justify-center">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Nhân bản"
+                              onClick={() => handleClone(row.id)} disabled={cloneMutation.isPending}>
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
                             {row.ket_qua && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" title="Export Word"
                                 onClick={() => {
