@@ -27,8 +27,8 @@ import {
 } from "@/hooks/use-bao-gia";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
 import { useLeadsList } from "@/hooks/use-leads";
-import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
-import { costBreakdown, liveKetQua, defaultDayItems } from "@/components/bao-gia/detail/helpers";
+import { exportBaoGiaWord, type TierPrice } from "@/lib/export-bao-gia-word";
+import { costBreakdown, liveKetQua, liveTierBreakdown, defaultDayItems } from "@/components/bao-gia/detail/helpers";
 import { toast } from "sonner";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -116,8 +116,8 @@ export default function BaoGiaPage() {
     });
   };
 
-  const handleExportWord = async (ketQua: BaoGiaKetQua, exchangeRate: number, profitUsd: number) => {
-    try { await exportBaoGiaWord(ketQua, exchangeRate, profitUsd); toast.success("Đã xuất file Word!"); }
+  const handleExportWord = async (ketQua: BaoGiaKetQua, exchangeRate: number, profitUsd: number, tiers?: TierPrice[]) => {
+    try { await exportBaoGiaWord(ketQua, exchangeRate, profitUsd, undefined, tiers); toast.success("Đã xuất file Word!"); }
     catch { toast.error("Lỗi xuất Word"); }
   };
 
@@ -194,8 +194,8 @@ export default function BaoGiaPage() {
                         <td className="py-2 px-3 text-right font-medium text-blue-700">{giaPaxVnd != null ? fmt(giaPaxVnd) : "—"}</td>
                         <td className="py-2 px-3 text-right text-blue-700">{giaPaxUsd != null ? fmtUsd(giaPaxUsd) : "—"}</td>
                         <td className="py-2 px-3 text-center">
-                          <Badge variant={row.trang_thai === "final" ? "default" : "secondary"}>
-                            {row.trang_thai === "final" ? "Chính thức" : "Nháp"}
+                          <Badge variant={row.trang_thai === "draft" ? "secondary" : "default"}>
+                            {row.trang_thai === "sent" ? "Đã gửi" : row.trang_thai === "final" ? "Chính thức" : "Nháp"}
                           </Badge>
                         </td>
                         <td className="py-2 px-3 text-right text-muted-foreground">
@@ -210,9 +210,16 @@ export default function BaoGiaPage() {
                             {row.ket_qua && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" title="Export Word"
                                 onClick={() => {
-                                  // Export với ket_qua live (case totals recompute) — match DETAIL
+                                  // Export với ket_qua live + ma trận giá theo số khách — match DETAIL
                                   const fresh = liveKetQua(row) ?? row.ket_qua;
-                                  if (fresh) handleExportWord(fresh, row.exchange_rate ?? 26000, row.profit_usd ?? 0);
+                                  if (!fresh) return;
+                                  const xr = row.exchange_rate ?? 26000;
+                                  const tiers = liveTierBreakdown(row).map((t) => ({
+                                    guests: t.guests,
+                                    gia_ban_vnd: t.line.gia_ban_per_pax,
+                                    gia_ban_usd: xr > 0 ? t.line.gia_ban_per_pax / xr : 0,
+                                  }));
+                                  handleExportWord(fresh, xr, row.profit_usd ?? 0, tiers);
                                 }}>
                                 <FileDown className="h-3.5 w-3.5" />
                               </Button>
