@@ -11,6 +11,7 @@ import KSCard from "./KSCard";
 import KSCancelModal from "./KSCancelModal";
 import KSAggCommitModal from "./KSAggCommitModal";
 import KSLegacyAdjustModal from "./KSLegacyAdjustModal";
+import KSNgoaiTourPanel from "./KSNgoaiTourPanel";
 import { useKSSection } from "./use-ks-section";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -124,6 +125,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
       {distinctKsIdsFromNgay.map((ksId) => (
         <KSCard key={ksId} ksId={ksId} data={cardData} handlers={cardHandlers} locked={locked} />
       ))}
+
+      {/* Khách sạn ngoài tour — chi phí KS tự do không gắn lịch trình (panel độc lập) */}
+      <KSNgoaiTourPanel doanId={doanId} tenDoan={tenDoan} locked={locked} />
 
       {/* "Điều chỉnh" modal — per-booking, sửa so_phong/gia_phong nhiều row sau khi paid */}
       {ksAdjustTarget && (

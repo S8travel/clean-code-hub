@@ -232,7 +232,10 @@ export default function ThanhToanDinhKyPage() {
       const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
       mg.totalThanhTien += tt;
       mg.totalDaTT += r.so_tien_da_tt;
-      mg.totalConLai += Math.max(0, tt - r.so_tien_da_tt);
+      // "Còn" = còn CẦN ĐỀ NGHỊ = NET − đã đề nghị (so_tien_da_dntt, gồm ĐNTT chưa
+      // trả). KHÔNG dùng so_tien_da_tt (đã trả) — kẻo phần đã đề nghị chưa trả bị
+      // batch lại → đề nghị trùng/trả dư cho NCC.
+      mg.totalConLai += Math.max(0, tt - r.so_tien_da_dntt);
     });
 
     dnttList.forEach((d) => {
@@ -281,7 +284,7 @@ export default function ThanhToanDinhKyPage() {
     if (!dialogCtx) return 0;
     return dialogCtx.rows.reduce((s, r) => {
       const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
-      return s + Math.max(0, tt - r.so_tien_da_tt);
+      return s + Math.max(0, tt - r.so_tien_da_dntt);
     }, 0);
   }, [dialogCtx]);
 
@@ -295,7 +298,7 @@ export default function ThanhToanDinhKyPage() {
     if (!ncc.nccId) { toast.error(t("Tháng này không có NCC hợp lệ")); return; }
     const eligible = mg.rows.filter((r) => {
       const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
-      return Math.max(0, tt - r.so_tien_da_tt) > 0;
+      return Math.max(0, tt - r.so_tien_da_dntt) > 0;
     });
     if (eligible.length === 0) { toast.warning(t("Tháng này không còn chi phí cần thanh toán")); return; }
     setDialogCtx({
@@ -329,7 +332,7 @@ export default function ThanhToanDinhKyPage() {
     // không cần manual drift fix nữa.
     const conLaiByRow = dialogCtx.rows.map((r) => ({
       id: r.id,
-      conLai: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt),
+      conLai: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_dntt),
     }));
     const allocAmts = proRataInts(batchEffectiveAmount, conLaiByRow.map((x) => x.conLai));
     const allocations = conLaiByRow.map((x, i) => ({
@@ -570,7 +573,7 @@ export default function ThanhToanDinhKyPage() {
                 {(() => {
                   // Tính alloc preview KHỚP với save logic (proRataInts) — không drift
                   const conLais = dialogCtx.rows.map((r) =>
-                    Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_tt)
+                    Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_dntt)
                   );
                   const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
                     ? proRataInts(batchEffectiveAmount, conLais)
@@ -683,7 +686,11 @@ function MonthGroupCard({
     return min === max ? mm : `${mm} → ${mx}`;
   };
 
-  const fullyPaid = monthGroup.totalConLai === 0 && monthGroup.totalThanhTien > 0;
+  // "Còn" = còn cần ĐỀ NGHỊ (totalConLai theo so_tien_da_dntt). fullyProposed = đã
+  // đề nghị hết (ẩn nút Tạo ĐNTT + tô xanh "Còn 0"). fullyPaid = đã TRẢ đủ (totalDaTT)
+  // → CHỈ khi này mới hiện ✓ "hoàn tất", tránh hiểu nhầm đề-nghị-hết là đã-trả.
+  const fullyProposed = monthGroup.totalConLai === 0 && monthGroup.totalThanhTien > 0;
+  const fullyPaid = monthGroup.totalDaTT >= monthGroup.totalThanhTien && monthGroup.totalThanhTien > 0;
 
   // Group chi phí by đoàn để hiển thị gom
   const byDoan = useMemo(() => {
@@ -714,7 +721,7 @@ function MonthGroupCard({
           <span className="text-sm font-medium">{monthGroup.monthLabel}</span>
           <span className="text-xs text-muted-foreground">
             · {fmt(monthGroup.totalThanhTien)} / {t("Đã TT")} <span className="text-emerald-600">{fmt(monthGroup.totalDaTT)}</span> /{" "}
-            <span className={fullyPaid ? "text-emerald-600 font-medium" : "text-orange-600 font-medium"}>
+            <span className={fullyProposed ? "text-emerald-600 font-medium" : "text-orange-600 font-medium"}>
               {t("Còn")} {fmt(monthGroup.totalConLai)}
             </span>
             {monthGroup.rows.length > 0 && (

@@ -24,6 +24,8 @@ interface DatePickerProps {
   defaultMonth?: string;
   /** Content rendered under the calendar (e.g. legend for highlighted days). */
   footer?: ReactNode;
+  /** Khoá chọn ngày (vd đoàn đã quyết toán) — nút trigger không bấm được. */
+  disabled?: boolean;
 }
 
 function parseISODate(s?: string): Date | undefined {
@@ -44,6 +46,7 @@ export function DatePicker({
   modifiersClassNames,
   defaultMonth,
   footer,
+  disabled = false,
 }: DatePickerProps) {
   const [openInternal, setOpenInternal] = useState(false);
   const isControlled = openProp !== undefined;
@@ -66,6 +69,7 @@ export function DatePicker({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
+          disabled={disabled}
           className={cn(
             "justify-start text-left font-normal",
             !validDate && "text-muted-foreground",

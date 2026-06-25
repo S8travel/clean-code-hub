@@ -585,6 +585,7 @@ async function resolveNccForCancel(dntt: {
       }
     } else {
       const table = dntt.ref_loai === "khach_san" ? "khach_san"
+        : dntt.ref_loai === "ngoai_tour_ks" ? "khach_san"  // ref_id=khach_san_id → cùng query
         : dntt.ref_loai === "nha_hang" ? "nha_hang"
         : dntt.ref_loai === "canh_diem" ? "canh_diem"
         : null;
@@ -671,6 +672,7 @@ export function useCancelDNTT() {
         await externalSupabase
           .from("doan_chi_phi")
           .update({ thanh_tien_thuc_te: null })
+          .eq("ngoai_tour", false)  // KS ngoài tour: thanh_tien_thuc_te = NET cố ý, đừng reset
           .in("id", allocChiPhiIds);
       }
 
@@ -866,6 +868,7 @@ export function useDeleteDNTT() {
         await externalSupabase
           .from("doan_chi_phi")
           .update({ thanh_tien_thuc_te: null })
+          .eq("ngoai_tour", false)  // KS ngoài tour: thanh_tien_thuc_te = NET cố ý, đừng reset
           .in("id", allocChiPhiIds);
       }
 

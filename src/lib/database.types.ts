@@ -1336,6 +1336,10 @@ export type Database = {
           mo_ta: string | null
           ngay_so: number | null
           ngay_thanh_toan: string | null
+          ngoai_tour: boolean
+          ngoai_tour_ci: string | null
+          ngoai_tour_co: string | null
+          khach_san_id: number | null
           nha_cung_cap_id: number | null
           ref_doan_ngay_id: number | null
           ref_doan_ngay_item_id: number | null
@@ -1375,6 +1379,10 @@ export type Database = {
           mo_ta?: string | null
           ngay_so?: number | null
           ngay_thanh_toan?: string | null
+          ngoai_tour?: boolean
+          ngoai_tour_ci?: string | null
+          ngoai_tour_co?: string | null
+          khach_san_id?: number | null
           nha_cung_cap_id?: number | null
           ref_doan_ngay_id?: number | null
           ref_doan_ngay_item_id?: number | null
@@ -1414,6 +1422,10 @@ export type Database = {
           mo_ta?: string | null
           ngay_so?: number | null
           ngay_thanh_toan?: string | null
+          ngoai_tour?: boolean
+          ngoai_tour_ci?: string | null
+          ngoai_tour_co?: string | null
+          khach_san_id?: number | null
           nha_cung_cap_id?: number | null
           ref_doan_ngay_id?: number | null
           ref_doan_ngay_item_id?: number | null

@@ -41,6 +41,9 @@ interface Props {
   onCanTruChange: (v: CanTruSelection[]) => void;
   tenDoanMoi: string;
   serviceDate?: string;
+  /** ref_loai cho ĐNTT. Mặc định 'khach_san' (KS trong tour). KS ngoài tour
+   *  truyền 'ngoai_tour_ks' để KHÔNG đụng aggregation in-tour (lọc cứng 'khach_san'). */
+  refLoai?: string;
 }
 
 function defaultNgayCan(serviceDate?: string): string {
@@ -55,6 +58,7 @@ function defaultNgayCan(serviceDate?: string): string {
 export default function KSDNTTModal({
   open, onClose, doanId, ksId, ksName, nccId, nccTen, nccStk, nccNganHang,
   totalKS, daCoc, localRows, chiPhiRowIds, canTru, onCanTruChange, tenDoanMoi, serviceDate,
+  refLoai = "khach_san",
 }: Props) {
   useTranslate();
   const conLai = totalKS - daCoc;
@@ -86,6 +90,12 @@ export default function KSDNTTModal({
       toast.error(t("Số tiền phải lớn hơn 0"));
       return;
     }
+    // Chống over-commit: tổng đề nghị (tiền mặt + cấn trừ) KHÔNG vượt phần còn lại
+    // (conLai = totalKS − đã cọc/đề nghị). Chặn cọc nhập tay quá tay.
+    if (soTien + canTruAmount > conLai) {
+      toast.error(t("Số tiền vượt phần còn phải thanh toán"));
+      return;
+    }
     setSubmitting(true);
     try {
       // 1. Tạo 1 ĐNTT cho FULL amount = soTien + canTruAmount
@@ -109,7 +119,7 @@ export default function KSDNTTModal({
         so_tien: fullAmount,
         la_coc: mode === "deposit",
         trang_thai_duyet: "cho_duyet",
-        ref_loai: "khach_san",
+        ref_loai: refLoai,
         ref_id: ksId,
         ghi_chu: ghiChu || null,
         ngay_can_thanh_toan: ngayCan || null,
