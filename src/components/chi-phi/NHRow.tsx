@@ -245,6 +245,11 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   const voucherInfo = row?.id != null ? redemptionByChiPhiId[row.id] : undefined;
   const isVoucherCovered = !!voucherInfo;
   const isVoucherCoveredTang = voucherInfo?.voucherLoai === "tang";
+  // Tặng MỘT PHẦN: voucher chỉ phủ vài vé → dòng chính còn phần công ty phải trả
+  // (tien_cong_ty > 0). Khi đó vẫn cần nút ĐNTT cho phần còn lại. Chỉ tặng-phủ-HẾT
+  // (tien_cong_ty = 0) mới loại suất chính khỏi ĐNTT.
+  const mainCompanyRemainder = isVoucherCoveredTang ? (mainCpForFoc?.tien_cong_ty ?? 0) : 0;
+  const isVoucherCoveredTangFull = isVoucherCoveredTang && mainCompanyRemainder <= 0;
   const voucherEligible = canApplyVoucher({
     nguoiTt: nguoiTtMain,
     activeDnttCount: activeDntts.length,
@@ -296,7 +301,7 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
               rowId={row.id}
               focKhach={focResolvedRow.foc_khach}
               focMien={focResolvedRow.foc_mien}
-              disabled={locked}
+              disabled={locked || isVoucherCovered}
             />
           )}
         </td>
@@ -422,6 +427,14 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                 <span className="inline-flex items-center gap-1 px-1 py-px rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap"
                   title={voucherInfo?.voucherTen || undefined}>
                   <Ticket className="h-3 w-3" /> {t("Voucher")}
+                  {voucherInfo && voucherInfo.soVe > 0 && (
+                    <span className="opacity-80">· {voucherInfo.soVe} {t("vé")}</span>
+                  )}
+                </span>
+              )}
+              {mainCompanyRemainder > 0 && activeDntts.length === 0 && (
+                <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap">
+                  {t("Còn")} {fmt(mainCompanyRemainder)} {t("cần ĐNTT")}
                 </span>
               )}
               {!isVoucherCovered && activeDntts.length === 0 && (
@@ -531,8 +544,11 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
             : <HoaDonCell dntts={activeDntts} />}
         </td>
 
-        {/* Actions */}
-        <td className="px-2 py-1.5">
+        {/* Actions — sticky mép phải để nút ĐNTT luôn thấy khi bảng cuộn ngang */}
+        <td className={cn(
+          "px-2 py-1.5 sticky right-0 z-10 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.12)]",
+          selected ? "bg-[#f5f8ff]" : "bg-card",
+        )}>
           <div className="flex items-center gap-1 justify-end">
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
               title={t("Thêm dịch vụ phát sinh")}
@@ -563,9 +579,9 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
               {isMealDinhKy && t("Định kỳ")}
             </Button>
             {nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length === 0 && !!row &&
-             (!isVoucherCoveredTang || companyExtrasTotal > 0) && (
+             (!isVoucherCoveredTangFull || companyExtrasTotal > 0) && (
               <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
-                title={isVoucherCovered ? t("Tạo ĐNTT cho phần phát sinh (suất chính đã dùng voucher)") : undefined}
+                title={isVoucherCoveredTangFull ? t("Tạo ĐNTT cho phần phát sinh (suất chính đã dùng voucher)") : undefined}
                 onClick={() => {
                   setDnttAlreadyPaid(0);
                   setDnttModalMode("full");
@@ -593,6 +609,8 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                   itemName: `${nh?.ten || t("Nhà hàng")} · ${dateLabel} ${buaLabel}`,
                   coverValue: mainThanhTien,
                   soVe: soKhachThucTe,
+                  donGia: row!.don_gia,
+                  ckPct: ckPhanTram,
                 })}>
                 <Ticket className="h-3.5 w-3.5" />
               </Button>
@@ -630,6 +648,8 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
           itemName: `${nh?.ten || t("Nhà hàng")} · ${dateLabel} ${buaLabel} · ${extra.mo_ta}`,
           coverValue: applyChietKhau(extra.so_luong * extra.don_gia, extra.chiet_khau_phan_tram),
           soVe: extra.so_luong,
+          donGia: extra.don_gia,
+          ckPct: extra.chiet_khau_phan_tram,
         } : null;
         return (
           <NHExtraRow

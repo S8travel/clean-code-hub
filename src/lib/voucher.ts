@@ -5,11 +5,15 @@
 // ghi nhận = giá trị công ty của dòng lúc dùng. Khi áp: chi phí về tien_cong_ty=0
 // (công ty không trả tiền vì đã đổi voucher) nhưng vẫn giữ gross hiển thị.
 
+import { applyChietKhau } from "./chi-phi-calc";
+
 export interface RedemptionLike {
   id: number;
   voucher_id: number;
   chi_phi_id: number | null;
   gia_tri: number;
+  /** Số vé voucher phủ (số khách miễn / trả-trước). Có thể < số khách → phủ MỘT PHẦN. */
+  so_luong?: number;
   dntt_id?: number | null;
   voucher?: { ten?: string | null; loai?: string | null } | null;
 }
@@ -18,6 +22,8 @@ export interface CoveredInfo {
   redemptionId: number;
   voucherId: number;
   giaTri: number;
+  /** Số vé voucher phủ (so_luong redemption). Phủ một phần khi < số khách của dòng. */
+  soVe: number;
   voucherTen: string;
   /** 'mua' = giữ giá trị (trả bằng voucher, có ĐNTT) | 'tang' = miễn phí (chính = 0). */
   voucherLoai: "mua" | "tang";
@@ -41,6 +47,7 @@ export function buildRedemptionMap(
       redemptionId: r.id,
       voucherId: r.voucher_id,
       giaTri: r.gia_tri,
+      soVe: r.so_luong ?? 0,
       voucherTen: r.voucher?.ten ?? "",
       voucherLoai: r.voucher?.loai === "tang" ? "tang" : "mua",
       dnttId: r.dntt_id ?? null,
@@ -65,6 +72,43 @@ export function canApplyVoucher(params: {
     params.activeDnttCount === 0 &&
     params.hasChiPhiId
   );
+}
+
+/**
+ * Chia giá trị 1 suất chính khi voucher phủ `soVe` vé (có thể < số khách → phủ MỘT PHẦN).
+ *
+ * - `fullValue`   = giá trị công ty cả dòng (đã FOC + CK).
+ * - `remainderNet`= giá trị phần KHÔNG được voucher phủ = (số khách − vé) × đơn giá, đã CK.
+ *                   Tính TRỰC TIẾP (không lấy fullValue − coverValue) để khi vé = số khách
+ *                   ra ĐÚNG 0, và để khớp BIT-FOR-BIT với số ĐNTT (caller truyền số ghế
+ *                   còn lại vào calcNHDnttAmount → mainNet = applyChietKhau(ghế còn × đơn giá)).
+ * - `coverValue`  = phần voucher phủ = fullValue − remainderNet (bù trừ → coverValue +
+ *                   remainderNet === fullValue, không lệch do làm tròn 2 lần).
+ * - `tienCongTy`  = số công ty phải trả lưu vào doan_chi_phi:
+ *                     TẶNG → remainderNet (vé tặng miễn phí, chỉ trả phần còn lại)
+ *                     MUA  → fullValue (giữ nguyên — voucher chỉ là cách thanh toán, có ĐNTT đủ)
+ *
+ * Vé bị kẹp [0, số khách]. veApplied = vé thực dùng (sau kẹp).
+ */
+export function splitVoucherCoverage(params: {
+  soKhachThucTe: number;
+  donGia: number;
+  ckPct: number | null;
+  soVe: number;
+  loai: "mua" | "tang";
+}): {
+  fullValue: number;
+  coverValue: number;
+  remainderNet: number;
+  tienCongTy: number;
+  veApplied: number;
+} {
+  const ve = Math.max(0, Math.min(Math.round(params.soVe), params.soKhachThucTe));
+  const fullValue = applyChietKhau(params.soKhachThucTe * params.donGia, params.ckPct);
+  const remainderNet = applyChietKhau((params.soKhachThucTe - ve) * params.donGia, params.ckPct);
+  const coverValue = Math.max(0, fullValue - remainderNet);
+  const tienCongTy = params.loai === "tang" ? remainderNet : fullValue;
+  return { fullValue, coverValue, remainderNet, tienCongTy, veApplied: ve };
 }
 
 /**
