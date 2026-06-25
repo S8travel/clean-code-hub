@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Plus, Trash2, X, Hotel, ArrowRight, Ban } from "lucide-react";
+import { Plus, Trash2, X, Hotel, ArrowRight, Ban, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,9 +11,13 @@ import {
   type ChiPhiRow, type DNTTRow,
 } from "@/hooks/use-chi-phi";
 import { useCancelDNTT } from "@/hooks/use-dntt";
+import { useCurrentUserName } from "@/hooks/use-doan";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import KSDNTTModal from "./KSDNTTModal";
+import DNTTKSPreviewModal from "./DNTTKSPreviewModal";
+import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
+import { buildNgoaiTourSelectedData, REF_LOAI_NGOAI_TOUR } from "@/lib/ks-ngoai-tour-print";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type LocalKSRow, type KSLoaiRow } from "./ks-section-shared";
 import {
@@ -24,10 +28,6 @@ import { errMsg } from "@/lib/error";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
-
-// ĐNTT KS ngoài tour dùng ref_loai RIÊNG để KHÔNG đụng aggregation KS trong tour
-// (use-ks-section lọc cứng ref_loai==='khach_san').
-const REF_LOAI_NGOAI_TOUR = "ngoai_tour_ks";
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   chua_de_nghi:  { label: "Chưa đề nghị", cls: "bg-gray-100 text-gray-600" },
@@ -57,9 +57,14 @@ interface Props {
   tenDoan?: string;
   /** Đoàn đã quyết toán → khóa thêm/sửa/xóa (trừ admin, do lockGuard ở hook). */
   locked?: boolean;
+  /** Chọn thẻ để in CHUNG với KS trong tour — state ở ChiPhiKSSection. */
+  selectedKsIds: Set<number>;
+  onToggleSelect: (ksId: number) => void;
 }
 
-export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false }: Props) {
+export default function KSNgoaiTourPanel({
+  doanId, tenDoan = "", locked = false, selectedKsIds, onToggleSelect,
+}: Props) {
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: ksList = [] } = useKhachSanList();
   const { data: nccList = [] } = useNhaCungCapList();
@@ -67,6 +72,7 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
   const upsert = useUpsertChiPhi();
   const del = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
+  const { data: currentUserName = "" } = useCurrentUserName();
 
   const ksInfoMap = useMemo(() => {
     const m: Record<number, KsInfo> = {};
@@ -90,6 +96,7 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
   const [picking, setPicking] = useState(false);
   const [modalKsId, setModalKsId] = useState<number | null>(null);
   const [canTruByKs, setCanTruByKs] = useState<Record<number, CanTruSelection[]>>({});
+  const [previewItems, setPreviewItems] = useState<EdgeFunctionData[] | null>(null);
   const tmpIdRef = useRef(0);
   const savingRef = useRef<Set<number>>(new Set());
 
@@ -218,6 +225,20 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
     is_hdv: false,
   });
 
+  // Hotels (id, tên, blob NH) cho builder in dùng chung.
+  const hotels = useMemo(
+    () => ksList.map((k) => ({ id: k.id, ten: k.ten, tai_khoan_thanh_toan: k.tai_khoan_thanh_toan })),
+    [ksList],
+  );
+
+  // In ĐNTT 1 thẻ (Word) — tái dùng builder chung + DNTTKSPreviewModal.
+  const handlePrintCard = (ksId: number) => {
+    const data = buildNgoaiTourSelectedData(
+      [ksId], chiPhiRows, dnttList, hotels, tenDoan || `#${doanId}`, currentUserName);
+    if (data.length === 0) { toast.error("Chưa có ĐNTT để in"); return; }
+    setPreviewItems(data);
+  };
+
   const modalKs = modalKsId != null ? savedRows.filter((r) => r.khach_san_id === modalKsId) : [];
   const modalNcc = modalKsId != null && ksInfoMap[modalKsId]?.nccId != null
     ? nccInfoMap[ksInfoMap[modalKsId].nccId!] : null;
@@ -238,6 +259,8 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
           </Button>
         )}
       </div>
+
+      {/* (Chọn để in CHUNG với KS trong tour — toolbar ở ChiPhiKSSection; checkbox trên từng thẻ) */}
 
       {/* Picker: chỉ chọn khách sạn → tạo thẻ + 1 dòng phòng trống để điền */}
       {picking && (
@@ -282,6 +305,7 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
         const remaining = Math.max(0, netVal - daCoc);
         // ĐNTT đã cam kết ≠ net hiện tại (đổi net qua đường khác / cọc đã trả 1 phần) → cảnh báo.
         const lech = committed && daCoc !== netVal;
+        const liveCount = liveDnttsFor(ksId).length;
         const hasCancellable = liveDnttsFor(ksId).some((d) => (Number(d.paid_amount) || 0) === 0);
         const badge = STATUS_BADGE[status] ?? STATUS_BADGE.chua_de_nghi;
 
@@ -289,7 +313,14 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
           <div key={ksId} className="rounded-md border border-blue-100 bg-white">
             {/* Header thẻ */}
             <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-blue-50/60 border-b border-blue-100">
-              <span className="text-xs font-semibold text-blue-900">{hotelName}</span>
+              <div className="flex items-center gap-2">
+                {!cardDinhKy && liveCount > 0 && (
+                  <Checkbox checked={selectedKsIds.has(ksId)}
+                    onCheckedChange={() => onToggleSelect(ksId)}
+                    title="Chọn để in chung với KS trong tour" />
+                )}
+                <span className="text-xs font-semibold text-blue-900">{hotelName}</span>
+              </div>
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
                   <Checkbox checked={cardDinhKy} disabled={locked}
@@ -409,16 +440,22 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
                   )}
                 </div>
               )}
-              {!cardDinhKy && !locked && (
+              {!cardDinhKy && (
                 <div className="flex items-center gap-1">
-                  {hasCancellable && (
+                  {liveCount > 0 && (
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-blue-700"
+                      onClick={() => handlePrintCard(ksId)}>
+                      <Printer className="h-3 w-3 mr-0.5" /> In
+                    </Button>
+                  )}
+                  {!locked && hasCancellable && (
                     <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-red-600 hover:text-red-700"
                       disabled={cancelMut.isPending}
                       onClick={() => handleCancelDntt(ksId)}>
                       <Ban className="h-3 w-3 mr-0.5" /> Hủy ĐNTT
                     </Button>
                   )}
-                  {remaining > 0 && cardSaved.length > 0 && (
+                  {!locked && remaining > 0 && cardSaved.length > 0 && (
                     <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
                       onClick={() => setModalKsId(ksId)}>
                       <ArrowRight className="h-3 w-3 mr-0.5" /> Đề nghị TT: {fmt(remaining)}
@@ -454,6 +491,13 @@ export default function KSNgoaiTourPanel({ doanId, tenDoan = "", locked = false 
           refLoai={REF_LOAI_NGOAI_TOUR}
         />
       )}
+
+      {/* Xem trước + xuất Word Giấy đề nghị thanh toán KS */}
+      <DNTTKSPreviewModal
+        open={!!previewItems}
+        items={previewItems ?? []}
+        onClose={() => setPreviewItems(null)}
+      />
     </div>
   );
 }
