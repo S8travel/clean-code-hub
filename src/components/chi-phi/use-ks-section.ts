@@ -601,7 +601,9 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   //   người đang nhập. localRows chỉ còn buffer dirty + dòng chưa lưu.
   useEffect(() => {
     if (!ksData) return;
-    const ksChiPhi = chiPhiRows.filter((c) => c.danh_muc === "khach_san");
+    // ngoai_tour: dòng KS tự do (panel "Ngoài tour" riêng) — KHÔNG đưa vào máy
+    // tính phòng/đêm/FOC, tránh dựng row rác / bị auto-xóa như mồ côi.
+    const ksChiPhi = chiPhiRows.filter((c) => c.danh_muc === "khach_san" && !c.ngoai_tour);
     const ngayMap: Record<number, KSNgayRow> = {};
     (ksData.ngayRows || []).forEach((r) => { ngayMap[r.id] = r; });
     const dayUseItemMap = ksData.dayUseItemMap || {};
@@ -958,7 +960,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   // (với KS tien_cong_ty là GROSS chưa trừ FOC → sum sai, hiện gạch nhầm).
   const thucTeOverrideById = new Map<number, number>();
   chiPhiRows.forEach((r) => {
-    if (r.danh_muc === "khach_san" && r.thanh_tien_thuc_te != null) {
+    if (r.danh_muc === "khach_san" && !r.ngoai_tour && r.thanh_tien_thuc_te != null) {
       thucTeOverrideById.set(r.id, Number(r.thanh_tien_thuc_te));
     }
   });

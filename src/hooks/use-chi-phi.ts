@@ -81,6 +81,14 @@ export interface ChiPhiRow {
   trang_thai_hoa_don: string | null;
   // Tag chi phí xe thuộc loại xe nào (doan.xe_id / xe_id_2) — tách báo cáo theo xe.
   xe_id: number | null;
+  // Chi phí "ngoài tour": dòng tự do KHÔNG gắn lịch trình (KS/NH/DV ngoài tour).
+  // Reconcile section + cascade điều tour bỏ qua row này.
+  ngoai_tour: boolean;
+  // KS ngoài tour: khách sạn chọn từ danh mục + check-in/check-out (số đêm).
+  // In-tour suy khách sạn/ngày qua ref_doan_ngay_id → để NULL.
+  khach_san_id: number | null;
+  ngoai_tour_ci: string | null;   // YYYY-MM-DD
+  ngoai_tour_co: string | null;   // YYYY-MM-DD
 }
 
 // NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).
@@ -809,9 +817,12 @@ export function useDeleteDNTT() {
         await externalSupabase.from("cong_no").delete().in("id", cnIds);
       }
       if (chiPhiIds.length > 0) {
+        // KS ngoài tour LƯU NET ở thanh_tien_thuc_te (thanh_tien generated = GROSS,
+        // chưa trừ FOC/đêm) → KHÔNG reset cho dòng ngoai_tour, kẻo RPC/định kỳ đọc nhầm GROSS.
         await externalSupabase
           .from("doan_chi_phi")
           .update({ thanh_tien_thuc_te: null })
+          .eq("ngoai_tour", false)
           .in("id", chiPhiIds);
       }
 
