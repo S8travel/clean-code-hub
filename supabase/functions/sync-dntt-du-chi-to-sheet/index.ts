@@ -145,6 +145,7 @@ serve(async (req) => {
       toDate?: string | null;
       trangThaiDuyet?: string | null;
       loai?: string | null;
+      refLoai?: string | null;
     } = {};
     if (req.method === "POST") {
       try {
@@ -173,6 +174,7 @@ serve(async (req) => {
     if (filters.toDate) q = q.lte("created_at", filters.toDate + "T23:59:59");
     if (filters.trangThaiDuyet) q = q.eq("trang_thai_duyet", filters.trangThaiDuyet);
     if (filters.loai) q = q.eq("loai", filters.loai);
+    if (filters.refLoai) q = q.eq("ref_loai", filters.refLoai);
 
     const { data: rows, error: qErr } = await q;
     if (qErr) throw qErr;
