@@ -100,6 +100,9 @@ interface Filters {
   trangThaiDuyet?: string | null;
   paymentStatus?: "unpaid" | "partial" | "paid" | null;
   loai?: string | null;
+  // Lọc theo ref_loai (vd 'hdv_quyet_toan', 'hdv_tam_ung') — dùng khi cần tách
+  // các ĐNTT cùng `loai` nhưng khác bản chất (HDV quyết toán vs tạm ứng đều loai='hdv').
+  refLoai?: string | null;
 }
 
 // Row của dntt_with_payment_status kèm join doan + nha_cung_cap (useDNTTList).
@@ -156,6 +159,7 @@ export function useDNTTList(filters: Filters) {
       if (filters.trangThaiDuyet) q = q.eq("trang_thai_duyet", filters.trangThaiDuyet);
       if (filters.paymentStatus) q = q.eq("payment_status", filters.paymentStatus);
       if (filters.loai) q = q.eq("loai", filters.loai);
+      if (filters.refLoai) q = q.eq("ref_loai", filters.refLoai);
 
       const { data, error } = await q;
       if (error) throw error;
