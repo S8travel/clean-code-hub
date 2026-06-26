@@ -86,6 +86,25 @@ function HoaDonUNCPageContent() {
     },
   });
 
+  // Load voucher payments per visible DNTT — hiển thị "đã trả bằng voucher X" +
+  // cash thực còn phải trả (so_tien − voucher − cấn trừ) trên cột Số tiền.
+  const { data: voucherByDntt = {} as Record<number, number> } = useQuery({
+    queryKey: ["hoadon-unc-voucher", visibleDnttIds.join(",")],
+    enabled: visibleDnttIds.length > 0,
+    queryFn: async () => {
+      const { data } = await externalSupabase
+        .from("payments")
+        .select("dntt_id, so_tien")
+        .eq("method", "voucher")
+        .in("dntt_id", visibleDnttIds);
+      const m: Record<number, number> = {};
+      (data || []).forEach((p) => {
+        m[p.dntt_id] = (m[p.dntt_id] || 0) + Number(p.so_tien);
+      });
+      return m;
+    },
+  });
+
   // Load nguồn TT (cash payment có nguon != null) per visible DNTT.
   // Key share prefix với "hoa-don-unc" để tự refetch khi mutation invalidate.
   const { data: nguonByDntt = {} as Record<number, string> } = useQuery({
@@ -335,6 +354,7 @@ function HoaDonUNCPageContent() {
                   row={row}
                   stt={(currentPage - 1) * PAGE_SIZE + idx + 1}
                   canTru={canTruByDntt[row.id] || 0}
+                  voucherPaid={voucherByDntt[row.id] || 0}
                   cocSibling={cocSibling}
                   siblingTotal={siblingTotal}
                   paidNguon={nguonByDntt[row.id]}
