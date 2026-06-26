@@ -28,6 +28,17 @@ export function HoaDonUNCFilters({
   trangThaiHD, setTrangThaiHD, trangThaiUNC, setTrangThaiUNC,
   trangThaiTT, setTrangThaiTT, onReset, onOpenBatch, batchCount,
 }: Props) {
+  // Khớp doan_chi_phi.loai / de_nghi_thanh_toan.loai. "HDV" là acronym, không dịch.
+  const loaiOptions = [
+    { value: "khach_san", label: t("Khách sạn") },
+    { value: "nha_hang", label: t("Nhà hàng") },
+    { value: "dich_vu", label: t("Dịch vụ") },
+    { value: "ve_may_bay", label: t("Vé máy bay") },
+    { value: "xe", label: t("Xe") },
+    { value: "visa", label: t("Visa") },
+    { value: "bao_hiem", label: t("Bảo hiểm") },
+    { value: "hdv", label: "HDV" },
+  ];
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="w-[200px]">
@@ -45,16 +56,13 @@ export function HoaDonUNCFilters({
         <label className="text-xs text-muted-foreground mb-1 block">{t("Loại")}</label>
         <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
           <SelectTrigger className="w-[130px]">
-            <span>{!loai ? t("Tất cả") : loai === "khach_san" ? t("Khách sạn") : loai === "nha_hang" ? t("Nhà hàng") : loai === "dich_vu" ? t("Dịch vụ") : loai === "xe" ? t("Xe") : loai === "visa" ? t("Visa") : t("Bảo hiểm")}</span>
+            <span>{loaiOptions.find((o) => o.value === loai)?.label ?? t("Tất cả")}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("Tất cả")}</SelectItem>
-            <SelectItem value="khach_san">{t("Khách sạn")}</SelectItem>
-            <SelectItem value="nha_hang">{t("Nhà hàng")}</SelectItem>
-            <SelectItem value="dich_vu">{t("Dịch vụ")}</SelectItem>
-            <SelectItem value="xe">{t("Xe")}</SelectItem>
-            <SelectItem value="visa">{t("Visa")}</SelectItem>
-            <SelectItem value="bao_hiem">{t("Bảo hiểm")}</SelectItem>
+            {loaiOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
