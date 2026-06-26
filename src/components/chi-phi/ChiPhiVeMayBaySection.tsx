@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import { errMsg } from "@/lib/error";
-import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock } from "lucide-react";
+import { Check, X, Ban, SlidersHorizontal, Trash2, CalendarClock, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -25,6 +25,12 @@ import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import { useCancelDNTT, useUpdateDNTT, useCreateAdjustment } from "@/hooks/use-dntt";
 import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
+import { useCurrentUserName } from "@/hooks/use-doan";
+import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
+import { SearchableSelect } from "@/components/SearchableSelect";
+import { externalSupabase } from "@/lib/supabase-external";
+import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
+import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { t, useTranslate } from "@/lib/i18n";
 
 // Loại tiền cho vé máy bay (giống visa). VND → tỷ giá khóa = 1.
@@ -43,6 +49,9 @@ interface CancelTarget { dnttId: number; isPaid: boolean }
 
 interface Props {
   doanId: number;
+  tenDoan?: string;
+  /** Ngày bắt đầu đoàn (YYYY-MM-DD) — dùng làm ngày mặc định trên ĐNTT in. */
+  ngayBatDau?: string;
   /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
   locked?: boolean;
 }
@@ -138,12 +147,18 @@ function AddVeRow({ doanId, onAdded, locked = false }: { doanId: number; onAdded
 }
 
 // ── Main section ─────────────────────────────────────────────────────────────
-export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props) {
+export default function ChiPhiVeMayBaySection({ doanId, tenDoan, ngayBatDau, locked = false }: Props) {
   useTranslate();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
+  const { data: nccList = [] } = useNhaCungCapList();
+  const { data: currentUserName = "" } = useCurrentUserName();
+  const nccOptions = useMemo(
+    () => nccList.map((n) => ({ value: String(n.id), label: n.ten })),
+    [nccList],
+  );
 
   const canTruByDnttId = useMemo(() => {
     const m: Record<number, number> = {};
@@ -168,6 +183,7 @@ export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props)
   interface ModalTarget { chiPhiId: number; thanhTien: number; moTa: string; nccId: number | null }
   const [modal, setModal] = useState<ModalTarget | null>(null);
   const [modalMode, setModalMode] = useState<"full" | "deposit">("full");
+  const [modalNccId, setModalNccId] = useState<number | null>(null);
   const [depositAmount, setDepositAmount] = useState(0);
   const [ngayCan, setNgayCan] = useState("");
 
@@ -178,8 +194,90 @@ export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props)
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
 
+  // In ĐNTT (Word) — preview modal dùng chung mẫu với Dịch vụ/Xe.
+  const [previewData, setPreviewData] = useState<NHDocData | null>(null);
+
   const veRows = chiPhiRows.filter((r) => r.danh_muc === "ve_may_bay");
   const total = veRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
+  // Dòng vé công ty trả → mới in được ĐNTT (HDV trả thì không qua flow này).
+  const companyVeRows = veRows.filter((r) => r.tien_cong_ty > 0);
+
+  // ── In ĐNTT (Word) ────────────────────────────────────────────────────────
+  // Bê mẫu của Dịch vụ/Xe: build entries từ dòng vé công ty trả (gộp theo NCC),
+  // mở DNTTNHPreviewModal để xem/sửa rồi xuất Word. STK/ngân hàng lấy live từ
+  // nha_cung_cap (vé máy bay không có TK riêng kiểu nhà xe).
+  const handlePrintDNTT = async () => {
+    if (companyVeRows.length === 0) {
+      toast.warning(t("Không có dòng vé công ty trả để in ĐNTT"));
+      return;
+    }
+    try {
+      const nccIds = Array.from(
+        new Set(companyVeRows.map((r) => r.nha_cung_cap_id).filter((x): x is number => x != null)),
+      );
+      const nccMap: Record<number, { ten: string; so_tai_khoan?: string; ngan_hang?: string }> = {};
+      if (nccIds.length > 0) {
+        const { data: nccs } = await externalSupabase
+          .from("nha_cung_cap")
+          .select("id, ten, so_tai_khoan, ngan_hang")
+          .in("id", nccIds);
+        for (const ncc of nccs ?? []) {
+          nccMap[ncc.id] = {
+            ten: ncc.ten,
+            so_tai_khoan: ncc.so_tai_khoan ?? undefined,
+            ngan_hang: ncc.ngan_hang ?? undefined,
+          };
+        }
+      }
+      const ngayLabel = ngayBatDau && /^\d{4}-\d{2}-\d{2}/.test(ngayBatDau)
+        ? ngayBatDau.slice(0, 10).split("-").reverse().join("/")
+        : "";
+
+      // Gộp các dòng vé theo NCC (null → key 0) → 1 entry/NCC.
+      const groups = new Map<number, typeof companyVeRows>();
+      for (const r of companyVeRows) {
+        const key = r.nha_cung_cap_id ?? 0;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(r);
+      }
+
+      const entries: NHDocEntry[] = [];
+      for (const [key, grows] of groups) {
+        const isGop = grows.length > 1;
+        const ncc = key !== 0 ? (nccMap[key] ?? null) : null;
+        // don_gia đã là VND net (computeVeVnd, đã trừ CK) → so_luong*don_gia = tiền vé.
+        const items = grows.map((r) => ({
+          so_luong: r.so_luong,
+          don_gia: r.don_gia,
+          ghi_chu: isGop ? (r.mo_ta || t("Vé máy bay")) : "",
+        }));
+        const totalCty = grows.reduce((s, r) => s + r.tien_cong_ty, 0);
+        entries.push({
+          ngay_date: ngayLabel,
+          ten_nh: ncc?.ten ?? grows[0].mo_ta ?? t("Vé máy bay"),
+          so_khach: grows.reduce((s, r) => s + r.so_luong, 0),
+          foc_khach: null,
+          foc: null,
+          items,
+          ncc,
+          tai_khoan_thanh_toan: null,
+          so_tien_coc: 0,
+          can_tru: 0,
+          so_tien_con_tt: totalCty,
+          la_coc: false,
+          multi_service: isGop,
+        });
+      }
+
+      setPreviewData({
+        doan: { ten_doan: tenDoan || String(doanId) },
+        entries,
+        nguoiDeNghi: currentUserName,
+      });
+    } catch (err: unknown) {
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
+    }
+  };
 
   // ── Inline row edit (mô tả + currency-aware số liệu) ───────────────────────
   type RowEdit = { mo_ta: string; so_luong: number; don_gia_raw: number; tien_te_loai: Currency; ty_gia: number; chiet_khau_pct: number };
@@ -254,6 +352,7 @@ export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props)
   const openModal = (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null) => {
     setModal({ chiPhiId, thanhTien, moTa, nccId });
     setModalMode("full");
+    setModalNccId(nccId);
     setDepositAmount(0);
     setNgayCan("");
   };
@@ -263,11 +362,16 @@ export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props)
     const soTien = modalMode === "full" ? thanhTien : depositAmount;
     if (soTien <= 0) { toast.error(t("Số tiền phải lớn hơn 0")); return; }
     if (modalMode === "deposit" && soTien >= thanhTien) { toast.error(t("Số tiền cọc phải nhỏ hơn tổng tiền")); return; }
+    // Lưu NCC chọn trong modal ngược lại vào dòng vé (vé máy bay không có master
+    // mang sẵn NCC) → in ĐNTT + định kỳ + ĐNTT lần sau dùng lại.
+    if (modalNccId !== nccId) {
+      upsertMut.mutate({ id: chiPhiId, doan_id: doanId, nha_cung_cap_id: modalNccId });
+    }
     insertDNTT.mutate({
       doan_id: doanId,
       loai: "ve_may_bay",
       mo_ta: moTa || "Vé máy bay",
-      nha_cung_cap_id: nccId,
+      nha_cung_cap_id: modalNccId,
       so_tien: soTien,
       la_coc: modalMode === "deposit",
       trang_thai_duyet: "cho_duyet",
@@ -304,6 +408,12 @@ export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props)
         <span className="text-sm font-semibold text-sky-900">✈️ {t("Vé máy bay")}</span>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-xs text-muted-foreground">{t("Tổng:")} {fmt(total)} ₫</span>}
+          {companyVeRows.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handlePrintDNTT}>
+              <Printer className="h-3.5 w-3.5" />
+              {t("In ĐNTT")}
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(!showAdd)} disabled={locked}>
             + {t("Thêm")}
           </Button>
@@ -625,6 +735,13 @@ export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props)
 
       {showAdd && <AddVeRow doanId={doanId} onAdded={() => setShowAdd(false)} locked={locked} />}
 
+      {/* In ĐNTT (Word) — preview + xuất, dùng chung modal với Dịch vụ/Xe */}
+      <DNTTNHPreviewModal
+        open={!!previewData}
+        data={previewData}
+        onClose={() => setPreviewData(null)}
+      />
+
       {/* ĐNTT Modal */}
       <Dialog open={!!modal} onOpenChange={(v) => { if (!v) setModal(null); }}>
         <DialogContent className="sm:max-w-md">
@@ -633,6 +750,18 @@ export default function ChiPhiVeMayBaySection({ doanId, locked = false }: Props)
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <p>{t("Tổng tiền:")} <span className="font-semibold">{fmt(modal?.thanhTien ?? 0)} VND</span></p>
+            <div className="space-y-1">
+              <Label className="text-xs">{t("Nhà cung cấp")}</Label>
+              <SearchableSelect
+                options={nccOptions}
+                value={modalNccId != null ? String(modalNccId) : ""}
+                onChange={(v) => setModalNccId(v ? Number(v) : null)}
+                placeholder={t("Chọn nhà cung cấp")}
+                searchPlaceholder={t("Tìm nhà cung cấp...")}
+                emptyText={t("Không tìm thấy")}
+                className="h-8 text-xs w-full"
+              />
+            </div>
             <RadioGroup value={modalMode} onValueChange={(v) => setModalMode(v as "full" | "deposit")} className="space-y-2">
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="full" id="ve-full" />
