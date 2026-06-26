@@ -5,23 +5,25 @@ import {
   resolveVoucherPrintAmount,
   sumGroupVoucherMua,
   buildAggAllocations,
+  splitVoucherCoverage,
   type RedemptionLike,
   type CoveredInfo,
 } from "./voucher";
 
 const mkCovered = (giaTri: number, loai: "mua" | "tang"): CoveredInfo => ({
-  redemptionId: 1, voucherId: 1, giaTri, voucherTen: "", voucherLoai: loai, dnttId: null,
+  redemptionId: 1, voucherId: 1, giaTri, soVe: 0, voucherTen: "", voucherLoai: loai, dnttId: null,
 });
 
 describe("buildRedemptionMap", () => {
   it("map chi_phi_id → thông tin voucher (tên + loại + dnttId)", () => {
     const reds: RedemptionLike[] = [
-      { id: 1, voucher_id: 10, chi_phi_id: 100, gia_tri: 850000, dntt_id: 77, voucher: { ten: "Voucher trưa", loai: "mua" } },
-      { id: 2, voucher_id: 11, chi_phi_id: 200, gia_tri: 1200000, voucher: { ten: "Voucher tối", loai: "tang" } },
+      { id: 1, voucher_id: 10, chi_phi_id: 100, gia_tri: 850000, so_luong: 16, dntt_id: 77, voucher: { ten: "Voucher trưa", loai: "mua" } },
+      { id: 2, voucher_id: 11, chi_phi_id: 200, gia_tri: 1200000, so_luong: 2, voucher: { ten: "Voucher tối", loai: "tang" } },
     ];
     const m = buildRedemptionMap(reds);
-    expect(m[100]).toEqual({ redemptionId: 1, voucherId: 10, giaTri: 850000, voucherTen: "Voucher trưa", voucherLoai: "mua", dnttId: 77 });
+    expect(m[100]).toEqual({ redemptionId: 1, voucherId: 10, giaTri: 850000, soVe: 16, voucherTen: "Voucher trưa", voucherLoai: "mua", dnttId: 77 });
     expect(m[200].voucherLoai).toBe("tang");
+    expect(m[200].soVe).toBe(2);
     expect(m[200].dnttId).toBeNull();
     expect(Object.keys(m)).toHaveLength(2);
   });
@@ -197,5 +199,56 @@ describe("buildAggAllocations", () => {
       { chi_phi_id: 102, so_tien: 200000 },
       { chi_phi_id: 9, so_tien: 500000 },
     ]);
+  });
+});
+
+describe("splitVoucherCoverage", () => {
+  // Tàu Paradise Delight: 24 khách × 1.150.000, không CK, voucher TẶNG 2 vé.
+  it("TẶNG phủ 2/24 vé → cover 2.3M, công ty còn trả 22 ghế = 25.3M", () => {
+    const r = splitVoucherCoverage({ soKhachThucTe: 24, donGia: 1150000, ckPct: null, soVe: 2, loai: "tang" });
+    expect(r.fullValue).toBe(27600000);
+    expect(r.coverValue).toBe(2300000);
+    expect(r.remainderNet).toBe(25300000);
+    expect(r.tienCongTy).toBe(25300000); // tặng → công ty trả phần còn lại
+    expect(r.veApplied).toBe(2);
+    // Bất biến: cover + tienCongTy(tặng) === full
+    expect(r.coverValue + r.tienCongTy).toBe(r.fullValue);
+  });
+
+  it("TẶNG phủ HẾT (vé = số khách) → cover full, công ty = 0", () => {
+    const r = splitVoucherCoverage({ soKhachThucTe: 24, donGia: 1150000, ckPct: null, soVe: 24, loai: "tang" });
+    expect(r.coverValue).toBe(27600000);
+    expect(r.remainderNet).toBe(0);
+    expect(r.tienCongTy).toBe(0);
+  });
+
+  it("MUA phủ 2/24 vé → công ty GIỮ full 27.6M (voucher chỉ là cách trả), cover 2.3M", () => {
+    const r = splitVoucherCoverage({ soKhachThucTe: 24, donGia: 1150000, ckPct: null, soVe: 2, loai: "mua" });
+    expect(r.tienCongTy).toBe(27600000);
+    expect(r.coverValue).toBe(2300000);
+    expect(r.remainderNet).toBe(25300000);
+  });
+
+  it("có CK%: cover + remainder bù trừ ĐÚNG full (không lệch làm tròn)", () => {
+    // 20 khách × 172.800, CK 5% → full = 3.283.200. Tặng 4 vé.
+    const r = splitVoucherCoverage({ soKhachThucTe: 20, donGia: 172800, ckPct: 5, soVe: 4, loai: "tang" });
+    expect(r.fullValue).toBe(3283200);
+    // remainderNet = applyChietKhau(16 × 172800, 5%) = 2.626.560
+    expect(r.remainderNet).toBe(2626560);
+    expect(r.coverValue).toBe(3283200 - 2626560);
+    expect(r.coverValue + r.tienCongTy).toBe(r.fullValue);
+  });
+
+  it("vé vượt số khách → kẹp về số khách (phủ hết)", () => {
+    const r = splitVoucherCoverage({ soKhachThucTe: 10, donGia: 100000, ckPct: null, soVe: 99, loai: "tang" });
+    expect(r.veApplied).toBe(10);
+    expect(r.tienCongTy).toBe(0);
+  });
+
+  it("vé ≤ 0 → kẹp về 0 (không phủ gì), công ty trả full", () => {
+    const r = splitVoucherCoverage({ soKhachThucTe: 10, donGia: 100000, ckPct: null, soVe: 0, loai: "tang" });
+    expect(r.veApplied).toBe(0);
+    expect(r.coverValue).toBe(0);
+    expect(r.tienCongTy).toBe(1000000);
   });
 });

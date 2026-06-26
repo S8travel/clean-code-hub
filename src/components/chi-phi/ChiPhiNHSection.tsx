@@ -43,7 +43,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
     isLoading, meals, nhRowData, nhRowHandlers,
     selectedKeys, setSelectedKeys, chiPhiRows, dnttList, congNoList,
     buildSelectedEntries, handlePrintSelected, previewNHData, setPreviewNHData,
-    dnttModalRow, dnttModalExtras, dnttModalNh, dnttModalCovered, dnttModalMode, setDnttModalMode,
+    dnttModalRow, dnttModalExtras, dnttModalNh, dnttModalCoverVe, dnttModalMode, setDnttModalMode,
     dnttDepositAmount, setDnttDepositAmount, dnttAlreadyPaid,
     dnttBsAmount, setDnttBsAmount, dnttNgayCan, setDnttNgayCan,
     dnttModalCanTru, setDnttModalCanTru, dnttSubmitting, handleDnttSubmit, closeDnttModal,
@@ -141,7 +141,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
               <th className="px-3 py-2 text-center font-medium">{t("TT ĐNTT")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("TT Thanh toán")}</th>
               <th className="px-2 py-2 text-center font-medium">{t("Hóa đơn")}</th>
-              <th className="px-2 py-2" />
+              <th className="px-2 py-2 sticky right-0 z-20 bg-muted" />
             </tr>
           </thead>
           <tbody>
@@ -180,7 +180,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
         canTru={dnttModalCanTru}
         onCanTruChange={setDnttModalCanTru}
         submitting={dnttSubmitting}
-        mainCovered={dnttModalCovered}
+        mainCoverVe={dnttModalCoverVe}
         onClose={closeDnttModal}
         onSubmit={handleDnttSubmit}
       />

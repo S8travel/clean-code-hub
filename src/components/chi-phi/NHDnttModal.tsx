@@ -28,8 +28,9 @@ interface Props {
   canTru: CanTruSelection[];
   onCanTruChange: (v: CanTruSelection[]) => void;
   submitting: boolean;
-  /** Voucher TẶNG phủ suất chính → loại khỏi ĐNTT (khớp handleDnttSubmit). */
-  mainCovered?: boolean;
+  /** Voucher TẶNG phủ N vé → ĐNTT chỉ tính số ghế CÒN LẠI (số khách − N). Phủ HẾT →
+   *  suất chính = 0 (chỉ phát sinh). 0/undefined = không tặng (MUA giữ full / không voucher). */
+  mainCoverVe?: number;
   onClose: () => void;
   onSubmit: () => void;
 }
@@ -38,19 +39,21 @@ interface Props {
 export default function NHDnttModal({
   row, extras, nh, mode, onModeChange, depositAmount, onDepositAmountChange,
   alreadyPaid, bsAmount, onBsAmountChange, ngayCan, onNgayCanChange,
-  canTru, onCanTruChange, submitting, mainCovered, onClose, onSubmit,
+  canTru, onCanTruChange, submitting, mainCoverVe = 0, onClose, onSubmit,
 }: Props) {
   useTranslate();
   if (!row) return null;
   const focResolvedModal = resolveNHFoc(row, nh);
   const soKhachThucTe = calcSoKhachThucTe(row.so_khach, focResolvedModal.foc_khach, focResolvedModal.foc_mien);
-  const mainTotalModal = soKhachThucTe * row.don_gia;
+  // Tặng N vé → ĐNTT chỉ gồm số ghế còn lại. mainCovered = true khi phủ hết (0 ghế còn).
+  const effectiveMainSeats = Math.max(0, soKhachThucTe - mainCoverVe);
+  const mainTotalModal = effectiveMainSeats * row.don_gia;
   const allExtrasTotalModal = extras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
   const hdvExtrasTotalModal = extras.filter(e => e.nguoi_tt === "hdv").reduce((s, e) => s + e.so_luong * e.don_gia, 0);
   const ckPctModal = row?.chiet_khau_phan_tram ?? nh?.chiet_khau_phan_tram ?? null;
   // Số tiền ĐNTT — DÙNG CHUNG calcNHDnttAmount (khớp handleDnttSubmit, hết drift CK phát sinh).
   const { grossCompany: grossBuaModal, chietKhau: chietKhauModal, netCompany: totalBua } =
-    calcNHDnttAmount({ mainGrossAfterFoc: mainTotalModal, mainCkPct: ckPctModal, mainCovered, extras });
+    calcNHDnttAmount({ mainGrossAfterFoc: mainTotalModal, mainCkPct: ckPctModal, mainCovered: mainCoverVe > 0 && effectiveMainSeats <= 0, extras });
   const effectiveTotalBua = Math.max(0, totalBua - alreadyPaid);
   const isBSMode = effectiveTotalBua <= 0;
   const soTien = isBSMode ? bsAmount : (mode === "full" ? effectiveTotalBua : depositAmount);

@@ -153,8 +153,8 @@ export default function NHExtraRow({
           <HoaDonChiPhiBadge chiPhiId={extra.id} trangThai={(trangThaiHoaDon ?? "chua_co") as TrangThaiDoc} />
         )}
       </td>
-      {/* Col 11: voucher (dùng/gỡ) + delete */}
-      <td className="px-2 py-1">
+      {/* Col 11: voucher (dùng/gỡ) + delete — sticky mép phải khớp cột Actions hàng chính */}
+      <td className="px-2 py-1 sticky right-0 z-10 bg-card shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.12)]">
         <div className="flex justify-end items-center gap-0.5">
           {/* Voucher: chỉ dòng công ty đủ điều kiện. Gỡ khi đã phủ. */}
           {covered ? (
