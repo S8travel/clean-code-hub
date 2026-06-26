@@ -4,6 +4,7 @@ import {
   remainingForGop,
   isGopEligible,
   gopLabel,
+  extraParentId,
   groupGopByNcc,
   sumSelected,
   buildCanTruPaymentItems,
@@ -65,6 +66,22 @@ describe("gopLabel", () => {
     expect(gopLabel("[dvps_42] Vé thuyền")).toBe("Vé thuyền");
     expect(gopLabel("Vé cáp treo")).toBe("Vé cáp treo");
     expect(gopLabel(null)).toBe("Dịch vụ");
+  });
+});
+
+describe("extraParentId", () => {
+  it("trả id cha cho extra [dvps_<id>]", () => {
+    expect(extraParentId("[dvps_42] Vé thuyền")).toBe(42);
+    expect(extraParentId("[dvps_9283] xe điện phố cổ")).toBe(9283);
+  });
+  it("dòng main (không prefix) → null", () => {
+    expect(extraParentId("Phố cổ hội an")).toBeNull();
+    expect(extraParentId(null)).toBeNull();
+  });
+  it("KHÔNG over-match: [dvps_12] không phải extra của main id=1", () => {
+    // Dùng cho guard xóa cascade — bắt trọn cụm số nên 12 ≠ 1, tránh xóa nhầm.
+    expect(extraParentId("[dvps_12] X")).toBe(12);
+    expect(extraParentId("[dvps_12] X") === 1).toBe(false);
   });
 });
 
