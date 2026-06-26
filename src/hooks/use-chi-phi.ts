@@ -8,6 +8,7 @@ import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { buildChiPhiChangeList } from "@/lib/chi-phi-diff";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
 import { errMsg } from "@/lib/error";
+import { extraParentId } from "@/lib/dntt-gop-calc";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export type DNTTRow = DNTTRowFromHook;
@@ -573,7 +574,23 @@ export function useDeleteChiPhi() {
   return useMutation({
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
       lockGuard(doanId); // đoàn đã quyết toán → chặn (trừ admin)
-      // GUARD: chặn xóa chi phí đang nằm trong ĐNTT chưa hủy.
+
+      // Gom main + extras phát sinh ([dvps_<id>]) để xóa CÙNG nhau. Xóa dòng DV
+      // chính mà bỏ extras → extras MỒ CÔI (group theo id cha đã mất nên vô hình
+      // trong app, nhưng vẫn lòi ở bản in Excel + cộng nhầm vào tổng tiền).
+      // Extras chỉ tồn tại cho DV (canh_diem); danh_muc khác → query rỗng, vô hại.
+      const { data: extraCandidates } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id, mo_ta")
+        .eq("doan_id", doanId)
+        .like("mo_ta", `[dvps_${id}]%`);
+      const extraIds = (extraCandidates ?? [])
+        .filter((r) => extraParentId(r.mo_ta) === id)
+        .map((r) => r.id);
+      const idsToDelete = [id, ...extraIds];
+
+      // GUARD: chặn xóa chi phí đang nằm trong ĐNTT chưa hủy — áp cho CẢ main lẫn
+      // extras (xóa main sẽ CASCADE xóa allocation của extra qua FK).
       // dntt_allocations.chi_phi_id FK = ON DELETE CASCADE → xóa chi phí sẽ xóa
       // luôn allocation (kể cả của ĐNTT cọc đã thanh toán) → mất dấu phần đã
       // cọc/đã trả → ĐNTT khoản còn lại tính sai (trả dư/thiếu).
@@ -583,7 +600,7 @@ export function useDeleteChiPhi() {
       const { data: allocs, error: allocErr } = await externalSupabase
         .from("dntt_allocations")
         .select("dntt_id")
-        .eq("chi_phi_id", id);
+        .in("chi_phi_id", idsToDelete);
       if (allocErr) throw allocErr;
       const dnttIds = [...new Set((allocs ?? []).map((a) => a.dntt_id))];
       if (dnttIds.length > 0) {
@@ -603,7 +620,7 @@ export function useDeleteChiPhi() {
         }
       }
 
-      const { error } = await externalSupabase.from("doan_chi_phi").delete().eq("id", id);
+      const { error } = await externalSupabase.from("doan_chi_phi").delete().in("id", idsToDelete);
       if (error) throw error;
       return { doanId, id, mo_ta, danh_muc };
     },
