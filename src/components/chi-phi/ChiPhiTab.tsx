@@ -324,7 +324,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
         {/* Vé máy bay — chỉ outbound + nội địa (xem tourProfile). Inbound ẩn. */}
         {tourProfile(doan?.loai_tour).showVeMayBay && (
-          <ChiPhiVeMayBaySection doanId={doanId} locked={locked} />
+          <ChiPhiVeMayBaySection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} locked={locked} />
         )}
 
         <ChiPhiBaoHiemSection
