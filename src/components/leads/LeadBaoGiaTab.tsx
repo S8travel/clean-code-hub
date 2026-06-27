@@ -9,9 +9,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { errMsg } from "@/lib/error";
 import { useAuth } from "@/hooks/use-auth";
-import { useBaoGiaByLead, useBaoGiaList, useCreateBaoGia, useCloneBaoGia } from "@/hooks/use-bao-gia";
+import { useBaoGiaByLead, useBaoGiaList, useCloneBaoGia } from "@/hooks/use-bao-gia";
 import { useUpdateLeadStatus, type Lead, type LeadTrangThai } from "@/hooks/use-leads";
-import { baoGiaCode, STATUS_INFO, liveKetQua, emptyBaoGiaKetQua, fmtVnd } from "@/components/bao-gia/detail/helpers";
+import { baoGiaCode, STATUS_INFO, liveKetQua, fmtVnd } from "@/components/bao-gia/detail/helpers";
+import { BaoGiaCreateModal, type BaoGiaCreatePrefill } from "@/components/bao-gia/BaoGiaCreateModal";
 
 interface Props {
   lead: Lead;
@@ -32,12 +33,12 @@ export function LeadBaoGiaTab({ lead }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: list = [], isLoading } = useBaoGiaByLead(lead.id);
-  const createBaoGia = useCreateBaoGia();
   const cloneBaoGia = useCloneBaoGia();
   const updateStatus = useUpdateLeadStatus();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Sau khi tạo/nhân bản báo giá cho lead → đẩy phễu + mở editor.
   const afterQuote = (newId: number) => {
@@ -47,26 +48,18 @@ export function LeadBaoGiaTab({ lead }: Props) {
     navigate(`/bao-gia/${newId}`);
   };
 
-  const handleCreate = async () => {
+  // Memo hóa: prop prefill phải ổn định reference, nếu không modal sẽ reset
+  // field mỗi lần tab re-render trong lúc đang mở (useEffect phụ thuộc prefill).
+  const createPrefill: BaoGiaCreatePrefill = useMemo(() => {
     const diemDen = (lead.diem_den ?? [])[0]?.diem_den ?? "";
-    const tieuDe = `BG · ${lead.ho_ten}${diemDen ? " · " + diemDen : ""}`;
-    const soNgay = lead.so_ngay || soNgayFromDates(lead.ngay_di_du_kien, lead.ngay_ve_du_kien);
-    try {
-      const { id } = await createBaoGia.mutateAsync({
-        tieu_de: tieuDe,
-        ket_qua: emptyBaoGiaKetQua(soNgay, tieuDe),
-        exchange_rate: 26000,
-        profit_usd: 15,
-        trang_thai: "draft",
-        lead_id: lead.id,
-        ngay_di: lead.ngay_di_du_kien,
-        ngay_ve: lead.ngay_ve_du_kien,
-      });
-      afterQuote(id);
-    } catch (e: unknown) {
-      toast.error(errMsg(e) || "Lỗi tạo báo giá");
-    }
-  };
+    return {
+      leadId: lead.id,
+      tenChuongTrinh: `BG · ${lead.ho_ten}${diemDen ? " · " + diemDen : ""}`,
+      soNgay: lead.so_ngay || soNgayFromDates(lead.ngay_di_du_kien, lead.ngay_ve_du_kien),
+      ngayDi: lead.ngay_di_du_kien,
+      ngayVe: lead.ngay_ve_du_kien,
+    };
+  }, [lead.id, lead.ho_ten, lead.diem_den, lead.so_ngay, lead.ngay_di_du_kien, lead.ngay_ve_du_kien]);
 
   const handlePick = async (bgId: number) => {
     try {
@@ -87,11 +80,18 @@ export function LeadBaoGiaTab({ lead }: Props) {
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => { setPickerSearch(""); setPickerOpen(true); }}>
             <Copy className="h-3.5 w-3.5" /> Dùng lại báo giá
           </Button>
-          <Button size="sm" className="h-8 text-xs gap-1" onClick={handleCreate} disabled={createBaoGia.isPending}>
+          <Button size="sm" className="h-8 text-xs gap-1" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" /> Tạo báo giá
           </Button>
         </div>
       </div>
+
+      <BaoGiaCreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={afterQuote}
+        prefill={createPrefill}
+      />
 
       {isLoading ? (
         <p className="text-xs text-muted-foreground">Đang tải...</p>

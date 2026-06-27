@@ -1,4 +1,4 @@
-import type { BaoGiaKetQua, BaoGiaCase, BaoGiaItem } from "@/hooks/use-bao-gia";
+import type { BaoGiaKetQua, BaoGiaCase, BaoGiaItem, GiaCuoiTier } from "@/hooks/use-bao-gia";
 
 export interface ManualItem {
   id: string;
@@ -127,4 +127,82 @@ export function calcBaoGia(
     gia_trung_binh_vnd,
     gia_trung_binh_usd,
   };
+}
+
+// ── Giá cuối (land tour — giá chốt sẵn, nhập tay theo bậc) ───────────────────
+
+/** 1 dòng bảng giá cuối đã chuẩn hoá. Khớp shape TierPrice của Word export. */
+export interface GiaCuoiTierLine {
+  guests: number;
+  gia_ban_vnd: number;
+  gia_ban_usd: number;
+}
+
+/** Chuẩn hoá bảng giá cuối nhập tay → dòng hiển thị / xuất:
+ *  - làm tròn VND, tính USD = VND / tỷ giá (rate ≤ 0 → USD = 0, tránh chia 0),
+ *  - lọc bậc không hợp lệ (guests ≤ 0),
+ *  - sắp xếp tăng dần theo số khách.
+ *  KHÔNG tính từ dịch vụ — giá là giá chốt, chỉ quy đổi USD. */
+export function giaCuoiTierLines(
+  tiers: GiaCuoiTier[] | undefined,
+  exchangeRate: number,
+): GiaCuoiTierLine[] {
+  return (tiers ?? [])
+    .filter((t) => t.guests > 0)
+    .slice()
+    .sort((a, b) => a.guests - b.guests)
+    .map((t) => {
+      const vnd = Math.round(t.gia_ban_vnd || 0);
+      return {
+        guests: Math.round(t.guests),
+        gia_ban_vnd: vnd,
+        gia_ban_usd: exchangeRate > 0 ? vnd / exchangeRate : 0,
+      };
+    });
+}
+
+/** 1 bậc giá đã suy ra KHOẢNG khách. Mô hình "ngưỡng": mỗi bậc lưu 1 số = số
+ *  khách TỐI THIỂU áp dụng; cận trên = (ngưỡng bậc kế − 1), bậc cuối để mở. */
+export interface GiaCuoiBracket {
+  guests_from: number;
+  guests_to: number | null; // null = mở (bậc cuối, "từ X khách")
+  gia_ban_vnd: number;
+  gia_ban_usd: number;
+  label: string; // "10–15 khách" | "từ 26 khách" | "10 khách"
+}
+
+/** Suy KHOẢNG khách cho mỗi bậc từ các ngưỡng "từ X". Khoảng tự nối liền theo
+ *  ngưỡng kế tiếp → không thể hở/chồng. Bậc cuối mở ("từ X khách"). */
+export function giaCuoiBrackets(
+  tiers: GiaCuoiTier[] | undefined,
+  exchangeRate: number,
+): GiaCuoiBracket[] {
+  const lines = giaCuoiTierLines(tiers, exchangeRate);
+  return lines.map((l, i) => {
+    const next = lines[i + 1];
+    const to = next ? next.guests - 1 : null;
+    let label: string;
+    if (to == null) label = `từ ${l.guests} khách`;
+    else if (to <= l.guests) label = `${l.guests} khách`;
+    else label = `${l.guests}–${to} khách`;
+    return {
+      guests_from: l.guests,
+      guests_to: to,
+      gia_ban_vnd: l.gia_ban_vnd,
+      gia_ban_usd: l.gia_ban_usd,
+      label,
+    };
+  });
+}
+
+/** Index bậc áp dụng cho số khách `pax` (ngưỡng cao nhất ≤ pax). Trả -1 khi
+ *  pax ≤ 0 hoặc nhỏ hơn bậc thấp nhất (không bậc nào phủ). */
+export function findBracketIndexForPax(brackets: GiaCuoiBracket[], pax: number): number {
+  if (!pax || pax <= 0) return -1;
+  let idx = -1;
+  for (let i = 0; i < brackets.length; i++) {
+    if (pax >= brackets[i].guests_from) idx = i;
+    else break;
+  }
+  return idx;
 }

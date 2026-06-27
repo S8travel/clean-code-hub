@@ -16,19 +16,20 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 import { BangGiaImport } from "@/components/bao-gia/BangGiaImport";
+import { BaoGiaCreateModal } from "@/components/bao-gia/BaoGiaCreateModal";
 import {
   useBaoGiaList,
-  useCreateBaoGia,
   useCloneBaoGia,
   useDeleteBaoGia,
-  type BaoGiaCase,
   type BaoGiaKetQua,
 } from "@/hooks/use-bao-gia";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
 import { useLeadsList } from "@/hooks/use-leads";
-import { exportBaoGiaWord, type TierPrice } from "@/lib/export-bao-gia-word";
-import { costBreakdown, liveKetQua, liveTierBreakdown, defaultDayItems } from "@/components/bao-gia/detail/helpers";
+import { exportBaoGiaWord, exportBaoGiaGiaCuoiWord, type TierPrice } from "@/lib/export-bao-gia-word";
+import { costBreakdown, liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
+import { giaCuoiTierLines, giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { toast } from "sonner";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -47,37 +48,14 @@ const LOAI_LABEL: Record<string, string> = {
   dich_vu: "Dịch vụ",
 };
 
-// Skeleton BaoGiaKetQua trống cho báo giá vừa tạo — user điền tại detail page.
-function emptyCase(guests: number): BaoGiaCase {
-  return {
-    guests,
-    pax: 0, rooms: 0,
-    hotel: 0, meal: 0, ticket: 0, transport: 0,
-    insurance: 0, guide: 0, tips: 0,
-    total_cost: 0, profit_vnd: 0,
-    final_price_vnd: 0, final_price_usd: 0,
-  };
-}
-function emptyKetQua(): BaoGiaKetQua {
-  return {
-    ten_chuong_trinh: "",
-    so_ngay: 1,
-    items: defaultDayItems(1),
-    case_16: emptyCase(16),
-    case_20: emptyCase(20),
-    gia_trung_binh_vnd: 0,
-    gia_trung_binh_usd: 0,
-  };
-}
-
 export default function BaoGiaPage() {
   const navigate = useNavigate();
   const { data: list = [], isLoading } = useBaoGiaList();
   const { data: bangGia = [] } = useBangGiaDichVu();
   const { data: leads = [] } = useLeadsList();
-  const createMutation = useCreateBaoGia();
   const cloneMutation = useCloneBaoGia();
   const deleteMutation = useDeleteBaoGia();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const handleClone = (id: number) => {
     cloneMutation.mutate(
@@ -93,22 +71,6 @@ export default function BaoGiaPage() {
   const leadName: Record<number, string> = {};
   leads.forEach((l) => { leadName[l.id] = l.ho_ten; });
 
-  const handleCreate = () => {
-    createMutation.mutate(
-      {
-        tieu_de: "",
-        ket_qua: emptyKetQua(),
-        exchange_rate: 26000,
-        profit_usd: 15,
-        trang_thai: "draft",
-      },
-      {
-        onSuccess: ({ id }) => navigate(`/bao-gia/${id}`),
-        onError: () => toast.error("Lỗi tạo báo giá"),
-      },
-    );
-  };
-
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id, {
       onSuccess: () => toast.success("Đã xóa báo giá"),
@@ -121,14 +83,33 @@ export default function BaoGiaPage() {
     catch { toast.error("Lỗi xuất Word"); }
   };
 
+  const handleExportGiaCuoi = async (ketQua: BaoGiaKetQua, exchangeRate: number) => {
+    try {
+      const tiers = giaCuoiBrackets(ketQua.gia_cuoi_tiers, exchangeRate).map((b) => ({
+        guests: b.guests_from,
+        gia_ban_vnd: b.gia_ban_vnd,
+        gia_ban_usd: b.gia_ban_usd,
+        label: b.label,
+      }));
+      await exportBaoGiaGiaCuoiWord(ketQua, exchangeRate, tiers);
+      toast.success("Đã xuất file Word!");
+    } catch { toast.error("Lỗi xuất Word"); }
+  };
+
   return (
     <div className="p-4 max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">Báo Giá Tour</h1>
-        <Button size="sm" onClick={handleCreate} disabled={createMutation.isPending}>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-1" />Tạo báo giá
         </Button>
       </div>
+
+      <BaoGiaCreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(id) => navigate(`/bao-gia/${id}`)}
+      />
 
       <Tabs defaultValue="bao-gia">
         <TabsList>
@@ -168,24 +149,35 @@ export default function BaoGiaPage() {
                 </thead>
                 <tbody>
                   {list.map((row) => {
-                    // Live recompute giá TB 2 phương án (16+20 khách) — match
-                    // DETAIL panel "GIÁ BÁN TOUR (TB 2 phương án)", KHÔNG đọc
-                    // gia_trung_binh frozen từ AI extract.
                     const xr = row.exchange_rate ?? 26000;
-                    const breakdown = costBreakdown({
-                      ket: row.ket_qua,
-                      exchangeRate: xr,
-                      profitUsd: row.profit_usd ?? 0,
-                      xeGia: row.xe_gia,
-                      phuThu: row.phu_thu,
-                      vcbRate: row.vcb_rate,
-                    });
-                    const giaPaxVnd = breakdown?.gia_ban_tb_per_pax ?? null;
-                    const giaPaxUsd = breakdown?.gia_ban_tb_per_pax_usd ?? null;
+                    const isGiaCuoi = row.loai_bao_gia === "gia_cuoi";
+                    // Giá cuối: lấy bậc thấp nhất (số khách nhỏ nhất) làm đại diện.
+                    // Tự tính: giá TB 2 phương án — match DETAIL panel.
+                    let giaPaxVnd: number | null;
+                    let giaPaxUsd: number | null;
+                    if (isGiaCuoi) {
+                      const lines = giaCuoiTierLines(row.ket_qua?.gia_cuoi_tiers, xr);
+                      giaPaxVnd = lines[0]?.gia_ban_vnd ?? null;
+                      giaPaxUsd = lines[0]?.gia_ban_usd ?? null;
+                    } else {
+                      const breakdown = costBreakdown({
+                        ket: row.ket_qua,
+                        exchangeRate: xr,
+                        profitUsd: row.profit_usd ?? 0,
+                        xeGia: row.xe_gia,
+                        phuThu: row.phu_thu,
+                        vcbRate: row.vcb_rate,
+                      });
+                      giaPaxVnd = breakdown?.gia_ban_tb_per_pax ?? null;
+                      giaPaxUsd = breakdown?.gia_ban_tb_per_pax_usd ?? null;
+                    }
                     return (
                       <tr key={row.id} className="border-t hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/bao-gia/${row.id}`)}>
                         <td className="py-2 px-3">
                           <span className="font-medium">{row.tieu_de || "(chưa có tên)"}</span>
+                          {isGiaCuoi && (
+                            <span className="ml-2 inline-block rounded bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] font-medium align-middle">Giá cuối</span>
+                          )}
                           {row.ket_qua && <span className="ml-2 text-muted-foreground">{row.ket_qua.so_ngay} ngày</span>}
                         </td>
                         <td className="py-2 px-3 text-muted-foreground">
@@ -210,10 +202,14 @@ export default function BaoGiaPage() {
                             {row.ket_qua && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" title="Export Word"
                                 onClick={() => {
+                                  const xr = row.exchange_rate ?? 26000;
+                                  if (isGiaCuoi) {
+                                    handleExportGiaCuoi(row.ket_qua!, xr);
+                                    return;
+                                  }
                                   // Export với ket_qua live + ma trận giá theo số khách — match DETAIL
                                   const fresh = liveKetQua(row) ?? row.ket_qua;
                                   if (!fresh) return;
-                                  const xr = row.exchange_rate ?? 26000;
                                   const tiers = liveTierBreakdown(row).map((t) => ({
                                     guests: t.guests,
                                     gia_ban_vnd: t.line.gia_ban_per_pax,

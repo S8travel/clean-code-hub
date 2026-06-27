@@ -4,14 +4,19 @@ import { toast } from "sonner";
 import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBaoGia, useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@/hooks/use-bao-gia";
-import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
+import { useLead } from "@/hooks/use-leads";
+import { exportBaoGiaWord, exportBaoGiaGiaCuoiWord } from "@/lib/export-bao-gia-word";
 import { liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
+import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { ChuongTrinhTourSection } from "@/components/bao-gia/detail/ChuongTrinhTourSection";
 import { DichVuPhuTroSection } from "@/components/bao-gia/detail/DichVuPhuTroSection";
 import { TierMatrixSection } from "@/components/bao-gia/detail/TierMatrixSection";
 import { TongHopChiPhiPanel } from "@/components/bao-gia/detail/TongHopChiPhiPanel";
+import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSection";
+import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
+import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 
 // Trang chi tiết Báo giá. State pattern: PARENT giữ `draft` (mirror row +
@@ -27,6 +32,10 @@ export default function BaoGiaDetailPage() {
 
   const [draft, setDraft] = useState<BaoGiaRow | null>(null);
   useEffect(() => { if (row) setDraft(row); }, [row]);
+
+  // Pax dự kiến của lead gắn báo giá → highlight bậc giá áp dụng.
+  const { data: lead } = useLead(draft?.lead_id ?? null);
+  const leadPax = lead ? (lead.so_nguoi_lon ?? 0) + (lead.so_nguoi_em ?? 0) : undefined;
 
   if (isLoading || !draft) {
     return (
@@ -72,14 +81,27 @@ export default function BaoGiaDetailPage() {
   };
 
   const isSent = draft.trang_thai === "sent";
+  const isGiaCuoi = draft.loai_bao_gia === "gia_cuoi";
 
   const handleExportPdf = async () => {
     if (!draft.ket_qua) return;
     try {
+      const xr = draft.exchange_rate ?? 26000;
+      if (isGiaCuoi) {
+        // Giá cuối: chỉ bảng giá theo khoảng khách (nhập tay) — không section costing.
+        const tiers = giaCuoiBrackets(draft.ket_qua.gia_cuoi_tiers, xr).map((b) => ({
+          guests: b.guests_from,
+          gia_ban_vnd: b.gia_ban_vnd,
+          gia_ban_usd: b.gia_ban_usd,
+          label: b.label,
+        }));
+        await exportBaoGiaGiaCuoiWord(draft.ket_qua, xr, tiers);
+        toast.success("Đã xuất file Word!");
+        return;
+      }
       // Recompute case totals từ items + xe_gia hiện tại → Word khớp panel UI.
       const fresh = liveKetQua(draft);
       if (!fresh) return;
-      const xr = draft.exchange_rate ?? 26000;
       // Bảng giá theo số khách (ma trận thật) — khớp section ma trận trên màn hình.
       const tiers = liveTierBreakdown(draft).map((t) => ({
         guests: t.guests,
@@ -123,31 +145,52 @@ export default function BaoGiaDetailPage() {
           </div>
         )}
         <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
-        <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
-          <div className="space-y-4 min-w-0">
-            <ThongTinTourSection
+        {isGiaCuoi ? (
+          <div className="max-w-[1400px] mx-auto space-y-4 min-w-0">
+            <GiaCuoiInfoSection
               draft={draft}
               row={row}
               updateDraftField={updateDraftField}
               updateDraftKetQua={updateDraftKetQua}
               saveField={saveField}
-              savePatch={savePatch}
               saveKetQua={saveKetQua}
             />
-            <ChuongTrinhTourSection
+            <GiaCuoiPriceSection
               draft={draft}
               updateDraftKetQua={updateDraftKetQua}
               saveKetQua={saveKetQua}
+              leadPax={leadPax}
             />
-            <DichVuPhuTroSection
-              draft={draft}
-              updateDraftKetQua={updateDraftKetQua}
-              saveKetQua={saveKetQua}
-            />
-            <TierMatrixSection draft={draft} saveKetQua={saveKetQua} />
+            <LichTrinhFilesSection draft={draft} />
           </div>
-          <TongHopChiPhiPanel draft={draft} />
-        </div>
+        ) : (
+          <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
+            <div className="space-y-4 min-w-0">
+              <ThongTinTourSection
+                draft={draft}
+                row={row}
+                updateDraftField={updateDraftField}
+                updateDraftKetQua={updateDraftKetQua}
+                saveField={saveField}
+                savePatch={savePatch}
+                saveKetQua={saveKetQua}
+              />
+              <ChuongTrinhTourSection
+                draft={draft}
+                updateDraftKetQua={updateDraftKetQua}
+                saveKetQua={saveKetQua}
+              />
+              <DichVuPhuTroSection
+                draft={draft}
+                updateDraftKetQua={updateDraftKetQua}
+                saveKetQua={saveKetQua}
+              />
+              <TierMatrixSection draft={draft} saveKetQua={saveKetQua} leadPax={leadPax} />
+              <LichTrinhFilesSection draft={draft} />
+            </div>
+            <TongHopChiPhiPanel draft={draft} />
+          </div>
+        )}
         </fieldset>
       </div>
       <BaoGiaFooter

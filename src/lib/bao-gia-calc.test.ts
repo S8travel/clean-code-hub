@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { calcBaoGia, calcTier, calcTiers, tierConfig, type ManualItem } from "./bao-gia-calc";
+import {
+  calcBaoGia, calcTier, calcTiers, tierConfig,
+  giaCuoiTierLines, giaCuoiBrackets, findBracketIndexForPax,
+  type ManualItem,
+} from "./bao-gia-calc";
 
 // CASES (hard-coded trong calcBaoGia):
 //   case_16: { guests: 16, pax: 17, rooms: 9 }
@@ -311,5 +315,123 @@ describe("calcTier / calcTiers — ma trận nhiều bậc", () => {
     expect(c20.final_price_vnd).toBeGreaterThan(c30.final_price_vnd);
     expect(c10.final_price_vnd).toBe(1_110_000);
     expect(c30.final_price_vnd).toBe(970_000);
+  });
+});
+
+describe("giaCuoiTierLines — bảng giá cuối nhập tay (land tour)", () => {
+  it("USD = VND / tỷ giá; làm tròn VND", () => {
+    const lines = giaCuoiTierLines([{ guests: 10, gia_ban_vnd: 5_200_001 }], 26_000);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].gia_ban_vnd).toBe(5_200_001);
+    expect(lines[0].gia_ban_usd).toBeCloseTo(5_200_001 / 26_000, 6);
+  });
+
+  it("sắp xếp tăng dần theo số khách", () => {
+    const lines = giaCuoiTierLines(
+      [
+        { guests: 30, gia_ban_vnd: 3_000_000 },
+        { guests: 10, gia_ban_vnd: 5_000_000 },
+        { guests: 20, gia_ban_vnd: 4_000_000 },
+      ],
+      26_000,
+    );
+    expect(lines.map((l) => l.guests)).toEqual([10, 20, 30]);
+  });
+
+  it("lọc bậc guests ≤ 0", () => {
+    const lines = giaCuoiTierLines(
+      [
+        { guests: 0, gia_ban_vnd: 1_000_000 },
+        { guests: -5, gia_ban_vnd: 1_000_000 },
+        { guests: 12, gia_ban_vnd: 2_000_000 },
+      ],
+      26_000,
+    );
+    expect(lines.map((l) => l.guests)).toEqual([12]);
+  });
+
+  it("tỷ giá ≤ 0 → USD = 0 (tránh chia 0), KHÔNG NaN/Infinity", () => {
+    const lines = giaCuoiTierLines([{ guests: 10, gia_ban_vnd: 5_000_000 }], 0);
+    expect(lines[0].gia_ban_usd).toBe(0);
+  });
+
+  it("undefined / rỗng → []", () => {
+    expect(giaCuoiTierLines(undefined, 26_000)).toEqual([]);
+    expect(giaCuoiTierLines([], 26_000)).toEqual([]);
+  });
+
+  it("gia_ban_vnd falsy (0/NaN) → 0, không vỡ", () => {
+    const lines = giaCuoiTierLines(
+      [{ guests: 10, gia_ban_vnd: 0 }, { guests: 20, gia_ban_vnd: NaN }],
+      26_000,
+    );
+    expect(lines.map((l) => l.gia_ban_vnd)).toEqual([0, 0]);
+    expect(lines.map((l) => l.gia_ban_usd)).toEqual([0, 0]);
+  });
+});
+
+describe("giaCuoiBrackets — suy khoảng khách từ ngưỡng 'từ X'", () => {
+  const tiers = [
+    { guests: 10, gia_ban_vnd: 5_000_000 },
+    { guests: 16, gia_ban_vnd: 4_500_000 },
+    { guests: 26, gia_ban_vnd: 4_000_000 },
+  ];
+
+  it("khoảng nối liền theo ngưỡng kế; bậc cuối để mở", () => {
+    const b = giaCuoiBrackets(tiers, 26_000);
+    expect(b.map((x) => [x.guests_from, x.guests_to])).toEqual([
+      [10, 15], [16, 25], [26, null],
+    ]);
+    expect(b.map((x) => x.label)).toEqual([
+      "10–15 khách", "16–25 khách", "từ 26 khách",
+    ]);
+  });
+
+  it("bậc rộng 1 khách (ngưỡng kế = +1) → label '1 số'", () => {
+    const b = giaCuoiBrackets([{ guests: 10, gia_ban_vnd: 1 }, { guests: 11, gia_ban_vnd: 2 }], 26_000);
+    expect(b[0].label).toBe("10 khách");
+    expect(b[0].guests_to).toBe(10);
+  });
+
+  it("1 bậc duy nhất → 'từ X khách' (mở)", () => {
+    const b = giaCuoiBrackets([{ guests: 8, gia_ban_vnd: 3_000_000 }], 26_000);
+    expect(b).toHaveLength(1);
+    expect(b[0].label).toBe("từ 8 khách");
+    expect(b[0].guests_to).toBeNull();
+  });
+
+  it("rỗng → []", () => {
+    expect(giaCuoiBrackets([], 26_000)).toEqual([]);
+  });
+});
+
+describe("findBracketIndexForPax — tra bậc theo số khách", () => {
+  const b = giaCuoiBrackets(
+    [
+      { guests: 10, gia_ban_vnd: 5_000_000 },
+      { guests: 16, gia_ban_vnd: 4_500_000 },
+      { guests: 26, gia_ban_vnd: 4_000_000 },
+    ],
+    26_000,
+  );
+
+  it("pax giữa khoảng → đúng bậc", () => {
+    expect(findBracketIndexForPax(b, 12)).toBe(0); // 10–15
+    expect(findBracketIndexForPax(b, 20)).toBe(1); // 16–25
+    expect(findBracketIndexForPax(b, 40)).toBe(2); // từ 26
+  });
+
+  it("pax đúng ngưỡng → vào bậc đó (không phải bậc trước)", () => {
+    expect(findBracketIndexForPax(b, 16)).toBe(1);
+    expect(findBracketIndexForPax(b, 26)).toBe(2);
+  });
+
+  it("pax nhỏ hơn bậc thấp nhất → -1 (không bậc nào phủ)", () => {
+    expect(findBracketIndexForPax(b, 5)).toBe(-1);
+  });
+
+  it("pax ≤ 0 → -1", () => {
+    expect(findBracketIndexForPax(b, 0)).toBe(-1);
+    expect(findBracketIndexForPax([], 10)).toBe(-1);
   });
 });

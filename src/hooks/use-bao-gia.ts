@@ -36,6 +36,13 @@ export interface BaoGiaCase {
   final_price_usd: number;
 }
 
+// 1 bậc giá cuối: số khách → giá bán/khách (VND) nhập tay. Chỉ dùng cho
+// loai_bao_gia='gia_cuoi' (land tour giá đã chốt). USD = gia_ban_vnd / tỷ giá.
+export interface GiaCuoiTier {
+  guests: number;
+  gia_ban_vnd: number;
+}
+
 export interface BaoGiaKetQua {
   ten_chuong_trinh: string;
   so_ngay: number;
@@ -47,7 +54,21 @@ export interface BaoGiaKetQua {
   // Ma trận giá nhiều bậc — danh sách SỐ KHÁCH mỗi bậc. Vắng/rỗng → mặc định
   // [16, 20] (back-compat 2 mức cũ). Giá mỗi bậc tính live qua calcTiers.
   tier_guests?: number[];
+  // Mode 'gia_cuoi': giá bán/khách nhập thẳng theo bậc số khách (KHÔNG tính từ
+  // items). Vắng ở báo giá tự-tính. Source of truth cho bảng giá + Word.
+  gia_cuoi_tiers?: GiaCuoiTier[];
 }
+
+// File lịch trình đính kèm (loai_bao_gia='gia_cuoi' — chương trình lấy của bên
+// khác). Chỉ lưu để xem/tải/xuất kèm, KHÔNG cho AI đọc.
+export interface LichTrinhFile {
+  ten: string;
+  url: string;
+  uploaded_at: string;
+  uploaded_by?: string | null;
+}
+
+export type LoaiBaoGia = "tu_tinh" | "gia_cuoi";
 
 export interface BaoGiaRow {
   id: number;
@@ -78,6 +99,14 @@ export interface BaoGiaRow {
   // Tỷ giá VCB (giá MUA USD) snapshot. Khác exchange_rate (báo giá rate quote
   // khách) → tính chênh lệch tỷ giá cho biên lợi nhuận. NULL = bỏ qua.
   vcb_rate: number | null;
+  // Đối tác bán (agents.id) — báo giá làm cho agent này. Nullable (nháp chưa rõ).
+  agent_id: number | null;
+  // Nhãn loại tour ('inbound'|'outbound'|'noi_dia'); map sang doan.loai_tour khi chốt.
+  loai_tour: string | null;
+  // 'tu_tinh' (tính từ dịch vụ) | 'gia_cuoi' (giá chốt sẵn theo bậc). Default 'tu_tinh'.
+  loai_bao_gia: LoaiBaoGia;
+  // File lịch trình đính kèm (mode 'gia_cuoi'). jsonb mảng LichTrinhFile.
+  lich_trinh_files: LichTrinhFile[];
 }
 
 // ── Queries ──
@@ -91,7 +120,7 @@ export function useBaoGiaList() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as BaoGiaRow[];
+      return data as unknown as BaoGiaRow[];
     },
   });
 }
@@ -107,7 +136,7 @@ export function useBaoGiaByLead(leadId: number | null | undefined) {
         .eq("lead_id", leadId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as BaoGiaRow[];
+      return data as unknown as BaoGiaRow[];
     },
   });
 }
@@ -123,7 +152,7 @@ export function useBaoGia(id?: number) {
         .eq("id", id!)
         .single();
       if (error) throw error;
-      return data as BaoGiaRow;
+      return data as unknown as BaoGiaRow;
     },
   });
 }
@@ -160,7 +189,7 @@ export function useCloneBaoGia() {
         .eq("id", id)
         .single();
       if (e1) throw e1;
-      const s = src as BaoGiaRow;
+      const s = src as unknown as BaoGiaRow;
       const payload: Omit<Partial<BaoGiaRow>, "id" | "created_at"> = {
         tieu_de: s.tieu_de ? `${s.tieu_de} (sao chép)` : s.tieu_de,
         noi_dung_goc: s.noi_dung_goc,
@@ -175,6 +204,10 @@ export function useCloneBaoGia() {
         xe_gia: s.xe_gia,
         phu_thu: s.phu_thu,
         vcb_rate: s.vcb_rate,
+        agent_id: s.agent_id,
+        loai_tour: s.loai_tour,
+        loai_bao_gia: s.loai_bao_gia,
+        lich_trinh_files: s.lich_trinh_files,
         trang_thai: "draft",
         lead_id: leadId ?? null,
       };
@@ -219,6 +252,80 @@ export function useDeleteBaoGia() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bao_gia"] });
+    },
+  });
+}
+
+// ── File lịch trình (mode 'gia_cuoi') ──
+// Lưu vào bucket public dùng chung "dntt-documents" (path duy nhất → KHÔNG upsert,
+// tránh lỗi RLS nhánh UPDATE policy). Danh sách lưu jsonb bao_gia.lich_trinh_files.
+
+const LICH_TRINH_BUCKET = "dntt-documents";
+
+export function useUploadLichTrinhFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      baoGiaId, file, current, uploadedBy,
+    }: {
+      baoGiaId: number;
+      file: File;
+      current: LichTrinhFile[];
+      uploadedBy?: string | null;
+    }): Promise<LichTrinhFile[]> => {
+      const ext = (file.name.split(".").pop() ?? "bin").replace(/[^a-zA-Z0-9]/g, "");
+      const path = `bao-gia-${baoGiaId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await externalSupabase.storage
+        .from(LICH_TRINH_BUCKET)
+        .upload(path, file, { contentType: file.type || undefined });
+      if (upErr) throw upErr;
+      const { data: urlData } = externalSupabase.storage.from(LICH_TRINH_BUCKET).getPublicUrl(path);
+      const next: LichTrinhFile[] = [
+        ...(current ?? []),
+        {
+          ten: file.name,
+          url: urlData.publicUrl,
+          uploaded_at: new Date().toISOString(),
+          uploaded_by: uploadedBy ?? null,
+        },
+      ];
+      const { error } = await externalSupabase
+        .from("bao_gia")
+        .update({ lich_trinh_files: next as unknown as TablesUpdate<"bao_gia">["lich_trinh_files"] })
+        .eq("id", baoGiaId);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: (_data, { baoGiaId }) => {
+      qc.invalidateQueries({ queryKey: ["bao_gia"] });
+      qc.invalidateQueries({ queryKey: ["bao_gia", baoGiaId] });
+    },
+  });
+}
+
+// Gỡ 1 file khỏi danh sách (theo url). KHÔNG xóa object storage (giữ đơn giản,
+// bucket public dùng chung — tránh xóa nhầm; orphan file không ảnh hưởng).
+export function useRemoveLichTrinhFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      baoGiaId, url, current,
+    }: {
+      baoGiaId: number;
+      url: string;
+      current: LichTrinhFile[];
+    }): Promise<LichTrinhFile[]> => {
+      const next = (current ?? []).filter((f) => f.url !== url);
+      const { error } = await externalSupabase
+        .from("bao_gia")
+        .update({ lich_trinh_files: next as unknown as TablesUpdate<"bao_gia">["lich_trinh_files"] })
+        .eq("id", baoGiaId);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: (_data, { baoGiaId }) => {
+      qc.invalidateQueries({ queryKey: ["bao_gia"] });
+      qc.invalidateQueries({ queryKey: ["bao_gia", baoGiaId] });
     },
   });
 }

@@ -97,6 +97,7 @@ export type Database = {
       }
       bao_gia: {
         Row: {
+          agent_id: number | null
           created_at: string | null
           created_by: string | null
           exchange_rate: number | null
@@ -105,6 +106,9 @@ export type Database = {
           id: number
           ket_qua: Json | null
           lead_id: number | null
+          lich_trinh_files: Json
+          loai_bao_gia: string
+          loai_tour: string | null
           ma_bg: string | null
           ngay_di: string | null
           ngay_ve: string | null
@@ -118,6 +122,7 @@ export type Database = {
           xe_ten: string | null
         }
         Insert: {
+          agent_id?: number | null
           created_at?: string | null
           created_by?: string | null
           exchange_rate?: number | null
@@ -126,6 +131,9 @@ export type Database = {
           id?: never
           ket_qua?: Json | null
           lead_id?: number | null
+          lich_trinh_files?: Json
+          loai_bao_gia?: string
+          loai_tour?: string | null
           ma_bg?: never
           ngay_di?: string | null
           ngay_ve?: string | null
@@ -139,6 +147,7 @@ export type Database = {
           xe_ten?: string | null
         }
         Update: {
+          agent_id?: number | null
           created_at?: string | null
           created_by?: string | null
           exchange_rate?: number | null
@@ -147,6 +156,9 @@ export type Database = {
           id?: never
           ket_qua?: Json | null
           lead_id?: number | null
+          lich_trinh_files?: Json
+          loai_bao_gia?: string
+          loai_tour?: string | null
           ma_bg?: never
           ngay_di?: string | null
           ngay_ve?: string | null
@@ -160,6 +172,13 @@ export type Database = {
           xe_ten?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bao_gia_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bao_gia_lead_id_fkey"
             columns: ["lead_id"]

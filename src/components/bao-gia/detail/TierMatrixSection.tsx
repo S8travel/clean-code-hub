@@ -8,17 +8,23 @@ import { tierGuestsOf, liveTierBreakdown, fmtVnd, type TierLine } from "./helper
 interface Props {
   draft: BaoGiaRow;
   saveKetQua: (next: BaoGiaKetQua) => void;
+  /** Số khách dự kiến của lead → tô đậm cột bậc áp dụng. 0/undefined = bỏ qua. */
+  leadPax?: number;
 }
 
 // Bảng giá nhiều bậc theo số khách. Mỗi bậc tính giá THẬT (số phòng/FOC/chia
 // khách riêng) thay vì 2 mức cứng 16/20. Bậc = 1 số khách (nhập mức thấp nhất
 // của khoảng cho an toàn). Lưu vào ket_qua.tier_guests.
-export function TierMatrixSection({ draft, saveKetQua }: Props) {
+export function TierMatrixSection({ draft, saveKetQua, leadPax }: Props) {
   const [newG, setNewG] = useState("");
   const ket = draft.ket_qua;
   const guests = tierGuestsOf(ket);
   const tiers = liveTierBreakdown(draft);
   const xr = draft.exchange_rate ?? 26000;
+  // Bậc áp dụng cho pax lead = ngưỡng cao nhất ≤ pax (tiers sort tăng dần).
+  const matchIdx = leadPax && leadPax > 0
+    ? tiers.reduce((acc, t, i) => (leadPax >= t.guests ? i : acc), -1)
+    : -1;
 
   const setGuests = (next: number[]) => {
     if (!ket) return;
@@ -43,6 +49,20 @@ export function TierMatrixSection({ draft, saveKetQua }: Props) {
       <h2 className="text-xs uppercase tracking-wider font-semibold text-slate-500">
         Bảng giá theo số khách (ma trận)
       </h2>
+
+      {leadPax && leadPax > 0 && (
+        <p className="text-[11px]">
+          {matchIdx >= 0 ? (
+            <span className="text-emerald-700">
+              Đoàn ~<b>{leadPax}</b> khách (lead) → giá áp dụng:{" "}
+              <b className="tabular-nums">{fmtVnd(tiers[matchIdx].line.gia_ban_per_pax)} ₫</b>/khách{" "}
+              <span className="text-slate-500">(bậc {tiers[matchIdx].guests} khách — cột tô đậm)</span>
+            </span>
+          ) : (
+            <span className="text-amber-700">Đoàn ~<b>{leadPax}</b> khách (lead) — chưa có bậc nào phủ số khách này.</span>
+          )}
+        </p>
+      )}
 
       {/* Editor bậc khách */}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -81,8 +101,13 @@ export function TierMatrixSection({ draft, saveKetQua }: Props) {
           <thead>
             <tr className="bg-[#E6F1FB]">
               <th className="text-left py-1.5 px-2 font-semibold sticky left-0 bg-[#E6F1FB] z-10">Khoản</th>
-              {tiers.map((t) => (
-                <th key={t.guests} className="text-right py-1.5 px-2 font-semibold min-w-[92px]">{t.guests} khách</th>
+              {tiers.map((t, i) => (
+                <th
+                  key={t.guests}
+                  className={`text-right py-1.5 px-2 font-semibold min-w-[92px] ${i === matchIdx ? "bg-emerald-100" : ""}`}
+                >
+                  {t.guests} khách
+                </th>
               ))}
             </tr>
           </thead>
@@ -98,8 +123,11 @@ export function TierMatrixSection({ draft, saveKetQua }: Props) {
             <MRow label="Lợi nhuận"      tiers={tiers} pick={(l) => l.profit_vnd} />
             <tr className="border-t-2 border-blue-200 bg-blue-50/60">
               <td className="py-1.5 px-2 font-bold sticky left-0 bg-blue-50/60 z-10">GIÁ BÁN / khách</td>
-              {tiers.map((t) => (
-                <td key={t.guests} className="py-1.5 px-2 text-right font-bold text-blue-700 tabular-nums">
+              {tiers.map((t, i) => (
+                <td
+                  key={t.guests}
+                  className={`py-1.5 px-2 text-right font-bold text-blue-700 tabular-nums ${i === matchIdx ? "bg-emerald-100" : ""}`}
+                >
                   {fmtVnd(t.line.gia_ban_per_pax)}
                 </td>
               ))}

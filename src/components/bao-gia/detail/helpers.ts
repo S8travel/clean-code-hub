@@ -87,6 +87,24 @@ export function emptyBaoGiaKetQua(soNgay = 1, tenChuongTrinh = ""): BaoGiaKetQua
   };
 }
 
+/** Skeleton ket_qua cho báo giá GIÁ CUỐI (land tour — giá chốt sẵn). KHÔNG có
+ *  slot dịch vụ (items rỗng); giá nhập thẳng theo bậc số khách (gia_cuoi_tiers). */
+export function emptyGiaCuoiKetQua(soNgay = 1, tenChuongTrinh = ""): BaoGiaKetQua {
+  return {
+    ten_chuong_trinh: tenChuongTrinh,
+    so_ngay: Math.max(1, soNgay),
+    items: [],
+    case_16: emptyBaoGiaCase(16),
+    case_20: emptyBaoGiaCase(20),
+    gia_trung_binh_vnd: 0,
+    gia_trung_binh_usd: 0,
+    gia_cuoi_tiers: [
+      { guests: 10, gia_ban_vnd: 0 },
+      { guests: 20, gia_ban_vnd: 0 },
+    ],
+  };
+}
+
 /** Live-recompute case_16 + case_20 + giá trung bình từ items[] + xe_gia +
  *  draft fields. Trả về BaoGiaKetQua "tươi" để các tổng hợp (panel UI, Word
  *  export) dùng chung — KHÔNG đọc case frozen từ AI extract.

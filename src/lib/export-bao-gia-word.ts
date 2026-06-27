@@ -30,6 +30,8 @@ export interface TierPrice {
   guests: number;
   gia_ban_vnd: number;
   gia_ban_usd: number;
+  /** Nhãn cột tuỳ chọn (vd "10–15 khách"). Vắng → "{guests} khách". */
+  label?: string;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -132,6 +134,136 @@ export async function exportBaoGiaWord(
       .replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "")
       .trim() || "tour";
   saveAs(blob, `bao_gia_${safeName}.docx`);
+}
+
+// ── Giá cuối format (land tour — chỉ bảng giá theo bậc, không costing) ─────────
+export async function exportBaoGiaGiaCuoiWord(
+  ketQua: BaoGiaKetQua,
+  exchangeRate: number,
+  tiers: TierPrice[],
+) {
+  const doc = buildGiaCuoiDoc(ketQua, exchangeRate, tiers);
+  const blob = await Packer.toBlob(doc);
+  const safeName =
+    ketQua.ten_chuong_trinh
+      .replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "")
+      .trim() || "tour";
+  saveAs(blob, `bao_gia_${safeName}.docx`);
+}
+
+function buildGiaCuoiDoc(
+  ketQua: BaoGiaKetQua,
+  exchangeRate: number,
+  tiers: TierPrice[],
+): Document {
+  const today = new Date().toLocaleDateString("vi-VN");
+  const HALF = Math.floor(CONTENT_W / 2);
+
+  const headerTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        children: [
+          cell(
+            [
+              p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22, align: AlignmentType.CENTER }),
+              p("S8 TRAVEL COMPANY", { size: 18, color: "555555", align: AlignmentType.CENTER }),
+              p("MST: 0402021137", { size: 18, color: "555555", align: AlignmentType.CENTER }),
+            ],
+            { width: HALF, margins: { top: 120, bottom: 120, left: 120, right: 120 } },
+          ),
+          cell(
+            [
+              p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", { bold: true, size: 22, align: AlignmentType.CENTER }),
+              p("Độc lập – Tự do – Hạnh phúc", { bold: true, size: 20, align: AlignmentType.CENTER }),
+              p("——————————————", { size: 18, color: "888888", align: AlignmentType.CENTER }),
+              p(`Hà Nội, ngày ${today}`, { size: 18, italics: true, color: "555555", align: AlignmentType.CENTER }),
+            ],
+            { width: CONTENT_W - HALF, margins: { top: 120, bottom: 120, left: 120, right: 120 } },
+          ),
+        ],
+      }),
+    ],
+  });
+
+  const titlePara = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 200, after: 100 },
+    children: [new TextRun({ noProof: true, text: "BẢNG BÁO GIÁ TOUR", bold: true, size: 32, font: "Times New Roman" })],
+  });
+
+  const subTitlePara = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 0, after: 200 },
+    children: [
+      new TextRun({ noProof: true, text: ketQua.ten_chuong_trinh, bold: true, size: 24, color: "185FA5", font: "Times New Roman" }),
+      new TextRun({ noProof: true, text: `  •  ${ketQua.so_ngay} ngày`, size: 20, color: "555555", font: "Times New Roman" }),
+    ],
+  });
+
+  // Bảng giá theo bậc số khách (giá đã chốt — nhập tay).
+  const LABEL_W = 2600;
+  const baseW = tiers.length ? Math.floor((CONTENT_W - LABEL_W) / tiers.length) : CONTENT_W - LABEL_W;
+  const colW = tiers.map((_, i) => (i === tiers.length - 1 ? CONTENT_W - LABEL_W - baseW * (tiers.length - 1) : baseW));
+  const tierTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          cell([p("Số khách", { bold: true })], { width: LABEL_W, shading: HEADER_SHADING }),
+          ...tiers.map((t, i) =>
+            cell([p(t.label ?? `${t.guests} khách`, { bold: true, align: AlignmentType.CENTER })], { width: colW[i], shading: HEADER_SHADING }),
+          ),
+        ],
+      }),
+      new TableRow({
+        children: [
+          cell([p("Giá / khách (VND)", { bold: true, color: "FFFFFF" })], { width: LABEL_W, shading: BLUE_SHADING }),
+          ...tiers.map((t, i) =>
+            cell([p(fmt(t.gia_ban_vnd), { bold: true, align: AlignmentType.CENTER, color: "FFFFFF", size: 24 })], { width: colW[i], shading: BLUE_SHADING }),
+          ),
+        ],
+      }),
+      new TableRow({
+        children: [
+          cell([p("Giá / khách (USD)", { bold: true })], { width: LABEL_W, shading: HEADER_SHADING }),
+          ...tiers.map((t, i) =>
+            cell([p(`≈ ${fmtUsd(t.gia_ban_usd)}`, { align: AlignmentType.CENTER })], { width: colW[i] }),
+          ),
+        ],
+      }),
+    ],
+  });
+
+  const noteParaCt =
+    tiers.length === 0
+      ? [p("(Chưa nhập bảng giá)", { italics: true, color: "999999" })]
+      : [
+          tierTable,
+          new Paragraph({ spacing: { before: 120 }, children: [] }),
+          p(`Tỷ giá quy đổi: ${fmt(exchangeRate)} VND/USD. Giá áp dụng cho chương trình tour kèm theo.`, { size: 18, italics: true, color: "555555" }),
+        ];
+
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: { width: PAGE_W, height: PAGE_H },
+            margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
+          },
+        },
+        children: [
+          headerTable,
+          titlePara,
+          subTitlePara,
+          sectionLabel("BẢNG GIÁ THEO SỐ KHÁCH"),
+          ...noteParaCt,
+        ],
+      },
+    ],
+  });
 }
 
 // ── Manual format (Chinese-style quotation) ───────────────────────────────────
