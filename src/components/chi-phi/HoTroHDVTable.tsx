@@ -28,7 +28,7 @@ import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
 import { t } from "@/lib/i18n";
 import { useCancelDNTT, type HDVHoTroItem } from "@/hooks/use-chi-phi-hdv";
 import type { HDVDoanInfo, KhacModalItem, KhacModalTarget, KhacCancelTarget } from "./hdv-shared";
-import { resolveHoTroNguoiTt, isTipLaiXeRow, TIP_LAI_XE_MO_TA } from "./hdv-shared";
+import { resolveHoTroNguoiTt, isTipLaiXeRow, missingDefaultKhacMoTas, orderKhacItems } from "./hdv-shared";
 import { HDVHoTroRow } from "./HDVHoTroRow";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -96,12 +96,18 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
     return m;
   }, [paymentsList]);
 
-  // Thứ tự hiển thị: row "Tip lái xe" luôn lên đầu, còn lại giữ thứ tự created_at.
-  const orderedItems = useMemo(() => {
-    const tip = hoTroItems.filter((i) => isTipLaiXeRow(i.mo_ta));
-    const rest = hoTroItems.filter((i) => !isTipLaiXeRow(i.mo_ta));
-    return [...tip, ...rest];
-  }, [hoTroItems]);
+  // Thứ tự hiển thị: dòng hệ thống (Tip lái xe + 7 khoản mặc định) lên đầu theo
+  // SYSTEM_KHAC_ORDER, còn lại (quà tặng + khoản OP tự thêm) giữ thứ tự created_at.
+  const orderedItems = useMemo(() => orderKhacItems(hoTroItems), [hoTroItems]);
+
+  // Đoàn "đang chạy / chưa kết thúc" (ngày về ≥ hôm nay) → mới auto-thêm 7 khoản
+  // mặc định. Đoàn cũ đã đi xong KHÔNG bị chèn dòng trống (chỉ Tip lái xe giữ
+  // nguyên hành vi cũ). Thiếu ngày về → coi như còn hiệu lực.
+  const isActiveDoan = useMemo(() => {
+    const ngayVe = doan?.ngay_ve;
+    if (!ngayVe) return true;
+    return ngayVe >= new Date().toISOString().slice(0, 10);
+  }, [doan?.ngay_ve]);
 
   // Multi-select cho ĐNTT gộp
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -170,35 +176,41 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
   // Default người trả — mặc định HDV (ứng trước), trừ row đã có tien_cong_ty (xem hdv-shared).
   const resolveNguoiTt = resolveHoTroNguoiTt;
 
-  // Tip lái xe luôn có sẵn mỗi đoàn: nếu chưa có → tự tạo 1 row (đơn giá 0, OP
-  // nhập sau). Guard theo doanId để không tạo trùng trong lúc chờ refetch; lỗi
-  // thì reset cho phép thử lại lần render sau.
-  const tipEnsuredForDoanRef = useRef<number | null>(null);
+  // Khoản "Khác" mặc định luôn có sẵn mỗi đoàn (đơn giá 0, Nguồn HDV — OP nhập
+  // sau): Tip lái xe cho MỌI đoàn; 7 khoản chuẩn (Nước Aqua, CTP HDV...) chỉ cho
+  // đoàn đang chạy/sắp đi. Thiếu dòng nào → tự tạo. Guard theo doanId để không
+  // tạo trùng trong lúc chờ refetch; lỗi thì reset cho phép thử lại render sau.
+  // Đoàn đã quyết toán (locked) → bỏ qua: lockGuard sẽ chặn insert (gây vòng lặp).
+  const defaultsEnsuredForDoanRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!doanId) return;
-    if (hoTroItems.some((i) => isTipLaiXeRow(i.mo_ta))) {
-      tipEnsuredForDoanRef.current = doanId;
+    if (!doanId || locked) return;
+    const missing = missingDefaultKhacMoTas(hoTroItems.map((i) => i.mo_ta), isActiveDoan);
+    if (missing.length === 0) {
+      defaultsEnsuredForDoanRef.current = doanId;
       return;
     }
-    if (tipEnsuredForDoanRef.current === doanId) return;
-    tipEnsuredForDoanRef.current = doanId;
-    upsertMut
-      .mutateAsync({
-        doan_id: doanId,
-        danh_muc: "hdv_ho_tro",
-        loai: "khac",
-        mo_ta: TIP_LAI_XE_MO_TA,
-        so_luong: 1,
-        don_gia: 0,
-        tien_cong_ty: 0,
-        tien_hdv: 0,
-      })
+    if (defaultsEnsuredForDoanRef.current === doanId) return;
+    defaultsEnsuredForDoanRef.current = doanId;
+    Promise.all(
+      missing.map((mo_ta) =>
+        upsertMut.mutateAsync({
+          doan_id: doanId,
+          danh_muc: "hdv_ho_tro",
+          loai: "khac",
+          mo_ta,
+          so_luong: 1,
+          don_gia: 0,
+          tien_cong_ty: 0,
+          tien_hdv: 0,
+        }),
+      ),
+    )
       .then(() => invalidate())
       .catch(() => {
-        if (tipEnsuredForDoanRef.current === doanId) tipEnsuredForDoanRef.current = null;
+        if (defaultsEnsuredForDoanRef.current === doanId) defaultsEnsuredForDoanRef.current = null;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doanId, hoTroItems]);
+  }, [doanId, hoTroItems, isActiveDoan, locked]);
 
   // Save handler — row component pass full payload sync via ref → đảm bảo
   // value mới nhất, không bị stale closure khi user blur xong chuyển tab.
