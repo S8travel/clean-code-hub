@@ -13,6 +13,7 @@ import { useCanhDiemList, useCreateCanhDiem, type CanhDiem } from "@/hooks/use-c
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast } from "sonner";
+import { errMsg } from "@/lib/error";
 import CanhDiemDetail from "@/components/canh-diem/CanhDiemDetail";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
@@ -46,8 +47,8 @@ function CanhDiemPageContent() {
       setNewNccId("");
       setShowCreate(false);
       toast.success(t("Đã tạo cảnh điểm"));
-    } catch {
-      toast.error(t("Lỗi tạo cảnh điểm"));
+    } catch (e) {
+      toast.error(errMsg(e) || t("Lỗi tạo cảnh điểm"));
     }
   };
 

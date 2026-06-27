@@ -1,6 +1,12 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TablesUpdate } from "@/lib/database.types";
+import { isFkViolation } from "@/lib/error";
+
+// NCC vừa chọn đã bị xóa (danh sách trong form bị stale) → DB chặn FK. Làm mới list
+// + báo người dùng chọn lại thay vì toast "Lỗi khi lưu" chung chung.
+const NCC_STALE_MSG =
+  "Nhà cung cấp vừa chọn không còn tồn tại. Danh sách đã được làm mới — vui lòng chọn lại.";
 
 export interface CanhDiem {
   id: number;
@@ -56,7 +62,13 @@ export function useCreateCanhDiem() {
         })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        if (isFkViolation(error)) {
+          qc.invalidateQueries({ queryKey: ["nha_cung_cap_list"] });
+          throw new Error(NCC_STALE_MSG);
+        }
+        throw error;
+      }
       return data as CanhDiem;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
@@ -71,7 +83,13 @@ export function useUpdateCanhDiem() {
         .from("canh_diem")
         .update(params.updates)
         .eq("id", params.id);
-      if (error) throw error;
+      if (error) {
+        if (isFkViolation(error)) {
+          qc.invalidateQueries({ queryKey: ["nha_cung_cap_list"] });
+          throw new Error(NCC_STALE_MSG);
+        }
+        throw error;
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
   });

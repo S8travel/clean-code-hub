@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { errMsg } from "./error";
+import { errMsg, isFkViolation } from "./error";
 
 describe("errMsg", () => {
   it("trả về message của Error", () => {
@@ -28,5 +28,17 @@ describe("errMsg", () => {
 
   it("trả về '' khi message không phải string", () => {
     expect(errMsg({ message: 123 })).toBe("");
+  });
+});
+
+describe("isFkViolation", () => {
+  it("true khi err có code 23503", () => {
+    expect(isFkViolation({ code: "23503", message: "fk" })).toBe(true);
+  });
+
+  it("false với mã lỗi khác / null / không có code", () => {
+    expect(isFkViolation({ code: "23505" })).toBe(false);
+    expect(isFkViolation(null)).toBe(false);
+    expect(isFkViolation(new Error("boom"))).toBe(false);
   });
 });

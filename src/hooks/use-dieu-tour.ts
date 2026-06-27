@@ -6,6 +6,7 @@ import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
 import { extraParentId } from "@/lib/dntt-gop-calc";
 import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
+import { resolveCanhDiemChiPhiTarget } from "@/lib/canh-diem-cascade";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
@@ -1011,14 +1012,31 @@ export function useSaveDieuTour() {
             // Dedupe cross-nhóm: tìm existing theo (doan_id, danh_muc, ngay_so, mo_ta)
             // thay vì ref_doan_ngay_item_id (vì mỗi nhóm có item.id riêng).
             // Đọc foc snapshot để update tính lại tien đúng (snapshot LOCK per-tour).
-            const { data: existing } = await externalSupabase
+            const cdCpCols =
+              "id, so_luong, don_gia, is_overridden, foc_khach_snapshot, foc_mien_snapshot";
+            const { data: existingByMoTa } = await externalSupabase
               .from("doan_chi_phi")
-              .select("id, so_luong, don_gia, is_overridden, foc_khach_snapshot, foc_mien_snapshot")
+              .select(cdCpCols)
               .eq("doan_id", doanId)
               .eq("danh_muc", "canh_diem")
               .eq("ngay_so", day.ngay_so)
               .eq("mo_ta", moTa)
               .maybeSingle();
+            // Fallback theo ref_doan_ngay_item_id (đúng cột UNIQUE) — bắt case ĐỔI TÊN
+            // cảnh điểm: mo_ta đổi mà ref giữ → dedupe mo_ta trượt → nếu INSERT sẽ đụng
+            // UNIQUE (...ref_doan_ngay_item_id). Lấy lại dòng cũ để UPDATE (set mo_ta mới).
+            let existingByRef = null as typeof existingByMoTa;
+            if (!existingByMoTa) {
+              ({ data: existingByRef } = await externalSupabase
+                .from("doan_chi_phi")
+                .select(cdCpCols)
+                .eq("doan_id", doanId)
+                .eq("danh_muc", "canh_diem")
+                .eq("ngay_so", day.ngay_so)
+                .eq("ref_doan_ngay_item_id", item.id)
+                .maybeSingle());
+            }
+            const existing = resolveCanhDiemChiPhiTarget(existingByMoTa, existingByRef);
 
             if (existing) {
               if (existing.is_overridden) {
