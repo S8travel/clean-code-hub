@@ -2300,6 +2300,53 @@ export type Database = {
           },
         ]
       }
+      khach_san_gia_phong: {
+        Row: {
+          active: boolean
+          created_at: string
+          den_ngay: string | null
+          gia: number
+          ghi_chu: string | null
+          id: number
+          khach_san_id: number
+          loai_phong: string | null
+          ten_giai_doan: string | null
+          tu_ngay: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          den_ngay?: string | null
+          gia?: number
+          ghi_chu?: string | null
+          id?: never
+          khach_san_id: number
+          loai_phong?: string | null
+          ten_giai_doan?: string | null
+          tu_ngay?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          den_ngay?: string | null
+          gia?: number
+          ghi_chu?: string | null
+          id?: never
+          khach_san_id?: number
+          loai_phong?: string | null
+          ten_giai_doan?: string | null
+          tu_ngay?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "khach_san_gia_phong_khach_san_id_fkey"
+            columns: ["khach_san_id"]
+            isOneToOne: false
+            referencedRelation: "khach_san"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead: {
         Row: {
           assigned_to: string | null
