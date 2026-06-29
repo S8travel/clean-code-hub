@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
 import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive } from "@/lib/tip-calc";
 import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
+import { sumHdvExtrasVND } from "@/lib/phai-thu-calc";
 import { t } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./hdv-shared";
 
@@ -84,6 +85,10 @@ export function CreateHDVPaymentModal({
   const quyVpDonGiaDefault = (doan?.quy_vp_nguoi_thu ?? "hdv") === "hdv"
     ? (doan?.quy_vp_amount ?? 200_000)
     : 0;
+  // Thu khác: gộp mọi khoản phải thu thêm tay (extras) mà HDV thu — ngoài
+  // tip/đầu khách/quỹ VP đã có dòng riêng. Để Tổng thu khớp bảng "Phải thu"
+  // (số quyết toán không lệch). OP vẫn sửa tay được sau khi mở modal.
+  const thuKhacDefault = sumHdvExtrasVND(doan);
 
   // Common state
   const [soTien, setSoTien] = useState(defaultSoTien ?? 0);
@@ -108,7 +113,7 @@ export function CreateHDVPaymentModal({
   const [quyVpSoLuong, setQuyVpSoLuong] = useState(1);
   const [quyVpDonGia, setQuyVpDonGia] = useState(quyVpDonGiaDefault);
   const [thuBanOp, setThuBanOp] = useState(0);
-  const [thuKhac, setThuKhac] = useState(0);
+  const [thuKhac, setThuKhac] = useState(thuKhacDefault);
 
   // Auto-compute quyết toán (logic tách ở lib/quyet-toan-hdv-calc.ts — có unit test)
   const { thuTipVnd, thuDauKhachVnd, thuQuyVpVnd, tongThu, conPhaiThanhToan } = calcQuyetToanHDV({
