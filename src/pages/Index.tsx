@@ -114,7 +114,6 @@ export default function Index() {
   const [quickTab, setQuickTab] = useState<
     "all" | "dang_chay" | "sap_khoi_hanh" | "dang_dien_ra" | "hoan_thanh" | "da_quyet_toan" | "huy"
   >("all");
-  const [pageSize, setPageSize] = useState(5);
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
@@ -127,6 +126,7 @@ export default function Index() {
   const loaiTourFilter = filterState.get("loaiTourFilter");
   const xeFilter = filterState.get("xeFilter");
   const page = parseInt(filterState.get("page"), 10) || 1;
+  const pageSize = parseInt(filterState.get("pageSize"), 10) || 5;
   const sortKey = filterState.get("sortKey");
   const sortDir = filterState.get("sortDir") as "asc" | "desc";
 
@@ -140,6 +140,8 @@ export default function Index() {
   const setLoaiTourFilter = (v: string) => filterState.set({ loaiTourFilter: v, page: "1" });
   const setXeFilter = (v: string) => filterState.set({ xeFilter: v, page: "1" });
   const setPage = (v: number) => filterState.set({ page: String(v) });
+  // Đổi số dòng/trang reset về trang 1 (tránh ở trang vượt range sau khi đổi size)
+  const setPageSize = (v: number) => filterState.set({ pageSize: String(v), page: "1" });
   const setSort = (k: string, d: "asc" | "desc") => filterState.set({ sortKey: k, sortDir: d });
 
   // Build user_roles map: user_id → ho_ten
@@ -834,7 +836,7 @@ export default function Index() {
             </div>
             <Select
               value={String(pageSize)}
-              onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+              onValueChange={(v) => setPageSize(Number(v))}
             >
               <SelectTrigger className="h-8 text-xs w-[130px]">
                 <span>{t("Hiển thị")} {pageSize}/{t("trang")}</span>

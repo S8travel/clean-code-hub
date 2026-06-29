@@ -13,6 +13,7 @@ export const DOAN_LIST_DEFAULTS = {
   loaiTourFilter: "all",
   xeFilter: "all",
   page: "1",
+  pageSize: "5",
   sortKey: "ngay_di",
   sortDir: "asc",
 } as const;
