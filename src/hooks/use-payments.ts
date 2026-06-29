@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { getChiPhiIdsForDNTT, recalcChiPhiStatus, type PaymentRow } from "@/hooks/use-dntt";
-import { appendCanTruLog } from "@/hooks/use-cong-no";
+import { appendCanTruLog, markCongNoCanTruIfExhausted, revertCongNoIfRecovered } from "@/hooks/use-cong-no";
 import { proRataInts } from "@/lib/pro-rata";
 import { canTruGhiChu } from "@/lib/can-tru-note";
 
@@ -28,18 +28,10 @@ export async function createCanTruPayments(opts: {
       ghi_chu: canTruGhiChu(it.sourceTenDoan),
     });
     if (error) throw error;
+    // appendCanTruLog (RPC) tự append log + flip 'da_can_tru' khi cạn — chạy SAU
+    // insert payment nên đọc đúng balance mới. Quỹ NCC doan_id=NULL bị RLS chặn
+    // ghi trực tiếp nên phải qua RPC definer.
     await appendCanTruLog(it.congNoId, it.soTien, opts.consumingDoanLog);
-    const { data: cn } = await externalSupabase
-      .from("cong_no_with_status")
-      .select("so_tien_con_lai")
-      .eq("id", it.congNoId)
-      .single();
-    if (cn && Number(cn.so_tien_con_lai) <= 0) {
-      await externalSupabase
-        .from("cong_no")
-        .update({ trang_thai: "da_can_tru" })
-        .eq("id", it.congNoId);
-    }
     total += it.soTien;
   }
   if (total > 0) {
@@ -271,19 +263,10 @@ export function useCreatePayment() {
       });
       if (error) throw error;
 
-      // Nếu cấn trừ hết cong_no → đánh dấu da_can_tru
+      // Nếu cấn trừ hết cong_no → đánh dấu da_can_tru (qua RPC definer: quỹ NCC
+      // doan_id=NULL bị RLS van_phong_scope chặn đọc/ghi trực tiếp).
       if (method === "can_tru" && congNoId) {
-        const { data: cnRow } = await externalSupabase
-          .from("cong_no_with_status")
-          .select("so_tien_con_lai")
-          .eq("id", congNoId)
-          .single();
-        if (cnRow && Number(cnRow.so_tien_con_lai) <= 0) {
-          await externalSupabase
-            .from("cong_no")
-            .update({ trang_thai: "da_can_tru" })
-            .eq("id", congNoId);
-        }
+        await markCongNoCanTruIfExhausted(congNoId);
       }
 
       const chiPhiIds = await getChiPhiIdsForDNTT(dnttId);
@@ -321,19 +304,10 @@ export function useDeletePayment() {
       const { error } = await externalSupabase.from("payments").delete().eq("id", id);
       if (error) throw error;
 
-      // Nếu xoá can_tru payment → cong_no có thể về 'con_du' (nếu trước đó da_can_tru)
+      // Nếu xoá can_tru payment → cong_no có thể về 'con_du' (nếu trước đó da_can_tru).
+      // Qua RPC definer: quỹ NCC doan_id=NULL bị RLS chặn đọc/ghi trực tiếp.
       if (pay?.cong_no_id) {
-        const { data: cnRow } = await externalSupabase
-          .from("cong_no_with_status")
-          .select("so_tien_con_lai, trang_thai")
-          .eq("id", pay.cong_no_id)
-          .single();
-        if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
-          await externalSupabase
-            .from("cong_no")
-            .update({ trang_thai: "con_du" })
-            .eq("id", pay.cong_no_id);
-        }
+        await revertCongNoIfRecovered(pay.cong_no_id);
       }
 
       if (pay?.dntt_id) {
