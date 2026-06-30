@@ -7,6 +7,7 @@ import {
   buildAggAllocations,
   splitVoucherCoverage,
   calcVoucherEditDelta,
+  calcCoveredSoKhachEdit,
   type RedemptionLike,
   type CoveredInfo,
 } from "./voucher";
@@ -353,5 +354,55 @@ describe("calcVoucherEditDelta", () => {
     expect(d.deltaTienCongTy).toBe(-(d.coverMoi - d.coverCu));
     expect(d.paymentVoucherCu).toBe(0);
     expect(d.paymentVoucherMoi).toBe(0);
+  });
+});
+
+describe("calcCoveredSoKhachEdit", () => {
+  // Tàu Sea Octopus: 604.800/vé, không CK, MUA, vé == số khách (phủ hết).
+  it("MUA giảm khách 39→37 (vé phủ hết) → vé tụt 37, cover/cty = 37×604800", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 39, soKhachThucTe: 37, donGia: 604800, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(37);
+    expect(r.coverValue).toBe(37 * 604800); // 22.377.600
+    expect(r.tienCongTy).toBe(37 * 604800); // mua giữ full
+  });
+
+  it("MUA tăng khách 37→39 (vé đang 37) → vé GIỮ 37 (khách thêm không tự phủ), cty=full 39", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 37, soKhachThucTe: 39, donGia: 604800, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(37);
+    expect(r.coverValue).toBe(37 * 604800);
+    expect(r.tienCongTy).toBe(39 * 604800); // full theo số khách mới
+  });
+
+  it("MUA phủ MỘT PHẦN: vé 20, khách 39→35 (vẫn ≥20) → vé giữ 20", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 20, soKhachThucTe: 35, donGia: 100000, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(20);
+    expect(r.coverValue).toBe(20 * 100000);
+    expect(r.tienCongTy).toBe(35 * 100000);
+  });
+
+  it("MUA giảm khách DƯỚI số vé: vé 20, khách 15 → vé kẹp 15", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 20, soKhachThucTe: 15, donGia: 100000, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(15);
+    expect(r.coverValue).toBe(15 * 100000);
+  });
+
+  it("TẶNG giảm khách 24→20 (vé tặng 2) → vé giữ 2, cty = remainderNet 18 ghế", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 2, soKhachThucTe: 20, donGia: 1150000, ckPct: null, loai: "tang" });
+    expect(r.veNew).toBe(2);
+    expect(r.coverValue).toBe(2 * 1150000);
+    expect(r.tienCongTy).toBe(18 * 1150000); // 18 ghế công ty trả
+  });
+
+  it("số khách = 0 → vé 0 (caller sẽ gỡ voucher)", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 39, soKhachThucTe: 0, donGia: 604800, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(0);
+    expect(r.coverValue).toBe(0);
+  });
+
+  it("có CK%: cover + remainder vẫn bù trừ đúng full (MUA, CK5%)", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 4, soKhachThucTe: 20, donGia: 172800, ckPct: 5, loai: "mua" });
+    // full = applyChietKhau(20×172800, 5%) = 3.283.200; mua → tienCongTy = full
+    expect(r.tienCongTy).toBe(3283200);
+    expect(r.veNew).toBe(4);
   });
 });

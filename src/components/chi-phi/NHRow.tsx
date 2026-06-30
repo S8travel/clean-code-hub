@@ -81,6 +81,8 @@ export interface NHRowHandlers {
   onOpenVoucher: (target: VoucherTarget) => void;
   onRemoveVoucher: (chiPhiId: number) => void;
   onEditVoucher: (chiPhiId: number, veMoi: number) => void;
+  /** Sửa số khách suất ĐÃ phủ voucher → vé kẹp + tính lại tiền (đọc so_khach từ localRows). */
+  onEditCoveredSoKhach: (key: string) => void;
 }
 
 interface Props {
@@ -107,7 +109,7 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
     setEditingDnttId, setEditAmount, setCancelMode, setCancelTarget,
     setDnttAlreadyPaid, setDnttModalMode, setDnttDepositAmount, setDnttNgayCan,
     setDnttModalKey, setAggCommit, setAggReason, setAggSurplusMode,
-    setAggCanTru, setAggNgayCan, onOpenVoucher, onEditVoucher,
+    setAggCanTru, setAggNgayCan, onOpenVoucher, onEditVoucher, onEditCoveredSoKhach,
   } = handlers;
 
   const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
@@ -316,7 +318,15 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
             {row ? (
               <>
                 {isVoucherCovered ? (
-                  <span className="w-[56px] text-center tabular-nums">{row.so_khach}</span>
+                  // Suất đã phủ voucher: VẪN sửa được số khách — vé voucher kẹp ≤ số
+                  // khách + tính lại tiền (onEditCoveredSoKhach). Đơn giá/CK vẫn khóa.
+                  <NHInput
+                    value={row.so_khach}
+                    onChange={(v) => handleChange(key, "so_khach", v)}
+                    onBlur={() => onEditCoveredSoKhach(key)}
+                    width="w-[56px]"
+                    disabled={locked}
+                  />
                 ) : (
                   <NHInput
                     value={row.so_khach}

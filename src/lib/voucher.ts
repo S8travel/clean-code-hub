@@ -241,6 +241,38 @@ export function calcVoucherEditDelta(params: {
 }
 
 /**
+ * Tính lại phủ voucher khi SỬA SỐ KHÁCH của 1 suất chính ĐÃ phủ voucher.
+ *
+ * Số khách đổi → vé voucher KẸP ≤ số khách mới (không phủ nhiều hơn số khách hiện
+ * có). Giảm khách dưới số vé → vé tụt theo; tăng khách → vé GIỮ NGUYÊN (khách thêm
+ * KHÔNG tự phủ voucher — muốn phủ thêm thì sửa vé ở popover). Trả giá trị TUYỆT ĐỐI
+ * mới (không phải delta). Thuần (không DB/React).
+ *
+ * - `veNew`      = min(veCu, soKhachThucTe) — vé sau kẹp.
+ * - `coverValue` = giá trị phủ mới (ghi voucher_su_dung.gia_tri).
+ * - `tienCongTy` = công ty trả mới: MUA → full (số khách × đơn giá, sau CK);
+ *   TẶNG → remainderNet (phần ghế không phủ).
+ */
+export function calcCoveredSoKhachEdit(params: {
+  veCu: number;
+  soKhachThucTe: number;
+  donGia: number;
+  ckPct: number | null;
+  loai: "mua" | "tang";
+}): { veNew: number; coverValue: number; tienCongTy: number } {
+  const soKhach = Math.max(0, params.soKhachThucTe);
+  const veNew = Math.max(0, Math.min(Math.round(params.veCu), soKhach));
+  const split = splitVoucherCoverage({
+    soKhachThucTe: soKhach,
+    donGia: params.donGia,
+    ckPct: params.ckPct,
+    soVe: veNew,
+    loai: params.loai,
+  });
+  return { veNew, coverValue: split.coverValue, tienCongTy: split.tienCongTy };
+}
+
+/**
  * Allocation cho ĐNTT bổ sung (footer aggregate) khi nhóm có dòng phủ voucher 'mua'.
  * Allocate giá trị MỖI dòng phát sinh chưa-chốt về ĐÚNG chi_phi của nó (cả voucher
  * lẫn cash) → recalc quy `so_tien_da_dntt`/`so_tien_da_tt` về từng dòng (đúng trạng
