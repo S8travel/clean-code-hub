@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
+import { revertCongNoIfRecovered } from "@/hooks/use-cong-no";
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
@@ -860,19 +861,10 @@ export function useDeleteDNTT() {
       const { error } = await externalSupabase.from("de_nghi_thanh_toan").delete().eq("id", id);
       if (error) throw error;
 
-      // Reset cong_no trạng thái về 'con_du' nếu balance khôi phục sau cascade-delete
+      // Reset cong_no trạng thái về 'con_du' nếu balance khôi phục sau cascade-delete.
+      // Qua RPC definer: quỹ NCC doan_id=NULL bị RLS chặn đọc/ghi trực tiếp.
       for (const cnId of affectedCongNoIds) {
-        const { data: cnRow } = await externalSupabase
-          .from("cong_no_with_status")
-          .select("so_tien_con_lai, trang_thai")
-          .eq("id", cnId)
-          .single();
-        if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
-          await externalSupabase
-            .from("cong_no")
-            .update({ trang_thai: "con_du" })
-            .eq("id", cnId);
-        }
+        await revertCongNoIfRecovered(cnId);
       }
 
       await recalcChiPhiStatus(chiPhiIds);

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { proRataInts } from "@/lib/pro-rata";
 import { useAuth } from "@/hooks/use-auth";
-import { isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
+import { isDnttPaidFromPrepaid, revertCongNoIfRecovered } from "@/hooks/use-cong-no";
 import type { Tables, TablesUpdate } from "@/lib/database.types";
 
 export interface DNTTRow {
@@ -392,14 +392,7 @@ async function releaseCanTruPayments(
   }
   await externalSupabase.from("payments").delete().in("id", ids);
   for (const cnId of affectedCongNoIds) {
-    const { data: cnRow } = await externalSupabase
-      .from("cong_no_with_status")
-      .select("so_tien_con_lai, trang_thai")
-      .eq("id", cnId)
-      .single();
-    if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
-      await externalSupabase.from("cong_no").update({ trang_thai: "con_du" }).eq("id", cnId);
-    }
+    await revertCongNoIfRecovered(cnId);
   }
 }
 
@@ -721,17 +714,7 @@ export function useCancelDNTT() {
 
         // Reset trạng thái cong_no nguồn về 'con_du' nếu trước đó là 'da_can_tru'
         for (const cnId of affectedCongNoIds) {
-          const { data: cnRow } = await externalSupabase
-            .from("cong_no_with_status")
-            .select("so_tien_con_lai, trang_thai")
-            .eq("id", cnId)
-            .single();
-          if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
-            await externalSupabase
-              .from("cong_no")
-              .update({ trang_thai: "con_du" })
-              .eq("id", cnId);
-          }
+          await revertCongNoIfRecovered(cnId);
         }
       }
 
@@ -899,17 +882,7 @@ export function useDeleteDNTT() {
 
       // 4) Reset cong_no nguồn về 'con_du' nếu balance khôi phục
       for (const cnId of affectedCongNoIds) {
-        const { data: cnRow } = await externalSupabase
-          .from("cong_no_with_status")
-          .select("so_tien_con_lai, trang_thai")
-          .eq("id", cnId)
-          .single();
-        if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
-          await externalSupabase
-            .from("cong_no")
-            .update({ trang_thai: "con_du" })
-            .eq("id", cnId);
-        }
+        await revertCongNoIfRecovered(cnId);
       }
     },
     onSuccess: () => {

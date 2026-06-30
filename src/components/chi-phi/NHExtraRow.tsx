@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { NHInput } from "./NHInput";
 import { HoaDonChiPhiBadge } from "./HoaDonBadge";
+import VoucherEditPopover from "./VoucherEditPopover";
 import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { fmt, type LocalNHExtra } from "./nh-section-shared";
 import type { VoucherTarget } from "./DungVoucherModal";
@@ -21,14 +22,20 @@ interface Props {
   locked?: boolean;
   /** Trạng thái hóa đơn TƯƠI đọc từ chiPhiRows (extrasMap init-once, không reconcile). */
   trangThaiHoaDon?: string | null;
-  /** Dòng phát sinh ĐÃ phủ voucher → 🔒 khóa input + nút gỡ + chặn xóa. */
+  /** Dòng phát sinh ĐÃ phủ voucher → 🔒 khóa input + popover sửa vé + chặn xóa. */
   covered?: boolean;
-  /** Tên voucher đã phủ (tooltip badge). */
+  /** Tên voucher đã phủ (tooltip badge + popover). */
   voucherTen?: string | null;
+  /** Số vé voucher hiện phủ (cho popover sửa). */
+  voucherSoVe?: number;
+  /** Loại voucher (mua/tặng) — quyết định preview popover. */
+  voucherLoai?: "mua" | "tang";
+  /** Tồn kho voucher còn lại (kẹp trần khi tăng vé). */
+  tonKhoConLai?: number;
   /** Đủ điều kiện áp voucher (công ty + chưa ĐNTT riêng + suất chính đã thanh toán). */
   voucherEligible?: boolean;
   onOpenVoucher?: (target: VoucherTarget) => void;
-  onRemoveVoucher?: (chiPhiId: number) => void;
+  onEditVoucher?: (chiPhiId: number, veMoi: number) => void;
   /** Target build sẵn ở NHRow (có nh/ngày/giá sau CK) để mở modal voucher. */
   voucherTarget?: VoucherTarget | null;
 }
@@ -36,7 +43,8 @@ interface Props {
 // 1 dòng dịch vụ phát sinh của bữa ăn. Tách verbatim từ NHRow.
 export default function NHExtraRow({
   mealKey, extra, idx, onChange, onSave, onDelete, locked = false, trangThaiHoaDon = null,
-  covered = false, voucherTen = null, voucherEligible = false, onOpenVoucher, onRemoveVoucher, voucherTarget = null,
+  covered = false, voucherTen = null, voucherSoVe = 0, voucherLoai = "mua", tonKhoConLai = 0,
+  voucherEligible = false, onOpenVoucher, onEditVoucher, voucherTarget = null,
 }: Props) {
   useTranslate();
   // Khóa sửa giá/SL/CK khi đã phủ voucher (giá trị đã chốt vào redemption.gia_tri).
@@ -156,13 +164,19 @@ export default function NHExtraRow({
       {/* Col 11: voucher (dùng/gỡ) + delete — sticky mép phải khớp cột Actions hàng chính */}
       <td className="px-2 py-1 sticky right-0 z-10 bg-card shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.12)]">
         <div className="flex justify-end items-center gap-0.5">
-          {/* Voucher: chỉ dòng công ty đủ điều kiện. Gỡ khi đã phủ. */}
+          {/* Voucher: chỉ dòng công ty đủ điều kiện. Sửa vé tại chỗ khi đã phủ. */}
           {covered ? (
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-purple-600 hover:text-purple-700"
-              title={t("Gỡ voucher")} disabled={locked}
-              onClick={() => extra.id != null && onRemoveVoucher?.(extra.id)}>
-              <Ticket className="h-3.5 w-3.5" />
-            </Button>
+            <VoucherEditPopover
+              veCu={voucherSoVe}
+              soKhachThucTe={extra.so_luong}
+              donGia={extra.don_gia}
+              ckPct={extra.chiet_khau_phan_tram}
+              loai={voucherLoai}
+              voucherTen={voucherTen ?? ""}
+              tonKhoConLai={tonKhoConLai}
+              disabled={locked}
+              onSubmit={(veMoi) => extra.id != null && onEditVoucher?.(extra.id, veMoi)}
+            />
           ) : voucherEligible && voucherTarget ? (
             <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-purple-600"
               title={t("Dùng voucher")}
