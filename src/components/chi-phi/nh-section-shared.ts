@@ -1,7 +1,7 @@
 // Helpers + types dùng chung cho tab Chi phí Nhà hàng.
 // Tách verbatim từ ChiPhiNHSection để hook / row / modal / shell cùng dùng.
 
-export const fmt = (n: number) => n.toLocaleString("vi-VN");
+export const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 export const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
   cho_duyet:     { textKey: "Chờ duyệt",  cls: "bg-yellow-100 text-yellow-700" },
@@ -14,6 +14,11 @@ export const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
 
 // Extra rows được nhận diện bằng prefix này trong cột mo_ta.
 export const extraPrefix = (bua: "trua" | "toi") => `[${bua}] `;
+
+// 1 chi_phi nhà hàng là DÒNG PHÁT SINH (extra) khi mo_ta mang prefix [trua]/[toi].
+// Dùng để phân biệt với suất chính (mo_ta = "NH (trưa)"). Khớp đúng output extraPrefix.
+export const isNHExtra = (moTa: string | null | undefined): boolean =>
+  !!moTa && (moTa.startsWith(extraPrefix("trua")) || moTa.startsWith(extraPrefix("toi")));
 
 // Parse "NH Name (trưa/tối)" → { name, bua }
 export function parseNHMoTa(moTa: string | null): { name: string; bua: string; buaIcon: string } {

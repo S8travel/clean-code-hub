@@ -29,6 +29,8 @@ interface Props {
   row: HoaDonRow;
   stt: number;
   canTru: number;
+  /** Phần đã trả bằng voucher (payments method='voucher') — hiển thị "Voucher: −X". */
+  voucherPaid: number;
   /** Cọc đã trả của anh em cùng ref — hiển thị "Đã cọc". */
   cocSibling: number;
   /** Tổng so_tien MỌI ĐNTT khác cùng ref (cọc + bổ sung) — mốc so sánh hóa đơn gộp. */
@@ -42,14 +44,16 @@ interface Props {
 }
 
 export function HoaDonUNCRow({
-  row, stt, canTru, cocSibling, siblingTotal, paidNguon,
+  row, stt, canTru, voucherPaid, cocSibling, siblingTotal, paidNguon,
   selectedNguon, onSelectNguon, onMarkPaid, markPaidPending, onUncUploaded,
 }: Props) {
   const lt = loaiLabel[row.loai];
   const lTxt = lt ? t(lt.textKey) : row.loai;
   const lCls = lt?.color ?? "bg-muted text-muted-foreground";
 
-  const thucTT = Math.max(0, row.so_tien - canTru);
+  // Phần đã khấu = cấn trừ công nợ + trả bằng voucher → cash thực còn phải trả.
+  const daKhau = canTru + voucherPaid;
+  const thucTT = Math.max(0, row.so_tien - daKhau);
   const isThuHoi = (row.ghi_chu || "").includes("[Thu hồi]");
   const sign = isThuHoi ? "-" : "";
   const amountCls = isThuHoi ? "text-blue-600" : "";
@@ -82,10 +86,15 @@ export function HoaDonUNCRow({
       </TableCell>
       <TableCell className="text-right text-sm font-medium">
         <div className="space-y-0.5">
-          {canTru > 0 ? (
+          {daKhau > 0 ? (
             <div className="text-xs space-y-0.5">
               <div className="text-muted-foreground">{t("Tổng")}: <span className={amountCls}>{sign}{fmt(row.so_tien)}</span></div>
-              <div className="text-amber-600">{t("Cấn trừ")}: −{fmt(canTru)}</div>
+              {voucherPaid > 0 && (
+                <div className="text-purple-600">{t("Voucher")}: −{fmt(voucherPaid)}</div>
+              )}
+              {canTru > 0 && (
+                <div className="text-amber-600">{t("Cấn trừ")}: −{fmt(canTru)}</div>
+              )}
               <div className={cn("text-sm font-semibold", amountCls)}>{t("Thực TT")}: {sign}{fmt(thucTT)}</div>
             </div>
           ) : (

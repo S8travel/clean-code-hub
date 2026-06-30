@@ -122,6 +122,23 @@ export function resolveNHFoc(
   };
 }
 
+// ─── Dịch vụ / cảnh điểm (FOC theo công thức floor số khách, mirror nhà hàng) ──
+
+// Resolve FOC dịch vụ cho COMPUTE/HIỂN THỊ: CHỈ đọc snapshot trên row (lock per-tour).
+// KHÔNG fallback master canh_diem — nếu fallback, đoàn cũ (chưa snapshot) sẽ HIỂN THỊ
+// FOC từ master nhưng `tien_cong_ty` lưu trong DB lại là gross (chưa tính lại) → ĐNTT
+// + aggregate đọc tien_cong_ty thành ra "không nhận FOC", lệch với phần hiển thị.
+// Master chỉ dùng làm DEFAULT lúc điều tour cascade INSERT (snapshot + tính tien 1 lần)
+// hoặc khi OP bấm "áp FOC từ danh mục" — cả 2 đều ghi snapshot + tính lại tien cùng lúc.
+export function resolveDVFoc(
+  row: { foc_khach_snapshot?: number | null; foc_mien_snapshot?: number | null } | null | undefined,
+): { foc_khach: number | null; foc_mien: number | null } {
+  return {
+    foc_khach: row?.foc_khach_snapshot ?? null,
+    foc_mien:  row?.foc_mien_snapshot  ?? null,
+  };
+}
+
 // Resolve chiết khấu nhà hàng: snapshot > master. Lock per-tour.
 // Lưu ý: snapshot = 0 là giá trị HỢP LỆ (OP clear ô) → KHÔNG fallback master.
 export function resolveNHChietKhau(

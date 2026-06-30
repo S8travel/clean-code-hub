@@ -126,17 +126,19 @@ export function useUpdateBookingTau() {
   return useMutation({
     mutationFn: async ({
       booking_id, doan_ngay_id, doan_id, bua_an, nha_hang_id, ...fields
-    }: Partial<TauNgayDisplayRow> & { doan_ngay_id: number; doan_id: number; bua_an: "trua" | "toi"; nha_hang_id: number }) => {
+    }: Partial<TauNgayDisplayRow> & { doan_ngay_id: number; doan_id: number; bua_an: "trua" | "toi"; nha_hang_id: number }): Promise<number> => {
       if (booking_id) {
         const { error } = await externalSupabase
           .from("doan_booking_nh")
           .update(fields)
           .eq("id", booking_id);
         if (error) throw error;
-      } else {
-        // ON CONFLICT KHÔNG dùng được với UNIQUE deferrable (xem upsertBookingNHByDayMeal)
-        await upsertBookingNHByDayMeal({ doan_ngay_id, doan_id, bua_an, nha_hang_id, ...fields });
+        return booking_id;
       }
+      // ON CONFLICT KHÔNG dùng được với UNIQUE deferrable (xem upsertBookingNHByDayMeal).
+      // Trả id mới để caller mở modal gửi mail ngay (khỏi cần bấm lần 2).
+      const created = await upsertBookingNHByDayMeal({ doan_ngay_id, doan_id, bua_an, nha_hang_id, ...fields });
+      return created.id;
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: [QK, v.doan_id] });

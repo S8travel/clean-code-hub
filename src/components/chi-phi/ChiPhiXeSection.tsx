@@ -22,13 +22,13 @@ import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
-import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT } from "@/lib/xe-calc";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId } from "@/lib/xe-calc";
 import { externalSupabase } from "@/lib/supabase-external";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
   cho_duyet: { textKey: "Chờ duyệt ĐNTT", cls: "bg-yellow-100 text-yellow-700" },
@@ -40,6 +40,8 @@ interface CancelTarget { dnttId: number; isPaid: boolean }
 
 /** Loại xe (joined) — chỉ các field section đọc. */
 interface XeInfo {
+  /** id của nha_xe_loai_xe (= doan.xe_id / xe_id_2) → tag doan_chi_phi.xe_id. */
+  id?: number | null;
   ten_xe?: string | null;
   so_cho?: number | null;
   nha_xe?: {
@@ -53,6 +55,8 @@ interface XeInfo {
 interface Props {
   doanId: number;
   xe: XeInfo | null;
+  /** Xe phụ (nhà xe thứ 2) — đoàn dùng 2 xe. */
+  xe2?: XeInfo | null;
   tenDoan?: string;
   /** Ngày bắt đầu đoàn (YYYY-MM-DD) — dùng làm ngày mặc định trên ĐNTT in. */
   ngayBatDau?: string;
@@ -60,7 +64,12 @@ interface Props {
   locked?: boolean;
 }
 
-export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locked = false }: Props) {
+function mkXeLabel(x: XeInfo | null | undefined, t: (s: string) => string): string | null {
+  if (!x) return null;
+  return [x.nha_xe?.ten, x.ten_xe, x.so_cho ? `${x.so_cho} ${t("chỗ")}` : ""].filter(Boolean).join(" · ") || null;
+}
+
+export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayBatDau, locked = false }: Props) {
   useTranslate();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -130,10 +139,26 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
   const total = xeRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
   // Dòng xe công ty trả → mới in được ĐNTT (HDV trả thì không qua flow này).
   const companyXeRows = xeRows.filter((r) => r.tien_cong_ty > 0);
+  // In ĐNTT (tờ giấy, thanh toán trực tiếp) BỎ dòng "định kỳ": định kỳ trả gộp
+  // theo NCC qua ThanhToanDinhKyPage, không in tờ ĐNTT per-đoàn (tránh trả 2 lần).
+  // User bật/tắt nút "Định kỳ" trên từng dòng để chọn xe nào vào tờ in.
+  const printableXeRows = companyXeRows.filter((r) => !r.thanh_toan_dinh_ky);
 
-  const xeLabel = xe
-    ? [xe.nha_xe?.ten, xe.ten_xe, xe.so_cho ? `${xe.so_cho} ${t("chỗ")}` : ""].filter(Boolean).join(" · ")
-    : null;
+  const xeLabel = mkXeLabel(xe, t);
+  const xe2Label = mkXeLabel(xe2, t);
+  // Map nha_cung_cap_id → TK ngân hàng nhà xe, gom CẢ 2 xe. ĐNTT in lấy STK theo
+  // đúng NCC của từng nhóm (trước đây chỉ lấy xe 1 → xe 2 NCC khác thiếu STK).
+  const xeTkttByNcc = useMemo(() => {
+    const m: Record<number, string> = {};
+    // Xe 1 ưu tiên: nếu 2 xe trùng NCC (cùng nhà cung cấp) thì giữ STK xe 1,
+    // KHÔNG để xe 2 ghi đè (xác định, tránh nhảy STK theo thứ tự).
+    for (const x of [xe, xe2]) {
+      const ncc = x?.nha_xe?.nha_cung_cap_id;
+      const tk = x?.nha_xe?.tai_khoan_thanh_toan?.trim();
+      if (ncc != null && tk && m[ncc] == null) m[ncc] = tk;
+    }
+    return m;
+  }, [xe, xe2]);
 
   // ── Row edit helpers ──────────────────────────────────────────────────────
   // Dòng cũ: don_gia_raw null → fallback don_gia (giá cũ); vat_pct null → 0 (không VAT,
@@ -221,6 +246,7 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
       tien_cong_ty: total,
       tien_hdv: 0,
       nha_cung_cap_id: parent?.nha_cung_cap_id ?? null,
+      xe_id: parent?.xe_id ?? null,
       thanh_toan_dinh_ky: true,
     }, {
       onSuccess: () => {
@@ -231,20 +257,25 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
   };
 
   // ── Add xe row ────────────────────────────────────────────────────────────
-  const handleAddXe = () => {
-    if (!xeLabel) { toast.warning(t("Đoàn chưa chọn xe trong phần điều tour")); return; }
+  // slot 1 = xe chính, 2 = xe phụ. Gán đúng NCC + tag xe_id của xe được chọn
+  // (trước đây luôn gán xe 1 → thêm dòng cho xe 2 bị sai nhà cung cấp).
+  const handleAddXe = (slot: 1 | 2) => {
+    const chosen = slot === 1 ? xe : xe2;
+    const label = mkXeLabel(chosen, t);
+    if (!label) { toast.warning(t("Đoàn chưa chọn xe trong phần điều tour")); return; }
     upsertMut.mutate({
       doan_id: doanId,
       danh_muc: "xe",
       loai: "xe",
-      mo_ta: xeLabel,
+      mo_ta: label,
       don_gia: 0,
       don_gia_raw: 0,
       vat_pct: XE_VAT_DEFAULT,
       so_luong: 1,
       tien_cong_ty: 0,
       tien_hdv: 0,
-      nha_cung_cap_id: xe?.nha_xe?.nha_cung_cap_id ?? null,
+      nha_cung_cap_id: chosen?.nha_xe?.nha_cung_cap_id ?? null,
+      xe_id: chosen?.id ?? null,
       thanh_toan_dinh_ky: true,
     }, {
       onSuccess: () => toast.success(t("Đã thêm dòng xe")),
@@ -256,13 +287,16 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
   // mở DNTTNHPreviewModal để xem/sửa rồi xuất Word. Dùng cho đoàn thanh toán xe
   // trực tiếp (cần tờ ĐNTT giấy, không bắt buộc qua flow duyệt).
   const handlePrintDNTT = async () => {
-    if (companyXeRows.length === 0) {
-      toast.warning(t("Không có dòng xe công ty trả để in ĐNTT"));
+    if (printableXeRows.length === 0) {
+      toast.warning(t("Không có dòng xe trả trực tiếp để in ĐNTT (dòng định kỳ trả qua thanh toán định kỳ)"));
       return;
     }
     try {
+      // NCC hiệu lực: dòng cũ nha_cung_cap_id=null (tạo trước khi gắn NCC nhà xe)
+      // → fallback NCC nhà xe master theo xe_id (xem resolveXeNccId) để vẫn lấy STK.
+      const rowNccId = (r: typeof printableXeRows[0]) => resolveXeNccId(r, [xe, xe2]);
       const nccIds = Array.from(
-        new Set(companyXeRows.map((r) => r.nha_cung_cap_id).filter((x): x is number => x != null)),
+        new Set(printableXeRows.map(rowNccId).filter((x): x is number => x != null)),
       );
       const nccMap: Record<number, { ten: string; so_tai_khoan?: string; ngan_hang?: string }> = {};
       if (nccIds.length > 0) {
@@ -283,17 +317,13 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
         ? ngayBatDau.slice(0, 10).split("-").reverse().join("/")
         : "";
 
-      // Gộp các dòng xe theo NCC (null → key 0) → 1 entry/NCC.
-      const groups = new Map<number, typeof companyXeRows>();
-      for (const r of companyXeRows) {
-        const key = r.nha_cung_cap_id ?? 0;
+      // Gộp các dòng xe theo NCC hiệu lực (null → key 0) → 1 entry/NCC.
+      const groups = new Map<number, typeof printableXeRows>();
+      for (const r of printableXeRows) {
+        const key = rowNccId(r) ?? 0;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(r);
       }
-
-      // TK ngân hàng nhà xe (nhập ở trang Nhà xe) — ưu tiên in lên ĐNTT thay vì NCC.
-      const xeNccKey = xe?.nha_xe?.nha_cung_cap_id ?? 0;
-      const xeTktt = xe?.nha_xe?.tai_khoan_thanh_toan?.trim() || null;
 
       const entries: NHDocEntry[] = [];
       for (const [key, grows] of groups) {
@@ -314,8 +344,8 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
           foc: null,
           items,
           ncc,
-          // Nhóm thuộc đúng nhà xe → dùng TK nhà xe; nhóm NCC khác → để Word fallback ncc.
-          tai_khoan_thanh_toan: key === xeNccKey ? xeTktt : null,
+          // TK nhà xe theo đúng NCC của nhóm (gom cả 2 xe); không có → Word fallback ncc.
+          tai_khoan_thanh_toan: xeTkttByNcc[key] ?? null,
           so_tien_coc: 0,
           can_tru: 0,
           so_tien_con_tt: totalCty,
@@ -388,21 +418,32 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-green-100 bg-green-50">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-green-900">🚌 {t("Xe")}</span>
-          {xeLabel && <span className="text-xs text-muted-foreground">· {xeLabel}</span>}
+          {xeLabel && <span className="text-xs text-muted-foreground">· {[xeLabel, xe2Label].filter(Boolean).join("  |  ")}</span>}
         </div>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-xs text-muted-foreground">{t("Tổng:")} {fmt(total)} ₫</span>}
-          {companyXeRows.length > 0 && (
+          {printableXeRows.length > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handlePrintDNTT}>
               <Printer className="h-3.5 w-3.5" />
               {t("In ĐNTT")}
             </Button>
           )}
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleAddXe} disabled={upsertMut.isPending || locked}>
-            + {t("Thêm")}
-          </Button>
+          {xe2Label ? (
+            <>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleAddXe(1)} disabled={upsertMut.isPending || locked}>
+                + {t("Xe 1")}
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleAddXe(2)} disabled={upsertMut.isPending || locked}>
+                + {t("Xe 2")}
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleAddXe(1)} disabled={upsertMut.isPending || locked}>
+              + {t("Thêm")}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -478,8 +519,15 @@ export default function ChiPhiXeSection({ doanId, xe, tenDoan, ngayBatDau, locke
                 return (
                   <React.Fragment key={row.id}>
                   <tr className="hover:bg-muted/20">
-                    {/* Mô tả */}
-                    <td className="px-4 py-2.5 font-medium">{row.mo_ta || "—"}</td>
+                    {/* Mô tả (+ badge thuộc xe nào khi đoàn có 2 xe) */}
+                    <td className="px-4 py-2.5 font-medium">
+                      {xe2Label && row.xe_id != null && (
+                        <span className="mr-1.5 px-1 py-px rounded text-[9px] font-medium bg-green-100 text-green-700 align-middle">
+                          {xe2?.id != null && row.xe_id === xe2.id ? t("Xe 2") : t("Xe 1")}
+                        </span>
+                      )}
+                      {row.mo_ta || "—"}
+                    </td>
 
                     {/* SL */}
                     <td className="px-2 py-2.5">

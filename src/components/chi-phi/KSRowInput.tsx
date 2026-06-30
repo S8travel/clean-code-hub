@@ -8,7 +8,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import type { LocalKSRow } from "./ks-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface Props {
   row: LocalKSRow;

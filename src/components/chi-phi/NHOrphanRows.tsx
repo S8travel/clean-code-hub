@@ -118,7 +118,7 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
             <td className="px-2 py-1.5 align-top text-center">
               <HoaDonCell dntts={cpActiveDntts} />
             </td>
-            <td />
+            <td className="sticky right-0 z-10 bg-card shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.12)]" />
           </tr>
         );
       })}

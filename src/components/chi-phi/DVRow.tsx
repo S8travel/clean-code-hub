@@ -1,4 +1,4 @@
-import { format, parseISO, subDays } from "date-fns";
+﻿import { format, parseISO, subDays } from "date-fns";
 import { Check, X, Ban, Plus, Trash2, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,6 +8,8 @@ import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatc
 import type { DnttLump } from "@/lib/can-tru-lump";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
+import { resolveDVFoc, calcSoKhachThucTe } from "@/lib/foc-calc";
+import { DVFocEditor } from "./DVFocEditor";
 import CatalogHoverCard from "./CatalogHoverCard";
 import { HoaDonCell, HoaDonChiPhiBadge } from "./HoaDonBadge";
 import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
@@ -18,7 +20,7 @@ import type { AggCommitTarget } from "./DVAggCommitModal";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
   cho_duyet: { textKey: "Chờ duyệt", cls: "bg-yellow-100 text-yellow-700" },
@@ -48,6 +50,7 @@ export interface DVRowData {
   congNoList: DVCongNoLite[];
   allDvRows: ChiPhiRow[];
   dvCdMap: ReturnType<typeof useDVCanhDiemMap>;
+  doanId: number;
   /** chi_phi_id → (dntt_id → so_tien allocation). Map dòng → ĐNTT (kể cả ĐNTT gộp). */
   allocByChiPhi: Map<number, Map<number, number>>;
   /** dntt_id → lump cấn trừ/tiền mặt theo từng chi_phi (dồn vào dòng đầu) — chỉ hiển thị. */
@@ -70,6 +73,7 @@ export interface DVRowHandlers {
   handleRowChange: (id: number | undefined, field: "so_luong" | "don_gia", v: number) => void;
   handleRowSave: (row: ChiPhiRow) => void;
   handleResetOverride: (row: ChiPhiRow) => void;
+  handleApplyMasterFoc: (row: ChiPhiRow, focKhach: number, focMien: number) => void;
   handleToggleNguoiTt: (row: ChiPhiRow) => void;
   setEditAmount: (v: string) => void;
   setEditingId: (v: number | null) => void;
@@ -103,13 +107,13 @@ interface Props {
 export default function DVRow({ row, day, data, handlers, locked = false }: Props) {
   useTranslate();
   const {
-    dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
+    dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap, doanId,
     allocByChiPhi, lumpedByDntt, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   } = data;
   const {
     getRowEdit, getDateLabel, setSelectedIds, toggleSelectRow, handleRowChange, handleRowSave,
-    handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
+    handleResetOverride, handleApplyMasterFoc, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
     setAggSurplusMode, setAggCanTru, setAggNgayCan,
@@ -117,8 +121,23 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   } = handlers;
 
   const local = getRowEdit(row);
-  const thanhTienLocal = local.so_luong * local.don_gia;
+  // FOC dịch vụ: CHỈ đọc snapshot trên row (không fallback master) → Thành tiền hiển
+  // thị KHỚP tien_cong_ty đã lưu (đã trừ FOC ở handleRowSave/cascade/áp danh mục).
+  const focResolved = resolveDVFoc(row);
+  const billedSoLuong = calcSoKhachThucTe(local.so_luong, focResolved.foc_khach, focResolved.foc_mien);
+  const focMienSo = local.so_luong - billedSoLuong;
+  const thanhTienLocal = billedSoLuong * local.don_gia;
   const nguoiTt = row.tien_hdv > 0 ? "hdv" : "cong_ty";
+
+  // Đoàn cũ (tạo trước khi cảnh điểm có FOC) → chưa có snapshot. Nếu master canh_diem
+  // CÓ FOC → gợi ý nút "áp" để snapshot + tính lại tien (1 lần, có chủ đích). KHÔNG
+  // tự lấy master vào compute (tránh phantom FOC: hiển thị có nhưng tien_cong_ty chưa trừ).
+  const cdMaster = row.ref_doan_ngay_item_id ? dvCdMap[row.ref_doan_ngay_item_id] : null;
+  const hasFocSnapshot = row.foc_khach_snapshot != null || row.foc_mien_snapshot != null;
+  const masterFocKhach = cdMaster?.foc_khach ?? null;
+  const masterFocMien = cdMaster?.foc_mien ?? null;
+  const canSuggestMasterFoc =
+    !hasFocSnapshot && !!masterFocKhach && !!masterFocMien && !locked;
 
   // Map dòng → ĐNTT qua ALLOCATION (không chỉ ref_id) → dòng nằm trong ĐNTT gộp
   // (ref_id trỏ dòng khác) vẫn nhận diện đúng ĐNTT của mình.
@@ -234,9 +253,29 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
         }>
           <span>{row.mo_ta || "—"}</span>
         </CatalogHoverCard>
+        {row.id != null && (
+          <DVFocEditor
+            doanId={doanId}
+            rowId={row.id}
+            focKhach={focResolved.foc_khach}
+            focMien={focResolved.foc_mien}
+            disabled={locked}
+          />
+        )}
+        {canSuggestMasterFoc && row.id != null && (
+          <button
+            type="button"
+            onClick={() => handleApplyMasterFoc(row, masterFocKhach!, masterFocMien!)}
+            disabled={upsertMut.isPending}
+            title={t("Áp FOC từ danh mục cảnh điểm vào chi phí (tính lại tiền)")}
+            className="ml-1 mt-0.5 inline-flex items-center rounded border border-amber-300 bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {t("Áp FOC")} {masterFocKhach}免{masterFocMien}
+          </button>
+        )}
       </td>
 
-      {/* SL — editable inline; input căn trái cố định (🔒 nằm sau) */}
+      {/* SL — editable inline; input căn trái cố định (🔒/FOC nằm sau) */}
       <td className="px-2 py-2.5">
         <div className="flex items-center gap-1">
           <DVInput
@@ -248,6 +287,11 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
           />
           {row.is_overridden && (
             <span title={t("Đã override — không sync với Điều tour")} className="text-amber-500 text-[10px]">🔒</span>
+          )}
+          {focMienSo > 0 && (
+            <span className="text-green-600 text-xs font-semibold whitespace-nowrap">
+              (FOC -{focMienSo})
+            </span>
           )}
         </div>
       </td>

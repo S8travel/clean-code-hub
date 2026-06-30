@@ -124,7 +124,13 @@ export function LeadKanban({ leads, onLeadClick }: Props) {
       return;
     }
 
-    // chot_deal: just update status (full conversion flow in LeadDrawer)
+    if (newStatus === "chot_deal") {
+      // Chốt deal = TẠO ĐOÀN, chỉ làm qua nút "Chốt deal" trong lead (1 đường duy
+      // nhất → tránh lead chot_deal mồ côi, không có đoàn). Kanban không đổi status.
+      toast.info(t("Mở lead và bấm Chốt deal để tạo đoàn"));
+      return;
+    }
+
     updateStatus.mutate(
       { id: leadId, trang_thai_moi: newStatus, created_by: user?.user_id },
       { onSuccess: () => toast.success(`${t("Đã chuyển sang")}: ${t(LEAD_TRANG_THAI_OPTS.find((o) => o.value === newStatus)?.label ?? "")}`),

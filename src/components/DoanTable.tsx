@@ -51,6 +51,8 @@ export interface DoanRow {
   huong_dan_vien_id?: number | null;
   xe_id?: number | null;
   xe_da_huy?: boolean | null;
+  xe_id_2?: number | null;
+  xe_da_huy_2?: boolean | null;
   da_check_quyet_toan?: boolean | null;
   da_thu_visa?: boolean | null;
   seri_id?: number | null;
@@ -69,6 +71,7 @@ export interface DoanRow {
   agent_huy?: { ten?: string | null } | null;
   dia_diem?: { ten?: string | null } | null;
   xe?: { ten_xe?: string | null; so_cho?: number | null; nha_xe?: { id?: number | null; ten?: string | null } | null } | null;
+  xe_2?: { ten_xe?: string | null; so_cho?: number | null; nha_xe?: { id?: number | null; ten?: string | null } | null } | null;
   [key: string]: unknown;
 }
 
@@ -287,7 +290,8 @@ export function DoanTable({
         const hdvName = lookup(g.huong_dan_vien, "ten");
         const agentName = g.agents?.ten || "—";
         const agentHuy = g.agent_huy?.ten as string | undefined;
-        const xe = xeLabel(g.xe);
+        // Ghép nhãn xe chính + xe phụ (đoàn 2 xe) để list không giấu xe phụ.
+        const xe = [g.xe, g.xe_2].map((x) => xeLabel(x)).filter(Boolean).join(" | ") || null;
         const diaDiem = lookup(g.dia_diem, "ten");
         const lon = g.so_khach_lon ?? 0;
         const em1 = g.so_khach_em1 ?? 0;

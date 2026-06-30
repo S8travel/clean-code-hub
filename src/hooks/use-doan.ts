@@ -19,6 +19,8 @@ export interface Doan {
   huong_dan_vien_id_2: number | null;
   xe_id: number | null;
   xe_da_huy: boolean | null;
+  xe_id_2: number | null;
+  xe_da_huy_2: boolean | null;
   seri_id: number | null;
   chuyen_bay_don: string | null;
   chuyen_bay_tien: string | null;
@@ -80,6 +82,8 @@ export interface DoanInsert {
   huong_dan_vien_id_2?: number | null;
   xe_id?: number | null;
   xe_da_huy?: boolean | null;
+  xe_id_2?: number | null;
+  xe_da_huy_2?: boolean | null;
   seri_id?: number | null;
   chuyen_bay_don?: string | null;
   chuyen_bay_tien?: string | null;
@@ -98,6 +102,8 @@ export interface DoanInsert {
   assigned_to?: string | null;
   created_by?: string | null;
   van_phong_id?: number | null;
+  khach_hang_id?: number | null;
+  kieu_gom?: string | null;
   loai_tour?: "inbound" | "outbound" | "noi_dia" | null;
   thi_truong?: string | null;
   shopping?: boolean | null;
@@ -338,7 +344,8 @@ export function useDoanList(
           dia_diem:dia_diem_id(ten),
           huong_dan_vien:huong_dan_vien!huong_dan_vien_id(id, ten, so_dien_thoai),
           huong_dan_vien_2:huong_dan_vien!huong_dan_vien_id_2(id, ten, so_dien_thoai),
-          xe:xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
+          xe:nha_xe_loai_xe!xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
+          xe_2:nha_xe_loai_xe!xe_id_2(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
           van_phong:van_phong_id(id, ten)
         `);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
@@ -479,7 +486,7 @@ export function useUpdateDoan() {
       // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem + diff log
       const { data: oldDoan, error: oldErr } = await externalSupabase
         .from("doan")
-        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, xe_id, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
+        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, xe_id, xe_id_2, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
         .eq("id", id)
         .single();
       if (oldErr) throw oldErr;
@@ -693,10 +700,11 @@ export function useUpdateDoan() {
           if (td === "cho_duyet" || td === "da_duyet") committedDnttAffected++;
 
           const isHdv = Number(cp.tien_hdv) > 0;
-          // NH: PHẢI trừ FOC + CK (snapshot per-row) — trước đây dùng
-          // newSoLuong*don_gia thô → tien_cong_ty không khớp "Thành tiền"/ĐNTT
-          // (đều trừ FOC) → badge "DNTT lệch" ảo sau rebooking. canh_diem/bao_hiem
-          // không có FOC/CK → giữ công thức thô.
+          // PHẢI trừ FOC khi rebooking, nếu không tien_cong_ty (gross) sẽ KHÔNG khớp
+          // "Thành tiền"/ĐNTT (đều trừ FOC) → modal/đối soát đọc số gross sai.
+          // - NH: trừ FOC + CK (snapshot per-row).
+          // - DV (canh_diem): trừ FOC (snapshot per-row) từ 2026-06-20, KHÔNG có CK.
+          // - bao_hiem: không FOC → giữ công thức thô.
           let newTotalCp: number;
           if (cp.danh_muc === "nha_hang") {
             const skTT = calcSoKhachThucTe(
@@ -705,6 +713,13 @@ export function useUpdateDoan() {
               cp.foc_mien_snapshot ?? null,
             );
             newTotalCp = applyChietKhau(skTT * Number(cp.don_gia ?? 0), cp.chiet_khau_phan_tram_snapshot ?? null);
+          } else if (cp.danh_muc === "canh_diem") {
+            const skTT = calcSoKhachThucTe(
+              newSoLuong,
+              cp.foc_khach_snapshot ?? null,
+              cp.foc_mien_snapshot ?? null,
+            );
+            newTotalCp = skTT * Number(cp.don_gia ?? 0);
           } else {
             newTotalCp = newSoLuong * Number(cp.don_gia ?? 0);
           }
@@ -825,6 +840,7 @@ export function useUpdateDoan() {
         ["huong_dan_vien_id", "HDV"],
         ["huong_dan_vien_id_2", "HDV phụ"],
         ["xe_id", "xe"],
+        ["xe_id_2", "xe phụ"],
         ["seri_id", "seri tour"],
         ["van_phong_id", "văn phòng"],
       ];

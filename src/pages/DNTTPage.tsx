@@ -54,7 +54,27 @@ const loaiLabel: Record<string, { textKey: string; color: string }> = {
   nha_hang: { textKey: "NH", color: "bg-orange-100 text-orange-700" },
   dich_vu: { textKey: "DV", color: "bg-purple-100 text-purple-700" },
   tra_truoc: { textKey: "Trả trước", color: "bg-amber-100 text-amber-700" },
+  dinh_ky: { textKey: "Định kỳ", color: "bg-teal-100 text-teal-700" },
+  hdv: { textKey: "HDV", color: "bg-rose-100 text-rose-700" },
+  hoan_ung: { textKey: "Hoàn ứng", color: "bg-slate-100 text-slate-700" },
+  xe: { textKey: "Xe", color: "bg-cyan-100 text-cyan-700" },
+  khac: { textKey: "Khác", color: "bg-gray-100 text-gray-700" },
 };
+
+// Mục lọc dropdown "Loại". Mỗi mục lọc theo cột `loai` HOẶC `ref_loai`:
+// HDV quyết toán & tạm ứng cùng loai='hdv' → chỉ tách được bằng ref_loai.
+const DNTT_TYPE_OPTIONS: { value: string; labelKey: string; field: "loai" | "ref_loai" }[] = [
+  { value: "khach_san", labelKey: "Khách sạn", field: "loai" },
+  { value: "nha_hang", labelKey: "Nhà hàng", field: "loai" },
+  { value: "dich_vu", labelKey: "Dịch vụ", field: "loai" },
+  { value: "xe", labelKey: "Xe", field: "loai" },
+  { value: "hdv_quyet_toan", labelKey: "Quyết toán HDV", field: "ref_loai" },
+  { value: "hdv_tam_ung", labelKey: "Tạm ứng HDV", field: "ref_loai" },
+  { value: "hoan_ung", labelKey: "Hoàn ứng", field: "loai" },
+  { value: "tra_truoc", labelKey: "Trả trước", field: "loai" },
+  { value: "dinh_ky", labelKey: "Định kỳ", field: "loai" },
+  { value: "khac", labelKey: "Khác", field: "loai" },
+];
 
 // Shape của ĐNTT cọc sibling đọc từ dntt_with_payment_status (subset cột).
 interface CocSiblingRow {
@@ -174,14 +194,18 @@ function DNTTPageContent() {
   const [trangThaiDuyet, setTrangThaiDuyet] = useState("cho_duyet");
   const [loai, setLoai] = useState("");
 
-  const filters = useMemo(() => ({
-    doanId: doanId ? Number(doanId) : null,
-    fromDate: fromDate ? format(fromDate, "yyyy-MM-dd") : null,
-    toDate: toDate ? format(toDate, "yyyy-MM-dd") : null,
-    trangThaiDuyet: trangThaiDuyet || null,
-    trangThaiTT: null,
-    loai: loai || null,
-  }), [doanId, fromDate, toDate, trangThaiDuyet, loai]);
+  const filters = useMemo(() => {
+    const sel = DNTT_TYPE_OPTIONS.find((o) => o.value === loai);
+    return {
+      doanId: doanId ? Number(doanId) : null,
+      fromDate: fromDate ? format(fromDate, "yyyy-MM-dd") : null,
+      toDate: toDate ? format(toDate, "yyyy-MM-dd") : null,
+      trangThaiDuyet: trangThaiDuyet || null,
+      trangThaiTT: null,
+      loai: sel?.field === "loai" ? loai : null,
+      refLoai: sel?.field === "ref_loai" ? loai : null,
+    };
+  }, [doanId, fromDate, toDate, trangThaiDuyet, loai]);
 
   const { data: rowsRaw = [], isLoading } = useDNTTList(filters);
   const scope = useDoanScope();
@@ -546,15 +570,14 @@ function DNTTPageContent() {
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">{t("Loại")}</label>
           <Select value={loai} onValueChange={v => setLoai(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[130px]">
-              <span>{!loai ? t("Tất cả") : loai === "khach_san" ? t("Khách sạn") : loai === "nha_hang" ? t("Nhà hàng") : loai === "tra_truoc" ? t("Trả trước") : t("Dịch vụ")}</span>
+            <SelectTrigger className="w-[150px]">
+              <span>{!loai ? t("Tất cả") : t(DNTT_TYPE_OPTIONS.find(o => o.value === loai)?.labelKey ?? "Tất cả")}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("Tất cả")}</SelectItem>
-              <SelectItem value="khach_san">{t("Khách sạn")}</SelectItem>
-              <SelectItem value="nha_hang">{t("Nhà hàng")}</SelectItem>
-              <SelectItem value="dich_vu">{t("Dịch vụ")}</SelectItem>
-              <SelectItem value="tra_truoc">{t("Trả trước")}</SelectItem>
+              {DNTT_TYPE_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -596,12 +619,20 @@ function DNTTPageContent() {
                 <TableRow key={row.id}>
                   <TableCell className="text-center">{(currentPage - 1) * PAGE_SIZE + idx + 1}</TableCell>
                   <TableCell>
-                    <button
-                      className="text-primary hover:underline text-left font-medium"
-                      onClick={() => navigate(`/doan/${row.doan_id}`)}
-                    >
-                      {row.ten_doan}
-                    </button>
+                    {row.doan_id != null ? (
+                      <button
+                        className="text-primary hover:underline text-left font-medium"
+                        onClick={() => navigate(`/doan/${row.doan_id}`)}
+                      >
+                        {row.ten_doan}
+                      </button>
+                    ) : (
+                      // ĐNTT định kỳ gộp nhiều đoàn (doan_id=null) → không có mã đoàn,
+                      // hiển thị tên NCC để nhận diện thay vì nút trống dẫn tới /doan/null.
+                      <span className="font-medium text-muted-foreground">
+                        {row.ten_ncc || t("Định kỳ")}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lCls)}>{lTxt}</span>

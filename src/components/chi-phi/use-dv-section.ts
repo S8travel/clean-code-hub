@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { format, subDays, parseISO, addDays } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dn
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { calcDnttPriorPaid } from "@/lib/chi-phi-calc";
+import { resolveDVFoc, calcSoKhachThucTe } from "@/lib/foc-calc";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
@@ -23,7 +24,7 @@ import { type CancelTarget } from "./DVCancelModal";
 import { type AggCommitTarget } from "./DVAggCommitModal";
 import { type DVRowData, type DVRowHandlers, type LocalDVExtra } from "./DVRow";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface DVSectionParams {
   doanId: number;
@@ -284,7 +285,10 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const local = editRowRef.current[row.id];
     if (!local) return;
     if (local.so_luong === row.so_luong && local.don_gia === row.don_gia) return;
-    const total = local.so_luong * local.don_gia;
+    // FOC dịch vụ: tien tính trên số khách SAU TRỪ FOC (chỉ snapshot trên row).
+    const foc = resolveDVFoc(row);
+    const billed = calcSoKhachThucTe(local.so_luong, foc.foc_khach, foc.foc_mien);
+    const total = billed * local.don_gia;
     const isHDV = row.tien_hdv > 0;
     upsertMut.mutate({
       id: row.id,
@@ -324,7 +328,10 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const isHdv = row.tien_hdv > 0;
     const newSoLuong = item.so_luong ?? 0;
     const newDonGia  = item.don_gia ?? 0;
-    const newTotal   = newSoLuong * newDonGia;
+    // Reset giữ nguyên FOC snapshot trên row → tính lại tien theo FOC cho khớp cascade.
+    const foc = resolveDVFoc(row);
+    const billed = calcSoKhachThucTe(newSoLuong, foc.foc_khach, foc.foc_mien);
+    const newTotal = billed * newDonGia;
     upsertMut.mutate({
       id: row.id,
       doan_id: doanId,
@@ -337,8 +344,28 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     });
   };
 
+  // Áp FOC từ master canh_diem vào 1 dòng đoàn cũ (chưa có snapshot): ghi snapshot +
+  // tính lại tien_cong_ty/hdv NGAY (1 lần, có chủ đích) → display/ĐNTT/aggregate khớp.
+  const handleApplyMasterFoc = (row: typeof dvRows[0], focKhach: number, focMien: number) => {
+    const billed = calcSoKhachThucTe(row.so_luong, focKhach, focMien);
+    const total = billed * row.don_gia;
+    const isHdv = row.tien_hdv > 0;
+    upsertMut.mutate({
+      id: row.id,
+      doan_id: doanId,
+      foc_khach_snapshot: focKhach,
+      foc_mien_snapshot: focMien,
+      tien_cong_ty: isHdv ? 0 : total,
+      tien_hdv:     isHdv ? total : 0,
+      thanh_tien_thuc_te: null,
+    }, {
+      onSuccess: () => toast.success(`Đã áp FOC ${focKhach}免${focMien} — đã tính lại tiền`),
+    });
+  };
+
   const handleToggleNguoiTt = (row: typeof dvRows[0]) => {
-    const total = row.so_luong * row.don_gia;
+    // Giữ tổng tiền đã tính (đã trừ FOC) — chỉ đổi cột công ty ↔ HDV.
+    const total = row.tien_cong_ty + row.tien_hdv;
     const next = row.tien_hdv > 0 ? "cong_ty" : "hdv";
     upsertMut.mutate({
       id: row.id,
@@ -495,7 +522,10 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           .in("id", dnttIds);
         const activeIds = new Set(
           (dnttRows ?? [])
-            .filter((d) => d.trang_thai_duyet !== "da_huy")
+            // Loại cả da_huy LẪN tu_choi — ĐNTT từ chối là record chết, RPC
+            // recalc cũng loại nó khỏi so_tien_da_dntt. Nếu chỉ loại da_huy →
+            // sau khi từ chối ĐNTT, tạo lại bị cảnh báo "TRÙNG" ảo.
+            .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
             .map((d) => d.id),
         );
         committed = (allocRows ?? [])
@@ -757,8 +787,13 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         let thanhTienSum = 0;
         for (const { row } of grows) {
           const rowExtras = (extrasMap[row.id!] ?? []).filter((e) => e.nguoi_tt !== "hdv" && e.don_gia > 0);
+          // Số lượng IN cho dòng chính = SAU TRỪ FOC (giống NH dùng soLuongThuc) → cột
+          // "Thành tiền" trong Word = so_luong_thuc × đơn giá khớp màn hình. Cột "Số khách"
+          // vẫn in gross qua entry.so_khach; cột FOC in số miễn riêng.
+          const rowFoc = resolveDVFoc(row);
+          const rowBilled = calcSoKhachThucTe(row.so_luong, rowFoc.foc_khach, rowFoc.foc_mien);
           // Gộp → ghi tên dịch vụ vào ghi_chu (vì ten_nh dùng cho tên NCC chung).
-          items.push({ so_luong: row.so_luong, don_gia: row.don_gia, ghi_chu: isGop ? (row.mo_ta || "Dịch vụ") : "" });
+          items.push({ so_luong: rowBilled, don_gia: row.don_gia, ghi_chu: isGop ? (row.mo_ta || "Dịch vụ") : "" });
           items.push(...rowExtras.map((e) => ({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta || "" })));
           soKhachSum += row.so_luong;
           thanhTienSum += row.tien_cong_ty + rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
@@ -823,8 +858,11 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           // sẽ lấy tên dịch vụ per-dòng từ item.ghi_chu (multi_service).
           ten_nh: isGop ? (nccFinal?.ten ?? "Gộp dịch vụ") : (first.mo_ta || "Dịch vụ"),
           so_khach: isGop ? first.so_luong : soKhachSum,
-          foc_khach: null,
-          foc: null,
+          // FOC dịch vụ của dòng main (chỉ snapshot — khớp tien_cong_ty in bản ĐNTT).
+          ...(() => {
+            const f = resolveDVFoc(first);
+            return { foc_khach: f.foc_khach, foc: f.foc_mien };
+          })(),
           items,
           ncc: nccFinal,
           so_tien_coc: soCoc,
@@ -838,7 +876,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       }
 
     return entries;
-  }, [selectedIds, dvRows, dnttList, paymentsList, extrasMap, sortedDays, allocByChiPhi]);
+  }, [selectedIds, dvRows, dnttList, paymentsList, extrasMap, sortedDays, allocByChiPhi, dvCdMap]);
 
   const handlePrintSelected = async () => {
     try {
@@ -860,13 +898,13 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   // ── Clustered props cho <DVRow> ────────────────────────────────────────────
 
   const dvData: DVRowData = {
-    dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap,
+    dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap, doanId,
     allocByChiPhi, lumpedByDntt, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   };
   const dvHandlers: DVRowHandlers = {
     getRowEdit, getDateLabel, setSelectedIds, toggleSelectRow, handleRowChange, handleRowSave,
-    handleResetOverride, handleToggleNguoiTt, setEditAmount, setEditingId,
+    handleResetOverride, handleApplyMasterFoc, handleToggleNguoiTt, setEditAmount, setEditingId,
     handleEditSave, handleToggleDinhKy, handleExtraAdd, openDvModal,
     setCancelMode, setCancelTarget, setAggCommit, setAggReason,
     setAggSurplusMode, setAggCanTru, setAggNgayCan,

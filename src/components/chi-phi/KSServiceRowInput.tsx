@@ -9,7 +9,7 @@ import { HoaDonChiPhiBadge } from "./HoaDonBadge";
 import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 type ServiceLoai = Exclude<KSLoaiRow, "phong">;
 

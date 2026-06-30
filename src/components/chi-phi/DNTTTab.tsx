@@ -13,7 +13,7 @@ import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 import { externalSupabase } from "@/lib/supabase-external";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 const EXTERNAL_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1/xuat-word-dntt-ks";
 const PUBLISHABLE_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";

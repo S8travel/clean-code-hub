@@ -114,7 +114,6 @@ export default function Index() {
   const [quickTab, setQuickTab] = useState<
     "all" | "dang_chay" | "sap_khoi_hanh" | "dang_dien_ra" | "hoan_thanh" | "da_quyet_toan" | "huy"
   >("all");
-  const [pageSize, setPageSize] = useState(5);
 
   // Filters + sort + pagination — persist qua URL params + sessionStorage
   const filterState = useDoanListFilters();
@@ -127,6 +126,7 @@ export default function Index() {
   const loaiTourFilter = filterState.get("loaiTourFilter");
   const xeFilter = filterState.get("xeFilter");
   const page = parseInt(filterState.get("page"), 10) || 1;
+  const pageSize = parseInt(filterState.get("pageSize"), 10) || 5;
   const sortKey = filterState.get("sortKey");
   const sortDir = filterState.get("sortDir") as "asc" | "desc";
 
@@ -140,6 +140,8 @@ export default function Index() {
   const setLoaiTourFilter = (v: string) => filterState.set({ loaiTourFilter: v, page: "1" });
   const setXeFilter = (v: string) => filterState.set({ xeFilter: v, page: "1" });
   const setPage = (v: number) => filterState.set({ page: String(v) });
+  // Đổi số dòng/trang reset về trang 1 (tránh ở trang vượt range sau khi đổi size)
+  const setPageSize = (v: number) => filterState.set({ pageSize: String(v), page: "1" });
   const setSort = (k: string, d: "asc" | "desc") => filterState.set({ sortKey: k, sortDir: d });
 
   // Build user_roles map: user_id → ho_ten
@@ -162,9 +164,12 @@ export default function Index() {
   const xeFilterOptions = useMemo(() => {
     const byId = new Map<string, string>();
     for (const g of groups ?? []) {
-      const id = g.xe?.nha_xe?.id;
-      const ten = g.xe?.nha_xe?.ten;
-      if (id != null && ten) byId.set(id.toString(), ten);
+      // Gom nhà xe của CẢ xe chính lẫn xe phụ → lọc theo nhà xe phụ vẫn ra đoàn.
+      for (const x of [g.xe, g.xe_2]) {
+        const id = x?.nha_xe?.id;
+        const ten = x?.nha_xe?.ten;
+        if (id != null && ten) byId.set(id.toString(), ten);
+      }
     }
     const real = [...byId.entries()]
       .map(([value, label]) => ({ value, label }))
@@ -237,9 +242,11 @@ export default function Index() {
       if (loaiTourSel.length && !loaiTourSel.includes(g.loai_tour ?? "")) return false;
 
       if (xeSel.length) {
-        const nhaXeId = g.xe?.nha_xe?.id?.toString();
-        const matchHuy = xeSel.includes(XE_HUY_FILTER_VALUE) && g.xe_da_huy === true;
-        const matchNhaXe = nhaXeId != null && xeSel.includes(nhaXeId);
+        // Khớp nhà xe của cả xe chính lẫn xe phụ.
+        const nhaXeIds = [g.xe?.nha_xe?.id, g.xe_2?.nha_xe?.id]
+          .filter((x): x is number => x != null).map((x) => x.toString());
+        const matchHuy = xeSel.includes(XE_HUY_FILTER_VALUE) && (g.xe_da_huy === true || g.xe_da_huy_2 === true);
+        const matchNhaXe = nhaXeIds.some((id) => xeSel.includes(id));
         if (!matchHuy && !matchNhaXe) return false;
       }
 
@@ -387,25 +394,26 @@ export default function Index() {
         }
         toast.success("Đã cập nhật đoàn");
       } else {
-        // Tường cứng theo VP: đoàn được đóng dấu VP nhà người tạo. Người tạo chưa có
-        // VP nhà → đoàn sẽ là van_phong_id=NULL → chỉ privileged thấy, OP không thấy.
-        // Chặn sớm thay vì tạo "đoàn mồ côi".
-        if (currentUser?.van_phong_id == null) {
+        // Tường cứng theo VP: đoàn đóng dấu VP do form chọn (mặc định VP nhà người
+        // tạo; cross-VP đổi được). Form chỉ liệt kê VP trong scope nên RLS WITH CHECK
+        // luôn pass. Chưa chọn VP → chặn sớm thay vì tạo "đoàn mồ côi" (van_phong_id=NULL).
+        const vanPhongId = data.van_phong_id ?? currentUser?.van_phong_id ?? null;
+        if (vanPhongId == null) {
           toast.error(
-            "Tài khoản của bạn chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin để gán VP nhà.",
+            "Chưa chọn Văn phòng cho đoàn. Nếu không có lựa chọn nào, liên hệ admin để gán VP nhà.",
           );
           return;
         }
         const markets = currentUser?.phan_loai_tour ?? null;
         if (markets && markets.length > 1) {
-          setPendingCreate({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null });
+          setPendingCreate({ ...data, shopping: false, van_phong_id: vanPhongId });
           return;
         }
         const thi_truong = markets && markets.length === 1 ? markets[0] : null;
         // KHÔNG tạo đoàn ngay — chỉ tạo sau khi xác nhận phân việc
         setDrawerOpen(false);
         setEditingDoan(null);
-        openPhanViec({ ...data, shopping: false, van_phong_id: currentUser?.van_phong_id ?? null, thi_truong });
+        openPhanViec({ ...data, shopping: false, van_phong_id: vanPhongId, thi_truong });
         return;
       }
       setDrawerOpen(false);
@@ -592,6 +600,7 @@ export default function Index() {
         dia_diem_id: doan.dia_diem_id,
         huong_dan_vien_id: doan.huong_dan_vien_id,
         xe_id: doan.xe_id,
+        xe_id_2: doan.xe_id_2,
         seri_id: doan.seri_id,
         so_khach: doan.so_khach,
         so_khach_lon: doan.so_khach_lon,
@@ -827,7 +836,7 @@ export default function Index() {
             </div>
             <Select
               value={String(pageSize)}
-              onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+              onValueChange={(v) => setPageSize(Number(v))}
             >
               <SelectTrigger className="h-8 text-xs w-[130px]">
                 <span>{t("Hiển thị")} {pageSize}/{t("trang")}</span>

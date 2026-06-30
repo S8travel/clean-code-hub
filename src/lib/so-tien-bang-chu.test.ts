@@ -46,4 +46,11 @@ describe("docTienBangChu", () => {
     expect(docTienBangChu(0)).toBe("Không đồng");
     expect(docTienBangChu(1_500_000)).toBe("Một triệu năm trăm nghìn đồng");
   });
+
+  it("số âm → tiền tố 'Âm' (vd quyết toán còn phải thu)", () => {
+    expect(docTienBangChu(-14_142_000)).toBe(
+      "Âm mười bốn triệu một trăm bốn mươi hai nghìn đồng",
+    );
+    expect(docTienBangChu(-1_500_000)).toBe("Âm một triệu năm trăm nghìn đồng");
+  });
 });

@@ -2,12 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
+import { revertCongNoIfRecovered } from "@/hooks/use-cong-no";
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { buildChiPhiChangeList } from "@/lib/chi-phi-diff";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
 import { errMsg } from "@/lib/error";
+import { extraParentId } from "@/lib/dntt-gop-calc";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export type DNTTRow = DNTTRowFromHook;
@@ -79,6 +81,16 @@ export interface ChiPhiRow {
   vat_pct: number | null;
   // Trạng thái hóa đơn cho dòng HDV trả (không có ĐNTT). NULL=chua_co.
   trang_thai_hoa_don: string | null;
+  // Tag chi phí xe thuộc loại xe nào (doan.xe_id / xe_id_2) — tách báo cáo theo xe.
+  xe_id: number | null;
+  // Chi phí "ngoài tour": dòng tự do KHÔNG gắn lịch trình (KS/NH/DV ngoài tour).
+  // Reconcile section + cascade điều tour bỏ qua row này.
+  ngoai_tour: boolean;
+  // KS ngoài tour: khách sạn chọn từ danh mục + check-in/check-out (số đêm).
+  // In-tour suy khách sạn/ngày qua ref_doan_ngay_id → để NULL.
+  khach_san_id: number | null;
+  ngoai_tour_ci: string | null;   // YYYY-MM-DD
+  ngoai_tour_co: string | null;   // YYYY-MM-DD
 }
 
 // NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).
@@ -563,7 +575,23 @@ export function useDeleteChiPhi() {
   return useMutation({
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
       lockGuard(doanId); // đoàn đã quyết toán → chặn (trừ admin)
-      // GUARD: chặn xóa chi phí đang nằm trong ĐNTT chưa hủy.
+
+      // Gom main + extras phát sinh ([dvps_<id>]) để xóa CÙNG nhau. Xóa dòng DV
+      // chính mà bỏ extras → extras MỒ CÔI (group theo id cha đã mất nên vô hình
+      // trong app, nhưng vẫn lòi ở bản in Excel + cộng nhầm vào tổng tiền).
+      // Extras chỉ tồn tại cho DV (canh_diem); danh_muc khác → query rỗng, vô hại.
+      const { data: extraCandidates } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id, mo_ta")
+        .eq("doan_id", doanId)
+        .like("mo_ta", `[dvps_${id}]%`);
+      const extraIds = (extraCandidates ?? [])
+        .filter((r) => extraParentId(r.mo_ta) === id)
+        .map((r) => r.id);
+      const idsToDelete = [id, ...extraIds];
+
+      // GUARD: chặn xóa chi phí đang nằm trong ĐNTT chưa hủy — áp cho CẢ main lẫn
+      // extras (xóa main sẽ CASCADE xóa allocation của extra qua FK).
       // dntt_allocations.chi_phi_id FK = ON DELETE CASCADE → xóa chi phí sẽ xóa
       // luôn allocation (kể cả của ĐNTT cọc đã thanh toán) → mất dấu phần đã
       // cọc/đã trả → ĐNTT khoản còn lại tính sai (trả dư/thiếu).
@@ -573,7 +601,7 @@ export function useDeleteChiPhi() {
       const { data: allocs, error: allocErr } = await externalSupabase
         .from("dntt_allocations")
         .select("dntt_id")
-        .eq("chi_phi_id", id);
+        .in("chi_phi_id", idsToDelete);
       if (allocErr) throw allocErr;
       const dnttIds = [...new Set((allocs ?? []).map((a) => a.dntt_id))];
       if (dnttIds.length > 0) {
@@ -593,7 +621,7 @@ export function useDeleteChiPhi() {
         }
       }
 
-      const { error } = await externalSupabase.from("doan_chi_phi").delete().eq("id", id);
+      const { error } = await externalSupabase.from("doan_chi_phi").delete().in("id", idsToDelete);
       if (error) throw error;
       return { doanId, id, mo_ta, danh_muc };
     },
@@ -807,9 +835,12 @@ export function useDeleteDNTT() {
         await externalSupabase.from("cong_no").delete().in("id", cnIds);
       }
       if (chiPhiIds.length > 0) {
+        // KS ngoài tour LƯU NET ở thanh_tien_thuc_te (thanh_tien generated = GROSS,
+        // chưa trừ FOC/đêm) → KHÔNG reset cho dòng ngoai_tour, kẻo RPC/định kỳ đọc nhầm GROSS.
         await externalSupabase
           .from("doan_chi_phi")
           .update({ thanh_tien_thuc_te: null })
+          .eq("ngoai_tour", false)
           .in("id", chiPhiIds);
       }
 
@@ -830,19 +861,10 @@ export function useDeleteDNTT() {
       const { error } = await externalSupabase.from("de_nghi_thanh_toan").delete().eq("id", id);
       if (error) throw error;
 
-      // Reset cong_no trạng thái về 'con_du' nếu balance khôi phục sau cascade-delete
+      // Reset cong_no trạng thái về 'con_du' nếu balance khôi phục sau cascade-delete.
+      // Qua RPC definer: quỹ NCC doan_id=NULL bị RLS chặn đọc/ghi trực tiếp.
       for (const cnId of affectedCongNoIds) {
-        const { data: cnRow } = await externalSupabase
-          .from("cong_no_with_status")
-          .select("so_tien_con_lai, trang_thai")
-          .eq("id", cnId)
-          .single();
-        if (cnRow && Number(cnRow.so_tien_con_lai) > 0 && cnRow.trang_thai === "da_can_tru") {
-          await externalSupabase
-            .from("cong_no")
-            .update({ trang_thai: "con_du" })
-            .eq("id", cnId);
-        }
+        await revertCongNoIfRecovered(cnId);
       }
 
       await recalcChiPhiStatus(chiPhiIds);

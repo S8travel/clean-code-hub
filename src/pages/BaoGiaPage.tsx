@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, Trash2, FileDown, FileText, Settings } from "lucide-react";
+import { Plus, Trash2, FileDown, FileText, Settings, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -20,13 +20,15 @@ import { BangGiaImport } from "@/components/bao-gia/BangGiaImport";
 import {
   useBaoGiaList,
   useCreateBaoGia,
+  useCloneBaoGia,
   useDeleteBaoGia,
   type BaoGiaCase,
   type BaoGiaKetQua,
 } from "@/hooks/use-bao-gia";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
-import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
-import { costBreakdown, liveKetQua, defaultDayItems } from "@/components/bao-gia/detail/helpers";
+import { useLeadsList } from "@/hooks/use-leads";
+import { exportBaoGiaWord, type TierPrice } from "@/lib/export-bao-gia-word";
+import { costBreakdown, liveKetQua, liveTierBreakdown, defaultDayItems } from "@/components/bao-gia/detail/helpers";
 import { toast } from "sonner";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -72,8 +74,24 @@ export default function BaoGiaPage() {
   const navigate = useNavigate();
   const { data: list = [], isLoading } = useBaoGiaList();
   const { data: bangGia = [] } = useBangGiaDichVu();
+  const { data: leads = [] } = useLeadsList();
   const createMutation = useCreateBaoGia();
+  const cloneMutation = useCloneBaoGia();
   const deleteMutation = useDeleteBaoGia();
+
+  const handleClone = (id: number) => {
+    cloneMutation.mutate(
+      { id },
+      {
+        onSuccess: ({ id: newId }) => { toast.success("Đã nhân bản"); navigate(`/bao-gia/${newId}`); },
+        onError: () => toast.error("Lỗi nhân bản"),
+      },
+    );
+  };
+
+  // Map lead_id → tên khách (hiển thị cột "Khách" trong list báo giá).
+  const leadName: Record<number, string> = {};
+  leads.forEach((l) => { leadName[l.id] = l.ho_ten; });
 
   const handleCreate = () => {
     createMutation.mutate(
@@ -98,8 +116,8 @@ export default function BaoGiaPage() {
     });
   };
 
-  const handleExportWord = async (ketQua: BaoGiaKetQua, exchangeRate: number, profitUsd: number) => {
-    try { await exportBaoGiaWord(ketQua, exchangeRate, profitUsd); toast.success("Đã xuất file Word!"); }
+  const handleExportWord = async (ketQua: BaoGiaKetQua, exchangeRate: number, profitUsd: number, tiers?: TierPrice[]) => {
+    try { await exportBaoGiaWord(ketQua, exchangeRate, profitUsd, undefined, tiers); toast.success("Đã xuất file Word!"); }
     catch { toast.error("Lỗi xuất Word"); }
   };
 
@@ -140,6 +158,7 @@ export default function BaoGiaPage() {
                 <thead>
                   <tr className="bg-[#E6F1FB]">
                     <th className="py-2 px-3 text-left font-semibold">Tên chương trình</th>
+                    <th className="py-2 px-3 text-left font-semibold">Khách (Lead)</th>
                     <th className="py-2 px-3 text-right font-semibold">Giá TB / pax (VND)</th>
                     <th className="py-2 px-3 text-right font-semibold">Giá TB / pax (USD)</th>
                     <th className="py-2 px-3 text-center font-semibold">Trạng thái</th>
@@ -169,11 +188,14 @@ export default function BaoGiaPage() {
                           <span className="font-medium">{row.tieu_de || "(chưa có tên)"}</span>
                           {row.ket_qua && <span className="ml-2 text-muted-foreground">{row.ket_qua.so_ngay} ngày</span>}
                         </td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {row.lead_id != null ? (leadName[row.lead_id] ?? `Lead #${row.lead_id}`) : "—"}
+                        </td>
                         <td className="py-2 px-3 text-right font-medium text-blue-700">{giaPaxVnd != null ? fmt(giaPaxVnd) : "—"}</td>
                         <td className="py-2 px-3 text-right text-blue-700">{giaPaxUsd != null ? fmtUsd(giaPaxUsd) : "—"}</td>
                         <td className="py-2 px-3 text-center">
-                          <Badge variant={row.trang_thai === "final" ? "default" : "secondary"}>
-                            {row.trang_thai === "final" ? "Chính thức" : "Nháp"}
+                          <Badge variant={row.trang_thai === "draft" ? "secondary" : "default"}>
+                            {row.trang_thai === "sent" ? "Đã gửi" : row.trang_thai === "final" ? "Chính thức" : "Nháp"}
                           </Badge>
                         </td>
                         <td className="py-2 px-3 text-right text-muted-foreground">
@@ -181,12 +203,23 @@ export default function BaoGiaPage() {
                         </td>
                         <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-1 justify-center">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Nhân bản"
+                              onClick={() => handleClone(row.id)} disabled={cloneMutation.isPending}>
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
                             {row.ket_qua && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" title="Export Word"
                                 onClick={() => {
-                                  // Export với ket_qua live (case totals recompute) — match DETAIL
+                                  // Export với ket_qua live + ma trận giá theo số khách — match DETAIL
                                   const fresh = liveKetQua(row) ?? row.ket_qua;
-                                  if (fresh) handleExportWord(fresh, row.exchange_rate ?? 26000, row.profit_usd ?? 0);
+                                  if (!fresh) return;
+                                  const xr = row.exchange_rate ?? 26000;
+                                  const tiers = liveTierBreakdown(row).map((t) => ({
+                                    guests: t.guests,
+                                    gia_ban_vnd: t.line.gia_ban_per_pax,
+                                    gia_ban_usd: xr > 0 ? t.line.gia_ban_per_pax / xr : 0,
+                                  }));
+                                  handleExportWord(fresh, xr, row.profit_usd ?? 0, tiers);
                                 }}>
                                 <FileDown className="h-3.5 w-3.5" />
                               </Button>

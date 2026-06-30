@@ -27,13 +27,23 @@ export interface KhacWordItem {
 export interface KhacWordInput {
   maDoan: string;
   tenDoan?: string;
-  tenNguoiNhan: string;
+  tenNguoiNhan: string;         // đơn vị/người nhận tiền (= chủ tài khoản)
   soTaiKhoan?: string | null;
   nganHang?: string | null;
   lyDo?: string | null;
   items: KhacWordItem[];
   ngayLap?: string;             // ISO date
   ngayCanThanhToan?: string | null;
+  /** Nhãn dòng người nhận trong info block. Mặc định "Người đề nghị".
+   *  Thanh toán cho NCC (định kỳ) → truyền "Đơn vị thụ hưởng". */
+  nhanLabel?: string;
+  /** Tên ở ô ký "NGƯỜI ĐỀ NGHỊ". Mặc định = tenNguoiNhan (case hoàn ứng:
+   *  người ứng = người ký). NCC định kỳ → để "" cho nhân viên ký tay. */
+  tenNguoiDeNghi?: string;
+  /** Ép hình thức nhận. Mặc định auto: chuyển khoản nếu có STK/ngân hàng,
+   *  ngược lại tiền mặt. Thanh toán cho NCC (định kỳ) luôn là "chuyen_khoan"
+   *  kể cả khi NCC chưa nhập STK (tránh in nhầm "Tiền mặt"). */
+  hinhThuc?: "tien_mat" | "chuyen_khoan";
 }
 
 // ── Style helpers (đồng bộ với export-dntt-nh-word.ts) ─────────────────────
@@ -157,11 +167,11 @@ function numberToVietnameseWords(n: number): string {
 
 // ── Main exporter ──────────────────────────────────────────────────────────
 export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<void> {
-  const { items, tenNguoiNhan, maDoan, tenDoan, soTaiKhoan, nganHang, lyDo, ngayCanThanhToan } = input;
+  const { items, tenNguoiNhan, maDoan, tenDoan, soTaiKhoan, nganHang, lyDo, ngayCanThanhToan, nhanLabel, tenNguoiDeNghi, hinhThuc } = input;
   const today = input.ngayLap ? new Date(input.ngayLap) : new Date();
   const dateVN = `Hà Nội, ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
   const tong = items.reduce((s, it) => s + it.thanh_tien, 0);
-  const isChuyenKhoan = !!(soTaiKhoan || nganHang);
+  const isChuyenKhoan = hinhThuc ? hinhThuc === "chuyen_khoan" : !!(soTaiKhoan || nganHang);
 
   // ── 1. Header: Company info trái + ngày phải ──────────────────────────
   // Cell trái rộng 65% để địa chỉ "Thành phố Đà Nẵng, Việt Nam" vừa 1 dòng.
@@ -211,7 +221,7 @@ export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<v
       alignment: AlignmentType.LEFT,
       spacing: { before: 40, after: 40 },
       children: [
-        new TextRun({ noProof: true, text: "Người đề nghị: ", font: "Arial", size: 22 }),
+        new TextRun({ noProof: true, text: `${nhanLabel ?? "Người đề nghị"}: `, font: "Arial", size: 22 }),
         new TextRun({ noProof: true, text: tenNguoiNhan || "—", font: "Arial", size: 22, bold: true }),
       ],
     }),
@@ -338,7 +348,7 @@ export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<v
   const SIG_W = Math.floor(CONTENT_W / 5);
   const SIG_LAST = CONTENT_W - SIG_W * 4;
   const sigTitles = ["NGƯỜI ĐỀ NGHỊ", "TRƯỞNG BỘ PHẬN", "KẾ TOÁN THANH TOÁN", "KẾ TOÁN TRƯỞNG", "GIÁM ĐỐC"];
-  const sigNames = [tenNguoiNhan.toUpperCase(), "VÕ THỊ MINH XUÂN", "TRẦN THỊ ÁNH HỒNG", "NGUYỄN CHÍ LINH", "NGUYỄN TIẾN DŨNG"];
+  const sigNames = [(tenNguoiDeNghi ?? tenNguoiNhan).toUpperCase(), "VÕ THỊ MINH XUÂN", "TRẦN THỊ ÁNH HỒNG", "NGUYỄN CHÍ LINH", "NGUYỄN TIẾN DŨNG"];
   const sigWidths = [SIG_W, SIG_W, SIG_W, SIG_W, SIG_LAST];
 
   const signatureTable = new Table({

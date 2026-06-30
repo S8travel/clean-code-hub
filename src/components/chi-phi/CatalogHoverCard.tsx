@@ -4,7 +4,7 @@ import type { NhaHangDetail } from "@/hooks/use-chi-phi-nh";
 import type { CanhDiemInfo } from "@/hooks/use-chi-phi-nh";
 import { t, useTranslate } from "@/lib/i18n";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 const LOAI_DV_LABEL: Record<string, string> = {
   tham_quan: "Tham quan",

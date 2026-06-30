@@ -1,12 +1,14 @@
-import { Trash2 } from "lucide-react";
+import { Trash2, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { NHInput } from "./NHInput";
 import { HoaDonChiPhiBadge } from "./HoaDonBadge";
+import VoucherEditPopover from "./VoucherEditPopover";
 import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { fmt, type LocalNHExtra } from "./nh-section-shared";
+import type { VoucherTarget } from "./DungVoucherModal";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
@@ -20,11 +22,33 @@ interface Props {
   locked?: boolean;
   /** Trạng thái hóa đơn TƯƠI đọc từ chiPhiRows (extrasMap init-once, không reconcile). */
   trangThaiHoaDon?: string | null;
+  /** Dòng phát sinh ĐÃ phủ voucher → 🔒 khóa input + popover sửa vé + chặn xóa. */
+  covered?: boolean;
+  /** Tên voucher đã phủ (tooltip badge + popover). */
+  voucherTen?: string | null;
+  /** Số vé voucher hiện phủ (cho popover sửa). */
+  voucherSoVe?: number;
+  /** Loại voucher (mua/tặng) — quyết định preview popover. */
+  voucherLoai?: "mua" | "tang";
+  /** Tồn kho voucher còn lại (kẹp trần khi tăng vé). */
+  tonKhoConLai?: number;
+  /** Đủ điều kiện áp voucher (công ty + chưa ĐNTT riêng + suất chính đã thanh toán). */
+  voucherEligible?: boolean;
+  onOpenVoucher?: (target: VoucherTarget) => void;
+  onEditVoucher?: (chiPhiId: number, veMoi: number) => void;
+  /** Target build sẵn ở NHRow (có nh/ngày/giá sau CK) để mở modal voucher. */
+  voucherTarget?: VoucherTarget | null;
 }
 
 // 1 dòng dịch vụ phát sinh của bữa ăn. Tách verbatim từ NHRow.
-export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDelete, locked = false, trangThaiHoaDon = null }: Props) {
+export default function NHExtraRow({
+  mealKey, extra, idx, onChange, onSave, onDelete, locked = false, trangThaiHoaDon = null,
+  covered = false, voucherTen = null, voucherSoVe = 0, voucherLoai = "mua", tonKhoConLai = 0,
+  voucherEligible = false, onOpenVoucher, onEditVoucher, voucherTarget = null,
+}: Props) {
   useTranslate();
+  // Khóa sửa giá/SL/CK khi đã phủ voucher (giá trị đã chốt vào redemption.gia_tri).
+  const inputDisabled = locked || covered;
   return (
     <tr className="border-b border-border/50 last:border-b-0 bg-muted/20">
       {/* Col 1: empty */}
@@ -38,11 +62,17 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
           <Input
             placeholder={t("Dịch vụ phát sinh")}
             value={extra.mo_ta}
-            disabled={locked}
+            disabled={inputDisabled}
             onChange={(e) => onChange(mealKey, idx, "mo_ta", e.target.value)}
             onBlur={() => onSave(mealKey, idx)}
             className="h-6 text-xs flex-1"
           />
+          {covered && (
+            <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700"
+              title={voucherTen || t("Đã dùng voucher")}>
+              <Ticket className="h-3 w-3" /> {t("Voucher")}
+            </span>
+          )}
         </div>
       </td>
       {/* Col 4: số lượng — căn trái, khớp dòng chính */}
@@ -53,7 +83,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
             onChange={(v) => onChange(mealKey, idx, "so_luong", v)}
             onBlur={() => onSave(mealKey, idx)}
             width="w-[56px]"
-            disabled={locked}
+            disabled={inputDisabled}
           />
         </div>
       </td>
@@ -67,7 +97,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
             width="w-[112px]"
             money
             decimal
-            disabled={locked}
+            disabled={inputDisabled}
           />
         </div>
       </td>
@@ -79,7 +109,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
             onChange={(v) => onChange(mealKey, idx, "chiet_khau_phan_tram", v)}
             onBlur={() => onSave(mealKey, idx)}
             width="w-[48px]"
-            disabled={locked}
+            disabled={inputDisabled}
           />
           {(() => {
             const truocCK = extra.so_luong * extra.don_gia;
@@ -107,7 +137,7 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
       {/* Col 9: Ai trả — toggle giống main row */}
       <td className="px-2 py-1 text-center">
         <button
-          disabled={locked}
+          disabled={inputDisabled}
           onClick={() => {
             const next = extra.nguoi_tt === "hdv" ? "cong_ty" : "hdv";
             onChange(mealKey, idx, "nguoi_tt", next);
@@ -131,10 +161,32 @@ export default function NHExtraRow({ mealKey, extra, idx, onChange, onSave, onDe
           <HoaDonChiPhiBadge chiPhiId={extra.id} trangThai={(trangThaiHoaDon ?? "chua_co") as TrangThaiDoc} />
         )}
       </td>
-      {/* Col 11: delete */}
-      <td className="px-2 py-1">
-        <div className="flex justify-end">
-          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={locked} onClick={() => onDelete(mealKey, idx)}>
+      {/* Col 11: voucher (dùng/gỡ) + delete — sticky mép phải khớp cột Actions hàng chính */}
+      <td className="px-2 py-1 sticky right-0 z-10 bg-card shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.12)]">
+        <div className="flex justify-end items-center gap-0.5">
+          {/* Voucher: chỉ dòng công ty đủ điều kiện. Sửa vé tại chỗ khi đã phủ. */}
+          {covered ? (
+            <VoucherEditPopover
+              veCu={voucherSoVe}
+              soKhachThucTe={extra.so_luong}
+              donGia={extra.don_gia}
+              ckPct={extra.chiet_khau_phan_tram}
+              loai={voucherLoai}
+              voucherTen={voucherTen ?? ""}
+              tonKhoConLai={tonKhoConLai}
+              disabled={locked}
+              onSubmit={(veMoi) => extra.id != null && onEditVoucher?.(extra.id, veMoi)}
+            />
+          ) : voucherEligible && voucherTarget ? (
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-purple-600"
+              title={t("Dùng voucher")}
+              onClick={() => onOpenVoucher?.(voucherTarget)}>
+              <Ticket className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={locked || covered}
+            title={covered ? t("Gỡ voucher trước khi xóa") : undefined}
+            onClick={() => onDelete(mealKey, idx)}>
             <Trash2 className="h-3 w-3 text-destructive" />
           </Button>
         </div>

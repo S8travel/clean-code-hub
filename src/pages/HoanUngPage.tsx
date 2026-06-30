@@ -1,6 +1,6 @@
 import { Fragment, useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Plus, Wallet, Trash2, Clock, CheckCircle2, FileText, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Wallet, Trash2, Clock, CheckCircle2, FileText, ChevronRight, ChevronDown, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,7 +18,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useHoanUngList, useDeleteHoanUng, LOAI_CHI_HOAN_UNG_OPTS,
+  type HoanUngRow,
 } from "@/hooks/use-hoan-ung";
+import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
 import HoanUngForm from "@/components/hoan-ung/HoanUngForm";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -38,9 +40,9 @@ const TRANG_THAI_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 const PAYMENT_BADGE: Record<string, { label: string; cls: string }> = {
-  unpaid:  { label: "Chưa hoàn", cls: "bg-muted text-muted-foreground" },
-  partial: { label: "Hoàn 1 phần", cls: "bg-yellow-100 text-yellow-700" },
-  paid:    { label: "Đã hoàn", cls: "bg-emerald-100 text-emerald-700" },
+  unpaid:  { label: "Chưa thanh toán", cls: "bg-muted text-muted-foreground" },
+  partial: { label: "Thanh toán 1 phần", cls: "bg-yellow-100 text-yellow-700" },
+  paid:    { label: "Đã thanh toán", cls: "bg-emerald-100 text-emerald-700" },
 };
 
 export default function HoanUngPage() {
@@ -85,6 +87,39 @@ export default function HoanUngPage() {
     .filter((r) => r.trang_thai_duyet !== "tu_choi" && r.trang_thai_duyet !== "da_huy")
     .reduce((s, r) => s + Number(r.so_tien), 0);
 
+  // In Giấy đề nghị thanh toán (Word) — reuse mẫu ĐNTT khác/hoàn ứng
+  const handlePrint = (r: HoanUngRow) => {
+    const srcItems = r.hoan_ung_items && r.hoan_ung_items.length > 0
+      ? r.hoan_ung_items
+      : [{ loai_chi: r.loai_chi_hoan_ung ?? "khac", mo_ta: r.mo_ta ?? "", so_tien: Number(r.so_tien), ngay: null }];
+    const items = srcItems.map((it) => {
+      const lc = LOAI_CHI_HOAN_UNG_OPTS.find((o) => o.value === it.loai_chi)?.label ?? it.loai_chi;
+      const datePrefix = it.ngay ? `${format(new Date(it.ngay), "dd/MM/yyyy")} · ` : "";
+      const noiDung = `${datePrefix}${lc ? `${lc}: ` : ""}${it.mo_ta ?? ""}`.trim();
+      return {
+        mo_ta: noiDung || "—",
+        so_luong: 1,
+        don_gia: Number(it.so_tien),
+        thanh_tien: Number(it.so_tien),
+      };
+    });
+    exportDnttKhacHoanUngWord({
+      maDoan: "",
+      // Chủ tài khoản = "Họ tên" user nhập (ten_nha_cung_cap), KHÔNG phải tên
+      // tài khoản đăng nhập (nguoi_ung_ho_ten) — user có thể nhận hộ người khác.
+      tenNguoiNhan: r.ten_nha_cung_cap || r.nguoi_ung_ho_ten || "—",
+      soTaiKhoan: r.so_tai_khoan,
+      nganHang: r.ngan_hang,
+      lyDo: `Hoàn ứng chi phí văn phòng${r.mo_ta ? ` — ${r.mo_ta}` : ""}`,
+      items,
+      ngayLap: r.tao_luc ?? undefined,
+      ngayCanThanhToan: r.ngay_can_thanh_toan,
+    }).then(
+      () => toast.success("Đã xuất Giấy đề nghị thanh toán"),
+      (e: unknown) => toast.error("Lỗi xuất Word: " + (errMsg(e) || "")),
+    );
+  };
+
   const handleDelete = () => {
     if (deleteTarget == null) return;
     deleteMut.mutate(deleteTarget, {
@@ -116,7 +151,7 @@ export default function HoanUngPage() {
             { icon: FileText,     label: "Tổng yêu cầu",   value: rows.length,   cls: "text-foreground" },
             { icon: Clock,        label: "Chờ duyệt",       value: totalCho,      cls: "text-amber-600" },
             { icon: CheckCircle2, label: "Đã duyệt",        value: totalDuyet,    cls: "text-blue-600" },
-            { icon: Wallet,       label: "Đã hoàn",         value: totalPaid,     cls: "text-emerald-600" },
+            { icon: Wallet,       label: "Đã thanh toán",   value: totalPaid,     cls: "text-emerald-600" },
           ].map(({ icon: Icon, label, value, cls }) => (
             <div key={label} className="rounded-lg border border-border bg-card p-3">
               <div className="flex items-center gap-1.5 mb-1">
@@ -201,9 +236,9 @@ export default function HoanUngPage() {
                 <th className="py-1.5 px-2 text-center font-medium">Mục</th>
                 <th className="py-1.5 px-2 text-right font-medium">Tổng tiền</th>
                 <th className="py-1.5 px-2 text-center font-medium">Trạng thái</th>
-                <th className="py-1.5 px-2 text-center font-medium">Hoàn tiền</th>
+                <th className="py-1.5 px-2 text-center font-medium">Thanh toán</th>
                 <th className="py-1.5 px-2 text-center font-medium">Ngày tạo</th>
-                <th className="py-1.5 px-2 w-8" />
+                <th className="py-1.5 px-2 w-16" />
               </tr>
             </thead>
             <tbody>
@@ -267,15 +302,24 @@ export default function HoanUngPage() {
                         {r.tao_luc ? format(new Date(r.tao_luc), "dd/MM/yyyy") : "—"}
                       </td>
                       <td className="py-1.5 px-2 text-center">
-                        {canDelete && (
+                        <div className="flex items-center justify-center gap-0.5">
                           <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(r.id); }}
-                            className="text-muted-foreground hover:text-destructive p-1"
-                            title="Xóa (chỉ khi đã bị từ chối)"
+                            onClick={(e) => { e.stopPropagation(); handlePrint(r); }}
+                            className="text-muted-foreground hover:text-primary p-1"
+                            title="In đề nghị thanh toán"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Printer className="h-3.5 w-3.5" />
                           </button>
-                        )}
+                          {canDelete && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(r.id); }}
+                              className="text-muted-foreground hover:text-destructive p-1"
+                              title="Xóa (chỉ khi đã bị từ chối)"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     {isOpen && items.length > 0 && (

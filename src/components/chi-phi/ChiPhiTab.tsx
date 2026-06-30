@@ -49,6 +49,13 @@ export interface ChiPhiTabDoan {
   agents?: { ten?: string | null } | null;
   huong_dan_vien?: { ten?: string | null } | null;
   xe?: {
+    id?: number | null;
+    ten_xe?: string | null;
+    so_cho?: number | null;
+    nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null; tai_khoan_thanh_toan?: string | null } | null;
+  } | null;
+  xe_2?: {
+    id?: number | null;
     ten_xe?: string | null;
     so_cho?: number | null;
     nha_xe?: { ten?: string | null; nha_cung_cap_id?: number | null; tai_khoan_thanh_toan?: string | null } | null;
@@ -308,7 +315,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
         <ChiPhiDVSection ref={dvSectionRef} doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} doanNhomId={activeNhomId} locked={locked} />
 
-        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} locked={locked} />
+        <ChiPhiXeSection doanId={doanId} xe={doan?.xe ?? null} xe2={doan?.xe_2 ?? null} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} locked={locked} />
 
         {/* Visa — ẩn cho tour nội địa (xem tourProfile), khớp BookingVisaXeTab. */}
         {tourProfile(doan?.loai_tour).showVisa && (
@@ -317,7 +324,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
         {/* Vé máy bay — chỉ outbound + nội địa (xem tourProfile). Inbound ẩn. */}
         {tourProfile(doan?.loai_tour).showVeMayBay && (
-          <ChiPhiVeMayBaySection doanId={doanId} locked={locked} />
+          <ChiPhiVeMayBaySection doanId={doanId} tenDoan={doan?.ten_doan || ""} ngayBatDau={doan?.ngay_di ?? undefined} locked={locked} />
         )}
 
         <ChiPhiBaoHiemSection

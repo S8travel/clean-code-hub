@@ -1,9 +1,14 @@
+import { useState } from "react";
 import { Printer } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { resolveKSFoc } from "@/lib/foc-calc";
 import { calcTotalKS } from "@/lib/foc-calc";
+import { useChiPhiList, useDNTTList } from "@/hooks/use-chi-phi";
+import { useKhachSanList } from "@/hooks/use-khach-san";
+import { useCurrentUserName } from "@/hooks/use-doan";
+import { buildNgoaiTourSelectedData, getNgoaiTourPrintableKsIds } from "@/lib/ks-ngoai-tour-print";
 import KSDNTTModal from "./KSDNTTModal";
 import KSAdjustModal from "./KSAdjustModal";
 import DNTTKSPreviewModal from "./DNTTKSPreviewModal";
@@ -11,6 +16,7 @@ import KSCard from "./KSCard";
 import KSCancelModal from "./KSCancelModal";
 import KSAggCommitModal from "./KSAggCommitModal";
 import KSLegacyAdjustModal from "./KSLegacyAdjustModal";
+import KSNgoaiTourPanel from "./KSNgoaiTourPanel";
 import { useKSSection } from "./use-ks-section";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -35,7 +41,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
     distinctKsIdsFromNgay,
     cardData, cardHandlers,
     selectedKsIds, setSelectedKsIds,
-    allSelected, ksWithDnttSelected,
+    ksWithDnttSelected,
     batchPrinting,
     handlePrintSelected, handleExportExcel,
     activeDnttByKs,
@@ -58,6 +64,39 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
     handleCancelSubmit, cancelPending,
   } = s;
 
+  // ── In CHUNG KS ngoài tour với KS trong tour ────────────────────────────────
+  const [selectedOutKsIds, setSelectedOutKsIds] = useState<Set<number>>(new Set());
+  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: dnttList = [] } = useDNTTList(doanId);
+  const { data: ksList = [] } = useKhachSanList();
+  const { data: currentUserName = "" } = useCurrentUserName();
+
+  const printableOutKsIds = getNgoaiTourPrintableKsIds(chiPhiRows, dnttList);
+  const outSelectedCount = printableOutKsIds.filter((id) => selectedOutKsIds.has(id)).length;
+  const toggleOutKs = (ksId: number) => setSelectedOutKsIds((prev) => {
+    const next = new Set(prev);
+    next.has(ksId) ? next.delete(ksId) : next.add(ksId);
+    return next;
+  });
+  const getOutData = () => buildNgoaiTourSelectedData(
+    printableOutKsIds.filter((id) => selectedOutKsIds.has(id)),
+    chiPhiRows, dnttList,
+    ksList.map((k) => ({ id: k.id, ten: k.ten, tai_khoan_thanh_toan: k.tai_khoan_thanh_toan })),
+    tenDoan || `#${doanId}`, currentUserName,
+  );
+
+  // Toolbar gộp: in-tour (selectedKsIds/distinctKsIdsFromNgay) + ngoài-tour.
+  const totalSelectable = distinctKsIdsFromNgay.length + printableOutKsIds.length;
+  const totalPrintableSelected = ksWithDnttSelected + outSelectedCount;
+  const allCombinedSelected = totalSelectable > 0 &&
+    selectedKsIds.length === distinctKsIdsFromNgay.length &&
+    outSelectedCount === printableOutKsIds.length;
+  const toggleAllCombined = (v: boolean) => {
+    setSelectedKsIds(v ? [...distinctKsIdsFromNgay] : []);
+    setSelectedOutKsIds(v ? new Set(printableOutKsIds) : new Set());
+  };
+  const clearAllSelected = () => { setSelectedKsIds([]); setSelectedOutKsIds(new Set()); };
+
   if (ksLoading) return <div className="text-sm text-muted-foreground">{t("Đang tải KS...")}</div>;
 
   return (
@@ -73,46 +112,44 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
         <p className="text-sm text-muted-foreground">{t("Chưa có chi phí khách sạn.")}</p>
       )}
 
-      {/* Toolbar select + print */}
-      {distinctKsIdsFromNgay.length > 0 && (
+      {/* Toolbar chọn + in (GỘP KS trong tour + KS ngoài tour) */}
+      {totalSelectable > 0 && (
         <div className="flex items-center gap-3 py-1">
           <div className="flex items-center gap-2">
             <Checkbox
-              checked={allSelected}
-              onCheckedChange={(v) =>
-                v ? setSelectedKsIds([...distinctKsIdsFromNgay]) : setSelectedKsIds([])
-              }
+              checked={allCombinedSelected}
+              onCheckedChange={(v) => toggleAllCombined(!!v)}
               id="select-all-ks"
             />
             <label htmlFor="select-all-ks" className="text-xs text-muted-foreground cursor-pointer select-none">
-              {selectedKsIds.length > 0
-                ? `${t("Đã chọn")} ${selectedKsIds.length}/${distinctKsIdsFromNgay.length} KS`
+              {(selectedKsIds.length + outSelectedCount) > 0
+                ? `${t("Đã chọn")} ${selectedKsIds.length + outSelectedCount}/${totalSelectable} KS`
                 : t("Chọn tất cả")}
             </label>
           </div>
-          {selectedKsIds.length > 0 && (
+          {(selectedKsIds.length + outSelectedCount) > 0 && (
             <>
               <Button
                 size="sm"
                 className="h-7 text-xs"
-                onClick={() => handlePrintSelected(activeDnttByKs)}
-                disabled={ksWithDnttSelected === 0}
-                title={ksWithDnttSelected === 0 ? t("Không có KS nào đang có ĐNTT") : undefined}
+                onClick={() => handlePrintSelected(activeDnttByKs, getOutData())}
+                disabled={totalPrintableSelected === 0}
+                title={totalPrintableSelected === 0 ? t("Không có KS nào đang có ĐNTT") : undefined}
               >
                 <Printer className="h-3.5 w-3.5 mr-1" />
-                {`${t("In Word")}${ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}`}
+                {`${t("In Word")}${totalPrintableSelected > 0 ? ` (${totalPrintableSelected})` : ""}`}
               </Button>
               <Button
                 size="sm"
                 variant="outline"
                 className="h-7 text-xs"
-                onClick={() => handleExportExcel(activeDnttByKs)}
-                disabled={batchPrinting || ksWithDnttSelected === 0}
-                title={ksWithDnttSelected === 0 ? t("Không có KS nào đang có ĐNTT") : undefined}
+                onClick={() => handleExportExcel(activeDnttByKs, getOutData())}
+                disabled={batchPrinting || totalPrintableSelected === 0}
+                title={totalPrintableSelected === 0 ? t("Không có KS nào đang có ĐNTT") : undefined}
               >
-                {t("Xuất Excel")}{ksWithDnttSelected > 0 ? ` (${ksWithDnttSelected})` : ""}
+                {t("Xuất Excel")}{totalPrintableSelected > 0 ? ` (${totalPrintableSelected})` : ""}
               </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedKsIds([])}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={clearAllSelected}>
                 {t("Bỏ chọn")}
               </Button>
             </>
@@ -124,6 +161,16 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
       {distinctKsIdsFromNgay.map((ksId) => (
         <KSCard key={ksId} ksId={ksId} data={cardData} handlers={cardHandlers} locked={locked} />
       ))}
+
+      {/* Khách sạn ngoài tour — chi phí KS tự do không gắn lịch trình.
+          Checkbox chọn để in CHUNG với KS trong tour (toolbar ở trên). */}
+      <KSNgoaiTourPanel
+        doanId={doanId}
+        tenDoan={tenDoan}
+        locked={locked}
+        selectedKsIds={selectedOutKsIds}
+        onToggleSelect={toggleOutKs}
+      />
 
       {/* "Điều chỉnh" modal — per-booking, sửa so_phong/gia_phong nhiều row sau khi paid */}
       {ksAdjustTarget && (
