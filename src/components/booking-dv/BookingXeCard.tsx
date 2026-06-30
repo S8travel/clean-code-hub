@@ -17,6 +17,7 @@ import { BOOKING_CC } from "@/lib/booking-cc";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
+import { formatXeForEmail } from "@/lib/xe-email";
 import {
   computeExportCells,
   type DayExportCell,
@@ -158,7 +159,8 @@ export default function BookingXeCard({
 
   const buildEmailHTML = (mode: "first" | "update" = "first", note = "") => {
     const nhaXeTen = xe?.nha_xe?.ten ?? "Quý đối tác";
-    const xeStr = xe ? `${xe.ten_xe}${xe.so_cho ? ` (${xe.so_cho} chỗ)` : ""}` : "—";
+    // Xe thường → chỉ số chỗ; limousine → loại xe + số chỗ. Xem lib/xe-email.
+    const xeStr = xe ? formatXeForEmail(xe.ten_xe, xe.so_cho) : "—";
     const hdvStr = formatHdvsForEmail(doanHdvs);
     const soKhachStr = soKhach ? `${soKhach} khách` : "—";
 
