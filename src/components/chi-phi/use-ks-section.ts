@@ -223,14 +223,12 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     };
   };
 
+  // Trả null khi KS in-tour đã chọn thiếu STK (lỗi chặn). Mảng RỖNG khi chưa chọn
+  // KS in-tour nào — KHÔNG còn lỗi, để caller gộp với dữ liệu KS ngoài tour.
   const validateAndBuildPairs = (activeDnttByKs: Record<number, number>) => {
     const pairs = selectedKsIds
       .map((ksId) => ({ ksId, dnttId: activeDnttByKs[ksId] }))
       .filter((p) => p.dnttId);
-    if (pairs.length === 0) {
-      toast.error("Các KS đã chọn chưa có ĐNTT nào");
-      return null;
-    }
     const missingBank = pairs.filter(({ ksId }) => !ksData?.khachSanMap[ksId]?.tai_khoan_thanh_toan);
     if (missingBank.length > 0) {
       const names = missingBank.map(({ ksId }) => ksData?.khachSanMap[ksId]?.ten || `KS #${ksId}`).join(", ");
@@ -240,22 +238,31 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     return pairs;
   };
 
-  const handlePrintSelected = (activeDnttByKs: Record<number, number>) => {
+  // extraItems: dữ liệu in của KS NGOÀI TOUR (gộp in chung với KS trong tour).
+  const handlePrintSelected = (
+    activeDnttByKs: Record<number, number>,
+    extraItems: EdgeFunctionData[] = [],
+  ) => {
     const pairs = validateAndBuildPairs(activeDnttByKs);
     if (!pairs) return;
     try {
-      const allData = pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId));
+      const allData = [...pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId)), ...extraItems];
+      if (allData.length === 0) { toast.error("Chưa chọn KS có ĐNTT để in"); return; }
       setPreviewItems(allData);
     } catch (err: unknown) {
       toast.error("Lỗi tải dữ liệu: " + (errMsg(err) || ""));
     }
   };
 
-  const handleExportExcel = (activeDnttByKs: Record<number, number>) => {
+  const handleExportExcel = (
+    activeDnttByKs: Record<number, number>,
+    extraItems: EdgeFunctionData[] = [],
+  ) => {
     const pairs = validateAndBuildPairs(activeDnttByKs);
     if (!pairs) return;
     try {
-      const allData = pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId));
+      const allData = [...pairs.map(({ ksId, dnttId }) => buildKSData(ksId, dnttId)), ...extraItems];
+      if (allData.length === 0) { toast.error("Chưa chọn KS có ĐNTT để in"); return; }
       exportDNTTKSExcel(allData, tenDoan || String(doanId));
       toast.success("Đã xuất file Excel");
     } catch (err: unknown) {
@@ -601,7 +608,9 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   //   người đang nhập. localRows chỉ còn buffer dirty + dòng chưa lưu.
   useEffect(() => {
     if (!ksData) return;
-    const ksChiPhi = chiPhiRows.filter((c) => c.danh_muc === "khach_san");
+    // ngoai_tour: dòng KS tự do (panel "Ngoài tour" riêng) — KHÔNG đưa vào máy
+    // tính phòng/đêm/FOC, tránh dựng row rác / bị auto-xóa như mồ côi.
+    const ksChiPhi = chiPhiRows.filter((c) => c.danh_muc === "khach_san" && !c.ngoai_tour);
     const ngayMap: Record<number, KSNgayRow> = {};
     (ksData.ngayRows || []).forEach((r) => { ngayMap[r.id] = r; });
     const dayUseItemMap = ksData.dayUseItemMap || {};
@@ -958,7 +967,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   // (với KS tien_cong_ty là GROSS chưa trừ FOC → sum sai, hiện gạch nhầm).
   const thucTeOverrideById = new Map<number, number>();
   chiPhiRows.forEach((r) => {
-    if (r.danh_muc === "khach_san" && r.thanh_tien_thuc_te != null) {
+    if (r.danh_muc === "khach_san" && !r.ngoai_tour && r.thanh_tien_thuc_te != null) {
       thucTeOverrideById.set(r.id, Number(r.thanh_tien_thuc_te));
     }
   });

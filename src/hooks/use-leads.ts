@@ -1,6 +1,7 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { DoanInsert } from "@/hooks/use-doan";
+import { syncDoanPaxFromRoster } from "@/hooks/use-doan-khach-le";
 import { syncNextAction } from "@/hooks/use-lead-next-action";
 
 export type LeadTrangThai =
@@ -41,6 +42,7 @@ export interface Lead {
   ngay_lien_he_cuoi: string | null;
   referral_lead_id: number | null;
   doan_id: number | null;
+  khach_hang_id: number | null;
   ghi_chu: string | null;
   created_by: string | null;
   created_at: string;
@@ -76,6 +78,7 @@ export interface LeadInsert {
   assigned_to?: string | null;
   ngay_follow_up_tiep?: string | null;
   referral_lead_id?: number | null;
+  khach_hang_id?: number | null;
   ghi_chu?: string | null;
   created_by?: string | null;
 }
@@ -317,6 +320,89 @@ export function useConvertLeadToDoan() {
       qc.invalidateQueries({ queryKey: ["lead_next_action", vars.leadId] });
       qc.invalidateQueries({ queryKey: ["my_next_actions"] });
       qc.invalidateQueries({ queryKey: ["doan"] });
+    },
+  });
+}
+
+// Ghép lead vào ĐOÀN GHÉP có sẵn (kieu_gom='ghep'): set lead.doan_id + chot_deal,
+// tạo 1 row khách lẻ trong roster từ lead, gán khách chính nếu đoàn chưa có, rồi
+// sync doan.so_khach_* = tổng roster. Giá bán khách lẻ để OP nhập sau ở tab Khách lẻ.
+export function useAttachLeadToDoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      leadId,
+      doanId,
+      khachHangId,
+      currentUserId,
+    }: {
+      leadId: number;
+      doanId: number;
+      khachHangId: number | null;
+      currentUserId: string | null;
+    }) => {
+      const { data: lead } = await externalSupabase
+        .from("lead")
+        .select("ho_ten, so_dien_thoai, so_nguoi_lon, so_nguoi_em")
+        .eq("id", leadId)
+        .maybeSingle();
+
+      const { error: leadErr } = await externalSupabase
+        .from("lead")
+        .update({ doan_id: doanId, trang_thai: "chot_deal" })
+        .eq("id", leadId);
+      if (leadErr) throw leadErr;
+
+      // Đoàn: gán khách chính nếu chưa có + đảm bảo kieu_gom='ghep'
+      const { data: d } = await externalSupabase
+        .from("doan")
+        .select("khach_hang_id, kieu_gom")
+        .eq("id", doanId)
+        .maybeSingle();
+      const doanPatch: { khach_hang_id?: number; kieu_gom?: string } = {};
+      if (d && d.khach_hang_id == null && khachHangId != null) doanPatch.khach_hang_id = khachHangId;
+      if (d && d.kieu_gom == null) doanPatch.kieu_gom = "ghep";
+      if (Object.keys(doanPatch).length > 0) {
+        await externalSupabase.from("doan").update(doanPatch).eq("id", doanId);
+      }
+
+      // Tạo row khách lẻ trong roster
+      if (lead) {
+        const { error: klErr } = await externalSupabase.from("doan_khach_le").insert({
+          doan_id: doanId,
+          khach_hang_id: khachHangId,
+          lead_id: leadId,
+          ho_ten: lead.ho_ten,
+          so_dien_thoai: lead.so_dien_thoai,
+          so_khach_lon: lead.so_nguoi_lon ?? 1,
+          so_khach_em1: lead.so_nguoi_em ?? 0,
+          created_by: currentUserId,
+        });
+        if (klErr) throw klErr;
+        // Số khách đoàn = tổng roster
+        await syncDoanPaxFromRoster(doanId);
+      }
+
+      await externalSupabase.from("lead_activity").insert({
+        lead_id: leadId,
+        loai: "doi_trang_thai",
+        trang_thai_cu: null,
+        trang_thai_moi: "chot_deal",
+        noi_dung: `Chốt deal → ghép vào đoàn #${doanId} (khách lẻ)`,
+        created_by: currentUserId,
+      });
+
+      return doanId;
+    },
+    onSuccess: async (_, vars) => {
+      await syncNextAction(vars.leadId).catch(() => {});
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["lead", vars.leadId] });
+      qc.invalidateQueries({ queryKey: ["lead_activities", vars.leadId] });
+      qc.invalidateQueries({ queryKey: ["my_next_actions"] });
+      qc.invalidateQueries({ queryKey: ["doan"] });
+      qc.invalidateQueries({ queryKey: ["khach_hang"] });
+      qc.invalidateQueries({ queryKey: ["doan_khach_le", vars.doanId] });
     },
   });
 }

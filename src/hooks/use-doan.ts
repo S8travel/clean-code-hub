@@ -102,6 +102,8 @@ export interface DoanInsert {
   assigned_to?: string | null;
   created_by?: string | null;
   van_phong_id?: number | null;
+  khach_hang_id?: number | null;
+  kieu_gom?: string | null;
   loai_tour?: "inbound" | "outbound" | "noi_dia" | null;
   thi_truong?: string | null;
   shopping?: boolean | null;

@@ -17,23 +17,20 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  useLead, useUpdateLead, useUpdateLeadStatus, useConvertLeadToDoan,
+  useLead, useUpdateLead, useUpdateLeadStatus,
   LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS, LEAD_LOAI_KHACH_OPTS,
   LEAD_PHONG_CACH_OPTS, LEAD_UU_TIEN_OPTS,
   type Lead, type LeadInsert, type LeadTrangThai,
 } from "@/hooks/use-leads";
-import type { DoanInsert } from "@/hooks/use-doan";
+import { ChotDealDialog } from "@/components/leads/ChotDealDialog";
 import { useLeadActivities, useCreateActivity, LEAD_ACTIVITY_LOAI_OPTS, LEAD_KET_QUA_OPTS } from "@/hooks/use-lead-activities";
 import { useLeadTasks, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/use-lead-tasks";
 import { useLeadDiemDen, useReplaceDiemDen, type LeadDiemDen } from "@/hooks/use-lead-diem-den";
 import { useUserRoles } from "@/hooks/use-doan";
+import { useKhachHang } from "@/hooks/use-khach-hang";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
+import { LeadBaoGiaTab } from "@/components/leads/LeadBaoGiaTab";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
@@ -69,7 +66,7 @@ const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 // Ref ổn định cho default rỗng — tránh tạo [] mới mỗi render (loop effect).
 const EMPTY_DIEM_DEN: LeadDiemDen[] = [];
 
-type Tab = "info" | "activity" | "tasks";
+type Tab = "info" | "khachhang" | "baogia" | "activity" | "tasks";
 
 // State cục bộ cho các field blur-save trong tab Thông tin.
 // Giá trị có thể là string (text input) hoặc number (input số) tùy field.
@@ -84,6 +81,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const { data: tasks = [] } = useLeadTasks(leadId);
   const { data: diemDenList = EMPTY_DIEM_DEN } = useLeadDiemDen(leadId);
   const { data: userRoles = [] } = useUserRoles();
+  const { data: khachHang } = useKhachHang(lead?.khach_hang_id ?? null);
 
   const updateLead = useUpdateLead();
   const updateStatus = useUpdateLeadStatus();
@@ -92,51 +90,13 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
   const toggleTask = useToggleTask();
   const deleteTask = useDeleteTask();
   const replaceDiemDen = useReplaceDiemDen();
-  const convertLead = useConvertLeadToDoan();
 
-  const [confirmConvertOpen, setConfirmConvertOpen] = useState(false);
+  // Modal chốt deal (2 lựa chọn: tạo đoàn mới / ghép đoàn có sẵn).
+  const [chotDealOpen, setChotDealOpen] = useState(false);
 
-  const handleChotDeal = async () => {
-    if (!lead) return;
-    // Tường cứng theo VP: đoàn đóng dấu VP nhà người chốt. Chưa có VP → đoàn mồ côi.
-    if (user?.van_phong_id == null) {
-      toast.error(t("Tài khoản chưa được gán Văn phòng — không thể tạo đoàn. Liên hệ admin."));
-      return;
-    }
-    const firstDiemDen = (lead.diem_den ?? [])[0]?.diem_den ?? "";
-    const tenDoan = `Đoàn ${lead.ho_ten}${firstDiemDen ? " - " + firstDiemDen : ""}`;
-    const ghiChu = `Tạo từ lead #${lead.id}.${lead.yeu_cau_dac_biet ? " " + lead.yeu_cau_dac_biet : ""}`;
-
-    const doanData: DoanInsert = {
-      ten_doan: tenDoan,
-      loai_tour: lead.loai_tour as "outbound" | "noi_dia",
-      so_khach: (lead.so_nguoi_lon ?? 0) + (lead.so_nguoi_em ?? 0),
-      so_khach_lon: lead.so_nguoi_lon ?? 0,
-      so_khach_em1: lead.so_nguoi_em ?? 0,
-      ngay_di: lead.ngay_di_du_kien,
-      ngay_ve: lead.ngay_ve_du_kien,
-      assigned_to: lead.assigned_to,
-      van_phong_id: user?.van_phong_id ?? null,
-      ghi_chu: ghiChu,
-      trang_thai: "dang_chay",
-    };
-
-    try {
-      const newDoan = await convertLead.mutateAsync({
-        leadId: lead.id,
-        doanData,
-        currentUserId: user?.user_id ?? null,
-      });
-      toast.success(`🎉 ${t("Đã tạo đoàn")} #${newDoan.id}`);
-      setConfirmConvertOpen(false);
-      onClose();
-      navigate(`/doan/${newDoan.id}`);
-    } catch (e: unknown) {
-      toast.error(errMsg(e) || t("Lỗi khi tạo đoàn"));
-    }
-  };
-
-  const canChotDeal = lead && lead.trang_thai !== "chot_deal" && lead.trang_thai !== "mat_khach";
+  // Hiện nút Chốt deal khi lead CHƯA có đoàn (kể cả lead đã chot_deal nhưng mồ côi
+  // đoàn — vd kéo kanban kiểu cũ). Ẩn khi đã có đoàn hoặc mất khách.
+  const canChotDeal = lead && lead.trang_thai !== "mat_khach" && !lead.doan_id;
 
   const [activeTab, setActiveTab] = useState<Tab>("info");
 
@@ -308,8 +268,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       <Button
                         size="sm"
                         className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => setConfirmConvertOpen(true)}
-                        disabled={convertLead.isPending}
+                        onClick={() => setChotDealOpen(true)}
                       >
                         <Trophy className="h-3.5 w-3.5" />
                         {t("Chốt deal")}
@@ -387,7 +346,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
             {/* Tabs */}
             <div className="shrink-0 flex border-b">
-              {([["info", "📋 Thông tin"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([tab, l]) => (
+              {([["info", "📋 Thông tin"], ["khachhang", "👤 Khách hàng"], ["baogia", "💰 Báo giá"], ["activity", "🕐 Hoạt động"], ["tasks", "✅ Việc cần làm"]] as [Tab, string][]).map(([tab, l]) => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className={cn("flex-1 py-2.5 text-xs font-medium transition-colors",
                     activeTab === tab ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
@@ -399,6 +358,52 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
 
             {/* Tab content */}
             <div className="flex-1 overflow-y-auto">
+
+              {/* ── Tab: Khách hàng ── */}
+              {activeTab === "khachhang" && lead && (
+                <div className="p-5 space-y-4">
+                  {lead.khach_hang_id && khachHang ? (
+                    <>
+                      <div className="rounded-md border p-3 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-sm truncate">{khachHang.ho_ten}</p>
+                          <span className="shrink-0 text-[10px] px-1.5 py-px rounded-full bg-muted">
+                            {khachHang.loai === "to_chuc" ? "Tổ chức" : "Cá nhân"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {khachHang.so_dien_thoai || "—"}
+                          {khachHang.email ? ` · ${khachHang.email}` : ""}
+                        </p>
+                        {khachHang.loai === "to_chuc" && khachHang.ten_to_chuc && (
+                          <p className="text-xs text-muted-foreground">{khachHang.ten_to_chuc}</p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-md border bg-muted/30 px-2 py-1.5 text-center">
+                          <p className="text-[10px] text-muted-foreground">Số lead</p>
+                          <p className="text-sm font-semibold">{khachHang.so_lead ?? 0}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 px-2 py-1.5 text-center">
+                          <p className="text-[10px] text-muted-foreground">Số đoàn</p>
+                          <p className="text-sm font-semibold">{khachHang.so_doan ?? 0}</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/khach-hang")}>
+                        Mở trang khách hàng
+                      </Button>
+                      <p className="text-[11px] text-muted-foreground">
+                        Hồ sơ doanh nghiệp, sở thích &amp; lịch sử đơn quản lý ở trang Khách hàng.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Lead chưa liên kết khách hàng.</p>
+                  )}
+                </div>
+              )}
+
+              {/* ── Tab: Báo giá ── */}
+              {activeTab === "baogia" && lead && <LeadBaoGiaTab lead={lead} />}
 
               {/* ── Tab: Thông tin ── */}
               {activeTab === "info" && lead && (
@@ -710,28 +715,17 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
             </div>
           </motion.div>
 
-          {/* Confirm: Tạo đoàn từ lead */}
-          <AlertDialog open={confirmConvertOpen} onOpenChange={setConfirmConvertOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{t("🎉 Chốt deal — Tạo đoàn?")}</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t("Đoàn sẽ được tạo với thông tin từ lead")} "{lead?.ho_ten}".
-                  {" "}{t("Bạn sẽ được chuyển sang trang chi tiết đoàn để bổ sung agent / địa điểm / lịch trình.")}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={convertLead.isPending}>{t("Hủy")}</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => { e.preventDefault(); handleChotDeal(); }}
-                  disabled={convertLead.isPending}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {convertLead.isPending ? t("Đang tạo...") : t("Tạo đoàn ngay")}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {/* Chốt deal: chọn tạo đoàn mới / ghép đoàn có sẵn */}
+          <ChotDealDialog
+            lead={lead ?? null}
+            open={chotDealOpen}
+            onClose={() => setChotDealOpen(false)}
+            onDone={(doanId) => {
+              setChotDealOpen(false);
+              onClose();
+              navigate(`/doan/${doanId}`);
+            }}
+          />
         </>
       )}
     </AnimatePresence>

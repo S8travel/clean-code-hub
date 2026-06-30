@@ -5,11 +5,15 @@
 // ghi nhận = giá trị công ty của dòng lúc dùng. Khi áp: chi phí về tien_cong_ty=0
 // (công ty không trả tiền vì đã đổi voucher) nhưng vẫn giữ gross hiển thị.
 
+import { applyChietKhau } from "./chi-phi-calc";
+
 export interface RedemptionLike {
   id: number;
   voucher_id: number;
   chi_phi_id: number | null;
   gia_tri: number;
+  /** Số vé voucher phủ (số khách miễn / trả-trước). Có thể < số khách → phủ MỘT PHẦN. */
+  so_luong?: number;
   dntt_id?: number | null;
   voucher?: { ten?: string | null; loai?: string | null } | null;
 }
@@ -18,6 +22,8 @@ export interface CoveredInfo {
   redemptionId: number;
   voucherId: number;
   giaTri: number;
+  /** Số vé voucher phủ (so_luong redemption). Phủ một phần khi < số khách của dòng. */
+  soVe: number;
   voucherTen: string;
   /** 'mua' = giữ giá trị (trả bằng voucher, có ĐNTT) | 'tang' = miễn phí (chính = 0). */
   voucherLoai: "mua" | "tang";
@@ -41,6 +47,7 @@ export function buildRedemptionMap(
       redemptionId: r.id,
       voucherId: r.voucher_id,
       giaTri: r.gia_tri,
+      soVe: r.so_luong ?? 0,
       voucherTen: r.voucher?.ten ?? "",
       voucherLoai: r.voucher?.loai === "tang" ? "tang" : "mua",
       dnttId: r.dntt_id ?? null,
@@ -68,6 +75,43 @@ export function canApplyVoucher(params: {
 }
 
 /**
+ * Chia giá trị 1 suất chính khi voucher phủ `soVe` vé (có thể < số khách → phủ MỘT PHẦN).
+ *
+ * - `fullValue`   = giá trị công ty cả dòng (đã FOC + CK).
+ * - `remainderNet`= giá trị phần KHÔNG được voucher phủ = (số khách − vé) × đơn giá, đã CK.
+ *                   Tính TRỰC TIẾP (không lấy fullValue − coverValue) để khi vé = số khách
+ *                   ra ĐÚNG 0, và để khớp BIT-FOR-BIT với số ĐNTT (caller truyền số ghế
+ *                   còn lại vào calcNHDnttAmount → mainNet = applyChietKhau(ghế còn × đơn giá)).
+ * - `coverValue`  = phần voucher phủ = fullValue − remainderNet (bù trừ → coverValue +
+ *                   remainderNet === fullValue, không lệch do làm tròn 2 lần).
+ * - `tienCongTy`  = số công ty phải trả lưu vào doan_chi_phi:
+ *                     TẶNG → remainderNet (vé tặng miễn phí, chỉ trả phần còn lại)
+ *                     MUA  → fullValue (giữ nguyên — voucher chỉ là cách thanh toán, có ĐNTT đủ)
+ *
+ * Vé bị kẹp [0, số khách]. veApplied = vé thực dùng (sau kẹp).
+ */
+export function splitVoucherCoverage(params: {
+  soKhachThucTe: number;
+  donGia: number;
+  ckPct: number | null;
+  soVe: number;
+  loai: "mua" | "tang";
+}): {
+  fullValue: number;
+  coverValue: number;
+  remainderNet: number;
+  tienCongTy: number;
+  veApplied: number;
+} {
+  const ve = Math.max(0, Math.min(Math.round(params.soVe), params.soKhachThucTe));
+  const fullValue = applyChietKhau(params.soKhachThucTe * params.donGia, params.ckPct);
+  const remainderNet = applyChietKhau((params.soKhachThucTe - ve) * params.donGia, params.ckPct);
+  const coverValue = Math.max(0, fullValue - remainderNet);
+  const tienCongTy = params.loai === "tang" ? remainderNet : fullValue;
+  return { fullValue, coverValue, remainderNet, tienCongTy, veApplied: ve };
+}
+
+/**
  * Số tiền voucher trừ khỏi "Số tiền còn thanh toán" khi IN ĐNTT nhà hàng/dịch vụ.
  *
  * - Voucher 'tang': suất chính bị LOẠI khỏi bản in (không in dòng chính) → KHÔNG
@@ -88,4 +132,136 @@ export function resolveVoucherPrintAmount(params: {
 }): number {
   const redeem = params.voucherLoai === "mua" ? Math.max(0, params.redeemGiaTri ?? 0) : 0;
   return Math.max(params.paymentVoucherAmount, redeem);
+}
+
+/**
+ * Tổng giá trị các dòng phủ voucher loại 'mua' trong 1 nhóm bữa (lọc theo chi_phi_id).
+ * Dùng khi tạo ĐNTT BỔ SUNG cho phát sinh: (1) ghi payment method='voucher' = `total`
+ * để phần vé "mua" được đánh dấu trả-bằng-voucher (không đòi cash); (2) `perChiPhi` để
+ * tách allocation phần voucher về ĐÚNG dòng phủ → recalc quy `so_tien_da_dntt`/`so_tien_da_tt`
+ * về dòng đó (chặn áp voucher lần 2 + gỡ voucher dò được ĐNTT qua allocation).
+ * Voucher 'tang' KHÔNG tính (suất 0đ, đã loại khỏi ĐNTT).
+ */
+export function sumGroupVoucherMua(
+  chiPhiIds: number[],
+  redemptionMap: Record<number, CoveredInfo>,
+): { total: number; perChiPhi: { chiPhiId: number; giaTri: number }[] } {
+  const perChiPhi: { chiPhiId: number; giaTri: number }[] = [];
+  let total = 0;
+  for (const id of chiPhiIds) {
+    const r = redemptionMap[id];
+    if (r?.voucherLoai === "mua" && r.giaTri > 0) {
+      perChiPhi.push({ chiPhiId: id, giaTri: r.giaTri });
+      total += r.giaTri;
+    }
+  }
+  return { total, perChiPhi };
+}
+
+/**
+ * Tính delta khi SỬA số vé voucher của 1 dòng (tăng/giảm) TẠI CHỖ — KHÔNG gỡ rồi
+ * áp lại. Gọi splitVoucherCoverage 2 lần (vé cũ / vé mới) cùng `loai` để mọi con số
+ * bù trừ bit-perfect với lúc áp ban đầu. Thuần (không DB/React) → test độc lập.
+ *
+ * - `veClamped` = vé mới sau khi kẹp vào [0, min(soKhachThucTe, veCu + tonKhoConLai)].
+ *   Cộng `veCu` vào trần tồn kho vì vé cũ đang CHIẾM kho của chính dòng này — khi sửa
+ *   nó được "trả lại" trước rồi mới trừ vé mới.
+ * - `route`:
+ *     'noop'   = vé không đổi (sau kẹp) → caller bỏ qua.
+ *     'remove' = vé mới ≤ 0 → caller gọi gỡ voucher (CHECK so_luong>0 chặn redemption=0).
+ *     'edit'   = cập nhật tại chỗ.
+ * - MUA: tien_cong_ty GIỮ NGUYÊN fullValue (voucher chỉ là cách trả) → deltaTienCongTy=0;
+ *   chỉ đổi coverValue (voucher_su_dung.gia_tri) + payment 'voucher'.
+ * - TẶNG: tien_cong_ty = remainderNet đổi theo vé → deltaTienCongTy = −deltaCover;
+ *   không có payment 'voucher' (paymentVoucher* = 0).
+ */
+export function calcVoucherEditDelta(params: {
+  veCu: number;
+  veMoi: number;
+  soKhachThucTe: number;
+  donGia: number;
+  ckPct: number | null;
+  loai: "mua" | "tang";
+  tonKhoConLai: number;
+}): {
+  route: "noop" | "remove" | "edit";
+  veClamped: number;
+  clamped: boolean;
+  coverCu: number;
+  coverMoi: number;
+  deltaCover: number;
+  tienCongTyCu: number;
+  tienCongTyMoi: number;
+  deltaTienCongTy: number;
+  deltaVe: number;
+  paymentVoucherCu: number;
+  paymentVoucherMoi: number;
+} {
+  const veCu = Math.max(0, Math.round(params.veCu));
+  const ton = Math.max(0, params.tonKhoConLai);
+  // Trần vé = min(số khách, tồn còn + vé cũ). Vé cũ cộng vào vì đang chiếm kho của chính nó.
+  const maxVe = Math.max(0, Math.min(params.soKhachThucTe, veCu + ton));
+  const veReq = Math.round(params.veMoi);
+  const veClamped = Math.max(0, Math.min(veReq, maxVe));
+  const clamped = veClamped !== veReq;
+
+  const common = {
+    soKhachThucTe: params.soKhachThucTe,
+    donGia: params.donGia,
+    ckPct: params.ckPct,
+    loai: params.loai,
+  };
+  const splitCu = splitVoucherCoverage({ ...common, soVe: veCu });
+  const splitMoi = splitVoucherCoverage({ ...common, soVe: veClamped });
+
+  const coverCu = splitCu.coverValue;
+  const coverMoi = splitMoi.coverValue;
+  const tienCongTyCu = splitCu.tienCongTy;
+  const tienCongTyMoi = splitMoi.tienCongTy;
+  const paymentVoucherCu = params.loai === "mua" ? coverCu : 0;
+  const paymentVoucherMoi = params.loai === "mua" ? coverMoi : 0;
+
+  const route: "noop" | "remove" | "edit" =
+    veClamped === veCu ? "noop" : veClamped <= 0 ? "remove" : "edit";
+
+  return {
+    route,
+    veClamped,
+    clamped,
+    coverCu,
+    coverMoi,
+    deltaCover: coverMoi - coverCu,
+    tienCongTyCu,
+    tienCongTyMoi,
+    deltaTienCongTy: tienCongTyMoi - tienCongTyCu,
+    deltaVe: veClamped - veCu,
+    paymentVoucherCu,
+    paymentVoucherMoi,
+  };
+}
+
+/**
+ * Allocation cho ĐNTT bổ sung (footer aggregate) khi nhóm có dòng phủ voucher 'mua'.
+ * Allocate giá trị MỖI dòng phát sinh chưa-chốt về ĐÚNG chi_phi của nó (cả voucher
+ * lẫn cash) → recalc quy `so_tien_da_dntt`/`so_tien_da_tt` về từng dòng (đúng trạng
+ * thái per-dòng + delete-guard bảo vệ). Phần dư (vd điều chỉnh dòng chính) → dòng chính.
+ * Bất biến: Σ so_tien === absDelta. `lines` rỗng → [{main, absDelta}] (hành vi footer cũ).
+ * Clamp khi Σ giá-trị dòng > absDelta (giá đổi sau redeem) → cắt, không vượt tổng.
+ */
+export function buildAggAllocations(
+  absDelta: number,
+  mainChiPhiId: number,
+  lines: { chiPhiId: number; soTien: number }[],
+): { chi_phi_id: number; so_tien: number }[] {
+  const allocs: { chi_phi_id: number; so_tien: number }[] = [];
+  let remaining = absDelta;
+  for (const e of lines) {
+    if (remaining <= 0) break;
+    const amt = Math.min(e.soTien, remaining);
+    if (amt <= 0) continue;
+    allocs.push({ chi_phi_id: e.chiPhiId, so_tien: amt });
+    remaining -= amt;
+  }
+  if (remaining > 0) allocs.push({ chi_phi_id: mainChiPhiId, so_tien: remaining });
+  return allocs;
 }

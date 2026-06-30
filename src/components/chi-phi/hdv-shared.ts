@@ -95,6 +95,50 @@ export const TIP_LAI_XE_NOTES: string[] = [
   "LMS 9S miền Nam = miền Trung = 200K",
 ];
 
+// ── Khoản "Khác" mặc định mọi đoàn đang chạy ─────────────────────────────────
+// 7 khoản công ty/HDV hay phát sinh. Trước đây OP gõ tay tự do ("CTP HDV MB",
+// "ctp hdv", "tiền ngủ hdv"...) → cùng 1 loại chi phí ra chục cách viết → KHÔNG
+// gộp báo cáo theo tháng được. Seed sẵn bằng TÊN CHUẨN (đơn giá 0, Nguồn HDV —
+// OP nhập sau) để sau này gộp/tra cứu theo đúng mo_ta. ĐỪNG đổi chuỗi đã ship:
+// đổi tên = mất liên kết với dữ liệu đã nhập.
+export const DEFAULT_KHAC_MO_TAS: string[] = [
+  "Nước Aqua",
+  "Nước Pocari",
+  "Tiền ngủ",
+  "CTP HDV",
+  "Tiền nước mùa hè",
+  "Ăn nội bộ lái xe",
+  "Bia, nước ngọt nhà hàng",
+];
+
+// Thứ tự hiển thị dòng "hệ thống": Tip lái xe trước, rồi 7 khoản mặc định.
+// Phần còn lại (quà tặng + khoản OP tự thêm) giữ thứ tự created_at.
+export const SYSTEM_KHAC_ORDER: string[] = [TIP_LAI_XE_MO_TA, ...DEFAULT_KHAC_MO_TAS];
+
+// Các mo_ta còn THIẾU cần auto-thêm cho 1 đoàn (so khớp sau khi trim, phân biệt
+// hoa/thường — chủ ý: "ctp hdv" tự gõ KHÔNG khớp "CTP HDV" chuẩn nên vẫn seed
+// dòng chuẩn cạnh nó để OP gộp). Tip lái xe luôn đảm bảo cho mọi đoàn; 7 khoản
+// mặc định CHỈ thêm cho đoàn đang chạy/sắp đi (isActive=true) — tránh chèn dòng
+// trống vào đoàn cũ đã kết thúc.
+export function missingDefaultKhacMoTas(
+  existingMoTas: (string | null | undefined)[],
+  isActive: boolean,
+): string[] {
+  const have = new Set(existingMoTas.map((m) => (m ?? "").trim()));
+  const targets = isActive ? SYSTEM_KHAC_ORDER : [TIP_LAI_XE_MO_TA];
+  return targets.filter((m) => !have.has(m));
+}
+
+// Sắp xếp dòng "Khác": dòng hệ thống theo SYSTEM_KHAC_ORDER lên đầu (đúng thứ
+// tự), còn lại giữ nguyên thứ tự đầu vào (Array.sort ổn định từ ES2019).
+export function orderKhacItems<T extends { mo_ta: string | null | undefined }>(items: T[]): T[] {
+  const rankOf = (m: string | null | undefined) => {
+    const idx = SYSTEM_KHAC_ORDER.indexOf((m ?? "").trim());
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+  };
+  return [...items].sort((a, b) => rankOf(a.mo_ta) - rankOf(b.mo_ta));
+}
+
 // Nguồn (người trả) mặc định cho 1 row "Khác": HDV ứng trước, công ty hoàn sau.
 //   tien_hdv > 0 → HDV · tien_cong_ty > 0 → Công ty · cả 2 = 0 → HDV (mặc định).
 // (Quà tặng khách + tip lái xe cũng mặc định HDV; OP đổi sang Công ty khi cần.)

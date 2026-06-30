@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Users, ArrowRightLeft, RefreshCw, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ interface Props {
 export function ThongTinTourSection({
   draft, row, updateDraftField, updateDraftKetQua, saveField, savePatch, saveKetQua,
 }: Props) {
+  const navigate = useNavigate();
   const ket = draft.ket_qua;
   const pax = paxOf(ket);
   const fetchRate = useFetchExchangeRate();
@@ -301,7 +303,18 @@ export function ThongTinTourSection({
 
         {/* Row 4 */}
         <div className="col-span-6">
-          <Label className="text-xs text-slate-600">Khách hàng (Lead)</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs text-slate-600">Khách hàng (Lead)</Label>
+            {draft.lead_id != null && (
+              <button
+                type="button"
+                onClick={() => navigate(`/leads?lead=${draft.lead_id}`)}
+                className="text-[11px] text-primary hover:underline"
+              >
+                → Xem lead
+              </button>
+            )}
+          </div>
           <div className="mt-1">
             <LeadSelector
               leadId={draft.lead_id}

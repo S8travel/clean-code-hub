@@ -4,7 +4,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
+import { extraParentId } from "@/lib/dntt-gop-calc";
 import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
+import { resolveCanhDiemChiPhiTarget } from "@/lib/canh-diem-cascade";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
@@ -620,20 +622,41 @@ export function useSaveDieuTour() {
           .maybeSingle();
         if (!cpRow) return;
         const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
-        const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
-        if (activeDnttIds.length > 0) {
-          const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
-          throw new Error(
-            `Không thể xóa "${cdName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`
-          );
+
+        // Main + extras phát sinh ([dvps_<mainId>]) phải xóa CÙNG nhau. Extras có
+        // ref_doan_ngay_item_id = NULL → KHÔNG khớp query theo itemId ở trên; nếu
+        // chỉ xóa main, extras thành MỒ CÔI (vô hình trong app vì group theo id cha
+        // đã mất, nhưng vẫn lòi ở bản in Excel + cộng nhầm vào tổng tiền).
+        const { data: extraCandidates } = await externalSupabase
+          .from("doan_chi_phi")
+          .select("id, mo_ta, so_tien_da_tt")
+          .eq("doan_id", doanId)
+          .like("mo_ta", `[dvps_${cpRow.id}]%`);
+        const extraRows = (extraCandidates ?? []).filter(
+          (r) => extraParentId(r.mo_ta) === cpRow.id,
+        );
+
+        // Pre-check DNTT + đã-trả cho CẢ main lẫn extras TRƯỚC khi xóa bất kỳ dòng nào.
+        for (const r of [cpRow, ...extraRows]) {
+          const rName = r.mo_ta || cdName;
+          const activeDnttIds = await getActiveDnttIdsForChiPhi(r.id);
+          if (activeDnttIds.length > 0) {
+            const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
+            throw new Error(
+              `Không thể xóa "${rName}" — đã có ĐNTT (${dnttIds}). Hủy ĐNTT trước khi xóa khỏi tour.`
+            );
+          }
+          // Đã trả tiền nhưng ĐNTT đã hủy (so_tien_da_tt > 0) → vẫn chặn xóa (mất dấu đã trả).
+          if (Number(r.so_tien_da_tt ?? 0) > 0) {
+            throw new Error(
+              `Không thể xóa "${rName}" — đã thanh toán. Xử lý công nợ/hoàn tiền trước khi gỡ khỏi tour.`
+            );
+          }
         }
-        // Đã trả tiền nhưng ĐNTT đã hủy (so_tien_da_tt > 0) → vẫn chặn xóa (mất dấu đã trả).
-        if (Number(cpRow.so_tien_da_tt ?? 0) > 0) {
-          throw new Error(
-            `Không thể xóa "${cdName}" — đã thanh toán. Xử lý công nợ/hoàn tiền trước khi gỡ khỏi tour.`
-          );
-        }
-        await externalSupabase.from("doan_chi_phi").delete().eq("id", cpRow.id);
+        await externalSupabase
+          .from("doan_chi_phi")
+          .delete()
+          .in("id", [cpRow.id, ...extraRows.map((r) => r.id)]);
       };
 
       // 1. Update doan fields
@@ -989,14 +1012,31 @@ export function useSaveDieuTour() {
             // Dedupe cross-nhóm: tìm existing theo (doan_id, danh_muc, ngay_so, mo_ta)
             // thay vì ref_doan_ngay_item_id (vì mỗi nhóm có item.id riêng).
             // Đọc foc snapshot để update tính lại tien đúng (snapshot LOCK per-tour).
-            const { data: existing } = await externalSupabase
+            const cdCpCols =
+              "id, so_luong, don_gia, is_overridden, foc_khach_snapshot, foc_mien_snapshot";
+            const { data: existingByMoTa } = await externalSupabase
               .from("doan_chi_phi")
-              .select("id, so_luong, don_gia, is_overridden, foc_khach_snapshot, foc_mien_snapshot")
+              .select(cdCpCols)
               .eq("doan_id", doanId)
               .eq("danh_muc", "canh_diem")
               .eq("ngay_so", day.ngay_so)
               .eq("mo_ta", moTa)
               .maybeSingle();
+            // Fallback theo ref_doan_ngay_item_id (đúng cột UNIQUE) — bắt case ĐỔI TÊN
+            // cảnh điểm: mo_ta đổi mà ref giữ → dedupe mo_ta trượt → nếu INSERT sẽ đụng
+            // UNIQUE (...ref_doan_ngay_item_id). Lấy lại dòng cũ để UPDATE (set mo_ta mới).
+            let existingByRef = null as typeof existingByMoTa;
+            if (!existingByMoTa) {
+              ({ data: existingByRef } = await externalSupabase
+                .from("doan_chi_phi")
+                .select(cdCpCols)
+                .eq("doan_id", doanId)
+                .eq("danh_muc", "canh_diem")
+                .eq("ngay_so", day.ngay_so)
+                .eq("ref_doan_ngay_item_id", item.id)
+                .maybeSingle());
+            }
+            const existing = resolveCanhDiemChiPhiTarget(existingByMoTa, existingByRef);
 
             if (existing) {
               if (existing.is_overridden) {

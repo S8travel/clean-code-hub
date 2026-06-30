@@ -44,6 +44,9 @@ export interface BaoGiaKetQua {
   case_20: BaoGiaCase;
   gia_trung_binh_vnd: number;
   gia_trung_binh_usd: number;
+  // Ma trận giá nhiều bậc — danh sách SỐ KHÁCH mỗi bậc. Vắng/rỗng → mặc định
+  // [16, 20] (back-compat 2 mức cũ). Giá mỗi bậc tính live qua calcTiers.
+  tier_guests?: number[];
 }
 
 export interface BaoGiaRow {
@@ -93,6 +96,22 @@ export function useBaoGiaList() {
   });
 }
 
+export function useBaoGiaByLead(leadId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["bao_gia", "by-lead", leadId],
+    enabled: !!leadId,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("bao_gia")
+        .select("*")
+        .eq("lead_id", leadId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as BaoGiaRow[];
+    },
+  });
+}
+
 export function useBaoGia(id?: number) {
   return useQuery({
     queryKey: ["bao_gia", id],
@@ -115,6 +134,50 @@ export function useCreateBaoGia() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: Omit<Partial<BaoGiaRow>, "id" | "created_at">) => {
+      const { data, error } = await externalSupabase
+        .from("bao_gia")
+        .insert(payload as unknown as TablesInsert<"bao_gia">)
+        .select("id")
+        .single();
+      if (error) throw error;
+      return data as { id: number };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bao_gia"] });
+    },
+  });
+}
+
+// Nhân bản 1 báo giá → bản nháp mới (giữ lịch trình + giá + ma trận bậc).
+// ma_bg/id/created_at để DB tự sinh; trạng thái về draft; gắn lead mới (hoặc bỏ trống).
+export function useCloneBaoGia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, leadId }: { id: number; leadId?: number | null }) => {
+      const { data: src, error: e1 } = await externalSupabase
+        .from("bao_gia")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (e1) throw e1;
+      const s = src as BaoGiaRow;
+      const payload: Omit<Partial<BaoGiaRow>, "id" | "created_at"> = {
+        tieu_de: s.tieu_de ? `${s.tieu_de} (sao chép)` : s.tieu_de,
+        noi_dung_goc: s.noi_dung_goc,
+        ket_qua: s.ket_qua,
+        exchange_rate: s.exchange_rate,
+        profit_usd: s.profit_usd,
+        ngay_di: s.ngay_di,
+        ngay_ve: s.ngay_ve,
+        ghi_chu: s.ghi_chu,
+        hieu_luc_ngay: s.hieu_luc_ngay,
+        xe_ten: s.xe_ten,
+        xe_gia: s.xe_gia,
+        phu_thu: s.phu_thu,
+        vcb_rate: s.vcb_rate,
+        trang_thai: "draft",
+        lead_id: leadId ?? null,
+      };
       const { data, error } = await externalSupabase
         .from("bao_gia")
         .insert(payload as unknown as TablesInsert<"bao_gia">)

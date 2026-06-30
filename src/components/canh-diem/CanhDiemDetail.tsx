@@ -13,6 +13,7 @@ import { Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import { useUpdateCanhDiem, useDeleteCanhDiem, type CanhDiem } from "@/hooks/use-canh-diem";
+import { errMsg } from "@/lib/error";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -96,8 +97,8 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
         },
       });
       toast.success("Đã lưu");
-    } catch {
-      toast.error("Lỗi khi lưu");
+    } catch (e) {
+      toast.error(errMsg(e) || "Lỗi khi lưu");
     }
   };
 

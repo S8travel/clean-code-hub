@@ -24,6 +24,11 @@ export interface AggCommitNHTarget {
   groupCongNoHT: number;
   paidDntt: DNTTRow | null;
   ngayDate: string | null;
+  /** Bữa của nhóm — để handleAggCommit dò extras (prefix [trua]/[toi]) + voucher 'mua'. */
+  bua_an: "trua" | "toi";
+  /** Phần delta được trả bằng voucher 'mua' (dòng phát sinh phủ voucher chưa-chốt).
+   *  Đã clamp ≤ delta. Cash thực phải trả = delta − voucherAmount − cấn trừ. */
+  voucherAmount: number;
 }
 
 interface Props {
@@ -100,6 +105,18 @@ export default function NHAggCommitModal({
                   </span>
                 </span>
               </div>
+              {target.delta > 0 && target.voucherAmount > 0 && (
+                <>
+                  <div className="flex justify-between text-purple-700">
+                    <span>{t("(−) Trả bằng voucher")}:</span>
+                    <span className="font-medium tabular-nums">{fmt(target.voucherAmount)} ₫</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-1">
+                    <span className="text-muted-foreground">{t("Cash thực phải trả")}:</span>
+                    <span className="font-semibold tabular-nums">{fmt(Math.max(0, target.delta - target.voucherAmount))} ₫</span>
+                  </div>
+                </>
+              )}
             </div>
             {target.nccName && (
               <div className="text-xs text-muted-foreground">
@@ -108,6 +125,8 @@ export default function NHAggCommitModal({
             )}
             {target.delta > 0 && target.nccId != null && (() => {
               const totalCt = canTru.reduce((s, x) => s + x.soTienCanTru, 0);
+              // Cấn trừ chỉ áp cho phần CASH (delta − voucher) — voucher không cấn trừ được.
+              const cashPortion = Math.max(0, target.delta - target.voucherAmount);
               return (
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">{t("Cấn trừ công nợ NCC (optional)")}</Label>
@@ -115,13 +134,13 @@ export default function NHAggCommitModal({
                     nccId={target.nccId}
                     value={canTru}
                     onChange={onCanTruChange}
-                    maxAmount={target.delta}
+                    maxAmount={cashPortion}
                   />
                   {totalCt > 0 && (
                     <p className="text-[10px] text-muted-foreground tabular-nums">
                       {t("DNTT sẽ tạo")}: <span className="font-medium text-foreground">{fmt(target.delta)} ₫</span>
                       {" · "}{t("Cấn trừ")}: <span className="font-medium text-amber-700">{fmt(totalCt)} ₫</span>
-                      {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt(target.delta - totalCt)} ₫</span>
+                      {" · "}{t("Cash còn TT")}: <span className="font-medium text-foreground">{fmt(Math.max(0, cashPortion - totalCt))} ₫</span>
                     </p>
                   )}
                 </div>

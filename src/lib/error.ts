@@ -8,3 +8,13 @@ export function errMsg(err: unknown): string {
   }
   return "";
 }
+
+// FK violation Postgres (mã 23503) — vd gán nha_cung_cap_id/khach_san_id không tồn tại.
+export function isFkViolation(err: unknown): boolean {
+  return (
+    err != null &&
+    typeof err === "object" &&
+    "code" in err &&
+    (err as { code: unknown }).code === "23503"
+  );
+}

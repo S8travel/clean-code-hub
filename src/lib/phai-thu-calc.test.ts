@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computePhaiThu,
   parsePhaiThuExtras,
+  sumHdvExtrasVND,
   DAU_KHACH_DEFAULT_RATE,
   QUY_VP_DEFAULT_AMOUNT,
   TY_GIA_NDT_DEFAULT,
@@ -296,6 +297,36 @@ describe("computePhaiThu", () => {
     expect(vp.donViGoc).toBe("VND");
     expect(vp.tyGia).toBe(1);
     expect(vp.thanhTienVND).toBe(200000);
+  });
+});
+
+describe("sumHdvExtrasVND", () => {
+  it("đoàn null/undefined hoặc không có extras → 0", () => {
+    expect(sumHdvExtrasVND(null)).toBe(0);
+    expect(sumHdvExtrasVND(undefined)).toBe(0);
+    expect(sumHdvExtrasVND({})).toBe(0);
+  });
+
+  it("chỉ cộng extras HDV thu, quy ra VND; bỏ extras công ty thu", () => {
+    const total = sumHdvExtrasVND({
+      phai_thu_extras: [
+        { moTa: "Ống ngậm thở cano", soTien: 192, loaiTien: "NDT", tyGia: 800, nguoiThu: "hdv" }, // 153.600
+        { moTa: "Phụ phí VND", soTien: 50000, loaiTien: "VND", tyGia: 999, nguoiThu: "hdv" }, // VND ép tyGia=1 → 50.000
+        { moTa: "Công ty thu", soTien: 100, loaiTien: "NDT", tyGia: 800, nguoiThu: "cong_ty" }, // KHÔNG cộng
+      ],
+    });
+    expect(total).toBe(153_600 + 50_000);
+  });
+
+  it("bỏ extras soTien=0 hoặc tyGia=0 (mirror điều kiện show)", () => {
+    const total = sumHdvExtrasVND({
+      phai_thu_extras: [
+        { moTa: "rỗng", soTien: 0, loaiTien: "NDT", tyGia: 800, nguoiThu: "hdv" },
+        { moTa: "thiếu tỷ giá", soTien: 100, loaiTien: "NDT", tyGia: 0, nguoiThu: "hdv" },
+        { moTa: "ok", soTien: 10, loaiTien: "NDT", tyGia: 800, nguoiThu: "hdv" },
+      ],
+    });
+    expect(total).toBe(10 * 800);
   });
 });
 

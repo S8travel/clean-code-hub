@@ -71,9 +71,13 @@ export function docSoThanhChu(input: number): string {
 /**
  * Số tiền VND ra chữ, viết hoa chữ cái đầu + hậu tố "đồng".
  * Vd 13_000_000 → "Mười ba triệu đồng". 0 → "Không đồng".
+ * Số âm (vd quyết toán còn phải thu) → tiền tố "Âm":
+ *   -14_142_000 → "Âm mười bốn triệu một trăm bốn mươi hai nghìn đồng".
  */
 export function docTienBangChu(soTien: number): string {
-  const chu = docSoThanhChu(soTien);
+  const chu = docSoThanhChu(soTien); // docSoThanhChu đã lấy trị tuyệt đối
   const withDong = `${chu} đồng`;
+  // Âm: giữ "Âm" hoa, phần đọc số viết thường liền sau.
+  if (soTien < 0) return `Âm ${withDong}`;
   return withDong.charAt(0).toUpperCase() + withDong.slice(1);
 }

@@ -19,6 +19,7 @@ import {
 import { useCampaignList } from "@/hooks/use-lead-campaign";
 import { useUserRoles } from "@/hooks/use-doan";
 import { useReplaceDiemDen } from "@/hooks/use-lead-diem-den";
+import { useFindKhachHangByPhone, useCreateKhachHang } from "@/hooks/use-khach-hang";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { t, useTranslate } from "@/lib/i18n";
@@ -60,11 +61,18 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const replaceDiemDen = useReplaceDiemDen();
+  const createKhach = useCreateKhachHang();
 
   const [form, setForm] = useState<LeadInsert>({ ...EMPTY });
   const [danhSachDiemDen, setDanhSachDiemDen] = useState<string[]>([]);
   const [diemDenInput, setDiemDenInput] = useState("");
   const [useSpecificDate, setUseSpecificDate] = useState(true);
+  // Liên kết khách cũ (dedup theo SĐT) khi TẠO lead mới. Mặc định bật.
+  const [linkExisting, setLinkExisting] = useState(true);
+
+  // Tìm khách trùng SĐT — chỉ khi tạo mới (lead == null)
+  const khachMatches = useFindKhachHangByPhone(lead ? null : form.so_dien_thoai).data ?? [];
+  const khachMatch = khachMatches[0] ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -102,6 +110,7 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
       setUseSpecificDate(true);
     }
     setDiemDenInput("");
+    setLinkExisting(true);
   }, [open, lead, user?.user_id]);
 
   const set = <K extends keyof LeadInsert>(k: K, v: LeadInsert[K]) => setForm((p) => ({ ...p, [k]: v }));
@@ -128,8 +137,27 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
         leadId = lead.id;
         toast.success(t("Đã cập nhật lead"));
       } else {
+        // Dedup khách: liên kết khách cũ (nếu match SĐT + đang bật) hoặc tạo mới.
+        let khachHangId: number | null = null;
+        if (linkExisting && khachMatch?.id) {
+          khachHangId = khachMatch.id;
+        } else {
+          const kh = await createKhach.mutateAsync({
+            ho_ten: form.ho_ten.trim(),
+            loai: isB2B || (form.ten_to_chuc ?? "").trim() ? "to_chuc" : "ca_nhan",
+            so_dien_thoai: form.so_dien_thoai || null,
+            email: form.email || null,
+            facebook_url: form.facebook_url || null,
+            ten_to_chuc: form.ten_to_chuc || null,
+            chuc_vu: form.chuc_vu || null,
+            nguon_dau: form.nguon || null,
+            created_by: user?.user_id ?? null,
+            van_phong_id: user?.van_phong_id ?? null,
+          });
+          khachHangId = kh.id;
+        }
         const created = await createLead.mutateAsync({
-          ...form, created_by: user?.user_id ?? null,
+          ...form, khach_hang_id: khachHangId, created_by: user?.user_id ?? null,
         });
         leadId = created.id;
         toast.success(t("Đã tạo lead mới"));
@@ -189,6 +217,29 @@ export function LeadFormDrawer({ open, onClose, lead }: Props) {
               <Input value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} placeholder="abc@gmail.com" />
             </Field>
           </div>
+
+          {/* Dedup: gợi ý khách cũ trùng SĐT (chỉ khi tạo lead mới) */}
+          {!lead && khachMatch && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs space-y-1.5">
+              <p className="text-blue-800">
+                🔎 {t("Đã có khách trùng SĐT")}:{" "}
+                <span className="font-semibold">{khachMatch.ho_ten}</span>
+                {` · ${khachMatch.so_lead ?? 0} lead · ${khachMatch.so_doan ?? 0} đoàn`}
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={linkExisting}
+                  onChange={(e) => setLinkExisting(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                <span className="text-blue-700">
+                  {linkExisting ? t("Sẽ liên kết vào khách cũ này") : t("Tạo khách hàng mới riêng")}
+                </span>
+              </label>
+            </div>
+          )}
+
           <Field label="Facebook">
             <Input value={form.facebook_url ?? ""} onChange={(e) => set("facebook_url", e.target.value)}
               placeholder={t("https://facebook.com/... hoặc https://m.me/...")} />

@@ -67,30 +67,26 @@ export function useCongNoList(filters: CongNoFilters = {}) {
   });
 }
 
-// Lấy danh sách công nợ còn dư cho 1 NCC (để dùng cấn trừ)
+// Lấy danh sách công nợ còn dư cho 1 NCC (để dùng cấn trừ).
+// Qua RPC SECURITY DEFINER (bypass RLS van_phong_scope) để quỹ NCC doan_id=NULL
+// (voucher / trả trước) hiện cho cả OP điều hành — họ cần thấy để cấn trừ. Công nợ
+// gắn đoàn vẫn GIỮ scope VP trong RPC; RPC KHÔNG trả ghi_chu (tránh lộ mã đoàn chéo
+// VP). Xem migration 20260629_cong_no_can_tru_rpc.sql.
 export function useCongNoByNCC(nccId: number | null | undefined) {
   return useQuery({
     queryKey: ["cong-no-by-ncc", nccId],
     enabled: !!nccId,
     queryFn: async () => {
-      const { data, error } = await externalSupabase
-        .from("cong_no_with_status")
-        .select(`
-          *,
-          doan:doan_id(ten_doan)
-        `)
-        .eq("nha_cung_cap_id", nccId!)
-        .eq("trang_thai", "con_du")
-        .gt("so_tien_con_lai", 0)
-        .order("created_at", { ascending: false });
+      const { data, error } = await externalSupabase.rpc("cong_no_kha_dung_cho_ncc", {
+        p_ncc_id: nccId!,
+      });
       if (error) throw error;
-      return (data || []).map((row) => {
-        const r = row as typeof row & { doan?: { ten_doan?: string | null } | null };
-        return {
-          ...r,
-          ten_doan: r.doan?.ten_doan || "",
-        };
-      }) as CongNoRow[];
+      return (data ?? []).map((r) => ({
+        ...r,
+        so_tien_con_lai: Number(r.so_tien_con_lai) || 0,
+        ten_doan: r.ten_doan || "",
+        ghi_chu: null,
+      })) as unknown as CongNoRow[];
     },
   });
 }
@@ -190,52 +186,57 @@ export function useCreatePrepaidDNTT() {
   });
 }
 
-// Append log vào ghi_chu của cong_no
+// Append log cấn trừ vào ghi_chu cong_no + tự flip 'da_can_tru' khi cạn.
+// Qua RPC SECURITY DEFINER: cong_no có thể là quỹ NCC doan_id=NULL mà RLS
+// van_phong_scope chặn OP đọc/ghi trực tiếp. entry tính sẵn ở JS để khớp đúng
+// format mà removeCanTruLog parse (tránh drift khi rollback).
 export async function appendCanTruLog(
   congNoId: number,
   soTien: number,
   tenDoanMoi: string,
 ) {
-  const { data } = await externalSupabase
-    .from("cong_no")
-    .select("ghi_chu")
-    .eq("id", congNoId)
-    .single();
-
   const d = new Date();
   const dd = d.getDate().toString().padStart(2, "0");
   const mm = (d.getMonth() + 1).toString().padStart(2, "0");
   const yyyy = d.getFullYear();
   const entry = `${dd}/${mm}/${yyyy}: Cấn trừ ${soTien.toLocaleString("vi-VN")}đ → Đoàn ${tenDoanMoi}`;
-  const existing = data?.ghi_chu;
-  const newGhiChu = existing ? `${existing}\n${entry}` : entry;
-
-  await externalSupabase
-    .from("cong_no")
-    .update({ ghi_chu: newGhiChu })
-    .eq("id", congNoId);
+  const { error } = await externalSupabase.rpc("cong_no_ghi_can_tru", {
+    p_cong_no_id: congNoId,
+    p_log_entry: entry,
+  });
+  if (error) throw error;
 }
 
-// Xóa log cấn trừ tương ứng khi rollback (hủy ĐNTT có can_tru)
-// Tìm dòng đầu tiên match "Cấn trừ {soTien}đ → Đoàn {tenDoan}" và xóa
+// Flip cong_no→'da_can_tru' khi đã cạn sau khi thêm payment cấn trừ (không ghi log).
+// Dùng cho useCreatePayment(can_tru) — quỹ NCC doan_id=NULL bị RLS chặn ghi trực tiếp.
+export async function markCongNoCanTruIfExhausted(congNoId: number) {
+  const { error } = await externalSupabase.rpc("cong_no_ghi_can_tru", {
+    p_cong_no_id: congNoId,
+  });
+  if (error) throw error;
+}
+
+// Revert cong_no→'con_du' khi balance khôi phục (sau khi xóa payment cấn trừ).
+// Qua RPC SECURITY DEFINER vì quỹ NCC doan_id=NULL bị RLS chặn đọc/ghi trực tiếp.
+export async function revertCongNoIfRecovered(congNoId: number) {
+  const { error } = await externalSupabase.rpc("cong_no_hoan_can_tru", {
+    p_cong_no_id: congNoId,
+  });
+  if (error) throw error;
+}
+
+// Xóa log cấn trừ tương ứng khi rollback (hủy ĐNTT có can_tru) + revert 'con_du'
+// nếu balance khôi phục. Qua RPC SECURITY DEFINER (quỹ NCC doan_id=NULL bị RLS
+// chặn đọc/ghi trực tiếp). target tính ở JS — RPC gỡ dòng đầu tiên CHỨA chuỗi này.
 export async function removeCanTruLog(
   congNoId: number,
   soTien: number,
   tenDoan: string,
 ) {
-  const { data } = await externalSupabase
-    .from("cong_no")
-    .select("ghi_chu")
-    .eq("id", congNoId)
-    .single();
-  if (!data?.ghi_chu) return;
   const target = `Cấn trừ ${soTien.toLocaleString("vi-VN")}đ → Đoàn ${tenDoan}`;
-  const lines = data.ghi_chu.split("\n");
-  const idx = lines.findIndex((l) => l.includes(target));
-  if (idx < 0) return;
-  lines.splice(idx, 1);
-  await externalSupabase
-    .from("cong_no")
-    .update({ ghi_chu: lines.length > 0 ? lines.join("\n") : null })
-    .eq("id", congNoId);
+  const { error } = await externalSupabase.rpc("cong_no_hoan_can_tru", {
+    p_cong_no_id: congNoId,
+    p_log_match: target,
+  });
+  if (error) throw error;
 }

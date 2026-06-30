@@ -12,7 +12,8 @@ export interface DinhKyChiPhiRow {
   mo_ta: string | null;
   thanh_tien: number;
   thanh_tien_thuc_te: number | null;
-  so_tien_da_tt: number;
+  so_tien_da_tt: number;       // đã TRẢ (paid)
+  so_tien_da_dntt: number;     // đã ĐỀ NGHỊ (committed, gồm ĐNTT chưa trả) — chống đề nghị trùng
   trang_thai_thanh_toan: string;
   nha_cung_cap_id: number | null;
   ten_ncc: string | null;
@@ -31,7 +32,7 @@ export function useDinhKyChiPhiList(filters?: {
       // 1. Load chi phí định kỳ chưa thanh toán đủ
       let q = externalSupabase
         .from("doan_chi_phi")
-        .select("id, doan_id, danh_muc, mo_ta, thanh_tien, thanh_tien_thuc_te, so_tien_da_tt, trang_thai_thanh_toan, nha_cung_cap_id")
+        .select("id, doan_id, danh_muc, mo_ta, thanh_tien, thanh_tien_thuc_te, so_tien_da_tt, so_tien_da_dntt, trang_thai_thanh_toan, nha_cung_cap_id, ngoai_tour, ngoai_tour_ci")
         .eq("thanh_toan_dinh_ky", true)
         .not("trang_thai_thanh_toan", "eq", "paid")
         .not("trang_thai_dntt", "eq", "cong_no")
@@ -73,12 +74,15 @@ export function useDinhKyChiPhiList(filters?: {
           id: r.id,
           doan_id: r.doan_id ?? 0,
           ten_doan: doan.ten_doan ?? null,
-          ngay_kh_di: doan.ngay_di ?? null,
+          // KS ngoài tour: gom tháng/lọc theo đêm thực (ngoai_tour_ci) — đêm có
+          // thể ở tháng khác hẳn ngày đi đoàn. Fallback ngày đi đoàn nếu thiếu CI.
+          ngay_kh_di: (r.ngoai_tour && r.ngoai_tour_ci) ? r.ngoai_tour_ci : (doan.ngay_di ?? null),
           danh_muc: r.danh_muc ?? "",
           mo_ta: r.mo_ta,
           thanh_tien: r.thanh_tien ?? 0,
           thanh_tien_thuc_te: r.thanh_tien_thuc_te,
           so_tien_da_tt: r.so_tien_da_tt ?? 0,
+          so_tien_da_dntt: r.so_tien_da_dntt ?? 0,
           trang_thai_thanh_toan: r.trang_thai_thanh_toan ?? "unpaid",
           nha_cung_cap_id: r.nha_cung_cap_id,
           ten_ncc: ncc?.ten ?? null,

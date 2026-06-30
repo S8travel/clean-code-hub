@@ -44,10 +44,17 @@ const LOAI_TOUR_OPTS = [
   { value: "noi_dia", label: "Nội địa" },
 ] as const;
 
+// Kiểu gom khách — trục RIÊNG, khác loai_tour. Ghép → quản lý roster khách lẻ.
+const KIEU_GOM_OPTS = [
+  { value: "tron_goi", label: "Trọn gói" },
+  { value: "ghep", label: "Khách ghép" },
+] as const;
+
 const EMPTY_FORM: DoanInsert = {
   ten_doan: "",
   van_phong_id: null,
   loai_tour: null,
+  kieu_gom: null,
   thi_truong: null,
   agent_id: null,
   dia_diem_id: null,
@@ -83,9 +90,11 @@ interface Props {
   onClose: () => void;
   onSave: (data: DoanInsert) => void;
   isSaving: boolean;
+  /** Giá trị điền sẵn khi TẠO MỚI (doan=null) — vd chốt deal từ lead. */
+  prefill?: Partial<DoanInsert>;
 }
 
-export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
+export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: Props) {
   useTranslate();
   const [form, setForm] = useState<DoanInsert>({ ...EMPTY_FORM });
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -138,6 +147,7 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
         ten_doan: str(doan.ten_doan) || "",
         van_phong_id: num(doan.van_phong_id),
         loai_tour: (str(doan.loai_tour) ?? null) as DoanInsert["loai_tour"],
+        kieu_gom: str(doan.kieu_gom),
         thi_truong: str(doan.thi_truong),
         agent_id: num(doan.agent_id),
         dia_diem_id: num(doan.dia_diem_id),
@@ -162,11 +172,18 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
       setOriginalSeriId(seriId);
     } else {
       // Tạo mới: mặc định VP nhà của người tạo (OP 1 VP → cố định; cross-VP đổi được).
-      setForm({ ...EMPTY_FORM, assigned_to: null, seri_id: null, van_phong_id: defaultVanPhongId });
+      // prefill (vd chốt deal từ lead) ghi đè default — vẫn sửa được trên form.
+      setForm({
+        ...EMPTY_FORM,
+        assigned_to: null,
+        seri_id: null,
+        van_phong_id: defaultVanPhongId,
+        ...(prefill ?? {}),
+      });
       setOriginalSeriId(null);
     }
     setConflictLines(null);
-  }, [doan, open, currentUserId, defaultVanPhongId]);
+  }, [doan, open, currentUserId, defaultVanPhongId, prefill]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -316,6 +333,23 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving }: Props) {
                   <SelectContent>
                     <SelectItem value="none">{t("— Chưa phân loại —")}</SelectItem>
                     {LOAI_TOUR_OPTS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label={t("Kiểu gom khách")}>
+                <Select
+                  value={form.kieu_gom ?? "none"}
+                  onValueChange={(v) => set("kieu_gom", v === "none" ? null : v)}
+                >
+                  <SelectTrigger className="rounded-lg h-10">
+                    <span>{!form.kieu_gom ? t("— Chưa phân loại —") : t(KIEU_GOM_OPTS.find((o) => o.value === form.kieu_gom)?.label ?? "")}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("— Chưa phân loại —")}</SelectItem>
+                    {KIEU_GOM_OPTS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
                     ))}
                   </SelectContent>

@@ -18,12 +18,14 @@ interface CaseConfig {
   rooms: number;
 }
 
-const CASES: CaseConfig[] = [
-  { guests: 16, pax: 17, rooms: 9 },
-  { guests: 20, pax: 21, rooms: 11 },
-];
+/** Cấu hình 1 bậc giá từ số khách: pax = khách + 1 HDV, phòng = ceil(khách/2) + 1
+ *  (phòng twin + 1 phòng HDV). Khớp 2 mức cũ: 16→17pax/9phòng, 20→21pax/11phòng. */
+export function tierConfig(guests: number): CaseConfig {
+  const g = Math.max(1, Math.round(guests));
+  return { guests: g, pax: g + 1, rooms: Math.ceil(g / 2) + 1 };
+}
 
-function calcCase(
+export function calcCase(
   items: ManualItem[],
   soNgay: number,
   exchangeRate: number,
@@ -64,6 +66,32 @@ function calcCase(
   return { guests, pax, rooms, hotel, meal, ticket, transport, insurance, guide, tips, total_cost, profit_vnd, final_price_vnd, final_price_usd };
 }
 
+/** Tính 1 BaoGiaCase cho 1 số khách bất kỳ (1 bậc). */
+export function calcTier(
+  items: ManualItem[],
+  soNgay: number,
+  exchangeRate: number,
+  profitUsd: number,
+  guests: number,
+  tienXe = 0,
+  tienPhuThu = 0,
+): BaoGiaCase {
+  return calcCase(items, soNgay, exchangeRate, profitUsd, tierConfig(guests), tienXe, tienPhuThu);
+}
+
+/** Ma trận giá: 1 BaoGiaCase cho MỖI số khách trong danh sách (bậc tuỳ ý). */
+export function calcTiers(
+  items: ManualItem[],
+  soNgay: number,
+  exchangeRate: number,
+  profitUsd: number,
+  guestsList: number[],
+  tienXe = 0,
+  tienPhuThu = 0,
+): BaoGiaCase[] {
+  return guestsList.map((g) => calcTier(items, soNgay, exchangeRate, profitUsd, g, tienXe, tienPhuThu));
+}
+
 export function calcBaoGia(
   items: ManualItem[],
   tenChuongTrinh: string,
@@ -73,9 +101,8 @@ export function calcBaoGia(
   tienXe = 0,
   tienPhuThu = 0,
 ): BaoGiaKetQua {
-  const [case_16, case_20] = CASES.map((cfg) =>
-    calcCase(items, soNgay, exchangeRate, profitUsd, cfg, tienXe, tienPhuThu)
-  );
+  // 2 mức 16/20 (back-compat) — tái dùng engine bậc.
+  const [case_16, case_20] = calcTiers(items, soNgay, exchangeRate, profitUsd, [16, 20], tienXe, tienPhuThu);
 
   const gia_trung_binh_vnd = Math.round((case_16.final_price_vnd + case_20.final_price_vnd) / 2);
   const gia_trung_binh_usd = (case_16.final_price_usd + case_20.final_price_usd) / 2;

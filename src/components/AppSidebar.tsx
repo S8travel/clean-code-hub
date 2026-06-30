@@ -26,6 +26,7 @@ import {
   BarChart3,
   Target,
   Ticket,
+  Contact,
   ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -151,6 +152,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "KHÁCH HÀNG",
     items: [
       { title: "Lead", url: "/leads", icon: Users2, resource: "lead" },
+      { title: "Khách hàng", url: "/khach-hang", icon: Contact, resource: "lead" },
       { title: "Lead cần xử lý", url: "/viec-lead", icon: Target, resource: "lead" },
       { title: "Báo cáo Lead", url: "/leads/bao-cao", icon: BarChart3, resource: "bao_cao_lead", minRole: "giam_doc" },
     ],
