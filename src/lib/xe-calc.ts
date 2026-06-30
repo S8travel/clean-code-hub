@@ -20,3 +20,29 @@ export function calcXeThanhTien(soLuong: number, donGiaRaw: number, vatPct: numb
   const sl = Math.max(0, Number(soLuong) || 0);
   return applyVat(donGiaRaw, vatPct) * sl;
 }
+
+/** Loại xe master (xe / xe2) — phần field cần để resolve NCC. */
+export interface XeMasterLike {
+  /** id của nha_xe_loai_xe (= doan.xe_id / xe_id_2). */
+  id?: number | null;
+  nha_xe?: { nha_cung_cap_id?: number | null } | null;
+}
+
+/**
+ * NCC hiệu lực của 1 dòng chi phí xe khi IN ĐNTT / gộp theo nhà cung cấp.
+ *
+ * Dòng chi phí tạo TRƯỚC khi nhà xe được gắn NCC sẽ snapshot `nha_cung_cap_id = null`
+ * (gắn NCC vào nhà xe master KHÔNG sync ngược dòng cũ) → rơi vào nhóm "không NCC",
+ * tờ in mất tên NCC + STK. Fallback về NCC của nhà xe master (khớp theo `xe_id`)
+ * để vẫn gộp đúng + lấy STK. Ưu tiên `nha_cung_cap_id` của dòng nếu đã có (snapshot
+ * có chủ đích vẫn thắng).
+ */
+export function resolveXeNccId(
+  row: { nha_cung_cap_id?: number | null; xe_id?: number | null },
+  masters: ReadonlyArray<XeMasterLike | null | undefined>,
+): number | null {
+  if (row.nha_cung_cap_id != null) return row.nha_cung_cap_id;
+  if (row.xe_id == null) return null;
+  const m = masters.find((x) => x != null && x.id != null && x.id === row.xe_id);
+  return m?.nha_xe?.nha_cung_cap_id ?? null;
+}
