@@ -74,20 +74,26 @@ export function splitGroupCongNo(
  * - `effectiveDelta = aggDelta + groupCongNoTotal`: chênh lệch CÒN LẠI sau khi
  *   trừ phần công nợ/hoàn tiền ĐÃ ghi nhận. `= 0` nghĩa là đã xử lý xong.
  *   (Cộng vì công nợ đã ghi nhận làm "thu hẹp" khoảng lệch về 0.)
- * - `effectiveCommitted = sumCommitted − groupCongNoTotal`: số tiền ĐNTT đã cam
- *   kết, trừ phần đã chuyển thành công nợ.
+ * - `effectiveCommitted = sumCommitted − groupCongNoTotal − voucherKhoRefund`: số
+ *   tiền ĐNTT đã cam kết, trừ phần đã chuyển công nợ + phần voucher hoàn về kho.
+ * - `voucherKhoRefund` (mặc định 0): phần payment 'voucher' GIỮ-LẠI vượt giá trị
+ *   phủ thực khi giảm vé trên ĐNTT đã trả đủ (= vé trả về kho). KHÔNG phải cash
+ *   công ty còn phải cân → trừ khỏi CẢ "đã trả" lẫn "cam kết" để lệch chỉ còn cash
+ *   thật (boat voucher tự loại). NH truyền vào; DV/KS để mặc định 0 → KHÔNG đổi.
  */
 export function calcAggregateDelta(input: {
   sumActual: number;
   sumPaid: number;
   sumCommitted: number;
   groupCongNoTotal: number;
+  voucherKhoRefund?: number;
 }): { aggDelta: number; effectiveDelta: number; effectiveCommitted: number } {
-  const aggDelta = input.sumActual - input.sumPaid;
+  const khoRefund = Math.max(0, input.voucherKhoRefund ?? 0);
+  const aggDelta = input.sumActual - (input.sumPaid - khoRefund);
   return {
     aggDelta,
     effectiveDelta: aggDelta + input.groupCongNoTotal,
-    effectiveCommitted: input.sumCommitted - input.groupCongNoTotal,
+    effectiveCommitted: input.sumCommitted - input.groupCongNoTotal - khoRefund,
   };
 }
 

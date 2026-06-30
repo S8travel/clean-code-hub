@@ -122,6 +122,33 @@ describe("calcAggregateDelta", () => {
     const r = calcAggregateDelta({ sumActual: 1_000_000, sumPaid: 1_000_000, sumCommitted: 1_000_000, groupCongNoTotal: 0 });
     expect(r).toEqual({ aggDelta: 0, effectiveDelta: 0, effectiveCommitted: 1_000_000 });
   });
+
+  it("voucherKhoRefund loại phần boat khỏi lệch — case Sea Octopus đoàn 79", () => {
+    // sumActual nhóm 35.667.600; đã trả 38.197.200 (voucher giữ 23.587.200); cam kết 38.197.200.
+    // voucherKhoRefund = 1.209.600 (vé về kho) → lệch CHỈ còn cash extras −1.320.000, KHÔNG dính boat.
+    const r = calcAggregateDelta({
+      sumActual: 35_667_600, sumPaid: 38_197_200, sumCommitted: 38_197_200,
+      groupCongNoTotal: 0, voucherKhoRefund: 1_209_600,
+    });
+    expect(r.aggDelta).toBe(-1_320_000);     // thừa cash thật (KHÔNG còn −2.529.600)
+    expect(r.effectiveDelta).toBe(-1_320_000);
+    expect(r.effectiveCommitted).toBe(36_987_600); // badge = 35.667.600 − 36.987.600 = −1.320.000
+  });
+
+  it("voucherKhoRefund + đã ghi công nợ phần cash → effectiveDelta về 0 (sạch)", () => {
+    const r = calcAggregateDelta({
+      sumActual: 35_667_600, sumPaid: 38_197_200, sumCommitted: 38_197_200,
+      groupCongNoTotal: 1_320_000, voucherKhoRefund: 1_209_600,
+    });
+    expect(r.effectiveDelta).toBe(0);
+    expect(r.effectiveCommitted).toBe(35_667_600); // = sumActual → badge 0
+  });
+
+  it("voucherKhoRefund mặc định 0 (DV/KS không truyền) → hành vi cũ", () => {
+    const r = calcAggregateDelta({ sumActual: 800_000, sumPaid: 1_000_000, sumCommitted: 1_000_000, groupCongNoTotal: 0 });
+    expect(r.aggDelta).toBe(-200_000);
+    expect(r.effectiveCommitted).toBe(1_000_000);
+  });
 });
 
 // ─── calcDnttMismatch ────────────────────────────────────────────────────────

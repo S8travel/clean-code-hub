@@ -14,7 +14,7 @@ import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments"
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useRedemptionsByDoan, useRedeemVoucher, useUndoRedemption, useUpdateRedemption, useVoucherStockByIds, type VoucherRow } from "@/hooks/use-voucher";
-import { buildRedemptionMap, resolveVoucherPrintAmount, sumGroupVoucherMua, buildAggAllocations, splitVoucherCoverage, calcVoucherEditDelta, calcCoveredSoKhachEdit } from "@/lib/voucher";
+import { buildRedemptionMap, resolveVoucherPrintAmount, sumGroupVoucherMua, buildAggAllocations, splitVoucherCoverage, calcVoucherEditDelta, calcCoveredSoKhachEdit, calcMuaVoucherPaymentSync } from "@/lib/voucher";
 import type { VoucherTarget } from "./DungVoucherModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -1253,11 +1253,12 @@ export function useNHSection({
   // Kẹp payment ≤ phần ĐNTT chưa trả (chống overpay). Trả cờ + chi_phi cần recalc.
   const syncMuaVoucherPayment = async (
     chiPhiId: number, isExtra: boolean, coverMoi: number, coverCu: number,
-  ): Promise<{ cashTopUp: boolean; payClamped: boolean; needsFooterCommit: boolean; recalcIds: number[] }> => {
+  ): Promise<{ cashTopUp: boolean; payClamped: boolean; needsFooterCommit: boolean; overpaidFromKho: number; recalcIds: number[] }> => {
     const recalcIds = new Set<number>([chiPhiId]);
     let cashTopUp = false;
     let payClamped = false;
     let needsFooterCommit = false;
+    let overpaidFromKho = 0;
     const dnttIds = isExtra
       ? [...new Set(((await externalSupabase
           .from("dntt_allocations").select("dntt_id").eq("chi_phi_id", chiPhiId)).data ?? [])
@@ -1279,32 +1280,43 @@ export function useNHSection({
           ? p.ghi_chu === tag
           : !(typeof p.ghi_chu === "string" && p.ghi_chu.startsWith("voucher:chi_phi:")));
       const ourPays = (pays ?? []).filter(isOurVoucherPay);
+      const ourVoucherPaidCu = ourPays.reduce((s, p) => s + Number(p.so_tien), 0);
       const otherSum = (pays ?? [])
         .filter((p) => !isOurVoucherPay(p))
         .reduce((s, p) => s + Number(p.so_tien), 0);
       const dnttSoTien = dnttIds.reduce(
         (s, id) => s + Number(dnttList.find((x) => x.id === id)?.so_tien ?? 0), 0);
-      const capacity = Math.max(0, dnttSoTien - otherSum);
-      const clampedPay = Math.max(0, Math.min(coverMoi, capacity));
-      payClamped = clampedPay < coverMoi;
-      const targetDnttId = ourPays[0]?.dntt_id ?? dnttIds[0];
 
-      if (ourPays.length > 0) {
-        await externalSupabase.from("payments").delete().in("id", ourPays.map((p) => p.id));
+      const sync = calcMuaVoucherPaymentSync({
+        coverMoi, coverCu, dnttSoTien, otherPaidSum: otherSum, ourVoucherPaidCu,
+      });
+      payClamped = sync.payClamped;
+      overpaidFromKho = sync.overpaidFromKho;
+
+      if (sync.keepPaid) {
+        // GIỮ payment voucher cũ → ĐNTT đứng yên 'paid' (không phantom "Chờ UNC").
+        // Phần giảm = vé TRẢ VỀ KHO; footer aggregate (qua voucherKhoRefund) lo phần
+        // cash thừa thật. KHÔNG DELETE+INSERT.
+        cashTopUp = false;
+      } else {
+        const targetDnttId = ourPays[0]?.dntt_id ?? dnttIds[0];
+        if (ourPays.length > 0) {
+          await externalSupabase.from("payments").delete().in("id", ourPays.map((p) => p.id));
+        }
+        if (sync.newVoucherPay > 0) {
+          await externalSupabase.from("payments").insert({
+            dntt_id: targetDnttId, method: "voucher", so_tien: sync.newVoucherPay, nguon: "voucher",
+            ghi_chu: isExtra ? tag : "Thanh toán phần suất chính bằng voucher",
+          });
+        }
+        cashTopUp = coverMoi < coverCu; // giảm phủ (chưa trả đủ) → phần chênh phải trả cash
       }
-      if (clampedPay > 0) {
-        await externalSupabase.from("payments").insert({
-          dntt_id: targetDnttId, method: "voucher", so_tien: clampedPay, nguon: "voucher",
-          ghi_chu: isExtra ? tag : "Thanh toán phần suất chính bằng voucher",
-        });
-      }
-      cashTopUp = coverMoi < coverCu; // giảm phủ → phần chênh phải trả cash
 
       const { data: affected } = await externalSupabase
         .from("dntt_allocations").select("chi_phi_id").in("dntt_id", dnttIds);
       (affected ?? []).forEach((a) => { if (a.chi_phi_id != null) recalcIds.add(a.chi_phi_id); });
     }
-    return { cashTopUp, payClamped, needsFooterCommit, recalcIds: [...recalcIds] };
+    return { cashTopUp, payClamped, needsFooterCommit, overpaidFromKho, recalcIds: [...recalcIds] };
   };
 
   // ── Sửa số vé voucher TẠI CHỖ (tăng/giảm) — không hoàn trả toàn bộ ──────────
