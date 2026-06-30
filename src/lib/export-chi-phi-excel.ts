@@ -338,11 +338,25 @@ function isActiveDntt(row: DNTTRow): boolean {
   );
 }
 
-function getActualSummaryValue(row: ChiPhiRow): number {
-  if (row.danh_muc === "khach_san" || row.danh_muc === "nha_hang") {
-    return row.thanh_tien_thuc_te ?? row.thanh_tien ?? 0;
-  }
-  return row.tien_cong_ty || 0;
+// Tổng NET của 1 chi phí = số THỰC trả (sau chiết khấu NH + gồm cả phần HDV).
+// KHÁC row.thanh_tien (GENERATED = don_gia*so_luong = GROSS, chưa trừ chiết khấu).
+// Khớp ChiPhiTab: total = Σ(tien_cong_ty + tien_hdv).
+export function getChiPhiNetBase(row: ChiPhiRow): number {
+  return (row.tien_cong_ty || 0) + (row.tien_hdv || 0);
+}
+
+// "Thực tế" NET của 1 chi phí: ưu tiên điều chỉnh (thanh_tien_thuc_te), else NET base.
+// Khớp ChiPhiTab dòng 155-157.
+export function getChiPhiThucTe(row: ChiPhiRow): number {
+  return row.thanh_tien_thuc_te ?? getChiPhiNetBase(row);
+}
+
+// "Thực tế" cho bảng "TỔNG HỢP CÔNG TY THANH TOÁN" (chỉ phần CÔNG TY trả).
+// thanh_tien_thuc_te (điều chỉnh) đã là số công ty trả thật; chưa có → = tien_cong_ty.
+// KHÔNG dùng row.thanh_tien (gross: gồm phần HDV + chưa trừ chiết khấu NH) → trước đây
+// làm Nhà hàng "Thực tế" phình lên cả chiết khấu lẫn phần HDV.
+export function getActualSummaryValue(row: ChiPhiRow): number {
+  return row.thanh_tien_thuc_te ?? (row.tien_cong_ty || 0);
 }
 
 function sumBy(rows: ChiPhiRow[], predicate: (row: ChiPhiRow) => boolean, selector: (row: ChiPhiRow) => number): number {
@@ -1227,11 +1241,16 @@ function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
 
 function buildChiTietSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows } = params;
-  const totalSoLuong = chiPhiRows.reduce((sum, row) => sum + (row.so_luong || 0), 0);
-  const totalThanhTien = chiPhiRows.reduce((sum, row) => sum + (row.thanh_tien || 0), 0);
-  const totalThucTe = chiPhiRows.reduce((sum, row) => sum + (row.thanh_tien_thuc_te ?? row.thanh_tien ?? 0), 0);
-  const totalCongTy = chiPhiRows.reduce((sum, row) => sum + (row.tien_cong_ty || 0), 0);
-  const totalHdv = chiPhiRows.reduce((sum, row) => sum + (row.tien_hdv || 0), 0);
+  // Tổng CHỈ tính dòng active (loại cong_no/hoan_tien) — khớp màn hình + sheet Tổng hợp.
+  // Dòng hủy vẫn HIỆN ở list để audit (cột "Tính dự trù" = Không), nhưng KHÔNG cộng tổng.
+  const activeRows = chiPhiRows.filter(isActiveChiPhi);
+  const totalSoLuong = activeRows.reduce((sum, row) => sum + (row.so_luong || 0), 0);
+  // Thành tiền + Thực tế dùng NET (sau chiết khấu NH) để khớp màn hình (155.172.291),
+  // KHÔNG dùng row.thanh_tien (gross).
+  const totalThanhTien = activeRows.reduce((sum, row) => sum + getChiPhiNetBase(row), 0);
+  const totalThucTe = activeRows.reduce((sum, row) => sum + getChiPhiThucTe(row), 0);
+  const totalCongTy = activeRows.reduce((sum, row) => sum + (row.tien_cong_ty || 0), 0);
+  const totalHdv = activeRows.reduce((sum, row) => sum + (row.tien_hdv || 0), 0);
 
   return {
     name: "Chi tiet chi phi",
@@ -1262,8 +1281,8 @@ function buildChiTietSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
         cell(row.mo_ta || "—"),
         cell(row.so_luong || 0, "number"),
         cell(row.don_gia || 0, "number"),
-        cell(row.thanh_tien || 0, "number"),
-        cell(row.thanh_tien_thuc_te ?? row.thanh_tien ?? 0, "number"),
+        cell(getChiPhiNetBase(row), "number"),
+        cell(getChiPhiThucTe(row), "number"),
         cell(row.tien_cong_ty || 0, "number"),
         cell(row.tien_hdv || 0, "number"),
         cell(getDnttStatusLabel(row.trang_thai_dntt)),
