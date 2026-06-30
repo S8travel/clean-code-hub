@@ -22,7 +22,7 @@ import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
-import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT } from "@/lib/xe-calc";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId } from "@/lib/xe-calc";
 import { externalSupabase } from "@/lib/supabase-external";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -139,6 +139,10 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
   const total = xeRows.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
   // Dòng xe công ty trả → mới in được ĐNTT (HDV trả thì không qua flow này).
   const companyXeRows = xeRows.filter((r) => r.tien_cong_ty > 0);
+  // In ĐNTT (tờ giấy, thanh toán trực tiếp) BỎ dòng "định kỳ": định kỳ trả gộp
+  // theo NCC qua ThanhToanDinhKyPage, không in tờ ĐNTT per-đoàn (tránh trả 2 lần).
+  // User bật/tắt nút "Định kỳ" trên từng dòng để chọn xe nào vào tờ in.
+  const printableXeRows = companyXeRows.filter((r) => !r.thanh_toan_dinh_ky);
 
   const xeLabel = mkXeLabel(xe, t);
   const xe2Label = mkXeLabel(xe2, t);
@@ -283,13 +287,16 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
   // mở DNTTNHPreviewModal để xem/sửa rồi xuất Word. Dùng cho đoàn thanh toán xe
   // trực tiếp (cần tờ ĐNTT giấy, không bắt buộc qua flow duyệt).
   const handlePrintDNTT = async () => {
-    if (companyXeRows.length === 0) {
-      toast.warning(t("Không có dòng xe công ty trả để in ĐNTT"));
+    if (printableXeRows.length === 0) {
+      toast.warning(t("Không có dòng xe trả trực tiếp để in ĐNTT (dòng định kỳ trả qua thanh toán định kỳ)"));
       return;
     }
     try {
+      // NCC hiệu lực: dòng cũ nha_cung_cap_id=null (tạo trước khi gắn NCC nhà xe)
+      // → fallback NCC nhà xe master theo xe_id (xem resolveXeNccId) để vẫn lấy STK.
+      const rowNccId = (r: typeof printableXeRows[0]) => resolveXeNccId(r, [xe, xe2]);
       const nccIds = Array.from(
-        new Set(companyXeRows.map((r) => r.nha_cung_cap_id).filter((x): x is number => x != null)),
+        new Set(printableXeRows.map(rowNccId).filter((x): x is number => x != null)),
       );
       const nccMap: Record<number, { ten: string; so_tai_khoan?: string; ngan_hang?: string }> = {};
       if (nccIds.length > 0) {
@@ -310,10 +317,10 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
         ? ngayBatDau.slice(0, 10).split("-").reverse().join("/")
         : "";
 
-      // Gộp các dòng xe theo NCC (null → key 0) → 1 entry/NCC.
-      const groups = new Map<number, typeof companyXeRows>();
-      for (const r of companyXeRows) {
-        const key = r.nha_cung_cap_id ?? 0;
+      // Gộp các dòng xe theo NCC hiệu lực (null → key 0) → 1 entry/NCC.
+      const groups = new Map<number, typeof printableXeRows>();
+      for (const r of printableXeRows) {
+        const key = rowNccId(r) ?? 0;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(r);
       }
@@ -417,7 +424,7 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
         </div>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-xs text-muted-foreground">{t("Tổng:")} {fmt(total)} ₫</span>}
-          {companyXeRows.length > 0 && (
+          {printableXeRows.length > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handlePrintDNTT}>
               <Printer className="h-3.5 w-3.5" />
               {t("In ĐNTT")}

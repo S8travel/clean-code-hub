@@ -38,7 +38,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   ref,
 ) {
   useTranslate();
-  const s = useNHSection({ doanId, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan, doanNhomId });
+  const s = useNHSection({ doanId, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan, doanNhomId, locked });
   const {
     isLoading, meals, nhRowData, nhRowHandlers,
     selectedKeys, setSelectedKeys, chiPhiRows, dnttList, congNoList,

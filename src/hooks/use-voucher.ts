@@ -204,6 +204,49 @@ export function useRedeemVoucher() {
   });
 }
 
+// Sửa số vé/giá trị 1 lần dùng voucher (edit-in-place — KHÔNG xóa rồi tạo lại,
+// giữ id để không vỡ FK/tag payment). Side-effect đồng bộ chi_phi/payment nằm ở
+// NH section (handleEditVoucher).
+export function useUpdateRedemption() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id, so_luong, gia_tri,
+    }: { id: number; so_luong: number; gia_tri: number; voucherId?: number; doanId?: number | null }) => {
+      const { error } = await externalSupabase
+        .from("voucher_su_dung")
+        .update({ so_luong, gia_tri })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["voucher"] });
+      qc.invalidateQueries({ queryKey: ["voucher-by-ncc"] });
+      qc.invalidateQueries({ queryKey: ["voucher-stock"] });
+      if (vars.voucherId) qc.invalidateQueries({ queryKey: ["voucher-redemptions", vars.voucherId] });
+      if (vars.doanId) qc.invalidateQueries({ queryKey: ["voucher-su-dung-by-doan", vars.doanId] });
+    },
+  });
+}
+
+// Tồn kho (so_luong_con_lai) của một số voucher theo id — dùng cho popover "Sửa vé"
+// để kẹp trần khi tăng. queryKey sort ổn định để cache không vỡ theo thứ tự.
+export function useVoucherStockByIds(ids: number[]) {
+  const sorted = [...new Set(ids)].sort((a, b) => a - b);
+  return useQuery({
+    queryKey: ["voucher-stock", sorted],
+    enabled: sorted.length > 0,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("voucher_with_status")
+        .select("id, so_luong_con_lai")
+        .in("id", sorted);
+      if (error) throw error;
+      return (data || []) as { id: number; so_luong_con_lai: number }[];
+    },
+  });
+}
+
 export function useUndoRedemption() {
   const qc = useQueryClient();
   return useMutation({

@@ -4394,6 +4394,25 @@ export type Database = {
       }
     }
     Functions: {
+      cong_no_ghi_can_tru: {
+        Args: { p_cong_no_id: number; p_log_entry?: string }
+        Returns: undefined
+      }
+      cong_no_hoan_can_tru: {
+        Args: { p_cong_no_id: number; p_log_match?: string }
+        Returns: undefined
+      }
+      cong_no_kha_dung_cho_ncc: {
+        Args: { p_ncc_id: number }
+        Returns: {
+          doan_id: number
+          id: number
+          loai: string
+          ly_do: string
+          so_tien_con_lai: number
+          ten_doan: string
+        }[]
+      }
       create_lead_from_form: {
         Args: {
           p_diem_den?: string

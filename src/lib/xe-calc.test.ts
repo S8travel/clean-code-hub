@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT } from "./xe-calc";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId } from "./xe-calc";
 
 describe("applyVat", () => {
   it("VAT 8% mặc định", () => {
@@ -46,5 +46,39 @@ describe("calcXeThanhTien", () => {
 describe("XE_VAT_DEFAULT", () => {
   it("mặc định 8", () => {
     expect(XE_VAT_DEFAULT).toBe(8);
+  });
+});
+
+describe("resolveXeNccId", () => {
+  const xe1 = { id: 51, nha_xe: { nha_cung_cap_id: 419 } };
+  const xe2 = { id: 50, nha_xe: { nha_cung_cap_id: 426 } };
+
+  it("dòng có nha_cung_cap_id → giữ nguyên (snapshot có chủ đích thắng)", () => {
+    expect(resolveXeNccId({ nha_cung_cap_id: 999, xe_id: 51 }, [xe1, xe2])).toBe(999);
+  });
+
+  it("dòng null + xe_id khớp xe 1 → NCC nhà xe master 1", () => {
+    expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: 51 }, [xe1, xe2])).toBe(419);
+  });
+
+  it("dòng null + xe_id khớp xe 2 → NCC nhà xe master 2", () => {
+    expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: 50 }, [xe1, xe2])).toBe(426);
+  });
+
+  it("dòng null + xe_id không khớp master nào → null", () => {
+    expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: 77 }, [xe1, xe2])).toBe(null);
+  });
+
+  it("dòng null + xe_id null → null", () => {
+    expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: null }, [xe1, xe2])).toBe(null);
+  });
+
+  it("master thiếu nha_xe / nha_cung_cap_id → null", () => {
+    expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: 51 }, [{ id: 51, nha_xe: null }])).toBe(null);
+    expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: 51 }, [{ id: 51, nha_xe: { nha_cung_cap_id: null } }])).toBe(null);
+  });
+
+  it("master null/undefined trong mảng → bỏ qua an toàn", () => {
+    expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: 51 }, [null, undefined, xe1])).toBe(419);
   });
 });

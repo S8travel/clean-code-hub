@@ -13,8 +13,8 @@ import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dn
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
-import { useRedemptionsByDoan, useRedeemVoucher, useUndoRedemption, type VoucherRow } from "@/hooks/use-voucher";
-import { buildRedemptionMap, resolveVoucherPrintAmount, sumGroupVoucherMua, buildAggAllocations, splitVoucherCoverage } from "@/lib/voucher";
+import { useRedemptionsByDoan, useRedeemVoucher, useUndoRedemption, useUpdateRedemption, useVoucherStockByIds, type VoucherRow } from "@/hooks/use-voucher";
+import { buildRedemptionMap, resolveVoucherPrintAmount, sumGroupVoucherMua, buildAggAllocations, splitVoucherCoverage, calcVoucherEditDelta } from "@/lib/voucher";
 import type { VoucherTarget } from "./DungVoucherModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -36,13 +36,15 @@ interface NHSectionParams {
   tenDoan?: string;
   /** Filter theo nhóm — Phase 2+ */
   doanNhomId?: number | null;
+  /** Đoàn đã quyết toán → khóa sửa/gỡ voucher (trừ admin). */
+  locked?: boolean;
 }
 
 // Toàn bộ state + effect + handler của tab Chi phí Nhà hàng.
 // Tách verbatim từ ChiPhiNHSection — component chỉ còn phần render.
 export function useNHSection({
   doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "",
-  doanNhomId,
+  doanNhomId, locked = false,
 }: NHSectionParams) {
   const { data: nhData, isLoading } = useChiPhiNHSection(doanId, doanNhomId);
   const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId, doanNhomId);
@@ -55,7 +57,20 @@ export function useNHSection({
   const redemptionByChiPhiId = useMemo(() => buildRedemptionMap(redemptions), [redemptions]);
   const redeemMut = useRedeemVoucher();
   const undoRedeemMut = useUndoRedemption();
+  const updateRedeemMut = useUpdateRedemption();
   const [voucherTarget, setVoucherTarget] = useState<VoucherTarget | null>(null);
+
+  // Tồn kho các voucher đang dùng cho đoàn → popover "Sửa vé" kẹp trần khi tăng.
+  const voucherIds = useMemo(
+    () => [...new Set(redemptions.map((r) => r.voucher_id))],
+    [redemptions],
+  );
+  const { data: voucherStocks = [] } = useVoucherStockByIds(voucherIds);
+  const voucherStockById = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const v of voucherStocks) m[v.id] = Number(v.so_luong_con_lai ?? 0);
+    return m;
+  }, [voucherStocks]);
 
   // Map dntt_id → tổng can_tru (cho hiển thị "Cấn trừ X" trên badge ĐNTT)
   const canTruByDnttId = useMemo(() => {
@@ -1218,7 +1233,156 @@ export function useNHSection({
     }
   };
 
+  // ── Sửa số vé voucher TẠI CHỖ (tăng/giảm) — không hoàn trả toàn bộ ──────────
+  // veMoi = 0 → fallback gỡ hẳn (CHECK so_luong>0 chặn redemption=0).
+  const handleEditVoucher = async (chiPhiId: number, veMoi: number) => {
+    if (locked) { toast.error("Đoàn đã quyết toán — không gỡ/sửa voucher."); return; }
+    const info = redemptionByChiPhiId[chiPhiId];
+    if (!info) return;
+    try {
+      const cpRow = chiPhiRows.find((c) => c.id === chiPhiId);
+      const isExtra = isNHExtra(cpRow?.mo_ta);
+
+      // Nguồn số khách tính tiền + đơn giá + CK để feed splitVoucherCoverage:
+      //  - suất chính: so_khach sau FOC (lấy từ localRows như handleRemoveVoucher)
+      //  - phát sinh: so_luong thô (không qua FOC) + CK snapshot
+      let soKhachThucTe = 0;
+      let donGia = 0;
+      let ckPct: number | null = null;
+      if (isExtra) {
+        soKhachThucTe = cpRow?.so_luong ?? 0;
+        donGia = cpRow?.don_gia ?? 0;
+        ckPct = cpRow?.chiet_khau_phan_tram_snapshot ?? null;
+      } else {
+        const rk = Object.keys(localRowsRef.current).find((key) => localRowsRef.current[key].id === chiPhiId);
+        const lrow = rk ? localRowsRef.current[rk] : null;
+        if (lrow) {
+          const nhM = nhData?.nhaHangMap[lrow.nha_hang_id];
+          const focR = resolveNHFoc(lrow, nhM);
+          soKhachThucTe = calcSoKhachThucTe(lrow.so_khach, focR.foc_khach, focR.foc_mien);
+          donGia = lrow.don_gia;
+          ckPct = lrow.chiet_khau_phan_tram ?? nhM?.chiet_khau_phan_tram ?? null;
+        }
+      }
+
+      // Tồn kho FRESH (không tin cache) để kẹp đúng khi tăng.
+      const { data: vstock } = await externalSupabase
+        .from("voucher_with_status").select("so_luong_con_lai").eq("id", info.voucherId).maybeSingle();
+      const tonKhoConLai = Number(vstock?.so_luong_con_lai ?? 0);
+
+      const d = calcVoucherEditDelta({
+        veCu: info.soVe, veMoi, soKhachThucTe, donGia, ckPct, loai: info.voucherLoai, tonKhoConLai,
+      });
+      if (d.route === "noop") return;
+      if (d.route === "remove") { await handleRemoveVoucher(chiPhiId); return; }
+
+      // ── route === 'edit' ──────────────────────────────────────────────────
+      // 1. Cập nhật voucher_su_dung (số vé + giá trị phủ). Kho tự tính lại qua view.
+      await updateRedeemMut.mutateAsync({
+        id: info.redemptionId, so_luong: d.veClamped, gia_tri: d.coverMoi,
+        voucherId: info.voucherId, doanId,
+      });
+
+      // 2. tien_cong_ty: chỉ TẶNG đổi (mua giữ full → deltaTienCongTy=0). Giữ
+      //    is_overridden như cũ (suất chính=true; extra do OP quản lý).
+      if (d.deltaTienCongTy !== 0) {
+        const { error } = await externalSupabase.from("doan_chi_phi").update({
+          tien_cong_ty: d.tienCongTyMoi, tien_hdv: 0, thanh_tien_thuc_te: null,
+        }).eq("id", chiPhiId);
+        if (error) throw error;
+      }
+
+      // 3. Đồng bộ payment 'voucher' — CHỈ voucher MUA (tặng không có payment).
+      let cashTopUp = false;
+      let payClamped = false;
+      let needsFooterCommit = false;
+      const recalcIds = new Set<number>([chiPhiId]);
+      if (info.voucherLoai === "mua") {
+        const dnttIds = isExtra
+          ? [...new Set(((await externalSupabase
+              .from("dntt_allocations").select("dntt_id").eq("chi_phi_id", chiPhiId)).data ?? [])
+              .map((a) => a.dntt_id as number))]
+          : dnttList
+              .filter((x) => x.ref_loai === "doan_chi_phi" && x.ref_id === chiPhiId
+                && x.trang_thai_duyet !== "da_huy" && x.trang_thai_duyet !== "tu_choi")
+              .map((x) => x.id);
+
+        if (dnttIds.length === 0) {
+          // Chưa chốt ĐNTT (vd dòng phát sinh chưa bấm footer) → chưa có payment để
+          // đồng bộ. ĐNTT tạo sau sẽ đọc giá trị voucher mới.
+          needsFooterCommit = true;
+        } else {
+          const tag = `voucher:chi_phi:${chiPhiId}`;
+          const { data: pays } = await externalSupabase
+            .from("payments").select("id, dntt_id, method, so_tien, ghi_chu").in("dntt_id", dnttIds);
+          const isOurVoucherPay = (p: { method: string; ghi_chu: string | null }) =>
+            p.method === "voucher" && (isExtra
+              ? p.ghi_chu === tag
+              : !(typeof p.ghi_chu === "string" && p.ghi_chu.startsWith("voucher:chi_phi:")));
+          const ourPays = (pays ?? []).filter(isOurVoucherPay);
+          const otherSum = (pays ?? [])
+            .filter((p) => !isOurVoucherPay(p))
+            .reduce((s, p) => s + Number(p.so_tien), 0);
+          const dnttSoTien = dnttIds.reduce(
+            (s, id) => s + Number(dnttList.find((x) => x.id === id)?.so_tien ?? 0), 0);
+          // Kẹp: payment voucher + các payment khác KHÔNG vượt so_tien ĐNTT (chống overpay).
+          const capacity = Math.max(0, dnttSoTien - otherSum);
+          const clampedPay = Math.max(0, Math.min(d.coverMoi, capacity));
+          payClamped = clampedPay < d.coverMoi;
+          const targetDnttId = ourPays[0]?.dntt_id ?? dnttIds[0];
+
+          if (ourPays.length > 0) {
+            await externalSupabase.from("payments").delete().in("id", ourPays.map((p) => p.id));
+          }
+          if (clampedPay > 0) {
+            await externalSupabase.from("payments").insert({
+              dntt_id: targetDnttId, method: "voucher", so_tien: clampedPay, nguon: "voucher",
+              ghi_chu: isExtra ? tag : "Thanh toán phần suất chính bằng voucher",
+            });
+          }
+          // Giảm voucher mua → phần chênh chuyển sang phải trả tiền mặt (footer aggregate).
+          cashTopUp = d.coverMoi < d.coverCu;
+
+          const { data: affected } = await externalSupabase
+            .from("dntt_allocations").select("chi_phi_id").in("dntt_id", dnttIds);
+          (affected ?? []).forEach((a) => { if (a.chi_phi_id != null) recalcIds.add(a.chi_phi_id); });
+        }
+      }
+
+      await recalcChiPhiStatus([...recalcIds]);
+      qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", doanId] });
+      qc.invalidateQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] });
+      qc.invalidateQueries({ queryKey: ["voucher"] });
+      qc.invalidateQueries({ queryKey: ["voucher-by-ncc"] });
+      qc.invalidateQueries({ queryKey: ["voucher-stock"] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", doanId] });
+      qc.invalidateQueries({ queryKey: ["payments-by-chi-phi", doanId] });
+      qc.invalidateQueries({ queryKey: ["payments-by-doan", doanId] });
+      qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", doanId] });
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
+      auditLog({
+        doan_id: doanId, action: "sua", table_name: "doan_chi_phi", record_id: chiPhiId,
+        mo_ta: `Sửa voucher ${info.voucherLoai === "tang" ? "(tặng)" : "(mua)"} ${info.soVe} → ${d.veClamped} vé `
+          + `(${d.coverCu.toLocaleString("vi-VN")} → ${d.coverMoi.toLocaleString("vi-VN")} ₫)`,
+      });
+      toast.success(`Đã sửa voucher: ${info.soVe} → ${d.veClamped} vé${d.clamped ? " (đã kẹp theo tồn kho/số khách)" : ""}`);
+      if (cashTopUp) {
+        toast.warning(`Giảm voucher → ${Math.abs(d.deltaCover).toLocaleString("vi-VN")} ₫ chuyển sang phải trả tiền mặt (ĐNTT hiện "Chờ UNC" hoặc nút "Thanh toán bổ sung" ở cuối nhóm).`, { duration: 6000 });
+      }
+      if (payClamped) {
+        toast.warning("Phần phủ thêm vượt phần ĐNTT chưa trả — đã kẹp. Kiểm tra công nợ nếu cần.", { duration: 6000 });
+      }
+      if (needsFooterCommit) {
+        toast.info("Voucher đã cập nhật. Bấm \"Thanh toán bổ sung\" ở cuối nhóm để chốt ĐNTT + ghi voucher.", { duration: 6000 });
+      }
+    } catch (err: unknown) {
+      toast.error("Lỗi: " + (errMsg(err) || "Không sửa được voucher"));
+    }
+  };
+
   const handleRemoveVoucher = async (chiPhiId: number) => {
+    if (locked) { toast.error("Đoàn đã quyết toán — không gỡ/sửa voucher."); return; }
     const info = redemptionByChiPhiId[chiPhiId];
     if (!info) return;
     try {
@@ -1539,7 +1703,7 @@ export function useNHSection({
   const nhRowData: NHRowData = {
     localRows, extrasMap, nhaHangMap, selectedKeys, dinhKyKeys,
     dnttList, paymentsList, congNoList, chiPhiRows, canTruByDnttId,
-    editingDnttId, editAmount, doanId, redemptionByChiPhiId,
+    editingDnttId, editAmount, doanId, redemptionByChiPhiId, voucherStockById,
     upsertPending: upsertMut.isPending,
     updateDNTTPending: updateDNTT.isPending,
   };
@@ -1553,6 +1717,7 @@ export function useNHSection({
     setAggCommit, setAggReason, setAggSurplusMode, setAggCanTru, setAggNgayCan,
     onOpenVoucher: (target) => setVoucherTarget(target),
     onRemoveVoucher: handleRemoveVoucher,
+    onEditVoucher: handleEditVoucher,
   };
 
   // ── DNTT modal derived ─────────────────────────────────────────────────────
