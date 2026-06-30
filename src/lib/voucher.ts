@@ -273,6 +273,51 @@ export function calcCoveredSoKhachEdit(params: {
 }
 
 /**
+ * Quyết định đồng bộ payment 'voucher' khi GIẢM/đổi giá trị phủ voucher 'mua'.
+ *
+ * Vấn đề: nếu ĐNTT ĐÃ trả đủ mà ta hạ payment voucher (coverMoi < coverCu) thì
+ * SUM(payments) tụt < so_tien → ĐNTT về 'partial' → đẻ "Chờ UNC" ẢO (thực ra
+ * giảm vé = vé TRẢ VỀ KHO, không phải công ty nợ thêm cash).
+ *
+ * Luật:
+ * - GIẢM phủ + ĐNTT đã trả đủ (paidBefore ≥ so_tien) → GIỮ NGUYÊN payment voucher
+ *   (`keepPaid`): ĐNTT đứng yên 'paid', không phantom. Phần giảm `overpaidFromKho`
+ *   = vé trả về kho; phần CASH thừa (nếu có) để footer aggregate ghi công nợ
+ *   (đã loại boat qua voucherKhoRefund trong calcAggregateDelta).
+ * - Còn lại (chưa trả đủ HOẶC tăng phủ) → clamp payment ≤ phần ĐNTT chưa trả
+ *   (logic cũ): phần chênh là cash thật.
+ *
+ * `overpaidFromKho` = coverCu − coverMoi khi keepPaid (chênh payment giữ-lại so với
+ * giá trị phủ thực) → cũng chính là voucherKhoRefund mà UI cần loại khỏi lệch.
+ */
+export function calcMuaVoucherPaymentSync(params: {
+  coverMoi: number;
+  coverCu: number;
+  dnttSoTien: number;
+  otherPaidSum: number;
+  ourVoucherPaidCu: number;
+}): { newVoucherPay: number; keepPaid: boolean; overpaidFromKho: number; payClamped: boolean } {
+  const reducing = params.coverMoi < params.coverCu;
+  const paidBefore = params.otherPaidSum + params.ourVoucherPaidCu;
+  if (reducing && paidBefore >= params.dnttSoTien) {
+    return {
+      newVoucherPay: params.ourVoucherPaidCu,
+      keepPaid: true,
+      overpaidFromKho: params.coverCu - params.coverMoi,
+      payClamped: false,
+    };
+  }
+  const capacity = Math.max(0, params.dnttSoTien - params.otherPaidSum);
+  const newVoucherPay = Math.max(0, Math.min(params.coverMoi, capacity));
+  return {
+    newVoucherPay,
+    keepPaid: false,
+    overpaidFromKho: 0,
+    payClamped: newVoucherPay < params.coverMoi,
+  };
+}
+
+/**
  * Allocation cho ĐNTT bổ sung (footer aggregate) khi nhóm có dòng phủ voucher 'mua'.
  * Allocate giá trị MỖI dòng phát sinh chưa-chốt về ĐÚNG chi_phi của nó (cả voucher
  * lẫn cash) → recalc quy `so_tien_da_dntt`/`so_tien_da_tt` về từng dòng (đúng trạng

@@ -8,6 +8,7 @@ import {
   splitVoucherCoverage,
   calcVoucherEditDelta,
   calcCoveredSoKhachEdit,
+  calcMuaVoucherPaymentSync,
   type RedemptionLike,
   type CoveredInfo,
 } from "./voucher";
@@ -404,5 +405,52 @@ describe("calcCoveredSoKhachEdit", () => {
     // full = applyChietKhau(20×172800, 5%) = 3.283.200; mua → tienCongTy = full
     expect(r.tienCongTy).toBe(3283200);
     expect(r.veNew).toBe(4);
+  });
+});
+
+describe("calcMuaVoucherPaymentSync", () => {
+  it("GIẢM phủ + ĐNTT ĐÃ trả đủ → keepPaid (giữ payment, vé về kho) — case Sea Octopus", () => {
+    // ĐNTT 38.197.200; đã trả: cash+cấn trừ 14.610.000 + voucher 23.587.200 = đủ.
+    // Giảm boat 23.587.200 → 22.377.600.
+    const r = calcMuaVoucherPaymentSync({
+      coverMoi: 22377600, coverCu: 23587200, dnttSoTien: 38197200,
+      otherPaidSum: 14610000, ourVoucherPaidCu: 23587200,
+    });
+    expect(r.keepPaid).toBe(true);
+    expect(r.newVoucherPay).toBe(23587200); // GIỮ NGUYÊN → ĐNTT đứng yên 'paid'
+    expect(r.overpaidFromKho).toBe(1209600); // = voucherKhoRefund UI loại khỏi lệch
+    expect(r.payClamped).toBe(false);
+  });
+
+  it("GIẢM phủ + ĐNTT CHƯA trả đủ → hạ payment (logic cũ, phần chênh là cash thật)", () => {
+    // ĐNTT 38.197.200; mới trả cash 5tr + voucher 23.587.200 = 28.587.200 < so_tien.
+    const r = calcMuaVoucherPaymentSync({
+      coverMoi: 22377600, coverCu: 23587200, dnttSoTien: 38197200,
+      otherPaidSum: 5000000, ourVoucherPaidCu: 23587200,
+    });
+    expect(r.keepPaid).toBe(false);
+    // capacity = 38.197.200 − 5.000.000 = 33.197.200 ≥ coverMoi → newVoucherPay = coverMoi
+    expect(r.newVoucherPay).toBe(22377600);
+    expect(r.overpaidFromKho).toBe(0);
+  });
+
+  it("TĂNG phủ → hạ/đặt payment theo coverMoi, clamp ≤ capacity", () => {
+    const r = calcMuaVoucherPaymentSync({
+      coverMoi: 25000000, coverCu: 22377600, dnttSoTien: 38197200,
+      otherPaidSum: 14610000, ourVoucherPaidCu: 22377600,
+    });
+    expect(r.keepPaid).toBe(false);
+    // capacity = 38.197.200 − 14.610.000 = 23.587.200 < coverMoi 25.000.000 → clamp
+    expect(r.newVoucherPay).toBe(23587200);
+    expect(r.payClamped).toBe(true);
+  });
+
+  it("GIẢM phủ + đã trả đúng bằng so_tien (paidBefore === dnttSoTien) → keepPaid", () => {
+    const r = calcMuaVoucherPaymentSync({
+      coverMoi: 100, coverCu: 200, dnttSoTien: 1000,
+      otherPaidSum: 800, ourVoucherPaidCu: 200,
+    });
+    expect(r.keepPaid).toBe(true);
+    expect(r.overpaidFromKho).toBe(100);
   });
 });

@@ -216,8 +216,20 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   );
   const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
   const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+  // voucherKhoRefund: payment 'voucher' GIỮ-LẠI vượt giá trị phủ thực (giảm vé trên
+  // ĐNTT đã trả đủ → vé về kho, không hạ payment). Loại khỏi lệch để boat voucher
+  // KHÔNG tính vào tiền thừa — chỉ phần cash (extras) mới cần ghi công nợ.
+  const groupChiPhiIds = groupChiPhi.map((cp) => cp.id).filter((x): x is number => x != null);
+  const groupVoucherPaid = paymentsList
+    .filter((p) => p.method === "voucher" && p.chi_phi_id != null && groupChiPhiIds.includes(p.chi_phi_id))
+    .reduce((s, p) => s + p.payment_so_tien, 0);
+  const groupVoucherGiaTri = groupChiPhiIds.reduce((s, id) => {
+    const r = redemptionByChiPhiId[id];
+    return r?.voucherLoai === "mua" ? s + r.giaTri : s;
+  }, 0);
+  const voucherKhoRefund = Math.max(0, groupVoucherPaid - groupVoucherGiaTri);
   const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
-    sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+    sumActual, sumPaid, sumCommitted, groupCongNoTotal, voucherKhoRefund,
   });
   const showAggBtn =
     nguoiTtMain === "cong_ty" &&
