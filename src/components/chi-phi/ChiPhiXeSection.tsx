@@ -22,7 +22,7 @@ import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
-import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId } from "@/lib/xe-calc";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId, resolveXeTaiKhoan } from "@/lib/xe-calc";
 import { externalSupabase } from "@/lib/supabase-external";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -344,8 +344,10 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
           foc: null,
           items,
           ncc,
-          // TK nhà xe theo đúng NCC của nhóm (gom cả 2 xe); không có → Word fallback ncc.
-          tai_khoan_thanh_toan: xeTkttByNcc[key] ?? null,
+          // TK nhà xe: ưu tiên lấy TRỰC TIẾP từ nhà xe master theo xe_id
+          // (resolveXeTaiKhoan) — nhà xe có TK nhưng KHÔNG gắn NCC vẫn hiện STK.
+          // Fallback theo NCC (xeTkttByNcc) rồi để Word fallback ncc.
+          tai_khoan_thanh_toan: resolveXeTaiKhoan(grows[0], [xe, xe2]) ?? xeTkttByNcc[key] ?? null,
           so_tien_coc: 0,
           can_tru: 0,
           so_tien_con_tt: totalCty,
