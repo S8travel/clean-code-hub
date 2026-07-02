@@ -102,6 +102,7 @@ type KhachSanWithNcc = Pick<
   Tables<"khach_san">,
   "id" | "foc_khach" | "foc_mien" | "dia_diem"
   | "nha_cung_cap_id" | "nguoi_thanh_toan" | "tai_khoan_thanh_toan"
+  | "thanh_toan_dinh_ky_mac_dinh"
 > & {
   ten: string;
   ten_ncc: string | null;
@@ -307,7 +308,7 @@ export function useChiPhiKSData(doanId?: number, doanNhomId?: number | null) {
 
       const { data: ksList, error: e2 } = await externalSupabase
         .from("khach_san")
-        .select("id, ten, foc_khach, foc_mien, dia_diem, nha_cung_cap_id, nguoi_thanh_toan, tai_khoan_thanh_toan")
+        .select("id, ten, foc_khach, foc_mien, dia_diem, nha_cung_cap_id, nguoi_thanh_toan, tai_khoan_thanh_toan, thanh_toan_dinh_ky_mac_dinh")
         .in("id", allKsIds);
       if (e2) throw e2;
 

@@ -2232,6 +2232,7 @@ export type Database = {
           tai_khoan_thanh_toan: string | null
           ten: string | null
           ten_zh: string | null
+          thanh_toan_dinh_ky_mac_dinh: boolean
           thong_tin_chung: string | null
           website: string | null
         }
@@ -2250,6 +2251,7 @@ export type Database = {
           tai_khoan_thanh_toan?: string | null
           ten?: string | null
           ten_zh?: string | null
+          thanh_toan_dinh_ky_mac_dinh?: boolean
           thong_tin_chung?: string | null
           website?: string | null
         }
@@ -2268,6 +2270,7 @@ export type Database = {
           tai_khoan_thanh_toan?: string | null
           ten?: string | null
           ten_zh?: string | null
+          thanh_toan_dinh_ky_mac_dinh?: boolean
           thong_tin_chung?: string | null
           website?: string | null
         }
