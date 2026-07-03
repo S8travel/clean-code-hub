@@ -31,6 +31,7 @@ import {
 } from "@/hooks/use-thanh-toan-dinh-ky";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
+import { resolveNccTaiKhoanText } from "@/lib/ncc-tai-khoan";
 import { errMsg } from "@/lib/error";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -124,6 +125,7 @@ interface NccGroup {
   nccTen: string;
   nccStk: string | null;
   nccNganHang: string | null;
+  nccTaiKhoanBlob: string | null; // ô "tài khoản thanh toán" (blob nhiều dòng)
   months: MonthGroup[]; // sort theo monthKey ASC
 }
 
@@ -186,7 +188,7 @@ export default function ThanhToanDinhKyPage() {
 
   // Group chi phí + DNTT by NCC → tháng (theo doan.ngay_di / dntt.ngay_di_min)
   const groupedByNccMonth = useMemo<NccGroup[]>(() => {
-    type Bucket = { ncc: Pick<NccGroup, "nccTen" | "nccStk" | "nccNganHang"> & { nccId: number | null }; months: Map<string, MonthGroup> };
+    type Bucket = { ncc: Pick<NccGroup, "nccTen" | "nccStk" | "nccNganHang" | "nccTaiKhoanBlob"> & { nccId: number | null }; months: Map<string, MonthGroup> };
     const map = new Map<string, Bucket>();
 
     const ensureNcc = (
@@ -195,11 +197,12 @@ export default function ThanhToanDinhKyPage() {
       nccTen: string,
       nccStk: string | null,
       nccNganHang: string | null,
+      nccTaiKhoanBlob: string | null,
     ): Bucket => {
       const ex = map.get(nccKey);
       if (ex) return ex;
       const fresh: Bucket = {
-        ncc: { nccId, nccTen, nccStk, nccNganHang },
+        ncc: { nccId, nccTen, nccStk, nccNganHang, nccTaiKhoanBlob },
         months: new Map(),
       };
       map.set(nccKey, fresh);
@@ -226,7 +229,7 @@ export default function ThanhToanDinhKyPage() {
     rows.forEach((r) => {
       const nccKey = String(r.nha_cung_cap_id ?? "khong_ncc");
       const monthKey = monthKeyFromDate(r.ngay_kh_di) ?? "khong_thang";
-      const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? t("Chưa có NCC"), r.ncc_so_tai_khoan, r.ncc_ngan_hang);
+      const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? t("Chưa có NCC"), r.ncc_so_tai_khoan, r.ncc_ngan_hang, r.ncc_tai_khoan_thanh_toan);
       const mg = ensureMonth(bucket, monthKey);
       mg.rows.push(r);
       const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
@@ -245,6 +248,7 @@ export default function ThanhToanDinhKyPage() {
         ten_ncc?: string | null;
         ncc_so_tai_khoan?: string | null;
         ncc_ngan_hang?: string | null;
+        ncc_tai_khoan_thanh_toan?: string | null;
       };
       const nccKey = String(d.nha_cung_cap_id ?? "khong_ncc");
       const minDate = d.ngay_di_min;
@@ -255,6 +259,7 @@ export default function ThanhToanDinhKyPage() {
         dNcc.ten_ncc || t("Chưa có NCC"),
         dNcc.ncc_so_tai_khoan || null,
         dNcc.ncc_ngan_hang || null,
+        dNcc.ncc_tai_khoan_thanh_toan || null,
       );
       ensureMonth(bucket, monthKey).dntts.push(d);
     });
@@ -272,6 +277,7 @@ export default function ThanhToanDinhKyPage() {
         nccTen: bucket.ncc.nccTen,
         nccStk: bucket.ncc.nccStk,
         nccNganHang: bucket.ncc.nccNganHang,
+        nccTaiKhoanBlob: bucket.ncc.nccTaiKhoanBlob,
         months: monthsArr,
       });
     });
@@ -343,6 +349,16 @@ export default function ThanhToanDinhKyPage() {
     const cocSuffix = batchMode === "partial" ? " (Cọc)" : "";
     const defaultMoTa = batchMoTa || `Thanh toán định kỳ – ${dialogCtx.nccTen} – ${dialogCtx.monthLabel}${cocSuffix}`;
 
+    // Snapshot tài khoản nhận tiền: ưu tiên ô "tài khoản thanh toán" (blob gộp
+    // sẵn tên+STK+ngân hàng) → gộp thành 1 dòng lưu vào so_tai_khoan, ngan_hang
+    // để null. Fallback 2 cột cấu trúc.
+    const acctRow = dialogCtx.rows[0];
+    const blob = acctRow?.ncc_tai_khoan_thanh_toan?.trim();
+    const snapshotStk = blob
+      ? resolveNccTaiKhoanText({ tai_khoan_thanh_toan: blob })
+      : (acctRow?.ncc_so_tai_khoan ?? null);
+    const snapshotBank = blob ? null : (acctRow?.ncc_ngan_hang ?? null);
+
     setSubmitting(true);
     try {
       await createBatch.mutateAsync({
@@ -352,6 +368,9 @@ export default function ThanhToanDinhKyPage() {
         allocations,
         soTien: batchEffectiveAmount,
         laCoc: batchMode === "partial",
+        tenNcc: dialogCtx.nccTen,
+        soTaiKhoan: snapshotStk,
+        nganHang: snapshotBank,
       });
       toast.success(t("Đã tạo đề nghị thanh toán định kỳ"));
       closeCreateDialog();
@@ -451,13 +470,19 @@ export default function ThanhToanDinhKyPage() {
       )}
 
       {/* Per-NCC card → group by tháng */}
-      {groupedByNccMonth.map((ncc) => (
+      {groupedByNccMonth.map((ncc) => {
+        const nccAcct = resolveNccTaiKhoanText({
+          so_tai_khoan: ncc.nccStk,
+          ngan_hang: ncc.nccNganHang,
+          tai_khoan_thanh_toan: ncc.nccTaiKhoanBlob,
+        });
+        return (
         <Card key={ncc.nccKey}>
           <CardHeader className="py-3 px-4">
             <CardTitle className="text-sm font-semibold">{ncc.nccTen}</CardTitle>
-            {ncc.nccStk && (
+            {nccAcct && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                {t("STK:")} {ncc.nccStk} · {ncc.nccNganHang || "—"}
+                {t("STK:")} {nccAcct}
               </p>
             )}
           </CardHeader>
@@ -469,12 +494,14 @@ export default function ThanhToanDinhKyPage() {
                 nccTen={ncc.nccTen}
                 nccStk={ncc.nccStk}
                 nccNganHang={ncc.nccNganHang}
+                nccTaiKhoanBlob={ncc.nccTaiKhoanBlob}
                 onCreateDNTT={() => openCreateDialogForMonth(ncc, mg)}
               />
             ))}
           </CardContent>
         </Card>
-      ))}
+        );
+      })}
 
       {/* Dialog tạo ĐNTT theo tháng */}
       <Dialog open={!!dialogCtx} onOpenChange={(v) => { if (!v) closeCreateDialog(); }}>
@@ -496,13 +523,20 @@ export default function ThanhToanDinhKyPage() {
                   <span className="text-muted-foreground">{t("Tổng còn lại của tháng")}</span>
                   <span className="font-semibold text-orange-600">{fmt(dialogTotalConLai)} ₫</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t("Chuyển đến")}</span>
-                  {dialogCtx.rows[0]?.ncc_so_tai_khoan ? (
-                    <span>{dialogCtx.rows[0].ncc_so_tai_khoan} · {dialogCtx.rows[0].ncc_ngan_hang || "—"}</span>
-                  ) : (
-                    <span className="text-amber-700 italic">{t("Chưa có TK — cập nhật trong Quản lý NCC")}</span>
-                  )}
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground shrink-0">{t("Chuyển đến")}</span>
+                  {(() => {
+                    const acct = resolveNccTaiKhoanText({
+                      so_tai_khoan: dialogCtx.rows[0]?.ncc_so_tai_khoan,
+                      ngan_hang: dialogCtx.rows[0]?.ncc_ngan_hang,
+                      tai_khoan_thanh_toan: dialogCtx.rows[0]?.ncc_tai_khoan_thanh_toan,
+                    });
+                    return acct ? (
+                      <span className="text-right">{acct}</span>
+                    ) : (
+                      <span className="text-amber-700 italic text-right">{t("Chưa có TK — cập nhật trong Quản lý NCC")}</span>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -629,12 +663,14 @@ function MonthGroupCard({
   nccTen,
   nccStk,
   nccNganHang,
+  nccTaiKhoanBlob,
   onCreateDNTT,
 }: {
   monthGroup: MonthGroup;
   nccTen: string;
   nccStk: string | null;
   nccNganHang: string | null;
+  nccTaiKhoanBlob: string | null;
   onCreateDNTT: () => void;
 }) {
   useTranslate();
@@ -657,11 +693,15 @@ function MonthGroupCard({
         const [y, m] = monthGroup.monthKey.split("-");
         noiDung = `Thanh toán công nợ tháng ${parseInt(m, 10)}/${y}`;
       }
+      // Ưu tiên ô "tài khoản thanh toán" (blob nhiều dòng) → in nguyên khối,
+      // KHÔNG dùng 2 cột STK/ngân hàng riêng (có thể trống với NCC này).
+      const blob = nccTaiKhoanBlob?.trim();
       await exportDnttKhacHoanUngWord({
         maDoan: "",
         tenNguoiNhan: nccTen || d.ten_nha_cung_cap || "—",
-        soTaiKhoan: nccStk,
-        nganHang: nccNganHang,
+        soTaiKhoan: blob ? null : nccStk,
+        nganHang: blob ? null : nccNganHang,
+        taiKhoanBlob: blob || null,
         lyDo: d.mo_ta || t("Thanh toán định kỳ"),
         nhanLabel: "Đơn vị thụ hưởng",
         tenNguoiDeNghi: "",

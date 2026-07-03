@@ -231,7 +231,11 @@ export default function BookingXeCard({
     setUpdateNote("");
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(xe?.nha_xe?.email ?? "");
-    const baseSubject = `[S8 Travel] Đặt xe – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`;
+    // Tiêu đề kèm loại xe/số chỗ (formatXeForEmail: xe thường "45 chỗ",
+    // limousine "LMS 9C (9 chỗ)") — nhà xe nhìn tiêu đề là biết loại xe.
+    const xeSubject = xe ? formatXeForEmail(xe.ten_xe, xe.so_cho) : "";
+    const xeSubjectPart = xeSubject && xeSubject !== "—" ? ` – ${xeSubject}` : "";
+    const baseSubject = `[S8 Travel] Đặt xe – ${tenDoan}${xeSubjectPart}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`;
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);
