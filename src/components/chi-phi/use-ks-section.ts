@@ -31,6 +31,7 @@ import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, type KSLoaiRow,
 import { useAuditLogger } from "@/hooks/use-activity-log";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { buildCanTruNote } from "@/lib/can-tru-note";
+import { computeInitialDinhKyKsIds } from "@/lib/ks-dinh-ky";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
 import { type KSCancelTarget } from "./KSCancelModal";
 
@@ -54,7 +55,7 @@ export interface KSAdjustTarget {
 // Tách verbatim từ ChiPhiKSSection — component chỉ còn phần render.
 export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionParams) {
   const { data: ksData, isLoading: ksLoading } = useChiPhiKSData(doanId);
-  const { data: chiPhiRows = [] } = useChiPhiList(doanId);
+  const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId);
   const chiPhiRowsRef = useRef(chiPhiRows);
   useEffect(() => { chiPhiRowsRef.current = chiPhiRows; }, [chiPhiRows]);
   const { data: dnttList = [] } = useDNTTList(doanId);
@@ -615,14 +616,18 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     (ksData.ngayRows || []).forEach((r) => { ngayMap[r.id] = r; });
     const dayUseItemMap = ksData.dayUseItemMap || {};
 
-    // dinhKyKsIds: init 1 lần từ DB
-    if (!dinhKyInitRef.current && ksChiPhi.length > 0) {
+    // dinhKyKsIds: init 1 lần SAU KHI cả chiPhiRows + ksData load xong.
+    // Nguồn = (a) dòng chi phí DB đã định kỳ + (b) KS có cờ mặc định định kỳ mà
+    // đoàn CHƯA có dòng nào (đoàn mới) — xem computeInitialDinhKyKsIds. Chờ load
+    // xong để (b) không seed nhầm KS thực ra đã có dòng (OP đã tắt) mà chưa fetch.
+    if (!dinhKyInitRef.current && !chiPhiLoading && !ksLoading) {
       dinhKyInitRef.current = true;
-      const dkIds = new Set<number>(
-        ksChiPhi
-          .filter((cp) => cp.thanh_toan_dinh_ky)
-          .map((cp) => ngayMap[cp.ref_doan_ngay_id!]?.khach_san_id as number)
-          .filter(Boolean),
+      const ngayKsMap: Record<number, number | null | undefined> = {};
+      Object.values(ngayMap).forEach((n) => { ngayKsMap[n.id] = n.khach_san_id; });
+      const dkIds = computeInitialDinhKyKsIds(
+        ksChiPhi,
+        ngayKsMap,
+        Object.values(ksData.khachSanMap),
       );
       if (dkIds.size > 0) setDinhKyKsIds(dkIds);
     }
@@ -682,7 +687,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       }
       return merged;
     });
-  }, [chiPhiRows, ksData]);
+  }, [chiPhiRows, ksData, chiPhiLoading, ksLoading]);
 
   // Toggle nguồn 1 DÒNG dịch vụ KS (Công ty ↔ HDV): flip tien_cong_ty ↔
   // tien_hdv của đúng dòng đó, giữ nguyên số tiền. Dòng dịch vụ KHÔNG nằm
@@ -780,6 +785,12 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         loai_row: row.loai_row ?? "phong",
         foc_count: focCountManual,
       };
+      // NCC của KS → cần cho bảng "Thanh toán định kỳ" gom theo NCC. Chỉ set khi
+      // resolve được (master đã load) — tránh ghi đè null làm mất NCC đã có khi
+      // ksInfo lag lúc reconcile. KHÔNG dùng cho luồng ĐNTT KS thường (đọc từ
+      // khachSanMap), nên set ở đây an toàn.
+      const ksNccId = ksInfo?.nha_cung_cap_id ?? null;
+      if (ksNccId != null) payload.nha_cung_cap_id = ksNccId;
       // ref_doan_ngay_item_id là LINK STRUCTURAL (xác định row thuộc Day-use card
       // nào). CHỈ set khi INSERT. KHÔNG đụng khi UPDATE — nếu reconcile dựng row
       // qua Path 2 (vd dayUseItemMap lag), row.ref_doan_ngay_item_id = undefined;

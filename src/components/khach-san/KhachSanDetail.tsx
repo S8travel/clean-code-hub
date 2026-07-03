@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import { useUpdateKhachSan, useDeleteKhachSan, type KhachSan } from "@/hooks/use-khach-san";
@@ -40,6 +41,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
     foc_mien: "",
     tai_khoan_thanh_toan: "",
     thong_tin_chung: "",
+    thanh_toan_dinh_ky_mac_dinh: false,
   });
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
       foc_mien: khachSan.foc_mien?.toString() ?? "",
       tai_khoan_thanh_toan: khachSan.tai_khoan_thanh_toan ?? "",
       thong_tin_chung: khachSan.thong_tin_chung ?? "",
+      thanh_toan_dinh_ky_mac_dinh: khachSan.thanh_toan_dinh_ky_mac_dinh ?? false,
     });
     // khachSan là phần tử .find() từ react-query — ref ổn định, chỉ đổi khi
     // chọn record khác hoặc refetch sau lưu → re-init form đúng lúc.
@@ -88,6 +91,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
         foc_mien: form.foc_mien ? Number(form.foc_mien) : null,
         tai_khoan_thanh_toan: form.tai_khoan_thanh_toan || null,
         thong_tin_chung: form.thong_tin_chung || null,
+        thanh_toan_dinh_ky_mac_dinh: form.thanh_toan_dinh_ky_mac_dinh,
       });
       toast.success("Đã lưu thông tin khách sạn");
     } catch {
@@ -193,6 +197,21 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
           <div className="flex-1">
             <Label className="text-xs">FOC miễn</Label>
             <Input type="number" value={form.foc_mien} onChange={(e) => set("foc_mien", e.target.value)} className="h-8 text-sm" />
+          </div>
+        </div>
+        <div className="col-span-2 flex items-start gap-3 rounded-md border p-3">
+          <Switch
+            id="ks-dinh-ky-mac-dinh"
+            checked={form.thanh_toan_dinh_ky_mac_dinh}
+            onCheckedChange={(v) => setForm((f) => ({ ...f, thanh_toan_dinh_ky_mac_dinh: v }))}
+          />
+          <div>
+            <Label htmlFor="ks-dinh-ky-mac-dinh" className="text-xs cursor-pointer">
+              Mặc định thanh toán định kỳ
+            </Label>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Bật: chi phí khách sạn này trong đoàn mới tự đánh dấu "định kỳ" (gộp thanh toán theo NCC).
+            </p>
           </div>
         </div>
         <div className="col-span-2">
