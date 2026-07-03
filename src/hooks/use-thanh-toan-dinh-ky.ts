@@ -19,6 +19,7 @@ export interface DinhKyChiPhiRow {
   ten_ncc: string | null;
   ncc_so_tai_khoan: string | null;
   ncc_ngan_hang: string | null;
+  ncc_tai_khoan_thanh_toan: string | null;
 }
 
 export function useDinhKyChiPhiList(filters?: {
@@ -57,12 +58,12 @@ export function useDinhKyChiPhiList(filters?: {
 
       // 3. Load NCC info
       const nccIds = [...new Set(cpRows.map((r) => r.nha_cung_cap_id).filter((id): id is number => id != null))];
-      type NccInfo = { id: number; ten: string | null; so_tai_khoan: string | null; ngan_hang: string | null };
+      type NccInfo = { id: number; ten: string | null; so_tai_khoan: string | null; ngan_hang: string | null; tai_khoan_thanh_toan: string | null };
       const nccMap: Record<number, NccInfo> = {};
       if (nccIds.length > 0) {
         const { data: nccList } = await externalSupabase
           .from("nha_cung_cap")
-          .select("id, ten, so_tai_khoan, ngan_hang")
+          .select("id, ten, so_tai_khoan, ngan_hang, tai_khoan_thanh_toan")
           .in("id", nccIds);
         (nccList || []).forEach((n) => { nccMap[n.id] = n; });
       }
@@ -88,6 +89,7 @@ export function useDinhKyChiPhiList(filters?: {
           ten_ncc: ncc?.ten ?? null,
           ncc_so_tai_khoan: ncc?.so_tai_khoan ?? null,
           ncc_ngan_hang: ncc?.ngan_hang ?? null,
+          ncc_tai_khoan_thanh_toan: ncc?.tai_khoan_thanh_toan ?? null,
         };
       });
 
@@ -127,6 +129,11 @@ export function useCreateBatchDNTT() {
       allocations: { chi_phi_id: number; so_tien: number }[];
       soTien: number;
       laCoc?: boolean;
+      // Snapshot tài khoản nhận tiền của NCC (ưu tiên ô tai_khoan_thanh_toan).
+      // soTaiKhoan có thể là chuỗi gộp nhiều dòng khi lấy từ blob.
+      tenNcc?: string | null;
+      soTaiKhoan?: string | null;
+      nganHang?: string | null;
     }) => {
       // Tạo DNTT gộp — không thuộc 1 đoàn cụ thể → doan_id = null
       const { data: authData } = await externalSupabase.auth.getUser();
@@ -138,6 +145,9 @@ export function useCreateBatchDNTT() {
           loai: "dinh_ky",
           mo_ta: payload.moTa,
           nha_cung_cap_id: payload.nccId,
+          ten_nha_cung_cap: payload.tenNcc ?? null,
+          so_tai_khoan: payload.soTaiKhoan ?? null,
+          ngan_hang: payload.nganHang ?? null,
           so_tien: payload.soTien,
           la_coc: payload.laCoc ?? false,
           trang_thai_duyet: "cho_duyet",
@@ -191,7 +201,7 @@ export function useDinhKyDNTTList(filters?: {
         .from("dntt_with_payment_status")
         .select(`
           *,
-          nha_cung_cap:nha_cung_cap_id(ten, so_tai_khoan, ngan_hang)
+          nha_cung_cap:nha_cung_cap_id(ten, so_tai_khoan, ngan_hang, tai_khoan_thanh_toan)
         `)
         .eq("loai", "dinh_ky")
         .order("created_at", { ascending: false });
@@ -202,7 +212,7 @@ export function useDinhKyDNTTList(filters?: {
       if (error) throw error;
 
       type DnttJoinRow = Record<string, unknown> & {
-        nha_cung_cap?: { ten?: string | null; so_tai_khoan?: string | null; ngan_hang?: string | null } | null;
+        nha_cung_cap?: { ten?: string | null; so_tai_khoan?: string | null; ngan_hang?: string | null; tai_khoan_thanh_toan?: string | null } | null;
         ten_nha_cung_cap?: string | null;
         so_tai_khoan?: string | null;
         ngan_hang?: string | null;
@@ -213,6 +223,7 @@ export function useDinhKyDNTTList(filters?: {
         ten_ncc: row.nha_cung_cap?.ten || row.ten_nha_cung_cap || "",
         ncc_so_tai_khoan: row.nha_cung_cap?.so_tai_khoan || row.so_tai_khoan || "",
         ncc_ngan_hang: row.nha_cung_cap?.ngan_hang || row.ngan_hang || "",
+        ncc_tai_khoan_thanh_toan: row.nha_cung_cap?.tai_khoan_thanh_toan || "",
       })) as unknown as DinhKyDNTTRow[];
 
       if (!filters?.includeResolved) {

@@ -30,6 +30,9 @@ export interface KhacWordInput {
   tenNguoiNhan: string;         // đơn vị/người nhận tiền (= chủ tài khoản)
   soTaiKhoan?: string | null;
   nganHang?: string | null;
+  /** Ô "tài khoản thanh toán" (blob nhiều dòng: tên chủ TK, số TK, ngân hàng).
+   *  Khi có → in nguyên khối các dòng, bỏ qua soTaiKhoan/nganHang cấu trúc. */
+  taiKhoanBlob?: string | null;
   lyDo?: string | null;
   items: KhacWordItem[];
   ngayLap?: string;             // ISO date
@@ -167,11 +170,12 @@ function numberToVietnameseWords(n: number): string {
 
 // ── Main exporter ──────────────────────────────────────────────────────────
 export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<void> {
-  const { items, tenNguoiNhan, maDoan, tenDoan, soTaiKhoan, nganHang, lyDo, ngayCanThanhToan, nhanLabel, tenNguoiDeNghi, hinhThuc } = input;
+  const { items, tenNguoiNhan, maDoan, tenDoan, soTaiKhoan, nganHang, taiKhoanBlob, lyDo, ngayCanThanhToan, nhanLabel, tenNguoiDeNghi, hinhThuc } = input;
   const today = input.ngayLap ? new Date(input.ngayLap) : new Date();
   const dateVN = `Hà Nội, ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
   const tong = items.reduce((s, it) => s + it.thanh_tien, 0);
-  const isChuyenKhoan = hinhThuc ? hinhThuc === "chuyen_khoan" : !!(soTaiKhoan || nganHang);
+  const blobLines = (taiKhoanBlob ?? "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const isChuyenKhoan = hinhThuc ? hinhThuc === "chuyen_khoan" : !!(soTaiKhoan || nganHang || blobLines.length > 0);
 
   // ── 1. Header: Company info trái + ngày phải ──────────────────────────
   // Cell trái rộng 65% để địa chỉ "Thành phố Đà Nẵng, Việt Nam" vừa 1 dòng.
@@ -314,33 +318,49 @@ export async function exportDnttKhacHoanUngWord(input: KhacWordInput): Promise<v
 
   const bankParas: Paragraph[] = [];
   if (isChuyenKhoan) {
-    bankParas.push(new Paragraph({
-      alignment: AlignmentType.LEFT,
-      spacing: { before: 40, after: 40 },
-      children: [
-        new TextRun({ noProof: true, text: "Chủ tài khoản: ", font: "Arial", size: 22 }),
-        new TextRun({ noProof: true, text: tenNguoiNhan || "—", font: "Arial", size: 22, bold: true }),
-      ],
-    }));
-    if (soTaiKhoan) {
+    if (blobLines.length > 0) {
+      // Ô "tài khoản thanh toán" — in nguyên khối, mỗi dòng 1 paragraph.
+      bankParas.push(new Paragraph({
+        alignment: AlignmentType.LEFT,
+        spacing: { before: 40, after: 20 },
+        children: [new TextRun({ noProof: true, text: "Thông tin chuyển khoản:", font: "Arial", size: 22 })],
+      }));
+      blobLines.forEach((line) => {
+        bankParas.push(new Paragraph({
+          alignment: AlignmentType.LEFT,
+          spacing: { before: 20, after: 20 },
+          children: [new TextRun({ noProof: true, text: line, font: "Arial", size: 22, bold: true })],
+        }));
+      });
+    } else {
       bankParas.push(new Paragraph({
         alignment: AlignmentType.LEFT,
         spacing: { before: 40, after: 40 },
         children: [
-          new TextRun({ noProof: true, text: "Số tài khoản: ", font: "Arial", size: 22 }),
-          new TextRun({ noProof: true, text: soTaiKhoan, font: "Arial", size: 22, bold: true }),
+          new TextRun({ noProof: true, text: "Chủ tài khoản: ", font: "Arial", size: 22 }),
+          new TextRun({ noProof: true, text: tenNguoiNhan || "—", font: "Arial", size: 22, bold: true }),
         ],
       }));
-    }
-    if (nganHang) {
-      bankParas.push(new Paragraph({
-        alignment: AlignmentType.LEFT,
-        spacing: { before: 40, after: 40 },
-        children: [
-          new TextRun({ noProof: true, text: "Ngân hàng: ", font: "Arial", size: 22 }),
-          new TextRun({ noProof: true, text: nganHang, font: "Arial", size: 22, bold: true }),
-        ],
-      }));
+      if (soTaiKhoan) {
+        bankParas.push(new Paragraph({
+          alignment: AlignmentType.LEFT,
+          spacing: { before: 40, after: 40 },
+          children: [
+            new TextRun({ noProof: true, text: "Số tài khoản: ", font: "Arial", size: 22 }),
+            new TextRun({ noProof: true, text: soTaiKhoan, font: "Arial", size: 22, bold: true }),
+          ],
+        }));
+      }
+      if (nganHang) {
+        bankParas.push(new Paragraph({
+          alignment: AlignmentType.LEFT,
+          spacing: { before: 40, after: 40 },
+          children: [
+            new TextRun({ noProof: true, text: "Ngân hàng: ", font: "Arial", size: 22 }),
+            new TextRun({ noProof: true, text: nganHang, font: "Arial", size: 22, bold: true }),
+          ],
+        }));
+      }
     }
   }
 
