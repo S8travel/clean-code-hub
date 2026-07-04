@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { getSoKhachText, groupKsRows } from "./export-chi-phi-excel";
+import {
+  getSoKhachText, groupKsRows,
+  getActualSummaryValue, getChiPhiNetBase, getChiPhiThucTe,
+} from "./export-chi-phi-excel";
 import type { ExportDoan } from "./export-chi-phi-excel";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 
@@ -18,6 +21,58 @@ const ksRow = (p: Partial<ChiPhiRow> & { id: number }): ChiPhiRow => ({
   chiet_khau_pct: null, don_gia_raw: null, vat_pct: null, trang_thai_hoa_don: null,
   ...p,
 }) as ChiPhiRow;
+
+// Chi phí NET vs GROSS — bug đoàn PQC06VJ260528YJ: nhà hàng có chiết khấu 5%
+// (món BABABA: gross 4.185.000, HDV trả net 3.975.750, chênh 209.250). row.thanh_tien
+// là GROSS (don_gia*so_luong) → KHÔNG dùng cho "Thành tiền"/"Thực tế"; phải dùng NET.
+describe("getChiPhiNetBase / getChiPhiThucTe — dùng NET, không dùng thanh_tien gross", () => {
+  it("NH HDV trả + chiết khấu 5% → net = tien_hdv (3.975.750), KHÔNG phải gross 4.185.000", () => {
+    const r = ksRow({ id: 1, danh_muc: "nha_hang", thanh_tien: 4185000, tien_cong_ty: 0, tien_hdv: 3975750 });
+    expect(getChiPhiNetBase(r)).toBe(3975750);
+    expect(getChiPhiThucTe(r)).toBe(3975750);
+  });
+
+  it("NH công ty trả + chiết khấu → net = tien_cong_ty (sau CK), KHÔNG phải gross", () => {
+    const r = ksRow({ id: 2, danh_muc: "nha_hang", thanh_tien: 4185000, tien_cong_ty: 3975750, tien_hdv: 0 });
+    expect(getChiPhiNetBase(r)).toBe(3975750);
+  });
+
+  it("có điều chỉnh (thanh_tien_thuc_te) → getChiPhiThucTe ưu tiên số điều chỉnh", () => {
+    const r = ksRow({ id: 3, danh_muc: "nha_hang", thanh_tien: 4185000, tien_cong_ty: 4050000, tien_hdv: 0, thanh_tien_thuc_te: 5000000 });
+    expect(getChiPhiThucTe(r)).toBe(5000000);
+    expect(getChiPhiNetBase(r)).toBe(4050000); // base vẫn net, không dính điều chỉnh
+  });
+});
+
+describe("getActualSummaryValue — bảng CÔNG TY THANH TOÁN chỉ tính phần công ty", () => {
+  it("NH HDV trả (cong_ty=0) → 0, KHÔNG lấy gross thanh_tien", () => {
+    const r = ksRow({ id: 1, danh_muc: "nha_hang", thanh_tien: 4185000, tien_cong_ty: 0, tien_hdv: 3975750 });
+    expect(getActualSummaryValue(r)).toBe(0);
+  });
+
+  it("NH công ty trả + chiết khấu → tien_cong_ty (net), KHÔNG phải gross", () => {
+    const r = ksRow({ id: 2, danh_muc: "nha_hang", thanh_tien: 4185000, tien_cong_ty: 3975750, tien_hdv: 0 });
+    expect(getActualSummaryValue(r)).toBe(3975750);
+  });
+
+  it("có điều chỉnh → dùng thanh_tien_thuc_te", () => {
+    const r = ksRow({ id: 3, danh_muc: "khach_san", thanh_tien: 4000000, tien_cong_ty: 4000000, thanh_tien_thuc_te: 4200000 });
+    expect(getActualSummaryValue(r)).toBe(4200000);
+  });
+
+  it("hạng mục khác (xe) → tien_cong_ty", () => {
+    const r = ksRow({ id: 4, danh_muc: "xe", loai: "xe", thanh_tien: 21792240, tien_cong_ty: 21792240, tien_hdv: 0 });
+    expect(getActualSummaryValue(r)).toBe(21792240);
+  });
+
+  it("kịch bản đoàn 246: tổng NH theo getActualSummaryValue = 24.984.000 (công ty), KHÔNG phải gross 31.297.301", () => {
+    // 2 dòng đại diện: 1 công ty (4.050.000) + 1 HDV trả có CK (gross 4.185.000 / hdv 3.975.750)
+    const congTy = ksRow({ id: 10, danh_muc: "nha_hang", thanh_tien: 4050000, tien_cong_ty: 4050000, tien_hdv: 0 });
+    const hdvCK = ksRow({ id: 11, danh_muc: "nha_hang", thanh_tien: 4185000, tien_cong_ty: 0, tien_hdv: 3975750 });
+    const sumCty = [congTy, hdvCK].reduce((s, r) => s + getActualSummaryValue(r), 0);
+    expect(sumCty).toBe(4050000); // chỉ phần công ty; gross sẽ là 8.235.000 (sai)
+  });
+});
 
 describe("getSoKhachText", () => {
   it("ghép đủ breakdown NL · TE 50% · TE free · TL + tổng (khớp trang điều tour)", () => {

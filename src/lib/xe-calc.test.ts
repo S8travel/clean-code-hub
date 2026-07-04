@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId } from "./xe-calc";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId, resolveXeTaiKhoan } from "./xe-calc";
 
 describe("applyVat", () => {
   it("VAT 8% mặc định", () => {
@@ -80,5 +80,36 @@ describe("resolveXeNccId", () => {
 
   it("master null/undefined trong mảng → bỏ qua an toàn", () => {
     expect(resolveXeNccId({ nha_cung_cap_id: null, xe_id: 51 }, [null, undefined, xe1])).toBe(419);
+  });
+});
+
+describe("resolveXeTaiKhoan", () => {
+  // Nhà xe CÓ tài khoản nhưng KHÔNG gắn NCC (case ÁNH MINH — đoàn 186).
+  const anhMinh = { id: 43, nha_xe: { nha_cung_cap_id: null, tai_khoan_thanh_toan: "Chủ TK: Việt Dương Phát\nSố TK: 118002620035\nNgân hàng: VietinBank" } };
+  const coNcc = { id: 51, nha_xe: { nha_cung_cap_id: 419, tai_khoan_thanh_toan: "HOÀNG HẬU\nSố TK: 1051764751" } };
+
+  it("nhà xe có TK nhưng KHÔNG NCC → vẫn trả TK (fix chính)", () => {
+    expect(resolveXeTaiKhoan({ xe_id: 43 }, [anhMinh])).toContain("118002620035");
+  });
+
+  it("nhà xe có NCC + TK → trả TK", () => {
+    expect(resolveXeTaiKhoan({ xe_id: 51 }, [anhMinh, coNcc])).toContain("1051764751");
+  });
+
+  it("xe_id không khớp master → null", () => {
+    expect(resolveXeTaiKhoan({ xe_id: 99 }, [anhMinh, coNcc])).toBe(null);
+  });
+
+  it("xe_id null → null", () => {
+    expect(resolveXeTaiKhoan({ xe_id: null }, [anhMinh])).toBe(null);
+  });
+
+  it("master không có nha_xe / TK rỗng → null", () => {
+    expect(resolveXeTaiKhoan({ xe_id: 43 }, [{ id: 43, nha_xe: null }])).toBe(null);
+    expect(resolveXeTaiKhoan({ xe_id: 43 }, [{ id: 43, nha_xe: { tai_khoan_thanh_toan: "   " } }])).toBe(null);
+  });
+
+  it("master null/undefined trong mảng → bỏ qua an toàn", () => {
+    expect(resolveXeTaiKhoan({ xe_id: 43 }, [null, undefined, anhMinh])).toContain("VietinBank");
   });
 });
