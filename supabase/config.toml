@@ -1,4 +1,4 @@
-project_id = "utrljiwwvohkdztwwchs"
+project_id = "lflsbwoqzmbknzdpaequ"
 
 # sync-chi-phi-to-sheet được gọi bởi pg_cron (không có user JWT) → tắt verify_jwt.
 # Bảo vệ bằng header 'x-cron-secret' khớp env CHI_PHI_CRON_SECRET (xem index.ts).

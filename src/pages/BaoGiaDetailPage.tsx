@@ -1,17 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Lock } from "lucide-react";
+import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BaoGiaAiImport } from "@/components/bao-gia/BaoGiaAiImport";
 import { useBaoGia, useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@/hooks/use-bao-gia";
-import { exportBaoGiaWord } from "@/lib/export-bao-gia-word";
-import { liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
+import { useLead } from "@/hooks/use-leads";
+import { exportBaoGiaTaiwanWord, exportBaoGiaGiaCuoiWord } from "@/lib/export-bao-gia-word";
+import { liveKetQua, baoGiaCode } from "@/components/bao-gia/detail/helpers";
+import { fileKind, extractItineraryText } from "@/lib/itinerary-file";
+import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
-import { ChuongTrinhTourSection } from "@/components/bao-gia/detail/ChuongTrinhTourSection";
-import { DichVuPhuTroSection } from "@/components/bao-gia/detail/DichVuPhuTroSection";
-import { TierMatrixSection } from "@/components/bao-gia/detail/TierMatrixSection";
+import { CostingSheetSection } from "@/components/bao-gia/detail/CostingSheetSection";
+import { TaiwanExportSection } from "@/components/bao-gia/detail/TaiwanExportSection";
 import { TongHopChiPhiPanel } from "@/components/bao-gia/detail/TongHopChiPhiPanel";
+import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSection";
+import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
+import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 
 // Trang chi tiết Báo giá. State pattern: PARENT giữ `draft` (mirror row +
@@ -27,6 +33,11 @@ export default function BaoGiaDetailPage() {
 
   const [draft, setDraft] = useState<BaoGiaRow | null>(null);
   useEffect(() => { if (row) setDraft(row); }, [row]);
+  const [aiOpen, setAiOpen] = useState(false);
+
+  // Pax dự kiến của lead gắn báo giá → highlight bậc giá áp dụng.
+  const { data: lead } = useLead(draft?.lead_id ?? null);
+  const leadPax = lead ? (lead.so_nguoi_lon ?? 0) + (lead.so_nguoi_em ?? 0) : undefined;
 
   if (isLoading || !draft) {
     return (
@@ -72,21 +83,41 @@ export default function BaoGiaDetailPage() {
   };
 
   const isSent = draft.trang_thai === "sent";
+  const isGiaCuoi = draft.loai_bao_gia === "gia_cuoi";
 
   const handleExportPdf = async () => {
     if (!draft.ket_qua) return;
     try {
-      // Recompute case totals từ items + xe_gia hiện tại → Word khớp panel UI.
+      const xr = draft.exchange_rate ?? 26000;
+      if (isGiaCuoi) {
+        // Giá cuối: chỉ bảng giá theo khoảng khách (nhập tay) — không section costing.
+        const tiers = giaCuoiBrackets(draft.ket_qua.gia_cuoi_tiers, xr).map((b) => ({
+          guests: b.guests_from,
+          gia_ban_vnd: b.gia_ban_vnd,
+          gia_ban_usd: b.gia_ban_usd,
+          label: b.label,
+        }));
+        await exportBaoGiaGiaCuoiWord(draft.ket_qua, xr, tiers);
+        toast.success("Đã xuất file Word!");
+        return;
+      }
+      // Recompute case totals từ items + xe_gia hiện tại → giá TB khớp panel UI.
       const fresh = liveKetQua(draft);
       if (!fresh) return;
-      const xr = draft.exchange_rate ?? 26000;
-      // Bảng giá theo số khách (ma trận thật) — khớp section ma trận trên màn hình.
-      const tiers = liveTierBreakdown(draft).map((t) => ({
-        guests: t.guests,
-        gia_ban_vnd: t.line.gia_ban_per_pax,
-        gia_ban_usd: xr > 0 ? t.line.gia_ban_per_pax / xr : 0,
-      }));
-      await exportBaoGiaWord(fresh, xr, draft.profit_usd ?? 0, undefined, tiers);
+      // Đọc nội dung file chương trình (docx/xlsx) để chèn xuống dưới báo giá.
+      let programText = "";
+      const progFile = (draft.lich_trinh_files ?? []).find((f) => {
+        const k = fileKind(f.ten);
+        return k === "docx" || k === "xlsx";
+      });
+      if (progFile) {
+        try {
+          const buf = await (await fetch(progFile.url)).arrayBuffer();
+          programText = await extractItineraryText(buf, fileKind(progFile.ten) as "docx" | "xlsx");
+        } catch { /* bỏ qua nếu đọc file lỗi */ }
+      }
+      // Xuất kiểu Đài Loan (報價): bảng giá 3 mốc + 單房差 + 報價包含/不含 + mã code + 行程內容.
+      await exportBaoGiaTaiwanWord(fresh, fresh.items, xr, baoGiaCode(draft), programText);
       toast.success("Đã xuất file Word!");
     } catch {
       toast.error("Lỗi xuất file");
@@ -123,33 +154,86 @@ export default function BaoGiaDetailPage() {
           </div>
         )}
         <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
-        <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
-          <div className="space-y-4 min-w-0">
-            <ThongTinTourSection
+        {isGiaCuoi ? (
+          <div className="max-w-[1400px] mx-auto space-y-4 min-w-0">
+            <GiaCuoiInfoSection
               draft={draft}
               row={row}
               updateDraftField={updateDraftField}
               updateDraftKetQua={updateDraftKetQua}
               saveField={saveField}
-              savePatch={savePatch}
               saveKetQua={saveKetQua}
             />
-            <ChuongTrinhTourSection
+            <GiaCuoiPriceSection
               draft={draft}
               updateDraftKetQua={updateDraftKetQua}
               saveKetQua={saveKetQua}
+              leadPax={leadPax}
             />
-            <DichVuPhuTroSection
-              draft={draft}
-              updateDraftKetQua={updateDraftKetQua}
-              saveKetQua={saveKetQua}
-            />
-            <TierMatrixSection draft={draft} saveKetQua={saveKetQua} />
+            <LichTrinhFilesSection draft={draft} />
           </div>
-          <TongHopChiPhiPanel draft={draft} />
-        </div>
+        ) : (
+          <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
+            <div className="space-y-4 min-w-0">
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
+                  onClick={() => setAiOpen(true)}>
+                  <Sparkles className="h-3.5 w-3.5" /> AI điền từ lịch trình
+                </Button>
+              </div>
+              <ThongTinTourSection
+                draft={draft}
+                row={row}
+                updateDraftField={updateDraftField}
+                updateDraftKetQua={updateDraftKetQua}
+                saveField={saveField}
+                savePatch={savePatch}
+                saveKetQua={saveKetQua}
+              />
+              <CostingSheetSection
+                draft={draft}
+                updateDraftKetQua={updateDraftKetQua}
+                saveKetQua={saveKetQua}
+                leadPax={leadPax}
+              />
+              <TaiwanExportSection
+                draft={draft}
+                updateDraftKetQua={updateDraftKetQua}
+                saveKetQua={saveKetQua}
+              />
+              <LichTrinhFilesSection draft={draft} />
+            </div>
+            <TongHopChiPhiPanel draft={draft} />
+          </div>
+        )}
         </fieldset>
       </div>
+      <BaoGiaAiImport
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        baoGiaId={draft.id}
+        files={draft.lich_trinh_files ?? []}
+        tourDate={draft.ngay_di}
+        exchangeRate={draft.exchange_rate}
+        savedReview={draft.ket_qua?.ai_review ?? null}
+        onSaveDraft={(d) => {
+          const ket = draft.ket_qua;
+          if (!ket) return;
+          saveKetQua({ ...ket, ai_review: d });
+        }}
+        onApply={(items, ten, soNgay) => {
+          const ket = draft.ket_qua;
+          if (!ket) return;
+          saveKetQua({
+            ...ket,
+            ten_chuong_trinh: ten || ket.ten_chuong_trinh,
+            so_ngay: soNgay || ket.so_ngay,
+            items,
+            ai_review: null, // đã áp dụng → bỏ bản nháp review
+          });
+          toast.success(`Đã nạp ${items.length} mục từ lịch trình. Kiểm tra giá & nhập bậc số khách.`);
+        }}
+      />
       <BaoGiaFooter
         onSaveDraft={() => todo("Lưu nháp")}
         onCreateBooking={() => todo("Tạo booking")}

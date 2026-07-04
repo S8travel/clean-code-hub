@@ -13,6 +13,7 @@ import { DeleteDialog } from "@/components/DeleteDialog";
 import { useUpdateKhachSan, useDeleteKhachSan, type KhachSan } from "@/hooks/use-khach-san";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { GiaPhongSection } from "@/components/khach-san/GiaPhongSection";
 
 interface Props {
   khachSan: KhachSan;
@@ -110,8 +111,8 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
   };
 
   return (
-    <div className="p-4 space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between">
+    <div className="p-4 space-y-6 max-w-5xl">
+      <div className="flex items-center justify-between max-w-2xl">
         <h2 className="text-lg font-semibold">{khachSan.ten}</h2>
         <div className="flex gap-2">
           <Button size="sm" onClick={handleSave} disabled={updateMut.isPending}>
@@ -130,7 +131,7 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 max-w-2xl">
         <div className="col-span-2">
           <Label className="text-xs">Nhà cung cấp</Label>
           <SearchableSelect
@@ -223,6 +224,9 @@ export default function KhachSanDetail({ khachSan, onDeleted }: Props) {
           <Textarea value={form.thong_tin_chung} onChange={(e) => set("thong_tin_chung", e.target.value)} className="text-sm min-h-[60px]" />
         </div>
       </div>
+
+      <Separator />
+      <GiaPhongSection khachSanId={khachSan.id} />
     </div>
   );
 }

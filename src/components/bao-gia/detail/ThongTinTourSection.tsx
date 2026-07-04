@@ -10,6 +10,7 @@ import { useFetchExchangeRate, type VcbRate } from "@/hooks/use-exchange-rate";
 import { paxOf, fmtVnd, defaultDayItems } from "./helpers";
 import { LeadSelector } from "./LeadSelector";
 import { VehicleSelector } from "./VehicleSelector";
+import { AgentSelect, LoaiTourSelect } from "@/components/bao-gia/BaoGiaFields";
 
 interface Props {
   draft: BaoGiaRow;
@@ -262,6 +263,20 @@ export function ThongTinTourSection({
               className="h-9 flex-1"
             />
             <span className="text-xs text-slate-500 px-2 whitespace-nowrap">USD / pax</span>
+          </div>
+        </div>
+
+        {/* Row 2b: Agent đối tác + Loại tour */}
+        <div className="col-span-6">
+          <Label className="text-xs text-slate-600">Agent (đối tác)</Label>
+          <div className="mt-1">
+            <AgentSelect value={draft.agent_id} onChange={(id) => saveField("agent_id", id)} />
+          </div>
+        </div>
+        <div className="col-span-6">
+          <Label className="text-xs text-slate-600">Loại tour</Label>
+          <div className="mt-1">
+            <LoaiTourSelect value={draft.loai_tour} onChange={(v) => saveField("loai_tour", v)} />
           </div>
         </div>
 

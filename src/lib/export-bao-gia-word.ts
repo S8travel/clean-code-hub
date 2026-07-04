@@ -14,7 +14,7 @@ import {
 } from "docx";
 import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
-import type { BaoGiaKetQua, BaoGiaItem } from "@/hooks/use-bao-gia";
+import type { BaoGiaKetQua, BaoGiaItem, BaoGiaExportBracket, BaoGiaExportConfig } from "@/hooks/use-bao-gia";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface ManualDayData {
@@ -30,6 +30,8 @@ export interface TierPrice {
   guests: number;
   gia_ban_vnd: number;
   gia_ban_usd: number;
+  /** Nhãn cột tuỳ chọn (vd "10–15 khách"). Vắng → "{guests} khách". */
+  label?: string;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -46,6 +48,7 @@ const PAGE_W    = 11906;
 const PAGE_H    = 16838;
 const MARGIN    = 1080;
 const CONTENT_W = PAGE_W - MARGIN * 2; // 9746
+const IDEO = "　"; // khoảng trắng full-width (ideographic) cho text tiếng Trung
 
 const LOAI_LABEL: Record<string, string> = {
   hotel: "Khách sạn",
@@ -132,6 +135,136 @@ export async function exportBaoGiaWord(
       .replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "")
       .trim() || "tour";
   saveAs(blob, `bao_gia_${safeName}.docx`);
+}
+
+// ── Giá cuối format (land tour — chỉ bảng giá theo bậc, không costing) ─────────
+export async function exportBaoGiaGiaCuoiWord(
+  ketQua: BaoGiaKetQua,
+  exchangeRate: number,
+  tiers: TierPrice[],
+) {
+  const doc = buildGiaCuoiDoc(ketQua, exchangeRate, tiers);
+  const blob = await Packer.toBlob(doc);
+  const safeName =
+    ketQua.ten_chuong_trinh
+      .replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "")
+      .trim() || "tour";
+  saveAs(blob, `bao_gia_${safeName}.docx`);
+}
+
+function buildGiaCuoiDoc(
+  ketQua: BaoGiaKetQua,
+  exchangeRate: number,
+  tiers: TierPrice[],
+): Document {
+  const today = new Date().toLocaleDateString("vi-VN");
+  const HALF = Math.floor(CONTENT_W / 2);
+
+  const headerTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        children: [
+          cell(
+            [
+              p("CÔNG TY TNHH DU LỊCH S8", { bold: true, size: 22, align: AlignmentType.CENTER }),
+              p("S8 TRAVEL COMPANY", { size: 18, color: "555555", align: AlignmentType.CENTER }),
+              p("MST: 0402021137", { size: 18, color: "555555", align: AlignmentType.CENTER }),
+            ],
+            { width: HALF, margins: { top: 120, bottom: 120, left: 120, right: 120 } },
+          ),
+          cell(
+            [
+              p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", { bold: true, size: 22, align: AlignmentType.CENTER }),
+              p("Độc lập – Tự do – Hạnh phúc", { bold: true, size: 20, align: AlignmentType.CENTER }),
+              p("——————————————", { size: 18, color: "888888", align: AlignmentType.CENTER }),
+              p(`Hà Nội, ngày ${today}`, { size: 18, italics: true, color: "555555", align: AlignmentType.CENTER }),
+            ],
+            { width: CONTENT_W - HALF, margins: { top: 120, bottom: 120, left: 120, right: 120 } },
+          ),
+        ],
+      }),
+    ],
+  });
+
+  const titlePara = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 200, after: 100 },
+    children: [new TextRun({ noProof: true, text: "BẢNG BÁO GIÁ TOUR", bold: true, size: 32, font: "Times New Roman" })],
+  });
+
+  const subTitlePara = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 0, after: 200 },
+    children: [
+      new TextRun({ noProof: true, text: ketQua.ten_chuong_trinh, bold: true, size: 24, color: "185FA5", font: "Times New Roman" }),
+      new TextRun({ noProof: true, text: `  •  ${ketQua.so_ngay} ngày`, size: 20, color: "555555", font: "Times New Roman" }),
+    ],
+  });
+
+  // Bảng giá theo bậc số khách (giá đã chốt — nhập tay).
+  const LABEL_W = 2600;
+  const baseW = tiers.length ? Math.floor((CONTENT_W - LABEL_W) / tiers.length) : CONTENT_W - LABEL_W;
+  const colW = tiers.map((_, i) => (i === tiers.length - 1 ? CONTENT_W - LABEL_W - baseW * (tiers.length - 1) : baseW));
+  const tierTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          cell([p("Số khách", { bold: true })], { width: LABEL_W, shading: HEADER_SHADING }),
+          ...tiers.map((t, i) =>
+            cell([p(t.label ?? `${t.guests} khách`, { bold: true, align: AlignmentType.CENTER })], { width: colW[i], shading: HEADER_SHADING }),
+          ),
+        ],
+      }),
+      new TableRow({
+        children: [
+          cell([p("Giá / khách (VND)", { bold: true, color: "FFFFFF" })], { width: LABEL_W, shading: BLUE_SHADING }),
+          ...tiers.map((t, i) =>
+            cell([p(fmt(t.gia_ban_vnd), { bold: true, align: AlignmentType.CENTER, color: "FFFFFF", size: 24 })], { width: colW[i], shading: BLUE_SHADING }),
+          ),
+        ],
+      }),
+      new TableRow({
+        children: [
+          cell([p("Giá / khách (USD)", { bold: true })], { width: LABEL_W, shading: HEADER_SHADING }),
+          ...tiers.map((t, i) =>
+            cell([p(`≈ ${fmtUsd(t.gia_ban_usd)}`, { align: AlignmentType.CENTER })], { width: colW[i] }),
+          ),
+        ],
+      }),
+    ],
+  });
+
+  const noteParaCt =
+    tiers.length === 0
+      ? [p("(Chưa nhập bảng giá)", { italics: true, color: "999999" })]
+      : [
+          tierTable,
+          new Paragraph({ spacing: { before: 120 }, children: [] }),
+          p(`Tỷ giá quy đổi: ${fmt(exchangeRate)} VND/USD. Giá áp dụng cho chương trình tour kèm theo.`, { size: 18, italics: true, color: "555555" }),
+        ];
+
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: { width: PAGE_W, height: PAGE_H },
+            margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
+          },
+        },
+        children: [
+          headerTable,
+          titlePara,
+          subTitlePara,
+          sectionLabel("BẢNG GIÁ THEO SỐ KHÁCH"),
+          ...noteParaCt,
+        ],
+      },
+    ],
+  });
 }
 
 // ── Manual format (Chinese-style quotation) ───────────────────────────────────
@@ -432,6 +565,224 @@ function buildManualDoc(
           spacer(),
           sectionLabel("CHI TIẾT CHƯƠNG TRÌNH"),
           programTable,
+        ],
+      },
+    ],
+  });
+}
+
+// ── Taiwan format (報價 — bảng giá kiểu Đài Loan + 報價包含/不含) ───────────────
+// 報價包含 mặc định mỗi báo giá đều có 5 mục này, rồi thêm các cảnh điểm (mất phí)
+// của chương trình vào sau.
+const DEFAULT_INCLUDED_ZH = [
+  "全程新款冷氣巴士",
+  "華語導遊",
+  "景點門票",
+  "餐食費用。餐標如行程上。",
+  "全程住宿飯店",
+];
+
+/** Xuất báo giá kiểu Đài Loan (報價) — Word. maBg = mã code duy nhất (ma_bg). */
+export async function exportBaoGiaTaiwanWord(
+  ketQua: BaoGiaKetQua,
+  items: BaoGiaItem[],
+  exchangeRate: number,
+  maBg: string,
+  programText?: string,
+) {
+  const doc = buildTaiwanDoc(ketQua, items, exchangeRate, maBg, programText);
+  const blob = await Packer.toBlob(doc);
+  const safeName =
+    ketQua.ten_chuong_trinh.replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "").trim() || "tour";
+  saveAs(blob, `bao_gia_${maBg}_${safeName}.docx`);
+}
+
+/** Giá trị MẶC ĐỊNH (tính live) cho cấu hình xuất báo giá Đài Loan. Editor +
+ *  export dùng chung; ket_qua.export_config override từng field. */
+export function taiwanExportDefaults(
+  ketQua: BaoGiaKetQua,
+  items: BaoGiaItem[],
+  exchangeRate: number,
+): Required<BaoGiaExportConfig> {
+  const soNgay = ketQua.so_ngay ?? 1;
+  const base = Math.round(ketQua.gia_trung_binh_usd);
+  const totalHotelVnd = items.filter((i) => i.loai === "hotel").reduce((s, i) => s + (i.don_gia || 0), 0);
+  return {
+    brackets: [
+      { label: "10-14 pax", price_usd: base + 30 },
+      { label: "15-23 pax", price_usd: base },
+      { label: "24pax以上", price_usd: base - 10 },
+    ],
+    single_supplement_usd: Math.round(totalHotelVnd / 2 / (exchangeRate || 1)) + 10,
+    above_notes: `1. 司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n2. 簽證、機票、私人費用\n3. 越南特殊節日另外報價`,
+    included: DEFAULT_INCLUDED_ZH.join("\n"),
+    excluded: `司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n簽證、機票、私人費用`,
+    notes: "",
+  };
+}
+
+/** Merge config đã lưu lên mặc định (chỉ field có giá trị mới override). */
+function mergeExportConfig(base: Required<BaoGiaExportConfig>, cfg?: BaoGiaExportConfig | null): Required<BaoGiaExportConfig> {
+  const c = cfg ?? {};
+  return {
+    brackets: c.brackets && c.brackets.length ? c.brackets : base.brackets,
+    single_supplement_usd: c.single_supplement_usd ?? base.single_supplement_usd,
+    above_notes: c.above_notes ?? base.above_notes,
+    included: c.included ?? base.included,
+    excluded: c.excluded ?? base.excluded,
+    notes: c.notes ?? base.notes,
+  };
+}
+
+function buildTaiwanDoc(
+  ketQua: BaoGiaKetQua,
+  items: BaoGiaItem[],
+  exchangeRate: number,
+  maBg: string,
+  programText?: string,
+): Document {
+  const today = new Date();
+  const todayStr = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
+  // Cấu hình xuất: mặc định live + override từ ket_qua.export_config (user sửa).
+  const cfg = mergeExportConfig(taiwanExportDefaults(ketQua, items, exchangeRate), ketQua.export_config);
+  const brackets: BaoGiaExportBracket[] = cfg.brackets;
+  const singleRoom = cfg.single_supplement_usd;
+
+  const hotelDays = items
+    .filter((i) => i.loai === "hotel" && (i.mo_ta || "").trim())
+    .map((i) => ({ ngay: i.ngay_so ?? 1, name: i.mo_ta.trim() }))
+    .sort((a, b) => a.ngay - b.ngay);
+
+  // Cảnh điểm mất phí (ưu tiên tên tiếng Trung), lọc trùng — nối thêm vào 報價包含.
+  const sights = [...new Set(
+    items
+      .filter((i) => i.loai === "ticket")
+      .map((i) => (i.ten_zh || i.mo_ta || "").trim())
+      .filter(Boolean),
+  )];
+
+  const nCol = brackets.length + 1; // + cột 單房差
+  const LEFT_W = 4200;
+  const PRICE_W = Math.floor((CONTENT_W - LEFT_W) / nCol);
+
+  // ── Bảng giá (price box) ────────────────────────────────────────────────────
+  const priceHeaderRow1 = new TableRow({
+    children: [
+      cell(
+        [
+          new Paragraph({
+            children: [
+              new TextRun({ noProof: true, text: "S8 Travel 報價：", bold: true, size: 22, color: "C00000", font: "Times New Roman" }),
+              // Mã báo giá: chữ trắng nền trắng → ẩn với khách, vẫn select/search được để tra lại.
+              new TextRun({ noProof: true, text: ` ${maBg} `, size: 22, color: "FFFFFF", font: "Times New Roman", shading: { type: ShadingType.CLEAR, fill: "FFFFFF", color: "auto" } }),
+            ],
+          }),
+        ],
+        { width: LEFT_W, margins: { top: 80, bottom: 80, left: 120, right: 120 } },
+      ),
+      cell(
+        [p(`${todayStr}${IDEO}報價出去（報價效期：3 個月）`, { bold: true, size: 20, color: "FFFFFF", align: AlignmentType.CENTER })],
+        { width: PRICE_W * nCol, colSpan: nCol, shading: BLUE_SHADING, margins: { top: 80, bottom: 80, left: 120, right: 120 } },
+      ),
+    ],
+  });
+
+  const priceHeaderRow2 = new TableRow({
+    children: [
+      cell([p("TOUR FEE (USD/pax)", { bold: true, size: 18 })], { width: LEFT_W, shading: HEADER_SHADING }),
+      ...brackets.map((b) => cell([p(b.label, { bold: true, size: 18, align: AlignmentType.CENTER })], { width: PRICE_W, shading: HEADER_SHADING })),
+      cell([p("單房差", { bold: true, size: 18, align: AlignmentType.CENTER })], { width: PRICE_W, shading: HEADER_SHADING }),
+    ],
+  });
+
+  const priceCells = (rowSpan: number) => [
+    ...brackets.map((b) => cell([p(`$${b.price_usd}`, { bold: true, align: AlignmentType.CENTER, size: 24, color: "1E3A6E" })], { width: PRICE_W, rowSpan, shading: LIGHTBLUE_SHADING, vertAlign: VerticalAlign.CENTER })),
+    cell([p(`$${singleRoom}`, { bold: true, align: AlignmentType.CENTER, size: 24, color: "1E3A6E" })], { width: PRICE_W, rowSpan, shading: LIGHTBLUE_SHADING, vertAlign: VerticalAlign.CENTER }),
+  ];
+
+  const hotelRows: TableRow[] = hotelDays.length === 0
+    ? [new TableRow({ children: [cell([p(ketQua.ten_chuong_trinh || "—", { size: 18 })], { width: LEFT_W }), ...priceCells(1)] })]
+    : hotelDays.map((d, idx) =>
+        new TableRow({
+          children: idx === 0
+            ? [cell([p(`D${d.ngay}${IDEO}${IDEO}${d.name}`, { size: 18 })], { width: LEFT_W, margins: { top: 60, bottom: 60, left: 100, right: 100 } }), ...priceCells(hotelDays.length)]
+            : [cell([p(`D${d.ngay}${IDEO}${IDEO}${d.name}`, { size: 18 })], { width: LEFT_W, margins: { top: 60, bottom: 60, left: 100, right: 100 } })],
+        }),
+      );
+
+  const priceTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [priceHeaderRow1, priceHeaderRow2, ...hotelRows],
+  });
+
+  // ── 以上價格不含 ────────────────────────────────────────────────────────────
+  const notesBlock = [
+    p("以上價格不含：", { bold: true, size: 18 }),
+    ...cfg.above_notes.split(/\r?\n/).filter((l) => l.trim()).map((l) => p(l, { size: 18 })),
+  ];
+
+  // ── 報價包含 / 報價不含 / 備註 (từ config; cảnh điểm tự nối vào 包含) ──────────
+  const includedLines = [...cfg.included.split(/\r?\n/).filter((l) => l.trim()), ...sights];
+  const excludedLines = cfg.excluded.split(/\r?\n/).filter((l) => l.trim());
+  const noteLines = cfg.notes.split(/\r?\n/).filter((l) => l.trim());
+  const LABEL_W2 = 1600;
+  const incExcTable = new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        children: [
+          cell([p("報價包含", { bold: true, color: "C00000" })], { width: LABEL_W2, shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+          cell(includedLines.map((l) => p(l, { size: 18 })), { width: CONTENT_W - LABEL_W2 }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          cell([p("報價不含", { bold: true, color: "C00000" })], { width: LABEL_W2, shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
+          cell(excludedLines.map((l) => p(l, { size: 18 })), { width: CONTENT_W - LABEL_W2 }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          cell([p("備註", { bold: true })], { width: LABEL_W2, shading: HEADER_SHADING }),
+          cell(noteLines.length ? noteLines.map((l) => p(l, { size: 18 })) : [p("", { size: 18 })], { width: CONTENT_W - LABEL_W2 }),
+        ],
+      }),
+    ],
+  });
+
+  // ── 行程內容 (nội dung file chương trình đính kèm, nếu đọc được) ──────────────
+  const programBlock: Paragraph[] = [];
+  if (programText && programText.trim()) {
+    programBlock.push(
+      new Paragraph({ spacing: { before: 220 }, children: [] }),
+      new Paragraph({ children: [new TextRun({ noProof: true, text: "行程內容", bold: true, size: 22, font: "Times New Roman", color: "185FA5" })] }),
+    );
+    let prevEmpty = false;
+    for (const raw of programText.split(/\r?\n/)) {
+      const line = raw.replace(/\s+$/, "");
+      const empty = line.trim() === "";
+      if (empty && prevEmpty) continue; // gộp dòng trống liên tiếp
+      programBlock.push(p(line, { size: 18 }));
+      prevEmpty = empty;
+    }
+  }
+
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: { width: PAGE_W, height: PAGE_H },
+            margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
+          },
+        },
+        children: [
+          priceTable,
+          spacer(),
+          ...notesBlock,
+          spacer(),
+          incExcTable,
+          ...programBlock,
         ],
       },
     ],
