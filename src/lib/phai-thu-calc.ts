@@ -131,6 +131,23 @@ export function parsePhaiThuExtras(raw: unknown): PhaiThuExtra[] {
 }
 
 /**
+ * Tổng các khoản "thu thêm tay" (extras) mà HDV thu hộ, quy ra VND.
+ *
+ * Dùng cho dòng "Thu khác" trên Giấy đề nghị quyết toán HDV: mọi khoản phải thu
+ * NGOÀI tip / đầu khách / quỹ VP (đã có dòng riêng trong form) mà HDV thu phải
+ * gộp hết vào "Thu khác" → Tổng thu khớp bảng "Phải thu", con số quyết toán
+ * (công ty còn phải trả / HDV trả lại) không bị lệch.
+ *
+ * Chỉ tính extras nguoiThu='hdv' và show (soTien>0 && tyGia>0) — mirror điều
+ * kiện trong computePhaiThu. Extras do công ty thu KHÔNG vào quyết toán HDV.
+ */
+export function sumHdvExtrasVND(doan: PhaiThuDoanInput | null | undefined): number {
+  return parsePhaiThuExtras(doan?.phai_thu_extras)
+    .filter((ex) => ex.nguoiThu === "hdv" && ex.soTien > 0 && ex.tyGia > 0)
+    .reduce((sum, ex) => sum + ex.soTien * ex.tyGia, 0);
+}
+
+/**
  * Tính toàn bộ Phải thu cho 1 đoàn (3 nguồn persist trong DB).
  * @param tyGiaNdt tỷ giá NDT→VND (UI lưu localStorage "hdv_ty_gia_ndt"); default 800.
  */

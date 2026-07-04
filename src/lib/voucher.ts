@@ -159,6 +159,165 @@ export function sumGroupVoucherMua(
 }
 
 /**
+ * Tính delta khi SỬA số vé voucher của 1 dòng (tăng/giảm) TẠI CHỖ — KHÔNG gỡ rồi
+ * áp lại. Gọi splitVoucherCoverage 2 lần (vé cũ / vé mới) cùng `loai` để mọi con số
+ * bù trừ bit-perfect với lúc áp ban đầu. Thuần (không DB/React) → test độc lập.
+ *
+ * - `veClamped` = vé mới sau khi kẹp vào [0, min(soKhachThucTe, veCu + tonKhoConLai)].
+ *   Cộng `veCu` vào trần tồn kho vì vé cũ đang CHIẾM kho của chính dòng này — khi sửa
+ *   nó được "trả lại" trước rồi mới trừ vé mới.
+ * - `route`:
+ *     'noop'   = vé không đổi (sau kẹp) → caller bỏ qua.
+ *     'remove' = vé mới ≤ 0 → caller gọi gỡ voucher (CHECK so_luong>0 chặn redemption=0).
+ *     'edit'   = cập nhật tại chỗ.
+ * - MUA: tien_cong_ty GIỮ NGUYÊN fullValue (voucher chỉ là cách trả) → deltaTienCongTy=0;
+ *   chỉ đổi coverValue (voucher_su_dung.gia_tri) + payment 'voucher'.
+ * - TẶNG: tien_cong_ty = remainderNet đổi theo vé → deltaTienCongTy = −deltaCover;
+ *   không có payment 'voucher' (paymentVoucher* = 0).
+ */
+export function calcVoucherEditDelta(params: {
+  veCu: number;
+  veMoi: number;
+  soKhachThucTe: number;
+  donGia: number;
+  ckPct: number | null;
+  loai: "mua" | "tang";
+  tonKhoConLai: number;
+}): {
+  route: "noop" | "remove" | "edit";
+  veClamped: number;
+  clamped: boolean;
+  coverCu: number;
+  coverMoi: number;
+  deltaCover: number;
+  tienCongTyCu: number;
+  tienCongTyMoi: number;
+  deltaTienCongTy: number;
+  deltaVe: number;
+  paymentVoucherCu: number;
+  paymentVoucherMoi: number;
+} {
+  const veCu = Math.max(0, Math.round(params.veCu));
+  const ton = Math.max(0, params.tonKhoConLai);
+  // Trần vé = min(số khách, tồn còn + vé cũ). Vé cũ cộng vào vì đang chiếm kho của chính nó.
+  const maxVe = Math.max(0, Math.min(params.soKhachThucTe, veCu + ton));
+  const veReq = Math.round(params.veMoi);
+  const veClamped = Math.max(0, Math.min(veReq, maxVe));
+  const clamped = veClamped !== veReq;
+
+  const common = {
+    soKhachThucTe: params.soKhachThucTe,
+    donGia: params.donGia,
+    ckPct: params.ckPct,
+    loai: params.loai,
+  };
+  const splitCu = splitVoucherCoverage({ ...common, soVe: veCu });
+  const splitMoi = splitVoucherCoverage({ ...common, soVe: veClamped });
+
+  const coverCu = splitCu.coverValue;
+  const coverMoi = splitMoi.coverValue;
+  const tienCongTyCu = splitCu.tienCongTy;
+  const tienCongTyMoi = splitMoi.tienCongTy;
+  const paymentVoucherCu = params.loai === "mua" ? coverCu : 0;
+  const paymentVoucherMoi = params.loai === "mua" ? coverMoi : 0;
+
+  const route: "noop" | "remove" | "edit" =
+    veClamped === veCu ? "noop" : veClamped <= 0 ? "remove" : "edit";
+
+  return {
+    route,
+    veClamped,
+    clamped,
+    coverCu,
+    coverMoi,
+    deltaCover: coverMoi - coverCu,
+    tienCongTyCu,
+    tienCongTyMoi,
+    deltaTienCongTy: tienCongTyMoi - tienCongTyCu,
+    deltaVe: veClamped - veCu,
+    paymentVoucherCu,
+    paymentVoucherMoi,
+  };
+}
+
+/**
+ * Tính lại phủ voucher khi SỬA SỐ KHÁCH của 1 suất chính ĐÃ phủ voucher.
+ *
+ * Số khách đổi → vé voucher KẸP ≤ số khách mới (không phủ nhiều hơn số khách hiện
+ * có). Giảm khách dưới số vé → vé tụt theo; tăng khách → vé GIỮ NGUYÊN (khách thêm
+ * KHÔNG tự phủ voucher — muốn phủ thêm thì sửa vé ở popover). Trả giá trị TUYỆT ĐỐI
+ * mới (không phải delta). Thuần (không DB/React).
+ *
+ * - `veNew`      = min(veCu, soKhachThucTe) — vé sau kẹp.
+ * - `coverValue` = giá trị phủ mới (ghi voucher_su_dung.gia_tri).
+ * - `tienCongTy` = công ty trả mới: MUA → full (số khách × đơn giá, sau CK);
+ *   TẶNG → remainderNet (phần ghế không phủ).
+ */
+export function calcCoveredSoKhachEdit(params: {
+  veCu: number;
+  soKhachThucTe: number;
+  donGia: number;
+  ckPct: number | null;
+  loai: "mua" | "tang";
+}): { veNew: number; coverValue: number; tienCongTy: number } {
+  const soKhach = Math.max(0, params.soKhachThucTe);
+  const veNew = Math.max(0, Math.min(Math.round(params.veCu), soKhach));
+  const split = splitVoucherCoverage({
+    soKhachThucTe: soKhach,
+    donGia: params.donGia,
+    ckPct: params.ckPct,
+    soVe: veNew,
+    loai: params.loai,
+  });
+  return { veNew, coverValue: split.coverValue, tienCongTy: split.tienCongTy };
+}
+
+/**
+ * Quyết định đồng bộ payment 'voucher' khi GIẢM/đổi giá trị phủ voucher 'mua'.
+ *
+ * Vấn đề: nếu ĐNTT ĐÃ trả đủ mà ta hạ payment voucher (coverMoi < coverCu) thì
+ * SUM(payments) tụt < so_tien → ĐNTT về 'partial' → đẻ "Chờ UNC" ẢO (thực ra
+ * giảm vé = vé TRẢ VỀ KHO, không phải công ty nợ thêm cash).
+ *
+ * Luật:
+ * - GIẢM phủ + ĐNTT đã trả đủ (paidBefore ≥ so_tien) → GIỮ NGUYÊN payment voucher
+ *   (`keepPaid`): ĐNTT đứng yên 'paid', không phantom. Phần giảm `overpaidFromKho`
+ *   = vé trả về kho; phần CASH thừa (nếu có) để footer aggregate ghi công nợ
+ *   (đã loại boat qua voucherKhoRefund trong calcAggregateDelta).
+ * - Còn lại (chưa trả đủ HOẶC tăng phủ) → clamp payment ≤ phần ĐNTT chưa trả
+ *   (logic cũ): phần chênh là cash thật.
+ *
+ * `overpaidFromKho` = coverCu − coverMoi khi keepPaid (chênh payment giữ-lại so với
+ * giá trị phủ thực) → cũng chính là voucherKhoRefund mà UI cần loại khỏi lệch.
+ */
+export function calcMuaVoucherPaymentSync(params: {
+  coverMoi: number;
+  coverCu: number;
+  dnttSoTien: number;
+  otherPaidSum: number;
+  ourVoucherPaidCu: number;
+}): { newVoucherPay: number; keepPaid: boolean; overpaidFromKho: number; payClamped: boolean } {
+  const reducing = params.coverMoi < params.coverCu;
+  const paidBefore = params.otherPaidSum + params.ourVoucherPaidCu;
+  if (reducing && paidBefore >= params.dnttSoTien) {
+    return {
+      newVoucherPay: params.ourVoucherPaidCu,
+      keepPaid: true,
+      overpaidFromKho: params.coverCu - params.coverMoi,
+      payClamped: false,
+    };
+  }
+  const capacity = Math.max(0, params.dnttSoTien - params.otherPaidSum);
+  const newVoucherPay = Math.max(0, Math.min(params.coverMoi, capacity));
+  return {
+    newVoucherPay,
+    keepPaid: false,
+    overpaidFromKho: 0,
+    payClamped: newVoucherPay < params.coverMoi,
+  };
+}
+
+/**
  * Allocation cho ĐNTT bổ sung (footer aggregate) khi nhóm có dòng phủ voucher 'mua'.
  * Allocate giá trị MỖI dòng phát sinh chưa-chốt về ĐÚNG chi_phi của nó (cả voucher
  * lẫn cash) → recalc quy `so_tien_da_dntt`/`so_tien_da_tt` về từng dòng (đúng trạng

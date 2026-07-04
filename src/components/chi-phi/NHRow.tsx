@@ -17,6 +17,7 @@ import { type VoucherTarget } from "./DungVoucherModal";
 import CatalogHoverCard from "./CatalogHoverCard";
 import { NHInput } from "./NHInput";
 import { NHFocEditor } from "./NHFocEditor";
+import VoucherEditPopover from "./VoucherEditPopover";
 import NHExtraRow from "./NHExtraRow";
 import NHAggFooterRow from "./NHAggFooterRow";
 import { HoaDonCell, HoaDonChiPhiBadge } from "./HoaDonBadge";
@@ -44,6 +45,8 @@ export interface NHRowData {
   doanId: number;
   /** chi_phi_id → voucher đã phủ (badge 🎟 + khóa input). */
   redemptionByChiPhiId: Record<number, CoveredInfo>;
+  /** voucher_id → tồn kho còn lại (kẹp trần khi tăng vé trong popover sửa). */
+  voucherStockById: Record<number, number>;
   upsertPending: boolean;
   updateDNTTPending: boolean;
 }
@@ -77,6 +80,9 @@ export interface NHRowHandlers {
   setAggNgayCan: (v: string) => void;
   onOpenVoucher: (target: VoucherTarget) => void;
   onRemoveVoucher: (chiPhiId: number) => void;
+  onEditVoucher: (chiPhiId: number, veMoi: number) => void;
+  /** Sửa số khách suất ĐÃ phủ voucher → vé kẹp + tính lại tiền (đọc so_khach từ localRows). */
+  onEditCoveredSoKhach: (key: string) => void;
 }
 
 interface Props {
@@ -94,7 +100,7 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   const {
     localRows, extrasMap, nhaHangMap, selectedKeys, dinhKyKeys, dnttList,
     paymentsList, congNoList, chiPhiRows, canTruByDnttId, editingDnttId,
-    editAmount, doanId, redemptionByChiPhiId, upsertPending, updateDNTTPending,
+    editAmount, doanId, redemptionByChiPhiId, voucherStockById, upsertPending, updateDNTTPending,
   } = data;
   const {
     setSelectedKeys, handleChange, handleSave, handleToggleNguoiTtNH,
@@ -103,7 +109,7 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
     setEditingDnttId, setEditAmount, setCancelMode, setCancelTarget,
     setDnttAlreadyPaid, setDnttModalMode, setDnttDepositAmount, setDnttNgayCan,
     setDnttModalKey, setAggCommit, setAggReason, setAggSurplusMode,
-    setAggCanTru, setAggNgayCan, onOpenVoucher, onRemoveVoucher,
+    setAggCanTru, setAggNgayCan, onOpenVoucher, onEditVoucher, onEditCoveredSoKhach,
   } = handlers;
 
   const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
@@ -210,8 +216,20 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   );
   const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
   const sumCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+  // voucherKhoRefund: payment 'voucher' GIỮ-LẠI vượt giá trị phủ thực (giảm vé trên
+  // ĐNTT đã trả đủ → vé về kho, không hạ payment). Loại khỏi lệch để boat voucher
+  // KHÔNG tính vào tiền thừa — chỉ phần cash (extras) mới cần ghi công nợ.
+  const groupChiPhiIds = groupChiPhi.map((cp) => cp.id).filter((x): x is number => x != null);
+  const groupVoucherPaid = paymentsList
+    .filter((p) => p.method === "voucher" && p.chi_phi_id != null && groupChiPhiIds.includes(p.chi_phi_id))
+    .reduce((s, p) => s + p.payment_so_tien, 0);
+  const groupVoucherGiaTri = groupChiPhiIds.reduce((s, id) => {
+    const r = redemptionByChiPhiId[id];
+    return r?.voucherLoai === "mua" ? s + r.giaTri : s;
+  }, 0);
+  const voucherKhoRefund = Math.max(0, groupVoucherPaid - groupVoucherGiaTri);
   const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
-    sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+    sumActual, sumPaid, sumCommitted, groupCongNoTotal, voucherKhoRefund,
   });
   const showAggBtn =
     nguoiTtMain === "cong_ty" &&
@@ -312,7 +330,15 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
             {row ? (
               <>
                 {isVoucherCovered ? (
-                  <span className="w-[56px] text-center tabular-nums">{row.so_khach}</span>
+                  // Suất đã phủ voucher: VẪN sửa được số khách — vé voucher kẹp ≤ số
+                  // khách + tính lại tiền (onEditCoveredSoKhach). Đơn giá/CK vẫn khóa.
+                  <NHInput
+                    value={row.so_khach}
+                    onChange={(v) => handleChange(key, "so_khach", v)}
+                    onBlur={() => onEditCoveredSoKhach(key)}
+                    width="w-[56px]"
+                    disabled={locked}
+                  />
                 ) : (
                   <NHInput
                     value={row.so_khach}
@@ -592,13 +618,19 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                 {t("ĐNTT")}
               </Button>
             )}
-            {/* Voucher: dùng (đủ điều kiện) / gỡ (đã phủ). Chỉ suất chính. */}
-            {isVoucherCovered ? (
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-purple-600 hover:text-purple-700"
-                title={t("Gỡ voucher")}
-                onClick={() => row?.id != null && onRemoveVoucher(row.id)}>
-                <Ticket className="h-3.5 w-3.5" />
-              </Button>
+            {/* Voucher: dùng (đủ điều kiện) / sửa vé tại chỗ (đã phủ). Chỉ suất chính. */}
+            {isVoucherCovered && voucherInfo ? (
+              <VoucherEditPopover
+                veCu={voucherInfo.soVe}
+                soKhachThucTe={soKhachThucTe}
+                donGia={row?.don_gia ?? 0}
+                ckPct={ckPhanTram}
+                loai={voucherInfo.voucherLoai}
+                voucherTen={voucherInfo.voucherTen}
+                tonKhoConLai={voucherStockById[voucherInfo.voucherId] ?? 0}
+                disabled={locked}
+                onSubmit={(veMoi) => row?.id != null && onEditVoucher(row.id, veMoi)}
+              />
             ) : voucherEligible && !isMealDinhKy ? (
               <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-purple-600"
                 title={t("Dùng voucher")}
@@ -651,6 +683,7 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
           donGia: extra.don_gia,
           ckPct: extra.chiet_khau_phan_tram,
         } : null;
+        const extraRedInfo = extra.id != null ? redemptionByChiPhiId[extra.id] : undefined;
         return (
           <NHExtraRow
             key={idx}
@@ -663,10 +696,13 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
             locked={locked}
             trangThaiHoaDon={extra.id != null ? (chiPhiRows.find((c) => c.id === extra.id)?.trang_thai_hoa_don ?? null) : null}
             covered={extraCovered}
-            voucherTen={extra.id != null ? (redemptionByChiPhiId[extra.id]?.voucherTen ?? null) : null}
+            voucherTen={extraRedInfo?.voucherTen ?? null}
+            voucherSoVe={extraRedInfo?.soVe ?? 0}
+            voucherLoai={extraRedInfo?.voucherLoai ?? "mua"}
+            tonKhoConLai={extraRedInfo ? (voucherStockById[extraRedInfo.voucherId] ?? 0) : 0}
             voucherEligible={extraEligible}
             onOpenVoucher={onOpenVoucher}
-            onRemoveVoucher={onRemoveVoucher}
+            onEditVoucher={onEditVoucher}
             voucherTarget={extraVoucherTarget}
           />
         );

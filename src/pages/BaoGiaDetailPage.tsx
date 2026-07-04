@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Lock } from "lucide-react";
+import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BaoGiaAiImport } from "@/components/bao-gia/BaoGiaAiImport";
 import { useBaoGia, useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@/hooks/use-bao-gia";
 import { useLead } from "@/hooks/use-leads";
-import { exportBaoGiaWord, exportBaoGiaGiaCuoiWord } from "@/lib/export-bao-gia-word";
-import { liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
+import { exportBaoGiaTaiwanWord, exportBaoGiaGiaCuoiWord } from "@/lib/export-bao-gia-word";
+import { liveKetQua, baoGiaCode } from "@/components/bao-gia/detail/helpers";
+import { fileKind, extractItineraryText } from "@/lib/itinerary-file";
 import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
-import { ChuongTrinhTourSection } from "@/components/bao-gia/detail/ChuongTrinhTourSection";
-import { DichVuPhuTroSection } from "@/components/bao-gia/detail/DichVuPhuTroSection";
-import { TierMatrixSection } from "@/components/bao-gia/detail/TierMatrixSection";
+import { CostingSheetSection } from "@/components/bao-gia/detail/CostingSheetSection";
+import { TaiwanExportSection } from "@/components/bao-gia/detail/TaiwanExportSection";
 import { TongHopChiPhiPanel } from "@/components/bao-gia/detail/TongHopChiPhiPanel";
 import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSection";
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
@@ -32,6 +33,7 @@ export default function BaoGiaDetailPage() {
 
   const [draft, setDraft] = useState<BaoGiaRow | null>(null);
   useEffect(() => { if (row) setDraft(row); }, [row]);
+  const [aiOpen, setAiOpen] = useState(false);
 
   // Pax dự kiến của lead gắn báo giá → highlight bậc giá áp dụng.
   const { data: lead } = useLead(draft?.lead_id ?? null);
@@ -99,16 +101,23 @@ export default function BaoGiaDetailPage() {
         toast.success("Đã xuất file Word!");
         return;
       }
-      // Recompute case totals từ items + xe_gia hiện tại → Word khớp panel UI.
+      // Recompute case totals từ items + xe_gia hiện tại → giá TB khớp panel UI.
       const fresh = liveKetQua(draft);
       if (!fresh) return;
-      // Bảng giá theo số khách (ma trận thật) — khớp section ma trận trên màn hình.
-      const tiers = liveTierBreakdown(draft).map((t) => ({
-        guests: t.guests,
-        gia_ban_vnd: t.line.gia_ban_per_pax,
-        gia_ban_usd: xr > 0 ? t.line.gia_ban_per_pax / xr : 0,
-      }));
-      await exportBaoGiaWord(fresh, xr, draft.profit_usd ?? 0, undefined, tiers);
+      // Đọc nội dung file chương trình (docx/xlsx) để chèn xuống dưới báo giá.
+      let programText = "";
+      const progFile = (draft.lich_trinh_files ?? []).find((f) => {
+        const k = fileKind(f.ten);
+        return k === "docx" || k === "xlsx";
+      });
+      if (progFile) {
+        try {
+          const buf = await (await fetch(progFile.url)).arrayBuffer();
+          programText = await extractItineraryText(buf, fileKind(progFile.ten) as "docx" | "xlsx");
+        } catch { /* bỏ qua nếu đọc file lỗi */ }
+      }
+      // Xuất kiểu Đài Loan (報價): bảng giá 3 mốc + 單房差 + 報價包含/不含 + mã code + 行程內容.
+      await exportBaoGiaTaiwanWord(fresh, fresh.items, xr, baoGiaCode(draft), programText);
       toast.success("Đã xuất file Word!");
     } catch {
       toast.error("Lỗi xuất file");
@@ -166,6 +175,12 @@ export default function BaoGiaDetailPage() {
         ) : (
           <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
             <div className="space-y-4 min-w-0">
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
+                  onClick={() => setAiOpen(true)}>
+                  <Sparkles className="h-3.5 w-3.5" /> AI điền từ lịch trình
+                </Button>
+              </div>
               <ThongTinTourSection
                 draft={draft}
                 row={row}
@@ -175,17 +190,17 @@ export default function BaoGiaDetailPage() {
                 savePatch={savePatch}
                 saveKetQua={saveKetQua}
               />
-              <ChuongTrinhTourSection
+              <CostingSheetSection
+                draft={draft}
+                updateDraftKetQua={updateDraftKetQua}
+                saveKetQua={saveKetQua}
+                leadPax={leadPax}
+              />
+              <TaiwanExportSection
                 draft={draft}
                 updateDraftKetQua={updateDraftKetQua}
                 saveKetQua={saveKetQua}
               />
-              <DichVuPhuTroSection
-                draft={draft}
-                updateDraftKetQua={updateDraftKetQua}
-                saveKetQua={saveKetQua}
-              />
-              <TierMatrixSection draft={draft} saveKetQua={saveKetQua} leadPax={leadPax} />
               <LichTrinhFilesSection draft={draft} />
             </div>
             <TongHopChiPhiPanel draft={draft} />
@@ -193,6 +208,32 @@ export default function BaoGiaDetailPage() {
         )}
         </fieldset>
       </div>
+      <BaoGiaAiImport
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        baoGiaId={draft.id}
+        files={draft.lich_trinh_files ?? []}
+        tourDate={draft.ngay_di}
+        exchangeRate={draft.exchange_rate}
+        savedReview={draft.ket_qua?.ai_review ?? null}
+        onSaveDraft={(d) => {
+          const ket = draft.ket_qua;
+          if (!ket) return;
+          saveKetQua({ ...ket, ai_review: d });
+        }}
+        onApply={(items, ten, soNgay) => {
+          const ket = draft.ket_qua;
+          if (!ket) return;
+          saveKetQua({
+            ...ket,
+            ten_chuong_trinh: ten || ket.ten_chuong_trinh,
+            so_ngay: soNgay || ket.so_ngay,
+            items,
+            ai_review: null, // đã áp dụng → bỏ bản nháp review
+          });
+          toast.success(`Đã nạp ${items.length} mục từ lịch trình. Kiểm tra giá & nhập bậc số khách.`);
+        }}
+      />
       <BaoGiaFooter
         onSaveDraft={() => todo("Lưu nháp")}
         onCreateBooking={() => todo("Tạo booking")}

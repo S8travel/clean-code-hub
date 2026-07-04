@@ -6,6 +6,8 @@ import {
   sumGroupVoucherMua,
   buildAggAllocations,
   splitVoucherCoverage,
+  calcVoucherEditDelta,
+  calcCoveredSoKhachEdit,
   type RedemptionLike,
   type CoveredInfo,
 } from "./voucher";
@@ -250,5 +252,157 @@ describe("splitVoucherCoverage", () => {
     expect(r.veApplied).toBe(0);
     expect(r.coverValue).toBe(0);
     expect(r.tienCongTy).toBe(1000000);
+  });
+});
+
+describe("calcVoucherEditDelta", () => {
+  // Tàu Paradise Delight: 24 khách × 1.150.000, không CK. full = 27.6M.
+  const boat = { soKhachThucTe: 24, donGia: 1150000, ckPct: null, tonKhoConLai: 100 };
+
+  it("TẶNG 2→4: cover +2.3M, công ty trả ÍT đi 2.3M, trả thêm 2 vé khỏi kho", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 2, veMoi: 4, loai: "tang" });
+    expect(d.route).toBe("edit");
+    expect(d.veClamped).toBe(4);
+    expect(d.coverCu).toBe(2300000);
+    expect(d.coverMoi).toBe(4600000);
+    expect(d.deltaCover).toBe(2300000);
+    expect(d.tienCongTyCu).toBe(25300000);
+    expect(d.tienCongTyMoi).toBe(23000000);
+    expect(d.deltaTienCongTy).toBe(-2300000); // tặng nhiều hơn → công ty trả ít hơn
+    expect(d.deltaVe).toBe(2);
+    expect(d.paymentVoucherMoi).toBe(0); // tặng không sinh payment voucher
+  });
+
+  it("TẶNG 4→2 (giảm): công ty trả THÊM 2.3M, trả lại 2 vé về kho", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 4, veMoi: 2, loai: "tang" });
+    expect(d.deltaCover).toBe(-2300000);
+    expect(d.deltaTienCongTy).toBe(2300000);
+    expect(d.deltaVe).toBe(-2);
+    expect(d.route).toBe("edit");
+  });
+
+  it("MUA 2→5: tien_cong_ty GIỮ full, chỉ cover + payment voucher tăng", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 2, veMoi: 5, loai: "mua" });
+    expect(d.tienCongTyCu).toBe(27600000);
+    expect(d.tienCongTyMoi).toBe(27600000);
+    expect(d.deltaTienCongTy).toBe(0);
+    expect(d.coverMoi).toBe(5750000);
+    expect(d.paymentVoucherMoi).toBe(5750000);
+    expect(d.deltaVe).toBe(3);
+    expect(d.route).toBe("edit");
+  });
+
+  it("MUA 5→2 (giảm trên ĐNTT đã trả): payment voucher giảm, công ty giữ full", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 5, veMoi: 2, loai: "mua" });
+    expect(d.deltaTienCongTy).toBe(0);
+    expect(d.coverCu).toBe(5750000);
+    expect(d.coverMoi).toBe(2300000);
+    expect(d.paymentVoucherMoi).toBeLessThan(d.paymentVoucherCu);
+  });
+
+  it("kẹp tồn kho: veCu=2, tồn=1, veMoi=5 → veClamped=min(10, 2+1)=3", () => {
+    const d = calcVoucherEditDelta({ soKhachThucTe: 10, donGia: 100000, ckPct: null, tonKhoConLai: 1, veCu: 2, veMoi: 5, loai: "tang" });
+    expect(d.veClamped).toBe(3);
+    expect(d.clamped).toBe(true);
+    expect(d.route).toBe("edit");
+  });
+
+  it("kẹp số khách: soKhach=10, veMoi=15, tồn dư → veClamped=10", () => {
+    const d = calcVoucherEditDelta({ soKhachThucTe: 10, donGia: 100000, ckPct: null, tonKhoConLai: 100, veCu: 4, veMoi: 15, loai: "tang" });
+    expect(d.veClamped).toBe(10);
+    expect(d.clamped).toBe(true);
+  });
+
+  it("veMoi = 0 → route='remove' (gỡ hẳn vì CHECK so_luong>0)", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 4, veMoi: 0, loai: "mua" });
+    expect(d.route).toBe("remove");
+    expect(d.veClamped).toBe(0);
+  });
+
+  it("veMoi âm → kẹp về 0 → route='remove'", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 4, veMoi: -3, loai: "tang" });
+    expect(d.veClamped).toBe(0);
+    expect(d.route).toBe("remove");
+  });
+
+  it("veMoi === veCu → route='noop', mọi delta = 0", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 3, veMoi: 3, loai: "mua" });
+    expect(d.route).toBe("noop");
+    expect(d.deltaVe).toBe(0);
+    expect(d.deltaCover).toBe(0);
+    expect(d.deltaTienCongTy).toBe(0);
+  });
+
+  it("tăng vượt trần (vé cũ đã = số khách) → noop, không tăng được", () => {
+    const d = calcVoucherEditDelta({ ...boat, veCu: 24, veMoi: 30, loai: "mua" });
+    expect(d.veClamped).toBe(24);
+    expect(d.route).toBe("noop");
+    expect(d.clamped).toBe(true);
+  });
+
+  it("có CK% MUA: 20kh×172.8k CK5%, 4→6 → cover+remainder bù trừ đúng full, deltaTienCongTy=0", () => {
+    const d = calcVoucherEditDelta({ soKhachThucTe: 20, donGia: 172800, ckPct: 5, tonKhoConLai: 50, veCu: 4, veMoi: 6, loai: "mua" });
+    // full = applyChietKhau(20×172800, 5%) = 3.283.200
+    const full = 3283200;
+    expect(d.coverMoi + d.tienCongTyMoi - full).toBe(d.coverMoi); // mua: tienCongTy=full
+    expect(d.deltaTienCongTy).toBe(0);
+    expect(d.paymentVoucherMoi).toBe(d.coverMoi);
+  });
+
+  it("có CK% TẶNG: 20kh×172.8k CK5%, 4→6 → deltaTienCongTy = -(coverMoi - coverCu)", () => {
+    const d = calcVoucherEditDelta({ soKhachThucTe: 20, donGia: 172800, ckPct: 5, tonKhoConLai: 50, veCu: 4, veMoi: 6, loai: "tang" });
+    expect(d.deltaTienCongTy).toBe(-(d.coverMoi - d.coverCu));
+    expect(d.paymentVoucherCu).toBe(0);
+    expect(d.paymentVoucherMoi).toBe(0);
+  });
+});
+
+describe("calcCoveredSoKhachEdit", () => {
+  // Tàu Sea Octopus: 604.800/vé, không CK, MUA, vé == số khách (phủ hết).
+  it("MUA giảm khách 39→37 (vé phủ hết) → vé tụt 37, cover/cty = 37×604800", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 39, soKhachThucTe: 37, donGia: 604800, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(37);
+    expect(r.coverValue).toBe(37 * 604800); // 22.377.600
+    expect(r.tienCongTy).toBe(37 * 604800); // mua giữ full
+  });
+
+  it("MUA tăng khách 37→39 (vé đang 37) → vé GIỮ 37 (khách thêm không tự phủ), cty=full 39", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 37, soKhachThucTe: 39, donGia: 604800, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(37);
+    expect(r.coverValue).toBe(37 * 604800);
+    expect(r.tienCongTy).toBe(39 * 604800); // full theo số khách mới
+  });
+
+  it("MUA phủ MỘT PHẦN: vé 20, khách 39→35 (vẫn ≥20) → vé giữ 20", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 20, soKhachThucTe: 35, donGia: 100000, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(20);
+    expect(r.coverValue).toBe(20 * 100000);
+    expect(r.tienCongTy).toBe(35 * 100000);
+  });
+
+  it("MUA giảm khách DƯỚI số vé: vé 20, khách 15 → vé kẹp 15", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 20, soKhachThucTe: 15, donGia: 100000, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(15);
+    expect(r.coverValue).toBe(15 * 100000);
+  });
+
+  it("TẶNG giảm khách 24→20 (vé tặng 2) → vé giữ 2, cty = remainderNet 18 ghế", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 2, soKhachThucTe: 20, donGia: 1150000, ckPct: null, loai: "tang" });
+    expect(r.veNew).toBe(2);
+    expect(r.coverValue).toBe(2 * 1150000);
+    expect(r.tienCongTy).toBe(18 * 1150000); // 18 ghế công ty trả
+  });
+
+  it("số khách = 0 → vé 0 (caller sẽ gỡ voucher)", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 39, soKhachThucTe: 0, donGia: 604800, ckPct: null, loai: "mua" });
+    expect(r.veNew).toBe(0);
+    expect(r.coverValue).toBe(0);
+  });
+
+  it("có CK%: cover + remainder vẫn bù trừ đúng full (MUA, CK5%)", () => {
+    const r = calcCoveredSoKhachEdit({ veCu: 4, soKhachThucTe: 20, donGia: 172800, ckPct: 5, loai: "mua" });
+    // full = applyChietKhau(20×172800, 5%) = 3.283.200; mua → tienCongTy = full
+    expect(r.tienCongTy).toBe(3283200);
+    expect(r.veNew).toBe(4);
   });
 });

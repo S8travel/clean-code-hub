@@ -1190,6 +1190,7 @@
   "Đã thanh toán:": "已付款：",
   "Đã thêm dòng xe": "已新增車輛列",
   "Không có dòng xe công ty trả để in ĐNTT": "沒有公司支付的車輛項目可列印付款申請",
+  "Không có dòng xe trả trực tiếp để in ĐNTT (dòng định kỳ trả qua thanh toán định kỳ)": "沒有直接付款的車輛項目可列印付款申請（定期付款項目透過定期付款處理）",
   "Không có dòng vé công ty trả để in ĐNTT": "沒有公司支付的機票項目可列印付款申請",
   "Đã thêm phụ phí visa": "已新增簽證附加費",
   "Đã thêm phụ phí xe": "已新增車輛附加費",

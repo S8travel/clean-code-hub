@@ -17,6 +17,7 @@ export interface KhachSan {
   nha_cung_cap_id: number | null;
   ten_zh: string | null;
   dia_diem_zh: string | null;
+  thanh_toan_dinh_ky_mac_dinh: boolean;
 }
 
 const QK = "khach_san_list";

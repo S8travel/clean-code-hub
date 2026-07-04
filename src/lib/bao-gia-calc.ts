@@ -8,8 +8,27 @@ export interface ManualItem {
   bang_gia_ten: string;
   gia: number | null;
   // FOC trừ khỏi multiplier (rooms cho hotel, pax cho meal/ticket).
-  // Default 0 nếu không khai báo.
+  // = SỐ MIỄN nhập tay (override). null/undefined → auto theo chính sách bên dưới.
   foc?: number;
+  // Chính sách FOC nhà hàng (snapshot master): foc_khach miễn foc_mien.
+  // Khi foc (override) vắng → tự tính số miễn = floor(count / foc_khach) × foc_mien.
+  foc_khach?: number;
+  foc_mien?: number;
+  // N (次/N数): số đêm (KS) / số lần (ăn, vé) / số chuyến (xe). Nhân thêm vào
+  // thành tiền. Default 1 nếu không khai báo (back-compat item cũ).
+  so_luong?: number;
+}
+
+/** Số suất/phòng MIỄN của 1 item ở quy mô `count` (pax cho ăn/vé, rooms cho KS):
+ *  - foc (override nhập tay) có giá trị → dùng luôn (cố định mọi cỡ đoàn);
+ *  - else có chính sách foc_khach → tự tính floor(count / foc_khach) × foc_mien;
+ *  - else 0. */
+export function effItemFoc(
+  i: { foc?: number; foc_khach?: number; foc_mien?: number }, count: number,
+): number {
+  if (i.foc != null) return i.foc;
+  if (i.foc_khach && i.foc_khach > 0) return Math.floor(count / i.foc_khach) * (i.foc_mien ?? 0);
+  return 0;
 }
 
 interface CaseConfig {
@@ -36,23 +55,24 @@ export function calcCase(
 ): BaoGiaCase {
   const { guests, pax, rooms } = cfg;
 
-  // FOC trừ khỏi multiplier per item. clamp 0 để không lỗ ngược.
+  // FOC (số miễn) trừ khỏi multiplier per item — auto theo chính sách hoặc
+  // override nhập tay (effItemFoc), rồi nhân N (so_luong). clamp 0.
   const hotel = items
     .filter((i) => i.loai === "hotel" && i.gia)
-    .reduce((s, i) => s + Math.max(0, rooms - (i.foc ?? 0)) * i.gia!, 0);
+    .reduce((s, i) => s + Math.max(0, rooms - effItemFoc(i, rooms)) * i.gia! * (i.so_luong ?? 1), 0);
 
   const meal = items
     .filter((i) => i.loai === "meal" && i.gia)
-    .reduce((s, i) => s + Math.max(0, pax - (i.foc ?? 0)) * i.gia!, 0);
+    .reduce((s, i) => s + Math.max(0, pax - effItemFoc(i, pax)) * i.gia! * (i.so_luong ?? 1), 0);
 
   const ticket = items
     .filter((i) => i.loai === "ticket" && i.gia)
-    .reduce((s, i) => s + Math.max(0, pax - (i.foc ?? 0)) * i.gia!, 0);
+    .reduce((s, i) => s + Math.max(0, pax - effItemFoc(i, pax)) * i.gia! * (i.so_luong ?? 1), 0);
 
-  // transport: lump-sum, KHÔNG áp FOC (catalog xe luôn foc=0).
+  // transport: lump-sum × N, KHÔNG áp FOC (catalog xe luôn foc=0).
   const transport = tienXe + tienPhuThu + items
     .filter((i) => (i.loai === "transport" || i.loai === "extra") && i.gia)
-    .reduce((s, i) => s + i.gia!, 0);
+    .reduce((s, i) => s + i.gia! * (i.so_luong ?? 1), 0);
 
   const insurance = 100_000 * pax;
   const guide = 200_000 * soNgay;
@@ -115,7 +135,10 @@ export function calcBaoGia(
       mo_ta: i.bang_gia_ten || i.mo_ta,
       don_gia: i.gia!,
       ghi_chu: "",
-      foc: i.foc ?? 0,
+      foc: i.foc,
+      foc_khach: i.foc_khach,
+      foc_mien: i.foc_mien,
+      so_luong: i.so_luong ?? 1,
     }));
 
   return {

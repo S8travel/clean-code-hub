@@ -2,7 +2,7 @@
 // cost breakdown để các sub-components share consistent output.
 
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
-import { calcBaoGia, calcTiers, type ManualItem } from "@/lib/bao-gia-calc";
+import { calcBaoGia, calcTiers, tierConfig, effItemFoc, type ManualItem } from "@/lib/bao-gia-calc";
 
 export const fmtVnd = (n: number | null | undefined) =>
   Math.round(Number(n) || 0).toLocaleString("vi-VN");
@@ -121,7 +121,10 @@ export function liveKetQua(draft: BaoGiaRow): BaoGiaKetQua | null {
     mo_ta: it.mo_ta,
     bang_gia_ten: it.mo_ta,
     gia: it.don_gia,
-    foc: it.foc ?? 0,
+    foc: it.foc,
+    foc_khach: it.foc_khach,
+    foc_mien: it.foc_mien,
+    so_luong: it.so_luong ?? 1,
   }));
 
   const phuThu = draft.phu_thu ?? 0;
@@ -202,7 +205,7 @@ export function costBreakdown(args: {
   const manualItems: ManualItem[] = (ket.items ?? []).map((it, i) => ({
     id: `${i}`, ngay: it.ngay_so ?? 1, loai: it.loai,
     mo_ta: it.mo_ta, bang_gia_ten: it.mo_ta, gia: it.don_gia,
-    foc: it.foc ?? 0,
+    foc: it.foc, foc_khach: it.foc_khach, foc_mien: it.foc_mien, so_luong: it.so_luong ?? 1,
   }));
   // Truyền 0 cho phuThu trong calc — phụ thu hiển thị dòng riêng (KHÔNG gộp
   // vào "Xe vận chuyển"). Cộng vào tổng cost vốn ngoài calc.
@@ -249,7 +252,8 @@ export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
   const guestsList = tierGuestsOf(ket);
   const manualItems: ManualItem[] = (ket.items ?? []).map((it, i) => ({
     id: `${i}`, ngay: it.ngay_so ?? 1, loai: it.loai,
-    mo_ta: it.mo_ta, bang_gia_ten: it.mo_ta, gia: it.don_gia, foc: it.foc ?? 0,
+    mo_ta: it.mo_ta, bang_gia_ten: it.mo_ta, gia: it.don_gia, foc: it.foc,
+    foc_khach: it.foc_khach, foc_mien: it.foc_mien, so_luong: it.so_luong ?? 1,
   }));
   const xr = draft.exchange_rate ?? 26000;
   const profitUsd = draft.profit_usd ?? 0;
@@ -260,4 +264,171 @@ export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
     guests: c.guests,
     line: buildCase(c, c.guests, phuThu, profitUsd, xr, draft.vcb_rate ?? null),
   }));
+}
+
+// ── Costing sheet (bố cục Excel: nhóm Xe/KS/Ăn/Vé × nhiều cột số khách) ───────
+
+export type CostingUnit = "rooms" | "pax" | "lump";
+
+/** 1 ô (cell) chi phí của 1 item ở 1 bậc số khách. */
+export interface CostingTierCell {
+  guests: number;
+  qty: number;    // số phòng (hotel) | pax (meal/ticket) | 1 (lump xe/phụ thu)
+  foc: number;    // số miễn áp dụng cho bậc này (auto theo chính sách hoặc override)
+  total: number;  // don_gia × so_luong × max(0, qty − foc)  (lump: × so_luong)
+}
+
+/** 1 dòng item trong bảng costing. itemIndex = vị trí trong ket.items (để sửa);
+ *  -1 = dòng tổng hợp (xe lump / phụ thu) lấy từ field draft, KHÔNG sửa inline. */
+export interface CostingRow {
+  itemIndex: number;
+  loai: BaoGiaItem["loai"];
+  unit: CostingUnit;
+  ngay_so: number;            // 0 = không gắn ngày (xe lump / phụ thu)
+  bua_an?: "trua" | "toi";
+  mo_ta: string;
+  ten_zh?: string;
+  don_gia: number;
+  don_gia_usd: number;
+  so_luong: number;           // N (次/N数)
+  foc_manual: number | null;  // số miễn nhập tay (override). null = auto theo policy
+  foc_khach?: number;         // chính sách FOC nhà hàng (auto)
+  foc_mien?: number;
+  editable: boolean;
+  cells: CostingTierCell[];   // 1 cell / bậc số khách
+}
+
+export interface CostingGroup {
+  key: "transport" | "hotel" | "meal" | "ticket";
+  label: string;
+  rows: CostingRow[];
+  subtotals: number[];        // tổng theo từng bậc
+}
+
+export interface CostingFooterRow {
+  key: string;
+  label: string;
+  values: number[];           // theo từng bậc
+  kind: "cost" | "total" | "profit" | "price" | "usd" | "pct";
+}
+
+export interface CostingSheet {
+  guests: number[];
+  configs: { guests: number; pax: number; rooms: number }[];
+  xr: number;
+  groups: CostingGroup[];
+  footer: CostingFooterRow[];
+}
+
+const GROUP_LABEL: Record<CostingGroup["key"], string> = {
+  transport: "Xe / Vận chuyển",
+  hotel: "Khách sạn",
+  meal: "Ăn uống",
+  ticket: "Vé tham quan",
+};
+
+// Thứ tự trong nhóm Ăn: trưa → tối → generic.
+function buaOrder(it: { bua_an?: "trua" | "toi" }): number {
+  if (it.bua_an === "trua") return 0;
+  if (it.bua_an === "toi") return 1;
+  return 2;
+}
+
+/** Dựng bảng costing theo bố cục Excel: gom theo nhóm Xe/KS/Ăn/Vé, mỗi item có
+ *  per-bậc (qty/thành tiền), footer (cộng dịch vụ → tổng vốn → giá bán/khách).
+ *  Footer khớp đúng calcCase/costBreakdown (giá/khách = round((tổng vốn+LN)/khách)). */
+export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
+  const ket = draft.ket_qua;
+  if (!ket) return null;
+
+  const xr = draft.exchange_rate ?? 26000;
+  const profitUsd = draft.profit_usd ?? 0;
+  const soNgay = ket.so_ngay ?? 1;
+  const vcb = draft.vcb_rate ?? null;
+  const guests = tierGuestsOf(ket);
+  const configs = guests.map(tierConfig);
+  const items = ket.items ?? [];
+
+  const unitFor = (loai: BaoGiaItem["loai"]): CostingUnit =>
+    loai === "hotel" ? "rooms" : loai === "transport" ? "lump" : "pax";
+
+  const cellsFor = (it: BaoGiaItem, don_gia: number, sl: number): CostingTierCell[] =>
+    configs.map((c) => {
+      const qty = it.loai === "hotel" ? c.rooms : it.loai === "transport" ? 1 : c.pax;
+      const foc = it.loai === "transport" ? 0 : effItemFoc(it, qty); // số miễn theo bậc
+      const eff = Math.max(0, qty - foc);
+      return { guests: c.guests, qty, foc, total: don_gia * sl * eff };
+    });
+
+  const rowFromItem = (it: BaoGiaItem, idx: number): CostingRow => {
+    const don_gia = it.don_gia ?? 0;
+    const sl = it.so_luong ?? 1;
+    return {
+      itemIndex: idx, loai: it.loai, unit: unitFor(it.loai),
+      ngay_so: it.ngay_so ?? 1, bua_an: it.bua_an, mo_ta: it.mo_ta, ten_zh: it.ten_zh,
+      don_gia, don_gia_usd: xr > 0 ? don_gia / xr : 0, so_luong: sl,
+      foc_manual: it.foc ?? null, foc_khach: it.foc_khach, foc_mien: it.foc_mien,
+      editable: true, cells: cellsFor(it, don_gia, sl),
+    };
+  };
+
+  const rowsOf = (loai: BaoGiaItem["loai"]): CostingRow[] =>
+    items
+      .map((it, i) => ({ it, i }))
+      .filter(({ it }) => it.loai === loai)
+      .sort((a, b) => ((a.it.ngay_so ?? 1) - (b.it.ngay_so ?? 1)) || (buaOrder(a.it) - buaOrder(b.it)))
+      .map(({ it, i }) => rowFromItem(it, i));
+
+  const lumpRow = (label: string, gia: number): CostingRow => ({
+    itemIndex: -1, loai: "transport", unit: "lump", ngay_so: 0, mo_ta: label,
+    don_gia: gia, don_gia_usd: xr > 0 ? gia / xr : 0, so_luong: 1,
+    foc_manual: null, editable: false,
+    cells: configs.map((c) => ({ guests: c.guests, qty: 1, foc: 0, total: gia })),
+  });
+
+  // Nhóm Xe = xe (lump từ draft) + transport items + phụ thu (lump từ draft).
+  const xeRows: CostingRow[] = [];
+  if ((draft.xe_gia ?? 0) > 0) xeRows.push(lumpRow(draft.xe_ten || "Xe", draft.xe_gia!));
+  rowsOf("transport").forEach((r) => xeRows.push(r));
+  if ((draft.phu_thu ?? 0) > 0) xeRows.push(lumpRow("Phụ thu (cầu đường, trung chuyển…)", draft.phu_thu));
+
+  const rawGroups: { key: CostingGroup["key"]; rows: CostingRow[] }[] = [
+    { key: "transport", rows: xeRows },
+    { key: "hotel", rows: rowsOf("hotel") },
+    { key: "meal", rows: rowsOf("meal") },
+    { key: "ticket", rows: rowsOf("ticket") },
+  ];
+  const groups: CostingGroup[] = rawGroups.map((g) => ({
+    key: g.key,
+    label: GROUP_LABEL[g.key],
+    rows: g.rows,
+    subtotals: configs.map((_, ti) => g.rows.reduce((s, r) => s + r.cells[ti].total, 0)),
+  }));
+
+  // Footer — khớp calcCase: tổng vốn = dịch vụ + HDV + BH + tip.
+  const dichVu = configs.map((_, ti) => groups.reduce((s, g) => s + g.subtotals[ti], 0));
+  const hdv = configs.map(() => 200_000 * soNgay);
+  const baoHiem = configs.map((c) => 100_000 * c.pax);
+  const tip = configs.map(() => 500_000);
+  const tongVon = configs.map((_, ti) => dichVu[ti] + hdv[ti] + baoHiem[ti] + tip[ti]);
+  const loiNhuan = configs.map((c) => Math.round(profitUsd * xr * c.guests));
+  const giaBan = configs.map((_, ti) => tongVon[ti] + loiNhuan[ti]);
+  const chenh = configs.map((_, ti) => (vcb && xr > 0 ? Math.round(giaBan[ti] * (vcb - xr) / xr) : 0));
+  const giaPerPax = configs.map((c, ti) => (c.guests > 0 ? Math.round(giaBan[ti] / c.guests) : 0));
+  const usdPerPax = configs.map((_, ti) => (xr > 0 ? giaPerPax[ti] / xr : 0));
+  const bienPct = configs.map((_, ti) => (giaBan[ti] > 0 ? (loiNhuan[ti] + chenh[ti]) / giaBan[ti] * 100 : 0));
+
+  const footer: CostingFooterRow[] = [
+    { key: "dich_vu", label: "Cộng dịch vụ", values: dichVu, kind: "cost" },
+    { key: "hdv", label: "Hướng dẫn viên", values: hdv, kind: "cost" },
+    { key: "bao_hiem", label: "Bảo hiểm", values: baoHiem, kind: "cost" },
+    { key: "tip", label: "Tip", values: tip, kind: "cost" },
+    { key: "tong_von", label: "TỔNG CHI PHÍ VỐN", values: tongVon, kind: "total" },
+    { key: "loi_nhuan", label: `Lợi nhuận (${fmtUsd(profitUsd)} USD/khách)`, values: loiNhuan, kind: "profit" },
+    { key: "gia_pax", label: "GIÁ BÁN / KHÁCH", values: giaPerPax, kind: "price" },
+    { key: "usd_pax", label: "≈ USD / khách", values: usdPerPax, kind: "usd" },
+    { key: "bien", label: "Biên lợi nhuận %", values: bienPct, kind: "pct" },
+  ];
+
+  return { guests, configs, xr, groups, footer };
 }

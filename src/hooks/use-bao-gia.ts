@@ -13,10 +13,20 @@ export interface BaoGiaItem {
   // Phân biệt bữa với loai='meal' (trưa/tối). Calc giữ nguyên (cả 2 cùng
   // tính × pax). Item cũ không có field này sẽ hiển thị "Ăn uống" generic.
   bua_an?: "trua" | "toi";
-  // FOC snapshot từ bang_gia_dich_vu (free portion/room). Trừ khỏi multiplier:
+  // FOC = SỐ MIỄN nhập tay (override). Trừ khỏi multiplier:
   //   hotel: (rooms - foc) × gia,  meal/ticket: (pax - foc) × gia.
-  // Item cũ không có foc → mặc định 0 (không trừ).
+  // null/undefined → tự tính theo chính sách foc_khach/foc_mien bên dưới (nếu có).
   foc?: number;
+  // Chính sách FOC nhà hàng (snapshot master nha_hang): foc_khach miễn foc_mien.
+  // Auto số miễn mỗi cỡ đoàn = floor(pax / foc_khach) × foc_mien. Override = foc.
+  foc_khach?: number;
+  foc_mien?: number;
+  // N (次/N数): số đêm (KS) / số lần (ăn, vé) / số chuyến (xe). Nhân vào thành
+  // tiền. Item cũ không có → mặc định 1.
+  so_luong?: number;
+  // Tên gốc tiếng Trung (từ AI trích lịch trình ZH) — hiển thị song ngữ trong
+  // bảng costing kiểu Excel. Item nhập tay/không có → bỏ trống.
+  ten_zh?: string;
 }
 
 export interface BaoGiaCase {
@@ -43,10 +53,29 @@ export interface GiaCuoiTier {
   gia_ban_vnd: number;
 }
 
+// 1 cột giá trong bảng xuất Đài Loan (nhãn khoảng khách + giá/khách USD).
+export interface BaoGiaExportBracket {
+  label: string;      // "10-14 pax"
+  price_usd: number;  // giá bán/khách (USD) cho khoảng này
+}
+
+// Cấu hình nội dung xuất báo giá Đài Loan — SỬA ĐƯỢC + LƯU theo báo giá (ket_qua).
+// Field nào vắng → export dùng mặc định tính live (taiwanExportDefaults).
+export interface BaoGiaExportConfig {
+  brackets?: BaoGiaExportBracket[];    // khoảng giá (cột)
+  single_supplement_usd?: number;      // 單房差
+  above_notes?: string;                // 以上價格不含 (nhiều dòng)
+  included?: string;                   // 報價包含 (nhiều dòng; cảnh điểm tự nối thêm khi xuất)
+  excluded?: string;                   // 報價不含 (nhiều dòng)
+  notes?: string;                      // 備註
+}
+
 export interface BaoGiaKetQua {
   ten_chuong_trinh: string;
   so_ngay: number;
   items: BaoGiaItem[];
+  // Cấu hình xuất báo giá Đài Loan (user sửa trong app). Vắng → export tính mặc định.
+  export_config?: BaoGiaExportConfig | null;
   case_16: BaoGiaCase;
   case_20: BaoGiaCase;
   gia_trung_binh_vnd: number;
@@ -57,6 +86,8 @@ export interface BaoGiaKetQua {
   // Mode 'gia_cuoi': giá bán/khách nhập thẳng theo bậc số khách (KHÔNG tính từ
   // items). Vắng ở báo giá tự-tính. Source of truth cho bảng giá + Word.
   gia_cuoi_tiers?: GiaCuoiTier[];
+  // Bản nháp review "AI điền từ lịch trình" (chưa áp dụng) — lưu để mở lại tiếp tục.
+  ai_review?: import("@/lib/bao-gia-ai-resolve").AiReviewDraft | null;
 }
 
 // File lịch trình đính kèm (loai_bao_gia='gia_cuoi' — chương trình lấy của bên
@@ -406,6 +437,32 @@ export function useExtractChuongTrinh() {
       }
 
       return resp.json();
+    },
+  });
+}
+
+// ── AI extract + match lịch trình (mode tự tính) ──
+// Gọi edge fn bao-gia-extract-match: AI trích xuất + khớp dòng master (id),
+// KHÔNG bịa giá. Giá resolve ở client qua lib/bao-gia-ai-resolve.
+export function useExtractMatchItinerary() {
+  return useMutation({
+    // input: đọc file đính kèm ({fileUrl,fileType}) hoặc dán text ({itinerary}).
+    mutationFn: async (
+      input: { itinerary?: string; fileUrl?: string; fileType?: string; provider?: "claude" | "keystone" },
+    ): Promise<import("@/lib/bao-gia-ai-resolve").AiExtractResult> => {
+      const session = await externalSupabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      const resp = await fetch(`${EXTERNAL_SUPABASE_URL}/functions/v1/bao-gia-extract-match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error ?? "Lỗi AI trích xuất lịch trình");
+      }
+      const { ketQua } = await resp.json();
+      return ketQua;
     },
   });
 }
