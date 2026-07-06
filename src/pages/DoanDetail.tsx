@@ -43,6 +43,7 @@ import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
 import BookingVisaXeTab from "@/components/booking-dv/BookingVisaXeTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
+import KhaoSatTab from "@/components/khao-sat/KhaoSatTab";
 import { KhachLeTab } from "@/components/dieu-tour/KhachLeTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
@@ -563,6 +564,7 @@ export default function DoanDetail() {
               <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
               <TabsTrigger value="tai-lieu">{t("Tài liệu")}</TabsTrigger>
               <TabsTrigger value="log">{t("Log")}</TabsTrigger>
+              <TabsTrigger value="khao-sat">{t("Khảo sát khách")}</TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -750,6 +752,10 @@ export default function DoanDetail() {
             </TabsContent>
           )}
           </fieldset>
+
+          <TabsContent value="khao-sat" className="mt-4">
+            {doanId != null && <KhaoSatTab doanId={doanId} />}
+          </TabsContent>
         </div>
       </Tabs>
     </div>

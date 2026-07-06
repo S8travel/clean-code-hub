@@ -27,6 +27,7 @@ import {
   Target,
   Ticket,
   Contact,
+  Star,
   ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -164,6 +165,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness, resource: "my_job" },
       { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, resource: "theo_doi" },
+      { title: "Khảo sát", url: "/khao-sat", icon: Star, resource: "theo_doi" },
       { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, resource: "xep_hdv" },
       { title: "Lock Phòng", url: "/lock-phong", icon: CalendarRange, resource: "lock_phong" },
       { title: "Invoice", url: "/invoice", icon: FileText, resource: "invoice" },
