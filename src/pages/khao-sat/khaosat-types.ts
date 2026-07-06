@@ -11,7 +11,6 @@ export interface FormState {
   email: string;
   next_trip: string; // 下次旅程 — free text
   y_kien_khac: string; // 旅遊建議 — free text
-  diem_ban: string; // 營業據點 — "" = chưa chọn; lưu CODE (single-select)
   nguon_thong_tin: string[]; // 獲得資訊 — mảng CODE (multi-select)
   yeu_to_mua: string[]; // 購買因素 — mảng CODE (multi-select)
   scores: Record<ScoreKey, number>; // 0 = chưa chấm
@@ -36,7 +35,6 @@ export function emptyForm(): FormState {
     email: "",
     next_trip: "",
     y_kien_khac: "",
-    diem_ban: "",
     nguon_thong_tin: [],
     yeu_to_mua: [],
     scores: emptyScores(),

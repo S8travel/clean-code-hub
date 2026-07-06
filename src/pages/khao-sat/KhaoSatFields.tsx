@@ -6,7 +6,6 @@ import type { UIStrings } from "./khaosat-i18n";
 import {
   SCORE_KEYS,
   CRITERIA_LABELS,
-  DIEM_BAN_OPTIONS,
   NGUON_OPTIONS,
   YEUTO_OPTIONS,
   FIELD_LABELS,
@@ -233,16 +232,6 @@ export function KhaoSatFields({
           disabled={submitting}
         />
       </div>
-
-      {/* ── Điểm bán (營業據點, single-select) ── */}
-      <ChoiceGroup
-        label={labelForLang(FIELD_LABELS.diem_ban, lang)}
-        options={DIEM_BAN_OPTIONS}
-        lang={lang}
-        disabled={submitting}
-        isSelected={(code) => form.diem_ban === code}
-        onToggle={(code) => onSet("diem_ban", form.diem_ban === code ? "" : code)}
-      />
 
       {/* ── Nguồn biết đến (獲得資訊, multi-select) ── */}
       <ChoiceGroup
