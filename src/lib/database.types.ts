@@ -4285,8 +4285,134 @@ export type Database = {
           },
         ]
       }
+      khach_hang_khao_sat: {
+        Row: {
+          created_at: string
+          dg_am_thuc: number | null
+          dg_huong_dan_vien: number | null
+          dg_khach_hang: number | null
+          dg_lich_trinh: number | null
+          dg_luu_tru: number | null
+          dg_truong_doan: number | null
+          dg_xe: number | null
+          diem_ban: string | null
+          doan_id: number | null
+          email: string | null
+          gioi_tinh: string | null
+          hdv_ten_snapshot: string | null
+          id: number
+          ip_hash: string | null
+          ma_doan_snapshot: string | null
+          next_trip: string | null
+          nghe_nghiep: string | null
+          ngon_ngu: string | null
+          nguon_thong_tin: string[] | null
+          so_dien_thoai: string | null
+          ten_khach: string | null
+          truong_doan_ten_snapshot: string | null
+          tuoi_range: string | null
+          y_kien_khac: string | null
+          yeu_to_mua: string[] | null
+        }
+        Insert: {
+          created_at?: string
+          dg_am_thuc?: number | null
+          dg_huong_dan_vien?: number | null
+          dg_khach_hang?: number | null
+          dg_lich_trinh?: number | null
+          dg_luu_tru?: number | null
+          dg_truong_doan?: number | null
+          dg_xe?: number | null
+          diem_ban?: string | null
+          doan_id?: number | null
+          email?: string | null
+          gioi_tinh?: string | null
+          hdv_ten_snapshot?: string | null
+          id?: number
+          ip_hash?: string | null
+          ma_doan_snapshot?: string | null
+          next_trip?: string | null
+          nghe_nghiep?: string | null
+          ngon_ngu?: string | null
+          nguon_thong_tin?: string[] | null
+          so_dien_thoai?: string | null
+          ten_khach?: string | null
+          truong_doan_ten_snapshot?: string | null
+          tuoi_range?: string | null
+          y_kien_khac?: string | null
+          yeu_to_mua?: string[] | null
+        }
+        Update: {
+          created_at?: string
+          dg_am_thuc?: number | null
+          dg_huong_dan_vien?: number | null
+          dg_khach_hang?: number | null
+          dg_lich_trinh?: number | null
+          dg_luu_tru?: number | null
+          dg_truong_doan?: number | null
+          dg_xe?: number | null
+          diem_ban?: string | null
+          doan_id?: number | null
+          email?: string | null
+          gioi_tinh?: string | null
+          hdv_ten_snapshot?: string | null
+          id?: number
+          ip_hash?: string | null
+          ma_doan_snapshot?: string | null
+          next_trip?: string | null
+          nghe_nghiep?: string | null
+          ngon_ngu?: string | null
+          nguon_thong_tin?: string[] | null
+          so_dien_thoai?: string | null
+          ten_khach?: string | null
+          truong_doan_ten_snapshot?: string | null
+          tuoi_range?: string | null
+          y_kien_khac?: string | null
+          yeu_to_mua?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "khach_hang_khao_sat_doan_id_fkey"
+            columns: ["doan_id"]
+            isOneToOne: false
+            referencedRelation: "doan"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
+      khao_sat_summary_per_doan: {
+        Row: {
+          doan_id: number | null
+          so_response: number | null
+          so_thap_diem: number | null
+          tb_am_thuc: number | null
+          tb_chung: number | null
+          tb_huong_dan_vien: number | null
+          tb_khach_hang: number | null
+          tb_lich_trinh: number | null
+          tb_luu_tru: number | null
+          tb_truong_doan: number | null
+          tb_xe: number | null
+        }
+        Relationships: []
+      }
+      khao_sat_overview: {
+        Row: {
+          doan_id: number | null
+          ngay_di: string | null
+          ngay_ve: string | null
+          op_name: string | null
+          so_khach: number | null
+          so_response: number | null
+          so_thap_diem: number | null
+          tb_chung: number | null
+          team_name: string | null
+          ten_doan: string | null
+        }
+        Relationships: []
+      }
       khach_hang_with_stats: {
         Row: {
           assigned_to: string | null
@@ -4480,6 +4606,20 @@ export type Database = {
           ly_do: string
           so_tien_con_lai: number
           ten_doan: string
+        }[]
+      }
+      create_khao_sat_from_form: {
+        Args: { payload: Json }
+        Returns: number
+      }
+      get_khao_sat_doan_info: {
+        Args: { p_doan_id: number }
+        Returns: {
+          doan_id: number
+          ma_doan: string
+          hdv_ten: string
+          truong_doan: string
+          hop_le: boolean
         }[]
       }
       create_lead_from_form: {

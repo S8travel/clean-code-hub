@@ -44,6 +44,8 @@ const KhachHangPage        = lazy(() => import("./pages/KhachHangPage.tsx"));
 const LeadReportPage       = lazy(() => import("./pages/LeadReportPage.tsx"));
 const ViecLeadPage         = lazy(() => import("./pages/ViecLeadPage.tsx"));
 const LeadFormPublicPage   = lazy(() => import("./pages/LeadFormPublicPage.tsx"));
+const KhaoSatPublicPage    = lazy(() => import("./pages/KhaoSatPublicPage.tsx"));
+const KhaoSatOverviewPage  = lazy(() => import("./pages/KhaoSatOverviewPage.tsx"));
 const HoanUngPage          = lazy(() => import("./pages/HoanUngPage.tsx"));
 const ThongBaoPage         = lazy(() => import("./pages/ThongBaoPage.tsx"));
 const NotFound             = lazy(() => import("./pages/NotFound.tsx"));
@@ -87,6 +89,7 @@ const App = () => (
               {/* Public */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/lead-form" element={<LeadFormPublicPage />} />
+              <Route path="/khao-sat/:doanId" element={<KhaoSatPublicPage />} />
 
               {/* Protected — yêu cầu đăng nhập */}
               <Route element={<ProtectedLayout />}>
@@ -123,6 +126,7 @@ const App = () => (
                 <Route path="/khach-hang" element={<KhachHangPage />} />
                 <Route path="/viec-lead" element={<ViecLeadPage />} />
                 <Route path="/leads/bao-cao" element={<LeadReportPage />} />
+                <Route path="/khao-sat" element={<KhaoSatOverviewPage />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Route>
