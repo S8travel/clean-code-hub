@@ -90,7 +90,6 @@ export default function KhaoSatPublicPage() {
     form.email.trim() !== "" ||
     form.next_trip.trim() !== "" ||
     form.y_kien_khac.trim() !== "" ||
-    form.diem_ban !== "" ||
     form.nguon_thong_tin.length > 0 ||
     form.yeu_to_mua.length > 0 ||
     SCORE_KEYS.some((k) => form.scores[k] > 0);
@@ -186,7 +185,6 @@ export default function KhaoSatPublicPage() {
         ["email", form.email.trim()],
         ["next_trip", form.next_trip.trim()],
         ["y_kien_khac", form.y_kien_khac.trim()],
-        ["diem_ban", form.diem_ban],
       ];
       for (const [key, val] of strFields) {
         if (val) payload[key as string] = val;

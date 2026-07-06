@@ -23,7 +23,6 @@ import KhaoSatResponseCard from "./KhaoSatResponseCard";
 const FIELD_COLS: (keyof typeof FIELD_LABELS)[] = [
   "next_trip",
   "y_kien_khac",
-  "diem_ban",
   "nguon_thong_tin",
   "yeu_to_mua",
 ];

@@ -1,7 +1,6 @@
 import { type KhaoSatRow } from "@/hooks/use-khao-sat";
 import { isLowScore, responseAverage, scoreColorClass } from "@/lib/khao-sat-utils";
 import {
-  DIEM_BAN_OPTIONS,
   NGUON_OPTIONS,
   SCORE_KEYS,
   YEUTO_OPTIONS,
@@ -36,7 +35,7 @@ function TextCell({ value }: { value: string | null }) {
 
 /**
  * Một dòng lưới khảo sát (1 khách = 1 dòng).
- * Cột: STT · Khách · 7 tiêu chí · next_trip · y_kien_khac · diem_ban ·
+ * Cột: STT · Khách · 7 tiêu chí · next_trip · y_kien_khac ·
  *      nguon_thong_tin · yeu_to_mua · trung bình.
  */
 export default function KhaoSatResponseCard({
@@ -57,9 +56,6 @@ export default function KhaoSatResponseCard({
     row.nghe_nghiep,
   ].filter(Boolean);
 
-  const diemBan = row.diem_ban
-    ? optionLabel(DIEM_BAN_OPTIONS, row.diem_ban, lang)
-    : "";
   const nguon = (row.nguon_thong_tin ?? [])
     .map((c) => optionLabel(NGUON_OPTIONS, c, lang))
     .join(", ");
@@ -102,9 +98,6 @@ export default function KhaoSatResponseCard({
       <TextCell value={row.next_trip} />
       <TextCell value={row.y_kien_khac} />
 
-      <td className="min-w-[90px] px-2 py-1.5 align-top text-slate-700">
-        {diemBan || <span className="text-slate-300">—</span>}
-      </td>
       <td className="min-w-[130px] max-w-[200px] px-2 py-1.5 align-top text-slate-700">
         {nguon || <span className="text-slate-300">—</span>}
       </td>
