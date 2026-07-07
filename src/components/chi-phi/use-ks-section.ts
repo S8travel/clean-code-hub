@@ -32,6 +32,8 @@ import { useAuditLogger } from "@/hooks/use-activity-log";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { computeInitialDinhKyKsIds } from "@/lib/ks-dinh-ky";
+import { calcPhiHuySurplus } from "@/lib/phi-huy";
+import { proRataInts } from "@/lib/pro-rata";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
 import { type KSCancelTarget } from "./KSCancelModal";
 
@@ -289,6 +291,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   const [aggReason, setAggReason] = useState("");
   const [aggNgayCan, setAggNgayCan] = useState("");
   const [aggSurplusMode, setAggSurplusMode] = useState<"con_du" | "hoan_tien">("con_du");
+  // Phí hủy (NCC giữ lại) khi delta < 0: ghi làm chi phí thực tế, chỉ hoàn/công nợ phần còn lại.
+  const [aggPhiHuy, setAggPhiHuy] = useState<number>(0);
   const [aggCanTru, setAggCanTru] = useState<CanTruSelection[]>([]);
   // Cho phép cọc nhiều lần: mode "full" = toàn bộ delta, "deposit" = 1 phần (cọc tiếp).
   // la_coc=true khi mode="deposit".
@@ -312,36 +316,58 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     }
     try {
       if (delta < 0) {
-        // Thừa → tạo cong_no (con_du = NCC giữ credit, hoan_tien = NCC trả cash)
+        // Thừa → phí hủy (NCC giữ lại) ghi làm chi phí thực tế + hoàn/công nợ phần còn lại.
+        const { phiHuy, refund, newActual } = calcPhiHuySurplus({
+          sumActual: aggCommit.sumActual, sumPaid: aggCommit.sumPaid, phiHuy: aggPhiHuy,
+        });
+        // Ghi phí hủy làm chi phí thực tế: set thanh_tien_thuc_te pro-rata theo tien_cong_ty.
+        if (phiHuy > 0 && chiPhiIds.length > 0) {
+          const cps = chiPhiRows.filter((cp) => chiPhiIds.includes(cp.id!));
+          const weights = cps.map((c) => Math.max(0, Number(c.tien_cong_ty ?? 0)));
+          const totalW = weights.reduce((a, b) => a + b, 0);
+          const shares = totalW > 0
+            ? proRataInts(newActual, weights)
+            : cps.map((_, i) => (i === 0 ? newActual : 0));
+          for (let i = 0; i < cps.length; i++) {
+            await externalSupabase.from("doan_chi_phi")
+              .update({ thanh_tien_thuc_te: shares[i] }).eq("id", cps[i].id!);
+          }
+        }
         const trang_thai = aggSurplusMode === "hoan_tien" ? "da_hoan_tien" : "con_du";
         const lyDoLabel = aggSurplusMode === "hoan_tien" ? "hoàn tiền" : "công nợ";
-        const fromPrepaid =
-          trang_thai === "con_du" && (await isDnttPaidFromPrepaid(paidDntt?.id));
-        const { error } = await externalSupabase.from("cong_no").insert({
-          doan_id: doanId,
-          dntt_goc_id: paidDntt?.id ?? null,
-          nha_cung_cap_id: nccId,
-          ten_nha_cung_cap: nccName ?? paidDntt?.ten_nha_cung_cap ?? null,
-          so_tien_goc: absDelta,
-          trang_thai,
-          loai: fromPrepaid ? "tra_truoc" : "phat_sinh",
-          ly_do: aggReason
-            ? `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}. Lý do: ${aggReason}`
-            : `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}`,
-        });
-        if (error) throw error;
+        const phiHuyNote = phiHuy > 0 ? ` (phí hủy NCC giữ ${fmt(phiHuy)} ₫)` : "";
+        // Công nợ/hoàn CHỈ cho phần refund (đã trừ phí hủy). refund=0 → NCC giữ hết, không tạo.
+        if (refund > 0) {
+          const fromPrepaid =
+            trang_thai === "con_du" && (await isDnttPaidFromPrepaid(paidDntt?.id));
+          const { error } = await externalSupabase.from("cong_no").insert({
+            doan_id: doanId,
+            dntt_goc_id: paidDntt?.id ?? null,
+            nha_cung_cap_id: nccId,
+            ten_nha_cung_cap: nccName ?? paidDntt?.ten_nha_cung_cap ?? null,
+            so_tien_goc: refund,
+            trang_thai,
+            loai: fromPrepaid ? "tra_truoc" : "phat_sinh",
+            ly_do: aggReason
+              ? `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}${phiHuyNote}. Lý do: ${aggReason}`
+              : `Điều chỉnh giảm KS (${ksName}) — ${lyDoLabel}${phiHuyNote}`,
+          });
+          if (error) throw error;
+        }
         if (chiPhiIds.length > 0) await recalcChiPhiStatus(chiPhiIds);
         auditLog({
           doan_id: doanId,
           action: "tao",
           table_name: "cong_no",
           record_id: chiPhiIds[0] ?? null,
-          mo_ta: `Ghi nhận ${lyDoLabel} ${fmt(absDelta)} ₫ — KS ${ksName ?? ""}${nccName ? " (NCC " + nccName + ")" : ""}`,
+          mo_ta: `Hủy/giảm KS ${ksName ?? ""}${nccName ? " (NCC " + nccName + ")" : ""}: phí hủy ${fmt(phiHuy)} ₫, ${lyDoLabel} ${fmt(refund)} ₫`,
         });
         toast.success(
-          aggSurplusMode === "hoan_tien"
-            ? `Đã ghi nhận hoàn tiền ${fmt(absDelta)} ₫`
-            : `Đã ghi nhận công nợ ${fmt(absDelta)} ₫`,
+          phiHuy > 0
+            ? `Đã ghi phí hủy ${fmt(phiHuy)} ₫ — ${lyDoLabel} ${fmt(refund)} ₫`
+            : (aggSurplusMode === "hoan_tien"
+                ? `Đã ghi nhận hoàn tiền ${fmt(refund)} ₫`
+                : `Đã ghi nhận công nợ ${fmt(refund)} ₫`),
         );
       } else {
         // Thiếu → tạo DNTT bổ sung. Mode "deposit" → la_coc=true + so_tien=aggDepositAmount
@@ -426,6 +452,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       setAggReason("");
       setAggNgayCan("");
       setAggSurplusMode("con_du");
+      setAggPhiHuy(0);
       setAggCanTru([]);
       setAggCommitMode("full");
       setAggDepositAmount(0);
@@ -902,7 +929,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
   // closeAggCommit — reset toàn bộ state liên quan (verbatim từ inline onOpenChange + footer)
   const closeAggCommit = () => {
     setAggCommit(null); setAggReason(""); setAggNgayCan("");
-    setAggSurplusMode("con_du"); setAggCanTru([]);
+    setAggSurplusMode("con_du"); setAggPhiHuy(0); setAggCanTru([]);
     setAggCommitMode("full"); setAggDepositAmount(0);
   };
 
@@ -1148,7 +1175,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     aggCommit, aggCommitMode, setAggCommitMode,
     aggDepositAmount, setAggDepositAmount,
     aggReason, setAggReason, aggNgayCan, setAggNgayCan,
-    aggSurplusMode, setAggSurplusMode, aggCanTru, setAggCanTru,
+    aggSurplusMode, setAggSurplusMode, aggPhiHuy, setAggPhiHuy, aggCanTru, setAggCanTru,
     handleAggCommit, closeAggCommit,
     insertPending: insertDNTT.isPending,
     // Legacy adjust modal

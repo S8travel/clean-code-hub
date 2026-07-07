@@ -54,7 +54,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
     aggCommit, aggCommitMode, setAggCommitMode,
     aggDepositAmount, setAggDepositAmount,
     aggReason, setAggReason, aggNgayCan, setAggNgayCan,
-    aggSurplusMode, setAggSurplusMode, aggCanTru, setAggCanTru,
+    aggSurplusMode, setAggSurplusMode, aggPhiHuy, setAggPhiHuy, aggCanTru, setAggCanTru,
     handleAggCommit, closeAggCommit, insertPending,
     adjustTarget, setAdjustTarget,
     adjustAmount, setAdjustAmount,
@@ -238,6 +238,8 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
         onNgayCanChange={setAggNgayCan}
         surplusMode={aggSurplusMode}
         onSurplusModeChange={setAggSurplusMode}
+        phiHuy={aggPhiHuy}
+        onPhiHuyChange={setAggPhiHuy}
         canTru={aggCanTru}
         onCanTruChange={setAggCanTru}
         submitting={insertPending}

@@ -49,6 +49,10 @@ import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
 import RemapNgayModal from "@/components/dieu-tour/RemapNgayModal";
+import DoiKsPhiHuyModal from "@/components/dieu-tour/DoiKsPhiHuyModal";
+import {
+  useDoiKsPhiHuy, checkKsPhiHuyOnChange, type KsPhiHuyPending,
+} from "@/hooks/use-doi-ks-phi-huy";
 
 function TabBadge({ count }: { count: number }) {
   if (count === 0) return null;
@@ -120,6 +124,10 @@ export default function DoanDetail() {
   const [showWordPreview, setShowWordPreview] = useState(false);
   const [showRemap, setShowRemap] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
+  // Guard đổi KS có phí hủy: KS cũ còn ĐNTT sống → chặn autosave, hỏi phí hủy.
+  const [ksPhiHuyPending, setKsPhiHuyPending] = useState<KsPhiHuyPending | null>(null);
+  const ksGateBusyRef = useRef(false);
+  const doiKsMut = useDoiKsPhiHuy();
   const queryClient = useQueryClient();
 
   // Auto-save refs
@@ -244,7 +252,7 @@ export default function DoanDetail() {
   // Cleanup timer on unmount
   useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
 
-  const doSave = useCallback(() => {
+  const runSave = useCallback(() => {
     if (!doanId) return;
     setSaveStatus("saving");
     saveMutation.mutate(
@@ -347,6 +355,84 @@ export default function DoanDetail() {
       }
     );
   }, [doanId, activeNhomId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, doanSoKhachLon, doanSoKhachEm1, doanSoKhachEm2, doanSoKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
+
+  // Gate TRƯỚC autosave: đổi KS mà KS cũ còn ĐNTT sống → chặn, hỏi phí hủy (modal)
+  // hoặc tự hủy ĐNTT chưa trả (silent path) RỒI mới lưu. Nếu chạy save trước thì
+  // doan_ngay.khach_san_id flip → dòng chi phí KS cũ bị quy nhầm sang KS mới (mất dấu tiền).
+  const doSave = useCallback(async () => {
+    if (!doanId) return;
+    if (ksPhiHuyPending || ksGateBusyRef.current) return; // modal đang mở / gate đang chạy
+    ksGateBusyRef.current = true;
+    try {
+      const pendings = await checkKsPhiHuyOnChange({ doanId, days, dbNgayRows });
+      const withPaid = pendings.find((p) => p.paidTotal > 0);
+      if (withPaid) {
+        setKsPhiHuyPending(withPaid);
+        setSaveStatus("pending"); // giữ trạng thái chờ — modal quyết tiếp
+        return;
+      }
+      // Chỉ có ĐNTT CHƯA trả → tự hủy kèm log (đã chốt nghiệp vụ), không cần hỏi
+      for (const p of pendings) {
+        await doiKsMut.mutateAsync({ doanId, pending: p, phiHuyInput: 0, mode: "phi_huy" });
+        toast.info(
+          `${t("Đã tự hủy")} ${p.unpaidDnttIds.length} ${t("ĐNTT chưa thanh toán của KS")} ${p.oldKsName}`,
+          { duration: 6000 },
+        );
+      }
+    } catch (e) {
+      setSaveStatus("error");
+      toast.error(errMsg(e) || t("Lỗi kiểm tra đổi khách sạn"));
+      return;
+    } finally {
+      ksGateBusyRef.current = false;
+    }
+    runSave();
+  }, [doanId, days, dbNgayRows, ksPhiHuyPending, doiKsMut, runSave]);
+
+  // Handlers cho modal phí hủy
+  const handleKsPhiHuyConfirm = useCallback(async (phiHuy: number) => {
+    if (!doanId || !ksPhiHuyPending) return;
+    try {
+      const r = await doiKsMut.mutateAsync({
+        doanId, pending: ksPhiHuyPending, phiHuyInput: phiHuy, mode: "phi_huy",
+      });
+      toast.success(
+        `${t("Đã tách KS")} ${ksPhiHuyPending.oldKsName} — ${t("phí hủy")} ${r.phiHuy.toLocaleString("vi-VN")} ₫` +
+        (r.refund > 0 ? ` · ${t("công nợ thu hồi")} ${r.refund.toLocaleString("vi-VN")} ₫` : ""),
+        { duration: 8000 },
+      );
+      setKsPhiHuyPending(null);
+      doSaveRef.current?.(); // chạy lại gate — pending đã xử → lưu thật
+    } catch (e) {
+      toast.error(errMsg(e) || t("Lỗi tách phí hủy"));
+    }
+  }, [doanId, ksPhiHuyPending, doiKsMut]);
+
+  const handleKsPhiHuyDefer = useCallback(async () => {
+    if (!doanId || !ksPhiHuyPending) return;
+    try {
+      await doiKsMut.mutateAsync({
+        doanId, pending: ksPhiHuyPending, phiHuyInput: 0, mode: "de_sau",
+      });
+      toast.warning(
+        `${t("KS")} ${ksPhiHuyPending.oldKsName} ${t("chuyển sang mục KS ngoài tour — cần xử lý phí hủy ở tab Chi phí.")}`,
+        { duration: 8000 },
+      );
+      setKsPhiHuyPending(null);
+      doSaveRef.current?.();
+    } catch (e) {
+      toast.error(errMsg(e) || t("Lỗi tách phí hủy"));
+    }
+  }, [doanId, ksPhiHuyPending, doiKsMut]);
+
+  const handleKsPhiHuyCancel = useCallback(() => {
+    // Không đổi nữa: bỏ pending + re-sync days từ DB (KS quay về cũ, không lưu gì)
+    setKsPhiHuyPending(null);
+    hasPendingChangesRef.current = false;
+    setSaveStatus("idle");
+    queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
+    queryClient.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] });
+  }, [doanId, queryClient]);
 
   // Keep ref updated so timer always calls latest doSave
   doSaveRef.current = doSave;
@@ -678,6 +764,13 @@ export default function DoanDetail() {
             {doanId != null && (
               <RemapNgayModal doanId={doanId} open={showRemap} onClose={() => setShowRemap(false)} />
             )}
+            <DoiKsPhiHuyModal
+              pending={ksPhiHuyPending}
+              submitting={doiKsMut.isPending}
+              onConfirm={handleKsPhiHuyConfirm}
+              onDefer={handleKsPhiHuyDefer}
+              onCancel={handleKsPhiHuyCancel}
+            />
           </TabsContent>
 
           <TabsContent value="booking-ks" className="mt-4">
