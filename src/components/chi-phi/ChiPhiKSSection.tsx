@@ -7,6 +7,7 @@ import { resolveKSFoc } from "@/lib/foc-calc";
 import { calcTotalKS } from "@/lib/foc-calc";
 import { useChiPhiList, useDNTTList } from "@/hooks/use-chi-phi";
 import { useKhachSanList } from "@/hooks/use-khach-san";
+import { usePaymentsByDoan } from "@/hooks/use-payments";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { buildNgoaiTourSelectedData, getNgoaiTourPrintableKsIds } from "@/lib/ks-ngoai-tour-print";
 import KSDNTTModal from "./KSDNTTModal";
@@ -69,6 +70,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: ksList = [] } = useKhachSanList();
+  const { data: paymentsList = [] } = usePaymentsByDoan(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
 
   const printableOutKsIds = getNgoaiTourPrintableKsIds(chiPhiRows, dnttList);
@@ -82,7 +84,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
     printableOutKsIds.filter((id) => selectedOutKsIds.has(id)),
     chiPhiRows, dnttList,
     ksList.map((k) => ({ id: k.id, ten: k.ten, tai_khoan_thanh_toan: k.tai_khoan_thanh_toan })),
-    tenDoan || `#${doanId}`, currentUserName,
+    tenDoan || `#${doanId}`, currentUserName, paymentsList,
   );
 
   // Toolbar gộp: in-tour (selectedKsIds/distinctKsIdsFromNgay) + ngoài-tour.

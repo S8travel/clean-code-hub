@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
 import { nightsBetween } from "@/lib/ks-ngoai-tour";
+import { buildCanTruNote } from "@/lib/can-tru-note";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 
 // ĐNTT KS ngoài tour dùng ref_loai riêng (cách ly KS trong tour).
@@ -10,6 +11,14 @@ export interface HotelLite {
   id: number;
   ten: string;
   tai_khoan_thanh_toan: string | null;
+}
+
+/** Payment tối thiểu cần cho bản in (cấn trừ per-ĐNTT). Khớp PaymentRow. */
+export interface CanTruPaymentLite {
+  dntt_id: number;
+  method: string;
+  so_tien: number | string;
+  ghi_chu: string | null;
 }
 
 const fmtDate = (iso?: string | null) =>
@@ -41,6 +50,7 @@ export function buildNgoaiTourEdgeData(
   liveDntts: DNTTRow[],
   tenDoan: string,
   nguoiDeNghi: string,
+  canTruPays: CanTruPaymentLite[] = [],
 ): EdgeFunctionData {
   const ciList = rows.map((r) => r.ngoai_tour_ci).filter(Boolean).sort();
   const coList = rows.map((r) => r.ngoai_tour_co).filter(Boolean).sort();
@@ -50,6 +60,15 @@ export function buildNgoaiTourEdgeData(
   const cocTotal = liveDntts
     .filter((d) => d.id !== dntt.id)
     .reduce((s, d) => s + Number(d.paid_amount || 0), 0);
+  // Cấn trừ CỦA CHÍNH ĐNTT đang in (payment method='can_tru' gắn vào dntt.id).
+  // Trước đây bỏ sót → bản in ghi nguyên so_tien, che mất phần đã cấn trừ (dễ trả dư).
+  const canTruTotal = canTruPays
+    .filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
+    .reduce((s, p) => s + Number(p.so_tien || 0), 0);
+  const canTruNote = canTruTotal > 0
+    ? (buildCanTruNote(canTruPays.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru"))
+        ?? "Cấn trừ công nợ")
+    : undefined;
   return {
     doan: { ten_doan: tenDoan, so_khach: 0 },
     ks: { ten: hotel?.ten ?? `KS #${dntt.ref_id}`, foc_khach: null, foc_mien: null },
@@ -68,6 +87,8 @@ export function buildNgoaiTourEdgeData(
       foc_count: Number(r.foc_count) || 0,
     })),
     cocTotal,
+    canTruTotal: canTruTotal > 0 ? canTruTotal : undefined,
+    canTruNote,
     focDisplay: "—",
     soTien: Number(dntt.so_tien) || 0,
     la_coc: !!dntt.la_coc,
@@ -84,6 +105,7 @@ export function buildNgoaiTourSelectedData(
   hotels: HotelLite[],
   tenDoan: string,
   nguoiDeNghi: string,
+  payments: CanTruPaymentLite[] = [],
 ): EdgeFunctionData[] {
   const out: EdgeFunctionData[] = [];
   for (const ksId of selectedKsIds) {
@@ -94,7 +116,8 @@ export function buildNgoaiTourSelectedData(
     const hotel = hotels.find((h) => h.id === ksId);
     const live = ngoaiTourLiveDntts(dnttList, ksId);
     for (const d of live) {
-      out.push(buildNgoaiTourEdgeData(rows, hotel, d, live, tenDoan, nguoiDeNghi));
+      const canTruPays = payments.filter((p) => p.dntt_id === d.id && p.method === "can_tru");
+      out.push(buildNgoaiTourEdgeData(rows, hotel, d, live, tenDoan, nguoiDeNghi, canTruPays));
     }
   }
   return out;
