@@ -358,6 +358,8 @@
   "Lead nhận": "接收商機",
   "Đang xử lý": "處理中",
   "Mất": "流失",
+  "Số lead đã đạt tới ít nhất mỗi bước (tính cả lead đã tiến xa hơn rồi quay lại hoặc đã mất). Conversion = tỷ lệ đi tiếp sang bước sau.": "已到達各階段（至少一次）的商機數（含曾前進更遠後退回或已流失者）。轉換率＝進入下一階段的比例。",
+  "Đạt tới bước": "已到達階段",
   "🥶 Top lý do mất khách": "🥶 流失原因排行",
   "Chưa có lead mất khách trong khoảng thời gian này": "此期間尚無流失商機",
   "📨 Template đã dùng": "📨 已使用範本",
