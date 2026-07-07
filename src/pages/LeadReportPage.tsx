@@ -137,6 +137,9 @@ function LeadReportPageContent() {
 
         {/* A. Funnel */}
         <Section title={t("📊 Funnel theo trạng thái")}>
+          <p className="text-[11px] text-muted-foreground -mt-1">
+            {t("Số lead đã đạt tới ít nhất mỗi bước (tính cả lead đã tiến xa hơn rồi quay lại hoặc đã mất). Conversion = tỷ lệ đi tiếp sang bước sau.")}
+          </p>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -144,7 +147,7 @@ function LeadReportPageContent() {
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" height={60} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="cnt" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="cnt" name={t("Đạt tới bước")} fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
