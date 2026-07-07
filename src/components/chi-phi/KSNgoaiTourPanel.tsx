@@ -11,6 +11,7 @@ import {
   type ChiPhiRow, type DNTTRow,
 } from "@/hooks/use-chi-phi";
 import { useCancelDNTT } from "@/hooks/use-dntt";
+import { usePaymentsByDoan } from "@/hooks/use-payments";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
@@ -69,6 +70,7 @@ export default function KSNgoaiTourPanel({
   const { data: ksList = [] } = useKhachSanList();
   const { data: nccList = [] } = useNhaCungCapList();
   const { data: dnttList = [] } = useDNTTList(doanId);
+  const { data: paymentsList = [] } = usePaymentsByDoan(doanId);
   const upsert = useUpsertChiPhi();
   const del = useDeleteChiPhi();
   const cancelMut = useCancelDNTT();
@@ -108,6 +110,17 @@ export default function KSNgoaiTourPanel({
   const liveDnttsFor = (ksId: number): DNTTRow[] =>
     ngoaiTourDntts.filter((d) => d.ref_id === ksId &&
       d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi");
+  // Tiền mặt đã trả cho 1 ĐNTT (chỉ method='cash'). ĐNTT chỉ có cấn trừ (can_tru)
+  // vẫn hủy được — useCancelDNTT tự xóa payment can_tru + hoàn credit về công nợ.
+  // Có cash đã trả → phải hủy ở trang ĐNTT (chọn cấn trừ/hoàn tiền cho phần cash).
+  const cashPaidOf = (dnttId: number): number =>
+    paymentsList
+      .filter((p) => p.dntt_id === dnttId && p.method === "cash")
+      .reduce((s, p) => s + Number(p.so_tien || 0), 0);
+  const canTruPaidOf = (dnttId: number): number =>
+    paymentsList
+      .filter((p) => p.dntt_id === dnttId && p.method === "can_tru")
+      .reduce((s, p) => s + Number(p.so_tien || 0), 0);
   const cardStatus = (ksId: number): string => {
     const live = liveDnttsFor(ksId);
     if (live.length === 0) return "chua_de_nghi";
@@ -196,11 +209,22 @@ export default function KSNgoaiTourPanel({
   };
 
   const handleCancelDntt = async (ksId: number) => {
-    const toCancel = liveDnttsFor(ksId).filter((d) => (Number(d.paid_amount) || 0) === 0);
-    if (toCancel.length === 0) { toast.error("Không có ĐNTT chưa thanh toán để hủy"); return; }
+    // Hủy được: ĐNTT KHÔNG có tiền mặt đã trả (chưa trả gì, hoặc chỉ cấn trừ credit).
+    const toCancel = liveDnttsFor(ksId).filter((d) => cashPaidOf(d.id) === 0);
+    if (toCancel.length === 0) {
+      toast.error("ĐNTT đã trả tiền mặt — hủy ở trang Đề nghị thanh toán (chọn cấn trừ/hoàn tiền).");
+      return;
+    }
+    const canTruTotal = toCancel.reduce((s, d) => s + canTruPaidOf(d.id), 0);
+    if (canTruTotal > 0 &&
+        !window.confirm(`Hủy ĐNTT sẽ hoàn ${fmt(canTruTotal)} ₫ cấn trừ về công nợ nguồn. Tiếp tục?`)) {
+      return;
+    }
     try {
       for (const d of toCancel) await cancelMut.mutateAsync({ id: d.id, mode: undefined });
-      toast.success("Đã hủy ĐNTT");
+      toast.success(canTruTotal > 0
+        ? `Đã hủy ĐNTT — hoàn ${fmt(canTruTotal)} ₫ về công nợ`
+        : "Đã hủy ĐNTT");
     } catch (e: unknown) {
       toast.error("Lỗi: " + (errMsg(e) || ""));
     }
@@ -234,7 +258,7 @@ export default function KSNgoaiTourPanel({
   // In ĐNTT 1 thẻ (Word) — tái dùng builder chung + DNTTKSPreviewModal.
   const handlePrintCard = (ksId: number) => {
     const data = buildNgoaiTourSelectedData(
-      [ksId], chiPhiRows, dnttList, hotels, tenDoan || `#${doanId}`, currentUserName);
+      [ksId], chiPhiRows, dnttList, hotels, tenDoan || `#${doanId}`, currentUserName, paymentsList);
     if (data.length === 0) { toast.error("Chưa có ĐNTT để in"); return; }
     setPreviewItems(data);
   };
@@ -306,7 +330,7 @@ export default function KSNgoaiTourPanel({
         // ĐNTT đã cam kết ≠ net hiện tại (đổi net qua đường khác / cọc đã trả 1 phần) → cảnh báo.
         const lech = committed && daCoc !== netVal;
         const liveCount = liveDnttsFor(ksId).length;
-        const hasCancellable = liveDnttsFor(ksId).some((d) => (Number(d.paid_amount) || 0) === 0);
+        const hasCancellable = liveDnttsFor(ksId).some((d) => cashPaidOf(d.id) === 0);
         const badge = STATUS_BADGE[status] ?? STATUS_BADGE.chua_de_nghi;
 
         return (

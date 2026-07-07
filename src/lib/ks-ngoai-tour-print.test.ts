@@ -63,6 +63,27 @@ describe("buildNgoaiTourEdgeData", () => {
     expect(e.cocTotal).toBe(5_000_000);   // cọc đã trả của ĐNTT #1
     expect(e.soTien).toBe(14_200_000);    // phần còn lại của ĐNTT #2
   });
+
+  it("cấn trừ CỦA CHÍNH ĐNTT đang in → canTruTotal + canTruNote (bản in trừ đúng)", () => {
+    const d = dntt({ id: 7, so_tien: 12_100_000 });
+    const pays = [
+      { dntt_id: 7, method: "can_tru", so_tien: 550_000, ghi_chu: "Cấn trừ từ đoàn: VHB121909BR5" },
+      { dntt_id: 9, method: "can_tru", so_tien: 999, ghi_chu: "Cấn trừ từ đoàn: KHÁC" }, // ĐNTT khác → bỏ
+      { dntt_id: 7, method: "cash", so_tien: 100, ghi_chu: null },                        // cash → không phải cấn trừ
+    ];
+    const e = buildNgoaiTourEdgeData([row({})], hotels[0], d, [d], "A", "x", pays);
+    expect(e.canTruTotal).toBe(550_000);
+    expect(e.canTruNote).toBe("Cấn trừ từ đoàn: VHB121909BR5");
+    // Template Word: "Thanh toán" = soTien − canTruTotal = 12.1tr − 550k = 11.55tr
+    expect(e.soTien).toBe(12_100_000);
+  });
+
+  it("không có cấn trừ → canTruTotal/canTruNote undefined", () => {
+    const d = dntt({ id: 1 });
+    const e = buildNgoaiTourEdgeData([row({})], hotels[0], d, [d], "A", "x");
+    expect(e.canTruTotal).toBeUndefined();
+    expect(e.canTruNote).toBeUndefined();
+  });
 });
 
 describe("buildNgoaiTourSelectedData", () => {
@@ -85,5 +106,15 @@ describe("buildNgoaiTourSelectedData", () => {
   it("KS không có ĐNTT sống → bỏ", () => {
     const rows = [row({ khach_san_id: 1 })];
     expect(buildNgoaiTourSelectedData([1], rows, [], hotels, "A", "x")).toEqual([]);
+  });
+
+  it("truyền payments → mỗi ĐNTT nhặt cấn trừ theo dntt_id", () => {
+    const rows = [row({ khach_san_id: 1 })];
+    const list = [dntt({ id: 5, ref_id: 1, so_tien: 12_100_000 })];
+    const pays = [{ dntt_id: 5, method: "can_tru", so_tien: 550_000, ghi_chu: "Cấn trừ từ đoàn: X" }];
+    const data = buildNgoaiTourSelectedData([1], rows, list, hotels, "A", "x", pays);
+    expect(data).toHaveLength(1);
+    expect(data[0].canTruTotal).toBe(550_000);
+    expect(data[0].canTruNote).toBe("Cấn trừ từ đoàn: X");
   });
 });
