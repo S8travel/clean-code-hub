@@ -12,6 +12,7 @@ import type { DNTTRow } from "@/hooks/use-dntt";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import KSCongNoMultiPanel from "./KSCongNoMultiPanel";
 import { fmt } from "./ks-section-shared";
+import { calcPhiHuySurplus } from "@/lib/phi-huy";
 import { t, useTranslate } from "@/lib/i18n";
 
 // Aggregate commit dialog (chốt chênh lệch sau OP edit so_phong/gia_phong/FOC)
@@ -42,6 +43,9 @@ interface Props {
   onNgayCanChange: (v: string) => void;
   surplusMode: "con_du" | "hoan_tien";
   onSurplusModeChange: (v: "con_du" | "hoan_tien") => void;
+  /** Phí hủy NCC giữ lại (chỉ dùng khi delta < 0 / thừa). */
+  phiHuy: number;
+  onPhiHuyChange: (v: number) => void;
   canTru: CanTruSelection[];
   onCanTruChange: (v: CanTruSelection[]) => void;
   submitting: boolean;
@@ -57,6 +61,7 @@ export default function KSAggCommitModal({
   reason: aggReason, onReasonChange: setAggReason,
   ngayCan: aggNgayCan, onNgayCanChange: setAggNgayCan,
   surplusMode: aggSurplusMode, onSurplusModeChange: setAggSurplusMode,
+  phiHuy: aggPhiHuy, onPhiHuyChange: setAggPhiHuy,
   canTru: aggCanTru, onCanTruChange: setAggCanTru,
   submitting, onClose, onSubmit: handleAggCommit,
 }: Props) {
@@ -191,31 +196,59 @@ export default function KSAggCommitModal({
                 </div>
               );
             })()}
-            {aggCommit.delta < 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">{t("Hình thức xử lý")}</Label>
-                <RadioGroup
-                  value={aggSurplusMode}
-                  onValueChange={(v) => setAggSurplusMode(v as "con_du" | "hoan_tien")}
-                  className="space-y-1.5"
-                >
-                  <div className="flex items-start gap-2">
-                    <RadioGroupItem value="con_du" id="ks-agg-cn" className="mt-0.5" />
-                    <Label htmlFor="ks-agg-cn" className="text-xs cursor-pointer leading-tight">
-                      <span className="font-medium">{t("Ghi nhận công nợ")}</span>
-                      <p className="text-muted-foreground font-normal">{t("NCC giữ tiền — có thể cấn trừ với DNTT khác cùng NCC")}</p>
-                    </Label>
+            {aggCommit.delta < 0 && (() => {
+              const ph = calcPhiHuySurplus({
+                sumActual: aggCommit.sumActual, sumPaid: aggCommit.sumPaid, phiHuy: aggPhiHuy,
+              });
+              return (
+                <div className="space-y-2">
+                  {/* Phí hủy — NCC giữ lại (dịch vụ hủy bị charge). Để 0 = hoàn toàn bộ. */}
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium">{t("Phí hủy (NCC giữ lại)")}</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-xs"
+                      value={aggPhiHuy || ""}
+                      onChange={(e) => setAggPhiHuy(Math.max(0, Math.min(Number(e.target.value) || 0, ph.absDelta)))}
+                      max={ph.absDelta}
+                      min={0}
+                      placeholder={`0 (${t("tối đa")} ${fmt(ph.absDelta)})`}
+                    />
+                    <p className="text-[10px] text-muted-foreground tabular-nums leading-tight">
+                      {t("NCC giữ")}: <span className="font-medium text-orange-700">{fmt(ph.phiHuy)} ₫</span>
+                      {" · "}{aggSurplusMode === "hoan_tien" ? t("Hoàn") : t("Công nợ")}: <span className="font-medium text-purple-700">{fmt(ph.refund)} ₫</span>
+                      {" · "}{t("Chi phí thực tế")}: <span className="font-medium text-foreground">{fmt(ph.newActual)} ₫</span>
+                    </p>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <RadioGroupItem value="hoan_tien" id="ks-agg-ht" className="mt-0.5" />
-                    <Label htmlFor="ks-agg-ht" className="text-xs cursor-pointer leading-tight">
-                      <span className="font-medium">{t("Ghi nhận hoàn tiền")}</span>
-                      <p className="text-muted-foreground font-normal">{t("NCC trả lại tiền cash — không cấn trừ")}</p>
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            )}
+                  {/* Hình thức xử lý phần còn lại — chỉ khi refund > 0 (còn tiền để hoàn/ghi nợ) */}
+                  {ph.refund > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">{t("Hình thức xử lý phần còn lại")}</Label>
+                      <RadioGroup
+                        value={aggSurplusMode}
+                        onValueChange={(v) => setAggSurplusMode(v as "con_du" | "hoan_tien")}
+                        className="space-y-1.5"
+                      >
+                        <div className="flex items-start gap-2">
+                          <RadioGroupItem value="con_du" id="ks-agg-cn" className="mt-0.5" />
+                          <Label htmlFor="ks-agg-cn" className="text-xs cursor-pointer leading-tight">
+                            <span className="font-medium">{t("Ghi nhận công nợ")}</span>
+                            <p className="text-muted-foreground font-normal">{t("NCC giữ tiền — có thể cấn trừ với DNTT khác cùng NCC")}</p>
+                          </Label>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <RadioGroupItem value="hoan_tien" id="ks-agg-ht" className="mt-0.5" />
+                          <Label htmlFor="ks-agg-ht" className="text-xs cursor-pointer leading-tight">
+                            <span className="font-medium">{t("Ghi nhận hoàn tiền")}</span>
+                            <p className="text-muted-foreground font-normal">{t("NCC trả lại tiền cash — không cấn trừ")}</p>
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {aggCommit.delta > 0 && (
               <div className="space-y-1">
                 <Label className="text-xs font-medium">{t("Ngày cần thanh toán")}</Label>
