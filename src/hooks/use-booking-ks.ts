@@ -49,11 +49,14 @@ export function useBookingKS(doanId: number | undefined) {
     refetchOnWindowFocus: false,
     enabled: !!doanId,
     queryFn: async () => {
-      // 1. Get ALL booking rows for this doan (never filter by current doan_ngay)
+      // 1. Get ALL booking rows for this doan (never filter by current doan_ngay).
+      //    Booking đã hủy (Tầng 2 lifecycle) → hiện ở dải "Đã hủy" tab Chi phí,
+      //    KHÔNG hiện ở tab Booking KS (khỏi gửi mail nhầm cho KS đã bỏ).
       const { data: bookings, error: e1 } = await externalSupabase
         .from("doan_booking_ks")
         .select("*")
         .eq("doan_id", doanId!)
+        .neq("trang_thai", "da_huy")
         .order("id", { ascending: true });
       if (e1) throw e1;
       if (!bookings || bookings.length === 0) return [];

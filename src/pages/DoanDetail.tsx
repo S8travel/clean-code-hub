@@ -390,11 +390,11 @@ export default function DoanDetail() {
   }, [doanId, days, dbNgayRows, ksPhiHuyPending, doiKsMut, runSave]);
 
   // Handlers cho modal phí hủy
-  const handleKsPhiHuyConfirm = useCallback(async (phiHuy: number) => {
+  const handleKsPhiHuyConfirm = useCallback(async (phiHuy: number, lyDo: string) => {
     if (!doanId || !ksPhiHuyPending) return;
     try {
       const r = await doiKsMut.mutateAsync({
-        doanId, pending: ksPhiHuyPending, phiHuyInput: phiHuy, mode: "phi_huy",
+        doanId, pending: ksPhiHuyPending, phiHuyInput: phiHuy, lyDo: lyDo || null, mode: "phi_huy",
       });
       toast.success(
         `${t("Đã tách KS")} ${ksPhiHuyPending.oldKsName} — ${t("phí hủy")} ${r.phiHuy.toLocaleString("vi-VN")} ₫` +

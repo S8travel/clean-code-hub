@@ -1018,6 +1018,12 @@ export type Database = {
           ks_notified_at: string | null
           mail_content_hash: string | null
           ngay_snapshot: Json | null
+          trang_thai: string
+          phi_huy: number | null
+          ly_do_huy: string | null
+          huy_luc: string | null
+          huy_boi: string | null
+          cong_no_id: number | null
         }
         Insert: {
           chi_phi?: number | null
@@ -1043,6 +1049,12 @@ export type Database = {
           ks_notified_at?: string | null
           mail_content_hash?: string | null
           ngay_snapshot?: Json | null
+          trang_thai?: string
+          phi_huy?: number | null
+          ly_do_huy?: string | null
+          huy_luc?: string | null
+          huy_boi?: string | null
+          cong_no_id?: number | null
         }
         Update: {
           chi_phi?: number | null
@@ -1068,8 +1080,21 @@ export type Database = {
           ks_notified_at?: string | null
           mail_content_hash?: string | null
           ngay_snapshot?: Json | null
+          trang_thai?: string
+          phi_huy?: number | null
+          ly_do_huy?: string | null
+          huy_luc?: string | null
+          huy_boi?: string | null
+          cong_no_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "doan_booking_ks_cong_no_id_fkey"
+            columns: ["cong_no_id"]
+            isOneToOne: false
+            referencedRelation: "cong_no"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "doan_booking_ks_doan_id_fkey"
             columns: ["doan_id"]
@@ -1356,6 +1381,7 @@ export type Database = {
           ngay_so: number | null
           ngay_thanh_toan: string | null
           ngoai_tour: boolean
+          ks_huy: boolean
           ngoai_tour_ci: string | null
           ngoai_tour_co: string | null
           khach_san_id: number | null
@@ -1399,6 +1425,7 @@ export type Database = {
           ngay_so?: number | null
           ngay_thanh_toan?: string | null
           ngoai_tour?: boolean
+          ks_huy?: boolean
           ngoai_tour_ci?: string | null
           ngoai_tour_co?: string | null
           khach_san_id?: number | null
@@ -1442,6 +1469,7 @@ export type Database = {
           ngay_so?: number | null
           ngay_thanh_toan?: string | null
           ngoai_tour?: boolean
+          ks_huy?: boolean
           ngoai_tour_ci?: string | null
           ngoai_tour_co?: string | null
           khach_san_id?: number | null

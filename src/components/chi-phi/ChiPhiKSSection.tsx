@@ -18,6 +18,7 @@ import KSCancelModal from "./KSCancelModal";
 import KSAggCommitModal from "./KSAggCommitModal";
 import KSLegacyAdjustModal from "./KSLegacyAdjustModal";
 import KSNgoaiTourPanel from "./KSNgoaiTourPanel";
+import KSDaHuyStrip from "./KSDaHuyStrip";
 import { useKSSection } from "./use-ks-section";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -73,7 +74,9 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
   const { data: paymentsList = [] } = usePaymentsByDoan(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
 
-  const printableOutKsIds = getNgoaiTourPrintableKsIds(chiPhiRows, dnttList);
+  // Cụm KS đã hủy (ks_huy) hiển thị ở dải "Đã hủy" — loại khỏi panel/in ngoài tour.
+  const outRows = chiPhiRows.filter((r) => !r.ks_huy);
+  const printableOutKsIds = getNgoaiTourPrintableKsIds(outRows, dnttList);
   const outSelectedCount = printableOutKsIds.filter((id) => selectedOutKsIds.has(id)).length;
   const toggleOutKs = (ksId: number) => setSelectedOutKsIds((prev) => {
     const next = new Set(prev);
@@ -82,7 +85,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
   });
   const getOutData = () => buildNgoaiTourSelectedData(
     printableOutKsIds.filter((id) => selectedOutKsIds.has(id)),
-    chiPhiRows, dnttList,
+    outRows, dnttList,
     ksList.map((k) => ({ id: k.id, ten: k.ten, tai_khoan_thanh_toan: k.tai_khoan_thanh_toan })),
     tenDoan || `#${doanId}`, currentUserName, paymentsList,
   );
@@ -173,6 +176,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
         selectedKsIds={selectedOutKsIds}
         onToggleSelect={toggleOutKs}
       />
+
+      {/* Dải "Đã hủy" (Tầng 2) — booking KS hủy bị charge. Gập mặc định,
+          tự bung + nút "Xử lý ngay" khi còn booking chưa chốt phí hủy. */}
+      <KSDaHuyStrip doanId={doanId} locked={locked} />
 
       {/* "Điều chỉnh" modal — per-booking, sửa so_phong/gia_phong nhiều row sau khi paid */}
       {ksAdjustTarget && (

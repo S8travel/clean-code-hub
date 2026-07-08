@@ -91,7 +91,8 @@ export default function KSNgoaiTourPanel({
     [ksList],
   );
 
-  const savedRows = chiPhiRows.filter((r) => r.danh_muc === "khach_san" && r.ngoai_tour);
+  // Loại cụm KS đã hủy (ks_huy) — hiển thị ở dải "Đã hủy" (KSDaHuyStrip), không phải panel này.
+  const savedRows = chiPhiRows.filter((r) => r.danh_muc === "khach_san" && r.ngoai_tour && !r.ks_huy);
 
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [dinhKyByKs, setDinhKyByKs] = useState<Record<number, boolean>>({});
@@ -257,8 +258,10 @@ export default function KSNgoaiTourPanel({
 
   // In ĐNTT 1 thẻ (Word) — tái dùng builder chung + DNTTKSPreviewModal.
   const handlePrintCard = (ksId: number) => {
+    // Lọc ks_huy: cụm KS đã hủy in/hiển thị ở dải "Đã hủy", không lẫn vào bản in panel này.
     const data = buildNgoaiTourSelectedData(
-      [ksId], chiPhiRows, dnttList, hotels, tenDoan || `#${doanId}`, currentUserName, paymentsList);
+      [ksId], chiPhiRows.filter((r) => !r.ks_huy), dnttList, hotels,
+      tenDoan || `#${doanId}`, currentUserName, paymentsList);
     if (data.length === 0) { toast.error("Chưa có ĐNTT để in"); return; }
     setPreviewItems(data);
   };

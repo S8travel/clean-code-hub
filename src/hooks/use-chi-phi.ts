@@ -91,6 +91,9 @@ export interface ChiPhiRow {
   khach_san_id: number | null;
   ngoai_tour_ci: string | null;   // YYYY-MM-DD
   ngoai_tour_co: string | null;   // YYYY-MM-DD
+  // Tầng 2 lifecycle: dòng thuộc cụm KS ĐÃ HỦY (dòng phí hủy + dòng convert khi đổi KS).
+  // Dải "Đã hủy" group theo khach_san_id trên các dòng này; panel KS ngoài tour LOẠI ra.
+  ks_huy: boolean;
 }
 
 // NCC rút gọn (chỉ field cần để hiển thị thông tin chuyển khoản).
