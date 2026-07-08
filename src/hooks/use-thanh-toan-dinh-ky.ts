@@ -35,6 +35,8 @@ export function useDinhKyChiPhiList(filters?: {
         .from("doan_chi_phi")
         .select("id, doan_id, danh_muc, mo_ta, thanh_tien, thanh_tien_thuc_te, so_tien_da_tt, so_tien_da_dntt, trang_thai_thanh_toan, nha_cung_cap_id, ngoai_tour, ngoai_tour_ci")
         .eq("thanh_toan_dinh_ky", true)
+        // Cụm KS đã hủy (Tầng 2) không phải khoản phải trả định kỳ — xử ở dải "Đã hủy".
+        .eq("ks_huy", false)
         .not("trang_thai_thanh_toan", "eq", "paid")
         .not("trang_thai_dntt", "eq", "cong_no")
         .not("trang_thai_dntt", "eq", "hoan_tien")

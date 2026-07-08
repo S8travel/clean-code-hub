@@ -1276,14 +1276,16 @@ export function useSaveDieuTour() {
 
       const { data: allBookingKs } = await externalSupabase
         .from("doan_booking_ks")
-        .select("id, khach_san_id, ks_dat_truoc_status, ks_final_status")
+        .select("id, khach_san_id, ks_dat_truoc_status, ks_final_status, trang_thai")
         .eq("doan_id", doanId);
       const distinctKsIdsFull = allKsIdsInDays.filter((id) => !khachKsIds.has(id));
       if (allBookingKs) {
         for (const bk of allBookingKs) {
-          // Delete "chua_gui" bookings for KS removed from tour or now set to "khach" payer
+          // Delete "chua_gui" bookings for KS removed from tour or now set to "khach" payer.
+          // Booking da_huy (Tầng 2 lifecycle — hủy có phí, guard đổi KS set TRƯỚC khi save
+          // chạy tới đây) là LỊCH SỬ TIỀN → không bao giờ xóa.
           const removedOrKhach = !distinctKsIdsFull.includes(bk.khach_san_id) || khachKsIds.has(bk.khach_san_id);
-          if (removedOrKhach) {
+          if (removedOrKhach && bk.trang_thai !== "da_huy") {
             const chuaGui = bk.ks_dat_truoc_status === "chua_gui" && bk.ks_final_status === "chua_gui";
             if (chuaGui) {
               await externalSupabase.from("doan_booking_ks").delete().eq("id", bk.id);
@@ -1295,7 +1297,7 @@ export function useSaveDieuTour() {
       for (const ksId of distinctKsIds) {
         const { data: existing } = await externalSupabase
           .from("doan_booking_ks")
-          .select("id, ks_final_status")
+          .select("id, ks_final_status, trang_thai")
           .eq("doan_id", doanId)
           .eq("khach_san_id", ksId)
           .maybeSingle();
@@ -1303,6 +1305,13 @@ export function useSaveDieuTour() {
         if (!existing) {
           // New booking row
           await externalSupabase.from("doan_booking_ks").insert({ doan_id: doanId, khach_san_id: ksId });
+        } else if (existing.trang_thai === "da_huy") {
+          // KS từng hủy nay quay lại tour → reactivate flow booking (giữ nguyên
+          // phi_huy/ly_do_huy làm lịch sử; dải "Đã hủy" vẫn hiện cụm ks_huy cũ).
+          await externalSupabase
+            .from("doan_booking_ks")
+            .update({ trang_thai: "active" })
+            .eq("id", existing.id);
         } else if (existing.ks_final_status === "ks_xac_nhan_huy") {
           // Reset cancelled booking
           await externalSupabase
