@@ -4,7 +4,8 @@ import { useBoPhan, useRoleAtLeast } from "@/hooks/use-permissions";
 import { useDoanScope } from "@/hooks/use-doan-scope";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
-import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight, Loader2, Share2 } from "lucide-react";
+import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight, Loader2, Share2, Banknote } from "lucide-react";
+import { ngayCanTTClass } from "@/lib/dntt-deadline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -193,6 +194,21 @@ function DNTTPageContent() {
   const [toDate, setToDate] = useState<Date | undefined>(undefined);
   const [trangThaiDuyet, setTrangThaiDuyet] = useState("cho_duyet");
   const [loai, setLoai] = useState("");
+  // Preset 1 chạm theo vòng đời ĐNTT (payment_status từ view). Không có state riêng —
+  // active suy từ combo (trangThaiDuyet, paymentStatus*) nên đổi filter tay là preset tự tắt.
+  const [paymentStatus, setPaymentStatus] = useState<"unpaid" | "partial" | "paid" | null>(null);
+  const [paymentStatusNot, setPaymentStatusNot] = useState<"paid" | null>(null);
+
+  const applyPreset = (p: "cho_duyet" | "cho_chi" | "da_tra") => {
+    if (p === "cho_duyet") { setTrangThaiDuyet("cho_duyet"); setPaymentStatus(null); setPaymentStatusNot(null); }
+    if (p === "cho_chi")   { setTrangThaiDuyet("da_duyet");  setPaymentStatus(null); setPaymentStatusNot("paid"); }
+    if (p === "da_tra")    { setTrangThaiDuyet("da_duyet");  setPaymentStatus("paid"); setPaymentStatusNot(null); }
+  };
+  const activePreset =
+    trangThaiDuyet === "cho_duyet" && !paymentStatus && !paymentStatusNot ? "cho_duyet"
+    : trangThaiDuyet === "da_duyet" && paymentStatusNot === "paid" ? "cho_chi"
+    : trangThaiDuyet === "da_duyet" && paymentStatus === "paid" ? "da_tra"
+    : null;
 
   const filters = useMemo(() => {
     const sel = DNTT_TYPE_OPTIONS.find((o) => o.value === loai);
@@ -201,11 +217,12 @@ function DNTTPageContent() {
       fromDate: fromDate ? format(fromDate, "yyyy-MM-dd") : null,
       toDate: toDate ? format(toDate, "yyyy-MM-dd") : null,
       trangThaiDuyet: trangThaiDuyet || null,
-      trangThaiTT: null,
+      paymentStatus,
+      paymentStatusNot,
       loai: sel?.field === "loai" ? loai : null,
       refLoai: sel?.field === "ref_loai" ? loai : null,
     };
-  }, [doanId, fromDate, toDate, trangThaiDuyet, loai]);
+  }, [doanId, fromDate, toDate, trangThaiDuyet, paymentStatus, paymentStatusNot, loai]);
 
   const { data: rowsRaw = [], isLoading } = useDNTTList(filters);
   const scope = useDoanScope();
@@ -242,7 +259,7 @@ function DNTTPageContent() {
   // Pagination — 20 row/trang, reset về 1 khi filter đổi
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [doanId, fromDate, toDate, trangThaiDuyet, loai]);
+  useEffect(() => { setPage(1); }, [doanId, fromDate, toDate, trangThaiDuyet, loai, paymentStatus, paymentStatusNot]);
   const totalPages = Math.max(1, Math.ceil(mainRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageRows = mainRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -349,6 +366,8 @@ function DNTTPageContent() {
     setToDate(undefined);
     setTrangThaiDuyet("");
     setLoai("");
+    setPaymentStatus(null);
+    setPaymentStatusNot(null);
   };
 
   const handleApprove = (id: number, level: ApprovalLevel) => {
@@ -509,6 +528,28 @@ function DNTTPageContent() {
         ))}
       </div>
 
+      {/* Preset 1 chạm theo vòng đời ĐNTT — hết cảnh "duyệt xong dòng biến mất" */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {([
+          { key: "cho_duyet" as const, label: t("Chờ duyệt") },
+          { key: "cho_chi" as const, label: t("Đã duyệt — chờ chi") },
+          { key: "da_tra" as const, label: t("Đã trả") },
+        ]).map((p) => (
+          <button
+            key={p.key}
+            onClick={() => applyPreset(p.key)}
+            className={cn(
+              "h-7 px-3 rounded-full text-xs font-medium border transition-colors",
+              activePreset === p.key
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-[200px]">
@@ -554,7 +595,11 @@ function DNTTPageContent() {
 
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">{t("Trạng thái duyệt")}</label>
-          <Select value={trangThaiDuyet} onValueChange={v => setTrangThaiDuyet(v === "all" ? "" : v)}>
+          <Select value={trangThaiDuyet} onValueChange={v => {
+            setTrangThaiDuyet(v === "all" ? "" : v);
+            // Đổi tay trạng thái duyệt → bỏ ràng buộc payment_status của preset
+            setPaymentStatus(null); setPaymentStatusNot(null);
+          }}>
             <SelectTrigger className="w-[140px]">
               <span>{!trangThaiDuyet ? t("Tất cả") : trangThaiDuyet === "cho_duyet" ? t("Chờ duyệt") : trangThaiDuyet === "da_duyet" ? t("Đã duyệt") : t("Từ chối")}</span>
             </SelectTrigger>
@@ -683,7 +728,7 @@ function DNTTPageContent() {
                       );
                     })()}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className={cn("text-sm", ngayCanTTClass(row.ngay_can_thanh_toan, { paid: row.payment_status === "paid" }))}>
                     {row.ngay_can_thanh_toan
                       ? format(new Date(row.ngay_can_thanh_toan), "dd/MM/yyyy")
                       : "—"}
@@ -720,6 +765,12 @@ function DNTTPageContent() {
                       {row.trang_thai_duyet === "cho_duyet" && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(row.id)}>
                           <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {row.trang_thai_duyet === "da_duyet" && row.payment_status !== "paid" && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" title={t("Đi tới thanh toán")}
+                          onClick={() => navigate(`/hoa-don-unc?doan=${row.doan_id ?? ""}&tt=chua_tt`)}>
+                          <Banknote className="h-4 w-4" />
                         </Button>
                       )}
                       {row.trang_thai_duyet === "da_duyet" && row.payment_status === "unpaid" && (

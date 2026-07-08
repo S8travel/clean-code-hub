@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { usePermission, useBoPhan } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { format } from "date-fns";
@@ -30,9 +31,15 @@ import { t, useTranslate } from "@/lib/i18n";
 function HoaDonUNCPageContent() {
   useTranslate();
 
-  const [doanId, setDoanId] = useState<string>("");
+  // Deep-link từ DNTTPage ("Đi tới thanh toán"): /hoa-don-unc?doan=<id>&tt=chua_tt
+  // → filter dựng sẵn, kế toán không phải chọn lại đoàn/trạng thái.
+  const [searchParams] = useSearchParams();
+  const [doanId, setDoanId] = useState<string>(searchParams.get("doan") ?? "");
   const [loai, setLoai] = useState<string>("");
-  const [trangThaiTT, setTrangThaiTT] = useState<string>("");
+  const [trangThaiTT, setTrangThaiTT] = useState<string>(() => {
+    const tt = searchParams.get("tt");
+    return tt === "chua_tt" || tt === "da_tt" ? tt : "";
+  });
   const [trangThaiHD, setTrangThaiHD] = useState<string>("");
   const [trangThaiUNC, setTrangThaiUNC] = useState<string>("");
   const [nguonMap, setNguonMap] = useState<Record<number, string>>({});

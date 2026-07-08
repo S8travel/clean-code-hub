@@ -99,6 +99,8 @@ interface Filters {
   toDate?: string | null;
   trangThaiDuyet?: string | null;
   paymentStatus?: "unpaid" | "partial" | "paid" | null;
+  // Loại trừ 1 payment_status — cho preset "Đã duyệt chờ chi" (unpaid + partial).
+  paymentStatusNot?: "unpaid" | "partial" | "paid" | null;
   loai?: string | null;
   // Lọc theo ref_loai (vd 'hdv_quyet_toan', 'hdv_tam_ung') — dùng khi cần tách
   // các ĐNTT cùng `loai` nhưng khác bản chất (HDV quyết toán vs tạm ứng đều loai='hdv').
@@ -158,6 +160,7 @@ export function useDNTTList(filters: Filters) {
       if (filters.toDate) q = q.lte("created_at", filters.toDate + "T23:59:59");
       if (filters.trangThaiDuyet) q = q.eq("trang_thai_duyet", filters.trangThaiDuyet);
       if (filters.paymentStatus) q = q.eq("payment_status", filters.paymentStatus);
+      if (filters.paymentStatusNot) q = q.neq("payment_status", filters.paymentStatusNot);
       if (filters.loai) q = q.eq("loai", filters.loai);
       if (filters.refLoai) q = q.eq("ref_loai", filters.refLoai);
 

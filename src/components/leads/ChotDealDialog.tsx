@@ -12,6 +12,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDoanList } from "@/hooks/use-doan";
 import type { DoanInsert } from "@/hooks/use-doan";
 import { useConvertLeadToDoan, useAttachLeadToDoan, type Lead } from "@/hooks/use-leads";
+import { useApplySeriToDoan } from "@/hooks/use-seri";
+import { useAssignPvItem } from "@/hooks/use-phan-viec";
 
 interface Props {
   lead: Lead | null;
@@ -40,6 +42,8 @@ export function ChotDealDialog({ lead, open, onClose, onDone }: Props) {
   const { user } = useAuth();
   const convertLead = useConvertLeadToDoan();
   const attachLead = useAttachLeadToDoan();
+  const applySeri = useApplySeriToDoan();
+  const assignPvItem = useAssignPvItem();
   const { data: doanListRaw = [] } = useDoanList();
 
   const [mode, setMode] = useState<"choice" | "create" | "attach">("choice");
@@ -89,6 +93,38 @@ export function ChotDealDialog({ lead, open, onClose, onDone }: Props) {
         doanData: { ...doanData, khach_hang_id: lead.khach_hang_id ?? null },
         currentUserId: user?.user_id ?? null,
       });
+      // Áp seri nếu OP đã chọn — luồng tạo thường CÓ bước này, luồng chốt deal
+      // trước đây bỏ sót → đoàn có seri_id nhưng lịch trình rỗng mà không ai báo.
+      if (doanData.seri_id && doanData.ngay_di) {
+        try {
+          await applySeri.mutateAsync({
+            doanId: newDoan.id, seriId: doanData.seri_id, ngayDi: doanData.ngay_di,
+          });
+        } catch (e: unknown) {
+          toast.warning(
+            "Đã tạo đoàn nhưng áp seri thất bại — lịch trình đang trống. " + (errMsg(e) || ""),
+            { duration: 8000 },
+          );
+        }
+      }
+      // Giao việc pv_nh_dv cho OP phụ trách — cột OP ở danh sách đoàn đọc từ
+      // cong_viec, thiếu bước này đoàn kẹt "OP: chưa phân" phải mở sửa lại tay.
+      if (doanData.assigned_to) {
+        try {
+          await assignPvItem.mutateAsync({
+            doanId: newDoan.id,
+            doanTen: doanData.ten_doan ?? `Đoàn #${newDoan.id}`,
+            ngayDi: doanData.ngay_di ?? null,
+            key: "pv_nh_dv",
+            userId: doanData.assigned_to,
+          });
+        } catch (e: unknown) {
+          toast.warning(
+            "Đã tạo đoàn nhưng chưa giao được việc cho OP: " + (errMsg(e) || ""),
+            { duration: 8000 },
+          );
+        }
+      }
       toast.success(`🎉 Đã tạo đoàn #${newDoan.id}`);
       onDone(newDoan.id);
     } catch (e: unknown) {
