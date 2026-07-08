@@ -182,6 +182,13 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   const conLai = Math.max(0, totalBua - daTT);
   // Primary DNTT for cancel: prefer pending over paid
   const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
+  // Cash đã trả cho 1 ĐNTT (chỉ method='cash'). ĐNTT "paid" nhưng chỉ toàn cấn trừ
+  // (cho_duyet + cấn trừ full lúc tạo) vẫn hủy được — useCancelDNTT xóa can_tru
+  // payments + hoàn credit về cong_no nguồn (cùng lớp bug KS ngoài tour, PR #250).
+  const dnttCashPaid = (dnttId: number): number =>
+    paymentsList
+      .filter((p) => p.dntt_id === dnttId && p.method === "cash")
+      .reduce((s, p) => s + p.payment_so_tien, 0);
   const canCancel = activeDntt && (
     activeDntt.trang_thai_duyet === "cho_duyet" ||
     activeDntt.trang_thai_duyet === "da_duyet" ||
@@ -582,14 +589,16 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
               onClick={() => addExtra(key)}>
               <Plus className="h-3 w-3" />
             </Button>
-            {nguoiTtMain === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid) && (
+            {nguoiTtMain === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid || dnttCashPaid(activeDntt.id) === 0) && (
               <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                 title={t("Hủy")}
                 onClick={() => {
                   setCancelMode("hoan_tien");
                   setCancelTarget({
                     dnttId: activeDntt.id,
-                    isPaid: activeDntt.payment_status === "paid",
+                    // Chỉ-cấn-trừ: isPaid=false → modal confirm thường, mode=undefined
+                    // (không tạo cong_no "hoàn tiền" ảo — credit tự hoàn về nguồn).
+                    isPaid: activeDntt.payment_status === "paid" && dnttCashPaid(activeDntt.id) > 0,
                     nhName: nh?.ten || t("Nhà hàng"),
                   });
                 }}>
