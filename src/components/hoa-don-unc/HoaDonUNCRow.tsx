@@ -8,6 +8,7 @@ import {
 import { TableCell, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { type HoaDonUNCRow as HoaDonRow } from "@/hooks/use-hoa-don-unc";
+import { ngayCanTTClass } from "@/lib/dntt-deadline";
 import { t } from "@/lib/i18n";
 import { buildPaymentContent } from "./payment-content";
 import { DocCell } from "./DocCell";
@@ -117,7 +118,7 @@ export function HoaDonUNCRow({
           )}
         </div>
       </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
+      <TableCell className={cn("text-xs", ngayCanTTClass(row.ngay_can_thanh_toan, { paid: row.payment_status === "paid" }))}>
         {row.ngay_can_thanh_toan
           ? format(new Date(row.ngay_can_thanh_toan), "dd/MM/yyyy")
           : "—"}

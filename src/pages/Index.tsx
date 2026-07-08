@@ -469,7 +469,13 @@ export default function Index() {
         }
         if (p.seri_id && p.ngay_di) {
           try { await applySeri.mutateAsync({ doanId: created.id, seriId: p.seri_id, ngayDi: p.ngay_di }); }
-          catch { /* non-fatal */ }
+          catch (seriErr: unknown) {
+            // Đoàn vẫn tạo được — nhưng PHẢI báo, không thì OP tưởng có lịch trình mà thực ra rỗng.
+            toast.warning(
+              "Đã tạo đoàn nhưng áp seri thất bại — lịch trình đang trống. " + (errMsg(seriErr) || ""),
+              { duration: 8000 },
+            );
+          }
         }
         await createPhanViec.mutateAsync({
           doan: { id: created.id, ten_doan: p.ten_doan, loai_tour: p.loai_tour ?? null, ngay_di: p.ngay_di ?? null },
