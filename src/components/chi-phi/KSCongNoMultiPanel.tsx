@@ -146,7 +146,11 @@ export default function KSCongNoMultiPanel({ nccId, value, onChange, maxAmount }
                 checked={!!sel}
                 onCheckedChange={() => toggle(o.id)}
               />
-              <label htmlFor={`ct-${o.id}`} className="text-xs flex-1 cursor-pointer truncate">
+              {/* KHÔNG dùng truncate (nowrap): DialogContent là grid — min-content của
+                  chuỗi nowrap dài (vd "Phát sinh trước hệ thống — dư tiền ... (đoàn XXX)")
+                  đẩy track rộng hơn khung modal → cả ruột modal tràn ra ngoài nền trắng.
+                  break-words + min-w-0 cho wrap nhiều dòng, đọc được trọn tên khoản nợ. */}
+              <label htmlFor={`ct-${o.id}`} className="text-xs flex-1 min-w-0 cursor-pointer break-words">
                 {o.isPrepaid ? <span className="text-amber-700 font-medium">{o.label}</span> : o.label}
               </label>
               {sel && (

@@ -193,7 +193,9 @@ export default function DVGopDnttModal({ open, onClose, doanId, tenDoan, dvRows 
                           onCheckedChange={() => toggle(i.chi_phi_id)}
                           className="h-3.5 w-3.5"
                         />
-                        <span className="flex-1 truncate">
+                        {/* break-words thay truncate — nowrap dài làm blowout grid dialog
+                            (xem KSCongNoMultiPanel) */}
+                        <span className="flex-1 min-w-0 break-words">
                           {i.ngay_so ? <span className="text-muted-foreground mr-1">N{i.ngay_so}</span> : null}
                           {i.label}
                           {i.extraCount > 0 && (
