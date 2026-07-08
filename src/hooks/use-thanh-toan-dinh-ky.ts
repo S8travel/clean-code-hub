@@ -134,7 +134,19 @@ export function useCreateBatchDNTT() {
       tenNcc?: string | null;
       soTaiKhoan?: string | null;
       nganHang?: string | null;
+      // NCC chưa có TK → user nhập tay trong dialog: lưu ngược blob này vào
+      // nha_cung_cap.tai_khoan_thanh_toan để các lần tạo ĐNTT sau tự có.
+      capNhatNccTaiKhoan?: string | null;
     }) => {
+      const nccTaiKhoanMoi = payload.capNhatNccTaiKhoan?.trim();
+      if (nccTaiKhoanMoi) {
+        const { error: nccErr } = await externalSupabase
+          .from("nha_cung_cap")
+          .update({ tai_khoan_thanh_toan: nccTaiKhoanMoi })
+          .eq("id", payload.nccId);
+        if (nccErr) throw nccErr;
+      }
+
       // Tạo DNTT gộp — không thuộc 1 đoàn cụ thể → doan_id = null
       const { data: authData } = await externalSupabase.auth.getUser();
       const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
@@ -173,11 +185,14 @@ export function useCreateBatchDNTT() {
       await recalcChiPhiStatus(payload.chiPhiIds);
       return dntt;
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["dinh_ky_chi_phi"] });
       qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
+      if (vars.capNhatNccTaiKhoan?.trim()) {
+        qc.invalidateQueries({ queryKey: ["nha_cung_cap"] });
+      }
     },
   });
 }

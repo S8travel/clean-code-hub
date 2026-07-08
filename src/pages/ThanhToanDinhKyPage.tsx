@@ -3,6 +3,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { proRataInts } from "@/lib/pro-rata";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -148,6 +149,8 @@ export default function ThanhToanDinhKyPage() {
   const [batchMoTa, setBatchMoTa] = useState("");
   const [batchMode, setBatchMode] = useState<"full" | "partial">("full");
   const [batchPaidAmount, setBatchPaidAmount] = useState<string>("");
+  // TK nhận tiền nhập tay khi NCC chưa có (lưu ngược vào nha_cung_cap khi tạo)
+  const [manualAcct, setManualAcct] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Range tự động tính từ tháng quick picker (override range tự chọn nếu chưa set)
@@ -300,6 +303,15 @@ export default function ThanhToanDinhKyPage() {
     : Math.min(batchPartialNum, dialogTotalConLai);
   const batchPartialValid = batchMode === "full" || (batchPartialNum > 0 && batchPartialNum <= dialogTotalConLai);
 
+  // TK nhận tiền hiện có của NCC trong dialog (null = chưa có → hiện ô nhập tay)
+  const dialogAcct = dialogCtx
+    ? resolveNccTaiKhoanText({
+        so_tai_khoan: dialogCtx.rows[0]?.ncc_so_tai_khoan,
+        ngan_hang: dialogCtx.rows[0]?.ncc_ngan_hang,
+        tai_khoan_thanh_toan: dialogCtx.rows[0]?.ncc_tai_khoan_thanh_toan,
+      })
+    : null;
+
   const openCreateDialogForMonth = (ncc: NccGroup, mg: MonthGroup) => {
     if (!ncc.nccId) { toast.error(t("Tháng này không có NCC hợp lệ")); return; }
     const eligible = mg.rows.filter((r) => {
@@ -317,6 +329,7 @@ export default function ThanhToanDinhKyPage() {
     setBatchMode("full");
     setBatchPaidAmount("");
     setBatchMoTa("");
+    setManualAcct("");
   };
 
   const closeCreateDialog = () => {
@@ -324,6 +337,7 @@ export default function ThanhToanDinhKyPage() {
     setBatchMode("full");
     setBatchPaidAmount("");
     setBatchMoTa("");
+    setManualAcct("");
   };
 
   const handleCreateBatch = async () => {
@@ -351,9 +365,11 @@ export default function ThanhToanDinhKyPage() {
 
     // Snapshot tài khoản nhận tiền: ưu tiên ô "tài khoản thanh toán" (blob gộp
     // sẵn tên+STK+ngân hàng) → gộp thành 1 dòng lưu vào so_tai_khoan, ngan_hang
-    // để null. Fallback 2 cột cấu trúc.
+    // để null. Fallback 2 cột cấu trúc. NCC chưa có TK → dùng blob user vừa
+    // nhập trong dialog (đồng thời lưu ngược vào nha_cung_cap).
     const acctRow = dialogCtx.rows[0];
-    const blob = acctRow?.ncc_tai_khoan_thanh_toan?.trim();
+    const manualBlob = !dialogAcct ? manualAcct.trim() : "";
+    const blob = manualBlob || acctRow?.ncc_tai_khoan_thanh_toan?.trim();
     const snapshotStk = blob
       ? resolveNccTaiKhoanText({ tai_khoan_thanh_toan: blob })
       : (acctRow?.ncc_so_tai_khoan ?? null);
@@ -371,6 +387,7 @@ export default function ThanhToanDinhKyPage() {
         tenNcc: dialogCtx.nccTen,
         soTaiKhoan: snapshotStk,
         nganHang: snapshotBank,
+        capNhatNccTaiKhoan: manualBlob || null,
       });
       toast.success(t("Đã tạo đề nghị thanh toán định kỳ"));
       closeCreateDialog();
@@ -525,20 +542,29 @@ export default function ThanhToanDinhKyPage() {
                 </div>
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground shrink-0">{t("Chuyển đến")}</span>
-                  {(() => {
-                    const acct = resolveNccTaiKhoanText({
-                      so_tai_khoan: dialogCtx.rows[0]?.ncc_so_tai_khoan,
-                      ngan_hang: dialogCtx.rows[0]?.ncc_ngan_hang,
-                      tai_khoan_thanh_toan: dialogCtx.rows[0]?.ncc_tai_khoan_thanh_toan,
-                    });
-                    return acct ? (
-                      <span className="text-right">{acct}</span>
-                    ) : (
-                      <span className="text-amber-700 italic text-right">{t("Chưa có TK — cập nhật trong Quản lý NCC")}</span>
-                    );
-                  })()}
+                  {dialogAcct ? (
+                    <span className="text-right">{dialogAcct}</span>
+                  ) : (
+                    <span className="text-amber-700 italic text-right">{t("Chưa có TK — nhập bên dưới")}</span>
+                  )}
                 </div>
               </div>
+
+              {!dialogAcct && (
+                <div className="space-y-1.5">
+                  <Label className="text-sm">{t("Tài khoản nhận tiền của NCC")}</Label>
+                  <Textarea
+                    value={manualAcct}
+                    onChange={(e) => setManualAcct(e.target.value)}
+                    placeholder={t("Tên chủ TK, số tài khoản, ngân hàng — mỗi dòng 1 mục")}
+                    rows={3}
+                    className="text-sm"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("Sẽ lưu vào hồ sơ NCC và in trên ĐNTT này")}
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label className="text-sm">{t("Số tiền đề nghị")}</Label>
