@@ -190,6 +190,13 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   const { groupCongNoCN, groupCongNoHT, groupCongNoTotal } =
     splitGroupCongNo(groupCongNoForGroup);
   const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
+  // Cash đã trả cho 1 ĐNTT (chỉ method='cash'). ĐNTT "paid" nhưng chỉ toàn cấn trừ
+  // (cho_duyet + cấn trừ full lúc tạo) vẫn hủy được — useCancelDNTT xóa can_tru
+  // payments + hoàn credit về cong_no nguồn (cùng lớp bug KS ngoài tour, PR #250).
+  const dnttCashPaid = (dnttId: number): number =>
+    paymentsList
+      .filter((p) => p.dntt_id === dnttId && p.method === "cash")
+      .reduce((s, p) => s + p.payment_so_tien, 0);
   const canCancel = activeDntt && (
     activeDntt.trang_thai_duyet === "cho_duyet" ||
     activeDntt.trang_thai_duyet === "da_duyet" ||
@@ -464,12 +471,14 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
       {/* Actions */}
       <td className="px-2 py-2.5">
         <div className="flex items-center gap-1 justify-end">
-          {nguoiTt === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid) && (
+          {nguoiTt === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid || dnttCashPaid(activeDntt.id) === 0) && (
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
               title={t("Hủy ĐNTT")}
               onClick={() => {
                 setCancelMode("hoan_tien");
-                setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" });
+                // Chỉ-cấn-trừ: isPaid=false → modal confirm thường, mode=undefined
+                // (không tạo cong_no "hoàn tiền" ảo — credit tự hoàn về nguồn).
+                setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" && dnttCashPaid(activeDntt.id) > 0 });
               }}>
               <Ban className="h-3 w-3" />
             </Button>
