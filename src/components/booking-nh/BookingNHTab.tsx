@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LayoutList, Utensils, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { LayoutList, Utensils, Clock, CheckCircle2, XCircle, Send } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useBookingNH } from "@/hooks/use-booking-nh";
@@ -10,6 +10,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import MealCard from "./MealCard";
 import MenuOverviewModal from "./MenuOverviewModal";
+import BatchSendNHModal from "./BatchSendNHModal";
+import { countNhBatchSendable } from "./nh-batch-items";
 import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDay(d: string | null) {
@@ -34,6 +36,13 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
   const { data: currentUserName = "" } = useCurrentUserName();
   const qc = useQueryClient();
   const [overviewOpen, setOverviewOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  // Đếm booking gửi được hàng loạt (chưa gửi + "Có thay đổi") — chỉ cần field
+  // booking DB + số khách, không phụ thuộc HDV/chú thích (không nằm trong hash).
+  const batchCount = countNhBatchSendable(days, {
+    tenDoan, soKhach, soKhachLon, soKhachEm1, soKhachEm2, soNoidBo,
+    hdvText: "", senderName: "",
+  });
 
   if (isLoading) {
     return (
@@ -75,10 +84,18 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
           </p>
         </div>
         {daysWithNH.length > 0 && (
-          <Button variant="outline" size="sm" onClick={() => setOverviewOpen(true)}>
-            <LayoutList className="h-4 w-4 mr-1.5" />
-            {t("Menu tổng quan")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {batchCount > 0 && (
+              <Button size="sm" onClick={() => setBatchOpen(true)}>
+                <Send className="h-4 w-4 mr-1.5" />
+                {t("Gửi email hàng loạt")} ({batchCount})
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setOverviewOpen(true)}>
+              <LayoutList className="h-4 w-4 mr-1.5" />
+              {t("Menu tổng quan")}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -215,6 +232,21 @@ export default function BookingNHTab({ doanId, tenDoan, soKhach, soNoidBo = 0, s
           ))}
         </div>
       )}
+
+      {/* Gửi hàng loạt — review bắt buộc trước khi bắn */}
+      <BatchSendNHModal
+        open={batchOpen}
+        onClose={() => setBatchOpen(false)}
+        doanId={doanId}
+        days={days}
+        tenDoan={tenDoan}
+        soKhach={soKhach}
+        soKhachLon={soKhachLon}
+        soKhachEm1={soKhachEm1}
+        soKhachEm2={soKhachEm2}
+        soNoidBo={soNoidBo}
+        currentUserName={currentUserName}
+      />
 
       {/* Overview Modal */}
       <MenuOverviewModal
