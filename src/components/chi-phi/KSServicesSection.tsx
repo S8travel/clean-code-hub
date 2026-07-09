@@ -54,7 +54,7 @@ export default function KSServicesSection({
             <TableHead className="w-[80px] h-auto py-1 px-2">{t("Loại")}</TableHead>
             <TableHead className="w-[60px] h-auto py-1 px-2">{t("SL")}</TableHead>
             <TableHead className="w-[60px] h-auto py-1 px-2">FOC</TableHead>
-            <TableHead className="w-[110px] h-auto py-1 px-2">{t("Đơn giá")}</TableHead>
+            <TableHead className="w-[110px] h-auto py-1 px-2 text-right">{t("Đơn giá")}</TableHead>
             <TableHead className="w-[110px] h-auto py-1 px-2">{t("Thành tiền")}</TableHead>
             <TableHead className="w-[100px] h-auto py-1 px-2 text-center">{t("Hóa đơn")}</TableHead>
             <TableHead className="w-[32px] h-auto py-1 px-2" />
