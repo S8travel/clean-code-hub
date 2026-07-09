@@ -25,8 +25,10 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { buildUpdateEmailHtml, escapeHtml } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import {
+  buildNhMailFields, buildNhSubject, buildNhEmailHtml, type NhMailInput,
+} from "@/lib/booking-mail/nh-mail";
 import { t, useTranslate } from "@/lib/i18n";
 
 const STATUS_CFG = {
@@ -227,21 +229,34 @@ function MealCardInner({
 
   const selectedMenu = setMenuOptions.find((m) => m.id === selectedSetMenuId) ?? null;
 
-  // Key fields đưa vào mail — hash để detect dirty.
-  const buildMailFields = () => ({
-    ngay_date: ngayDate,
-    bua_an: buaAn,
-    nha_hang_id: nhaHangId,
-    set_menu_id: selectedSetMenuId,
-    ten_set: selectedMenu?.ten_set ?? booking?.ten_set_snapshot ?? null,
+  // Input cho builder mail dùng chung (lib/booking-mail/nh-mail) — flow lẻ truyền
+  // từ STATE card (selectedMenu/monList đang sửa); batch truyền từ booking DB.
+  const buildMailInput = (): NhMailInput => ({
+    tenDoan,
+    ngayDate,
+    buaAn,
+    nhaHangId,
+    nhaHangTen,
+    setMenuId: selectedSetMenuId,
+    tenSet: selectedMenu?.ten_set ?? booking?.ten_set_snapshot ?? null,
     gia: selectedMenu?.gia ?? booking?.gia_snapshot ?? null,
-    mon_an: monList,
-    so_khach: soKhach,
-    so_khach_lon: soKhachLon,
-    so_khach_em1: soKhachEm1,
-    so_khach_em2: soKhachEm2,
-    so_noi_bo: soNoidBo,
+    donVi: selectedMenu?.don_vi ?? booking?.don_vi_snapshot ?? null,
+    monList,
+    ghiChu,
+    prevSnapshot: booking?.mail_sent_snapshot ?? null,
+    soKhach,
+    soKhachLon,
+    soKhachEm1,
+    soKhachEm2,
+    soNoidBo,
+    chuThichKhach,
+    hdvText: formatHdvsForEmail(doanHdvs),
+    senderName: userProfile?.ho_ten || currentUserName,
+    senderPhone: userProfile?.so_dien_thoai ?? null,
   });
+
+  // Key fields đưa vào mail — hash để detect dirty.
+  const buildMailFields = () => buildNhMailFields(buildMailInput());
 
   const isDirty =
     !!booking &&
@@ -332,162 +347,8 @@ function MealCardInner({
 
   const handleMonBlur = () => saveBooking({ mon_an_snapshot: monList });
 
-  const buildEmailHtml = (mode: "first" | "update" = "first", note = "") => {
-    const buaLabel = buaAn === "trua" ? "Ăn trưa" : "Ăn tối";
-    // Chú thích khách (ăn chay / dị ứng / VIP…) từ tab Điều tour — quan trọng
-    // với nhà hàng nên hiển thị nổi bật.
-    const ctClean = (chuThichKhach ?? "").trim();
-    const ctHtml = escapeHtml(ctClean).replace(/\n/g, "<br>");
-
-    // Update mode: minimal layout
-    if (mode === "update") {
-      const senderName = userProfile?.ho_ten || currentUserName;
-      // Diff đánh dấu THẲNG trong từng dòng (old → new) — KHÔNG mục riêng,
-      // KHÔNG callout đầu mail. prev null (gửi trước feature) → chỉ hiện giá trị
-      // hiện tại, không có mũi tên.
-      const prev = booking?.mail_sent_snapshot as Record<string, unknown> | null | undefined;
-      const num = (v: unknown) => (typeof v === "number" ? v : v == null ? 0 : Number(v) || 0);
-      const arrow = (label: string, p: number, c: number) =>
-        p !== c ? `${label} ${p} → ${c}` : `${label} ${c}`;
-
-      // Số khách: Người lớn (+ Trẻ em chỉ khi có — hoặc vừa đổi về 0 để thấy đổi)
-      const curLon = num(soKhachLon);
-      const curEm = num(soKhachEm1) + num(soKhachEm2);
-      const prevLon = prev ? num(prev.so_khach_lon) : curLon;
-      const prevEm = prev ? num(prev.so_khach_em1) + num(prev.so_khach_em2) : curEm;
-      const soKhachVal =
-        curEm > 0 || prevEm > 0
-          ? `${arrow("Người lớn", prevLon, curLon)} + ${arrow("Trẻ em", prevEm, curEm)}`
-          : arrow("Người lớn", prevLon, curLon);
-
-      // Ngày
-      const ngayChanged = !!prev && (prev.ngay_date ?? "") !== (ngayDate ?? "");
-      const ngayVal = ngayChanged
-        ? `${fmtDate(String(prev!.ngay_date))} → ${fmtDate(ngayDate)}`
-        : fmtDate(ngayDate);
-
-      // Set menu (fallback booking snapshot khi selectedMenu chưa resolve)
-      const curSetName = selectedMenu?.ten_set ?? booking?.ten_set_snapshot ?? null;
-      const curSetPrice = selectedMenu?.gia ?? booking?.gia_snapshot ?? null;
-      const curSetUnit = selectedMenu?.don_vi ?? booking?.don_vi_snapshot ?? null;
-      const fmtSet = (n: string | null, g: number | null, u: string | null) =>
-        n ? `${n}${g != null ? ` — ${g.toLocaleString("vi-VN")}${u ? `/${u}` : ""}` : ""}` : "—";
-      const curSet = fmtSet(curSetName, curSetPrice, curSetUnit);
-      const setChanged =
-        !!prev &&
-        ((prev.ten_set ?? "") !== (curSetName ?? "") ||
-          num(prev.gia) !== num(curSetPrice));
-      const setMenuVal = setChanged
-        ? `${fmtSet((prev!.ten_set as string | null) ?? null, (prev!.gia as number | null) ?? null, null)} → ${curSet}`
-        : curSet;
-
-      // Món ăn thay đổi: ghép "từ món → sang món", list NGAY DƯỚI Set menu.
-      // Không đổi → 1 dòng "Món ăn: N món".
-      const prevMon = prev && Array.isArray(prev.mon_an) ? (prev.mon_an as string[]) : [];
-      const curMon = monList;
-      const removedMon = prev ? prevMon.filter((m) => !curMon.includes(m)) : [];
-      const addedMon = prev ? curMon.filter((m) => !prevMon.includes(m)) : [];
-      const monChangeItems: string[] = [];
-      const pairs = Math.min(removedMon.length, addedMon.length);
-      for (let i = 0; i < pairs; i++)
-        monChangeItems.push(`${escapeHtml(removedMon[i])} → <strong>${escapeHtml(addedMon[i])}</strong>`);
-      for (const m of addedMon.slice(pairs))
-        monChangeItems.push(`Thêm: <strong>${escapeHtml(m)}</strong>`);
-      for (const m of removedMon.slice(pairs))
-        monChangeItems.push(`Bỏ: <strong>${escapeHtml(m)}</strong>`);
-
-      const liSt = `style="margin:4px 0;font-size:14px"`;
-      const lbl = (s: string) => `<span style="color:#64748b">${escapeHtml(s)}:</span>`;
-      const row = (label: string, value: string) =>
-        `<li ${liSt}>${lbl(label)} <strong>${escapeHtml(value)}</strong></li>`;
-      // Đổi cả set menu → diff từng món vô nghĩa, liệt kê NGUYÊN menu mới.
-      // Chỉ sửa món trong cùng set → ghép "từ → sang". Không đổi → "N món".
-      const monBlock = setChanged
-        ? curMon.length > 0
-          ? `<li ${liSt}>${lbl("Danh sách món (set menu mới)")}<ul style="margin:4px 0;padding-left:18px;list-style:decimal">${curMon
-              .map((m) => `<li style="margin:2px 0;font-size:14px">${escapeHtml(m)}</li>`)
-              .join("")}</ul></li>`
-          : row("Món ăn", "—")
-        : monChangeItems.length > 0
-          ? `<li ${liSt}>${lbl("Món ăn thay đổi")}<ul style="margin:4px 0;padding-left:18px;list-style:circle">${monChangeItems
-              .map((it) => `<li style="margin:2px 0;font-size:14px">${it}</li>`)
-              .join("")}</ul></li>`
-          : row("Món ăn", `${curMon.length} món`);
-
-      const keyFields = `<ul style="margin:0 0 8px;padding-left:18px;list-style:disc">${[
-        row("Đoàn", tenDoan || "—"),
-        row("Ngày", ngayVal),
-        row("Bữa ăn", buaLabel),
-        row("Số khách", soKhachVal),
-        row("Set menu", setMenuVal),
-        monBlock,
-        ctClean
-          ? `<li ${liSt}><span style="color:#b45309">⚠ Lưu ý khách:</span> <strong style="color:#b45309">${ctHtml}</strong></li>`
-          : "",
-        row("HDV", formatHdvsForEmail(doanHdvs)),
-      ].join("")}</ul>`;
-      return buildUpdateEmailHtml({
-        greeting: `Kính gửi ${nhaHangTen || "Quý nhà hàng"},`,
-        intro: `Cập nhật booking ${buaLabel.toLowerCase()} đoàn ${tenDoan || "—"}:`,
-        keyFieldsHtml: keyFields,
-        note,
-        senderName,
-        senderPhone: userProfile?.so_dien_thoai ?? null,
-      });
-    }
-
-    const monRows = monList.map((m, i) => `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px">${i + 1}</td><td style="border:1px solid #e2e8f0;padding:6px 12px">${m}</td></tr>`).join("");
-    return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
-  <div style="max-width:620px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
-    <div style="background:#0f172a;padding:24px 32px;text-align:center">
-      <h2 style="margin:0;color:#fff;font-size:18px">CÔNG TY TNHH DU LỊCH S8</h2>
-      <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY | MST: 0402021137</p>
-    </div>
-    <div style="padding:28px 32px">
-      <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${nhaHangTen || "Quý nhà hàng"}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt <strong>${buaLabel}</strong> cho đoàn <strong>${tenDoan || "—"}</strong>:</p>
-      <table style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:16px">
-        <tr style="background:#f1f5f9">
-          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Hạng mục</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 12px;text-align:left">Thông tin</th>
-        </tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Đoàn</td><td style="border:1px solid #e2e8f0;padding:8px 12px"><strong>${tenDoan || "—"}</strong></td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Ngày</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${fmtDate(ngayDate)}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Bữa ăn</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${buaLabel}</td></tr>
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Số khách</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soKhach ?? "—"} khách</td></tr>
-        ${soKhachLon ? `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px 6px 24px;color:#64748b;font-size:13px">Người lớn</td><td style="border:1px solid #e2e8f0;padding:6px 12px;color:#64748b;font-size:13px">${soKhachLon} khách</td></tr>` : ""}
-        ${soKhachEm1 ? `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px 6px 24px;color:#64748b;font-size:13px">TE 6–10 tuổi</td><td style="border:1px solid #e2e8f0;padding:6px 12px;color:#64748b;font-size:13px">${soKhachEm1} khách</td></tr>` : ""}
-        ${soKhachEm2 ? `<tr><td style="border:1px solid #e2e8f0;padding:6px 12px 6px 24px;color:#64748b;font-size:13px">TE dưới 6 tuổi</td><td style="border:1px solid #e2e8f0;padding:6px 12px;color:#64748b;font-size:13px">${soKhachEm2} khách</td></tr>` : ""}
-        ${soNoidBo ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Nội bộ</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${soNoidBo} suất (${soNoidBo === 3 ? "T/L · HDV · Lái xe" : "HDV · Lái xe"})</td></tr>` : ""}
-        ${selectedMenu ? `<tr><td style="border:1px solid #e2e8f0;padding:8px 12px">Set menu</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${selectedMenu.ten_set}${selectedMenu.gia != null ? ` — ${selectedMenu.gia.toLocaleString("vi-VN")}/${selectedMenu.don_vi}` : ""}</td></tr>` : ""}
-        <tr><td style="border:1px solid #e2e8f0;padding:8px 12px">HDV</td><td style="border:1px solid #e2e8f0;padding:8px 12px">${formatHdvsForEmail(doanHdvs)}</td></tr>
-        ${ctClean ? `<tr><td style="border:1px solid #fcd34d;background:#fffbeb;padding:8px 12px;color:#b45309;font-weight:600">⚠ Lưu ý khách</td><td style="border:1px solid #fcd34d;background:#fffbeb;padding:8px 12px;color:#b45309;font-weight:600">${ctHtml}</td></tr>` : ""}
-      </table>
-      ${monList.length > 0 ? `
-      <p style="font-weight:600;margin:0 0 8px">Danh sách món:</p>
-      <table style="border-collapse:collapse;width:100%;font-size:14px">
-        <tr style="background:#f1f5f9">
-          <th style="border:1px solid #e2e8f0;padding:6px 12px;width:40px">#</th>
-          <th style="border:1px solid #e2e8f0;padding:6px 12px;text-align:left">Tên món</th>
-        </tr>
-        ${monRows}
-      </table>` : ""}
-      ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
-      <p style="margin-top:24px;color:#64748b;font-size:13px">Kính nhờ quý nhà hàng xác nhận booking trong vòng <strong>24 giờ</strong>.<br>Trân trọng cảm ơn!</p>
-      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
-        <strong>${userProfile?.ho_ten || currentUserName}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>
-        <strong style="color:#0f172a">CÔNG TY TNHH DU LỊCH S8</strong><br>
-        MST: 0402021137<br>
-        Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, Thành Phố Đà Nẵng, Việt Nam<br>
-        Email: s8travel.hddt@gmail.com
-      </p>
-    </div>
-  </div>
-</body></html>`;
-  };
+  const buildEmailHtml = (mode: "first" | "update" = "first", note = "") =>
+    buildNhEmailHtml(buildMailInput(), mode, note);
 
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const openEmailModal = (mode: "first" | "update" = "first") => {
@@ -495,12 +356,8 @@ function MealCardInner({
     // updateNote = lời nhắn tự do (tùy chọn). Diff thay đổi KHÔNG prefill vào
     // đây nữa — đã ghép thẳng vào nội dung mail (mục "Nội dung thay đổi…").
     setUpdateNote("");
-    const buaLabel = buaAn === "trua" ? "ăn trưa" : "ăn tối";
-    const ngayStr = ngayDate ? format(new Date(ngayDate + "T00:00:00"), "dd/MM", { locale: vi }) : "";
     setEmailTo(normalizeEmails(nhaHangEmail));
-    const baseSubject = `[S8 Travel] Đặt ${buaLabel}${tenDoan ? ` – ${tenDoan}` : ""}${ngayStr ? ` – ${ngayStr}` : ""} – ${nhaHangTen || "Nhà hàng"}`;
-    // KEEP subject IDENTICAL khi update — Gmail strip "Re:" rồi match subject để group thread.
-    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
+    setEmailSubject(buildNhSubject(buildMailInput(), mode));
     setEmailHtml(buildEmailHtml(mode, ""));
     setEmailModalOpen(true);
   };
