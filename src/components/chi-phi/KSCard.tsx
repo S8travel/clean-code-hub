@@ -307,7 +307,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                 <TableHead className="w-[90px] h-auto py-1 px-2">C/I</TableHead>
                 <TableHead className="w-[90px] h-auto py-1 px-2">C/O</TableHead>
                 <TableHead className="w-[50px] h-auto py-1 px-2">{t("Đêm")}</TableHead>
-                <TableHead className="w-[100px] h-auto py-1 px-2">{t("Giá/phòng")}</TableHead>
+                <TableHead className="w-[100px] h-auto py-1 px-2 text-right">{t("Giá/phòng")}</TableHead>
                 <TableHead className="w-[110px] h-auto py-1 px-2">{t("Thành tiền")}</TableHead>
                 <TableHead className="w-[32px] h-auto py-1 px-2" />
               </TableRow>

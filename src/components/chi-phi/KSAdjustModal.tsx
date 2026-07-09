@@ -160,6 +160,7 @@ export default function KSAdjustModal({
             doan_id: doanId,
             so_luong: d.so_phong,
             don_gia: d.gia_phong,
+            foc_count: d.foc_count,
             total_override: calcRowActual(d),
           }),
         ),

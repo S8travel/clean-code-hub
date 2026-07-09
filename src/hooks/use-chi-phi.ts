@@ -471,6 +471,9 @@ export function useUpdateChiPhiActual() {
       // Override total cho NH (FOC + chiết khấu khiến SL × đơn_giá ≠ tổng).
       // DV không truyền → fallback newTotal = so_luong * don_gia.
       total_override?: number;
+      // FOC nhập tay (KS Option A). KHÔNG truyền → giữ nguyên foc_count cũ.
+      // Bắt buộc cho KSAdjustModal: nếu không, FOC sửa trong modal không persist → reload về 0.
+      foc_count?: number;
     }) => {
       lockGuard(args.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
       const newTotal = args.total_override ?? args.so_luong * args.don_gia;
@@ -490,6 +493,8 @@ export function useUpdateChiPhiActual() {
           tien_hdv:     isHdv ? newTotal : 0,
           thanh_tien_thuc_te: newTotal,
           is_overridden: true,
+          // foc_count chỉ set khi caller truyền (KSAdjustModal) — KHÔNG đụng khi undefined.
+          ...(args.foc_count !== undefined ? { foc_count: args.foc_count } : {}),
         })
         .eq("id", args.id)
         .select("id, doan_id")
