@@ -2310,5 +2310,7 @@
   "chưa đọc": "未讀",
   "Tải thêm": "載入更多",
   "Đã hiển thị tất cả thông báo": "已顯示所有通知",
-  "Tip khoán": "包幹小費"
+  "Tip khoán": "包幹小費",
+  "ĐNTT này không gắn với dòng chi phí nào — không duyệt được. Hủy phiếu và tạo lại từ tab Chi phí.": "此付款申請未關聯任何費用明細 — 無法核准。請作廢後於費用分頁重新建立。",
+  "Phiếu rỗng": "空白單據"
 }

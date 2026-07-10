@@ -35,6 +35,9 @@ export interface DNTTRow {
   paid_amount: number;
   payment_status: "unpaid" | "partial" | "paid";
   thanh_toan_luc: string | null;
+  /** Số dòng dntt_allocations. 0 + ref_loai gắn chi phí = PHIẾU RỖNG (không duyệt được,
+   *  trigger chan_duyet_dntt_khong_allocation chặn ở DB). Xem isDnttRong(). */
+  alloc_count: number;
   // 3-level approval
   tp_dh_duyet_boi: string | null;  // uuid
   tp_dh_duyet_luc: string | null;

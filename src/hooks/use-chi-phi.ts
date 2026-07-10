@@ -10,7 +10,8 @@ import { buildChiPhiChangeList } from "@/lib/chi-phi-diff";
 import { markChiPhiSavedLocally } from "@/lib/chi-phi-sync-bus";
 import { errMsg } from "@/lib/error";
 import { extraParentId } from "@/lib/dntt-gop-calc";
-import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
+import { splitDnttPayload, chiPhiIdsOf } from "@/lib/dntt-insert-payload";
+import type { Json, Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export type DNTTRow = DNTTRowFromHook;
 
@@ -681,34 +682,25 @@ export function useInsertDNTT() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (payload: Record<string, unknown> & { doan_id: number; allocations?: AllocationRow[] }) => {
-      const { allocations, ...dnttPayload } = payload;
       // Lấy user_id trực tiếp từ auth (tránh race với useAuth state)
       const { data: authData } = await externalSupabase.auth.getUser();
       const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
-      const { data, error } = await externalSupabase
-        .from("de_nghi_thanh_toan")
-        .insert({ ...dnttPayload, tao_boi: taoBoi } as unknown as TablesInsert<"de_nghi_thanh_toan">)
-        .select("id")
-        .single();
+
+      // NGUYÊN TỬ: dntt + allocations trong 1 transaction (RPC).
+      // Trước 10/07/2026 hook này insert dntt rồi mới insert allocations; allocation
+      // lỗi (vd chi phí đã bị xóa khi sửa Điều tour, cache client còn dòng ma) →
+      // ĐNTT RỖNG ở lại DB, onSuccess không chạy nên cũng không có log. OP bấm lại →
+      // sinh thêm phiếu rỗng. Sự cố đoàn HAN05BR260707DO: 4 phiếu 3.850.000 cho 1 bữa.
+      // Xem supabase/migrations/20260710_dntt_atomic_insert.sql.
+      const args = splitDnttPayload({ ...payload, tao_boi: taoBoi });
+      const { data: newId, error } = await externalSupabase.rpc("create_dntt_with_allocations", {
+        p_dntt: args.p_dntt as Json,
+        p_allocations: args.p_allocations as unknown as Json,
+      });
       if (error) throw error;
 
-      const chiPhiIds: number[] = [];
-      if (allocations && allocations.length > 0) {
-        const rows = allocations.map((a) => ({
-          dntt_id: data.id,
-          chi_phi_id: a.chi_phi_id,
-          so_tien: a.so_tien,
-          ghi_chu: a.ghi_chu ?? null,
-        }));
-        const { error: allocErr } = await externalSupabase
-          .from("dntt_allocations")
-          .insert(rows);
-        if (allocErr) throw allocErr;
-        chiPhiIds.push(...allocations.map((a) => a.chi_phi_id));
-      }
-
-      await recalcChiPhiStatus(chiPhiIds);
-      return data;
+      await recalcChiPhiStatus(chiPhiIdsOf(args));
+      return { id: Number(newId) };
     },
     onSuccess: (data, v) => {
       qc.invalidateQueries({ queryKey: ["de_nghi_thanh_toan", v.doan_id] });

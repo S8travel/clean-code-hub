@@ -22,6 +22,7 @@ import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-c
 import { applyChietKhau, calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
+import { nhMainMoTa, resolveNhMainId } from "@/lib/nh-chi-phi-resolve";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -157,7 +158,7 @@ export function useNHSection({
       const nh = nhData.nhaHangMap[meal.nha_hang_id];
       const nhName = nh?.ten || "Nhà hàng";
       const buaStr = meal.bua_an === "trua" ? "trưa" : "tối";
-      const mainMoTa = `${nhName} (${buaStr})`;
+      const mainMoTa = nhMainMoTa(nhName, meal.bua_an);
 
       const mainCp = nhChiPhi.find(
         (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
@@ -221,7 +222,7 @@ export function useNHSection({
       const nh = nhData.nhaHangMap[meal.nha_hang_id];
       const nhName = nh?.ten || "Nhà hàng";
       const buaStr = meal.bua_an === "trua" ? "trưa" : "tối";
-      const mainMoTa = `${nhName} (${buaStr})`;
+      const mainMoTa = nhMainMoTa(nhName, meal.bua_an);
       const mainCp = nhChiPhi.find(
         (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
       );
@@ -263,7 +264,7 @@ export function useNHSection({
         const nh = nhData.nhaHangMap[meal.nha_hang_id];
         const nhName = nh?.ten || "Nhà hàng";
         const buaStr = meal.bua_an === "trua" ? "trưa" : "tối";
-        const mainMoTa = `${nhName} (${buaStr})`;
+        const mainMoTa = nhMainMoTa(nhName, meal.bua_an);
         const mainCp = nhChiPhi.find(
           (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
         );
@@ -327,6 +328,42 @@ export function useNHSection({
       return changed ? next : prev;
     });
   }, [nhData, chiPhiRows, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang]);
+
+  // Nhận lại id dòng chi phí chính khi cascade Điều tour đã XÓA rồi TẠO LẠI dòng đó.
+  //
+  // `localRows[key].id` chỉ được gán lúc init (initializedRef) và khi handleSave insert.
+  // Không effect nào đồng bộ lại `id`, nên sau một lần cascade, state giữ id đã chết
+  // ("dòng ma") suốt phiên. Bấm "Gửi ĐNTT" trên đó → ĐNTT trỏ chi_phi_id chết →
+  // allocation vi phạm FK. Guard trùng `wouldOverCommit` cũng câm vì tra theo id chết.
+  // (Sự cố HAN05BR260707DO 10/07/2026 — 4 phiếu 3.850.000 cho 1 bữa ăn.)
+  //
+  // CỐ Ý chỉ NHẬN id thật, không bao giờ XÓA id: dòng vừa INSERT có thể chưa vào cache,
+  // xóa id lúc đó sẽ khiến submit insert lần hai. Ca "đã xóa, chưa có dòng thay thế"
+  // được bắt bằng cách hỏi DB ngay trước khi tạo ĐNTT (handleDnttSubmit).
+  useEffect(() => {
+    if (!nhData || !initializedRef.current || chiPhiLoading) return;
+    setLocalRows((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const meal of nhData.meals) {
+        const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
+        const row = next[key];
+        if (!row) continue;
+        const nhTen = nhData.nhaHangMap[meal.nha_hang_id]?.ten || "Nhà hàng";
+        const { id, adopted } = resolveNhMainId({
+          currentId: row.id,
+          chiPhiRows,
+          doanNgayId: meal.doan_ngay_id,
+          moTa: nhMainMoTa(nhTen, meal.bua_an),
+        });
+        if (adopted) {
+          next[key] = { ...row, id };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [nhData, chiPhiRows, chiPhiLoading]);
 
   // Sync localRows cho rows KHÔNG override khi Điều tour đổi set menu.
   // NH cascade ở useSaveDieuTour chỉ update master metadata, KHÔNG đụng don_gia
@@ -512,7 +549,7 @@ export function useNHSection({
         loai: "chi",
         danh_muc: "nha_hang",
         ref_doan_ngay_id: row.doan_ngay_id,
-        mo_ta: `${nhName} (${buaStr})`,
+        mo_ta: nhMainMoTa(nhName, row.bua_an),
         don_gia: row.don_gia,
         so_luong: row.so_khach,
         tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
@@ -705,12 +742,40 @@ export function useNHSection({
     const extras = extrasMap[key] || [];
     if (!row) return;
 
+    // Chốt chặn "dòng ma": id trong state có thể trỏ vào dòng chi phí đã bị cascade
+    // Điều tour xóa (state chỉ gán id lúc init). Tạo ĐNTT trên id chết → allocation vi
+    // phạm FK; guard chống trùng cũng câm vì nó tra allocation theo id chết → OP bấm
+    // lại nhiều lần (sự cố HAN05BR260707DO). Hỏi DB ngay tại thời điểm cam kết tiền,
+    // KHÔNG tin cache. Chết → xóa id, để nhánh `!row.id` bên dưới tra lại / tạo mới.
+    if (row.id) {
+      const { data: alive, error: aliveErr } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id")
+        .eq("id", row.id)
+        .maybeSingle();
+      if (aliveErr) {
+        toast.error("Không kiểm tra được dòng chi phí: " + (errMsg(aliveErr) || ""));
+        return;
+      }
+      if (!alive) {
+        const deadId = row.id;
+        setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], id: undefined } }));
+        row = { ...row, id: undefined };
+        qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+        toast.info(
+          "Dòng chi phí bữa này đã được tạo lại khi sửa Điều tour — hệ thống tự cập nhật rồi tiếp tục.",
+          { duration: 6000 },
+        );
+        console.warn(`[NH] dòng ma: chi_phi #${deadId} không còn tồn tại, resolve lại theo mo_ta`);
+      }
+    }
+
     // Auto-save chi_phi nếu chưa có id
     if (!row.id) {
       const nh0 = nhData?.nhaHangMap[row.nha_hang_id];
       const nhName0 = nh0?.ten || "Nhà hàng";
       const buaStr0 = row.bua_an === "trua" ? "trưa" : "tối";
-      const expectedMoTa = `${nhName0} (${buaStr0})`;
+      const expectedMoTa = nhMainMoTa(nhName0, row.bua_an);
       // Defensive: lookup chi phí có sẵn trong DB. Trường hợp localRows lệch
       // với DB (init race, hoặc cascade từ điều tour sau init) → reuse id thay
       // vì INSERT (sẽ collide ux_doan_chi_phi_nh_unique).
