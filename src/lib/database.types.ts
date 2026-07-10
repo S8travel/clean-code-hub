@@ -4553,6 +4553,7 @@ export type Database = {
       }
       dntt_with_payment_status: {
         Row: {
+          alloc_count: number
           created_at: string | null
           doan_id: number | null
           duyet_boi: string | null
@@ -4620,6 +4621,10 @@ export type Database = {
       cong_no_ghi_can_tru: {
         Args: { p_cong_no_id: number; p_log_entry?: string }
         Returns: undefined
+      }
+      create_dntt_with_allocations: {
+        Args: { p_dntt: Json; p_allocations?: Json }
+        Returns: number
       }
       cong_no_hoan_can_tru: {
         Args: { p_cong_no_id: number; p_log_match?: string }
