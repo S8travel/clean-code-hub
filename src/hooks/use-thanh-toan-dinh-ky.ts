@@ -2,11 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
+import { anKhoiDinhKy } from "@/lib/dinh-ky-doan-huy";
 
 export interface DinhKyChiPhiRow {
   id: number;
   doan_id: number;
   ten_doan: string | null;
+  /** 'huy' = đoàn đã hủy. Dùng để loại khỏi khoản phải trả — xem lib/dinh-ky-doan-huy. */
+  doan_trang_thai: string | null;
   ngay_kh_di: string | null;
   danh_muc: string;
   mo_ta: string | null;
@@ -52,9 +55,9 @@ export function useDinhKyChiPhiList(filters?: {
       const doanIds = [...new Set(cpRows.map((r) => r.doan_id).filter((id): id is number => id != null))];
       const { data: doanList } = await externalSupabase
         .from("doan")
-        .select("id, ten_doan, ngay_di")
+        .select("id, ten_doan, ngay_di, trang_thai")
         .in("id", doanIds);
-      type DoanInfo = { id: number; ten_doan: string | null; ngay_di: string | null };
+      type DoanInfo = { id: number; ten_doan: string | null; ngay_di: string | null; trang_thai: string | null };
       const doanMap: Record<number, DoanInfo> = {};
       (doanList || []).forEach((d) => { doanMap[d.id] = d; });
 
@@ -77,6 +80,7 @@ export function useDinhKyChiPhiList(filters?: {
           id: r.id,
           doan_id: r.doan_id ?? 0,
           ten_doan: doan.ten_doan ?? null,
+          doan_trang_thai: doan.trang_thai ?? null,
           // KS ngoài tour: gom tháng/lọc theo đêm thực (ngoai_tour_ci) — đêm có
           // thể ở tháng khác hẳn ngày đi đoàn. Fallback ngày đi đoàn nếu thiếu CI.
           ngay_kh_di: (r.ngoai_tour && r.ngoai_tour_ci) ? r.ngoai_tour_ci : (doan.ngay_di ?? null),
@@ -94,6 +98,11 @@ export function useDinhKyChiPhiList(filters?: {
           ncc_tai_khoan_thanh_toan: ncc?.tai_khoan_thanh_toan ?? null,
         };
       });
+
+      // Đoàn đã hủy: chi phí dự kiến của nó không phải khoản phải trả. Lọc SỚM để
+      // không lọt vào tổng cụm NCC × tháng (tổng đó chính là số tiền ĐNTT gộp).
+      // Chốt tiền nằm trong anKhoiDinhKy: dòng nào đã cam kết/đã trả thì GIỮ.
+      rows = rows.filter((r) => !anKhoiDinhKy(r));
 
       // Filter by date range if provided
       if (filters?.tuNgay || filters?.denNgay) {

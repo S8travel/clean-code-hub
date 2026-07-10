@@ -18,6 +18,14 @@ import { DoanDrawer } from "@/components/DoanDrawer";
 import { PhanViecModal } from "@/components/doan/PhanViecModal";
 import { useDoanOpMap, useCreatePhanViec, useAssignPvItem, type PvKey } from "@/hooks/use-phan-viec";
 import { DeleteDialog } from "@/components/DeleteDialog";
+import { HuyDoanDialog } from "@/components/HuyDoanDialog";
+import { blockerLabel } from "@/lib/blocker-label";
+import {
+  buildCancelBlockers,
+  type CancelBlocker,
+  type KsStatusRow,
+  type NhStatusRow,
+} from "@/lib/doan-cancel-check";
 import {
   useDoanList,
   useDoanRealtime,
@@ -106,6 +114,7 @@ export default function Index() {
   const [editingDoan, setEditingDoan] = useState<DoanRow | null>(null);
   const [deletingDoan, setDeletingDoan] = useState<DoanRow | null>(null);
   const [cancelingDoan, setCancelingDoan] = useState<DoanRow | null>(null);
+  const [cancelBlockers, setCancelBlockers] = useState<CancelBlocker[]>([]);
   const [pendingCreate, setPendingCreate] = useState<DoanInsert | null>(null);
   const [pendingPhanViec, setPendingPhanViec] = useState<
     { payload: DoanInsert; info: { code: string; agent: string; diaDiem: string; soKhach: number | null; ngayDi: string | null; ngayVe: string | null; loaiTour: string | null } } | null
@@ -491,7 +500,10 @@ export default function Index() {
     }
   };
 
-  const checkDoanCancelable = async (doanId: number): Promise<string[]> => {
+  // Logic phân loại nằm ở lib/doan-cancel-check (thuần, có test). Hàm này chỉ
+  // fetch. NÉM LỖI khi query hỏng: guard đọc rỗng vì mạng/RLS sẽ kết luận "không
+  // vướng gì" → cho xóa đoàn còn booking đã gửi cho NCC.
+  const fetchCancelBlockers = async (doanId: number): Promise<CancelBlocker[]> => {
     const [ks, nh, dv, dntt] = await Promise.all([
       externalSupabase.from("doan_booking_ks").select("ks_dat_truoc_status, ks_final_status").eq("doan_id", doanId),
       // NH + Du thuyền (cùng bảng doan_booking_nh): lấy đủ trạng thái để phân biệt
@@ -503,75 +515,71 @@ export default function Index() {
       externalSupabase.from("doan_booking_dv").select("id").eq("doan_id", doanId).in("booking_status", ["cho_xac_nhan", "da_xac_nhan"]),
       externalSupabase.from("de_nghi_thanh_toan").select("id").eq("doan_id", doanId).not("trang_thai_duyet", "in", '("tu_choi","da_huy")'),
     ]);
-    const errors: string[] = [];
-    // KS: chỉ block nếu booking đã được GỬI (status != chua_gui) và chưa hủy.
-    //   - `chua_gui` = chưa gửi mail → không có cam kết bên ngoài → cho xóa.
-    //   - cancelled = đã hủy → cho xóa.
-    //   - Final là phase quyết định: nếu Final đã/đang hủy → toàn booking coi như cancelled,
-    //     bất kể ks_dat_truoc_status (đặt trước có thể vẫn ở ks_xac_nhan trước khi user
-    //     chuyển sang Final rồi hủy). Đồng bộ với use-dieu-tour.checkKhachSanDeletable.
-    type KsStatusRow = { ks_dat_truoc_status: string | null; ks_final_status: string | null };
-    const isKsCancelled = (r: KsStatusRow) => {
-      const cancelStates = ["cho_ks_xac_nhan_huy", "ks_xac_nhan_huy"];
-      if (r.ks_final_status) return cancelStates.includes(r.ks_final_status);
-      return r.ks_dat_truoc_status != null && cancelStates.includes(r.ks_dat_truoc_status);
-    };
-    const isKsSent = (r: KsStatusRow) =>
-      (r.ks_dat_truoc_status && r.ks_dat_truoc_status !== "chua_gui") ||
-      (r.ks_final_status && r.ks_final_status !== "chua_gui");
-    const activeKS = (ks.data ?? []).filter((r) => !isKsCancelled(r) && isKsSent(r)).length;
-    if (activeKS > 0) errors.push(`Booking KS: còn ${activeKS} khách sạn đã gửi mail chưa hủy`);
+    if (ks.error) throw ks.error;
+    if (nh.error) throw nh.error;
+    if (dv.error) throw dv.error;
+    if (dntt.error) throw dntt.error;
 
-    // NH vs Du thuyền (cùng bảng doan_booking_nh):
-    //  - Nhà hàng thường: dùng booking_status (da_gui/nh_xac_nhan = chưa hủy).
-    //  - Du thuyền (tau_ngay/tau_dem): đặt/hủy qua dat_truoc_status/final_status 2 pha (như KS,
-    //    giá trị KHÔNG có tiền tố ks_). Hủy đi qua final_status nên booking_status có thể vẫn
-    //    'da_gui' → KHÔNG được dùng booking_status cho du thuyền (gây chặn nhầm khi hủy đoàn).
-    type NhStatusRow = {
-      booking_status: string | null;
-      dat_truoc_status: string | null;
-      final_status: string | null;
-      nha_hang: { loai: string | null } | { loai: string | null }[] | null;
-    };
-    const nhLoai = (r: NhStatusRow) =>
-      (Array.isArray(r.nha_hang) ? r.nha_hang[0]?.loai : r.nha_hang?.loai) ?? null;
-    const isTau = (r: NhStatusRow) => nhLoai(r) === "tau_ngay" || nhLoai(r) === "tau_dem";
-    const tauCancelStates = ["cho_xac_nhan_huy", "xac_nhan_huy"];
-    const isTauCancelled = (r: NhStatusRow) =>
-      r.final_status
-        ? tauCancelStates.includes(r.final_status)
-        : r.dat_truoc_status != null && tauCancelStates.includes(r.dat_truoc_status);
-    const isTauSent = (r: NhStatusRow) =>
-      (r.dat_truoc_status != null && r.dat_truoc_status !== "chua_gui") ||
-      (r.final_status != null && r.final_status !== "chua_gui");
-    const nhRows = (nh.data ?? []) as unknown as NhStatusRow[];
-    const activeNH = nhRows.filter(
-      (r) => !isTau(r) && (r.booking_status === "da_gui" || r.booking_status === "nh_xac_nhan"),
-    ).length;
-    const activeTau = nhRows.filter((r) => isTau(r) && !isTauCancelled(r) && isTauSent(r)).length;
-    if (activeNH > 0) errors.push(`Booking NH: còn ${activeNH} bữa chưa hủy`);
-    if (activeTau > 0) errors.push(`Booking Tàu/Du thuyền: còn ${activeTau} chuyến chưa hủy`);
-    if ((dv.data ?? []).length > 0) errors.push(`Booking DV: còn ${dv.data!.length} dịch vụ chưa hủy`);
-    if ((dntt.data ?? []).length > 0) errors.push(`ĐNTT: còn ${dntt.data!.length} phiếu chưa hủy`);
-    return errors;
+    const dnttCuaDoan = new Set((dntt.data ?? []).map((d) => d.id as number));
+
+    // ĐNTT định kỳ có doan_id = NULL → truy vấn theo doan_id ở trên KHÔNG thấy.
+    // Đi vòng qua chi phí: doan_chi_phi → dntt_allocations → ĐNTT còn sống.
+    const { data: cpRows, error: eCp } = await externalSupabase
+      .from("doan_chi_phi").select("id").eq("doan_id", doanId);
+    if (eCp) throw eCp;
+
+    let dnttDinhKyCount = 0;
+    const cpIds = (cpRows ?? []).map((r) => r.id as number);
+    if (cpIds.length > 0) {
+      const { data: allocs, error: eAlloc } = await externalSupabase
+        .from("dntt_allocations").select("dntt_id").in("chi_phi_id", cpIds);
+      if (eAlloc) throw eAlloc;
+
+      const dnttIds = [...new Set((allocs ?? []).map((a) => a.dntt_id as number))]
+        .filter((id) => !dnttCuaDoan.has(id)); // tránh đếm trùng phiếu của chính đoàn
+      if (dnttIds.length > 0) {
+        const { data: live, error: eLive } = await externalSupabase
+          .from("de_nghi_thanh_toan").select("id").in("id", dnttIds)
+          .not("trang_thai_duyet", "in", '("tu_choi","da_huy")');
+        if (eLive) throw eLive;
+        dnttDinhKyCount = (live ?? []).length;
+      }
+    }
+
+    return buildCancelBlockers({
+      ks: (ks.data ?? []) as KsStatusRow[],
+      nh: (nh.data ?? []) as unknown as NhStatusRow[],
+      dvActiveCount: (dv.data ?? []).length,
+      dnttActiveCount: dnttCuaDoan.size,
+      dnttDinhKyCount,
+    });
   };
 
+  // Hủy: LUÔN mở màn checklist — kể cả khi còn vướng. Trước đây chỉ bắn toast đỏ
+  // rồi bỏ mặc OP tự đoán phải vào tab nào (ngõ cụt khiến OP bỏ dùng booking).
   const handleOpenCancel = async (doan: DoanRow) => {
-    const errors = await checkDoanCancelable(doan.id);
-    if (errors.length > 0) {
-      toast.error("Không thể hủy đoàn", { description: errors.join(" · ") });
-      return;
+    try {
+      setCancelBlockers(await fetchCancelBlockers(doan.id));
+      setCancelingDoan(doan);
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || t("Không kiểm tra được trạng thái đoàn"));
     }
-    setCancelingDoan(doan);
   };
 
+  // Xóa vĩnh viễn: giữ chặn cứng, không có màn dọn dẹp — mất dữ liệu là không lùi được.
   const handleOpenDelete = async (doan: DoanRow) => {
-    const errors = await checkDoanCancelable(doan.id);
-    if (errors.length > 0) {
-      toast.error("Không thể xóa đoàn", { description: errors.join(" · ") });
-      return;
+    try {
+      const blockers = await fetchCancelBlockers(doan.id);
+      if (blockers.length > 0) {
+        toast.error(t("Không thể xóa đoàn"), {
+          description: blockers.map((b) => `${b.count} ${blockerLabel(b.kind)}`).join(" · "),
+        });
+        return;
+      }
+      setDeletingDoan(doan);
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || t("Không kiểm tra được trạng thái đoàn"));
     }
-    setDeletingDoan(doan);
   };
 
   const handleDelete = async () => {
@@ -587,14 +595,19 @@ export default function Index() {
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = async (lyDoHuy: string, agentHuyId: number | null) => {
     if (!cancelingDoan) return;
     try {
-      await cancelDoan.mutateAsync(cancelingDoan.id);
-      toast.success("Đã hủy đoàn");
+      const name = cancelingDoan.ten_doan;
+      await cancelDoan.mutateAsync({ id: cancelingDoan.id, lyDoHuy, agentHuyId });
+      logActivity.mutate({
+        action: "huy", table_name: "doan", record_id: cancelingDoan.id, doan_id: cancelingDoan.id,
+        mo_ta: `Hủy đoàn ${name} — lý do: ${lyDoHuy}`,
+      });
+      toast.success(t("Đã hủy đoàn"));
       setCancelingDoan(null);
-    } catch {
-      toast.error("Hủy đoàn thất bại");
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || t("Hủy đoàn thất bại"));
     }
   };
 
@@ -865,14 +878,18 @@ export default function Index() {
         isSaving={createDoan.isPending || updateDoan.isPending}
       />
 
-      <DeleteDialog
-        open={!!cancelingDoan}
-        name={cancelingDoan?.ten_doan || ""}
-        onConfirm={handleCancel}
-        onCancel={() => setCancelingDoan(null)}
-        isDeleting={cancelDoan.isPending}
-        variant="cancel"
-      />
+      {cancelingDoan && (
+        <HuyDoanDialog
+          open
+          doanId={cancelingDoan.id}
+          tenDoan={cancelingDoan.ten_doan || ""}
+          blockers={cancelBlockers}
+          agents={agents ?? []}
+          isPending={cancelDoan.isPending}
+          onClose={() => setCancelingDoan(null)}
+          onConfirm={handleCancel}
+        />
+      )}
 
       <DeleteDialog
         open={!!deletingDoan}

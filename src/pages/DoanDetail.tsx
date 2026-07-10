@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, FileDown, CalendarCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import { DieuTourGuardError } from "@/lib/dieu-tour-guard-error";
+import { parseDoanTab } from "@/lib/doan-cancel-check";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
@@ -69,6 +70,7 @@ export default function DoanDetail() {
   useTranslate();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const doanId = Number(id);
 
   // Realtime: máy khác đổi đoan/doan_ngay/doan_ngay_item → tự refetch
@@ -122,7 +124,10 @@ export default function DoanDetail() {
   const [tipLumpSum, setTipLumpSum] = useState<number | null>(null);
   const [days, setDays] = useState<DayLocal[]>([]);
   const [initialized, setInitialized] = useState(false);
-  const [activeTab, setActiveTab] = useState("dieu-tour");
+  // Deep-link ?tab= từ màn checklist "Hủy đoàn" (Index.tsx) nhảy thẳng vào tab
+  // cần dọn. Whitelist ở lib — `?tab=<rác>` phải rơi về dieu-tour, không để Tabs
+  // rỗng ruột. Chỉ đọc lúc mount; sau đó tab do người dùng điều khiển.
+  const [activeTab, setActiveTab] = useState<string>(() => parseDoanTab(searchParams.get("tab")) ?? "dieu-tour");
   const [showWordPreview, setShowWordPreview] = useState(false);
   const [showRemap, setShowRemap] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");

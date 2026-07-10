@@ -73,6 +73,7 @@ export function NhatKyTab() {
               <SelectItem value="tao">{t("Tạo")}</SelectItem>
               <SelectItem value="sua">{t("Sửa")}</SelectItem>
               <SelectItem value="xoa">{t("Xóa")}</SelectItem>
+              <SelectItem value="huy">{t("Hủy")}</SelectItem>
               <SelectItem value="duyet">{t("Duyệt")}</SelectItem>
               <SelectItem value="tu_choi">{t("Từ chối")}</SelectItem>
               <SelectItem value="thanh_toan">{t("Thanh toán")}</SelectItem>

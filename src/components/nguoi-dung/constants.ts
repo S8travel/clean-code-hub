@@ -86,6 +86,7 @@ export const ACTION_LABEL: Record<string, string> = {
   tao: "Tạo",
   sua: "Sửa",
   xoa: "Xóa",
+  huy: "Hủy",
   duyet: "Duyệt",
   tu_choi: "Từ chối",
   thanh_toan: "Thanh toán",

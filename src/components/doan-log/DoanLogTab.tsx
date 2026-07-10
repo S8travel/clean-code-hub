@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, CheckCircle2, Circle, FileText, AlertTriangle, StickyNote, History, Edit2, Trash2, CheckCheck, XCircle, CreditCard, PlusCircle, Pencil } from "lucide-react";
+import { Plus, CheckCircle2, Circle, FileText, AlertTriangle, StickyNote, History, Edit2, Trash2, Ban, CheckCheck, XCircle, CreditCard, PlusCircle, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,7 @@ const ACTION_CONFIG: Record<ActivityAction, { label: string; icon: React.Element
   tao:       { label: "Tạo mới",   icon: PlusCircle,  cls: "text-green-600" },
   sua:       { label: "Cập nhật",  icon: Edit2,       cls: "text-blue-600"  },
   xoa:       { label: "Xóa",       icon: Trash2,      cls: "text-red-600"   },
+  huy:       { label: "Hủy đoàn",  icon: Ban,         cls: "text-amber-600" },
   duyet:     { label: "Duyệt",     icon: CheckCheck,  cls: "text-emerald-600" },
   tu_choi:   { label: "Từ chối",   icon: XCircle,     cls: "text-orange-600" },
   thanh_toan:{ label: "Thanh toán",icon: CreditCard,  cls: "text-purple-600" },
