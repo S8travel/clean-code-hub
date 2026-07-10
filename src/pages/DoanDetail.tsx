@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
+import { DieuTourGuardError } from "@/lib/dieu-tour-guard-error";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
@@ -348,10 +349,25 @@ export default function DoanDetail() {
         },
         onError: (err: unknown) => {
           setSaveStatus("error");
+
+          // Backstop chặn TRƯỚC khi ghi byte nào → DB nguyên vẹn, thao tác của OP vẫn
+          // đúng và còn trên màn hình. Refetch lúc này sẽ xoá sạch mọi sửa đổi khác
+          // trong cùng lượt (số khách, cảnh điểm ngày khác…) chỉ vì một dòng vướng ĐNTT.
+          // Giữ nguyên `days`; OP đọc thông điệp rồi tự trả cảnh điểm về, hoặc hủy ĐNTT.
+          if (err instanceof DieuTourGuardError) {
+            // `id` cố định: OP gõ tiếp → autosave lại chặn lại. Không có id thì sonner
+            // xếp chồng một toast đỏ 14 giây sau mỗi 1,5 giây gõ.
+            toast.error(err.message, { id: "dieu-tour-guard", duration: 12000 });
+            // Badge về "idle": lỗi này KHÔNG phải hỏng kỹ thuật, mà là việc OP phải xử
+            // (trả cảnh điểm về, hoặc hủy ĐNTT). Để badge đỏ "Lỗi lưu" đứng mãi thì OP
+            // tưởng hệ thống hỏng.
+            setTimeout(() => setSaveStatus("idle"), 3000);
+            return;
+          }
+
           toast.error(errMsg(err) || t("Lỗi khi lưu"));
-          // Restore-on-error safety net: reset pending flag để init useEffect
-          // (line 144) re-sync `days` từ DB khi data refetch về. Tránh UI bị
-          // stuck ở state đã edit nhưng save fail (vd: xóa cảnh điểm có DNTT).
+          // Lỗi KHÔNG phải guard → có thể đã ghi một phần (mạng đứt, race sau backstop).
+          // Không biết DB đang ở đâu → refetch kéo UI về đúng sự thật.
           hasPendingChangesRef.current = false;
           queryClient.invalidateQueries({ queryKey: ["doan", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });

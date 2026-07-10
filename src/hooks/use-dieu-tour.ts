@@ -5,7 +5,11 @@ import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
 import { extraParentId } from "@/lib/dntt-gop-calc";
-import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
+import { getActiveDnttIdsForChiPhi, getActiveDnttIdsForChiPhiBatch } from "@/lib/dntt-guard";
+import { DieuTourGuardError } from "@/lib/dieu-tour-guard-error";
+import {
+  findDoomedCanhDiemItems, findBlockedChiPhi, buildCanhDiemBlockedMessage,
+} from "@/lib/canh-diem-remove-guard";
 import { resolveCanhDiemChiPhiTarget } from "@/lib/canh-diem-cascade";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
@@ -504,15 +508,31 @@ export function useSaveDieuTour() {
     mutationFn: async (payload: SaveDieuTourPayload) => {
       const { doanId, doanNhomId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
 
-      // Đoàn đã quyết toán → lưu điều tour sẽ cascade sửa chi phí → chặn (trừ admin).
-      lockGuard(doanId);
-
       // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
       const counters = { thucTeClearCount: 0, nhOrphanDeleted: 0, nhOrphanKept: 0 };
 
+      let defaultDoanNhomId: number | null = doanNhomId ?? null;
+
+      // Đoàn đã quyết toán → lưu điều tour sẽ cascade sửa chi phí → chặn (trừ admin).
+      // CỐ Ý để NGOÀI khối try bên dưới: đoàn bị khoá thì UI đã disable sửa, `days` local
+      // (nếu có) là rác → revert về DB mới đúng. Ném Error thường → onError refetch.
+      lockGuard(doanId);
+
+      // ══ GIAI ĐOẠN 1 — CHỈ ĐỌC & KIỂM TRA. Không một byte nào được ghi trong khối này. ══
+      //
+      // Mọi lỗi ở đây (guard chặn, query hỏng, mất mạng, RLS timeout) đều có chung một sự
+      // thật: DB nguyên vẹn, thao tác của OP vẫn đúng. Vì vậy gói tất cả thành
+      // DieuTourGuardError để `DoanDetail.onError` GIỮ NGUYÊN state, không refetch.
+      //
+      // Bọc cả khối thay vì gắn nhãn từng chỗ throw: thêm pre-check mới sau này không phải
+      // nhớ gắn nhãn, và lỗi SELECT (dự án từng có query RLS 5-8 giây) không còn xoá sạch
+      // cả buổi làm của OP — đúng thứ bản vá này đi diệt.
+      //
+      // Ranh giới của giai đoạn 1 là lệnh `update doan` ngay bên dưới. Đừng ghi gì trước nó.
+      try {
+
       // Resolve doan_nhom_id sớm — dùng cho backstop bên dưới + mọi query existing-row
       // & INSERT mới (tránh ghi đè cross-nhóm khi đoàn có nhiều nhóm).
-      let defaultDoanNhomId: number | null = doanNhomId ?? null;
       if (defaultDoanNhomId == null) {
         const { data: nhomDefault } = await externalSupabase
           .from("doan_nhom")
@@ -523,7 +543,7 @@ export function useSaveDieuTour() {
         defaultDoanNhomId = nhomDefault?.id ?? null;
       }
       if (defaultDoanNhomId == null) {
-        throw new Error("Đoàn chưa có nhóm — không thể lưu điều tour");
+        throw new DieuTourGuardError("Đoàn chưa có nhóm — không thể lưu điều tour");
       }
 
       // ── BACKSTOP: KHÔNG cho gỡ NH đã thanh toán / có ĐNTT khỏi chương trình ──
@@ -573,40 +593,153 @@ export function useSaveDieuTour() {
           }
         }
         if (blocked.length > 0) {
-          throw new Error(
+          throw new DieuTourGuardError(
             `Không thể gỡ khỏi chương trình bữa ăn đã thanh toán/có ĐNTT: ${blocked.join("; ")}. ` +
-            `Hủy ĐNTT liên quan trước, hoặc giữ nhà hàng trong lịch trình.`,
+            `Hủy ĐNTT liên quan trước, hoặc giữ nhà hàng trong lịch trình. ` +
+            `Lịch trình chưa bị thay đổi.`,
           );
         }
       }
+
+      // ── BACKSTOP 2: CẢNH ĐIỂM — cùng lý do, cùng vị trí (TRƯỚC mọi ghi DB) ──
+      //
+      // `deleteChiPhiByItemIdSafe` (bên dưới) cũng chặn, NHƯNG nó chỉ chạy ở bước dọn
+      // doan_ngay_item — tức SAU `update doan` và SAU khi upsert doan_ngay. Throw ở đó
+      // để lại DB nửa vời: số khách đã lưu, lịch trình thì không. Với autosave (không có
+      // nút Save) OP mất cả loạt thao tác mà chẳng hiểu vì sao — đúng thứ bào mòn niềm
+      // tin khiến người ta ngại gõ vào Điều tour.
+      //
+      // Khối này tính TRƯỚC tập item sắp bị xóa, kiểm hết một lượt, gộp mọi dòng vướng
+      // vào MỘT thông điệp. Chưa ghi gì nên throw là an toàn tuyệt đối.
+      // Phần quyết định ở lib/canh-diem-remove-guard.ts (thuần, có test).
+      {
+        const { data: ngayRows, error: eNgay } = await externalSupabase
+          .from("doan_ngay")
+          .select("id, ngay_so")
+          .eq("doan_id", doanId)
+          .eq("doan_nhom_id", defaultDoanNhomId);
+        if (eNgay) throw eNgay; // fail-safe: không verify được thì KHÔNG cho lưu
+
+        const ngayIdToNgaySo = new Map<number, number>(
+          (ngayRows ?? []).map((r) => [r.id as number, r.ngay_so as number]),
+        );
+        const ngayIds = [...ngayIdToNgaySo.keys()];
+
+        if (ngayIds.length > 0) {
+          const { data: dbItems, error: eItems } = await externalSupabase
+            .from("doan_ngay_item")
+            .select("id, doan_ngay_id, canh_diem_id")
+            .in("doan_ngay_id", ngayIds);
+          if (eItems) throw eItems;
+
+          const doomedItemIds = findDoomedCanhDiemItems(
+            (dbItems ?? []).map((it) => ({
+              id: it.id as number,
+              doan_ngay_id: it.doan_ngay_id as number,
+              canh_diem_id: it.canh_diem_id ?? null,
+            })),
+            ngayIdToNgaySo,
+            days.map((d) => ({
+              ngay_so: d.ngay_so,
+              canhDiemIds: d.items.map((it) => it.canh_diem_id).filter((id): id is number => !!id && id > 0),
+            })),
+          );
+
+          if (doomedItemIds.length > 0) {
+            // Dòng chi phí CHÍNH của các item sắp xóa...
+            const { data: mainCps, error: eMain } = await externalSupabase
+              .from("doan_chi_phi")
+              .select("id, mo_ta, so_tien_da_tt")
+              .in("ref_doan_ngay_item_id", doomedItemIds);
+            if (eMain) throw eMain;
+
+            // ...cộng extras phát sinh `[dvps_<mainId>]` (ref_doan_ngay_item_id NULL nên
+            // query trên không thấy). Xóa main mà bỏ extras → extras thành mồ côi.
+            const mainIds = new Set((mainCps ?? []).map((r) => r.id as number));
+            let extraCps: typeof mainCps = [];
+            if (mainIds.size > 0) {
+              const { data: extras, error: eExtra } = await externalSupabase
+                .from("doan_chi_phi")
+                .select("id, mo_ta, so_tien_da_tt")
+                .eq("doan_id", doanId)
+                .like("mo_ta", "[dvps_%");
+              if (eExtra) throw eExtra;
+              extraCps = (extras ?? []).filter((r) => {
+                const parent = extraParentId(r.mo_ta);
+                return parent != null && mainIds.has(parent);
+              });
+            }
+
+            const allRows = [...(mainCps ?? []), ...(extraCps ?? [])].map((r) => ({
+              id: r.id as number,
+              mo_ta: r.mo_ta ?? null,
+              so_tien_da_tt: r.so_tien_da_tt ?? null,
+            }));
+
+            if (allRows.length > 0) {
+              const activeDnttByChiPhi = await getActiveDnttIdsForChiPhiBatch(
+                allRows.map((r) => r.id),
+              );
+              const blockedCd = findBlockedChiPhi(allRows, activeDnttByChiPhi);
+              if (blockedCd.length > 0) throw new DieuTourGuardError(buildCanhDiemBlockedMessage(blockedCd));
+            }
+          }
+        }
+      }
+      } catch (e: unknown) {
+        // Chưa ghi gì → luôn là guard error, kể cả lỗi query/RLS/mạng. Giữ nguyên thông
+        // điệp gốc để OP đọc được lý do thật.
+        if (e instanceof DieuTourGuardError) throw e;
+        const msg = e instanceof Error ? e.message : String(e ?? "");
+        throw new DieuTourGuardError(
+          msg || "Không kiểm tra được điều tour trước khi lưu — thử lại. Lịch trình chưa bị thay đổi.",
+        );
+      }
+      // Chốt lại cho TypeScript (throw ở trong try không thu hẹp kiểu được ra ngoài).
+      // Vẫn nằm TRƯỚC mọi lệnh ghi.
+      if (defaultDoanNhomId == null) {
+        throw new DieuTourGuardError("Đoàn chưa có nhóm — không thể lưu điều tour");
+      }
+
+      // ══ GIAI ĐOẠN 2 — GHI. Từ đây trở đi, lỗi = DB có thể nửa vời → onError refetch. ══
 
       // Pre-check DNTT trước khi delete chi_phi linked với doan_ngay_item.
       // Nếu chi_phi có dntt_allocations → THROW error tiếng Việt cụ thể (DNTT id + tên cảnh điểm).
       // User phải hủy/giải phóng allocation trước khi xóa cảnh điểm khỏi tour.
       const deleteChiPhiByItemIdSafe = async (itemId: number) => {
-        const { data: cpRow } = await externalSupabase
+        // MỘT item có thể có NHIỀU dòng chi phí (day-use khách sạn gắn vào cảnh điểm bọc:
+        // "Day Use 7 twn", "extra bed", "ăn sáng"… — 11 item trên prod, có item mang
+        // 30,3 triệu đã trả). `.maybeSingle()` cũ trả `{data: null, error}` khi ≥2 dòng,
+        // mà error bị BỎ QUA → `cpRow` null → return sớm → guard tiền KHÔNG chạy, và lệnh
+        // xoá doan_ngay_item sau đó đụng FK `NO ACTION` rồi thất bại trong im lặng.
+        const { data: cpRows, error: eCp } = await externalSupabase
           .from("doan_chi_phi")
           .select("id, mo_ta, so_tien_da_tt")
-          .eq("ref_doan_ngay_item_id", itemId)
-          .maybeSingle();
-        if (!cpRow) return;
-        const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
+          .eq("ref_doan_ngay_item_id", itemId);
+        if (eCp) throw eCp; // fail-safe: không đọc được thì KHÔNG xoá
+        if (!cpRows || cpRows.length === 0) return;
+        const cdName = cpRows[0].mo_ta || `cảnh điểm #${itemId}`;
 
         // Main + extras phát sinh ([dvps_<mainId>]) phải xóa CÙNG nhau. Extras có
         // ref_doan_ngay_item_id = NULL → KHÔNG khớp query theo itemId ở trên; nếu
         // chỉ xóa main, extras thành MỒ CÔI (vô hình trong app vì group theo id cha
         // đã mất, nhưng vẫn lòi ở bản in Excel + cộng nhầm vào tổng tiền).
-        const { data: extraCandidates } = await externalSupabase
+        const mainIds = new Set(cpRows.map((r) => r.id));
+        const { data: extraCandidates, error: eExtra } = await externalSupabase
           .from("doan_chi_phi")
           .select("id, mo_ta, so_tien_da_tt")
           .eq("doan_id", doanId)
-          .like("mo_ta", `[dvps_${cpRow.id}]%`);
-        const extraRows = (extraCandidates ?? []).filter(
-          (r) => extraParentId(r.mo_ta) === cpRow.id,
-        );
+          .like("mo_ta", "[dvps_%");
+        if (eExtra) throw eExtra;
+        const extraRows = (extraCandidates ?? []).filter((r) => {
+          const parent = extraParentId(r.mo_ta);
+          return parent != null && mainIds.has(parent);
+        });
 
         // Pre-check DNTT + đã-trả cho CẢ main lẫn extras TRƯỚC khi xóa bất kỳ dòng nào.
-        for (const r of [cpRow, ...extraRows]) {
+        // (Backstop giai đoạn 1 đã kiểm cùng điều kiện; giữ đây làm lớp phòng thủ thứ hai
+        //  cho race — ai đó tạo ĐNTT giữa lúc backstop chạy và lúc xoá.)
+        for (const r of [...cpRows, ...extraRows]) {
           const rName = r.mo_ta || cdName;
           const activeDnttIds = await getActiveDnttIdsForChiPhi(r.id);
           if (activeDnttIds.length > 0) {
@@ -622,10 +755,13 @@ export function useSaveDieuTour() {
             );
           }
         }
-        await externalSupabase
+        const { error: eDel } = await externalSupabase
           .from("doan_chi_phi")
           .delete()
-          .in("id", [cpRow.id, ...extraRows.map((r) => r.id)]);
+          .in("id", [...cpRows.map((r) => r.id), ...extraRows.map((r) => r.id)]);
+        // Không nuốt: xoá hụt dòng chi phí → lệnh xoá doan_ngay_item ngay sau đó đụng FK
+        // `NO ACTION` và cũng hỏng → tour "lưu xong" mà cảnh điểm vẫn còn nguyên.
+        if (eDel) throw eDel;
       };
 
       // 1. Update doan fields
@@ -818,7 +954,11 @@ export function useSaveDieuTour() {
             await deleteChiPhiByItemIdSafe(itemId);
           }
           // Now safe to delete doan_ngay_item
-          await externalSupabase.from("doan_ngay_item").delete().in("id", idsToDelete);
+          // Không nuốt lỗi: FK doan_chi_phi.ref_doan_ngay_item_id là NO ACTION — còn sót
+          // dòng chi phí thì lệnh này hỏng, và tour "lưu xong" mà cảnh điểm vẫn còn.
+          const { error: eDelItem } = await externalSupabase
+            .from("doan_ngay_item").delete().in("id", idsToDelete);
+          if (eDelItem) throw eDelItem;
         }
 
         if (selectedCanhDiemIds.length === 0 && (!itemsToDelete || itemsToDelete.length === 0)) {
@@ -831,7 +971,9 @@ export function useSaveDieuTour() {
             for (const ri of remainingItems) {
               await deleteChiPhiByItemIdSafe(ri.id);
             }
-            await externalSupabase.from("doan_ngay_item").delete().eq("doan_ngay_id", doanNgayId);
+            const { error: eDelAll } = await externalSupabase
+              .from("doan_ngay_item").delete().eq("doan_ngay_id", doanNgayId);
+            if (eDelAll) throw eDelAll;
           }
         }
 
