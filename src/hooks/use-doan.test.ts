@@ -147,11 +147,49 @@ describe("useCancelDoan", () => {
     vi.clearAllMocks();
   });
 
-  it("resolves on successful cancel", async () => {
-    mockFrom.mockReturnValue(makeBuilder({ data: null, error: null }));
+  it("ghi trang_thai + ly_do_huy (đã trim) khi hủy", async () => {
+    const builder = makeBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
 
     const { result } = renderHook(() => useCancelDoan(), { wrapper: makeWrapper() });
-    result.current.mutate(5);
+    result.current.mutate({ id: 5, lyDoHuy: "  khách hủy do bão  " });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(builder.update).toHaveBeenCalledWith({ trang_thai: "huy", ly_do_huy: "khách hủy do bão" });
+  });
+
+  it("ghi agent_huy_id khi được truyền; null = xoá agent hủy cũ", async () => {
+    const builder = makeBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+
+    const { result } = renderHook(() => useCancelDoan(), { wrapper: makeWrapper() });
+    result.current.mutate({ id: 5, lyDoHuy: "agent báo hủy", agentHuyId: 7 });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(builder.update).toHaveBeenCalledWith({ trang_thai: "huy", ly_do_huy: "agent báo hủy", agent_huy_id: 7 });
+  });
+
+  it("KHÔNG đụng cột agent_huy_id khi bỏ trống", async () => {
+    const builder = makeBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+
+    const { result } = renderHook(() => useCancelDoan(), { wrapper: makeWrapper() });
+    result.current.mutate({ id: 5, lyDoHuy: "lý do" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const payload = (builder.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(payload).not.toHaveProperty("agent_huy_id");
+  });
+
+  // Chặn tầng 2: UI đã disable nút, nhưng hook có thể bị gọi thẳng.
+  it("lý do rỗng / chỉ khoảng trắng → lỗi, KHÔNG ghi DB", async () => {
+    const builder = makeBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+
+    const { result } = renderHook(() => useCancelDoan(), { wrapper: makeWrapper() });
+    result.current.mutate({ id: 5, lyDoHuy: "   " });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(builder.update).not.toHaveBeenCalled();
   });
 });

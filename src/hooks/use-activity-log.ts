@@ -2,10 +2,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useAuth } from "@/hooks/use-auth";
 
+// activity_log.action là cột text, KHÔNG có CHECK constraint (đã kiểm trên prod)
+// → thêm giá trị mới an toàn. NhatKyTab render qua ACTION_LABEL[x] ?? x nên
+// giá trị lạ cũng không vỡ UI.
 export type ActivityAction =
   | "tao"
   | "sua"
   | "xoa"
+  | "huy"
   | "duyet"
   | "tu_choi"
   | "thanh_toan";

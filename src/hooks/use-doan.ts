@@ -959,16 +959,37 @@ export function useToggleDoanFlag() {
   });
 }
 
+export interface CancelDoanVars {
+  id: number;
+  /** Bắt buộc, không rỗng. 29/29 đoàn hủy trước đây đều để trống cột này. */
+  lyDoHuy: string;
+  /** FK → agents: agent nào BÁO hủy (không phải người bấm nút). Tùy chọn. */
+  agentHuyId?: number | null;
+}
+
 export function useCancelDoan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number) => {
-      const { error } = await externalSupabase
-        .from("doan")
-        .update({ trang_thai: "huy" })
-        .eq("id", id);
+    mutationFn: async ({ id, lyDoHuy, agentHuyId }: CancelDoanVars) => {
+      // Chặn tầng 2: UI đã disable nút, nhưng hook có thể bị gọi thẳng.
+      const reason = lyDoHuy.trim();
+      if (!reason) throw new Error("Bắt buộc nhập lý do hủy đoàn");
+
+      const payload: { trang_thai: string; ly_do_huy: string; agent_huy_id?: number | null } = {
+        trang_thai: "huy",
+        ly_do_huy: reason,
+      };
+      // `undefined` = không đụng cột; `null` = xoá agent hủy cũ.
+      if (agentHuyId !== undefined) payload.agent_huy_id = agentHuyId;
+
+      const { error } = await externalSupabase.from("doan").update(payload).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["doan"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["doan"] });
+      // Chi phí của đoàn vừa hủy phải biến khỏi màn Thanh toán định kỳ ngay,
+      // kẻo kế toán gộp trả cho tour không chạy (xem lib/dinh-ky-doan-huy).
+      qc.invalidateQueries({ queryKey: ["dinh_ky_chi_phi"] });
+    },
   });
 }
