@@ -18,9 +18,8 @@ import { useCreateHDVPayment, type HDVInfo } from "@/hooks/use-chi-phi-hdv";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
-import { defaultTipRate, defaultTipSoKhach, tipDaysInclusive } from "@/lib/tip-calc";
 import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
-import { sumHdvExtrasVND } from "@/lib/phai-thu-calc";
+import { buildQuyetToanSeed } from "@/lib/quyet-toan-hdv-seed";
 import { t } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./hdv-shared";
 
@@ -56,39 +55,25 @@ export function CreateHDVPaymentModal({
     (doan?.so_khach_lon ?? 0) + (doan?.so_khach_em1 ?? 0) +
     (doan?.so_khach_em2 ?? 0) + (doan?.so_khach_tl ?? 0) ||
     doan?.so_khach || 0;
-  const soNgayDefault = tipDaysInclusive(doan?.ngay_di, doan?.ngay_ve);
   const soKhachTl = doan?.so_khach_tl ?? 0;
   // "Số khách" trên giấy đề nghị quyết toán = số khách THỰC, KHÔNG tính T/L
   // (T/L không tính suất). Khớp số khách tip (cũng trừ T/L qua defaultTipSoKhach).
   const soKhachThuc = Math.max(0, soKhachDefault - soKhachTl);
-  const tyGiaDefault = (() => {
-    const s = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
-    return s ? Number(s) : 800;
-  })();
   const tongHdvChiVal = tongHdvChi ?? 0;
 
-  // ── Defaults "Tổng thu" — lấy từ doan để KHỚP bảng "Phải thu" + summary card
-  //    (netConPhaiTra). Mirror ChiPhiPhasThuSection / computeHdvPhaiThuVND.
-  // Tip: T/L không đóng tip → skip khỏi số khách; ẩn (=0) khi bỏ tích "Thu tiền tip".
-  const tipAutoSoKhach = defaultTipSoKhach(soKhachDefault, soKhachTl);
-  const tipSoKhachDefault = doan?.thu_tip === false
-    ? 0
-    : (doan?.tip_so_khach_override ?? tipAutoSoKhach);
-  const tipDonGiaDefault = doan?.tip_rate ?? defaultTipRate(soKhachTl);
-  // Đầu khách: số khách mặc định 0 (OP nhập tay), đơn giá mặc định 200k.
-  //   Chỉ tính vào Tổng thu khi HDV là người thu.
-  const dauKhachSoKhachDefault = (doan?.dau_khach_nguoi_thu ?? "hdv") === "hdv"
-    ? (doan?.dau_khach_so_khach_override ?? 0)
-    : 0;
-  const dauKhachDonGiaDefault = doan?.dau_khach_rate ?? 200_000;
-  // Quỹ VP: lump-sum, mặc định 200k. Chỉ tính khi HDV thu.
-  const quyVpDonGiaDefault = (doan?.quy_vp_nguoi_thu ?? "hdv") === "hdv"
-    ? (doan?.quy_vp_amount ?? 200_000)
-    : 0;
-  // Thu khác: gộp mọi khoản phải thu thêm tay (extras) mà HDV thu — ngoài
-  // tip/đầu khách/quỹ VP đã có dòng riêng. Để Tổng thu khớp bảng "Phải thu"
-  // (số quyết toán không lệch). OP vẫn sửa tay được sau khi mở modal.
-  const thuKhacDefault = sumHdvExtrasVND(doan);
+  // Tỷ giá NDT lưu trên máy — CHỈ là fallback cho đoàn chưa chốt `doan.tip_ty_gia`.
+  // Trước 10/07/2026 modal đọc THẲNG localStorage và bỏ qua tip_ty_gia → OP sửa tỷ giá
+  // ở bảng Phải thu (800 → 795) mà quyết toán vẫn in 800.
+  const tyGiaLocal = (() => {
+    const s = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
+    const n = s != null ? Number(s) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : 800;
+  })();
+
+  // ── Defaults "Tổng thu" — dựng từ CHÍNH computePhaiThu (một nguồn với bảng Phải thu),
+  //    nên không thể trôi khỏi nhau. Xem lib/quyet-toan-hdv-seed.ts.
+  const seed = buildQuyetToanSeed(doan, tyGiaLocal);
+  const soNgayDefault = seed.soNgay;
 
   // Common state
   const [soTien, setSoTien] = useState(defaultSoTien ?? 0);
@@ -105,21 +90,24 @@ export function CreateHDVPaymentModal({
   // Quyết toán state (7 fields theo form S8 BM02.1-20)
   const [tamUng, setTamUng] = useState(tamUngDaTT ?? 0);
   const [thuTrachNhiem, setThuTrachNhiem] = useState(0);
-  const [tipSoKhach, setTipSoKhach] = useState(tipSoKhachDefault);
-  const [tipDonGia, setTipDonGia] = useState(tipDonGiaDefault);
-  const [tipTyGia, setTipTyGia] = useState(tyGiaDefault);
-  const [dauKhachSoKhach, setDauKhachSoKhach] = useState(dauKhachSoKhachDefault);
-  const [dauKhachDonGia, setDauKhachDonGia] = useState(dauKhachDonGiaDefault);
-  const [quyVpSoLuong, setQuyVpSoLuong] = useState(1);
-  const [quyVpDonGia, setQuyVpDonGia] = useState(quyVpDonGiaDefault);
+  const [tipSoKhach, setTipSoKhach] = useState(seed.tip.soKhach);
+  const [tipDonGia, setTipDonGia] = useState(seed.tip.donGiaNT);
+  const [tipTyGia, setTipTyGia] = useState(seed.tip.tyGia);
+  const [dauKhachSoKhach, setDauKhachSoKhach] = useState(seed.dauKhach.soKhach);
+  const [dauKhachDonGia, setDauKhachDonGia] = useState(seed.dauKhach.donGia);
+  const [quyVpSoLuong, setQuyVpSoLuong] = useState(seed.quyVp.soLuong);
+  const [quyVpDonGia, setQuyVpDonGia] = useState(seed.quyVp.donGia);
   const [thuBanOp, setThuBanOp] = useState(0);
-  const [thuKhac, setThuKhac] = useState(thuKhacDefault);
+  const [thuKhac, setThuKhac] = useState(seed.thuKhac);
+  // Tip khoán (doan.tip_lump_sum): công thức số khách × đơn giá × ngày KHÔNG tái tạo
+  // được tổng khoán → giữ tổng gốc để quyết toán khớp Phải thu. null = tính công thức.
+  const tipTongNT = seed.tip.tongNT;
 
   // Auto-compute quyết toán (logic tách ở lib/quyet-toan-hdv-calc.ts — có unit test)
   const { thuTipVnd, thuDauKhachVnd, thuQuyVpVnd, tongThu, conPhaiThanhToan } = calcQuyetToanHDV({
     tamUng,
     thuTrachNhiem,
-    tip: { soKhach: tipSoKhach, donGiaNT: tipDonGia, soNgay: soNgayDefault, tyGia: tipTyGia },
+    tip: { soKhach: tipSoKhach, donGiaNT: tipDonGia, soNgay: soNgayDefault, tyGia: tipTyGia, tongNT: tipTongNT },
     dauKhach: { soKhach: dauKhachSoKhach, donGia: dauKhachDonGia },
     quyVp: { soLuong: quyVpSoLuong, donGia: quyVpDonGia },
     thuBanOp,
@@ -139,7 +127,9 @@ export function CreateHDVPaymentModal({
   const buildQuyetToanData = () => ({
     tam_ung: tamUng,
     thu_trach_nhiem: thuTrachNhiem,
-    thu_tip: { so_khach: tipSoKhach, don_gia_nt: tipDonGia, ty_gia: tipTyGia },
+    // tong_nt: chỉ có khi đoàn dùng tip khoán. Bản ghi cũ thiếu field → export tính
+    // theo công thức như trước (tương thích ngược).
+    thu_tip: { so_khach: tipSoKhach, don_gia_nt: tipDonGia, ty_gia: tipTyGia, tong_nt: tipTongNT },
     thu_dau_khach: { so_khach: dauKhachSoKhach, don_gia: dauKhachDonGia },
     thu_quy_vp: { so_luong: quyVpSoLuong, don_gia: quyVpDonGia },
     thu_ban_op: thuBanOp,
@@ -241,8 +231,12 @@ export function CreateHDVPaymentModal({
                     {fmt(thuTipVnd)} ₫
                   </p>
                 </div>
+                {/* Đoàn tip khoán: công thức nhân KHÔNG ra tổng khoán → in đúng phép tính
+                    đang dùng, tránh người đọc tưởng số tiền sai. */}
                 <p className="text-[10px] text-muted-foreground">
-                  {tipSoKhach} × {tipDonGia} NT × {soNgayDefault} {t("ngày")} × {tipTyGia} = {fmt(thuTipVnd)} ₫
+                  {tipTongNT != null
+                    ? <>{t("Tip khoán")} {fmt(tipTongNT)} NT × {tipTyGia} = {fmt(thuTipVnd)} ₫</>
+                    : <>{tipSoKhach} × {tipDonGia} NT × {soNgayDefault} {t("ngày")} × {tipTyGia} = {fmt(thuTipVnd)} ₫</>}
                 </p>
               </div>
 

@@ -4,8 +4,9 @@ import { useBoPhan, useRoleAtLeast } from "@/hooks/use-permissions";
 import { useDoanScope } from "@/hooks/use-doan-scope";
 import { AccessDenied, PermissionGate } from "@/components/PermissionGate";
 import { useNavigate } from "react-router-dom";
-import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight, Loader2, Share2, Banknote } from "lucide-react";
+import { RotateCcw, Check, X, Trash2, Ban, ChevronLeft, ChevronRight, Loader2, Share2, Banknote, AlertTriangle } from "lucide-react";
 import { ngayCanTTClass } from "@/lib/dntt-deadline";
+import { isDnttRong } from "@/lib/dntt-rong";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -162,12 +163,18 @@ function ApprovalCell({
     return <TableCell className="text-xs text-muted-foreground">{t("Chờ duyệt")}</TableCell>;
   }
 
+  // Phiếu rỗng (không gắn chi phí nào): duyệt sẽ bị trigger DB chặn. Khoá nút Duyệt
+  // ngay tại đây để kế toán không bấm rồi mới ăn lỗi. Vẫn cho "Từ chối" để dọn phiếu.
+  const rong = isDnttRong(row);
+
   return (
     <TableCell>
       <div className="flex flex-col gap-1">
         <Button
           size="sm" variant="outline"
           className="h-6 px-2 text-xs text-green-600"
+          disabled={rong}
+          title={rong ? t("ĐNTT này không gắn với dòng chi phí nào — không duyệt được. Hủy phiếu và tạo lại từ tab Chi phí.") : undefined}
           onClick={() => onApprove(row.id, level)}
         >
           <Check className="h-3 w-3 mr-1" /> {t("Duyệt")}
@@ -682,7 +689,20 @@ function DNTTPageContent() {
                   <TableCell>
                     <span className={cn("px-2 py-0.5 rounded text-xs font-medium", lCls)}>{lTxt}</span>
                   </TableCell>
-                  <TableCell className="text-sm">{row.mo_ta}</TableCell>
+                  <TableCell className="text-sm">
+                    <span className="break-words">{row.mo_ta}</span>
+                    {/* Phiếu rỗng: không gắn dòng chi phí nào. Trigger DB chặn duyệt,
+                        badge này để kế toán biết trước khi bấm. Xem lib/dntt-rong.ts. */}
+                    {isDnttRong(row) && (
+                      <span
+                        className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium align-middle"
+                        title={t("ĐNTT này không gắn với dòng chi phí nào — không duyệt được. Hủy phiếu và tạo lại từ tab Chi phí.")}
+                      >
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        {t("Phiếu rỗng")}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-medium">
                     {(() => {
                       const refKey = row.doan_id != null && row.ref_loai && row.ref_id != null
