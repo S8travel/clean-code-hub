@@ -48,6 +48,8 @@ export async function exportHDVQuyetToanExcel({ data, hdv, nguoiDeNghi, ngayLap 
   const tipSoKhach = data.thu_tip?.so_khach ?? 0;
   const tipDonGia = data.thu_tip?.don_gia_nt ?? 0;
   const tipTyGia = data.thu_tip?.ty_gia ?? 0;
+  // Tip khoán (doan.tip_lump_sum) — bản ghi cũ không có field này, khi đó tính công thức.
+  const tipTongNT = data.thu_tip?.tong_nt ?? null;
   const soNgay = data.so_ngay_doan ?? 0;
   const dauKhachSL = data.thu_dau_khach?.so_khach ?? 0;
   const dauKhachDG = data.thu_dau_khach?.don_gia ?? 0;
@@ -62,7 +64,7 @@ export async function exportHDVQuyetToanExcel({ data, hdv, nguoiDeNghi, ngayLap 
   const { thuTipVnd, thuDauKhachVnd, thuQuyVpVnd, tongThu, conPhaiThanhToan } = calcQuyetToanHDV({
     tamUng,
     thuTrachNhiem,
-    tip: { soKhach: tipSoKhach, donGiaNT: tipDonGia, soNgay, tyGia: tipTyGia },
+    tip: { soKhach: tipSoKhach, donGiaNT: tipDonGia, soNgay, tyGia: tipTyGia, tongNT: tipTongNT },
     dauKhach: { soKhach: dauKhachSL, donGia: dauKhachDG },
     quyVp: { soLuong: quyVpSL, donGia: quyVpDG },
     thuBanOp,

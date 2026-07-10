@@ -24,7 +24,10 @@ export interface HDVInfo {
 export interface QuyetToanData {
   tam_ung?: number;
   thu_trach_nhiem?: number;
-  thu_tip?: { so_khach?: number; don_gia_nt?: number; ty_gia?: number };
+  /** tong_nt: tổng tip theo đơn vị gốc khi đoàn dùng tip KHOÁN (doan.tip_lump_sum) —
+   *  công thức số khách × đơn giá × số ngày không tái tạo được số đó.
+   *  Vắng mặt (bản ghi tạo trước 10/07/2026) → export tính theo công thức như cũ. */
+  thu_tip?: { so_khach?: number; don_gia_nt?: number; ty_gia?: number; tong_nt?: number | null };
   thu_dau_khach?: { so_khach?: number; don_gia?: number };
   thu_quy_vp?: { so_luong?: number; don_gia?: number };
   thu_ban_op?: number;
