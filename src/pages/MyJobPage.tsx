@@ -36,6 +36,7 @@ import { CheckCircle2, Circle, StickyNote, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
+import { ksBookingCanFinal, ksFinalProgress, ksAllFinal } from "@/lib/ks-booking-final";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmtDate(d: string | null | undefined) {
@@ -369,7 +370,9 @@ export default function MyJobPage() {
         const showNH = scope.has("all") || scope.has("nh");
         const showDV = scope.has("all") || scope.has("dv");
 
-        const ks: KSItem[]   = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
+        const ksAll: KSItem[] = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
+        // Booking đã/đang hủy không còn là việc cần theo dõi — xem lib/ks-booking-final.ts.
+        const ks: KSItem[]   = ksBookingCanFinal(ksAll);
         const ksFinal        = ks.filter((r) => r.ks_final_status === "ks_xac_nhan_final").length;
         const nh: NHItem[]   = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
         const nhSent         = nh.filter((r) => r.booking_status === "da_gui" || r.booking_status === "khong_dat").length;
@@ -418,7 +421,7 @@ export default function MyJobPage() {
       const ks = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
       const nh = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
       const dv = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
-      const ksOk = ks.every((r) => r.ks_final_status === "ks_xac_nhan_final");
+      const ksOk = ksAllFinal(ks);
       const nhOk = nh.every((r) => r.booking_status === "da_gui" || r.booking_status === "khong_dat");
       const dvOk = dv.every((r) => r.booking_status === "da_xac_nhan" || r.booking_status === "khong_dat");
       return !ksOk || !nhOk || !dvOk;
@@ -449,7 +452,10 @@ export default function MyJobPage() {
       const dv   = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
       const dntt = filterDNTTByScope(td.dnttList.filter((r) => r.doan_id === id), scope);
 
-      const ksNotFinal = ks.filter((r) => r.ks_final_status !== "ks_xac_nhan_final").length;
+      // Booking đang/đã vào luồng hủy KHÔNG phải việc "chưa final" — đếm vào đây là báo
+      // động giả (nút "Hủy booking" nay đặt 'cho_ks_xac_nhan_huy' phổ biến hơn trước).
+      const ksProgress = ksFinalProgress(ks);
+      const ksNotFinal = ksProgress.total - ksProgress.done;
       const nhNotSent  = nh.filter((r) => r.booking_status !== "da_gui" && r.booking_status !== "khong_dat").length;
       const dvNotXN    = dv.filter((r) => r.booking_status !== "da_xac_nhan" && r.booking_status !== "khong_dat").length;
       const dnttPending = dntt.filter((r) => r.trang_thai_duyet === "cho_duyet").length;

@@ -22,6 +22,15 @@ export interface BookingKSRow {
   email_thread_id: string | null;
   deadline: string | null;
   mail_content_hash: string | null;
+  /** Subject mail đặt-trước/final đã gửi — mail hủy dùng `Re: <subject>` để cùng thread Gmail. */
+  email_subject: string | null;
+  // Vòng đời booking (Tầng 2, migration 20260708_ks_booking_lifecycle.sql)
+  trang_thai: string | null;
+  phi_huy: number | null;
+  ly_do_huy: string | null;
+  huy_luc: string | null;
+  huy_boi: string | null;
+  cong_no_id: number | null;
 }
 
 export interface BookingKSDisplay extends BookingKSRow {
@@ -220,9 +229,7 @@ export function useSendKSBookingEmail() {
 
       // Cập nhật trạng thái tương ứng
       const now = new Date().toISOString();
-      // email_subject là cột DB (có trong doan_booking_ks) nhưng chưa nằm trong
-      // BookingKSRow interface → mở rộng cục bộ để không cần `any`.
-      let fields: Partial<BookingKSRow> & { email_subject?: string } = { email_thread_id: threadId };
+      let fields: Partial<BookingKSRow> = { email_thread_id: threadId };
       if (params.mailContentHash !== undefined) fields.mail_content_hash = params.mailContentHash;
       // Lưu subject để mail UNC sau này có thể vào cùng thread (Gmail group by subject).
       // Chỉ lưu cho 'final'/'dat_truoc' (mail chính). 'huy'/'update' sẽ vào cùng thread cũ.

@@ -27,7 +27,11 @@ import { useBookingTau } from "@/hooks/use-booking-tau";
 import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
 import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
+import HuyBookingKsDialog, { type HuyBookingKsArgs } from "@/components/dieu-tour/HuyBookingKsDialog";
+import KsHuyMailModal, { type KsHuyMailTarget } from "@/components/dieu-tour/KsHuyMailModal";
+import { isKsBookingActive } from "@/hooks/use-doi-ks-phi-huy";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
@@ -517,6 +521,45 @@ Email: s8travel.hddt@gmail.com`;
   const datTruocConfirmed = row.ks_dat_truoc_status === "ks_xac_nhan";
   const isCancelled = row.ks_final_status === "ks_xac_nhan_huy";
 
+  // Hủy booking + (tuỳ chọn) mail hủy — nút nằm ở header card, dùng được ở mọi
+  // trạng thái đang sống (kể cả cho_ks_xac_nhan: mail vừa gửi, KS chưa trả lời).
+  const [huyOpen, setHuyOpen] = useState(false);
+  const [huyMailTarget, setHuyMailTarget] = useState<KsHuyMailTarget | null>(null);
+  const [huyLyDo, setHuyLyDo] = useState("");
+
+  const handleHuyConfirm = async ({ lyDo, sendMail }: HuyBookingKsArgs) => {
+    setHuyLyDo(lyDo);
+    if (sendMail && row.khach_san_email) {
+      // Mail TRƯỚC (sendMut tự set ks_final_status='cho_ks_xac_nhan_huy'), lý do ghi SAU.
+      setHuyMailTarget({
+        bookingId: row.id,
+        khachSanTen: row.khach_san_ten,
+        email: row.khach_san_email,
+        emailThreadId: row.email_thread_id,
+        emailSubject: row.email_subject,
+        roomDates,
+      });
+      setHuyOpen(false);
+      return;
+    }
+    // updateStatus nuốt lỗi (`catch { toast.error }`) → nếu dùng nó ở đây, ghi DB hỏng
+    // mà vẫn báo "Đã cập nhật trạng thái hủy". Gọi thẳng mutation để biết thật giả.
+    try {
+      await updateMut.mutateAsync({
+        id: row.id,
+        fields: {
+          ks_final_status: "cho_ks_xac_nhan_huy",
+          ...(lyDo ? { ly_do_huy: lyDo } : {}),
+        },
+      });
+      await syncBookingStatus(doanId);
+      setHuyOpen(false);
+      toast.success(t("Đã cập nhật trạng thái hủy"));
+    } catch (e: unknown) {
+      toast.error(`${t("Lỗi khi cập nhật")}: ${errMsg(e) || ""}`);
+    }
+  };
+
   const buildMailFields = () => ({
     khach_san_id: row.khach_san_id,
     check_in_dates: roomDates,
@@ -524,10 +567,10 @@ Email: s8travel.hddt@gmail.com`;
     ghi_chu: ghiChu,
   });
 
-  const isActive =
-    !isCancelled &&
-    (["cho_ks_xac_nhan", "ks_xac_nhan"].includes(row.ks_dat_truoc_status) ||
-      ["cho_ks_xac_nhan", "ks_xac_nhan_final"].includes(row.ks_final_status));
+  // Dùng CHUNG vị từ với gate đổi KS (use-doi-ks-phi-huy). Định nghĩa cũ chỉ loại
+  // 'ks_xac_nhan_huy' nên booking ở 'cho_ks_xac_nhan_huy' (vừa bấm Hủy booking) vẫn
+  // hiện nút "Hủy booking" và badge "Có thay đổi" → dễ gửi mail hủy lần hai.
+  const isActive = isKsBookingActive(row);
   const isDirty = isActive && isMailDirty(row.ks_dat_truoc_sent_at, row.mail_content_hash, buildMailFields());
   const overall = getOverallStatus(row);
 
@@ -618,14 +661,32 @@ Email: s8travel.hddt@gmail.com`;
             )}
           </div>
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Hủy booking — hiện với MỌI booking đang sống. Trước 07/2026 nút này chỉ
+              nằm trong FinalSection, mà FinalSection đợi KS xác nhận đặt-trước; ở
+              cho_ks_xac_nhan (mail vừa gửi, KS chưa trả lời) OP không có đường nào
+              hủy → cộng với guard Điều tour thành ngõ cụt. */}
+          {isActive && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2 shrink-0 text-xs text-red-600 border-red-300 hover:bg-red-50"
+              onClick={() => setHuyOpen(true)}
+              title={t("Hủy booking & báo khách sạn")}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              {t("Hủy booking")}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Body */}
@@ -759,6 +820,41 @@ Email: s8travel.hddt@gmail.com`;
       updateNote={updateNote}
       onUpdateNoteChange={setUpdateNote}
     />
+
+    <HuyBookingKsDialog
+      open={huyOpen}
+      onOpenChange={setHuyOpen}
+      khachSanTen={row.khach_san_ten}
+      hasEmail={!!row.khach_san_email}
+      submitting={updateMut.isPending}
+      onConfirm={handleHuyConfirm}
+    />
+    <KsHuyMailModal
+      target={huyMailTarget}
+      tenDoan={tenDoan}
+      lyDo={huyLyDo}
+      onSent={async () => {
+        // PHẢI tự đặt trạng thái, KHÔNG dựa vào sendMut: nhánh "Mở email client"
+        // (mailto) không gọi sendMut. Trước đây onSent chỉ ghi ly_do_huy, mà lý do
+        // rỗng thì bỏ qua luôn → KS đã nhận mail hủy nhưng booking vẫn "đang sống"
+        // → OP tưởng chưa gửi, bấm lại → khách sạn nhận mail hủy LẦN HAI.
+        //
+        // Gọi THẲNG updateMut chứ KHÔNG qua updateStatus: updateStatus nuốt lỗi bằng
+        // `catch { toast.error }`, nên KsHuyMailModal.finish() sẽ tưởng ghi DB thành
+        // công — tái tạo đúng lỗi trên. Ở đây lỗi phải NỔI LÊN để modal báo
+        // "đã gửi mail nhưng lưu thất bại" và giữ cờ không gửi lại.
+        await updateMut.mutateAsync({
+          id: row.id,
+          fields: {
+            ks_final_status: "cho_ks_xac_nhan_huy",
+            ...(huyLyDo ? { ly_do_huy: huyLyDo } : {}),
+          },
+        });
+        await syncBookingStatus(doanId);
+        setHuyMailTarget(null);
+      }}
+      onCancel={() => setHuyMailTarget(null)}
+    />
     </>
   );
 }
@@ -848,7 +944,16 @@ function FinalSection({
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
-  if (!datTruocConfirmed) {
+  // Booking đang/đã trong luồng hủy PHẢI hiện nút chốt, độc lập với pha đặt-trước.
+  //
+  // Nút "Hủy booking" (header) dùng được ngay ở 'cho_ks_xac_nhan' (KS chưa trả lời).
+  // Nếu để guard `datTruocConfirmed` bên dưới che, booking rơi vào 'cho_ks_xac_nhan_huy'
+  // sẽ mất luôn nút "KS xác nhận hủy", và đường tiến duy nhất còn lại là bấm
+  // "KS xác nhận đặt trước" — ghi một timestamp xác nhận GIẢ cho booking đang bị hủy.
+  // Đó lại đúng kiểu ngõ cụt mà tính năng này sinh ra để dẹp.
+  const dangHuy = status === "cho_ks_xac_nhan_huy" || status === "ks_xac_nhan_huy";
+
+  if (!datTruocConfirmed && !dangHuy) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-muted/10 p-3 flex items-center justify-center min-h-[80px]">
         <p className="text-xs text-muted-foreground italic">{t("Chờ xác nhận đặt trước")}</p>

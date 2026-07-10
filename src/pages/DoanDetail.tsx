@@ -49,9 +49,10 @@ import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
 import RemapNgayModal from "@/components/dieu-tour/RemapNgayModal";
-import DoiKsPhiHuyModal from "@/components/dieu-tour/DoiKsPhiHuyModal";
+import DoiKsPhiHuyModal, { type DoiKsConfirmArgs } from "@/components/dieu-tour/DoiKsPhiHuyModal";
+import KsHuyMailModal from "@/components/dieu-tour/KsHuyMailModal";
 import {
-  useDoiKsPhiHuy, checkKsPhiHuyOnChange, type KsPhiHuyPending,
+  useDoiKsPhiHuy, checkKsPhiHuyOnChange, KsDnttNgoaiPhamViError, type KsPhiHuyPending,
 } from "@/hooks/use-doi-ks-phi-huy";
 
 function TabBadge({ count }: { count: number }) {
@@ -124,9 +125,15 @@ export default function DoanDetail() {
   const [showWordPreview, setShowWordPreview] = useState(false);
   const [showRemap, setShowRemap] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
-  // Guard đổi KS có phí hủy: KS cũ còn ĐNTT sống → chặn autosave, hỏi phí hủy.
+  // Guard đổi KS: KS cũ còn ĐNTT sống HOẶC booking đã gửi → chặn autosave, hỏi OP.
   const [ksPhiHuyPending, setKsPhiHuyPending] = useState<KsPhiHuyPending | null>(null);
+  // Bước 2 (tuỳ chọn): soạn mail hủy gửi KS cũ TRƯỚC khi ghi DB.
+  const [ksHuyMail, setKsHuyMail] = useState<{
+    pending: KsPhiHuyPending; phiHuy: number; lyDo: string; mode: "phi_huy" | "de_sau";
+  } | null>(null);
   const ksGateBusyRef = useRef(false);
+  // Đã ghi DB cho ít nhất 1 KS trong lượt đổi này (không hoàn tác được).
+  const ksCommittedRef = useRef(false);
   const doiKsMut = useDoiKsPhiHuy();
   const queryClient = useQueryClient();
 
@@ -356,83 +363,152 @@ export default function DoanDetail() {
     );
   }, [doanId, activeNhomId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, doanSoKhachLon, doanSoKhachEm1, doanSoKhachEm2, doanSoKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
 
-  // Gate TRƯỚC autosave: đổi KS mà KS cũ còn ĐNTT sống → chặn, hỏi phí hủy (modal)
-  // hoặc tự hủy ĐNTT chưa trả (silent path) RỒI mới lưu. Nếu chạy save trước thì
+  // Chạy lại gate SAU khi React đã flush (setState ở trên đã vào state, doSaveRef đã
+  // trỏ closure mới).
+  //
+  // KHÔNG gọi `doSaveRef.current?.()` thẳng: lúc đó React chưa re-render, doSaveRef vẫn
+  // trỏ closure CŨ với `ksPhiHuyPending` truthy → doSave early-return → `runSave()`
+  // không chạy → `doan_ngay.khach_san_id` không bao giờ được lưu (đổi KS "mất tích").
+  // setTimeout(0) là macrotask, luôn chạy sau khi React commit.
+  const rerunGateSoon = useCallback(() => {
+    setTimeout(() => doSaveRef.current?.(), 0);
+  }, []);
+
+  // Gate TRƯỚC autosave: KS cũ rời khỏi lịch trình mà còn ĐNTT sống HOẶC còn booking
+  // đã gửi mail → dừng, hỏi (phí hủy / mail hủy) RỒI mới lưu. Nếu chạy save trước thì
   // doan_ngay.khach_san_id flip → dòng chi phí KS cũ bị quy nhầm sang KS mới (mất dấu tiền).
+  //
+  // Trước 07/2026 gate chỉ mở modal khi paidTotal>0; ca "chỉ có ĐNTT chưa trả" bị tự hủy
+  // IM LẶNG, còn ca "booking đã gửi, chưa dính tiền" thì gate bỏ qua hẳn → booking thành
+  // mồ côi, khách sạn không hề biết mình bị hủy. Nay mọi pending đều hỏi OP.
   const doSave = useCallback(async () => {
     if (!doanId) return;
     if (ksPhiHuyPending || ksGateBusyRef.current) return; // modal đang mở / gate đang chạy
     ksGateBusyRef.current = true;
     try {
       const pendings = await checkKsPhiHuyOnChange({ doanId, days, dbNgayRows });
-      const withPaid = pendings.find((p) => p.paidTotal > 0);
-      if (withPaid) {
-        setKsPhiHuyPending(withPaid);
+      if (pendings.length > 0) {
+        // Xử từng KS một; sau mỗi lần xong gate chạy lại và bắt KS kế (nếu có).
+        setKsPhiHuyPending(pendings[0]);
         setSaveStatus("pending"); // giữ trạng thái chờ — modal quyết tiếp
         return;
       }
-      // Chỉ có ĐNTT CHƯA trả → tự hủy kèm log (đã chốt nghiệp vụ), không cần hỏi
-      for (const p of pendings) {
-        await doiKsMut.mutateAsync({ doanId, pending: p, phiHuyInput: 0, mode: "phi_huy" });
-        toast.info(
-          `${t("Đã tự hủy")} ${p.unpaidDnttIds.length} ${t("ĐNTT chưa thanh toán của KS")} ${p.oldKsName}`,
-          { duration: 6000 },
-        );
-      }
     } catch (e) {
+      // KS dính ĐNTT không thuộc riêng đoàn này (thanh toán định kỳ): KHÔNG đổi được,
+      // nhưng cũng KHÔNG được để autosave chết cả tour. Trả riêng những ngày đó về KS
+      // cũ rồi lưu tiếp mọi thay đổi khác của OP.
+      if (e instanceof KsDnttNgoaiPhamViError) {
+        ksGateBusyRef.current = false;
+        setDays((prev) => prev.map((d) =>
+          d.id && e.dayIds.includes(d.id) ? { ...d, khach_san_id: e.oldKsId } : d,
+        ));
+        toast.error(e.message, { duration: 14000 });
+        rerunGateSoon(); // lưu phần còn lại sau khi days đã revert
+        return;
+      }
       setSaveStatus("error");
-      toast.error(errMsg(e) || t("Lỗi kiểm tra đổi khách sạn"));
+      toast.error(errMsg(e) || t("Lỗi kiểm tra đổi khách sạn"), { duration: 12000 });
       return;
     } finally {
       ksGateBusyRef.current = false;
     }
+    ksCommittedRef.current = false; // gate sạch → lượt đổi kết thúc, reset cờ batch
     runSave();
-  }, [doanId, days, dbNgayRows, ksPhiHuyPending, doiKsMut, runSave]);
+  }, [doanId, days, dbNgayRows, ksPhiHuyPending, runSave, rerunGateSoon]);
 
-  // Handlers cho modal phí hủy
-  const handleKsPhiHuyConfirm = useCallback(async (phiHuy: number, lyDo: string) => {
-    if (!doanId || !ksPhiHuyPending) return;
-    try {
-      const r = await doiKsMut.mutateAsync({
-        doanId, pending: ksPhiHuyPending, phiHuyInput: phiHuy, lyDo: lyDo || null, mode: "phi_huy",
-      });
+  // Ghi DB cho 1 pending rồi chạy lại gate. Dùng chung cho cả 3 lối: xác nhận, để sau,
+  // và "sau khi mail hủy đã gửi xong" (KsHuyMailModal.onSent).
+  const applyKsChange = useCallback(async (
+    pending: KsPhiHuyPending, phiHuy: number, lyDo: string, mode: "phi_huy" | "de_sau",
+  ) => {
+    if (!doanId) return;
+    // KS cũ không dính ĐNTT nào → chỉ đánh dấu booking, tuyệt đối không đụng chi phí.
+    const realMode = pending.hasMoney ? mode : "booking_only";
+    const r = await doiKsMut.mutateAsync({
+      doanId, pending, phiHuyInput: phiHuy, lyDo: lyDo || null, mode: realMode,
+    });
+    if (realMode === "booking_only") {
       toast.success(
-        `${t("Đã tách KS")} ${ksPhiHuyPending.oldKsName} — ${t("phí hủy")} ${r.phiHuy.toLocaleString("vi-VN")} ₫` +
+        `${t("Đã đánh dấu booking")} ${pending.oldKsName} ${t("chờ KS xác nhận hủy")}`,
+        { duration: 6000 },
+      );
+    } else if (realMode === "de_sau") {
+      toast.warning(
+        `${t("KS")} ${pending.oldKsName} ${t("chuyển sang mục KS ngoài tour — cần xử lý phí hủy ở tab Chi phí.")}`,
+        { duration: 8000 },
+      );
+    } else {
+      toast.success(
+        `${t("Đã tách KS")} ${pending.oldKsName} — ${t("phí hủy")} ${r.phiHuy.toLocaleString("vi-VN")} ₫` +
         (r.refund > 0 ? ` · ${t("công nợ thu hồi")} ${r.refund.toLocaleString("vi-VN")} ₫` : ""),
         { duration: 8000 },
       );
-      setKsPhiHuyPending(null);
-      doSaveRef.current?.(); // chạy lại gate — pending đã xử → lưu thật
-    } catch (e) {
-      toast.error(errMsg(e) || t("Lỗi tách phí hủy"));
     }
-  }, [doanId, ksPhiHuyPending, doiKsMut]);
+    // Đã ghi DB cho KS này → không hoàn tác được nữa (booking đổi trạng thái, tiền tách,
+    // công nợ tạo). Cờ này chặn "Hủy đổi KS" ở KS kế tiếp revert `days` về DB, vốn sẽ
+    // làm KS vừa xử lý HỒI SINH vào lịch trình dù booking đã hủy.
+    ksCommittedRef.current = true;
+    setKsPhiHuyPending(null);
+    setKsHuyMail(null);
+    rerunGateSoon();
+  }, [doanId, doiKsMut, rerunGateSoon]);
 
-  const handleKsPhiHuyDefer = useCallback(async () => {
-    if (!doanId || !ksPhiHuyPending) return;
+  // Tích "gửi mail hủy" → soạn mail TRƯỚC (bắt soát), ghi DB SAU (onSent). Không tích →
+  // ghi DB luôn. Xem lý do thứ tự này ở đầu KsHuyMailModal.
+  const dispatchKsChange = useCallback(async (
+    args: DoiKsConfirmArgs, mode: "phi_huy" | "de_sau",
+  ) => {
+    const pending = ksPhiHuyPending;
+    if (!doanId || !pending) return;
+    if (args.sendHuyMail && pending.booking?.email) {
+      setKsHuyMail({ pending, phiHuy: args.phiHuy, lyDo: args.lyDo, mode });
+      return;
+    }
     try {
-      await doiKsMut.mutateAsync({
-        doanId, pending: ksPhiHuyPending, phiHuyInput: 0, mode: "de_sau",
-      });
-      toast.warning(
-        `${t("KS")} ${ksPhiHuyPending.oldKsName} ${t("chuyển sang mục KS ngoài tour — cần xử lý phí hủy ở tab Chi phí.")}`,
-        { duration: 8000 },
-      );
-      setKsPhiHuyPending(null);
-      doSaveRef.current?.();
+      await applyKsChange(pending, args.phiHuy, args.lyDo, mode);
     } catch (e) {
       toast.error(errMsg(e) || t("Lỗi tách phí hủy"));
     }
-  }, [doanId, ksPhiHuyPending, doiKsMut]);
+  }, [doanId, ksPhiHuyPending, applyKsChange]);
+
+  const handleKsPhiHuyConfirm = useCallback(
+    (args: DoiKsConfirmArgs) => { void dispatchKsChange(args, "phi_huy"); },
+    [dispatchKsChange],
+  );
+
+  const handleKsPhiHuyDefer = useCallback(
+    (args: DoiKsConfirmArgs) => { void dispatchKsChange(args, "de_sau"); },
+    [dispatchKsChange],
+  );
 
   const handleKsPhiHuyCancel = useCallback(() => {
-    // Không đổi nữa: bỏ pending + re-sync days từ DB (KS quay về cũ, không lưu gì)
+    const pending = ksPhiHuyPending;
+    const daCoKsDaXuLy = ksCommittedRef.current;
     setKsPhiHuyPending(null);
+    setKsHuyMail(null);
+
+    if (daCoKsDaXuLy && pending) {
+      // Đổi NHIỀU KS một lượt và KS trước đã ghi DB (booking hủy, tiền tách, công nợ).
+      // KHÔNG được revert toàn bộ `days` về DB — sẽ dựng lại KS đã hủy vào lịch trình.
+      // Chỉ trả riêng các ngày của KS đang hỏi về giá trị cũ, rồi lưu tiếp phần còn lại.
+      // (Trả về đúng những ngày này cũng khiến gate không hỏi lại chính KS đó → không lặp.)
+      setDays((prev) => prev.map((d) =>
+        d.id && pending.dayIds.includes(d.id) ? { ...d, khach_san_id: pending.oldKsId } : d,
+      ));
+      toast.warning(
+        `${t("Giữ nguyên")} ${pending.oldKsName}. ${t("Các khách sạn đã xử lý trước đó không hoàn tác được.")}`,
+        { duration: 8000 },
+      );
+      rerunGateSoon();
+      return;
+    }
+
+    // Chưa xử KS nào: bỏ pending + re-sync days từ DB (KS quay về cũ, không lưu gì)
     hasPendingChangesRef.current = false;
     setSaveStatus("idle");
     queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
     queryClient.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] });
-  }, [doanId, queryClient]);
+  }, [doanId, queryClient, ksPhiHuyPending, rerunGateSoon]);
 
   // Keep ref updated so timer always calls latest doSave
   doSaveRef.current = doSave;
@@ -765,12 +841,33 @@ export default function DoanDetail() {
               <RemapNgayModal doanId={doanId} open={showRemap} onClose={() => setShowRemap(false)} />
             )}
             <DoiKsPhiHuyModal
-              pending={ksPhiHuyPending}
+              /* Ẩn khi bản nháp mail đang mở — 2 dialog chồng nhau. */
+              pending={ksHuyMail ? null : ksPhiHuyPending}
               submitting={doiKsMut.isPending}
               onConfirm={handleKsPhiHuyConfirm}
               onDefer={handleKsPhiHuyDefer}
               onCancel={handleKsPhiHuyCancel}
             />
+            {ksHuyMail?.pending.booking && (
+              <KsHuyMailModal
+                target={{
+                  bookingId: ksHuyMail.pending.booking.bookingId,
+                  khachSanTen: ksHuyMail.pending.oldKsName,
+                  email: ksHuyMail.pending.booking.email,
+                  emailThreadId: ksHuyMail.pending.booking.emailThreadId,
+                  emailSubject: ksHuyMail.pending.booking.emailSubject,
+                  roomDates: ksHuyMail.pending.booking.roomDates,
+                }}
+                tenDoan={doan?.ten_doan ?? ""}
+                lyDo={ksHuyMail.lyDo}
+                onSent={() => applyKsChange(
+                  ksHuyMail.pending, ksHuyMail.phiHuy, ksHuyMail.lyDo, ksHuyMail.mode,
+                )}
+                /* Đóng bản nháp = quay lại modal phí hủy, KHÔNG hủy cả thao tác đổi KS
+                   (OP thường chỉ muốn sửa lý do rồi soạn lại). */
+                onCancel={() => setKsHuyMail(null)}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="booking-ks" className="mt-4">

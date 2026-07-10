@@ -52,10 +52,13 @@ export function useTheodoi() {
     staleTime: 30_000,
     queryFn: async (): Promise<TheodoiData> => {
       const [ksRes, nhRes, dvRes, dnttRes] = await Promise.all([
-        // KS: join khach_san để lấy tên
+        // KS: join khach_san để lấy tên.
+        // Loại booking đã hủy (Tầng 2 lifecycle) — nếu không, KS đã hủy vẫn bị đếm là
+        // "chưa final" → báo động giả trên Theo dõi / MyJob.
         externalSupabase
           .from("doan_booking_ks")
-          .select("doan_id, ks_dat_truoc_status, ks_final_status, khach_san:khach_san_id(ten)"),
+          .select("doan_id, ks_dat_truoc_status, ks_final_status, khach_san:khach_san_id(ten)")
+          .neq("trang_thai", "da_huy"),
 
         // NH: join nha_hang để lấy tên, lấy qua doan_booking_nh
         externalSupabase

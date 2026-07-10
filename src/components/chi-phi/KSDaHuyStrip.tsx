@@ -10,7 +10,7 @@ import { useKhachSanList } from "@/hooks/use-khach-san";
 import {
   useDoiKsPhiHuy, fetchKsHuyResolvePending, type KsPhiHuyPending,
 } from "@/hooks/use-doi-ks-phi-huy";
-import DoiKsPhiHuyModal from "@/components/dieu-tour/DoiKsPhiHuyModal";
+import DoiKsPhiHuyModal, { type DoiKsConfirmArgs } from "@/components/dieu-tour/DoiKsPhiHuyModal";
 import { errMsg } from "@/lib/error";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -107,7 +107,8 @@ export default function KSDaHuyStrip({ doanId, locked = false }: Props) {
     }
   };
 
-  const handleResolveConfirm = async (phiHuy: number, lyDo: string) => {
+  // variant='resolve' không có khối booking (pending.booking = null) → bỏ qua sendHuyMail.
+  const handleResolveConfirm = async ({ phiHuy, lyDo }: DoiKsConfirmArgs) => {
     if (!resolvePending) return;
     try {
       const r = await doiKsMut.mutateAsync({
