@@ -27,6 +27,7 @@ import { AccessDenied } from "@/components/PermissionGate";
 import { CheckCircle2, Circle, AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
+import { ksFinalProgress } from "@/lib/ks-booking-final";
 
 function fmtDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -416,7 +417,8 @@ export default function TheodoiPage() {
                   ) : pageRows.map(({ g }, idx) => {
                     const cells = pvMatrix?.get(g.id) ?? {};
                     const ks = grp.ks.get(g.id) ?? [];
-                    const ksFinal = ks.filter((r) => r.ks_final_status === "ks_xac_nhan_final").length;
+                    // Booking đã/đang hủy không nằm ở mẫu số — xem lib/ks-booking-final.ts.
+                    const { done: ksFinal, total: ksTotal } = ksFinalProgress(ks);
                     const nh = grp.nh.get(g.id) ?? [];
                     const nhSent = nh.filter((r) => r.booking_status === "da_gui").length;
                     const dv = grp.dv.get(g.id) ?? [];
@@ -456,7 +458,7 @@ export default function TheodoiPage() {
                               />
                               {it.key === "pv_ks" && (
                                 <InfoTooltip
-                                  trigger={<Badge done={ksFinal} total={ks.length}>{ksFinal}/{ks.length} {t("Final")}</Badge>}
+                                  trigger={<Badge done={ksFinal} total={ksTotal}>{ksFinal}/{ksTotal} {t("Final")}</Badge>}
                                   items={ks.map((r) => {
                                     const s = ksOverallStatus(r.ks_dat_truoc_status, r.ks_final_status);
                                     return { label: r.khach_san_ten, statusLabel: s.label, statusCls: s.cls };

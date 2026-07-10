@@ -18,7 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { SearchableSelect } from "@/components/SearchableSelect";
 import type { DayLocal, DayItemLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
-import { checkCanhDiemDeletable, checkNhaHangDeletable, checkKhachSanDeletable } from "@/hooks/use-dieu-tour";
+import { checkCanhDiemDeletable, checkNhaHangDeletable } from "@/hooks/use-dieu-tour";
 import { useSetMenus } from "@/hooks/use-nha-hang";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
@@ -522,25 +522,20 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
             </div>
           ) : (
           <>
+            {/* KHÔNG chặn cứng ở đây nữa. Trước 07/2026 cả 2 nút gọi checkKhachSanDeletable
+                → booking đã gửi mail là toast "Không thể xóa" + return, dropdown không mở.
+                Cộng với nút "Hủy booking" (tab Booking KS) chỉ hiện sau khi KS xác nhận
+                đặt-trước → trạng thái cho_ks_xac_nhan thành NGÕ CỤT: không đổi, không gỡ,
+                không hủy được. Nay để mở; gate `checkKsPhiHuyOnChange` ở DoanDetail.doSave
+                chặn TRƯỚC khi ghi DB và hỏi (phí hủy / mail hủy) — có đường thoát tại chỗ. */}
             <div className="flex items-center gap-1">
               <button type="button" title={t("Bấm để đổi khách sạn")}
                 className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
-                onClick={async () => {
-                  if (doanId && selectedKS) {
-                    const result = await checkKhachSanDeletable(doanId, selectedKS.id, selectedKS.ten);
-                    if (!result.ok) { toast.error(result.reason ?? t("Không thể đổi")); return; }
-                  }
-                  setEditSel("ks");
-                }}>
+                onClick={() => setEditSel("ks")}>
                 {selectedKS.ten}
               </button>
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide" onClick={async () => {
-                if (doanId && selectedKS) {
-                  const result = await checkKhachSanDeletable(doanId, selectedKS.id, selectedKS.ten);
-                  if (!result.ok) { toast.error(result.reason ?? t("Không thể xóa")); return; }
-                }
-                update({ khach_san_id: null });
-              }}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide"
+                onClick={() => update({ khach_san_id: null })}>
                 <X className="h-3 w-3" />
               </Button>
             </div>

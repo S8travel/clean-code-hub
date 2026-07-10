@@ -28,7 +28,22 @@ import { buildKsNgoaiTourPayload } from "@/lib/ks-ngoai-tour";
 import { REF_LOAI_NGOAI_TOUR } from "@/lib/ks-ngoai-tour-print";
 import { useCancelDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
+import { findForeignKsDntt, formatForeignKsDntt, isKsBookingActive } from "@/lib/ks-dntt-scope";
 import type { DayLocal, DoanNgayRow } from "@/hooks/use-dieu-tour";
+
+/** Booking KS cũ đang "sống" (đã gửi mail, chưa vào luồng hủy) — đủ dữ liệu dựng mail hủy. */
+export interface KsBookingHuyInfo {
+  bookingId: number;
+  /** Email KS (master). Rỗng → modal ẩn tuỳ chọn gửi mail, chỉ đổi trạng thái. */
+  email: string | null;
+  emailThreadId: string | null;
+  /** Subject mail đặt-trước đã gửi — mail hủy dùng `Re: <subject>` để cùng thread Gmail. */
+  emailSubject: string | null;
+  datTruocStatus: string;
+  finalStatus: string;
+  /** Các đêm KS cũ đang giữ (YYYY-MM-DD, sort) — dựng dòng "Ngày đã đặt" trong mail. */
+  roomDates: string[];
+}
 
 export interface KsPhiHuyPending {
   oldKsId: number;
@@ -41,15 +56,23 @@ export interface KsPhiHuyPending {
   paidByDntt: DoiKsPaidDntt[];
   /** ĐNTT sống chưa trả đồng nào (cho_duyet/da_duyet) — sẽ tự hủy kèm log. */
   unpaidDnttIds: number[];
+  /** Có ĐNTT sống (đã trả hoặc chưa) → cần tách tiền. false = chỉ dính booking. */
+  hasMoney: boolean;
+  /** Booking đã gửi mail & chưa hủy → cần báo KS cũ. null = không cần (chưa gửi / đã hủy). */
+  booking: KsBookingHuyInfo | null;
 }
 
-/** Tên + NCC khách sạn (khachSanList của Điều tour không có nha_cung_cap_id). */
+// isKsBookingActive / isOwnKsDntt: xem lib/ks-dntt-scope.ts (thuần, có test).
+// Re-export để các importer cũ (BookingKSTab) không phải đổi đường dẫn.
+export { isKsBookingActive };
+
+/** Tên + NCC + email khách sạn (khachSanList của Điều tour không có nha_cung_cap_id). */
 async function fetchKsInfo(ksId: number): Promise<{
-  ten: string; nccId: number | null; nccTen: string | null;
+  ten: string; nccId: number | null; nccTen: string | null; email: string | null;
 }> {
   const { data: ks } = await externalSupabase
     .from("khach_san")
-    .select("id, ten, nha_cung_cap_id, nha_cung_cap:nha_cung_cap_id(ten)")
+    .select("id, ten, email, nha_cung_cap_id, nha_cung_cap:nha_cung_cap_id(ten)")
     .eq("id", ksId)
     .maybeSingle();
   const nccJoined = ks?.nha_cung_cap as { ten: string | null } | null;
@@ -57,12 +80,153 @@ async function fetchKsInfo(ksId: number): Promise<{
     ten: ks?.ten ?? `KS #${ksId}`,
     nccId: ks?.nha_cung_cap_id ?? null,
     nccTen: nccJoined?.ten ?? null,
+    email: ks?.email ?? null,
   };
 }
 
 /**
- * Phát hiện đổi-KS-có-tiền TRƯỚC khi save. Read-only.
- * Trả [] khi không có gì cần chặn (save tiếp như bình thường).
+ * KS cũ dính ĐNTT không thuộc riêng đoàn này (điển hình: thanh toán định kỳ gom nhiều
+ * đoàn) → không đoán mò được cách tách tiền, phải chặn.
+ *
+ * Mang theo `oldKsId` + `dayIds` để caller HOÀN TÁC đúng những ngày đó rồi lưu tiếp
+ * phần còn lại. Nếu chỉ ném lỗi trần, autosave sẽ chết cả tour: mọi sửa đổi khác
+ * (cảnh điểm, số khách…) cũng không lưu được và toast nổ lại mỗi lần gõ.
+ */
+export class KsDnttNgoaiPhamViError extends Error {
+  constructor(message: string, readonly oldKsId: number, readonly dayIds: number[]) {
+    super(message);
+    this.name = "KsDnttNgoaiPhamViError";
+  }
+}
+
+/** ĐNTT sống, đủ trường để phân loại "của riêng KS/đoàn này" hay không. */
+interface LiveDnttLite {
+  id: number;
+  doan_id: number | null;
+  loai: string | null;
+  ref_loai: string | null;
+  ref_id: number | null;
+  paid_amount: number;
+  trang_thai_duyet: string | null;
+}
+
+/**
+ * Mọi ĐNTT còn sống đang dính tới tiền của KS cũ trong các ngày `dayIds`.
+ *
+ * Gộp HAI đường, vì thiếu một trong hai đều mất dấu tiền:
+ *  (a) dòng chi phí KS in-tour của các ngày đó → dntt_allocations → ĐNTT.
+ *      Bắt được ĐNTT ĐỊNH KỲ (doan_id = NULL, ref_loai='dinh_ky') mà cách dò theo
+ *      ref hoàn toàn không thấy.
+ *  (b) ĐNTT trỏ thẳng (doan_id, ref_loai='khach_san', ref_id=ksId).
+ *      Bắt được ĐNTT KS tạo KHÔNG kèm allocation nào (nhánh `allocations: allocs.length
+ *      > 0 ? allocs : undefined` ở use-ks-section) — đường (a) sẽ bỏ sót.
+ */
+async function fetchLiveDnttForKsDays(
+  doanId: number, ksId: number, dayIds: number[],
+): Promise<LiveDnttLite[]> {
+  const ids = new Set<number>();
+
+  if (dayIds.length > 0) {
+    // Dòng chi phí KS in-tour của các ngày (bỏ dòng day-use wrapper + ngoài tour).
+    const { data: cps, error: cpErr } = await externalSupabase
+      .from("doan_chi_phi")
+      .select("id")
+      .eq("doan_id", doanId)
+      .eq("danh_muc", "khach_san")
+      .eq("ngoai_tour", false)
+      .is("ref_doan_ngay_item_id", null)
+      .in("ref_doan_ngay_id", dayIds);
+    if (cpErr) throw cpErr;
+    const cpIds = (cps ?? []).map((r) => r.id as number);
+    if (cpIds.length > 0) {
+      const { data: allocs, error: aErr } = await externalSupabase
+        .from("dntt_allocations")
+        .select("dntt_id")
+        .in("chi_phi_id", cpIds);
+      if (aErr) throw aErr;
+      (allocs ?? []).forEach((a) => ids.add(a.dntt_id as number));
+    }
+  }
+
+  const { data: byRef, error: refErr } = await externalSupabase
+    .from("dntt_with_payment_status")
+    .select("id")
+    .eq("doan_id", doanId)
+    .eq("ref_loai", "khach_san")
+    .eq("ref_id", ksId)
+    .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
+  if (refErr) throw refErr;
+  (byRef ?? []).forEach((d) => { if (d.id != null) ids.add(d.id as number); });
+
+  if (ids.size === 0) return [];
+
+  const { data: dntts, error: dErr } = await externalSupabase
+    .from("dntt_with_payment_status")
+    .select("id, doan_id, loai, ref_loai, ref_id, paid_amount, trang_thai_duyet")
+    .in("id", [...ids])
+    .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
+  if (dErr) throw dErr;
+
+  return (dntts ?? [])
+    .filter((d): d is typeof d & { id: number } => d.id != null)
+    .map((d) => ({
+      id: d.id,
+      doan_id: d.doan_id ?? null,
+      loai: d.loai ?? null,
+      ref_loai: d.ref_loai ?? null,
+      ref_id: d.ref_id ?? null,
+      paid_amount: Number(d.paid_amount ?? 0),
+      trang_thai_duyet: d.trang_thai_duyet ?? null,
+    }));
+}
+
+/** Booking KS cũ + các đêm nó đang giữ. null khi không có booking sống cần báo hủy. */
+async function fetchKsBookingHuyInfo(
+  doanId: number, ksId: number, dayIds: number[], email: string | null,
+): Promise<KsBookingHuyInfo | null> {
+  const { data: bkRaw, error } = await externalSupabase
+    .from("doan_booking_ks")
+    .select("id, ks_dat_truoc_status, ks_final_status, email_thread_id, trang_thai")
+    .eq("doan_id", doanId)
+    .eq("khach_san_id", ksId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!bkRaw || !isKsBookingActive(bkRaw)) return null;
+
+  // email_subject có trong DB nhưng chưa vào generated types → query riêng, ép kiểu hẹp.
+  const { data: subjRow } = await externalSupabase
+    .from("doan_booking_ks")
+    .select("email_subject")
+    .eq("id", bkRaw.id)
+    .maybeSingle();
+  const emailSubject = (subjRow as { email_subject?: string | null } | null)?.email_subject ?? null;
+
+  const { data: ngayRows } = await externalSupabase
+    .from("doan_ngay")
+    .select("ngay_date")
+    .in("id", dayIds.length > 0 ? dayIds : [-1]);
+  const roomDates = [...new Set((ngayRows ?? []).map((r) => r.ngay_date).filter(Boolean) as string[])].sort();
+
+  return {
+    bookingId: bkRaw.id as number,
+    email,
+    emailThreadId: bkRaw.email_thread_id ?? null,
+    emailSubject,
+    datTruocStatus: bkRaw.ks_dat_truoc_status ?? "chua_gui",
+    finalStatus: bkRaw.ks_final_status ?? "chua_gui",
+    roomDates,
+  };
+}
+
+/**
+ * Phát hiện đổi/gỡ KS cần quyết định, TRƯỚC khi save. Read-only.
+ * Trả [] khi không có gì cần hỏi (save tiếp như bình thường).
+ *
+ * Bắt HAI ca (trước 07/2026 chỉ bắt ca đầu):
+ *   1. KS cũ còn ĐNTT sống  → tách tiền (phí hủy / tự hủy ĐNTT chưa trả).
+ *   2. KS cũ có booking đã gửi mail, chưa hủy → phải báo hủy cho KS cũ.
+ * Bỏ sót ca 2 chính là chỗ booking cũ thành mồ côi im lặng, KS không hề biết
+ * mình bị hủy — OP phải mở Gmail báo tay, rồi bỏ luôn hệ thống.
  */
 export async function checkKsPhiHuyOnChange(opts: {
   doanId: number;
@@ -100,22 +264,52 @@ export async function checkKsPhiHuyOnChange(opts: {
     if (dayErr) throw dayErr;
     const allDayIds = (dbDays ?? []).map((r) => r.id as number);
     const remaining = allDayIds.filter((id) => !changedDayIds.has(id));
-    if (remaining.length > 0) continue; // còn ngày khác giữ KS → không phải hủy hẳn
+    // Còn ngày khác giữ KS → giảm bớt đêm, không phải hủy hẳn. Ca đó xử bằng ô "Phí hủy"
+    // trong modal "Xử lý chênh lệch thừa" (KSAggCommitModal).
+    //
+    // LỖ HỔNG ĐÃ BIẾT (review 10/07/2026, chưa vá — hiện 0 ca trên prod, KHÔNG mất tiền
+    // vì allocation giữ nguyên): KS trả bằng ĐNTT ĐỊNH KỲ thì `KSCard.showAggBtn` luôn
+    // false (ttByKs chỉ cộng ĐNTT ref_loai='khach_san'), nên giảm bớt đêm của KS định kỳ
+    // KHÔNG kích được cả gate này lẫn modal chênh lệch → không ai nhắc phí hủy.
+    // Vá đúng: ở nhánh này vẫn gọi fetchLiveDnttForKsDays(doanId, oldKsId, [...changedDayIds])
+    // và chặn/hỏi nếu dòng chi phí của các ngày bị gỡ còn allocation sống.
+    if (remaining.length > 0) continue;
 
-    // 3. ĐNTT sống của KS cũ (payment_status chỉ có trên VIEW, không phải bảng gốc)
-    const { data: dntts, error: dnttErr } = await externalSupabase
-      .from("dntt_with_payment_status")
-      .select("id, so_tien, paid_amount, trang_thai_duyet")
-      .eq("doan_id", doanId)
-      .eq("ref_loai", "khach_san")
-      .eq("ref_id", oldKsId)
-      .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
-    if (dnttErr) throw dnttErr;
-    // View trả cột nullable theo generated types — id thực tế luôn có.
-    const liveRows = (dntts ?? []).filter(
-      (d): d is typeof d & { id: number } => d.id != null,
-    );
-    if (liveRows.length === 0) continue; // không dính tiền → lưu như cũ
+    const info = await fetchKsInfo(oldKsId);
+    const dayIds = allDayIds.length > 0 ? allDayIds : [...changedDayIds];
+
+    // 3. Tiền gắn với KS cũ.
+    //
+    // KHÔNG dò bằng (doan_id, ref_loai='khach_san', ref_id=oldKsId) — cách đó MÙ với
+    // ĐNTT thanh toán ĐỊNH KỲ (doan_id = NULL, ref_loai='dinh_ky'), vốn là cách
+    // ROSAMIA/ROSEMARY đang được trả. Bỏ sót → gate im lặng → save flip
+    // doan_ngay.khach_san_id → dòng chi phí (và tiền đã trả) bị quy sang KS MỚI.
+    // Đúng bug Wyndham/Crowne, chỉ khác kênh.
+    //
+    // Dò từ DÒNG CHI PHÍ của các ngày đó → allocation → ĐNTT. Bắt mọi kênh.
+    const liveRows = await fetchLiveDnttForKsDays(doanId, oldKsId, dayIds);
+
+    const booking = await fetchKsBookingHuyInfo(doanId, oldKsId, dayIds, info.email);
+
+    // Không dính tiền VÀ không có booking sống → lưu như cũ, không hỏi gì.
+    if (liveRows.length === 0 && !booking) continue;
+
+    // ĐNTT "của riêng KS này trong đoàn này" mới xử được bằng luồng phí hủy:
+    // planDoiKsPhiHuy chia phí hủy theo paid_amount của TỪNG ĐNTT, và bước tách
+    // sẽ đổi ref_loai + (nếu chưa trả) tự hủy cả ĐNTT. Với ĐNTT định kỳ gom nhiều
+    // đoàn, paid_amount là của CẢ LÔ và hủy nó sẽ giết luôn ĐNTT của đoàn khác.
+    // → Không đoán mò: chặn, chỉ đúng ĐNTT cho OP xử lý trước.
+    const foreign = findForeignKsDntt(liveRows, doanId, oldKsId);
+    if (foreign.length > 0) {
+      throw new KsDnttNgoaiPhamViError(
+        `Không đổi được khách sạn "${info.ten}": nó đang nằm trong đề nghị thanh toán ` +
+        `${formatForeignKsDntt(foreign)} không thuộc riêng đoàn này (thanh toán định kỳ gom nhiều đoàn). ` +
+        `Xử lý đề nghị đó trước, nếu không tiền đã trả sẽ bị quy nhầm sang khách sạn mới. ` +
+        `Lịch trình đã được giữ nguyên khách sạn cũ.`,
+        oldKsId,
+        dayIds,
+      );
+    }
 
     const paidByDntt: DoiKsPaidDntt[] = liveRows
       .filter((d) => Number(d.paid_amount) > 0)
@@ -124,16 +318,17 @@ export async function checkKsPhiHuyOnChange(opts: {
       .filter((d) => Number(d.paid_amount) === 0)
       .map((d) => d.id);
 
-    const info = await fetchKsInfo(oldKsId);
     out.push({
       oldKsId,
       oldKsName: info.ten,
       oldKsNccId: info.nccId,
       oldKsNccTen: info.nccTen,
-      dayIds: allDayIds.length > 0 ? allDayIds : [...changedDayIds],
+      dayIds,
       paidTotal: paidByDntt.reduce((s, d) => s + d.paidAmount, 0),
       paidByDntt,
       unpaidDnttIds,
+      hasMoney: liveRows.length > 0,
+      booking,
     });
   }
   return out;
@@ -168,9 +363,27 @@ export async function fetchKsHuyResolvePending(opts: {
 
   const { data: dntts } = await externalSupabase
     .from("dntt_with_payment_status")
-    .select("id, paid_amount, trang_thai_duyet")
+    .select("id, doan_id, loai, paid_amount, trang_thai_duyet")
     .in("id", dnttIds)
     .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
+
+  // Chặn ĐNTT không thuộc riêng đoàn này (định kỳ gom nhiều đoàn): paid_amount là của
+  // CẢ LÔ, chia phí hủy theo nó sẽ hoàn công nợ sai cho đoàn khác.
+  //
+  // KHÔNG dùng `findForeignKsDntt` ở đây: tới bước resolve, ĐNTT hợp lệ của đoàn đã bị
+  // đổi `ref_loai` sang 'ngoai_tour_ks' (bước "Để sau"), mà `isOwnKsDntt` đòi
+  // `ref_loai==='khach_san'` → sẽ chặn nhầm chính ca hợp lệ. Lọc theo chủ sở hữu thay vì ref.
+  const laDinhKy = (dntts ?? []).filter((d) => d.loai === "dinh_ky" || d.doan_id !== doanId);
+  if (laDinhKy.length > 0) {
+    const info0 = await fetchKsInfo(ksId);
+    throw new KsDnttNgoaiPhamViError(
+      `Không chốt được phí hủy cho "${info0.ten}": khoản này nằm trong đề nghị thanh toán ` +
+      `${laDinhKy.map((d) => `#${d.id}`).join(", ")} gom nhiều đoàn. Xử lý đề nghị đó trước.`,
+      ksId,
+      [],
+    );
+  }
+
   const paidByDntt: DoiKsPaidDntt[] = (dntts ?? [])
     .filter((d): d is typeof d & { id: number } => d.id != null && Number(d.paid_amount) > 0)
     .map((d) => ({ dnttId: d.id, paidAmount: Number(d.paid_amount) }));
@@ -186,6 +399,9 @@ export async function fetchKsHuyResolvePending(opts: {
     paidTotal: paidByDntt.reduce((s, d) => s + d.paidAmount, 0),
     paidByDntt,
     unpaidDnttIds: [],
+    hasMoney: true,
+    // Booking đã 'da_huy' từ lúc "Để sau" — mail hủy (nếu cần) gửi ở tab Booking KS.
+    booking: null,
   };
 }
 
@@ -197,8 +413,10 @@ export interface DoiKsDetachArgs {
   /** Lý do hủy (ghi vào booking.ly_do_huy + cong_no.ly_do). */
   lyDo?: string | null;
   /** phi_huy = tách trọn; de_sau = convert giữ nguyên (phi_huy NULL, xử sau);
-   *  resolve = hoàn tất phí hủy cho booking đã de_sau (rows nguồn = ks_huy). */
-  mode: "phi_huy" | "de_sau" | "resolve";
+   *  resolve = hoàn tất phí hủy cho booking đã de_sau (rows nguồn = ks_huy);
+   *  booking_only = KS cũ KHÔNG dính đồng nào, chỉ đánh dấu booking "chờ XN hủy"
+   *  (không đụng doan_chi_phi / ĐNTT / cong_no). */
+  mode: "phi_huy" | "de_sau" | "resolve" | "booking_only";
 }
 
 export function useDoiKsPhiHuy() {
@@ -208,6 +426,25 @@ export function useDoiKsPhiHuy() {
 
   return useMutation({
     mutationFn: async ({ doanId, pending, phiHuyInput, lyDo, mode }: DoiKsDetachArgs) => {
+      // booking_only: KS cũ chưa dính ĐNTT nào → KHÔNG đụng doan_chi_phi/allocation/cong_no.
+      // Chỉ đánh dấu booking "chờ KS xác nhận hủy" + ghi lý do.
+      // CỐ Ý không set trang_thai='da_huy': dải "Đã hủy" (tab Chi phí) chỉ hiện cụm
+      // ks_huy, mà ca này không có dòng chi phí nào → booking sẽ biến mất khỏi cả hai
+      // chỗ. Giữ nguyên 'active' để card còn ở tab Booking KS (kèm banner "đã bị xóa
+      // khỏi điều tour") cho OP gửi / gửi lại mail hủy.
+      if (mode === "booking_only") {
+        if (!pending.booking) throw new Error("Thiếu thông tin booking để đánh dấu hủy");
+        const { error } = await externalSupabase
+          .from("doan_booking_ks")
+          .update({
+            ks_final_status: "cho_ks_xac_nhan_huy",
+            ...(lyDo ? { ly_do_huy: lyDo } : {}),
+          })
+          .eq("id", pending.booking.bookingId);
+        if (error) throw error;
+        return { phiHuy: 0, refund: 0, cancelled: 0 };
+      }
+
       const isResolve = mode === "resolve";
       const plan = planDoiKsPhiHuy({ paidByDntt: pending.paidByDntt, phiHuyInput });
       // Công nợ bắt buộc NCC (useCongNoByNCC lọc theo nha_cung_cap_id — thiếu là mồ côi,
@@ -246,6 +483,11 @@ export function useDoiKsPhiHuy() {
           .eq("id", id);
       }
 
+      // LỖ HỔNG ĐÃ BIẾT (pre-existing, review 10/07/2026): bước 2 dưới đây INSERT dòng
+      // "[Phí hủy]" không idempotent (khác bước 4 cong_no có guard `existingCn`). Mutation
+      // không có transaction → nếu lỗi giữa chừng rồi OP thử lại, dòng [Phí hủy] + allocation
+      // bị nhân đôi. Vá đúng: lookup dòng cùng nguồn (doan_id + khach_san_id + ks_huy=true)
+      // → UPDATE gia_phong thay vì insert, và dedupe allocation theo (dntt_id, chi_phi_id).
       let fRowId: number | null = null;
       let congNoId: number | null = null;
       if (mode !== "de_sau") {

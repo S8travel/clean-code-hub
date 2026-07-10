@@ -483,49 +483,18 @@ export async function checkNhaHangDeletable(
   return { ok: true };
 }
 
-// Pre-check khi xóa khách sạn khỏi điều tour.
-//   doan_booking_ks active (đặt trước/final đã gửi, chưa vào luồng hủy) → block.
-// Chi_phi KS được quản lý thủ công ở Chi phí tab — không link 1-1 từ điều tour, bỏ qua DNTT check.
-export async function checkKhachSanDeletable(
-  doanId: number,
-  khachSanId: number,
-  khachSanTen: string,
-): Promise<{ ok: boolean; reason?: string }> {
-  const { data: bookingKs } = await externalSupabase
-    .from("doan_booking_ks")
-    .select("id, ks_dat_truoc_status, ks_final_status")
-    .eq("doan_id", doanId)
-    .eq("khach_san_id", khachSanId)
-    .maybeSingle();
-  if (!bookingKs) return { ok: true };
-
-  // Booking đã vào luồng hủy ở final (kể cả ks_xac_nhan đặt trước trước đó) → allow xóa.
-  // Final là phase quyết định: nếu final đã/đang hủy thì toàn booking coi như cancelled.
-  if (
-    bookingKs.ks_final_status === "cho_ks_xac_nhan_huy" ||
-    bookingKs.ks_final_status === "ks_xac_nhan_huy"
-  ) {
-    return { ok: true };
-  }
-
-  // Active phase = đã gửi mail nhưng chưa vào luồng hủy
-  const dtActive = ["cho_ks_xac_nhan", "ks_xac_nhan"].includes(bookingKs.ks_dat_truoc_status || "");
-  const finalActive = ["cho_ks_xac_nhan", "ks_xac_nhan_final"].includes(bookingKs.ks_final_status || "");
-  if (!dtActive && !finalActive) return { ok: true };
-
-  let phase = "đặt trước";
-  let statusLabel = "đã gửi mail booking";
-  if (finalActive) {
-    phase = "final";
-    statusLabel = bookingKs.ks_final_status === "ks_xac_nhan_final" ? "đã xác nhận" : "đã gửi mail booking";
-  } else if (bookingKs.ks_dat_truoc_status === "ks_xac_nhan") {
-    statusLabel = "đã xác nhận";
-  }
-  return {
-    ok: false,
-    reason: `Không thể xóa "${khachSanTen}" — booking ${phase} ${statusLabel}, chưa hủy. Hủy booking trước khi xóa khỏi tour.`,
-  };
-}
+// GỠ 07/2026 — `checkKhachSanDeletable` (chặn cứng đổi/gỡ KS khi booking đã gửi).
+//
+// Nó tạo ngõ cụt: mở khóa duy nhất là ks_final_status ∈ {cho_ks_xac_nhan_huy,
+// ks_xac_nhan_huy}, mà nút đặt được trạng thái đó lại nằm trong FinalSection của
+// BookingKSTab — chỉ render khi KS đã xác nhận đặt-trước. Ở cho_ks_xac_nhan (mail
+// vừa gửi, KS chưa trả lời — ~30% số dòng booking) OP không đổi / không gỡ / không
+// hủy được bằng bất kỳ đường nào trên UI. Hệ quả: OP làm booking ngoài hệ thống.
+//
+// Thay bằng gate CÓ ĐƯỜNG THOÁT: `checkKsPhiHuyOnChange` (use-doi-ks-phi-huy.ts)
+// chạy trong DoanDetail.doSave TRƯỚC khi ghi DB, phát hiện cả ĐNTT sống lẫn booking
+// đã gửi, rồi mở modal hỏi phí hủy + mail hủy. Vị từ "booking còn sống" nay là
+// `isKsBookingActive` trong cùng file đó.
 
 export function useSaveDieuTour() {
   const qc = useQueryClient();
@@ -1313,7 +1282,14 @@ export function useSaveDieuTour() {
             .update({ trang_thai: "active" })
             .eq("id", existing.id);
         } else if (existing.ks_final_status === "ks_xac_nhan_huy") {
-          // Reset cancelled booking
+          // Reset cancelled booking.
+          //
+          // CỐ Ý chỉ 'ks_xac_nhan_huy' (KS đã xác nhận hủy), KHÔNG gồm
+          // 'cho_ks_xac_nhan_huy'. Nút "Hủy booking" (tab Booking KS) và mode
+          // booking_only đặt trạng thái "chờ KS xác nhận hủy" trong khi KS VẪN còn
+          // trong tour (trang_thai='active'). Nếu reset ở đây thì autosave Điều tour
+          // kế tiếp sẽ NULL ks_dat_truoc/ks_final (mất snapshot phòng/đêm) và lật
+          // ngược việc hủy — trong khi mail hủy đã gửi thật cho khách sạn.
           await externalSupabase
             .from("doan_booking_ks")
             .update({
