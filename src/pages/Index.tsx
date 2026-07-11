@@ -19,6 +19,7 @@ import { PhanViecModal } from "@/components/doan/PhanViecModal";
 import { useDoanOpMap, useCreatePhanViec, useAssignPvItem, type PvKey } from "@/hooks/use-phan-viec";
 import { DeleteDialog } from "@/components/DeleteDialog";
 import { HuyDoanDialog } from "@/components/HuyDoanDialog";
+import HuyDoanBatchModal from "@/components/HuyDoanBatchModal";
 import { blockerLabel } from "@/lib/blocker-label";
 import {
   buildCancelBlockers,
@@ -115,6 +116,7 @@ export default function Index() {
   const [deletingDoan, setDeletingDoan] = useState<DoanRow | null>(null);
   const [cancelingDoan, setCancelingDoan] = useState<DoanRow | null>(null);
   const [cancelBlockers, setCancelBlockers] = useState<CancelBlocker[]>([]);
+  const [batchHuyOpen, setBatchHuyOpen] = useState(false);
   const [pendingCreate, setPendingCreate] = useState<DoanInsert | null>(null);
   const [pendingPhanViec, setPendingPhanViec] = useState<
     { payload: DoanInsert; info: { code: string; agent: string; diaDiem: string; soKhach: number | null; ngayDi: string | null; ngayVe: string | null; loaiTour: string | null } } | null
@@ -560,6 +562,7 @@ export default function Index() {
   const handleOpenCancel = async (doan: DoanRow) => {
     try {
       setCancelBlockers(await fetchCancelBlockers(doan.id));
+      setBatchHuyOpen(false); // reset kẻo lần hủy trước còn mở
       setCancelingDoan(doan);
     } catch (e: unknown) {
       toast.error(errMsg(e) || t("Không kiểm tra được trạng thái đoàn"));
@@ -888,6 +891,22 @@ export default function Index() {
           isPending={cancelDoan.isPending}
           onClose={() => setCancelingDoan(null)}
           onConfirm={handleCancel}
+          onOpenBatchHuy={() => setBatchHuyOpen(true)}
+        />
+      )}
+
+      {cancelingDoan && batchHuyOpen && (
+        <HuyDoanBatchModal
+          open
+          doanId={cancelingDoan.id}
+          tenDoan={cancelingDoan.ten_doan || ""}
+          soKhach={cancelingDoan.so_khach}
+          ngayDi={cancelingDoan.ngay_di}
+          onClose={() => setBatchHuyOpen(false)}
+          onAllSent={async () => {
+            // Booking đã flip sang trạng thái hủy → blockers cập nhật, nút Hủy đoàn mở khi sạch.
+            try { setCancelBlockers(await fetchCancelBlockers(cancelingDoan.id)); } catch { /* giữ blockers cũ */ }
+          }}
         />
       )}
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Ban, CheckCircle2, ExternalLink } from "lucide-react";
+import { Ban, CheckCircle2, ExternalLink, Mail } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -35,10 +35,12 @@ interface Props {
   isPending: boolean;
   onClose: () => void;
   onConfirm: (lyDoHuy: string, agentHuyId: number | null) => void;
+  /** Mở màn soạn mail hủy hàng loạt cho mọi NCC (Đợt C). Chỉ hiện khi còn vướng. */
+  onOpenBatchHuy?: () => void;
 }
 
 export function HuyDoanDialog({
-  open, doanId, tenDoan, blockers, agents, isPending, onClose, onConfirm,
+  open, doanId, tenDoan, blockers, agents, isPending, onClose, onConfirm, onOpenBatchHuy,
 }: Props) {
   useTranslate();
   const navigate = useNavigate();
@@ -103,6 +105,16 @@ export function HuyDoanDialog({
             <p className="mt-2 text-[11px] text-muted-foreground">
               {t("Hủy từng mục ở tab tương ứng, rồi quay lại đây.")}
             </p>
+            {onOpenBatchHuy && (
+              <Button
+                size="sm"
+                className="w-full mt-2 h-8 text-xs bg-sky-600 hover:bg-sky-700 text-white"
+                onClick={onOpenBatchHuy}
+              >
+                <Mail className="h-3.5 w-3.5 mr-1.5" />
+                {t("Soạn mail hủy cho tất cả NCC")}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border border-emerald-300/50 bg-emerald-50 p-3 flex items-start gap-2">
