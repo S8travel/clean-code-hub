@@ -14,6 +14,9 @@ import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useUpsertBookingXe, type BookingXeRow } from "@/hooks/use-booking-xe";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
+import HuyBookingConfirmDialog, { type HuyBookingConfirmArgs } from "@/components/shared/HuyBookingConfirmDialog";
+import HuyMailModal, { type HuyMailModalTarget } from "@/components/shared/HuyMailModal";
+import { buildXeHuySubject, buildXeHuyEmailHtml, buildXeHuyMailtoBody } from "@/lib/booking-mail/xe-huy-mail";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
@@ -127,6 +130,8 @@ export default function BookingXeCard({
   const [sending, setSending] = useState(false);
   const [ghiChu, setGhiChu] = useState(booking?.ghi_chu ?? "");
   const [deadline, setDeadline] = useState(() => booking?.deadline ?? getDefaultDeadline(ngayDi ?? "") ?? "");
+  const [huyDialogOpen, setHuyDialogOpen] = useState(false);
+  const [huyTarget, setHuyTarget] = useState<HuyMailModalTarget | null>(null);
 
   const status = booking?.booking_status ?? "chua_dat";
   const statusCfg = STATUS_CFG[status as keyof typeof STATUS_CFG] ?? STATUS_CFG.chua_dat;
@@ -288,9 +293,45 @@ export default function BookingXeCard({
     toast.success(t("Đã xác nhận booking xe"));
   };
 
-  const handleCancel = () => {
-    save({ booking_status: "da_huy" });
-    toast.success(t("Đã hủy booking xe"));
+  const handleCancel = () => setHuyDialogOpen(true);
+
+  // mutateAsync (không phải save fire-and-forget): onSent PHẢI biết ghi da_huy có
+  // thành công không. Mail hủy đã bay cho nhà xe rồi mà DB ghi hụt trong im lặng
+  // thì hệ thống vẫn "chờ xác nhận" — desync đúng cái luồng này cần tránh.
+  const applyHuyStatus = () =>
+    upsert.mutateAsync({ doan_id: doanId, xe_id: xe?.id ?? null, booking_status: "da_huy" });
+
+  const handleHuyConfirm = ({ lyDo, sendMail }: HuyBookingConfirmArgs) => {
+    const to = xe?.nha_xe?.email ?? "";
+    if (sendMail && to) {
+      const tenNhaXe = xe?.nha_xe?.ten ?? "";
+      setHuyTarget({
+        resetKey: booking?.id ?? 0,
+        title: `${t("Mail hủy booking xe")} — ${tenNhaXe}`,
+        nccTen: tenNhaXe,
+        toEmail: to,
+        buildDraft: (s) => {
+          const input = {
+            tenDoan, tenNhaXe, tenXe: xe?.ten_xe ?? null, soCho: xe?.so_cho ?? null,
+            ngayDi, lyDo: lyDo || null, senderName: s.name, senderPhone: s.phone,
+          };
+          return {
+            subject: buildXeHuySubject(input),
+            html: buildXeHuyEmailHtml(input),
+            mailtoBody: buildXeHuyMailtoBody(input),
+          };
+        },
+        send: async ({ to: sendTo, subject, html, replyTo }) => {
+          await callSendBookingEmail({ to: sendTo, cc: BOOKING_CC.xe, subject, html, replyTo });
+        },
+      });
+      setHuyDialogOpen(false);
+      return;
+    }
+    applyHuyStatus()
+      .then(() => toast.success(t("Đã hủy booking xe")))
+      .catch(() => toast.error(t("Lỗi cập nhật")));
+    setHuyDialogOpen(false);
   };
 
   const handleReset = () => {
@@ -430,6 +471,22 @@ export default function BookingXeCard({
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}
+      />
+
+      <HuyBookingConfirmDialog
+        open={huyDialogOpen}
+        onOpenChange={setHuyDialogOpen}
+        tenNcc={xe?.nha_xe?.ten ?? "—"}
+        loaiNcc={t("nhà xe")}
+        hasEmail={!!xe?.nha_xe?.email}
+        submitting={upsert.isPending}
+        onConfirm={handleHuyConfirm}
+      />
+
+      <HuyMailModal
+        target={huyTarget}
+        onSent={async () => { await applyHuyStatus(); setHuyTarget(null); }}
+        onCancel={() => setHuyTarget(null)}
       />
     </>
   );

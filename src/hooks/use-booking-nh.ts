@@ -19,6 +19,8 @@ export interface BookingNHRow {
   sent_at: string | null;
   sent_by: string | null;
   email_thread_id: string | null;
+  /** Subject mail booking đã gửi — mail hủy dùng `Re: <subject>` để cùng thread. */
+  email_subject: string | null;
   deadline: string | null;
   mail_content_hash: string | null;
   mail_sent_snapshot: Record<string, unknown> | null;
@@ -276,7 +278,11 @@ export function useSendNHBookingEmail() {
       replyTo?: string;
       emailThreadId?: string | null;
       // mode='update' → giữ nguyên booking_status, chỉ update sent_at + email_thread_id
-      mode?: "first" | "update";
+      // mode='huy'    → CHỈ gửi mail hủy, KHÔNG ghi gì vào booking. Trạng thái
+      //                 cho_xac_nhan_huy do card tự đổi (onSent). Tách vậy để mail
+      //                 hủy tuyệt đối không đè email_subject (đang giữ subject gốc
+      //                 cho threading) / mail_content_hash / booking_status.
+      mode?: "first" | "update" | "huy";
       mailContentHash?: string;
       mailSentSnapshot?: Record<string, unknown>;
     }) => {
@@ -307,6 +313,10 @@ export function useSendNHBookingEmail() {
       }
       const data = await res.json();
       if (data?.error) throw new Error(data.error);
+
+      // Mail hủy: gửi xong là hết phần của hook. KHÔNG chạm booking — card đổi
+      // trạng thái cho_xac_nhan_huy trong onSent (giữ đúng đường saveBooking cũ).
+      if (params.mode === "huy") return;
 
       const threadId = isFirst ? newThreadId : params.emailThreadId;
 

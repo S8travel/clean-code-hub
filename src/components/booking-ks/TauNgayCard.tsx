@@ -20,6 +20,9 @@ import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import HuyBookingConfirmDialog, { type HuyBookingConfirmArgs } from "@/components/shared/HuyBookingConfirmDialog";
+import HuyMailModal, { type HuyMailModalTarget } from "@/components/shared/HuyMailModal";
+import { buildTauHuySubject, buildTauHuyEmailHtml, buildTauHuyMailtoBody } from "@/lib/booking-mail/tau-huy-mail";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { t, useTranslate } from "@/lib/i18n";
@@ -81,6 +84,8 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   // id booking vừa tạo (row prop chưa kịp refetch) → cho phép mở modal & gửi mail
   // ngay trong 1 lần bấm thay vì bắt user bấm lại.
   const [localBookingId, setLocalBookingId] = useState<number | null>(null);
+  const [huyDialogOpen, setHuyDialogOpen] = useState(false);
+  const [huyTarget, setHuyTarget] = useState<HuyMailModalTarget | null>(null);
   const effectiveBookingId = row.booking_id ?? localBookingId;
 
   useEffect(() => {
@@ -110,6 +115,55 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     } catch {
       toast.error(t("Lỗi cập nhật"));
     }
+  };
+
+  // Hủy tàu = final_status 'cho_xac_nhan_huy' (pha 1). Dùng cho cả nhánh không
+  // gửi mail lẫn onSent sau khi mail đã bay.
+  const applyHuyStatus = () => updateStatus({ final_status: "cho_xac_nhan_huy" });
+
+  const handleHuyConfirm = ({ lyDo, sendMail }: HuyBookingConfirmArgs) => {
+    const to = row.nha_hang_email ?? "";
+    if (sendMail && to && effectiveBookingId) {
+      const nhaHangTen = row.nha_hang_ten ?? "";
+      setHuyTarget({
+        resetKey: effectiveBookingId,
+        title: `${t("Mail hủy booking tàu")} — ${nhaHangTen}`,
+        nccTen: nhaHangTen,
+        toEmail: to,
+        buildDraft: (s) => {
+          const input = {
+            tenDoan, nhaHangTen, ngayDate: row.ngay_date, ngaySo: row.ngay_so,
+            buaAn: row.bua_an, soKhach: soKhach ?? null, lyDo: lyDo || null,
+            senderName: s.name, senderPhone: s.phone,
+          };
+          return {
+            // Dùng subject mail đặt đã lưu (row.email_subject) để mail hủy cùng
+            // thread. Subject nhúng số khách → rebooking đổi số khách sẽ làm bản
+            // dựng-lại lệch thread; subject gốc thì không.
+            subject: buildTauHuySubject(input, row.email_subject),
+            html: buildTauHuyEmailHtml(input),
+            mailtoBody: buildTauHuyMailtoBody(input),
+          };
+        },
+        send: async ({ to: sendTo, subject, html, sender, replyTo }) => {
+          await sendEmailMut.mutateAsync({
+            bookingId: effectiveBookingId,
+            doanId: row.doan_id,
+            to: sendTo,
+            subject,
+            html,
+            sentBy: sender.name,
+            replyTo,
+            emailThreadId: row.email_thread_id,
+            mode: "huy", // chỉ gửi, trạng thái do onSent đổi
+          });
+        },
+      });
+      setHuyDialogOpen(false);
+      return;
+    }
+    applyHuyStatus();
+    setHuyDialogOpen(false);
   };
 
   const ensureBookingExists = async (): Promise<boolean> => {
@@ -363,6 +417,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
                 row={row}
                 datTruocConfirmed={datTruocConfirmed}
                 onUpdateStatus={updateStatus}
+                onRequestHuy={() => setHuyDialogOpen(true)}
               />
             </div>
           </div>
@@ -385,6 +440,22 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}
+      />
+
+      <HuyBookingConfirmDialog
+        open={huyDialogOpen}
+        onOpenChange={setHuyDialogOpen}
+        tenNcc={row.nha_hang_ten ?? "—"}
+        loaiNcc={t("du thuyền")}
+        hasEmail={!!row.nha_hang_email && !!effectiveBookingId}
+        submitting={updateMut.isPending}
+        onConfirm={handleHuyConfirm}
+      />
+
+      <HuyMailModal
+        target={huyTarget}
+        onSent={async () => { applyHuyStatus(); setHuyTarget(null); }}
+        onCancel={() => setHuyTarget(null)}
       />
     </>
   );
@@ -483,10 +554,12 @@ function FinalSection({
   row,
   datTruocConfirmed,
   onUpdateStatus,
+  onRequestHuy,
 }: {
   row: TauNgayDisplayRow;
   datTruocConfirmed: boolean;
   onUpdateStatus: (fields: Partial<TauNgayDisplayRow>) => void;
+  onRequestHuy: () => void;
 }) {
   const status = row.final_status;
 
@@ -507,8 +580,8 @@ function FinalSection({
   };
   const badge = BADGE[status] || BADGE.chua_gui;
 
-  const handleHuy = () =>
-    onUpdateStatus({ final_status: "cho_xac_nhan_huy" });
+  // Mở dialog opt-in (soạn mail hủy?) ở parent thay vì đổi trạng thái ngay.
+  const handleHuy = () => onRequestHuy();
 
   return (
     <div className="rounded-lg border border-green-200/60 bg-green-50/30 p-3 space-y-2">

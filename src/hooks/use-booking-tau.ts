@@ -20,6 +20,8 @@ export interface TauNgayDisplayRow {
   booking_status: string;
   sent_at: string | null;
   email_thread_id: string | null;
+  /** Subject mail đặt tàu đã gửi — mail hủy dùng `Re: <subject>` để cùng thread. */
+  email_subject: string | null;
   deadline: string | null;
   dat_truoc_status: string;
   dat_truoc_sent_at: string | null;
@@ -103,6 +105,7 @@ export function useBookingTau(doanId: number | undefined) {
             booking_status: bkg?.booking_status ?? "chua_gui",
             sent_at: bkg?.sent_at ?? null,
             email_thread_id: bkg?.email_thread_id ?? null,
+            email_subject: bkg?.email_subject ?? null,
             deadline: bkg?.deadline ?? null,
             dat_truoc_status: bkg?.dat_truoc_status ?? "chua_gui",
             dat_truoc_sent_at: bkg?.dat_truoc_sent_at ?? null,

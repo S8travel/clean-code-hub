@@ -24,6 +24,8 @@ import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
 import { externalSupabase } from "@/lib/supabase-external";
 import { cn } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import HuyBookingConfirmDialog, { type HuyBookingConfirmArgs } from "@/components/shared/HuyBookingConfirmDialog";
+import NhHuyMailModal, { type NhHuyMailTarget } from "@/components/booking-nh/NhHuyMailModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import {
@@ -116,6 +118,10 @@ function MealCardInner({
   const [sending, setSending] = useState(false);
   const [zaloModalOpen, setZaloModalOpen] = useState(false);
   const [zaloText, setZaloText] = useState("");
+  // Hủy booking: dialog opt-in (soạn mail?) → nếu tick thì mở NhHuyMailModal.
+  const [huyDialogOpen, setHuyDialogOpen] = useState(false);
+  const [huyMailTarget, setHuyMailTarget] = useState<NhHuyMailTarget | null>(null);
+  const [huyLyDo, setHuyLyDo] = useState<string | null>(null);
 
   // Set menu đang chọn: ưu tiên booking đã lưu, fallback về điều tour
   const [selectedSetMenuId, setSelectedSetMenuId] = useState<number | null>(
@@ -506,9 +512,38 @@ function MealCardInner({
     saveBooking({ booking_status: "nh_xac_nhan" });
     toast.success(t("Đã xác nhận"));
   };
-  const handleCancel = () => {
-    saveBooking({ booking_status: "cho_xac_nhan_huy" });
-    toast(t("Đã cập nhật trạng thái hủy"));
+  const handleCancel = () => setHuyDialogOpen(true);
+
+  // Đổi trạng thái sang "chờ NH xác nhận hủy". mutateAsync (không phải saveBooking
+  // fire-and-forget): onSent PHẢI biết ghi có thành công không — mail hủy đã bay
+  // cho nhà hàng mà DB ghi hụt im lặng thì hệ thống vẫn "đã gửi".
+  const applyHuyStatus = () => {
+    if (!booking?.id) return Promise.resolve();
+    return updateMut.mutateAsync({ id: booking.id, doan_id: doanId, booking_status: "cho_xac_nhan_huy" });
+  };
+
+  const handleHuyConfirm = ({ lyDo, sendMail }: HuyBookingConfirmArgs) => {
+    if (sendMail && nhaHangEmail && booking) {
+      // Mở bản nháp cho OP soát. Trạng thái CHỈ đổi sau khi mail gửi xong (onSent).
+      setHuyLyDo(lyDo || null);
+      setHuyMailTarget({
+        bookingId: booking.id,
+        doanId,
+        nhaHangTen: nhaHangTen ?? "",
+        buaAn,
+        ngayDate: ngayDate ?? null,
+        email: nhaHangEmail,
+        emailThreadId: booking.email_thread_id ?? null,
+        emailSubject: booking.email_subject ?? null,
+      });
+      setHuyDialogOpen(false);
+      return;
+    }
+    // Không gửi mail → đổi trạng thái ngay (hành vi cũ).
+    applyHuyStatus()
+      .then(() => toast(t("Đã cập nhật trạng thái hủy")))
+      .catch(() => toast.error(t("Lỗi cập nhật")));
+    setHuyDialogOpen(false);
   };
   const handleReset = () => {
     saveBooking({ booking_status: "chua_gui", sent_at: null, sent_by: null });
@@ -792,6 +827,28 @@ function MealCardInner({
         </div>
       </DialogContent>
     </Dialog>
+
+    <HuyBookingConfirmDialog
+      open={huyDialogOpen}
+      onOpenChange={setHuyDialogOpen}
+      tenNcc={nhaHangTen ?? "—"}
+      loaiNcc={t("nhà hàng")}
+      hasEmail={!!nhaHangEmail && !!booking}
+      submitting={updateMut.isPending || upsertMut.isPending}
+      onConfirm={handleHuyConfirm}
+    />
+
+    <NhHuyMailModal
+      target={huyMailTarget}
+      tenDoan={tenDoan ?? ""}
+      lyDo={huyLyDo}
+      onSent={async () => {
+        await applyHuyStatus();
+        setHuyMailTarget(null);
+        setHuyLyDo(null);
+      }}
+      onCancel={() => { setHuyMailTarget(null); setHuyLyDo(null); }}
+    />
     </>
   );
 }
