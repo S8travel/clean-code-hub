@@ -1042,10 +1042,15 @@ export function useNHSection({
     }
   };
 
-  const handleCancelSubmit = () => {
+  const handleCancelSubmit = (ncc?: { id: number; ten: string } | null) => {
     if (!cancelTarget) return;
     cancelMut.mutate(
-      { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
+      {
+        id: cancelTarget.dnttId,
+        mode: cancelTarget.isPaid ? cancelMode : undefined,
+        nccId: ncc?.id ?? null,
+        nccTen: ncc?.ten ?? null,
+      },
       {
         onSuccess: () => {
           toast.success(cancelTarget.isPaid ? "Đã hủy khoản thanh toán" : "Đã hủy đề nghị");
