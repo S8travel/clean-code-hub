@@ -1,13 +1,21 @@
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { t, useTranslate } from "@/lib/i18n";
 
 export interface NHCancelTarget {
   dnttId: number;
   isPaid: boolean;
   nhName: string;
+  /** Dịch vụ chưa gắn NCC (phát sinh) → mode 'cong_no' cần OP chọn NCC để công nợ cấn trừ được. */
+  missingNcc?: boolean;
 }
 
 interface Props {
@@ -16,7 +24,8 @@ interface Props {
   onModeChange: (v: "cong_no" | "hoan_tien") => void;
   submitting: boolean;
   onClose: () => void;
-  onSubmit: () => void;
+  /** NCC = NCC OP chọn khi dịch vụ chưa gắn (chỉ dùng cho mode 'cong_no' + missingNcc). */
+  onSubmit: (ncc: { id: number; ten: string } | null) => void;
 }
 
 // Modal hủy ĐNTT / khoản thanh toán bữa ăn. Tách verbatim từ ChiPhiNHSection.
@@ -24,6 +33,25 @@ export default function NHCancelModal({
   target, mode, onModeChange, submitting, onClose, onSubmit,
 }: Props) {
   useTranslate();
+  const { data: nccList = [] } = useNhaCungCapList();
+  const [nccId, setNccId] = useState<number | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Reset lựa chọn NCC mỗi lần mở cho target mới.
+  useEffect(() => { setNccId(null); setPickerOpen(false); }, [target?.dnttId]);
+
+  // Chỉ hỏi NCC khi: đã thanh toán + chọn "Cấn trừ công nợ" + dịch vụ chưa gắn NCC.
+  const needNcc = !!target?.isPaid && mode === "cong_no" && !!target?.missingNcc;
+  const selectedNcc = useMemo(
+    () => nccList.find((n) => n.id === nccId) ?? null,
+    [nccList, nccId],
+  );
+  const blockSubmit = submitting || (needNcc && !selectedNcc);
+
+  const handleSubmit = () => {
+    onSubmit(needNcc && selectedNcc ? { id: selectedNcc.id, ten: selectedNcc.ten } : null);
+  };
+
   return (
     <Dialog open={!!target} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-sm">
@@ -58,6 +86,55 @@ export default function NHCancelModal({
           ) : (
             <p className="text-xs">{t("Đề nghị sẽ bị hủy, chi phí trở về trạng thái chưa gửi duyệt.")}</p>
           )}
+
+          {/* Dịch vụ phát sinh chưa gắn NCC → bắt chọn NCC để công nợ cấn trừ được. */}
+          {needNcc && (
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">
+                {t("Nhà cung cấp")} <span className="text-destructive">*</span>
+              </Label>
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between h-8 text-xs font-normal"
+                  >
+                    <span className={cn("truncate", !selectedNcc && "text-muted-foreground")}>
+                      {selectedNcc?.ten ?? t("Chọn nhà cung cấp…")}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                  <Command>
+                    <CommandInput placeholder={t("Tìm nhà cung cấp…")} className="text-xs" />
+                    <CommandList>
+                      <CommandEmpty className="py-3 text-xs text-center text-muted-foreground">
+                        {t("Không tìm thấy")}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {nccList.map((n) => (
+                          <CommandItem
+                            key={n.id}
+                            value={n.ten}
+                            onSelect={() => { setNccId(n.id); setPickerOpen(false); }}
+                            className="text-xs"
+                          >
+                            <Check className={cn("mr-2 h-3.5 w-3.5", nccId === n.id ? "opacity-100" : "opacity-0")} />
+                            <span className="truncate">{n.ten}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Dịch vụ này chưa gắn nhà cung cấp — chọn NCC để công nợ có thể cấn trừ/thu hồi.")}
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>
@@ -67,8 +144,8 @@ export default function NHCancelModal({
             variant="destructive"
             size="sm"
             className="text-xs"
-            onClick={onSubmit}
-            disabled={submitting}
+            onClick={handleSubmit}
+            disabled={blockSubmit}
           >
             {t("Xác nhận hủy")}
           </Button>

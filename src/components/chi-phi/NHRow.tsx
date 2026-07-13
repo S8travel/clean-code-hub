@@ -600,6 +600,9 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                     // (không tạo cong_no "hoàn tiền" ảo — credit tự hoàn về nguồn).
                     isPaid: activeDntt.payment_status === "paid" && dnttCashPaid(activeDntt.id) > 0,
                     nhName: nh?.ten || t("Nhà hàng"),
+                    // Dịch vụ phát sinh chưa gắn NCC (master lẫn dòng chi phí đều trống)
+                    // → modal sẽ hỏi NCC để công nợ cấn trừ được.
+                    missingNcc: !nh?.nha_cung_cap_id && !mainChiPhiRow?.nha_cung_cap_id,
                   });
                 }}>
                 <Ban className="h-3 w-3" />

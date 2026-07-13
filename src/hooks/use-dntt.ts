@@ -626,7 +626,7 @@ export function useCancelDNTT() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, mode, userId }: { id: number; mode?: "cong_no" | "hoan_tien"; userId?: string | null }) => {
+    mutationFn: async ({ id, mode, userId, nccId, nccTen }: { id: number; mode?: "cong_no" | "hoan_tien"; userId?: string | null; nccId?: number | null; nccTen?: string | null }) => {
       const { data: dntt, error: fetchErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
         .select("id, doan_id, ref_loai, ref_id, nha_cung_cap_id, ten_nha_cung_cap, loai, mo_ta")
@@ -648,10 +648,11 @@ export function useCancelDNTT() {
           .reduce((s, p) => s + Number(p.so_tien), 0);
         if (cashForCheck > 0) {
           const ncc = await resolveNccForCancel(dntt);
-          if (!ncc.id) {
+          // nccId truyền vào = NCC do OP chọn ở modal khi dịch vụ phát sinh chưa gắn NCC.
+          if (!ncc.id && !nccId) {
             throw new Error(
               "Chi phí chưa gắn nhà cung cấp — công nợ tạo ra sẽ không cấn trừ được. " +
-              "Gắn NCC cho dịch vụ/chi phí rồi hủy lại (hoặc chọn 'Hoàn tiền' nếu NCC trả lại tiền mặt).",
+              "Chọn nhà cung cấp trong ô hủy (hoặc gắn NCC cho dịch vụ), hoặc chọn 'Hoàn tiền'.",
             );
           }
         }
@@ -749,7 +750,9 @@ export function useCancelDNTT() {
       // NCC resolve qua helper (DNTT → ref KS/NH/cảnh điểm/dịch vụ). Với mode='cong_no'
       // NCC đã được validate ở bước 0; 'hoan_tien' chỉ là record audit nên NCC có thể null.
       if (mode && cashPaid > 0) {
-        const ncc = await resolveNccForCancel(dntt);
+        const resolved = await resolveNccForCancel(dntt);
+        // Ưu tiên NCC resolve được từ ĐNTT/ref; nếu không có, dùng NCC OP chọn ở modal.
+        const ncc = { id: resolved.id ?? nccId ?? null, ten: resolved.ten ?? nccTen ?? null };
         const { error: cnErr } = await externalSupabase.from("cong_no").insert({
           doan_id: dntt.doan_id,
           dntt_goc_id: id,
