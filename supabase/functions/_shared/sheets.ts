@@ -12,6 +12,38 @@ export const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Status HTTP coi là tạm thời (Google hay trả 500 INTERNAL lẻ) → nên thử lại. */
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+/**
+ * fetch có retry + backoff cho Google API — chống lỗi tạm thời (5xx/429/lỗi mạng).
+ * Thử tối đa `retries`+1 lần, giãn 1s → 2s → 4s. Trả về `Response` y như fetch để
+ * call-site vẫn `if (!res.ok) throw ...` bình thường. Chỉ retry khi CHƯA đọc body;
+ * khi phải thử lại thì giải phóng body của response cũ trước (tránh rò kết nối).
+ */
+async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  opts: { retries?: number; baseDelayMs?: number } = {},
+): Promise<Response> {
+  const retries = opts.retries ?? 3;
+  const baseDelay = opts.baseDelayMs ?? 1000;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await globalThis.fetch(url, init);
+      // Thành công / lỗi vĩnh viễn / hết lượt → trả cho caller xử lý.
+      if (!RETRYABLE_STATUS.has(res.status) || attempt === retries) return res;
+      await res.text().catch(() => {}); // giải phóng body trước khi thử lại
+    } catch (e) {
+      lastErr = e; // lỗi mạng — thử lại nếu còn lượt
+      if (attempt === retries) throw e;
+    }
+    await new Promise((r) => setTimeout(r, baseDelay * 2 ** attempt));
+  }
+  throw lastErr ?? new Error("fetchWithRetry: hết lượt thử");
+}
+
 /** Convert PEM private key string → ArrayBuffer cho crypto.subtle.importKey. */
 function pemToArrayBuffer(pem: string): ArrayBuffer {
   const b64 = pem
@@ -69,7 +101,7 @@ export async function getAccessToken(
   );
   const jwt = `${signInput}.${base64UrlEncode(sigBuf)}`;
 
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+  const tokenRes = await fetchWithRetry("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -91,7 +123,7 @@ export async function ensureSheetTab(
   spreadsheetId: string,
   tabName: string,
 ): Promise<void> {
-  const metaRes = await fetch(
+  const metaRes = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
@@ -107,7 +139,7 @@ export async function ensureSheetTab(
   );
   if (exists) return;
 
-  const addRes = await fetch(
+  const addRes = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
       method: "POST",
@@ -135,7 +167,7 @@ export async function ensureHeader(
   lastCol: string,
 ): Promise<void> {
   const range = `${tabName}!A1:Z1`;
-  const getRes = await fetch(
+  const getRes = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
@@ -151,7 +183,7 @@ export async function ensureHeader(
   if (matches) return;
 
   const putRange = `${tabName}!A1:${lastCol}1`;
-  const putRes = await fetch(
+  const putRes = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(putRange)}?valueInputOption=RAW`,
     {
       method: "PUT",
@@ -175,7 +207,7 @@ export async function readExistingIdRowMap(
   tabName: string,
 ): Promise<Map<number, number>> {
   const range = `${tabName}!A2:A`;
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
@@ -200,7 +232,7 @@ export async function batchUpdateRows(
   updates: { range: string; values: SheetValues }[],
 ): Promise<void> {
   if (updates.length === 0) return;
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
     {
       method: "POST",
@@ -227,7 +259,7 @@ export async function appendRows(
 ): Promise<void> {
   if (rows.length === 0) return;
   const range = `${tabName}!A:${lastCol}`;
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
@@ -283,7 +315,7 @@ export async function createDatedTab(
   spreadsheetId: string,
   baseTitle: string,
 ): Promise<{ sheetId: number; title: string }> {
-  const metaRes = await fetch(
+  const metaRes = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
@@ -304,7 +336,7 @@ export async function createDatedTab(
     n += 1;
   }
 
-  const addRes = await fetch(
+  const addRes = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
       method: "POST",
@@ -340,7 +372,7 @@ export async function writeValues(
   range: string,
   values: SheetValues,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     {
       method: "PUT",
@@ -366,7 +398,7 @@ export async function batchUpdateSpreadsheet(
   requests: Record<string, unknown>[],
 ): Promise<void> {
   if (requests.length === 0) return;
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
       method: "POST",

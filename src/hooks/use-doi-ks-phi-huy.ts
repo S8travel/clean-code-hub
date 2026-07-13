@@ -552,15 +552,18 @@ export function useDoiKsPhiHuy() {
             (lyDo ? `. Lý do: ${lyDo}` : "");
           // IDEMPOTENT: mutation không có transaction — retry sau lỗi giữa chừng (hoặc
           // resolve lại) KHÔNG được nhân đôi công nợ. Tìm cong_no con_du cùng nguồn
-          // (đoàn + NCC + dntt_goc + ly_do flow này) → UPDATE về số mới thay vì insert.
+          // (đoàn + NCC + dntt_goc ∈ ĐNTT đã trả của KS này) → UPDATE về số mới thay vì
+          // insert. Khóa theo dntt_goc thay vì ly_do để bắt được cả công nợ do LUỒNG KHÁC
+          // tạo trước đó (vd "Điều chỉnh giảm KS" ở tab Chi phí) — tránh ghi công nợ trùng
+          // cho cùng một khoản trả dư của KS. (goc = ĐNTT trả nhiều nhất, luôn ∈ danh sách.)
+          const paidDnttIds = pending.paidByDntt.map((d) => d.dnttId);
           const { data: existingCn } = await externalSupabase
             .from("cong_no")
             .select("id")
             .eq("doan_id", doanId)
             .eq("nha_cung_cap_id", pending.oldKsNccId!)
-            .eq("dntt_goc_id", goc?.dnttId ?? -1)
             .eq("trang_thai", "con_du")
-            .like("ly_do", `Hủy khách sạn ${pending.oldKsName}%`)
+            .in("dntt_goc_id", paidDnttIds.length > 0 ? paidDnttIds : [goc?.dnttId ?? -1])
             .order("id")
             .limit(1)
             .maybeSingle();
