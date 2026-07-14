@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { shouldCollectTip } from "@/lib/tip-calc";
 import { parsePhaiThuExtras, type PhaiThuExtra } from "@/lib/phai-thu-calc";
+import { resolveTyGia, planSaveTyGia, isTyGiaHopLe, nenSeedLocal } from "@/lib/ty-gia-input";
 import { tourProfile } from "@/lib/tour-profile";
 import { t, useTranslate } from "@/lib/i18n";
 import { useUpdateDoanTip } from "@/hooks/use-doan";
@@ -87,15 +88,22 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
   };
 
   // ── Tip tỷ giá (persist doan.tip_ty_gia; localStorage chỉ làm default cho đoàn mới) ─
-  const effTyGia = doan?.tip_ty_gia ?? (Number(localStorage.getItem("hdv_ty_gia_ndt")) || 800);
-  const [tyGia, setTyGia] = useState<number>(effTyGia || 800);
-  useEffect(() => { setTyGia(effTyGia || 800); }, [effTyGia]);
+  // Ô trống = "OP đang gõ dở", KHÔNG phải "xóa tỷ giá" → xem lib/ty-gia-input.ts.
+  const effTyGia = resolveTyGia(doan?.tip_ty_gia, localStorage.getItem("hdv_ty_gia_ndt"));
+  const [tyGia, setTyGia] = useState<number>(effTyGia);
+  // Refetch ["doan"] có thể nổ giữa lúc OP đang gõ → không đồng bộ đè lên ô đang focus.
+  const tyGiaFocusRef = useRef(false);
+  useEffect(() => { if (!tyGiaFocusRef.current) setTyGia(effTyGia); }, [effTyGia]);
   const handleTyGiaChange = (v: number) => {
     setTyGia(v);
-    localStorage.setItem("hdv_ty_gia_ndt", String(v)); // seed default cho đoàn mới
+    // Chỉ seed khi hợp lệ — ghi String(0) sẽ đầu độc mặc định của cả máy.
+    if (nenSeedLocal(v)) localStorage.setItem("hdv_ty_gia_ndt", String(v));
   };
   const saveTyGia = (v: number) => {
-    if (v !== (doan?.tip_ty_gia ?? null)) updateTip.mutate({ id: doanId, tip_ty_gia: v || null });
+    const keHoach = planSaveTyGia(v, doan?.tip_ty_gia);
+    // Trống/0/trùng → trả ô về giá trị đang có. TUYỆT ĐỐI không ghi NULL đè tỷ giá đã chốt.
+    if (!keHoach.luu) { setTyGia(effTyGia); return; }
+    updateTip.mutate({ id: doanId, tip_ty_gia: keHoach.giaTri });
   };
 
   // ── Người thu tip (persist doan.tip_nguoi_thu) ────────────────────────────
@@ -360,7 +368,8 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                     type="number"
                     value={tyGia || ""}
                     onChange={(e) => handleTyGiaChange(Number(e.target.value) || 0)}
-                    onBlur={() => saveTyGia(tyGia)}
+                    onFocus={() => { tyGiaFocusRef.current = true; }}
+                    onBlur={() => { tyGiaFocusRef.current = false; saveTyGia(tyGia); }}
                     disabled={locked}
                     className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
                   />
@@ -442,7 +451,14 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                       type="number"
                       value={dkLocalTyGia || ""}
                       onChange={(e) => setDkLocalTyGia(Number(e.target.value) || 0)}
-                      onBlur={() => { if (dkLocalTyGia !== (doan?.dau_khach_ty_gia ?? 0)) saveDk({ dau_khach_ty_gia: dkLocalTyGia || null }); }}
+                      onBlur={() => {
+                        // Ô trống → trả về giá trị đang có. Không ghi null: ở đây null
+                        // nghĩa là "ăn theo tỷ giá tip", không phải "OP muốn xóa".
+                        if (!isTyGiaHopLe(dkLocalTyGia)) { setDkLocalTyGia(dkEffTyGia); return; }
+                        if (Number(dkLocalTyGia) !== Number(doan?.dau_khach_ty_gia ?? 0)) {
+                          saveDk({ dau_khach_ty_gia: Number(dkLocalTyGia) });
+                        }
+                      }}
                       disabled={locked}
                       className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
                     />
@@ -519,7 +535,13 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                       type="number"
                       value={vpLocalTyGia || ""}
                       onChange={(e) => setVpLocalTyGia(Number(e.target.value) || 0)}
-                      onBlur={() => { if (vpLocalTyGia !== (doan?.quy_vp_ty_gia ?? 0)) saveVp({ quy_vp_ty_gia: vpLocalTyGia || null }); }}
+                      onBlur={() => {
+                        // Như ô đầu khách: ô trống KHÔNG được biến thành null trong DB.
+                        if (!isTyGiaHopLe(vpLocalTyGia)) { setVpLocalTyGia(vpEffTyGia); return; }
+                        if (Number(vpLocalTyGia) !== Number(doan?.quy_vp_ty_gia ?? 0)) {
+                          saveVp({ quy_vp_ty_gia: Number(vpLocalTyGia) });
+                        }
+                      }}
                       disabled={locked}
                       className="h-6 text-xs px-1.5 py-0 text-center w-[72px]"
                     />
