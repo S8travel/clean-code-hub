@@ -17,6 +17,8 @@ import {
 } from "@/hooks/use-booking-dv";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import HuyBookingConfirmDialog, { type HuyBookingConfirmArgs } from "@/components/shared/HuyBookingConfirmDialog";
+import DvHuyMailModal, { type DvHuyMailTarget } from "@/components/booking-dv/DvHuyMailModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
@@ -101,6 +103,9 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const [updateNote, setUpdateNote] = useState("");
   const [zaloModalOpen, setZaloModalOpen] = useState(false);
+  const [huyDialogOpen, setHuyDialogOpen] = useState(false);
+  const [huyMailTarget, setHuyMailTarget] = useState<DvHuyMailTarget | null>(null);
+  const [huyLyDo, setHuyLyDo] = useState<string | null>(null);
   const [zaloText, setZaloText] = useState("");
   const [emailTo, setEmailTo] = useState(row.email_nha_cung_cap || "");
   const [emailSubject, setEmailSubject] = useState("");
@@ -424,9 +429,39 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
     saveAll({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
     toast.success(t("Đã xác nhận booking"));
   };
-  const handleCancel = () => {
-    saveAll({ booking_status: "cho_xac_nhan_huy" });
-    toast(t("Đã cập nhật trạng thái hủy"));
+  const handleCancel = () => setHuyDialogOpen(true);
+
+  // Đổi trạng thái cả NHÓM (primary + siblings) sang "chờ xác nhận hủy".
+  // mutateAsync + Promise.all (không phải saveAll fire-and-forget): onSent PHẢI
+  // biết ghi có thành công không — mail hủy đã bay mà DB ghi hụt im lặng thì hệ
+  // thống vẫn "đã gửi".
+  const applyHuyStatus = () =>
+    Promise.all(
+      allRows.map((r) =>
+        updateMut.mutateAsync({ id: r.id, doan_id: r.doan_id, updates: { booking_status: "cho_xac_nhan_huy" } }),
+      ),
+    );
+
+  const handleHuyConfirm = ({ lyDo, sendMail }: HuyBookingConfirmArgs) => {
+    const to = email || row.email_nha_cung_cap || "";
+    if (sendMail && to) {
+      setHuyLyDo(lyDo || null);
+      setHuyMailTarget({
+        bookingId: row.id,
+        doanId: row.doan_id,
+        tenNhaCungCap: tenNCC || row.ten_nha_cung_cap || "",
+        dichVuList: dvSorted.map((d) => ({ ten_dv: d.ten_dv, ngay_date: d.ngay_date, so_khach: d.so_khach })),
+        email: to,
+        emailThreadId: row.email_thread_id ?? null,
+        emailSubject: row.email_subject ?? null,
+      });
+      setHuyDialogOpen(false);
+      return;
+    }
+    applyHuyStatus()
+      .then(() => toast(t("Đã cập nhật trạng thái hủy")))
+      .catch(() => toast.error(t("Lỗi cập nhật")));
+    setHuyDialogOpen(false);
   };
   const handleReset = () => {
     saveAll({ booking_status: "chua_dat", sent_at: null, sent_by: null, confirm_at: null });
@@ -712,6 +747,28 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
           </div>
         </DialogContent>
       </Dialog>
+
+      <HuyBookingConfirmDialog
+        open={huyDialogOpen}
+        onOpenChange={setHuyDialogOpen}
+        tenNcc={tenNCC || row.ten_nha_cung_cap || "—"}
+        loaiNcc={t("nhà cung cấp")}
+        hasEmail={!!(email || row.email_nha_cung_cap)}
+        submitting={updateMut.isPending}
+        onConfirm={handleHuyConfirm}
+      />
+
+      <DvHuyMailModal
+        target={huyMailTarget}
+        tenDoan={tenDoan}
+        lyDo={huyLyDo}
+        onSent={async () => {
+          await applyHuyStatus();
+          setHuyMailTarget(null);
+          setHuyLyDo(null);
+        }}
+        onCancel={() => { setHuyMailTarget(null); setHuyLyDo(null); }}
+      />
     </div>
   );
 }

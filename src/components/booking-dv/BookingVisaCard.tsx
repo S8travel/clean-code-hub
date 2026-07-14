@@ -17,6 +17,9 @@ import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useUpsertBookingVisa, useDeleteBookingVisa, type BookingVisaRow } from "@/hooks/use-booking-visa";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
+import HuyBookingConfirmDialog, { type HuyBookingConfirmArgs } from "@/components/shared/HuyBookingConfirmDialog";
+import HuyMailModal, { type HuyMailModalTarget } from "@/components/shared/HuyMailModal";
+import { buildVisaHuySubject, buildVisaHuyEmailHtml, buildVisaHuyMailtoBody } from "@/lib/booking-mail/visa-huy-mail";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useDonViVisaList, type DonViVisa } from "@/hooks/use-visa";
@@ -100,6 +103,8 @@ export default function BookingVisaCard({
   const [ghiChu, setGhiChu] = useState(booking.ghi_chu ?? "");
   const [deadline, setDeadline] = useState(() => booking.deadline ?? getDefaultDeadline(ngayDi ?? "") ?? "");
   const [selectedDonViId, setSelectedDonViId] = useState<number | null>(booking.don_vi_visa_id ?? null);
+  const [huyDialogOpen, setHuyDialogOpen] = useState(false);
+  const [huyTarget, setHuyTarget] = useState<HuyMailModalTarget | null>(null);
 
   const donVi = donViList.find((d) => d.id === selectedDonViId) ?? null;
   const status = booking.booking_status ?? "chua_dat";
@@ -267,7 +272,43 @@ export default function BookingVisaCard({
     save({ booking_status: "da_xac_nhan", confirm_at: new Date().toISOString() });
     toast.success(t("Đã xác nhận booking visa"));
   };
-  const handleCancel = () => { save({ booking_status: "da_huy" }); };
+  const handleCancel = () => setHuyDialogOpen(true);
+
+  // mutateAsync (không phải save fire-and-forget): onSent PHẢI biết ghi da_huy có
+  // thành công không — mail hủy đã bay cho đơn vị visa mà DB ghi hụt im lặng thì
+  // hệ thống vẫn "chờ xác nhận".
+  const applyHuyStatus = () =>
+    upsert.mutateAsync({ ...booking, doan_id: doanId, booking_status: "da_huy" });
+
+  const handleHuyConfirm = ({ lyDo, sendMail }: HuyBookingConfirmArgs) => {
+    const to = donVi?.email ?? "";
+    if (sendMail && to) {
+      const tenDonVi = donVi?.ten ?? "";
+      setHuyTarget({
+        resetKey: booking.id,
+        title: `${t("Mail hủy booking visa")} — ${tenDonVi}`,
+        nccTen: tenDonVi,
+        toEmail: to,
+        buildDraft: (s) => {
+          const input = { tenDoan, tenDonVi, ngayDi, lyDo: lyDo || null, senderName: s.name, senderPhone: s.phone };
+          return {
+            subject: buildVisaHuySubject(input),
+            html: buildVisaHuyEmailHtml(input),
+            mailtoBody: buildVisaHuyMailtoBody(input),
+          };
+        },
+        send: async ({ to: sendTo, subject, html, replyTo }) => {
+          await callSendBookingEmail({ to: sendTo, cc: BOOKING_CC.visa, subject, html, replyTo });
+        },
+      });
+      setHuyDialogOpen(false);
+      return;
+    }
+    applyHuyStatus()
+      .then(() => toast.success(t("Đã hủy booking visa")))
+      .catch(() => toast.error(t("Lỗi cập nhật")));
+    setHuyDialogOpen(false);
+  };
   const handleReset = () => { save({ booking_status: "chua_dat", sent_at: null, confirm_at: null }); };
 
   const handleDelete = () => {
@@ -435,6 +476,22 @@ export default function BookingVisaCard({
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}
+      />
+
+      <HuyBookingConfirmDialog
+        open={huyDialogOpen}
+        onOpenChange={setHuyDialogOpen}
+        tenNcc={donVi?.ten ?? "—"}
+        loaiNcc={t("đơn vị visa")}
+        hasEmail={!!donVi?.email}
+        submitting={upsert.isPending}
+        onConfirm={handleHuyConfirm}
+      />
+
+      <HuyMailModal
+        target={huyTarget}
+        onSent={async () => { await applyHuyStatus(); setHuyTarget(null); }}
+        onCancel={() => setHuyTarget(null)}
       />
     </>
   );

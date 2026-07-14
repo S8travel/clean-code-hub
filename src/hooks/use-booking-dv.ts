@@ -24,6 +24,8 @@ export interface BookingDVRow {
   confirm_at: string | null;
   created_at: string;
   email_thread_id: string | null;
+  /** Subject mail booking đã gửi — mail hủy dùng `Re: <subject>` để cùng thread. */
+  email_subject: string | null;
   deadline: string | null;
   mail_content_hash: string | null;
 }
@@ -130,7 +132,10 @@ export function useSendBookingEmail() {
       replyTo?: string;
       emailThreadId?: string | null;
       // mode='update' → giữ nguyên booking_status, chỉ update sent_at/by + email_thread_id
-      mode?: "first" | "update";
+      // mode='huy'    → CHỈ gửi mail hủy, KHÔNG ghi gì vào booking. Trạng thái
+      //                 cho_xac_nhan_huy do card đổi (onSent, cả nhóm gộp). Tách vậy
+      //                 để mail hủy không đè email_subject (giữ subject gốc threading).
+      mode?: "first" | "update" | "huy";
       mailContentHash?: string;
     }) => {
       const isFirst = !params.emailThreadId;
@@ -144,6 +149,9 @@ export function useSendBookingEmail() {
         cc: BOOKING_CC.dv,
         subject: params.subject, html: params.html, replyTo: params.replyTo,
       });
+
+      // Mail hủy: gửi xong là hết. Card đổi trạng thái cả nhóm trong onSent.
+      if (params.mode === "huy") return;
 
       const threadId = isFirst ? newThreadId : params.emailThreadId;
 

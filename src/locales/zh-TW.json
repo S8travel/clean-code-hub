@@ -2356,5 +2356,19 @@
   "Đã hủy đoàn": "已取消團體",
   "Hủy đoàn thất bại": "取消團體失敗",
   "phiếu ĐNTT định kỳ đã gộp chi phí của đoàn này": "已將本團費用合併的定期付款申請單",
-  "Mở trang": "開啟頁面"
+  "Mở trang": "開啟頁面",
+  "nhà cung cấp": "供應商",
+  "nhà hàng": "餐廳",
+  "Mail hủy booking nhà hàng": "餐廳訂位取消郵件",
+  "Mail hủy booking dịch vụ": "服務訂購取消郵件",
+  "sẽ chuyển sang \"Chờ xác nhận hủy\". Không có khoản tiền nào bị đụng tới — chi phí và ĐNTT (nếu có) xử lý riêng ở tab Chi phí.": "將轉為「等待確認取消」。不會動到任何款項 — 費用與付款申請（如有）請於費用分頁另行處理。",
+  "NCC chưa có email trong hệ thống — chỉ đổi trạng thái, bạn cần báo bằng cách khác.": "供應商在系統中尚未設定電子郵件 — 系統僅變更狀態，請以其他方式通知。",
+  "Lý do hủy (hiện trong mail gửi NCC)": "取消原因（會顯示在寄給供應商的郵件中）",
+  "du thuyền": "遊船",
+  "nhà xe": "車行",
+  "đơn vị visa": "簽證單位",
+  "Mail hủy booking tàu": "遊船訂位取消郵件",
+  "Mail hủy booking xe": "車輛訂購取消郵件",
+  "Mail hủy booking visa": "簽證取消郵件",
+  "Đã hủy booking visa": "已取消簽證訂購"
 }
