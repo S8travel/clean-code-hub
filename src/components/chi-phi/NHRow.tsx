@@ -1,6 +1,7 @@
 import { format, subDays, parseISO } from "date-fns";
 import { Plus, Ban, Check, X, CalendarClock, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { needAskNcc, suggestNcc } from "@/lib/cancel-ncc";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -600,9 +601,16 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                     // (không tạo cong_no "hoàn tiền" ảo — credit tự hoàn về nguồn).
                     isPaid: activeDntt.payment_status === "paid" && dnttCashPaid(activeDntt.id) > 0,
                     nhName: nh?.ten || t("Nhà hàng"),
-                    // Dịch vụ phát sinh chưa gắn NCC (master lẫn dòng chi phí đều trống)
-                    // → modal sẽ hỏi NCC để công nợ cấn trừ được.
-                    missingNcc: !nh?.nha_cung_cap_id && !mainChiPhiRow?.nha_cung_cap_id,
+                    // Hỏi NCC dựa ĐÚNG nguồn guard hủy đọc = DÒNG CHI PHÍ.
+                    // Master có NCC KHÔNG cứu được (resolveNccForCancel không fallback
+                    // sang master khi ref_loai='doan_chi_phi') — xét master ở đây chính
+                    // là bug 14/07: ô chọn không hiện mà guard vẫn chặn → bế tắc.
+                    missingNcc: needAskNcc({ chiPhiNccId: mainChiPhiRow?.nha_cung_cap_id }),
+                    // Master chỉ để ĐIỀN SẴN cho OP bấm xác nhận, không để tắt câu hỏi.
+                    suggestedNccId: suggestNcc({
+                      chiPhiNccId: mainChiPhiRow?.nha_cung_cap_id,
+                      masterNccId: nh?.nha_cung_cap_id ?? null,
+                    }),
                   });
                 }}>
                 <Ban className="h-3 w-3" />
