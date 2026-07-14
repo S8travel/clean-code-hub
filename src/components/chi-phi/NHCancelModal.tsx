@@ -14,8 +14,10 @@ export interface NHCancelTarget {
   dnttId: number;
   isPaid: boolean;
   nhName: string;
-  /** Dịch vụ chưa gắn NCC (phát sinh) → mode 'cong_no' cần OP chọn NCC để công nợ cấn trừ được. */
+  /** Dòng chi phí chưa gắn NCC → mode 'cong_no' cần OP chọn NCC để công nợ cấn trừ được. */
   missingNcc?: boolean;
+  /** NCC gợi ý (từ master nhà hàng) — điền sẵn để OP chỉ cần xác nhận, không phải tự tìm. */
+  suggestedNccId?: number | null;
 }
 
 interface Props {
@@ -37,8 +39,12 @@ export default function NHCancelModal({
   const [nccId, setNccId] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Reset lựa chọn NCC mỗi lần mở cho target mới.
-  useEffect(() => { setNccId(null); setPickerOpen(false); }, [target?.dnttId]);
+  // Mở cho target mới → điền sẵn NCC gợi ý (từ master nhà hàng). OP chỉ cần xác
+  // nhận thay vì tự dò trong danh sách; vẫn đổi được nếu gợi ý sai.
+  useEffect(() => {
+    setNccId(target?.suggestedNccId ?? null);
+    setPickerOpen(false);
+  }, [target?.dnttId, target?.suggestedNccId]);
 
   // Chỉ hỏi NCC khi: đã thanh toán + chọn "Cấn trừ công nợ" + dịch vụ chưa gắn NCC.
   const needNcc = !!target?.isPaid && mode === "cong_no" && !!target?.missingNcc;
