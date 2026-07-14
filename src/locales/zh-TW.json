@@ -2370,5 +2370,17 @@
   "Mail hủy booking tàu": "遊船訂位取消郵件",
   "Mail hủy booking xe": "車輛訂購取消郵件",
   "Mail hủy booking visa": "簽證取消郵件",
-  "Đã hủy booking visa": "已取消簽證訂購"
+  "Đã hủy booking visa": "已取消簽證訂購",
+  "mail hủy": "取消郵件",
+  "Soạn mail hủy tất cả NCC": "撰寫所有供應商的取消郵件",
+  "Soạn mail hủy cho tất cả NCC": "為所有供應商撰寫取消郵件",
+  "Mỗi NCC còn dính booking = 1 dòng. Soát danh sách + email + nội dung, bỏ tick dòng chưa muốn gửi, rồi gửi tuần tự. Không tự gửi khi bạn chưa bấm.": "每個尚有訂位的供應商為一列。請核對清單、電子郵件與內容，取消勾選不想寄送的列，再依序寄出。未按下按鈕前不會自動寄送。",
+  "Đang tải booking…": "正在載入訂位…",
+  "Không có booking nào cần gửi mail hủy.": "沒有需要寄送取消郵件的訂位。",
+  "Kênh / NCC": "管道／供應商",
+  "(thông báo — không chặn hủy đoàn)": "（通知 — 不影響取消團體）",
+  "Gửi lại có thể gửi TRÙNG mail nếu lần trước lỗi do mạng (mail có thể đã bay). Chỉ gửi lại nếu chắc NCC chưa nhận. Tiếp tục?": "若上次因網路錯誤（郵件可能已寄出），重寄可能會重複寄送。僅在確定供應商尚未收到時才重寄。是否繼續？",
+  "Chọn nhà cung cấp…": "選擇供應商…",
+  "Tìm nhà cung cấp…": "搜尋供應商…",
+  "Dịch vụ này chưa gắn nhà cung cấp — chọn NCC để công nợ có thể cấn trừ/thu hồi.": "此服務尚未綁定供應商 — 請選擇供應商，債務才能抵扣／收回。"
 }
