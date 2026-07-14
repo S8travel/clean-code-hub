@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "fs";
 import { join, resolve } from "path";
 import zhTW from "@/locales/zh-TW.json";
+import { findNearMiss } from "./i18n-near-miss";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // i18n coverage: quét tất cả `t("vietnamese")` trong src/ → mọi key phải có
@@ -73,7 +74,20 @@ describe("i18n key coverage", () => {
       }
     }
     if (missing.length > 0) {
-      const sample = missing.slice(0, 10).map((k) => `  ${JSON.stringify(k)}`).join("\n");
+      // Chỉ đích danh "key gần giống" — key thiếu chỉ khác key đã có ở ký tự nhìn
+      // y hệt (… vs ... , — vs - , nháy cong…). Không có dòng gợi ý này, người sửa
+      // mở file thấy "rõ ràng có rồi" rồi loay hoay (đúng thứ làm main đỏ ở #267).
+      const daCo = Object.keys(translations);
+      const sample = missing.slice(0, 10).map((k) => {
+        const gan = findNearMiss(k, daCo);
+        if (!gan) return `  ${JSON.stringify(k)}`;
+        return [
+          `  ${JSON.stringify(k)}`,
+          `      ⚠ GẦN GIỐNG key đã có: ${JSON.stringify(gan.keyDaCo)}`,
+          `        → khác nhau ở: ${gan.khacBiet}`,
+          `        → sửa cho khớp 1 trong 2 (đừng thêm key mới trùng nghĩa).`,
+        ].join("\n");
+      }).join("\n");
       const msg = `${missing.length} key(s) chưa có bản dịch zh-TW. Thêm vào src/locales/zh-TW.json:\n${sample}${missing.length > 10 ? `\n  ... và ${missing.length - 10} nữa` : ""}`;
       throw new Error(msg);
     }
