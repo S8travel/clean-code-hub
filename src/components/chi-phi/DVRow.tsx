@@ -15,7 +15,8 @@ import { HoaDonCell, HoaDonChiPhiBadge } from "./HoaDonBadge";
 import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { DVInput } from "./DVInput";
 import type { DVModalTarget } from "./DVDnttModal";
-import type { CancelTarget } from "./DVCancelModal";
+import type { CancelTarget } from "./ChiPhiCancelModal";
+import { needAskNcc } from "@/lib/cancel-ncc";
 import type { AggCommitTarget } from "./DVAggCommitModal";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { t, useTranslate } from "@/lib/i18n";
@@ -478,7 +479,14 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
                 setCancelMode("hoan_tien");
                 // Chỉ-cấn-trừ: isPaid=false → modal confirm thường, mode=undefined
                 // (không tạo cong_no "hoàn tiền" ảo — credit tự hoàn về nguồn).
-                setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" && dnttCashPaid(activeDntt.id) > 0 });
+                setCancelTarget({
+                  dnttId: activeDntt.id,
+                  isPaid: activeDntt.payment_status === "paid" && dnttCashPaid(activeDntt.id) > 0,
+                  // Dòng chi phí chưa gắn NCC → mode "Ghi công nợ" cần OP chọn NCC (guard hủy
+                  // đọc doan_chi_phi.nha_cung_cap_id). DV không có master → không gợi ý sẵn.
+                  missingNcc: needAskNcc({ chiPhiNccId: row.nha_cung_cap_id }),
+                  suggestedNccId: null,
+                });
               }}>
               <Ban className="h-3 w-3" />
             </Button>

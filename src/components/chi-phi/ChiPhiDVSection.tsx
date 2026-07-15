@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { NHDocEntry } from "@/lib/export-dntt-nh-word";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import DVDnttModal from "./DVDnttModal";
-import DVCancelModal from "./DVCancelModal";
+import ChiPhiCancelModal from "./ChiPhiCancelModal";
 import DVAggCommitModal from "./DVAggCommitModal";
 import DVGopDnttModal from "./DVGopDnttModal";
 import DVRow from "./DVRow";
@@ -174,7 +174,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
         submitting={insertPending}
       />
 
-      <DVCancelModal
+      <ChiPhiCancelModal
         target={cancelTarget}
         mode={cancelMode}
         onModeChange={setCancelMode}

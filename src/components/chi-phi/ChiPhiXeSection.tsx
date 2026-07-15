@@ -13,6 +13,8 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { errMsg } from "@/lib/error";
+import ChiPhiCancelModal, { type CancelTarget } from "./ChiPhiCancelModal";
+import { needAskNcc } from "@/lib/cancel-ncc";
 import {
   useChiPhiList, useDNTTList, useInsertDNTT, useUpsertChiPhi, useDeleteChiPhi,
 } from "@/hooks/use-chi-phi";
@@ -35,8 +37,6 @@ const STATUS_LABEL: Record<string, { textKey: string; cls: string }> = {
   da_duyet:  { textKey: "Đã duyệt ĐNTT",  cls: "bg-teal-100 text-teal-700" },
   tu_choi:   { textKey: "Từ chối",         cls: "bg-red-100 text-red-700" },
 };
-
-interface CancelTarget { dnttId: number; isPaid: boolean }
 
 /** Loại xe (joined) — chỉ các field section đọc. */
 interface XeInfo {
@@ -405,10 +405,16 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
     });
   };
 
-  const handleCancel = () => {
+  const handleCancel = (ncc?: { id: number; ten: string } | null) => {
     if (!cancelTarget) return;
     cancelMut.mutate(
-      { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
+      {
+        id: cancelTarget.dnttId,
+        mode: cancelTarget.isPaid ? cancelMode : undefined,
+        // NCC OP chọn khi dòng xe chưa gắn — để công nợ cấn trừ có nha_cung_cap_id.
+        nccId: ncc?.id ?? null,
+        nccTen: ncc?.ten ?? null,
+      },
       {
         onSuccess: () => { toast.success(t("Đã hủy")); setCancelTarget(null); },
         onError: (err: unknown) => toast.error(errMsg(err) || t("Lỗi khi hủy")),
@@ -718,7 +724,13 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
                             title={t("Hủy ĐNTT")}
                             onClick={() => {
                               setCancelMode("hoan_tien");
-                              setCancelTarget({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" });
+                              setCancelTarget({
+                                dnttId: activeDntt.id,
+                                isPaid: activeDntt.payment_status === "paid",
+                                // Dòng xe chưa gắn NCC → mode "Ghi công nợ" cần OP chọn NCC.
+                                missingNcc: needAskNcc({ chiPhiNccId: row.nha_cung_cap_id }),
+                                suggestedNccId: null,
+                              });
                             }}>
                             <Ban className="h-3 w-3" />
                           </Button>
@@ -927,31 +939,15 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
       </Dialog>
 
 
-      {/* Cancel Dialog */}
-      <Dialog open={!!cancelTarget} onOpenChange={(v) => { if (!v) setCancelTarget(null); }}>
-        <DialogContent className="sm:max-w-[340px]">
-          <DialogHeader><DialogTitle className="text-sm">{t("Hủy đề nghị thanh toán")}</DialogTitle></DialogHeader>
-          {cancelTarget?.isPaid && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">{t("Đã thanh toán — chọn cách xử lý:")}</p>
-              <RadioGroup value={cancelMode} onValueChange={(v) => setCancelMode(v as "cong_no" | "hoan_tien")} className="flex gap-4">
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="hoan_tien" id="xe-cancel-ht" />
-                  <Label htmlFor="xe-cancel-ht" className="text-xs">{t("Hoàn tiền")}</Label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="cong_no" id="xe-cancel-cn" />
-                  <Label htmlFor="xe-cancel-cn" className="text-xs">{t("Ghi công nợ")}</Label>
-                </div>
-              </RadioGroup>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCancelTarget(null)}>{t("Đóng")}</Button>
-            <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelMut.isPending}>{t("Xác nhận hủy")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Cancel Dialog — dùng chung với DV (ô chọn NCC khi dòng chưa gắn) */}
+      <ChiPhiCancelModal
+        target={cancelTarget}
+        mode={cancelMode}
+        onModeChange={setCancelMode}
+        onClose={() => setCancelTarget(null)}
+        onSubmit={handleCancel}
+        submitting={cancelMut.isPending}
+      />
     </div>
   );
 }
