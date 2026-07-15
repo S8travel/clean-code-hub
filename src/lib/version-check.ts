@@ -3,22 +3,32 @@ import { toast } from "sonner";
 import { t } from "@/lib/i18n";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phát hiện deploy mới → ép người đang mở tab tải lại.
+// Phát hiện deploy mới → báo người đang mở tab, cho ÂN HẠN rồi mới tự tải lại.
 // Client poll /version.json (file thật, no-store) so với __APP_VERSION__ baked
 // trong bundle. Khác → toast đếm ngược COUNTDOWN_S giây rồi tự reload (có nút
-// "Tải lại ngay"). Đây là cơ chế báo bản mới DUY NHẤT cho user.
+// "Tải lại ngay" để OP tải ngay nếu muốn). Đây là cơ chế báo bản mới DUY NHẤT.
+// Ân hạn 5 phút (không phải 10s): reload đột ngột giữa lúc OP đang nhập dở =
+// mất công; cho họ thời gian blur/hoàn tất rồi tự tải, hoặc bấm tải ngay.
 // PWA service worker (vite-plugin-pwa) chạy network-first / KHÔNG precache
 // index.html → navigation luôn ra mạng, không che mất luồng version.json này.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const POLL_MS = 3 * 60_000; // poll mỗi 3 phút
-const COUNTDOWN_S = 10;      // đếm ngược trước khi tự reload
+const COUNTDOWN_S = 5 * 60;  // ân hạn 5 phút trước khi tự reload
 const TOAST_ID = "app-version-update";
 
 /** Có nên reload không: chỉ khi latest hợp lệ, khác rỗng và khác current. */
 export function shouldReload(current: string, latest: unknown): boolean {
   if (typeof latest !== "string" || latest.length === 0) return false;
   return latest !== current;
+}
+
+/** Đếm ngược dạng m:ss ("5:00", "4:09"). Ân hạn 5 phút nên "300s…" đọc xấu. */
+export function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${String(rem).padStart(2, "0")}`;
 }
 
 async function fetchLatestVersion(): Promise<string | null> {
@@ -38,7 +48,7 @@ function startCountdownAndReload() {
   const render = () =>
     toast(t("Có phiên bản mới"), {
       id: TOAST_ID,
-      description: `${t("Tự tải lại sau")} ${remaining}s…`,
+      description: `${t("Tự tải lại sau")} ${formatCountdown(remaining)}`,
       duration: Infinity,
       action: {
         label: t("Tải lại ngay"),
