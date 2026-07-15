@@ -53,9 +53,12 @@ import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreview
 import RemapNgayModal from "@/components/dieu-tour/RemapNgayModal";
 import DoiKsPhiHuyModal, { type DoiKsConfirmArgs } from "@/components/dieu-tour/DoiKsPhiHuyModal";
 import KsHuyMailModal from "@/components/dieu-tour/KsHuyMailModal";
+import KsBotDemCanhBaoDialog from "@/components/dieu-tour/KsBotDemCanhBaoDialog";
 import {
-  useDoiKsPhiHuy, checkKsPhiHuyOnChange, KsDnttNgoaiPhamViError, type KsPhiHuyPending,
+  useDoiKsPhiHuy, checkKsPhiHuyOnChange, checkKsBotDemOnChange,
+  KsDnttNgoaiPhamViError, type KsPhiHuyPending,
 } from "@/hooks/use-doi-ks-phi-huy";
+import type { KsBotDemCanhBao } from "@/lib/ks-bot-dem";
 
 function TabBadge({ count }: { count: number }) {
   if (count === 0) return null;
@@ -140,6 +143,13 @@ export default function DoanDetail() {
   const ksGateBusyRef = useRef(false);
   // Đã ghi DB cho ít nhất 1 KS trong lượt đổi này (không hoàn tác được).
   const ksCommittedRef = useRef(false);
+  // Cảnh báo "đêm đang giữ tiền bị đụng" — ca mà checkKsPhiHuyOnChange cố tình bỏ qua
+  // (KS vẫn còn đêm khác / gán KS vào đêm mồ côi). Chỉ hỏi, KHÔNG tự xử lý tiền.
+  const [ksBotDem, setKsBotDem] = useState<KsBotDemCanhBao | null>(null);
+  // Các dayId OP ĐÃ bấm "tôi hiểu, vẫn đổi". Theo TỪNG đêm, KHÔNG phải cờ tắt-cả-gate:
+  // nếu bật/tắt cả gate thì xác nhận cảnh báo #1 sẽ nuốt luôn cảnh báo #2 (đêm khác đang
+  // giữ tiền) → tiền quy nhầm không ai báo. Dọn khi lượt đổi kết thúc (days re-sync từ DB).
+  const ksBotDemOkRef = useRef<Set<number>>(new Set());
   const doiKsMut = useDoiKsPhiHuy();
   const queryClient = useQueryClient();
 
@@ -404,7 +414,7 @@ export default function DoanDetail() {
   // mồ côi, khách sạn không hề biết mình bị hủy. Nay mọi pending đều hỏi OP.
   const doSave = useCallback(async () => {
     if (!doanId) return;
-    if (ksPhiHuyPending || ksGateBusyRef.current) return; // modal đang mở / gate đang chạy
+    if (ksPhiHuyPending || ksBotDem || ksGateBusyRef.current) return; // modal đang mở / gate đang chạy
     ksGateBusyRef.current = true;
     try {
       const pendings = await checkKsPhiHuyOnChange({ doanId, days, dbNgayRows });
@@ -412,6 +422,22 @@ export default function DoanDetail() {
         // Xử từng KS một; sau mỗi lần xong gate chạy lại và bắt KS kế (nếu có).
         setKsPhiHuyPending(pendings[0]);
         setSaveStatus("pending"); // giữ trạng thái chờ — modal quyết tiếp
+        return;
+      }
+
+      // Gate #2 — đêm đang giữ tiền bị gỡ / bị gán sang KS khác. checkKsPhiHuyOnChange
+      // BỎ QUA những ca này (nó chỉ lo khi KS biến mất hẳn khỏi tour), nên trước đây OP
+      // gỡ một đêm đã trả tiền mà không được báo một chữ nào.
+      //
+      // Lọc bỏ cảnh báo mà OP ĐÃ xác nhận (mọi đêm của nó nằm trong ksBotDemOkRef) rồi
+      // hỏi cái còn lại đầu tiên — gate tự lặp qua từng cảnh báo như gate #1, KHÔNG để
+      // "đồng ý 1 cái = đồng ý tất".
+      const canhBao = (await checkKsBotDemOnChange({ doanId, days, dbNgayRows })).filter(
+        (cb) => !cb.demDinhTien.every((d) => ksBotDemOkRef.current.has(d.dayId)),
+      );
+      if (canhBao.length > 0) {
+        setKsBotDem(canhBao[0]);
+        setSaveStatus("pending");
         return;
       }
     } catch (e) {
@@ -434,8 +460,38 @@ export default function DoanDetail() {
       ksGateBusyRef.current = false;
     }
     ksCommittedRef.current = false; // gate sạch → lượt đổi kết thúc, reset cờ batch
+    ksBotDemOkRef.current.clear(); // lượt đổi xong → lần sửa sau phải hỏi lại từ đầu
     runSave();
-  }, [doanId, days, dbNgayRows, ksPhiHuyPending, runSave, rerunGateSoon]);
+  }, [doanId, days, dbNgayRows, ksPhiHuyPending, ksBotDem, runSave, rerunGateSoon]);
+
+  // ── Cảnh báo "đêm đang giữ tiền" — 3 lối thoát, không lối nào tự đụng tiền ──────
+  const botDemGiuNguyen = useCallback(() => {
+    const cb = ksBotDem;
+    setKsBotDem(null);
+    if (!cb) return;
+    // Hoàn tác ĐÚNG những đêm bị cảnh báo, giữ nguyên mọi sửa đổi khác của OP trong
+    // cùng lượt (cảnh điểm, số khách…) — không để một cảnh báo giết cả lần lưu.
+    const dayIds = cb.demDinhTien.map((d) => d.dayId);
+    setDays((prev) => prev.map((d) => {
+      if (!d.id || !dayIds.includes(d.id)) return d;
+      const db = dbNgayRows.find((r) => r.id === d.id);
+      return { ...d, khach_san_id: db?.khach_san_id ?? null };
+    }));
+    rerunGateSoon();
+  }, [ksBotDem, dbNgayRows, rerunGateSoon]);
+
+  const botDemTiepTuc = useCallback(() => {
+    // Đánh dấu ĐÚNG những đêm vừa xác nhận (không tắt cả gate) → cảnh báo còn lại vẫn hỏi.
+    ksBotDem?.demDinhTien.forEach((d) => ksBotDemOkRef.current.add(d.dayId));
+    setKsBotDem(null);
+    rerunGateSoon();
+  }, [ksBotDem, rerunGateSoon]);
+
+  // Xử tiền trước, đổi lịch sau → hoàn tác lịch trình rồi mới sang tab Chi phí.
+  const botDemMoChiPhi = useCallback(() => {
+    botDemGiuNguyen();
+    setActiveTab("chi-phi");
+  }, [botDemGiuNguyen]);
 
   // Ghi DB cho 1 pending rồi chạy lại gate. Dùng chung cho cả 3 lối: xác nhận, để sau,
   // và "sau khi mail hủy đã gửi xong" (KsHuyMailModal.onSent).
@@ -969,6 +1025,17 @@ export default function DoanDetail() {
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Cảnh báo "đêm giữ tiền" render Ở CẤP TRANG (ngoài Tabs): nếu để trong TabsContent
+          "dieu-tour", Radix unmount nó khi OP sang tab khác → autosave (debounce 1500ms) nổ
+          gate #2 lúc đó sẽ set ksBotDem nhưng dialog KHÔNG hiện, mà ksBotDem lại chặn mọi
+          save tiếp → thay đổi kẹt/mất im lặng. */}
+      <KsBotDemCanhBaoDialog
+        canhBao={ksBotDem}
+        onTiepTuc={botDemTiepTuc}
+        onGiuNguyen={botDemGiuNguyen}
+        onMoChiPhi={botDemMoChiPhi}
+      />
     </div>
   );
 }

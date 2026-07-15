@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Lock, Plus, X, MessageSquarePlus, GripVertical } from "lucide-react";
+import { Lock, Plus, X, MessageSquarePlus, GripVertical, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -528,13 +528,20 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 đặt-trước → trạng thái cho_ks_xac_nhan thành NGÕ CỤT: không đổi, không gỡ,
                 không hủy được. Nay để mở; gate `checkKsPhiHuyOnChange` ở DoanDetail.doSave
                 chặn TRƯỚC khi ghi DB và hỏi (phí hủy / mail hủy) — có đường thoát tại chỗ. */}
+            {/* Ô tên KS ĐÃ đổi thẳng được 1 click từ trước, nhưng nó trông y hệt một cái
+                nhãn (không mũi tên, không icon) nên OP tưởng chỉ bấm được nút ❌ → quen tay
+                XÓA trước rồi mới chọn lại. Thói quen đó ghi trạng thái "đêm không có KS"
+                xuống DB, biến dòng chi phí thành mồ côi, rồi lần lưu sau lại quy nó sang KS
+                mới. Chevron ở đây là để giết đúng thói quen đó. */}
             <div className="flex items-center gap-1">
               <button type="button" title={t("Bấm để đổi khách sạn")}
-                className="flex-1 min-w-0 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
+                className="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1 rounded-md border border-green-200 bg-green-50 text-xs font-semibold text-green-800 break-words text-center hover:bg-green-100 hover:border-green-400 cursor-pointer transition-colors"
                 onClick={() => setEditSel("ks")}>
-                {selectedKS.ten}
+                <span className="min-w-0 break-words">{selectedKS.ten}</span>
+                <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
               </button>
               <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 print-hide"
+                title={t("Gỡ khách sạn khỏi đêm này")}
                 onClick={() => update({ khach_san_id: null })}>
                 <X className="h-3 w-3" />
               </Button>
