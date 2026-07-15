@@ -136,7 +136,10 @@ export function buildKSRowFromCp(
   const co = format(coDate, "yyyy-MM-dd");
   return {
     id: cp.id,
-    khach_san_id: ngay.khach_san_id,
+    // NEO: ưu tiên KS đã snapshot trên chính dòng; fallback lịch trình cho dòng cũ
+    // chưa neo (tương thích ngược). Nhờ vậy đổi KS của ngày KHÔNG kéo dòng đã trả tiền
+    // sang KS mới — nó ở lại đúng KS đã snapshot.
+    khach_san_id: cp.khach_san_id ?? ngay.khach_san_id,
     doan_ngay_id: cp.ref_doan_ngay_id || 0,
     ngay_date: ci,
     loai_phong: cp.mo_ta || "",
@@ -153,4 +156,27 @@ export function buildKSRowFromCp(
     is_hdv: (cp.tien_hdv ?? 0) > 0,
     trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
   } as LocalKSRow;
+}
+
+/**
+ * KS ids cần render card + giữ trong khachSanMap, gộp từ 4 nguồn.
+ *
+ * `chiPhi` (KS đã neo trên chính dòng chi phí) BẮT BUỘC có mặt: nếu một dòng neo KS_A mà
+ * đêm của nó đã đổi lịch trình sang KS khác (và KS_A chưa có ĐNTT), thiếu nguồn này thì
+ * KS_A không có card + rớt khỏi khachSanMap → cleanup xóa dòng khỏi localRows → dòng TÀNG
+ * HÌNH nhưng vẫn cộng vào tổng đoàn. Tách thuần để test (đây là regression việc neo KS suýt
+ * gây ra, do adversarial review bắt).
+ *
+ * `orphaned` = KS có dòng/ĐNTT nhưng KHÔNG còn trong lịch trình và không phải day-use →
+ * vẫn phải render card để dòng đã neo (hoặc ĐNTT) hiển thị + sửa được, không mất dấu tiền.
+ */
+export function resolveKsIds(input: {
+  ngay: number[]; dntt: number[]; dayUse: number[]; chiPhi: number[];
+}): { allKsIds: number[]; orphanedKsIds: number[] } {
+  const ngay = new Set(input.ngay);
+  const dayUse = new Set(input.dayUse);
+  const allKsIds = [...new Set([...input.ngay, ...input.dntt, ...input.dayUse, ...input.chiPhi])];
+  const orphanedKsIds = [...new Set([...input.dntt, ...input.chiPhi])]
+    .filter((id) => !ngay.has(id) && !dayUse.has(id));
+  return { allKsIds, orphanedKsIds };
 }

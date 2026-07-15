@@ -793,6 +793,12 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
         loai: "chi",
         danh_muc: "khach_san",
         ref_doan_ngay_id: row.doan_ngay_id,
+        // NEO danh tính KS vào chính dòng chi phí. Trước đây dòng in-tour để trống
+        // khach_san_id → danh tính suy từ doan_ngay.khach_san_id, nên đổi KS của ngày
+        // làm dòng (và tiền đã trả) tự nhảy sang KS mới. Ghi id ở đây = tiền không trôi
+        // theo lịch trình nữa. Đường đọc (buildKSRowFromCp) fallback về lịch trình cho
+        // dòng cũ chưa neo → tương thích ngược.
+        khach_san_id: row.khach_san_id ?? null,
         mo_ta:
           row.loai_phong ||
           (row.is_day_use
@@ -971,9 +977,11 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       return;
     }
     if (!cp.ref_doan_ngay_id) return;
+    // NEO: ưu tiên KS trên chính dòng; fallback lịch trình cho dòng cũ chưa neo.
     const ng = ngayRows.find((r) => r.id === cp.ref_doan_ngay_id);
-    if (!ng?.khach_san_id) return;
-    (chiPhiIdsByKs[ng.khach_san_id] = chiPhiIdsByKs[ng.khach_san_id] || []).push(cp.id);
+    const ksId = cp.khach_san_id ?? ng?.khach_san_id ?? null;
+    if (ksId == null) return;
+    (chiPhiIdsByKs[ksId] = chiPhiIdsByKs[ksId] || []).push(cp.id);
   });
 
   // Can_tru đã áp dụng cho từng KS — qua payments
