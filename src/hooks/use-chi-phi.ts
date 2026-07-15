@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
+import { resolveKsIds } from "@/components/chi-phi/ks-section-shared";
 import { revertCongNoIfRecovered } from "@/hooks/use-cong-no";
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
@@ -258,6 +259,20 @@ export function useChiPhiKSData(doanId?: number, doanNhomId?: number | null) {
         .eq("ref_loai", "khach_san")
         .not("ref_id", "is", null);
 
+      // KS ĐÃ NEO trên chính dòng chi phí in-tour (doan_chi_phi.khach_san_id snapshot).
+      // BẮT BUỘC gom vào: nếu một dòng neo KS_A mà đêm của nó đã đổi lịch trình sang KS
+      // khác (và KS_A chưa có ĐNTT), thiếu nguồn này thì KS_A không có card + rớt khỏi
+      // khachSanMap → cleanup xóa khỏi localRows → dòng TÀNG HÌNH nhưng vẫn cộng vào tổng
+      // đoàn. Loại day-use (ref_doan_ngay_item_id) vì đã có nguồn ksIdsFromDayUse riêng.
+      const { data: cpKsRows } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("khach_san_id")
+        .eq("doan_id", doanId!)
+        .eq("danh_muc", "khach_san")
+        .eq("ngoai_tour", false)
+        .is("ref_doan_ngay_item_id", null)
+        .not("khach_san_id", "is", null);
+
       // Day-use KS: doan_ngay_item links đến canh_diem có khach_san_id
       const { data: itemsWithCanhDiem } = await externalSupabase
         .from("doan_ngay_item")
@@ -304,9 +319,13 @@ export function useChiPhiKSData(doanId?: number, doanNhomId?: number | null) {
       const ksIdsFromDntt = new Set(
         (dnttRows || []).map((r) => r.ref_id).filter((x): x is number => x != null),
       );
-      const allKsIds = [...new Set([...ksIdsFromNgay, ...ksIdsFromDntt, ...ksIdsFromDayUse])];
-      // Track which KS ids are "orphaned" (in DNTT but no longer in tour schedule + not day-use)
-      const orphanedKsIds = [...ksIdsFromDntt].filter((id) => !ksIdsFromNgay.has(id) && !ksIdsFromDayUse.has(id));
+      const ksIdsFromChiPhi = new Set(
+        (cpKsRows || []).map((r) => r.khach_san_id).filter((x): x is number => x != null),
+      );
+      const { allKsIds, orphanedKsIds } = resolveKsIds({
+        ngay: [...ksIdsFromNgay], dntt: [...ksIdsFromDntt],
+        dayUse: [...ksIdsFromDayUse], chiPhi: [...ksIdsFromChiPhi],
+      });
 
       if (allKsIds.length === 0) return { ngayRows: [], khachSanMap: {}, orphanedKsIds: [], dayUseItemMap: {}, dayUseKsIds: [] };
 
@@ -687,10 +706,10 @@ export function useInsertDNTT() {
       const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
 
       // NGUYÊN TỬ: dntt + allocations trong 1 transaction (RPC).
-      // Trước 10/07/2026 hook này insert dntt rồi mới insert allocations; allocation
-      // lỗi (vd chi phí đã bị xóa khi sửa Điều tour, cache client còn dòng ma) →
-      // ĐNTT RỖNG ở lại DB, onSuccess không chạy nên cũng không có log. OP bấm lại →
-      // sinh thêm phiếu rỗng. Sự cố đoàn HAN05BR260707DO: 4 phiếu 3.850.000 cho 1 bữa.
+      // Trước đây hook này insert dntt rồi mới insert allocations; allocation lỗi
+      // (vd chi phí đã bị xóa khi sửa Điều tour, cache client còn dòng ma) → ĐNTT
+      // RỖNG ở lại DB, onSuccess không chạy nên cũng không có log. OP bấm lại →
+      // sinh thêm phiếu rỗng (đã xảy ra thật: một bữa ăn đẻ ra một loạt phiếu rỗng).
       // Xem supabase/migrations/20260710_dntt_atomic_insert.sql.
       const args = splitDnttPayload({ ...payload, tao_boi: taoBoi });
       const { data: newId, error } = await externalSupabase.rpc("create_dntt_with_allocations", {
