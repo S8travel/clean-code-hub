@@ -2,7 +2,7 @@
 //
 // Vấn đề gốc: dòng chi phí KS in-tour KHÔNG lưu khach_san_id — danh tính KS suy từ
 // ref_doan_ngay_id → doan_ngay.khach_san_id. OP đổi KS của ngày → cùng dòng chi phí
-// (và TIỀN đã trả cho KS cũ) tự "nhảy" sang KS mới → rối tiền (ca Wyndham/Crowne 07/2026).
+// (và TIỀN đã trả cho KS cũ) tự "nhảy" sang KS mới → rối tiền. Đã xảy ra thật.
 //
 // Guard: TRƯỚC khi autosave flip doan_ngay.khach_san_id, phát hiện KS cũ biến mất hẳn
 // khỏi tour mà còn ĐNTT sống → tách sạch (detach) rồi mới lưu:
@@ -29,6 +29,9 @@ import { REF_LOAI_NGOAI_TOUR } from "@/lib/ks-ngoai-tour-print";
 import { useCancelDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
 import { findForeignKsDntt, formatForeignKsDntt, isKsBookingActive } from "@/lib/ks-dntt-scope";
+import {
+  buildBotDemCanhBao, type DemChiPhiLite, type KsBotDemCanhBao,
+} from "@/lib/ks-bot-dem";
 import type { DayLocal, DoanNgayRow } from "@/hooks/use-dieu-tour";
 
 /** Booking KS cũ đang "sống" (đã gửi mail, chưa vào luồng hủy) — đủ dữ liệu dựng mail hủy. */
@@ -281,10 +284,10 @@ export async function checkKsPhiHuyOnChange(opts: {
     // 3. Tiền gắn với KS cũ.
     //
     // KHÔNG dò bằng (doan_id, ref_loai='khach_san', ref_id=oldKsId) — cách đó MÙ với
-    // ĐNTT thanh toán ĐỊNH KỲ (doan_id = NULL, ref_loai='dinh_ky'), vốn là cách
-    // ROSAMIA/ROSEMARY đang được trả. Bỏ sót → gate im lặng → save flip
+    // ĐNTT thanh toán ĐỊNH KỲ (doan_id = NULL, ref_loai='dinh_ky'), vốn là cách một
+    // số khách sạn đang được trả. Bỏ sót → gate im lặng → save flip
     // doan_ngay.khach_san_id → dòng chi phí (và tiền đã trả) bị quy sang KS MỚI.
-    // Đúng bug Wyndham/Crowne, chỉ khác kênh.
+    // Cùng một bug "tiền nhảy sang KS mới", chỉ khác kênh thanh toán.
     //
     // Dò từ DÒNG CHI PHÍ của các ngày đó → allocation → ĐNTT. Bắt mọi kênh.
     const liveRows = await fetchLiveDnttForKsDays(doanId, oldKsId, dayIds);
@@ -331,6 +334,138 @@ export async function checkKsPhiHuyOnChange(opts: {
       booking,
     });
   }
+  return out;
+}
+
+/**
+ * Tiền đang nằm trên từng đêm — đọc THẲNG các cột tiền của dòng chi phí KS.
+ *
+ * KHÔNG hỏi bảng ĐNTT. Hai lý do, cả hai đều đã làm câm guard trước đây:
+ *   1. `so_tien_da_dntt` / `so_tien_da_tt` do RPC `recalc_chi_phi_payment_status` tính từ
+ *      allocation → bắt được MỌI kênh, kể cả ĐNTT ĐỊNH KỲ (ref_loai='dinh_ky').
+ *   2. RLS: OP điều hành không đọc được ĐNTT định kỳ → hỏi bảng đó sẽ nhận về rỗng và
+ *      guard lại im lặng đúng ở ca nguy hiểm nhất.
+ */
+async function fetchTienTheoDem(doanId: number, dayIds: number[]): Promise<Map<number, DemChiPhiLite>> {
+  const out = new Map<number, DemChiPhiLite>();
+  if (dayIds.length === 0) return out;
+
+  const { data: cps, error } = await externalSupabase
+    .from("doan_chi_phi")
+    .select("ref_doan_ngay_id, so_tien_da_dntt, so_tien_da_tt")
+    .eq("doan_id", doanId)
+    .eq("danh_muc", "khach_san")
+    .eq("ngoai_tour", false)
+    .eq("ks_huy", false) // dòng đã hủy → tiền đã được xử lý, không chặn nữa
+    .is("ref_doan_ngay_item_id", null)
+    .in("ref_doan_ngay_id", dayIds);
+  if (error) throw error;
+
+  for (const r of cps ?? []) {
+    const id = r.ref_doan_ngay_id as number | null;
+    if (id == null) continue;
+    const cur = out.get(id) ?? { dayId: id, ngaySo: null, ngayDate: null, daDeNghi: 0, daTra: 0 };
+    cur.daDeNghi += Number(r.so_tien_da_dntt ?? 0);
+    cur.daTra += Number(r.so_tien_da_tt ?? 0);
+    out.set(id, cur);
+  }
+  return out;
+}
+
+/**
+ * Cảnh báo "đêm đang giữ tiền bị đụng" — che đúng HAI ca mà `checkKsPhiHuyOnChange` cố tình
+ * bỏ qua (nó chỉ nổ khi KS biến mất HẲN khỏi tour, xem 2 dòng `continue` ở trên):
+ *
+ *   1. `go_bot_dem` — gỡ/đổi 1 đêm mà KS cũ VẪN còn đêm khác. Guard cũ im lặng.
+ *   2. `gan_ks_vao_dem_co_tien` — gán KS cho đêm đang giữ tiền mồ côi. Guard cũ mù hẳn
+ *      (`if (!dbRow?.khach_san_id) continue`). Vì Điều tour bắt xóa KS cũ trước rồi mới
+ *      chọn KS mới, MỌI lần đổi KS đều đi qua đúng đây → đây mới là lúc tiền bị quy nhầm.
+ *
+ * CHỈ CẢNH BÁO — không đụng tiền. Quy trình xử lý tiền hiện hành (nút "Xử lý chênh lệch
+ * thừa" ở tab Chi phí → công nợ) đang chạy đúng; việc của guard này là đảm bảo OP BIẾT
+ * mình đang bước qua cái gì, chứ không phải thay thế nó bằng tự động hoá chưa kiểm chứng.
+ *
+ * Read-only. Trả [] = không có gì phải hỏi.
+ */
+export async function checkKsBotDemOnChange(opts: {
+  doanId: number;
+  days: DayLocal[];
+  dbNgayRows: DoanNgayRow[];
+}): Promise<KsBotDemCanhBao[]> {
+  const { doanId, days, dbNgayRows } = opts;
+
+  const demBiGoTheoKs = new Map<number, number[]>(); // oldKsId → dayIds bị gỡ khỏi nó
+  const demDuocGanKs: number[] = [];                 // đêm CHƯA có KS mà nay được gán
+
+  for (const day of days) {
+    if (!day.id) continue;
+    const dbRow = dbNgayRows.find((r) => r.id === day.id);
+    if (!dbRow) continue;
+    const cu = dbRow.khach_san_id ?? null;
+    const moi = day.khach_san_id ?? null;
+    if (cu === moi) continue;
+
+    if (cu == null) {
+      // Đêm chưa có KS → nay được gán. Nếu đêm đang giữ tiền mồ côi thì tiền sẽ bị quy
+      // sang KS mới ngay khi lưu.
+      if (moi != null) demDuocGanKs.push(day.id);
+      continue;
+    }
+    demBiGoTheoKs.set(cu, [...(demBiGoTheoKs.get(cu) ?? []), day.id]);
+  }
+
+  if (demBiGoTheoKs.size === 0 && demDuocGanKs.length === 0) return [];
+
+  // Nhãn đêm (ngày thứ mấy / ngày nào) để modal nói rõ đêm nào bị đụng.
+  const moiDayId = [...new Set([...demBiGoTheoKs.values()].flat().concat(demDuocGanKs))];
+  const { data: ngayRows } = await externalSupabase
+    .from("doan_ngay")
+    .select("id, ngay_so, ngay_date")
+    .in("id", moiDayId);
+  const nhan = new Map<number, { ngaySo: number | null; ngayDate: string | null }>();
+  for (const r of ngayRows ?? []) {
+    nhan.set(r.id as number, { ngaySo: r.ngay_so ?? null, ngayDate: r.ngay_date ?? null });
+  }
+
+  const tien = await fetchTienTheoDem(doanId, moiDayId);
+  const lay = (dayId: number): DemChiPhiLite => ({
+    dayId,
+    ngaySo: nhan.get(dayId)?.ngaySo ?? null,
+    ngayDate: nhan.get(dayId)?.ngayDate ?? null,
+    daDeNghi: tien.get(dayId)?.daDeNghi ?? 0,
+    daTra: tien.get(dayId)?.daTra ?? 0,
+  });
+
+  const out: KsBotDemCanhBao[] = [];
+
+  for (const [oldKsId, dayIds] of demBiGoTheoKs) {
+    // KS cũ còn đêm khác sau thay đổi? Nếu KHÔNG → nó biến mất hẳn khỏi tour, đã có
+    // checkKsPhiHuyOnChange lo (luồng detach + phí hủy). Không cảnh báo chồng.
+    const conLai = days.filter(
+      (d) => d.khach_san_id === oldKsId && !(d.id && dayIds.includes(d.id)),
+    ).length;
+    if (conLai === 0) continue;
+
+    const info = await fetchKsInfo(oldKsId);
+    const cb = buildBotDemCanhBao({
+      kind: "go_bot_dem",
+      oldKsId,
+      oldKsName: info.ten,
+      demBiGo: dayIds.map(lay),
+      soDemConLai: conLai,
+    });
+    if (cb) out.push(cb);
+  }
+
+  const cbGan = buildBotDemCanhBao({
+    kind: "gan_ks_vao_dem_co_tien",
+    oldKsId: null,
+    oldKsName: null,
+    demBiGo: demDuocGanKs.map(lay),
+    soDemConLai: 0,
+  });
+  if (cbGan) out.push(cbGan);
+
   return out;
 }
 
