@@ -27,6 +27,7 @@ import {
   type KsStatusRow,
   type NhStatusRow,
 } from "@/lib/doan-cancel-check";
+import { demDnttChanHuyDoan } from "@/lib/huy-doan-guards";
 import {
   useDoanList,
   useDoanRealtime,
@@ -524,6 +525,21 @@ export default function Index() {
 
     const dnttCuaDoan = new Set((dntt.data ?? []).map((d) => d.id as number));
 
+    // ĐNTT đã trả mà tiền đã chuyển thành công nợ (OP "điều chỉnh giảm/về 0" → cong_no.dntt_goc_id
+    // trỏ vào nó) coi như ĐÃ XỬ LÝ — đừng chặn hủy đoàn. Nếu vẫn chặn, OP kẹt: ĐNTT còn da_duyet,
+    // mà bấm "Hủy ĐNTT" thì rơi vào bug xóa payment cấn trừ chéo đoàn (use-dntt/coCanTruCheoDntt).
+    // Ca thực tế: nhiều ĐNTT KS đã trả, đã có công nợ đối ứng → coi như xong, không nên chặn.
+    let dnttDaCoCongNo: ReadonlySet<number> = new Set();
+    if (dnttCuaDoan.size > 0) {
+      const { data: cnRev, error: eCnRev } = await externalSupabase
+        .from("cong_no").select("dntt_goc_id").in("dntt_goc_id", [...dnttCuaDoan]);
+      if (eCnRev) throw eCnRev;
+      dnttDaCoCongNo = new Set(
+        (cnRev ?? []).map((c) => c.dntt_goc_id as number | null).filter((x): x is number => x != null),
+      );
+    }
+    const dnttActiveCount = demDnttChanHuyDoan([...dnttCuaDoan], dnttDaCoCongNo);
+
     // ĐNTT định kỳ có doan_id = NULL → truy vấn theo doan_id ở trên KHÔNG thấy.
     // Đi vòng qua chi phí: doan_chi_phi → dntt_allocations → ĐNTT còn sống.
     const { data: cpRows, error: eCp } = await externalSupabase
@@ -552,7 +568,7 @@ export default function Index() {
       ks: (ks.data ?? []) as KsStatusRow[],
       nh: (nh.data ?? []) as unknown as NhStatusRow[],
       dvActiveCount: (dv.data ?? []).length,
-      dnttActiveCount: dnttCuaDoan.size,
+      dnttActiveCount,
       dnttDinhKyCount,
     });
   };
