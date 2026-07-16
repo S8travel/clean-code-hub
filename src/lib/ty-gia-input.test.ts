@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isTyGiaHopLe, planSaveTyGia, resolveTyGia, nenSeedLocal } from "./ty-gia-input";
+import { isTyGiaHopLe, planSaveTyGia, resolveTyGia } from "./ty-gia-input";
 
 describe("planSaveTyGia — ô trống KHÔNG được xóa tỷ giá đã chốt", () => {
   // ĐÂY LÀ CA GÂY BUG: OP xóa trắng ô để gõ số mới, ô mất focus lúc đang trống
@@ -70,20 +70,6 @@ describe("resolveTyGia — thứ tự ưu tiên khi hiển thị", () => {
 
   it("DB = 0 coi như chưa chốt → rơi xuống mặc định máy", () => {
     expect(resolveTyGia(0, "805")).toBe(805);
-  });
-});
-
-describe("nenSeedLocal — đừng đầu độc mặc định của cả máy", () => {
-  it("số hợp lệ → seed", () => {
-    expect(nenSeedLocal(794)).toBe(true);
-  });
-
-  // Code cũ: onChange gọi localStorage.setItem(String(0)) = "0" ngay khi OP xóa trắng ô
-  // → mọi đoàn CHƯA chốt tỷ giá trên máy đó tụt về 800.
-  it("0 / trống → KHÔNG seed", () => {
-    expect(nenSeedLocal(0)).toBe(false);
-    expect(nenSeedLocal("")).toBe(false);
-    expect(nenSeedLocal(Number.NaN)).toBe(false);
   });
 });
 

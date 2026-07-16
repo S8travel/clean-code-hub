@@ -77,10 +77,3 @@ export function resolveTyGia(
   return macDinh;
 }
 
-/**
- * Có nên ghi số này xuống localStorage làm mặc định cho đoàn mới không?
- * Chỉ khi hợp lệ — nếu không, một lần xóa trắng ô sẽ đầu độc mặc định của cả máy.
- */
-export function nenSeedLocal(v: unknown): boolean {
-  return isTyGiaHopLe(v);
-}

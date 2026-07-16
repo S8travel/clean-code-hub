@@ -113,7 +113,7 @@ describe("buildQuyetToanSeed — khớp bảng Phải thu (bất biến)", () =>
     expect(seed.thuKhac).toBe(0);
   });
 
-  it("chưa chốt tip_ty_gia → dùng tham số fallback (localStorage)", () => {
+  it("chưa chốt tip_ty_gia → dùng tham số fallback (hằng mặc định, KHÔNG localStorage)", () => {
     const d = { ...doanThat, tip_ty_gia: null };
     expect(buildQuyetToanSeed(d, 810).tip.tyGia).toBe(810);
     expect(quyetToan(d, 810).thuTipVnd).toBe(phaiThuHdv(d, "tip", 810));
