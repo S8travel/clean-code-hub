@@ -69,7 +69,23 @@ function formatDayDisplay(dateStr: string) {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-function DetailLine({ item }: { item: { dia_chi?: string | null; thong_tin_chung?: string | null; so_dien_thoai?: string | null } }) {
+function DetailLine({
+  item,
+  hideThongTinChung = false,
+}: {
+  item: { dia_chi?: string | null; thong_tin_chung?: string | null; so_dien_thoai?: string | null };
+  hideThongTinChung?: boolean;
+}) {
+  // Khách sạn: hiện địa chỉ + SĐT, bỏ "thông tin chung" (link ảnh/loại phòng) cho gọn.
+  if (hideThongTinChung) {
+    if (!item.dia_chi && !item.so_dien_thoai) return null;
+    return (
+      <div className="text-[13px] text-muted-foreground mt-0.5 space-y-0.5">
+        {item.dia_chi && <p>{item.dia_chi}</p>}
+        {item.so_dien_thoai && <p>{item.so_dien_thoai}</p>}
+      </div>
+    );
+  }
   if (!item.dia_chi && !item.thong_tin_chung && !item.so_dien_thoai) return null;
   return (
     <div className="text-[13px] text-muted-foreground mt-0.5 space-y-0.5">
@@ -546,7 +562,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                 <X className="h-3 w-3" />
               </Button>
             </div>
-            <DetailLine item={selectedKS} />
+            <DetailLine item={selectedKS} hideThongTinChung />
           </>
           )
         ) : (
