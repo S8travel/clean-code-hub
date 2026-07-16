@@ -3,6 +3,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { proRataInts } from "@/lib/pro-rata";
 import { useAuth } from "@/hooks/use-auth";
 import { isDnttPaidFromPrepaid, revertCongNoIfRecovered } from "@/hooks/use-cong-no";
+import { coCanTruCheoDntt } from "@/lib/huy-doan-guards";
 import type { Tables, TablesUpdate } from "@/lib/database.types";
 
 export interface DNTTRow {
@@ -666,7 +667,21 @@ export function useCancelDNTT() {
         .eq("dntt_goc_id", id);
       if (relatedCongNos && relatedCongNos.length > 0) {
         const cnIds = relatedCongNos.map((c) => c.id);
-        // Xóa payments tham chiếu các cong_no này (RESTRICT FK)
+        // ⚠️ Công nợ này có thể ĐÃ được cấn trừ sang ĐNTT/ĐOÀN KHÁC: payment method='can_tru'
+        // với cong_no_id trỏ vào đây nhưng dntt_id thuộc đoàn khác. Code cũ xóa thẳng mọi
+        // payment tham chiếu cong_no → đoàn kia mất dấu đã trả, nợ lại tiền (bug chéo đoàn,
+        // phát hiện qua ca thực tế). Chỉ auto-reverse khi công nợ CHƯA bị cấn trừ ở phiếu khác.
+        const { data: pmtRefCongNo, error: ePmtRef } = await externalSupabase
+          .from("payments").select("id, dntt_id").in("cong_no_id", cnIds);
+        if (ePmtRef) throw ePmtRef;
+        if (coCanTruCheoDntt(pmtRefCongNo ?? [], id)) {
+          throw new Error(
+            "Công nợ từ điều chỉnh của ĐNTT này đã được cấn trừ sang phiếu/đoàn khác — hủy " +
+            "tự động sẽ xóa mất khoản đã trả của đoàn kia. Hãy hoàn tác các lần cấn trừ đó " +
+            "(hoặc xử lý tay), rồi hủy lại.",
+          );
+        }
+        // Công nợ chưa ai dùng → xóa sạch (kèm payment của CHÍNH ĐNTT này nếu có; RESTRICT FK).
         await externalSupabase.from("payments").delete().in("cong_no_id", cnIds);
         await externalSupabase.from("cong_no").delete().in("id", cnIds);
       }
