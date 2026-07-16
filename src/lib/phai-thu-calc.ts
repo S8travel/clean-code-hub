@@ -15,7 +15,7 @@ import { tourProfile } from "./tour-profile";
 /** Đơn giá / số tiền mặc định khi đoàn chưa nhập (mirror ChiPhiPhasThuSection). */
 export const DAU_KHACH_DEFAULT_RATE = 200_000;
 export const QUY_VP_DEFAULT_AMOUNT = 200_000;
-/** Tỷ giá NDT → VND mặc định khi UI chưa lưu localStorage. */
+/** Tỷ giá NDT → VND mặc định khi đoàn chưa chốt `doan.tip_ty_gia` (snapshot per tour). */
 export const TY_GIA_NDT_DEFAULT = 800;
 
 export type NguoiThu = "hdv" | "cong_ty";
@@ -149,7 +149,7 @@ export function sumHdvExtrasVND(doan: PhaiThuDoanInput | null | undefined): numb
 
 /**
  * Tính toàn bộ Phải thu cho 1 đoàn (3 nguồn persist trong DB).
- * @param tyGiaNdt tỷ giá NDT→VND (UI lưu localStorage "hdv_ty_gia_ndt"); default 800.
+ * @param tyGiaNdt tỷ giá NDT→VND fallback khi đoàn chưa chốt `tip_ty_gia`; default 800.
  */
 export function computePhaiThu(
   doan: PhaiThuDoanInput | null | undefined,
@@ -158,8 +158,8 @@ export function computePhaiThu(
   const empty: PhaiThuResult = { items: [], totalVND: 0, hdvVND: 0, ctyVND: 0 };
   if (!doan) return empty;
 
-  // Tỷ giá tip: ưu tiên snapshot trên đoàn (tip_ty_gia), fallback tham số (UI
-  // truyền từ localStorage), cuối cùng default 800.
+  // Tỷ giá tip: ưu tiên snapshot trên đoàn (tip_ty_gia), fallback tham số
+  // (mỗi đoàn độc lập — caller truyền hằng mặc định), cuối cùng default 800.
   const tyGiaTipBase =
     doan.tip_ty_gia && doan.tip_ty_gia > 0 ? doan.tip_ty_gia
     : tyGiaNdt > 0 ? tyGiaNdt

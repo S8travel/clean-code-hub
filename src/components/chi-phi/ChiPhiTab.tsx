@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { tourProfile } from "@/lib/tour-profile";
 import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
+import { TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -216,7 +217,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
     try {
       setExportingExcel(true);
-      const tyGiaNdt = Number(localStorage.getItem("hdv_ty_gia_ndt") ?? "800") || 800;
+      // Tỷ giá tip lấy từ snapshot mỗi đoàn (export tự đọc doan.tip_ty_gia); đoàn chưa
+      // chốt → hằng mặc định. KHÔNG dùng localStorage chung (gây nhảy chéo đoàn).
+      const tyGiaNdt = TY_GIA_NDT_DEFAULT;
       await exportChiPhiDoanExcel({
         doan,
         chiPhiRows,

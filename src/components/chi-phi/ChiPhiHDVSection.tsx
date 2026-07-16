@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
 import { exportHDVTamUngExcel } from "@/lib/export-hdv-tam-ung-excel";
 import { tipDaysInclusive } from "@/lib/tip-calc";
-import { computePhaiThu } from "@/lib/phai-thu-calc";
+import { computePhaiThu, TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { t, useTranslate } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./hdv-shared";
 import { HoTroHDVTable } from "./HoTroHDVTable";
@@ -39,9 +39,9 @@ interface Props {
 // export Excel. Mỗi khoản tính phần HDV theo nguoi_thu đã persist trên đoàn.
 function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
   if (!doan) return 0;
-  const tyGiaStr = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
-  const tyGia = tyGiaStr ? Number(tyGiaStr) || 800 : 800;
-  return computePhaiThu(doan, tyGia).hdvVND;
+  // Tỷ giá tip lấy từ snapshot của chính đoàn (computePhaiThu tự đọc doan.tip_ty_gia);
+  // đoàn chưa chốt → hằng mặc định. KHÔNG dùng localStorage chung (gây nhảy chéo đoàn).
+  return computePhaiThu(doan, TY_GIA_NDT_DEFAULT).hdvVND;
 }
 
 export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props) {

@@ -10,7 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { shouldCollectTip } from "@/lib/tip-calc";
 import { parsePhaiThuExtras, type PhaiThuExtra } from "@/lib/phai-thu-calc";
-import { resolveTyGia, planSaveTyGia, isTyGiaHopLe, nenSeedLocal } from "@/lib/ty-gia-input";
+import { resolveTyGia, planSaveTyGia, isTyGiaHopLe } from "@/lib/ty-gia-input";
 import { tourProfile } from "@/lib/tour-profile";
 import { t, useTranslate } from "@/lib/i18n";
 import { useUpdateDoanTip } from "@/hooks/use-doan";
@@ -87,18 +87,18 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
     if (v !== effTipCurrency) updateTip.mutate({ id: doanId, tip_currency: v });
   };
 
-  // ── Tip tỷ giá (persist doan.tip_ty_gia; localStorage chỉ làm default cho đoàn mới) ─
+  // ── Tip tỷ giá — CHỈ đọc snapshot của chính đoàn (doan.tip_ty_gia) ─────────
+  // Mỗi đoàn ĐỘC LẬP: đoàn chưa chốt → hằng mặc định (800). Trước đây fallback
+  // localStorage "hdv_ty_gia_ndt" (chung cả máy) + seed lại mỗi lần OP sửa → mọi
+  // đoàn chưa chốt "auto nhảy" theo đoàn vừa sửa (OP báo lỗi 16/07/2026). Đã bỏ
+  // hẳn nguồn dùng chung, không đọc/ghi localStorage nữa.
   // Ô trống = "OP đang gõ dở", KHÔNG phải "xóa tỷ giá" → xem lib/ty-gia-input.ts.
-  const effTyGia = resolveTyGia(doan?.tip_ty_gia, localStorage.getItem("hdv_ty_gia_ndt"));
+  const effTyGia = resolveTyGia(doan?.tip_ty_gia, null);
   const [tyGia, setTyGia] = useState<number>(effTyGia);
   // Refetch ["doan"] có thể nổ giữa lúc OP đang gõ → không đồng bộ đè lên ô đang focus.
   const tyGiaFocusRef = useRef(false);
   useEffect(() => { if (!tyGiaFocusRef.current) setTyGia(effTyGia); }, [effTyGia]);
-  const handleTyGiaChange = (v: number) => {
-    setTyGia(v);
-    // Chỉ seed khi hợp lệ — ghi String(0) sẽ đầu độc mặc định của cả máy.
-    if (nenSeedLocal(v)) localStorage.setItem("hdv_ty_gia_ndt", String(v));
-  };
+  const handleTyGiaChange = (v: number) => setTyGia(v);
   const saveTyGia = (v: number) => {
     const keHoach = planSaveTyGia(v, doan?.tip_ty_gia);
     // Trống/0/trùng → trả ô về giá trị đang có. TUYỆT ĐỐI không ghi NULL đè tỷ giá đã chốt.

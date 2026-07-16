@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
 import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
 import { buildQuyetToanSeed } from "@/lib/quyet-toan-hdv-seed";
+import { TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { t } from "@/lib/i18n";
 import type { HDVDoanInfo } from "./hdv-shared";
 
@@ -61,18 +62,12 @@ export function CreateHDVPaymentModal({
   const soKhachThuc = Math.max(0, soKhachDefault - soKhachTl);
   const tongHdvChiVal = tongHdvChi ?? 0;
 
-  // Tỷ giá NDT lưu trên máy — CHỈ là fallback cho đoàn chưa chốt `doan.tip_ty_gia`.
-  // Trước 10/07/2026 modal đọc THẲNG localStorage và bỏ qua tip_ty_gia → OP sửa tỷ giá
-  // ở bảng Phải thu (800 → 795) mà quyết toán vẫn in 800.
-  const tyGiaLocal = (() => {
-    const s = typeof window !== "undefined" ? localStorage.getItem("hdv_ty_gia_ndt") : null;
-    const n = s != null ? Number(s) : NaN;
-    return Number.isFinite(n) && n > 0 ? n : 800;
-  })();
-
+  // Tỷ giá tip: CHỈ đọc snapshot của chính đoàn (computePhaiThu tự đọc doan.tip_ty_gia);
+  // đoàn chưa chốt → hằng mặc định. KHÔNG đọc localStorage dùng chung — nếu không, đoàn
+  // chưa chốt sẽ "nhảy" theo tỷ giá đoàn khác OP vừa sửa (OP báo lỗi 16/07/2026).
   // ── Defaults "Tổng thu" — dựng từ CHÍNH computePhaiThu (một nguồn với bảng Phải thu),
   //    nên không thể trôi khỏi nhau. Xem lib/quyet-toan-hdv-seed.ts.
-  const seed = buildQuyetToanSeed(doan, tyGiaLocal);
+  const seed = buildQuyetToanSeed(doan, TY_GIA_NDT_DEFAULT);
   const soNgayDefault = seed.soNgay;
 
   // Common state
