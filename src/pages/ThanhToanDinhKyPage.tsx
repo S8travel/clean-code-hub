@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye, Plus, Printer } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye, Plus, Printer, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -32,6 +32,7 @@ import {
 } from "@/hooks/use-thanh-toan-dinh-ky";
 import { useCancelDNTT, type DNTTRow } from "@/hooks/use-dntt";
 import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
+import { exportDinhKyExcel } from "@/lib/export-dinh-ky-excel";
 import { resolveNccTaiKhoanText } from "@/lib/ncc-tai-khoan";
 import { errMsg } from "@/lib/error";
 import { t, useTranslate } from "@/lib/i18n";
@@ -745,6 +746,21 @@ function MonthGroupCard({
     }
   };
 
+  // Excel tổng hợp cụm này: 1 dòng / đoàn (mã đoàn, ngày đi, số khách, tiền).
+  // Số tiền dùng CHUNG công thức với header card — xem lib/export-dinh-ky-excel.
+  const handleExportExcel = () => {
+    try {
+      exportDinhKyExcel({
+        rows: monthGroup.rows,
+        nccTen,
+        monthLabel: monthGroup.monthLabel,
+      });
+      toast.success(t("Đã xuất Excel tổng hợp"));
+    } catch (e: unknown) {
+      toast.error(t("Lỗi xuất Excel: ") + (errMsg(e) || ""));
+    }
+  };
+
   const fmtRange = (min?: string | null, max?: string | null) => {
     if (!min && !max) return null;
     const mm = min ? format(new Date(min + "T00:00:00"), "dd/MM/yy") : "?";
@@ -796,11 +812,24 @@ function MonthGroupCard({
             {fullyPaid && <span className="ml-1">✓</span>}
           </span>
         </button>
-        {monthGroup.totalConLai > 0 && (
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={onCreateDNTT}>
-            <Plus className="h-3 w-3" /> {t("Tạo ĐNTT")}
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Excel tổng hợp: đoàn nào dùng bao nhiêu + bao nhiêu khách. Hiện cả khi
+              đã đề nghị/trả hết — kế toán vẫn cần bản đối chiếu gửi NCC. */}
+          {monthGroup.rows.length > 0 && (
+            <Button
+              size="sm" variant="outline" className="h-7 text-xs gap-1"
+              title={t("Tải Excel tổng hợp theo đoàn")}
+              onClick={handleExportExcel}
+            >
+              <FileSpreadsheet className="h-3 w-3" /> {t("Excel")}
+            </Button>
+          )}
+          {monthGroup.totalConLai > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onCreateDNTT}>
+              <Plus className="h-3 w-3" /> {t("Tạo ĐNTT")}
+            </Button>
+          )}
+        </div>
       </div>
 
       {expanded && (

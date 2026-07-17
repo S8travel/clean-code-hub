@@ -11,6 +11,8 @@ export interface DinhKyChiPhiRow {
   /** 'huy' = đoàn đã hủy. Dùng để loại khỏi khoản phải trả — xem lib/dinh-ky-doan-huy. */
   doan_trang_thai: string | null;
   ngay_kh_di: string | null;
+  /** Tổng khách của đoàn = (lớn+em1+em2+TL) || so_khach — mirror computePhaiThu/ChiPhiTab. */
+  so_khach: number;
   danh_muc: string;
   mo_ta: string | null;
   thanh_tien: number;
@@ -55,9 +57,13 @@ export function useDinhKyChiPhiList(filters?: {
       const doanIds = [...new Set(cpRows.map((r) => r.doan_id).filter((id): id is number => id != null))];
       const { data: doanList } = await externalSupabase
         .from("doan")
-        .select("id, ten_doan, ngay_di, trang_thai")
+        .select("id, ten_doan, ngay_di, trang_thai, so_khach, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl")
         .in("id", doanIds);
-      type DoanInfo = { id: number; ten_doan: string | null; ngay_di: string | null; trang_thai: string | null };
+      type DoanInfo = {
+        id: number; ten_doan: string | null; ngay_di: string | null; trang_thai: string | null;
+        so_khach: number | null; so_khach_lon: number | null; so_khach_em1: number | null;
+        so_khach_em2: number | null; so_khach_tl: number | null;
+      };
       const doanMap: Record<number, DoanInfo> = {};
       (doanList || []).forEach((d) => { doanMap[d.id] = d; });
 
@@ -84,6 +90,11 @@ export function useDinhKyChiPhiList(filters?: {
           // KS ngoài tour: gom tháng/lọc theo đêm thực (ngoai_tour_ci) — đêm có
           // thể ở tháng khác hẳn ngày đi đoàn. Fallback ngày đi đoàn nếu thiếu CI.
           ngay_kh_di: (r.ngoai_tour && r.ngoai_tour_ci) ? r.ngoai_tour_ci : (doan.ngay_di ?? null),
+          // Cột chi tiết là nguồn chính; `so_khach` chỉ là fallback cho đoàn cũ chưa
+          // tách lớn/em/TL (mirror computePhaiThu — đừng cộng cả hai kẻo double).
+          so_khach:
+            ((doan.so_khach_lon ?? 0) + (doan.so_khach_em1 ?? 0) +
+             (doan.so_khach_em2 ?? 0) + (doan.so_khach_tl ?? 0)) || (doan.so_khach ?? 0),
           danh_muc: r.danh_muc ?? "",
           mo_ta: r.mo_ta,
           thanh_tien: r.thanh_tien ?? 0,
