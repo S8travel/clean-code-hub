@@ -248,7 +248,9 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
       if (ks) {
         ksLines.push(ks.ten);
         if (ks.dia_chi) ksLines.push(ks.dia_chi);
-        if (ks.thong_tin_chung) ksLines.push(ks.thong_tin_chung);
+        // Khách sạn: CHỈ địa chỉ + SĐT — bỏ `thong_tin_chung` (link ảnh/loại phòng
+        // Google Drive) cho gọn. Khớp bảng điều tour trên màn hình (DayRow/DetailLine
+        // dùng cờ hideThongTinChung). Nhà hàng trưa/tối vẫn in đầy đủ như cũ.
         if (ks.so_dien_thoai) ksLines.push(ks.so_dien_thoai);
       }
     }
