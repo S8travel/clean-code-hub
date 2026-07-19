@@ -48,6 +48,18 @@ jobs:
       - name: Run tests
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/recalc_chi_phi_payment_status/test.sql
 
+      # ── create_lead_from_form ────────────────────────────────────────────
+      # Endpoint GHI công khai (anon gọi được) → cap độ dài + rate-limit là
+      # rào chắn duy nhất. Dùng chung container; bảng của 2 bộ test không trùng tên.
+      - name: Load schema (create_lead_from_form)
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/create_lead_from_form/schema.sql
+
+      - name: Load function (create_lead_from_form)
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260720_harden_create_lead_from_form.sql
+
+      - name: Run tests (create_lead_from_form)
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/create_lead_from_form/test.sql
+
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
