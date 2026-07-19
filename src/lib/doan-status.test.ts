@@ -35,3 +35,21 @@ describe("computeDoanStatus — ưu tiên: huy > da_quyet_toan > hoan_thanh > da
       .toBe("hoan_thanh");
   });
 });
+
+describe("computeDoanStatus — tham số today (tiêm đồng hồ)", () => {
+  it("so với today truyền vào, KHÔNG phải ngày hệ thống", () => {
+    const today = new Date("2026-06-10T12:00:00");
+    // 2026-06-12 đã là quá khứ so với ngày chạy thật, nhưng còn tương lai so với `today`
+    expect(computeDoanStatus({ trang_thai: "dang_chay", ngay_ve: "2026-06-12" }, null, today))
+      .toBe("dang_chay");
+    expect(computeDoanStatus({ trang_thai: "dang_chay", ngay_ve: "2026-06-09" }, null, today))
+      .toBe("hoan_thanh");
+  });
+
+  it("không mutate object today của caller", () => {
+    const today = new Date("2026-06-10T12:00:00");
+    const before = today.getTime();
+    computeDoanStatus({ trang_thai: "dang_chay", ngay_ve: "2026-06-09" }, null, today);
+    expect(today.getTime()).toBe(before);
+  });
+});

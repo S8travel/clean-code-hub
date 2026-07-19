@@ -25,18 +25,23 @@ export const DOAN_STATUS_ORDER: DoanStatus[] = [
  * - da_quyet_toan: có DNTT QT HDV đã 'paid' (qua qtPaidSet).
  * - hoan_thanh: ngay_ve < hôm nay.
  * - dang_chay: còn lại.
+ *
+ * `today` cho phép test tiêm đồng hồ cố định (mặc định = ngày hệ thống). Caller nào
+ * cũng tự tính "hôm nay" thì phải truyền xuống đây, nếu không 2 nhánh so với 2 mốc
+ * thời gian khác nhau.
  */
 export function computeDoanStatus(
   doan: { id?: number | null; trang_thai?: string | null; ngay_ve?: string | null },
   qtPaidSet?: Set<number> | null,
+  today: Date = new Date(),
 ): DoanStatus {
   if (doan.trang_thai === "huy") return "huy";
   if (doan.id != null && qtPaidSet?.has(doan.id)) return "da_quyet_toan";
   if (doan.ngay_ve) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const t0 = new Date(today); // copy — KHÔNG mutate tham số của caller
+    t0.setHours(0, 0, 0, 0);
     const ve = new Date(doan.ngay_ve + "T00:00:00");
-    if (ve.getTime() < today.getTime()) return "hoan_thanh";
+    if (ve.getTime() < t0.getTime()) return "hoan_thanh";
   }
   return "dang_chay";
 }

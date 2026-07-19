@@ -42,7 +42,7 @@ export function doanStatusLabel(
   qtPaidSet: Set<number> | null,
   today: Date = new Date(),
 ): string {
-  const base = computeDoanStatus(g, qtPaidSet);
+  const base = computeDoanStatus(g, qtPaidSet, today);
   if (base === "huy") return "Đã huỷ";
   if (base === "da_quyet_toan") return "Đã quyết toán";
   if (base === "hoan_thanh") return "Hoàn thành";
