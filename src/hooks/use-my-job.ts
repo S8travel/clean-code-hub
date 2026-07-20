@@ -1,5 +1,44 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { parseISO, isToday, isBefore, differenceInDays } from "date-fns";
 import { externalSupabase } from "@/lib/supabase-external";
+import { useMyPhanViecScope } from "@/hooks/use-phan-viec";
+
+/**
+ * Nhóm deadline theo độ gấp. Badge sidebar + tab Deadline đếm mọi nhóm TRỪ "later"
+ * → phải dùng CHUNG hàm này, đừng chép lại (chép chính là gốc của bug badge lệch).
+ */
+export function deadlineGroup(deadline: string): "overdue" | "today" | "week" | "later" {
+  const d = parseISO(deadline);
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  if (isBefore(d, now)) return "overdue";
+  if (isToday(d)) return "today";
+  if (differenceInDays(d, now) <= 7) return "week";
+  return "later";
+}
+
+/**
+ * Hợp nhất deadline "mình phụ trách (phân việc)" + "booking mình tự gửi/tạo".
+ *
+ * - Phần phân việc phải lọc lại theo scope: được giao pv_ks thì chỉ nhận deadline KS.
+ * - Dedupe theo BẢNG NGUỒN thật (`rpcType`) chứ không theo `type` hiển thị — id của
+ *   doan_booking_ks và doan_booking_nh là 2 sequence riêng nên có thể trùng số, dedupe
+ *   theo type sẽ gộp nhầm tàu ngày (lưu ở bảng nh, hiện icon ks) với khách sạn.
+ */
+export function mergeMyDeadlines(
+  pvDeadlines: DeadlineItem[],
+  pvScope: Map<number, Set<"ks" | "nh" | "dv">> | undefined,
+  createdDeadlines: DeadlineItem[],
+): DeadlineItem[] {
+  const pvPart = pvDeadlines.filter((it) => pvScope?.get(it.doanId)?.has(it.type) ?? false);
+  const map = new Map<string, DeadlineItem>();
+  for (const it of [...pvPart, ...createdDeadlines]) map.set(`${it.rpcType}-${it.bookingId}`, it);
+  return [...map.values()].sort((a, b) => a.deadline.localeCompare(b.deadline));
+}
+
+/** Số deadline CẦN XỬ LÝ = mọi nhóm trừ "later". Dùng cho badge + tab. */
+export function countDeadlineCanXuLy(items: DeadlineItem[]): number {
+  return items.filter((d) => deadlineGroup(d.deadline) !== "later").length;
+}
 
 export interface DeadlineItem {
   type: "ks" | "nh" | "dv";       // type HIỂN THỊ (icon) — tàu ngày = "ks"
@@ -209,4 +248,46 @@ export function useMarkDeadlineDone() {
       qc.invalidateQueries({ queryKey: ["my_created_deadlines"] });
     },
   });
+}
+
+/** Số việc giao còn phải làm (nhận về mình, chưa xong). Query đếm thuần — nhẹ. */
+export function useGiaoViecPendingCount(uid: string | null | undefined) {
+  return useQuery<number>({
+    queryKey: ["giao_viec_pending_count", uid],
+    enabled: !!uid,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { count, error } = await externalSupabase
+        .from("cong_viec")
+        .select("id", { count: "exact", head: true })
+        .eq("nguoi_nhan", uid!)
+        .in("trang_thai", ["cho_nhan", "dang_lam"]);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+/**
+ * Badge "Công việc của tôi" = SỐ VIỆC CÒN PHẢI XỬ LÝ (deadline + việc giao),
+ * đúng bằng tổng 2 con số trên tab của trang.
+ *
+ * TRƯỚC 22/07/2026 badge lấy `useThongBaoCount(uid, "giao_viec")` — tức đếm THÔNG BÁO
+ * CHƯA ĐỌC, không phải việc. Thông báo chỉ được set is_read khi bấm vào chuông, nên
+ * OP xử lý hết việc mà badge vẫn đứng nguyên (ca thật: tab hiện 47+17 nhưng badge 105).
+ *
+ * Dùng lại ĐÚNG các hook/hàm mà trang dùng (react-query cache chung key nên mở trang
+ * không tốn thêm request) — để badge không thể trôi khỏi trang lần nữa.
+ */
+export function useMyJobCount(uid: string | null | undefined, hoTen: string | null | undefined) {
+  const { data: pvScope } = useMyPhanViecScope(uid);
+  const pvDoanIds = pvScope ? [...pvScope.keys()] : [];
+  const { data: pvDeadlines = [] } = useMyDeadlines(pvDoanIds);
+  const { data: createdDeadlines = [] } = useMyCreatedBookingDeadlines(hoTen);
+  const { data: giaoViecPending = 0 } = useGiaoViecPendingCount(uid);
+
+  const deadlineCount = countDeadlineCanXuLy(
+    mergeMyDeadlines(pvDeadlines, pvScope, createdDeadlines),
+  );
+  return deadlineCount + giaoViecPending;
 }
