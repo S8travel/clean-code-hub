@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { planDoiKsPhiHuy } from "./doi-ks-phi-huy";
 
 describe("planDoiKsPhiHuy", () => {
-  it("phí hủy 50% (ca Wyndham): 1 ĐNTT 40.68M, phí 20.34M → refund 20.34M", () => {
+  it("phí hủy 50%: 1 ĐNTT đã trả, phí bằng nửa → refund đúng nửa còn lại", () => {
     const p = planDoiKsPhiHuy({
       paidByDntt: [{ dnttId: 1344, paidAmount: 40_680_000 }],
       phiHuyInput: 20_340_000,

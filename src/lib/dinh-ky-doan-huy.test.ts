@@ -9,7 +9,7 @@ const row = (over: Partial<Parameters<typeof anKhoiDinhKy>[0]> = {}) => ({
 });
 
 describe("anKhoiDinhKy", () => {
-  it("đoàn đã hủy, chưa cam kết, chưa trả → ẩn (13 dòng bảo hiểm trên prod)", () => {
+  it("đoàn đã hủy, chưa cam kết, chưa trả → ẩn khỏi khoản phải trả", () => {
     expect(anKhoiDinhKy(row())).toBe(true);
   });
 

@@ -11,14 +11,14 @@ const byKind = (items: HuyItem[]) => items.map((i) => i.kind);
 describe("KS", () => {
   const ks = (over = {}) => ({
     id: 1, ks_dat_truoc_status: "da_gui", ks_final_status: "chua_gui",
-    khach_san_ten: "Wyndham", khach_san_email: "ks@a.com", email_subject: "[S8 Travel] Đặt phòng – X", ngay_dates: ["2026-08-02"],
+    khach_san_ten: "KS Demo", khach_san_email: "ks@a.com", email_subject: "[S8 Travel] Đặt phòng – X", ngay_dates: ["2026-08-02"],
     ...over,
   });
 
   it("đã gửi & chưa hủy → vào danh sách, là blocker, giữ subject gốc", () => {
     const items = collectHuyItems({ ...empty, ks: [ks()] }, ctx);
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ kind: "ks", bookingIds: [1], nccTen: "Wyndham", isBlocker: true, originalSubject: "[S8 Travel] Đặt phòng – X" });
+    expect(items[0]).toMatchObject({ kind: "ks", bookingIds: [1], nccTen: "KS Demo", isBlocker: true, originalSubject: "[S8 Travel] Đặt phòng – X" });
     expect(items[0].skipReason).toBeUndefined();
   });
 

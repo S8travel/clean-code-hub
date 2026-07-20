@@ -14,9 +14,10 @@ describe("calcDnttPriorPaid", () => {
   });
 
   it("cộng paid_amount của ĐNTT non-cọc đã trả 1 phần (bug gốc) + loại ĐNTT đang in", () => {
-    // #743 đã trả 58.760.000 (la_coc=false), đang in #858 còn lại → cọc = 58.760.000.
-    const list = [d({ id: 743, paid_amount: 58_760_000 }), d({ id: 858, paid_amount: 0 })];
-    expect(calcDnttPriorPaid(list, 858)).toBe(58_760_000);
+    // Bug gốc: chỉ cộng phiếu có la_coc=true → bỏ sót phiếu non-cọc đã trả một phần,
+    // bản in phiếu còn lại ghi "đã trả 0" và đòi NCC nguyên số tiền.
+    const list = [d({ id: 1, paid_amount: 58_760_000 }), d({ id: 2, paid_amount: 0 })];
+    expect(calcDnttPriorPaid(list, 2)).toBe(58_760_000);
   });
 
   it("loại ĐNTT đã hủy / từ chối", () => {

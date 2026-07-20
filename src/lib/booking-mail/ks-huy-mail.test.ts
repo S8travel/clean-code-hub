@@ -12,7 +12,7 @@ import {
 
 const base: KsHuyMailInput = {
   tenDoan: "S8HAN5D260801-XX",
-  khachSanTen: "Wyndham Legend Halong",
+  khachSanTen: "Khách Sạn Demo Hạ Long",
   roomDates: ["2026-08-02", "2026-08-03"],
   lyDo: "Khách đổi lịch",
   senderName: "Trần B",
@@ -31,7 +31,7 @@ describe("buildKsDatTruocSubject", () => {
   // Đặc biệt: BookingKSTab.fmtDate:63 là format(..., "dd/MM") — KHÔNG có năm.
   it("ngày trong subject là dd/MM (KHÔNG có năm) — khớp BookingKSTab.fmtDate", () => {
     expect(buildKsDatTruocSubject(base)).toBe(
-      "[S8 Travel] Đặt phòng – S8HAN5D260801-XX – Wyndham Legend Halong – 02/08, 03/08 (2 đêm)",
+      "[S8 Travel] Đặt phòng – S8HAN5D260801-XX – Khách Sạn Demo Hạ Long – 02/08, 03/08 (2 đêm)",
     );
   });
 
@@ -50,7 +50,7 @@ describe("buildKsDatTruocSubject", () => {
 
   it("không có ngày → bỏ hẳn đuôi ngày", () => {
     expect(buildKsDatTruocSubject({ ...base, roomDates: [] })).toBe(
-      "[S8 Travel] Đặt phòng – S8HAN5D260801-XX – Wyndham Legend Halong",
+      "[S8 Travel] Đặt phòng – S8HAN5D260801-XX – Khách Sạn Demo Hạ Long",
     );
   });
 });
@@ -78,7 +78,7 @@ describe("buildKsHuyEmailHtml", () => {
   it("đủ đoàn / KS / khoảng ngày check-out = đêm cuối + 1 / lý do / người gửi", () => {
     const html = buildKsHuyEmailHtml(base);
     expect(html).toContain("S8HAN5D260801-XX");
-    expect(html).toContain("Wyndham Legend Halong");
+    expect(html).toContain("Khách Sạn Demo Hạ Long");
     expect(html).toContain("HỦY");
     expect(html).toContain("02/08/2026 – 04/08/2026 (2 đêm)");
     expect(html).toContain("Khách đổi lịch");

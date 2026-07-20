@@ -123,9 +123,9 @@ describe("calcAggregateDelta", () => {
     expect(r).toEqual({ aggDelta: 0, effectiveDelta: 0, effectiveCommitted: 1_000_000 });
   });
 
-  it("voucherKhoRefund loại phần boat khỏi lệch — case Sea Octopus đoàn 79", () => {
-    // sumActual nhóm 35.667.600; đã trả 38.197.200 (voucher giữ 23.587.200); cam kết 38.197.200.
-    // voucherKhoRefund = 1.209.600 (vé về kho) → lệch CHỈ còn cash extras −1.320.000, KHÔNG dính boat.
+  it("voucherKhoRefund loại phần boat khỏi lệch", () => {
+    // Nhóm đã trả một phần bằng voucher. Phần vé trả về kho (voucherKhoRefund) KHÔNG
+    // phải tiền thừa → lệch chỉ được tính trên phần cash của extras, không dính boat.
     const r = calcAggregateDelta({
       sumActual: 35_667_600, sumPaid: 38_197_200, sumCommitted: 38_197_200,
       groupCongNoTotal: 0, voucherKhoRefund: 1_209_600,
