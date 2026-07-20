@@ -53,6 +53,7 @@ import { usePermission, useRoleAtLeast, useBoPhan, type Resource } from "@/hooks
 import { useLockPhongDeadlineAlerts } from "@/hooks/use-lock-phong";
 import { useCurrentSession } from "@/hooks/use-current-user";
 import { useThongBaoCount } from "@/hooks/use-thong-bao";
+import { useMyJobCount } from "@/hooks/use-my-job";
 import { useLeadStats } from "@/hooks/use-lead-stats";
 import { useMyOverdueCount } from "@/hooks/use-lead-next-action";
 import { UserSettingsMenu } from "@/components/UserSettingsMenu";
@@ -271,7 +272,10 @@ export function AppSidebar() {
   const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null, { includeAll: includeAllAlerts });
   const { data: invoiceBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "gia");
   const { data: suCoBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "su_co");
-  const { data: giaoViecBadge = 0 } = useThongBaoCount(session?.user?.id ?? null, "giao_viec");
+  // Badge "Công việc của tôi" = SỐ VIỆC còn phải xử lý (deadline + việc giao), khớp
+  // đúng tổng 2 tab của trang. Trước 22/07/2026 dùng useThongBaoCount(…, "giao_viec")
+  // = đếm THÔNG BÁO chưa đọc → OP làm xong hết việc mà badge vẫn đứng nguyên.
+  const myJobBadge = useMyJobCount(session?.user?.id ?? null, user?.ho_ten ?? null);
   const { data: leadStats } = useLeadStats(session?.user?.id ?? null);
   const { data: viecLeadBadge = 0 } = useMyOverdueCount(session?.user?.id ?? null);
   const leadBadge = (leadStats?.lead_moi_today ?? 0) + (leadStats?.follow_up_today ?? 0) + (leadStats?.follow_up_overdue ?? 0);
@@ -294,7 +298,7 @@ export function AppSidebar() {
     url === "/lock-phong" ? deadlineAlerts.length :
     url === "/invoice" ? invoiceBadge :
     url === "/theo-doi" ? suCoBadge :
-    url === "/my-job" ? giaoViecBadge :
+    url === "/my-job" ? myJobBadge :
     url === "/viec-lead" ? viecLeadBadge :
     url === "/leads" ? leadBadge : 0;
   // Quá hạn → đỏ (urgent), còn lại → cam mặc định
