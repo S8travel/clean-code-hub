@@ -107,7 +107,7 @@ export interface CancelCheckInput {
    * thực tế là ĐNTT định kỳ (`doan_id = NULL`, gộp nhiều đoàn theo NCC).
    *
    * Truy vấn theo `de_nghi_thanh_toan.doan_id = doanId` MÙ hoàn toàn với chúng.
-   * Đo prod 10/07/2026: 13 đoàn đang chạy có 17 phân bổ, tổng 172.465.120 đ cam
+   * Đây là đường tiền có thật và không nhỏ: nhiều đoàn đang chạy có chi phí đã cam
    * kết qua ĐNTT định kỳ — hủy đoàn mà không ai được báo là tiền đã hứa với NCC.
    */
   dnttDinhKyCount: number;

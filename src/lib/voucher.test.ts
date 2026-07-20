@@ -206,7 +206,7 @@ describe("buildAggAllocations", () => {
 });
 
 describe("splitVoucherCoverage", () => {
-  // Tàu Paradise Delight: 24 khách × 1.150.000, không CK, voucher TẶNG 2 vé.
+  // Vé tàu: 24 khách × 1.150.000, không CK, voucher TẶNG 2 vé.
   it("TẶNG phủ 2/24 vé → cover 2.3M, công ty còn trả 22 ghế = 25.3M", () => {
     const r = splitVoucherCoverage({ soKhachThucTe: 24, donGia: 1150000, ckPct: null, soVe: 2, loai: "tang" });
     expect(r.fullValue).toBe(27600000);
@@ -257,7 +257,7 @@ describe("splitVoucherCoverage", () => {
 });
 
 describe("calcVoucherEditDelta", () => {
-  // Tàu Paradise Delight: 24 khách × 1.150.000, không CK. full = 27.6M.
+  // Vé tàu: 24 khách × 1.150.000, không CK. full = 27.6M.
   const boat = { soKhachThucTe: 24, donGia: 1150000, ckPct: null, tonKhoConLai: 100 };
 
   it("TẶNG 2→4: cover +2.3M, công ty trả ÍT đi 2.3M, trả thêm 2 vé khỏi kho", () => {

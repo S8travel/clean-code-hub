@@ -335,7 +335,7 @@ export function useNHSection({
   // Không effect nào đồng bộ lại `id`, nên sau một lần cascade, state giữ id đã chết
   // ("dòng ma") suốt phiên. Bấm "Gửi ĐNTT" trên đó → ĐNTT trỏ chi_phi_id chết →
   // allocation vi phạm FK. Guard trùng `wouldOverCommit` cũng câm vì tra theo id chết.
-  // (Sự cố HAN05BR260707DO 10/07/2026 — 4 phiếu 3.850.000 cho 1 bữa ăn.)
+  // (Đã xảy ra thật: OP bấm lại nhiều lần → một bữa ăn đẻ ra một loạt phiếu rỗng.)
   //
   // CỐ Ý chỉ NHẬN id thật, không bao giờ XÓA id: dòng vừa INSERT có thể chưa vào cache,
   // xóa id lúc đó sẽ khiến submit insert lần hai. Ca "đã xóa, chưa có dòng thay thế"

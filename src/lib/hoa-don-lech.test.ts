@@ -75,8 +75,8 @@ describe("calcHoaDonExpectedTotal / calcHoaDonLech", () => {
     expect(calcHoaDonLech(330_000_000, 159_400_000, 164_000_000)).toBe(6_600_000);
   });
 
-  it("ca VHC: sibling gồm CỌC + BỔ SUNG (phát sinh), không chỉ cọc → mốc đủ", () => {
-    // Dòng nhập HĐ = nước 1.65tr; anh em = cọc 10tr + [Bổ sung] 108.26tr = 118.26tr.
+  it("sibling gồm CỌC + BỔ SUNG (phát sinh), không chỉ cọc → mốc đủ", () => {
+    // Dòng đang nhập HĐ nhỏ; anh em cùng nhóm = cọc + [Bổ sung] phát sinh.
     const soTien = 1_650_000;
     const sibling = 10_000_000 + 108_260_000; // gồm bổ sung — trước đây bỏ sót
     expect(calcHoaDonExpectedTotal(soTien, sibling)).toBe(119_910_000);

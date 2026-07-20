@@ -95,7 +95,7 @@ describe("nhà hàng vs du thuyền (cùng bảng doan_booking_nh)", () => {
 });
 
 // Cổng cũ lọc ĐNTT theo doan_id, mà ĐNTT định kỳ có doan_id = NULL → mù hoàn
-// toàn. Prod 10/07/2026: 13 đoàn đang chạy, 17 phân bổ, 172.465.120 đ cam kết.
+// toàn với chúng — trong khi đó là tiền đã cam kết thật với NCC.
 describe("ĐNTT định kỳ (doan_id = NULL)", () => {
   it("chặn hủy, và đích là trang định kỳ chứ không phải tab của đoàn", () => {
     const b = buildCancelBlockers({ ...empty, dnttDinhKyCount: 2 });

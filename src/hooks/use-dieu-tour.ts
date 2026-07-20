@@ -708,8 +708,8 @@ export function useSaveDieuTour() {
       // User phải hủy/giải phóng allocation trước khi xóa cảnh điểm khỏi tour.
       const deleteChiPhiByItemIdSafe = async (itemId: number) => {
         // MỘT item có thể có NHIỀU dòng chi phí (day-use khách sạn gắn vào cảnh điểm bọc:
-        // "Day Use 7 twn", "extra bed", "ăn sáng"… — 11 item trên prod, có item mang
-        // 30,3 triệu đã trả). `.maybeSingle()` cũ trả `{data: null, error}` khi ≥2 dòng,
+        // "Day Use", "extra bed", "ăn sáng"… — có thật trên dữ liệu chạy, và có item
+        // mang khoản đã trả không nhỏ). `.maybeSingle()` cũ trả `{data: null, error}` khi ≥2 dòng,
         // mà error bị BỎ QUA → `cpRow` null → return sớm → guard tiền KHÔNG chạy, và lệnh
         // xoá doan_ngay_item sau đó đụng FK `NO ACTION` rồi thất bại trong im lặng.
         const { data: cpRows, error: eCp } = await externalSupabase

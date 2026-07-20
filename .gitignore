@@ -21,6 +21,20 @@ dev-dist
 # Backup database Supabase (chứa dữ liệu thật — TUYỆT ĐỐI không commit)
 /backups/
 
+# ── DỮ LIỆU THẬT: repo này đang PUBLIC. Không file nào dưới đây được commit. ──
+# Xuất Excel / báo cáo / dump từ DB chạy thật — chứa mã đoàn, giá NCC, doanh thu.
+*.xlsx
+*.xls
+*.csv
+.~lock.*#
+*-backup.json
+# Báo cáo & khảo sát nội bộ sinh ra trong lúc làm việc (số liệu thật)
+BAO_TRI_HE_THONG_*.md
+Bao_cao_*.md
+Danh_gia_*.md
+CODE_REVIEW_*.md
+LEAD_PLAYBOOK.md
+
 # VAPID private key cho Web Push (paste vào secret edge fn, KHÔNG commit)
 vapid-keys.local.json
 

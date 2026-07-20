@@ -49,8 +49,8 @@ export function calcHoaDonLech(hoaDon: number, soTien: number, cocSibling = 0): 
 
 /**
  * Mô tả việc lệch. Bắt đầu bằng marker `[HĐ#<id>]` (để dedupe ilike), kèm dịch vụ.
- * VD: "[HĐ#604] Dịch vụ: [Gộp] Vinwonder… — Hóa đơn nhập 3.400.000 ₫ ≠ số tiền ĐNTT
- *      3.600.000 ₫ (lệch -200.000 ₫) · Đoàn VDC053005BR6. Kiểm tra & xử lý."
+ * VD: "[HĐ#12] Dịch vụ: [Gộp] <tên dịch vụ> — Hóa đơn nhập 3.400.000 ₫ ≠ số tiền ĐNTT
+ *      3.600.000 ₫ (lệch -200.000 ₫) · Đoàn <mã đoàn>. Kiểm tra & xử lý."
  */
 export function formatHoaDonLechMoTa(p: {
   id: number;
