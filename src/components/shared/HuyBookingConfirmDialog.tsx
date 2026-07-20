@@ -4,7 +4,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Mail } from "lucide-react";
 import { t, useTranslate } from "@/lib/i18n";
@@ -29,18 +28,27 @@ interface Props {
 
 // Xác nhận hủy booking NH/DV — mirror HuyBookingKsDialog. Trước đây nút "Hủy" đổi
 // trạng thái NGAY, không hỏi, không mail → NCC chẳng bao giờ biết mình bị hủy.
-// Opt-in + soát bắt buộc: tick "Gửi mail hủy" → mở bản nháp cho OP soát trước khi
-// gửi (không auto-bắn cho NCC).
+// Opt-in + soát bắt buộc: "Soạn mail hủy" → mở bản nháp cho OP soát trước khi gửi
+// (không auto-bắn cho NCC).
+//
+// 2 NÚT thay vì checkbox: trước đây muốn hủy KHÔNG gửi mail thì phải bỏ tick rồi mới
+// bấm — OP không nhận ra, tưởng bắt buộc gửi mail. Nay mỗi lựa chọn là 1 nút riêng.
 export default function HuyBookingConfirmDialog({
   open, onOpenChange, tenNcc, loaiNcc, hasEmail, submitting, onConfirm,
 }: Props) {
   useTranslate();
   const [lyDo, setLyDo] = useState("");
-  const [sendMail, setSendMail] = useState(hasEmail);
+  // Nút nào đang chạy — để chỉ nút đó hiện "Đang xử lý...", nút kia chỉ mờ đi.
+  const [pending, setPending] = useState<"mail" | "no_mail" | null>(null);
 
   useEffect(() => {
-    if (open) { setLyDo(""); setSendMail(hasEmail); }
-  }, [open, hasEmail]);
+    if (open) { setLyDo(""); setPending(null); }
+  }, [open]);
+
+  const huy = (sendMail: boolean) => {
+    setPending(sendMail ? "mail" : "no_mail");
+    onConfirm({ lyDo: lyDo.trim(), sendMail });
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!submitting) onOpenChange(o); }}>
@@ -55,22 +63,14 @@ export default function HuyBookingConfirmDialog({
           </p>
 
           {hasEmail ? (
-            <label className="flex items-start gap-2 cursor-pointer rounded-md border border-sky-200 bg-sky-50/50 p-2">
-              <Checkbox
-                checked={sendMail}
-                onCheckedChange={(v) => setSendMail(v === true)}
-                disabled={submitting}
-                className="mt-0.5 shrink-0"
-              />
-              <span className="text-xs min-w-0 break-words">
-                <span className="inline-flex items-center gap-1 font-medium">
-                  <Mail className="h-3.5 w-3.5 shrink-0" /> {t("Gửi mail hủy cho")} {loaiNcc}
-                </span>
-                <span className="block text-[11px] text-muted-foreground">
-                  {t("sẽ mở bản nháp cho bạn soát trước khi gửi")}
-                </span>
+            <p className="rounded-md border border-sky-200 bg-sky-50/50 p-2 break-words">
+              <span className="inline-flex items-center gap-1 text-xs font-medium">
+                <Mail className="h-3.5 w-3.5 shrink-0" /> {t("Gửi mail hủy cho")} {loaiNcc}
               </span>
-            </label>
+              <span className="block text-[11px] text-muted-foreground">
+                {t("sẽ mở bản nháp cho bạn soát trước khi gửi")}
+              </span>
+            </p>
           ) : (
             <p className="text-[11px] text-amber-700 break-words">
               {t("NCC chưa có email trong hệ thống — chỉ đổi trạng thái, bạn cần báo bằng cách khác.")}
@@ -79,7 +79,7 @@ export default function HuyBookingConfirmDialog({
 
           <div className="space-y-1">
             <Label className="text-xs font-medium">
-              {sendMail && hasEmail ? t("Lý do hủy (hiện trong mail gửi NCC)") : t("Lý do hủy (optional)")}
+              {hasEmail ? t("Lý do hủy (hiện trong mail nếu bạn chọn gửi)") : t("Lý do hủy (optional)")}
             </Label>
             <Textarea
               className="text-xs min-h-[48px] resize-none"
@@ -94,16 +94,25 @@ export default function HuyBookingConfirmDialog({
             onClick={() => onOpenChange(false)}>
             {t("Đóng")}
           </Button>
+          {/* Hủy KHÔNG gửi mail — luôn hiện. Khi NCC không có email thì đây là nút duy nhất. */}
           <Button
-            size="sm"
-            className="text-xs bg-red-600 hover:bg-red-700 text-white"
+            variant="outline" size="sm"
+            className="text-xs border-red-300 text-red-700 hover:bg-red-50"
             disabled={submitting}
-            onClick={() => onConfirm({ lyDo: lyDo.trim(), sendMail: sendMail && hasEmail })}
+            onClick={() => huy(false)}
           >
-            {submitting
-              ? t("Đang xử lý...")
-              : sendMail && hasEmail ? t("Soạn mail hủy") : t("Hủy booking")}
+            {pending === "no_mail" ? t("Đang xử lý...") : hasEmail ? t("Hủy, không gửi mail") : t("Hủy booking")}
           </Button>
+          {hasEmail && (
+            <Button
+              size="sm"
+              className="text-xs bg-red-600 hover:bg-red-700 text-white"
+              disabled={submitting}
+              onClick={() => huy(true)}
+            >
+              {pending === "mail" ? t("Đang xử lý...") : t("Soạn mail hủy")}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
