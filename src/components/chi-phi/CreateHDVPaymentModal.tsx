@@ -139,9 +139,12 @@ export function CreateHDVPaymentModal({
 
   const handleSubmit = async () => {
     if (soTien <= 0) { toast.error(t("Số tiền phải lớn hơn 0")); return; }
+    // Chốt chặn cuối: VND không có đơn vị lẻ. calcQuyetToanHDV đã trả số nguyên,
+    // nhưng ô này OP gõ tay được nên vẫn tròn lần nữa trước khi ghi DB.
+    const soTienVnd = Math.round(soTien);
     try {
       await createMut.mutateAsync({
-        doanId, hdvId, refLoai, soTien, laThuHoi, moTa,
+        doanId, hdvId, refLoai, soTien: soTienVnd, laThuHoi, moTa,
         ghiChu: ghiChu || undefined,
         quyetToanData: isQT ? buildQuyetToanData() : null,
         ngayCanThanhToan: ngayCanTT || null,
