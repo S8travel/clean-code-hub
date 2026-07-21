@@ -130,6 +130,7 @@ export interface UserRole {
   user_id: string;
   role: string;
   ho_ten: string;
+  so_dien_thoai: string | null;
 }
 
 export interface DoanPermission {
@@ -277,7 +278,7 @@ export function useUserRoles() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("user_roles")
-        .select("id, user_id, role, ho_ten")
+        .select("id, user_id, role, ho_ten, so_dien_thoai")
         .order("ho_ten");
       if (error) throw error;
       return data as UserRole[];

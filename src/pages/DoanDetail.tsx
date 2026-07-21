@@ -13,7 +13,7 @@ import { t, useTranslate } from "@/lib/i18n";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDoanList, useDoanDetailRealtime } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
+import { useDoanList, useDoanDetailRealtime, useUserRoles } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
 import { useAuth } from "@/hooks/use-auth";
 import {
   useCanhDiem,
@@ -81,6 +81,7 @@ export default function DoanDetail() {
   useDoanDetailRealtime(doanId);
 
   const { data: groups, isLoading } = useDoanList();
+  const { data: userRoles } = useUserRoles();
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
   // FEATURE_DOAN_PERM_DISABLED: tạm tắt per-tour permission, dùng team-based thay thế
@@ -679,6 +680,15 @@ export default function DoanDetail() {
       .join(" | ");
   }, [doan]);
 
+  // OP phụ trách (doan.assigned_to) → "Tên — SĐT" cho bảng điều tour in ra.
+  const opDisplayStr = useMemo(() => {
+    if (!doan?.assigned_to) return "";
+    const u = userRoles?.find((r) => r.user_id === doan.assigned_to);
+    if (!u) return "";
+    const sdt = u.so_dien_thoai?.trim();
+    return sdt ? `${u.ho_ten} — ${sdt}` : u.ho_ten ?? "";
+  }, [doan?.assigned_to, userRoles]);
+
   const dieuTourExportData = useMemo((): DieuTourExportData | null => {
     if (!doan) return null;
     return {
@@ -688,6 +698,7 @@ export default function DoanDetail() {
       khachSanList,
       tenDoan: doan.ten_doan ?? "",
       hdv: hdvDisplayStr,
+      op: opDisplayStr,
       xe: doan.xe ?? null,
       xe_2: doan.xe_2 ?? null,
       ngayDi: doan.ngay_di ?? null,
@@ -710,7 +721,7 @@ export default function DoanDetail() {
       thuTip,
       tipRate,
     };
-  }, [doan, hdvDisplayStr, days, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour, thuTip, tipRate]);
+  }, [doan, hdvDisplayStr, opDisplayStr, days, canhDiemList, nhaHangList, khachSanList, allSetMenus, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach, chuThichKhach, coTinhSuatTLNhaHang, gifts, ghiChuDieuTour, thuTip, tipRate]);
 
   // Warning badge counts
   const bookingKSBadgeCount = useMemo(() =>
@@ -850,6 +861,7 @@ export default function DoanDetail() {
             <CompanyHeader />
             <DoanInfoSection
               doan={doan}
+              op={opDisplayStr}
               bangDon={bangDon}
               setBangDon={handleSetBangDon}
               shopping={shopping}

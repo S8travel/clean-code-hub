@@ -3,10 +3,11 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
-  ShieldCheck, User, UserCheck, Bus, CalendarDays,
+  ShieldCheck, User, UserCheck, UserCog, Bus, CalendarDays,
   ClipboardList, ShoppingBag, Users, Utensils, StickyNote,
 } from "lucide-react";
 import { t, useTranslate } from "@/lib/i18n";
+import { OP_SOS_NOTE } from "@/lib/export-dieu-tour-word";
 
 function formatDate(d: string | null) {
   if (!d) return "—";
@@ -53,6 +54,8 @@ function hdvLabel(hdv: HdvInfo | null | undefined): string {
 
 interface Props {
   doan: DoanInfo;
+  /** OP phụ trách — "Tên — SĐT" (rỗng nếu đoàn chưa phân OP hoặc OP chưa có SĐT). */
+  op: string;
   bangDon: string;
   setBangDon: (v: string) => void;
   shopping: boolean | null;
@@ -75,7 +78,7 @@ interface Props {
 }
 
 export default function DoanInfoSection({
-  doan, bangDon, setBangDon, shopping, setShopping,
+  doan, op, bangDon, setBangDon, shopping, setShopping,
   truongDoan, setTruongDoan, chuyenBayDon, setChuyenBayDon,
   chuyenBayTien, setChuyenBayTien,
   soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalFromDoan,
@@ -111,6 +114,12 @@ export default function DoanInfoSection({
                 </span>
               );
             })()}
+          </Row>
+          <Row label={t("OP")} icon={UserCog}>
+            <span className="break-words">
+              {op || "—"}
+              <span className="block font-bold">{t(OP_SOS_NOTE)}</span>
+            </span>
           </Row>
           <Row label={t("Xe")} icon={Bus}>
             {(() => {
