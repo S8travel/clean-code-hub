@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildNgoaiTourEdgeData, buildNgoaiTourSelectedData, getNgoaiTourPrintableKsIds,
-  ngoaiTourLiveDntts, type HotelLite,
+  ngoaiTourLiveDntts, selectPrintableNgoaiTourDntts, type HotelLite,
 } from "./ks-ngoai-tour-print";
 import { calcTotalThanhTien } from "./export-dntt-ks-word";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
@@ -86,7 +86,55 @@ describe("buildNgoaiTourEdgeData", () => {
   });
 });
 
+describe("selectPrintableNgoaiTourDntts", () => {
+  it("bỏ ĐNTT đã trả đủ khi còn phiếu chưa trả (không in double)", () => {
+    const daTra = dntt({ id: 1, so_tien: 3_150_000, payment_status: "paid", paid_amount: 3_150_000 });
+    const conLai = dntt({ id: 2, so_tien: 1_050_000 });
+    expect(selectPrintableNgoaiTourDntts([daTra, conLai]).map((d) => d.id)).toEqual([2]);
+  });
+
+  it("giữ phiếu trả một phần", () => {
+    const partial = dntt({ id: 3, so_tien: 5_000_000, payment_status: "partial", paid_amount: 2_000_000 });
+    expect(selectPrintableNgoaiTourDntts([partial]).map((d) => d.id)).toEqual([3]);
+  });
+
+  it("nhiều phiếu chưa trả → in hết, cọc xếp trước", () => {
+    const conLai = dntt({ id: 2, so_tien: 10_000_000 });
+    const coc = dntt({ id: 5, so_tien: 3_000_000, la_coc: true });
+    expect(selectPrintableNgoaiTourDntts([conLai, coc]).map((d) => d.id)).toEqual([5, 2]);
+  });
+
+  it("tất cả đã trả đủ → in phiếu mới nhất (theo tao_luc)", () => {
+    const cu = dntt({ id: 1, payment_status: "paid", paid_amount: 1, tao_luc: "2026-07-13T04:21:06Z" });
+    const moi = dntt({ id: 2, payment_status: "paid", paid_amount: 1, tao_luc: "2026-07-21T02:23:52Z" });
+    expect(selectPrintableNgoaiTourDntts([cu, moi]).map((d) => d.id)).toEqual([2]);
+    expect(selectPrintableNgoaiTourDntts([moi, cu]).map((d) => d.id)).toEqual([2]);
+  });
+
+  it("tất cả đã trả đủ + thiếu tao_luc → fallback id lớn nhất", () => {
+    const a = dntt({ id: 4, payment_status: "paid", paid_amount: 1, tao_luc: null });
+    const b = dntt({ id: 9, payment_status: "paid", paid_amount: 1, tao_luc: null });
+    expect(selectPrintableNgoaiTourDntts([a, b]).map((d) => d.id)).toEqual([9]);
+  });
+
+  it("không có ĐNTT nào → mảng rỗng", () => {
+    expect(selectPrintableNgoaiTourDntts([])).toEqual([]);
+  });
+});
+
 describe("buildNgoaiTourSelectedData", () => {
+  it("thẻ có phiếu đã trả + phiếu còn lại → CHỈ 1 khối in (bug in double)", () => {
+    const rows = [row({ khach_san_id: 1 })];
+    const list = [
+      dntt({ id: 1, ref_id: 1, so_tien: 3_150_000, payment_status: "paid", paid_amount: 3_150_000 }),
+      dntt({ id: 2, ref_id: 1, so_tien: 1_050_000 }),
+    ];
+    const data = buildNgoaiTourSelectedData([1], rows, list, hotels, "A", "x");
+    expect(data).toHaveLength(1);
+    expect(data[0].soTien).toBe(1_050_000);
+    expect(data[0].cocTotal).toBe(3_150_000);  // phần đã trả vẫn trừ đúng trên bản in
+  });
+
   it("gộp nhiều KS, mỗi ĐNTT sống = 1 biên bản", () => {
     const rows = [row({ khach_san_id: 1 }), row({ khach_san_id: 2, mo_ta: "Twin", tien_cong_ty: 5_000_000 })];
     const list = [

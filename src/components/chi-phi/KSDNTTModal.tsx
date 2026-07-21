@@ -3,7 +3,7 @@ import { format, subDays, parseISO } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { proRataInts } from "@/lib/pro-rata";
+import { buildKSAllocations } from "@/lib/ks-alloc";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -37,6 +37,9 @@ interface Props {
   daCoc: number;
   localRows: LocalKSRow[];
   chiPhiRowIds: number[];
+  /** doan_chi_phi.id → so_tien_da_dntt (phần đã cam kết). Dùng chia allocation theo
+   *  phần CÒN LẠI của từng dòng — thiếu map này thì rơi về chia theo thành tiền. */
+  committedById?: Record<number, number>;
   canTru: CanTruSelection[];
   onCanTruChange: (v: CanTruSelection[]) => void;
   tenDoanMoi: string;
@@ -57,7 +60,8 @@ function defaultNgayCan(serviceDate?: string): string {
 
 export default function KSDNTTModal({
   open, onClose, doanId, ksId, ksName, nccId, nccTen, nccStk, nccNganHang,
-  totalKS, daCoc, localRows, chiPhiRowIds, canTru, onCanTruChange, tenDoanMoi, serviceDate,
+  totalKS, daCoc, localRows, chiPhiRowIds, committedById, canTru, onCanTruChange,
+  tenDoanMoi, serviceDate,
   refLoai = "khach_san",
 }: Props) {
   useTranslate();
@@ -101,12 +105,18 @@ export default function KSDNTTModal({
       // 1. Tạo 1 ĐNTT cho FULL amount = soTien + canTruAmount
       const fullAmount = soTien + canTruAmount;
       // Bỏ row thanh_tien <= 0 (FOC row) — dntt_allocations CHECK so_tien > 0.
-      const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id) && (r.thanh_tien ?? 0) > 0);
-      // Largest-remainder split → SUM(allocations.so_tien) === fullAmount
-      const allocAmts = proRataInts(fullAmount, allocRows.map((r) => r.thanh_tien));
-      const allocations = allocRows
-        .map((r, i) => ({ chi_phi_id: r.id!, so_tien: allocAmts[i] }))
-        .filter((a) => a.so_tien > 0);
+      // Chia theo phần CÒN LẠI của từng dòng (thanh_tien − so_tien_da_dntt) để ĐNTT
+      // khoản còn lại không rải sang dòng đã trả xong. Xem lib/ks-alloc.ts.
+      const allocations = buildKSAllocations(
+        fullAmount,
+        localRows
+          .filter((r) => r.id && chiPhiRowIds.includes(r.id))
+          .map((r) => ({
+            id: r.id!,
+            thanh_tien: r.thanh_tien,
+            committed: committedById?.[r.id!] ?? 0,
+          })),
+      );
 
       const payload = {
         doan_id: doanId,
