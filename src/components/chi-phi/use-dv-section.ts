@@ -13,6 +13,8 @@ import { calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { resolveDVFoc, calcSoKhachThucTe } from "@/lib/foc-calc";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump";
+import { buildAggClusters, type AggClusterRow } from "@/lib/agg-cluster";
+import { buildRemainingAllocations } from "@/lib/alloc-remaining";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -238,6 +240,38 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     [dnttList],
   );
   const dvRowIdSet = useMemo(() => new Set(dvRows.map((r) => r.id)), [dvRows]);
+
+  // ── Cụm cân đối: các dòng TRẢ CHUNG 1 ĐNTT gộp ────────────────────────────
+  // Nhóm cơ sở = dòng chính + phát sinh của nó; cụm = các nhóm dùng chung ĐNTT.
+  // Chênh lệch sau khi sửa inline được netting trên CẢ CỤM → 1 nút xử lý duy
+  // nhất, thay vì mỗi dòng một nút ngược chiều dù tiền đi cùng một phiếu.
+  const clusterByGroupKey = useMemo(() => {
+    const rows: AggClusterRow[] = [];
+    for (const r of allDvRows) {
+      if (r.id == null) continue;
+      const m = r.mo_ta?.match(/^\[dvps_(\d+)\] /);
+      rows.push({
+        id: r.id,
+        groupKey: m ? Number(m[1]) : r.id,
+        tien_cong_ty: r.tien_cong_ty,
+        thanh_tien_thuc_te: r.thanh_tien_thuc_te,
+        so_tien_da_tt: r.so_tien_da_tt,
+        so_tien_da_dntt: r.so_tien_da_dntt,
+      });
+    }
+    // groupOrder PHẢI khớp thứ tự render (sortedDays: ngay_so tăng dần, sort stable
+    // nên trong cùng ngày giữ thứ tự dvRows) → anchor là dòng cuối cụm trên màn hình.
+    const groupOrder = [...dvRows]
+      .sort((a, b) => (a.ngay_so ?? 0) - (b.ngay_so ?? 0))
+      .map((r) => r.id)
+      .filter((id): id is number => id != null);
+    return buildAggClusters({
+      rows,
+      allocs: allocRows,
+      liveDnttIds: activeDnttIdSet,
+      groupOrder,
+    });
+  }, [allDvRows, dvRows, allocRows, activeDnttIdSet]);
 
   // Các dòng "anh em" của 1 dòng = mọi dòng DV cùng nằm trong 1 ĐNTT (còn hiệu lực)
   // với nó (gộp). Trả về gồm chính nó.
@@ -603,12 +637,26 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
   const handleAggCommit = async () => {
     if (!aggCommit) return;
-    const { mainRow, delta, paidDntt } = aggCommit;
+    const { mainRow, clusterRows, clusterLabels, delta, paidDntt } = aggCommit;
     const absDelta = Math.abs(delta);
-    if (!mainRow.nha_cung_cap_id) {
+    // NCC lấy từ dòng neo; cụm gộp theo 1 ĐNTT nên các dòng cùng NCC — fallback
+    // sang dòng khác trong cụm phòng dòng neo chưa gán NCC.
+    const nccId = mainRow.nha_cung_cap_id
+      ?? clusterRows.find((r) => r.nha_cung_cap_id != null)?.nha_cung_cap_id
+      ?? null;
+    if (!nccId) {
       toast.error("Chi phí không có NCC — không thể tạo công nợ/ĐNTT bổ sung");
       return;
     }
+    // Cụm = các dòng trả chung 1 ĐNTT gộp. Recalc + phân bổ trên CẢ cụm.
+    const clusterIds = clusterRows.map((r) => r.id).filter((id): id is number => id != null);
+    const recalcIds = clusterIds.length > 0 ? clusterIds : [mainRow.id];
+    // Nhãn cụm cho mô tả ĐNTT/công nợ — cắt bớt khi cụm đông để mô tả không quá dài.
+    const clusterLabel = clusterLabels.length > 1
+      ? (clusterLabels.length > 3
+          ? `${clusterLabels.slice(0, 2).join(" · ")} +${clusterLabels.length - 2} dịch vụ`
+          : clusterLabels.join(" · "))
+      : (mainRow.mo_ta || "");
     try {
       if (delta < 0) {
         // Thừa → tạo cong_no (con_du = NCC giữ credit, hoan_tien = NCC trả cash)
@@ -620,23 +668,23 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         const { error } = await externalSupabase.from("cong_no").insert({
           doan_id: doanId,
           dntt_goc_id: paidDntt?.id ?? null,
-          nha_cung_cap_id: mainRow.nha_cung_cap_id,
+          nha_cung_cap_id: nccId,
           ten_nha_cung_cap: paidDntt?.ten_nha_cung_cap ?? null,
           so_tien_goc: absDelta,
           trang_thai,
           loai: fromPrepaid ? "tra_truoc" : "phat_sinh",
           ly_do: aggReason
-            ? `Điều chỉnh giảm chi phí (${mainRow.mo_ta || ""}) — ${lyDoLabel}. Lý do: ${aggReason}`
-            : `Điều chỉnh giảm chi phí (${mainRow.mo_ta || ""}) — ${lyDoLabel}`,
+            ? `Điều chỉnh giảm chi phí (${clusterLabel}) — ${lyDoLabel}. Lý do: ${aggReason}`
+            : `Điều chỉnh giảm chi phí (${clusterLabel}) — ${lyDoLabel}`,
         });
         if (error) throw error;
-        await recalcChiPhiStatus([mainRow.id]);
+        await recalcChiPhiStatus(recalcIds);
         auditLog({
           doan_id: doanId,
           action: "tao",
           table_name: "cong_no",
           record_id: mainRow.id,
-          mo_ta: `Ghi nhận ${lyDoLabel} ${fmt(absDelta)} ₫ — dịch vụ ${mainRow.mo_ta || ""}${paidDntt?.ten_nha_cung_cap ? " (NCC " + paidDntt.ten_nha_cung_cap + ")" : ""}`,
+          mo_ta: `Ghi nhận ${lyDoLabel} ${fmt(absDelta)} ₫ — dịch vụ ${clusterLabel}${paidDntt?.ten_nha_cung_cap ? " (NCC " + paidDntt.ten_nha_cung_cap + ")" : ""}`,
         });
         toast.success(
           aggSurplusMode === "hoan_tien"
@@ -645,11 +693,24 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         );
       } else {
         // Thiếu → tạo DNTT bổ sung (cho_duyet) + cấn trừ cong_no nếu user chọn
+        // Phân bổ theo phần CÒN THIẾU của từng dòng trong cụm (thực tế − đã cam kết),
+        // không dồn hết vào dòng neo — dòng thiếu tiền mới là dòng nhận allocation.
+        // Cụm 1 dòng → y hệt hành vi cũ. Xem lib/alloc-remaining.ts.
+        const allocations = buildRemainingAllocations(
+          absDelta,
+          clusterRows
+            .filter((r) => r.id != null)
+            .map((r) => ({
+              id: r.id,
+              thanh_tien: Number(r.thanh_tien_thuc_te ?? r.tien_cong_ty ?? 0),
+              committed: Number(r.so_tien_da_dntt ?? 0),
+            })),
+        );
         const newDntt = await insertDNTT.mutateAsync({
           doan_id: doanId,
           loai: "dich_vu",
-          mo_ta: `[Bổ sung] ${mainRow.mo_ta || "Dịch vụ"}`.trim(),
-          nha_cung_cap_id: mainRow.nha_cung_cap_id,
+          mo_ta: `[Bổ sung] ${clusterLabel || "Dịch vụ"}`.trim(),
+          nha_cung_cap_id: nccId,
           so_tien: absDelta,
           la_coc: false,
           trang_thai_duyet: "cho_duyet",
@@ -657,7 +718,9 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           ref_id: mainRow.id,
           ngay_can_thanh_toan: aggNgayCan || null,
           ghi_chu: aggReason ? `Lý do: ${aggReason}` : null,
-          allocations: [{ chi_phi_id: mainRow.id, so_tien: absDelta }],
+          allocations: allocations.length > 0
+            ? allocations
+            : [{ chi_phi_id: mainRow.id, so_tien: absDelta }],
         });
         const newDnttId = newDntt?.id ?? null;
 
@@ -677,7 +740,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
             dnttId: newDnttId,
             consumingDoanLog: tenDoan || `#${doanId}`,
             items: canTruItems,
-            recalcChiPhiIds: [mainRow.id],
+            recalcChiPhiIds: recalcIds,
           });
         }
 
@@ -899,7 +962,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
   const dvData: DVRowData = {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap, doanId,
-    allocByChiPhi, lumpedByDntt, selectedIds, editingId, editAmount, ngayBatDau,
+    allocByChiPhi, lumpedByDntt, clusterByGroupKey, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   };
   const dvHandlers: DVRowHandlers = {

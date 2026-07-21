@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import type { AggCluster } from "@/lib/agg-cluster";
 import type { DnttLump } from "@/lib/can-tru-lump";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
@@ -55,6 +56,8 @@ export interface DVRowData {
   allocByChiPhi: Map<number, Map<number, number>>;
   /** dntt_id → lump cấn trừ/tiền mặt theo từng chi_phi (dồn vào dòng đầu) — chỉ hiển thị. */
   lumpedByDntt: Map<number, DnttLump>;
+  /** main row id → cụm cân đối (các dòng trả chung 1 ĐNTT gộp). Xem lib/agg-cluster.ts. */
+  clusterByGroupKey: Map<number, AggCluster>;
   selectedIds: number[];
   editingId: number | null;
   editAmount: string;
@@ -108,7 +111,7 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   useTranslate();
   const {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap, doanId,
-    allocByChiPhi, lumpedByDntt, selectedIds, editingId, editAmount, ngayBatDau,
+    allocByChiPhi, lumpedByDntt, clusterByGroupKey, selectedIds, editingId, editAmount, ngayBatDau,
     upsertMut, updateDNTT,
   } = data;
   const {
@@ -183,9 +186,26 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   const hoanTienAmount = congNoList
     .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
     .reduce((s, c) => s + (c.so_tien_goc ?? 0), 0);
-  // Tổng cong_no đã ghi nhận cho group này (con_du + da_can_tru + da_hoan_tien).
+  // ── Cụm cân đối (các dòng trả chung 1 ĐNTT gộp) ───────────────────────────
+  // Nhóm cơ sở (dòng chính + phát sinh) là đơn vị SỬA; cụm là đơn vị CHỐT TIỀN.
+  // Fallback về nhóm cơ sở khi chưa dựng được cụm (dòng chưa có id).
+  const extraChiPhiRows = allDvRows.filter(r =>
+    r.mo_ta?.startsWith(`[dvps_${row.id}] `),
+  );
+  const groupChiPhi = [row, ...extraChiPhiRows];
+  const cluster = row.id != null ? clusterByGroupKey.get(row.id) : undefined;
+  const clusterRowIds = cluster?.rowIds ?? groupChiPhi.map(r => r.id).filter((x): x is number => x != null);
+  const clusterRows = cluster
+    ? allDvRows.filter(r => r.id != null && clusterRowIds.includes(r.id))
+    : groupChiPhi;
+  const clusterDnttIds = cluster?.dnttIds ?? dnttIds;
+  // Dòng NEO của cụm = dòng chính cuối cùng theo thứ tự hiển thị → chỉ nó render
+  // footer chênh lệch (cụm 1 nhóm thì chính là dòng đó, y như trước).
+  const isAggAnchor = cluster ? cluster.anchorGroupKey === row.id : true;
+
+  // Tổng cong_no đã ghi nhận cho CỤM (con_du + da_can_tru + da_hoan_tien).
   const groupCongNoForGroup = congNoList.filter(
-    (c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id),
+    (c) => c.dntt_goc_id != null && clusterDnttIds.includes(c.dntt_goc_id),
   );
   const { groupCongNoCN, groupCongNoHT, groupCongNoTotal } =
     splitGroupCongNo(groupCongNoForGroup);
@@ -205,31 +225,44 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   const shownDntts = [...activeDntts, ...rejectedDntts];
   const isSelected = row.id != null && selectedIds.includes(row.id);
 
-  // Aggregate-after-edits delta (CHỈ phần công ty thanh toán).
-  const extraChiPhiRows = allDvRows.filter(r =>
-    r.mo_ta?.startsWith(`[dvps_${row.id}] `),
-  );
-  const groupChiPhi = [row, ...extraChiPhiRows];
-  const { sumActual, sumPaid } = sumCompanyChiPhi(groupChiPhi);
-  // Cam kết ĐNTT của CẢ NHÓM (main + extras) theo allocation per-dòng (so_tien_da_dntt),
-  // KHÔNG phải tổng so_tien của ĐNTT (ĐNTT gộp gồm nhiều dòng khác NCC chung).
-  const sumCommitted = groupChiPhi.reduce((s, r) => s + (r.so_tien_da_dntt ?? 0), 0);
+  // Aggregate-after-edits delta — tính trên CẢ CỤM (CHỈ phần công ty thanh toán).
+  // Tiền đi theo PHIẾU: 1 ĐNTT gộp trả cho nhiều dòng thì thừa dòng này bù thiếu
+  // dòng kia, chốt 1 lần. Tính riêng từng dòng sẽ ra 2 nút ngược chiều (thừa 585k
+  // + thiếu 405k) trong khi thực tế chỉ dư 180k.
+  const { sumActual, sumPaid } = sumCompanyChiPhi(clusterRows);
+  // Cam kết ĐNTT theo allocation per-dòng (so_tien_da_dntt), KHÔNG phải tổng
+  // so_tien của ĐNTT (ĐNTT gộp có thể gồm dòng của section khác).
+  const sumCommitted = clusterRows.reduce((s, r) => s + (r.so_tien_da_dntt ?? 0), 0);
   const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
     sumActual, sumPaid, sumCommitted, groupCongNoTotal,
   });
+  // ĐNTT còn hiệu lực của CỤM (kể cả phiếu ref thẳng vào dòng, chưa có allocation).
+  const clusterDntts = dnttList.filter(d =>
+    d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&
+    (clusterDnttIds.includes(d.id) ||
+      (d.ref_loai === "doan_chi_phi" && d.ref_id != null && clusterRowIds.includes(d.ref_id))),
+  );
+  // Còn phiếu chưa trả xong → tiền đang chờ, chưa chốt chênh lệch được.
+  const clusterPendingAmt = clusterDntts
+    .filter(d => d.payment_status !== "paid")
+    .reduce((s, d) => s + Math.max(0, Number(d.so_tien) - Number(d.paid_amount || 0)), 0);
   const showAggBtn =
-    nguoiTt === "cong_ty" &&
-    daDeNghi === 0 &&
+    isAggAnchor &&
+    sumActual + sumCommitted > 0 &&   // cụm có tiền công ty (dòng HDV thuần không cần)
+    clusterPendingAmt === 0 &&
     sumPaid > 0 &&
     effectiveDelta !== 0;
-  const aggPaidDntt = paidDntts[0] ?? null;
-  const hasCommittedDntt = activeDntts.some(d =>
+  // Phiếu gốc để gắn cong_no: lấy theo CỤM — dòng neo có thể không phải dòng
+  // đứng tên phiếu đã trả (ĐNTT gộp ref_id trỏ 1 dòng, allocate cho nhiều dòng).
+  const aggPaidDntt = clusterDntts.find(d => d.payment_status === "paid") ?? paidDntts[0] ?? null;
+  const hasCommittedDntt = clusterDntts.some(d =>
     d.trang_thai_duyet === "cho_duyet" || d.trang_thai_duyet === "da_duyet",
   );
-  // Ẩn badge khi nút footer hiện (trùng thông tin).
-  const dnttMismatch = calcDnttMismatch({
-    sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn,
-  });
+  // Badge lệch: cấp cụm → chỉ hiện ở dòng neo, tránh lặp trên từng dòng của cụm.
+  // Ẩn khi nút footer hiện (trùng thông tin).
+  const dnttMismatch = isAggAnchor
+    ? calcDnttMismatch({ sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn })
+    : 0;
 
   return [
     <tr key={row.id} className={cn("hover:bg-muted/20", isSelected && "bg-primary/5")}>
@@ -638,6 +671,10 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
               onClick={() => {
                 setAggCommit({
                   mainRow: row,
+                  clusterRows,
+                  clusterLabels: (cluster?.groupKeys ?? [row.id!])
+                    .map((gk) => allDvRows.find((r) => r.id === gk)?.mo_ta || "")
+                    .filter(Boolean),
                   delta: effectiveDelta,
                   sumActual,
                   sumPaid,

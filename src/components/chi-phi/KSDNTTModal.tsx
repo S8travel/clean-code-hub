@@ -3,7 +3,7 @@ import { format, subDays, parseISO } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { buildKSAllocations } from "@/lib/ks-alloc";
+import { buildRemainingAllocations } from "@/lib/alloc-remaining";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -106,8 +106,8 @@ export default function KSDNTTModal({
       const fullAmount = soTien + canTruAmount;
       // Bỏ row thanh_tien <= 0 (FOC row) — dntt_allocations CHECK so_tien > 0.
       // Chia theo phần CÒN LẠI của từng dòng (thanh_tien − so_tien_da_dntt) để ĐNTT
-      // khoản còn lại không rải sang dòng đã trả xong. Xem lib/ks-alloc.ts.
-      const allocations = buildKSAllocations(
+      // khoản còn lại không rải sang dòng đã trả xong. Xem lib/alloc-remaining.ts.
+      const allocations = buildRemainingAllocations(
         fullAmount,
         localRows
           .filter((r) => r.id && chiPhiRowIds.includes(r.id))
