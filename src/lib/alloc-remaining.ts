@@ -1,6 +1,6 @@
 import { proRataInts } from "@/lib/pro-rata";
 
-export interface KSAllocRow {
+export interface RemainingAllocRow {
   /** doan_chi_phi.id */
   id: number;
   /** Tiền công ty của dòng (NET sau FOC) */
@@ -9,7 +9,7 @@ export interface KSAllocRow {
   committed?: number;
 }
 
-export interface KSAllocation {
+export interface RemainingAllocation {
   chi_phi_id: number;
   so_tien: number;
 }
@@ -25,7 +25,7 @@ export interface KSAllocation {
  * Fallback về `thanh_tien` khi tổng phần còn lại <= 0 (thẻ đã cam kết đủ nhưng vẫn
  * tạo thêm ĐNTT — giữ hành vi cũ thay vì trả mảng rỗng làm phiếu rỗng).
  */
-export function buildKSAllocations(fullAmount: number, rows: KSAllocRow[]): KSAllocation[] {
+export function buildRemainingAllocations(fullAmount: number, rows: RemainingAllocRow[]): RemainingAllocation[] {
   const positive = rows.filter((r) => Math.round(r.thanh_tien || 0) > 0);
   if (positive.length === 0) return [];
 
