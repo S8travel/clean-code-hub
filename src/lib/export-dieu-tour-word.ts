@@ -20,6 +20,10 @@ import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/
 import type { SetMenu } from "@/hooks/use-nha-hang";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
+/** Lưu ý in kèm dòng OP — dùng chung Word export + modal xem trước + bảng trên màn hình. */
+export const OP_SOS_NOTE =
+  "Tất cả việc SOS trong đoàn đề nghị gọi ngay cho điều hành phụ trách";
+
 const BORDER     = { style: BorderStyle.SINGLE, size: 1, color: "000000" };
 const BORDERS    = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
 // Border bảng lịch trình — ¾ pt (size tính theo 1/8 pt → 6 = ¾ pt).
@@ -168,6 +172,8 @@ export interface DieuTourExportData {
   khachSanList: KhachSanItem[];
   tenDoan: string;
   hdv: string;
+  /** OP phụ trách đoàn — "Tên — SĐT" (rỗng nếu đoàn chưa phân OP). */
+  op?: string;
   xe: XeExportInfo | null;
   xe_2?: XeExportInfo | null;
   ngayDi: string | null;
@@ -272,7 +278,7 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
 export async function exportDieuTourWord(data: DieuTourExportData) {
   const {
     days, canhDiemList, nhaHangList, khachSanList,
-    tenDoan, hdv, xe, xe_2, ngayDi, ngayVe,
+    tenDoan, hdv, op, xe, xe_2, ngayDi, ngayVe,
     bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
     soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
     chuThichKhach, gifts, ghiChuDieuTour,
@@ -368,6 +374,14 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
       cell([p(hdv || "—")], { width: VW }),
       cell([p("Shopping:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell([p(shopStr)], { width: VW_R }),
+    ]}),
+    // Row 2b: OP phụ trách (tên — SĐT) + lưu ý SOS, value trải full-width
+    new TableRow({ children: [
+      cell([p("OP:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell(
+        [p(op || "—"), p(OP_SOS_NOTE, { bold: true })],
+        { width: VW + LW + VW_R, colSpan: 3 }
+      ),
     ]}),
     // Row 3: Xe | T/L
     new TableRow({ children: [
@@ -563,7 +577,7 @@ function buildDocFromCells(
   logoData: ArrayBuffer | null = null,
 ): import("docx").Document {
   const {
-    tenDoan, hdv, xe, xe_2, ngayDi, ngayVe,
+    tenDoan, hdv, op, xe, xe_2, ngayDi, ngayVe,
     bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien,
     soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalKhach,
     chuThichKhach, gifts, thuTip, tipRate,
@@ -634,6 +648,14 @@ function buildDocFromCells(
       cell([p(hdv || "—")], { width: VW }),
       cell([p("Shopping:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
       cell([p(shopStr)], { width: VW_R }),
+    ]}),
+    // OP phụ trách (tên — SĐT) + lưu ý SOS, value trải full-width
+    new TableRow({ children: [
+      cell([p("OP:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
+      cell(
+        [p(op || "—"), p(OP_SOS_NOTE, { bold: true })],
+        { width: VW + LW + VW_R, colSpan: 3 }
+      ),
     ]}),
     new TableRow({ children: [
       cell([p("Xe:", { bold: true })], { width: LW, shading: HEADER_SHADING }),
