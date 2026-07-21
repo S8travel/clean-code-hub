@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,13 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
   const { data: ksList = [] } = useKhachSanList();
   const { data: paymentsList = [] } = usePaymentsByDoan(doanId);
   const { data: currentUserName = "" } = useCurrentUserName();
+
+  // Phần đã cam kết per dòng — KSDNTTModal chia allocation theo phần CÒN LẠI.
+  const committedById = useMemo(() => {
+    const m: Record<number, number> = {};
+    chiPhiRows.forEach((r) => { if (r.id != null) m[r.id] = Number(r.so_tien_da_dntt) || 0; });
+    return m;
+  }, [chiPhiRows]);
 
   // Cụm KS đã hủy (ks_huy) hiển thị ở dải "Đã hủy" — loại khỏi panel/in ngoài tour.
   const outRows = chiPhiRows.filter((r) => !r.ks_huy);
@@ -221,6 +228,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
           daCoc={(cocByKs[modalKsId] || 0) + (canTruAmtByKsId[modalKsId] || 0)}
           localRows={(grouped[modalKsId] || []).filter((r) => !r.is_hdv)}
           chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id && !r.is_hdv).map((r) => r.id!)}
+          committedById={committedById}
           canTru={canTruByKs[modalKsId] ?? []}
           onCanTruChange={(v) => setCanTruByKs((prev) => ({ ...prev, [modalKsId]: v }))}
           tenDoanMoi={tenDoan}
