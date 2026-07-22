@@ -157,11 +157,14 @@ export function useDeleteNguoiDung() {
 export function useUpdateUserProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, ho_ten, so_dien_thoai }: { userId: string; ho_ten: string; so_dien_thoai: string | null }) => {
-      const { error } = await externalSupabase
-        .from("user_roles")
-        .update({ ho_ten, so_dien_thoai })
-        .eq("user_id", userId);
+    // Qua RPC, KHÔNG update thẳng user_roles: policy UPDATE của bảng chỉ mở cho
+    // admin nên non-admin update trúng 0 row mà PostgREST vẫn trả về không lỗi
+    // → UI báo "đã lưu" trong khi DB không đổi. RPC giới hạn đúng 2 cột hồ sơ.
+    mutationFn: async ({ ho_ten, so_dien_thoai }: { userId: string; ho_ten: string; so_dien_thoai: string | null }) => {
+      const { error } = await externalSupabase.rpc("update_my_profile", {
+        p_ho_ten: ho_ten,
+        p_so_dien_thoai: so_dien_thoai,
+      });
       if (error) throw error;
     },
     onSuccess: (_, vars) => {
