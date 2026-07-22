@@ -4789,6 +4789,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_my_profile: {
+        Args: { p_ho_ten: string; p_so_dien_thoai?: string | null }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
