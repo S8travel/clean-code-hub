@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { proRataInts } from "@/lib/pro-rata";
+import { netPhaiTra } from "@/lib/dinh-ky-amounts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -236,7 +237,7 @@ export default function ThanhToanDinhKyPage() {
       const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? t("Chưa có NCC"), r.ncc_so_tai_khoan, r.ncc_ngan_hang, r.ncc_tai_khoan_thanh_toan);
       const mg = ensureMonth(bucket, monthKey);
       mg.rows.push(r);
-      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      const tt = netPhaiTra(r);
       mg.totalThanhTien += tt;
       mg.totalDaTT += r.so_tien_da_tt;
       // "Còn" = còn CẦN ĐỀ NGHỊ = NET − đã đề nghị (so_tien_da_dntt, gồm ĐNTT chưa
@@ -293,7 +294,7 @@ export default function ThanhToanDinhKyPage() {
   const dialogTotalConLai = useMemo(() => {
     if (!dialogCtx) return 0;
     return dialogCtx.rows.reduce((s, r) => {
-      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      const tt = netPhaiTra(r);
       return s + Math.max(0, tt - r.so_tien_da_dntt);
     }, 0);
   }, [dialogCtx]);
@@ -316,7 +317,7 @@ export default function ThanhToanDinhKyPage() {
   const openCreateDialogForMonth = (ncc: NccGroup, mg: MonthGroup) => {
     if (!ncc.nccId) { toast.error(t("Tháng này không có NCC hợp lệ")); return; }
     const eligible = mg.rows.filter((r) => {
-      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      const tt = netPhaiTra(r);
       return Math.max(0, tt - r.so_tien_da_dntt) > 0;
     });
     if (eligible.length === 0) { toast.warning(t("Tháng này không còn chi phí cần thanh toán")); return; }
@@ -353,7 +354,7 @@ export default function ThanhToanDinhKyPage() {
     // không cần manual drift fix nữa.
     const conLaiByRow = dialogCtx.rows.map((r) => ({
       id: r.id,
-      conLai: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_dntt),
+      conLai: Math.max(0, netPhaiTra(r) - r.so_tien_da_dntt),
     }));
     const allocAmts = proRataInts(batchEffectiveAmount, conLaiByRow.map((x) => x.conLai));
     const allocations = conLaiByRow.map((x, i) => ({
@@ -634,7 +635,7 @@ export default function ThanhToanDinhKyPage() {
                 {(() => {
                   // Tính alloc preview KHỚP với save logic (proRataInts) — không drift
                   const conLais = dialogCtx.rows.map((r) =>
-                    Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_dntt)
+                    Math.max(0, netPhaiTra(r) - r.so_tien_da_dntt)
                   );
                   const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
                     ? proRataInts(batchEffectiveAmount, conLais)
@@ -847,7 +848,7 @@ function MonthGroupCard({
                   </div>
                   <div className="pl-3 space-y-0.5">
                     {d.rows.map((r) => {
-                      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+                      const tt = netPhaiTra(r);
                       const conLai = Math.max(0, tt - r.so_tien_da_tt);
                       const isPaid = conLai === 0;
                       return (
