@@ -15,7 +15,10 @@ export interface DinhKyChiPhiRow {
   so_khach: number;
   danh_muc: string;
   mo_ta: string | null;
+  /** Gross (đơn giá × SL, generated) — CHƯA trừ FOC. KHÔNG dùng làm số phải trả NCC. */
   thanh_tien: number;
+  /** Số công ty phải trả NCC = đã trừ FOC (KS/NH). Đây MỚI là base cho ĐNTT định kỳ. */
+  tien_cong_ty: number;
   thanh_tien_thuc_te: number | null;
   so_tien_da_tt: number;       // đã TRẢ (paid)
   so_tien_da_dntt: number;     // đã ĐỀ NGHỊ (committed, gồm ĐNTT chưa trả) — chống đề nghị trùng
@@ -38,7 +41,7 @@ export function useDinhKyChiPhiList(filters?: {
       // 1. Load chi phí định kỳ chưa thanh toán đủ
       let q = externalSupabase
         .from("doan_chi_phi")
-        .select("id, doan_id, danh_muc, mo_ta, thanh_tien, thanh_tien_thuc_te, so_tien_da_tt, so_tien_da_dntt, trang_thai_thanh_toan, nha_cung_cap_id, ngoai_tour, ngoai_tour_ci")
+        .select("id, doan_id, danh_muc, mo_ta, thanh_tien, tien_cong_ty, thanh_tien_thuc_te, so_tien_da_tt, so_tien_da_dntt, trang_thai_thanh_toan, nha_cung_cap_id, ngoai_tour, ngoai_tour_ci")
         .eq("thanh_toan_dinh_ky", true)
         // Cụm KS đã hủy (Tầng 2) không phải khoản phải trả định kỳ — xử ở dải "Đã hủy".
         .eq("ks_huy", false)
@@ -98,6 +101,7 @@ export function useDinhKyChiPhiList(filters?: {
           danh_muc: r.danh_muc ?? "",
           mo_ta: r.mo_ta,
           thanh_tien: r.thanh_tien ?? 0,
+          tien_cong_ty: r.tien_cong_ty ?? 0,
           thanh_tien_thuc_te: r.thanh_tien_thuc_te,
           so_tien_da_tt: r.so_tien_da_tt ?? 0,
           so_tien_da_dntt: r.so_tien_da_dntt ?? 0,

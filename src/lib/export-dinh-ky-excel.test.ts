@@ -11,7 +11,9 @@ const row = (o: Partial<DinhKyExportRow> = {}): DinhKyExportRow => ({
   so_khach: 10,
   mo_ta: "Bảo hiểm - Bảo hiểm",
   danh_muc: "bao_hiem",
+  // Mặc định không FOC: gross == net.
   thanh_tien: 1_000_000,
+  tien_cong_ty: 1_000_000,
   thanh_tien_thuc_te: null,
   so_tien_da_tt: 0,
   so_tien_da_dntt: 0,
@@ -21,8 +23,8 @@ const row = (o: Partial<DinhKyExportRow> = {}): DinhKyExportRow => ({
 describe("buildDinhKyDoanSummaries — gom theo đoàn", () => {
   it("cộng nhiều chi phí của cùng 1 đoàn thành 1 dòng", () => {
     const out = buildDinhKyDoanSummaries([
-      row({ thanh_tien: 1_000_000 }),
-      row({ thanh_tien: 500_000, mo_ta: "Vé cáp" }),
+      row({ tien_cong_ty: 1_000_000 }),
+      row({ tien_cong_ty: 500_000, mo_ta: "Vé cáp" }),
     ]);
     expect(out).toHaveLength(1);
     expect(out[0].soTien).toBe(1_500_000);
@@ -31,27 +33,35 @@ describe("buildDinhKyDoanSummaries — gom theo đoàn", () => {
     expect(out[0].noiDung).toBe("Bảo hiểm - Bảo hiểm, Vé cáp");
   });
 
-  it("thanh_tien_thuc_te override thanh_tien (NET)", () => {
-    const out = buildDinhKyDoanSummaries([row({ thanh_tien: 1_000_000, thanh_tien_thuc_te: 700_000 })]);
+  it("dòng KS có FOC → trả NET (tien_cong_ty), KHÔNG dùng gross thanh_tien", () => {
+    // TWIN 11 phòng × 1.45M, FOC 1 → gross 15.95M nhưng chỉ phải trả 14.5M.
+    const out = buildDinhKyDoanSummaries([
+      row({ danh_muc: "khach_san", mo_ta: "TWIN/DBL/SGL", thanh_tien: 15_950_000, tien_cong_ty: 14_500_000 }),
+    ]);
+    expect(out[0].soTien).toBe(14_500_000);
+  });
+
+  it("thanh_tien_thuc_te override tien_cong_ty (NET)", () => {
+    const out = buildDinhKyDoanSummaries([row({ tien_cong_ty: 1_000_000, thanh_tien_thuc_te: 700_000 })]);
     expect(out[0].soTien).toBe(700_000);
   });
 
-  it("thanh_tien_thuc_te = 0 (điều chỉnh về 0) KHÔNG được rơi về thanh_tien", () => {
-    const out = buildDinhKyDoanSummaries([row({ thanh_tien: 1_000_000, thanh_tien_thuc_te: 0 })]);
+  it("thanh_tien_thuc_te = 0 (điều chỉnh về 0) KHÔNG được rơi về tien_cong_ty", () => {
+    const out = buildDinhKyDoanSummaries([row({ tien_cong_ty: 1_000_000, thanh_tien_thuc_te: 0 })]);
     expect(out[0].soTien).toBe(0);
   });
 
   it("còn lại tính theo ĐÃ ĐỀ NGHỊ (so_tien_da_dntt), không phải đã trả", () => {
     // Đã đề nghị đủ 1tr nhưng mới trả 400k → không còn gì để đề nghị nữa.
     const out = buildDinhKyDoanSummaries([
-      row({ thanh_tien: 1_000_000, so_tien_da_dntt: 1_000_000, so_tien_da_tt: 400_000 }),
+      row({ tien_cong_ty: 1_000_000, so_tien_da_dntt: 1_000_000, so_tien_da_tt: 400_000 }),
     ]);
     expect(out[0].conLai).toBe(0);
     expect(out[0].daTT).toBe(400_000);
   });
 
   it("còn lại không âm khi đề nghị vượt NET", () => {
-    const out = buildDinhKyDoanSummaries([row({ thanh_tien: 1_000_000, so_tien_da_dntt: 1_200_000 })]);
+    const out = buildDinhKyDoanSummaries([row({ tien_cong_ty: 1_000_000, so_tien_da_dntt: 1_200_000 })]);
     expect(out[0].conLai).toBe(0);
   });
 
@@ -85,8 +95,8 @@ describe("buildDinhKyDoanSummaries — gom theo đoàn", () => {
 describe("sumDinhKyTotals — tổng phải bằng tổng các dòng (khớp header card)", () => {
   it("cộng đúng mọi cột", () => {
     const items = buildDinhKyDoanSummaries([
-      row({ doan_id: 1, so_khach: 10, thanh_tien: 1_000_000, so_tien_da_tt: 200_000, so_tien_da_dntt: 300_000 }),
-      row({ doan_id: 2, so_khach: 5, thanh_tien: 500_000, so_tien_da_tt: 0, so_tien_da_dntt: 0 }),
+      row({ doan_id: 1, so_khach: 10, tien_cong_ty: 1_000_000, so_tien_da_tt: 200_000, so_tien_da_dntt: 300_000 }),
+      row({ doan_id: 2, so_khach: 5, tien_cong_ty: 500_000, so_tien_da_tt: 0, so_tien_da_dntt: 0 }),
     ]);
     const t = sumDinhKyTotals(items);
     expect(t).toEqual({
