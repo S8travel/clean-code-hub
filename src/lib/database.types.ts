@@ -1382,6 +1382,7 @@ export type Database = {
           ngay_thanh_toan: string | null
           ngoai_tour: boolean
           ks_huy: boolean
+          ky_thanh_toan: string | null
           ngoai_tour_ci: string | null
           ngoai_tour_co: string | null
           khach_san_id: number | null
@@ -1426,6 +1427,7 @@ export type Database = {
           ngay_thanh_toan?: string | null
           ngoai_tour?: boolean
           ks_huy?: boolean
+          ky_thanh_toan?: string | null
           ngoai_tour_ci?: string | null
           ngoai_tour_co?: string | null
           khach_san_id?: number | null
@@ -1470,6 +1472,7 @@ export type Database = {
           ngay_thanh_toan?: string | null
           ngoai_tour?: boolean
           ks_huy?: boolean
+          ky_thanh_toan?: string | null
           ngoai_tour_ci?: string | null
           ngoai_tour_co?: string | null
           khach_san_id?: number | null

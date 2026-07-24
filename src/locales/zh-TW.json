@@ -2390,5 +2390,16 @@
   "Gửi lại có thể gửi TRÙNG mail nếu lần trước lỗi do mạng (mail có thể đã bay). Chỉ gửi lại nếu chắc NCC chưa nhận. Tiếp tục?": "若上次因網路錯誤（郵件可能已寄出），重寄可能會重複寄送。僅在確定供應商尚未收到時才重寄。是否繼續？",
   "Chọn nhà cung cấp…": "選擇供應商…",
   "Tìm nhà cung cấp…": "搜尋供應商…",
-  "Dịch vụ này chưa gắn nhà cung cấp — chọn NCC để công nợ có thể cấn trừ/thu hồi.": "此服務尚未綁定供應商 — 請選擇供應商，債務才能抵扣／收回。"
+  "Dịch vụ này chưa gắn nhà cung cấp — chọn NCC để công nợ có thể cấn trừ/thu hồi.": "此服務尚未綁定供應商 — 請選擇供應商，債務才能抵扣／收回。",
+  "Đẩy sang": "推遲至",
+  "đẩy từ": "推遲自",
+  "Trả về kỳ gốc": "還原至原始期間",
+  "Đã đẩy sang kỳ sau": "已推遲至下期",
+  "Đã trả về kỳ gốc": "已還原至原始期間",
+  "Không đổi được kỳ thanh toán": "無法變更付款期間",
+  "Chi phí đoàn này đã được đẩy sang kỳ hiện tại": "此團費用已推遲至目前期間",
+  "Trả chi phí đoàn này về kỳ gốc": "將此團費用還原至原始期間",
+  "Hóa đơn NCC xuất khi đoàn kết thúc → đẩy khoản này sang kỳ sau": "供應商於團隊結束後才開立發票 → 將此款項推遲至下期",
+  "Chi phí đã nằm trong ĐNTT — hủy ĐNTT trước nếu muốn đổi kỳ": "費用已列入付款申請單 — 如需變更期間請先取消申請單",
+  "(đã có ĐNTT — không đổi kỳ được)": "（已有付款申請單 — 無法變更期間）"
 }
