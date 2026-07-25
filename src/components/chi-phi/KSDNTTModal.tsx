@@ -78,7 +78,12 @@ export default function KSDNTTModal({
   const [submitting, setSubmitting] = useState(false);
 
   const soTien = mode === "full" ? thucThanhToan : depositAmount;
-  const soTienConLai = mode === "full" ? 0 : thucThanhToan - depositAmount;
+  // Tổng phiếu ĐNTT thực tạo = tiền mặt (soTien) + cấn trừ. Hiện rõ con số này để
+  // OP không vô tình tạo phiếu HỤT so với chi phí: bug thực tế là OP gõ cọc tròn
+  // 3tr + cấn trừ 3tr = 6tr trong khi chi phí 6,05tr → thiếu 50k, rồi kẹt vòng
+  // hủy-tạo-lại vì badge lệch nhưng không có nút bù.
+  const fullAmountPreview = soTien + canTruAmount;
+  const thieuChuaDeNghi = Math.max(0, conLai - fullAmountPreview);
 
   const buildMoTa = () => {
     const parts: string[] = [];
@@ -231,13 +236,14 @@ export default function KSDNTTModal({
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="full" id="full" />
                 <Label htmlFor="full" className="text-xs cursor-pointer">
-                  {t("Toàn bộ")} — {fmt(thucThanhToan)} VND
+                  {t("Trả hết phần còn lại")} — {fmt(thucThanhToan)} VND
+                  {canTruAmount > 0 ? ` + ${fmt(canTruAmount)} ${t("cấn trừ")}` : ""}
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="deposit" id="deposit" />
                 <Label htmlFor="deposit" className="text-xs cursor-pointer">
-                  {t("1 phần (cọc/cấn trừ)")}
+                  {t("Trả trước một phần (cọc)")}
                 </Label>
               </div>
             </RadioGroup>
@@ -245,7 +251,7 @@ export default function KSDNTTModal({
 
           {mode === "deposit" && thucThanhToan > 0 && (
             <div className="space-y-2">
-              <Label className="text-xs">{t("Số tiền cọc/cấn trừ")}</Label>
+              <Label className="text-xs">{t("Số tiền cọc (tiền mặt trả trước)")}</Label>
               <Input
                 type="number"
                 className="h-8 text-xs"
@@ -254,10 +260,26 @@ export default function KSDNTTModal({
                 max={thucThanhToan}
                 min={0}
               />
-              {depositAmount > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  {t("Còn lại")}: {fmt(thucThanhToan - depositAmount)} VND
-                </p>
+            </div>
+          )}
+
+          {/* Tổng phiếu = tiền mặt + cấn trừ. Hiện rõ để tránh tạo phiếu HỤT so với
+              chi phí (cấn trừ được áp dụng ở panel trên, KHÔNG phụ thuộc chọn full/cọc). */}
+          {(thucThanhToan > 0 || canTruAmount > 0) && (
+            <div className="text-xs rounded-md border border-border px-3 py-2 space-y-0.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("Tổng phiếu đề nghị")}:</span>
+                <span className="font-semibold">{fmt(fullAmountPreview)} VND</span>
+              </div>
+              {canTruAmount > 0 && (
+                <div className="text-[11px] text-muted-foreground">
+                  = {t("tiền mặt")} {fmt(soTien)} + {t("cấn trừ")} {fmt(canTruAmount)}
+                </div>
+              )}
+              {thieuChuaDeNghi > 0 && (
+                <div className="text-[11px] text-amber-600 font-medium">
+                  ⚠ {t("Còn")} {fmt(thieuChuaDeNghi)} VND {t("chưa được đề nghị")} ({t("tổng chi phí")} {fmt(conLai)})
+                </div>
               )}
             </div>
           )}
