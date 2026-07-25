@@ -4,6 +4,7 @@ import { errMsg } from "@/lib/error";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { buildRemainingAllocations } from "@/lib/alloc-remaining";
+import { calcKSDnttAmount } from "@/lib/ks-dntt-amount";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -77,13 +78,10 @@ export default function KSDNTTModal({
   const qc = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
-  const soTien = mode === "full" ? thucThanhToan : depositAmount;
-  // Tổng phiếu ĐNTT thực tạo = tiền mặt (soTien) + cấn trừ. Hiện rõ con số này để
-  // OP không vô tình tạo phiếu HỤT so với chi phí: bug thực tế là OP gõ cọc tròn
-  // 3tr + cấn trừ 3tr = 6tr trong khi chi phí 6,05tr → thiếu 50k, rồi kẹt vòng
-  // hủy-tạo-lại vì badge lệch nhưng không có nút bù.
-  const fullAmountPreview = soTien + canTruAmount;
-  const thieuChuaDeNghi = Math.max(0, conLai - fullAmountPreview);
+  // so_tien (nghĩa vụ phiếu) = cấn trừ + tiền mặt — cấn trừ TRỪ vào, KHÔNG cộng
+  // thêm. Khớp bất biến của mọi ĐNTT đã duyệt trong DB (xem lib/ks-dntt-amount).
+  // full: nghĩa vụ = toàn bộ còn lại; deposit: nghĩa vụ = số cọc user nhập.
+  const amt = calcKSDnttAmount({ conLai, canTruAmount, mode, depositAmount });
 
   const buildMoTa = () => {
     const parts: string[] = [];
@@ -95,20 +93,24 @@ export default function KSDNTTModal({
   };
 
   const handleSubmit = async () => {
-    if (soTien <= 0 && canTruAmount <= 0) {
+    if (amt.soTien <= 0) {
       toast.error(t("Số tiền phải lớn hơn 0"));
       return;
     }
-    // Chống over-commit: tổng đề nghị (tiền mặt + cấn trừ) KHÔNG vượt phần còn lại
-    // (conLai = totalKS − đã cọc/đề nghị). Chặn cọc nhập tay quá tay.
-    if (soTien + canTruAmount > conLai) {
+    // Chống over-commit: nghĩa vụ phiếu KHÔNG vượt phần còn lại (conLai).
+    if (amt.soTien > conLai) {
       toast.error(t("Số tiền vượt phần còn phải thanh toán"));
+      return;
+    }
+    // Cấn trừ là hình thức trả TRONG nghĩa vụ — không được vượt nghĩa vụ phiếu.
+    if (canTruAmount > amt.soTien) {
+      toast.error(t("Cấn trừ vượt quá số tiền đề nghị"));
       return;
     }
     setSubmitting(true);
     try {
-      // 1. Tạo 1 ĐNTT cho FULL amount = soTien + canTruAmount
-      const fullAmount = soTien + canTruAmount;
+      // ĐNTT.so_tien = nghĩa vụ = cấn trừ + tiền mặt (cấn trừ đã nằm trong đây).
+      const fullAmount = amt.soTien;
       // Bỏ row thanh_tien <= 0 (FOC row) — dntt_allocations CHECK so_tien > 0.
       // Chia theo phần CÒN LẠI của từng dòng (thanh_tien − so_tien_da_dntt) để ĐNTT
       // khoản còn lại không rải sang dòng đã trả xong. Xem lib/alloc-remaining.ts.
@@ -145,14 +147,15 @@ export default function KSDNTTModal({
 
       // 2. Nếu có cấn trừ: tạo các payment can_tru (gộp nhiều cong_no cùng NCC)
       if (canTruAmount > 0 && mainDnttId) {
-        let ctRemain = conLai;
+        // Cấn trừ phân bổ trong phạm vi nghĩa vụ phiếu (không vượt so_tien).
+        let ctRemain = amt.soTien;
         const items: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
         for (const s of canTru) {
           if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
-          const amt = Math.min(s.soTienCanTru, ctRemain);
-          if (amt <= 0) continue;
-          items.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
-          ctRemain -= amt;
+          const ctAmt = Math.min(s.soTienCanTru, ctRemain);
+          if (ctAmt <= 0) continue;
+          items.push({ congNoId: s.congNoId, soTien: ctAmt, sourceTenDoan: s.tenDoan });
+          ctRemain -= ctAmt;
         }
         await createCanTruPayments({
           dnttId: mainDnttId,
@@ -251,34 +254,34 @@ export default function KSDNTTModal({
 
           {mode === "deposit" && thucThanhToan > 0 && (
             <div className="space-y-2">
-              <Label className="text-xs">{t("Số tiền cọc (tiền mặt trả trước)")}</Label>
+              {/* Số cọc = TỔNG nghĩa vụ phiếu này (cấn trừ nằm trong, không cộng thêm). */}
+              <Label className="text-xs">{t("Số tiền cọc (tổng khoản đợt này)")}</Label>
               <Input
                 type="number"
                 className="h-8 text-xs"
                 value={depositAmount || ""}
                 onChange={(e) => setDepositAmount(Number(e.target.value) || 0)}
-                max={thucThanhToan}
+                max={conLai}
                 min={0}
               />
             </div>
           )}
 
-          {/* Tổng phiếu = tiền mặt + cấn trừ. Hiện rõ để tránh tạo phiếu HỤT so với
-              chi phí (cấn trừ được áp dụng ở panel trên, KHÔNG phụ thuộc chọn full/cọc). */}
-          {(thucThanhToan > 0 || canTruAmount > 0) && (
+          {/* Tổng phiếu = nghĩa vụ = cấn trừ + tiền mặt. Cấn trừ TRỪ vào để ra tiền
+              mặt (không cộng thêm) — khớp bất biến DB. Hiện phần "còn lại" nếu cọc
+              chưa phủ hết tổng chi phí (đợt sau lo). */}
+          {(amt.soTien > 0 || canTruAmount > 0) && (
             <div className="text-xs rounded-md border border-border px-3 py-2 space-y-0.5">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{t("Tổng phiếu đề nghị")}:</span>
-                <span className="font-semibold">{fmt(fullAmountPreview)} VND</span>
+                <span className="font-semibold">{fmt(amt.soTien)} VND</span>
               </div>
-              {canTruAmount > 0 && (
-                <div className="text-[11px] text-muted-foreground">
-                  = {t("tiền mặt")} {fmt(soTien)} + {t("cấn trừ")} {fmt(canTruAmount)}
-                </div>
-              )}
-              {thieuChuaDeNghi > 0 && (
+              <div className="text-[11px] text-muted-foreground">
+                = {t("cấn trừ")} {fmt(canTruAmount)} + {t("tiền mặt")} {fmt(amt.tienMat)}
+              </div>
+              {amt.conLaiSau > 0 && (
                 <div className="text-[11px] text-amber-600 font-medium">
-                  ⚠ {t("Còn")} {fmt(thieuChuaDeNghi)} VND {t("chưa được đề nghị")} ({t("tổng chi phí")} {fmt(conLai)})
+                  ⚠ {t("Còn")} {fmt(amt.conLaiSau)} VND {t("chưa được đề nghị")} ({t("tổng chi phí")} {fmt(conLai)})
                 </div>
               )}
             </div>
@@ -308,7 +311,7 @@ export default function KSDNTTModal({
             size="sm"
             className="text-xs"
             onClick={handleSubmit}
-            disabled={submitting || (soTien <= 0 && canTruAmount <= 0)}
+            disabled={submitting || !amt.hopLe}
           >
             {t("Tạo đề nghị TT")}
           </Button>

@@ -2406,7 +2406,8 @@
   "cấn trừ": "抵扣",
   "tiền mặt": "現金",
   "Trả trước một phần (cọc)": "預付一部分（訂金）",
-  "Số tiền cọc (tiền mặt trả trước)": "訂金金額（預付現金）",
+  "Số tiền cọc (tổng khoản đợt này)": "訂金金額（本次總額）",
+  "Cấn trừ vượt quá số tiền đề nghị": "抵扣超過申請金額",
   "Tổng phiếu đề nghị": "申請單總額",
   "chưa được đề nghị": "尚未申請",
   "Sửa giá/số phòng cho khớp, hoặc trả nốt phần đã đề nghị rồi bổ sung phần lệch. Đừng hủy nếu ĐNTT có cấn trừ.": "修正房價／房數以相符，或先付清已申請部分再補足差額。若付款申請單含抵扣，請勿取消。"
