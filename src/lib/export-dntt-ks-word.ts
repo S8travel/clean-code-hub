@@ -142,12 +142,25 @@ export function calcTotalThanhTien(roomEntries: EdgeFunctionData["roomEntries"])
   }, 0);
 }
 
+// Số tiền NCC thực nhận qua chuyển khoản = ĐNTT − phần đã cấn trừ công nợ.
+// ĐNTT cọc cũng có thể được cấn trừ 100% → thực chuyển 0 (kẹp không âm).
+export function calcThucChuyen(soTien: number, canTruTotal = 0): number {
+  return Math.max(0, soTien - canTruTotal);
+}
+
+// Dùng layout cấn trừ (16 cột, có cột "Cấn trừ" + "Ghi chú") khi ĐNTT có cấn trừ.
+// KHÔNG loại trừ ĐNTT cọc: cọc cấn trừ hết thì bản in phải hiện "Thanh toán" = 0,
+// khớp bản Excel — trước đây quên nên cọc đã cấn trừ vẫn in nguyên mệnh giá.
+export function dungLayoutCanTru(canTruTotal = 0, layoutCanTru = false): boolean {
+  return layoutCanTru || canTruTotal > 0;
+}
+
 function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[] {
   const { ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
   const canTruTotal = data.canTruTotal ?? 0;
   const canTruNote = data.canTruNote ?? "";
   const bankChildren = buildBankChildren(ncc);
-  const useCanTru = !la_coc && (layoutCanTru || canTruTotal > 0);
+  const useCanTru = dungLayoutCanTru(canTruTotal, layoutCanTru);
   const tongTien = calcTotalThanhTien(roomEntries);
   // Layout: cấn trừ (16 cột) / thường & cọc (14 cột). Mọi layout có "Tổng tiền".
   const colWidths = useCanTru ? COL_CANTRU_W : COL_W;
@@ -190,7 +203,7 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
         // col14 "Thông tin NH"; col15 "Ghi chú"
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
         const canTruText = canTruTotal > 0 ? fmt(canTruTotal) : "—";
-        const thucChuyen = Math.max(0, soTien - canTruTotal);
+        const thucChuyen = calcThucChuyen(soTien, canTruTotal);
         const noteText = canTruNote || "—";
         cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
         cells.push(cell([p(canTruText, { size: 14, color: canTruTotal > 0 ? "FF6600" : undefined })], { width: colWidths[12], rowSpan: totalRoomRows }));
@@ -220,9 +233,12 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
 function buildKSTable(data: EdgeFunctionData): Table {
   const canTruTotal = data.canTruTotal ?? 0;
   const colWidths = canTruTotal > 0 ? COL_CANTRU_W : COL_W;
-  const headers = data.la_coc
-    ? TABLE_HEADERS_LA_COC
-    : canTruTotal > 0 ? TABLE_HEADERS_CANTRU
+  // Cấn trừ THẮNG cọc: ĐNTT cọc có cấn trừ vẫn dùng layout 16 cột để data rows
+  // (cũng 16 cột khi có cấn trừ) khớp header — nếu để la_coc thắng thì header 14
+  // cột mà data 16 cột → lệch bảng.
+  const headers = canTruTotal > 0
+    ? TABLE_HEADERS_CANTRU
+    : data.la_coc ? TABLE_HEADERS_LA_COC
     : TABLE_HEADERS;
   const headerRow = new TableRow({
     children: headers.map((h, i) =>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcTotalThanhTien } from "./export-dntt-ks-word";
+import { calcTotalThanhTien, calcThucChuyen, dungLayoutCanTru } from "./export-dntt-ks-word";
 import type { EdgeFunctionData } from "./export-dntt-ks-word";
 
 type Room = EdgeFunctionData["roomEntries"][number];
@@ -34,5 +34,43 @@ describe("calcTotalThanhTien", () => {
 
   it("roomEntries rỗng → 0", () => {
     expect(calcTotalThanhTien([])).toBe(0);
+  });
+});
+
+describe("calcThucChuyen — số NCC thực nhận sau cấn trừ", () => {
+  it("không cấn trừ → nguyên số tiền ĐNTT", () => {
+    expect(calcThucChuyen(10_000_000)).toBe(10_000_000);
+  });
+
+  it("cấn trừ một phần → phần còn lại", () => {
+    expect(calcThucChuyen(26_000_000, 10_000_000)).toBe(16_000_000);
+  });
+
+  it("cọc cấn trừ HẾT → 0 (không phải in nguyên mệnh giá)", () => {
+    // Case đoàn thật: cọc 10tr, cấn trừ 10tr → bản in phải là 0.
+    expect(calcThucChuyen(10_000_000, 10_000_000)).toBe(0);
+  });
+
+  it("cấn trừ vượt (dữ liệu lệch) → kẹp về 0, không âm", () => {
+    expect(calcThucChuyen(10_000_000, 12_000_000)).toBe(0);
+  });
+});
+
+describe("dungLayoutCanTru — chọn layout 16 cột", () => {
+  it("có cấn trừ → dùng layout cấn trừ", () => {
+    expect(dungLayoutCanTru(10_000_000)).toBe(true);
+  });
+
+  it("KHÔNG cấn trừ, không ép layout → layout thường/cọc", () => {
+    expect(dungLayoutCanTru(0)).toBe(false);
+  });
+
+  it("ép layout (bảng gộp có ít nhất 1 ĐNTT cấn trừ) → true cả dòng không cấn trừ", () => {
+    expect(dungLayoutCanTru(0, true)).toBe(true);
+  });
+
+  it("ĐNTT cọc có cấn trừ VẪN dùng layout cấn trừ (đây là bug đã sửa)", () => {
+    // Trước fix: la_coc chặn layout cấn trừ → in nguyên mệnh giá cọc.
+    expect(dungLayoutCanTru(10_000_000)).toBe(true);
   });
 });
