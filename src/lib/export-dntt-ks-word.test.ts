@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcTotalThanhTien, calcThucChuyen, dungLayoutCanTru } from "./export-dntt-ks-word";
+import { calcTotalThanhTien, calcThucChuyen, dungLayoutCanTru, calcConLaiPrint } from "./export-dntt-ks-word";
 import type { EdgeFunctionData } from "./export-dntt-ks-word";
 
 type Room = EdgeFunctionData["roomEntries"][number];
@@ -53,6 +53,25 @@ describe("calcThucChuyen — số NCC thực nhận sau cấn trừ", () => {
 
   it("cấn trừ vượt (dữ liệu lệch) → kẹp về 0, không âm", () => {
     expect(calcThucChuyen(10_000_000, 12_000_000)).toBe(0);
+  });
+});
+
+describe("calcConLaiPrint — phần còn lại đối chiếu trên bản in", () => {
+  it("cọc chưa phủ hết tổng → hiện phần còn (case đoàn thật 6.05tr − 6tr)", () => {
+    expect(calcConLaiPrint(6_050_000, 0, 6_000_000)).toBe(50_000);
+  });
+
+  it("phiếu phủ đủ tổng → 0 (ẩn dòng còn lại)", () => {
+    expect(calcConLaiPrint(6_050_000, 0, 6_050_000)).toBe(0);
+  });
+
+  it("đã cọc trước ở phiếu khác → trừ cả cocTotal", () => {
+    // Tổng 10tr, đã cọc 4tr phiếu trước, phiếu này 3tr → còn 3tr.
+    expect(calcConLaiPrint(10_000_000, 4_000_000, 3_000_000)).toBe(3_000_000);
+  });
+
+  it("phủ quá tổng (dữ liệu lệch) → kẹp về 0, không âm", () => {
+    expect(calcConLaiPrint(6_000_000, 0, 6_050_000)).toBe(0);
   });
 });
 

@@ -155,6 +155,13 @@ export function dungLayoutCanTru(canTruTotal = 0, layoutCanTru = false): boolean
   return layoutCanTru || canTruTotal > 0;
 }
 
+// "Còn lại" sau phiếu này = Tổng tiền − đã cọc/trả trước − số tiền phiếu này.
+// ĐNTT cọc chỉ phủ 1 phần tổng → hiện phần còn để kế toán khỏi tưởng phiếu sai
+// số học (Tổng 6.05tr nhưng Cấn trừ 3tr + Thanh toán 3tr = 6tr, hụt 50k).
+export function calcConLaiPrint(tongTien: number, cocTotal: number, soTien: number): number {
+  return Math.max(0, tongTien - cocTotal - soTien);
+}
+
 function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[] {
   const { ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
   const canTruTotal = data.canTruTotal ?? 0;
@@ -204,12 +211,23 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
         const canTruText = canTruTotal > 0 ? fmt(canTruTotal) : "—";
         const thucChuyen = calcThucChuyen(soTien, canTruTotal);
-        const noteText = canTruNote || "—";
+        const conLaiPrint = calcConLaiPrint(tongTien, cocTotal, soTien);
         cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
         cells.push(cell([p(canTruText, { size: 14, color: canTruTotal > 0 ? "FF6600" : undefined })], { width: colWidths[12], rowSpan: totalRoomRows }));
-        cells.push(cell([p(fmt(thucChuyen), { bold: true, size: 14 })], { width: colWidths[13], rowSpan: totalRoomRows }));
+        // "Thanh toán" (tiền mặt NCC thực nhận). ĐNTT cọc → thêm nhãn "(cọc)".
+        cells.push(cell(
+          la_coc
+            ? [p(fmt(thucChuyen), { bold: true, size: 14 }), p("(cọc)", { size: 12, color: "FF0000", italics: true })]
+            : [p(fmt(thucChuyen), { bold: true, size: 14 })],
+          { width: colWidths[13], rowSpan: totalRoomRows },
+        ));
         cells.push(cell(bankChildren, { width: colWidths[14], rowSpan: totalRoomRows }));
-        cells.push(cell([p(noteText, { size: 14, alignment: AlignmentType.LEFT })], { width: colWidths[15], rowSpan: totalRoomRows }));
+        // "Ghi chú": nguồn cấn trừ + dòng "Còn lại" đối chiếu khi phiếu chưa phủ hết tổng.
+        const noteChildren = [p(canTruNote || "—", { size: 14, alignment: AlignmentType.LEFT })];
+        if (conLaiPrint > 0) {
+          noteChildren.push(p(`Còn lại: ${fmt(conLaiPrint)}`, { size: 13, color: "FF6600", alignment: AlignmentType.LEFT }));
+        }
+        cells.push(cell(noteChildren, { width: colWidths[15], rowSpan: totalRoomRows }));
       } else {
         // ĐNTT thường & cọc thật: col11 "Đã thanh toán"/"Đã cọc" = cọc đã trả trước;
         // col12 = soTien (cọc thật → đỏ + nhãn "(cọc)"); col13 "Thông tin NH"

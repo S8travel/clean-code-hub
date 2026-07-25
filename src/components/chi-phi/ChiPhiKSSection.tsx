@@ -49,7 +49,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
     activeDnttByKs,
     previewItems, setPreviewItems,
     modalOpen, setModalOpen, modalKsId, setModalKsId,
-    khachSanMap, grouped, cocByKs, canTruAmtByKsId,
+    khachSanMap, grouped, cocByKs,
     canTruByKs, setCanTruByKs,
     ksAdjustTarget, setKsAdjustTarget,
     aggCommit, aggCommitMode, setAggCommitMode,
@@ -225,7 +225,10 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
             const modalFoc = resolveKSFoc(modalRows, modalKs);
             return calcTotalKS(modalRows, modalFoc.foc_khach, modalFoc.foc_mien);
           })()}
-          daCoc={(cocByKs[modalKsId] || 0) + (canTruAmtByKsId[modalKsId] || 0)}
+          // cocByKs = Σ so_tien ĐNTT sống, mà so_tien = tiền mặt + cấn trừ → ĐÃ gồm
+          // cấn trừ. KHÔNG cộng canTruAmtByKsId nữa (cộng = đếm cấn trừ 2 lần → daCoc
+          // phồng → conLai âm → chặn tạo phiếu bù sai).
+          daCoc={cocByKs[modalKsId] || 0}
           localRows={(grouped[modalKsId] || []).filter((r) => !r.is_hdv)}
           chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id && !r.is_hdv).map((r) => r.id!)}
           committedById={committedById}
