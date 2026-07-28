@@ -19,6 +19,8 @@ export interface UserRoleRow {
   active: boolean;
   /** true = tài khoản chỉ xem. Khóa ghi thật ở DB (RLS restrictive), xem lib/readonly-mode.ts */
   chi_xem: boolean;
+  /** true = không được thấy giá vốn. RLS chặn đọc bảng chi phí; số phát qua RPC get_chi_phi_agent_view */
+  che_gia_von: boolean;
   password_hash: string | null;
   created_at: string;
 }

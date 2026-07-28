@@ -17,6 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { useCheGiaVon } from "@/hooks/use-permissions";
 import type { DayLocal, DayItemLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
 import { checkCanhDiemDeletable, checkNhaHangDeletable } from "@/hooks/use-dieu-tour";
 import { useSetMenus } from "@/hooks/use-nha-hang";
@@ -152,8 +153,12 @@ function SetMenuSelect({
   onChange: (id: number | null) => void;
 }) {
   const { data: menus = [] } = useSetMenus(nhaHangId);
+  // Tài khoản che giá vốn: chỉ hiện tên set, KHÔNG hiện giá NCC.
+  const anGia = useCheGiaVon();
   if (menus.length === 0) return null;
   const fmt = (n: number) => n.toLocaleString("vi-VN");
+  const nhan = (m: { ten_set: string; gia?: number | null }) =>
+    `${m.ten_set}${!anGia && m.gia ? ` — ${fmt(m.gia)}đ` : ""}`;
   return (
     <Select
       value={value ? String(value) : "none"}
@@ -163,7 +168,7 @@ function SetMenuSelect({
         <span>
           {(() => {
             const m = value ? menus.find((x) => x.id === value) : null;
-            return m ? `${m.ten_set}${m.gia ? ` — ${fmt(m.gia)}đ` : ""}` : t("Chọn set menu");
+            return m ? nhan(m) : t("Chọn set menu");
           })()}
         </span>
       </SelectTrigger>
@@ -171,7 +176,7 @@ function SetMenuSelect({
         <SelectItem value="none">{t("-- Không chọn --")}</SelectItem>
         {menus.map((m) => (
           <SelectItem key={m.id} value={String(m.id)}>
-            {m.ten_set}{m.gia ? ` — ${fmt(m.gia)}đ` : ""}
+            {nhan(m)}
           </SelectItem>
         ))}
       </SelectContent>

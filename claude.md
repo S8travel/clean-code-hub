@@ -220,7 +220,28 @@ user_roles      id(uuid), user_id(uuid)
 
 doan_permissions  id, doan_id, user_id, ho_ten
                   quyen: 'view'|'edit'
+
+agent_he_so     agent_id (PK→agents), he_so (>=1.0), ghi_chu, cap_nhat_luc
+                ← hệ số nhân chi phí phát cho tài khoản che_gia_von.
+                  RLS: CHỈ admin/giám đốc đọc-ghi. KHÔNG để trên `agents`
+                  vì bảng đó ai cũng đọc được → biết hệ số là chia ngược
+                  ra giá vốn thật.
 ```
+
+### Tài khoản chỉ xem / che giá vốn
+```
+user_roles.chi_xem      → RLS restrictive chặn INSERT/UPDATE/DELETE mọi bảng
+                          (trừ UPDATE thong_bao) + guard trong RPC SECURITY DEFINER
+user_roles.che_gia_von  → RLS restrictive chặn SELECT: doan_chi_phi,
+                          de_nghi_thanh_toan, payments, cong_no, dntt_allocations,
+                          doan_invoice, doan_ks_dem
+                          Chi phí phát qua RPC get_chi_phi_agent_view(doan_id)
+                          — số ĐÃ nhân agent_he_so.he_so, KHÔNG trả hệ số ra client
+```
+⚠️ Còn hở có chủ ý: `doan_ngay_item.don_gia` + giá master danh mục vẫn đọc được
+qua API (RLS lọc theo DÒNG, không theo CỘT; các bảng đó chứa dữ liệu vận hành
+tài khoản cần). UI đã ẩn. Muốn kín nốt phải gỡ quyền `doan` và dựng bản agent
+cho cả lịch trình.
 
 ---
 
