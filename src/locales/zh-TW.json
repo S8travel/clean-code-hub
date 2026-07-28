@@ -2412,5 +2412,18 @@
   "chưa được đề nghị": "尚未申請",
   "Sửa giá/số phòng cho khớp, hoặc trả nốt phần đã đề nghị rồi bổ sung phần lệch. Đừng hủy nếu ĐNTT có cấn trừ.": "修正房價／房數以相符，或先付清已申請部分再補足差額。若付款申請單含抵扣，請勿取消。",
   "Chi phí văn phòng": "辦公室費用",
-  "Khóa mọi thao tác thêm/sửa/xóa (chặn tận DB)": "鎖定所有新增／修改／刪除操作（於資料庫層阻擋）"
+  "Khóa mọi thao tác thêm/sửa/xóa (chặn tận DB)": "鎖定所有新增／修改／刪除操作（於資料庫層阻擋）",
+  "Chi phí (bản agent)": "費用（代理版）",
+  "Chọn đoàn": "選擇團組",
+  "Gõ tên đoàn...": "輸入團組名稱…",
+  "Không tìm thấy đoàn": "找不到團組",
+  "Chọn một đoàn để xem chi phí.": "請選擇團組以查看費用。",
+  "Không tải được chi phí.": "無法載入費用。",
+  "Đoàn này chưa có chi phí, hoặc agent của đoàn chưa được cấu hình.": "此團組尚無費用，或該團組的代理尚未設定。",
+  "Nội dung": "內容",
+  "Tổng cộng": "總計",
+  "Cảnh điểm & dịch vụ": "景點與服務",
+  "HDV & hỗ trợ": "導遊與支援",
+  "Che giá vốn": "隱藏成本價",
+  "Không đọc được bảng chi phí; chỉ xem \"Chi phí (bản agent)\" đã cộng hệ số": "無法讀取費用資料表；僅能查看已加係數的「費用（代理版）」"
 }

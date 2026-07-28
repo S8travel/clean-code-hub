@@ -37,6 +37,7 @@ const MyJobPage            = lazy(() => import("./pages/MyJobPage.tsx"));
 const LockPhongPage        = lazy(() => import("./pages/LockPhongPage.tsx"));
 const InvoicePage          = lazy(() => import("./pages/InvoicePage.tsx"));
 const BaoGiaPage           = lazy(() => import("./pages/BaoGiaPage.tsx"));
+const ChiPhiAgentPage      = lazy(() => import("./pages/ChiPhiAgentPage.tsx"));
 const BaoGiaDetailPage     = lazy(() => import("./pages/BaoGiaDetailPage.tsx"));
 const TeamAssignmentPage   = lazy(() => import("./pages/TeamAssignmentPage.tsx"));
 const LeadsPage            = lazy(() => import("./pages/LeadsPage.tsx"));
@@ -120,6 +121,7 @@ const App = () => (
                 <Route path="/lock-phong" element={<LockPhongPage />} />
                 <Route path="/invoice" element={<InvoicePage />} />
                 <Route path="/bao-gia" element={<BaoGiaPage />} />
+                <Route path="/chi-phi-agent" element={<ChiPhiAgentPage />} />
                 <Route path="/bao-gia/:id" element={<BaoGiaDetailPage />} />
                 <Route path="/settings/teams" element={<TeamAssignmentPage />} />
                 <Route path="/leads" element={<LeadsPage />} />
