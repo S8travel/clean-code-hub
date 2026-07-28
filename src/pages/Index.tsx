@@ -86,9 +86,11 @@ export default function Index() {
   const scope = useDoanScope();
   // Kế toán: chỉ XEM ở danh sách đoàn — ẩn nút tạo + menu thao tác.
   // admin/giam_doc luôn edit được dù bo_phan=ke_toan.
-  const canEditDoan = scope.isPrivileged || currentUser?.bo_phan !== "ke_toan";
+  const canEditDoan =
+    !currentUser?.chi_xem && (scope.isPrivileged || currentUser?.bo_phan !== "ke_toan");
   // Cờ "Đã duyệt QT" / "Đã thu visa": chỉ kế toán + admin/giám đốc được tick.
-  const canTickFlags = scope.isPrivileged || currentUser?.bo_phan === "ke_toan";
+  const canTickFlags =
+    !currentUser?.chi_xem && (scope.isPrivileged || currentUser?.bo_phan === "ke_toan");
   const { data: groupsRaw, isLoading, error } = useDoanList(
     scope.phanLoaiTour,
     scope.vanPhongIds,

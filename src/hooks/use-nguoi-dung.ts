@@ -17,6 +17,8 @@ export interface UserRoleRow {
   phan_loai_tour: string[] | null;
   ghi_chu: string | null;
   active: boolean;
+  /** true = tài khoản chỉ xem. Khóa ghi thật ở DB (RLS restrictive), xem lib/readonly-mode.ts */
+  chi_xem: boolean;
   password_hash: string | null;
   created_at: string;
 }

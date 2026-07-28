@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermission } from "@/hooks/use-permissions";
+import { AccessDenied } from "@/components/PermissionGate";
 import {
   useHoanUngList, useDeleteHoanUng, LOAI_CHI_HOAN_UNG_OPTS,
   type HoanUngRow,
@@ -47,6 +49,7 @@ const PAYMENT_BADGE: Record<string, { label: string; cls: string }> = {
 
 export default function HoanUngPage() {
   const { user } = useAuth();
+  const canView = usePermission("hoan_ung", "view");
   const [filterLoaiChi, setFilterLoaiChi] = useState("");
   const [filterTrangThai, setFilterTrangThai] = useState("");
   const [filterMine, setFilterMine] = useState(false);
@@ -127,6 +130,10 @@ export default function HoanUngPage() {
       onError: (e: unknown) => toast.error("Lỗi: " + (errMsg(e) || "Không xóa được")),
     });
   };
+
+  // Guard sau toàn bộ hook (rules-of-hooks). RLS `hoan_ung_perm_select` cũng chặn
+  // ở DB nên gõ thẳng URL cũng không lấy được dữ liệu.
+  if (!canView) return <AccessDenied />;
 
   return (
     <div className="h-full flex flex-col">

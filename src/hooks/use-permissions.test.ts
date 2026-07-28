@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { usePermission, useRoleAtLeast, useBoPhan } from "@/hooks/use-permissions";
+import { usePermission, useRoleAtLeast, useBoPhan, useIsReadOnly } from "@/hooks/use-permissions";
 import { useAuth } from "@/hooks/use-auth";
 
 vi.mock("@/hooks/use-auth", () => ({
@@ -109,6 +109,28 @@ describe("useRoleAtLeast", () => {
     const { result } = renderHook(() => useRoleAtLeast("nhan_vien"), { wrapper: makeWrapper() });
     expect(result.current).toBe(false);
   });
+
+  // Tài khoản chỉ xem: 2 cổng vai trò chỉ gate quyền XEM trang → nâng lên tầm
+  // giám đốc, nếu không "xem toàn bộ" sẽ rớt ở Tổng quan / Theo dõi / ĐNTT...
+  it("nâng tài khoản chỉ-xem lên tầm giam_doc dù role thấp", () => {
+    mockUseAuth.mockReturnValue({ user: { role: "specialist", chi_xem: true } });
+    for (const min of ["nhan_vien", "truong_phong", "giam_doc"]) {
+      const { result } = renderHook(() => useRoleAtLeast(min), { wrapper: makeWrapper() });
+      expect(result.current).toBe(true);
+    }
+  });
+
+  it("KHÔNG nâng tài khoản chỉ-xem tới admin (trang Voucher vẫn khóa)", () => {
+    mockUseAuth.mockReturnValue({ user: { role: "specialist", chi_xem: true } });
+    const { result } = renderHook(() => useRoleAtLeast("admin"), { wrapper: makeWrapper() });
+    expect(result.current).toBe(false);
+  });
+
+  it("không hạ cấp admin đang bật cờ chỉ-xem", () => {
+    mockUseAuth.mockReturnValue({ user: { role: "admin", chi_xem: true } });
+    const { result } = renderHook(() => useRoleAtLeast("admin"), { wrapper: makeWrapper() });
+    expect(result.current).toBe(true);
+  });
 });
 
 describe("useBoPhan", () => {
@@ -137,6 +159,42 @@ describe("useBoPhan", () => {
   it("returns false when user bo_phan does not match", () => {
     mockUseAuth.mockReturnValue({ user: { role: "nhan_vien", bo_phan: "sale" } });
     const { result } = renderHook(() => useBoPhan("ke_toan"), { wrapper: makeWrapper() });
+    expect(result.current).toBe(false);
+  });
+
+  it("tài khoản chỉ-xem qua được cổng bộ phận (ĐNTT / HĐ&UNC là trang kế toán)", () => {
+    mockUseAuth.mockReturnValue({ user: { role: "specialist", bo_phan: null, chi_xem: true } });
+    const { result } = renderHook(() => useBoPhan("ke_toan"), { wrapper: makeWrapper() });
+    expect(result.current).toBe(true);
+  });
+});
+
+describe("useIsReadOnly", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns false when user is null", () => {
+    mockUseAuth.mockReturnValue({ user: null });
+    const { result } = renderHook(() => useIsReadOnly(), { wrapper: makeWrapper() });
+    expect(result.current).toBe(false);
+  });
+
+  it("returns true when chi_xem is set", () => {
+    mockUseAuth.mockReturnValue({ user: { role: "specialist", chi_xem: true } });
+    const { result } = renderHook(() => useIsReadOnly(), { wrapper: makeWrapper() });
+    expect(result.current).toBe(true);
+  });
+
+  it("KHÔNG miễn trừ admin — cờ chỉ-xem thắng mọi role (khớp RLS ở DB)", () => {
+    mockUseAuth.mockReturnValue({ user: { role: "admin", chi_xem: true } });
+    const { result } = renderHook(() => useIsReadOnly(), { wrapper: makeWrapper() });
+    expect(result.current).toBe(true);
+  });
+
+  it("returns false for a normal account", () => {
+    mockUseAuth.mockReturnValue({ user: { role: "truong_phong", chi_xem: false } });
+    const { result } = renderHook(() => useIsReadOnly(), { wrapper: makeWrapper() });
     expect(result.current).toBe(false);
   });
 });

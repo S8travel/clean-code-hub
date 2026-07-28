@@ -3918,6 +3918,7 @@ export type Database = {
         Row: {
           active: boolean
           bo_phan: string | null
+          chi_xem: boolean
           created_at: string | null
           email: string | null
           ghi_chu: string | null
@@ -3936,6 +3937,7 @@ export type Database = {
         Insert: {
           active?: boolean
           bo_phan?: string | null
+          chi_xem?: boolean
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null
@@ -3954,6 +3956,7 @@ export type Database = {
         Update: {
           active?: boolean
           bo_phan?: string | null
+          chi_xem?: boolean
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null
