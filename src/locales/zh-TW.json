@@ -2412,6 +2412,5 @@
   "chưa được đề nghị": "尚未申請",
   "Sửa giá/số phòng cho khớp, hoặc trả nốt phần đã đề nghị rồi bổ sung phần lệch. Đừng hủy nếu ĐNTT có cấn trừ.": "修正房價／房數以相符，或先付清已申請部分再補足差額。若付款申請單含抵扣，請勿取消。",
   "Chi phí văn phòng": "辦公室費用",
-  "Tài khoản chỉ xem — mọi thao tác thêm/sửa/xóa đều bị khóa.": "唯讀帳號 — 所有新增／修改／刪除操作皆已鎖定。",
   "Khóa mọi thao tác thêm/sửa/xóa (chặn tận DB)": "鎖定所有新增／修改／刪除操作（於資料庫層阻擋）"
 }
