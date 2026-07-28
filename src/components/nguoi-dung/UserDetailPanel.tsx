@@ -41,6 +41,7 @@ const formFrom = (u: UserRoleRow): DetailForm => ({
   so_dien_thoai: u.so_dien_thoai,
   ghi_chu: u.ghi_chu,
   active: u.active,
+  chi_xem: u.chi_xem,
   password_hash: u.password_hash,
 });
 
@@ -328,6 +329,19 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
             <Switch
               checked={form.active}
               onCheckedChange={(v) => set("active", v)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm font-medium">{t("Chỉ xem")}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Khóa mọi thao tác thêm/sửa/xóa (chặn tận DB)")}
+              </p>
+            </div>
+            <Switch
+              checked={form.chi_xem}
+              onCheckedChange={(v) => set("chi_xem", v)}
             />
           </div>
         </div>

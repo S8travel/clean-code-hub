@@ -89,7 +89,8 @@ export default function DoanDetail() {
   // const { data: doanPerms = [] } = useDoanPermissions(doanId || null);
   // const myPerm = doanPerms.find((p) => p.user_id === currentUser?.user_id);
   // const canEdit = isAdmin || doanPerms.length === 0 || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
-  const canEdit = true;
+  // Tài khoản chỉ xem → khóa nguyên <fieldset> bên dưới (DB cũng chặn ghi).
+  const canEdit = !currentUser?.chi_xem;
 
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();

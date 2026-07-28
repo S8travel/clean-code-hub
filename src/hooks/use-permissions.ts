@@ -22,6 +22,7 @@ export type Resource =
   | "seri"
   // Hệ thống
   | "dntt"
+  | "hoan_ung"
   | "thanh_toan_dk"
   | "hoa_don_unc"
   | "cong_no"
@@ -114,6 +115,18 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
   return false;
 }
 
+/**
+ * Tài khoản chỉ xem (`user_roles.chi_xem`) — mọi thao tác ghi bị khóa.
+ *
+ * Khác `usePermission(x, "edit")`: cờ này là lớp CHẶN toàn cục, độc lập ma trận
+ * quyền, và được enforce thật ở DB (RLS restrictive + guard RPC). Dùng nó để
+ * disable UI cho đúng, đừng dùng nó làm lớp bảo mật.
+ */
+export function useIsReadOnly(): boolean {
+  const { user } = useAuth();
+  return !!user?.chi_xem;
+}
+
 const ROLE_LEVELS: Record<string, number> = {
   nhan_vien: 1,
   nhan_vien_cao_cap: 2,
@@ -123,18 +136,38 @@ const ROLE_LEVELS: Record<string, number> = {
   admin: 6,
 };
 
+/**
+ * Tài khoản chỉ xem được nâng lên tầm nhìn `giam_doc` cho 2 cổng theo vai trò
+ * (`useRoleAtLeast` / `useBoPhan`).
+ *
+ * Lý do: 2 cổng đó chỉ dùng để gate QUYỀN XEM TRANG (Tổng quan, Theo dõi, Xếp
+ * HDV, Invoice, Báo cáo Lead, ĐNTT, HĐ&UNC) và menu tương ứng — không chỗ nào
+ * dùng chúng để gate thao tác. Tài khoản chỉ xem không ghi được gì (RLS chặn ở
+ * DB), nên để nó rớt ở cổng vai trò chỉ khiến "được xem toàn bộ" thành sai.
+ * Cổng thật của tài khoản này là ma trận resource (`usePermission`).
+ *
+ * KHÔNG nâng tới `admin`: đó là quyền quản trị thật (vd trang Voucher), giữ
+ * nguyên để menu và trang không lệch nhau.
+ */
+const CHI_XEM_LEVEL = 5; // = giam_doc
+
 /** Trả về true nếu role của user >= minRole trong hierarchy */
 export function useRoleAtLeast(minRole: string): boolean {
   const { user } = useAuth();
   if (!user) return false;
-  return (ROLE_LEVELS[user.role] ?? 0) >= (ROLE_LEVELS[minRole] ?? 999);
+  const level = Math.max(
+    ROLE_LEVELS[user.role] ?? 0,
+    user.chi_xem ? CHI_XEM_LEVEL : 0,
+  );
+  return level >= (ROLE_LEVELS[minRole] ?? 999);
 }
 
-/** Trả về true nếu user thuộc boPhan chỉ định, hoặc là admin */
+/** Trả về true nếu user thuộc boPhan chỉ định, hoặc là admin / tài khoản chỉ xem */
 export function useBoPhan(boPhan: string): boolean {
   const { user } = useAuth();
   if (!user) return false;
   if (user.role === "admin") return true;
+  if (user.chi_xem) return true;
   return user.bo_phan === boPhan;
 }
 
