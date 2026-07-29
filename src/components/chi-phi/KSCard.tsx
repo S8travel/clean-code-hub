@@ -13,6 +13,7 @@ import {
   resolveKSFoc,
 } from "@/lib/foc-calc";
 import { calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import { DayGroup, EmptyDayHeader } from "./DayGroup";
 import KSServicesSection from "./KSServicesSection";
 import KSFocEditor from "./KSFocEditor";
@@ -137,7 +138,9 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
     sumActual, sumPaid, sumCommitted, groupCongNoTotal,
   });
-  const daDeNghi = unpaidDnttsForKs.reduce((s, d) => s + Math.max(0, d.so_tien - (d.paid_amount || 0)), 0);
+  // Tiền còn treo — theo ĐÚNG định nghĩa của RPC recalc (nguồn của sumPaid), nên
+  // phiếu `cho_duyet` dù đã cấn trừ đủ vẫn tính là treo. Xem lib/dntt-con-treo.ts.
+  const daDeNghi = tinhDnttConTreo(cancellableDntts);
   const showAggBtn = daDeNghi === 0 && sumPaid > 0 && effectiveDelta !== 0;
   const aggPaidDntt = paidDnttsForKs[0] ?? null;
   const hasCommittedDntt = cancellableDntts.some(

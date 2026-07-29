@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import type { AggCluster } from "@/lib/agg-cluster";
 import type { DnttLump } from "@/lib/can-tru-lump";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
@@ -243,9 +244,9 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
       (d.ref_loai === "doan_chi_phi" && d.ref_id != null && clusterRowIds.includes(d.ref_id))),
   );
   // Còn phiếu chưa trả xong → tiền đang chờ, chưa chốt chênh lệch được.
-  const clusterPendingAmt = clusterDntts
-    .filter(d => d.payment_status !== "paid")
-    .reduce((s, d) => s + Math.max(0, Number(d.so_tien) - Number(d.paid_amount || 0)), 0);
+  // Theo ĐÚNG định nghĩa của RPC recalc (nguồn của sumPaid): phiếu `cho_duyet`
+  // dù đã cấn trừ đủ vẫn tính là treo. Xem lib/dntt-con-treo.ts.
+  const clusterPendingAmt = tinhDnttConTreo(clusterDntts);
   const showAggBtn =
     isAggAnchor &&
     sumActual + sumCommitted > 0 &&   // cụm có tiền công ty (dòng HDV thuần không cần)
