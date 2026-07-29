@@ -49,9 +49,11 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
     nha_cung_cap_id: "",
   });
   const [tinhSuatTL, setTinhSuatTL] = useState(nhaHang.tinh_suat_tl ?? false);
+  const [dinhKyMacDinh, setDinhKyMacDinh] = useState(nhaHang.thanh_toan_dinh_ky_mac_dinh ?? false);
 
   useEffect(() => {
     setTinhSuatTL(nhaHang.tinh_suat_tl ?? false);
+    setDinhKyMacDinh(nhaHang.thanh_toan_dinh_ky_mac_dinh ?? false);
     setForm({
       ten: nhaHang.ten ?? "",
       ten_zh: nhaHang.ten_zh ?? "",
@@ -96,6 +98,7 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         thong_tin_chung: form.thong_tin_chung || null,
         nha_cung_cap_id: form.nha_cung_cap_id ? Number(form.nha_cung_cap_id) : null,
         tinh_suat_tl: tinhSuatTL,
+        thanh_toan_dinh_ky_mac_dinh: dinhKyMacDinh,
       });
       toast.success("Đã lưu thông tin nhà hàng");
     } catch {
@@ -198,6 +201,22 @@ export default function NhaHangDetail({ nhaHang, onDeleted }: Props) {
         <div className="flex items-center justify-between col-span-2 py-1">
           <Label className="text-xs">Tính suất ăn T/L</Label>
           <Switch checked={tinhSuatTL} onCheckedChange={setTinhSuatTL} />
+        </div>
+        <div className="col-span-2 flex items-start gap-3 rounded-md border p-3">
+          <Switch
+            id="nh-dinh-ky-mac-dinh"
+            checked={dinhKyMacDinh}
+            onCheckedChange={setDinhKyMacDinh}
+          />
+          <div>
+            <Label htmlFor="nh-dinh-ky-mac-dinh" className="text-xs cursor-pointer">
+              Mặc định thanh toán định kỳ
+            </Label>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Bật: chi phí nhà hàng này trong đoàn mới tự đánh dấu "định kỳ" (gộp thanh toán theo NCC).
+              Đoàn đã có chi phí giữ nguyên như đang đặt.
+            </p>
+          </div>
         </div>
         <div>
           <Label className="text-xs">Người thanh toán</Label>

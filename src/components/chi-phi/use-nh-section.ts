@@ -23,6 +23,7 @@ import { applyChietKhau, calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { nhMainMoTa, resolveNhMainId } from "@/lib/nh-chi-phi-resolve";
+import { computeInitialDinhKyNhKeys } from "@/lib/nh-dinh-ky";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -215,19 +216,23 @@ export function useNHSection({
     setLocalRows(rows);
     setExtrasMap(extras);
 
-    // Khởi tạo dinhKyKeys từ DB
-    const dkSet = new Set<string>();
-    for (const meal of nhData.meals) {
-      const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
-      const nh = nhData.nhaHangMap[meal.nha_hang_id];
-      const nhName = nh?.ten || "Nhà hàng";
-      const buaStr = meal.bua_an === "trua" ? "trưa" : "tối";
-      const mainMoTa = nhMainMoTa(nhName, meal.bua_an);
-      const mainCp = nhChiPhi.find(
-        (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
-      );
-      if (mainCp?.thanh_toan_dinh_ky) dkSet.add(key);
-    }
+    // Khởi tạo dinhKyKeys: bữa đã có chi phí → theo DB; bữa chưa có → seed từ cờ
+    // mặc định của nhà hàng (đoàn mới khỏi bật tay). Xem lib/nh-dinh-ky.ts.
+    const dkSet = computeInitialDinhKyNhKeys(
+      nhData.meals.map((meal) => {
+        const nh = nhData.nhaHangMap[meal.nha_hang_id];
+        const mainMoTa = nhMainMoTa(nh?.ten || "Nhà hàng", meal.bua_an);
+        const mainCp = nhChiPhi.find(
+          (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
+        );
+        return {
+          key: `${meal.doan_ngay_id}_${meal.bua_an}`,
+          daCoChiPhi: !!mainCp,
+          chiPhiDinhKy: mainCp?.thanh_toan_dinh_ky ?? null,
+          nhMacDinh: nh?.thanh_toan_dinh_ky_mac_dinh ?? null,
+        };
+      }),
+    );
     if (dkSet.size > 0) setDinhKyKeys(dkSet);
 
     initializedRef.current = true;
