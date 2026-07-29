@@ -42,6 +42,7 @@ export const RESOURCE_SECTIONS: ResourceSection[] = [
     items: [
       { value: "dashboard", label: "Tổng quan" },
       { value: "my_job", label: "Công việc của tôi" },
+      { value: "so_tay", label: "Sổ tay điều hành" },
       { value: "doan", label: "Danh sách đoàn" },
       { value: "theo_doi", label: "Theo dõi" },
       { value: "xep_hdv", label: "Xếp HDV" },
