@@ -13,6 +13,7 @@ import type { CongNoRow } from "@/hooks/use-cong-no";
 import { calcSoKhachThucTe, resolveNHFoc } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import { canApplyVoucher, sumGroupVoucherMua, type CoveredInfo } from "@/lib/voucher";
 import { type VoucherTarget } from "./DungVoucherModal";
 import CatalogHoverCard from "./CatalogHoverCard";
@@ -172,7 +173,9 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   // pendingDntts: ĐNTT chưa được thanh toán đủ
   const paidDntts = activeDntts.filter((d) => d.payment_status === "paid");
   const pendingDntts = activeDntts.filter((d) => d.payment_status !== "paid");
-  const daDeNghi = pendingDntts.reduce((s, d) => s + (d.so_tien - (d.paid_amount || 0)), 0);
+  // Tiền còn treo — theo ĐÚNG định nghĩa của RPC recalc (nguồn của sumPaid), nên
+  // phiếu `cho_duyet` dù đã cấn trừ đủ vẫn tính là treo. Xem lib/dntt-con-treo.ts.
+  const daDeNghi = tinhDnttConTreo(activeDntts);
   // canTruAmtForNh: tổng can_tru payments thuộc về chi_phi này
   const canTruAmtForNh = row?.id
     ? paymentsList
