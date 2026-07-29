@@ -22,6 +22,7 @@ import {
   CalendarRange,
   FileText,
   Calculator,
+  BookOpen,
   Users2,
   BarChart3,
   Target,
@@ -164,6 +165,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard, resource: "dashboard" },
       { title: "Công việc của tôi", url: "/my-job", icon: BriefcaseBusiness, resource: "my_job" },
+      { title: "Sổ tay điều hành", url: "/so-tay", icon: BookOpen, resource: "so_tay" },
       { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, resource: "theo_doi" },
       { title: "Khảo sát", url: "/khao-sat", icon: Star, resource: "theo_doi" },

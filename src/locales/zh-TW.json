@@ -2414,5 +2414,22 @@
   "Khóa mọi thao tác thêm/sửa/xóa (chặn tận DB)": "鎖定所有新增／修改／刪除操作（於資料庫層阻擋）",
   "Nội dung": "內容",
   "Tổng cộng": "總計",
-  "Thành phố": "城市"
+  "Thành phố": "城市",
+  "Sổ tay điều hành": "營運手冊",
+  "Tra cứu quy trình & xử lý tình huống": "查詢作業流程與情境處理",
+  "Tìm quy trình, tình huống... (gõ không dấu cũng được)": "搜尋流程、情境…（可不加聲調符號）",
+  "Xóa tìm kiếm": "清除搜尋",
+  "Quy trình": "流程",
+  "Tình huống": "情境",
+  "Checklist": "檢查清單",
+  "kết quả": "筆結果",
+  "Không tìm thấy kết quả nào.": "找不到任何結果。",
+  "Quy trình vận hành": "營運流程",
+  "Xử lý tình huống": "情境處理",
+  "Thứ tự ưu tiên": "優先順序",
+  "Các bước thực hiện": "執行步驟",
+  "Mẫu câu trả lời": "回覆範本",
+  "Đã chép": "已複製",
+  "Chép": "複製",
+  "Không sao chép được — bôi đen rồi copy tay giúp mình": "無法複製 — 請手動選取後複製"
 }

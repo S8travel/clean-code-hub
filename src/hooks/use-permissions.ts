@@ -10,6 +10,7 @@ export type Resource =
   // Quản lý đoàn
   | "dashboard"
   | "my_job"
+  | "so_tay"
   | "doan"
   | "theo_doi"
   | "xep_hdv"
