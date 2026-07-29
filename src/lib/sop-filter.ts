@@ -2,6 +2,7 @@
 // không cần render.
 
 import type { SopCat, SopMuc } from "./sop-data";
+import { chuZhCuaMuc } from "./sop-i18n";
 
 /** Bỏ dấu tiếng Việt + hạ chữ thường — để gõ "khach san" vẫn ra "khách sạn". */
 export function boDau(s: string): string {
@@ -15,9 +16,14 @@ export function boDau(s: string): string {
     .toLowerCase();
 }
 
-/** Gom toàn bộ chữ của một mục để tìm kiếm — kể cả bước, mẫu câu, checklist. */
+/**
+ * Gom toàn bộ chữ của một mục để tìm kiếm — kể cả bước, mẫu câu, checklist.
+ * Gộp LUÔN bản tiếng Trung: đang xem tiếng Trung mà gõ tiếng Việt (hoặc ngược
+ * lại) vẫn ra kết quả, vì team dùng lẫn hai thứ tiếng.
+ */
 function noiDungTimKiem(m: SopMuc): string {
   return [
+    chuZhCuaMuc(m.id),
     m.title,
     m.sub,
     m.tinhHuong ?? "",
