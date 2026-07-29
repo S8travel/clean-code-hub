@@ -49,7 +49,6 @@ export const RESOURCE_SECTIONS: ResourceSection[] = [
       { value: "invoice", label: "Invoice" },
       { value: "bao_gia", label: "Báo Giá" },
       { value: "chi_phi", label: "Chi phí (tab trong đoàn)" },
-      { value: "chi_phi_agent", label: "Chi phí (bản agent)" },
     ],
   },
   {
@@ -113,6 +112,5 @@ export const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   ghi_chu: null,
   active: true,
   chi_xem: false,
-  che_gia_von: false,
   password_hash: null,
 });

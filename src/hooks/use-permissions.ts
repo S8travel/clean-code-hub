@@ -17,7 +17,6 @@ export type Resource =
   | "invoice"
   | "bao_gia"
   | "chi_phi"
-  | "chi_phi_agent"
   // Danh mục
   | "danh_muc"
   | "seri"
@@ -126,20 +125,6 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
 export function useIsReadOnly(): boolean {
   const { user } = useAuth();
   return !!user?.chi_xem;
-}
-
-/**
- * Tài khoản che giá vốn (`user_roles.che_gia_von`) — không được thấy giá NCC.
- *
- * Ở DB, RLS đã chặn ĐỌC các bảng giá vốn đoàn (doan_chi_phi, ĐNTT, payments,
- * cong_no, doan_ks_dem...). Hook này để bịt nốt các chỗ giá lọt ra từ bảng
- * KHÁC mà tài khoản vẫn cần đọc để xem lịch trình — RLS lọc theo dòng, không
- * lọc được theo cột. Chi phí phát cho các tài khoản này đi qua RPC
- * `get_chi_phi_agent_view` (đã nhân hệ số).
- */
-export function useCheGiaVon(): boolean {
-  const { user } = useAuth();
-  return !!user?.che_gia_von;
 }
 
 const ROLE_LEVELS: Record<string, number> = {

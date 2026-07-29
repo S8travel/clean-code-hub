@@ -50,35 +50,6 @@ export type Database = {
         }
         Relationships: []
       }
-      agent_he_so: {
-        Row: {
-          agent_id: number
-          cap_nhat_luc: string
-          ghi_chu: string | null
-          he_so: number
-        }
-        Insert: {
-          agent_id: number
-          cap_nhat_luc?: string
-          ghi_chu?: string | null
-          he_so?: number
-        }
-        Update: {
-          agent_id?: number
-          cap_nhat_luc?: string
-          ghi_chu?: string | null
-          he_so?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agent_he_so_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: true
-            referencedRelation: "agents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       agents: {
         Row: {
           id: number
@@ -3947,7 +3918,6 @@ export type Database = {
         Row: {
           active: boolean
           bo_phan: string | null
-          che_gia_von: boolean
           chi_xem: boolean
           created_at: string | null
           email: string | null
@@ -3967,7 +3937,6 @@ export type Database = {
         Insert: {
           active?: boolean
           bo_phan?: string | null
-          che_gia_von?: boolean
           chi_xem?: boolean
           created_at?: string | null
           email?: string | null
@@ -3987,7 +3956,6 @@ export type Database = {
         Update: {
           active?: boolean
           bo_phan?: string | null
-          che_gia_von?: boolean
           chi_xem?: boolean
           created_at?: string | null
           email?: string | null
@@ -4763,17 +4731,6 @@ export type Database = {
           mat_khach: number
           total_lead: number
           user_id: string
-        }[]
-      }
-      get_chi_phi_agent_view: {
-        Args: { p_doan_id: number }
-        Returns: {
-          danh_muc: string
-          mo_ta: string
-          ngay_so: number
-          so_luong: number
-          don_gia: number
-          thanh_tien: number
         }[]
       }
       get_lead_funnel: {

@@ -22,7 +22,6 @@ import {
   CalendarRange,
   FileText,
   Calculator,
-  Coins,
   Users2,
   BarChart3,
   Target,
@@ -172,7 +171,6 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Lock Phòng", url: "/lock-phong", icon: CalendarRange, resource: "lock_phong" },
       { title: "Invoice", url: "/invoice", icon: FileText, resource: "invoice" },
       { title: "Báo Giá", url: "/bao-gia", icon: Calculator, resource: "bao_gia" },
-      { title: "Chi phí (bản agent)", url: "/chi-phi-agent", icon: Coins, resource: "chi_phi_agent" },
     ],
   },
   {

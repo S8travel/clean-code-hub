@@ -220,28 +220,28 @@ user_roles      id(uuid), user_id(uuid)
 
 doan_permissions  id, doan_id, user_id, ho_ten
                   quyen: 'view'|'edit'
-
-agent_he_so     agent_id (PK→agents), he_so (>=1.0), ghi_chu, cap_nhat_luc
-                ← hệ số nhân chi phí phát cho tài khoản che_gia_von.
-                  RLS: CHỈ admin/giám đốc đọc-ghi. KHÔNG để trên `agents`
-                  vì bảng đó ai cũng đọc được → biết hệ số là chia ngược
-                  ra giá vốn thật.
 ```
 
-### Tài khoản chỉ xem / che giá vốn
+### Tài khoản chỉ xem
 ```
-user_roles.chi_xem      → RLS restrictive chặn INSERT/UPDATE/DELETE mọi bảng
-                          (trừ UPDATE thong_bao) + guard trong RPC SECURITY DEFINER
-user_roles.che_gia_von  → RLS restrictive chặn SELECT: doan_chi_phi,
-                          de_nghi_thanh_toan, payments, cong_no, dntt_allocations,
-                          doan_invoice, doan_ks_dem
-                          Chi phí phát qua RPC get_chi_phi_agent_view(doan_id)
-                          — số ĐÃ nhân agent_he_so.he_so, KHÔNG trả hệ số ra client
+user_roles.chi_xem → RLS restrictive chặn INSERT/UPDATE/DELETE mọi bảng
+                     (trừ UPDATE thong_bao) + guard trong RPC SECURITY DEFINER
 ```
-⚠️ Còn hở có chủ ý: `doan_ngay_item.don_gia` + giá master danh mục vẫn đọc được
-qua API (RLS lọc theo DÒNG, không theo CỘT; các bảng đó chứa dữ liệu vận hành
-tài khoản cần). UI đã ẩn. Muốn kín nốt phải gỡ quyền `doan` và dựng bản agent
-cho cả lịch trình.
+
+### ⛔ ĐÃ THỬ VÀ BỎ: nhân hệ số chi phí cho tài khoản đối tác
+Ý tưởng: cho đại diện agent xem chi phí đoàn đã nhân hệ số, giấu giá vốn thật.
+**Đã dừng hẳn 29/07/2026** — đừng dựng lại mà không đọc phần này.
+
+- Nhân ở tầng hiển thị: bất khả thi. 151 file chạm `tien_cong_ty/thanh_tien/
+  don_gia/so_tien`, không có tầng chung.
+- Nhân ở client (tầng fetch): **lộ ngay** — PostgREST trả số gốc rồi trình duyệt
+  mới nhân, mở DevTools tab Network là thấy; response hồ sơ còn kèm cả hệ số.
+- Chặn đọc bằng RLS + trang riêng cho agent: **phản tác dụng**. Menu thiếu, màn
+  hình "không có quyền truy cập", tên trang "bản agent" — tất cả đều BÁO HIỆU
+  cho người dùng biết họ bị giới hạn, đúng thứ cần tránh khi mục tiêu là giấu.
+- Kết luận: **một khi đối tác có tài khoản đăng nhập vào hệ thống nội bộ thì
+  không giấu được với người biết kỹ thuật.** Muốn kín thì đừng cấp tài khoản —
+  xuất file (Excel/PDF) với giá đã nhân sẵn và gửi cho họ.
 
 ---
 

@@ -15,7 +15,6 @@ import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDoanList, useDoanDetailRealtime, useUserRoles } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
 import { useAuth } from "@/hooks/use-auth";
-import { usePermission } from "@/hooks/use-permissions";
 import {
   useCanhDiem,
   useNhaHang,
@@ -92,9 +91,6 @@ export default function DoanDetail() {
   // const canEdit = isAdmin || doanPerms.length === 0 || myPerm?.quyen === "edit" || myPerm?.quyen === "admin";
   // Tài khoản chỉ xem → khóa nguyên <fieldset> bên dưới (DB cũng chặn ghi).
   const canEdit = !currentUser?.chi_xem;
-  // Resource `chi_phi` trước đây không được enforce ở đâu — nay gate tab Chi phí,
-  // để tài khoản che giá vốn không thấy giá gốc (RLS ở DB cũng đã chặn đọc).
-  const canViewChiPhi = usePermission("chi_phi", "view");
 
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();
@@ -816,9 +812,7 @@ export default function DoanDetail() {
               {doan?.kieu_gom === "ghep" && (
                 <TabsTrigger value="khach-le">{t("Khách lẻ")}</TabsTrigger>
               )}
-              {canViewChiPhi && (
-                <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
-              )}
+              <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
               <TabsTrigger value="tai-lieu">{t("Tài liệu")}</TabsTrigger>
               <TabsTrigger value="log">{t("Log")}</TabsTrigger>
               <TabsTrigger value="khao-sat">{t("Khảo sát khách")}</TabsTrigger>
@@ -1012,17 +1006,15 @@ export default function DoanDetail() {
             />
           </TabsContent>
 
-          {canViewChiPhi && (
-            <TabsContent value="chi-phi" className="mt-4">
-              {/* Phase 3: KHÔNG hiện DoanNhomTabs ở Chi phí tab.
-                  Chi phí query cả 2 nhóm gộp lại, merge same NH-bữa hoặc same cảnh điểm. */}
-              <ChiPhiTab
-                doanId={doanId}
-                doan={doan}
-                coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
-              />
-            </TabsContent>
-          )}
+          <TabsContent value="chi-phi" className="mt-4">
+            {/* Phase 3: KHÔNG hiện DoanNhomTabs ở Chi phí tab.
+                Chi phí query cả 2 nhóm gộp lại, merge same NH-bữa hoặc same cảnh điểm. */}
+            <ChiPhiTab
+              doanId={doanId}
+              doan={doan}
+              coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
+            />
+          </TabsContent>
 
           <TabsContent value="tai-lieu" className="mt-4">
             <DoanTaiLieuTab doanId={doanId} />
