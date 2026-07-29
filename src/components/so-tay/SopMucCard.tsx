@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { SopMuc } from "@/lib/sop-data";
+import { dichSopMuc } from "@/lib/sop-i18n";
 import { t } from "@/lib/i18n";
 
 interface Props {
@@ -17,7 +18,9 @@ interface Props {
  * Checklist tick vào KHÔNG lưu (tải lại trang là trắng) — đúng như bản HTML gốc.
  * Muốn lưu theo từng đoàn thì cần bảng DB riêng, để dành cho bước sau.
  */
-export default function SopMucCard({ muc, moSan = false }: Props) {
+export default function SopMucCard({ muc: mucGoc, moSan = false }: Props) {
+  // Trang cha đã gọi useTranslate() → đổi ngôn ngữ là re-render, hàm này chạy lại.
+  const muc = dichSopMuc(mucGoc);
   const [mo, setMo] = useState(moSan);
   const [daTick, setDaTick] = useState<Set<number>>(new Set());
   const [daChep, setDaChep] = useState(false);
