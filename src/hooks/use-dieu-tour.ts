@@ -1521,6 +1521,18 @@ export async function syncDieuTourToBookingDV(params: {
 }): Promise<{ synced: number; warnings: SyncWarning[] }> {
   const { doanId, days, canhDiemList, soKhach } = params;
 
+  // Danh mục CHƯA TẢI XONG thì DỪNG, không được coi là "đoàn không có dịch vụ".
+  // Mọi item tra `canhDiemList` để biết loai/co_phi; danh mục rỗng → không item nào
+  // khớp → rơi vào nhánh "không còn dịch vụ nào" bên dưới và XÓA SẠCH booking chua_dat
+  // của đoàn. Một lần autosave chạy trước khi query ["canh_diem"] kịp về (mở lại trang,
+  // refetch, mất mạng chớp nhoáng) là đủ để thổi bay dữ liệu booking — im lặng.
+  if (canhDiemList.length === 0) {
+    throw new Error(
+      "Chưa tải xong danh mục cảnh điểm/dịch vụ — bỏ qua đồng bộ Booking DV lần này " +
+      "để không xóa nhầm booking đã có. Lưu lại điều tour sau khi trang tải đủ.",
+    );
+  }
+
   // Collect co_phi + tag dich_vu items (KHÔNG phụ thuộc nguoi_thanh_toan —
   // HDV trả cash vẫn cần gửi mail booking với NCC để giữ chỗ).
   const coPhiItems: { cd: CanhDiemItem; ngay_date: string }[] = [];
@@ -1535,15 +1547,18 @@ export async function syncDieuTourToBookingDV(params: {
 
   if (coPhiItems.length === 0) {
     // Xóa tất cả booking DV chua_dat vì không còn dịch vụ nào
-    const { data: existingAll } = await externalSupabase
+    const { data: existingAll, error: eSel } = await externalSupabase
       .from("doan_booking_dv")
       .select("id, booking_status")
       .eq("doan_id", doanId);
+    if (eSel) throw eSel;
 
     if (existingAll) {
       for (const bk of existingAll) {
         if (bk.booking_status === "chua_dat") {
-          await externalSupabase.from("doan_booking_dv").delete().eq("id", bk.id);
+          const { error: eDel } = await externalSupabase
+            .from("doan_booking_dv").delete().eq("id", bk.id);
+          if (eDel) throw eDel;
         }
       }
     }
@@ -1571,34 +1586,43 @@ export async function syncDieuTourToBookingDV(params: {
   const warnings: SyncWarning[] = [];
 
   for (const [ncc, { email, dichVu }] of groups) {
-    const { data: existing } = await externalSupabase
+    const { data: existing, error: eSel } = await externalSupabase
       .from("doan_booking_dv")
       .select("id, booking_status, dich_vu_list")
       .eq("doan_id", doanId)
       .eq("ten_nha_cung_cap", ncc)
       .maybeSingle();
+    // KHÔNG nuốt lỗi: đọc hụt ở đây làm code tưởng "chưa có dòng nào" rồi insert đè /
+    // hoặc bỏ qua, mà caller thì không biết gì.
+    if (eSel) throw eSel;
 
     if (!existing || existing.booking_status === "chua_dat") {
       if (existing) {
         if (dichVu.length === 0) {
           // Xóa luôn dòng booking DV nếu không còn dịch vụ nào
-          await externalSupabase.from("doan_booking_dv").delete().eq("id", existing.id);
+          const { error } = await externalSupabase
+            .from("doan_booking_dv").delete().eq("id", existing.id);
+          if (error) throw error;
         } else {
           // Cập nhật lại danh sách dịch vụ
-          await externalSupabase
+          const { error } = await externalSupabase
             .from("doan_booking_dv")
             .update({ dich_vu_list: dichVu, email_nha_cung_cap: email })
             .eq("id", existing.id);
+          if (error) throw error;
         }
       } else if (dichVu.length > 0) {
-        // Chỉ insert nếu có dịch vụ
-        await externalSupabase.from("doan_booking_dv").insert({
+        // Chỉ insert nếu có dịch vụ.
+        // Ghi hụt ở ĐÂY chính là ca "tab Booking DV trống trơn mà không ai hay":
+        // trước đây lỗi bị bỏ qua và `synced` vẫn cộng lên, nên caller báo thành công.
+        const { error } = await externalSupabase.from("doan_booking_dv").insert({
           doan_id: doanId,
           ten_nha_cung_cap: ncc,
           email_nha_cung_cap: email,
           dich_vu_list: dichVu,
           booking_status: "chua_dat",
         });
+        if (error) throw error;
       }
       synced += dichVu.length;
     } else if (["cho_xac_nhan", "da_xac_nhan"].includes(existing.booking_status)) {
@@ -1617,10 +1641,11 @@ export async function syncDieuTourToBookingDV(params: {
         [...oldKeys].some((k) => !newKeys.has(k)) ||
         [...newKeys].some((k) => !oldKeys.has(k));
       if (hasChange) {
-        await externalSupabase
+        const { error } = await externalSupabase
           .from("doan_booking_dv")
           .update({ dich_vu_list: dichVu, email_nha_cung_cap: email })
           .eq("id", existing.id);
+        if (error) throw error;
       }
 
       if (hasChange) {
@@ -1631,15 +1656,18 @@ export async function syncDieuTourToBookingDV(params: {
   }
 
   // Cleanup: xóa các booking chua_dat không còn trong điều tour hiện tại
-  const { data: allExisting } = await externalSupabase
+  const { data: allExisting, error: eAll } = await externalSupabase
     .from("doan_booking_dv")
     .select("id, ten_nha_cung_cap, booking_status")
     .eq("doan_id", doanId);
+  if (eAll) throw eAll;
 
   if (allExisting) {
     for (const bk of allExisting) {
       if (bk.booking_status === "chua_dat" && !groups.has(bk.ten_nha_cung_cap)) {
-        await externalSupabase.from("doan_booking_dv").delete().eq("id", bk.id);
+        const { error } = await externalSupabase
+          .from("doan_booking_dv").delete().eq("id", bk.id);
+        if (error) throw error;
       }
     }
   }
