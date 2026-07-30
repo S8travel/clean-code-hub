@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
-import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
+import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, buildOccupiedMealSlotIds, findOrphanNhExtras, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
 import { extraParentId } from "@/lib/dntt-gop-calc";
 import { getActiveDnttIdsForChiPhi, getActiveDnttIdsForChiPhiBatch } from "@/lib/dntt-guard";
 import { DieuTourGuardError } from "@/lib/dieu-tour-guard-error";
@@ -1271,7 +1271,7 @@ export function useSaveDieuTour() {
       {
         const { data: allNgayRows } = await externalSupabase
           .from("doan_ngay")
-          .select("ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id")
+          .select("id, ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id")
           .eq("doan_id", doanId);
         const { keys: expectedNhKeys, hasUnknownNh } = buildExpectedNhKeys(
           allNgayRows ?? [],
@@ -1282,11 +1282,24 @@ export function useSaveDieuTour() {
         if (!hasUnknownNh) {
           const { data: nhCpRows } = await externalSupabase
             .from("doan_chi_phi")
-            .select("id, ngay_so, mo_ta")
+            .select("id, ngay_so, mo_ta, ref_doan_ngay_id, so_tien_da_tt")
             .eq("doan_id", doanId)
             .eq("danh_muc", "nha_hang");
-          const orphans = findOrphanNhChiPhi(nhCpRows ?? [], expectedNhKeys);
+          // Dòng phát sinh của ô bữa đã bị bỏ trống: phải dọn CÙNG dòng chính.
+          // Chúng mang cờ định kỳ + NCC của bữa (lib/dinh-ky-nhom.ts) nên nếu ở lại
+          // sẽ tiếp tục nằm trong cụm NCC × tháng và được TRẢ TIỀN, trong khi tab
+          // Chi phí không còn hiển thị chúng để OP phát hiện.
+          const occupiedSlotIds = buildOccupiedMealSlotIds(allNgayRows ?? []);
+          const orphans = [
+            ...findOrphanNhChiPhi(nhCpRows ?? [], expectedNhKeys),
+            ...findOrphanNhExtras(nhCpRows ?? [], occupiedSlotIds),
+          ];
           for (const cp of orphans) {
+            // Đã trả tiền (ĐNTT có thể đã hủy) → giữ lại, xóa là mất dấu tiền đã trả.
+            if (Number(cp.so_tien_da_tt ?? 0) > 0) {
+              counters.nhOrphanKept++;
+              continue;
+            }
             // Còn ĐNTT hiệu lực → giữ lại cho luồng điều chỉnh/công nợ, báo caller toast.
             const activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
             if (activeDnttIds.length > 0) {

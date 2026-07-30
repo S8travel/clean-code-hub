@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { proRataInts } from "@/lib/pro-rata";
 import { netPhaiTra } from "@/lib/dinh-ky-amounts";
+import { nhanChiPhi } from "@/lib/dinh-ky-nhom";
 import { kyHieuLuc, kyMacDinh, daDoiKy, kyKeTiep, coTheDoiKy } from "@/lib/ky-thanh-toan";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -648,7 +649,7 @@ export default function ThanhToanDinhKyPage() {
                   return dialogCtx.rows.map((r, i) => (
                     <div key={r.id} className="flex justify-between text-muted-foreground">
                       <span className="truncate max-w-[220px]">
-                        {r.ten_doan || `${t("Đoàn")} #${r.doan_id}`} · {r.mo_ta}
+                        {r.ten_doan || `${t("Đoàn")} #${r.doan_id}`} · {nhanChiPhi(r.mo_ta).nhan}
                       </span>
                       <span className="ml-2 font-medium text-foreground shrink-0">
                         {fmt(allocated[i])} ₫
@@ -923,10 +924,13 @@ function MonthGroupCard({
                       const tt = netPhaiTra(r);
                       const conLai = Math.max(0, tt - r.so_tien_da_tt);
                       const isPaid = conLai === 0;
+                      // Dòng phát sinh ([trua]/[toi]/[dvps_<id>]): bỏ prefix kỹ thuật,
+                      // thụt vào dưới dòng chính của nó.
+                      const { nhan, laPhatSinh } = nhanChiPhi(r.mo_ta);
                       return (
                         <div key={r.id} className="flex justify-between text-muted-foreground">
-                          <span className="truncate max-w-[280px]">
-                            • {r.mo_ta || "—"}
+                          <span className={cn("truncate max-w-[280px]", laPhatSinh && "pl-3")}>
+                            {laPhatSinh ? "↳" : "•"} {nhan || "—"}
                           </span>
                           <span className="ml-2 shrink-0">
                             {fmt(tt)} ₫{" "}

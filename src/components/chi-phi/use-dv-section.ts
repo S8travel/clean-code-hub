@@ -15,6 +15,7 @@ import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump";
 import { buildAggClusters, type AggClusterRow } from "@/lib/agg-cluster";
 import { buildRemainingAllocations } from "@/lib/alloc-remaining";
+import { tienDeNghiTrung } from "@/lib/dinh-ky-nhom";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -451,6 +452,16 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       so_luong: extra.so_luong,
       tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
       tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
+      // Phát sinh MỚI đi theo cờ định kỳ + NCC CỦA DÒNG CHÍNH — bỏ sót thì dòng này
+      // không lọt vào trang Thanh toán định kỳ (mà luồng gộp theo NCC cũng bỏ qua
+      // vì dòng chính là định kỳ) → tiền không nằm trong đề nghị nào.
+      // Xem lib/dinh-ky-nhom.ts.
+      //
+      // CHỈ ghi khi INSERT — dòng đã có id mà lật cờ ở đây thì mọi cú blur sẽ âm
+      // thầm kéo dòng cũ vào luồng định kỳ, kể cả dòng đã nằm trong ĐNTT cũ →
+      // đề nghị/trả lần hai. Lật cờ dòng cũ phải qua nút "Định kỳ" (có cảnh báo).
+      ...(extra.id ? {} : { thanh_toan_dinh_ky: mainRow.thanh_toan_dinh_ky ?? false }),
+      ...(mainRow.nha_cung_cap_id != null ? { nha_cung_cap_id: mainRow.nha_cung_cap_id } : {}),
     }, {
       onSuccess: (data) => {
         if (!extra.id && data?.id) {
@@ -494,11 +505,43 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
   // ── Định kỳ toggle ────────────────────────────────────────────────────────
 
+  // Cờ định kỳ áp cho CẢ NHÓM: dòng chính + mọi dòng phát sinh [dvps_<id>].
+  // Chỉ ghi dòng chính thì phát sinh rơi ra ngoài mọi luồng đề nghị thanh toán —
+  // xem lib/dinh-ky-nhom.ts.
   const handleToggleDinhKy = (row: typeof dvRows[0]) => {
     const newVal = !row.thanh_toan_dinh_ky;
+    const extraIds = (extrasMapRef.current[row.id] ?? [])
+      .map((e) => e.id)
+      .filter((x): x is number => x != null);
+
+    if (newVal && extraIds.length > 0) {
+      const extraCps = allDvRows.filter((r) => r.id != null && extraIds.includes(r.id));
+      const trung = tienDeNghiTrung(row, extraCps);
+      if (trung > 0) {
+        const ok = window.confirm(
+          `Dịch vụ này đã có ĐNTT gánh cả tiền phát sinh (${trung.toLocaleString("vi-VN")} ₫ ` +
+          `nằm trong phiếu cũ, allocation dồn vào dòng chính).\n` +
+          `Bật định kỳ sẽ làm phần đó hiện lại như "chưa đề nghị" ở trang Thanh toán ` +
+          `định kỳ → dễ đề nghị/trả lần hai.\n\n` +
+          `Nên hủy ĐNTT cũ trước. Vẫn muốn bật?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal }, {
       onSuccess: () => toast.success(newVal ? "Đã bật thanh toán định kỳ" : "Đã tắt thanh toán định kỳ"),
     });
+    for (const id of extraIds) {
+      upsertMut.mutate({
+        id,
+        doan_id: doanId,
+        thanh_toan_dinh_ky: newVal,
+        // Trang định kỳ gom cụm theo NCC — phát sinh thiếu NCC sẽ nằm ở cụm
+        // "Chưa có NCC" và không tạo được ĐNTT.
+        ...(row.nha_cung_cap_id != null ? { nha_cung_cap_id: row.nha_cung_cap_id } : {}),
+      });
+    }
   };
 
   // ── ĐNTT handlers ─────────────────────────────────────────────────────────
