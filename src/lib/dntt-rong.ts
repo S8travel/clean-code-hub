@@ -8,10 +8,16 @@
 // Nay RPC create_dntt_with_allocations() nguyên tử nên không sinh thêm phiếu rỗng, và
 // trigger DB chặn duyệt. Hàm này chỉ để UI báo sớm cho kế toán, không phải chốt chặn.
 //
-// hoan_ung / hdv / dinh_ky KHÔNG allocate vào doan_chi_phi → không phải phiếu rỗng.
+// hoan_ung / hdv KHÔNG allocate vào doan_chi_phi → không phải phiếu rỗng.
+//
+// `dinh_ky` THÌ CÓ: useCreateBatchDNTT allocate thẳng vào doan_chi_phi của nhiều đoàn
+// (bản đầu ghi chú nhầm là không, nên phiếu rỗng định kỳ duyệt & chi được suốt — sửa
+// 30/07/2026 cùng migration 20260730_chan_duyet_dntt_dinh_ky_rong.sql). Phiếu rỗng ở
+// luồng định kỳ còn khó thấy hơn: không có allocation thì `ky_hieu_luc` = null nên nó
+// rơi vào cụm "Chưa rõ tháng", nằm ngoài cụm tháng kế toán đang làm việc.
 
 /** ref_loai của ĐNTT bắt buộc phải kèm allocation. */
-const REF_LOAI_CAN_ALLOCATION = new Set(["doan_chi_phi", "khach_san"]);
+const REF_LOAI_CAN_ALLOCATION = new Set(["doan_chi_phi", "khach_san", "dinh_ky"]);
 
 export function isDnttRong(d: {
   ref_loai: string | null;
