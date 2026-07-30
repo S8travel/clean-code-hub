@@ -184,6 +184,11 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   const congNoAmount = congNoList
     .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "con_du")
     .reduce((s, c) => s + c.so_tien_con_lai, 0);
+  // Đã cấn trừ hết: vẫn hiện badge (mờ) để kế toán biết khoản này ĐÃ ghi công nợ —
+  // trước đây badge tắt hẳn nên nhìn dòng không phân biệt được với "chưa xử lý gì".
+  const congNoDaCanTru = congNoList
+    .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_can_tru")
+    .reduce((s, c) => s + (c.so_tien_goc ?? 0), 0);
   const hoanTienAmount = congNoList
     .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
     .reduce((s, c) => s + (c.so_tien_goc ?? 0), 0);
@@ -488,12 +493,20 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
               CN: {fmt(congNoAmount)}
             </span>
           )}
+          {congNoDaCanTru > 0 && (
+            <span
+              className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-purple-50 text-purple-500 whitespace-nowrap"
+              title={t("Khoản này đã được ghi công nợ và cấn trừ hết")}
+            >
+              CN: {fmt(congNoDaCanTru)} · {t("đã cấn trừ")}
+            </span>
+          )}
           {hoanTienAmount > 0 && (
             <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
               HT: {fmt(hoanTienAmount)}
             </span>
           )}
-          {activeDntts.length === 0 && congNoAmount === 0 && hoanTienAmount === 0 && (
+          {activeDntts.length === 0 && congNoAmount === 0 && congNoDaCanTru === 0 && hoanTienAmount === 0 && (
             <span className="text-[10px] text-muted-foreground">—</span>
           )}
         </div>

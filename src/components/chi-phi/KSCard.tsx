@@ -39,7 +39,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
     grouped, localRows, dnttList, congNoList,
-    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs, daDeNghiByKs,
+    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs, daDeNghiByKs, congNoDaCanTruByKs,
     congNoByKs, hoanTienByKs,
     groupCongNoTotalByKs, groupCongNoCNByKs, groupCongNoHTByKs,
     thucTeOverrideById, canTruByDnttId,
@@ -103,6 +103,9 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const isDaTT = thucTeKS > 0 && daTT >= thucTeKS;
   void isDaTT;
   const congNoAmount = congNoByKs[ksId] || 0;
+  // Công nợ đã cấn trừ hết: vẫn hiện badge (mờ) để kế toán biết khoản này ĐÃ được ghi
+  // công nợ, khỏi phải mở trang Công nợ đối chiếu. Xem lib/cong-no-badge.ts.
+  const congNoDaCanTru = congNoDaCanTruByKs[ksId] || 0;
   const hoanTienAmount = hoanTienByKs[ksId] || 0;
   const ksStatus = getKsChiPhiStatus(ksId);
   const ksStatusInfo = STATUS_LABEL[ksStatus] ?? STATUS_LABEL.chua_de_nghi;
@@ -558,11 +561,19 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                   );
                 })}
                 {/* CN / HT badges — hiển thị tổng công nợ + hoàn tiền của KS này */}
-                {(congNoAmount > 0 || hoanTienAmount > 0) && (
+                {(congNoAmount > 0 || congNoDaCanTru > 0 || hoanTienAmount > 0) && (
                   <div className="flex items-center gap-1.5 px-3 py-1 bg-muted/10 border-t border-border">
                     {congNoAmount > 0 && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
                         CN: {fmt(congNoAmount)}
+                      </span>
+                    )}
+                    {congNoDaCanTru > 0 && (
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-500 whitespace-nowrap"
+                        title={t("Khoản này đã được ghi công nợ và cấn trừ hết")}
+                      >
+                        CN: {fmt(congNoDaCanTru)} · {t("đã cấn trừ")}
                       </span>
                     )}
                     {hoanTienAmount > 0 && (
