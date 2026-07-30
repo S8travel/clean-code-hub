@@ -317,28 +317,3 @@ export function calcMuaVoucherPaymentSync(params: {
   };
 }
 
-/**
- * Allocation cho ĐNTT bổ sung (footer aggregate) khi nhóm có dòng phủ voucher 'mua'.
- * Allocate giá trị MỖI dòng phát sinh chưa-chốt về ĐÚNG chi_phi của nó (cả voucher
- * lẫn cash) → recalc quy `so_tien_da_dntt`/`so_tien_da_tt` về từng dòng (đúng trạng
- * thái per-dòng + delete-guard bảo vệ). Phần dư (vd điều chỉnh dòng chính) → dòng chính.
- * Bất biến: Σ so_tien === absDelta. `lines` rỗng → [{main, absDelta}] (hành vi footer cũ).
- * Clamp khi Σ giá-trị dòng > absDelta (giá đổi sau redeem) → cắt, không vượt tổng.
- */
-export function buildAggAllocations(
-  absDelta: number,
-  mainChiPhiId: number,
-  lines: { chiPhiId: number; soTien: number }[],
-): { chi_phi_id: number; so_tien: number }[] {
-  const allocs: { chi_phi_id: number; so_tien: number }[] = [];
-  let remaining = absDelta;
-  for (const e of lines) {
-    if (remaining <= 0) break;
-    const amt = Math.min(e.soTien, remaining);
-    if (amt <= 0) continue;
-    allocs.push({ chi_phi_id: e.chiPhiId, so_tien: amt });
-    remaining -= amt;
-  }
-  if (remaining > 0) allocs.push({ chi_phi_id: mainChiPhiId, so_tien: remaining });
-  return allocs;
-}

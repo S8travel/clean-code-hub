@@ -1131,12 +1131,29 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     if (cp.id != null && (cp.so_tien_da_dntt ?? 0) > 0) cpCommittedById[cp.id] = true;
   });
 
+  // Σ cam kết THẬT per KS = Σ so_tien_da_dntt (RPC recalc tính TOÀN CỤC nên thấy cả
+  // ĐNTT gộp định kỳ). `ttByKs`/`cocByKs` chỉ cộng phiếu ref_loai='khach_san' →
+  // mù hoàn toàn với phiếu định kỳ (doan_id=NULL, ref_loai='dinh_ky'). Thiếu vế này,
+  // KS vừa có phiếu KS đã trả vừa được gộp định kỳ sẽ hiện nút "Thanh toán bổ sung"
+  // cho khoản đã nằm trong phiếu gộp → trả hai lần.
+  const daDeNghiByKs: Record<number, number> = {};
+  const soTienDaDnttById = new Map<number, number>();
+  chiPhiRows.forEach((cp) => {
+    if (cp.id != null) soTienDaDnttById.set(cp.id, Number(cp.so_tien_da_dntt ?? 0));
+  });
+  Object.entries(chiPhiIdsByKs).forEach(([ksIdStr, ids]) => {
+    daDeNghiByKs[Number(ksIdStr)] = ids.reduce(
+      (s, id) => s + (soTienDaDnttById.get(id) ?? 0),
+      0,
+    );
+  });
+
   // ── Clustered data + handlers cho <KSCard> ─────────────────────────────────
 
   const cardData: KSCardData = {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
     grouped, localRows, dnttList, congNoList,
-    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs,
+    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs, daDeNghiByKs,
     congNoByKs, hoanTienByKs,
     groupCongNoTotalByKs, groupCongNoCNByKs, groupCongNoHTByKs,
     thucTeOverrideById, canTruByDnttId,
@@ -1223,6 +1240,8 @@ export interface KSCardData {
   ttByKs: Record<number, number>;
   canTruAmtByKsId: Record<number, number>;
   chiPhiIdsByKs: Record<number, number[]>;
+  /** Σ so_tien_da_dntt per KS — cam kết toàn cục, thấy cả ĐNTT gộp định kỳ. */
+  daDeNghiByKs: Record<number, number>;
   congNoByKs: Record<number, number>;
   hoanTienByKs: Record<number, number>;
   groupCongNoTotalByKs: Record<number, number>;
