@@ -118,12 +118,31 @@ type DnttListJoinedRow = Tables<"dntt_with_payment_status"> & {
 };
 
 // Helper: lấy danh sách chi_phi_id được phân bổ cho 1 DNTT
+/**
+ * Danh sách chi_phi_id mà 1 ĐNTT phân bổ vào — ĐI QUA RPC, KHÔNG select trần.
+ *
+ * Mọi caller đều dùng kết quả này làm đầu vào cho `recalcChiPhiStatus`. Recalc là
+ * SECURITY DEFINER nên ghi được mọi dòng; nếu danh sách đầu vào bị RLS cắt thì dòng
+ * ngoài scope KHÔNG được tính lại → sau khi hủy phiếu nó vẫn giữ cam kết của phiếu đã
+ * chết → "còn phải đề nghị" = 0 → khoản nợ NCC biến mất khỏi trang Thanh toán định kỳ.
+ *
+ * Policy `van_phong_scope` của dntt_allocations scope theo VP của đoàn chứa dòng chi
+ * phí và KHÔNG có nhánh kế toán cho phiếu `doan_id IS NULL` (payments thì có) — mà
+ * phiếu gộp định kỳ chính là loại đó, gom chi phí của nhiều đoàn.
+ * Xem supabase/migrations/20260730_get_chi_phi_ids_for_dntt.sql.
+ */
 export async function getChiPhiIdsForDNTT(dnttId: number): Promise<number[]> {
-  const { data } = await externalSupabase
-    .from("dntt_allocations")
-    .select("chi_phi_id")
-    .eq("dntt_id", dnttId);
-  return (data || []).map((r) => r.chi_phi_id);
+  const { data, error } = await externalSupabase.rpc("get_chi_phi_ids_for_dntt", {
+    p_dntt_id: dnttId,
+  });
+  // CỐ Ý không throw: mọi call site chạy SAU khi đã ghi DB (hủy/từ chối/mark paid).
+  // Throw ở đây khiến mutation báo lỗi dù thao tác đã xong → user bấm lại → useCancelDNTT
+  // chạy hai lần → công nợ trùng. Log để còn truy được, rồi trả rỗng như hành vi cũ.
+  if (error) {
+    console.error(`[dntt] không lấy được chi_phi_id của ĐNTT #${dnttId}:`, error);
+    return [];
+  }
+  return (data ?? []).map((id) => Number(id));
 }
 
 // Helper: gọi RPC tính lại trạng thái thanh toán của các chi phí

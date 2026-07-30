@@ -4707,6 +4707,10 @@ export type Database = {
           unc_url: string
         }[]
       }
+      get_chi_phi_ids_for_dntt: {
+        Args: { p_dntt_id: number }
+        Returns: number[]
+      }
       get_lead_by_nguon: {
         Args: {
           p_from: string
