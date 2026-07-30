@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { toast } from "sonner";
 import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
@@ -86,7 +87,7 @@ export default function LockPhongEmailModal({ open, onOpenChange, lockPhong, ksR
   const { email: currentUserEmail } = useCurrentUserEmail();
   const sendMut = useSendLockPhongEmail();
 
-  const baseSubject = `[S8 Travel] Lock Phòng – ${lockPhong.ten_doan} – ${ksRow.khach_san_ten}`;
+  const baseSubject = sanitizeEmailSubject(`[S8 Travel] Lock Phòng – ${lockPhong.ten_doan} – ${ksRow.khach_san_ten}`);
 
   // Build update HTML (minimal) hoặc first HTML (full)
   const buildHtml = (forMode: "first" | "update", note: string): string => {

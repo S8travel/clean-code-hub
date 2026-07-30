@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { normalizeEmails } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
@@ -255,7 +256,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
     const buaStr = row.bua_an === "trua" ? "Trưa" : "Tối";
     setEmailTo(normalizeEmails(row.nha_hang_email));
-    const baseSubject = `[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`;
+    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`);
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailHtml(buildEmailHtml(selectedSetMenu, mode, ""));
     setEmailModalOpen(true);
