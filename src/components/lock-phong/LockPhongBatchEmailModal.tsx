@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { format } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { vi } from "date-fns/locale";
@@ -157,7 +158,7 @@ export default function LockPhongBatchEmailModal({ open, onOpenChange, group }: 
   const selectedEntries = group.entries.filter((e) => selectedIds.has(e.ksRow.id));
   // Coi là update khi có row nào trong selected đã từng gửi (dù qua server hay mailto).
   const isUpdate = selectedEntries.some((e) => !!e.ksRow.email_sent_at);
-  const baseSubject = `[S8 Travel] Lock Phòng – ${group.khach_san_ten}`;
+  const baseSubject = sanitizeEmailSubject(`[S8 Travel] Lock Phòng – ${group.khach_san_ten}`);
 
   const toggleEntry = (id: number) => {
     setSelectedIds((prev) => {

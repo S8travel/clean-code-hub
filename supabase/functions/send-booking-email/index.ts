@@ -65,6 +65,21 @@ serve(async (req) => {
       );
     }
 
+    // CHỐT CHẶN tiêu đề: gộp mọi khoảng trắng (kể cả \n, \r, \t) về 1 dấu cách.
+    // Sự cố 30/07/2026: một khách sạn trong danh mục có tên kết thúc bằng ký tự xuống
+    // dòng (dán từ Excel) → tiêu đề mail đặt phòng dính \n → Resend trả 422
+    // `The "\n" is not allowed in the subject field`, OP không gửi được mail và thông
+    // báo lỗi thì thô. Đặt ở ĐÂY vì có ~10 chỗ dựng tiêu đề rải rác trong client, thêm
+    // chỗ mới rất dễ quên; mọi caller đều đi qua hàm này.
+    // Cũng bịt luôn header-injection (chèn header giả sau \r\n trong tiêu đề).
+    const cleanSubject = String(subject).replace(/\s+/g, " ").trim();
+    if (!cleanSubject) {
+      return new Response(
+        JSON.stringify({ error: "Tiêu đề email rỗng sau khi làm sạch khoảng trắng" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const toList = parseEmailList(to);
     if (toList.length === 0) {
       return new Response(
@@ -97,7 +112,7 @@ serve(async (req) => {
             .filter((e) => !toList.includes(e));
           return ccList.length ? { cc: ccList } : {};
         })()),
-        subject,
+        subject: cleanSubject,
         html,
         text: (typeof text === "string" && text.trim()) ? text : htmlToText(html),
         reply_to: [opReplyTo(replyTo)],
