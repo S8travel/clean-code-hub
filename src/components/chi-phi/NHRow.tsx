@@ -239,9 +239,16 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
     return r?.voucherLoai === "mua" ? s + r.giaTri : s;
   }, 0);
   const voucherKhoRefund = Math.max(0, groupVoucherPaid - groupVoucherGiaTri);
-  const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
-    sumActual, sumPaid, sumCommitted, groupCongNoTotal, voucherKhoRefund,
+  // Σ cam kết THẬT của nhóm (RPC recalc tính toàn cục) — thấy cả ĐNTT định kỳ mà
+  // dnttList không thấy (phiếu định kỳ có doan_id=NULL nên useDNTTList lọc mất).
+  const sumDaDeNghi = groupChiPhi.reduce((s, cp) => s + Number(cp.so_tien_da_dntt ?? 0), 0);
+  const { effectiveDelta: aggDeltaThuan, effectiveCommitted, deltaThieuThat } = calcAggregateDelta({
+    sumActual, sumPaid, sumCommitted, groupCongNoTotal, voucherKhoRefund, sumDaDeNghi,
   });
+  // Nhánh THIẾU đo theo cam kết toàn cục: khoản đã nằm trong phiếu gộp cuối tháng
+  // KHÔNG được gợi ý "Thanh toán bổ sung" lần nữa. Nhánh THỪA giữ nguyên (tiền đã
+  // ra khỏi tài khoản thì vẫn phải có đường ghi công nợ).
+  const effectiveDelta = aggDeltaThuan > 0 ? Math.max(0, deltaThieuThat) : aggDeltaThuan;
   const showAggBtn =
     nguoiTtMain === "cong_ty" &&
     daDeNghi === 0 &&

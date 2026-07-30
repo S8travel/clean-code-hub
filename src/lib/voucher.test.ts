@@ -4,7 +4,6 @@ import {
   canApplyVoucher,
   resolveVoucherPrintAmount,
   sumGroupVoucherMua,
-  buildAggAllocations,
   splitVoucherCoverage,
   calcVoucherEditDelta,
   calcCoveredSoKhachEdit,
@@ -152,56 +151,6 @@ describe("sumGroupVoucherMua", () => {
     const map = { 1: mkCovered(0, "mua") };
     expect(sumGroupVoucherMua([1], map).total).toBe(0);
     expect(sumGroupVoucherMua([1], map).perChiPhi).toEqual([]);
-  });
-});
-
-describe("buildAggAllocations", () => {
-  it("Sea Octopus +1: vé tàu + Vé Vịnh + Soft Drink mỗi dòng về đúng chi_phi; tổng = 959.800", () => {
-    const allocs = buildAggAllocations(959800, 9 /* main */, [
-      { chiPhiId: 101, soTien: 604800 }, // vé tàu (voucher)
-      { chiPhiId: 102, soTien: 310000 }, // Vé Vịnh (cash)
-      { chiPhiId: 103, soTien: 45000 },  // Soft Drink (cash)
-    ]);
-    expect(allocs).toEqual([
-      { chi_phi_id: 101, so_tien: 604800 },
-      { chi_phi_id: 102, so_tien: 310000 },
-      { chi_phi_id: 103, so_tien: 45000 },
-    ]);
-    expect(allocs.reduce((s, a) => s + a.so_tien, 0)).toBe(959800);
-  });
-
-  it("không có dòng phát sinh → dồn toàn bộ vào main (giữ hành vi footer cũ)", () => {
-    expect(buildAggAllocations(959800, 9, [])).toEqual([{ chi_phi_id: 9, so_tien: 959800 }]);
-  });
-
-  it("Σ dòng == absDelta → không có dòng dư main", () => {
-    const allocs = buildAggAllocations(604800, 9, [{ chiPhiId: 101, soTien: 604800 }]);
-    expect(allocs).toEqual([{ chi_phi_id: 101, so_tien: 604800 }]);
-    expect(allocs.reduce((s, a) => s + a.so_tien, 0)).toBe(604800);
-  });
-
-  it("Σ dòng > absDelta (giá đổi sau redeem) → clamp, tổng vẫn = absDelta", () => {
-    const allocs = buildAggAllocations(500000, 9, [
-      { chiPhiId: 101, soTien: 400000 },
-      { chiPhiId: 102, soTien: 300000 },
-    ]);
-    expect(allocs.reduce((s, a) => s + a.so_tien, 0)).toBe(500000);
-    expect(allocs).toEqual([
-      { chi_phi_id: 101, so_tien: 400000 },
-      { chi_phi_id: 102, so_tien: 100000 },
-    ]);
-  });
-
-  it("Σ dòng < absDelta (có điều chỉnh dòng chính) → phần dư về main", () => {
-    const allocs = buildAggAllocations(1000000, 9, [
-      { chiPhiId: 101, soTien: 300000 },
-      { chiPhiId: 102, soTien: 200000 },
-    ]);
-    expect(allocs).toEqual([
-      { chi_phi_id: 101, so_tien: 300000 },
-      { chi_phi_id: 102, so_tien: 200000 },
-      { chi_phi_id: 9, so_tien: 500000 },
-    ]);
   });
 });
 

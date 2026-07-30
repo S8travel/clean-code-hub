@@ -342,7 +342,7 @@ export default function DoanDetail() {
           const orphanKept = result?.nhOrphanKept ?? 0;
           if (orphanKept > 0) {
             toast.warning(
-              `${orphanKept} ${t("dòng chi phí nhà hàng cũ còn ĐNTT/voucher — cần xử lý ở tab Chi phí trước khi in.")}`,
+              `${orphanKept} ${t("dòng chi phí nhà hàng cũ đã thanh toán / còn ĐNTT / có voucher — cần xử lý ở tab Chi phí trước khi in.")}`,
               { duration: 8000 }
             );
           }

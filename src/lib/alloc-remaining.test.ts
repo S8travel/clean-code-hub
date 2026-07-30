@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildRemainingAllocations } from "./alloc-remaining";
+import { buildRemainingAllocations, buildAggAllocationsSpread } from "./alloc-remaining";
 
 describe("buildRemainingAllocations", () => {
   it("chưa cam kết gì → chia pro-rata theo thành tiền", () => {
@@ -74,5 +74,71 @@ describe("buildRemainingAllocations", () => {
       { id: 3, thanh_tien: 1_000_000, committed: 0 },
     ]);
     expect(allocs.reduce((s, a) => s + a.so_tien, 0)).toBe(1_000_000);
+  });
+});
+
+describe("buildAggAllocationsSpread", () => {
+  // Nhóm bữa ăn: dòng chính đã cam kết đủ, dòng phát sinh mới hoàn toàn chưa.
+  const nhomBuaAn = [
+    { id: 9, thanh_tien: 500_000, committed: 500_000 },     // suất chính đã trả
+    { id: 10, thanh_tien: 2_764_800, committed: 0 },        // "Tôm hùm" mới thêm
+  ];
+
+  it("không voucher → tiền về ĐÚNG dòng còn thiếu, không dồn dòng chính", () => {
+    const allocs = buildAggAllocationsSpread(2_764_800, nhomBuaAn, [], 9);
+    expect(allocs).toEqual([{ chi_phi_id: 10, so_tien: 2_764_800 }]);
+  });
+
+  it("dòng voucher 'mua' nhận đúng giá trị của nó, phần cash chia theo còn thiếu", () => {
+    const rows = [
+      { id: 9, thanh_tien: 500_000, committed: 500_000 },
+      { id: 101, thanh_tien: 604_800, committed: 0 },  // vé tàu (voucher mua)
+      { id: 102, thanh_tien: 310_000, committed: 0 },  // Vé Vịnh (cash)
+    ];
+    const allocs = buildAggAllocationsSpread(914_800, rows, [{ chi_phi_id: 101, so_tien: 604_800 }], 9);
+    expect(allocs).toEqual([
+      { chi_phi_id: 101, so_tien: 604_800 },
+      { chi_phi_id: 102, so_tien: 310_000 },
+    ]);
+    expect(allocs.reduce((s, a) => s + a.so_tien, 0)).toBe(914_800);
+  });
+
+  it("Σ dòng cố định > tổng (giá đổi sau redeem) → clamp, tổng vẫn khớp", () => {
+    const allocs = buildAggAllocationsSpread(
+      500_000,
+      [{ id: 9, thanh_tien: 1_000_000, committed: 0 }],
+      [{ chi_phi_id: 101, so_tien: 400_000 }, { chi_phi_id: 102, so_tien: 300_000 }],
+      9,
+    );
+    expect(allocs.reduce((s, a) => s + a.so_tien, 0)).toBe(500_000);
+    expect(allocs).toEqual([
+      { chi_phi_id: 101, so_tien: 400_000 },
+      { chi_phi_id: 102, so_tien: 100_000 },
+    ]);
+  });
+
+  it("cả nhóm đã cam kết đủ → fallback chia theo giá trị dòng (không tạo phiếu rỗng)", () => {
+    const allocs = buildAggAllocationsSpread(
+      300_000,
+      [{ id: 9, thanh_tien: 500_000, committed: 500_000 }],
+      [],
+      9,
+    );
+    expect(allocs).toEqual([{ chi_phi_id: 9, so_tien: 300_000 }]);
+  });
+
+  it("nhóm toàn dòng 0đ/HDV → dồn dòng fallback thay vì tạo phiếu rỗng", () => {
+    const allocs = buildAggAllocationsSpread(250_000, [{ id: 9, thanh_tien: 0 }], [], 9);
+    expect(allocs).toEqual([{ chi_phi_id: 9, so_tien: 250_000 }]);
+  });
+
+  it("dòng cố định phủ hết tổng → không sinh dòng dư", () => {
+    const allocs = buildAggAllocationsSpread(
+      604_800,
+      [{ id: 9, thanh_tien: 500_000, committed: 0 }],
+      [{ chi_phi_id: 101, so_tien: 604_800 }],
+      9,
+    );
+    expect(allocs).toEqual([{ chi_phi_id: 101, so_tien: 604_800 }]);
   });
 });

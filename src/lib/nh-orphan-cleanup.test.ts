@@ -6,6 +6,8 @@ import {
   buildOccupiedMealSlots,
   nhChiPhiSlot,
   findRemovedPaidNhChiPhi,
+  buildOccupiedMealSlotIds,
+  findOrphanNhExtras,
 } from "./nh-orphan-cleanup";
 
 const nhNames = new Map<number, string>([
@@ -141,5 +143,46 @@ describe("findRemovedPaidNhChiPhi", () => {
   it("extras đã trả không bị bắt (không phải main slot)", () => {
     const paid = [{ id: 50, ngay_so: 4, mo_ta: "[toi] HDV phát sinh (tối)" }];
     expect(findRemovedPaidNhChiPhi(paid, occupied)).toEqual([]);
+  });
+});
+
+describe("findOrphanNhExtras", () => {
+  // Chương trình mới: doan_ngay #10 còn NH bữa trưa (tối đã gỡ), #11 trống hẳn.
+  const occupied = buildOccupiedMealSlotIds([
+    { id: 10, an_trua_nha_hang_id: 7, an_toi_nha_hang_id: null },
+    { id: 11, an_trua_nha_hang_id: null, an_toi_nha_hang_id: null },
+  ]);
+
+  it("phát sinh của ô bữa đã gỡ → mồ côi", () => {
+    const rows = [{ id: 501, ref_doan_ngay_id: 10, mo_ta: "[toi] Tôm hùm" }];
+    expect(findOrphanNhExtras(rows, occupied).map((r) => r.id)).toEqual([501]);
+  });
+
+  it("phát sinh của ô bữa CÒN nhà hàng → giữ (đổi NH cũng không đụng)", () => {
+    const rows = [{ id: 502, ref_doan_ngay_id: 10, mo_ta: "[trua] Tôm hùm" }];
+    expect(findOrphanNhExtras(rows, occupied)).toEqual([]);
+  });
+
+  it("ngày không còn bữa nào → cả hai bữa đều mồ côi", () => {
+    const rows = [
+      { id: 503, ref_doan_ngay_id: 11, mo_ta: "[trua] Bia" },
+      { id: 504, ref_doan_ngay_id: 11, mo_ta: "[toi] Nước" },
+    ];
+    expect(findOrphanNhExtras(rows, occupied).map((r) => r.id)).toEqual([503, 504]);
+  });
+
+  it("ngày đã bị xoá khỏi doan_ngay → mồ côi", () => {
+    const rows = [{ id: 505, ref_doan_ngay_id: 99, mo_ta: "[trua] Bia" }];
+    expect(findOrphanNhExtras(rows, occupied).map((r) => r.id)).toEqual([505]);
+  });
+
+  it("dòng CHÍNH không bao giờ bị bắt ở đây (đã có findOrphanNhChiPhi lo)", () => {
+    const rows = [{ id: 506, ref_doan_ngay_id: 10, mo_ta: "NHÀ HÀNG A (tối)" }];
+    expect(findOrphanNhExtras(rows, occupied)).toEqual([]);
+  });
+
+  it("thiếu ref_doan_ngay_id → bỏ qua (không đủ căn cứ, thà giữ còn hơn xoá nhầm)", () => {
+    const rows = [{ id: 507, ref_doan_ngay_id: null, mo_ta: "[trua] Bia" }];
+    expect(findOrphanNhExtras(rows, occupied)).toEqual([]);
   });
 });

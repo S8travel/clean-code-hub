@@ -115,3 +115,62 @@ export function findRemovedPaidNhChiPhi<T extends NhChiPhiLite>(
     return slot != null && !occupiedSlots.has(slot);
   });
 }
+
+// ── Dòng PHÁT SINH mồ côi ([trua]/[toi] của ô bữa đã bị bỏ trống) ────────────
+//
+// Vì sao phải dọn (trước đây cố ý bỏ qua): dòng phát sinh nay mang
+// `thanh_toan_dinh_ky` + `nha_cung_cap_id` theo bữa (xem lib/dinh-ky-nhom.ts), nên
+// nếu bữa bị gỡ mà dòng còn lại thì nó vẫn nằm trong cụm NCC × tháng ở trang Thanh
+// toán định kỳ và được TRẢ TIỀN — trong khi tab Chi phí không hiển thị nó nữa (chỉ
+// render extras theo bữa còn trong lịch trình) nên OP không có cách nào phát hiện.
+//
+// Khớp theo `ref_doan_ngay_id` + bữa (ĐÚNG khoá mà use-nh-section dùng để hiển thị),
+// KHÔNG theo ngay_so — ngay_so trên chi phí có thể lệch sau khi đổi ngày đi.
+// ĐỔI nhà hàng trong cùng ô bữa thì ô vẫn "occupied" → extras Ở LẠI (chúng vẫn hiện
+// dưới dòng chính mới). Chỉ ô bữa TRỐNG HẲN (bỏ bữa / xoá ngày) mới là mồ côi.
+
+export interface NgayMealIdLite {
+  id: number;
+  an_trua_nha_hang_id: number | null;
+  an_toi_nha_hang_id: number | null;
+}
+
+export interface NhExtraLite {
+  id: number;
+  ref_doan_ngay_id: number | null;
+  mo_ta: string | null;
+}
+
+/** Khoá ô bữa theo doan_ngay.id: `${doanNgayId}|trua` | `${doanNgayId}|toi`. */
+export function mealSlotIdKey(doanNgayId: number, bua: "trua" | "toi"): string {
+  return `${doanNgayId}|${bua}`;
+}
+
+/** Tập ô bữa CÓ nhà hàng, khoá theo doan_ngay.id (mọi nhóm). */
+export function buildOccupiedMealSlotIds(days: NgayMealIdLite[]): Set<string> {
+  const s = new Set<string>();
+  for (const d of days) {
+    if (d.an_trua_nha_hang_id) s.add(mealSlotIdKey(d.id, "trua"));
+    if (d.an_toi_nha_hang_id) s.add(mealSlotIdKey(d.id, "toi"));
+  }
+  return s;
+}
+
+/** Ô bữa của 1 dòng phát sinh; null nếu không phải dòng phát sinh / thiếu ref. */
+export function nhExtraSlot(row: NhExtraLite): string | null {
+  if (row.ref_doan_ngay_id == null || !row.mo_ta) return null;
+  if (row.mo_ta.startsWith("[trua] ")) return mealSlotIdKey(row.ref_doan_ngay_id, "trua");
+  if (row.mo_ta.startsWith("[toi] ")) return mealSlotIdKey(row.ref_doan_ngay_id, "toi");
+  return null;
+}
+
+/** Dòng phát sinh có ô bữa không còn nhà hàng nào → mồ côi, caller dọn. */
+export function findOrphanNhExtras<T extends NhExtraLite>(
+  rows: T[],
+  occupiedSlotIds: Set<string>,
+): T[] {
+  return rows.filter((cp) => {
+    const slot = nhExtraSlot(cp);
+    return slot != null && !occupiedSlotIds.has(slot);
+  });
+}

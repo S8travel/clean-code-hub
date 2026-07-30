@@ -39,7 +39,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
     grouped, localRows, dnttList, congNoList,
-    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs,
+    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs, daDeNghiByKs,
     congNoByKs, hoanTienByKs,
     groupCongNoTotalByKs, groupCongNoCNByKs, groupCongNoHTByKs,
     thucTeOverrideById, canTruByDnttId,
@@ -135,9 +135,15 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const sumPaid = daTT;
   const sumCommitted = cancellableDntts.reduce((s, d) => s + Number(d.so_tien), 0);
   const groupCongNoTotal = groupCongNoTotalByKs[ksId] || 0;
-  const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
+  const { effectiveDelta: aggDeltaThuan, effectiveCommitted, deltaThieuThat } = calcAggregateDelta({
+    // sumPaid/sumCommitted ở KS chỉ cộng phiếu ref_loai='khach_san' → mù với ĐNTT
+    // gộp định kỳ. daDeNghiByKs (Σ so_tien_da_dntt, RPC tính toàn cục) thì thấy.
     sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+    sumDaDeNghi: daDeNghiByKs[ksId] || 0,
   });
+  // Nhánh THIẾU đo theo cam kết toàn cục — không gợi ý trả thêm khoản đã nằm trong
+  // phiếu gộp cuối tháng. Nhánh THỪA giữ nguyên (tiền đã ra thì vẫn cần ghi công nợ).
+  const effectiveDelta = aggDeltaThuan > 0 ? Math.max(0, deltaThieuThat) : aggDeltaThuan;
   // Tiền còn treo — theo ĐÚNG định nghĩa của RPC recalc (nguồn của sumPaid), nên
   // phiếu `cho_duyet` dù đã cấn trừ đủ vẫn tính là treo. Xem lib/dntt-con-treo.ts.
   const daDeNghi = tinhDnttConTreo(cancellableDntts);

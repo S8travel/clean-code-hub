@@ -234,9 +234,14 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   // Cam kết ĐNTT theo allocation per-dòng (so_tien_da_dntt), KHÔNG phải tổng
   // so_tien của ĐNTT (ĐNTT gộp có thể gồm dòng của section khác).
   const sumCommitted = clusterRows.reduce((s, r) => s + (r.so_tien_da_dntt ?? 0), 0);
-  const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
-    sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+  const { effectiveDelta: aggDeltaThuan, effectiveCommitted, deltaThieuThat } = calcAggregateDelta({
+    // sumCommitted của cụm CHÍNH LÀ Σ so_tien_da_dntt → nó thấy cả ĐNTT định kỳ
+    // (phiếu doan_id=NULL, dnttList lọc theo đoàn nên không thấy).
+    sumActual, sumPaid, sumCommitted, groupCongNoTotal, sumDaDeNghi: sumCommitted,
   });
+  // Nhánh THIẾU đo theo cam kết toàn cục: khoản đã nằm trong phiếu gộp cuối tháng
+  // KHÔNG được gợi ý "Thanh toán bổ sung" lần nữa. Nhánh THỪA giữ nguyên.
+  const effectiveDelta = aggDeltaThuan > 0 ? Math.max(0, deltaThieuThat) : aggDeltaThuan;
   // ĐNTT còn hiệu lực của CỤM (kể cả phiếu ref thẳng vào dòng, chưa có allocation).
   const clusterDntts = dnttList.filter(d =>
     d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi" &&

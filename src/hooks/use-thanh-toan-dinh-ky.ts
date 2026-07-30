@@ -4,6 +4,8 @@ import { recalcChiPhiStatus, type DNTTRow } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
 import { anKhoiDinhKy } from "@/lib/dinh-ky-doan-huy";
 import { kyHieuLuc, kyNhoNhat } from "@/lib/ky-thanh-toan";
+import { splitDnttPayload } from "@/lib/dntt-insert-payload";
+import type { Json } from "@/lib/database.types";
 
 export interface DinhKyChiPhiRow {
   id: number;
@@ -246,40 +248,44 @@ export function useCreateBatchDNTT() {
       // Tạo DNTT gộp — không thuộc 1 đoàn cụ thể → doan_id = null
       const { data: authData } = await externalSupabase.auth.getUser();
       const taoBoi = authData?.user?.id ?? user?.user_id ?? null;
-      const { data: dntt, error } = await externalSupabase
-        .from("de_nghi_thanh_toan")
-        .insert({
-          doan_id: null,
-          loai: "dinh_ky",
-          mo_ta: payload.moTa,
-          nha_cung_cap_id: payload.nccId,
-          ten_nha_cung_cap: payload.tenNcc ?? null,
-          so_tai_khoan: payload.soTaiKhoan ?? null,
-          ngan_hang: payload.nganHang ?? null,
-          so_tien: payload.soTien,
-          la_coc: payload.laCoc ?? false,
-          trang_thai_duyet: "cho_duyet",
-          ref_loai: "dinh_ky",
-          ref_id: null,
-          tao_boi: taoBoi,
-        })
-        .select("id")
-        .single();
+
+      // NGUYÊN TỬ: dntt + allocations trong 1 transaction (RPC), y như luồng ĐNTT
+      // per-đoàn (use-chi-phi.ts useInsertDNTT). Trước đây hook này insert phiếu
+      // TRƯỚC rồi mới insert allocations: lỗi ở bước 2 (chi phí vừa bị xóa ở tab
+      // Chi phí, mất mạng, token hết hạn...) để lại PHIẾU RỖNG mang đủ số tiền
+      // nhưng 0 dòng phân bổ → recalc không thấy allocation nào → cụm NCC × tháng
+      // vẫn báo "còn phải đề nghị" → kỳ sau đề nghị lại = TRẢ HAI LẦN.
+      // Xem supabase/migrations/20260710_dntt_atomic_insert.sql (sự cố 10/07/2026).
+      // splitDnttPayload còn lọc alloc <= 0 và gộp trùng chi_phi_id giúp.
+      const args = splitDnttPayload({
+        doan_id: null,
+        loai: "dinh_ky",
+        mo_ta: payload.moTa,
+        nha_cung_cap_id: payload.nccId,
+        ten_nha_cung_cap: payload.tenNcc ?? null,
+        so_tai_khoan: payload.soTaiKhoan ?? null,
+        ngan_hang: payload.nganHang ?? null,
+        so_tien: payload.soTien,
+        la_coc: payload.laCoc ?? false,
+        trang_thai_duyet: "cho_duyet",
+        ref_loai: "dinh_ky",
+        ref_id: null,
+        tao_boi: taoBoi,
+        allocations: payload.allocations,
+      });
+      if (args.p_allocations.length === 0) {
+        throw new Error("Không có khoản chi phí nào để phân bổ — tải lại trang rồi thử lại.");
+      }
+      const { data: newId, error } = await externalSupabase.rpc("create_dntt_with_allocations", {
+        p_dntt: args.p_dntt as Json,
+        p_allocations: args.p_allocations as unknown as Json,
+      });
       if (error) throw error;
 
-      // Insert allocations
-      const allocRows = payload.allocations.map((a) => ({
-        dntt_id: dntt.id,
-        chi_phi_id: a.chi_phi_id,
-        so_tien: a.so_tien,
-      }));
-      const { error: allocErr } = await externalSupabase
-        .from("dntt_allocations")
-        .insert(allocRows);
-      if (allocErr) throw allocErr;
-
+      // Recalc theo TOÀN BỘ chi phí của cụm (không chỉ dòng được phân bổ) — dòng
+      // alloc 0 bị lọc vẫn nên refresh trạng thái cho khớp.
       await recalcChiPhiStatus(payload.chiPhiIds);
-      return dntt;
+      return { id: Number(newId) };
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["dinh_ky_chi_phi"] });

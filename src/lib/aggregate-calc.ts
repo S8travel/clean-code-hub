@@ -80,6 +80,8 @@ export function splitGroupCongNo(
  *   phủ thực khi giảm vé trên ĐNTT đã trả đủ (= vé trả về kho). KHÔNG phải cash
  *   công ty còn phải cân → trừ khỏi CẢ "đã trả" lẫn "cam kết" để lệch chỉ còn cash
  *   thật (boat voucher tự loại). NH truyền vào; DV/KS để mặc định 0 → KHÔNG đổi.
+ * - `deltaThieuThat`: phần THIẾU sau khi tính cả tiền đã ĐỀ NGHỊ nhưng chưa trả
+ *   (`sumDaDeNghi` = Σ `chi_phi.so_tien_da_dntt` của nhóm). Xem chú thích dưới.
  */
 export function calcAggregateDelta(input: {
   sumActual: number;
@@ -87,13 +89,31 @@ export function calcAggregateDelta(input: {
   sumCommitted: number;
   groupCongNoTotal: number;
   voucherKhoRefund?: number;
-}): { aggDelta: number; effectiveDelta: number; effectiveCommitted: number } {
+  /**
+   * Σ `so_tien_da_dntt` của nhóm — cam kết THẬT do RPC recalc tính TOÀN CỤC, nên
+   * nó thấy cả ĐNTT mà section không thấy: phiếu định kỳ có `doan_id = NULL` nên
+   * `useDNTTList(doanId)` lọc mất, `daDeNghi`/`clusterPendingAmt` đều = 0.
+   * Thiếu vế này, một khoản đã nằm trong phiếu gộp cuối tháng vẫn hiện nút
+   * "Thanh toán bổ sung" → OP bấm → đề nghị/trả LẦN HAI.
+   * Mặc định 0 → giữ nguyên hành vi cho caller chưa truyền.
+   */
+  sumDaDeNghi?: number;
+}): {
+  aggDelta: number;
+  effectiveDelta: number;
+  effectiveCommitted: number;
+  deltaThieuThat: number;
+} {
   const khoRefund = Math.max(0, input.voucherKhoRefund ?? 0);
   const aggDelta = input.sumActual - (input.sumPaid - khoRefund);
+  // max(): ĐNTT bị hủy SAU khi trả thì cam kết tụt về 0 nhưng tiền đã ra khỏi tài
+  // khoản — lấy vế lớn hơn để không gợi ý trả thêm phần đã trả.
+  const daChiPhoi = Math.max(input.sumPaid, input.sumDaDeNghi ?? 0);
   return {
     aggDelta,
     effectiveDelta: aggDelta + input.groupCongNoTotal,
     effectiveCommitted: input.sumCommitted - input.groupCongNoTotal - khoRefund,
+    deltaThieuThat: input.sumActual - (daChiPhoi - khoRefund) + input.groupCongNoTotal,
   };
 }
 

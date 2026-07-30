@@ -13,6 +13,7 @@
 import { format, parseISO } from "date-fns";
 import { downloadXlsx, type XlsxCell } from "@/lib/xlsx-simple";
 import { netPhaiTra } from "@/lib/dinh-ky-amounts";
+import { nhanChiPhi } from "@/lib/dinh-ky-nhom";
 
 /** Chỉ các field export cần — khớp DinhKyChiPhiRow của use-thanh-toan-dinh-ky. */
 export interface DinhKyExportRow {
@@ -73,7 +74,8 @@ export function buildDinhKyDoanSummaries(rows: DinhKyExportRow[]): DinhKyDoanSum
     s.soTien += tt;
     s.daTT += r.so_tien_da_tt;
     s.conLai += Math.max(0, tt - r.so_tien_da_dntt);
-    const label = (r.mo_ta ?? "").trim() || r.danh_muc;
+    // Bỏ prefix nhóm [trua]/[toi]/[dvps_<id>] — khoá kỹ thuật, in cho NCC đọc thì thành rác.
+    const label = nhanChiPhi(r.mo_ta).nhan || r.danh_muc;
     if (label) s.moTaSet.add(label);
   }
 
