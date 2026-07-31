@@ -51,3 +51,6 @@ vapid-keys.local.json
 *.njsproj
 *.sln
 *.sw?
+
+# Ảnh nguồn cho website giới thiệu (logo KS / du thuyền / nhà hàng) — chỉ là kho ảnh tạm, không commit
+_S8_WEB_ANH/

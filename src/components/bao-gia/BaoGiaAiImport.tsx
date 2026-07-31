@@ -13,16 +13,18 @@ import {
   useExtractMatchItinerary, useUploadLichTrinhFile,
   type BaoGiaItem, type LichTrinhFile,
 } from "@/hooks/use-bao-gia";
-import { useBaoGiaResolveMaps } from "@/hooks/use-bao-gia-ai-maps";
+import { useBaoGiaResolveMaps, useMarkCanhDiemCombo, useWriteGiaPhongFromBaoGia } from "@/hooks/use-bao-gia-ai-maps";
+import { useIsReadOnly } from "@/hooks/use-permissions";
 import {
-  resolveAiItems, toBaoGiaItems, aliasesToLearn,
-  hotelChoiceGroups, defaultHotelSelection, applyHotelSelection,
-  type ResolvedItem, type AiReviewDraft,
+  resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks,
+  hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
+  analyzeCombo, comboPatchForRef, sanitizeDraftRows, BUA_LABEL,
+  type ResolvedItem, type AiReviewDraft, type BaoGomBuaAn,
 } from "@/lib/bao-gia-ai-resolve";
 import { useBaoGiaAliasMap, useLearnAliases } from "@/hooks/use-bao-gia-aliases";
 import { fileKind, imageMime, extractItineraryText } from "@/lib/itinerary-file";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface Props {
   open: boolean;
@@ -71,7 +73,10 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
   const loadedRef = useRef(false); // đã nạp bản nháp lưu chưa (1 lần/lần mở)
 
   const { user } = useAuth();
+  const readOnly = useIsReadOnly();
   const extract = useExtractMatchItinerary();
+  const markCombo = useMarkCanhDiemCombo();
+  const writeGiaPhong = useWriteGiaPhongFromBaoGia();
   const upload = useUploadLichTrinhFile();
   const { data: maps, isLoading: mapsLoading } = useBaoGiaResolveMaps(open);
   const { data: aliasMap } = useBaoGiaAliasMap(open);
@@ -88,7 +93,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
     if (!loadedRef.current) {
       loadedRef.current = true;
       if (savedReview?.items?.length) {
-        setRows(savedReview.items);
+        setRows(sanitizeDraftRows(savedReview.items));
         setSelection(savedReview.selection ?? {});
         setTen(savedReview.ten ?? "");
         setSoNgay(savedReview.so_ngay && savedReview.so_ngay > 0 ? savedReview.so_ngay : 1);
@@ -104,10 +109,36 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
   }, [open, files]);
 
   const groups = useMemo(() => (rows ? hotelChoiceGroups(rows) : new Map<number, number[]>()), [rows]);
+  // Phương án KS không được chọn → không vào báo giá, nên cũng không được đóng vai
+  // combo trừ bữa ăn (xem analyzeCombo). Phụ thuộc selection → combo tính lại khi
+  // OP đổi phương án.
+  const droppedHotels = useMemo(() => droppedByHotel(groups, selection), [groups, selection]);
+  // Combo (vé đã gồm bữa ăn): dòng ăn tương ứng bị ẩn khỏi báo giá, dòng vé đáng
+  // ngờ thì chỉ cảnh báo. Tính lại mỗi lần rows đổi → không có trạng thái kẹt.
+  const combo = useMemo(() => analyzeCombo(rows ?? [], droppedHotels), [rows, droppedHotels]);
   const included = useMemo(
-    () => (rows ? applyHotelSelection(rows, groups, selection) : []),
-    [rows, groups, selection],
+    () => (rows ? applyExclusions(rows, groups, selection, combo) : []),
+    [rows, groups, selection, combo],
   );
+  // Dòng ăn đang bị nghi tính trùng (để gắn nhãn ngay trên chính dòng ăn đó).
+  const warnedMeals = useMemo(() => {
+    const s = new Set<number>();
+    for (const w of combo.warnings.values()) for (const mi of w.mealIdxs) s.add(mi);
+    return s;
+  }, [combo]);
+  // Các dòng combo THỰC SỰ đã trừ được 1 bữa → chỉ những dòng này mới được ghi
+  // chú "Đã gồm ăn trưa" khi xuất báo giá.
+  const daTruCombo = useMemo(() => {
+    const s = new Set<ResolvedItem>();
+    if (rows) for (const sup of combo.suppressed.values()) s.add(rows[sup.byIdx]);
+    return s;
+  }, [rows, combo]);
+  // Ngày có dòng ăn tính tiền riêng → dòng vé của ngày đó mới cần hỏi "có kèm ăn?".
+  const daysWithMeal = useMemo(() => {
+    const s = new Set<number>();
+    for (const r of rows ?? []) if (r.loai === "meal") s.add(r.ngay_so);
+    return s;
+  }, [rows]);
 
   const runExtract = async (input: { itinerary?: string; fileUrl?: string; fileType?: string; provider: "claude" | "keystone" }) => {
     if (!maps) { toast.warning("Đang tải danh mục, thử lại sau giây lát"); return; }
@@ -192,40 +223,61 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
 
   const patchRow = (idx: number, patch: Partial<ResolvedItem>) =>
     setRows((rs) => rs ? rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)) : rs);
+  // Đổi/xoá tham chiếu danh mục thì cờ combo phải theo dòng MỚI (nạp lại hoặc
+  // xoá). Để cờ cũ bám lại = ẩn oan bữa ăn hoặc bỏ sót combo, cả 2 đều sai tiền.
+  const comboPatch = (table: ResolvedItem["match_table"], id: number | null) =>
+    comboPatchForRef(maps, table, id);
   // Gõ tên tay → xoá ref danh mục (thành dòng chỉ-giá nhập tay).
+  // GIỮ cờ combo: gõ sửa tên hiển thị ("Cáp treo Bà Nà" → "... (khứ hồi)") vẫn là
+  // đúng dịch vụ đó. Xoá cờ theo từng ký tự gõ = bữa ăn lặng lẽ bị tính lại 2 lần.
+  // Chỉ hạ nguồn về 'user' vì cờ không còn được dòng danh mục nào bảo chứng.
   const clearRef = (idx: number, text: string) =>
-    patchRow(idx, { mo_ta: text, match_table: null, match_id: null, match_set_menu_id: null, from_alias: false });
+    patchRow(idx, {
+      mo_ta: text, match_table: null, match_id: null, match_set_menu_id: null, from_alias: false,
+      ...(rows?.[idx]?.bao_gom_bua_an ? { bao_gom_nguon: "user" as const } : {}),
+    });
   // Chọn từ danh mục → fill tên + giá + ref (để học alias). KS lấy giá theo mùa.
+  // confidence=1: người chọn tay thì khớp là CHẮC, không còn là phỏng đoán của AI
+  // — tắt dấu ⚠ "độ tin cậy thấp" và mở khoá ghi cờ combo vào danh mục.
   const pickCatalogForRow = (idx: number, loai: ResolvedItem["loai"], opt: CatalogOption) => {
     if (loai === "hotel") {
       const gia = resolveGiaPhongValue(maps?.khachSanGia.get(opt.id) ?? [], tourDate);
       patchRow(idx, {
-        mo_ta: opt.ten, match_label: opt.ten,
+        mo_ta: opt.ten, match_label: opt.ten, confidence: 1,
         match_table: "khach_san", match_id: opt.id, match_set_menu_id: null, from_alias: false,
+        ...comboPatch("khach_san", opt.id),
         ...(gia && gia > 0 ? { don_gia: gia, status: "matched" as const } : { status: "no_price" as const }),
       });
       return;
     }
-    const patch: Partial<ResolvedItem> = { mo_ta: opt.ten, match_label: opt.ten, from_alias: false };
+    const patch: Partial<ResolvedItem> = { mo_ta: opt.ten, match_label: opt.ten, confidence: 1, from_alias: false };
     if (loai === "meal") { patch.match_table = "nha_hang"; patch.match_id = opt.nhaHangId ?? null; patch.match_set_menu_id = opt.id; }
     else if (loai === "transport") { patch.match_table = "nha_xe_loai_xe"; patch.match_id = opt.id; patch.match_set_menu_id = null; }
     else { patch.match_table = "canh_diem"; patch.match_id = opt.id; patch.match_set_menu_id = null; }
+    Object.assign(patch, comboPatch(patch.match_table ?? null, patch.match_id ?? null));
     if (opt.gia != null && opt.gia > 0) { patch.don_gia = opt.gia; patch.status = "matched"; }
     else { patch.status = "no_price"; }
     patchRow(idx, patch);
   };
   // Đổi loại/nhóm dòng (Ăn trưa/tối, Vé, KS, Xe). Giữ tên + giá; xoá ref danh
   // mục (khác loại → ref cũ không còn đúng) → thành dòng tự nhập, chọn lại được.
+  // Dòng ăn chưa rõ bữa để value = "meal:" (KHÔNG mặc định "meal:trua"): nếu hiển
+  // thị sẵn "Ăn trưa" thì OP bấm đúng "Ăn trưa" sẽ không bắn onChange, cảnh báo
+  // "dòng ăn chưa rõ bữa" kẹt vĩnh viễn mà không cách nào sửa.
   const loaiValue = (r: ResolvedItem): string =>
-    r.loai === "meal" ? `meal:${r.bua_an ?? "trua"}` : r.loai;
+    r.loai === "meal" ? `meal:${r.bua_an ?? ""}` : r.loai;
   const changeLoai = (idx: number, value: string) => {
     if (!rows) return;
     const parsed = value.startsWith("meal:")
-      ? { loai: "meal" as const, bua: value.split(":")[1] as "trua" | "toi" }
+      ? { loai: "meal" as const, bua: (value.slice(5) || undefined) as "trua" | "toi" | undefined }
       : { loai: value as ResolvedItem["loai"], bua: undefined };
     const next = rows.map((r, i) => i === idx ? {
       ...r, loai: parsed.loai, bua_an: parsed.bua,
       match_table: null, match_id: null, match_set_menu_id: null, match_label: "", from_alias: false,
+      // Đổi loại = xoá ref danh mục → cờ combo của dòng cũ không còn đúng. Giữ lại
+      // thì dòng Xe/Ăn cũng dính ghi chú "Đã gồm ăn trưa", đổi ngược về Vé lại ẩn bữa.
+      ...comboPatch(null, null),
+      tinh_rieng: undefined,
       status: (r.don_gia > 0 ? "matched" : "unmatched") as ResolvedItem["status"],
     } : r);
     setRows(next);
@@ -245,12 +297,80 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
       return next;
     });
 
+  // ── Combo đã gồm bữa ăn ──
+  /** id cảnh điểm được phép GHI cờ combo vào danh mục, hoặc null (chỉ sửa cục bộ).
+   *  Chặn ghi khi khớp danh mục còn yếu: AI khớp nhầm sang cảnh điểm khác
+   *  (confidence thấp) mà vẫn ghi master thì mọi báo giá sau của mọi OP đều bị
+   *  trừ oan bữa ăn — đúng thứ nhánh "nghi ngờ" cố tránh. */
+  const canWriteCombo = (r: ResolvedItem): number | null => {
+    if (readOnly) return null;
+    if (r.match_table !== "canh_diem" || !r.match_id) return null;
+    // KHÔNG lấy `bao_gom_nguon === "master"` làm bằng chứng khớp chắc: cờ master
+    // được gắn theo match của AI, kể cả match yếu. Nếu tin nó thì đúng ca đáng
+    // chặn nhất (AI khớp nhầm "vé trẻ em" sang dòng có cờ) lại được phép GỠ cờ
+    // của dòng danh mục đó cho toàn hệ thống.
+    const chacChan = r.from_alias || r.confidence >= 0.6;
+    return chacChan ? r.match_id : null;
+  };
+
+  // OP xác nhận (hoặc gỡ) cờ combo trên 1 dòng vé: áp dụng NGAY cho báo giá đang
+  // mở, đồng thời ghi vào DANH MỤC để mọi báo giá sau tự trừ — sửa 1 lần, hết lặp
+  // lại. Ghi danh mục hỏng (thiếu quyền / chỉ xem) KHÔNG chặn: báo giá vẫn đúng.
+  const setCombo = async (idx: number, bua: BaoGomBuaAn | null) => {
+    const r = rows?.[idx];
+    if (!r) return;
+    // Đổi bữa thì ghi chú mô tả bữa CŨ thành sai ("gồm ăn tối (buffet trưa...)")
+    // → xoá, cả ở dòng lẫn ở danh mục.
+    const giuGhiChu = bua != null && bua === r.bao_gom_bua_an;
+    patchRow(idx, {
+      bao_gom_bua_an: bua,
+      bao_gom_nguon: "user",
+      ...(giuGhiChu ? {} : { bao_gom_ghi_chu: undefined }),
+      bo_qua_combo: bua ? undefined : true, // chọn "không gồm" = tắt luôn cảnh báo
+    });
+
+    const cdId = canWriteCombo(r);
+    if (!cdId) {
+      toast.success(bua
+        ? `Đã trừ ${BUA_LABEL[bua]} cùng ngày trong báo giá này`
+        : "Đã bỏ đánh dấu combo cho báo giá này");
+      // Khớp danh mục còn yếu → KHÔNG ghi master, nếu không 1 cú bấm sửa nhầm dòng
+      // danh mục sẽ làm mọi báo giá sau tự trừ oan.
+      if (r.match_table === "canh_diem" && r.match_id && !readOnly) {
+        toast.info("Khớp danh mục chưa chắc chắn nên chỉ áp dụng cho báo giá này — muốn áp dụng lâu dài thì đánh dấu ở trang Cảnh điểm.");
+      }
+      return;
+    }
+    try {
+      await markCombo.mutateAsync({ id: cdId, bua, xoaGhiChu: !giuGhiChu });
+      toast.success(bua
+        ? `Đã ghi vào danh mục: "${r.match_label || r.mo_ta}" gồm ${BUA_LABEL[bua]} — báo giá sau tự trừ`
+        : `Đã gỡ cờ combo của "${r.match_label || r.mo_ta}" trong danh mục`);
+    } catch (e: unknown) {
+      toast.warning(`${errMsg(e) || "Không ghi được vào danh mục"} — vẫn áp dụng cho báo giá này.`);
+    }
+  };
+  const setTinhRieng = (idx: number, v: boolean) => patchRow(idx, { tinh_rieng: v || undefined });
+
   const handleApply = () => {
     if (included.length === 0) return;
-    onApply(toBaoGiaItems(included), ten, soNgay);
+    onApply(toBaoGiaItems(included, daTruCombo), ten, soNgay);
     // Học bộ nhớ khớp từ các dòng đã áp dụng (fire-and-forget) → lần sau tự khớp.
     const toLearn = aliasesToLearn(included, user?.user_id);
     if (toLearn.length) learn.mutate(toLearn);
+    // Giá KS nhập tay + master chưa có giá → ghi ngược vào danh mục (nguồn "báo
+    // giá", chỉ chèn mới — không đè giá sẵn có). Fire-and-forget: hỏng (thiếu
+    // quyền...) không chặn áp dụng, báo giá này vẫn đúng.
+    if (!readOnly && maps) {
+      const wb = giaPhongWritebacks(included, maps.khachSanGia);
+      if (wb.length) {
+        writeGiaPhong.mutate({ items: wb, baoGiaId }, {
+          onSuccess: (n) => {
+            if (n) toast.info(`Đã lưu giá phòng tham khảo vào danh mục KS: ${wb.map((w) => w.ten).join(", ")} (nguồn: báo giá — sửa được ở trang Khách sạn)`);
+          },
+        });
+      }
+    }
     onClose();
   };
 
@@ -351,6 +471,16 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
               <span className="text-muted-foreground">{soNgay} ngày · {included.length} mục</span>
               <span className="text-emerald-700 inline-flex items-center gap-1"><Check className="h-3 w-3" />{matched} có giá</span>
               {missing > 0 && <span className="text-amber-700 inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{missing} cần điền giá</span>}
+              {combo.suppressed.size > 0 && (
+                <span className="text-slate-500" title="Bữa ăn đã nằm trong vé combo — không tính tiền lần 2">
+                  ⊂ {combo.suppressed.size} bữa đã gồm trong combo
+                </span>
+              )}
+              {combo.warnings.size > 0 && (
+                <span className="text-amber-700" title="Vé nghi đã bao gồm bữa ăn — xác nhận để khỏi tính trùng">
+                  ⚠ {combo.warnings.size} vé nghi đã gồm ăn
+                </span>
+              )}
             </div>
             <div className="rounded-md border overflow-hidden">
               <table className="w-full text-xs border-collapse">
@@ -385,8 +515,13 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
                           const isAltHotel = r.loai === "hotel" && groups.has(r.ngay_so);
                           const chosen = !isAltHotel || selection[r.ngay_so] === idx;
                           const ok = r.don_gia > 0;
+                          const sup = combo.suppressed.get(idx);   // dòng ăn đã nằm trong combo
+                          const warn = combo.warnings.get(idx);    // dòng vé nghi là combo kèm ăn
+                          const rowCls = sup ? "bg-slate-50 text-slate-400"
+                            : !chosen ? "opacity-50"
+                            : ok ? "" : "bg-amber-50/50";
                           return (
-                            <tr key={idx} className={`border-t border-slate-100 ${!chosen ? "opacity-50" : ok ? "" : "bg-amber-50/50"}`}>
+                            <tr key={idx} className={`border-t border-slate-100 ${rowCls}`}>
                               <td className="py-1 px-2 text-center text-slate-500 align-top">
                                 {r.ngay_so}
                                 {r.bua_an && <span className="block text-[9px] text-slate-400">{r.bua_an === "trua" ? "trưa" : "tối"}</span>}
@@ -415,12 +550,82 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
                                       title="Đổi loại/nhóm dòng này"
                                       className="mt-0.5 ml-1 text-[10px] text-slate-500 bg-transparent border border-slate-200 rounded px-1 py-0.5 outline-none focus:border-blue-300 cursor-pointer"
                                     >
+                                      {r.loai === "meal" && !r.bua_an && (
+                                        <option value="meal:">🍴 Ăn (chưa rõ bữa)</option>
+                                      )}
                                       <option value="meal:trua">🍴 Ăn trưa</option>
                                       <option value="meal:toi">🍴 Ăn tối</option>
                                       <option value="ticket">🎫 Vé / Dịch vụ</option>
                                       <option value="hotel">🏨 Khách sạn</option>
                                       <option value="transport">🚗 Xe</option>
                                     </select>
+                                    {/* Vé / du thuyền / xe trọn gói: cờ đã xác nhận, cảnh báo nghi ngờ, hoặc
+                                        lối vào im lặng cho ca chính (ngày có bữa ăn mà chưa ai đánh dấu gì). */}
+                                    {r.loai !== "meal"
+                                      && (r.bao_gom_bua_an || warn || (r.loai === "ticket" && daysWithMeal.has(r.ngay_so))) && (
+                                      <ComboChooser
+                                        current={r.bao_gom_bua_an ?? null}
+                                        onPick={(b) => setCombo(idx, b)}
+                                        ghiVaoDanhMuc={canWriteCombo(r) ? (r.match_label || r.mo_ta) : null}
+                                        label={r.bao_gom_bua_an
+                                          ? (warn
+                                            // Khai gồm bữa nhưng CHƯA trừ được dòng nào → không được hiện xanh
+                                            // như đã trừ, OP sẽ tưởng xong mà tiền vẫn tính đủ.
+                                            ? `🍽 đã gồm ${BUA_LABEL[r.bao_gom_bua_an]} · ⚠ chưa trừ được — dòng ăn chưa rõ bữa`
+                                            : `🍽 combo · đã gồm ${BUA_LABEL[r.bao_gom_bua_an]}`)
+                                          : warn
+                                            ? `⚠ có thể đã gồm ${warn.bua ? BUA_LABEL[warn.bua] : "bữa ăn"} — kiểm tra`
+                                            : "🍽 vé này có kèm bữa ăn?"}
+                                        tone={r.bao_gom_bua_an && !warn ? "ok" : warn ? "warn" : "mo"}
+                                        title={warn?.nguon === "khong_ro_bua"
+                                          ? "Vé khai đã gồm bữa ăn, nhưng dòng ăn cùng ngày không ghi rõ trưa/tối nên hệ thống chưa trừ được. Chọn trưa/tối cho dòng ăn đó."
+                                          : !r.bao_gom_bua_an && !warn
+                                          ? "Ngày này có bữa ăn tính tiền riêng. Nếu vé đã bao gồm bữa đó, đánh dấu ở đây để khỏi trả 2 lần."
+                                          : r.bao_gom_bua_an
+                                            ? `${r.bao_gom_nguon === "master" ? "Danh mục cảnh điểm" : "Bạn vừa xác nhận"}: vé này đã gồm ${BUA_LABEL[r.bao_gom_bua_an]}${r.bao_gom_ghi_chu ? ` (${r.bao_gom_ghi_chu})` : ""}. Bấm để sửa.`
+                                            : warn?.nguon === "ai"
+                                              ? "AI đọc được trong lịch trình là vé này đã bao gồm bữa ăn. Xác nhận để bỏ tính trùng."
+                                              : "Tên dòng có dấu hiệu vé combo kèm ăn. Xác nhận để bỏ tính trùng."}
+                                      />
+                                    )}
+                                    {/* Dòng ăn đang bị nghi tính trùng với combo cùng ngày */}
+                                    {!sup && warnedMeals.has(idx) && (
+                                      <span
+                                        className="mt-0.5 ml-1 block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                                        title="Ngày này có vé nghi/khai đã bao gồm bữa ăn. Chọn đúng Ăn trưa / Ăn tối cho dòng này, hoặc xác nhận cờ combo trên dòng vé, để hệ thống trừ đúng."
+                                      >
+                                        ⚠ có thể trùng với vé combo cùng ngày
+                                      </span>
+                                    )}
+                                    {/* Dòng ăn đã nằm trong combo → không tính tiền */}
+                                    {sup && (
+                                      <span className="mt-0.5 ml-1 flex flex-wrap items-center gap-1">
+                                        <span
+                                          className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                                          title={`Đã nằm trong "${sup.label}"${sup.ghi_chu ? ` — ${sup.ghi_chu}` : ""}. Không tính tiền để khỏi trùng.`}
+                                        >
+                                          ⊂ đã gồm trong {sup.label}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setTinhRieng(idx, true)}
+                                          className="text-[10px] text-blue-600 hover:underline"
+                                          title="Bữa này thực tế ăn riêng, phải trả thêm tiền"
+                                        >
+                                          vẫn tính riêng
+                                        </button>
+                                      </span>
+                                    )}
+                                    {combo.overridden.has(idx) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setTinhRieng(idx, false)}
+                                        className="mt-0.5 ml-1 block text-[10px] text-amber-700 hover:underline"
+                                        title="Đang tính riêng dù combo cùng ngày đã gồm bữa này — bấm để trừ lại"
+                                      >
+                                        ⚠ tính riêng dù combo đã gồm — hoàn tác
+                                      </button>
+                                    )}
                                   </span>
                                 </div>
                               </td>
@@ -440,20 +645,28 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
                                   </span>
                                 )}
                               </td>
-                              <td className="py-1 px-2 text-right text-slate-500 tabular-nums">
+                              <td className={`py-1 px-2 text-right text-slate-500 tabular-nums ${sup ? "line-through" : ""}`}>
                                 {r.don_gia > 0 ? (r.don_gia / xr).toFixed(2) : "—"}
                               </td>
                               <td className="py-1 px-2">
-                                <Input
-                                  type="text" inputMode="numeric"
-                                  value={r.don_gia > 0 ? r.don_gia.toLocaleString("vi-VN") : ""}
-                                  onChange={(e) => setGia(idx, parseInt(e.target.value.replace(/[^0-9]/g, ""), 10) || 0)}
-                                  placeholder="0"
-                                  className={`h-7 text-xs text-right ${chosen && !ok ? "border-amber-400" : ""}`}
-                                />
+                                {sup ? (
+                                  <span className="block text-right text-[11px] text-slate-400 line-through tabular-nums">
+                                    {r.don_gia > 0 ? r.don_gia.toLocaleString("vi-VN") : "—"}
+                                  </span>
+                                ) : (
+                                  <Input
+                                    type="text" inputMode="numeric"
+                                    value={r.don_gia > 0 ? r.don_gia.toLocaleString("vi-VN") : ""}
+                                    onChange={(e) => setGia(idx, parseInt(e.target.value.replace(/[^0-9]/g, ""), 10) || 0)}
+                                    placeholder="0"
+                                    className={`h-7 text-xs text-right ${chosen && !ok ? "border-amber-400" : ""}`}
+                                  />
+                                )}
                               </td>
                               <td className="py-1 px-1 text-center">
-                                {r.loai === "transport" ? (
+                                {sup ? (
+                                  <span className="text-slate-300">—</span>
+                                ) : r.loai === "transport" ? (
                                   <span className="text-slate-300">—</span>
                                 ) : (
                                   <input
@@ -488,6 +701,8 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
             <p className="text-[11px] text-muted-foreground">
               <b>PA</b> = phương án khách sạn (đêm có nhiều lựa chọn) → chọn 1, chỉ KS được chọn vào báo giá.
               Mục nền cam = chưa có giá → điền tay. <span className="text-violet-700">“đã nhớ”</span> = tự điền từ bộ nhớ đã học (sửa lại được).
+              <b> ⚠ có thể đã gồm…</b> = vé nghi là combo kèm ăn → bấm xác nhận, bữa ăn cùng ngày sẽ bị gạch (<b>⊂ đã gồm</b>) và không tính tiền;
+              xác nhận cũng được ghi vào danh mục cảnh điểm nên báo giá sau tự trừ.
               Khi bấm <b>Áp dụng</b>, hệ thống ghi nhớ khớp + giá để lần sau tự điền. Sau đó nhập bậc số khách để ra giá tour.
             </p>
           </div>
@@ -519,6 +734,69 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Chip trên dòng VÉ: khai/gỡ "vé này đã bao gồm bữa ăn". Chọn xong, bữa ăn cùng
+// ngày bị trừ khỏi báo giá NGAY, đồng thời ghi vào danh mục cảnh điểm.
+const COMBO_OPTIONS: { v: BaoGomBuaAn | null; label: string }[] = [
+  { v: "trua", label: "Đã gồm ăn trưa" },
+  { v: "toi", label: "Đã gồm ăn tối" },
+  { v: "ca_hai", label: "Đã gồm cả trưa + tối" },
+  { v: null, label: "Không gồm bữa nào" },
+];
+
+function ComboChooser({ current, label, tone, title, ghiVaoDanhMuc, onPick }: {
+  current: BaoGomBuaAn | null;
+  label: string;
+  /** ok = đã trừ · warn = cần kiểm tra · mo = lối vào im lặng, không gây nhiễu. */
+  tone: "ok" | "warn" | "mo";
+  title: string;
+  /** Tên dòng danh mục sẽ bị GHI ĐÈ (null = chỉ sửa trong báo giá này). */
+  ghiVaoDanhMuc: string | null;
+  onPick: (bua: BaoGomBuaAn | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={title}
+          className={`mt-0.5 ml-1 block rounded px-1.5 py-0.5 text-left text-[10px] font-medium ${
+            tone === "ok"
+              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              : tone === "warn"
+                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          }`}
+        >
+          {label}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={4} className="w-[220px] p-1">
+        <p className="px-2 py-1 text-[10px] text-muted-foreground">
+          Vé này đã bao gồm bữa ăn nào?
+        </p>
+        {COMBO_OPTIONS.map((o) => (
+          <button
+            key={o.v ?? "khong"}
+            type="button"
+            onClick={() => { onPick(o.v); setOpen(false); }}
+            className={`w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50 ${
+              (current ?? null) === o.v ? "font-semibold text-emerald-700" : ""
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+        <p className="px-2 py-1 text-[10px] text-muted-foreground border-t mt-1 break-words">
+          {ghiVaoDanhMuc
+            ? <>Ghi vào danh mục cảnh điểm <b>“{ghiVaoDanhMuc}”</b> → mọi báo giá sau tự trừ.</>
+            : <>Chỉ áp dụng cho báo giá này (không đủ điều kiện ghi vào danh mục).</>}
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 

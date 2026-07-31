@@ -40,6 +40,9 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   const [donVi, setDonVi] = useState("");
   const [focKhach, setFocKhach] = useState("");
   const [focMien, setFocMien] = useState("");
+  // Vé combo đã gồm bữa ăn — "khong" = vé thường (lưu NULL).
+  const [baoGomBuaAn, setBaoGomBuaAn] = useState("khong");
+  const [baoGomGhiChu, setBaoGomGhiChu] = useState("");
   const [nguoiThanhToan, setNguoiThanhToan] = useState("");
   const [email, setEmail] = useState("");
   const [taiKhoanThanhToan, setTaiKhoanThanhToan] = useState("");
@@ -59,6 +62,8 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     setDonVi(canhDiem.don_vi || "");
     setFocKhach(canhDiem.foc_khach?.toString() || "");
     setFocMien(canhDiem.foc_mien?.toString() || "");
+    setBaoGomBuaAn(canhDiem.bao_gom_bua_an || "khong");
+    setBaoGomGhiChu(canhDiem.bao_gom_ghi_chu || "");
     setNguoiThanhToan(canhDiem.nguoi_thanh_toan || "");
     setEmail(canhDiem.email || "");
     setTaiKhoanThanhToan(canhDiem.tai_khoan_thanh_toan || "");
@@ -87,6 +92,9 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           don_vi: coPhi ? donVi || null : null,
           foc_khach: coPhi && focKhach ? Number(focKhach) : null,
           foc_mien: coPhi && focMien ? Number(focMien) : null,
+          // KHÔNG gate theo coPhi: tắt/bật switch "Có phí" không được xoá trắng cờ combo.
+          bao_gom_bua_an: baoGomBuaAn === "khong" ? null : baoGomBuaAn,
+          bao_gom_ghi_chu: baoGomBuaAn === "khong" ? null : baoGomGhiChu || null,
           nguoi_thanh_toan: coPhi ? nguoiThanhToan || null : null,
           email: email || null,
           tai_khoan_thanh_toan: taiKhoanThanhToan || null,
@@ -197,6 +205,44 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
                 placeholder="Y suất" className="h-9 text-sm w-28"
               />
             </div>
+          </div>
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-xs flex items-center gap-2">
+              Vé combo đã bao gồm bữa ăn
+              <span className="text-[11px] font-normal text-muted-foreground italic">
+                vd Bà Nà: vé cáp treo đã kèm buffet trưa
+              </span>
+            </Label>
+            <div className="flex items-center gap-2">
+              <Select value={baoGomBuaAn} onValueChange={setBaoGomBuaAn}>
+                <SelectTrigger className="h-9 text-sm w-44">
+                  <span>
+                    {baoGomBuaAn === "trua" ? "Gồm ăn trưa"
+                      : baoGomBuaAn === "toi" ? "Gồm ăn tối"
+                      : baoGomBuaAn === "ca_hai" ? "Gồm cả trưa + tối"
+                      : "Không gồm bữa nào"}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="khong">Không gồm bữa nào</SelectItem>
+                  <SelectItem value="trua">Gồm ăn trưa</SelectItem>
+                  <SelectItem value="toi">Gồm ăn tối</SelectItem>
+                  <SelectItem value="ca_hai">Gồm cả trưa + tối</SelectItem>
+                </SelectContent>
+              </Select>
+              {baoGomBuaAn !== "khong" && (
+                <Input
+                  value={baoGomGhiChu}
+                  onChange={(e) => setBaoGomGhiChu(e.target.value)}
+                  placeholder="Mô tả bữa đã gồm (buffet trưa trên đỉnh...)"
+                  className="h-9 text-sm flex-1"
+                />
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground italic">
+              Bật cờ này thì báo giá AI sẽ tự ẩn bữa ăn cùng ngày, không tính tiền 2 lần.
+              Áp dụng cho mọi báo giá lập sau đó.
+            </p>
           </div>
         </div>
       )}

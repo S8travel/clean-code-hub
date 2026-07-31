@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Hotel, Utensils, Bus, Ticket, Info, Plus, X } from "lucide-react";
+import { Hotel, Utensils, Bus, Ticket, Info, Plus, X, FileSpreadsheet } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error";
 import type { BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
+import { exportBaoGiaCostingExcel } from "@/lib/export-bao-gia-costing-excel";
 import {
-  costingSheet, fmtVnd, fmtUsd, tierGuestsOf,
+  costingSheet, fmtVnd, fmtUsd, tierGuestsOf, baoGiaCode,
   type CostingGroup, type CostingRow,
 } from "./helpers";
 
@@ -64,13 +67,39 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
 
   const tierBg = (i: number) => (i === matchIdx ? "bg-emerald-50" : "");
 
+  // Xuất Excel dùng CHÍNH `sheet` đang hiển thị → file luôn khớp số trên màn hình.
+  const handleExportExcel = () => {
+    try {
+      exportBaoGiaCostingExcel(sheet, {
+        tenChuongTrinh: ket.ten_chuong_trinh || draft.tieu_de || "",
+        maBg: baoGiaCode(draft),
+        soNgay: ket.so_ngay ?? 1,
+        ngayDi: draft.ngay_di,
+        ngayVe: draft.ngay_ve,
+        profitUsd: draft.profit_usd,
+      });
+      toast.success("Đã xuất bảng tính giá ra Excel");
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || "Lỗi xuất Excel");
+    }
+  };
+
   return (
     <section className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs uppercase tracking-wider font-semibold text-slate-500">
           Bảng chi phí (theo nhóm · nhiều cỡ đoàn)
         </h2>
-        <span className="text-[11px] text-slate-400">Tỷ giá {fmtVnd(sheet.xr)} ₫/USD</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-slate-400">Tỷ giá {fmtVnd(sheet.xr)} ₫/USD</span>
+          <Button
+            size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+            title="Tải bảng tính giá ra Excel (song ngữ Việt / 中文)"
+            onClick={handleExportExcel}
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" /> Xuất Excel
+          </Button>
+        </div>
       </div>
 
       {leadPax && leadPax > 0 && matchIdx >= 0 && (
