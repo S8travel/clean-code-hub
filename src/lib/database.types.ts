@@ -190,6 +190,8 @@ export type Database = {
       }
       canh_diem: {
         Row: {
+          bao_gom_bua_an: string | null
+          bao_gom_ghi_chu: string | null
           co_phi: boolean | null
           created_at: string | null
           dia_diem: string | null
@@ -212,6 +214,8 @@ export type Database = {
           thong_tin_chung: string | null
         }
         Insert: {
+          bao_gom_bua_an?: string | null
+          bao_gom_ghi_chu?: string | null
           co_phi?: boolean | null
           created_at?: string | null
           dia_diem?: string | null
@@ -234,6 +238,8 @@ export type Database = {
           thong_tin_chung?: string | null
         }
         Update: {
+          bao_gom_bua_an?: string | null
+          bao_gom_ghi_chu?: string | null
           co_phi?: boolean | null
           created_at?: string | null
           dia_diem?: string | null

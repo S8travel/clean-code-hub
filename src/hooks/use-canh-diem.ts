@@ -17,6 +17,10 @@ export interface CanhDiem {
   co_phi: boolean | null;
   foc_khach: number | null;
   foc_mien: number | null;
+  /** Vé combo đã bao gồm bữa ăn ('trua'|'toi'|'ca_hai'); null = vé thường.
+   *  Báo giá AI dùng cờ này để không tính tiền bữa ăn 2 lần. */
+  bao_gom_bua_an: string | null;
+  bao_gom_ghi_chu: string | null;
   ghi_chu: string | null;
   thong_tin_chung: string | null;
   nguoi_thanh_toan: string | null;
@@ -32,6 +36,16 @@ export interface CanhDiem {
 }
 
 const QK = "canh_diem_list";
+
+/** Sửa danh mục cảnh điểm phải làm mới CẢ 3 cache đọc bảng này, không chỉ trang
+ *  danh mục: "canh_diem" (điều tour / seri) và "bao_gia_ai_maps" (báo giá AI,
+ *  staleTime 10 phút + không refetch khi focus). Bỏ sót → OP bật cờ combo ở danh
+ *  mục rồi quay lại báo giá trong 10 phút vẫn thấy bữa ăn bị tính 2 lần. */
+function invalidateCanhDiem(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: [QK] });
+  qc.invalidateQueries({ queryKey: ["canh_diem"] });
+  qc.invalidateQueries({ queryKey: ["bao_gia_ai_maps"] });
+}
 
 export function useCanhDiemList() {
   return useQuery<CanhDiem[]>({
@@ -71,7 +85,7 @@ export function useCreateCanhDiem() {
       }
       return data as CanhDiem;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+    onSuccess: () => invalidateCanhDiem(qc),
   });
 }
 
@@ -91,7 +105,7 @@ export function useUpdateCanhDiem() {
         throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+    onSuccess: () => invalidateCanhDiem(qc),
   });
 }
 
@@ -105,6 +119,6 @@ export function useDeleteCanhDiem() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [QK] }),
+    onSuccess: () => invalidateCanhDiem(qc),
   });
 }

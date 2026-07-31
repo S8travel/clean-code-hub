@@ -31,6 +31,9 @@ export interface CanhDiemItem {
   khach_san_id: number | null;
   ghi_chu: string | null;
   nha_cung_cap_id: number | null;
+  /** Vé combo đã bao gồm bữa ăn ('trua'|'toi'|'ca_hai'|null) — CHỈ để cảnh báo
+   *  hiển thị ở điều tour, KHÔNG dùng tính tiền (chưa có cột snapshot per-tour). */
+  bao_gom_bua_an: string | null;
 }
 
 export interface NhaHangItem {
@@ -121,7 +124,7 @@ export function useCanhDiem() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("canh_diem")
-        .select("id, ten, loai, co_phi, gia_mac_dinh, foc_khach, foc_mien, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu, nha_cung_cap_id")
+        .select("id, ten, loai, co_phi, gia_mac_dinh, foc_khach, foc_mien, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu, nha_cung_cap_id, bao_gom_bua_an")
         .order("ten");
       if (error) throw error;
       return data as CanhDiemItem[];
