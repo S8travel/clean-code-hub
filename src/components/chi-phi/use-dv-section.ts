@@ -23,7 +23,7 @@ import { useCurrentUserName } from "@/hooks/use-doan";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type DVModalTarget } from "./DVDnttModal";
-import { type CancelTarget } from "./DVCancelModal";
+import { type CancelTarget } from "./ChiPhiCancelModal";
 import { type AggCommitTarget } from "./DVAggCommitModal";
 import { type DVRowData, type DVRowHandlers, type LocalDVExtra } from "./DVRow";
 
@@ -665,10 +665,16 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     });
   };
 
-  const handleCancel = () => {
+  const handleCancel = (ncc?: { id: number; ten: string } | null) => {
     if (!cancelTarget) return;
     cancelMut.mutate(
-      { id: cancelTarget.dnttId, mode: cancelTarget.isPaid ? cancelMode : undefined },
+      {
+        id: cancelTarget.dnttId,
+        mode: cancelTarget.isPaid ? cancelMode : undefined,
+        // NCC OP chọn khi dịch vụ chưa gắn — để công nợ cấn trừ tạo ra có nha_cung_cap_id.
+        nccId: ncc?.id ?? null,
+        nccTen: ncc?.ten ?? null,
+      },
       {
         onSuccess: () => { toast.success("Đã hủy"); setCancelTarget(null); },
         onError: (err: unknown) => toast.error(errMsg(err) || "Lỗi khi hủy"),
