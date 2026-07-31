@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -292,7 +293,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       : `${fmtShort(dvDates[0])}–${fmtShort(dvDates[dvDates.length - 1])}`;
     void ngayDi; // legacy — không còn dùng cho subject
     setEmailTo(email || row.email_nha_cung_cap || "");
-    const baseSubject = `[S8 Travel] Đặt dịch vụ – ${tenDoan}${dvDateStr ? ` – ${dvDateStr}` : ""}${ncc ? ` – ${ncc}` : ""}`;
+    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt dịch vụ – ${tenDoan}${dvDateStr ? ` – ${dvDateStr}` : ""}${ncc ? ` – ${ncc}` : ""}`);
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);

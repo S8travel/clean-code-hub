@@ -3,7 +3,8 @@ import { format, subDays, parseISO } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { proRataInts } from "@/lib/pro-rata";
+import { buildRemainingAllocations } from "@/lib/alloc-remaining";
+import { calcKSDnttAmount } from "@/lib/ks-dntt-amount";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -37,6 +38,9 @@ interface Props {
   daCoc: number;
   localRows: LocalKSRow[];
   chiPhiRowIds: number[];
+  /** doan_chi_phi.id → so_tien_da_dntt (phần đã cam kết). Dùng chia allocation theo
+   *  phần CÒN LẠI của từng dòng — thiếu map này thì rơi về chia theo thành tiền. */
+  committedById?: Record<number, number>;
   canTru: CanTruSelection[];
   onCanTruChange: (v: CanTruSelection[]) => void;
   tenDoanMoi: string;
@@ -57,7 +61,8 @@ function defaultNgayCan(serviceDate?: string): string {
 
 export default function KSDNTTModal({
   open, onClose, doanId, ksId, ksName, nccId, nccTen, nccStk, nccNganHang,
-  totalKS, daCoc, localRows, chiPhiRowIds, canTru, onCanTruChange, tenDoanMoi, serviceDate,
+  totalKS, daCoc, localRows, chiPhiRowIds, committedById, canTru, onCanTruChange,
+  tenDoanMoi, serviceDate,
   refLoai = "khach_san",
 }: Props) {
   useTranslate();
@@ -73,8 +78,10 @@ export default function KSDNTTModal({
   const qc = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
-  const soTien = mode === "full" ? thucThanhToan : depositAmount;
-  const soTienConLai = mode === "full" ? 0 : thucThanhToan - depositAmount;
+  // so_tien (nghĩa vụ phiếu) = cấn trừ + tiền mặt — cấn trừ TRỪ vào, KHÔNG cộng
+  // thêm. Khớp bất biến của mọi ĐNTT đã duyệt trong DB (xem lib/ks-dntt-amount).
+  // full: nghĩa vụ = toàn bộ còn lại; deposit: nghĩa vụ = số cọc user nhập.
+  const amt = calcKSDnttAmount({ conLai, canTruAmount, mode, depositAmount });
 
   const buildMoTa = () => {
     const parts: string[] = [];
@@ -86,27 +93,37 @@ export default function KSDNTTModal({
   };
 
   const handleSubmit = async () => {
-    if (soTien <= 0 && canTruAmount <= 0) {
+    if (amt.soTien <= 0) {
       toast.error(t("Số tiền phải lớn hơn 0"));
       return;
     }
-    // Chống over-commit: tổng đề nghị (tiền mặt + cấn trừ) KHÔNG vượt phần còn lại
-    // (conLai = totalKS − đã cọc/đề nghị). Chặn cọc nhập tay quá tay.
-    if (soTien + canTruAmount > conLai) {
+    // Chống over-commit: nghĩa vụ phiếu KHÔNG vượt phần còn lại (conLai).
+    if (amt.soTien > conLai) {
       toast.error(t("Số tiền vượt phần còn phải thanh toán"));
+      return;
+    }
+    // Cấn trừ là hình thức trả TRONG nghĩa vụ — không được vượt nghĩa vụ phiếu.
+    if (canTruAmount > amt.soTien) {
+      toast.error(t("Cấn trừ vượt quá số tiền đề nghị"));
       return;
     }
     setSubmitting(true);
     try {
-      // 1. Tạo 1 ĐNTT cho FULL amount = soTien + canTruAmount
-      const fullAmount = soTien + canTruAmount;
+      // ĐNTT.so_tien = nghĩa vụ = cấn trừ + tiền mặt (cấn trừ đã nằm trong đây).
+      const fullAmount = amt.soTien;
       // Bỏ row thanh_tien <= 0 (FOC row) — dntt_allocations CHECK so_tien > 0.
-      const allocRows = localRows.filter((r) => r.id && chiPhiRowIds.includes(r.id) && (r.thanh_tien ?? 0) > 0);
-      // Largest-remainder split → SUM(allocations.so_tien) === fullAmount
-      const allocAmts = proRataInts(fullAmount, allocRows.map((r) => r.thanh_tien));
-      const allocations = allocRows
-        .map((r, i) => ({ chi_phi_id: r.id!, so_tien: allocAmts[i] }))
-        .filter((a) => a.so_tien > 0);
+      // Chia theo phần CÒN LẠI của từng dòng (thanh_tien − so_tien_da_dntt) để ĐNTT
+      // khoản còn lại không rải sang dòng đã trả xong. Xem lib/alloc-remaining.ts.
+      const allocations = buildRemainingAllocations(
+        fullAmount,
+        localRows
+          .filter((r) => r.id && chiPhiRowIds.includes(r.id))
+          .map((r) => ({
+            id: r.id!,
+            thanh_tien: r.thanh_tien,
+            committed: committedById?.[r.id!] ?? 0,
+          })),
+      );
 
       const payload = {
         doan_id: doanId,
@@ -130,14 +147,15 @@ export default function KSDNTTModal({
 
       // 2. Nếu có cấn trừ: tạo các payment can_tru (gộp nhiều cong_no cùng NCC)
       if (canTruAmount > 0 && mainDnttId) {
-        let ctRemain = conLai;
+        // Cấn trừ phân bổ trong phạm vi nghĩa vụ phiếu (không vượt so_tien).
+        let ctRemain = amt.soTien;
         const items: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
         for (const s of canTru) {
           if (s.soTienCanTru <= 0 || ctRemain <= 0) continue;
-          const amt = Math.min(s.soTienCanTru, ctRemain);
-          if (amt <= 0) continue;
-          items.push({ congNoId: s.congNoId, soTien: amt, sourceTenDoan: s.tenDoan });
-          ctRemain -= amt;
+          const ctAmt = Math.min(s.soTienCanTru, ctRemain);
+          if (ctAmt <= 0) continue;
+          items.push({ congNoId: s.congNoId, soTien: ctAmt, sourceTenDoan: s.tenDoan });
+          ctRemain -= ctAmt;
         }
         await createCanTruPayments({
           dnttId: mainDnttId,
@@ -221,13 +239,14 @@ export default function KSDNTTModal({
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="full" id="full" />
                 <Label htmlFor="full" className="text-xs cursor-pointer">
-                  {t("Toàn bộ")} — {fmt(thucThanhToan)} VND
+                  {t("Trả hết phần còn lại")} — {fmt(thucThanhToan)} VND
+                  {canTruAmount > 0 ? ` + ${fmt(canTruAmount)} ${t("cấn trừ")}` : ""}
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="deposit" id="deposit" />
                 <Label htmlFor="deposit" className="text-xs cursor-pointer">
-                  {t("1 phần (cọc/cấn trừ)")}
+                  {t("Trả trước một phần (cọc)")}
                 </Label>
               </div>
             </RadioGroup>
@@ -235,19 +254,35 @@ export default function KSDNTTModal({
 
           {mode === "deposit" && thucThanhToan > 0 && (
             <div className="space-y-2">
-              <Label className="text-xs">{t("Số tiền cọc/cấn trừ")}</Label>
+              {/* Số cọc = TỔNG nghĩa vụ phiếu này (cấn trừ nằm trong, không cộng thêm). */}
+              <Label className="text-xs">{t("Số tiền cọc (tổng khoản đợt này)")}</Label>
               <Input
                 type="number"
                 className="h-8 text-xs"
                 value={depositAmount || ""}
                 onChange={(e) => setDepositAmount(Number(e.target.value) || 0)}
-                max={thucThanhToan}
+                max={conLai}
                 min={0}
               />
-              {depositAmount > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  {t("Còn lại")}: {fmt(thucThanhToan - depositAmount)} VND
-                </p>
+            </div>
+          )}
+
+          {/* Tổng phiếu = nghĩa vụ = cấn trừ + tiền mặt. Cấn trừ TRỪ vào để ra tiền
+              mặt (không cộng thêm) — khớp bất biến DB. Hiện phần "còn lại" nếu cọc
+              chưa phủ hết tổng chi phí (đợt sau lo). */}
+          {(amt.soTien > 0 || canTruAmount > 0) && (
+            <div className="text-xs rounded-md border border-border px-3 py-2 space-y-0.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("Tổng phiếu đề nghị")}:</span>
+                <span className="font-semibold">{fmt(amt.soTien)} VND</span>
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                = {t("cấn trừ")} {fmt(canTruAmount)} + {t("tiền mặt")} {fmt(amt.tienMat)}
+              </div>
+              {amt.conLaiSau > 0 && (
+                <div className="text-[11px] text-amber-600 font-medium">
+                  ⚠ {t("Còn")} {fmt(amt.conLaiSau)} VND {t("chưa được đề nghị")} ({t("tổng chi phí")} {fmt(conLai)})
+                </div>
               )}
             </div>
           )}
@@ -276,7 +311,7 @@ export default function KSDNTTModal({
             size="sm"
             className="text-xs"
             onClick={handleSubmit}
-            disabled={submitting || (soTien <= 0 && canTruAmount <= 0)}
+            disabled={submitting || !amt.hopLe}
           >
             {t("Tạo đề nghị TT")}
           </Button>

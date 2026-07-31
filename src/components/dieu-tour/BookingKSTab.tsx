@@ -1,4 +1,5 @@
 import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
+import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -432,7 +433,7 @@ function BookingKSCard({
       ? roomDates.map(fmtDate).join(", ") + ` (${roomDates.length} đêm)`
       : "";
     setEmailTo(normalizeEmails(row.khach_san_email));
-    const baseSubject = `[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`;
+    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`);
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailHtml(buildEmailHtml(mode, ""));
     setEmailModalOpen(true);

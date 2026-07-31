@@ -19,6 +19,8 @@ export interface NhaHang {
   dia_diem_zh: string | null;
   chiet_khau_phan_tram: number | null;
   tinh_suat_tl: boolean | null;
+  /** Đoàn MỚI tự đánh dấu chi phí nhà hàng này là định kỳ — xem lib/nh-dinh-ky.ts */
+  thanh_toan_dinh_ky_mac_dinh: boolean;
   loai: string; // 'nha_hang' | 'tau_ngay'
 }
 

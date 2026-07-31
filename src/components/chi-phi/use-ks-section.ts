@@ -1020,6 +1020,8 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
 
   // Tổng công nợ / hoàn tiền per KS — từ bảng cong_no
   const congNoByKs: Record<number, number> = {};
+  /** Công nợ ĐÃ cấn trừ hết (số gốc) — badge lịch sử, xem lib/cong-no-badge.ts. */
+  const congNoDaCanTruByKs: Record<number, number> = {};
   const hoanTienByKs: Record<number, number> = {};
   // groupCongNoTotalByKs = sum so_tien_goc across ALL cong_no states (con_du + da_can_tru + da_hoan_tien).
   // Dùng để effectiveDelta / effectiveCommitted: trừ phần NCC đã credit/refund khỏi sumPaid/sumCommitted.
@@ -1051,6 +1053,10 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
       congNoByKs[ksId] = (congNoByKs[ksId] || 0) + c.so_tien_con_lai;
       groupCongNoCNByKs[ksId] = (groupCongNoCNByKs[ksId] || 0) + goc;
     } else if (c.trang_thai === "da_can_tru") {
+      // Giữ số để badge VẪN hiện sau khi cấn trừ hết. Trước đây chỉ cộng vào
+      // groupCongNoCN (dùng tính chênh lệch) nên badge biến mất sạch → nhìn thẻ không
+      // biết khoản này từng được ghi công nợ hay chưa. Xem lib/cong-no-badge.ts.
+      congNoDaCanTruByKs[ksId] = (congNoDaCanTruByKs[ksId] || 0) + goc;
       groupCongNoCNByKs[ksId] = (groupCongNoCNByKs[ksId] || 0) + goc;
     } else if (c.trang_thai === "da_hoan_tien") {
       hoanTienByKs[ksId] = (hoanTienByKs[ksId] || 0) + goc;
@@ -1131,13 +1137,30 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     if (cp.id != null && (cp.so_tien_da_dntt ?? 0) > 0) cpCommittedById[cp.id] = true;
   });
 
+  // Σ cam kết THẬT per KS = Σ so_tien_da_dntt (RPC recalc tính TOÀN CỤC nên thấy cả
+  // ĐNTT gộp định kỳ). `ttByKs`/`cocByKs` chỉ cộng phiếu ref_loai='khach_san' →
+  // mù hoàn toàn với phiếu định kỳ (doan_id=NULL, ref_loai='dinh_ky'). Thiếu vế này,
+  // KS vừa có phiếu KS đã trả vừa được gộp định kỳ sẽ hiện nút "Thanh toán bổ sung"
+  // cho khoản đã nằm trong phiếu gộp → trả hai lần.
+  const daDeNghiByKs: Record<number, number> = {};
+  const soTienDaDnttById = new Map<number, number>();
+  chiPhiRows.forEach((cp) => {
+    if (cp.id != null) soTienDaDnttById.set(cp.id, Number(cp.so_tien_da_dntt ?? 0));
+  });
+  Object.entries(chiPhiIdsByKs).forEach(([ksIdStr, ids]) => {
+    daDeNghiByKs[Number(ksIdStr)] = ids.reduce(
+      (s, id) => s + (soTienDaDnttById.get(id) ?? 0),
+      0,
+    );
+  });
+
   // ── Clustered data + handlers cho <KSCard> ─────────────────────────────────
 
   const cardData: KSCardData = {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
     grouped, localRows, dnttList, congNoList,
-    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs,
-    congNoByKs, hoanTienByKs,
+    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs, daDeNghiByKs,
+    congNoByKs, congNoDaCanTruByKs, hoanTienByKs,
     groupCongNoTotalByKs, groupCongNoCNByKs, groupCongNoHTByKs,
     thucTeOverrideById, canTruByDnttId,
     cpCommittedById,
@@ -1223,7 +1246,11 @@ export interface KSCardData {
   ttByKs: Record<number, number>;
   canTruAmtByKsId: Record<number, number>;
   chiPhiIdsByKs: Record<number, number[]>;
+  /** Σ so_tien_da_dntt per KS — cam kết toàn cục, thấy cả ĐNTT gộp định kỳ. */
+  daDeNghiByKs: Record<number, number>;
   congNoByKs: Record<number, number>;
+  /** Công nợ đã cấn trừ hết (số gốc) — badge lịch sử cho kế toán. */
+  congNoDaCanTruByKs: Record<number, number>;
   hoanTienByKs: Record<number, number>;
   groupCongNoTotalByKs: Record<number, number>;
   groupCongNoCNByKs: Record<number, number>;

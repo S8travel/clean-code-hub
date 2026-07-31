@@ -3,9 +3,9 @@ import { computeInitialDinhKyKsIds } from "./ks-dinh-ky";
 
 // ngayKsMap: doan_ngay.id → khach_san_id
 const ngayKsMap = {
-  10: 66,   // ngày trỏ tới KS 66 (Rosamia)
+  10: 66,   // hai ngày cùng trỏ tới một KS bật "định kỳ mặc định"
   11: 66,
-  20: 92,   // ngày trỏ tới KS 92 (Rosemary)
+  20: 92,   // KS khác, cũng bật định kỳ mặc định
   30: 500,  // KS thường
 };
 

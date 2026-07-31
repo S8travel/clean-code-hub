@@ -26,6 +26,8 @@ export interface NhaHangDetail {
   ncc_so_tai_khoan: string | null;
   ncc_ngan_hang: string | null;
   tinh_suat_tl: boolean | null;
+  /** Đoàn MỚI tự đánh dấu chi phí nhà hàng này là định kỳ — xem lib/nh-dinh-ky.ts */
+  thanh_toan_dinh_ky_mac_dinh: boolean | null;
 }
 
 export interface NHSectionData {
@@ -139,7 +141,7 @@ export function useChiPhiNHSection(doanId?: number, doanNhomId?: number | null) 
       const nhIds = [...new Set(meals.map((m) => m.nha_hang_id))];
       const { data: nhList, error: e2 } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, thong_tin_chung, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, tai_khoan_thanh_toan, nha_cung_cap_id, tinh_suat_tl")
+        .select("id, ten, dia_chi, thong_tin_chung, foc_khach, foc_mien, chiet_khau_phan_tram, nguoi_thanh_toan, tai_khoan_thanh_toan, nha_cung_cap_id, tinh_suat_tl, thanh_toan_dinh_ky_mac_dinh")
         .in("id", nhIds);
       if (e2) throw e2;
 

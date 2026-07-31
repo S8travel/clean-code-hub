@@ -24,7 +24,11 @@ import { useDoanScope } from "@/hooks/use-doan-scope";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
 import { useDNTTNeedingApproval } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
-import { useMyDeadlines, useMyCreatedBookingDeadlines, useMarkDeadlineDone, type DeadlineItem } from "@/hooks/use-my-job";
+import {
+  useMyDeadlines, useMyCreatedBookingDeadlines, useMarkDeadlineDone,
+  deadlineGroup, mergeMyDeadlines, countDeadlineCanXuLy,
+  type DeadlineItem,
+} from "@/hooks/use-my-job";
 import { useMyTeamAssignments, useAllTeamAgents } from "@/hooks/use-teams";
 import { useDoanLogGhiChu, useToggleResolved } from "@/hooks/use-doan-log";
 import { useCongViecList } from "@/hooks/use-cong-viec";
@@ -177,15 +181,6 @@ const TYPE_CFG = {
   dv: { icon: Package,  label: "DV",  cls: "bg-purple-100 text-purple-700" },
 };
 
-function deadlineGroup(deadline: string): "overdue" | "today" | "week" | "later" {
-  const d = parseISO(deadline);
-  const now = new Date(); now.setHours(0, 0, 0, 0);
-  if (isBefore(d, now)) return "overdue";
-  if (isToday(d)) return "today";
-  if (differenceInDays(d, now) <= 7) return "week";
-  return "later";
-}
-
 const GROUP_CFG = {
   overdue: { labelKey: "Quá hạn",     cls: "text-red-600",   bg: "bg-red-50 border-red-200" },
   today:   { labelKey: "Hôm nay",     cls: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
@@ -330,18 +325,11 @@ export default function MyJobPage() {
 
   // Union: deadline mình phụ trách (phân việc) + booking mình gửi/tạo.
   // Dedupe theo type+bookingId → hiện 1 lần.
-  const filteredDeadlines = useMemo(() => {
-    const pvPart = pvDeadlines.filter(
-      (item) => pvScope?.get(item.doanId)?.has(item.type) ?? false,
-    );
-    const map = new Map<string, DeadlineItem>();
-    for (const it of [...pvPart, ...createdDeadlines]) {
-      // Key theo BẢNG NGUỒN thật (rpcType) — id ks/nh là 2 sequence riêng, có thể
-      // trùng số → key theo display type sẽ gộp nhầm tàu ngày (nh) với ks.
-      map.set(`${it.rpcType}-${it.bookingId}`, it);
-    }
-    return [...map.values()].sort((a, b) => a.deadline.localeCompare(b.deadline));
-  }, [pvDeadlines, pvScope, createdDeadlines]);
+  // Logic hợp nhất nằm ở lib (use-my-job) để badge sidebar dùng CHUNG — xem mergeMyDeadlines.
+  const filteredDeadlines = useMemo(
+    () => mergeMyDeadlines(pvDeadlines, pvScope, createdDeadlines),
+    [pvDeadlines, pvScope, createdDeadlines],
+  );
 
   const { data: ghiChuLogs = [] } = useDoanLogGhiChu(user?.user_id);
   const toggleResolved = useToggleResolved();
@@ -531,7 +519,7 @@ export default function MyJobPage() {
               {t("Deadline")}
               {filteredDeadlines.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
-                  {filteredDeadlines.filter((d) => deadlineGroup(d.deadline) !== "later").length || filteredDeadlines.length}
+                  {countDeadlineCanXuLy(filteredDeadlines) || filteredDeadlines.length}
                 </span>
               )}
             </TabsTrigger>

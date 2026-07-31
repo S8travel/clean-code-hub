@@ -13,7 +13,13 @@ import { t, useTranslate } from "@/lib/i18n";
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 export interface AggCommitTarget {
+  /** Dòng neo của cụm (dòng cuối theo thứ tự hiển thị) — dùng cho NCC + mô tả. */
   mainRow: ChiPhiRow;
+  /** Toàn bộ dòng chi phí của CỤM (các dòng trả chung 1 ĐNTT gộp + phát sinh).
+   *  Dùng để phân bổ ĐNTT bổ sung và recalc trạng thái. */
+  clusterRows: ChiPhiRow[];
+  /** Tên các dòng chính trong cụm — hiện trên modal khi cụm gộp nhiều dịch vụ. */
+  clusterLabels: string[];
   delta: number;       // < 0 = thừa (cong_no), > 0 = thiếu (DNTT bổ sung)
   sumActual: number;
   sumPaid: number;
@@ -57,7 +63,13 @@ export default function DVAggCommitModal({
         </DialogHeader>
         {target && (
           <div className="space-y-3 py-1 text-sm">
-            <p className="text-xs text-muted-foreground">{target.mainRow.mo_ta}</p>
+            {/* Cụm gộp nhiều dịch vụ (trả chung 1 ĐNTT) → liệt kê để OP biết
+                chênh lệch đang chốt cho những dòng nào. */}
+            <p className="text-xs text-muted-foreground break-words">
+              {target.clusterLabels.length > 1
+                ? target.clusterLabels.join(" · ")
+                : target.mainRow.mo_ta}
+            </p>
             <div className="space-y-1 text-xs border rounded px-2 py-1.5 bg-muted/30">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{t("Tổng thực tế (nhóm)")}:</span>

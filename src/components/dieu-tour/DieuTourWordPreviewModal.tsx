@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FileDown } from "lucide-react";
-import { computeExportCells, exportDieuTourWordFromCells } from "@/lib/export-dieu-tour-word";
+import { computeExportCells, exportDieuTourWordFromCells, OP_SOS_NOTE } from "@/lib/export-dieu-tour-word";
 import type { DieuTourExportData, DayExportCell } from "@/lib/export-dieu-tour-word";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -48,6 +48,13 @@ function InfoTable({ data }: { data: DieuTourExportData }) {
           <td className="border border-gray-300 px-2 py-1">{data.hdv || "—"}</td>
           <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">Shopping</td>
           <td className="border border-gray-300 px-2 py-1">{shopStr}</td>
+        </tr>
+        <tr>
+          <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("OP")}</td>
+          <td colSpan={3} className="border border-gray-300 px-2 py-1">
+            {data.op || "—"}
+            <span className="block font-bold">{t(OP_SOS_NOTE)}</span>
+          </td>
         </tr>
         <tr>
           <td className="border border-gray-300 px-2 py-1 font-semibold bg-gray-100 whitespace-nowrap">{t("Xe")}</td>

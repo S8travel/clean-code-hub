@@ -16,10 +16,20 @@ describe("isDnttRong", () => {
     expect(isDnttRong({ ...base, alloc_count: 1 })).toBe(false);
   });
 
-  it("hoàn ứng / HDV / định kỳ vốn không allocation → KHÔNG coi là rỗng", () => {
+  it("hoàn ứng / HDV vốn không allocation → KHÔNG coi là rỗng", () => {
     expect(isDnttRong({ ...base, ref_loai: null })).toBe(false);
-    expect(isDnttRong({ ...base, ref_loai: "dinh_ky" })).toBe(false);
     expect(isDnttRong({ ...base, ref_loai: "ngoai_tour_ks" })).toBe(false);
+  });
+
+  // Phiếu gộp định kỳ CÓ allocate vào doan_chi_phi (useCreateBatchDNTT) — bản đầu
+  // xếp nhầm nó vào nhóm "không cần allocation" nên phiếu rỗng định kỳ duyệt & chi
+  // được, mà chi phí vẫn báo chưa đề nghị → kỳ sau đề nghị lại = trả hai lần.
+  it("ĐNTT gộp định kỳ không allocation → RỖNG", () => {
+    expect(isDnttRong({ ...base, ref_loai: "dinh_ky" })).toBe(true);
+  });
+
+  it("ĐNTT gộp định kỳ có allocation → bình thường", () => {
+    expect(isDnttRong({ ...base, ref_loai: "dinh_ky", alloc_count: 3 })).toBe(false);
   });
 
   it("đã hủy / từ chối → không cảnh báo nữa (rác đã dọn)", () => {

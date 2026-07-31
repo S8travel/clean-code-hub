@@ -19,3 +19,27 @@ verify_jwt = false
 # Bảo vệ: FB_VERIFY_TOKEN (đăng ký) + chữ ký X-Hub-Signature-256 (FB_APP_SECRET).
 [functions.fb-lead-webhook]
 verify_jwt = false
+
+# ── 4 hàm dưới đây ĐANG chạy verify_jwt = false trên prod nhưng TRƯỚC ĐÂY thiếu khai
+# ở file này. Thiếu khai = `npx supabase functions deploy <tên>` dùng mặc định
+# verify_jwt = TRUE và ÂM THẦM SIẾT hàm đang chạy → client gọi bằng publishable key
+# `sb_publishable_…` (KHÔNG phải JWT) sẽ ăn 401 và tính năng chết ngay sau khi deploy.
+# Khai ở đây để lệnh deploy giữ đúng trạng thái prod. Muốn siết verify_jwt thì phải
+# sửa cả phía client trước — xem ghi chú "Edge fn verify_jwt deferred".
+
+# send-booking-email: mọi luồng gửi mail (booking KS/NH/DV, lock phòng, UNC, lead)
+# gọi bằng publishable key, không có user JWT.
+[functions.send-booking-email]
+verify_jwt = false
+
+# ai-chat: gọi từ widget chat trong app bằng publishable key.
+[functions.ai-chat]
+verify_jwt = false
+
+# extract-chuong-trinh: trích lịch trình từ file OP tải lên, gọi bằng publishable key.
+[functions.extract-chuong-trinh]
+verify_jwt = false
+
+# notify: điểm nhận thông báo, gọi không kèm user JWT.
+[functions.notify]
+verify_jwt = false

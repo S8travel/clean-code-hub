@@ -153,6 +153,21 @@ export function groupKsRows(
   return { ksCostByNgay, ksCostNoRef, dayUseGroups, totalHdvKS, totalCtyKS };
 }
 
+/** Hiển thị dòng KS không map được vào lịch trên sheet Hành trình. Dòng NGOÀI
+ *  TOUR vẫn có đủ dữ liệu trong DB: neo KS (`khach_san_id`) + ngày C/I–C/O riêng
+ *  (`ngoai_tour_ci/co`) → phải in ra, không được "—" hết (OP đọc bản in không
+ *  biết khoản đó của KS nào, đêm nào). Tách hàm thuần để test. */
+export function ksLeftoverDisplay(
+  row: Pick<ChiPhiRow, "khach_san_id" | "ngoai_tour_ci" | "ngoai_tour_co">,
+  khachSanMap: Record<number, ExportKsInfo>,
+): { ksTen: string; ci: string; co: string } {
+  return {
+    ksTen: (row.khach_san_id != null ? khachSanMap[row.khach_san_id]?.ten : null) || "—",
+    ci: formatDateValue(row.ngoai_tour_ci),
+    co: formatDateValue(row.ngoai_tour_co),
+  };
+}
+
 const DANH_MUC_LABELS: Record<string, string> = {
   khach_san: "Khách sạn",
   nha_hang: "Nhà hàng",
@@ -906,13 +921,19 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   for (const [ngayId, arr] of [...ksCostByNgay.entries()]) {
     if (!consumedNgayIds.has(ngayId)) ksLeftover.push(...arr);
   }
+  // Ngoài tour xếp theo C/I rồi KS cho dễ dò; dòng không có ngày về cuối,
+  // giữ thứ tự cũ với nhau (sort stable).
+  ksLeftover.sort((a, b) =>
+    (a.ngoai_tour_ci ?? "￿").localeCompare(b.ngoai_tour_ci ?? "￿") ||
+    (a.khach_san_id ?? 0) - (b.khach_san_id ?? 0));
   for (const row of ksLeftover) {
     const hdvAmt = row.tien_hdv || 0;
     const ctyAmt = row.tien_cong_ty || 0;
+    const d = ksLeftoverDisplay(row, ksData?.khachSanMap || {});
     rows.push([
-      cell("—"), cell("—"),
+      cell(d.ci), cell(d.ksTen),
       cell((row.mo_ta || "").trim() || "Phòng", "text"),
-      cell("—"), cell("—"),
+      cell(d.ci), cell(d.co),
       cell(row.so_luong || 0, "number"),
       cell(focFromRow(row) || "—"),
       hideKsPrice ? cell("") : cell(row.don_gia || 0, "number"),

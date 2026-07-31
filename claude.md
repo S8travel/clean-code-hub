@@ -222,6 +222,27 @@ doan_permissions  id, doan_id, user_id, ho_ten
                   quyen: 'view'|'edit'
 ```
 
+### Tài khoản chỉ xem
+```
+user_roles.chi_xem → RLS restrictive chặn INSERT/UPDATE/DELETE mọi bảng
+                     (trừ UPDATE thong_bao) + guard trong RPC SECURITY DEFINER
+```
+
+### ⛔ ĐÃ THỬ VÀ BỎ: nhân hệ số chi phí cho tài khoản đối tác
+Ý tưởng: cho đại diện agent xem chi phí đoàn đã nhân hệ số, giấu giá vốn thật.
+**Đã dừng hẳn 29/07/2026** — đừng dựng lại mà không đọc phần này.
+
+- Nhân ở tầng hiển thị: bất khả thi. 151 file chạm `tien_cong_ty/thanh_tien/
+  don_gia/so_tien`, không có tầng chung.
+- Nhân ở client (tầng fetch): **lộ ngay** — PostgREST trả số gốc rồi trình duyệt
+  mới nhân, mở DevTools tab Network là thấy; response hồ sơ còn kèm cả hệ số.
+- Chặn đọc bằng RLS + trang riêng cho agent: **phản tác dụng**. Menu thiếu, màn
+  hình "không có quyền truy cập", tên trang "bản agent" — tất cả đều BÁO HIỆU
+  cho người dùng biết họ bị giới hạn, đúng thứ cần tránh khi mục tiêu là giấu.
+- Kết luận: **một khi đối tác có tài khoản đăng nhập vào hệ thống nội bộ thì
+  không giấu được với người biết kỹ thuật.** Muốn kín thì đừng cấp tài khoản —
+  xuất file (Excel/PDF) với giá đã nhân sẵn và gửi cho họ.
+
 ---
 
 ## 📁 File Structure
@@ -774,9 +795,28 @@ ALTER TABLE public.ten_bang ENABLE ROW LEVEL SECURITY;
 -- Policy mặc định (điều chỉnh theo nghiệp vụ):
 CREATE POLICY "auth_all" ON public.ten_bang
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- BẮT BUỘC: khóa ghi cho tài khoản chỉ xem (user_roles.chi_xem).
+-- Migration 20260728_tai_khoan_chi_xem quét MỘT LẦN toàn bộ bảng đang có →
+-- bảng tạo SAU đó KHÔNG tự có policy này = lỗ hổng, tài khoản chỉ xem ghi được.
+CREATE POLICY chi_xem_block_insert ON public.ten_bang AS RESTRICTIVE
+  FOR INSERT TO public WITH CHECK (NOT (SELECT public.is_tk_chi_xem()));
+CREATE POLICY chi_xem_block_update ON public.ten_bang AS RESTRICTIVE
+  FOR UPDATE TO public USING (NOT (SELECT public.is_tk_chi_xem()));
+CREATE POLICY chi_xem_block_delete ON public.ten_bang AS RESTRICTIVE
+  FOR DELETE TO public USING (NOT (SELECT public.is_tk_chi_xem()));
 ```
 
 Áp dụng tương tự cho VIEW (GRANT SELECT) và FUNCTION/RPC (GRANT EXECUTE).
+
+**RPC mới `SECURITY DEFINER` có ghi**: chạy bằng quyền owner → BYPASS toàn bộ RLS
+trên, kể cả policy `chi_xem_*`. Phải tự chèn guard đầu thân hàm:
+```sql
+IF public.is_tk_chi_xem() THEN
+  RAISE EXCEPTION 'Tài khoản chỉ xem — không thực hiện được thao tác này'
+    USING ERRCODE = '42501';
+END IF;
+```
 
 ---
 

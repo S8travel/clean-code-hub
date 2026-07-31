@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
-import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
+import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, buildOccupiedMealSlotIds, findOrphanNhExtras, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
 import { extraParentId } from "@/lib/dntt-gop-calc";
 import { getActiveDnttIdsForChiPhi, getActiveDnttIdsForChiPhiBatch } from "@/lib/dntt-guard";
 import { DieuTourGuardError } from "@/lib/dieu-tour-guard-error";
@@ -31,6 +31,9 @@ export interface CanhDiemItem {
   khach_san_id: number | null;
   ghi_chu: string | null;
   nha_cung_cap_id: number | null;
+  /** Vé combo đã bao gồm bữa ăn ('trua'|'toi'|'ca_hai'|null) — CHỈ để cảnh báo
+   *  hiển thị ở điều tour, KHÔNG dùng tính tiền (chưa có cột snapshot per-tour). */
+  bao_gom_bua_an: string | null;
 }
 
 export interface NhaHangItem {
@@ -121,7 +124,7 @@ export function useCanhDiem() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("canh_diem")
-        .select("id, ten, loai, co_phi, gia_mac_dinh, foc_khach, foc_mien, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu, nha_cung_cap_id")
+        .select("id, ten, loai, co_phi, gia_mac_dinh, foc_khach, foc_mien, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu, nha_cung_cap_id, bao_gom_bua_an")
         .order("ten");
       if (error) throw error;
       return data as CanhDiemItem[];
@@ -708,8 +711,8 @@ export function useSaveDieuTour() {
       // User phải hủy/giải phóng allocation trước khi xóa cảnh điểm khỏi tour.
       const deleteChiPhiByItemIdSafe = async (itemId: number) => {
         // MỘT item có thể có NHIỀU dòng chi phí (day-use khách sạn gắn vào cảnh điểm bọc:
-        // "Day Use 7 twn", "extra bed", "ăn sáng"… — 11 item trên prod, có item mang
-        // 30,3 triệu đã trả). `.maybeSingle()` cũ trả `{data: null, error}` khi ≥2 dòng,
+        // "Day Use", "extra bed", "ăn sáng"… — có thật trên dữ liệu chạy, và có item
+        // mang khoản đã trả không nhỏ). `.maybeSingle()` cũ trả `{data: null, error}` khi ≥2 dòng,
         // mà error bị BỎ QUA → `cpRow` null → return sớm → guard tiền KHÔNG chạy, và lệnh
         // xoá doan_ngay_item sau đó đụng FK `NO ACTION` rồi thất bại trong im lặng.
         const { data: cpRows, error: eCp } = await externalSupabase
@@ -1271,7 +1274,7 @@ export function useSaveDieuTour() {
       {
         const { data: allNgayRows } = await externalSupabase
           .from("doan_ngay")
-          .select("ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id")
+          .select("id, ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id")
           .eq("doan_id", doanId);
         const { keys: expectedNhKeys, hasUnknownNh } = buildExpectedNhKeys(
           allNgayRows ?? [],
@@ -1282,11 +1285,24 @@ export function useSaveDieuTour() {
         if (!hasUnknownNh) {
           const { data: nhCpRows } = await externalSupabase
             .from("doan_chi_phi")
-            .select("id, ngay_so, mo_ta")
+            .select("id, ngay_so, mo_ta, ref_doan_ngay_id, so_tien_da_tt")
             .eq("doan_id", doanId)
             .eq("danh_muc", "nha_hang");
-          const orphans = findOrphanNhChiPhi(nhCpRows ?? [], expectedNhKeys);
+          // Dòng phát sinh của ô bữa đã bị bỏ trống: phải dọn CÙNG dòng chính.
+          // Chúng mang cờ định kỳ + NCC của bữa (lib/dinh-ky-nhom.ts) nên nếu ở lại
+          // sẽ tiếp tục nằm trong cụm NCC × tháng và được TRẢ TIỀN, trong khi tab
+          // Chi phí không còn hiển thị chúng để OP phát hiện.
+          const occupiedSlotIds = buildOccupiedMealSlotIds(allNgayRows ?? []);
+          const orphans = [
+            ...findOrphanNhChiPhi(nhCpRows ?? [], expectedNhKeys),
+            ...findOrphanNhExtras(nhCpRows ?? [], occupiedSlotIds),
+          ];
           for (const cp of orphans) {
+            // Đã trả tiền (ĐNTT có thể đã hủy) → giữ lại, xóa là mất dấu tiền đã trả.
+            if (Number(cp.so_tien_da_tt ?? 0) > 0) {
+              counters.nhOrphanKept++;
+              continue;
+            }
             // Còn ĐNTT hiệu lực → giữ lại cho luồng điều chỉnh/công nợ, báo caller toast.
             const activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
             if (activeDnttIds.length > 0) {
@@ -1508,6 +1524,18 @@ export async function syncDieuTourToBookingDV(params: {
 }): Promise<{ synced: number; warnings: SyncWarning[] }> {
   const { doanId, days, canhDiemList, soKhach } = params;
 
+  // Danh mục CHƯA TẢI XONG thì DỪNG, không được coi là "đoàn không có dịch vụ".
+  // Mọi item tra `canhDiemList` để biết loai/co_phi; danh mục rỗng → không item nào
+  // khớp → rơi vào nhánh "không còn dịch vụ nào" bên dưới và XÓA SẠCH booking chua_dat
+  // của đoàn. Một lần autosave chạy trước khi query ["canh_diem"] kịp về (mở lại trang,
+  // refetch, mất mạng chớp nhoáng) là đủ để thổi bay dữ liệu booking — im lặng.
+  if (canhDiemList.length === 0) {
+    throw new Error(
+      "Chưa tải xong danh mục cảnh điểm/dịch vụ — bỏ qua đồng bộ Booking DV lần này " +
+      "để không xóa nhầm booking đã có. Lưu lại điều tour sau khi trang tải đủ.",
+    );
+  }
+
   // Collect co_phi + tag dich_vu items (KHÔNG phụ thuộc nguoi_thanh_toan —
   // HDV trả cash vẫn cần gửi mail booking với NCC để giữ chỗ).
   const coPhiItems: { cd: CanhDiemItem; ngay_date: string }[] = [];
@@ -1522,15 +1550,18 @@ export async function syncDieuTourToBookingDV(params: {
 
   if (coPhiItems.length === 0) {
     // Xóa tất cả booking DV chua_dat vì không còn dịch vụ nào
-    const { data: existingAll } = await externalSupabase
+    const { data: existingAll, error: eSel } = await externalSupabase
       .from("doan_booking_dv")
       .select("id, booking_status")
       .eq("doan_id", doanId);
+    if (eSel) throw eSel;
 
     if (existingAll) {
       for (const bk of existingAll) {
         if (bk.booking_status === "chua_dat") {
-          await externalSupabase.from("doan_booking_dv").delete().eq("id", bk.id);
+          const { error: eDel } = await externalSupabase
+            .from("doan_booking_dv").delete().eq("id", bk.id);
+          if (eDel) throw eDel;
         }
       }
     }
@@ -1558,34 +1589,43 @@ export async function syncDieuTourToBookingDV(params: {
   const warnings: SyncWarning[] = [];
 
   for (const [ncc, { email, dichVu }] of groups) {
-    const { data: existing } = await externalSupabase
+    const { data: existing, error: eSel } = await externalSupabase
       .from("doan_booking_dv")
       .select("id, booking_status, dich_vu_list")
       .eq("doan_id", doanId)
       .eq("ten_nha_cung_cap", ncc)
       .maybeSingle();
+    // KHÔNG nuốt lỗi: đọc hụt ở đây làm code tưởng "chưa có dòng nào" rồi insert đè /
+    // hoặc bỏ qua, mà caller thì không biết gì.
+    if (eSel) throw eSel;
 
     if (!existing || existing.booking_status === "chua_dat") {
       if (existing) {
         if (dichVu.length === 0) {
           // Xóa luôn dòng booking DV nếu không còn dịch vụ nào
-          await externalSupabase.from("doan_booking_dv").delete().eq("id", existing.id);
+          const { error } = await externalSupabase
+            .from("doan_booking_dv").delete().eq("id", existing.id);
+          if (error) throw error;
         } else {
           // Cập nhật lại danh sách dịch vụ
-          await externalSupabase
+          const { error } = await externalSupabase
             .from("doan_booking_dv")
             .update({ dich_vu_list: dichVu, email_nha_cung_cap: email })
             .eq("id", existing.id);
+          if (error) throw error;
         }
       } else if (dichVu.length > 0) {
-        // Chỉ insert nếu có dịch vụ
-        await externalSupabase.from("doan_booking_dv").insert({
+        // Chỉ insert nếu có dịch vụ.
+        // Ghi hụt ở ĐÂY chính là ca "tab Booking DV trống trơn mà không ai hay":
+        // trước đây lỗi bị bỏ qua và `synced` vẫn cộng lên, nên caller báo thành công.
+        const { error } = await externalSupabase.from("doan_booking_dv").insert({
           doan_id: doanId,
           ten_nha_cung_cap: ncc,
           email_nha_cung_cap: email,
           dich_vu_list: dichVu,
           booking_status: "chua_dat",
         });
+        if (error) throw error;
       }
       synced += dichVu.length;
     } else if (["cho_xac_nhan", "da_xac_nhan"].includes(existing.booking_status)) {
@@ -1604,10 +1644,11 @@ export async function syncDieuTourToBookingDV(params: {
         [...oldKeys].some((k) => !newKeys.has(k)) ||
         [...newKeys].some((k) => !oldKeys.has(k));
       if (hasChange) {
-        await externalSupabase
+        const { error } = await externalSupabase
           .from("doan_booking_dv")
           .update({ dich_vu_list: dichVu, email_nha_cung_cap: email })
           .eq("id", existing.id);
+        if (error) throw error;
       }
 
       if (hasChange) {
@@ -1618,15 +1659,18 @@ export async function syncDieuTourToBookingDV(params: {
   }
 
   // Cleanup: xóa các booking chua_dat không còn trong điều tour hiện tại
-  const { data: allExisting } = await externalSupabase
+  const { data: allExisting, error: eAll } = await externalSupabase
     .from("doan_booking_dv")
     .select("id, ten_nha_cung_cap, booking_status")
     .eq("doan_id", doanId);
+  if (eAll) throw eAll;
 
   if (allExisting) {
     for (const bk of allExisting) {
       if (bk.booking_status === "chua_dat" && !groups.has(bk.ten_nha_cung_cap)) {
-        await externalSupabase.from("doan_booking_dv").delete().eq("id", bk.id);
+        const { error } = await externalSupabase
+          .from("doan_booking_dv").delete().eq("id", bk.id);
+        if (error) throw error;
       }
     }
   }

@@ -511,6 +511,9 @@ export default function KSNgoaiTourPanel({
           daCoc={cardDaCoc(modalKsId)}
           localRows={modalKs.map(toLocalKSRow)}
           chiPhiRowIds={modalKs.map((r) => r.id)}
+          committedById={Object.fromEntries(
+            modalKs.map((r) => [r.id, Number(r.so_tien_da_dntt) || 0]),
+          )}
           canTru={canTruByKs[modalKsId] ?? []}
           onCanTruChange={(v) => setCanTruByKs((prev) => ({ ...prev, [modalKsId]: v }))}
           tenDoanMoi={tenDoan}

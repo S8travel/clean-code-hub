@@ -14,7 +14,8 @@ import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments"
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useRedemptionsByDoan, useRedeemVoucher, useUndoRedemption, useUpdateRedemption, useVoucherStockByIds, type VoucherRow } from "@/hooks/use-voucher";
-import { buildRedemptionMap, resolveVoucherPrintAmount, sumGroupVoucherMua, buildAggAllocations, splitVoucherCoverage, calcVoucherEditDelta, calcCoveredSoKhachEdit, calcMuaVoucherPaymentSync } from "@/lib/voucher";
+import { buildRedemptionMap, resolveVoucherPrintAmount, sumGroupVoucherMua, splitVoucherCoverage, calcVoucherEditDelta, calcCoveredSoKhachEdit, calcMuaVoucherPaymentSync } from "@/lib/voucher";
+import { buildAggAllocationsSpread } from "@/lib/alloc-remaining";
 import type { VoucherTarget } from "./DungVoucherModal";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -23,6 +24,8 @@ import { applyChietKhau, calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { nhMainMoTa, resolveNhMainId } from "@/lib/nh-chi-phi-resolve";
+import { computeInitialDinhKyNhKeys } from "@/lib/nh-dinh-ky";
+import { tienDeNghiTrung } from "@/lib/dinh-ky-nhom";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { type AggCommitNHTarget } from "./NHAggCommitModal";
 import { type NHCancelTarget } from "./NHCancelModal";
@@ -215,19 +218,23 @@ export function useNHSection({
     setLocalRows(rows);
     setExtrasMap(extras);
 
-    // Khởi tạo dinhKyKeys từ DB
-    const dkSet = new Set<string>();
-    for (const meal of nhData.meals) {
-      const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
-      const nh = nhData.nhaHangMap[meal.nha_hang_id];
-      const nhName = nh?.ten || "Nhà hàng";
-      const buaStr = meal.bua_an === "trua" ? "trưa" : "tối";
-      const mainMoTa = nhMainMoTa(nhName, meal.bua_an);
-      const mainCp = nhChiPhi.find(
-        (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
-      );
-      if (mainCp?.thanh_toan_dinh_ky) dkSet.add(key);
-    }
+    // Khởi tạo dinhKyKeys: bữa đã có chi phí → theo DB; bữa chưa có → seed từ cờ
+    // mặc định của nhà hàng (đoàn mới khỏi bật tay). Xem lib/nh-dinh-ky.ts.
+    const dkSet = computeInitialDinhKyNhKeys(
+      nhData.meals.map((meal) => {
+        const nh = nhData.nhaHangMap[meal.nha_hang_id];
+        const mainMoTa = nhMainMoTa(nh?.ten || "Nhà hàng", meal.bua_an);
+        const mainCp = nhChiPhi.find(
+          (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
+        );
+        return {
+          key: `${meal.doan_ngay_id}_${meal.bua_an}`,
+          daCoChiPhi: !!mainCp,
+          chiPhiDinhKy: mainCp?.thanh_toan_dinh_ky ?? null,
+          nhMacDinh: nh?.thanh_toan_dinh_ky_mac_dinh ?? null,
+        };
+      }),
+    );
     if (dkSet.size > 0) setDinhKyKeys(dkSet);
 
     initializedRef.current = true;
@@ -335,7 +342,7 @@ export function useNHSection({
   // Không effect nào đồng bộ lại `id`, nên sau một lần cascade, state giữ id đã chết
   // ("dòng ma") suốt phiên. Bấm "Gửi ĐNTT" trên đó → ĐNTT trỏ chi_phi_id chết →
   // allocation vi phạm FK. Guard trùng `wouldOverCommit` cũng câm vì tra theo id chết.
-  // (Sự cố HAN05BR260707DO 10/07/2026 — 4 phiếu 3.850.000 cho 1 bữa ăn.)
+  // (Đã xảy ra thật: OP bấm lại nhiều lần → một bữa ăn đẻ ra một loạt phiếu rỗng.)
   //
   // CỐ Ý chỉ NHẬN id thật, không bao giờ XÓA id: dòng vừa INSERT có thể chưa vào cache,
   // xóa id lúc đó sẽ khiến submit insert lần hai. Ca "đã xóa, chưa có dòng thay thế"
@@ -628,19 +635,62 @@ export function useNHSection({
     qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", doanId] });
   };
 
+  // Cờ định kỳ áp cho CẢ NHÓM bữa ăn: dòng chính + mọi dòng phát sinh.
+  // Chỉ ghi dòng chính thì phát sinh (thanh_toan_dinh_ky=false) rơi ra ngoài mọi
+  // luồng đề nghị thanh toán — xem lib/dinh-ky-nhom.ts.
   const handleToggleDinhKyNH = useCallback((key: string) => {
+    const newVal = !dinhKyKeysRef.current.has(key);
+    const row = localRowsRef.current[key];
+    const extraIds = (extrasMapRef.current[key] ?? [])
+      .map((e) => e.id)
+      .filter((x): x is number => x != null);
+    // NCC lấy từ DÒNG CHÍNH trước, master chỉ fallback — GIỐNG handleExtraSave.
+    // Lấy master ở đây sẽ ghi đè NCC đúng (dòng chính / migration đã gán) bằng NCC
+    // master mới trong cửa sổ master vừa đổi mà Điều tour chưa lưu lại → một bữa bị
+    // chẻ thành hai thẻ NCC trên trang định kỳ.
+    const mainCp = row?.id != null ? (chiPhiRows.find((c) => c.id === row.id) ?? null) : null;
+    const nccId =
+      mainCp?.nha_cung_cap_id ??
+      (row ? nhData?.nhaHangMap[row.nha_hang_id]?.nha_cung_cap_id ?? null : null);
+
+    if (newVal && row?.id && extraIds.length > 0) {
+      const extraCps = chiPhiRows.filter((c) => c.id != null && extraIds.includes(c.id));
+      const trung = tienDeNghiTrung(mainCp, extraCps);
+      if (trung > 0) {
+        const ok = window.confirm(
+          `Bữa này đã có ĐNTT gánh cả tiền phát sinh (${trung.toLocaleString("vi-VN")} ₫ ` +
+          `nằm trong phiếu cũ, allocation dồn vào dòng chính).\n` +
+          `Bật định kỳ sẽ làm phần đó hiện lại như "chưa đề nghị" ở trang Thanh toán ` +
+          `định kỳ → dễ đề nghị/trả lần hai.\n\n` +
+          `Nên hủy ĐNTT cũ trước. Vẫn muốn bật?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     setDinhKyKeys((prev) => {
       const next = new Set(prev);
-      const newVal = !next.has(key);
       if (newVal) next.add(key); else next.delete(key);
-      // Cập nhật chi phí row trong DB nếu đã tồn tại
-      const row = localRowsRef.current[key];
-      if (row?.id) {
-        upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal });
-      }
       return next;
     });
-  }, [doanId, upsertMut]);
+
+    // Chỉ ghi DB cho dòng đã tồn tại; dòng chưa lưu sẽ nhận cờ ở handleSave /
+    // handleExtraSave (đọc dinhKyKeysRef).
+    if (row?.id) {
+      upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal });
+    }
+    for (const id of extraIds) {
+      upsertMut.mutate({
+        id,
+        doan_id: doanId,
+        thanh_toan_dinh_ky: newVal,
+        // Trang định kỳ gom cụm theo NCC — phát sinh thiếu NCC sẽ nằm ở cụm
+        // "Chưa có NCC" và không tạo được ĐNTT. Chỉ ghi khi BẬT: lúc tắt, luồng gộp
+        // theo NCC trong đoàn (dntt-gop-calc) đọc NCC của dòng chính, không cần đụng.
+        ...(newVal && nccId != null ? { nha_cung_cap_id: nccId } : {}),
+      });
+    }
+  }, [doanId, upsertMut, nhData, chiPhiRows]);
 
   const handleToggleNguoiTtNH = useCallback((key: string) => {
     const row = localRowsRef.current[key];
@@ -682,6 +732,14 @@ export function useNHSection({
     // CK riêng từng extra — áp per dòng (làm tròn 1 lần/dòng, đúng Mức A).
     const thanhTien = applyChietKhau(extra.so_luong * extra.don_gia, extra.chiet_khau_phan_tram);
     const nguoiTt = nguoiTtOverride ?? extra.nguoi_tt;
+    // NCC lấy từ DÒNG CHÍNH trước, master chỉ là fallback: trang định kỳ gom cụm
+    // theo NCC, lấy master khi dòng chính giữ snapshot cũ sẽ chẻ một bữa thành hai
+    // thẻ NCC (dòng chính một nơi, phát sinh một nơi).
+    const mainCp = row.id != null ? chiPhiRows.find((c) => c.id === row.id) : undefined;
+    const nccId =
+      mainCp?.nha_cung_cap_id ??
+      nhData?.nhaHangMap[row.nha_hang_id]?.nha_cung_cap_id ??
+      null;
 
     upsertMut.mutate(
       {
@@ -697,6 +755,17 @@ export function useNHSection({
         tien_cong_ty: nguoiTt !== "hdv" ? thanhTien : 0,
         tien_hdv: nguoiTt === "hdv" ? thanhTien : 0,
         chiet_khau_phan_tram_snapshot: extra.chiet_khau_phan_tram,
+        // Phát sinh MỚI đi theo cờ định kỳ CỦA BỮA — bỏ sót thì dòng này không lọt
+        // vào trang Thanh toán định kỳ (mà luồng gộp theo NCC cũng bỏ qua vì bữa là
+        // định kỳ) → tiền không nằm trong đề nghị nào. Xem lib/dinh-ky-nhom.ts.
+        //
+        // CHỈ ghi khi INSERT. Dòng đã có id mà lật cờ ở đây thì mọi cú blur (input
+        // lưu onBlur, không cần sửa gì) sẽ âm thầm kéo dòng cũ vào luồng định kỳ —
+        // kể cả dòng mà tiền đã nằm trong ĐNTT per-bữa cũ → đề nghị/trả lần hai.
+        // Lật cờ cho dòng cũ phải đi qua nút "Định kỳ" (có cảnh báo tienDeNghiTrung).
+        ...(extra.id ? {} : { thanh_toan_dinh_ky: dinhKyKeysRef.current.has(key) }),
+        // Chỉ set khi resolve được — tránh ghi đè null khi nhData lag (mirror use-ks-section).
+        ...(nccId != null ? { nha_cung_cap_id: nccId } : {}),
       },
       {
         onSuccess: (data) => {
@@ -710,7 +779,7 @@ export function useNHSection({
         },
       },
     );
-  }, [doanId, upsertMut]);
+  }, [doanId, upsertMut, nhData, chiPhiRows]);
 
   const handleExtraDelete = useCallback((key: string, idx: number) => {
     const extra = extrasMapRef.current[key]?.[idx];
@@ -1107,10 +1176,10 @@ export function useNHSection({
       } else {
         // Thiếu → tạo DNTT bổ sung (cho_duyet) + cấn trừ cong_no nếu user chọn.
         // Allocate phần VÉ VOUCHER 'mua' về ĐÚNG dòng phủ (để recalc quy so_tien_da_dntt
-        // về dòng đó + ghi payment 'voucher' attribute đúng); CASH còn lại dồn vào suất
-        // chính (giữ pattern footer cũ). KHÔNG allocate full tien_cong_ty của dòng cash:
-        // dòng cũ sửa SL (vd Vé Vịnh 17→18) có tien_cong_ty FULL ≠ phần tăng → sẽ "ăn"
-        // hết delta, bỏ đói dòng voucher. Voucher phải được ưu tiên giữ đúng giá trị.
+        // về dòng đó + ghi payment 'voucher' attribute đúng); CASH còn lại chia theo phần
+        // CÒN THIẾU của từng dòng trong nhóm. KHÔNG allocate full tien_cong_ty của dòng
+        // cash: dòng cũ sửa SL (vd Vé Vịnh 17→18) có tien_cong_ty FULL ≠ phần tăng → sẽ
+        // "ăn" hết delta, bỏ đói dòng voucher. Voucher phải được ưu tiên giữ đúng giá trị.
         const groupPrefix = extraPrefix(bua_an);
         const voucherCandidateIds = chiPhiRows
           .filter((cp) =>
@@ -1123,9 +1192,28 @@ export function useNHSection({
           .map((cp) => cp.id);
         const { total: voucherSum, perChiPhi: voucherMuaLines } =
           sumGroupVoucherMua(voucherCandidateIds, redemptionByChiPhiId);
-        const allocations = voucherSum > 0
-          ? buildAggAllocations(absDelta, mainRow.id, voucherMuaLines.map((e) => ({ chiPhiId: e.chiPhiId, soTien: e.giaTri })))
-          : [{ chi_phi_id: mainRow.id, so_tien: absDelta }];
+        // Dòng của CẢ NHÓM (chính + phát sinh) để chia phần cash theo còn-thiếu.
+        // Dồn hết vào dòng chính (hành vi cũ) làm dòng phát sinh giữ so_tien_da_dntt=0
+        // → trang định kỳ vẫn coi nó "chưa đề nghị" → đề nghị/trả lần hai.
+        const groupAllocRows = chiPhiRows
+          .filter((cp) =>
+            cp.danh_muc === "nha_hang" &&
+            cp.ref_doan_ngay_id === mainRow.ref_doan_ngay_id &&
+            (cp.id === mainRow.id || cp.mo_ta?.startsWith(groupPrefix)),
+          )
+          .map((cp) => ({
+            id: cp.id,
+            thanh_tien: Number(cp.thanh_tien_thuc_te ?? cp.tien_cong_ty ?? 0),
+            committed: Number(cp.so_tien_da_dntt ?? 0),
+          }));
+        const allocations = buildAggAllocationsSpread(
+          absDelta,
+          groupAllocRows,
+          voucherSum > 0
+            ? voucherMuaLines.map((e) => ({ chi_phi_id: e.chiPhiId, so_tien: e.giaTri }))
+            : [],
+          mainRow.id,
+        );
         // Payment 'voucher' theo ĐÚNG allocation thực (đã clamp ≤ absDelta) — KHÔNG
         // dùng giaTri thô (giá đổi sau redeem → payment > so_tien → overpaid).
         const allocByChiPhi = new Map(allocations.map((a) => [a.chi_phi_id, a.so_tien]));

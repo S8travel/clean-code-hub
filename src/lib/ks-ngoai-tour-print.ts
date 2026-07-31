@@ -32,6 +32,29 @@ export function ngoaiTourLiveDntts(dnttList: DNTTRow[], ksId: number): DNTTRow[]
   );
 }
 
+/** ĐNTT mới hơn (theo tao_luc, fallback id khi thiếu/bằng nhau). */
+function newerThan(a: DNTTRow, b: DNTTRow): boolean {
+  if (a.tao_luc && b.tao_luc && a.tao_luc !== b.tao_luc) return a.tao_luc > b.tao_luc;
+  return a.id > b.id;
+}
+
+/** ĐNTT của 1 thẻ KS ngoài tour CẦN in.
+ *
+ *  Chỉ in phiếu CHƯA thanh toán xong. Bản in dựng theo các dòng phòng HIỆN TẠI của
+ *  thẻ, nên in lại phiếu đã trả đủ sẽ ra một khối trùng lặp — và sai số khi thẻ đã
+ *  thêm dòng sau lúc phiếu đó trả xong (tổng tiền + "đã thanh toán" đều lệch).
+ *  Không còn phiếu nào chưa trả → in phiếu mới nhất (in lại biên bản lưu hồ sơ).
+ *  Cọc xếp trước — khớp thứ tự ưu tiên của KS trong tour (activeDnttByKs). */
+export function selectPrintableNgoaiTourDntts(live: DNTTRow[]): DNTTRow[] {
+  const chuaTraXong = live.filter((d) => d.payment_status !== "paid");
+  if (chuaTraXong.length > 0) {
+    // sort ổn định → giữ thứ tự gốc trong từng nhóm cọc / không cọc
+    return [...chuaTraXong].sort((a, b) => Number(!!b.la_coc) - Number(!!a.la_coc));
+  }
+  if (live.length === 0) return [];
+  return [live.reduce((newest, d) => (newerThan(d, newest) ? d : newest), live[0])];
+}
+
 /** Các khach_san_id có dòng ngoài tour + đang có ĐNTT sống (in được). */
 export function getNgoaiTourPrintableKsIds(chiPhiRows: ChiPhiRow[], dnttList: DNTTRow[]): number[] {
   const ksIds = [...new Set(
@@ -97,7 +120,8 @@ export function buildNgoaiTourEdgeData(
   };
 }
 
-/** Dựng dữ liệu in cho các khách sạn ngoài tour được chọn (tất cả ĐNTT sống của mỗi KS). */
+/** Dựng dữ liệu in cho các khách sạn ngoài tour được chọn.
+ *  Mỗi KS in các ĐNTT do selectPrintableNgoaiTourDntts chọn (KHÔNG in lại phiếu đã trả đủ). */
 export function buildNgoaiTourSelectedData(
   selectedKsIds: number[],
   chiPhiRows: ChiPhiRow[],
@@ -115,7 +139,7 @@ export function buildNgoaiTourSelectedData(
     if (rows.length === 0) continue;
     const hotel = hotels.find((h) => h.id === ksId);
     const live = ngoaiTourLiveDntts(dnttList, ksId);
-    for (const d of live) {
+    for (const d of selectPrintableNgoaiTourDntts(live)) {
       const canTruPays = payments.filter((p) => p.dntt_id === d.id && p.method === "can_tru");
       out.push(buildNgoaiTourEdgeData(rows, hotel, d, live, tenDoan, nguoiDeNghi, canTruPays));
     }

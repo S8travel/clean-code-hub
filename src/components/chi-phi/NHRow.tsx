@@ -13,6 +13,7 @@ import type { CongNoRow } from "@/hooks/use-cong-no";
 import { calcSoKhachThucTe, resolveNHFoc } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import { canApplyVoucher, sumGroupVoucherMua, type CoveredInfo } from "@/lib/voucher";
 import { type VoucherTarget } from "./DungVoucherModal";
 import CatalogHoverCard from "./CatalogHoverCard";
@@ -172,7 +173,9 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   // pendingDntts: ĐNTT chưa được thanh toán đủ
   const paidDntts = activeDntts.filter((d) => d.payment_status === "paid");
   const pendingDntts = activeDntts.filter((d) => d.payment_status !== "paid");
-  const daDeNghi = pendingDntts.reduce((s, d) => s + (d.so_tien - (d.paid_amount || 0)), 0);
+  // Tiền còn treo — theo ĐÚNG định nghĩa của RPC recalc (nguồn của sumPaid), nên
+  // phiếu `cho_duyet` dù đã cấn trừ đủ vẫn tính là treo. Xem lib/dntt-con-treo.ts.
+  const daDeNghi = tinhDnttConTreo(activeDntts);
   // canTruAmtForNh: tổng can_tru payments thuộc về chi_phi này
   const canTruAmtForNh = row?.id
     ? paymentsList
@@ -236,9 +239,16 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
     return r?.voucherLoai === "mua" ? s + r.giaTri : s;
   }, 0);
   const voucherKhoRefund = Math.max(0, groupVoucherPaid - groupVoucherGiaTri);
-  const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
-    sumActual, sumPaid, sumCommitted, groupCongNoTotal, voucherKhoRefund,
+  // Σ cam kết THẬT của nhóm (RPC recalc tính toàn cục) — thấy cả ĐNTT định kỳ mà
+  // dnttList không thấy (phiếu định kỳ có doan_id=NULL nên useDNTTList lọc mất).
+  const sumDaDeNghi = groupChiPhi.reduce((s, cp) => s + Number(cp.so_tien_da_dntt ?? 0), 0);
+  const { effectiveDelta: aggDeltaThuan, effectiveCommitted, deltaThieuThat } = calcAggregateDelta({
+    sumActual, sumPaid, sumCommitted, groupCongNoTotal, voucherKhoRefund, sumDaDeNghi,
   });
+  // Nhánh THIẾU đo theo cam kết toàn cục: khoản đã nằm trong phiếu gộp cuối tháng
+  // KHÔNG được gợi ý "Thanh toán bổ sung" lần nữa. Nhánh THỪA giữ nguyên (tiền đã
+  // ra khỏi tài khoản thì vẫn phải có đường ghi công nợ).
+  const effectiveDelta = aggDeltaThuan > 0 ? Math.max(0, deltaThieuThat) : aggDeltaThuan;
   const showAggBtn =
     nguoiTtMain === "cong_ty" &&
     daDeNghi === 0 &&

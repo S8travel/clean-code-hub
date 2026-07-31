@@ -4,7 +4,7 @@ import { vi } from "date-fns/locale";
 import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { useAuth } from "@/hooks/use-auth";
-import { useDoanList, useAgents, useDiaDiem } from "@/hooks/use-doan";
+import { useDoanList, useAgents, useDiaDiem, useUserRoles } from "@/hooks/use-doan";
 import {
   useChiPhiSummaryMap,
   useDoanInvoiceData,
@@ -63,6 +63,7 @@ interface DoanWithRel {
   chuyen_bay_don: string | null;
   chuyen_bay_tien: string | null;
   ghi_chu_dieu_tour: string | null;
+  assigned_to?: string | null;
   agents?: { id: number; ten: string } | null;
   dia_diem?: { ten: string } | null;
   huong_dan_vien?: { id: number; ten: string; so_dien_thoai?: string | null } | null;
@@ -104,6 +105,7 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
   const { data: canhDiemList = [] } = useCanhDiem();
   const { data: nhaHangList = [] } = useNhaHang();
   const { data: khachSanList = [] } = useKhachSan();
+  const { data: userRoles = [] } = useUserRoles();
   const { data: dbNgayRows = [] } = useDoanNgayList(doan.id);
   const { data: dbNgayItems = [] } = useDoanNgayItems(doan.id);
   const [showPreview, setShowPreview] = useState(false);
@@ -133,6 +135,12 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
           .map(fmt)
           .join(" | ");
       })(),
+      op: (() => {
+        const u = doan.assigned_to ? userRoles.find((r) => r.user_id === doan.assigned_to) : null;
+        if (!u) return "";
+        const sdt = u.so_dien_thoai?.trim();
+        return sdt ? `${u.ho_ten} — ${sdt}` : u.ho_ten ?? "";
+      })(),
       xe: doan.xe ?? null,
       ngayDi: doan.ngay_di ?? null,
       ngayVe: doan.ngay_ve ?? null,
@@ -150,7 +158,7 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
       gifts: Array.isArray(doan.tang_pham) ? doan.tang_pham : [],
       ghiChuDieuTour: doan.ghi_chu_dieu_tour || "",
     };
-  }, [doan, days, canhDiemList, nhaHangList, khachSanList]);
+  }, [doan, days, canhDiemList, nhaHangList, khachSanList, userRoles]);
 
   return (
     <div className="space-y-3">

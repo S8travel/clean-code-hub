@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -207,7 +208,7 @@ export default function BookingVisaCard({
     setUpdateNote("");
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(donVi?.email ?? "");
-    const baseSubject = `[S8 Travel] Xin visa – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`;
+    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Xin visa – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`);
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
     setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);

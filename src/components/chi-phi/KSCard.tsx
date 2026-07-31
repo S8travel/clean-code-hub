@@ -13,6 +13,7 @@ import {
   resolveKSFoc,
 } from "@/lib/foc-calc";
 import { calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import { DayGroup, EmptyDayHeader } from "./DayGroup";
 import KSServicesSection from "./KSServicesSection";
 import KSFocEditor from "./KSFocEditor";
@@ -38,7 +39,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
     grouped, localRows, dnttList, congNoList,
-    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs,
+    cocByKs, ttByKs, canTruAmtByKsId, chiPhiIdsByKs, daDeNghiByKs, congNoDaCanTruByKs,
     congNoByKs, hoanTienByKs,
     groupCongNoTotalByKs, groupCongNoCNByKs, groupCongNoHTByKs,
     thucTeOverrideById, canTruByDnttId,
@@ -102,6 +103,9 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const isDaTT = thucTeKS > 0 && daTT >= thucTeKS;
   void isDaTT;
   const congNoAmount = congNoByKs[ksId] || 0;
+  // Công nợ đã cấn trừ hết: vẫn hiện badge (mờ) để kế toán biết khoản này ĐÃ được ghi
+  // công nợ, khỏi phải mở trang Công nợ đối chiếu. Xem lib/cong-no-badge.ts.
+  const congNoDaCanTru = congNoDaCanTruByKs[ksId] || 0;
   const hoanTienAmount = hoanTienByKs[ksId] || 0;
   const ksStatus = getKsChiPhiStatus(ksId);
   const ksStatusInfo = STATUS_LABEL[ksStatus] ?? STATUS_LABEL.chua_de_nghi;
@@ -134,10 +138,18 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
   const sumPaid = daTT;
   const sumCommitted = cancellableDntts.reduce((s, d) => s + Number(d.so_tien), 0);
   const groupCongNoTotal = groupCongNoTotalByKs[ksId] || 0;
-  const { effectiveDelta, effectiveCommitted } = calcAggregateDelta({
+  const { effectiveDelta: aggDeltaThuan, effectiveCommitted, deltaThieuThat } = calcAggregateDelta({
+    // sumPaid/sumCommitted ở KS chỉ cộng phiếu ref_loai='khach_san' → mù với ĐNTT
+    // gộp định kỳ. daDeNghiByKs (Σ so_tien_da_dntt, RPC tính toàn cục) thì thấy.
     sumActual, sumPaid, sumCommitted, groupCongNoTotal,
+    sumDaDeNghi: daDeNghiByKs[ksId] || 0,
   });
-  const daDeNghi = unpaidDnttsForKs.reduce((s, d) => s + Math.max(0, d.so_tien - (d.paid_amount || 0)), 0);
+  // Nhánh THIẾU đo theo cam kết toàn cục — không gợi ý trả thêm khoản đã nằm trong
+  // phiếu gộp cuối tháng. Nhánh THỪA giữ nguyên (tiền đã ra thì vẫn cần ghi công nợ).
+  const effectiveDelta = aggDeltaThuan > 0 ? Math.max(0, deltaThieuThat) : aggDeltaThuan;
+  // Tiền còn treo — theo ĐÚNG định nghĩa của RPC recalc (nguồn của sumPaid), nên
+  // phiếu `cho_duyet` dù đã cấn trừ đủ vẫn tính là treo. Xem lib/dntt-con-treo.ts.
+  const daDeNghi = tinhDnttConTreo(cancellableDntts);
   const showAggBtn = daDeNghi === 0 && sumPaid > 0 && effectiveDelta !== 0;
   const aggPaidDntt = paidDnttsForKs[0] ?? null;
   const hasCommittedDntt = cancellableDntts.some(
@@ -246,7 +258,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
             {dnttMismatch !== 0 && (
               <span
                 className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
-                title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Hủy ĐNTT & tạo lại.")}`}
+                title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Sửa giá/số phòng cho khớp, hoặc trả nốt phần đã đề nghị rồi bổ sung phần lệch. Đừng hủy nếu ĐNTT có cấn trừ.")}`}
               >
                 ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
               </span>
@@ -549,11 +561,19 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                   );
                 })}
                 {/* CN / HT badges — hiển thị tổng công nợ + hoàn tiền của KS này */}
-                {(congNoAmount > 0 || hoanTienAmount > 0) && (
+                {(congNoAmount > 0 || congNoDaCanTru > 0 || hoanTienAmount > 0) && (
                   <div className="flex items-center gap-1.5 px-3 py-1 bg-muted/10 border-t border-border">
                     {congNoAmount > 0 && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
                         CN: {fmt(congNoAmount)}
+                      </span>
+                    )}
+                    {congNoDaCanTru > 0 && (
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-500 whitespace-nowrap"
+                        title={t("Khoản này đã được ghi công nợ và cấn trừ hết")}
+                      >
+                        CN: {fmt(congNoDaCanTru)} · {t("đã cấn trừ")}
                       </span>
                     )}
                     {hoanTienAmount > 0 && (

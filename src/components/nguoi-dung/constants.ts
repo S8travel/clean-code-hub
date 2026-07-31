@@ -42,6 +42,7 @@ export const RESOURCE_SECTIONS: ResourceSection[] = [
     items: [
       { value: "dashboard", label: "Tổng quan" },
       { value: "my_job", label: "Công việc của tôi" },
+      { value: "so_tay", label: "Sổ tay điều hành" },
       { value: "doan", label: "Danh sách đoàn" },
       { value: "theo_doi", label: "Theo dõi" },
       { value: "xep_hdv", label: "Xếp HDV" },
@@ -62,6 +63,7 @@ export const RESOURCE_SECTIONS: ResourceSection[] = [
     section: "Hệ thống",
     items: [
       { value: "dntt", label: "Đề nghị thanh toán" },
+      { value: "hoan_ung", label: "Chi phí văn phòng" },
       { value: "thanh_toan_dk", label: "Thanh toán định kỳ" },
       { value: "hoa_don_unc", label: "Thanh toán, HĐ & UNC" },
       { value: "cong_no", label: "Công nợ" },
@@ -110,5 +112,6 @@ export const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   so_dien_thoai: null,
   ghi_chu: null,
   active: true,
+  chi_xem: false,
   password_hash: null,
 });

@@ -4,8 +4,8 @@ import { lumpCanTruCash } from "./can-tru-lump";
 const sum = (a: number[]) => a.reduce((s, x) => s + x, 0);
 
 describe("lumpCanTruCash", () => {
-  it("ca thường: dồn HẾT cấn trừ vào dòng đầu (đoàn 156)", () => {
-    // allocs [8.190.000, 2.835.000], cấn trừ 4.131.000, cash 0
+  it("ca thường: dồn HẾT cấn trừ vào dòng đầu", () => {
+    // 2 alloc, cấn trừ nhỏ hơn dòng đầu, không có cash
     const r = lumpCanTruCash([8_190_000, 2_835_000], 4_131_000, 0);
     expect(r).toEqual([
       { canTru: 4_131_000, cash: 0, choUNC: 4_059_000 },

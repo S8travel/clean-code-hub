@@ -4,7 +4,7 @@
 // RÀNG BUỘC QUAN TRỌNG: số tiền phải KHỚP TUYỆT ĐỐI với header card
 // (ThanhToanDinhKyPage → groupedByNccMonth). Vì thế 3 công thức dưới đây phải
 // mirror đúng chỗ đó — lệch một cái là kế toán đối chiếu ra 2 số khác nhau:
-//   tt     = thanh_tien_thuc_te ?? thanh_tien          (NET, ưu tiên số điều chỉnh)
+//   tt     = thanh_tien_thuc_te ?? tien_cong_ty        (NET, đã trừ FOC; ưu tiên số điều chỉnh)
 //   đã TT  = Σ so_tien_da_tt                            (đã TRẢ)
 //   còn    = Σ max(0, tt − so_tien_da_dntt)             (còn cần ĐỀ NGHỊ — theo đã
 //            đề nghị, KHÔNG phải đã trả; nếu dùng so_tien_da_tt thì phần đã đề nghị
@@ -12,6 +12,8 @@
 
 import { format, parseISO } from "date-fns";
 import { downloadXlsx, type XlsxCell } from "@/lib/xlsx-simple";
+import { netPhaiTra } from "@/lib/dinh-ky-amounts";
+import { nhanChiPhi } from "@/lib/dinh-ky-nhom";
 
 /** Chỉ các field export cần — khớp DinhKyChiPhiRow của use-thanh-toan-dinh-ky. */
 export interface DinhKyExportRow {
@@ -21,7 +23,10 @@ export interface DinhKyExportRow {
   so_khach: number;
   mo_ta: string | null;
   danh_muc: string;
+  /** Gross (generated) — CHƯA trừ FOC. KHÔNG dùng làm số phải trả NCC. */
   thanh_tien: number;
+  /** Net — đã trừ FOC (KS/NH). Base đúng cho số phải trả NCC. */
+  tien_cong_ty: number;
   thanh_tien_thuc_te: number | null;
   so_tien_da_tt: number;
   so_tien_da_dntt: number;
@@ -39,7 +44,7 @@ export interface DinhKyDoanSummary {
   conLai: number;
 }
 
-const netOf = (r: DinhKyExportRow) => r.thanh_tien_thuc_te ?? r.thanh_tien;
+const netOf = (r: DinhKyExportRow) => netPhaiTra(r);
 
 /**
  * Gom chi phí theo đoàn + cộng tiền. Pure → test được, và là nơi DUY NHẤT giữ
@@ -69,7 +74,8 @@ export function buildDinhKyDoanSummaries(rows: DinhKyExportRow[]): DinhKyDoanSum
     s.soTien += tt;
     s.daTT += r.so_tien_da_tt;
     s.conLai += Math.max(0, tt - r.so_tien_da_dntt);
-    const label = (r.mo_ta ?? "").trim() || r.danh_muc;
+    // Bỏ prefix nhóm [trua]/[toi]/[dvps_<id>] — khoá kỹ thuật, in cho NCC đọc thì thành rác.
+    const label = nhanChiPhi(r.mo_ta).nhan || r.danh_muc;
     if (label) s.moTaSet.add(label);
   }
 

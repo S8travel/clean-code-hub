@@ -120,12 +120,12 @@ describe("calcAggregateDelta", () => {
   });
   it("không lệch → mọi giá trị 0", () => {
     const r = calcAggregateDelta({ sumActual: 1_000_000, sumPaid: 1_000_000, sumCommitted: 1_000_000, groupCongNoTotal: 0 });
-    expect(r).toEqual({ aggDelta: 0, effectiveDelta: 0, effectiveCommitted: 1_000_000 });
+    expect(r).toEqual({ aggDelta: 0, effectiveDelta: 0, effectiveCommitted: 1_000_000, deltaThieuThat: 0 });
   });
 
-  it("voucherKhoRefund loại phần boat khỏi lệch — case Sea Octopus đoàn 79", () => {
-    // sumActual nhóm 35.667.600; đã trả 38.197.200 (voucher giữ 23.587.200); cam kết 38.197.200.
-    // voucherKhoRefund = 1.209.600 (vé về kho) → lệch CHỈ còn cash extras −1.320.000, KHÔNG dính boat.
+  it("voucherKhoRefund loại phần boat khỏi lệch", () => {
+    // Nhóm đã trả một phần bằng voucher. Phần vé trả về kho (voucherKhoRefund) KHÔNG
+    // phải tiền thừa → lệch chỉ được tính trên phần cash của extras, không dính boat.
     const r = calcAggregateDelta({
       sumActual: 35_667_600, sumPaid: 38_197_200, sumCommitted: 38_197_200,
       groupCongNoTotal: 0, voucherKhoRefund: 1_209_600,
@@ -148,6 +148,62 @@ describe("calcAggregateDelta", () => {
     const r = calcAggregateDelta({ sumActual: 800_000, sumPaid: 1_000_000, sumCommitted: 1_000_000, groupCongNoTotal: 0 });
     expect(r.aggDelta).toBe(-200_000);
     expect(r.effectiveCommitted).toBe(1_000_000);
+  });
+
+  // ── deltaThieuThat: chặn "Thanh toán bổ sung" trùng với ĐNTT gộp cuối tháng ──
+  // Phiếu định kỳ có doan_id = NULL nên section KHÔNG thấy nó trong dnttList →
+  // sumPaid/daDeNghi đều mù. so_tien_da_dntt (RPC recalc, toàn cục) thì thấy.
+
+  it("phát sinh đã nằm trong ĐNTT gộp chờ trả → KHÔNG còn thiếu", () => {
+    // Bữa 500k đã trả qua phiếu định kỳ tháng trước; thêm phát sinh 2.764.800 và
+    // kế toán đã gộp nó vào phiếu định kỳ tháng này (chưa trả).
+    const r = calcAggregateDelta({
+      sumActual: 3_264_800, sumPaid: 500_000, sumCommitted: 500_000,
+      groupCongNoTotal: 0, sumDaDeNghi: 3_264_800,
+    });
+    expect(r.effectiveDelta).toBe(2_764_800);  // vế cũ vẫn thấy "thiếu"
+    expect(r.deltaThieuThat).toBe(0);          // thực tế đã đề nghị đủ → không bổ sung
+  });
+
+  it("chỉ đề nghị được một phần → chỉ bổ sung phần chưa đề nghị", () => {
+    const r = calcAggregateDelta({
+      sumActual: 3_264_800, sumPaid: 500_000, sumCommitted: 500_000,
+      groupCongNoTotal: 0, sumDaDeNghi: 2_000_000,
+    });
+    expect(r.deltaThieuThat).toBe(1_264_800);
+  });
+
+  it("chưa đề nghị gì thêm → giữ nguyên số thiếu (hành vi cũ)", () => {
+    const r = calcAggregateDelta({
+      sumActual: 3_264_800, sumPaid: 500_000, sumCommitted: 500_000,
+      groupCongNoTotal: 0, sumDaDeNghi: 500_000,
+    });
+    expect(r.deltaThieuThat).toBe(2_764_800);
+    expect(r.deltaThieuThat).toBe(r.effectiveDelta);
+  });
+
+  it("ĐNTT bị hủy sau khi đã trả (cam kết tụt về 0) → vẫn đo theo tiền đã trả", () => {
+    const r = calcAggregateDelta({
+      sumActual: 1_200_000, sumPaid: 1_000_000, sumCommitted: 0,
+      groupCongNoTotal: 0, sumDaDeNghi: 0,
+    });
+    expect(r.deltaThieuThat).toBe(200_000);
+  });
+
+  it("không truyền sumDaDeNghi → deltaThieuThat = effectiveDelta (caller cũ không đổi)", () => {
+    const r = calcAggregateDelta({
+      sumActual: 1_200_000, sumPaid: 1_000_000, sumCommitted: 1_000_000, groupCongNoTotal: 0,
+    });
+    expect(r.deltaThieuThat).toBe(r.effectiveDelta);
+  });
+
+  it("đã ghi công nợ rồi mới đề nghị tiếp → công nợ vẫn được cộng vào vế thiếu", () => {
+    const r = calcAggregateDelta({
+      sumActual: 900_000, sumPaid: 1_000_000, sumCommitted: 1_000_000,
+      groupCongNoTotal: 200_000, sumDaDeNghi: 1_000_000,
+    });
+    expect(r.effectiveDelta).toBe(100_000);
+    expect(r.deltaThieuThat).toBe(100_000); // sumDaDeNghi = sumPaid → không đổi
   });
 });
 

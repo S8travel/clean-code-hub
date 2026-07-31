@@ -1,6 +1,9 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { proRataInts } from "@/lib/pro-rata";
+import { netPhaiTra } from "@/lib/dinh-ky-amounts";
+import { nhanChiPhi } from "@/lib/dinh-ky-nhom";
+import { kyHieuLuc, kyMacDinh, daDoiKy, kyKeTiep, coTheDoiKy } from "@/lib/ky-thanh-toan";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye, Plus, Printer, FileSpreadsheet } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Ban, Eye, Plus, Printer, FileSpreadsheet, CornerDownRight, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -27,6 +30,7 @@ import {
   useNccOptions,
   useDinhKyDNTTList,
   useDinhKyDNTTAllocations,
+  useSetKyThanhToan,
   type DinhKyChiPhiRow,
   type DinhKyDNTTRow,
 } from "@/hooks/use-thanh-toan-dinh-ky";
@@ -232,11 +236,12 @@ export default function ThanhToanDinhKyPage() {
 
     rows.forEach((r) => {
       const nccKey = String(r.nha_cung_cap_id ?? "khong_ncc");
-      const monthKey = monthKeyFromDate(r.ngay_kh_di) ?? "khong_thang";
+      // Kỳ hiệu lực = override ky_thanh_toan (nếu kế toán đã đẩy) ?? tháng ngày đi.
+      const monthKey = kyHieuLuc(r);
       const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? t("Chưa có NCC"), r.ncc_so_tai_khoan, r.ncc_ngan_hang, r.ncc_tai_khoan_thanh_toan);
       const mg = ensureMonth(bucket, monthKey);
       mg.rows.push(r);
-      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      const tt = netPhaiTra(r);
       mg.totalThanhTien += tt;
       mg.totalDaTT += r.so_tien_da_tt;
       // "Còn" = còn CẦN ĐỀ NGHỊ = NET − đã đề nghị (so_tien_da_dntt, gồm ĐNTT chưa
@@ -256,7 +261,9 @@ export default function ThanhToanDinhKyPage() {
       };
       const nccKey = String(d.nha_cung_cap_id ?? "khong_ncc");
       const minDate = d.ngay_di_min;
-      const monthKey = monthKeyFromDate(minDate ?? null) ?? "khong_thang";
+      // ky_hieu_luc tính từ chính chi phí phiếu này phân bổ (đã tính override) →
+      // phiếu luôn nằm cùng cụm với chi phí, kể cả khi chi phí bị đẩy tháng.
+      const monthKey = d.ky_hieu_luc ?? monthKeyFromDate(minDate ?? null) ?? "khong_thang";
       const bucket = ensureNcc(
         nccKey,
         d.nha_cung_cap_id,
@@ -293,7 +300,7 @@ export default function ThanhToanDinhKyPage() {
   const dialogTotalConLai = useMemo(() => {
     if (!dialogCtx) return 0;
     return dialogCtx.rows.reduce((s, r) => {
-      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      const tt = netPhaiTra(r);
       return s + Math.max(0, tt - r.so_tien_da_dntt);
     }, 0);
   }, [dialogCtx]);
@@ -316,7 +323,7 @@ export default function ThanhToanDinhKyPage() {
   const openCreateDialogForMonth = (ncc: NccGroup, mg: MonthGroup) => {
     if (!ncc.nccId) { toast.error(t("Tháng này không có NCC hợp lệ")); return; }
     const eligible = mg.rows.filter((r) => {
-      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+      const tt = netPhaiTra(r);
       return Math.max(0, tt - r.so_tien_da_dntt) > 0;
     });
     if (eligible.length === 0) { toast.warning(t("Tháng này không còn chi phí cần thanh toán")); return; }
@@ -353,7 +360,7 @@ export default function ThanhToanDinhKyPage() {
     // không cần manual drift fix nữa.
     const conLaiByRow = dialogCtx.rows.map((r) => ({
       id: r.id,
-      conLai: Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_dntt),
+      conLai: Math.max(0, netPhaiTra(r) - r.so_tien_da_dntt),
     }));
     const allocAmts = proRataInts(batchEffectiveAmount, conLaiByRow.map((x) => x.conLai));
     const allocations = conLaiByRow.map((x, i) => ({
@@ -634,7 +641,7 @@ export default function ThanhToanDinhKyPage() {
                 {(() => {
                   // Tính alloc preview KHỚP với save logic (proRataInts) — không drift
                   const conLais = dialogCtx.rows.map((r) =>
-                    Math.max(0, (r.thanh_tien_thuc_te ?? r.thanh_tien) - r.so_tien_da_dntt)
+                    Math.max(0, netPhaiTra(r) - r.so_tien_da_dntt)
                   );
                   const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
                     ? proRataInts(batchEffectiveAmount, conLais)
@@ -642,7 +649,7 @@ export default function ThanhToanDinhKyPage() {
                   return dialogCtx.rows.map((r, i) => (
                     <div key={r.id} className="flex justify-between text-muted-foreground">
                       <span className="truncate max-w-[220px]">
-                        {r.ten_doan || `${t("Đoàn")} #${r.doan_id}`} · {r.mo_ta}
+                        {r.ten_doan || `${t("Đoàn")} #${r.doan_id}`} · {nhanChiPhi(r.mo_ta).nhan}
                       </span>
                       <span className="ml-2 font-medium text-foreground shrink-0">
                         {fmt(allocated[i])} ₫
@@ -706,6 +713,22 @@ function MonthGroupCard({
   const [cancelTarget, setCancelTarget] = useState<DNTTRow | null>(null);
   const [viewTarget, setViewTarget] = useState<DNTTRow | null>(null);
   const [printingId, setPrintingId] = useState<number | null>(null);
+  const setKy = useSetKyThanhToan();
+  // Kỳ đích khi bấm "Đẩy sang". Cụm "Chưa rõ tháng" không có kỳ kế hợp lệ
+  // (kyKeTiep trả về chính nó) → ẩn nút, tránh ghi giá trị vi phạm CHECK ở DB.
+  const kyDich = kyKeTiep(monthGroup.monthKey);
+  const dayDuoc = kyDich !== monthGroup.monthKey;
+
+  // Đẩy chi phí của 1 đoàn sang kỳ khác (ky = null → trả về kỳ gốc theo ngày đi).
+  const handleDoiKy = (chiPhiIds: number[], ky: string | null) => {
+    setKy.mutate(
+      { chiPhiIds, ky },
+      {
+        onSuccess: () => toast.success(ky ? t("Đã đẩy sang kỳ sau") : t("Đã trả về kỳ gốc")),
+        onError: (e: unknown) => toast.error(errMsg(e) || t("Không đổi được kỳ thanh toán")),
+      },
+    );
+  };
 
   // In Giấy đề nghị thanh toán cho NCC (Word) — reuse mẫu ĐNTT khác.
   // NCC = đơn vị thụ hưởng (chủ tài khoản); ô "Người đề nghị" để trống cho NV ký.
@@ -774,7 +797,9 @@ function MonthGroupCard({
   const fullyProposed = monthGroup.totalConLai === 0 && monthGroup.totalThanhTien > 0;
   const fullyPaid = monthGroup.totalDaTT >= monthGroup.totalThanhTien && monthGroup.totalThanhTien > 0;
 
-  // Group chi phí by đoàn để hiển thị gom
+  // Group chi phí by đoàn để hiển thị gom.
+  // Kèm trạng thái "đẩy kỳ": hóa đơn NCC xuất khi đoàn kết thúc, nên đoàn khởi
+  // hành cuối tháng thường phải trả ở kỳ sau — kế toán đẩy cả cụm đoàn × NCC này.
   const byDoan = useMemo(() => {
     const map = new Map<number, { ten_doan: string; ngay_di: string | null; rows: DinhKyChiPhiRow[] }>();
     monthGroup.rows.forEach((r) => {
@@ -787,7 +812,16 @@ function MonthGroupCard({
       });
     });
     return [...map.entries()]
-      .map(([doan_id, v]) => ({ doan_id, ...v }))
+      .map(([doan_id, v]) => ({
+        doan_id,
+        ...v,
+        // Đã đẩy khỏi kỳ gốc → hiện badge + cho trả về.
+        daDay: v.rows.some(daDoiKy),
+        kyGoc: kyMacDinh({ ngay_kh_di: v.ngay_di }),
+        // Dòng đã nằm trong ĐNTT thì không đổi kỳ được (chi phí và phiếu sẽ lệch cụm).
+        doiKyDuoc: v.rows.every(coTheDoiKy),
+        chiPhiIds: v.rows.map((r) => r.id),
+      }))
       .sort((a, b) => (a.ngay_di || "").localeCompare(b.ngay_di || ""));
   }, [monthGroup.rows]);
 
@@ -839,21 +873,64 @@ function MonthGroupCard({
             <div className="space-y-2">
               {byDoan.map((d) => (
                 <div key={d.doan_id} className="text-xs">
-                  <div className="font-medium">
-                    {d.ten_doan}
-                    <span className="ml-2 text-muted-foreground font-normal">
-                      ({d.ngay_di ? format(new Date(d.ngay_di + "T00:00:00"), "dd/MM/yyyy") : "—"})
+                  <div className="font-medium flex items-center gap-2 flex-wrap">
+                    <span>
+                      {d.ten_doan}
+                      <span className="ml-2 text-muted-foreground font-normal">
+                        ({d.ngay_di ? format(new Date(d.ngay_di + "T00:00:00"), "dd/MM/yyyy") : "—"})
+                      </span>
                     </span>
+                    {d.daDay && (
+                      <span
+                        className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-violet-100 text-violet-700"
+                        title={t("Chi phí đoàn này đã được đẩy sang kỳ hiện tại")}
+                      >
+                        {t("đẩy từ")} {monthLabelFromKey(d.kyGoc)}
+                      </span>
+                    )}
+                    {d.doiKyDuoc ? (
+                      d.daDay ? (
+                        <button
+                          type="button"
+                          className="text-[10px] font-normal text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 disabled:opacity-50"
+                          disabled={setKy.isPending}
+                          title={t("Trả chi phí đoàn này về kỳ gốc")}
+                          onClick={() => handleDoiKy(d.chiPhiIds, null)}
+                        >
+                          <Undo2 className="h-3 w-3" /> {t("Trả về kỳ gốc")}
+                        </button>
+                      ) : dayDuoc ? (
+                        <button
+                          type="button"
+                          className="text-[10px] font-normal text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 disabled:opacity-50"
+                          disabled={setKy.isPending}
+                          title={t("Hóa đơn NCC xuất khi đoàn kết thúc → đẩy khoản này sang kỳ sau")}
+                          onClick={() => handleDoiKy(d.chiPhiIds, kyDich)}
+                        >
+                          <CornerDownRight className="h-3 w-3" /> {t("Đẩy sang")} {monthLabelFromKey(kyDich)}
+                        </button>
+                      ) : null
+                    ) : (
+                      <span
+                        className="text-[10px] font-normal text-muted-foreground"
+                        title={t("Chi phí đã nằm trong ĐNTT — hủy ĐNTT trước nếu muốn đổi kỳ")}
+                      >
+                        {t("(đã có ĐNTT — không đổi kỳ được)")}
+                      </span>
+                    )}
                   </div>
                   <div className="pl-3 space-y-0.5">
                     {d.rows.map((r) => {
-                      const tt = r.thanh_tien_thuc_te ?? r.thanh_tien;
+                      const tt = netPhaiTra(r);
                       const conLai = Math.max(0, tt - r.so_tien_da_tt);
                       const isPaid = conLai === 0;
+                      // Dòng phát sinh ([trua]/[toi]/[dvps_<id>]): bỏ prefix kỹ thuật,
+                      // thụt vào dưới dòng chính của nó.
+                      const { nhan, laPhatSinh } = nhanChiPhi(r.mo_ta);
                       return (
                         <div key={r.id} className="flex justify-between text-muted-foreground">
-                          <span className="truncate max-w-[280px]">
-                            • {r.mo_ta || "—"}
+                          <span className={cn("truncate max-w-[280px]", laPhatSinh && "pl-3")}>
+                            {laPhatSinh ? "↳" : "•"} {nhan || "—"}
                           </span>
                           <span className="ml-2 shrink-0">
                             {fmt(tt)} ₫{" "}

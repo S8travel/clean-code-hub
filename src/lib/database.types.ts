@@ -190,6 +190,8 @@ export type Database = {
       }
       canh_diem: {
         Row: {
+          bao_gom_bua_an: string | null
+          bao_gom_ghi_chu: string | null
           co_phi: boolean | null
           created_at: string | null
           dia_diem: string | null
@@ -212,6 +214,8 @@ export type Database = {
           thong_tin_chung: string | null
         }
         Insert: {
+          bao_gom_bua_an?: string | null
+          bao_gom_ghi_chu?: string | null
           co_phi?: boolean | null
           created_at?: string | null
           dia_diem?: string | null
@@ -234,6 +238,8 @@ export type Database = {
           thong_tin_chung?: string | null
         }
         Update: {
+          bao_gom_bua_an?: string | null
+          bao_gom_ghi_chu?: string | null
           co_phi?: boolean | null
           created_at?: string | null
           dia_diem?: string | null
@@ -1382,6 +1388,7 @@ export type Database = {
           ngay_thanh_toan: string | null
           ngoai_tour: boolean
           ks_huy: boolean
+          ky_thanh_toan: string | null
           ngoai_tour_ci: string | null
           ngoai_tour_co: string | null
           khach_san_id: number | null
@@ -1426,6 +1433,7 @@ export type Database = {
           ngay_thanh_toan?: string | null
           ngoai_tour?: boolean
           ks_huy?: boolean
+          ky_thanh_toan?: string | null
           ngoai_tour_ci?: string | null
           ngoai_tour_co?: string | null
           khach_san_id?: number | null
@@ -1470,6 +1478,7 @@ export type Database = {
           ngay_thanh_toan?: string | null
           ngoai_tour?: boolean
           ks_huy?: boolean
+          ky_thanh_toan?: string | null
           ngoai_tour_ci?: string | null
           ngoai_tour_co?: string | null
           khach_san_id?: number | null
@@ -3091,6 +3100,7 @@ export type Database = {
           tai_khoan_thanh_toan: string | null
           ten: string | null
           ten_zh: string | null
+          thanh_toan_dinh_ky_mac_dinh: boolean
           thong_tin_chung: string | null
           tinh_suat_tl: boolean | null
           website: string | null
@@ -3113,6 +3123,7 @@ export type Database = {
           tai_khoan_thanh_toan?: string | null
           ten?: string | null
           ten_zh?: string | null
+          thanh_toan_dinh_ky_mac_dinh?: boolean
           thong_tin_chung?: string | null
           tinh_suat_tl?: boolean | null
           website?: string | null
@@ -3135,6 +3146,7 @@ export type Database = {
           tai_khoan_thanh_toan?: string | null
           ten?: string | null
           ten_zh?: string | null
+          thanh_toan_dinh_ky_mac_dinh?: boolean
           thong_tin_chung?: string | null
           tinh_suat_tl?: boolean | null
           website?: string | null
@@ -3915,6 +3927,7 @@ export type Database = {
         Row: {
           active: boolean
           bo_phan: string | null
+          chi_xem: boolean
           created_at: string | null
           email: string | null
           ghi_chu: string | null
@@ -3933,6 +3946,7 @@ export type Database = {
         Insert: {
           active?: boolean
           bo_phan?: string | null
+          chi_xem?: boolean
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null
@@ -3951,6 +3965,7 @@ export type Database = {
         Update: {
           active?: boolean
           bo_phan?: string | null
+          chi_xem?: boolean
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null
@@ -4698,6 +4713,10 @@ export type Database = {
           unc_url: string
         }[]
       }
+      get_chi_phi_ids_for_dntt: {
+        Args: { p_dntt_id: number }
+        Returns: number[]
+      }
       get_lead_by_nguon: {
         Args: {
           p_from: string
@@ -4787,6 +4806,10 @@ export type Database = {
           p_ly_do_mat?: string
           p_trang_thai_moi: string
         }
+        Returns: undefined
+      }
+      update_my_profile: {
+        Args: { p_ho_ten: string; p_so_dien_thoai?: string | null }
         Returns: undefined
       }
     }

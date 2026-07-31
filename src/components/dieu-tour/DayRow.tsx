@@ -97,6 +97,20 @@ function DetailLine({
 }
 
 
+// Cảnh báo (chỉ đọc) khi ngày có cảnh điểm combo đã bao gồm bữa ăn mà vẫn đặt
+// nhà hàng cho đúng bữa đó. print-hide: cảnh báo nội bộ, không lọt lên bản in
+// gửi khách/HDV. break-words: cột Ăn trưa/tối là 1fr, chuỗi dài không được đội cột.
+function ComboWarnBadge({ ten }: { ten: string }) {
+  return (
+    <div
+      className="print-hide mt-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-1 text-[11px] leading-snug text-amber-800 break-words"
+      title={t("Cảnh điểm này đã bao gồm bữa ăn — đặt thêm nhà hàng có thể trả tiền 2 lần")}
+    >
+      ⚠ {t("Combo đã gồm bữa này")}: {ten}
+    </div>
+  );
+}
+
 function MealNote({
   value,
   onChange,
@@ -154,6 +168,8 @@ function SetMenuSelect({
   const { data: menus = [] } = useSetMenus(nhaHangId);
   if (menus.length === 0) return null;
   const fmt = (n: number) => n.toLocaleString("vi-VN");
+  const nhan = (m: { ten_set: string; gia?: number | null }) =>
+    `${m.ten_set}${m.gia ? ` — ${fmt(m.gia)}đ` : ""}`;
   return (
     <Select
       value={value ? String(value) : "none"}
@@ -163,7 +179,7 @@ function SetMenuSelect({
         <span>
           {(() => {
             const m = value ? menus.find((x) => x.id === value) : null;
-            return m ? `${m.ten_set}${m.gia ? ` — ${fmt(m.gia)}đ` : ""}` : t("Chọn set menu");
+            return m ? nhan(m) : t("Chọn set menu");
           })()}
         </span>
       </SelectTrigger>
@@ -171,7 +187,7 @@ function SetMenuSelect({
         <SelectItem value="none">{t("-- Không chọn --")}</SelectItem>
         {menus.map((m) => (
           <SelectItem key={m.id} value={String(m.id)}>
-            {m.ten_set}{m.gia ? ` — ${fmt(m.gia)}đ` : ""}
+            {nhan(m)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -214,6 +230,20 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
   const selectedNhaTrua = nhaHangList.find((n) => n.id === day.an_trua_nha_hang_id);
   const selectedNhaToi = nhaHangList.find((n) => n.id === day.an_toi_nha_hang_id);
   const selectedKS = khachSanList.find((k) => k.id === day.khach_san_id);
+
+  // Cảnh điểm combo trong ngày đã bao gồm sẵn bữa ăn (vd Bà Nà: cáp treo + buffet
+  // trưa) → đặt thêm nhà hàng cho bữa đó dễ trả tiền 2 lần. CHỈ CẢNH BÁO: không
+  // tự bỏ chọn nhà hàng, vì mọi thay đổi day sẽ kích hoạt auto-save của DoanDetail.
+  const comboBua = (bua: "trua" | "toi"): string | null => {
+    for (const it of day.items) {
+      const cd = canhDiemList.find((c) => c.id === it.canh_diem_id);
+      if (!cd?.bao_gom_bua_an) continue;
+      if (cd.bao_gom_bua_an === bua || cd.bao_gom_bua_an === "ca_hai") return cd.ten;
+    }
+    return null;
+  };
+  const comboTrua = selectedNhaTrua ? comboBua("trua") : null;
+  const comboToi = selectedNhaToi ? comboBua("toi") : null;
 
   return (
     <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_32px] print:grid-cols-[60px_1fr_1fr_1fr_1fr] gap-0 border-b border-gray-300 min-h-[100px] print-avoid-break">
@@ -418,6 +448,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               </Button>
             </div>
             <DetailLine item={selectedNhaTrua} />
+            {comboTrua && <ComboWarnBadge ten={comboTrua} />}
             <SetMenuSelect
               nhaHangId={selectedNhaTrua.id}
               value={day.an_trua_set_menu_id ?? null}
@@ -487,6 +518,7 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
               </Button>
             </div>
             <DetailLine item={selectedNhaToi} />
+            {comboToi && <ComboWarnBadge ten={comboToi} />}
             <SetMenuSelect
               nhaHangId={selectedNhaToi.id}
               value={day.an_toi_set_menu_id ?? null}

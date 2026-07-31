@@ -23,11 +23,13 @@ const OUTPUT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["ngay_so", "loai", "bua_an", "ten_zh", "ten_vi", "match", "ghi_chu"],
+        required: ["ngay_so", "loai", "bua_an", "ten_zh", "ten_vi", "match", "ghi_chu", "da_bao_gom"],
         properties: {
           ngay_so: { type: "integer" },
           loai: { type: "string", enum: ["hotel", "meal", "ticket", "transport", "dich_vu"] },
           bua_an: { type: ["string", "null"] },
+          // "trua"|"toi"|"ca_hai"|null — vé/hoạt động này đã bao gồm sẵn bữa ăn.
+          da_bao_gom: { type: ["string", "null"] },
           ten_zh: { type: "string" },
           ten_vi: { type: "string" },
           match: {
@@ -83,7 +85,7 @@ serve(async (req) => {
     );
 
     const [canhDiemRes, nhaHangRes, khachSanRes, xeRes] = await Promise.all([
-      supabase.from("canh_diem").select("id, ten, dia_diem, loai").eq("co_phi", true).limit(1000),
+      supabase.from("canh_diem").select("id, ten, dia_diem, loai, bao_gom_bua_an").eq("co_phi", true).limit(1000),
       supabase.from("nha_hang").select("id, ten, dia_diem, set_menu:nha_hang_set_menu(id, ten_set)").limit(1000),
       supabase.from("khach_san").select("id, ten, dia_diem").limit(1000),
       supabase.from("nha_xe_loai_xe").select("id, ten_xe, so_cho, nha_xe:nha_xe_id(ten)").limit(1000),
@@ -92,6 +94,8 @@ serve(async (req) => {
     const catalog = {
       canh_diem: (canhDiemRes.data ?? []).map((c: Record<string, unknown>) => ({
         id: c.id, ten: c.ten, dia_diem: c.dia_diem, loai: c.loai,
+        // Chỉ gửi khi có (đa số vé là vé thường) → giữ prompt gọn.
+        ...(c.bao_gom_bua_an ? { bao_gom_bua_an: c.bao_gom_bua_an } : {}),
       })),
       nha_hang: (nhaHangRes.data ?? []).map((n: Record<string, unknown>) => ({
         id: n.id, ten: n.ten, dia_diem: n.dia_diem,
@@ -119,7 +123,13 @@ PHÂN LOẠI (loai):
 
 KHỚP: theo NGHĨA + ĐỊA ĐIỂM, chịu khác ngôn ngữ (西湖=Tây Hồ). Không chắc → match=null + confidence thấp. bua_an chỉ cho meal. Hạng mục không mất tiền (tự do, nghỉ) → BỎ QUA.
 
-CẤU TRÚC JSON: { "ten_chuong_trinh": string, "so_ngay": number, "items": [ { "ngay_so": number, "loai": "hotel|meal|ticket|transport|dich_vu", "bua_an": "trua|toi"|null, "ten_zh": string, "ten_vi": string, "match": { "table": "khach_san|nha_hang|canh_diem|nha_xe_loai_xe", "id": number, "set_menu_id": number|null, "confidence": number } | null, "ghi_chu": string } ] }
+COMBO ĐÃ GỒM BỮA ĂN (da_bao_gom) — chống tính tiền 2 lần:
+- Lịch trình hay ghi vé và bữa ăn thành 2 ý riêng dù bán chung 1 vé combo (vd Bà Nà: cáp treo + buffet trưa; du thuyền 含午餐).
+- Nếu text nói rõ vé/hoạt động đó ĐÃ BAO GỒM bữa ăn (含午餐, 含晚餐, 包含午餐, 套票含餐, "đã bao gồm ăn trưa", "vé combo cáp treo + buffet"...) → trên dòng VÉ đó đặt da_bao_gom = "trua" | "toi" | "ca_hai". Các dòng khác để null.
+- Dòng canh_diem trong DANH MỤC có sẵn field bao_gom_bua_an nghĩa là vé đó vốn đã gồm bữa ăn — khớp vào đó thì cứ đặt da_bao_gom cho khớp.
+- QUAN TRỌNG: VẪN trích ĐẦY ĐỦ dòng bữa ăn như bình thường, TUYỆT ĐỐI KHÔNG tự ý bỏ. Hệ thống sẽ tự trừ. Nhiệm vụ của bạn chỉ là BÁO CỜ.
+
+CẤU TRÚC JSON: { "ten_chuong_trinh": string, "so_ngay": number, "items": [ { "ngay_so": number, "loai": "hotel|meal|ticket|transport|dich_vu", "bua_an": "trua|toi"|null, "da_bao_gom": "trua|toi|ca_hai"|null, "ten_zh": string, "ten_vi": string, "match": { "table": "khach_san|nha_hang|canh_diem|nha_xe_loai_xe", "id": number, "set_menu_id": number|null, "confidence": number } | null, "ghi_chu": string } ] }
 
 DANH MỤC (JSON):
 ${JSON.stringify(catalog)}`;
