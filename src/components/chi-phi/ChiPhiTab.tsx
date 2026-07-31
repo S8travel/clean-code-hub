@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef } from "react";
 import { FileSpreadsheet, Printer, ChevronDown } from "lucide-react";
 import { errMsg } from "@/lib/error";
+import { externalSupabase } from "@/lib/supabase-external";
 import { useChiPhiList, useDNTTList, useChiPhiKSData } from "@/hooks/use-chi-phi";
 import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
 import { useDoanNhomList } from "@/hooks/use-doan-nhom";
@@ -220,13 +221,39 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       // Tỷ giá tip lấy từ snapshot mỗi đoàn (export tự đọc doan.tip_ty_gia); đoàn chưa
       // chốt → hằng mặc định. KHÔNG dùng localStorage chung (gây nhảy chéo đoàn).
       const tyGiaNdt = TY_GIA_NDT_DEFAULT;
+      // khachSanMap của hook chỉ gom KS in-tour → KS neo trên dòng NGOÀI TOUR
+      // (khach_san_id) thiếu tên, bản in ra "—". Fetch bù tên trước khi xuất
+      // (không nới hook: id ngoài tour vào resolveKsIds sẽ mọc card mồ côi).
+      let exportKsData = ksData;
+      const missingKsIds = [...new Set(
+        chiPhiRows
+          .filter((r) => r.danh_muc === "khach_san" && r.khach_san_id != null
+            && !ksData?.khachSanMap?.[r.khach_san_id])
+          .map((r) => r.khach_san_id!),
+      )];
+      if (missingKsIds.length > 0) {
+        const { data: extraKs } = await externalSupabase
+          .from("khach_san")
+          .select("id, ten, foc_khach, foc_mien, dia_diem, nha_cung_cap_id, nguoi_thanh_toan, tai_khoan_thanh_toan, thanh_toan_dinh_ky_mac_dinh")
+          .in("id", missingKsIds);
+        if (extraKs?.length && ksData) {
+          const merged = { ...ksData.khachSanMap };
+          for (const k of extraKs) {
+            merged[k.id] = {
+              ...k, ten: k.ten ?? "",
+              ten_ncc: null, ncc_so_tai_khoan: null, ncc_ngan_hang: null,
+            };
+          }
+          exportKsData = { ...ksData, khachSanMap: merged };
+        }
+      }
       await exportChiPhiDoanExcel({
         doan,
         chiPhiRows,
         dnttList,
         hdvData,
         opName,
-        ksData,
+        ksData: exportKsData,
         tyGiaNdt,
         mode,
       });

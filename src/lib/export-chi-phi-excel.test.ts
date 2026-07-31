@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  getSoKhachText, groupKsRows,
+  getSoKhachText, groupKsRows, ksLeftoverDisplay,
   getActualSummaryValue, getChiPhiNetBase, getChiPhiThucTe,
 } from "./export-chi-phi-excel";
 import type { ExportDoan } from "./export-chi-phi-excel";
@@ -140,5 +140,26 @@ describe("groupKsRows — tách day-use khỏi KS qua đêm (bug đoàn S8SAPA6D
     expect(g.dayUseGroups.size).toBe(0);
     expect(g.ksCostByNgay.get(469)!.map((r) => r.id)).toEqual([2878, 3548, 2870]);
     expect(g.ksCostByNgay.get(470)!.map((r) => r.id)).toEqual([2880, 2883, 2884]);
+  });
+});
+
+// Dòng KS ngoài tour (ref NULL) có neo khach_san_id + ngoai_tour_ci/co trong DB
+// (bug đoàn S8DAD260717-K: bản in ra "—" hết dù DB đủ tên KS + ngày).
+describe("ksLeftoverDisplay — dòng KS ngoài tour phải in tên KS + C/I-C/O", () => {
+  const khachSanMap = { 58: { ten: "Wyndham Soleil Danang" } };
+
+  it("có neo + ngày → tên KS + ngày định dạng dd/MM/yyyy", () => {
+    const d = ksLeftoverDisplay(
+      { khach_san_id: 58, ngoai_tour_ci: "2026-07-17", ngoai_tour_co: "2026-07-21" },
+      khachSanMap,
+    );
+    expect(d).toEqual({ ksTen: "Wyndham Soleil Danang", ci: "17/07/2026", co: "21/07/2026" });
+  });
+
+  it("không neo / KS thiếu trong map / không ngày → giữ '—'", () => {
+    expect(ksLeftoverDisplay({ khach_san_id: null, ngoai_tour_ci: null, ngoai_tour_co: null }, khachSanMap))
+      .toEqual({ ksTen: "—", ci: "—", co: "—" });
+    expect(ksLeftoverDisplay({ khach_san_id: 999, ngoai_tour_ci: null, ngoai_tour_co: null }, khachSanMap).ksTen)
+      .toBe("—");
   });
 });
