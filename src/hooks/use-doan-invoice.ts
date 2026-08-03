@@ -46,27 +46,23 @@ export function useDoanInvoiceData(doanId?: number) {
 }
 
 // ── Query: chi phí thực tế aggregated cho nhiều đoàn ─────────────────────────
+// Aggregate trên DB qua RPC — select raw doan_chi_phi rồi cộng ở client bị
+// PostgREST cắt ở 1000 dòng → đoàn ngoài 1000 dòng đầu hiển thị 0 đ.
 export function useChiPhiSummaryMap(doanIds: number[]) {
   return useQuery({
     queryKey: ["chi_phi_summary_map", doanIds.slice().sort().join(",")],
     enabled: doanIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await externalSupabase
-        .from("doan_chi_phi")
-        .select("doan_id, tien_cong_ty, tien_hdv, thanh_tien_thuc_te, trang_thai_dntt")
-        .in("doan_id", doanIds);
+      const { data, error } = await externalSupabase.rpc(
+        "get_chi_phi_summary_by_doan",
+        { p_doan_ids: doanIds },
+      );
       if (error) throw error;
 
       const map = new Map<number, ChiPhiSummary>();
       for (const r of data ?? []) {
-        if (r.trang_thai_dntt === "cong_no" || r.trang_thai_dntt === "hoan_tien") continue;
-        if (r.doan_id == null) continue;
-        const prev = map.get(r.doan_id) ?? { thucTe: 0, total: 0 };
-        const contrib = (r.tien_cong_ty ?? 0) + (r.tien_hdv ?? 0);
-        prev.total += contrib;
-        prev.thucTe += r.thanh_tien_thuc_te != null ? r.thanh_tien_thuc_te : contrib;
-        map.set(r.doan_id, prev);
+        map.set(r.doan_id, { thucTe: r.thuc_te ?? 0, total: r.total ?? 0 });
       }
       return map;
     },

@@ -4717,6 +4717,14 @@ export type Database = {
         Args: { p_dntt_id: number }
         Returns: number[]
       }
+      get_chi_phi_summary_by_doan: {
+        Args: { p_doan_ids: number[] }
+        Returns: {
+          doan_id: number
+          thuc_te: number
+          total: number
+        }[]
+      }
       get_lead_by_nguon: {
         Args: {
           p_from: string
