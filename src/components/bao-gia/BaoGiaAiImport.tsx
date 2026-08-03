@@ -17,11 +17,14 @@ import { useBaoGiaResolveMaps, useMarkCanhDiemCombo, useWriteGiaPhongFromBaoGia 
 import { useIsReadOnly } from "@/hooks/use-permissions";
 import {
   resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks,
+  applyKsBuaRules, toKsBuaRules,
   hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
   analyzeCombo, comboPatchForRef, sanitizeDraftRows, BUA_LABEL,
-  type ResolvedItem, type AiReviewDraft, type BaoGomBuaAn,
+  type ResolvedItem, type AiReviewDraft, type BaoGomBuaAn, type KsBuaRule,
 } from "@/lib/bao-gia-ai-resolve";
 import { useBaoGiaAliasMap, useLearnAliases } from "@/hooks/use-bao-gia-aliases";
+import { useBaoGiaRuleList } from "@/hooks/use-bao-gia-rules";
+import { BaoGiaRuleChatPanel } from "@/components/bao-gia/BaoGiaRuleChat";
 import { fileKind, imageMime, extractItineraryText } from "@/lib/itinerary-file";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -80,6 +83,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
   const upload = useUploadLichTrinhFile();
   const { data: maps, isLoading: mapsLoading } = useBaoGiaResolveMaps(open);
   const { data: aliasMap } = useBaoGiaAliasMap(open);
+  const { data: ruleRows } = useBaoGiaRuleList(open);
   const learn = useLearnAliases();
 
   useEffect(() => {
@@ -145,7 +149,12 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
     setRunningProvider(input.provider);
     try {
       const result = await extract.mutateAsync(input);
-      const resolved = resolveAiItems(result, maps, tourDate, aliasMap);
+      // Quy tắc đã dạy qua chat (vd KS giá kèm ăn tối) áp NGAY sau resolve —
+      // chỉ lần phân tích này, không re-apply lên nháp/rows user đã sửa.
+      const resolved = applyKsBuaRules(
+        resolveAiItems(result, maps, tourDate, aliasMap),
+        toKsBuaRules(ruleRows),
+      );
       setTen(result.ten_chuong_trinh ?? "");
       setSoNgay(result.so_ngay && result.so_ngay > 0 ? result.so_ngay : 1);
       setRows(resolved);
@@ -284,6 +293,12 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
     setSelection(defaultHotelSelection(next, hotelChoiceGroups(next)));
   };
 
+  // Quy tắc vừa dạy trong panel chat → áp NGAY vào rows đang review (chỉ đụng
+  // dòng hotel của đúng KS đó — sửa tay ở các dòng khác giữ nguyên). Combo/tiền
+  // tự tính lại vì analyzeCombo là memo trên rows.
+  const handleRuleSaved = (rule: KsBuaRule) =>
+    setRows((rs) => (rs ? applyKsBuaRules(rs, [rule]) : rs));
+
   const setGia = (idx: number, gia: number) =>
     setRows((rs) => rs ? rs.map((r, i) => (i === idx ? { ...r, don_gia: gia } : r)) : rs);
   // FOC override (số miễn). undefined → auto theo chính sách NH (foc_khach/foc_mien).
@@ -386,7 +401,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className={`${rows ? "sm:max-w-6xl" : "sm:max-w-4xl"} max-h-[90vh] flex flex-col`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-violet-600" /> AI điền từ lịch trình
@@ -397,7 +412,8 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className="flex-1 min-h-0 flex gap-3">
+        <div className="flex-1 min-w-0 overflow-auto">
         {!rows ? (
           <div className="space-y-3">
             {mode === "file" ? (
@@ -705,6 +721,14 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
               xác nhận cũng được ghi vào danh mục cảnh điểm nên báo giá sau tự trừ.
               Khi bấm <b>Áp dụng</b>, hệ thống ghi nhớ khớp + giá để lần sau tự điền. Sau đó nhập bậc số khách để ra giá tour.
             </p>
+          </div>
+        )}
+        </div>
+        {/* Cột chat "Sửa & dạy quy tắc" — chỉ hiện ở bước review: thấy sai thì
+            gõ sửa tại chỗ, quy tắc lưu DB + áp ngay vào rows đang xem. */}
+        {rows && (
+          <div className="hidden md:block w-[300px] shrink-0 border-l pl-3 min-h-0">
+            <BaoGiaRuleChatPanel onRuleSaved={handleRuleSaved} />
           </div>
         )}
         </div>

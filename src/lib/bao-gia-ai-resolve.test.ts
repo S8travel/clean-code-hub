@@ -13,6 +13,8 @@ import {
   droppedByHotel,
   sanitizeDraftRows,
   giaPhongWritebacks,
+  applyKsBuaRules,
+  toKsBuaRules,
   type AiExtractResult,
   type AiExtractItem,
   type ResolveMaps,
@@ -506,6 +508,63 @@ describe("giaPhongWritebacks — ghi ngược giá KS nhập tay vào master", (
       hotelRow({ ngay_so: 2, don_gia: 1_500_000 }),
     ], maps.khachSanGia);
     expect(wb).toEqual([{ khach_san_id: 99, gia: 1_200_000, ten: "KS Mới" }]);
+  });
+});
+
+describe("applyKsBuaRules — quy tắc 'KS giá kèm bữa ăn' đã dạy qua chat", () => {
+  const row = (p: Partial<ResolvedItem>): ResolvedItem => ({
+    ngay_so: 1, loai: "hotel", mo_ta: "KS Rule", don_gia: 2_000_000,
+    ten_zh: "", ten_vi: "", ghi_chu: "", confidence: 1,
+    status: "matched", match_label: "KS Rule",
+    match_table: "khach_san", match_id: 50, match_set_menu_id: null,
+    ...p,
+  });
+  const meal = (p: Partial<ResolvedItem>): ResolvedItem =>
+    row({ loai: "meal", match_table: "nha_hang", match_id: 3, mo_ta: "Ăn", don_gia: 300_000, ...p });
+  const RULE = { id: 1, khach_san_id: 50, bua: "toi" as const, gia_phong: 3_000_000 };
+
+  it("đêm có ăn tối → giá phòng theo rule + cờ bao_gom, analyzeCombo gạch dòng ăn tối", () => {
+    const rows = applyKsBuaRules([row({}), meal({ bua_an: "toi" })], [RULE]);
+    expect(rows[0].don_gia).toBe(3_000_000);
+    expect(rows[0].bao_gom_bua_an).toBe("toi");
+    expect(rows[0].match_label).toContain("quy tắc kèm ăn tối");
+    // Tích hợp: máy combo sẵn có tự trừ bữa ăn — không tính tiền 2 lần.
+    const combo = analyzeCombo(rows);
+    expect(combo.suppressed.has(1)).toBe(true);
+    expect(combo.suppressed.get(1)!.byIdx).toBe(0);
+  });
+
+  it("đêm KHÔNG có ăn tối (chỉ ăn trưa) → giữ giá thường, không cờ", () => {
+    const rows = applyKsBuaRules([row({}), meal({ bua_an: "trua" })], [RULE]);
+    expect(rows[0].don_gia).toBe(2_000_000);
+    expect(rows[0].bao_gom_bua_an).toBeUndefined();
+  });
+
+  it("dòng ăn KHÔNG rõ bữa → rule 'toi' không áp (không đoán bừa); rule 'ca_hai' thì áp", () => {
+    const input = [row({}), meal({ bua_an: undefined })];
+    expect(applyKsBuaRules(input, [RULE])[0].don_gia).toBe(2_000_000);
+    const caHai = applyKsBuaRules(input, [{ ...RULE, bua: "ca_hai" as const }]);
+    expect(caHai[0].don_gia).toBe(3_000_000);
+    expect(caHai[0].bao_gom_bua_an).toBe("ca_hai");
+  });
+
+  it("KS khác / đêm khác → không đụng", () => {
+    const rows = applyKsBuaRules(
+      [row({ match_id: 99 }), row({ ngay_so: 2 }), meal({ bua_an: "toi" })],
+      [RULE],
+    );
+    expect(rows[0].don_gia).toBe(2_000_000); // KS 99 không có rule
+    expect(rows[1].don_gia).toBe(2_000_000); // đêm 2 không có bữa tối
+  });
+
+  it("toKsBuaRules lọc dòng không hợp lệ (sai loai, thiếu KS, bữa rác, giá 0)", () => {
+    expect(toKsBuaRules([
+      { id: 1, loai: "ks_gia_kem_bua", khach_san_id: 50, bua: "toi", gia_phong: 3_000_000 },
+      { id: 2, loai: "khac", khach_san_id: 50, bua: "toi", gia_phong: 1 },
+      { id: 3, loai: "ks_gia_kem_bua", khach_san_id: null, bua: "toi", gia_phong: 1 },
+      { id: 4, loai: "ks_gia_kem_bua", khach_san_id: 51, bua: "dinner", gia_phong: 1 },
+      { id: 5, loai: "ks_gia_kem_bua", khach_san_id: 52, bua: "trua", gia_phong: 0 },
+    ])).toEqual([{ id: 1, khach_san_id: 50, bua: "toi", gia_phong: 3_000_000 }]);
   });
 });
 

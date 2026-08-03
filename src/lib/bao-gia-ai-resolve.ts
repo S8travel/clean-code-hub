@@ -621,6 +621,71 @@ export function applyExclusions(
   return rows.filter((_, i) => !dropped.has(i));
 }
 
+// ── Quy tắc đã DẠY qua chat (bảng bao_gia_rule) ──────────────────────────────
+// AI không "nhớ trong đầu" — user dạy 1 lần ("KS này có ăn tối thì giá phòng 3tr,
+// không tính tiền ăn tối"), chat parse thành rule lưu DB, và hàm dưới đây áp dụng
+// DETERMINISTIC mỗi lần resolve. Tái dùng nguyên máy combo (bao_gom_bua_an →
+// analyzeCombo tự gạch dòng ăn, badge ⊂, nút "vẫn tính riêng").
+
+/** Quy tắc "KS giá kèm bữa ăn" (loai='ks_gia_kem_bua'). */
+export interface KsBuaRule {
+  id: number;
+  khach_san_id: number;
+  bua: BaoGomBuaAn;
+  gia_phong: number;
+}
+
+/** Ép rows bảng bao_gia_rule (untyped) → KsBuaRule[] hợp lệ. */
+export function toKsBuaRules(
+  rows: Array<{ id: number; loai: string; khach_san_id: number | null; bua: string | null; gia_phong: number | null }> | null | undefined,
+): KsBuaRule[] {
+  const out: KsBuaRule[] = [];
+  for (const r of rows ?? []) {
+    if (r.loai !== "ks_gia_kem_bua" || r.khach_san_id == null) continue;
+    const bua = sanitizeBaoGom(r.bua);
+    if (!bua || !(Number(r.gia_phong) > 0)) continue;
+    out.push({ id: r.id, khach_san_id: r.khach_san_id, bua, gia_phong: Number(r.gia_phong) });
+  }
+  return out;
+}
+
+/** Áp quy tắc "KS giá kèm bữa" lên rows vừa resolve (gọi 1 LẦN ngay sau
+ *  resolveAiItems — KHÔNG gọi lại trên nháp/rows user đã sửa, kẻo đè tay OP).
+ *  Đêm ở KS có rule + lịch trình có bữa được rule phủ (theo comboCoversBua —
+ *  bữa KHÔNG ghi rõ trưa/tối chỉ bị 'ca_hai' phủ, không đoán bừa) →
+ *  đặt giá phòng theo rule + cờ bao_gom để analyzeCombo tự trừ dòng ăn.
+ *  Không có bữa khớp → giữ nguyên (giá thường), an toàn tiền. */
+export function applyKsBuaRules(rows: ResolvedItem[], rules: KsBuaRule[]): ResolvedItem[] {
+  if (rules.length === 0) return rows;
+  const byKs = new Map<number, KsBuaRule>();
+  for (const r of rules) if (!byKs.has(r.khach_san_id)) byKs.set(r.khach_san_id, r);
+
+  const mealsByDay = new Map<number, ResolvedItem[]>();
+  for (const r of rows) {
+    if (r.loai !== "meal") continue;
+    const arr = mealsByDay.get(r.ngay_so);
+    if (arr) arr.push(r);
+    else mealsByDay.set(r.ngay_so, [r]);
+  }
+
+  return rows.map((r) => {
+    if (r.loai !== "hotel" || r.match_table !== "khach_san" || r.match_id == null) return r;
+    const rule = byKs.get(r.match_id);
+    if (!rule) return r;
+    const meals = mealsByDay.get(r.ngay_so) ?? [];
+    if (!meals.some((m) => comboCoversBua(rule.bua, m.bua_an))) return r;
+    return {
+      ...r,
+      don_gia: rule.gia_phong,
+      status: "matched" as const,
+      match_label: `${r.match_label || r.mo_ta} · quy tắc kèm ${BUA_LABEL[rule.bua]}`,
+      bao_gom_bua_an: rule.bua,
+      bao_gom_nguon: "master" as const,
+      bao_gom_ghi_chu: `Quy tắc đã dạy: giá phòng ${rule.gia_phong.toLocaleString("vi-VN")} ₫ đã gồm ${BUA_LABEL[rule.bua]}`,
+    };
+  });
+}
+
 /** 1 alias để gửi RPC học (jsonb). */
 export interface AliasLearnInput {
   text_key: string;
