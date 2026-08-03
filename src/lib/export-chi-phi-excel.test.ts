@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   getSoKhachText, groupKsRows, ksLeftoverDisplay,
   getActualSummaryValue, getChiPhiNetBase, getChiPhiThucTe,
+  parseNHMoTa, mergeNHRows, buildVoucherNote,
 } from "./export-chi-phi-excel";
 import type { ExportDoan } from "./export-chi-phi-excel";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
+import type { CoveredInfo } from "@/lib/voucher";
 
 const doan = (p: Partial<ExportDoan>): ExportDoan => p;
 
@@ -161,5 +163,75 @@ describe("ksLeftoverDisplay — dòng KS ngoài tour phải in tên KS + C/I-C/O
       .toEqual({ ksTen: "—", ci: "—", co: "—" });
     expect(ksLeftoverDisplay({ khach_san_id: 999, ngoai_tour_ci: null, ngoai_tour_co: null }, khachSanMap).ksTen)
       .toBe("—");
+  });
+});
+
+// Voucher trên bản in Excel — bug thật đã xảy ra: bữa tối phủ voucher tặng nguyên
+// đoàn (17 vé) → tien_cong_ty = 0, Excel trống ô CTY TT mà không nói lý do.
+// buildVoucherNote sinh ghi chú từ redemption map.
+describe("buildVoucherNote — ghi chú voucher cho dòng chi phí trên Excel", () => {
+  const covered = (p: Partial<CoveredInfo>): CoveredInfo => ({
+    redemptionId: 33, voucherId: 7, giaTri: 20_400_000, soVe: 17,
+    voucherTen: "Voucher NH Động X", voucherLoai: "tang", dnttId: null,
+    ...p,
+  });
+
+  it("dòng phủ voucher → 'Voucher N vé'; kèm tên khi withTen (sheet Chi tiết)", () => {
+    const map = { 5108: covered({}) };
+    expect(buildVoucherNote([5108], map)).toBe("Voucher 17 vé");
+    expect(buildVoucherNote([5108], map, true)).toBe("Voucher 17 vé — Voucher NH Động X");
+  });
+
+  it("dòng không phủ / map rỗng → '' (không đụng dòng thường)", () => {
+    expect(buildVoucherNote([5108], {})).toBe("");
+    expect(buildVoucherNote([1, 2], { 5108: covered({}) })).toBe("");
+  });
+
+  it("redemption legacy soVe = 0 → vẫn ghi 'Voucher' (không ghi '0 vé')", () => {
+    expect(buildVoucherNote([5108], { 5108: covered({ soVe: 0 }) })).toBe("Voucher");
+  });
+
+  it("nhóm gộp nhiều dòng phủ → cộng vé, tên không lặp", () => {
+    const map = { 1: covered({ soVe: 10 }), 2: covered({ redemptionId: 34, soVe: 7 }) };
+    expect(buildVoucherNote([1, 2], map)).toBe("Voucher 17 vé");
+    expect(buildVoucherNote([1, 2], map, true)).toBe("Voucher 17 vé — Voucher NH Động X");
+  });
+});
+
+describe("mergeNHRows — gộp dòng NH giữ đủ id gốc để tra voucher", () => {
+  it("2 dòng cùng (tên, đơn giá) gộp 1 dòng in, mergedIds giữ CẢ 2 id (voucher có thể gắn dòng sau)", () => {
+    const rows = [
+      ksRow({ id: 5107, danh_muc: "nha_hang", mo_ta: "[toi] NHÀ HÀNG X", so_luong: 5, don_gia: 1_200_000, tien_cong_ty: 6_000_000 }),
+      ksRow({ id: 5108, danh_muc: "nha_hang", mo_ta: "[toi] NHÀ HÀNG X", so_luong: 12, don_gia: 1_200_000, tien_cong_ty: 0 }),
+    ];
+    const merged = mergeNHRows(rows);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].mergedIds).toEqual([5107, 5108]);
+    expect(merged[0].so_luong).toBe(17);
+    // Voucher gắn dòng ĐỨNG SAU (5108) vẫn dò ra qua mergedIds
+    const map: Record<number, CoveredInfo> = {
+      5108: { redemptionId: 33, voucherId: 7, giaTri: 20_400_000, soVe: 17, voucherTen: "Voucher NH Động X", voucherLoai: "tang", dnttId: null },
+    };
+    expect(buildVoucherNote(merged[0].mergedIds, map)).toBe("Voucher 17 vé");
+  });
+
+  it("khác đơn giá → KHÔNG gộp, mỗi dòng mang id riêng", () => {
+    const rows = [
+      ksRow({ id: 1, danh_muc: "nha_hang", mo_ta: "[trua] NHÀ HÀNG Y", so_luong: 17, don_gia: 666_424 }),
+      ksRow({ id: 2, danh_muc: "nha_hang", mo_ta: "[trua] NHÀ HÀNG Y", so_luong: 1, don_gia: 120_000 }),
+    ];
+    const merged = mergeNHRows(rows);
+    expect(merged).toHaveLength(2);
+    expect(merged.map((r) => r.mergedIds)).toEqual([[1], [2]]);
+  });
+});
+
+describe("parseNHMoTa", () => {
+  it("prefix [trua]/[toi] + hậu tố '(trưa)/(tối)' + mo_ta trơn", () => {
+    expect(parseNHMoTa("[trua] NHÀ HÀNG Y")).toEqual({ bua: "trua", name: "NHÀ HÀNG Y" });
+    expect(parseNHMoTa("[toi] NHÀ HÀNG X")).toEqual({ bua: "toi", name: "NHÀ HÀNG X" });
+    expect(parseNHMoTa("NHÀ HÀNG X (tối)")).toEqual({ bua: "toi", name: "NHÀ HÀNG X" });
+    expect(parseNHMoTa("NƯỚC SUỐI ĐOÀN")).toEqual({ bua: null, name: "NƯỚC SUỐI ĐOÀN" });
+    expect(parseNHMoTa(null)).toEqual({ bua: null, name: "—" });
   });
 });

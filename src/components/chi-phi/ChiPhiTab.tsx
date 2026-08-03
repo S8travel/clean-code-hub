@@ -8,6 +8,8 @@ import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
 import { useUserRoles, useCurrentUserName } from "@/hooks/use-doan";
+import { useRedemptionsByDoan } from "@/hooks/use-voucher";
+import { buildRedemptionMap } from "@/lib/voucher";
 import ChiPhiHeader from "./ChiPhiHeader";
 import ChiPhiKSSection from "./ChiPhiKSSection";
 import ChiPhiNHSection, { type ChiPhiNHSectionHandle } from "./ChiPhiNHSection";
@@ -139,6 +141,10 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   const { data: hdvData, isLoading: isHDVLoading } = useChiPhiHDVSection(doanId);
   const { data: ksData } = useChiPhiKSData(doanId, activeNhomId);
   const { data: userRoles = [] } = useUserRoles();
+  // Voucher đã phủ của đoàn → xuất Excel ghi rõ dòng nào trả bằng voucher
+  // (voucher 'tang' đưa tien_cong_ty về 0, không ghi chú thì bản in trống trơn).
+  const { data: redemptions = [] } = useRedemptionsByDoan(doanId);
+  const redemptionMap = useMemo(() => buildRedemptionMap(redemptions), [redemptions]);
   const opName = useMemo(() => {
     if (!doan?.assigned_to) return "—";
     return userRoles.find((u) => u.user_id === doan.assigned_to)?.ho_ten || "—";
@@ -256,6 +262,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         ksData: exportKsData,
         tyGiaNdt,
         mode,
+        redemptionMap,
       });
       toast.success(t("Đã xuất file Excel"));
     } catch (error: unknown) {

@@ -3,6 +3,7 @@ import { saveAs } from "file-saver";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
 import { computePhaiThu } from "@/lib/phai-thu-calc";
+import type { CoveredInfo } from "@/lib/voucher";
 
 type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note" | "total" | "total_number";
 
@@ -105,6 +106,13 @@ interface ExportChiPhiDoanExcelParams {
    * - "hdv": chỉ sheet Hành trình (in cho HDV).
    */
   mode?: "full" | "hdv";
+  /**
+   * chi_phi_id → voucher đã phủ (buildRedemptionMap từ voucher_su_dung của đoàn).
+   * Dòng phủ voucher 'tang' có tien_cong_ty=0 → không truyền map thì bản in chỉ
+   * thấy ô CTY TT trống, người đọc không biết vì sao (đã xảy ra thật: bữa tối
+   * phủ voucher tặng nguyên đoàn mà Excel trống trơn).
+   */
+  redemptionMap?: Record<number, CoveredInfo>;
 }
 
 const encoder = new TextEncoder();
@@ -166,6 +174,60 @@ export function ksLeftoverDisplay(
     ci: formatDateValue(row.ngoai_tour_ci),
     co: formatDateValue(row.ngoai_tour_co),
   };
+}
+
+/** Tách bữa (trưa/tối) + tên NH từ mo_ta chi phí nhà hàng. */
+export function parseNHMoTa(moTa: string | null): { bua: "trua" | "toi" | null; name: string } {
+  if (!moTa) return { bua: null, name: "—" };
+  if (moTa.startsWith("[trua] ")) return { bua: "trua", name: moTa.slice(7) };
+  if (moTa.startsWith("[toi] ")) return { bua: "toi", name: moTa.slice(6) };
+  const m = moTa.match(/^(.+)\s+\((trưa|tối)\)$/);
+  if (m) return { bua: m[2] === "trưa" ? "trua" : "toi", name: m[1] };
+  return { bua: null, name: moTa };
+}
+
+export type MergedNHRow = ChiPhiRow & {
+  /** id MỌI dòng gốc đã gộp — tra voucher phải soi đủ (voucher gắn theo chi_phi_id,
+   *  dòng phủ voucher không chắc là dòng đứng đầu nhóm gộp). */
+  mergedIds: number[];
+};
+
+/** Gộp các dòng NH cùng (tên, đơn giá) trong 1 bữa thành 1 dòng in (cộng SL + tiền). */
+export function mergeNHRows(list: ChiPhiRow[]): MergedNHRow[] {
+  const grouped = new Map<string, MergedNHRow>();
+  for (const r of list) {
+    const { name } = parseNHMoTa(r.mo_ta);
+    const key = `${name}__${r.don_gia}`;
+    const ex = grouped.get(key);
+    if (ex) {
+      ex.so_luong = (ex.so_luong || 0) + (r.so_luong || 0);
+      ex.tien_cong_ty = (ex.tien_cong_ty || 0) + (r.tien_cong_ty || 0);
+      ex.tien_hdv = (ex.tien_hdv || 0) + (r.tien_hdv || 0);
+      ex.mergedIds.push(r.id);
+    } else {
+      grouped.set(key, { ...r, mergedIds: [r.id] });
+    }
+  }
+  return [...grouped.values()];
+}
+
+/**
+ * Ghi chú voucher cho 1 dòng in Excel. `withTen` → kèm tên voucher (sheet Chi tiết);
+ * mặc định gọn cho sheet Hành trình. Trả "" khi dòng không phủ voucher.
+ * VD: "Voucher 17 vé" / "Voucher 17 vé — Voucher NH Động X".
+ */
+export function buildVoucherNote(
+  chiPhiIds: number[],
+  redemptionMap: Record<number, CoveredInfo>,
+  withTen = false,
+): string {
+  const infos = chiPhiIds.map((id) => redemptionMap[id]).filter(Boolean) as CoveredInfo[];
+  if (infos.length === 0) return "";
+  const totalVe = infos.reduce((s, r) => s + (r.soVe || 0), 0);
+  const note = totalVe > 0 ? `Voucher ${totalVe} vé` : "Voucher";
+  if (!withTen) return note;
+  const tens = [...new Set(infos.map((r) => r.voucherTen).filter(Boolean))].join(", ");
+  return tens ? `${note} — ${tens}` : note;
 }
 
 const DANH_MUC_LABELS: Record<string, string> = {
@@ -750,14 +812,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     return format(d, "dd/MM/yyyy");
   }
 
-  function parseNH(moTa: string | null): { bua: "trua" | "toi" | null; name: string } {
-    if (!moTa) return { bua: null, name: "—" };
-    if (moTa.startsWith("[trua] ")) return { bua: "trua", name: moTa.slice(7) };
-    if (moTa.startsWith("[toi] ")) return { bua: "toi", name: moTa.slice(6) };
-    const m = moTa.match(/^(.+)\s+\((trưa|tối)\)$/);
-    if (m) return { bua: m[2] === "trưa" ? "trua" : "toi", name: m[1] };
-    return { bua: null, name: moTa };
-  }
+  const redemptionMap = params.redemptionMap ?? {};
 
   const rows: SheetCell[][] = [];
 
@@ -979,48 +1034,35 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
   }
   const sortedNgaySo = [...nhByNgaySo.keys()].sort((a, b) => a - b);
 
-  function mergeNHRows(list: ChiPhiRow[]): ChiPhiRow[] {
-    const grouped = new Map<string, ChiPhiRow>();
-    for (const r of list) {
-      const { name } = parseNH(r.mo_ta);
-      const key = `${name}__${r.don_gia}`;
-      const ex = grouped.get(key);
-      if (ex) {
-        ex.so_luong = (ex.so_luong || 0) + (r.so_luong || 0);
-        ex.tien_cong_ty = (ex.tien_cong_ty || 0) + (r.tien_cong_ty || 0);
-        ex.tien_hdv = (ex.tien_hdv || 0) + (r.tien_hdv || 0);
-      } else {
-        grouped.set(key, { ...r });
-      }
-    }
-    return [...grouped.values()];
-  }
-
   for (const ngaySo of sortedNgaySo) {
     const dayRows = nhByNgaySo.get(ngaySo)!;
     const dateStr = ngaySo > 0 ? ngaySoToDate(ngaySo) : "—";
 
-    const truaRows = mergeNHRows(dayRows.filter((r) => parseNH(r.mo_ta).bua === "trua"));
-    const toiRows = mergeNHRows(dayRows.filter((r) => parseNH(r.mo_ta).bua === "toi"));
+    const truaRows = mergeNHRows(dayRows.filter((r) => parseNHMoTa(r.mo_ta).bua === "trua"));
+    const toiRows = mergeNHRows(dayRows.filter((r) => parseNHMoTa(r.mo_ta).bua === "toi"));
 
     let isFirstKeptRow = true;
-    const pushMealRows = (mealRows: ChiPhiRow[], buaLabel: string) => {
+    const pushMealRows = (mealRows: MergedNHRow[], buaLabel: string) => {
       for (const r of mealRows) {
-        const name = parseNH(r.mo_ta).name;
+        const name = parseNHMoTa(r.mo_ta).name;
         const tong = (r.so_luong || 0) * (r.don_gia || 0);
         const hdvAmt = r.tien_hdv || 0;
         const ctyAmt = r.tien_cong_ty || 0;
         totalHdvNH += hdvAmt;
         totalCtyNH += ctyAmt;
+        // Dòng phủ voucher: ghi rõ trên tên + ô CTY TT (thay vì trống trơn khi
+        // voucher 'tang' đưa tien_cong_ty về 0 — người đọc bản in phải biết bữa
+        // này trả bằng voucher chứ không phải quên nhập tiền).
+        const vNote = buildVoucherNote(r.mergedIds, redemptionMap);
         rows.push([
           cell(isFirstKeptRow ? dateStr : ""),
           cell(buaLabel),
-          cell(name, "text", 3),
+          cell(vNote ? `${name} — ${vNote}` : name, "text", 3),
           cell(r.so_luong || 0, "number"),
           cell(r.don_gia || 0, "number"),
           tong > 0 ? cell(tong, "number") : cell(""),
           hdvAmt > 0 ? cell(hdvAmt, "number") : cell(""),
-          ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),
+          ctyAmt > 0 ? cell(ctyAmt, "number") : cell(vNote ? "Voucher" : ""),
         ]);
         isFirstKeptRow = false;
       }
@@ -1056,13 +1098,15 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     totalHdvVE += hdvAmt;
     totalCtyVE += ctyAmt;
     const displayName = (row.mo_ta || "—").replace(/^\[[^\]]+\]\s*/, "");
+    // Dịch vụ phủ voucher (Phase 2 DV) — ghi chú giống section NH.
+    const vNote = buildVoucherNote([row.id], redemptionMap);
     rows.push([
       cell(dateStr),
-      cell(displayName, "text", 5),
+      cell(vNote ? `${displayName} — ${vNote}` : displayName, "text", 5),
       cell(row.so_luong || 0, "number"),
       cell(row.don_gia || 0, "number"),
       hdvAmt > 0 ? cell(hdvAmt, "number") : cell(""),
-      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(""),
+      ctyAmt > 0 ? cell(ctyAmt, "number") : cell(vNote ? "Voucher" : ""),
     ]);
   }
   if (veRows.length === 0) rows.push([cell("(Chưa có dữ liệu)", "note", 10)]);
@@ -1262,6 +1306,13 @@ function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
 
 function buildChiTietSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows } = params;
+  const redemptionMap = params.redemptionMap ?? {};
+  // Mô tả kèm ghi chú voucher (có tên voucher — sheet chi tiết đủ chỗ, phục vụ audit).
+  const moTaText = (row: ChiPhiRow): string => {
+    const vNote = buildVoucherNote([row.id], redemptionMap, true);
+    const base = row.mo_ta || "—";
+    return vNote ? `${base} [${vNote}]` : base;
+  };
   // Tổng CHỈ tính dòng active (loại cong_no/hoan_tien) — khớp màn hình + sheet Tổng hợp.
   // Dòng hủy vẫn HIỆN ở list để audit (cột "Tính dự trù" = Không), nhưng KHÔNG cộng tổng.
   const activeRows = chiPhiRows.filter(isActiveChiPhi);
@@ -1299,7 +1350,7 @@ function buildChiTietSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
         cell(row.ngay_so ?? ""),
         cell(getDanhMucLabel(row.danh_muc)),
         cell(getLoaiLabel(row.loai)),
-        cell(row.mo_ta || "—"),
+        cell(moTaText(row)),
         cell(row.so_luong || 0, "number"),
         cell(row.don_gia || 0, "number"),
         cell(getChiPhiNetBase(row), "number"),
