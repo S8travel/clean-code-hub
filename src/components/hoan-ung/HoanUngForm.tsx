@@ -16,8 +16,8 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  useCreateHoanUng, LOAI_CHI_HOAN_UNG_OPTS,
-  type HoanUngInsert, type HoanUngItem,
+  useCreateHoanUng, useUpdateHoanUng, LOAI_CHI_HOAN_UNG_OPTS,
+  type HoanUngInsert, type HoanUngItem, type HoanUngRow,
 } from "@/hooks/use-hoan-ung";
 import { externalSupabase } from "@/lib/supabase-external";
 
@@ -26,6 +26,8 @@ const fmt = (n: number) => n.toLocaleString("vi-VN");
 interface Props {
   open: boolean;
   onClose: () => void;
+  // Có editRow = sửa phiếu cho_duyet (caller remount bằng key để tách state edit/create)
+  editRow?: HoanUngRow | null;
 }
 
 interface DraftItem {
@@ -48,9 +50,10 @@ function emptyItem(): DraftItem {
   };
 }
 
-export default function HoanUngForm({ open, onClose }: Props) {
+export default function HoanUngForm({ open, onClose, editRow }: Props) {
   const { user } = useAuth();
   const createMut = useCreateHoanUng();
+  const updateMut = useUpdateHoanUng();
 
   // Thông tin nhận tiền (1 lần, dùng cho cả yêu cầu)
   const [hoTen, setHoTen] = useState("");
@@ -64,6 +67,32 @@ export default function HoanUngForm({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open || !user?.user_id) return;
+    if (editRow) {
+      // Edit mode: prefill toàn bộ từ phiếu. Legacy 1 dòng (hoan_ung_items null)
+      // → dựng lại 1 item từ các cột phẳng.
+      const src: HoanUngItem[] = editRow.hoan_ung_items && editRow.hoan_ung_items.length > 0
+        ? editRow.hoan_ung_items
+        : [{
+            loai_chi: editRow.loai_chi_hoan_ung ?? "",
+            mo_ta: editRow.mo_ta ?? "",
+            so_tien: Number(editRow.so_tien),
+            ngay: null,
+            hoa_don_url: editRow.hoa_don_url,
+          }];
+      setItems(src.map((it) => ({
+        loai_chi: it.loai_chi,
+        mo_ta: it.mo_ta,
+        so_tien: Number(it.so_tien) || "",
+        ngay: it.ngay ?? "",
+        hoa_don_file: null,
+        hoa_don_url: it.hoa_don_url ?? null,
+      })));
+      setHoTen(editRow.ten_nha_cung_cap ?? "");
+      setSoTaiKhoan(editRow.so_tai_khoan ?? "");
+      setNganHang(editRow.ngan_hang ?? "");
+      setNgayCanTT(editRow.ngay_can_thanh_toan ?? "");
+      return;
+    }
     // user_roles KHÔNG có cột so_tai_khoan/ngan_hang — select cũ làm hỏng cả
     // query (kể cả ho_ten cũng không prefill). Chỉ lấy ho_ten; STK/ngân hàng
     // nhập tay.
@@ -76,7 +105,7 @@ export default function HoanUngForm({ open, onClose }: Props) {
         if (!data) return;
         setHoTen(data.ho_ten ?? "");
       });
-  }, [open, user?.user_id]);
+  }, [open, user?.user_id, editRow]);
 
   const reset = () => {
     setItems([emptyItem()]);
@@ -141,6 +170,25 @@ export default function HoanUngForm({ open, onClose }: Props) {
       return;
     }
 
+    if (editRow) {
+      updateMut.mutate({
+        id: editRow.id,
+        items: uploadedItems,
+        ten_nguoi_ung: hoTen || user.email || user.user_id,
+        so_tai_khoan: soTaiKhoan.trim() || null,
+        ngan_hang: nganHang.trim() || null,
+        ngay_can_thanh_toan: ngayCanTT || null,
+      }, {
+        onSuccess: () => {
+          toast.success(`Đã cập nhật yêu cầu (${items.length} mục, tổng ${fmt(total)} ₫)`);
+          onClose();
+        },
+        onError: (e: unknown) => toast.error("Lỗi: " + (errMsg(e) || "Không cập nhật được")),
+        onSettled: () => setSubmitting(false),
+      });
+      return;
+    }
+
     const payload: HoanUngInsert = {
       items: uploadedItems,
       nguoi_ung_id: user.user_id,
@@ -166,7 +214,7 @@ export default function HoanUngForm({ open, onClose }: Props) {
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col p-0 gap-0">
         <SheetHeader className="px-6 py-4 border-b shrink-0">
-          <SheetTitle>Yêu cầu chi phí văn phòng</SheetTitle>
+          <SheetTitle>{editRow ? "Sửa yêu cầu chi phí văn phòng" : "Yêu cầu chi phí văn phòng"}</SheetTitle>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
@@ -324,9 +372,11 @@ export default function HoanUngForm({ open, onClose }: Props) {
           <Button
             className="flex-1"
             onClick={handleSubmit}
-            disabled={submitting || createMut.isPending}
+            disabled={submitting || createMut.isPending || updateMut.isPending}
           >
-            {submitting ? "Đang gửi..." : `Gửi yêu cầu (${fmt(total)} ₫)`}
+            {submitting
+              ? (editRow ? "Đang lưu..." : "Đang gửi...")
+              : (editRow ? `Lưu thay đổi (${fmt(total)} ₫)` : `Gửi yêu cầu (${fmt(total)} ₫)`)}
           </Button>
         </SheetFooter>
       </SheetContent>

@@ -1,6 +1,6 @@
 import { Fragment, useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Plus, Wallet, Trash2, Clock, CheckCircle2, FileText, ChevronRight, ChevronDown, Printer } from "lucide-react";
+import { Plus, Wallet, Trash2, Clock, CheckCircle2, FileText, ChevronRight, ChevronDown, Printer, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -55,6 +55,7 @@ export default function HoanUngPage() {
   const [filterMine, setFilterMine] = useState(false);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<HoanUngRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const toggleExpanded = (id: number) =>
@@ -254,6 +255,8 @@ export default function HoanUngPage() {
                 const payBadge = PAYMENT_BADGE[r.payment_status] ?? PAYMENT_BADGE.unpaid;
                 const isMine = r.nguoi_ung_id === user?.user_id;
                 const canDelete = r.trang_thai_duyet === "tu_choi" && isMine;
+                // Sửa: chỉ chủ đơn, còn chờ duyệt, chưa dính payment nào
+                const canEditRow = isMine && r.trang_thai_duyet === "cho_duyet" && r.payment_status === "unpaid";
                 const items = r.hoan_ung_items ?? [];
                 const isMulti = items.length > 1;
                 const isOpen = expanded.has(r.id);
@@ -310,6 +313,15 @@ export default function HoanUngPage() {
                       </td>
                       <td className="py-1.5 px-2 text-center">
                         <div className="flex items-center justify-center gap-0.5">
+                          {canEditRow && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setEditTarget(r); setFormOpen(true); }}
+                              className="text-muted-foreground hover:text-primary p-1"
+                              title="Sửa (khi còn chờ duyệt)"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); handlePrint(r); }}
                             className="text-muted-foreground hover:text-primary p-1"
@@ -375,8 +387,13 @@ export default function HoanUngPage() {
         )}
       </div>
 
-      {/* Form modal */}
-      <HoanUngForm open={formOpen} onClose={() => setFormOpen(false)} />
+      {/* Form modal — key remount để tách state edit/create (draft tạo mới không dính dữ liệu phiếu vừa sửa) */}
+      <HoanUngForm
+        key={editTarget?.id ?? "new"}
+        open={formOpen}
+        editRow={editTarget}
+        onClose={() => { setFormOpen(false); setEditTarget(null); }}
+      />
 
       {/* Delete confirm */}
       <AlertDialog open={deleteTarget != null} onOpenChange={(v) => !v && setDeleteTarget(null)}>
