@@ -4,7 +4,7 @@
 // 2 field thêm: loai_chi_hoan_ung (enum), nguoi_ung_id (uuid → auth.users).
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
-import type { TablesInsert } from "@/lib/database.types";
+import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export const LOAI_CHI_HOAN_UNG_OPTS: { value: string; label: string }[] = [
   { value: "vpp",          label: "Văn phòng phẩm" },
@@ -153,6 +153,70 @@ export function useCreateHoanUng() {
         .single();
       if (error) throw error;
       return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hoan_ung_list"] });
+      qc.invalidateQueries({ queryKey: ["dntt-list"] });
+    },
+  });
+}
+
+export interface HoanUngUpdate {
+  id: number;
+  items: HoanUngItem[];
+  ten_nguoi_ung: string;
+  so_tai_khoan?: string | null;
+  ngan_hang?: string | null;
+  ngay_can_thanh_toan?: string | null;
+}
+
+// Sửa yêu cầu hoàn ứng — CHỈ khi còn cho_duyet + chưa có payment.
+// Phiếu là 1 dòng de_nghi_thanh_toan nên DNTTPage (view dntt_with_payment_status)
+// thấy số mới ngay sau invalidate.
+export function useUpdateHoanUng() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: HoanUngUpdate) => {
+      if (payload.items.length === 0) throw new Error("Cần ít nhất 1 dòng chi phí");
+      const totalAmount = payload.items.reduce((s, it) => s + Number(it.so_tien || 0), 0);
+      if (totalAmount <= 0) throw new Error("Tổng số tiền phải lớn hơn 0");
+
+      // Phiếu cho_duyet vẫn có thể đã bị cấn trừ (view tính SUM(payments) bất kể
+      // duyệt) → đã có payment thì cấm sửa, tránh lệch số đã trả vs mệnh giá.
+      const { data: pays, error: payErr } = await externalSupabase
+        .from("payments")
+        .select("id")
+        .eq("dntt_id", payload.id)
+        .limit(1);
+      if (payErr) throw payErr;
+      if ((pays ?? []).length > 0) {
+        throw new Error("Phiếu đã có thanh toán/cấn trừ — không sửa được. Hãy hủy phiếu và tạo lại.");
+      }
+
+      const uniqueLoaiChi = [...new Set(payload.items.map((it) => it.loai_chi))];
+      const singleLoaiChi = uniqueLoaiChi.length === 1 ? uniqueLoaiChi[0] : null;
+
+      const { data, error } = await externalSupabase
+        .from("de_nghi_thanh_toan")
+        .update({
+          loai_chi_hoan_ung: singleLoaiChi,
+          hoan_ung_items: payload.items,
+          mo_ta: buildHoanUngSummary(payload.items),
+          so_tien: totalAmount,
+          ten_nha_cung_cap: payload.ten_nguoi_ung,
+          so_tai_khoan: payload.so_tai_khoan ?? null,
+          ngan_hang: payload.ngan_hang ?? null,
+          ngay_can_thanh_toan: payload.ngay_can_thanh_toan ?? null,
+        } as unknown as TablesUpdate<"de_nghi_thanh_toan">)
+        .eq("id", payload.id)
+        .eq("trang_thai_duyet", "cho_duyet")
+        .select("id");
+      if (error) throw error;
+      // 0 row = phiếu đã được duyệt/hủy ở tab khác, HOẶC RLS chặn (silent fail)
+      if (!data || data.length === 0) {
+        throw new Error("Phiếu không còn ở trạng thái chờ duyệt (hoặc không có quyền sửa) — tải lại trang.");
+      }
+      return data[0];
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hoan_ung_list"] });
