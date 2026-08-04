@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useLeadsList, LEAD_TRANG_THAI_OPTS, LEAD_NGUON_OPTS, type Lead, type LeadTrangThai } from "@/hooks/use-leads";
+import { useLeadRealtime } from "@/hooks/use-lead-realtime";
 import { useUserRoles } from "@/hooks/use-doan";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadTable } from "@/components/leads/LeadTable";
@@ -25,6 +26,9 @@ export default function LeadsPage() {
   const { user } = useAuth();
   const { data: userRoles = [] } = useUserRoles();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Webhook FB Messenger ghi lead/tin nhắn từ server → realtime invalidate để
+  // list + LeadDrawer đang mở tự tươi (không realtime thì phải F5 mới thấy).
+  useLeadRealtime();
 
   // Filters
   const [search, setSearch] = useState("");
