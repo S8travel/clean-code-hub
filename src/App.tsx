@@ -45,6 +45,7 @@ const KhachHangPage        = lazy(() => import("./pages/KhachHangPage.tsx"));
 const LeadReportPage       = lazy(() => import("./pages/LeadReportPage.tsx"));
 const ViecLeadPage         = lazy(() => import("./pages/ViecLeadPage.tsx"));
 const LeadFormPublicPage   = lazy(() => import("./pages/LeadFormPublicPage.tsx"));
+const ChinhSachQuyenRiengTuPage = lazy(() => import("./pages/ChinhSachQuyenRiengTuPage.tsx"));
 const KhaoSatPublicPage    = lazy(() => import("./pages/KhaoSatPublicPage.tsx"));
 const KhaoSatOverviewPage  = lazy(() => import("./pages/KhaoSatOverviewPage.tsx"));
 const HoanUngPage          = lazy(() => import("./pages/HoanUngPage.tsx"));
@@ -90,6 +91,8 @@ const App = () => (
               {/* Public */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/lead-form" element={<LeadFormPublicPage />} />
+              {/* Chính sách quyền riêng tư — Meta App Review đọc trang này */}
+              <Route path="/privacy" element={<ChinhSachQuyenRiengTuPage />} />
               <Route path="/khao-sat/:doanId" element={<KhaoSatPublicPage />} />
 
               {/* Protected — yêu cầu đăng nhập */}
