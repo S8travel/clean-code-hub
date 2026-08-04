@@ -23,19 +23,20 @@ interface ThongBaoRecord {
   noi_dung: string | null;
   doan_id: number | null;
   cong_viec_id: number | null;
+  lead_id: number | null;
 }
 
 // Bản sao của targetUrl trong src/lib/thong-bao-utils.ts — sửa bên đó
 // thì sửa cả đây (edge fn không import được code src/).
 function targetUrl(tb: ThongBaoRecord): string {
-  const { loai, doan_id, cong_viec_id } = tb;
+  const { loai, doan_id, cong_viec_id, lead_id } = tb;
   if (!loai) return "/";
   if (loai.startsWith("deadline") && doan_id) return `/doan/${doan_id}`;
   if (loai === "giao_viec" && cong_viec_id) return `/my-job?cong_viec=${cong_viec_id}`;
   if (loai === "giao_viec" && doan_id) return `/doan/${doan_id}`;
   if (loai === "dntt_can_duyet") return "/de-nghi-thanh-toan";
   if (loai === "su_co" && doan_id) return `/doan/${doan_id}?tab=log`;
-  if (loai.startsWith("lead_")) return "/leads";
+  if (loai.startsWith("lead_")) return lead_id ? `/leads?lead=${lead_id}` : "/leads";
   if (loai === "gia" && doan_id) return `/doan/${doan_id}`;
   if (loai === "thong_tin_doan" && doan_id) return `/doan/${doan_id}`;
   return "/";

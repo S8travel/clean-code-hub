@@ -24,6 +24,7 @@ export const ICON_BY_LOAI: Record<string, string> = {
   lead_qua_han:              "🔥",
   lead_follow_up_today:      "⏰",
   lead_lanh:                 "🥶",
+  lead_tin_nhan_fb:          "💬",
 };
 
 export function iconFor(loai: string) {
@@ -57,7 +58,7 @@ export function groupByTime(items: ThongBaoRow[]) {
 // Bản sao logic này nằm trong edge fn supabase/functions/send-push/index.ts
 // (không import được code src/) — sửa bên đây thì sửa cả bên đó.
 export function targetUrl(tb: ThongBaoRow): string | null {
-  const { loai, doan_id, cong_viec_id } = tb;
+  const { loai, doan_id, cong_viec_id, lead_id } = tb;
   if (loai.startsWith("deadline") && doan_id) return `/doan/${doan_id}`;
   if (loai === "giao_viec" && cong_viec_id)   return `/my-job?cong_viec=${cong_viec_id}`;
   // Hủy đoàn: trigger tạo thong_bao loai='giao_viec' KHÔNG kèm cong_viec_id
@@ -65,7 +66,8 @@ export function targetUrl(tb: ThongBaoRow): string | null {
   if (loai === "giao_viec" && doan_id)        return `/doan/${doan_id}`;
   if (loai === "dntt_can_duyet")              return `/de-nghi-thanh-toan`;
   if (loai === "su_co" && doan_id)            return `/doan/${doan_id}?tab=log`;
-  if (loai.startsWith("lead_"))               return `/leads`;
+  // Có lead_id → deep-link mở đúng LeadDrawer (/leads?lead=:id); cũ → trang list.
+  if (loai.startsWith("lead_"))               return lead_id ? `/leads?lead=${lead_id}` : `/leads`;
   if (loai === "gia" && doan_id)              return `/doan/${doan_id}`;
   // Đổi số khách/ngày/địa điểm (trigger fn_doan_phanviec_events)
   if (loai === "thong_tin_doan" && doan_id)   return `/doan/${doan_id}`;

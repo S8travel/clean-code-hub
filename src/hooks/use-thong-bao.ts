@@ -16,6 +16,7 @@ export interface ThongBaoRow {
   created_at: string;
   cong_viec_id: number | null;
   dntt_id: number | null;
+  lead_id: number | null;
 }
 
 const QK = "thong_bao";
