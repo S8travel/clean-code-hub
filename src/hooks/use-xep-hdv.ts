@@ -37,6 +37,7 @@ export function useDoanForXep(filter: { from: string; to: string } | null) {
         .select("id, ten_doan, ngay_di, ngay_ve, chuyen_bay_don, chuyen_bay_tien, agent_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, dia_diem:dia_diem_id(ten), agents:agent_id(ten)")
         .gte("ngay_di", filter!.from)
         .lte("ngay_di", filter!.to)
+        .neq("trang_thai", "huy")
         .order("ngay_di");
       if (error) throw error;
       return (data ?? []).map((d) => ({

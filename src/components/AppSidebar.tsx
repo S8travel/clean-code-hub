@@ -169,7 +169,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Danh sách đoàn", url: "/doan", icon: List, resource: "doan" },
       { title: "Theo dõi", url: "/theo-doi", icon: ClipboardList, resource: "theo_doi" },
       { title: "Khảo sát", url: "/khao-sat", icon: Star, resource: "theo_doi" },
-      { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, resource: "xep_hdv" },
+      { title: "Xếp HDV", url: "/xep-hdv", icon: CalendarCheck, resource: "xep_hdv", boPhanOnly: "dieu_hanh", minRole: "giam_doc" },
       { title: "Lock Phòng", url: "/lock-phong", icon: CalendarRange, resource: "lock_phong" },
       { title: "Invoice", url: "/invoice", icon: FileText, resource: "invoice" },
       { title: "Báo Giá", url: "/bao-gia", icon: Calculator, resource: "bao_gia" },
