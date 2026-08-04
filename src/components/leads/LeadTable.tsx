@@ -57,6 +57,8 @@ export function LeadTable({ leads, onRowClick }: Props) {
   };
 
   const hasB2B = leads.some((l) => B2B_TYPES.includes(l.loai_khach ?? ""));
+  // Cột Page chỉ hiện khi có lead từ fanpage (nhiều trang → cần biết tin về trang nào)
+  const hasPage = leads.some((l) => l.fb_page_ten);
 
   if (leads.length === 0) {
     return (
@@ -74,6 +76,7 @@ export function LeadTable({ leads, onRowClick }: Props) {
             <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Tên / SĐT")}</th>
             {hasB2B && <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Tổ chức")}</th>}
             <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Nguồn")}</th>
+            {hasPage && <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Page")}</th>}
             <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Điểm đến")}</th>
             <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Sales")}</th>
             <th className="py-1.5 px-2 font-medium whitespace-nowrap">{t("Trạng thái")}</th>
@@ -128,6 +131,19 @@ export function LeadTable({ leads, onRowClick }: Props) {
                     {nguonLabelI18n}
                   </span>
                 </td>
+
+                {/* Page (fanpage nhận tin — chỉ hiện khi list có lead từ fanpage) */}
+                {hasPage && (
+                  <td className="py-1.5 px-2">
+                    {lead.fb_page_ten ? (
+                      <span className="truncate max-w-[140px] block" title={lead.fb_page_ten}>
+                        {lead.fb_page_ten}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                )}
 
                 {/* Điểm đến */}
                 <td className="py-1.5 px-2">
