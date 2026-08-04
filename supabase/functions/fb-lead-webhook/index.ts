@@ -24,6 +24,8 @@
 //   FB_PAGE_TOKENS         — (khi nối NHIỀU fanpage) JSON {"<page_id>":"<token>"};
 //                            PSID là page-scoped nên fetch profile phải đúng token
 //                            của trang đó. Chưa set → dùng FB_PAGE_ACCESS_TOKEN.
+//                            Hoặc: dán token trang mới vào secret FB_* tùy tên —
+//                            fn tự dò token thuộc trang nào qua Graph /me.
 //   FB_APP_SECRET          — (tùy chọn) để verify chữ ký webhook.
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — tự có sẵn trong môi trường edge fn.
 
@@ -143,20 +145,71 @@ interface MessengerEvent {
   };
 }
 
-// Token theo trang: nhiều fanpage → PSID là page-scoped, fetch profile PHẢI dùng
-// đúng token của trang đó. FB_PAGE_TOKENS = JSON {"<page_id>":"<token>", ...};
-// chưa set (1 trang) → fallback FB_PAGE_ACCESS_TOKEN.
-function pageTokenFor(pageId: string | null): string | undefined {
-  const raw = Deno.env.get("FB_PAGE_TOKENS");
-  if (raw && pageId) {
+// ── Token theo trang ──────────────────────────────────────────────────────────
+// PSID là page-scoped → fetch profile PHẢI dùng đúng token của trang đó.
+// Nguồn token (không cần khai page id thủ công):
+//   1. FB_PAGE_TOKENS = JSON {"<page_id>":"<token>"} (map tường minh — ưu tiên)
+//   2. TỰ DÒ: mọi secret tên FB_* có giá trị dạng page token (EAA...) — gọi Graph
+//      /me?fields=id để biết token thuộc trang nào, cache lại (per warm instance).
+//      → Thêm fanpage mới = tạo token + dán vào secret FB_<tên tuỳ ý> là chạy.
+//   3. Fallback FB_PAGE_ACCESS_TOKEN (trang đầu tiên / khi không dò ra).
+const pageTokenCache = new Map<string, string>();
+
+function candidateTokens(): string[] {
+  const env = Deno.env.toObject();
+  const out: string[] = [];
+  const raw = env["FB_PAGE_TOKENS"];
+  if (raw) {
     try {
-      const map = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof map[pageId] === "string") return map[pageId] as string;
+      const v = JSON.parse(raw) as unknown;
+      if (Array.isArray(v)) out.push(...v.filter((x): x is string => typeof x === "string"));
+      else if (v && typeof v === "object") {
+        out.push(...Object.values(v).filter((x): x is string => typeof x === "string"));
+      }
     } catch {
-      console.error("FB_PAGE_TOKENS không phải JSON hợp lệ — dùng FB_PAGE_ACCESS_TOKEN");
+      console.error("FB_PAGE_TOKENS không phải JSON hợp lệ — bỏ qua");
     }
   }
-  return Deno.env.get("FB_PAGE_ACCESS_TOKEN") ?? undefined;
+  for (const [k, v] of Object.entries(env)) {
+    if (k.startsWith("FB_") && typeof v === "string" && v.startsWith("EAA")) out.push(v);
+  }
+  return [...new Set(out)];
+}
+
+// Token này của trang nào? (Graph /me với page token trả về chính trang đó.)
+async function tokenPageId(token: string): Promise<string | null> {
+  const res = await fetch(
+    `https://graph.facebook.com/${GRAPH_VERSION}/me?fields=id&access_token=${encodeURIComponent(token)}`,
+  );
+  if (!res.ok) return null;
+  const d = await res.json();
+  return typeof d.id === "string" ? d.id : null;
+}
+
+async function pageTokenFor(pageId: string | null): Promise<string | undefined> {
+  const fallback = Deno.env.get("FB_PAGE_ACCESS_TOKEN") ?? undefined;
+  if (!pageId) return fallback;
+  const cached = pageTokenCache.get(pageId);
+  if (cached) return cached;
+  // Map tường minh trước (không tốn call Graph)
+  const raw = Deno.env.get("FB_PAGE_TOKENS");
+  if (raw) {
+    try {
+      const m = JSON.parse(raw) as Record<string, unknown>;
+      if (!Array.isArray(m) && typeof m[pageId] === "string") {
+        pageTokenCache.set(pageId, m[pageId] as string);
+        return m[pageId] as string;
+      }
+    } catch { /* đã log ở candidateTokens */ }
+  }
+  // Tự dò trong các secret FB_* — chỉ tốn call Graph lần đầu mỗi trang (có cache)
+  for (const t of candidateTokens()) {
+    if ((await tokenPageId(t)) === pageId) {
+      pageTokenCache.set(pageId, t);
+      return t;
+    }
+  }
+  return fallback;
 }
 
 // Tên profile người nhắn (cần pages_messaging đã duyệt; fail → null, giữ tên mặc định).
@@ -212,7 +265,7 @@ async function handleMessengerEvent(
 
   // PSID chưa có lead → lấy tên profile + tên trang TRƯỚC khi tạo, để thông báo
   // "Lead mới" (trigger bắn ngay trong RPC) mang tên thật thay vì "Khách Messenger".
-  const pageToken = pageTokenFor(pageId);
+  const pageToken = await pageTokenFor(pageId);
   let hoTen: string | null = null;
   let pageTen: string | null = null;
   if (pageToken && !(await psidHasLead(psid, supaUrl, serviceKey))) {

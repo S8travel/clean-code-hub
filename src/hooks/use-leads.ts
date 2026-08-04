@@ -19,6 +19,10 @@ export interface Lead {
   so_dien_thoai: string | null;
   email: string | null;
   facebook_url: string | null;
+  // Lead từ FB Messenger (webhook fb-lead-webhook tự điền)
+  fb_psid?: string | null;
+  fb_page_id?: string | null;
+  fb_page_ten?: string | null;
   nguon: string;
   campaign_id: number | null;
   loai_tour: string;
