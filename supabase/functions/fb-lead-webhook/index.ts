@@ -1,18 +1,29 @@
-// FB Lead Ads → CRM. Webhook nhận leadgen từ Facebook, fetch chi tiết qua Graph
-// API rồi gọi RPC create_lead_from_form (đã có auto-assign round-robin + log).
+// FB Lead Ads + Messenger → CRM. Meta chỉ cho 1 callback URL cho object `page`
+// → MỌI field (leadgen, messages...) cùng đổ về webhook này.
+//
+//  - Leadgen  : entry[].changes[] field='leadgen' → GET graph → RPC
+//               create_lead_from_form (auto-assign round-robin + log).
+//  - Messenger: entry[].messaging[] có message → RPC upsert_lead_from_messenger
+//               (PSID mới → tạo lead 'fb_messenger' + thông báo lead_moi qua
+//               trigger; PSID cũ → log lead_activity + thông báo lead_tin_nhan_fb).
+//               Lead mới: fetch tên profile qua Graph để đặt ho_ten.
 //
 // 2 mode:
 //  - GET  : Facebook verify webhook (hub.mode/hub.verify_token/hub.challenge).
-//  - POST : leadgen event → mỗi leadgen_id → GET graph → map field → tạo lead.
+//  - POST : sự kiện page (leadgen + messages).
 //
 // Public-callable (FB gọi không có JWT) → đặt verify_jwt=false trong config.toml.
 // Bảo vệ: (1) verify_token khi đăng ký; (2) chữ ký X-Hub-Signature-256 (nếu set
 // FB_APP_SECRET); (3) fetch leadgen cần FB_PAGE_ACCESS_TOKEN hợp lệ → POST giả
-// không lấy được data.
+// không lấy được data; (4) RPC messenger chỉ GRANT cho service_role.
 //
 // Secrets cần set (supabase secrets):
 //   FB_VERIFY_TOKEN        — chuỗi tự chọn, khớp với cấu hình webhook trên FB.
-//   FB_PAGE_ACCESS_TOKEN   — long-lived Page Access Token (quyền leads_retrieval).
+//   FB_PAGE_ACCESS_TOKEN   — long-lived Page Access Token (quyền leads_retrieval;
+//                            thêm pages_messaging để đọc tên profile người nhắn).
+//   FB_PAGE_TOKENS         — (khi nối NHIỀU fanpage) JSON {"<page_id>":"<token>"};
+//                            PSID là page-scoped nên fetch profile phải đúng token
+//                            của trang đó. Chưa set → dùng FB_PAGE_ACCESS_TOKEN.
 //   FB_APP_SECRET          — (tùy chọn) để verify chữ ký webhook.
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — tự có sẵn trong môi trường edge fn.
 
@@ -120,6 +131,118 @@ async function createLead(fields: LeadFieldData[], formName: string | null): Pro
   return true;
 }
 
+// ── Messenger ────────────────────────────────────────────────────────────────
+
+interface MessengerEvent {
+  sender?: { id?: string };
+  message?: {
+    mid?: string;
+    text?: string;
+    is_echo?: boolean;
+    attachments?: { type?: string }[];
+  };
+}
+
+// Token theo trang: nhiều fanpage → PSID là page-scoped, fetch profile PHẢI dùng
+// đúng token của trang đó. FB_PAGE_TOKENS = JSON {"<page_id>":"<token>", ...};
+// chưa set (1 trang) → fallback FB_PAGE_ACCESS_TOKEN.
+function pageTokenFor(pageId: string | null): string | undefined {
+  const raw = Deno.env.get("FB_PAGE_TOKENS");
+  if (raw && pageId) {
+    try {
+      const map = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof map[pageId] === "string") return map[pageId] as string;
+    } catch {
+      console.error("FB_PAGE_TOKENS không phải JSON hợp lệ — dùng FB_PAGE_ACCESS_TOKEN");
+    }
+  }
+  return Deno.env.get("FB_PAGE_ACCESS_TOKEN") ?? undefined;
+}
+
+// Tên profile người nhắn (cần pages_messaging đã duyệt; fail → null, giữ tên mặc định).
+async function fetchProfileName(psid: string, token: string): Promise<string | null> {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${psid}?fields=name&access_token=${encodeURIComponent(token)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    console.error(`Graph fetch profile ${psid} fail: ${res.status} ${await res.text()}`);
+    return null;
+  }
+  const data = await res.json();
+  return typeof data.name === "string" && data.name.trim() ? data.name.trim() : null;
+}
+
+// Tên fanpage (để lưu lead thuộc trang nào — hệ thống có thể nối nhiều trang).
+async function fetchPageName(pageId: string, token: string): Promise<string | null> {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${pageId}?fields=name&access_token=${encodeURIComponent(token)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    console.error(`Graph fetch page ${pageId} fail: ${res.status} ${await res.text()}`);
+    return null;
+  }
+  const data = await res.json();
+  return typeof data.name === "string" && data.name.trim() ? data.name.trim() : null;
+}
+
+// Lead theo PSID đã tồn tại chưa — chỉ để quyết định có fetch tên profile không
+// (RPC tự chống race bằng advisory lock, check này không cần chính xác tuyệt đối).
+async function psidHasLead(psid: string, supaUrl: string, serviceKey: string): Promise<boolean> {
+  const res = await fetch(
+    `${supaUrl}/rest/v1/lead?fb_psid=eq.${encodeURIComponent(psid)}&select=id&limit=1`,
+    { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } },
+  );
+  if (!res.ok) return false;
+  const rows = await res.json();
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+// Xử lý 1 tin nhắn Messenger → RPC upsert_lead_from_messenger.
+async function handleMessengerEvent(
+  ev: MessengerEvent,
+  pageId: string | null,
+  supaUrl: string,
+  serviceKey: string,
+): Promise<boolean> {
+  const psid = ev.sender?.id;
+  const m = ev.message;
+  if (!psid || !m || m.is_echo) return false; // echo = tin page tự gửi → bỏ qua
+
+  const attachTypes = (m.attachments ?? []).map((a) => a.type || "file");
+  const text = m.text?.trim() ||
+    (attachTypes.length ? `[Đính kèm: ${attachTypes.join(", ")}]` : "");
+
+  // PSID chưa có lead → lấy tên profile + tên trang TRƯỚC khi tạo, để thông báo
+  // "Lead mới" (trigger bắn ngay trong RPC) mang tên thật thay vì "Khách Messenger".
+  const pageToken = pageTokenFor(pageId);
+  let hoTen: string | null = null;
+  let pageTen: string | null = null;
+  if (pageToken && !(await psidHasLead(psid, supaUrl, serviceKey))) {
+    hoTen = await fetchProfileName(psid, pageToken);
+    if (pageId) pageTen = await fetchPageName(pageId, pageToken);
+  }
+
+  const res = await fetch(`${supaUrl}/rest/v1/rpc/upsert_lead_from_messenger`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({
+      p_psid: psid,
+      p_message: text || null,
+      p_mid: m.mid ?? null,
+      p_ho_ten: hoTen,
+      p_page_id: pageId,
+      p_page_ten: pageTen,
+    }),
+  });
+  if (!res.ok) {
+    console.error(`RPC upsert_lead_from_messenger fail: ${res.status} ${await res.text()}`);
+    return false;
+  }
+  return true;
+}
+
 serve(async (req) => {
   const url = new URL(req.url);
 
@@ -139,7 +262,7 @@ serve(async (req) => {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  // ── POST: leadgen event ───────────────────────────────────────────────────
+  // ── POST: sự kiện page (leadgen + messages) ──────────────────────────────
   const rawBody = await req.text();
 
   // Verify chữ ký nếu có FB_APP_SECRET (khuyến nghị bật cho production).
@@ -152,11 +275,9 @@ serve(async (req) => {
     }
   }
 
+  // Token chỉ BẮT BUỘC cho leadgen (fetch chi tiết); Messenger vẫn chạy được
+  // không token (chỉ mất phần lấy tên profile) → không early-return ở đây.
   const pageToken = Deno.env.get("FB_PAGE_ACCESS_TOKEN");
-  if (!pageToken) {
-    console.error("Thiếu FB_PAGE_ACCESS_TOKEN");
-    return new Response("OK", { status: 200 }); // 200 để FB không retry dồn
-  }
 
   let payload: unknown;
   try {
@@ -165,27 +286,72 @@ serve(async (req) => {
     return new Response("OK", { status: 200 });
   }
 
-  // Cấu trúc: { object:'page', entry:[{ changes:[{ field:'leadgen', value:{ leadgen_id,... } }] }] }
-  const entries = (payload as { entry?: { changes?: { field?: string; value?: { leadgen_id?: string } }[] }[] }).entry ?? [];
+  // Cấu trúc: { object:'page', entry:[{
+  //   id: '<page_id>',                                           ← trang nhận sự kiện
+  //   changes:[{ field:'leadgen', value:{ leadgen_id,... } }],   ← Lead Ads
+  //   messaging:[{ sender:{id}, message:{mid,text,...} }],       ← Messenger
+  // }] }
+  const entries = (payload as {
+    entry?: {
+      id?: string;
+      changes?: { field?: string; value?: { leadgen_id?: string } }[];
+      messaging?: MessengerEvent[];
+    }[];
+  }).entry ?? [];
+
   const leadgenIds: string[] = [];
+  const msgEvents: { ev: MessengerEvent; pageId: string | null }[] = [];
   for (const e of entries) {
     for (const c of e.changes ?? []) {
       if (c.field === "leadgen" && c.value?.leadgen_id) leadgenIds.push(c.value.leadgen_id);
     }
-  }
-
-  let ok = 0, fail = 0;
-  for (const id of leadgenIds) {
-    try {
-      const detail = await fetchLeadFields(id, pageToken);
-      if (detail && (await createLead(detail.fields, detail.formName))) ok++;
-      else fail++;
-    } catch (err) {
-      console.error(`Xử lý leadgen ${id} lỗi:`, err);
-      fail++;
+    for (const m of e.messaging ?? []) {
+      if (m?.message && !m.message.is_echo && m.sender?.id) {
+        msgEvents.push({ ev: m, pageId: e.id ?? null });
+      }
     }
   }
-  console.log(`FB leadgen: ${ok} tạo, ${fail} lỗi/bỏ qua (tổng ${leadgenIds.length})`);
+
+  // ── Messenger ──
+  if (msgEvents.length > 0) {
+    const supaUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supaUrl || !serviceKey) {
+      console.error("Thiếu SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
+    } else {
+      let mOk = 0, mFail = 0;
+      for (const { ev, pageId } of msgEvents) {
+        try {
+          if (await handleMessengerEvent(ev, pageId, supaUrl, serviceKey)) mOk++;
+          else mFail++;
+        } catch (err) {
+          console.error("Xử lý messenger event lỗi:", err);
+          mFail++;
+        }
+      }
+      console.log(`FB messenger: ${mOk} xử lý, ${mFail} lỗi/bỏ qua (tổng ${msgEvents.length})`);
+    }
+  }
+
+  // ── Leadgen ──
+  if (leadgenIds.length > 0) {
+    if (!pageToken) {
+      console.error("Thiếu FB_PAGE_ACCESS_TOKEN — bỏ qua leadgen");
+    } else {
+      let ok = 0, fail = 0;
+      for (const id of leadgenIds) {
+        try {
+          const detail = await fetchLeadFields(id, pageToken);
+          if (detail && (await createLead(detail.fields, detail.formName))) ok++;
+          else fail++;
+        } catch (err) {
+          console.error(`Xử lý leadgen ${id} lỗi:`, err);
+          fail++;
+        }
+      }
+      console.log(`FB leadgen: ${ok} tạo, ${fail} lỗi/bỏ qua (tổng ${leadgenIds.length})`);
+    }
+  }
 
   // Luôn trả 200 để FB không retry (đã log lỗi để theo dõi).
   return new Response("OK", { status: 200 });

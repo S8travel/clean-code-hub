@@ -16,6 +16,8 @@ verify_jwt = false
 verify_jwt = false
 
 # fb-lead-webhook được Facebook gọi (không có user JWT) → tắt verify_jwt.
+# Nhận CẢ leadgen (Lead Ads) LẪN messages (Messenger) — Meta chỉ cho 1 callback
+# URL cho object `page` nên mọi field cùng đổ về hàm này.
 # Bảo vệ: FB_VERIFY_TOKEN (đăng ký) + chữ ký X-Hub-Signature-256 (FB_APP_SECRET).
 [functions.fb-lead-webhook]
 verify_jwt = false

@@ -105,6 +105,9 @@ export const LEAD_TRANG_THAI_OPTS: { value: LeadTrangThai; label: string; color:
 export const LEAD_NGUON_OPTS: { value: string; label: string }[] = [
   { value: "web_form",          label: "Form web public" },
   { value: "facebook_ads",      label: "Facebook Ads" },
+  // 2 nguồn auto từ webhook fb-lead-webhook (Lead Ads + Messenger)
+  { value: "fb_lead_ads",       label: "FB Lead Ads" },
+  { value: "fb_messenger",      label: "FB Messenger" },
   { value: "zalo_oa",           label: "Zalo OA" },
   { value: "website",           label: "Website" },
   { value: "hotline",           label: "Hotline" },

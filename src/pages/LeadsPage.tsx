@@ -83,7 +83,10 @@ export default function LeadsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
 
-  // Deep-link /leads?lead=:id → mở drawer lead đó (vd back-link từ trang báo giá).
+  // Deep-link /leads?lead=:id → mở drawer lead đó (back-link từ báo giá, chuông
+  // thông báo tin nhắn FB...). Deps theo searchParams để bấm chuông KHI ĐANG Ở
+  // /leads vẫn mở drawer (không chỉ lúc mount). Không loop: xử lý xong thì clear
+  // param → lần chạy sau leadParam null → return sớm.
   useEffect(() => {
     const leadParam = searchParams.get("lead");
     if (!leadParam) return;
@@ -93,8 +96,7 @@ export default function LeadsPage() {
       setDetailOpen(true);
     }
     setSearchParams({}, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   const openDetail = (lead: Lead) => {
     setSelectedLeadId(lead.id);
