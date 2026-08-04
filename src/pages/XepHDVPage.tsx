@@ -36,7 +36,7 @@ import {
   getSuggestions,
   type TourInput,
 } from "@/hooks/use-xep-hdv";
-import { useRoleAtLeast } from "@/hooks/use-permissions";
+import { useRoleAtLeast, useBoPhan } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -548,15 +548,19 @@ function ScheduleGrid({
       const endIdx = dayStrs.indexOf(tour.ngay_ve);
       if (startIdx < 0 || endIdx < 0) return;
 
+      // Dữ liệu input có thể trùng lịch trên cùng HDV → cắt phần đè để không vỡ colSpan
+      const effStart = Math.max(startIdx, dayIdx);
+      if (endIdx < effStart) return;
+
       // Gap trước tour
-      const gap = startIdx - dayIdx;
+      const gap = effStart - dayIdx;
       if (gap > 0) {
         cells.push(
           <td key={`g-${dayIdx}`} colSpan={gap} className="border border-gray-200 bg-white" />
         );
       }
 
-      const span = endIdx - startIdx + 1;
+      const span = endIdx - effStart + 1;
       const colorClass = TOUR_COLORS[ti % TOUR_COLORS.length];
       cells.push(
         <td
@@ -675,6 +679,8 @@ function XepHDVPageContent() {
   // Kết quả
   const [result, setResult] = useState<TourInput[] | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "grid">("cards");
+  // Lịch vẽ trực tiếp từ input (HDV đã gán sẵn), không cần chạy xếp
+  const [showInputSchedule, setShowInputSchedule] = useState(false);
   const [assignView, setAssignView] = useState<"byhdv" | "bydate">("byhdv");
 
   // Ràng buộc tái xếp — key = "db-{doan_id}" hoặc "file-{_key}"
@@ -861,6 +867,21 @@ function XepHDVPageContent() {
     return t.doan_id != null ? `db-${t.doan_id}` : `${t.ten_doan}|${t.ngay_di}`;
   }
 
+  // Lịch từ input: assigned_hdv_id = locked_hdv_id (getSelectedTours đã set sẵn),
+  // nhân đôi tour có HDV phụ để hiện trên cả 2 hàng HDV
+  const inputSchedule = (() => {
+    if (!showInputSchedule) return null;
+    const base = getSelectedTours();
+    const expanded: TourInput[] = [];
+    for (const tour of base) {
+      expanded.push(tour);
+      if (tour.locked_hdv_id_2 != null && tour.locked_hdv_id_2 !== tour.assigned_hdv_id) {
+        expanded.push({ ...tour, assigned_hdv_id: tour.locked_hdv_id_2 });
+      }
+    }
+    return { expanded, noHdv: base.filter((tour) => tour.assigned_hdv_id == null) };
+  })();
+
   function handleRun() {
     const tours = getSelectedTours();
     if (tours.length === 0) { toast.error(t("Chưa chọn đoàn nào")); return; }
@@ -868,6 +889,7 @@ function XepHDVPageContent() {
     setResult(assignHDVs(tours, poolHdvs, maxToursPerHDV));
     setLockedTourKeys(new Set());
     setViewMode("cards");
+    setShowInputSchedule(false);
   }
 
   function handleRerun() {
@@ -885,6 +907,7 @@ function XepHDVPageContent() {
     });
     setResult(assignHDVs(toursForRerun, poolHdvs, maxToursPerHDV));
     setViewMode("cards");
+    setShowInputSchedule(false);
   }
 
   function handleReassign(tourIdx: number, newHdvId: number | null) {
@@ -925,9 +948,8 @@ function XepHDVPageContent() {
   const hdvMap = new Map<number, string>(hdvList.map((h) => [h.id, h.ten]));
   const unassignedCount = result?.filter((t) => t.assigned_hdv_id === null).length ?? 0;
 
-  function exportScheduleToExcel() {
-    if (!result) return;
-    const assignedTours = result.filter((t) => t.assigned_hdv_id !== null);
+  function exportScheduleToExcel(tours: TourInput[]) {
+    const assignedTours = tours.filter((t) => t.assigned_hdv_id !== null);
     if (assignedTours.length === 0) return;
 
     const allDateStrs = assignedTours.flatMap((t) => [t.ngay_di, t.ngay_ve]).filter(Boolean);
@@ -948,8 +970,8 @@ function XepHDVPageContent() {
     }
 
     const hdvIds = [...new Set(assignedTours.map((t) => t.assigned_hdv_id!))].sort((a, b) => {
-      const na = activeHdvs.find((h) => h.id === a)?.ten ?? "";
-      const nb = activeHdvs.find((h) => h.id === b)?.ten ?? "";
+      const na = hdvList.find((h) => h.id === a)?.ten ?? "";
+      const nb = hdvList.find((h) => h.id === b)?.ten ?? "";
       return na.localeCompare(nb, "vi");
     });
 
@@ -966,7 +988,7 @@ function XepHDVPageContent() {
 
     // Hàng dữ liệu
     const dataRows = hdvIds.map((hdvId, idx) => {
-      const hdv = activeHdvs.find((h) => h.id === hdvId);
+      const hdv = hdvList.find((h) => h.id === hdvId);
       const parts = (hdv?.ten ?? "").trim().split(/\s+/);
       const shortName = parts[parts.length - 1].toUpperCase();
       const rowDays: string[] = Array(days.length).fill("");
@@ -1120,7 +1142,7 @@ function XepHDVPageContent() {
           <h1 className="font-semibold text-sm">{t("Xếp hướng dẫn viên")}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {result && (
+          {!showInputSchedule && result && (
             <>
               {/* Main view toggle */}
               <div className="flex items-center border rounded-md overflow-hidden h-8">
@@ -1168,7 +1190,7 @@ function XepHDVPageContent() {
               )}
             </>
           )}
-          {result && viewMode === "cards" && (
+          {!showInputSchedule && result && viewMode === "cards" && (
             <Button
               size="sm" variant="outline" className="h-8 text-xs gap-1.5"
               onClick={assignView === "byhdv" ? exportAssignmentToExcel : exportByDateToExcel}
@@ -1176,14 +1198,31 @@ function XepHDVPageContent() {
               <Download className="h-3.5 w-3.5" /> {t("Tải Excel")}
             </Button>
           )}
-          {result && viewMode === "grid" && (
+          {!showInputSchedule && result && viewMode === "grid" && (
             <Button
               size="sm" variant="outline" className="h-8 text-xs gap-1.5"
-              onClick={exportScheduleToExcel}
+              onClick={() => exportScheduleToExcel(result)}
             >
               <Download className="h-3.5 w-3.5" /> {t("Tải Excel")}
             </Button>
           )}
+          {showInputSchedule && inputSchedule && (
+            <Button
+              size="sm" variant="outline" className="h-8 text-xs gap-1.5"
+              onClick={() => exportScheduleToExcel(inputSchedule.expanded)}
+            >
+              <Download className="h-3.5 w-3.5" /> {t("Tải Excel")}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={showInputSchedule ? "default" : "outline"}
+            className="h-8 text-xs gap-1.5"
+            onClick={() => setShowInputSchedule((v) => !v)}
+            disabled={!showInputSchedule && selectedDoanIds.size === 0}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" /> {t("Lịch input")}
+          </Button>
           <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleRun} disabled={selectedDoanIds.size === 0}>
             <Play className="h-3.5 w-3.5" /> {t("Chạy xếp")}
           </Button>
@@ -1244,6 +1283,70 @@ function XepHDVPageContent() {
                       {dbFetching ? t("Đang tải...") : t("Tải")}
                     </Button>
                   </div>
+                  {displayDbTours.length > 0 && (() => {
+                    const allKeys = displayDbTours.map((tour) => `db-${tour.doan_id}`);
+                    const selCount = allKeys.filter((k) => selectedDoanIds.has(k)).length;
+                    const allChecked = selCount === allKeys.length;
+
+                    // Nhóm key theo miền của địa điểm (Bắc/Trung/Nam, không rõ → Khác)
+                    const mienById = new Map(diaDiemList.map((d) => [d.id, d.mien]));
+                    const keysByMien = new Map<string, string[]>();
+                    for (const tour of displayDbTours) {
+                      const mien = (tour.dia_diem_id != null ? mienById.get(tour.dia_diem_id) : null) ?? t("Khác");
+                      const arr = keysByMien.get(mien) ?? [];
+                      arr.push(`db-${tour.doan_id}`);
+                      keysByMien.set(mien, arr);
+                    }
+                    const mienOrder = ["Bắc", "Trung", "Nam", t("Khác")].filter((m) => keysByMien.has(m));
+
+                    const toggleKeys = (keys: string[], allSelected: boolean) => {
+                      setSelectedDoanIds((prev) => {
+                        const next = new Set(prev);
+                        if (allSelected) keys.forEach((k) => next.delete(k));
+                        else keys.forEach((k) => next.add(k));
+                        return next;
+                      });
+                      setResult(null);
+                    };
+
+                    return (
+                      <div className="space-y-1 border-b pb-1">
+                        <label className="flex items-center gap-2 px-2 py-1 rounded text-xs font-medium cursor-pointer hover:bg-muted/50">
+                          <Checkbox
+                            checked={allChecked ? true : selCount > 0 ? "indeterminate" : false}
+                            onCheckedChange={() => toggleKeys(allKeys, allChecked)}
+                          />
+                          {t("Chọn tất cả")}
+                          <span className="text-muted-foreground font-normal">({selCount}/{allKeys.length})</span>
+                        </label>
+                        {mienOrder.length > 1 && (
+                          <div className="flex flex-wrap items-center gap-1 px-2">
+                            <span className="text-[10px] text-muted-foreground">{t("Chọn theo miền:")}</span>
+                            {mienOrder.map((mien) => {
+                              const keys = keysByMien.get(mien)!;
+                              const allSel = keys.every((k) => selectedDoanIds.has(k));
+                              return (
+                                <button
+                                  key={mien}
+                                  onClick={() => toggleKeys(keys, allSel)}
+                                  className={cn(
+                                    "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border transition-colors",
+                                    allSel
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "bg-background hover:bg-muted/60 border-border"
+                                  )}
+                                >
+                                  {allSel && <Check className="h-2.5 w-2.5" />}
+                                  {mien}
+                                  <span className="opacity-60">({keys.length})</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {displayDbTours.length > 0 && (
                     <div className="space-y-0.5 max-h-48 overflow-y-auto">
                       {displayDbTours.map((tour) => {
@@ -1310,6 +1413,29 @@ function XepHDVPageContent() {
                   </Button>
 
                   {/* Danh sách đoàn từ file */}
+                  {fileTours.length > 0 && (() => {
+                    const allKeys = fileTours.map((tour) => tour._key);
+                    const selCount = allKeys.filter((k) => selectedDoanIds.has(k)).length;
+                    const allChecked = selCount === allKeys.length;
+                    return (
+                      <label className="flex items-center gap-2 px-2 py-1 rounded text-xs font-medium cursor-pointer hover:bg-muted/50 border-b">
+                        <Checkbox
+                          checked={allChecked ? true : selCount > 0 ? "indeterminate" : false}
+                          onCheckedChange={() => {
+                            setSelectedDoanIds((prev) => {
+                              const next = new Set(prev);
+                              if (allChecked) allKeys.forEach((k) => next.delete(k));
+                              else allKeys.forEach((k) => next.add(k));
+                              return next;
+                            });
+                            setResult(null);
+                          }}
+                        />
+                        {t("Chọn tất cả")}
+                        <span className="text-muted-foreground font-normal">({selCount}/{allKeys.length})</span>
+                      </label>
+                    );
+                  })()}
                   {fileTours.length > 0 && (
                     <div className="space-y-0.5 max-h-48 overflow-y-auto">
                       {fileTours.map((tour) => {
@@ -1567,7 +1693,17 @@ function XepHDVPageContent() {
         {/* ── Right panel: kết quả ── */}
         <Panel minSize={40}>
           {/* View lịch cần scroll cả 2 chiều → dùng div thường thay ScrollArea */}
-          {result && viewMode === "grid" ? (
+          {showInputSchedule && inputSchedule ? (
+            <div className="h-full overflow-auto p-3 space-y-2">
+              {inputSchedule.noHdv.length > 0 && (
+                <p className="text-xs text-amber-600">
+                  ⚠ {inputSchedule.noHdv.length} {t("đoàn chưa có HDV — không hiện trên lịch:")}{" "}
+                  {inputSchedule.noHdv.map((tour) => tour.ten_doan).join(", ")}
+                </p>
+              )}
+              <ScheduleGrid result={inputSchedule.expanded} hdvList={hdvList} />
+            </div>
+          ) : result && viewMode === "grid" ? (
             <div className="h-full overflow-auto p-3">
               <ScheduleGrid result={result} hdvList={activeHdvs} />
             </div>
@@ -1768,7 +1904,11 @@ function XepHDVPageContent() {
 }
 
 export default function XepHDVPage() {
-  const canView = useRoleAtLeast("giam_doc");
-  if (!canView) return <AccessDenied />;
+  // Mở cho bộ phận điều hành + toàn bộ giám đốc trở lên (giam_doc, admin).
+  // Gọi cả 2 hook vô điều kiện — KHÔNG dùng `||` trực tiếp vì short-circuit sẽ
+  // bỏ qua hook thứ 2 khi hook thứ 1 truthy (vi phạm Rules of Hooks).
+  const isDieuHanh = useBoPhan("dieu_hanh");
+  const isGiamDoc = useRoleAtLeast("giam_doc");
+  if (!isDieuHanh && !isGiamDoc) return <AccessDenied />;
   return <XepHDVPageContent />;
 }
