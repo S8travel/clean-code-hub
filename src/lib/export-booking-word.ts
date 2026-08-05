@@ -211,7 +211,13 @@ export async function exportBookingWord(
         const rowBText = soKhach ? `日遊船 ${bua}：${soKhach} pax` : (tau.set_menu_ten || bua);
         const rowCText = tau.nha_hang_website || "";
         rowAChildren.push(cell([p(tau.nha_hang_ten, { bold: true, size: 26 })], { width: COL_W[3], borders: DETAIL_TOP }));
-        rowAChildren.push(cell([p(tau.nha_hang_email || "", { size: 22, italic: true })], { width: COL_W[4], rowSpan: 3 }));
+        // Cột TEL: ưu tiên SĐT như dòng KS; chưa có SĐT trong danh mục mới rơi về email
+        rowAChildren.push(cell(
+          tau.nha_hang_so_dien_thoai
+            ? [p(tau.nha_hang_so_dien_thoai, { size: 24 })]
+            : [p(tau.nha_hang_email || "", { size: 22, italic: true })],
+          { width: COL_W[4], rowSpan: 3 }
+        ));
         rows.push(new TableRow({ children: rowAChildren }));
         rows.push(new TableRow({ children: [cell([p(rowBText, { bold: true, size: 28, color: "FF0000" })], { width: COL_W[3], borders: DETAIL_MIDDLE })] }));
         rows.push(new TableRow({ children: [cell([p(rowCText, { italic: true, size: 22, color: "0563C1" })], { width: COL_W[3], borders: DETAIL_BOTTOM })] }));
