@@ -14,6 +14,7 @@ export interface TauNgayDisplayRow {
   nha_hang_id: number;
   nha_hang_ten: string;
   nha_hang_email: string | null;
+  nha_hang_so_dien_thoai: string | null;
   nha_hang_website: string | null;
   set_menu_id: number | null;
   set_menu_ten: string | null;
@@ -61,12 +62,12 @@ export function useBookingTau(doanId: number | undefined) {
       // Fetch nha_hang filtered to tau_ngay only
       const { data: nhList } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, email, website, loai")
+        .select("id, ten, email, so_dien_thoai, website, loai")
         .in("id", [...nhIds])
         .eq("loai", "tau_ngay");
 
-      const tauMap = new Map<number, { ten: string; email: string | null; website: string | null }>(
-        (nhList ?? []).map((n) => [n.id, { ten: n.ten ?? "", email: n.email, website: n.website ?? null }]),
+      const tauMap = new Map<number, { ten: string; email: string | null; so_dien_thoai: string | null; website: string | null }>(
+        (nhList ?? []).map((n) => [n.id, { ten: n.ten ?? "", email: n.email, so_dien_thoai: n.so_dien_thoai ?? null, website: n.website ?? null }]),
       );
       if (!tauMap.size) return [];
 
@@ -99,6 +100,7 @@ export function useBookingTau(doanId: number | undefined) {
             nha_hang_id: nhId,
             nha_hang_ten: nh.ten,
             nha_hang_email: nh.email,
+            nha_hang_so_dien_thoai: nh.so_dien_thoai,
             nha_hang_website: nh.website,
             set_menu_id: bkg?.set_menu_id ?? null,
             set_menu_ten: (bkg?.set_menu as { ten_set?: string | null } | null)?.ten_set ?? null,
