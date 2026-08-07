@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,11 +19,14 @@ interface Props {
 export function VehicleSelector({ xeTen, xeGia, onChange }: Props) {
   const { data: bangGia = [] } = useBangGiaDichVu();
   const [tenLocal, setTenLocal] = useState(xeTen ?? "");
+  const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Sync tên khi parent push giá trị mới (vd pick từ catalog).
+  // Sync tên khi parent push giá trị mới (vd pick từ catalog). Chỉ bỏ qua khi
+  // focus đang nằm TRONG chính instance này — kiểm tra "activeElement là INPUT
+  // bất kỳ" sẽ làm instance khác cùng field (modal AI + trang cùng mount) giữ
+  // tên stale rồi blur-save ghi đè tên mới.
   useEffect(() => {
-    const el = document.activeElement as HTMLElement | null;
-    if (el?.tagName !== "INPUT") setTenLocal(xeTen ?? "");
+    if (!wrapRef.current?.contains(document.activeElement)) setTenLocal(xeTen ?? "");
   }, [xeTen]);
 
   const commitText = () => {
@@ -41,7 +44,7 @@ export function VehicleSelector({ xeTen, xeGia, onChange }: Props) {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div ref={wrapRef} className="flex items-center gap-2">
       <div className="flex-1 min-w-0">
         <ServiceTypeahead
           value={tenLocal}

@@ -3,6 +3,7 @@ import {
   Packer,
   Paragraph,
   TextRun,
+  ImageRun,
   Table,
   TableRow,
   TableCell,
@@ -15,6 +16,7 @@ import {
 import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
 import type { BaoGiaKetQua, BaoGiaItem, BaoGiaExportBracket, BaoGiaExportConfig } from "@/hooks/use-bao-gia";
+import { fitPageSize, type PageImage } from "@/lib/itinerary-images";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface ManualDayData {
@@ -582,15 +584,18 @@ const DEFAULT_INCLUDED_ZH = [
   "全程住宿飯店",
 ];
 
-/** Xuất báo giá kiểu Đài Loan (報價) — Word. maBg = mã code duy nhất (ma_bg). */
+/** Xuất báo giá kiểu Đài Loan (報價) — Word. maBg = mã code duy nhất (ma_bg).
+ *  行程內容: ưu tiên `programImages` (ảnh từng trang lịch trình gốc — giữ nguyên
+ *  format); không có ảnh mới dùng `programText` (trích từ Word/Excel, mất layout). */
 export async function exportBaoGiaTaiwanWord(
   ketQua: BaoGiaKetQua,
   items: BaoGiaItem[],
   exchangeRate: number,
   maBg: string,
   programText?: string,
+  programImages?: PageImage[],
 ) {
-  const doc = buildTaiwanDoc(ketQua, items, exchangeRate, maBg, programText);
+  const doc = buildTaiwanDoc(ketQua, items, exchangeRate, maBg, programText, programImages);
   const blob = await Packer.toBlob(doc);
   const safeName =
     ketQua.ten_chuong_trinh.replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "").trim() || "tour";
@@ -640,6 +645,7 @@ function buildTaiwanDoc(
   exchangeRate: number,
   maBg: string,
   programText?: string,
+  programImages?: PageImage[],
 ): Document {
   const today = new Date();
   const todayStr = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
@@ -750,13 +756,39 @@ function buildTaiwanDoc(
     ],
   });
 
-  // ── 行程內容 (nội dung file chương trình đính kèm, nếu đọc được) ──────────────
+  // ── 行程內容 (file chương trình đính kèm) ──────────────────────────────────
+  // Ưu tiên ẢNH TRANG (PDF/ảnh render sẵn — giữ nguyên format gốc của khách);
+  // chỉ khi không có ảnh mới rơi về text trích từ Word/Excel (mất layout).
   const programBlock: Paragraph[] = [];
-  if (programText && programText.trim()) {
+  const hasProgramImages = !!programImages && programImages.length > 0;
+  if (hasProgramImages || (programText && programText.trim())) {
     programBlock.push(
       new Paragraph({ spacing: { before: 220 }, children: [] }),
       new Paragraph({ children: [new TextRun({ noProof: true, text: "行程內容", bold: true, size: 22, font: "Times New Roman", color: "185FA5" })] }),
     );
+  }
+  if (hasProgramImages) {
+    // DXA → px: /20 ra pt, ×96/72 ra px. Trừ đệm nhỏ để trang ảnh không tràn
+    // sang trang sau vì spacing đoạn.
+    const MAX_W_PX = Math.floor((CONTENT_W / 20) * (96 / 72));
+    const MAX_H_PX = Math.floor(((PAGE_H - MARGIN * 2) / 20) * (96 / 72)) - 40;
+    for (const img of programImages) {
+      const size = fitPageSize(img.width, img.height, MAX_W_PX, MAX_H_PX);
+      programBlock.push(
+        new Paragraph({
+          spacing: { before: 80 },
+          alignment: AlignmentType.CENTER,
+          children: [
+            new ImageRun({
+              type: img.type,
+              data: img.data,
+              transformation: { width: size.width, height: size.height },
+            }),
+          ],
+        }),
+      );
+    }
+  } else if (programText && programText.trim()) {
     let prevEmpty = false;
     for (const raw of programText.split(/\r?\n/)) {
       const line = raw.replace(/\s+$/, "");
