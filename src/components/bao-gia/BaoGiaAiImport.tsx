@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, Loader2, Check, AlertTriangle, HelpCircle, FileText, Upload, Save, Hotel, Utensils, Bus, Ticket } from "lucide-react";
+import { Sparkles, Loader2, Check, AlertTriangle, HelpCircle, FileText, Upload, Save, Hotel, Utensils, Bus, Ticket, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -11,8 +11,10 @@ import { errMsg } from "@/lib/error";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useExtractMatchItinerary, useUploadLichTrinhFile,
-  type BaoGiaItem, type LichTrinhFile,
+  type BaoGiaItem, type BaoGiaKetQua, type BaoGiaRow,
 } from "@/hooks/use-bao-gia";
+import { aiPreviewSheet, fmtVnd, fmtUsd, tierGuestsOf } from "@/components/bao-gia/detail/helpers";
+import { VehicleSelector } from "@/components/bao-gia/detail/VehicleSelector";
 import { useBaoGiaResolveMaps, useMarkCanhDiemCombo, useWriteGiaPhongFromBaoGia } from "@/hooks/use-bao-gia-ai-maps";
 import { useIsReadOnly } from "@/hooks/use-permissions";
 import {
@@ -32,12 +34,15 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/compon
 interface Props {
   open: boolean;
   onClose: () => void;
-  baoGiaId: number;
-  files: LichTrinhFile[];
-  /** Ngày tour ('YYYY-MM-DD') để lấy giá KS theo mùa. */
-  tourDate?: string | null;
-  /** Tỷ giá để hiển thị đơn giá USD trong bảng review. Default 26000. */
-  exchangeRate?: number | null;
+  /** Draft báo giá (live) — nguồn file/tỷ giá + xe_gia/phu_thu/profit/tier_guests
+   *  cho phần tính tiền xem trước ngay trong màn review. */
+  draft: BaoGiaRow;
+  /** Committed state (DB) — so sánh trước save tránh dirty save. */
+  row: BaoGiaRow;
+  updateDraftField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
+  saveField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
+  savePatch: (patch: Partial<BaoGiaRow>) => void;
+  saveKetQua: (next: BaoGiaKetQua) => void;
   /** Bản nháp review đã lưu (ket_qua.ai_review) → mở lại tiếp tục. */
   savedReview?: AiReviewDraft | null;
   onApply: (items: BaoGiaItem[], tenChuongTrinh: string, soNgay: number) => void;
@@ -60,9 +65,15 @@ interface CatalogOption { id: number; ten: string; gia?: number | null; nhaHangI
 
 // Modal "AI điền từ lịch trình": ưu tiên đọc FILE lịch trình đính kèm (PDF/ảnh);
 // không có file thì upload; vẫn cho dán text. AI trích xuất + khớp danh mục →
-// review (sửa giá, chọn 1 KS/đêm) → áp dụng vào items báo giá.
-export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, exchangeRate, savedReview, onApply, onSaveDraft }: Props) {
-  const xr = exchangeRate && exchangeRate > 0 ? exchangeRate : 26000;
+// review (sửa giá, chọn 1 KS/đêm, điền xe/phụ thu, xem giá sống) → áp dụng.
+export function BaoGiaAiImport({
+  open, onClose, draft, row, updateDraftField, saveField, savePatch, saveKetQua,
+  savedReview, onApply, onSaveDraft,
+}: Props) {
+  const baoGiaId = draft.id;
+  const tourDate = draft.ngay_di;
+  const files = useMemo(() => draft.lich_trinh_files ?? [], [draft.lich_trinh_files]);
+  const xr = draft.exchange_rate && draft.exchange_rate > 0 ? draft.exchange_rate : 26000;
   const [mode, setMode] = useState<"file" | "text">("file");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState("");
@@ -72,6 +83,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
   const [soNgay, setSoNgay] = useState(1);
   const [extracting, setExtracting] = useState(false); // đang trích text docx/xlsx
   const [runningProvider, setRunningProvider] = useState<"claude" | "keystone" | null>(null);
+  const [newTier, setNewTier] = useState(""); // ô "thêm cỡ đoàn" ở phần tính tiền
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadedRef = useRef(false); // đã nạp bản nháp lưu chưa (1 lần/lần mở)
 
@@ -143,6 +155,28 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
     for (const r of rows ?? []) if (r.loai === "meal") s.add(r.ngay_so);
     return s;
   }, [rows]);
+
+  // ── Tính tiền XEM TRƯỚC ngay trong review ──
+  // Chạy CHÍNH costingSheet trên items đang review (qua aiPreviewSheet) → giá
+  // hiển thị ở đây khớp 100% bảng chi phí sau khi bấm Áp dụng, không lệch công thức.
+  const previewItems = useMemo(() => toBaoGiaItems(included, daTruCombo), [included, daTruCombo]);
+  const previewSheet = useMemo(
+    () => (rows ? aiPreviewSheet(draft, previewItems, soNgay) : null),
+    [rows, draft, previewItems, soNgay],
+  );
+  const tierGuests = tierGuestsOf(draft.ket_qua);
+  const setTierGuests = (next: number[]) => {
+    const ket = draft.ket_qua;
+    if (!ket) return;
+    const cleaned = [...new Set(next.filter((n) => n > 0).map((n) => Math.round(n)))].sort((a, b) => a - b);
+    saveKetQua({ ...ket, tier_guests: cleaned.length ? cleaned : [16, 20] });
+  };
+  const addTier = () => {
+    const n = Number(newTier);
+    if (!n || n <= 0) return;
+    setTierGuests([...tierGuests, n]);
+    setNewTier("");
+  };
 
   const runExtract = async (input: { itinerary?: string; fileUrl?: string; fileType?: string; provider: "claude" | "keystone" }) => {
     if (!maps) { toast.warning("Đang tải danh mục, thử lại sau giây lát"); return; }
@@ -369,7 +403,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
 
   const handleApply = () => {
     if (included.length === 0) return;
-    onApply(toBaoGiaItems(included, daTruCombo), ten, soNgay);
+    onApply(previewItems, ten, soNgay);
     // Học bộ nhớ khớp từ các dòng đã áp dụng (fire-and-forget) → lần sau tự khớp.
     const toLearn = aliasesToLearn(included, user?.user_id);
     if (toLearn.length) learn.mutate(toLearn);
@@ -386,7 +420,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
         });
       }
     }
-    onClose();
+    handleClose();
   };
 
   const handleSaveDraft = () => {
@@ -395,12 +429,26 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
     toast.success("Đã lưu nháp — lần sau mở lại tiếp tục được");
   };
 
+  // Esc / click ngoài đóng dialog làm input unmount TRƯỚC khi blur kịp chạy →
+  // phụ thu / lợi nhuận / tỷ giá vừa gõ hiện trên draft nhưng chưa persist.
+  // Flush phần lệch khi đóng (blur đã lưu rồi thì savePatch lặp lại vô hại).
+  const handleClose = () => {
+    const patch: Partial<BaoGiaRow> = {};
+    if ((draft.phu_thu ?? 0) !== (row.phu_thu ?? 0)) patch.phu_thu = draft.phu_thu ?? 0;
+    if (draft.profit_usd !== row.profit_usd) patch.profit_usd = draft.profit_usd;
+    if (draft.exchange_rate !== row.exchange_rate && (draft.exchange_rate ?? 0) > 0) {
+      patch.exchange_rate = draft.exchange_rate;
+    }
+    if (Object.keys(patch).length) savePatch(patch);
+    onClose();
+  };
+
   const matched = included.filter((r) => r.don_gia > 0).length;
   const missing = included.filter((r) => r.don_gia <= 0).length;
   const busy = extract.isPending || mapsLoading || extracting;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className={`${rows ? "sm:max-w-6xl" : "sm:max-w-4xl"} max-h-[90vh] flex flex-col`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -408,7 +456,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
           </DialogTitle>
           <DialogDescription>
             AI đọc file lịch trình (PDF/ảnh) hoặc text, lọc hạng mục mất tiền + khớp danh mục; giá lấy từ hệ thống.
-            Kiểm tra & điền giá còn thiếu, chọn 1 khách sạn cho đêm có nhiều phương án.
+            Kiểm tra & điền giá còn thiếu, chọn 1 khách sạn cho đêm có nhiều phương án — giá tour tính sống ngay ở bảng “Tính tiền” bên dưới, không cần Áp dụng mới thấy.
           </DialogDescription>
         </DialogHeader>
 
@@ -714,12 +762,159 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
                 </tbody>
               </table>
             </div>
+            {/* ── Tính tiền xem trước: chi phí chung (xe/phụ thu/lợi nhuận/tỷ giá)
+                sửa ở đây LƯU THẲNG vào báo giá (auto-save như trang chính); bảng
+                tổng bên dưới = đúng công thức bảng chi phí sau khi Áp dụng. */}
+            {previewSheet && (
+              <div className="rounded-md border">
+                <div className="border-b bg-slate-50/70 p-2.5 space-y-2">
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-6">
+                      <span className="block text-[11px] text-slate-600 mb-1">Xe sử dụng (trọn tour)</span>
+                      <VehicleSelector
+                        xeTen={draft.xe_ten}
+                        xeGia={draft.xe_gia}
+                        onChange={(xeTen, xeGia) => {
+                          if (xeTen === row.xe_ten && xeGia === row.xe_gia) return;
+                          savePatch({ xe_ten: xeTen, xe_gia: xeGia });
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <span className="block text-[11px] text-slate-600 mb-1" title="Vé cầu đường, xe trung chuyển… — tính 1 lần, không nhân khách">Phụ thu (1 lần)</span>
+                      <Input
+                        type="text" inputMode="numeric"
+                        value={(draft.phu_thu ?? 0) > 0 ? (draft.phu_thu ?? 0).toLocaleString("vi-VN") : ""}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/[^0-9]/g, "");
+                          updateDraftField("phu_thu", digits ? parseInt(digits, 10) : 0);
+                        }}
+                        onBlur={() => {
+                          if ((draft.phu_thu ?? 0) !== (row.phu_thu ?? 0)) saveField("phu_thu", draft.phu_thu ?? 0);
+                        }}
+                        placeholder="0"
+                        className="h-9 text-xs text-right"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <span className="block text-[11px] text-slate-600 mb-1">Lợi nhuận (USD/khách)</span>
+                      <Input
+                        type="number"
+                        value={draft.profit_usd ?? 0}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v)) updateDraftField("profit_usd", v);
+                        }}
+                        onBlur={() => {
+                          if (draft.profit_usd !== row.profit_usd) saveField("profit_usd", draft.profit_usd);
+                        }}
+                        className="h-9 text-xs text-right"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <span className="block text-[11px] text-slate-600 mb-1">Tỷ giá (VND/USD)</span>
+                      <Input
+                        type="number"
+                        value={draft.exchange_rate ?? 26000}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v)) updateDraftField("exchange_rate", v);
+                        }}
+                        onBlur={() => {
+                          const v = draft.exchange_rate;
+                          if (v != null && v > 0 && v !== row.exchange_rate) saveField("exchange_rate", v);
+                        }}
+                        className="h-9 text-xs text-right"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500 mr-1">Cỡ đoàn:</span>
+                    {tierGuests.map((g) => (
+                      <span key={g} className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-xs">
+                        {g} khách
+                        <button
+                          type="button"
+                          onClick={() => setTierGuests(tierGuests.filter((x) => x !== g))}
+                          disabled={tierGuests.length <= 1}
+                          className="text-slate-400 hover:text-red-500 disabled:opacity-30"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                    <Input
+                      type="number" min={1} value={newTier}
+                      onChange={(e) => setNewTier(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addTier()}
+                      placeholder="Số khách"
+                      className="h-7 w-24 text-xs"
+                    />
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addTier}>
+                      <Plus className="h-3 w-3" /> Thêm cỡ
+                    </Button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-[#E6F1FB]">
+                        <th className="py-1.5 px-2 text-left font-semibold">Tính tiền (xem trước)</th>
+                        {previewSheet.configs.map((c) => (
+                          <th key={c.guests} className="py-1 px-2 text-right font-semibold whitespace-nowrap">
+                            <div className="text-blue-800">{c.guests} khách</div>
+                            <div className="text-[10px] font-normal text-slate-500">{c.rooms} phòng · {c.pax} pax</div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewSheet.groups.map((g) => (
+                        <tr key={g.key} className="border-t border-slate-100">
+                          <td className="py-0.5 px-2 text-slate-600">Cộng {g.label.toLowerCase()}</td>
+                          {g.subtotals.map((v, ti) => (
+                            <td key={ti} className="py-0.5 px-2 text-right tabular-nums">{fmtVnd(v)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                      {previewSheet.footer.map((f) => {
+                        const isTotal = f.kind === "total";
+                        const isPrice = f.kind === "price";
+                        return (
+                          <tr
+                            key={f.key}
+                            className={`border-t ${
+                              isTotal ? "border-t-2 border-slate-300 bg-slate-50 font-bold"
+                              : isPrice ? "bg-blue-50/60 font-bold text-blue-800"
+                              : "border-slate-100"
+                            }`}
+                          >
+                            <td className={isTotal || isPrice ? "py-1 px-2" : "py-1 px-2 text-slate-600"}>{f.label}</td>
+                            {f.values.map((v, ti) => (
+                              <td
+                                key={ti}
+                                className={`py-1 px-2 text-right tabular-nums ${
+                                  f.kind === "usd" ? "text-slate-500" : f.kind === "pct" ? "text-emerald-600" : ""
+                                }`}
+                              >
+                                {f.kind === "usd" ? fmtUsd(v) : f.kind === "pct" ? `${v.toFixed(1)}%` : fmtVnd(v)}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             <p className="text-[11px] text-muted-foreground">
               <b>PA</b> = phương án khách sạn (đêm có nhiều lựa chọn) → chọn 1, chỉ KS được chọn vào báo giá.
               Mục nền cam = chưa có giá → điền tay. <span className="text-violet-700">“đã nhớ”</span> = tự điền từ bộ nhớ đã học (sửa lại được).
               <b> ⚠ có thể đã gồm…</b> = vé nghi là combo kèm ăn → bấm xác nhận, bữa ăn cùng ngày sẽ bị gạch (<b>⊂ đã gồm</b>) và không tính tiền;
               xác nhận cũng được ghi vào danh mục cảnh điểm nên báo giá sau tự trừ.
-              Khi bấm <b>Áp dụng</b>, hệ thống ghi nhớ khớp + giá để lần sau tự điền. Sau đó nhập bậc số khách để ra giá tour.
+              Bảng <b>Tính tiền</b> là giá sống theo đúng công thức bảng chi phí — sửa giá/FOC/xe/phụ thu là số nhảy ngay,
+              bấm <b>Áp dụng</b> xong số không đổi. Xe, phụ thu, lợi nhuận, tỷ giá, cỡ đoàn sửa ở đây được lưu thẳng vào báo giá.
             </p>
           </div>
         )}
@@ -734,7 +929,7 @@ export function BaoGiaAiImport({ open, onClose, baoGiaId, files, tourDate, excha
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" onClick={handleClose}>Hủy</Button>
           {!rows ? (
             <>
               <Button onClick={() => handleAnalyze("claude")} disabled={busy || (mode === "file" && !selectedUrl)}>

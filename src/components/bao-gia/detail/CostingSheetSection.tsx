@@ -239,7 +239,8 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
       <p className="text-[11px] text-slate-500">
         Cột <b>N</b> = số đêm (KS) / số lần (ăn, vé). <b>FOC</b> nhà hàng <b>tự tính</b> theo chính sách (vd 16免1)
         cho từng cỡ đoàn — để trống ô FOC = auto, nhập số = ghi đè. Mỗi cột hiện <b>SL−miễn</b> (số đã trừ FOC).
-        Xe & phụ thu lấy từ phần thông tin tour ở trên (sửa tại đó). Thêm/xoá dịch vụ ở mục “Chương trình tour”.
+        Xe & phụ thu sửa ở phần thông tin tour phía trên (hoặc trong màn “AI điền từ lịch trình”).
+        Thêm/xoá dòng dịch vụ: mở lại “AI điền từ lịch trình” → sửa ở màn review → Áp dụng.
       </p>
     </section>
   );

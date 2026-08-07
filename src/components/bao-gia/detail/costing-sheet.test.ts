@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calcTier, effItemFoc, type ManualItem } from "@/lib/bao-gia-calc";
-import { costingSheet, emptyBaoGiaCase } from "./helpers";
+import { aiPreviewSheet, costingSheet, emptyBaoGiaCase } from "./helpers";
 import type { BaoGiaRow, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 
 function makeDraft(items: BaoGiaItem[], over: Partial<BaoGiaRow> = {}): BaoGiaRow {
@@ -104,6 +104,47 @@ describe("costingSheet — bố cục nhóm + nhiều bậc", () => {
     ]);
     const s = costingSheet(d)!;
     expect(s.groups[3].rows[0].ten_zh).toBe("玻璃桥");
+  });
+});
+
+describe("aiPreviewSheet — preview review AI khớp costingSheet sau Áp dụng", () => {
+  const reviewItems: BaoGiaItem[] = [
+    { loai: "hotel", mo_ta: "KS A", don_gia: 1_000_000, ghi_chu: "", ngay_so: 1 },
+    { loai: "meal", bua_an: "trua", mo_ta: "Trưa", don_gia: 100_000, ghi_chu: "", ngay_so: 1, foc_khach: 16, foc_mien: 1 },
+    { loai: "ticket", mo_ta: "Vé", don_gia: 50_000, ghi_chu: "", ngay_so: 2 },
+  ];
+
+  it("số giống HỆT costingSheet của draft đã áp items (cùng xe/phụ thu/profit)", () => {
+    // Draft đang mở modal: items CŨ trong ket_qua (khác items đang review).
+    const draftDangReview = makeDraft(
+      [{ loai: "ticket", mo_ta: "Item cũ", don_gia: 999_999, ghi_chu: "", ngay_so: 1 }],
+      { xe_gia: 12_000_000, xe_ten: "Xe 45", phu_thu: 300_000, profit_usd: 10 },
+    );
+    const preview = aiPreviewSheet(draftDangReview, reviewItems, 5)!;
+
+    // Draft SAU khi bấm Áp dụng: items = reviewItems, so_ngay = 5.
+    const draftDaApDung = makeDraft(reviewItems, {
+      xe_gia: 12_000_000, xe_ten: "Xe 45", phu_thu: 300_000, profit_usd: 10,
+    });
+    draftDaApDung.ket_qua!.so_ngay = 5;
+    const applied = costingSheet(draftDaApDung)!;
+
+    expect(preview.guests).toEqual(applied.guests);
+    expect(preview.groups.map((g) => g.subtotals)).toEqual(applied.groups.map((g) => g.subtotals));
+    expect(preview.footer).toEqual(applied.footer);
+  });
+
+  it("dùng tier_guests + xe/phụ thu của draft hiện tại", () => {
+    const draft = makeDraft([], { xe_gia: 5_000_000, phu_thu: 200_000 });
+    draft.ket_qua!.tier_guests = [10, 30];
+    const s = aiPreviewSheet(draft, reviewItems, 3)!;
+    expect(s.guests).toEqual([10, 30]);
+    expect(s.groups[0].subtotals).toEqual([5_200_000, 5_200_000]); // xe + phụ thu lump
+  });
+
+  it("ket_qua null → null", () => {
+    const draft = makeDraft([], {});
+    expect(aiPreviewSheet({ ...draft, ket_qua: null }, reviewItems, 3)).toBeNull();
   });
 });
 

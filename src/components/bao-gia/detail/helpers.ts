@@ -432,3 +432,20 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
 
   return { guests, configs, xr, groups, footer };
 }
+
+/** Bảng costing XEM TRƯỚC cho màn review AI: tính trên các dòng ĐANG review
+ *  (chưa Áp dụng) nhưng chạy CHÍNH costingSheet với draft hiện tại (xe_gia,
+ *  phu_thu, profit_usd, tỷ giá, tier_guests) → số hiển thị khớp 100% bảng
+ *  chi phí sau khi bấm Áp dụng. */
+export function aiPreviewSheet(
+  draft: BaoGiaRow,
+  previewItems: BaoGiaItem[],
+  soNgay: number,
+): CostingSheet | null {
+  const ket = draft.ket_qua;
+  if (!ket) return null;
+  return costingSheet({
+    ...draft,
+    ket_qua: { ...ket, items: previewItems, so_ngay: Math.max(1, soNgay) },
+  });
+}

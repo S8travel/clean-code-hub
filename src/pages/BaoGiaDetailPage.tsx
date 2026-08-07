@@ -8,7 +8,8 @@ import { useBaoGia, useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@
 import { useLead } from "@/hooks/use-leads";
 import { exportBaoGiaTaiwanWord, exportBaoGiaGiaCuoiWord } from "@/lib/export-bao-gia-word";
 import { liveKetQua, baoGiaCode } from "@/components/bao-gia/detail/helpers";
-import { fileKind, extractItineraryText } from "@/lib/itinerary-file";
+import { extractItineraryText, imageMime } from "@/lib/itinerary-file";
+import { pickProgramFile, renderPdfToPageImages, imageToPageImages, MAX_PROGRAM_PAGES, type PageImage } from "@/lib/itinerary-images";
 import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
@@ -104,20 +105,55 @@ export default function BaoGiaDetailPage() {
       // Recompute case totals từ items + xe_gia hiện tại → giá TB khớp panel UI.
       const fresh = liveKetQua(draft);
       if (!fresh) return;
-      // Đọc nội dung file chương trình (docx/xlsx) để chèn xuống dưới báo giá.
+      // 行程內容: ưu tiên file PDF/ảnh → render từng trang thành ẢNH nhúng vào
+      // Word (giữ nguyên format gốc của khách; nhiều file ảnh = nhiều trang).
+      // Word/Excel → trích text (mất bảng biểu — khuyên đính kèm bản PDF).
       let programText = "";
-      const progFile = (draft.lich_trinh_files ?? []).find((f) => {
-        const k = fileKind(f.ten);
-        return k === "docx" || k === "xlsx";
-      });
-      if (progFile) {
+      let programImages: PageImage[] | undefined;
+      const prog = pickProgramFile(draft.lich_trinh_files ?? []);
+      if (prog) {
         try {
-          const buf = await (await fetch(progFile.url)).arrayBuffer();
-          programText = await extractItineraryText(buf, fileKind(progFile.ten) as "docx" | "xlsx");
-        } catch { /* bỏ qua nếu đọc file lỗi */ }
+          if (prog.kind === "pdf") {
+            const buf = await (await fetch(prog.files[0].url)).arrayBuffer();
+            const r = await renderPdfToPageImages(buf);
+            programImages = r.pages;
+            if (r.truncated) {
+              toast.warning(`Lịch trình PDF dài ${r.numPages} trang — file xuất chỉ nhúng ${r.pages.length} trang đầu.`, { duration: 6000 });
+            }
+          } else if (prog.kind === "image") {
+            const all: PageImage[] = [];
+            for (const f of prog.files) {
+              const buf = await (await fetch(f.url)).arrayBuffer();
+              all.push(...(await imageToPageImages(buf, imageMime(f.ten) || "image/png")));
+            }
+            programImages = all.slice(0, MAX_PROGRAM_PAGES);
+            if (all.length > MAX_PROGRAM_PAGES) {
+              toast.warning(`Lịch trình dạng ảnh dài ${all.length} trang — file xuất chỉ nhúng ${MAX_PROGRAM_PAGES} trang đầu.`, { duration: 6000 });
+            }
+          } else {
+            const buf = await (await fetch(prog.files[0].url)).arrayBuffer();
+            programText = await extractItineraryText(buf, prog.kind);
+          }
+        } catch {
+          // File PDF/ảnh lỗi (hỏng, có mật khẩu, đã xóa khỏi storage...) nhưng
+          // báo giá còn đính kèm Word/Excel → fallback trích text thay vì xuất
+          // thiếu hẳn 行程內容 (hành vi cũ trước khi có nhúng ảnh).
+          if (prog.fallbackText) {
+            try {
+              const fb = prog.fallbackText;
+              const buf = await (await fetch(fb.file.url)).arrayBuffer();
+              programText = await extractItineraryText(buf, fb.kind);
+              toast.warning(`Không đọc được "${prog.files[0].ten}" — dùng nội dung text từ "${fb.file.ten}" thay thế (mất định dạng gốc).`, { duration: 6000 });
+            } catch {
+              toast.warning(`Không đọc được file lịch trình đính kèm — file xuất sẽ thiếu phần 行程內容.`);
+            }
+          } else {
+            toast.warning(`Không đọc được file lịch trình "${prog.files[0].ten}" — file xuất sẽ thiếu phần 行程內容.`);
+          }
+        }
       }
       // Xuất kiểu Đài Loan (報價): bảng giá 3 mốc + 單房差 + 報價包含/不含 + mã code + 行程內容.
-      await exportBaoGiaTaiwanWord(fresh, fresh.items, xr, baoGiaCode(draft), programText);
+      await exportBaoGiaTaiwanWord(fresh, fresh.items, xr, baoGiaCode(draft), programText, programImages);
       toast.success("Đã xuất file Word!");
     } catch {
       toast.error("Lỗi xuất file");
@@ -211,10 +247,12 @@ export default function BaoGiaDetailPage() {
       <BaoGiaAiImport
         open={aiOpen}
         onClose={() => setAiOpen(false)}
-        baoGiaId={draft.id}
-        files={draft.lich_trinh_files ?? []}
-        tourDate={draft.ngay_di}
-        exchangeRate={draft.exchange_rate}
+        draft={draft}
+        row={row}
+        updateDraftField={updateDraftField}
+        saveField={saveField}
+        savePatch={savePatch}
+        saveKetQua={saveKetQua}
         savedReview={draft.ket_qua?.ai_review ?? null}
         onSaveDraft={(d) => {
           const ket = draft.ket_qua;
