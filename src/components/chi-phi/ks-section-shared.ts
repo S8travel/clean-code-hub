@@ -107,7 +107,12 @@ export function buildKSRowFromCp(
     if (!info.ngay_date) return null;
     return {
       id: cp.id,
-      khach_san_id: info.khach_san_id,
+      // NEO trước, danh mục sau — ĐỐI XỨNG với Path 2 bên dưới. `info.khach_san_id`
+      // đọc SỐNG từ `canh_diem.khach_san_id` (master), nên nếu ưu tiên nó thì dòng
+      // day-use lấy danh tính KS từ danh mục chứ không từ snapshot per-tour: đổi
+      // wrapper cảnh điểm sang KS khác là dòng ĐÃ TRẢ TIỀN nhảy thẻ. Đúng thứ NEO
+      // sinh ra để chặn.
+      khach_san_id: cp.khach_san_id ?? info.khach_san_id,
       doan_ngay_id: info.doan_ngay_id,
       ngay_date: info.ngay_date,
       loai_phong: cp.mo_ta || "Day Use",
@@ -156,6 +161,32 @@ export function buildKSRowFromCp(
     is_hdv: (cp.tien_hdv ?? 0) > 0,
     trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
   } as LocalKSRow;
+}
+
+/**
+ * Item day-use của (KS, ngày) — LINK STRUCTURAL phải gắn vào MỌI dòng chi phí tạo mới
+ * trên thẻ Day Use (dòng phòng LẪN dòng dịch vụ).
+ *
+ * Vì sao phải deterministic từ `dayUseItemMap` chứ không dò `ref_doan_ngay_item_id` của
+ * sibling rows: sibling có thể chính nó đã mất link (bug cũ) → dò ra undefined → dòng mới
+ * lại lưu null → lặp lại lỗi. Nhiều item cùng KS cùng ngày → lấy id NHỎ NHẤT để 2 lần gọi
+ * cùng input luôn ra cùng kết quả.
+ *
+ * undefined = ngày đó không phải day-use của KS này (KS ngủ) → dòng dựng lại qua Path 2
+ * (`doan_ngay.khach_san_id`), đúng như cũ.
+ */
+export function resolveDayUseItemId(
+  dayUseItemMap: Record<number, KSDayUseInfo>,
+  ksId: number,
+  ngayDate: string,
+): number | undefined {
+  let found: number | undefined;
+  for (const [idStr, info] of Object.entries(dayUseItemMap)) {
+    if (info.khach_san_id !== ksId || info.ngay_date !== ngayDate) continue;
+    const id = Number(idStr);
+    if (found === undefined || id < found) found = id;
+  }
+  return found;
 }
 
 /**

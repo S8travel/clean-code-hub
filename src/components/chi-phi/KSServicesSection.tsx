@@ -29,7 +29,9 @@ export default function KSServicesSection({
   ngayDateToNgaySo: Record<string, number>;
   ngayDateToDoanNgayId: Record<string, number>;
   localRows: LocalKSRow[];
-  onAddMore: (doanNgayId: number, ngayDate: string, refItemId?: number) => void;
+  // Link day-use do KSCard tự resolve (deterministic từ dayUseItemMap) — section KHÔNG
+  // truyền lên nữa: dò từ sibling rows làm lỗi mất link tự lan trong cùng thẻ.
+  onAddMore: (doanNgayId: number, ngayDate: string) => void;
   onFieldChange: (idx: number, field: string, value: string | number) => void;
   onBlurSave: (idx: number) => void;
   onDelete: (idx: number) => void;
@@ -80,7 +82,7 @@ export default function KSServicesSection({
                       size="sm"
                       className="h-6 text-xs px-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
                       disabled={locked}
-                      onClick={() => onAddMore(doanNgayId, dateStr, dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined)}
+                      onClick={() => onAddMore(doanNgayId, dateStr)}
                     >
                       <Plus className="h-3 w-3 mr-0.5" />
                       {t("Thêm")}
