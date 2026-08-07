@@ -18,7 +18,7 @@ import { DayGroup, EmptyDayHeader } from "./DayGroup";
 import KSServicesSection from "./KSServicesSection";
 import KSFocEditor from "./KSFocEditor";
 import KSCodeEditor from "./KSCodeEditor";
-import { fmt, STATUS_LABEL, type LocalKSRow } from "./ks-section-shared";
+import { fmt, resolveDayUseItemId, STATUS_LABEL, type LocalKSRow } from "./ks-section-shared";
 import { HoaDonBadge } from "./HoaDonBadge";
 import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import type { KSCardData, KSCardHandlers } from "./use-ks-section";
@@ -328,17 +328,13 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
               {roomDayEntries.map(([dateStr, dayRows]) => {
                 const ngaySo = ngayDateToNgaySo[dateStr];
                 const doanNgayId = ngayDateToDoanNgayId[dateStr] || dayRows[0]?.doan_ngay_id;
-                // Day-use card: row mới phải kế thừa ref_doan_ngay_item_id, nếu
-                // không reload sẽ nhảy sang KS overnight (Path 2). Lấy DETERMINISTIC
-                // từ dayUseItemMap (theo ksId + ngày) — KHÔNG dò sibling rows vì
-                // sibling có thể đã mất link → refItemForDay undefined → row mới
-                // lưu null → nhảy KS. Fallback sibling chỉ cho case hiếm.
-                const dayUseEntry = Object.entries(dayUseItemMap).find(
-                  ([, info]) => info.khach_san_id === ksId && info.ngay_date === dateStr,
-                );
-                const refItemForDay = dayUseEntry
-                  ? Number(dayUseEntry[0])
-                  : (dayRows.find((r) => r.ref_doan_ngay_item_id != null)?.ref_doan_ngay_item_id ?? undefined);
+                // Day-use card: row mới phải kế thừa ref_doan_ngay_item_id, nếu không
+                // reload sẽ nhảy sang KS overnight (Path 2). Lấy DETERMINISTIC từ
+                // dayUseItemMap (theo ksId + ngày) — KHÔNG dò sibling rows: sibling mang
+                // link nào dựng được thì link đó ĐANG có trong map rồi, còn link không
+                // có trong map là link chết (item đã xoá) → copy sang dòng mới chỉ nhân
+                // bản lỗi, tệ hơn là ghi FK trỏ vào item không tồn tại.
+                const refItemForDay = resolveDayUseItemId(dayUseItemMap, ksId, dateStr);
                 return (
                   <DayGroup
                     key={dateStr}
@@ -380,8 +376,13 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                     dateStr={info.ngay_date}
                     ngaySo={info.ngay_so}
                     isDayUse
+                    // Dòng DỊCH VỤ cũng phải mang link day-use y như dòng phòng. Trước đây
+                    // truyền undefined → lưu ref_doan_ngay_item_id=null → lần sau
+                    // buildKSRowFromCp rơi xuống Path 2, mà ngày day-use KHÔNG có
+                    // doan_ngay.khach_san_id → return null → dòng (và tiền đã gửi ĐNTT)
+                    // biến mất khỏi giao diện với mọi người trừ tab đang cache sessionStorage.
                     onAddRoom={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, Number(itemIdStr))}
-                    onAddService={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, undefined, "dich_vu_khac")}
+                    onAddService={() => handleAddRow(ksId, info.doan_ngay_id, info.ngay_date, Number(itemIdStr), "dich_vu_khac")}
                     locked={locked}
                   />
                 ))}
@@ -395,8 +396,17 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
               ngayDateToNgaySo={ngayDateToNgaySo}
               ngayDateToDoanNgayId={ngayDateToDoanNgayId}
               localRows={localRows}
-              onAddMore={(doanNgayId, ngayDate, refItemId) =>
-                handleAddRow(ksId, doanNgayId, ngayDate, refItemId, "dich_vu_khac")
+              // Link day-use resolve tại ĐÂY, không nhận từ KSServicesSection (trước đây
+              // section dò sibling rows → dòng dịch vụ đầu tiên mất link thì mọi dòng
+              // thêm sau đều mất theo, lỗi tự lan trong cùng một thẻ).
+              onAddMore={(doanNgayId, ngayDate) =>
+                handleAddRow(
+                  ksId,
+                  doanNgayId,
+                  ngayDate,
+                  resolveDayUseItemId(dayUseItemMap, ksId, ngayDate),
+                  "dich_vu_khac",
+                )
               }
               onFieldChange={handleFieldChange}
               onBlurSave={handleBlurSave}
