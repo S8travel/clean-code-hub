@@ -1,15 +1,23 @@
-// Xuất Excel BẢNG TÍNH GIÁ của 1 báo giá — song ngữ Việt / 中文.
+// Xuất Excel BẢNG TÍNH GIÁ của 1 báo giá — song ngữ Việt / 中文, CÓ CÔNG THỨC.
 //
 // Nguồn số liệu DUY NHẤT là `CostingSheet` do `costingSheet(draft)` dựng sẵn (cùng
 // đúng thứ đang hiển thị trên màn hình): nhóm Xe/KS/Ăn/Vé × nhiều cỡ đoàn, cộng
 // nhóm, và footer (tổng vốn → lợi nhuận → giá bán/khách). File này KHÔNG tính lại
 // gì cả — tính lại là mở đường cho Excel lệch số với app.
 //
+// CÔNG THỨC (thêm 08/2026): ô tiền xuất ra dạng `<f>` + giá trị cache, để cấp trên
+// mở file sửa đơn giá / số lượng / tỷ giá / lợi nhuận thì cả bảng tự chạy lại.
+// Nguyên tắc bất di bất dịch: **chỉ gắn công thức khi nó tái tạo ĐÚNG con số app
+// đã tính** (`fx()` tự đối chiếu, lệch thì rơi về ô số tĩnh). Nếu không, mở file
+// ra thấy một đằng, gõ một phím lại nhảy sang một nẻo.
+//
 // Tiếng Trung: tiêu đề cột / nhãn nhóm / nhãn footer đều kèm 中文; tên dịch vụ có
 // cột 中文名稱 riêng lấy từ `ten_zh` (bản gốc AI trích từ lịch trình tiếng Trung).
 
-import type { CostingSheet, CostingRow, CostingUnit } from "@/components/bao-gia/detail/helpers";
-import { downloadXlsx, type XlsxCell, type XlsxSheet } from "@/lib/xlsx-simple";
+import type {
+  CostingSheet, CostingRow, CostingUnit, CostingFooterRow,
+} from "@/components/bao-gia/detail/helpers";
+import { columnName, downloadXlsx, type XlsxCell, type XlsxSheet, type XlsxStyle } from "@/lib/xlsx-simple";
 
 /** Thông tin đầu file (lấy từ BaoGiaRow — truyền vào để lib không phụ thuộc hook). */
 export interface CostingExcelMeta {
@@ -20,6 +28,8 @@ export interface CostingExcelMeta {
   ngayVe?: string | null;
   profitUsd?: number | null;
   agentTen?: string | null;
+  /** Tỷ giá bán VCB — chỉ dùng cho dòng biên lợi nhuận (chênh lệch tỷ giá). */
+  vcbRate?: number | null;
 }
 
 const GROUP_ZH: Record<CostingSheet["groups"][number]["key"], string> = {
@@ -48,28 +58,26 @@ const FOOTER_ZH: Record<string, string> = {
   bien: "利潤率",
 };
 
-const fmtVnd = (n: number) => Math.round(Number(n) || 0).toLocaleString("vi-VN");
-const fmtUsd = (n: number) => (Number(n) || 0).toFixed(2);
-
 const txt = (value: string | number, colSpan = 1): XlsxCell => ({ value, style: "text", colSpan });
 const head = (value: string, colSpan = 1): XlsxCell => ({ value, style: "header", colSpan });
 const num = (value: number, colSpan = 1): XlsxCell => ({ value, style: "number", colSpan });
+const num2 = (value: number, colSpan = 1): XlsxCell => ({ value, style: "number2", colSpan });
 const tot = (value: string, colSpan = 1): XlsxCell => ({ value, style: "total", colSpan });
 const totNum = (value: number, colSpan = 1): XlsxCell => ({ value, style: "total_number", colSpan });
+
+/** Ô công thức — CHỈ gắn `<f>` khi công thức tính ra đúng con số app đưa sang.
+ *  Lệch (do app đổi cách tính mà file này chưa theo kịp) → giữ ô số tĩnh, thà
+ *  mất tính năng sửa còn hơn hiện sai tiền. */
+function fx(value: number, formula: string, evaluated: number, style: XlsxStyle, eps = 0): XlsxCell {
+  const khop = Number.isFinite(evaluated) && Math.abs(evaluated - value) <= eps;
+  return khop ? { value, style, formula } : { value, style };
+}
 
 /** Nhãn ngày của 1 dòng: D3 / D3·Trưa. Dòng lump (xe, phụ thu) không gắn ngày. */
 function dayLabel(r: CostingRow): string {
   if (r.ngay_so <= 0) return "";
   const bua = r.bua_an === "trua" ? "·Trưa 午" : r.bua_an === "toi" ? "·Tối 晚" : "";
   return `D${r.ngay_so}${bua}`;
-}
-
-/** Ô "SL" của 1 bậc: lump không có số lượng; có FOC thì ghi rõ "17−1" để người
- *  đọc thấy đã trừ suất miễn, khớp đúng bảng trên màn hình. */
-function slCell(r: CostingRow, cell: { qty: number; foc: number }): XlsxCell {
-  if (r.unit === "lump") return txt("—");
-  if (cell.foc > 0) return txt(`${cell.qty}−${cell.foc}`);
-  return num(cell.qty);
 }
 
 /** FOC hiển thị: số nhập tay (ghi đè) hoặc chính sách "16免1" hoặc trống. */
@@ -83,11 +91,52 @@ const FIXED_COLS = 8;
 const FIXED_WIDTHS = [9, 30, 24, 12, 11, 14, 6, 10];
 const TIER_WIDTHS = [10, 15];
 
+// Cột cố định (1-based) mà công thức trỏ tới.
+const COL_PARAM = columnName(3);
+const COL_DG_VND = columnName(6);
+const COL_N = columnName(7);
+/** Cột "SL" và "Thành tiền" của bậc thứ `ti`. */
+const colSL = (ti: number) => columnName(FIXED_COLS + ti * 2 + 1);
+const colTien = (ti: number) => columnName(FIXED_COLS + ti * 2 + 2);
+
+/** Địa chỉ tuyệt đối của các ô THAM SỐ để footer trỏ vào ($C$7…). */
+interface ParamRefs {
+  xr: string;
+  profit: string;
+  soNgay: string;
+  vcb?: string;
+  hdv?: string;
+  baoHiem?: string;
+  tip?: string;
+}
+
+/** Đơn giá gốc của 3 dòng chi phí cố định — suy ngược từ footer để ô tham số
+ *  luôn khớp con số app, kể cả khi hằng số trong app đổi. `undefined` = không
+ *  suy được (footer thiếu dòng, hoặc các bậc không cùng một đơn giá) → giữ số tĩnh. */
+function derivedUnitCost(
+  values: number[] | undefined,
+  divisors: number[],
+): number | undefined {
+  if (!values || values.length === 0 || values.length !== divisors.length) return undefined;
+  if (divisors.some((d) => !d || d <= 0)) return undefined;
+  const unit = values[0] / divisors[0];
+  if (!Number.isFinite(unit)) return undefined;
+  return values.every((v, i) => unit * divisors[i] === v) ? unit : undefined;
+}
+
 /** Dựng sheet Excel bảng tính giá. Thuần dữ liệu → test được, không cần DOM. */
 export function buildCostingXlsxSheet(sheet: CostingSheet, meta: CostingExcelMeta): XlsxSheet {
   const nTier = sheet.configs.length;
   const totalCols = FIXED_COLS + nTier * 2;
   const rows: XlsxCell[][] = [];
+  /** Số dòng (1-based) của dòng SẮP được push. */
+  const nextRow = () => rows.length + 1;
+
+  const footerOf = (key: string) => sheet.footer.find((f) => f.key === key);
+  const soNgay = meta.soNgay > 0 ? meta.soNgay : 0;
+  const hdvPerDay = derivedUnitCost(footerOf("hdv")?.values, sheet.configs.map(() => soNgay));
+  const bhPerPax = derivedUnitCost(footerOf("bao_hiem")?.values, sheet.configs.map((c) => c.pax));
+  const tipTotal = derivedUnitCost(footerOf("tip")?.values, sheet.configs.map(() => 1));
 
   // ── Đầu file ──
   rows.push([{ value: "BẢNG TÍNH GIÁ TOUR · 旅遊報價計算表", style: "title", colSpan: totalCols }]);
@@ -95,11 +144,27 @@ export function buildCostingXlsxSheet(sheet: CostingSheet, meta: CostingExcelMet
     rows.push([tot(label, 2), txt(value, totalCols - 2)]);
   info("Chương trình 行程", meta.tenChuongTrinh || "—");
   if (meta.maBg) info("Mã báo giá 報價編號", meta.maBg);
-  info("Số ngày 天數", `${meta.soNgay} ngày 天`);
   if (meta.ngayDi || meta.ngayVe) info("Ngày đi – về 出發－回程", `${meta.ngayDi || "—"} → ${meta.ngayVe || "—"}`);
   if (meta.agentTen) info("Đối tác 客戶", meta.agentTen);
-  info("Tỷ giá 匯率", `1 USD = ${fmtVnd(sheet.xr)} VND`);
-  if (meta.profitUsd != null) info("Lợi nhuận 利潤", `${fmtUsd(meta.profitUsd)} USD / khách 每人`);
+
+  // ── Khối THAM SỐ: sửa các ô này thì cả bảng dưới tự tính lại ──
+  rows.push([tot("THAM SỐ 參數 — sửa ô giữa, cả bảng tự tính lại", totalCols)]);
+  const param = (label: string, cell: XlsxCell, note: string): string => {
+    const ref = `$${COL_PARAM}$${nextRow()}`;
+    rows.push([tot(label, 2), cell, txt(note, totalCols - 3)]);
+    return ref;
+  };
+  const refs: ParamRefs = {
+    xr: param("Tỷ giá 匯率", num(sheet.xr), "VND / 1 USD"),
+    profit: param("Lợi nhuận 利潤", num2(meta.profitUsd ?? 0), "USD / khách 每人"),
+    soNgay: param("Số ngày 天數", num(meta.soNgay), "ngày 天"),
+  };
+  if ((meta.vcbRate ?? 0) > 0) {
+    refs.vcb = param("Tỷ giá VCB 銀行匯率", num(meta.vcbRate!), "chỉ dùng cho biên lợi nhuận 僅用於利潤率");
+  }
+  if (hdvPerDay != null) refs.hdv = param("HDV / ngày 導遊每天", num(hdvPerDay), "VND");
+  if (bhPerPax != null) refs.baoHiem = param("Bảo hiểm / khách 保險每人", num(bhPerPax), "VND");
+  if (tipTotal != null) refs.tip = param("Tip / đoàn 小費", num(tipTotal), "VND");
   rows.push([txt("")]);
 
   // ── 2 dòng tiêu đề: dải bậc số khách, rồi nhãn từng cột ──
@@ -115,51 +180,146 @@ export function buildCostingXlsxSheet(sheet: CostingSheet, meta: CostingExcelMet
   const freezeRows = rows.length;
 
   // ── Từng nhóm: dải tiêu đề → các dòng → cộng nhóm ──
+  const subtotalRowOf = new Map<CostingSheet["groups"][number]["key"], number>();
   for (const g of sheet.groups) {
     rows.push([tot(`${g.label.toUpperCase()} ${GROUP_ZH[g.key]}`, totalCols)]);
     if (g.rows.length === 0) {
       rows.push([txt("(chưa có 無)", totalCols)]);
     }
+    const firstRow = nextRow();
     for (const r of g.rows) {
+      const rn = nextRow();
+      // Cột SL của dòng lump là "—" → công thức tiền chỉ nhân ĐG × N.
+      const tienFormula = (ti: number) =>
+        r.unit === "lump"
+          ? `${COL_DG_VND}${rn}*${COL_N}${rn}`
+          : `${COL_DG_VND}${rn}*${COL_N}${rn}*${colSL(ti)}${rn}`;
       rows.push([
         txt(dayLabel(r)),
         txt(r.mo_ta || "—"),
         txt(r.ten_zh || ""),
         txt(UNIT_LABEL[r.unit]),
-        txt(fmtUsd(r.don_gia_usd)), // chuỗi: giữ 2 số lẻ, numFmt của file chỉ có #,##0
+        fx(r.don_gia_usd, `${COL_DG_VND}${rn}/${refs.xr}`,
+          sheet.xr > 0 ? r.don_gia / sheet.xr : NaN, "number2", 1e-9),
         num(r.don_gia),
         num(r.so_luong),
         txt(focLabel(r)),
-        ...r.cells.flatMap((c) => [slCell(r, c), num(c.total)]),
+        ...r.cells.flatMap((c, ti) => {
+          const eff = Math.max(0, c.qty - c.foc);
+          return [
+            r.unit === "lump" ? txt("—") : num(eff),
+            fx(c.total, tienFormula(ti),
+              r.don_gia * r.so_luong * (r.unit === "lump" ? 1 : eff), "number"),
+          ];
+        }),
       ]);
     }
+    const lastRow = rows.length; // dòng dữ liệu cuối cùng vừa push
+    subtotalRowOf.set(g.key, nextRow());
     rows.push([
       tot(`Cộng ${g.label.toLowerCase()} ${GROUP_ZH[g.key]}小計`, FIXED_COLS),
       // Cột "SL" để trống → cột "Thành tiền" thành 1 cột số liền mạch, Excel sum được.
-      ...g.subtotals.flatMap((s) => [tot(""), totNum(s)]),
+      ...g.subtotals.flatMap((s, ti) => [
+        tot(""),
+        g.rows.length === 0
+          ? totNum(s)
+          : fx(s, `SUM(${colTien(ti)}${firstRow}:${colTien(ti)}${lastRow})`,
+            g.rows.reduce((acc, r) => acc + r.cells[ti].total, 0), "total_number"),
+      ]),
     ]);
   }
 
   // ── Footer: tổng vốn → lợi nhuận → giá bán ──
   rows.push([txt("")]);
+  const footerRowOf = new Map<string, number>();
+  const costKeys: string[] = [];
+
+  /** Ô giá trị của 1 dòng footer ở bậc `ti` — gắn công thức khi đủ ô phụ thuộc. */
+  const footerCell = (key: string, kind: CostingFooterRow["kind"], v: number, ti: number): XlsxCell => {
+    const cfg = sheet.configs[ti];
+    const col = colTien(ti);
+    const at = (k: string) => {
+      const rn = footerRowOf.get(k);
+      return rn ? `${col}${rn}` : null;
+    };
+    // Tổng doanh thu = tổng vốn + lợi nhuận (app không in ra dòng riêng).
+    const tvRef = at("tong_von"), lnRef = at("loi_nhuan");
+    const banRef = tvRef && lnRef ? `(${tvRef}+${lnRef})` : null;
+    const tvVal = footerOf("tong_von")?.values[ti] ?? 0;
+    const lnVal = footerOf("loi_nhuan")?.values[ti] ?? 0;
+    const banVal = tvVal + lnVal;
+
+    switch (key) {
+      case "dich_vu": {
+        const parts = sheet.groups.map((g) => subtotalRowOf.get(g.key)).filter((r): r is number => r != null);
+        if (parts.length !== sheet.groups.length || parts.length === 0) break;
+        return fx(v, parts.map((r) => `${col}${r}`).join("+"),
+          sheet.groups.reduce((s, g) => s + g.subtotals[ti], 0), "total_number");
+      }
+      case "hdv":
+        if (!refs.hdv || hdvPerDay == null) break;
+        return fx(v, `${refs.hdv}*${refs.soNgay}`, hdvPerDay * soNgay, "total_number");
+      case "bao_hiem":
+        if (!refs.baoHiem || bhPerPax == null) break;
+        return fx(v, `${refs.baoHiem}*${cfg.pax}`, bhPerPax * cfg.pax, "total_number");
+      case "tip":
+        if (!refs.tip || tipTotal == null) break;
+        return fx(v, `${refs.tip}`, tipTotal, "total_number");
+      case "tong_von": {
+        const parts = costKeys.map((k) => at(k)).filter((r): r is string => r != null);
+        if (parts.length !== costKeys.length || parts.length === 0) break;
+        return fx(v, parts.join("+"),
+          costKeys.reduce((s, k) => s + (footerOf(k)?.values[ti] ?? 0), 0), "total_number");
+      }
+      case "loi_nhuan":
+        return fx(v, `ROUND(${refs.profit}*${refs.xr}*${cfg.guests},0)`,
+          Math.round((meta.profitUsd ?? 0) * sheet.xr * cfg.guests), "total_number");
+      case "gia_pax": {
+        if (!banRef || cfg.guests <= 0) break;
+        return fx(v, `ROUND(${banRef}/${cfg.guests},0)`,
+          Math.round(banVal / cfg.guests), "total_number");
+      }
+      case "usd_pax": {
+        const gpRef = at("gia_pax");
+        const gpVal = footerOf("gia_pax")?.values[ti];
+        if (!gpRef || gpVal == null || sheet.xr <= 0) break;
+        return fx(v, `${gpRef}/${refs.xr}`, gpVal / sheet.xr, "total_number2", 1e-9);
+      }
+      case "bien": {
+        if (!banRef || !lnRef) break;
+        const chenhF = refs.vcb ? `+ROUND(${banRef}*(${refs.vcb}-${refs.xr})/${refs.xr},0)` : "";
+        const chenhV = refs.vcb && sheet.xr > 0
+          ? Math.round(banVal * ((meta.vcbRate ?? 0) - sheet.xr) / sheet.xr)
+          : 0;
+        return fx(v, `IF(${banRef}=0,0,(${lnRef}${chenhF})/${banRef}*100)`,
+          banVal > 0 ? (lnVal + chenhV) / banVal * 100 : 0, "total_pct", 1e-9);
+      }
+    }
+    // Không gắn được công thức → giữ nguyên kiểu hiển thị cũ.
+    if (kind === "usd") return { value: v, style: "total_number2" };
+    if (kind === "pct") return { value: v, style: "total_pct" };
+    return totNum(v);
+  };
+
   for (const f of sheet.footer) {
     const zh = FOOTER_ZH[f.key] ?? "";
     const label = zh ? `${f.label} ${zh}` : f.label;
+    const rn = nextRow();
+    footerRowOf.set(f.key, rn);
     rows.push([
       tot(label, FIXED_COLS),
-      ...f.values.flatMap((v) => [
-        tot(""),
-        f.kind === "usd" ? tot(fmtUsd(v))
-          : f.kind === "pct" ? tot(`${v.toFixed(1)}%`)
-          : totNum(v),
-      ]),
+      ...f.values.flatMap((v, ti) => [tot(""), footerCell(f.key, f.kind, v, ti)]),
     ]);
+    // Đẩy vào costKeys SAU khi dựng ô, để dòng "tổng vốn" chỉ cộng các dòng
+    // chi phí đứng TRƯỚC nó (đúng thứ tự app tính), không tự cộng chính mình.
+    if (f.kind === "cost") costKeys.push(f.key);
   }
 
   rows.push([txt("")]);
   rows.push([txt(
-    "Ghi chú 備註: N = số đêm (khách sạn) / số lần (ăn, vé) 次數. "
-    + "FOC = suất miễn phí 免費名額 (vd 16免1); cột SL ghi dạng «17−1» nghĩa là 17 suất đã trừ 1 suất miễn. "
+    "Ghi chú 備註: Ô nền xám và ô tiền đều là CÔNG THỨC — sửa THAM SỐ hoặc ĐG/N/SL thì cả bảng tự tính lại. "
+    + "N = số đêm (khách sạn) / số lần (ăn, vé) 次數. "
+    + "FOC = suất miễn phí 免費名額 (vd 16免1); cột SL là số suất ĐÃ TRỪ suất miễn. "
     + "Giá bán / khách = (tổng chi phí vốn + lợi nhuận) / số khách. 每人售價 =（總成本＋利潤）÷ 人數。",
     totalCols,
   )]);

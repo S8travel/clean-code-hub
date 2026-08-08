@@ -77,6 +77,7 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
         ngayDi: draft.ngay_di,
         ngayVe: draft.ngay_ve,
         profitUsd: draft.profit_usd,
+        vcbRate: draft.vcb_rate,
       });
       toast.success("Đã xuất bảng tính giá ra Excel");
     } catch (e: unknown) {

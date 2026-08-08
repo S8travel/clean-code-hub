@@ -7,10 +7,14 @@
 
 import { saveAs } from "file-saver";
 
-/** 0 text · 1 title · 2 header · 3 number · 4 total(text) · 5 total(number) */
-export type XlsxStyle = "text" | "title" | "header" | "number" | "total" | "total_number";
+/** 0 text · 1 title · 2 header · 3 number · 4 total(text) · 5 total(number)
+ *  · 6 số 2 lẻ · 7 total 2 lẻ · 8 total phần trăm */
+export type XlsxStyle =
+  | "text" | "title" | "header" | "number" | "total" | "total_number"
+  | "number2" | "total_number2" | "total_pct";
 const STYLE_IDS: Record<XlsxStyle, number> = {
   text: 0, title: 1, header: 2, number: 3, total: 4, total_number: 5,
+  number2: 6, total_number2: 7, total_pct: 8,
 };
 
 export interface XlsxCell {
@@ -18,6 +22,11 @@ export interface XlsxCell {
   style: XlsxStyle;
   /** Gộp ô sang phải (dùng cho dòng tiêu đề). */
   colSpan?: number;
+  /** Công thức Excel KHÔNG có dấu "=" (vd `F12*G12`). Khi có, `value` là giá trị
+   *  cache — Excel hiện nó tới khi người dùng sửa ô nguồn rồi tính lại. Vì vậy
+   *  công thức PHẢI tái tạo đúng con số app đã tính, nếu không mở file ra một
+   *  đằng, bấm sửa một nẻo. */
+  formula?: string;
 }
 
 function escapeXml(value: string): string {
@@ -25,7 +34,8 @@ function escapeXml(value: string): string {
     .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
-function columnName(index: number): string {
+/** 1 → "A", 27 → "AA". Export để nơi dựng công thức tự tính địa chỉ ô. */
+export function columnName(index: number): string {
   let v = index, r = "";
   while (v > 0) { r = String.fromCharCode(65 + ((v - 1) % 26)) + r; v = Math.floor((v - 1) / 26); }
   return r;
@@ -33,7 +43,13 @@ function columnName(index: number): string {
 
 function toXmlCell(ref: string, sc: XlsxCell): string {
   const styleId = STYLE_IDS[sc.style];
-  if (typeof sc.value === "number" && Number.isFinite(sc.value)) {
+  const numeric = typeof sc.value === "number" && Number.isFinite(sc.value);
+  if (sc.formula) {
+    // Ô công thức luôn là ô số: <f> công thức + <v> giá trị cache.
+    const cached = numeric ? sc.value : 0;
+    return `<c r="${ref}" s="${styleId}"><f>${escapeXml(sc.formula)}</f><v>${cached}</v></c>`;
+  }
+  if (numeric) {
     return `<c r="${ref}" s="${styleId}"><v>${sc.value}</v></c>`;
   }
   return `<c r="${ref}" s="${styleId}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(String(sc.value ?? ""))}</t></is></c>`;
@@ -49,7 +65,8 @@ function buildSheetXml(rows: XlsxCell[][], columns: number[], freezeRows: number
       const span = Math.max(1, sc.colSpan ?? 1);
       const ref = `${columnName(col)}${rowNum}`;
       // Ô số 0 vẫn phải ghi ra (String(0).length > 0) — chỉ bỏ ô rỗng thật.
-      if (String(sc.value ?? "").length > 0) parts.push(toXmlCell(ref, sc));
+      // Ô công thức luôn ghi, kể cả khi cache rỗng.
+      if (sc.formula || String(sc.value ?? "").length > 0) parts.push(toXmlCell(ref, sc));
       if (span > 1) merges.push(`${ref}:${columnName(col + span - 1)}${rowNum}`);
       col += span;
     });
@@ -77,7 +94,11 @@ function buildSheetXml(rows: XlsxCell[][], columns: number[], freezeRows: number
 function buildStylesXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>
+  <numFmts count="3">
+    <numFmt numFmtId="164" formatCode="#,##0"/>
+    <numFmt numFmtId="165" formatCode="#,##0.00"/>
+    <numFmt numFmtId="166" formatCode="0.0&quot;%&quot;"/>
+  </numFmts>
   <fonts count="3">
     <font><sz val="11"/><name val="Arial"/><family val="2"/></font>
     <font><sz val="14"/><name val="Arial"/><family val="2"/><b/><color rgb="FFFFFFFF"/></font>
@@ -100,7 +121,7 @@ function buildStylesXml(): string {
     </border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="6">
+  <cellXfs count="9">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1">
       <alignment vertical="center" wrapText="1"/>
     </xf>
@@ -117,6 +138,15 @@ function buildStylesXml(): string {
       <alignment vertical="center"/>
     </xf>
     <xf numFmtId="164" fontId="2" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="right" vertical="center"/>
+    </xf>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="right" vertical="center"/>
+    </xf>
+    <xf numFmtId="165" fontId="2" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="right" vertical="center"/>
+    </xf>
+    <xf numFmtId="166" fontId="2" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
       <alignment horizontal="right" vertical="center"/>
     </xf>
   </cellXfs>
