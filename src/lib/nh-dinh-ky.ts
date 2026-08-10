@@ -34,3 +34,19 @@ export function computeInitialDinhKyNhKeys(meals: DinhKyNhMeal[]): Set<string> {
   }
   return result;
 }
+
+/**
+ * `doan_chi_phi.thanh_toan_dinh_ky` cho dòng chi phí NH do cascade điều tour TẠO MỚI.
+ *
+ * Vì sao cần: cascade (use-dieu-tour) sinh dòng chi phí ngay khi OP lưu điều tour —
+ * TRƯỚC khi tab Chi phí NH được mở lần nào. Lúc tab mở, bữa đã `daCoChiPhi` nên
+ * `computeInitialDinhKyNhKeys` đọc cờ từ DB (false) và KHÔNG seed từ danh mục nữa →
+ * nhà hàng gắn `thanh_toan_dinh_ky_mac_dinh` vẫn ra dòng tắt cờ, tiền rơi ngoài
+ * luồng định kỳ cho tới khi có người backfill tay (đã xảy ra trên dữ liệu thật).
+ *
+ * Chỉ dùng cho INSERT. Cascade UPDATE KHÔNG được đụng cờ này: đó là toggle per-đoàn
+ * OP bật/tắt tay, đổi cờ danh mục không được phép lật lại đoàn đã chốt chi phí.
+ */
+export function cascadeInsertDinhKyNH(nhMacDinh: boolean | null | undefined): boolean {
+  return nhMacDinh === true;
+}

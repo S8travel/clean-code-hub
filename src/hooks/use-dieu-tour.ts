@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, buildOccupiedMealSlotIds, findOrphanNhExtras, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
+import { cascadeInsertDinhKyNH } from "@/lib/nh-dinh-ky";
 import { extraParentId } from "@/lib/dntt-gop-calc";
 import { getActiveDnttIdsForChiPhi, getActiveDnttIdsForChiPhiBatch } from "@/lib/dntt-guard";
 import { DieuTourGuardError } from "@/lib/dieu-tour-guard-error";
@@ -47,6 +48,8 @@ export interface NhaHangItem {
   foc_khach: number | null;
   foc_mien: number | null;
   chiet_khau_phan_tram: number | null;
+  /** Đoàn MỚI tự đánh dấu chi phí nhà hàng này là định kỳ — xem lib/nh-dinh-ky.ts */
+  thanh_toan_dinh_ky_mac_dinh: boolean | null;
 }
 
 export interface KhachSanItem {
@@ -138,7 +141,7 @@ export function useNhaHang() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("nha_hang")
-        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan, so_dien_thoai, nha_cung_cap_id, foc_khach, foc_mien, chiet_khau_phan_tram")
+        .select("id, ten, dia_chi, thong_tin_chung, nguoi_thanh_toan, so_dien_thoai, nha_cung_cap_id, foc_khach, foc_mien, chiet_khau_phan_tram, thanh_toan_dinh_ky_mac_dinh")
         .order("ten");
       if (error) throw error;
       return data as NhaHangItem[];
@@ -1232,6 +1235,11 @@ export function useSaveDieuTour() {
                 foc_khach_snapshot: mealItem?.foc_khach ?? null,
                 foc_mien_snapshot:  mealItem?.foc_mien  ?? null,
                 chiet_khau_phan_tram_snapshot: mealItem?.chiet_khau_phan_tram ?? null,
+                // Cờ định kỳ của danh mục chỉ với tới được dòng ở ĐÂY: cascade chạy
+                // trước khi tab Chi phí NH mở lần nào, nên seed trong lib/nh-dinh-ky
+                // (chỉ áp cho bữa CHƯA có dòng) không bao giờ tới lượt. INSERT thôi —
+                // UPDATE lật cờ sẽ hồi sinh định kỳ mà OP đã tắt tay ở đoàn cũ.
+                thanh_toan_dinh_ky: cascadeInsertDinhKyNH(mealItem?.thanh_toan_dinh_ky_mac_dinh),
               };
 
               // Approach A merge cross-nhóm: dedupe chi phí by (doan_id, danh_muc, ngay_so, mo_ta).
