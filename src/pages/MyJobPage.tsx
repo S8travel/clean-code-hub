@@ -1,10 +1,10 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { format, differenceInDays, startOfMonth, endOfMonth, parseISO, isToday, isBefore } from "date-fns";
+import { format, differenceInDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
   BriefcaseBusiness, CalendarClock, Users, ClipboardList,
-  AlertCircle, AlertTriangle, Info, ArrowRight, Hotel, Utensils, Package, EyeOff,
+  ArrowRight, Hotel, Utensils, Package, EyeOff,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,7 +22,6 @@ import {
 import { useDoanList } from "@/hooks/use-doan";
 import { useDoanScope } from "@/hooks/use-doan-scope";
 import { useTheodoi, type KSItem, type NHItem, type DVItem, type DNTTItem } from "@/hooks/use-theo-doi";
-import { useDNTTNeedingApproval } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useMyDeadlines, useMyCreatedBookingDeadlines, useMarkDeadlineDone,
@@ -36,11 +35,12 @@ import { useMyPhanViecScope } from "@/hooks/use-phan-viec";
 import GiaoViecTab from "@/components/my-job/GiaoViecTab";
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
-import { CheckCircle2, Circle, StickyNote, Check } from "lucide-react";
+import { computeDoanStatus } from "@/lib/doan-status";
+import { Circle, StickyNote, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
-import { ksBookingCanFinal, ksFinalProgress, ksAllFinal } from "@/lib/ks-booking-final";
+import { ksBookingCanFinal, ksAllFinal } from "@/lib/ks-booking-final";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmtDate(d: string | null | undefined) {
@@ -164,15 +164,6 @@ const BO_PHAN_LABELS: Record<string, string> = {
   cong_tac_vien: "Cộng tác viên",
 };
 
-// ── Todo item type ────────────────────────────────────────────────────────────
-type TodoItem = {
-  priority: "high" | "medium" | "low";
-  label: string;
-  doanName: string;
-  doanId: number;
-  url?: string;  // override target nav (vd ĐNTT page thay vì doan detail)
-};
-
 // ── Deadline helpers ──────────────────────────────────────────────────────────
 // label là acronym (KS, NH, DV) → KHÔNG wrap.
 const TYPE_CFG = {
@@ -229,7 +220,6 @@ export default function MyJobPage() {
   const [search, setSearch] = useState("");
   const [trangThai, setTrangThai] = useState("dang_chay");
   const [page, setPage] = useState(1);
-  const [todoPage, setTodoPage] = useState(1);
 
   const uid = user?.user_id;
 
@@ -339,15 +329,15 @@ export default function MyJobPage() {
     (task) => task.nguoi_nhan === uid && (task.trang_thai === "cho_nhan" || task.trang_thai === "dang_lam"),
   ).length;
 
-  const { data: dnttNeedApproval = [] } = useDNTTNeedingApproval(uid);
-
   // Rows cho bảng (với booking status)
+  // Trạng thái lọc theo computeDoanStatus (không phải cột doan.trang_thai thô) →
+  // đoàn đã về (ngay_ve < hôm nay) rơi vào "Hoàn thành", không còn lẫn vào "Đang chạy".
   const rows = useMemo(() => {
     if (!myDoan || !td) return [];
     return myDoan
       .filter((g) => {
         if (hiddenIds.has(g.id)) return false;
-        if (trangThai !== "all" && g.trang_thai !== trangThai) return false;
+        if (trangThai !== "all" && computeDoanStatus(g) !== trangThai) return false;
         if (search && !(g.ten_doan ?? "").toLowerCase().includes(search.toLowerCase())) return false;
         return true;
       })
@@ -387,7 +377,7 @@ export default function MyJobPage() {
     const monthStart = format(startOfMonth(now), "yyyy-MM-dd");
     const monthEnd   = format(endOfMonth(now), "yyyy-MM-dd");
 
-    const dangChay = myDoan.filter((d) => d.trang_thai === "dang_chay").length;
+    const dangChay = myDoan.filter((d) => computeDoanStatus(d) === "dang_chay").length;
     const sapKhoiHanh = myDoan.filter((d) => {
       if (!d.ngay_di) return false;
       const di = new Date(d.ngay_di + "T00:00:00");
@@ -397,9 +387,10 @@ export default function MyJobPage() {
       .filter((d) => d.ngay_di && d.ngay_di >= monthStart && d.ngay_di <= monthEnd)
       .reduce((s, d) => s + (d.so_khach ?? 0), 0);
 
-    // Đoàn đang chạy có booking chưa hoàn tất (trong phạm vi scope)
+    // Đoàn đang chạy có booking chưa hoàn tất (trong phạm vi scope) — đoàn đã kết thúc
+    // không còn là việc phải đặt nữa.
     const choBooking = myDoan.filter((d) => {
-      if (d.trang_thai !== "dang_chay") return false;
+      if (computeDoanStatus(d) !== "dang_chay") return false;
       if (!td) return false;
       const id = d.id;
       const scope = myDoanScopeMap.get(id) ?? new Set<string>();
@@ -417,82 +408,6 @@ export default function MyJobPage() {
 
     return { dangChay, sapKhoiHanh, choBooking, tongKhachThang };
   }, [myDoan, td, myDoanScopeMap]);
-
-  // Việc cần xử lý
-  const todos = useMemo((): TodoItem[] => {
-    if (!td) return [];
-    const now = new Date();
-    const items: TodoItem[] = [];
-
-    for (const d of myDoan) {
-      if (d.trang_thai === "huy" || d.trang_thai === "hoan_thanh") continue;
-      const id = d.id;
-      const name = d.ten_doan ?? "";
-      const daysLeft = d.ngay_di ? differenceInDays(new Date(d.ngay_di + "T00:00:00"), now) : null;
-
-      const scope = myDoanScopeMap.get(id) ?? new Set<string>();
-      const showKS = scope.has("all") || scope.has("ks");
-      const showNH = scope.has("all") || scope.has("nh");
-      const showDV = scope.has("all") || scope.has("dv");
-
-      const ks   = showKS ? td.ksList.filter((r) => r.doan_id === id) : [];
-      const nh   = showNH ? td.nhList.filter((r) => r.doan_id === id) : [];
-      const dv   = showDV ? td.dvList.filter((r) => r.doan_id === id) : [];
-      const dntt = filterDNTTByScope(td.dnttList.filter((r) => r.doan_id === id), scope);
-
-      // Booking đang/đã vào luồng hủy KHÔNG phải việc "chưa final" — đếm vào đây là báo
-      // động giả (nút "Hủy booking" nay đặt 'cho_ks_xac_nhan_huy' phổ biến hơn trước).
-      const ksProgress = ksFinalProgress(ks);
-      const ksNotFinal = ksProgress.total - ksProgress.done;
-      const nhNotSent  = nh.filter((r) => r.booking_status !== "da_gui" && r.booking_status !== "khong_dat").length;
-      const dvNotXN    = dv.filter((r) => r.booking_status !== "da_xac_nhan" && r.booking_status !== "khong_dat").length;
-      const dnttPending = dntt.filter((r) => r.trang_thai_duyet === "cho_duyet").length;
-      const hasBookingIssue = ksNotFinal > 0 || nhNotSent > 0 || dvNotXN > 0;
-
-      // HIGH: sắp đi trong 3 ngày mà còn việc
-      if (daysLeft !== null && daysLeft >= 0 && daysLeft <= 3 && hasBookingIssue) {
-        items.push({ priority: "high", label: `${t("Ngày đi còn")} ${daysLeft} ${t("ngày — còn booking chưa xong")}`, doanName: name, doanId: id });
-      } else {
-        // MEDIUM: booking cụ thể chưa xong
-        if (ksNotFinal > 0) items.push({ priority: "medium", label: `${t("Booking KS")}: ${ksNotFinal} ${t("chỗ chưa final")}`, doanName: name, doanId: id });
-        if (nhNotSent > 0)  items.push({ priority: "medium", label: `${t("Booking NH")}: ${nhNotSent} ${t("bữa chưa gửi")}`, doanName: name, doanId: id });
-        if (dvNotXN > 0)    items.push({ priority: "medium", label: `${t("Booking DV")}: ${dvNotXN} ${t("dịch vụ chưa xác nhận")}`, doanName: name, doanId: id });
-        // MEDIUM: ĐNTT chờ duyệt
-        if (dnttPending > 0) items.push({ priority: "medium", label: `${dnttPending} ${t("phiếu ĐNTT đang chờ duyệt")}`, doanName: name, doanId: id });
-        // LOW: sắp đi trong 7 ngày
-        if (daysLeft !== null && daysLeft >= 0 && daysLeft <= 7 && !hasBookingIssue) {
-          items.push({ priority: "low", label: `${t("Ngày khởi hành còn")} ${daysLeft} ${t("ngày")}`, doanName: name, doanId: id });
-        }
-      }
-    }
-
-    // ĐNTT cần user duyệt — HIGH priority (blocking finance flow).
-    for (const d of dnttNeedApproval) {
-      items.push({
-        priority: "high",
-        label: `${t("ĐNTT cần duyệt cấp")} ${d.cap}: ${d.mo_ta ?? "—"} (${d.so_tien.toLocaleString("vi-VN")} ₫)`,
-        doanName: d.ten_doan,
-        doanId: d.doan_id ?? 0,
-        url: "/de-nghi-thanh-toan",
-      });
-    }
-
-    // Sắp xếp: high → medium → low
-    const order = { high: 0, medium: 1, low: 2 };
-    return items.sort((a, b) => order[a.priority] - order[b.priority]);
-  }, [myDoan, td, myDoanScopeMap, dnttNeedApproval]);
-
-  // Phân trang "Việc cần xử lý" — 10 dòng/trang
-  const TODO_PAGE_SIZE = 10;
-  const totalTodoPages = Math.max(1, Math.ceil(todos.length / TODO_PAGE_SIZE));
-  const currentTodoPage = Math.min(todoPage, totalTodoPages);
-  const pageTodos = todos.slice((currentTodoPage - 1) * TODO_PAGE_SIZE, currentTodoPage * TODO_PAGE_SIZE);
-
-  const priorityConfig = {
-    high:   { icon: AlertCircle,   cls: "text-red-600",    bg: "bg-red-50 border-red-100" },
-    medium: { icon: AlertTriangle, cls: "text-amber-600",  bg: "bg-amber-50 border-amber-100" },
-    low:    { icon: Info,          cls: "text-blue-500",   bg: "bg-blue-50 border-blue-100" },
-  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -585,10 +500,10 @@ export default function MyJobPage() {
               />
               <Select value={trangThai} onValueChange={setTrangThai}>
                 <SelectTrigger className="h-8 text-xs w-36">
-                  <span>{trangThai === "dang_chay" ? t("Chờ xác nhận") : trangThai === "hoan_thanh" ? t("Hoàn thành") : trangThai === "huy" ? t("Đã hủy") : t("Tất cả")}</span>
+                  <span>{trangThai === "dang_chay" ? t("Đang chạy") : trangThai === "hoan_thanh" ? t("Hoàn thành") : trangThai === "huy" ? t("Đã hủy") : t("Tất cả")}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dang_chay">{t("Chờ xác nhận")}</SelectItem>
+                  <SelectItem value="dang_chay">{t("Đang chạy")}</SelectItem>
                   <SelectItem value="hoan_thanh">{t("Hoàn thành")}</SelectItem>
                   <SelectItem value="huy">{t("Đã hủy")}</SelectItem>
                   <SelectItem value="all">{t("Tất cả")}</SelectItem>
@@ -807,70 +722,6 @@ export default function MyJobPage() {
           </div>
         )}
 
-        {/* Section: Việc cần xử lý */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold">{t("Việc cần xử lý")}</h2>
-          {!isLoading && todos.length > 0 && (
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">
-                {t("Hiển thị")} {(currentTodoPage - 1) * TODO_PAGE_SIZE + 1}–{Math.min(currentTodoPage * TODO_PAGE_SIZE, todos.length)} / {todos.length}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setTodoPage((p) => Math.max(1, p - 1))}
-                  disabled={currentTodoPage <= 1}
-                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
-                >
-                  <ChevronLeft className="h-3 w-3" />
-                  {t("Trước")}
-                </button>
-                <span className="px-2 text-muted-foreground">{t("Trang")} {currentTodoPage} / {totalTodoPages}</span>
-                <button
-                  onClick={() => setTodoPage((p) => Math.min(totalTodoPages, p + 1))}
-                  disabled={currentTodoPage >= totalTodoPages}
-                  className="h-7 px-2 inline-flex items-center gap-1 border rounded text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
-                >
-                  {t("Sau")}
-                  <ChevronRight className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          )}
-          {isLoading ? (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
-            </div>
-          ) : todos.length === 0 ? (
-            <div className="rounded-lg border bg-green-50 border-green-100 px-4 py-6 text-center">
-              <p className="text-sm text-green-700 font-medium">{t("Không có việc gì cần xử lý")}</p>
-              <p className="text-xs text-green-600 mt-0.5">{t("Tất cả đoàn đều đang ổn")}</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {pageTodos.map((item, i) => {
-                const cfg = priorityConfig[item.priority];
-                const PIcon = cfg.icon;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => navigate(item.url ?? `/doan/${item.doanId}`)}
-                    className={cn(
-                      "w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left hover:opacity-80 transition-opacity",
-                      cfg.bg,
-                    )}
-                  >
-                    <PIcon className={cn("h-4 w-4 shrink-0", cfg.cls)} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-foreground truncate">{item.doanName}</p>
-                      <p className="text-xs text-muted-foreground">{item.label}</p>
-                    </div>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
           </TabsContent>
 
           {/* ── Tab Deadline ──────────────────────────────────────────────── */}
