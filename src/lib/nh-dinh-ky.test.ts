@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeInitialDinhKyNhKeys, type DinhKyNhMeal } from "@/lib/nh-dinh-ky";
+import { computeInitialDinhKyNhKeys, cascadeInsertDinhKyNH, type DinhKyNhMeal } from "@/lib/nh-dinh-ky";
 
 const meal = (over: Partial<DinhKyNhMeal> & { key: string }): DinhKyNhMeal => ({
   daCoChiPhi: false,
@@ -50,5 +50,22 @@ describe("computeInitialDinhKyNhKeys", () => {
       meal({ key: "3_trua" }),
     ]);
     expect(s.size).toBe(0);
+  });
+});
+
+describe("cascadeInsertDinhKyNH", () => {
+  it("nhà hàng gắn cờ mặc định → dòng cascade tạo ra đã bật định kỳ", () => {
+    expect(cascadeInsertDinhKyNH(true)).toBe(true);
+  });
+
+  it("nhà hàng không gắn cờ → tắt", () => {
+    expect(cascadeInsertDinhKyNH(false)).toBe(false);
+  });
+
+  // Nhà hàng vừa bị xoá khỏi danh mục / danh sách chưa tải xong → mealItem undefined.
+  // Mặc định phải là TẮT: bật nhầm sẽ kéo tiền vào cụm định kỳ của một NCC chưa xác định.
+  it("null/undefined → tắt", () => {
+    expect(cascadeInsertDinhKyNH(null)).toBe(false);
+    expect(cascadeInsertDinhKyNH(undefined)).toBe(false);
   });
 });
