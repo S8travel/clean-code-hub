@@ -17,6 +17,7 @@ import { errMsg } from "@/lib/error";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { lyDoKhongBookingDV, NHAN_LY_DO_KHONG_BOOKING } from "@/lib/booking-dv-filter";
 
 interface Props {
   canhDiem: CanhDiem;
@@ -50,6 +51,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   const [ghiChu, setGhiChu] = useState("");
   const [nhaCungCapId, setNhaCungCapId] = useState("");
   const [khachSanId, setKhachSanId] = useState("");
+  const [khongCanBooking, setKhongCanBooking] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
 
   useEffect(() => {
@@ -71,6 +73,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     setGhiChu(canhDiem.ghi_chu || "");
     setNhaCungCapId(canhDiem.nha_cung_cap_id?.toString() || "");
     setKhachSanId(canhDiem.khach_san_id?.toString() || "");
+    setKhongCanBooking(canhDiem.khong_can_booking ?? false);
   }, [canhDiem]);
 
   const handleSave = async () => {
@@ -102,6 +105,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           ghi_chu: ghiChu || null,
           nha_cung_cap_id: nhaCungCapId ? Number(nhaCungCapId) : null,
           khach_san_id: khachSanId ? Number(khachSanId) : null,
+          khong_can_booking: khongCanBooking,
         },
       });
       toast.success("Đã lưu");
@@ -120,12 +124,24 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
     }
   };
 
+  // Badge phản ánh ĐÚNG thứ sync Booking DV làm, không chỉ mỗi `loai`: dịch vụ
+  // gắn KS day-use hoặc bật "đặt ngoài hệ thống" thì không có mail nào được gửi.
+  const lyDo = lyDoKhongBookingDV({
+    loai,
+    co_phi: coPhi,
+    khach_san_id: khachSanId ? Number(khachSanId) : null,
+    khong_can_booking: khongCanBooking,
+  });
+
   return (
     <div className="p-6 max-w-2xl space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Chi tiết cảnh điểm</h2>
-        <Badge className={loai === "dich_vu" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}>
-          {loai === "dich_vu" ? "Có gửi mail" : "Không gửi mail"}
+        <Badge
+          className={lyDo === null ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}
+          title={lyDo ? NHAN_LY_DO_KHONG_BOOKING[lyDo] : undefined}
+        >
+          {lyDo === null ? "Có gửi mail" : "Không gửi mail"}
         </Badge>
       </div>
 
@@ -276,6 +292,23 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           />
           <p className="text-[11px] text-muted-foreground italic">
             Khi liên kết: cảnh điểm này được điền vào "Chương trình" sẽ tự tạo booking KS và đẩy chi phí vào Section Khách sạn.
+            Booking đã nằm bên tab Khách sạn nên dịch vụ này KHÔNG hiện ở tab Booking DV nữa.
+          </p>
+        </div>
+        <div className="space-y-1.5 col-span-2">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={khongCanBooking}
+              onCheckedChange={setKhongCanBooking}
+              disabled={!!khachSanId}
+            />
+            <Label className="text-sm">Đặt ngoài hệ thống — không cần gửi booking</Label>
+          </div>
+          <p className="text-[11px] text-muted-foreground italic">
+            Bật khi dịch vụ này luôn đặt qua Zalo / điện thoại / quan hệ sẵn. Dịch vụ sẽ không
+            xuất hiện ở tab Booking DV của bất kỳ đoàn nào, không bị nhắc "chưa gửi booking".
+            Chi phí vẫn tính bình thường.
+            {khachSanId && " (Đã liên kết KS day-use nên vốn dĩ không gửi booking DV.)"}
           </p>
         </div>
         <div className="space-y-1.5 col-span-2">
