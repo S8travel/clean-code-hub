@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   nhDeadlineTypes, deadlineGroup, mergeMyDeadlines, countDeadlineCanXuLy,
+  isDoanDaVe, conDangNhac, ngayHomNay,
   type DeadlineItem,
 } from "./use-my-job";
 
@@ -111,5 +112,52 @@ describe("countDeadlineCanXuLy — số khớp badge sidebar và tab", () => {
 
   it("rỗng → 0", () => {
     expect(countDeadlineCanXuLy([])).toBe(0);
+  });
+});
+
+// Đoàn đã về thì booking hết ý nghĩa: không còn gì để đuổi NCC. Trước đây chỉ lọc
+// đoàn huỷ nên deadline của đoàn đi xong từ lâu nằm lì ở nhóm "quá hạn", OP không
+// xử lý được cũng không tắt được → nhờn cảnh báo.
+describe("isDoanDaVe / conDangNhac — ngừng nhắc đoàn đã về", () => {
+  const row = (ngay_ve: string | null, trang_thai = "dang_chay") =>
+    ({ doan: { ten_doan: "D1", trang_thai, ngay_ve } });
+
+  it("đoàn về hôm qua → thôi nhắc", () => {
+    expect(isDoanDaVe(row(iso(-1)))).toBe(true);
+    expect(conDangNhac(row(iso(-1)))).toBe(false);
+  });
+
+  it("đoàn về HÔM NAY vẫn nhắc — chưa kết thúc hẳn", () => {
+    expect(isDoanDaVe(row(iso(0)))).toBe(false);
+    expect(conDangNhac(row(iso(0)))).toBe(true);
+  });
+
+  it("đoàn còn chạy / sắp đi → nhắc bình thường", () => {
+    expect(conDangNhac(row(iso(3)))).toBe(true);
+  });
+
+  it("ngay_ve rỗng → KHÔNG đoán, giữ nguyên hành vi cũ là vẫn nhắc", () => {
+    expect(isDoanDaVe(row(null))).toBe(false);
+    expect(conDangNhac(row(null))).toBe(true);
+    expect(conDangNhac({ doan: { ten_doan: "D", trang_thai: "dang_chay" } })).toBe(true);
+  });
+
+  it("join doan rỗng (FK hỏng) → vẫn nhắc, không nuốt mất việc", () => {
+    expect(conDangNhac({ doan: null })).toBe(true);
+  });
+
+  it("đoàn huỷ vẫn bị loại như trước, kể cả chưa tới ngày về", () => {
+    expect(conDangNhac(row(iso(5), "huy"))).toBe(false);
+  });
+
+  it("đoàn vừa huỷ vừa đã về → loại", () => {
+    expect(conDangNhac(row(iso(-30), "huy"))).toBe(false);
+  });
+
+  it("ngayHomNay theo giờ máy, không lệch ngày do UTC", () => {
+    // 31/12 lúc 23h VN: toISOString() sẽ ra 2026-12-31T16:00Z → đúng ngày, nhưng
+    // 01/01 lúc 06h thì toISOString() ra 31/12. Hàm này luôn bám giờ địa phương.
+    expect(ngayHomNay(new Date(2027, 0, 1, 6, 0, 0))).toBe("2027-01-01");
+    expect(ngayHomNay(new Date(2026, 11, 31, 23, 30, 0))).toBe("2026-12-31");
   });
 });
