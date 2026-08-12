@@ -1796,6 +1796,8 @@ export function useNHSection({
     dntts?: typeof dnttList;
     /** doan_chi_phi mới nhất — số tiền IN lấy từ đây, KHÔNG lấy từ localRows. */
     cpRows?: ChiPhiRow[];
+    /** Bữa ăn + master NH mới nhất (giá set menu, tên, tài khoản NCC). */
+    nhSrc?: typeof nhData;
     /** Nơi gom các dòng có số trên màn hình khác số trong DB (để cảnh báo). */
     outDiffs?: PrintLineDiff[];
   }
@@ -1823,10 +1825,14 @@ export function useNHSection({
     const entries: NHDocEntry[] = [];
     const canTruShownByNcc: Record<number, boolean> = {};
 
+    // Bữa ăn + master NH: dùng bản TƯƠI khi caller truyền (giá set menu, tên NH,
+    // tài khoản thanh toán, NCC đều in ra giấy nên cũng phải mới nhất).
+    const nhSrc = src?.nhSrc ?? nhData;
+
     for (const key of selectedKeys) {
         const row = localRowsRef.current[key];
         if (!row) continue;
-        const nh = nhData.nhaHangMap[row.nha_hang_id];
+        const nh = nhSrc.nhaHangMap[row.nha_hang_id];
         if (!nh) continue;
 
         // Suất chính: CHỈ tin DB cho dòng ĐÃ override — đó là số OP tự nhập, mà
@@ -1838,23 +1844,39 @@ export function useNHSection({
         // don_gia = 0 trong DB, tin nguyên si sẽ MẤT hẳn suất chính khỏi tờ giấy.
         const cpMainRow = row.id != null ? cpById[row.id] : undefined;
         const cpMain = cpMainRow?.is_overridden === true ? cpMainRow : undefined;
-        const rowPrint = cpMain
-          ? {
-              ...row,
-              so_khach: cpMain.so_luong > 0 ? cpMain.so_luong : row.so_khach,
-              don_gia: cpMain.don_gia > 0 ? cpMain.don_gia : row.don_gia,
-              chiet_khau_phan_tram: resolveNHChietKhau(cpMain, nh),
-              foc_khach_snapshot: cpMain.foc_khach_snapshot,
-              foc_mien_snapshot: cpMain.foc_mien_snapshot,
-              chiet_khau_phan_tram_snapshot: cpMain.chiet_khau_phan_tram_snapshot,
-            }
-          : row;
+        let rowPrint: LocalNHRow;
+        if (cpMain) {
+          rowPrint = {
+            ...row,
+            so_khach: cpMain.so_luong > 0 ? cpMain.so_luong : row.so_khach,
+            don_gia: cpMain.don_gia > 0 ? cpMain.don_gia : row.don_gia,
+            chiet_khau_phan_tram: resolveNHChietKhau(cpMain, nh),
+            foc_khach_snapshot: cpMain.foc_khach_snapshot,
+            foc_mien_snapshot: cpMain.foc_mien_snapshot,
+            chiet_khau_phan_tram_snapshot: cpMain.chiet_khau_phan_tram_snapshot,
+          };
+        } else {
+          // Dòng KHÔNG override: giá dẫn xuất từ Điều tour / giá set menu — nguồn đó
+          // (query chi_phi_nh_section) cũng có thể cũ trên tab mở lâu. Tính lại từ
+          // bản TƯƠI theo ĐÚNG công thức của effect sync để bản in và màn hình
+          // không bao giờ nói 2 giá khác nhau.
+          const mealPrint = nhSrc.meals.find((m) => `${m.doan_ngay_id}_${m.bua_an}` === key);
+          const ckSnap = cpMainRow
+            ? (cpMainRow.chiet_khau_phan_tram_snapshot ?? null)
+            : (row.chiet_khau_phan_tram_snapshot ?? null);
+          rowPrint = {
+            ...row,
+            don_gia: mealPrint?.gia_set_menu ?? cpMainRow?.don_gia ?? row.don_gia,
+            foc_khach_snapshot: cpMainRow ? (cpMainRow.foc_khach_snapshot ?? null) : (row.foc_khach_snapshot ?? null),
+            foc_mien_snapshot: cpMainRow ? (cpMainRow.foc_mien_snapshot ?? null) : (row.foc_mien_snapshot ?? null),
+            chiet_khau_phan_tram_snapshot: ckSnap,
+            chiet_khau_phan_tram: resolveNHChietKhau({ chiet_khau_phan_tram_snapshot: ckSnap }, nh),
+          };
+        }
         const mainDiff = diffPrintLine(
           nh.ten,
           { so_luong: row.so_khach, don_gia: row.don_gia, chiet_khau_phan_tram: row.chiet_khau_phan_tram },
-          cpMain
-            ? { so_luong: rowPrint.so_khach, don_gia: rowPrint.don_gia, chiet_khau_phan_tram: rowPrint.chiet_khau_phan_tram }
-            : null,
+          { so_luong: rowPrint.so_khach, don_gia: rowPrint.don_gia, chiet_khau_phan_tram: rowPrint.chiet_khau_phan_tram },
         );
         if (mainDiff) outDiffs?.push({ ...mainDiff, chiPhiId: row.id, loai: "sua", key });
         // Dòng chi phí đã bị XÓA ở nơi khác nhưng màn hình còn giữ → vẫn in (không
@@ -2119,12 +2141,16 @@ export function useNHSection({
     }
     await Promise.all([
       qc.refetchQueries({ queryKey: ["doan_chi_phi", doanId] }),
+      qc.refetchQueries({ queryKey: ["chi_phi_nh_section", doanId] }),
       qc.refetchQueries({ queryKey: ["de_nghi_thanh_toan", doanId] }),
       qc.refetchQueries({ queryKey: ["payments-by-chi-phi", doanId] }),
       qc.refetchQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] }),
     ]);
     const freshCp = qc.getQueryData(["doan_chi_phi", doanId, doanNhomId ?? null]) as
       | ChiPhiRow[]
+      | undefined;
+    const freshNh = qc.getQueryData(["chi_phi_nh_section", doanId, doanNhomId ?? null]) as
+      | typeof nhData
       | undefined;
     const freshDntt = qc.getQueryData(["de_nghi_thanh_toan", doanId]) as typeof dnttList | undefined;
     const freshPmts =
@@ -2140,6 +2166,7 @@ export function useNHSection({
       redMap: freshRedMap,
       dntts: freshDntt ?? dnttList,
       cpRows: freshCp ?? chiPhiRows,
+      nhSrc: freshNh ?? nhData,
       outDiffs: diffs,
     });
 
@@ -2203,7 +2230,7 @@ export function useNHSection({
     return entries;
   }, [
     qc, doanId, doanNhomId, buildEntriesFromSources,
-    dnttList, paymentsList, chiPhiRows, redemptionByChiPhiId,
+    dnttList, paymentsList, chiPhiRows, redemptionByChiPhiId, nhData,
   ]);
 
   const handlePrintSelected = async () => {
