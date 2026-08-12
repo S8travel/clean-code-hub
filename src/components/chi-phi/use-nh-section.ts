@@ -8,7 +8,8 @@ import {
   useChiPhiList, useUpsertChiPhi, useDeleteChiPhi, useDNTTList, useInsertDNTT,
 } from "@/hooks/use-chi-phi";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
-import { diffPrintLine, isDnttLechBoQua, type PrintLineDiff } from "@/lib/print-dntt-sync";
+import { waitForChiPhiWrites } from "@/lib/chi-phi-writes";
+import { diffPrintLine, isDnttLechBoQua, moTaPrintDiff, type PrintLineDiff } from "@/lib/print-dntt-sync";
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useAuditLogger } from "@/hooks/use-activity-log";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
@@ -1813,8 +1814,9 @@ export function useNHSection({
     // KHÔNG bao giờ được sync lại → tab mở lâu giữ giá cũ. Bản in là chứng từ kế
     // toán nên phải khớp DB: số tiền lấy theo doan_chi_phi, màn hình chỉ dùng để
     // biết chọn dòng nào. Chênh lệch được gom vào outDiffs để báo người in.
+    const cpRowsForPrint = src?.cpRows ?? chiPhiRows;
     const cpById: Record<number, ChiPhiRow> = {};
-    for (const cp of (src?.cpRows ?? chiPhiRows)) {
+    for (const cp of cpRowsForPrint) {
       if (cp.id != null) cpById[cp.id] = cp;
     }
     const outDiffs = src?.outDiffs;
@@ -1832,13 +1834,15 @@ export function useNHSection({
         // override) → đúng loại dòng in ra số cũ. Dòng KHÔNG override thì số trên
         // màn hình dẫn xuất từ Điều tour / giá set menu và có thể ĐI TRƯỚC DB
         // (chưa bấm lưu, DB còn đơn giá 0) → giữ số màn hình như cũ.
+        // Chỉ nhận từng field khi DB có số thật (> 0): dòng phủ voucher có thể còn
+        // don_gia = 0 trong DB, tin nguyên si sẽ MẤT hẳn suất chính khỏi tờ giấy.
         const cpMainRow = row.id != null ? cpById[row.id] : undefined;
         const cpMain = cpMainRow?.is_overridden === true ? cpMainRow : undefined;
         const rowPrint = cpMain
           ? {
               ...row,
-              so_khach: cpMain.so_luong,
-              don_gia: cpMain.don_gia,
+              so_khach: cpMain.so_luong > 0 ? cpMain.so_luong : row.so_khach,
+              don_gia: cpMain.don_gia > 0 ? cpMain.don_gia : row.don_gia,
               chiet_khau_phan_tram: resolveNHChietKhau(cpMain, nh),
               foc_khach_snapshot: cpMain.foc_khach_snapshot,
               foc_mien_snapshot: cpMain.foc_mien_snapshot,
@@ -1852,14 +1856,67 @@ export function useNHSection({
             ? { so_luong: rowPrint.so_khach, don_gia: rowPrint.don_gia, chiet_khau_phan_tram: rowPrint.chiet_khau_phan_tram }
             : null,
         );
-        if (mainDiff) outDiffs?.push(mainDiff);
+        if (mainDiff) outDiffs?.push({ ...mainDiff, chiPhiId: row.id, loai: "sua", key });
+        // Dòng chi phí đã bị XÓA ở nơi khác nhưng màn hình còn giữ → vẫn in (không
+        // tự ý bỏ dòng của người dùng) nhưng phải báo để kế toán biết mà kiểm.
+        if (row.id != null && cpRowsForPrint.length > 0 && !cpById[row.id]) {
+          outDiffs?.push({
+            ten: nh.ten,
+            truoc: { so_luong: row.so_khach, don_gia: row.don_gia },
+            sau: { so_luong: row.so_khach, don_gia: row.don_gia },
+            loai: "xoa",
+          });
+        }
 
         // Số khách thực tế (trừ FOC) — dùng snapshot trên row
         const focResolvedNH = resolveNHFoc(rowPrint, nh);
         const soLuongThuc = calcSoKhachThucTe(rowPrint.so_khach, focResolvedNH.foc_khach, focResolvedNH.foc_mien);
 
-        // Build items: main meal + extras
-        const extras = extrasMapRef.current[key] || [];
+        // Dòng phát sinh: dựng từ DB (nguồn thật) rồi GỘP thêm dòng local chưa lưu.
+        // extrasMap chỉ seed 1 lần/đoàn nên tab này vừa có thể giữ số cũ, vừa có thể
+        // KHÔNG thấy dòng tab khác mới thêm → in thiếu hẳn dòng khỏi "Tổng tiền".
+        const localExtras = extrasMapRef.current[key] || [];
+        const extraPre = extraPrefix(rowPrint.bua_an);
+        const dbExtras: LocalNHExtra[] = cpRowsForPrint
+          .filter(
+            (cp) =>
+              cp.danh_muc === "nha_hang" &&
+              cp.ref_doan_ngay_id === rowPrint.doan_ngay_id &&
+              cp.mo_ta?.startsWith(extraPre),
+          )
+          .map((cp) => ({
+            id: cp.id,
+            mo_ta: (cp.mo_ta ?? "").slice(extraPre.length),
+            so_luong: cp.so_luong,
+            don_gia: cp.don_gia,
+            nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
+            chiet_khau_phan_tram: cp.chiet_khau_phan_tram_snapshot ?? 0,
+          }));
+        // Không đọc được chi phí tươi (query lỗi / cache rỗng) → giữ nguyên bản màn hình.
+        const extras: LocalNHExtra[] =
+          cpRowsForPrint.length > 0
+            ? [...dbExtras, ...localExtras.filter((e) => e.id == null)]
+            : localExtras;
+        const localExtraById = new Map(
+          localExtras.filter((e) => e.id != null).map((e) => [e.id as number, e]),
+        );
+        // Dòng phát sinh còn trên màn hình nhưng đã bị xóa trong DB → không in nữa,
+        // nhưng phải báo (im lặng bỏ dòng thì tổng tiền tự nhiên hụt).
+        if (cpRowsForPrint.length > 0) {
+          const dbExtraIds = new Set(dbExtras.map((e) => e.id));
+          for (const e of localExtras) {
+            if (e.id != null && !dbExtraIds.has(e.id) && e.don_gia > 0) {
+              outDiffs?.push({
+                ten: e.mo_ta || nh.ten,
+                truoc: { so_luong: e.so_luong, don_gia: e.don_gia },
+                sau: { so_luong: 0, don_gia: 0 },
+                chiPhiId: e.id,
+                loai: "xoa",
+                key,
+              });
+            }
+          }
+        }
         const items: NHDocEntry["items"] = [];
         const mainCkPct = rowPrint.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
         // Voucher TẶNG: in ĐỦ số suất chính (gross) — phần vé tặng hiển thị RIÊNG ở cột
@@ -1879,20 +1936,32 @@ export function useNHSection({
         let extraVoucherMua = 0;
         let extraNgoaiDntt = 0;
         extras.forEach((e) => {
-          const cpExtra = e.id != null ? cpById[e.id] : undefined;
-          const eSoLuong = cpExtra ? cpExtra.so_luong : e.so_luong;
-          const eDonGia = cpExtra ? cpExtra.don_gia : e.don_gia;
-          const eCk = cpExtra ? (cpExtra.chiet_khau_phan_tram_snapshot ?? 0) : e.chiet_khau_phan_tram;
-          if (eDonGia <= 0) return;
+          if (e.don_gia <= 0) return;
           const eRed = e.id != null ? redMap[e.id] : undefined;
           if (eRed?.voucherLoai === "tang") return;
           // Chỉ cảnh báo cho dòng THỰC SỰ được in (dòng bị loại không gây nhiễu).
-          const eDiff = diffPrintLine(
-            e.mo_ta || nh.ten,
-            { so_luong: e.so_luong, don_gia: e.don_gia, chiet_khau_phan_tram: e.chiet_khau_phan_tram },
-            cpExtra ? { so_luong: eSoLuong, don_gia: eDonGia, chiet_khau_phan_tram: eCk } : null,
-          );
-          if (eDiff) outDiffs?.push(eDiff);
+          const eLocal = e.id != null ? localExtraById.get(e.id) : undefined;
+          if (eLocal) {
+            const eDiff = diffPrintLine(
+              e.mo_ta || nh.ten,
+              { so_luong: eLocal.so_luong, don_gia: eLocal.don_gia, chiet_khau_phan_tram: eLocal.chiet_khau_phan_tram },
+              { so_luong: e.so_luong, don_gia: e.don_gia, chiet_khau_phan_tram: e.chiet_khau_phan_tram },
+            );
+            if (eDiff) outDiffs?.push({ ...eDiff, chiPhiId: e.id, loai: "sua", key });
+          } else if (e.id != null) {
+            // Dòng chỉ có trong DB (tab khác vừa thêm) — vẫn in, nhưng báo cho biết.
+            outDiffs?.push({
+              ten: e.mo_ta || nh.ten,
+              truoc: { so_luong: 0, don_gia: 0 },
+              sau: { so_luong: e.so_luong, don_gia: e.don_gia },
+              chiPhiId: e.id,
+              loai: "them",
+              key,
+            });
+          }
+          const eSoLuong = e.so_luong;
+          const eDonGia = e.don_gia;
+          const eCk = e.chiet_khau_phan_tram;
           items.push({ so_luong: eSoLuong, don_gia: eDonGia, ghi_chu: e.mo_ta, chiet_khau_phan_tram: eCk });
           // Phát sinh HDV trả tiền mặt: VẪN in (NCC thấy đủ suất) nhưng KHÔNG nằm
           // trong ĐNTT công ty (calcNHDnttAmount loại nguoi_tt='hdv') → tách ra để
@@ -2040,6 +2109,14 @@ export function useNHSection({
    * voucher) → bản in từng ra "Cấn trừ = 0" và in đủ tiền dù đã cấn trừ.
    */
   const buildSelectedEntries = useCallback(async (): Promise<NHDocEntry[] | undefined> => {
+    // Chờ blur-save đang bay xong RỒI mới đọc DB — chính cú click nút In làm ô
+    // đang gõ mất focus, đọc ngay sẽ về trước lệnh UPDATE và in lại số cũ.
+    const settled = await waitForChiPhiWrites(qc);
+    if (!settled) {
+      toast.warning("Còn thay đổi chi phí đang lưu — kiểm tra kỹ số tiền trên bản in.", {
+        duration: 8000,
+      });
+    }
     await Promise.all([
       qc.refetchQueries({ queryKey: ["doan_chi_phi", doanId] }),
       qc.refetchQueries({ queryKey: ["de_nghi_thanh_toan", doanId] }),
@@ -2067,17 +2144,60 @@ export function useNHSection({
     });
 
     if (diffs.length > 0) {
-      // Màn hình đang giữ số cũ (dòng override không bao giờ tự sync lại) → in
-      // theo DB, đồng thời cho bảng nạp lại từ DB để người dùng thấy đúng số.
-      initializedRef.current = false;
-      const n = (v: number) => v.toLocaleString("vi-VN");
-      const chiTiet = diffs
-        .slice(0, 3)
-        .map((d) => `${d.ten} ${n(d.truoc.so_luong)}×${n(d.truoc.don_gia)} → ${n(d.sau.so_luong)}×${n(d.sau.don_gia)}`)
-        .join("; ");
+      // Kéo ĐÚNG các dòng lệch trên màn hình về số vừa in. KHÔNG lật initializedRef
+      // (nạp lại cả bảng ở một thời điểm bất kỳ sau đó sẽ nuốt dòng phát sinh chưa
+      // lưu và đè ô OP đang gõ).
+      const suaById = new Map<number, PrintLineDiff>();
+      for (const d of diffs) {
+        if (d.chiPhiId != null && d.loai === "sua") suaById.set(d.chiPhiId, d);
+      }
+      const themKeys = new Set(diffs.filter((d) => d.loai !== "sua").map((d) => d.key));
+      if (suaById.size > 0) {
+        setLocalRows((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          for (const [k, r] of Object.entries(prev)) {
+            const d = r.id != null ? suaById.get(r.id) : undefined;
+            if (!d) continue;
+            next[k] = {
+              ...r,
+              so_khach: d.sau.so_luong,
+              don_gia: d.sau.don_gia,
+              chiet_khau_phan_tram: d.sau.chiet_khau_phan_tram ?? r.chiet_khau_phan_tram,
+            };
+            changed = true;
+          }
+          return changed ? next : prev;
+        });
+        setExtrasMap((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          for (const [k, list] of Object.entries(prev)) {
+            let listChanged = false;
+            const newList = list.map((e) => {
+              const d = e.id != null ? suaById.get(e.id) : undefined;
+              if (!d) return e;
+              listChanged = true;
+              return {
+                ...e,
+                so_luong: d.sau.so_luong,
+                don_gia: d.sau.don_gia,
+                chiet_khau_phan_tram: d.sau.chiet_khau_phan_tram ?? e.chiet_khau_phan_tram,
+              };
+            });
+            if (listChanged) { next[k] = newList; changed = true; }
+          }
+          return changed ? next : prev;
+        });
+      }
+      // Dòng THÊM/XÓA thì không patch tại chỗ được (phải dựng lại nhóm) → bảng vẫn
+      // lệch cho tới khi F5; nói thẳng trong toast thay vì im lặng.
+      const chiTiet = diffs.slice(0, 3).map(moTaPrintDiff).join("; ");
+      const coThemXoa = themKeys.size > 0;
       toast.warning(
-        `Bản in lấy số MỚI NHẤT trong hệ thống — ${diffs.length} dòng khác số đang hiện trên màn hình: ${chiTiet}${diffs.length > 3 ? "…" : ""}`,
-        { duration: 8000 },
+        `Bản in lấy số MỚI NHẤT trong hệ thống — ${diffs.length} dòng khác màn hình: ${chiTiet}${diffs.length > 3 ? "…" : ""}` +
+          (coThemXoa ? " · Có dòng được thêm/xóa ở nơi khác — tải lại trang để bảng khớp." : ""),
+        { duration: 10000 },
       );
     }
     return entries;

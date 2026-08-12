@@ -30,6 +30,20 @@ export interface PrintLineDiff {
   truoc: PrintLineValue;
   /** Số mới nhất trong DB (dùng để in). */
   sau: PrintLineValue;
+  /** doan_chi_phi.id — để caller kéo đúng dòng đó trên màn hình về số DB. */
+  chiPhiId?: number;
+  /** Khóa nhóm trên màn hình (NH: `<doan_ngay_id>_<bua_an>`). */
+  key?: string;
+  /** sua = số đổi · them = dòng chỉ có trong DB · xoa = dòng đã bị xóa trong DB. */
+  loai?: "sua" | "them" | "xoa";
+}
+
+/** Câu mô tả 1 chênh lệch cho toast — gộp 3 loại về một dạng đọc được. */
+export function moTaPrintDiff(d: PrintLineDiff): string {
+  const n = (v: number) => v.toLocaleString("vi-VN");
+  if (d.loai === "them") return `${d.ten}: mới có trong hệ thống (${n(d.sau.so_luong)}×${n(d.sau.don_gia)})`;
+  if (d.loai === "xoa") return `${d.ten}: đã bị xóa khỏi hệ thống`;
+  return `${d.ten}: ${n(d.truoc.so_luong)}×${n(d.truoc.don_gia)} → ${n(d.sau.so_luong)}×${n(d.sau.don_gia)}`;
 }
 
 /** Lệch tiền ≤ ngưỡng này coi như bằng nhau (sai số làm tròn CK từng dòng). */

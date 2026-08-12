@@ -4,6 +4,7 @@ import {
   diffPrintLine,
   isDnttLechBoQua,
   calcPrintDnttLech,
+  moTaPrintDiff,
 } from "./print-dntt-sync";
 import { calcNHEntryTotal } from "./export-dntt-nh-word";
 
@@ -68,6 +69,51 @@ describe("diffPrintLine", () => {
       truoc: { so_luong: 2, don_gia: 600_000 },
       sau: { so_luong: 2, don_gia: 300_000 },
     });
+  });
+});
+
+describe("moTaPrintDiff", () => {
+  it("sửa số → câu cũ → mới", () => {
+    expect(
+      moTaPrintDiff({
+        ten: "Phát sinh",
+        truoc: { so_luong: 2, don_gia: 600_000 },
+        sau: { so_luong: 2, don_gia: 300_000 },
+        loai: "sua",
+      }),
+    ).toBe("Phát sinh: 2×600.000 → 2×300.000");
+  });
+
+  it("dòng chỉ có trong DB → nói rõ là mới", () => {
+    expect(
+      moTaPrintDiff({
+        ten: "Nước suối",
+        truoc: { so_luong: 0, don_gia: 0 },
+        sau: { so_luong: 10, don_gia: 15_000 },
+        loai: "them",
+      }),
+    ).toBe("Nước suối: mới có trong hệ thống (10×15.000)");
+  });
+
+  it("dòng đã bị xóa trong DB", () => {
+    expect(
+      moTaPrintDiff({
+        ten: "Nhà hàng A",
+        truoc: { so_luong: 10, don_gia: 500_000 },
+        sau: { so_luong: 0, don_gia: 0 },
+        loai: "xoa",
+      }),
+    ).toBe("Nhà hàng A: đã bị xóa khỏi hệ thống");
+  });
+
+  it("không ghi loại → mặc định hiểu là sửa số", () => {
+    expect(
+      moTaPrintDiff({
+        ten: "X",
+        truoc: { so_luong: 1, don_gia: 1_000 },
+        sau: { so_luong: 1, don_gia: 2_000 },
+      }),
+    ).toBe("X: 1×1.000 → 1×2.000");
   });
 });
 
