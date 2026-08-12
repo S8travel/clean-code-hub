@@ -120,6 +120,20 @@ export interface NHDocEntry {
    *  theo TỪNG dòng (lấy từ item.ghi_chu), số khách theo từng dòng, cột Ghi chú bỏ;
    *  các cột tổng/cọc/cấn trừ/cần thanh toán vẫn gộp (rowSpan) cho cả entry. */
   multi_service?: boolean;
+
+  // ── Metadata ĐNTT đang in — KHÔNG in ra Word ────────────────────────────────
+  // Chỉ để modal xem trước đối chiếu "Tổng tiền" (Σ dòng) với số tiền ĐNTT: 2 cột
+  // này lấy từ 2 nguồn khác nhau, lệch nhau = tờ giấy tự mâu thuẫn (Tổng − Cấn trừ
+  // ≠ Còn TT). Xem lib/print-dntt-sync.ts.
+  /** ĐNTT đang in (nếu có ĐNTT sống cho dòng/nhóm này). */
+  dntt_id?: number;
+  /** so_tien của ĐNTT đó. */
+  dntt_so_tien?: number;
+  /** ĐNTT cọc / [Bổ sung] → so_tien CỐ Ý khác tổng dòng, không cảnh báo lệch. */
+  dntt_lech_bo_qua?: boolean;
+  /** Phần ĐÃ in trong "Tổng tiền" nhưng CỐ Ý không nằm trong so_tien ĐNTT:
+   *  voucher TẶNG (dòng chính in gross) + dòng phát sinh HDV trả tiền mặt. */
+  dntt_ngoai_dntt?: number;
 }
 
 export interface NHDocData {

@@ -192,7 +192,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         return;
       }
 
-      const nhRaw = nhSectionRef.current?.buildSelectedEntries();
+      const nhRaw = await nhSectionRef.current?.buildSelectedEntries();
       const dvRaw = await dvSectionRef.current?.buildSelectedEntries();
       const nhEntries = nhRaw ?? [];
       const dvEntries = dvRaw ?? [];

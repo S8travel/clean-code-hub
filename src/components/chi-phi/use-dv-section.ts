@@ -16,6 +16,7 @@ import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump"
 import { buildAggClusters, type AggClusterRow } from "@/lib/agg-cluster";
 import { buildRemainingAllocations } from "@/lib/alloc-remaining";
 import { tienDeNghiTrung } from "@/lib/dinh-ky-nhom";
+import { diffPrintLine, isDnttLechBoQua, type PrintLineDiff } from "@/lib/print-dntt-sync";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -821,6 +822,43 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const entries: NHDocEntry[] = [];
     const canTruShownByNcc: Record<number, boolean> = {};
 
+    // Đọc TƯƠI chi phí + ĐNTT + cấn trừ + allocation trước khi dựng bản in. Bản in
+    // là chứng từ kế toán nên phải khớp DB: cache React Query không tự refetch khi
+    // quay lại tab (app tắt refetchOnWindowFocus) và extrasMap chỉ seed 1 lần/đoàn
+    // → tab mở lâu từng in số cũ trong khi cột "còn thanh toán" đã theo ĐNTT mới.
+    // Phải đọc thẳng cache: state/memo chỉ đổi ở render sau, cùng tick vẫn số cũ.
+    await Promise.all([
+      qc.refetchQueries({ queryKey: ["doan_chi_phi", doanId] }),
+      qc.refetchQueries({ queryKey: ["de_nghi_thanh_toan", doanId] }),
+      qc.refetchQueries({ queryKey: ["payments-by-chi-phi", doanId] }),
+      qc.refetchQueries({ queryKey: ["dntt_allocations_by_doan", doanId] }),
+    ]);
+    const cpFresh =
+      (qc.getQueryData(["doan_chi_phi", doanId, doanNhomId ?? null]) as ChiPhiRow[] | undefined) ??
+      chiPhiRows;
+    const dntts =
+      (qc.getQueryData(["de_nghi_thanh_toan", doanId]) as typeof dnttList | undefined) ?? dnttList;
+    const pmts =
+      (qc.getQueryData(["payments-by-chi-phi", doanId]) as typeof paymentsList | undefined) ??
+      paymentsList;
+    const allocFresh =
+      (qc.getQueryData(["dntt_allocations_by_doan", doanId]) as typeof allocRows | undefined) ??
+      allocRows;
+
+    const cpById: Record<number, ChiPhiRow> = {};
+    for (const cp of cpFresh) if (cp.id != null) cpById[cp.id] = cp;
+    /** chi_phi_id → (dntt_id → so_tien), dựng lại từ allocation tươi. */
+    const allocFor = new Map<number, Map<number, number>>();
+    /** dntt_id → tổng allocation TOÀN đoàn (để biết ĐNTT có trải ra ngoài nhóm in không). */
+    const allocTotalByDntt = new Map<number, number>();
+    for (const a of allocFresh) {
+      let inner = allocFor.get(a.chi_phi_id);
+      if (!inner) { inner = new Map<number, number>(); allocFor.set(a.chi_phi_id, inner); }
+      inner.set(a.dntt_id, (inner.get(a.dntt_id) ?? 0) + a.so_tien);
+      allocTotalByDntt.set(a.dntt_id, (allocTotalByDntt.get(a.dntt_id) ?? 0) + a.so_tien);
+    }
+    const printDiffs: PrintLineDiff[] = [];
+
     // Fetch tai_khoan_thanh_toan from canh_diem via doan_ngay_item
     const refItemIds = dvRows
       .filter((r) => r.id && selectedIds.includes(r.id) && r.ref_doan_ngay_item_id)
@@ -866,12 +904,12 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       // Dòng CHƯA có ĐNTT → entry riêng (số tiền = thành tiền dòng).
       type DNTTLite = (typeof dnttList)[number];
       const activeDnttById = new Map<number, DNTTLite>(
-        dnttList
+        dntts
           .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
           .map((d) => [d.id, d] as const),
       );
       const pendingDnttOf = (rowId: number): DNTTLite | null => {
-        const allocs = allocByChiPhi.get(rowId);
+        const allocs = allocFor.get(rowId);
         if (!allocs) return null;
         const cands = [...allocs.keys()]
           .map((id) => activeDnttById.get(id))
@@ -897,8 +935,33 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         const items: { so_luong: number; don_gia: number; ghi_chu: string }[] = [];
         let soKhachSum = 0;
         let thanhTienSum = 0;
-        for (const { row } of grows) {
-          const rowExtras = (extrasMap[row.id!] ?? []).filter((e) => e.nguoi_tt !== "hdv" && e.don_gia > 0);
+        for (const { row: rowCache } of grows) {
+          // Số tiền IN lấy theo bản DB mới nhất của dòng (fallback bản trên màn hình).
+          const row = (rowCache.id != null ? cpById[rowCache.id] : undefined) ?? rowCache;
+          const rowDiff = diffPrintLine(
+            rowCache.mo_ta || "Dịch vụ",
+            { so_luong: rowCache.so_luong, don_gia: rowCache.don_gia },
+            rowCache.id != null && cpById[rowCache.id]
+              ? { so_luong: row.so_luong, don_gia: row.don_gia }
+              : null,
+          );
+          if (rowDiff) printDiffs.push(rowDiff);
+
+          const rowExtras: LocalDVExtra[] = [];
+          for (const e of extrasMap[rowCache.id!] ?? []) {
+            const cpExtra = e.id != null ? cpById[e.id] : undefined;
+            const eSoLuong = cpExtra ? cpExtra.so_luong : e.so_luong;
+            const eDonGia = cpExtra ? cpExtra.don_gia : e.don_gia;
+            // Dòng không in (HDV trả / giá 0) thì cũng không cảnh báo lệch.
+            if (e.nguoi_tt === "hdv" || eDonGia <= 0) continue;
+            const eDiff = diffPrintLine(
+              e.mo_ta || "Phát sinh",
+              { so_luong: e.so_luong, don_gia: e.don_gia },
+              cpExtra ? { so_luong: eSoLuong, don_gia: eDonGia } : null,
+            );
+            if (eDiff) printDiffs.push(eDiff);
+            rowExtras.push({ ...e, so_luong: eSoLuong, don_gia: eDonGia });
+          }
           // Số lượng IN cho dòng chính = SAU TRỪ FOC (giống NH dùng soLuongThuc) → cột
           // "Thành tiền" trong Word = so_luong_thuc × đơn giá khớp màn hình. Cột "Số khách"
           // vẫn in gross qua entry.so_khach; cột FOC in số miễn riêng.
@@ -911,7 +974,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           thanhTienSum += row.tien_cong_ty + rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
         }
 
-        const first = grows[0].row;
+        const firstCache = grows[0].row;
+        const first = (firstCache.id != null ? cpById[firstCache.id] : undefined) ?? firstCache;
         const firstDay = grows[0].day;
         const nccId = first.nha_cung_cap_id ?? null;
 
@@ -920,8 +984,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         let canTruNote: string | undefined;
         if (nccId && !canTruShownByNcc[nccId]) {
           const canTruPays = dntt
-            ? paymentsList.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
-            : grows.flatMap(({ row }) => paymentsList.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru"));
+            ? pmts.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
+            : grows.flatMap(({ row }) => pmts.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru"));
           canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
           if (canTruAmount > 0) {
             canTruShownByNcc[nccId] = true;
@@ -938,9 +1002,9 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         if (dntt) {
           const priorDnttIds = new Set<number>();
           for (const { row } of grows) {
-            const allocs = allocByChiPhi.get(row.id!);
+            const allocs = allocFor.get(row.id!);
             if (allocs) for (const id of allocs.keys()) priorDnttIds.add(id);
-            dnttList
+            dntts
               .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id)
               .forEach((d) => priorDnttIds.add(d.id));
           }
@@ -949,7 +1013,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
             .filter((d): d is DNTTLite => !!d);
           soCoc = calcDnttPriorPaid(priorDntts, dntt.id);
         } else {
-          soCoc = grows.reduce((s, { row }) => s + dnttList
+          soCoc = grows.reduce((s, { row }) => s + dntts
             .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id && d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
             .reduce((a, d) => a + d.so_tien, 0), 0);
         }
@@ -984,11 +1048,41 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           la_coc: !!dntt?.la_coc,
           multi_service: isGop,
           tai_khoan_thanh_toan: first.ref_doan_ngay_item_id ? (tkttMap[first.ref_doan_ngay_item_id] ?? null) : null,
+          // Metadata cho modal xem trước đối chiếu tổng dòng ↔ số tiền ĐNTT.
+          dntt_id: dntt?.id,
+          dntt_so_tien: dntt?.so_tien,
+          // Bỏ qua khi cọc/bổ sung, HOẶC khi ĐNTT còn allocate cho dòng NGOÀI nhóm
+          // đang in (gộp nhiều dòng, chỉ chọn in một phần) → so tổng sẽ lệch giả.
+          dntt_lech_bo_qua: isDnttLechBoQua(dntt) || (() => {
+            if (!dntt) return false;
+            const tongAlloc = allocTotalByDntt.get(dntt.id) ?? 0;
+            if (tongAlloc <= 0) return false;
+            const allocTrongNhom = grows.reduce(
+              (s, { row }) => s + (allocFor.get(row.id!)?.get(dntt.id) ?? 0),
+              0,
+            );
+            return allocTrongNhom + 1 < tongAlloc;
+          })(),
         });
       }
 
+    if (printDiffs.length > 0) {
+      const n = (v: number) => v.toLocaleString("vi-VN");
+      const chiTiet = printDiffs
+        .slice(0, 3)
+        .map((d) => `${d.ten} ${n(d.truoc.so_luong)}×${n(d.truoc.don_gia)} → ${n(d.sau.so_luong)}×${n(d.sau.don_gia)}`)
+        .join("; ");
+      toast.warning(
+        `Bản in lấy số MỚI NHẤT trong hệ thống — ${printDiffs.length} dòng khác số đang hiện trên màn hình: ${chiTiet}${printDiffs.length > 3 ? "…" : ""}`,
+        { duration: 8000 },
+      );
+    }
+
     return entries;
-  }, [selectedIds, dvRows, dnttList, paymentsList, extrasMap, sortedDays, allocByChiPhi, dvCdMap]);
+  }, [
+    selectedIds, dvRows, dnttList, paymentsList, extrasMap, sortedDays,
+    chiPhiRows, allocRows, qc, doanId, doanNhomId,
+  ]);
 
   const handlePrintSelected = async () => {
     try {

@@ -7,6 +7,8 @@ import { externalSupabase } from "@/lib/supabase-external";
 import {
   useChiPhiList, useUpsertChiPhi, useDeleteChiPhi, useDNTTList, useInsertDNTT,
 } from "@/hooks/use-chi-phi";
+import type { ChiPhiRow } from "@/hooks/use-chi-phi";
+import { diffPrintLine, isDnttLechBoQua, type PrintLineDiff } from "@/lib/print-dntt-sync";
 import { useChiPhiNHSection } from "@/hooks/use-chi-phi-nh";
 import { useAuditLogger } from "@/hooks/use-activity-log";
 import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dntt";
@@ -1785,16 +1787,37 @@ export function useNHSection({
 
   // ── Print handler ─────────────────────────────────────────────────────────
 
-  const buildSelectedEntries = useCallback((
-    pmtsArg?: typeof paymentsList,
-    redMapArg?: typeof redemptionByChiPhiId,
+  /** Nguồn dữ liệu cho bản in — truyền TƯƠI từ cache sau refetch (không qua React
+   *  state: state chỉ đổi ở render sau, cùng 1 tick vẫn là số cũ). */
+  interface PrintSources {
+    pmts?: typeof paymentsList;
+    redMap?: typeof redemptionByChiPhiId;
+    dntts?: typeof dnttList;
+    /** doan_chi_phi mới nhất — số tiền IN lấy từ đây, KHÔNG lấy từ localRows. */
+    cpRows?: ChiPhiRow[];
+    /** Nơi gom các dòng có số trên màn hình khác số trong DB (để cảnh báo). */
+    outDiffs?: PrintLineDiff[];
+  }
+
+  const buildEntriesFromSources = useCallback((
+    src?: PrintSources,
   ): NHDocEntry[] | undefined => {
     if (!nhData || selectedKeys.length === 0) return undefined;
     // Nguồn cấn trừ/voucher cho bản in — ưu tiên dữ liệu tươi (refetch lúc bấm In),
     // fallback cache. Cache payments-by-chi-phi dễ stale ngay sau khi cấn trừ
     // (vd voucher qua công nợ) → trước đây bản in QUÊN trừ cấn trừ, in đủ tiền.
-    const pmts = pmtsArg ?? paymentsList;
-    const redMap = redMapArg ?? redemptionByChiPhiId;
+    const pmts = src?.pmts ?? paymentsList;
+    const redMap = src?.redMap ?? redemptionByChiPhiId;
+    const dntts = src?.dntts ?? dnttList;
+    // localRows/extrasMap chỉ seed 1 LẦN/đoàn (initializedRef) và dòng đã override
+    // KHÔNG bao giờ được sync lại → tab mở lâu giữ giá cũ. Bản in là chứng từ kế
+    // toán nên phải khớp DB: số tiền lấy theo doan_chi_phi, màn hình chỉ dùng để
+    // biết chọn dòng nào. Chênh lệch được gom vào outDiffs để báo người in.
+    const cpById: Record<number, ChiPhiRow> = {};
+    for (const cp of (src?.cpRows ?? chiPhiRows)) {
+      if (cp.id != null) cpById[cp.id] = cp;
+    }
+    const outDiffs = src?.outDiffs;
     const entries: NHDocEntry[] = [];
     const canTruShownByNcc: Record<number, boolean> = {};
 
@@ -1804,14 +1827,41 @@ export function useNHSection({
         const nh = nhData.nhaHangMap[row.nha_hang_id];
         if (!nh) continue;
 
+        // Suất chính: CHỈ tin DB cho dòng ĐÃ override — đó là số OP tự nhập, mà
+        // localRows không bao giờ sync lại (seed 1 lần + effect sync bỏ qua dòng
+        // override) → đúng loại dòng in ra số cũ. Dòng KHÔNG override thì số trên
+        // màn hình dẫn xuất từ Điều tour / giá set menu và có thể ĐI TRƯỚC DB
+        // (chưa bấm lưu, DB còn đơn giá 0) → giữ số màn hình như cũ.
+        const cpMainRow = row.id != null ? cpById[row.id] : undefined;
+        const cpMain = cpMainRow?.is_overridden === true ? cpMainRow : undefined;
+        const rowPrint = cpMain
+          ? {
+              ...row,
+              so_khach: cpMain.so_luong,
+              don_gia: cpMain.don_gia,
+              chiet_khau_phan_tram: resolveNHChietKhau(cpMain, nh),
+              foc_khach_snapshot: cpMain.foc_khach_snapshot,
+              foc_mien_snapshot: cpMain.foc_mien_snapshot,
+              chiet_khau_phan_tram_snapshot: cpMain.chiet_khau_phan_tram_snapshot,
+            }
+          : row;
+        const mainDiff = diffPrintLine(
+          nh.ten,
+          { so_luong: row.so_khach, don_gia: row.don_gia, chiet_khau_phan_tram: row.chiet_khau_phan_tram },
+          cpMain
+            ? { so_luong: rowPrint.so_khach, don_gia: rowPrint.don_gia, chiet_khau_phan_tram: rowPrint.chiet_khau_phan_tram }
+            : null,
+        );
+        if (mainDiff) outDiffs?.push(mainDiff);
+
         // Số khách thực tế (trừ FOC) — dùng snapshot trên row
-        const focResolvedNH = resolveNHFoc(row, nh);
-        const soLuongThuc = calcSoKhachThucTe(row.so_khach, focResolvedNH.foc_khach, focResolvedNH.foc_mien);
+        const focResolvedNH = resolveNHFoc(rowPrint, nh);
+        const soLuongThuc = calcSoKhachThucTe(rowPrint.so_khach, focResolvedNH.foc_khach, focResolvedNH.foc_mien);
 
         // Build items: main meal + extras
         const extras = extrasMapRef.current[key] || [];
         const items: NHDocEntry["items"] = [];
-        const mainCkPct = row.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
+        const mainCkPct = rowPrint.chiet_khau_phan_tram ?? nh.chiet_khau_phan_tram ?? 0;
         // Voucher TẶNG: in ĐỦ số suất chính (gross) — phần vé tặng hiển thị RIÊNG ở cột
         // "Cấn trừ" (note "Voucher") qua voucher_amount để kế toán/NCC thấy ĐÃ tặng bao
         // nhiêu (Tổng − voucher = phần công ty trả). CHỈ phủ HẾT (tangPhuHetMain) mới bỏ
@@ -1820,17 +1870,36 @@ export function useNHSection({
         const isTangMain = redMain?.voucherLoai === "tang";
         const tangVeMain = isTangMain ? Math.min(redMain.soVe ?? soLuongThuc, soLuongThuc) : 0;
         const tangPhuHetMain = isTangMain && (soLuongThuc - tangVeMain) <= 0;
-        if (!tangPhuHetMain && row.don_gia > 0) {
-          items.push({ so_luong: soLuongThuc, don_gia: row.don_gia, ghi_chu: "", chiet_khau_phan_tram: mainCkPct });
+        if (!tangPhuHetMain && rowPrint.don_gia > 0) {
+          items.push({ so_luong: soLuongThuc, don_gia: rowPrint.don_gia, ghi_chu: "", chiet_khau_phan_tram: mainCkPct });
         }
         // Extras: voucher TẶNG → loại khỏi bản in (miễn phí); MUA → in dòng nhưng cộng
         // giá trị voucher vào extraVoucherMua để trừ khỏi cash phải trả ĐNTT bổ sung.
+        // Số tiền cũng lấy theo DB (extrasMap seed 1 lần/đoàn, không tự sync lại).
         let extraVoucherMua = 0;
+        let extraNgoaiDntt = 0;
         extras.forEach((e) => {
-          if (e.don_gia <= 0) return;
+          const cpExtra = e.id != null ? cpById[e.id] : undefined;
+          const eSoLuong = cpExtra ? cpExtra.so_luong : e.so_luong;
+          const eDonGia = cpExtra ? cpExtra.don_gia : e.don_gia;
+          const eCk = cpExtra ? (cpExtra.chiet_khau_phan_tram_snapshot ?? 0) : e.chiet_khau_phan_tram;
+          if (eDonGia <= 0) return;
           const eRed = e.id != null ? redMap[e.id] : undefined;
           if (eRed?.voucherLoai === "tang") return;
-          items.push({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta, chiet_khau_phan_tram: e.chiet_khau_phan_tram });
+          // Chỉ cảnh báo cho dòng THỰC SỰ được in (dòng bị loại không gây nhiễu).
+          const eDiff = diffPrintLine(
+            e.mo_ta || nh.ten,
+            { so_luong: e.so_luong, don_gia: e.don_gia, chiet_khau_phan_tram: e.chiet_khau_phan_tram },
+            cpExtra ? { so_luong: eSoLuong, don_gia: eDonGia, chiet_khau_phan_tram: eCk } : null,
+          );
+          if (eDiff) outDiffs?.push(eDiff);
+          items.push({ so_luong: eSoLuong, don_gia: eDonGia, ghi_chu: e.mo_ta, chiet_khau_phan_tram: eCk });
+          // Phát sinh HDV trả tiền mặt: VẪN in (NCC thấy đủ suất) nhưng KHÔNG nằm
+          // trong ĐNTT công ty (calcNHDnttAmount loại nguoi_tt='hdv') → tách ra để
+          // đối chiếu tổng dòng ↔ ĐNTT không báo lệch giả.
+          if (e.nguoi_tt === "hdv") {
+            extraNgoaiDntt += applyChietKhau(eSoLuong * eDonGia, eCk);
+          }
           if (eRed?.voucherLoai === "mua") {
             // Nguồn chuẩn = redeemGiaTri (cache-independent), KHÔNG dựa payment.
             extraVoucherMua += resolveVoucherPrintAmount({ voucherLoai: "mua", redeemGiaTri: eRed.giaTri, paymentVoucherAmount: 0 });
@@ -1839,9 +1908,9 @@ export function useNHSection({
         if (items.length === 0) continue;
 
         // DNTT for this meal
-        const chiPhiId = row.id;
+        const chiPhiId = rowPrint.id;
         const mealDntts = chiPhiId
-          ? dnttList.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId)
+          ? dntts.filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === chiPhiId)
           : [];
 
         // ĐNTT đang chờ in: chọn cái đầu tiên chưa hủy / chưa từ chối / chưa paid.
@@ -1930,13 +1999,13 @@ export function useNHSection({
           : Math.max(0, totalEntry - soCoc - canTruAmount - voucherAmount);
 
         // Format ngay_date
-        const d = new Date(row.ngay_date + "T00:00:00");
+        const d = new Date(rowPrint.ngay_date + "T00:00:00");
         const ngayDisplay = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
         entries.push({
           ngay_date: ngayDisplay,
           ten_nh: nh.ten,
-          so_khach: row.so_khach,
+          so_khach: rowPrint.so_khach,
           foc_khach: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_khach : null,
           foc: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_mien : null,
           items,
@@ -1949,28 +2018,77 @@ export function useNHSection({
           voucher_amount: voucherAmount,
           so_tien_con_tt: soTienConTT,
           la_coc: !!activeDntt?.la_coc,
+          // Metadata (KHÔNG in ra Word): modal xem trước so tổng dòng với số tiền
+          // ĐNTT đang in → bắt trường hợp ĐNTT tạo trước khi sửa giá.
+          dntt_id: activeDntt?.id,
+          dntt_so_tien: activeDntt?.so_tien,
+          dntt_lech_bo_qua: isDnttLechBoQua(activeDntt),
+          dntt_ngoai_dntt: (voucherReducesDntt ? 0 : voucherAmount) + extraNgoaiDntt,
         });
     }
 
     return entries;
-  }, [nhData, selectedKeys, dnttList, paymentsList, redemptionByChiPhiId]);
+  }, [nhData, selectedKeys, dnttList, paymentsList, redemptionByChiPhiId, chiPhiRows]);
+
+  /**
+   * Dựng entries bản in TỪ DỮ LIỆU TƯƠI — dùng cho MỌI đường in (nút In của
+   * section + in gộp NH·DV ở ChiPhiTab).
+   *
+   * Refetch trước rồi đọc thẳng cache: React state (localRows/extrasMap/dnttList)
+   * chỉ đổi ở render sau nên trong cùng 1 tick vẫn là số cũ. Cache
+   * payments-by-chi-phi còn hay stale ngay sau khi cấn trừ qua công nợ (vd
+   * voucher) → bản in từng ra "Cấn trừ = 0" và in đủ tiền dù đã cấn trừ.
+   */
+  const buildSelectedEntries = useCallback(async (): Promise<NHDocEntry[] | undefined> => {
+    await Promise.all([
+      qc.refetchQueries({ queryKey: ["doan_chi_phi", doanId] }),
+      qc.refetchQueries({ queryKey: ["de_nghi_thanh_toan", doanId] }),
+      qc.refetchQueries({ queryKey: ["payments-by-chi-phi", doanId] }),
+      qc.refetchQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] }),
+    ]);
+    const freshCp = qc.getQueryData(["doan_chi_phi", doanId, doanNhomId ?? null]) as
+      | ChiPhiRow[]
+      | undefined;
+    const freshDntt = qc.getQueryData(["de_nghi_thanh_toan", doanId]) as typeof dnttList | undefined;
+    const freshPmts =
+      (qc.getQueryData(["payments-by-chi-phi", doanId]) as typeof paymentsList) ?? paymentsList;
+    const freshRedeem = qc.getQueryData(["voucher-su-dung-by-doan", doanId]) as
+      | typeof redemptions
+      | undefined;
+    const freshRedMap = freshRedeem ? buildRedemptionMap(freshRedeem) : redemptionByChiPhiId;
+
+    const diffs: PrintLineDiff[] = [];
+    const entries = buildEntriesFromSources({
+      pmts: freshPmts,
+      redMap: freshRedMap,
+      dntts: freshDntt ?? dnttList,
+      cpRows: freshCp ?? chiPhiRows,
+      outDiffs: diffs,
+    });
+
+    if (diffs.length > 0) {
+      // Màn hình đang giữ số cũ (dòng override không bao giờ tự sync lại) → in
+      // theo DB, đồng thời cho bảng nạp lại từ DB để người dùng thấy đúng số.
+      initializedRef.current = false;
+      const n = (v: number) => v.toLocaleString("vi-VN");
+      const chiTiet = diffs
+        .slice(0, 3)
+        .map((d) => `${d.ten} ${n(d.truoc.so_luong)}×${n(d.truoc.don_gia)} → ${n(d.sau.so_luong)}×${n(d.sau.don_gia)}`)
+        .join("; ");
+      toast.warning(
+        `Bản in lấy số MỚI NHẤT trong hệ thống — ${diffs.length} dòng khác số đang hiện trên màn hình: ${chiTiet}${diffs.length > 3 ? "…" : ""}`,
+        { duration: 8000 },
+      );
+    }
+    return entries;
+  }, [
+    qc, doanId, doanNhomId, buildEntriesFromSources,
+    dnttList, paymentsList, chiPhiRows, redemptionByChiPhiId,
+  ]);
 
   const handlePrintSelected = async () => {
     try {
-      // Refetch tươi cấn trừ (payments) + voucher (redemptions) TRƯỚC khi dựng bản in.
-      // Cache payments-by-chi-phi hay stale ngay sau khi cấn trừ qua công nợ (vd voucher)
-      // → bản in trước đây ra "Cấn trừ = 0" và in đủ tiền dù đã cấn trừ.
-      await Promise.all([
-        qc.refetchQueries({ queryKey: ["payments-by-chi-phi", doanId] }),
-        qc.refetchQueries({ queryKey: ["voucher-su-dung-by-doan", doanId] }),
-      ]);
-      const freshPmts =
-        (qc.getQueryData(["payments-by-chi-phi", doanId]) as typeof paymentsList) ?? paymentsList;
-      const freshRedeem = qc.getQueryData(["voucher-su-dung-by-doan", doanId]) as
-        | typeof redemptions
-        | undefined;
-      const freshRedMap = freshRedeem ? buildRedemptionMap(freshRedeem) : redemptionByChiPhiId;
-      const entries = buildSelectedEntries(freshPmts, freshRedMap);
+      const entries = await buildSelectedEntries();
       if (!entries || entries.length === 0) {
         toast.error("Không có dữ liệu để xuất");
         return;
