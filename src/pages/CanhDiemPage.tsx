@@ -18,6 +18,7 @@ import CanhDiemDetail from "@/components/canh-diem/CanhDiemDetail";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { t, useTranslate } from "@/lib/i18n";
+import { canGuiBookingDV } from "@/lib/booking-dv-filter";
 
 function CanhDiemPageContent() {
   useTranslate();
@@ -135,9 +136,9 @@ function CanhDiemPageContent() {
                     <span className="font-medium text-xs truncate">{cd.ten}</span>
                     <Badge variant="outline" className={cn(
                       "text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0",
-                      cd.loai === "dich_vu" ? "border-purple-300 text-purple-600" : "border-slate-300 text-slate-500"
+                      canGuiBookingDV(cd) ? "border-purple-300 text-purple-600" : "border-slate-300 text-slate-500"
                     )}>
-                      {cd.loai === "dich_vu" ? t("Có mail") : t("Không mail")}
+                      {canGuiBookingDV(cd) ? t("Có mail") : t("Không mail")}
                     </Badge>
                   </div>
                   {cd.dia_diem && (
