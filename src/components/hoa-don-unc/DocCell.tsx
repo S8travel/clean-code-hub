@@ -4,6 +4,7 @@ import {
   Loader2, ScanText, ClipboardPaste, Mail,
 } from "lucide-react";
 import { ocrInvoiceAmount, isAmountMatch } from "@/lib/ocr-invoice";
+import { openStorageFile } from "@/lib/storage-url";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -181,7 +182,15 @@ export function DocCell({
               variant="outline"
               size="sm"
               className="h-6 px-2 text-xs"
-              onClick={() => window.open(url, "_blank")}
+              onClick={() => {
+                // Bucket chứng từ đã khoá → phải ký link tạm mới mở được.
+                void openStorageFile(url).catch(() =>
+                  toast({
+                    title: t("Không mở được file — bạn không có quyền hoặc file đã bị gỡ."),
+                    variant: "destructive",
+                  }),
+                );
+              }}
             >
               <Eye className="h-3 w-3 mr-1" /> {t("Xem")}
             </Button>
