@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
-import { fileKind, imageMime, extractItineraryText } from "./itinerary-file";
+import { fileKind, imageMime, extractItineraryText, unsupportedFileInfo } from "./itinerary-file";
 
 describe("fileKind — phân loại file lịch trình", () => {
   it("pdf", () => {
@@ -21,6 +21,28 @@ describe("fileKind — phân loại file lịch trình", () => {
   it("khác → other", () => {
     expect(fileKind("a.txt")).toBe("other");
     expect(fileKind("noext")).toBe("other");
+  });
+});
+
+describe("unsupportedFileInfo — báo lý do + cách chữa", () => {
+  it("file đọc được → null", () => {
+    for (const n of ["ct.pdf", "ct.docx", "gia.xlsx", "gia.xls", "a.png", "b.JPG"]) {
+      expect(unsupportedFileInfo(n)).toBeNull();
+    }
+  });
+  it(".doc Word cũ → chỉ đúng cách chữa là lưu thành .docx", () => {
+    const info = unsupportedFileInfo("chuong-trinh-VN04.doc");
+    expect(info).not.toBeNull();
+    expect(info!.badge).toContain(".docx");
+    expect(info!.help).toContain(".docx");
+  });
+  it(".DOC viết hoa cũng nhận ra (không rơi vào nhánh chung)", () => {
+    expect(unsupportedFileInfo("CT.DOC")!.badge).toBe(unsupportedFileInfo("ct.doc")!.badge);
+  });
+  it("định dạng lạ → hướng dẫn chung, KHÔNG bảo lưu thành .docx", () => {
+    const info = unsupportedFileInfo("ghi-chu.txt");
+    expect(info).not.toBeNull();
+    expect(info!.badge).not.toContain("Word bản cũ");
   });
 });
 
