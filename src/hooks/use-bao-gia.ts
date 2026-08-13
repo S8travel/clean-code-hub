@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
+import { resolveStorageUrl } from "@/lib/storage-url";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export interface BaoGiaItem {
@@ -452,10 +453,16 @@ export function useExtractMatchItinerary() {
     ): Promise<import("@/lib/bao-gia-ai-resolve").AiExtractResult> => {
       const session = await externalSupabase.auth.getSession();
       const token = session.data.session?.access_token;
+      // File lịch trình nằm trong bucket riêng tư, mà edge fn thì tự tải file về
+      // phía server → phải ký link tạm ngay ở client rồi mới gửi đi. Nhờ vậy hàm
+      // bên kia không phải sửa gì.
+      const body = input.fileUrl
+        ? { ...input, fileUrl: await resolveStorageUrl(input.fileUrl) }
+        : input;
       const resp = await fetch(`${EXTERNAL_SUPABASE_URL}/functions/v1/bao-gia-extract-match`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(input),
+        body: JSON.stringify(body),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));

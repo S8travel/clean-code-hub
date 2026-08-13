@@ -1,4 +1,5 @@
 import { externalSupabase } from "@/lib/supabase-external";
+import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import type { KhachSanItem } from "./use-dieu-tour";
@@ -180,7 +181,6 @@ export function useDeleteBookingKS() {
 }
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
-const SUPABASE_ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 // loai: 'dat_truoc' | 'final' | 'huy' | 'update'
 // 'update' = gửi cập nhật, KHÔNG đổi status — chỉ update sent_at + sent_by + email_thread_id
@@ -206,11 +206,7 @@ export function useSendKSBookingEmail() {
       // email_thread_id vẫn lưu (UUID) làm flag "đã gửi" để show nút "Gửi cập nhật".
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
+        headers: await edgeAuthHeaders(),
         body: JSON.stringify({
           to: params.to,
           cc: BOOKING_CC.ks,

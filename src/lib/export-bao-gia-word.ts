@@ -119,6 +119,43 @@ const sectionLabel = (text: string) =>
     children: [new TextRun({ noProof: true, text, bold: true, size: 22, font: "Times New Roman", color: "185FA5" })],
   });
 
+const RED_SHADING = { fill: "C00000", type: ShadingType.CLEAR, color: "auto" };
+
+// Dải cảnh báo đỏ đặt ở ĐẦU mọi bản Word có giá vốn / lợi nhuận.
+// Bản nội bộ và bản gửi đối tác trước đây tên file gần như giống hệt nhau nên
+// rất dễ gửi nhầm. Dải này + tiền tố NOIBO_ ở tên file là 2 lớp chặn nhầm,
+// không phải trang trí — đừng gỡ khi chỉnh giao diện.
+const internalOnlyBanner = () =>
+  new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        children: [
+          cell(
+            [
+              p("TÀI LIỆU NỘI BỘ — KHÔNG GỬI ĐỐI TÁC / KHÁCH HÀNG", {
+                bold: true,
+                size: 26,
+                color: "FFFFFF",
+                align: AlignmentType.CENTER,
+              }),
+              p("Bản này có đơn giá vốn, tổng chi phí và lợi nhuận. Bản gửi đối tác là mẫu 報價.", {
+                size: 18,
+                color: "FFFFFF",
+                align: AlignmentType.CENTER,
+              }),
+            ],
+            {
+              width: CONTENT_W,
+              shading: RED_SHADING,
+              margins: { top: 140, bottom: 140, left: 140, right: 140 },
+            }
+          ),
+        ],
+      }),
+    ],
+  });
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export async function exportBaoGiaWord(
   ketQua: BaoGiaKetQua,
@@ -136,7 +173,10 @@ export async function exportBaoGiaWord(
     ketQua.ten_chuong_trinh
       .replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "")
       .trim() || "tour";
-  saveAs(blob, `bao_gia_${safeName}.docx`);
+  // NOIBO_: CẢ HAI nhánh (thủ công lẫn tự tính) đều in đơn giá vốn, nhánh tự
+  // tính in thêm tổng chi phí + lợi nhuận. Tên cũ không phân biệt được với bản
+  // Đài Loan sạch giá vốn (`bao_gia_<mã>_<tên>.docx`).
+  saveAs(blob, `NOIBO_bao_gia_${safeName}.docx`);
 }
 
 // ── Giá cuối format (land tour — chỉ bảng giá theo bậc, không costing) ─────────
@@ -559,6 +599,9 @@ function buildManualDoc(
           },
         },
         children: [
+          // Bản thủ công vẫn in cột "Đơn giá (VND)" từng dịch vụ → là bản nội bộ.
+          internalOnlyBanner(),
+          spacer(),
           headerTable,
           titlePara,
           subTitlePara,
@@ -1075,6 +1118,9 @@ function buildAutoDoc(
           },
         },
         children: [
+          // Bản tự tính: có Đơn giá (VND), Tổng chi phí, Lợi nhuận (VND/USD).
+          internalOnlyBanner(),
+          spacer(),
           headerTable,
           titlePara,
           subTitlePara,

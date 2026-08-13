@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Upload, FileText, Trash2, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { openStorageFileOnClick } from "@/lib/storage-url";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { errMsg } from "@/lib/error";
@@ -82,6 +83,7 @@ export function LichTrinhFilesSection({ draft }: Props) {
                 href={f.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={openStorageFileOnClick(f.url, toast.error)}
                 className="flex-1 min-w-0 truncate font-medium text-slate-700 hover:text-blue-600 hover:underline inline-flex items-center gap-1"
               >
                 {f.ten}

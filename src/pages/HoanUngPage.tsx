@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import { toast } from "sonner";
+import { openStorageFileOnClick } from "@/lib/storage-url";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
@@ -363,7 +364,10 @@ export default function HoanUngPage() {
                                       href={it.hoa_don_url}
                                       target="_blank"
                                       rel="noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openStorageFileOnClick(it.hoa_don_url!, toast.error)(e);
+                                      }}
                                       className="text-blue-600 hover:underline inline-flex items-center gap-0.5 shrink-0"
                                     >
                                       <FileText className="h-3 w-3" /> Hóa đơn

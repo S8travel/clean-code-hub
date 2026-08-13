@@ -1,4 +1,5 @@
 import { externalSupabase } from "@/lib/supabase-external";
+import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import type { TablesUpdate } from "@/lib/database.types";
@@ -400,8 +401,6 @@ export function useLockPhongDeadlineAlerts(
 // ── Email ──
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
-const SUPABASE_ANON_KEY =
-  "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 export function useSendLockPhongBatchEmail() {
   const qc = useQueryClient();
@@ -426,11 +425,7 @@ export function useSendLockPhongBatchEmail() {
       // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
+        headers: await edgeAuthHeaders(),
         body: JSON.stringify({
           to: params.to,
           cc: BOOKING_CC.ks,
@@ -511,11 +506,7 @@ export function useSendLockPhongEmail() {
       // → Gmail tạo thread mới. Bỏ → Gmail group theo Subject + From.
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
+        headers: await edgeAuthHeaders(),
         body: JSON.stringify({
           to: params.to,
           cc: BOOKING_CC.ks,

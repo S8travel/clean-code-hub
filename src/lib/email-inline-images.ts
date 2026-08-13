@@ -4,8 +4,15 @@ import { externalSupabase } from "@/lib/supabase-external";
 // (client chặn ảnh inline data:). Giải pháp: upload lên Storage public →
 // dùng URL https → mọi email client render bình thường.
 //
-// Tái dùng bucket "dntt-documents" (đã public, getPublicUrl hoạt động cho UNC).
-const BUCKET = "dntt-documents";
+// Bucket RIÊNG, cố tình để public và KHÔNG chứa gì ngoài ảnh nhúng mail.
+//
+// Ảnh nhúng mail KHÔNG được nằm chung bucket với chứng từ: bucket chứng từ là
+// bucket riêng tư, mở file bằng link ký có hạn — mà mail ĐÃ GỬI thì nằm trong
+// hộp thư người nhận, không sửa lại được, nên link hết hạn là ảnh hỏng vĩnh
+// viễn. Vì vậy tách đôi: chứng từ = riêng tư + link ký; ảnh mail = public + URL bền.
+//
+// ĐỪNG đẩy gì khác vào bucket này, và đừng dùng nó cho file có số tiền.
+const BUCKET = "email-images";
 
 function extFromMime(mime: string): string {
   const m = mime.toLowerCase();
