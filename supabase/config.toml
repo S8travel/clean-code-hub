@@ -34,9 +34,10 @@ verify_jwt = false
 [functions.send-booking-email]
 verify_jwt = false
 
-# ai-chat: gọi từ widget chat trong app bằng publishable key.
-[functions.ai-chat]
-verify_jwt = false
+# ai-chat: ĐÃ GỠ 13/08/2026. Hàm trợ lý AI cũ không xác thực người gọi và nạp
+# thẳng dữ liệu danh mục vào prompt, trong khi màn hình gọi nó đã bỏ từ lâu.
+# ĐỪNG khai lại tên này. Muốn làm trợ lý AI thì viết hàm mới: bắt buộc xác thực,
+# whitelist đúng cột được phép đọc, và không đưa dữ liệu giá vốn vào prompt.
 
 # extract-chuong-trinh: trích lịch trình từ file OP tải lên, gọi bằng publishable key.
 [functions.extract-chuong-trinh]

@@ -35,7 +35,7 @@ flowchart TB
   subgraph SB["Supabase"]
     auth["Auth JWT<br/>anon · authenticated · service_role<br/>user_roles · 外洩密碼防護 已啟用"]
     api["Data API PostgREST + RLS<br/>RPC · VIEW security_invoker"]
-    edge["Edge Functions (Deno)<br/>send-booking-email · ai-chat<br/>sync-dntt / chi-phi / du-chi → Sheet<br/>xuat-word-dntt-ks · change-password"]
+    edge["Edge Functions (Deno)<br/>send-booking-email · bao-gia-extract-match<br/>sync-dntt / chi-phi / du-chi → Sheet<br/>xuat-word-dntt-ks · change-password"]
     db[("PostgreSQL — 啟用 RLS")]
     storage[("Storage<br/>dntt-documents · doan-files<br/>已禁止 anon 列檔")]
     cron["pg_cron + pg_net<br/>每30分/每週 同步 · 線索追蹤<br/>升級提醒 · 派工提醒"]
@@ -54,7 +54,7 @@ flowchart TB
   subgraph EXT["外部服務"]
     resend["Resend<br/>交易郵件"]
     sheets["Google Sheets API<br/>付款 / 費用報表"]
-    ai["AI 服務<br/>(ai-chat)"]
+    ai["AI 服務<br/>(bao-gia-extract-match · extract-chuong-trinh)"]
     hibp["HaveIBeenPwned<br/>外洩密碼檢查"]
   end
 
