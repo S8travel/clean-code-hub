@@ -8,13 +8,13 @@
 import { saveAs } from "file-saver";
 
 /** 0 text · 1 title · 2 header · 3 number · 4 total(text) · 5 total(number)
- *  · 6 số 2 lẻ · 7 total 2 lẻ · 8 total phần trăm */
+ *  · 6 số 2 lẻ · 7 total 2 lẻ · 8 total phần trăm · 9 cảnh báo (nền đỏ) */
 export type XlsxStyle =
   | "text" | "title" | "header" | "number" | "total" | "total_number"
-  | "number2" | "total_number2" | "total_pct";
+  | "number2" | "total_number2" | "total_pct" | "warn";
 const STYLE_IDS: Record<XlsxStyle, number> = {
   text: 0, title: 1, header: 2, number: 3, total: 4, total_number: 5,
-  number2: 6, total_number2: 7, total_pct: 8,
+  number2: 6, total_number2: 7, total_pct: 8, warn: 9,
 };
 
 export interface XlsxCell {
@@ -104,12 +104,13 @@ function buildStylesXml(): string {
     <font><sz val="14"/><name val="Arial"/><family val="2"/><b/><color rgb="FFFFFFFF"/></font>
     <font><sz val="11"/><name val="Arial"/><family val="2"/><b/></font>
   </fonts>
-  <fills count="5">
+  <fills count="6">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF1F2937"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFDBEAFE"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF3F4F6"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFC00000"/></patternFill></fill>
   </fills>
   <borders count="2">
     <border><left/><right/><top/><bottom/><diagonal/></border>
@@ -121,7 +122,7 @@ function buildStylesXml(): string {
     </border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="9">
+  <cellXfs count="10">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1">
       <alignment vertical="center" wrapText="1"/>
     </xf>
@@ -148,6 +149,9 @@ function buildStylesXml(): string {
     </xf>
     <xf numFmtId="166" fontId="2" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
       <alignment horizontal="right" vertical="center"/>
+    </xf>
+    <xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="center" vertical="center" wrapText="1"/>
     </xf>
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>

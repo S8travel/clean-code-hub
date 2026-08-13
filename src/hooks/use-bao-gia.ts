@@ -89,6 +89,10 @@ export interface BaoGiaKetQua {
   gia_cuoi_tiers?: GiaCuoiTier[];
   // Bản nháp review "AI điền từ lịch trình" (chưa áp dụng) — lưu để mở lại tiếp tục.
   ai_review?: import("@/lib/bao-gia-ai-resolve").AiReviewDraft | null;
+  // Công HDV / ngày cho báo giá NÀY. null/vắng = để hệ thống tự đặt theo tuyến
+  // (Sapa 700k, còn lại 200k — resolveHdvGiaNgay). OP gõ số = chốt cứng số đó,
+  // không bị đổi ngược khi lịch trình thay đổi.
+  hdv_gia_ngay?: number | null;
 }
 
 // File lịch trình đính kèm (loai_bao_gia='gia_cuoi' — chương trình lấy của bên

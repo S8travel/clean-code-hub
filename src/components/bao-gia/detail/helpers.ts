@@ -2,7 +2,10 @@
 // cost breakdown để các sub-components share consistent output.
 
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
-import { calcBaoGia, calcTiers, tierConfig, effItemFoc, type ManualItem } from "@/lib/bao-gia-calc";
+import {
+  calcBaoGia, calcTiers, tierConfig, effItemFoc,
+  HDV_GIA_NGAY_MAC_DINH, HDV_GIA_NGAY_SAPA, type ManualItem,
+} from "@/lib/bao-gia-calc";
 
 export const fmtVnd = (n: number | null | undefined) =>
   Math.round(Number(n) || 0).toLocaleString("vi-VN");
@@ -136,6 +139,7 @@ export function liveKetQua(draft: BaoGiaRow): BaoGiaKetQua | null {
     draft.profit_usd ?? 0,
     draft.xe_gia ?? 0,
     phuThu, // lump-sum vào transport
+    resolveHdvGiaNgay(ket),
   );
 
   return {
@@ -211,7 +215,7 @@ export function costBreakdown(args: {
   // vào "Xe vận chuyển"). Cộng vào tổng cost vốn ngoài calc.
   const live = calcBaoGia(
     manualItems, ket.ten_chuong_trinh, ket.so_ngay ?? 1,
-    exchangeRate, profitUsd, xeGia ?? 0, 0,
+    exchangeRate, profitUsd, xeGia ?? 0, 0, resolveHdvGiaNgay(ket),
   );
   const phuThuVal = args.phuThu ?? 0;
   const case16 = buildCase(live.case_16, 16, phuThuVal, profitUsd, exchangeRate, vcbRate);
@@ -259,11 +263,74 @@ export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
   const profitUsd = draft.profit_usd ?? 0;
   const phuThu = draft.phu_thu ?? 0;
   // phuThu = 0 trong calc (hiển thị dòng riêng), cộng ngoài qua buildCase — KHỚP costBreakdown.
-  const cases = calcTiers(manualItems, ket.so_ngay ?? 1, xr, profitUsd, guestsList, draft.xe_gia ?? 0, 0);
+  const cases = calcTiers(
+    manualItems, ket.so_ngay ?? 1, xr, profitUsd, guestsList,
+    draft.xe_gia ?? 0, 0, resolveHdvGiaNgay(ket),
+  );
   return cases.map((c) => ({
     guests: c.guests,
     line: buildCase(c, c.guests, phuThu, profitUsd, xr, draft.vcb_rate ?? null),
   }));
+}
+
+// ── Công HDV / ngày ──────────────────────────────────────────────────────────
+// Tuyến Sapa cần HDV chuyên tuyến đi suốt hành trình → 700k/ngày cho CẢ tour,
+// không phải chỉ mấy ngày ở Sapa.
+
+/** Bỏ dấu tiếng Việt + gộp khoảng trắng để dò từ khoá không phụ thuộc cách gõ. */
+function boDau(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d").replace(/\s+/g, " ");
+}
+
+/** Tour có ghé Sapa? Dò tên chương trình + tên mọi dòng dịch vụ (VI lẫn 中文).
+ *  Tiếng Việt dò theo BIÊN TỪ (\bsa ?pa\b) để "casapark" không dính.
+ *  Tiếng Trung CHỈ nhận 沙壩/沙坝 — 沙巴 là Sabah (Malaysia), gộp vào sẽ đội
+ *  giá HDV của tour Malaysia lên 700k. */
+export function isSapaTour(ket: BaoGiaKetQua | null | undefined): boolean {
+  if (!ket) return false;
+  const nguon = [ket.ten_chuong_trinh ?? "", ...(ket.items ?? []).flatMap((i) => [i.mo_ta ?? "", i.ten_zh ?? ""])];
+  return nguon.some((raw) => {
+    if (!raw) return false;
+    if (raw.includes("沙壩") || raw.includes("沙坝")) return true;
+    return /\bsa ?pa\b/.test(boDau(raw));
+  });
+}
+
+/** Công HDV/ngày dùng để tính báo giá này. OP đã gõ số → tôn trọng tuyệt đối
+ *  (kể cả 0); chưa gõ → tự đặt theo tuyến. */
+export function resolveHdvGiaNgay(ket: BaoGiaKetQua | null | undefined): number {
+  const v = ket?.hdv_gia_ngay;
+  if (v != null && Number.isFinite(v) && v >= 0) return v;
+  return isSapaTour(ket) ? HDV_GIA_NGAY_SAPA : HDV_GIA_NGAY_MAC_DINH;
+}
+
+/** Ép ngày của dòng thêm tay về [1, soNgay]. Ngày ngoài khoảng làm dòng biến
+ *  mất khỏi mắt OP (bảng gom theo ngày) mà tiền vẫn tính — chặn ngay ở ô nhập. */
+export function clampNgay(v: number, soNgay: number): number {
+  const max = Math.max(1, Math.round(soNgay) || 1);
+  if (!Number.isFinite(v)) return 1;
+  return Math.min(max, Math.max(1, Math.round(v)));
+}
+
+/** Dòng dịch vụ TRỐNG do OP tự thêm (AI đọc thiếu / phát sinh sau). Tên + giá
+ *  để rỗng, OP điền inline ngay trên bảng. `so_luong` = 1 (N), FOC để auto.
+ *  `bua_an` chỉ gắn cho dòng ăn — dòng vé/KS/xe mang bua_an sẽ làm máy combo
+ *  hiểu nhầm là bữa ăn cần trừ. */
+export function newBaoGiaItem(
+  loai: BaoGiaItem["loai"],
+  ngay_so: number,
+  bua_an?: "trua" | "toi",
+): BaoGiaItem {
+  return {
+    loai,
+    mo_ta: "",
+    don_gia: 0,
+    ghi_chu: "",
+    ngay_so: Math.max(1, Math.round(ngay_so) || 1),
+    so_luong: 1,
+    ...(loai === "meal" && bua_an ? { bua_an } : {}),
+  };
 }
 
 // ── Costing sheet (bố cục Excel: nhóm Xe/KS/Ăn/Vé × nhiều cột số khách) ───────
@@ -407,7 +474,8 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
 
   // Footer — khớp calcCase: tổng vốn = dịch vụ + HDV + BH + tip.
   const dichVu = configs.map((_, ti) => groups.reduce((s, g) => s + g.subtotals[ti], 0));
-  const hdv = configs.map(() => 200_000 * soNgay);
+  const hdvGiaNgay = resolveHdvGiaNgay(ket);
+  const hdv = configs.map(() => hdvGiaNgay * soNgay);
   const baoHiem = configs.map((c) => 100_000 * c.pax);
   const tip = configs.map(() => 500_000);
   const tongVon = configs.map((_, ti) => dichVu[ti] + hdv[ti] + baoHiem[ti] + tip[ti]);
@@ -420,7 +488,7 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
 
   const footer: CostingFooterRow[] = [
     { key: "dich_vu", label: "Cộng dịch vụ", values: dichVu, kind: "cost" },
-    { key: "hdv", label: "Hướng dẫn viên", values: hdv, kind: "cost" },
+    { key: "hdv", label: `Hướng dẫn viên (${fmtVnd(hdvGiaNgay)} ₫/ngày)`, values: hdv, kind: "cost" },
     { key: "bao_hiem", label: "Bảo hiểm", values: baoHiem, kind: "cost" },
     { key: "tip", label: "Tip", values: tip, kind: "cost" },
     { key: "tong_von", label: "TỔNG CHI PHÍ VỐN", values: tongVon, kind: "total" },

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Hotel, Utensils, Bus, Ticket, Info, Plus, X, FileSpreadsheet } from "lucide-react";
+import { Hotel, Utensils, Bus, Ticket, Plus, X, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import type { BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { exportBaoGiaCostingExcel } from "@/lib/export-bao-gia-costing-excel";
+import { GroupBlock } from "./CostingRows";
 import {
-  costingSheet, fmtVnd, fmtUsd, tierGuestsOf, baoGiaCode,
-  type CostingGroup, type CostingRow,
+  costingSheet, fmtVnd, fmtUsd, newBaoGiaItem, tierGuestsOf, baoGiaCode,
+  isSapaTour, resolveHdvGiaNgay,
+  type CostingGroup,
 } from "./helpers";
 
 interface Props {
@@ -54,6 +56,10 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
     if (guests.length <= 1) return;
     setGuests(guests.filter((x) => x !== g));
   };
+  // Công HDV: OP gõ số thì theo số đó, chưa gõ thì tự đặt theo tuyến (Sapa 700k).
+  const sapa = isSapaTour(ket);
+  const hdvGiaNgay = resolveHdvGiaNgay(ket);
+
   // Bậc áp dụng cho lead = ngưỡng cao nhất ≤ leadPax.
   const matchIdx = leadPax && leadPax > 0
     ? sheet.configs.reduce((acc, c, i) => (leadPax >= c.guests ? i : acc), -1)
@@ -64,6 +70,20 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
     updateDraftKetQua({ ...ket, items: items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) });
   };
   const commit = () => saveKetQua({ ...ket, items });
+
+  // Thêm/xoá dòng dịch vụ — lưu THẲNG (không đợi blur): dòng mới rỗng, nếu chỉ
+  // để ở draft mà OP F5 thì mất, còn dòng xoá mà không persist thì quay lại vẫn thấy.
+  const addItem = (loai: BaoGiaItem["loai"], ngay_so: number, bua_an?: "trua" | "toi") => {
+    saveKetQua({ ...ket, items: [...items, newBaoGiaItem(loai, ngay_so, bua_an)] });
+  };
+  const removeItem = (idx: number) => {
+    const it = items[idx];
+    if (!it) return;
+    // Dòng đã có tiền mà lỡ tay xoá thì báo giá lệch âm thầm → hỏi lại.
+    const ten = it.mo_ta?.trim() || "(chưa đặt tên)";
+    if ((it.don_gia ?? 0) > 0 && !window.confirm(`Xoá "${ten}" (${fmtVnd(it.don_gia)} ₫) khỏi báo giá?`)) return;
+    saveKetQua({ ...ket, items: items.filter((_, i) => i !== idx) });
+  };
 
   const tierBg = (i: number) => (i === matchIdx ? "bg-emerald-50" : "");
 
@@ -93,12 +113,15 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
         </h2>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-slate-400">Tỷ giá {fmtVnd(sheet.xr)} ₫/USD</span>
+          {/* File này có khối THAM SỐ + công thức sống → người nhận bấm lại được
+              giá vốn từng bậc khách. Nhãn phải nói rõ là bản nội bộ. */}
           <Button
-            size="sm" variant="outline" className="h-7 text-xs gap-1.5"
-            title="Tải bảng tính giá ra Excel (song ngữ Việt / 中文)"
+            size="sm" variant="outline"
+            className="h-7 text-xs gap-1.5 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+            title="Tải bảng tính giá ra Excel — bản NỘI BỘ, có tham số giá vốn + lợi nhuận. KHÔNG gửi đối tác."
             onClick={handleExportExcel}
           >
-            <FileSpreadsheet className="h-3.5 w-3.5" /> Xuất Excel
+            <FileSpreadsheet className="h-3.5 w-3.5" /> Xuất Excel (nội bộ)
           </Button>
         </div>
       </div>
@@ -139,6 +162,49 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
         </span>
       </div>
 
+      {/* Công HDV/ngày — tự đặt theo tuyến, OP ghi đè được */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] text-slate-500 mr-1">HDV / ngày:</span>
+        <Input
+          type="text" inputMode="numeric"
+          value={hdvGiaNgay > 0 ? hdvGiaNgay.toLocaleString("vi-VN") : ""}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/[^0-9]/g, "");
+            // Xoá trắng ô = trả về CHO hệ thống tự đặt, không phải "0 đồng".
+            updateDraftKetQua({ ...ket, hdv_gia_ngay: digits ? parseInt(digits, 10) : null });
+          }}
+          onBlur={() => saveKetQua({ ...ket, hdv_gia_ngay: ket.hdv_gia_ngay ?? null })}
+          placeholder="Tự đặt theo tuyến"
+          className="h-7 w-28 text-xs text-right"
+        />
+        <span className="text-[11px] text-slate-400">₫</span>
+        {ket.hdv_gia_ngay == null ? (
+          <span
+            className={cn(
+              "rounded px-1.5 py-0.5 text-[10px]",
+              sapa ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500",
+            )}
+            title={sapa
+              ? "Lịch trình có Sapa → HDV chuyên tuyến 700.000 ₫/ngày cho cả tour. Gõ số khác để ghi đè."
+              : "Chưa chỉ định → dùng mức mặc định. Gõ số để ghi đè."}
+          >
+            {sapa ? "tự nhận: tuyến Sapa" : "mặc định"}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => saveKetQua({ ...ket, hdv_gia_ngay: null })}
+            className="text-[10px] text-blue-600 hover:underline"
+            title="Bỏ số đã gõ, để hệ thống tự đặt theo tuyến"
+          >
+            ↺ về tự đặt
+          </button>
+        )}
+        <span className="text-[11px] text-slate-400">
+          × {ket.so_ngay ?? 1} ngày = <b className="text-slate-600">{fmtVnd(hdvGiaNgay * (ket.so_ngay ?? 1))} ₫</b>
+        </span>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="text-xs border-collapse w-full min-w-[860px]">
           <thead>
@@ -174,7 +240,6 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
           <tbody>
             {sheet.groups.map((g) => {
               const meta = GROUP_META[g.key];
-              const hasRows = g.rows.length > 0;
               return (
                 <GroupBlock
                   key={g.key}
@@ -183,9 +248,11 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
                   metaTint={meta.tint}
                   nTier={nTier}
                   matchIdx={matchIdx}
-                  hasRows={hasRows}
+                  soNgay={ket.so_ngay ?? 1}
                   onLive={liveItem}
                   onCommit={commit}
+                  onAdd={addItem}
+                  onRemove={removeItem}
                 />
               );
             })}
@@ -241,176 +308,9 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
         Cột <b>N</b> = số đêm (KS) / số lần (ăn, vé). <b>FOC</b> nhà hàng <b>tự tính</b> theo chính sách (vd 16免1)
         cho từng cỡ đoàn — để trống ô FOC = auto, nhập số = ghi đè. Mỗi cột hiện <b>SL−miễn</b> (số đã trừ FOC).
         Xe & phụ thu sửa ở phần thông tin tour phía trên (hoặc trong màn “AI điền từ lịch trình”).
-        Thêm/xoá dòng dịch vụ: mở lại “AI điền từ lịch trình” → sửa ở màn review → Áp dụng.
+        <b>Thiếu mục</b>: bấm “＋ Thêm dòng…” ở cuối nhóm rồi điền tên + giá ngay trên dòng mới.
+        <b>Thừa</b>: rê chuột vào dòng → biểu tượng thùng rác cạnh tên.
       </p>
     </section>
-  );
-}
-
-function GroupBlock({
-  group, metaIcon, metaTint, nTier, matchIdx, hasRows, onLive, onCommit,
-}: {
-  group: CostingGroup;
-  metaIcon: React.ReactNode;
-  metaTint: string;
-  nTier: number;
-  matchIdx: number;
-  hasRows: boolean;
-  onLive: (idx: number, patch: Partial<BaoGiaItem>) => void;
-  onCommit: () => void;
-}) {
-  const totalCols = 6 + nTier * 2;
-  return (
-    <>
-      <tr>
-        <td colSpan={totalCols} className="border border-slate-200 px-2 py-1 bg-slate-100/70">
-          <span className={cn("inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-semibold", metaTint)}>
-            {metaIcon} {group.label}
-          </span>
-        </td>
-      </tr>
-      {!hasRows && (
-        <tr>
-          <td colSpan={totalCols} className="border border-slate-200 px-2 py-1 text-[11px] text-slate-400 italic">
-            (chưa có)
-          </td>
-        </tr>
-      )}
-      {group.rows.map((r, ri) => (
-        <ItemRow
-          key={r.itemIndex >= 0 ? `i${r.itemIndex}` : `s${group.key}-${ri}`}
-          row={r}
-          matchIdx={matchIdx}
-          onLive={onLive}
-          onCommit={onCommit}
-        />
-      ))}
-      {/* Subtotal nhóm */}
-      <tr className="bg-slate-50/70 text-[11px]">
-        <td colSpan={6} className="sticky left-0 z-10 bg-slate-50/70 border border-slate-200 px-2 py-0.5 text-right font-medium text-slate-600">
-          Cộng {group.label.toLowerCase()}
-        </td>
-        {group.subtotals.map((s, ti) => (
-          <td key={ti} colSpan={2} className={cn("border border-slate-200 px-2 py-0.5 text-right font-semibold tabular-nums", ti === matchIdx && "bg-emerald-50")}>
-            {fmtVnd(s)}
-          </td>
-        ))}
-      </tr>
-    </>
-  );
-}
-
-function ItemRow({
-  row, matchIdx, onLive, onCommit,
-}: {
-  row: CostingRow;
-  matchIdx: number;
-  onLive: (idx: number, patch: Partial<BaoGiaItem>) => void;
-  onCommit: () => void;
-}) {
-  const idx = row.itemIndex;
-  const editable = row.editable && idx >= 0;
-  const dayBadge = row.ngay_so > 0
-    ? `D${row.ngay_so}${row.bua_an === "trua" ? "·T" : row.bua_an === "toi" ? "·Tối" : ""}`
-    : "";
-
-  const numInput = "h-7 w-full text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
-
-  return (
-    <tr className="border-t border-slate-100 hover:bg-slate-50/50">
-      {/* Cột ngày */}
-      <td className="sticky left-0 z-10 bg-white border border-slate-200 px-1.5 py-1 text-[10px] text-slate-400 text-center align-top w-12">
-        {dayBadge}
-      </td>
-      {/* Chi tiết: VI + ZH */}
-      <td className="border border-slate-200 px-2 py-1 min-w-[180px]">
-        {editable ? (
-          <input
-            value={row.mo_ta}
-            onChange={(e) => onLive(idx, { mo_ta: e.target.value })}
-            onBlur={onCommit}
-            placeholder="Tên dịch vụ"
-            className="w-full bg-transparent text-xs font-medium text-slate-700 outline-none focus:bg-blue-50/40 rounded px-1"
-          />
-        ) : (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
-            {row.mo_ta} <Info className="h-3 w-3 text-slate-300" />
-          </span>
-        )}
-        {row.ten_zh && <div className="text-[10px] text-slate-400 px-1">{row.ten_zh}</div>}
-      </td>
-      {/* ĐG USD (auto) */}
-      <td className="border border-slate-200 px-2 py-1 text-right text-slate-500 tabular-nums">{fmtUsd(row.don_gia_usd)}</td>
-      {/* ĐG VND */}
-      <td className="border border-slate-200 px-1 py-1 text-right">
-        {editable ? (
-          <Input
-            type="text"
-            inputMode="numeric"
-            value={row.don_gia > 0 ? row.don_gia.toLocaleString("vi-VN") : ""}
-            onChange={(e) => {
-              const digits = e.target.value.replace(/[^0-9]/g, "");
-              onLive(idx, { don_gia: digits ? parseInt(digits, 10) : 0 });
-            }}
-            onBlur={onCommit}
-            placeholder="0"
-            className={numInput}
-          />
-        ) : (
-          <span className="tabular-nums text-slate-700">{fmtVnd(row.don_gia)}</span>
-        )}
-      </td>
-      {/* N */}
-      <td className="border border-slate-200 px-1 py-1 text-center">
-        {editable ? (
-          <Input
-            type="number" min={1} step={1}
-            value={row.so_luong}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              onLive(idx, { so_luong: !isNaN(v) && v > 0 ? v : 1 });
-            }}
-            onBlur={onCommit}
-            className={cn(numInput, "text-center w-12 mx-auto")}
-          />
-        ) : (
-          <span className="text-slate-400">1</span>
-        )}
-      </td>
-      {/* FOC — trống = auto theo chính sách (placeholder), nhập số = ghi đè */}
-      <td className="border border-slate-200 px-1 py-1 text-center">
-        {editable && row.unit !== "lump" ? (
-          <Input
-            type="number" min={0} step={0.5}
-            value={row.foc_manual ?? ""}
-            placeholder={row.foc_khach ? `${row.foc_khach}免${row.foc_mien ?? 0}` : "0"}
-            title={row.foc_khach
-              ? `Tự tính ${row.foc_khach} miễn ${row.foc_mien ?? 0} mỗi cỡ đoàn — nhập số để ghi đè`
-              : "Số suất/phòng miễn (để trống = 0)"}
-            onChange={(e) => {
-              const s = e.target.value.trim();
-              if (s === "") { onLive(idx, { foc: undefined }); return; }
-              const v = parseFloat(s);
-              onLive(idx, { foc: !isNaN(v) && v >= 0 ? v : 0 });
-            }}
-            onBlur={onCommit}
-            className={cn(numInput, "text-center w-14 mx-auto")}
-          />
-        ) : (
-          <span className="text-slate-300">—</span>
-        )}
-      </td>
-      {/* Per-tier: SL + Thành tiền */}
-      {row.cells.map((cell, ti) => (
-        <td key={ti} colSpan={2} className={cn("border border-slate-200 px-2 py-1", ti === matchIdx && "bg-emerald-50")}>
-          <span className="flex items-center justify-between gap-2 tabular-nums">
-            <span className="w-12 text-center text-slate-400" title={cell.foc > 0 ? `${cell.qty} − ${cell.foc} miễn` : undefined}>
-              {row.unit === "lump" ? "—" : cell.foc > 0 ? `${cell.qty}−${cell.foc}` : cell.qty}
-            </span>
-            <span className="text-slate-700">{fmtVnd(cell.total)}</span>
-          </span>
-        </td>
-      ))}
-    </tr>
   );
 }
