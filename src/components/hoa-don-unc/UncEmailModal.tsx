@@ -13,6 +13,7 @@ import { BOOKING_CC, type BookingCcType } from "@/lib/booking-cc";
 import { normalizeEmailList } from "@/lib/unc-email";
 import type { HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
 import { t, useTranslate } from "@/lib/i18n";
+import { resolveStorageUrl } from "@/lib/storage-url";
 
 interface Props {
   row: HoaDonUNCRow;
@@ -201,7 +202,9 @@ async function resolveBookingEmail(row: HoaDonUNCRow): Promise<EmailTarget> {
 }
 
 async function fetchAsBase64(url: string, ncc: string | null, id: number) {
-  const res = await fetch(url);
+  // File UNC nằm ở bucket riêng tư → phải ký link tạm rồi mới tải được nội dung
+  // về đính kèm mail. Đọc URL công khai đã lưu trong DB sẽ bị từ chối.
+  const res = await fetch(await resolveStorageUrl(url));
   if (!res.ok) throw new Error(t("Không tải được file UNC đã upload"));
   const blob = await res.blob();
   const buf = await blob.arrayBuffer();

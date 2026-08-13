@@ -30,6 +30,7 @@ import { BaoGiaRuleChatPanel } from "@/components/bao-gia/BaoGiaRuleChat";
 import { fileKind, imageMime, extractItineraryText } from "@/lib/itinerary-file";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { resolveStorageUrl } from "@/lib/storage-url";
 
 interface Props {
   open: boolean;
@@ -216,7 +217,8 @@ export function BaoGiaAiImport({
       try {
         setExtracting(true);
         setRunningProvider(prov);
-        const buf = await (await fetch(f.url)).arrayBuffer();
+        // Bucket lịch trình là bucket riêng tư → ký link tạm rồi mới đọc được.
+        const buf = await (await fetch(await resolveStorageUrl(f.url))).arrayBuffer();
         const text = await extractItineraryText(buf, kind);
         if (!text.trim()) { toast.warning("File rỗng / không đọc được nội dung"); return; }
         await runExtract({ itinerary: text, provider: prov });

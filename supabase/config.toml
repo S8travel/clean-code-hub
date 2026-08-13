@@ -29,10 +29,12 @@ verify_jwt = false
 # Khai ở đây để lệnh deploy giữ đúng trạng thái prod. Muốn siết verify_jwt thì phải
 # sửa cả phía client trước — xem ghi chú "Edge fn verify_jwt deferred".
 
-# send-booking-email: mọi luồng gửi mail (booking KS/NH/DV, lock phòng, UNC, lead)
-# gọi bằng publishable key, không có user JWT.
+# send-booking-email: mọi luồng gửi mail (booking KS/NH/DV, lock phòng, UNC, lead).
+# Từ 13/08/2026 client gọi bằng access token của phiên đăng nhập (lib/edge-fn-auth.ts)
+# nên bật verify_jwt. ĐỪNG hạ về false: hàm này gửi mail dưới tên miền công ty,
+# để mở là ai cũng gửi được mail mạo danh.
 [functions.send-booking-email]
-verify_jwt = false
+verify_jwt = true
 
 # ai-chat: ĐÃ GỠ 13/08/2026. Hàm trợ lý AI cũ không xác thực người gọi và nạp
 # thẳng dữ liệu danh mục vào prompt, trong khi màn hình gọi nó đã bỏ từ lâu.

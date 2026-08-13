@@ -4,6 +4,7 @@
 
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { resolveStorageUrl } from "@/lib/storage-url";
 import { externalSupabase } from "@/lib/supabase-external";
 import { BOOKING_CC, type BookingCcType } from "@/lib/booking-cc";
 import type { HoaDonUNCRow } from "@/hooks/use-hoa-don-unc";
@@ -341,7 +342,8 @@ function uncFilename(ncc: string | null, id: number, ext: string): string {
 }
 
 export async function fetchUncAsBase64(url: string, ncc: string | null, id: number) {
-  const res = await fetch(url);
+  // File UNC ở bucket riêng tư → ký link tạm rồi mới tải nội dung về đính kèm mail.
+  const res = await fetch(await resolveStorageUrl(url));
   if (!res.ok) throw new Error("Không tải được file UNC đã upload");
   const blob = await res.blob();
   const buf = await blob.arrayBuffer();

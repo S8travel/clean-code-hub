@@ -20,6 +20,7 @@ import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSecti
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
 import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
+import { resolveStorageUrl } from "@/lib/storage-url";
 
 // Trang chi tiết Báo giá. State pattern: PARENT giữ `draft` (mirror row +
 // live edits). Children controlled bởi draft. Mỗi field change → setDraft
@@ -114,7 +115,7 @@ export default function BaoGiaDetailPage() {
       if (prog) {
         try {
           if (prog.kind === "pdf") {
-            const buf = await (await fetch(prog.files[0].url)).arrayBuffer();
+            const buf = await (await fetch(await resolveStorageUrl(prog.files[0].url))).arrayBuffer();
             const r = await renderPdfToPageImages(buf);
             programImages = r.pages;
             if (r.truncated) {
@@ -123,7 +124,7 @@ export default function BaoGiaDetailPage() {
           } else if (prog.kind === "image") {
             const all: PageImage[] = [];
             for (const f of prog.files) {
-              const buf = await (await fetch(f.url)).arrayBuffer();
+              const buf = await (await fetch(await resolveStorageUrl(f.url))).arrayBuffer();
               all.push(...(await imageToPageImages(buf, imageMime(f.ten) || "image/png")));
             }
             programImages = all.slice(0, MAX_PROGRAM_PAGES);
@@ -131,7 +132,7 @@ export default function BaoGiaDetailPage() {
               toast.warning(`Lịch trình dạng ảnh dài ${all.length} trang — file xuất chỉ nhúng ${MAX_PROGRAM_PAGES} trang đầu.`, { duration: 6000 });
             }
           } else {
-            const buf = await (await fetch(prog.files[0].url)).arrayBuffer();
+            const buf = await (await fetch(await resolveStorageUrl(prog.files[0].url))).arrayBuffer();
             programText = await extractItineraryText(buf, prog.kind);
           }
         } catch {
@@ -141,7 +142,7 @@ export default function BaoGiaDetailPage() {
           if (prog.fallbackText) {
             try {
               const fb = prog.fallbackText;
-              const buf = await (await fetch(fb.file.url)).arrayBuffer();
+              const buf = await (await fetch(await resolveStorageUrl(fb.file.url))).arrayBuffer();
               programText = await extractItineraryText(buf, fb.kind);
               toast.warning(`Không đọc được "${prog.files[0].ten}" — dùng nội dung text từ "${fb.file.ten}" thay thế (mất định dạng gốc).`, { duration: 6000 });
             } catch {
