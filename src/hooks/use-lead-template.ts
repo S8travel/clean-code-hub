@@ -1,9 +1,9 @@
 import { externalSupabase } from "@/lib/supabase-external";
+import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { htmlFromText } from "@/lib/lead-template";
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
-const SUPABASE_ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 export interface LeadTemplate {
   id: number;
@@ -72,11 +72,7 @@ export function useSendLeadEmail() {
         (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined;
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
+        headers: await edgeAuthHeaders(),
         body: JSON.stringify({
           to: p.to,
           subject: p.subject,
