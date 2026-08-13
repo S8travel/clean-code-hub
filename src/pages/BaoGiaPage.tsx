@@ -199,8 +199,18 @@ export default function BaoGiaPage() {
                               onClick={() => handleClone(row.id)} disabled={cloneMutation.isPending}>
                               <Copy className="h-3.5 w-3.5" />
                             </Button>
+                            {/* CÙNG một nút ra 2 loại file khác hẳn nhau: mode "giá cuối"
+                                ra bản gửi khách (chỉ giá bán), mode tự tính ra bản NỘI BỘ
+                                có đơn giá vốn + tổng chi phí + lợi nhuận. Tô đỏ + đổi chữ
+                                để OP biết TRƯỚC khi bấm mình sắp tải bản nào. */}
                             {row.ket_qua && (
-                              <Button variant="ghost" size="icon" className="h-6 w-6" title="Export Word"
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-6 w-6${isGiaCuoi ? "" : " text-red-600 hover:text-red-700"}`}
+                                title={isGiaCuoi
+                                  ? "Xuất Word — bản gửi khách (chỉ giá bán)"
+                                  : "Xuất Word NỘI BỘ — có giá vốn, tổng chi phí, lợi nhuận. KHÔNG gửi đối tác."}
                                 onClick={() => {
                                   const xr = row.exchange_rate ?? 26000;
                                   if (isGiaCuoi) {
