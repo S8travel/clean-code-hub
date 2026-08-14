@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { BangGiaImport } from "@/components/bao-gia/BangGiaImport";
+import { BangGiaTable } from "@/components/bao-gia/BangGiaTable";
 import { BaoGiaCreateModal } from "@/components/bao-gia/BaoGiaCreateModal";
 import {
   useBaoGiaList,
@@ -34,19 +35,6 @@ import { toast } from "sonner";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 const fmtUsd = (n: number) => n.toFixed(2);
-
-const LOAI_COLOR: Record<string, string> = {
-  hotel: "bg-blue-100 text-blue-700",
-  nha_hang: "bg-green-100 text-green-700",
-  xe: "bg-cyan-100 text-cyan-700",
-  dich_vu: "bg-orange-100 text-orange-700",
-};
-const LOAI_LABEL: Record<string, string> = {
-  hotel: "Khách sạn",
-  nha_hang: "Nhà hàng",
-  xe: "Xe",
-  dich_vu: "Dịch vụ",
-};
 
 export default function BaoGiaPage() {
   const navigate = useNavigate();
@@ -262,47 +250,21 @@ export default function BaoGiaPage() {
         <TabsContent value="bang-gia" className="mt-3 space-y-4">
           <BangGiaImport />
 
-          {bangGia.length > 0 && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-2">
-                Bảng giá hiện tại: <strong>{bangGia.length}</strong> dịch vụ
-                <span className="ml-3">
-                  (KS: {bangGia.filter(r => r.loai === "hotel").length} •
-                  Ăn uống: {bangGia.filter(r => r.loai === "nha_hang").length} •
-                  Xe: {bangGia.filter(r => r.loai === "xe").length} •
-                  Dịch vụ: {bangGia.filter(r => r.loai === "dich_vu").length})
-                </span>
-              </p>
-              <div className="border rounded-lg overflow-hidden max-h-96 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-[#E6F1FB] sticky top-0">
-                    <tr>
-                      <th className="py-1.5 px-2 text-left font-semibold">Tên dịch vụ</th>
-                      <th className="py-1.5 px-2 text-center font-semibold">Loại</th>
-                      <th className="py-1.5 px-2 text-right font-semibold">Giá (VND)</th>
-                      <th className="py-1.5 px-2 text-center font-semibold">FOC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bangGia.map((row) => (
-                      <tr key={row.id} className="border-t hover:bg-muted/20">
-                        <td className="py-1 px-2">{row.ten}</td>
-                        <td className="py-1 px-2 text-center">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${LOAI_COLOR[row.loai] ?? ""}`}>
-                            {LOAI_LABEL[row.loai] ?? row.loai}
-                          </span>
-                        </td>
-                        <td className="py-1 px-2 text-right font-mono">
-                          {row.gia ? row.gia.toLocaleString("vi-VN") : "—"}
-                        </td>
-                        <td className="py-1 px-2 text-center text-muted-foreground">{row.foc || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {/* Hiện KỂ CẢ khi bảng giá rỗng: nút "Thêm dịch vụ" nằm trong bảng này,
+              ẩn đi thì bảng trống chỉ còn đường import file, không gõ tay được. */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">
+              Bảng giá hiện tại: <strong>{bangGia.length}</strong> dịch vụ
+              <span className="ml-3">
+                (KS: {bangGia.filter(r => r.loai === "hotel").length} •
+                Ăn uống: {bangGia.filter(r => r.loai === "nha_hang").length} •
+                Xe: {bangGia.filter(r => r.loai === "xe").length} •
+                Dịch vụ: {bangGia.filter(r => r.loai === "dich_vu").length})
+              </span>
+              <span className="ml-3">Sửa thẳng trên bảng — gõ xong bấm ra ngoài là lưu.</span>
+            </p>
+            <BangGiaTable rows={bangGia} />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

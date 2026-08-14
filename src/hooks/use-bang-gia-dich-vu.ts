@@ -28,6 +28,84 @@ export function useBangGiaDichVu() {
   });
 }
 
+/** UPDATE ... .select().single() mà không đụng được dòng nào thì PostgREST ném
+ *  PGRST116 ("JSON object requested, multiple (or no) rows returned") — câu đó
+ *  dán thẳng lên toast thì OP không hiểu gì. Hai nguyên nhân thật: RLS chặn ghi
+ *  (tài khoản chỉ xem), hoặc dòng đã bị người khác bỏ khỏi bảng giá. */
+function loiKhongDungDuocDong(e: { code?: string; message?: string }): Error {
+  if (e?.code === "PGRST116") {
+    return new Error("Không lưu được — dòng này có thể đã bị người khác bỏ khỏi bảng giá, hoặc tài khoản của bạn không có quyền sửa. Tải lại trang để xem bản mới nhất.");
+  }
+  return new Error(e?.message || "Không lưu được");
+}
+
+/** Sửa 1 dòng bảng giá (sửa tay inline). KHÔNG invalidate: query sắp theo
+ *  loại+tên, refetch giữa lúc OP đang gõ sẽ làm dòng NHẢY CHỖ dưới con trỏ.
+ *  Vá thẳng vào cache đúng dòng đó — thứ tự chỉ sắp lại ở lần tải trang sau. */
+export function useUpdateBangGiaRow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: number; patch: Partial<Omit<BangGiaDichVu, "id" | "created_at">> }) => {
+      const { data, error } = await externalSupabase
+        .from("bang_gia_dich_vu")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single();
+      // .select().single() sau UPDATE: RLS chặn thì trả 0 dòng → lỗi, KHÔNG im
+      // lặng báo "đã lưu" trong khi DB không đổi gì.
+      if (error) throw loiKhongDungDuocDong(error);
+      return data as BangGiaDichVu;
+    },
+    onSuccess: (row) => {
+      qc.setQueryData<BangGiaDichVu[]>(["bang_gia_dich_vu"], (cur) =>
+        (cur ?? []).map((r) => (r.id === row.id ? row : r)));
+    },
+  });
+}
+
+/** Thêm 1 dòng bảng giá. Dòng mới chèn lên ĐẦU danh sách (không sắp lại) để OP
+ *  thấy ngay chỗ vừa thêm mà điền, thay vì phải đi tìm nó giữa mấy trăm dòng. */
+export function useAddBangGiaRow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (row: Pick<BangGiaDichVu, "ten" | "loai" | "gia" | "foc">) => {
+      const { data, error } = await externalSupabase
+        .from("bang_gia_dich_vu")
+        .insert({ ...row, active: true })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as BangGiaDichVu;
+    },
+    onSuccess: (row) => {
+      qc.setQueryData<BangGiaDichVu[]>(["bang_gia_dich_vu"], (cur) => [row, ...(cur ?? [])]);
+    },
+  });
+}
+
+/** Bỏ 1 dòng khỏi bảng giá. XOÁ MỀM (active=false) — cùng cách import đang dùng,
+ *  giữ lại dòng cũ để còn lần ra nếu bấm nhầm. */
+export function useDeleteBangGiaRow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { data, error } = await externalSupabase
+        .from("bang_gia_dich_vu")
+        .update({ active: false })
+        .eq("id", id)
+        .select("id")
+        .single();
+      if (error) throw loiKhongDungDuocDong(error);
+      return (data as { id: number }).id;
+    },
+    onSuccess: (id) => {
+      qc.setQueryData<BangGiaDichVu[]>(["bang_gia_dich_vu"], (cur) =>
+        (cur ?? []).filter((r) => r.id !== id));
+    },
+  });
+}
+
 export function useImportBangGia() {
   const qc = useQueryClient();
   return useMutation({
