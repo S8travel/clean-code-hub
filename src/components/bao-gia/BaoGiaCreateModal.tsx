@@ -19,6 +19,8 @@ import {
   useUploadLichTrinhFile,
   type LoaiBaoGia,
 } from "@/hooks/use-bao-gia";
+import { unsupportedFileInfo } from "@/lib/itinerary-file";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import { emptyBaoGiaKetQua, emptyGiaCuoiKetQua } from "@/components/bao-gia/detail/helpers";
 import { AgentSelect, LoaiTourSelect } from "@/components/bao-gia/BaoGiaFields";
 
@@ -67,6 +69,19 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
 
   const submitting = createBaoGia.isPending || uploadFile.isPending;
 
+  // Chọn / kéo-thả file. Định dạng AI không đọc được vẫn đính kèm bình thường,
+  // nhưng báo ngay tại đây — biết sớm còn kịp lưu lại thành .docx trước khi tạo.
+  const pickFile = (picked: File[]) => {
+    const f = picked[0];
+    if (!f) return;
+    setFile(f);
+    if (picked.length > 1) toast.info("Lúc tạo chỉ nhận 1 file — tải thêm ở trang chi tiết báo giá.");
+    const info = unsupportedFileInfo(f.name);
+    if (info) toast.warning(`${f.name} — ${info.help}`, { duration: 10000 });
+  };
+  const { dragging, dropProps } = useFileDrop(pickFile, submitting);
+  const fileUnsup = file ? unsupportedFileInfo(file.name) : null;
+
   const handleSubmit = async () => {
     const ten = tenChuongTrinh.trim();
     const days = soNgay > 0 ? soNgay : 1;
@@ -90,7 +105,7 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
       // Upload file lịch trình (nếu có) — chỉ khi đã có id để tạo path.
       if (file) {
         try {
-          await uploadFile.mutateAsync({ baoGiaId: id, file, current: [], uploadedBy: user?.user_id });
+          await uploadFile.mutateAsync({ baoGiaId: id, files: [file], current: [], uploadedBy: user?.user_id });
         } catch (e: unknown) {
           // Báo giá đã tạo — chỉ cảnh báo phần file, không chặn.
           toast.error("Đã tạo báo giá nhưng lỗi tải file: " + (errMsg(e) || ""));
@@ -191,36 +206,46 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
           </div>
 
           {/* File lịch trình — cả 2 mode (không bắt buộc) */}
-          <div>
+          <div {...dropProps}>
             <Label className="text-xs text-slate-600">
               File lịch trình <span className="text-[10px] text-slate-400 font-normal">(không bắt buộc — có thể tải thêm sau)</span>
             </Label>
             {file ? (
-              <div className="mt-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                <FileText className="h-4 w-4 text-blue-600 shrink-0" />
-                <span className="flex-1 min-w-0 truncate text-xs">{file.name}</span>
-                <button
-                  type="button"
-                  onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                  className="text-slate-400 hover:text-red-500"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+              <div className={`mt-1 rounded-md border px-2.5 py-2 ${dragging ? "border-blue-400 border-dashed bg-blue-50" : "border-slate-200 bg-slate-50"}`}>
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                  <span className="flex-1 min-w-0 truncate text-xs">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                    className="text-slate-400 hover:text-red-500"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {fileUnsup && (
+                  <p className="mt-1.5 rounded bg-amber-100 px-1.5 py-1 text-[10px] leading-snug text-amber-800">
+                    AI chưa đọc được file này — {fileUnsup.help}
+                  </p>
+                )}
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-1 flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500 hover:bg-slate-50"
+                className={`mt-1 flex w-full items-center justify-center gap-2 rounded-md border border-dashed px-3 py-3 text-xs transition-colors ${
+                  dragging ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-300 text-slate-500 hover:bg-slate-50"
+                }`}
               >
-                <Upload className="h-4 w-4" /> Chọn file (PDF, Word, ảnh...)
+                <Upload className="h-4 w-4" /> Kéo thả hoặc chọn file (PDF, Word .docx, ảnh...)
               </button>
             )}
             <input
               ref={fileInputRef}
               type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.docx,.xlsx,.xls,.doc"
               className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => pickFile(Array.from(e.target.files ?? []))}
             />
           </div>
         </div>

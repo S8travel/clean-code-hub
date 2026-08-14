@@ -17,6 +17,27 @@ export function fileKind(name: string): FileKind {
   return "other";
 }
 
+/** File AI KHÔNG đọc được: nhãn ngắn (gắn cạnh tên file) + cách chữa cụ thể.
+ *  null = đọc được.
+ *
+ *  Tách riêng `.doc` khỏi nhóm "khác": đây là ca hay gặp nhất (đối tác Đài Loan
+ *  gửi Word 97-2003) và cách chữa rất khác — lưu lại thành .docx là xong. Báo
+ *  chung chung "chưa đọc được" thì OP không biết làm gì, tải lại nhiều lần cùng
+ *  1 file mà vẫn không chọn được để phân tích. */
+export function unsupportedFileInfo(name: string): { badge: string; help: string } | null {
+  if (fileKind(name) !== "other") return null;
+  if (ext(name) === "doc") {
+    return {
+      badge: "Word bản cũ — lưu lại thành .docx",
+      help: "Word 97-2003 (.doc) chưa đọc được. Mở bằng Word → Lưu thành .docx (hoặc in ra PDF) rồi tải lại.",
+    };
+  }
+  return {
+    badge: "chưa đọc được — đổi sang PDF/.docx",
+    help: "Chỉ đọc được PDF, ảnh, Word (.docx) và Excel (.xlsx/.xls). Đổi sang một trong các định dạng đó, hoặc dán nội dung dạng text.",
+  };
+}
+
 /** MIME ảnh cho Claude (image block). '' nếu không phải ảnh hỗ trợ. */
 export function imageMime(name: string): string {
   const e = ext(name);

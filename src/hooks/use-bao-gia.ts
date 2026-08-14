@@ -302,37 +302,50 @@ export function useUploadLichTrinhFile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      baoGiaId, file, current, uploadedBy,
+      baoGiaId, files, current, uploadedBy,
     }: {
       baoGiaId: number;
-      file: File;
+      /** Nhiều file (kéo-thả thường thả cả cụm). 1 file → mảng 1 phần tử. */
+      files: File[];
       current: LichTrinhFile[];
       uploadedBy?: string | null;
     }): Promise<LichTrinhFile[]> => {
-      const ext = (file.name.split(".").pop() ?? "bin").replace(/[^a-zA-Z0-9]/g, "");
-      const path = `bao-gia-${baoGiaId}/${Date.now()}.${ext}`;
-      const { error: upErr } = await externalSupabase.storage
-        .from(LICH_TRINH_BUCKET)
-        .upload(path, file, { contentType: file.type || undefined });
-      if (upErr) throw upErr;
-      const { data: urlData } = externalSupabase.storage.from(LICH_TRINH_BUCKET).getPublicUrl(path);
-      const next: LichTrinhFile[] = [
-        ...(current ?? []),
-        {
+      const stamp = Date.now();
+      const added: LichTrinhFile[] = [];
+      const failed: string[] = [];
+      // Tuần tự + hậu tố index: 2 file thả cùng lúc rơi vào cùng mili giây sẽ
+      // trùng path → file sau ghi đè file trước (bucket không upsert = lỗi luôn).
+      for (const [i, file] of files.entries()) {
+        const ext = (file.name.split(".").pop() ?? "bin").replace(/[^a-zA-Z0-9]/g, "");
+        const path = `bao-gia-${baoGiaId}/${stamp}-${i}.${ext}`;
+        const { error: upErr } = await externalSupabase.storage
+          .from(LICH_TRINH_BUCKET)
+          .upload(path, file, { contentType: file.type || undefined });
+        if (upErr) { failed.push(`${file.name} (${upErr.message})`); continue; }
+        const { data: urlData } = externalSupabase.storage.from(LICH_TRINH_BUCKET).getPublicUrl(path);
+        added.push({
           ten: file.name,
           url: urlData.publicUrl,
           uploaded_at: new Date().toISOString(),
           uploaded_by: uploadedBy ?? null,
-        },
-      ];
-      const { error } = await externalSupabase
-        .from("bao_gia")
-        .update({ lich_trinh_files: next as unknown as TablesUpdate<"bao_gia">["lich_trinh_files"] })
-        .eq("id", baoGiaId);
-      if (error) throw error;
+        });
+      }
+      const next: LichTrinhFile[] = [...(current ?? []), ...added];
+      // Ghi phần tải được TRƯỚC rồi mới báo lỗi phần hỏng: thả 3 file hỏng 1 thì
+      // 2 file kia vẫn vào danh sách, không bắt làm lại từ đầu.
+      if (added.length) {
+        const { error } = await externalSupabase
+          .from("bao_gia")
+          .update({ lich_trinh_files: next as unknown as TablesUpdate<"bao_gia">["lich_trinh_files"] })
+          .eq("id", baoGiaId);
+        if (error) throw error;
+      }
+      if (failed.length) throw new Error(`Không tải được: ${failed.join("; ")}`);
       return next;
     },
-    onSuccess: (_data, { baoGiaId }) => {
+    // onSettled (không phải onSuccess): nhánh lỗi một phần vẫn đã ghi DB → không
+    // invalidate thì danh sách trên màn hình thiếu file vừa tải.
+    onSettled: (_data, _err, { baoGiaId }) => {
       qc.invalidateQueries({ queryKey: ["bao_gia"] });
       qc.invalidateQueries({ queryKey: ["bao_gia", baoGiaId] });
     },

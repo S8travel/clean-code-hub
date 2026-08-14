@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { CHI_PHI_MUTATION_KEY } from "@/lib/chi-phi-writes";
 import { toast } from "sonner";
 import { externalSupabase } from "@/lib/supabase-external";
 import { recalcChiPhiStatus, type DNTTRow as DNTTRowFromHook } from "@/hooks/use-dntt";
@@ -482,6 +483,7 @@ export function useUpdateChiPhiActual() {
   const { user } = useAuth();
   const lockGuard = useChiPhiLockGuard();
   return useMutation({
+    mutationKey: CHI_PHI_MUTATION_KEY,
     mutationFn: async (args: {
       id: number;
       doan_id: number;
@@ -540,11 +542,14 @@ export function useUpdateChiPhiActual() {
   });
 }
 
+// Key + hàm chờ nằm ở lib (test độc lập): CHI_PHI_MUTATION_KEY, waitForChiPhiWrites.
+
 export function useUpsertChiPhi() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const lockGuard = useChiPhiLockGuard();
   return useMutation({
+    mutationKey: CHI_PHI_MUTATION_KEY,
     mutationFn: async (payload: Partial<ChiPhiRow> & { doan_id: number }) => {
       lockGuard(payload.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
       // thanh_tien là generated column — loại trước khi insert/update.
@@ -602,6 +607,7 @@ export function useDeleteChiPhi() {
   const { user } = useAuth();
   const lockGuard = useChiPhiLockGuard();
   return useMutation({
+    mutationKey: CHI_PHI_MUTATION_KEY,
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
       lockGuard(doanId); // đoàn đã quyết toán → chặn (trừ admin)
 
