@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { calcTier, effItemFoc, type ManualItem } from "@/lib/bao-gia-calc";
-import { aiPreviewSheet, costingSheet, emptyBaoGiaCase } from "./helpers";
+import {
+  aiPreviewSheet, clampNgay, costingSheet, emptyBaoGiaCase, isSapaTour,
+  newBaoGiaItem, resolveHdvGiaNgay,
+} from "./helpers";
 import type { BaoGiaRow, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 
 function makeDraft(items: BaoGiaItem[], over: Partial<BaoGiaRow> = {}): BaoGiaRow {
@@ -104,6 +107,130 @@ describe("costingSheet — bố cục nhóm + nhiều bậc", () => {
     ]);
     const s = costingSheet(d)!;
     expect(s.groups[3].rows[0].ten_zh).toBe("玻璃桥");
+  });
+});
+
+describe("HDV / ngày — tuyến Sapa 700k cho CẢ tour", () => {
+  const ve = (mo_ta: string, ten_zh = ""): BaoGiaItem =>
+    ({ loai: "ticket", mo_ta, ten_zh, don_gia: 0, ghi_chu: "", ngay_so: 1 });
+  const ketOf = (items: BaoGiaItem[], ten = "Tour test", over: Partial<BaoGiaKetQua> = {}) =>
+    ({ ...makeDraft(items).ket_qua!, ten_chuong_trinh: ten, ...over });
+
+  it("nhận Sapa qua tên chương trình — mọi cách gõ", () => {
+    for (const ten of ["Hà Nội - Sapa 4N3Đ", "HÀ NỘI SA PA", "tour sapa mùa lúa", "北越海陸空~如夢沙壩6日"]) {
+      expect(isSapaTour(ketOf([], ten)), ten).toBe(true);
+    }
+  });
+
+  it("nhận Sapa qua tên dòng dịch vụ (kể cả chỉ có bản tiếng Trung)", () => {
+    expect(isSapaTour(ketOf([ve("KK SAPA HOTEL")]))).toBe(true);
+    expect(isSapaTour(ketOf([ve("Nhà hàng Hải Yến", "沙壩海燕餐廳")]))).toBe(true);
+  });
+
+  it("KHÔNG nhận nhầm: 沙巴 là Sabah (Malaysia), và chữ sapa lọt giữa từ khác", () => {
+    expect(isSapaTour(ketOf([], "馬來西亞沙巴5日"))).toBe(false);
+    expect(isSapaTour(ketOf([ve("Casapark Hotel")]))).toBe(false);
+    expect(isSapaTour(ketOf([ve("Hạ Long - Ninh Bình")], "Đông Bắc 5N"))).toBe(false);
+    expect(isSapaTour(null)).toBe(false);
+  });
+
+  it("chưa gõ tay → tự đặt 700k cho tour Sapa, 200k cho tour thường", () => {
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Sapa"))).toBe(700_000);
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Đà Nẵng"))).toBe(200_000);
+  });
+
+  it("OP gõ tay thì tôn trọng tuyệt đối, kể cả 0 và kể cả tour Sapa", () => {
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Sapa", { hdv_gia_ngay: 500_000 }))).toBe(500_000);
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Sapa", { hdv_gia_ngay: 0 }))).toBe(0);
+    // null = trả về cho hệ thống tự đặt (nút "↺ về tự đặt")
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Sapa", { hdv_gia_ngay: null }))).toBe(700_000);
+  });
+
+  it("footer bảng chi phí + giá bán/khách chạy theo mức HDV đã resolve", () => {
+    const items: BaoGiaItem[] = [ve("Vé")];
+    const thuong = costingSheet(makeDraft(items))!;                       // so_ngay = 3
+    const sapa = costingSheet(makeDraft(items, {
+      ket_qua: { ...makeDraft(items).ket_qua!, ten_chuong_trinh: "Tour Sapa" },
+    }))!;
+    const hdvOf = (s: typeof thuong) => s.footer.find((f) => f.key === "hdv")!;
+    expect(hdvOf(thuong).values).toEqual([600_000, 600_000]);            // 200k × 3
+    expect(hdvOf(sapa).values).toEqual([2_100_000, 2_100_000]);          // 700k × 3
+    expect(hdvOf(sapa).label).toContain("700.000 ₫/ngày");               // hiện rõ mức đang dùng
+    // Chênh 1,5tr dồn hết vào tổng vốn → giá bán/khách bậc 16 tăng đúng 1.5M/16.
+    const gia = (s: typeof thuong) => s.footer.find((f) => f.key === "gia_pax")!.values[0];
+    expect(gia(sapa) - gia(thuong)).toBe(1_500_000 / 16);
+  });
+
+  it("calcTier (ma trận giá) dùng CÙNG mức HDV với bảng chi phí", () => {
+    const items: BaoGiaItem[] = [ve("Vé")];
+    const draft = makeDraft(items, {
+      ket_qua: { ...makeDraft(items).ket_qua!, ten_chuong_trinh: "Tour Sapa" },
+    });
+    const s = costingSheet(draft)!;
+    const manual: ManualItem[] = [{ id: "0", ngay: 1, loai: "ticket", mo_ta: "Vé", bang_gia_ten: "Vé", gia: 0 }];
+    const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, 700_000);
+    expect(s.footer.find((f) => f.key === "gia_pax")!.values[0]).toBe(c.final_price_vnd);
+  });
+});
+
+describe("newBaoGiaItem / clampNgay — thêm dòng tay khi AI đọc sót", () => {
+  it("dòng mới rỗng tên + giá, N = 1, FOC để auto", () => {
+    const it = newBaoGiaItem("ticket", 3);
+    expect(it).toEqual({ loai: "ticket", mo_ta: "", don_gia: 0, ghi_chu: "", ngay_so: 3, so_luong: 1 });
+    expect(it.foc).toBeUndefined();       // để auto theo chính sách, không ép 0
+  });
+
+  it("bua_an CHỈ gắn cho dòng ăn — dòng vé mang bữa sẽ bị máy combo trừ oan", () => {
+    expect(newBaoGiaItem("meal", 2, "toi").bua_an).toBe("toi");
+    expect(newBaoGiaItem("ticket", 2, "toi").bua_an).toBeUndefined();
+    expect(newBaoGiaItem("hotel", 2, "trua").bua_an).toBeUndefined();
+    expect(newBaoGiaItem("meal", 2).bua_an).toBeUndefined();
+  });
+
+  it("ngày rác (0, âm, NaN, lẻ) không lọt xuống bảng", () => {
+    expect(newBaoGiaItem("meal", 0).ngay_so).toBe(1);
+    expect(newBaoGiaItem("meal", -5).ngay_so).toBe(1);
+    expect(newBaoGiaItem("meal", NaN).ngay_so).toBe(1);
+    expect(newBaoGiaItem("meal", 2.6).ngay_so).toBe(3);
+    expect(clampNgay(NaN, 5)).toBe(1);
+    expect(clampNgay(0, 5)).toBe(1);
+    expect(clampNgay(9, 5)).toBe(5);      // quá số ngày tour → kẹp về ngày cuối
+    expect(clampNgay(3, 5)).toBe(3);
+    expect(clampNgay(2, 0)).toBe(1);      // tour chưa khai số ngày
+  });
+
+  it("dòng thêm tay vào ĐÚNG nhóm + đúng thứ tự ngày, chưa có giá thì không cộng tiền", () => {
+    const base: BaoGiaItem[] = [
+      { loai: "ticket", mo_ta: "Vé D2", don_gia: 50_000, ghi_chu: "", ngay_so: 2 },
+    ];
+    const s = costingSheet(makeDraft([...base, newBaoGiaItem("ticket", 1)]))!;
+    const ve = s.groups[3];
+    expect(ve.rows.map((r) => r.ngay_so)).toEqual([1, 2]);   // dòng mới D1 xếp lên trước
+    expect(ve.rows[0].mo_ta).toBe("");
+    expect(ve.rows[0].editable).toBe(true);                  // sửa inline được ngay
+    expect(ve.subtotals[0]).toBe(50_000 * 17);               // dòng rỗng cộng 0 đồng
+  });
+
+  it("thêm dòng ăn tối D1 → nằm sau dòng trưa cùng ngày", () => {
+    const items: BaoGiaItem[] = [
+      { loai: "meal", bua_an: "trua", mo_ta: "Trưa", don_gia: 100_000, ghi_chu: "", ngay_so: 1 },
+    ];
+    const s = costingSheet(makeDraft([...items, newBaoGiaItem("meal", 1, "toi")]))!;
+    expect(s.groups[2].rows.map((r) => r.bua_an)).toEqual(["trua", "toi"]);
+  });
+
+  it("xoá dòng: itemIndex của các dòng còn lại vẫn trỏ đúng item", () => {
+    const items: BaoGiaItem[] = [
+      { loai: "ticket", mo_ta: "A", don_gia: 10_000, ghi_chu: "", ngay_so: 1 },
+      { loai: "ticket", mo_ta: "B", don_gia: 20_000, ghi_chu: "", ngay_so: 2 },
+      { loai: "ticket", mo_ta: "C", don_gia: 30_000, ghi_chu: "", ngay_so: 3 },
+    ];
+    const conLai = items.filter((_, i) => i !== 1);           // xoá "B"
+    const s = costingSheet(makeDraft(conLai))!;
+    const ve = s.groups[3];
+    expect(ve.rows.map((r) => r.mo_ta)).toEqual(["A", "C"]);
+    expect(ve.rows.map((r) => r.itemIndex)).toEqual([0, 1]);
+    expect(ve.rows.map((r) => conLai[r.itemIndex].mo_ta)).toEqual(["A", "C"]);
   });
 });
 

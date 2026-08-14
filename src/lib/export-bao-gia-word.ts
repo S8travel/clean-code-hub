@@ -122,9 +122,9 @@ const sectionLabel = (text: string) =>
 const RED_SHADING = { fill: "C00000", type: ShadingType.CLEAR, color: "auto" };
 
 // Dải cảnh báo đỏ đặt ở ĐẦU mọi bản Word có giá vốn / lợi nhuận.
-// Bản nội bộ và bản gửi đối tác trước đây tên file gần như giống hệt nhau nên
-// rất dễ gửi nhầm. Dải này + tiền tố NOIBO_ ở tên file là 2 lớp chặn nhầm,
-// không phải trang trí — đừng gỡ khi chỉnh giao diện.
+// Lý do: bản nội bộ và bản gửi đối tác trước đây tên file gần như giống hệt
+// (bao_gia_<tên>.docx vs bao_gia_<mã>_<tên>.docx) → gửi nhầm là lộ giá vốn.
+// Dải này + tiền tố NOIBO_ ở tên file là 2 lớp chặn nhầm, không phải trang trí.
 const internalOnlyBanner = () =>
   new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
@@ -139,7 +139,7 @@ const internalOnlyBanner = () =>
                 color: "FFFFFF",
                 align: AlignmentType.CENTER,
               }),
-              p("Bản này có đơn giá vốn, tổng chi phí và lợi nhuận. Bản gửi đối tác là mẫu 報價.", {
+              p("Bản này có ĐƠN GIÁ VỐN, TỔNG CHI PHÍ và LỢI NHUẬN. Bản gửi đối tác là mẫu 報價 (tên file bao_gia_<mã>_<tên>.docx).", {
                 size: 18,
                 color: "FFFFFF",
                 align: AlignmentType.CENTER,
@@ -173,9 +173,9 @@ export async function exportBaoGiaWord(
     ketQua.ten_chuong_trinh
       .replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "")
       .trim() || "tour";
-  // NOIBO_: CẢ HAI nhánh (thủ công lẫn tự tính) đều in đơn giá vốn, nhánh tự
-  // tính in thêm tổng chi phí + lợi nhuận. Tên cũ không phân biệt được với bản
-  // Đài Loan sạch giá vốn (`bao_gia_<mã>_<tên>.docx`).
+  // Tiền tố NOIBO_: cả 2 nhánh (manual + auto) đều in đơn giá vốn, bản auto in
+  // thêm tổng chi phí + lợi nhuận. Tên cũ `bao_gia_<tên>.docx` gần như không
+  // phân biệt được với bản Đài Loan sạch giá vốn `bao_gia_<mã>_<tên>.docx`.
   saveAs(blob, `NOIBO_bao_gia_${safeName}.docx`);
 }
 
@@ -645,6 +645,33 @@ export async function exportBaoGiaTaiwanWord(
   saveAs(blob, `bao_gia_${maBg}_${safeName}.docx`);
 }
 
+/** Bớt so với giá chuẩn 20 pax (USD/khách) cho các mốc đoàn lớn. */
+export const BOT_25PAX_USD = 7;
+export const BOT_30PAX_USD = 12;
+
+/** Mốc giá MẶC ĐỊNH của bảng báo giá Đài Loan (chính sách 08/2026):
+ *    10-14  → giữ nguyên cách cũ (giá trung bình + 30)
+ *    15-19  → đúng giá chuẩn bậc 16 pax
+ *    20-24  → đúng giá chuẩn bậc 20 pax
+ *    25-29  → giá 20 pax − 7 USD
+ *    30+    → giá 20 pax − 12 USD
+ *  Lấy `case_16`/`case_20` (luôn tính cho đúng 16 và 20 khách) chứ KHÔNG lấy
+ *  theo `tier_guests` — OP đổi cỡ đoàn trên bảng chi phí không được làm trôi
+ *  mốc giá chào khách. Thiếu case (báo giá cũ) → lùi về giá trung bình.
+ *  OP sửa tay trong "Nội dung file xuất" vẫn đè được toàn bộ. */
+export function taiwanDefaultBrackets(ketQua: BaoGiaKetQua): BaoGiaExportBracket[] {
+  const base = Math.round(ketQua.gia_trung_binh_usd);
+  const p16 = Math.round(ketQua.case_16?.final_price_usd ?? ketQua.gia_trung_binh_usd);
+  const p20 = Math.round(ketQua.case_20?.final_price_usd ?? ketQua.gia_trung_binh_usd);
+  return [
+    { label: "10-14 pax", price_usd: base + 30 },
+    { label: "15-19 pax", price_usd: p16 },
+    { label: "20-24 pax", price_usd: p20 },
+    { label: "25-29 pax", price_usd: p20 - BOT_25PAX_USD },
+    { label: "30pax以上", price_usd: p20 - BOT_30PAX_USD },
+  ];
+}
+
 /** Giá trị MẶC ĐỊNH (tính live) cho cấu hình xuất báo giá Đài Loan. Editor +
  *  export dùng chung; ket_qua.export_config override từng field. */
 export function taiwanExportDefaults(
@@ -656,11 +683,7 @@ export function taiwanExportDefaults(
   const base = Math.round(ketQua.gia_trung_binh_usd);
   const totalHotelVnd = items.filter((i) => i.loai === "hotel").reduce((s, i) => s + (i.don_gia || 0), 0);
   return {
-    brackets: [
-      { label: "10-14 pax", price_usd: base + 30 },
-      { label: "15-23 pax", price_usd: base },
-      { label: "24pax以上", price_usd: base - 10 },
-    ],
+    brackets: taiwanDefaultBrackets(ketQua),
     single_supplement_usd: Math.round(totalHotelVnd / 2 / (exchangeRate || 1)) + 10,
     above_notes: `1. 司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n2. 簽證、機票、私人費用\n3. 越南特殊節日另外報價`,
     included: DEFAULT_INCLUDED_ZH.join("\n"),

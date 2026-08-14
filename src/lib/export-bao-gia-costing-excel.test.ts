@@ -100,7 +100,8 @@ describe("buildCostingXlsxSheet — bảng tính giá song ngữ", () => {
   });
 
   it("có tiêu đề + thông tin đầu file song ngữ", () => {
-    expect(lines[0]).toContain("旅遊報價計算表");
+    // lines[0] là dải cảnh báo NỘI BỘ → tiêu đề nằm ngay dưới.
+    expect(lines[1]).toContain("旅遊報價計算表");
     expect(lines.some((l) => l.includes("行程") && l.includes("Đà Nẵng 4N3Đ"))).toBe(true);
   });
 
@@ -274,9 +275,27 @@ describe("buildCostingXlsxSheet — bảng tính giá song ngữ", () => {
     expect(cell.f).toBe(`F${an.rowNo}*G${an.rowNo}*I${an.rowNo}`);
   });
 
-  it("tên file có mã báo giá + ngày, bỏ ký tự cấm", () => {
+  it("tên file có tiền tố NOIBO_ + mã báo giá + ngày, bỏ ký tự cấm", () => {
     const f = costingFileName({ ...meta, tenChuongTrinh: 'Tour A/B: "hè"' }, new Date(2026, 6, 31));
-    expect(f).toBe("Bang-tinh-gia_BG00012_Tour A-B- -hè-_20260731.xlsx");
+    expect(f).toBe("NOIBO_Bang-tinh-gia_BG00012_Tour A-B- -hè-_20260731.xlsx");
     expect(f).not.toMatch(/[\\/:*?"<>|]/);
+  });
+
+  // File này có khối THAM SỐ + công thức sống → người nhận tự bấm lại được giá
+  // vốn. Dải cảnh báo là lớp chặn gửi nhầm, không phải trang trí → khoá bằng test.
+  it("dòng 1 là dải cảnh báo NỘI BỘ, nền đỏ, gộp hết chiều ngang", () => {
+    const warn = out.rows[0][0];
+    expect(warn.style).toBe("warn");
+    expect(String(warn.value)).toContain("KHÔNG GỬI ĐỐI TÁC");
+    expect(warn.colSpan).toBe(out.columns.length);
+  });
+
+  it("chèn dải cảnh báo KHÔNG làm lệch công thức (địa chỉ ô tính động)", () => {
+    // Cùng bộ dữ liệu, chỉ khác việc có dải cảnh báo ở đầu: mọi công thức phải
+    // trỏ vào đúng dòng của chính nó, tức lệch đều đúng 1 dòng so với trước.
+    const an = byName("Cơm trưa NH ABC");
+    expect(an.cells[9]?.formula).toBe(`F${an.rowNo}*G${an.rowNo}*I${an.rowNo}`);
+    // freezeRows phải bao trọn phần đầu (gồm cả dải cảnh báo) chứ không kẹt ở số cũ.
+    expect(out.freezeRows).toBeGreaterThan(1);
   });
 });

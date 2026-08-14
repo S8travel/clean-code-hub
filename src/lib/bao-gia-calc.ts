@@ -44,6 +44,11 @@ export function tierConfig(guests: number): CaseConfig {
   return { guests: g, pax: g + 1, rooms: Math.ceil(g / 2) + 1 };
 }
 
+/** Công HDV mặc định / ngày. */
+export const HDV_GIA_NGAY_MAC_DINH = 200_000;
+/** Tuyến Sapa phải dùng HDV chuyên tuyến, đi suốt hành trình → giá cả tour. */
+export const HDV_GIA_NGAY_SAPA = 700_000;
+
 export function calcCase(
   items: ManualItem[],
   soNgay: number,
@@ -52,6 +57,7 @@ export function calcCase(
   cfg: CaseConfig,
   tienXe: number,
   tienPhuThu: number,
+  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
 ): BaoGiaCase {
   const { guests, pax, rooms } = cfg;
 
@@ -75,7 +81,7 @@ export function calcCase(
     .reduce((s, i) => s + i.gia! * (i.so_luong ?? 1), 0);
 
   const insurance = 100_000 * pax;
-  const guide = 200_000 * soNgay;
+  const guide = hdvGiaNgay * soNgay;
   const tips = 500_000;
 
   const total_cost = hotel + meal + ticket + transport + insurance + guide + tips;
@@ -95,8 +101,9 @@ export function calcTier(
   guests: number,
   tienXe = 0,
   tienPhuThu = 0,
+  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
 ): BaoGiaCase {
-  return calcCase(items, soNgay, exchangeRate, profitUsd, tierConfig(guests), tienXe, tienPhuThu);
+  return calcCase(items, soNgay, exchangeRate, profitUsd, tierConfig(guests), tienXe, tienPhuThu, hdvGiaNgay);
 }
 
 /** Ma trận giá: 1 BaoGiaCase cho MỖI số khách trong danh sách (bậc tuỳ ý). */
@@ -108,8 +115,9 @@ export function calcTiers(
   guestsList: number[],
   tienXe = 0,
   tienPhuThu = 0,
+  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
 ): BaoGiaCase[] {
-  return guestsList.map((g) => calcTier(items, soNgay, exchangeRate, profitUsd, g, tienXe, tienPhuThu));
+  return guestsList.map((g) => calcTier(items, soNgay, exchangeRate, profitUsd, g, tienXe, tienPhuThu, hdvGiaNgay));
 }
 
 export function calcBaoGia(
@@ -120,9 +128,10 @@ export function calcBaoGia(
   profitUsd: number,
   tienXe = 0,
   tienPhuThu = 0,
+  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
 ): BaoGiaKetQua {
   // 2 mức 16/20 (back-compat) — tái dùng engine bậc.
-  const [case_16, case_20] = calcTiers(items, soNgay, exchangeRate, profitUsd, [16, 20], tienXe, tienPhuThu);
+  const [case_16, case_20] = calcTiers(items, soNgay, exchangeRate, profitUsd, [16, 20], tienXe, tienPhuThu, hdvGiaNgay);
 
   const gia_trung_binh_vnd = Math.round((case_16.final_price_vnd + case_20.final_price_vnd) / 2);
   const gia_trung_binh_usd = (case_16.final_price_usd + case_20.final_price_usd) / 2;

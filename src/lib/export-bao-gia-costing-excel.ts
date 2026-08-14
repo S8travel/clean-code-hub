@@ -139,6 +139,16 @@ export function buildCostingXlsxSheet(sheet: CostingSheet, meta: CostingExcelMet
   const tipTotal = derivedUnitCost(footerOf("tip")?.values, sheet.configs.map(() => 1));
 
   // ── Đầu file ──
+  // Dải cảnh báo NỘI BỘ: file này có khối THAM SỐ (tỷ giá, lợi nhuận/khách,
+  // HDV/ngày, bảo hiểm/khách, tip/đoàn) + công thức sống → người nhận tự bấm
+  // lại được giá vốn theo từng bậc khách. Gửi nhầm là mất sạch biên lợi nhuận.
+  // Địa chỉ ô trong công thức tính động qua nextRow() nên thêm dòng này KHÔNG
+  // làm lệch công thức; freezeRows cũng lấy theo rows.length.
+  rows.push([{
+    value: "TÀI LIỆU NỘI BỘ — KHÔNG GỬI ĐỐI TÁC / KHÁCH HÀNG · 內部文件，請勿外傳",
+    style: "warn",
+    colSpan: totalCols,
+  }]);
   rows.push([{ value: "BẢNG TÍNH GIÁ TOUR · 旅遊報價計算表", style: "title", colSpan: totalCols }]);
   const info = (label: string, value: string) =>
     rows.push([tot(label, 2), txt(value, totalCols - 2)]);
@@ -337,7 +347,8 @@ export function costingFileName(meta: CostingExcelMeta, now: Date = new Date()):
   const d = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
   const base = [meta.maBg, meta.tenChuongTrinh].filter(Boolean).join("_") || "bao-gia";
   const safe = base.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim().slice(0, 80);
-  return `Bang-tinh-gia_${safe}_${d}.xlsx`;
+  // Tiền tố NOIBO_ để không lẫn với file gửi đối tác trong thư mục Downloads.
+  return `NOIBO_Bang-tinh-gia_${safe}_${d}.xlsx`;
 }
 
 /** Dựng + tải file .xlsx bảng tính giá. */
