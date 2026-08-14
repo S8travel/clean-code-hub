@@ -32,6 +32,9 @@ export interface CanhDiem {
   tai_khoan_thanh_toan: string | null;
   nha_cung_cap_id: number | null;
   khach_san_id: number | null;
+  /** true = đặt ngoài hệ thống (Zalo/điện thoại) → không sinh dòng ở tab Booking DV.
+   *  Chi phí vẫn tính bình thường. Xem @/lib/booking-dv-filter. */
+  khong_can_booking: boolean | null;
   created_at: string;
 }
 

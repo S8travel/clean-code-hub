@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { openStorageFileOnClick } from "@/lib/storage-url";
 import { FileText, Upload, X, ReceiptText, MapPin, Users, TrendingUp, CheckCircle2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t, useTranslate } from "@/lib/i18n";
@@ -310,7 +311,10 @@ function TaiLieuChip({
       href={taiLieu.file_url}
       target="_blank"
       rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        openStorageFileOnClick(taiLieu.file_url, toast.error)(e);
+      }}
       className={cn(
         "text-xs shrink-0 rounded px-2 py-1 font-medium transition-colors cursor-pointer",
         cls,
@@ -530,6 +534,7 @@ function InvoiceDoanCard({
               href={f.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={openStorageFileOnClick(f.url, toast.error)}
               className="truncate text-blue-600 hover:underline max-w-[130px]"
             >
               {f.name}

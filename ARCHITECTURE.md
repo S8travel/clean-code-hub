@@ -34,7 +34,7 @@ flowchart TB
   subgraph SB["Supabase (lflsbwoqzmbknzdpaequ)"]
     auth["Auth JWT<br/>anon · authenticated · service_role<br/>user_roles · leaked-pw bật"]
     api["Data API PostgREST + RLS<br/>RPC · VIEW security_invoker"]
-    edge["Edge Functions (Deno)<br/>send-booking-email · ai-chat<br/>sync-dntt / chi-phi / du-chi → Sheet<br/>xuat-word-dntt-ks · change-password"]
+    edge["Edge Functions (Deno)<br/>send-booking-email · bao-gia-extract-match<br/>sync-dntt / chi-phi / du-chi → Sheet<br/>xuat-word-dntt-ks · change-password"]
     db[("PostgreSQL — RLS bật")]
     storage[("Storage<br/>dntt-documents · doan-files<br/>list khóa anon")]
     cron["pg_cron + pg_net<br/>sync 30' / tuần · lead followup<br/>escalation · nhắc việc"]
@@ -53,7 +53,7 @@ flowchart TB
   subgraph EXT["Dịch vụ ngoài"]
     resend["Resend<br/>email giao dịch"]
     sheets["Google Sheets API<br/>báo cáo ĐNTT / chi phí"]
-    ai["AI provider<br/>(ai-chat)"]
+    ai["AI provider<br/>(bao-gia-extract-match · extract-chuong-trinh)"]
     hibp["HaveIBeenPwned<br/>mật khẩu rò rỉ"]
   end
 
@@ -121,7 +121,8 @@ Chi tiết file → `CLAUDE.md`.
 - **RPC quan trọng:** `recalc_chi_phi_payment_status` — nguồn DUY NHẤT tính
   `doan_chi_phi.trang_thai_thanh_toan` (dựa SUM(payments)), KHÔNG set tay.
 - **Edge Functions (Deno)** — thực tế trong `supabase/functions/`:
-  `send-booking-email` (Resend, mọi mail booking/UNC), `ai-chat`,
+  `send-booking-email` (Resend, mọi mail booking/UNC), `bao-gia-extract-match`,
+  `bao-gia-teach-rule`, `fb-lead-webhook`, `send-push`,
   `xuat-word-dntt-ks`, `get-exchange-rate`, `Change-password`, + 3 hàm đồng bộ
   Google Sheet: `sync-dntt-to-sheet` · `sync-chi-phi-to-sheet` ·
   `sync-dntt-du-chi-to-sheet`. (DB query trong edge fn dùng `service_role` →

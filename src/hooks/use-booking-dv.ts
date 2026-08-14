@@ -1,4 +1,5 @@
 import { externalSupabase } from "@/lib/supabase-external";
+import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import { normalizeEmailList } from "@/lib/unc-email";
@@ -86,7 +87,6 @@ export function useDeleteBookingDV() {
 }
 
 const SUPABASE_EDGE_URL = "https://lflsbwoqzmbknzdpaequ.supabase.co/functions/v1";
-const SUPABASE_ANON_KEY = "sb_publishable_NDWgz5PzI38R-ouTHShYaw_6YhYjOIw";
 
 export async function callSendBookingEmail(params: {
   to: string;
@@ -103,11 +103,7 @@ export async function callSendBookingEmail(params: {
   const to = normalizeEmailList(params.to);
   const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
+    headers: await edgeAuthHeaders(),
     body: JSON.stringify({ ...params, to, replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined }),
   });
   if (!res.ok) {

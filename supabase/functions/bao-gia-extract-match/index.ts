@@ -136,8 +136,15 @@ ${JSON.stringify(catalog)}`;
 
     let userContent: unknown;
     if (hasFile) {
-      const allowedPrefix = (Deno.env.get("SUPABASE_URL") ?? "") + "/storage/v1/object/public/";
-      if (!fileUrl.startsWith(allowedPrefix)) return json({ error: "fileUrl không hợp lệ" }, 400);
+      // Chốt chống SSRF: chỉ cho tải file nằm trong Storage của chính dự án.
+      // Nhận CẢ 2 dạng — `/public/` (bucket công khai) và `/sign/` (link ký tạm
+      // của bucket riêng tư). File lịch trình nằm ở bucket riêng tư nên client
+      // ký link trước khi gửi sang đây; thiếu nhánh `/sign/` là luồng AI trích
+      // lịch trình từ file chết.
+      const objectBase = (Deno.env.get("SUPABASE_URL") ?? "") + "/storage/v1/object/";
+      const urlHopLe =
+        fileUrl.startsWith(objectBase + "public/") || fileUrl.startsWith(objectBase + "sign/");
+      if (!urlHopLe) return json({ error: "fileUrl không hợp lệ" }, 400);
       const fr = await fetch(fileUrl);
       if (!fr.ok) return json({ error: "Không tải được file lịch trình" }, 400);
       const b64 = encodeBase64(await fr.arrayBuffer());

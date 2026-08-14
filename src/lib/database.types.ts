@@ -204,6 +204,7 @@ export type Database = {
           icon: string | null
           id: number
           khach_san_id: number | null
+          khong_can_booking: boolean
           loai: string | null
           nguoi_thanh_toan: string | null
           nha_cung_cap_id: number | null
@@ -228,6 +229,7 @@ export type Database = {
           icon?: string | null
           id?: never
           khach_san_id?: number | null
+          khong_can_booking?: boolean
           loai?: string | null
           nguoi_thanh_toan?: string | null
           nha_cung_cap_id?: number | null
@@ -252,6 +254,7 @@ export type Database = {
           icon?: string | null
           id?: never
           khach_san_id?: number | null
+          khong_can_booking?: boolean
           loai?: string | null
           nguoi_thanh_toan?: string | null
           nha_cung_cap_id?: number | null

@@ -12,6 +12,7 @@ import {
   findDoomedCanhDiemItems, findBlockedChiPhi, buildCanhDiemBlockedMessage,
 } from "@/lib/canh-diem-remove-guard";
 import { resolveCanhDiemChiPhiTarget } from "@/lib/canh-diem-cascade";
+import { canGuiBookingDV } from "@/lib/booking-dv-filter";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 
@@ -35,6 +36,8 @@ export interface CanhDiemItem {
   /** Vé combo đã bao gồm bữa ăn ('trua'|'toi'|'ca_hai'|null) — CHỈ để cảnh báo
    *  hiển thị ở điều tour, KHÔNG dùng tính tiền (chưa có cột snapshot per-tour). */
   bao_gom_bua_an: string | null;
+  /** true = đặt ngoài hệ thống (Zalo/điện thoại) → bỏ qua khi sync Booking DV. */
+  khong_can_booking: boolean | null;
 }
 
 export interface NhaHangItem {
@@ -127,7 +130,7 @@ export function useCanhDiem() {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("canh_diem")
-        .select("id, ten, loai, co_phi, gia_mac_dinh, foc_khach, foc_mien, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu, nha_cung_cap_id, bao_gom_bua_an")
+        .select("id, ten, loai, co_phi, gia_mac_dinh, foc_khach, foc_mien, nguoi_thanh_toan, icon, dia_diem, so_dien_thoai, email, khach_san_id, ghi_chu, nha_cung_cap_id, bao_gom_bua_an, khong_can_booking")
         .order("ten");
       if (error) throw error;
       return data as CanhDiemItem[];
@@ -1546,11 +1549,14 @@ export async function syncDieuTourToBookingDV(params: {
 
   // Collect co_phi + tag dich_vu items (KHÔNG phụ thuộc nguoi_thanh_toan —
   // HDV trả cash vẫn cần gửi mail booking với NCC để giữ chỗ).
+  // Loại tàu/day-use (booking bên tab KS) + dịch vụ đặt ngoài hệ thống — xem
+  // canGuiBookingDV. Nhóm nào rơi khỏi danh sách thì dòng booking `chua_dat`
+  // tương ứng bị cleanup ở cuối hàm xoá đi; dòng ĐÃ gửi mail giữ nguyên.
   const coPhiItems: { cd: CanhDiemItem; ngay_date: string }[] = [];
   for (const day of days) {
     for (const item of day.items) {
       const cd = canhDiemList.find((c) => c.id === item.canh_diem_id);
-      if (cd && cd.co_phi && cd.loai === "dich_vu") {
+      if (cd && canGuiBookingDV(cd)) {
         coPhiItems.push({ cd, ngay_date: day.ngay_date });
       }
     }
@@ -1786,7 +1792,9 @@ export async function checkPreSaveWarnings(params: {
     for (const dbItem of dbItems) {
       if (!currentCdIds.has(dbItem.canh_diem_id)) {
         const cd = canhDiemList.find((c) => c.id === dbItem.canh_diem_id);
-        if (!cd || !cd.co_phi || cd.loai !== "dich_vu") continue;
+        // Dịch vụ không sinh booking DV (tàu day-use, đặt qua Zalo) thì gỡ khỏi
+        // tour cũng chẳng ảnh hưởng booking nào → đừng cảnh báo thừa.
+        if (!cd || !canGuiBookingDV(cd)) continue;
 
         const ncc = dvGroupName(cd, dvNccNameById);
         const { data: bookingDv } = await externalSupabase

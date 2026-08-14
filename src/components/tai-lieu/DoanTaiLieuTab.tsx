@@ -10,6 +10,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { openStorageFileOnClick } from "@/lib/storage-url";
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import {
@@ -130,6 +131,7 @@ function FileLine({ doc, doanId }: { doc: DoanTaiLieuRow; doanId: number }) {
           href={doc.file_url}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={openStorageFileOnClick(doc.file_url, toast.error)}
           className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 truncate"
         >
           <ExternalLink className="h-3 w-3 shrink-0" />

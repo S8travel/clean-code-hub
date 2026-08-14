@@ -695,6 +695,7 @@
   "Đã tải lên": "已上傳",
   "hóa đơn": "發票",
   "Không thể tải lên": "無法上傳",
+  "Không mở được file — bạn không có quyền hoặc file đã bị gỡ.": "無法開啟檔案 — 您沒有權限，或檔案已被移除。",
   "Đã xóa file": "已刪除檔案",
   "Xóa file?": "刪除檔案？",
   "File sẽ bị xóa và trạng thái sẽ trở về \"Chưa có\".": "檔案將被刪除，狀態將恢復為「尚無」。",
