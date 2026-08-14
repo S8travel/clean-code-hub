@@ -27,7 +27,8 @@ import {
 import { useBaoGiaAliasMap, useLearnAliases } from "@/hooks/use-bao-gia-aliases";
 import { useBaoGiaRuleList } from "@/hooks/use-bao-gia-rules";
 import { BaoGiaRuleChatPanel } from "@/components/bao-gia/BaoGiaRuleChat";
-import { fileKind, imageMime, extractItineraryText } from "@/lib/itinerary-file";
+import { fileKind, imageMime, extractItineraryText, unsupportedFileInfo } from "@/lib/itinerary-file";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { resolveStorageUrl } from "@/lib/storage-url";
@@ -230,20 +231,34 @@ export function BaoGiaAiImport({
       }
       return;
     }
-    toast.warning("File này chưa đọc được — chuyển sang dán text");
+    toast.warning(unsupportedFileInfo(f.ten)?.help ?? "File này chưa đọc được — chuyển sang dán text");
   };
 
-  const handleUpload = async (file: File | null) => {
-    if (!file) return;
+  const handleUpload = async (picked: File[]) => {
+    if (!picked.length) return;
+    // Báo NGAY lúc tải, không để user phát hiện sau khi file đã nằm im lìm mờ
+    // trong danh sách (ca .doc: tải lại 3 lần vẫn không bấm chọn được).
+    const unreadable = picked.filter((f) => unsupportedFileInfo(f.name));
+    for (const f of unreadable) {
+      toast.warning(`${f.name} — ${unsupportedFileInfo(f.name)!.help}`, { duration: 10000 });
+    }
     try {
-      await upload.mutateAsync({ baoGiaId, file, current: files, uploadedBy: user?.user_id });
-      toast.success("Đã tải file — chọn rồi Phân tích");
+      const next = await upload.mutateAsync({ baoGiaId, files: picked, current: files, uploadedBy: user?.user_id });
+      // Chọn sẵn file vừa tải mà đọc được → bấm Phân tích luôn, khỏi đi tìm.
+      const justAdded = next.slice(files.length);
+      const firstOk = justAdded.find((f) => fileKind(f.ten) !== "other");
+      if (firstOk) setSelectedUrl(firstOk.url);
+      toast.success(firstOk
+        ? "Đã tải file — chọn rồi Phân tích"
+        : "Đã tải file (định dạng này AI chưa đọc được)");
     } catch (e: unknown) {
       toast.error(errMsg(e) || "Lỗi tải file");
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
+  const { dragging, dropProps } = useFileDrop(handleUpload, upload.isPending);
 
   // Danh mục master cho picker đổi/chọn dịch vụ (mọi loại — giống KS).
   const sortByTen = (a: CatalogOption, b: CatalogOption) => a.ten.localeCompare(b.ten);
@@ -467,25 +482,40 @@ export function BaoGiaAiImport({
         {!rows ? (
           <div className="space-y-3">
             {mode === "file" ? (
-              <>
+              // Vùng nhận kéo-thả = cả khu chọn file (thả trúng chỗ nào cũng ăn).
+              <div
+                {...dropProps}
+                className={`space-y-3 rounded-lg border-2 border-dashed p-2 transition-colors ${
+                  dragging ? "border-blue-400 bg-blue-50/60" : "border-transparent"
+                }`}
+              >
                 {files.length > 0 ? (
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium text-slate-600">Chọn file lịch trình:</p>
                     <div className="rounded-md border divide-y">
                       {files.map((f) => {
                         const k = fileKind(f.ten);
-                        const sup = k !== "other";
+                        const unsup = unsupportedFileInfo(f.ten);
                         return (
-                          <label key={f.url} className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${sup ? "hover:bg-muted/40" : "opacity-60"}`}>
+                          <label key={f.url} className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${unsup ? "opacity-70" : "hover:bg-muted/40"}`}>
                             <input
-                              type="radio" name="lt-file" disabled={!sup}
+                              type="radio" name="lt-file" disabled={!!unsup}
                               checked={selectedUrl === f.url}
                               onChange={() => setSelectedUrl(f.url)}
                             />
                             <FileText className="h-4 w-4 text-blue-600 shrink-0" />
                             <span className="flex-1 min-w-0 truncate">{f.ten}</span>
                             {(k === "docx" || k === "xlsx") && <span className="text-[10px] text-slate-400">đọc qua text</span>}
-                            {!sup && <span className="text-[10px] text-amber-600">chưa đọc được — dán text</span>}
+                            {/* Nhãn nói luôn CÁCH CHỮA (hover xem đầy đủ) — "chưa đọc
+                                được" trơ trọi thì OP chỉ biết tải lại lần nữa. */}
+                            {unsup && (
+                              <span
+                                className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                                title={unsup.help}
+                              >
+                                {unsup.badge}
+                              </span>
+                            )}
                           </label>
                         );
                       })}
@@ -494,7 +524,9 @@ export function BaoGiaAiImport({
                 ) : (
                   <div className="rounded-md border border-dashed p-5 text-center">
                     <FileText className="h-6 w-6 mx-auto text-slate-300 mb-1" />
-                    <p className="text-xs text-muted-foreground mb-2">Chưa có file lịch trình đính kèm.</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Chưa có file lịch trình đính kèm — <span className="font-medium text-slate-600">kéo thả file vào đây</span> hoặc:
+                    </p>
                     <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => fileInputRef.current?.click()} disabled={upload.isPending}>
                       {upload.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Tải file lên
                     </Button>
@@ -503,15 +535,22 @@ export function BaoGiaAiImport({
                 <div className="flex items-center justify-between">
                   {files.length > 0 ? (
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => fileInputRef.current?.click()} disabled={upload.isPending}>
-                      {upload.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />} Tải thêm file
+                      {upload.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />} Tải thêm file (hoặc kéo thả vào đây)
                     </Button>
                   ) : <span />}
                   <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setMode("text")}>
                     hoặc dán nội dung text →
                   </button>
                 </div>
-                <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleUpload(e.target.files?.[0] ?? null)} />
-              </>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.docx,.xlsx,.xls,.doc"
+                  className="hidden"
+                  onChange={(e) => handleUpload(Array.from(e.target.files ?? []))}
+                />
+              </div>
             ) : (
               <>
                 <Textarea
@@ -527,7 +566,9 @@ export function BaoGiaAiImport({
               </>
             )}
             <p className="text-[11px] text-muted-foreground">
-              {mapsLoading ? "Đang tải danh mục..." : "AI chỉ chọn dòng danh mục + lấy giá thật; không tự bịa giá. Đọc trực tiếp PDF/ảnh."}
+              {mapsLoading
+                ? "Đang tải danh mục..."
+                : "AI chỉ chọn dòng danh mục + lấy giá thật; không tự bịa giá. Đọc được: PDF, ảnh, Word .docx, Excel — file Word bản cũ .doc phải lưu lại thành .docx."}
             </p>
           </div>
         ) : (
