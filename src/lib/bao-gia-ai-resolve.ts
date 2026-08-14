@@ -140,6 +140,7 @@ export function newResolvedItem(
     match_id: null,
     match_set_menu_id: null,
     from_alias: false,
+    sua_tay: true, // OP tự thêm → mọi thứ trên dòng này là do người đặt
   };
 }
 
