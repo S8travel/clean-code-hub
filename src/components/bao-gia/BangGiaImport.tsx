@@ -85,7 +85,7 @@ export function BangGiaImport() {
         <br />
         <span className="font-medium text-foreground">Excel:</span> 1 sheet, hàng 1 là tiêu đề, cột: <span className="font-medium text-foreground">Loại | Tên | FOC | Giá</span> (Loại: KS / NH / XE / DV).
         <br />
-        <span className="font-medium text-foreground">Lưu ý:</span> Import mới sẽ thay thế toàn bộ bảng giá hiện tại.
+        <span className="font-medium text-foreground">Lưu ý:</span> Import mới sẽ thay thế <span className="font-medium text-foreground">toàn bộ</span> bảng giá hiện tại — kể cả những dòng vừa sửa hoặc thêm tay ở bảng bên dưới.
       </p>
 
       {!preview ? (
