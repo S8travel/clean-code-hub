@@ -93,6 +93,11 @@ export interface ResolvedItem {
   match_set_menu_id?: number | null;
   /** TRUE = giá/khớp lấy từ bộ nhớ alias đã học (hiển thị nhãn ↺). */
   from_alias?: boolean;
+  /** TRUE = OP đã ĐỘNG TAY vào dòng này trong màn review (chọn lại danh mục, gõ
+   *  tên, sửa giá, đổi loại, tự thêm dòng). Quyết định 2 việc khi Áp dụng:
+   *  học alias kể cả dòng chỉ sửa mỗi tên, và alias đó được quyền thắng AI
+   *  khớp chắc ở lần sau. Học thụ động (không ai đụng) thì KHÔNG có cờ này. */
+  sua_tay?: boolean;
 
   // ── Combo đã bao gồm bữa ăn (chỉ dòng vé/dịch vụ) ──
   /** ĐÃ XÁC NHẬN vé này gồm bữa nào → dòng ăn cùng ngày bị ẩn khỏi báo giá.
@@ -135,6 +140,7 @@ export function newResolvedItem(
     match_id: null,
     match_set_menu_id: null,
     from_alias: false,
+    sua_tay: true, // OP tự thêm → mọi thứ trên dòng này là do người đặt
   };
 }
 
@@ -146,6 +152,8 @@ export interface AliasEntry {
   set_menu_id: number | null;
   ten_hien_thi: string | null;
   gia_override: number | null;
+  /** Người sửa tay dạy ra alias này (≠ học thụ động) → được thắng AI khớp chắc. */
+  sua_tay?: boolean;
 }
 
 /** Chuẩn hoá text lịch trình thành key alias: lowercase, bỏ dấu tiếng Việt, bỏ
@@ -193,9 +201,29 @@ function toBaoGiaLoai(loai: AiExtractItem["loai"]): BaoGiaItem["loai"] {
   return "ticket";
 }
 
-/** Tỷ giá CỐ ĐỊNH quy đổi định mức USD → đơn giá menu khi mô tả chỉ ghi USD,
- *  KHÔNG khớp được giá cụ thể. Theo quy ước OP (khác tỷ giá quote khách). */
+/** Tỷ giá CỐ ĐỊNH quy đổi định mức USD → đơn giá khi mô tả chỉ ghi USD, KHÔNG
+ *  khớp được giá cụ thể. Theo quy ước OP (khác tỷ giá quote khách). */
 export const USD_BUDGET_RATE = 20_000;
+
+/** Riêng BỮA ĂN: lịch trình đối tác hay ghi mức ăn chung chung, không chỉ định
+ *  nhà hàng (越式料理 7USD, 中越式料理/中式料理 8USD…). Quy ước OP: quy đổi rồi
+ *  CỘNG THÊM 20.000₫/suất → 7USD = 160.000₫, 8USD = 180.000₫. */
+export const USD_BUDGET_CONG_THEM_MEAL = 20_000;
+
+const fmtDinhMuc = (n: number) => n.toLocaleString("vi-VN");
+
+/** Đơn giá định mức từ mức USD ghi trong lịch trình, theo loại dòng.
+ *  Ăn: usd × 20.000 + 20.000 · còn lại: usd × 20.000. */
+export function usdBudgetPrice(usd: number, loai: BaoGiaItem["loai"]): number {
+  const base = Math.round(usd * USD_BUDGET_RATE);
+  return loai === "meal" ? base + USD_BUDGET_CONG_THEM_MEAL : base;
+}
+
+/** Nhãn giải thích con số định mức (hiện ở cột "Khớp danh mục" màn review AI). */
+export function usdBudgetLabel(usd: number, loai: BaoGiaItem["loai"]): string {
+  const base = `Định mức ${usd} USD × ${fmtDinhMuc(USD_BUDGET_RATE)}`;
+  return loai === "meal" ? `${base} + ${fmtDinhMuc(USD_BUDGET_CONG_THEM_MEAL)}` : base;
+}
 
 /** Trích số USD đầu tiên trong text (định mức bữa ăn): "8USD", "8 USD", "USD 8",
  *  "8$", "$8", "8美金/美元", "7.5usd". Trả null nếu không có. */
@@ -315,10 +343,66 @@ function resolveOneCore(it: AiExtractItem, maps: ResolveMaps, tourDate?: string 
   };
 }
 
+/** Áp 1 dòng bộ nhớ alias lên kết quả vừa resolve. Trả null khi alias rỗng
+ *  (không ref, không giá, không tên) — không có gì để áp.
+ *
+ *  Alias CHỈ-TÊN (OP sửa mỗi bản dịch sai) chỉ đổi `mo_ta`, GIỮ NGUYÊN giá + ref
+ *  đang có: dạy dịch không được phép làm rơi giá đã khớp, và phải để dòng chảy
+ *  tiếp xuống nhánh định mức USD. */
+function applyAlias(
+  res: ResolvedItem, a: AliasEntry, maps: ResolveMaps, tourDate?: string | null,
+): ResolvedItem | null {
+  const hasRef = a.match_table != null && a.target_id != null;
+  let label = a.ten_hien_thi || res.mo_ta;
+  let gia: number | null = a.gia_override ?? null;
+  let focPatch: { foc_khach?: number; foc_mien?: number; foc?: number } = {};
+  // Alias trỏ sang dòng danh mục KHÁC → cờ combo phải lấy lại theo dòng mới
+  // (kể cả khi dòng mới KHÔNG phải combo → xoá cờ cũ, tránh ẩn nhầm bữa ăn).
+  let comboPatch: Pick<ResolvedItem, "bao_gom_bua_an" | "bao_gom_nguon" | "bao_gom_ghi_chu"> = {};
+  if (a.match_table && a.target_id) {
+    const r = resolveMatchRef(
+      { table: a.match_table, id: a.target_id, set_menu_id: a.set_menu_id, confidence: 1 },
+      maps, tourDate,
+    );
+    if (r.ok) {
+      if (!a.ten_hien_thi) label = r.label;
+      if (gia == null) gia = r.gia;
+      focPatch = withFoc(r);
+      comboPatch = r.bao_gom_bua_an
+        ? withCombo(r)
+        : { bao_gom_bua_an: null, bao_gom_nguon: undefined, bao_gom_ghi_chu: undefined };
+    }
+  }
+  const dg = gia != null && gia > 0 ? gia : 0;
+
+  if (!hasRef && dg <= 0) {
+    // Chỉ dạy được cái TÊN → chỉ đổi tên. Không đụng giá/ref/status.
+    return a.ten_hien_thi ? { ...res, mo_ta: a.ten_hien_thi, from_alias: true } : null;
+  }
+
+  return {
+    ...res,
+    ...focPatch,
+    ...comboPatch,
+    mo_ta: a.ten_hien_thi || res.mo_ta,
+    don_gia: dg,
+    status: dg > 0 ? "matched" : "no_price",
+    match_label: `↺ ${label}`,
+    match_table: a.match_table ?? res.match_table ?? null,
+    match_id: a.target_id ?? res.match_id ?? null,
+    match_set_menu_id: a.set_menu_id ?? res.match_set_menu_id ?? null,
+    from_alias: true,
+  };
+}
+
 /** Resolve 1 item theo thứ tự ưu tiên:
  *  1. AI match danh mục (giá catalog) — giữ nếu khớp CHẮC (matched + conf ≥ 0.6).
- *  2. Bộ nhớ alias đã học (khi AI không chắc) → tự khớp danh mục / điền giá đã học.
- *  3. Định mức USD: mô tả ghi "N USD" → đơn giá = N × 20.000₫ (theo OP). */
+ *  2. Bộ nhớ alias đã học. Alias do NGƯỜI SỬA TAY (`sua_tay`) thắng cả khi AI
+ *     khớp chắc — người đã dạy thì máy phải nghe, nếu không AI cứ sai một cách
+ *     tự tin là dạy bao nhiêu lần cũng vô ích. Alias học thụ động (dòng chỉ trôi
+ *     qua một lần Áp dụng, không ai sửa) vẫn nhường AI khớp chắc.
+ *  3. Định mức USD: mô tả ghi "N USD" → đơn giá = N × 20.000₫, riêng dòng ĂN
+ *     (mức ăn chung chung, không chỉ định nhà hàng) cộng thêm 20.000₫ (theo OP). */
 function resolveOne(
   it: AiExtractItem, maps: ResolveMaps, tourDate?: string | null,
   aliasMap?: Map<string, AliasEntry>,
@@ -326,60 +410,24 @@ function resolveOne(
   const res = resolveOneCore(it, maps, tourDate);
   const strong = res.status === "matched" && (res.confidence ?? 0) >= 0.6;
 
-  if (!strong && aliasMap && aliasMap.size > 0) {
-    const a = aliasMap.get(aliasKeyOf(it.ten_zh || it.ten_vi || "", res.loai));
-    if (a) {
-      let label = a.ten_hien_thi || res.mo_ta;
-      let gia: number | null = a.gia_override ?? null;
-      let focPatch: { foc_khach?: number; foc_mien?: number; foc?: number } = {};
-      // Alias trỏ sang dòng danh mục KHÁC → cờ combo phải lấy lại theo dòng mới
-      // (kể cả khi dòng mới KHÔNG phải combo → xoá cờ cũ, tránh ẩn nhầm bữa ăn).
-      let comboPatch: Pick<ResolvedItem, "bao_gom_bua_an" | "bao_gom_nguon" | "bao_gom_ghi_chu"> = {};
-      if (a.match_table && a.target_id) {
-        const r = resolveMatchRef(
-          { table: a.match_table, id: a.target_id, set_menu_id: a.set_menu_id, confidence: 1 },
-          maps, tourDate,
-        );
-        if (r.ok) {
-          if (!a.ten_hien_thi) label = r.label;
-          if (gia == null) gia = r.gia;
-          focPatch = withFoc(r);
-          comboPatch = r.bao_gom_bua_an
-            ? withCombo(r)
-            : { bao_gom_bua_an: null, bao_gom_nguon: undefined, bao_gom_ghi_chu: undefined };
-        }
-      }
-      const dg = gia != null && gia > 0 ? gia : 0;
-      if (dg > 0 || (a.match_table != null && a.target_id != null)) {
-        return {
-          ...res,
-          ...focPatch,
-          ...comboPatch,
-          mo_ta: a.ten_hien_thi || res.mo_ta,
-          don_gia: dg,
-          status: dg > 0 ? "matched" : "no_price",
-          match_label: `↺ ${label}`,
-          match_table: a.match_table ?? res.match_table ?? null,
-          match_id: a.target_id ?? res.match_id ?? null,
-          match_set_menu_id: a.set_menu_id ?? res.match_set_menu_id ?? null,
-          from_alias: true,
-        };
-      }
-    }
-  }
+  let cur = res;
+  const a = aliasMap?.get(aliasKeyOf(it.ten_zh || it.ten_vi || "", res.loai));
+  if (a && (!strong || a.sua_tay)) cur = applyAlias(res, a, maps, tourDate) ?? res;
 
-  if (res.don_gia <= 0) {
+  // Định mức USD chạy SAU alias, tính trên `cur`: alias chỉ-tên không kèm giá thì
+  // dòng vẫn phải được điền định mức, chứ không phải dạy dịch xong là mất giá.
+  if (cur.don_gia <= 0) {
     const usd = parseUsdAmount(`${it.ten_zh ?? ""} ${it.ten_vi ?? ""} ${it.ghi_chu ?? ""}`);
     if (usd != null) {
       return {
-        ...res,
-        don_gia: Math.round(usd * USD_BUDGET_RATE),
+        ...cur,
+        don_gia: usdBudgetPrice(usd, cur.loai),
         status: "matched",
-        match_label: `Định mức ${usd} USD × 20.000`,
+        match_label: usdBudgetLabel(usd, cur.loai),
       };
     }
   }
-  return res;
+  return cur;
 }
 
 /** Resolve toàn bộ kết quả AI. aliasMap (tuỳ chọn) = bộ nhớ khớp tự học. */
@@ -724,11 +772,15 @@ export interface AliasLearnInput {
   ten_hien_thi: string;
   gia_override: number | null;
   tao_boi: string | null;
+  /** Dòng này do OP sửa tay (xem ResolvedItem.sua_tay) → alias được ưu tiên cao. */
+  sua_tay: boolean;
 }
 
-/** Rút alias để HỌC từ các dòng đã áp dụng. Chỉ học dòng có kết quả cụ thể
- *  (có ref danh mục HOẶC giá > 0) + có key. Dòng có ref danh mục → gia_override
- *  = null (giá lấy động từ catalog, KS theo mùa); dòng chỉ-giá → học luôn giá. */
+/** Rút alias để HỌC từ các dòng đã áp dụng. Học khi dòng có kết quả cụ thể (ref
+ *  danh mục HOẶC giá > 0) — HOẶC khi OP sửa tay mỗi cái TÊN: bản dịch AI sai mà
+ *  không học thì lần sau nó dịch sai y hệt, sửa tay hoá công cốc.
+ *  Dòng có ref danh mục → gia_override = null (giá lấy động từ catalog, KS theo
+ *  mùa); dòng chỉ-giá → học luôn giá. */
 export function aliasesToLearn(rows: ResolvedItem[], userId?: string | null): AliasLearnInput[] {
   const out: AliasLearnInput[] = [];
   for (const r of rows) {
@@ -736,7 +788,10 @@ export function aliasesToLearn(rows: ResolvedItem[], userId?: string | null): Al
     if (!key) continue;
     const hasRef = r.match_table != null && r.match_id != null;
     const hasPrice = r.don_gia > 0;
-    if (!hasRef && !hasPrice) continue;
+    // Dạy TÊN: chỉ nhận khi OP thật sự động tay + tên không rỗng, tránh ghi vào
+    // bộ nhớ chung những dòng trống hoặc tên do chính AI đặt.
+    const dayTen = r.sua_tay === true && (r.mo_ta ?? "").trim() !== "";
+    if (!hasRef && !hasPrice && !dayTen) continue;
     out.push({
       text_key: key,
       loai: r.loai,
@@ -746,6 +801,7 @@ export function aliasesToLearn(rows: ResolvedItem[], userId?: string | null): Al
       ten_hien_thi: r.mo_ta,
       gia_override: hasRef ? null : (hasPrice ? r.don_gia : null),
       tao_boi: userId ?? null,
+      sua_tay: r.sua_tay === true,
     });
   }
   return out;

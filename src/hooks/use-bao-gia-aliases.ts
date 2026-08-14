@@ -15,6 +15,7 @@ interface AliasRow {
   set_menu_id: number | null;
   ten_hien_thi: string | null;
   gia_override: number | null;
+  sua_tay: boolean | null;
 }
 
 /** Bộ nhớ alias đã học → Map<`${text_key}::${loai}`, AliasEntry>. Khớp aliasKeyOf. */
@@ -26,7 +27,7 @@ export function useBaoGiaAliasMap(enabled = true) {
     queryFn: async (): Promise<Map<string, AliasEntry>> => {
       const { data, error } = await db
         .from("bao_gia_match_alias")
-        .select("text_key, loai, match_table, target_id, set_menu_id, ten_hien_thi, gia_override");
+        .select("text_key, loai, match_table, target_id, set_menu_id, ten_hien_thi, gia_override, sua_tay");
       if (error) throw error;
       const map = new Map<string, AliasEntry>();
       for (const row of (data ?? []) as AliasRow[]) {
@@ -37,6 +38,7 @@ export function useBaoGiaAliasMap(enabled = true) {
           set_menu_id: row.set_menu_id,
           ten_hien_thi: row.ten_hien_thi,
           gia_override: row.gia_override,
+          sua_tay: row.sua_tay === true,
         });
       }
       return map;

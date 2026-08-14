@@ -292,9 +292,12 @@ export function BaoGiaAiImport({
   // GIỮ cờ combo: gõ sửa tên hiển thị ("Cáp treo Bà Nà" → "... (khứ hồi)") vẫn là
   // đúng dịch vụ đó. Xoá cờ theo từng ký tự gõ = bữa ăn lặng lẽ bị tính lại 2 lần.
   // Chỉ hạ nguồn về 'user' vì cờ không còn được dòng danh mục nào bảo chứng.
+  // sua_tay: gõ tên = DẠY bản dịch. Không đánh dấu thì dòng không giá không ref sẽ
+  // không được học, lần sau AI dịch sai y hệt (xem aliasesToLearn).
   const clearRef = (idx: number, text: string) =>
     patchRow(idx, {
       mo_ta: text, match_table: null, match_id: null, match_set_menu_id: null, from_alias: false,
+      sua_tay: true,
       ...(rows?.[idx]?.bao_gom_bua_an ? { bao_gom_nguon: "user" as const } : {}),
     });
   // Chọn từ danh mục → fill tên + giá + ref (để học alias). KS lấy giá theo mùa.
@@ -304,14 +307,14 @@ export function BaoGiaAiImport({
     if (loai === "hotel") {
       const gia = resolveGiaPhongValue(maps?.khachSanGia.get(opt.id) ?? [], tourDate);
       patchRow(idx, {
-        mo_ta: opt.ten, match_label: opt.ten, confidence: 1,
+        mo_ta: opt.ten, match_label: opt.ten, confidence: 1, sua_tay: true,
         match_table: "khach_san", match_id: opt.id, match_set_menu_id: null, from_alias: false,
         ...comboPatch("khach_san", opt.id),
         ...(gia && gia > 0 ? { don_gia: gia, status: "matched" as const } : { status: "no_price" as const }),
       });
       return;
     }
-    const patch: Partial<ResolvedItem> = { mo_ta: opt.ten, match_label: opt.ten, confidence: 1, from_alias: false };
+    const patch: Partial<ResolvedItem> = { mo_ta: opt.ten, match_label: opt.ten, confidence: 1, from_alias: false, sua_tay: true };
     if (loai === "meal") { patch.match_table = "nha_hang"; patch.match_id = opt.nhaHangId ?? null; patch.match_set_menu_id = opt.id; }
     else if (loai === "transport") { patch.match_table = "nha_xe_loai_xe"; patch.match_id = opt.id; patch.match_set_menu_id = null; }
     else { patch.match_table = "canh_diem"; patch.match_id = opt.id; patch.match_set_menu_id = null; }
@@ -333,7 +336,7 @@ export function BaoGiaAiImport({
       ? { loai: "meal" as const, bua: (value.slice(5) || undefined) as "trua" | "toi" | undefined }
       : { loai: value as ResolvedItem["loai"], bua: undefined };
     const next = rows.map((r, i) => i === idx ? {
-      ...r, loai: parsed.loai, bua_an: parsed.bua,
+      ...r, loai: parsed.loai, bua_an: parsed.bua, sua_tay: true,
       match_table: null, match_id: null, match_set_menu_id: null, match_label: "", from_alias: false,
       // Đổi loại = xoá ref danh mục → cờ combo của dòng cũ không còn đúng. Giữ lại
       // thì dòng Xe/Ăn cũng dính ghi chú "Đã gồm ăn trưa", đổi ngược về Vé lại ẩn bữa.
@@ -352,7 +355,7 @@ export function BaoGiaAiImport({
     setRows((rs) => (rs ? applyKsBuaRules(rs, [rule]) : rs));
 
   const setGia = (idx: number, gia: number) =>
-    setRows((rs) => rs ? rs.map((r, i) => (i === idx ? { ...r, don_gia: gia } : r)) : rs);
+    setRows((rs) => rs ? rs.map((r, i) => (i === idx ? { ...r, don_gia: gia, sua_tay: true } : r)) : rs);
   // FOC override (số miễn). undefined → auto theo chính sách NH (foc_khach/foc_mien).
   const setFoc = (idx: number, foc: number | undefined) =>
     setRows((rs) => rs ? rs.map((r, i) => (i === idx ? { ...r, foc } : r)) : rs);
@@ -1094,10 +1097,19 @@ function CatalogPicker({ value, options, onType, onPick }: {
   onPick: (opt: CatalogOption) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const suggestions = useMemo(() => {
+  // AI khớp sai thường kèm tên lạ ("Món Trung", "Nhà hàng địa phương") → lọc theo
+  // tên đó ra RỖNG → popover không mở, OP tưởng picker hỏng và kết luận là không
+  // chọn lại được. Không khớp chữ nào thì mở NGUYÊN danh mục, kèm dòng nói rõ
+  // đang hiện tất cả — chỗ chọn lại phải luôn có đường vào.
+  const { suggestions, khongKhop, conLai } = useMemo(() => {
     const q = value.toLowerCase().trim();
-    const pool = q ? options.filter((o) => o.ten.toLowerCase().includes(q)) : options;
-    return pool.slice(0, 40);
+    const hit = q ? options.filter((o) => o.ten.toLowerCase().includes(q)) : options;
+    const pool = hit.length > 0 ? hit : options;
+    return {
+      suggestions: pool.slice(0, 40),
+      khongKhop: q.length > 0 && hit.length === 0 && options.length > 0,
+      conLai: Math.max(0, pool.length - 40),
+    };
   }, [options, value]);
 
   return (
@@ -1117,6 +1129,11 @@ function CatalogPicker({ value, options, onType, onPick }: {
         className="w-[280px] p-0 max-h-[240px] overflow-y-auto"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
+        {khongKhop && (
+          <p className="sticky top-0 z-10 border-b bg-amber-50 px-2.5 py-1 text-[10px] text-amber-800 break-words">
+            Không có mục nào khớp “{value}” — đang hiện toàn bộ danh mục, chọn lại bên dưới.
+          </p>
+        )}
         {suggestions.map((o) => (
           <button
             key={o.id}
@@ -1130,6 +1147,11 @@ function CatalogPicker({ value, options, onType, onPick }: {
             )}
           </button>
         ))}
+        {conLai > 0 && (
+          <p className="border-t px-2.5 py-1 text-[10px] text-muted-foreground">
+            còn {conLai} mục nữa — gõ thêm chữ để lọc
+          </p>
+        )}
       </PopoverContent>
     </Popover>
   );
