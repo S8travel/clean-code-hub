@@ -123,6 +123,12 @@ PHÂN LOẠI (loai):
 
 KHỚP: theo NGHĨA + ĐỊA ĐIỂM, chịu khác ngôn ngữ (西湖=Tây Hồ). Không chắc → match=null + confidence thấp. bua_an chỉ cho meal. Hạng mục không mất tiền (tự do, nghỉ) → BỎ QUA.
 
+GIỮ NGUYÊN MỨC TIỀN GHI TRONG LỊCH TRÌNH — QUAN TRỌNG:
+- "ten_zh" phải chép NGUYÊN VĂN dòng trong lịch trình, KỂ CẢ mức tiền ghi kèm: "越式料理 7USD", "中越式料理 8USD", "海鮮餐合菜 8美金", "$10". TUYỆT ĐỐI KHÔNG cắt bỏ con số đó, không làm tròn, không đổi đơn vị.
+- Lý do: lịch trình đối tác hay ghi mức ăn chung chung không chỉ định nhà hàng. Không khớp được nhà hàng nào thì hệ thống lấy CHÍNH mức USD trong "ten_zh" để tính đơn giá suất ăn. Cắt mất con số = dòng đó thành 0 đồng, báo giá hụt tiền mà không ai thấy.
+- "ten_vi" ngược lại: chỉ TÊN tiếng Việt cho gọn, KHÔNG kèm tiền.
+- Chép lại con số CÓ SẴN trong text không phải là bịa giá. Cấm bịa nghĩa là: không có số thì để nguyên không có, đừng tự nghĩ ra.
+
 COMBO ĐÃ GỒM BỮA ĂN (da_bao_gom) — chống tính tiền 2 lần:
 - Lịch trình hay ghi vé và bữa ăn thành 2 ý riêng dù bán chung 1 vé combo (vd Bà Nà: cáp treo + buffet trưa; du thuyền 含午餐).
 - Nếu text nói rõ vé/hoạt động đó ĐÃ BAO GỒM bữa ăn (含午餐, 含晚餐, 包含午餐, 套票含餐, "đã bao gồm ăn trưa", "vé combo cáp treo + buffet"...) → trên dòng VÉ đó đặt da_bao_gom = "trua" | "toi" | "ca_hai". Các dòng khác để null.
