@@ -16,6 +16,8 @@ import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump"
 import { buildAggClusters, type AggClusterRow } from "@/lib/agg-cluster";
 import { buildRemainingAllocations } from "@/lib/alloc-remaining";
 import { tienDeNghiTrung } from "@/lib/dinh-ky-nhom";
+import { diffPrintLine, isDnttLechBoQua, moTaPrintDiff, type PrintLineDiff } from "@/lib/print-dntt-sync";
+import { waitForChiPhiWrites } from "@/lib/chi-phi-writes";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -821,6 +823,51 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const entries: NHDocEntry[] = [];
     const canTruShownByNcc: Record<number, boolean> = {};
 
+    // Đọc TƯƠI chi phí + ĐNTT + cấn trừ + allocation trước khi dựng bản in. Bản in
+    // là chứng từ kế toán nên phải khớp DB: cache React Query không tự refetch khi
+    // quay lại tab (app tắt refetchOnWindowFocus) và extrasMap chỉ seed 1 lần/đoàn
+    // → tab mở lâu từng in số cũ trong khi cột "còn thanh toán" đã theo ĐNTT mới.
+    // Phải đọc thẳng cache: state/memo chỉ đổi ở render sau, cùng tick vẫn số cũ.
+    // Chờ blur-save đang bay TRƯỚC đã — chính cú click nút In làm ô đang gõ mất
+    // focus, đọc ngay thì response về trước lệnh UPDATE và in lại số cũ.
+    const settled = await waitForChiPhiWrites(qc);
+    if (!settled) {
+      toast.warning("Còn thay đổi chi phí đang lưu — kiểm tra kỹ số tiền trên bản in.", {
+        duration: 8000,
+      });
+    }
+    await Promise.all([
+      qc.refetchQueries({ queryKey: ["doan_chi_phi", doanId] }),
+      qc.refetchQueries({ queryKey: ["de_nghi_thanh_toan", doanId] }),
+      qc.refetchQueries({ queryKey: ["payments-by-chi-phi", doanId] }),
+      qc.refetchQueries({ queryKey: ["dntt_allocations_by_doan", doanId] }),
+    ]);
+    const cpFresh =
+      (qc.getQueryData(["doan_chi_phi", doanId, doanNhomId ?? null]) as ChiPhiRow[] | undefined) ??
+      chiPhiRows;
+    const dntts =
+      (qc.getQueryData(["de_nghi_thanh_toan", doanId]) as typeof dnttList | undefined) ?? dnttList;
+    const pmts =
+      (qc.getQueryData(["payments-by-chi-phi", doanId]) as typeof paymentsList | undefined) ??
+      paymentsList;
+    const allocFresh =
+      (qc.getQueryData(["dntt_allocations_by_doan", doanId]) as typeof allocRows | undefined) ??
+      allocRows;
+
+    const cpById: Record<number, ChiPhiRow> = {};
+    for (const cp of cpFresh) if (cp.id != null) cpById[cp.id] = cp;
+    /** chi_phi_id → (dntt_id → so_tien), dựng lại từ allocation tươi. */
+    const allocFor = new Map<number, Map<number, number>>();
+    /** dntt_id → tổng allocation TOÀN đoàn (để biết ĐNTT có trải ra ngoài nhóm in không). */
+    const allocTotalByDntt = new Map<number, number>();
+    for (const a of allocFresh) {
+      let inner = allocFor.get(a.chi_phi_id);
+      if (!inner) { inner = new Map<number, number>(); allocFor.set(a.chi_phi_id, inner); }
+      inner.set(a.dntt_id, (inner.get(a.dntt_id) ?? 0) + a.so_tien);
+      allocTotalByDntt.set(a.dntt_id, (allocTotalByDntt.get(a.dntt_id) ?? 0) + a.so_tien);
+    }
+    const printDiffs: PrintLineDiff[] = [];
+
     // Fetch tai_khoan_thanh_toan from canh_diem via doan_ngay_item
     const refItemIds = dvRows
       .filter((r) => r.id && selectedIds.includes(r.id) && r.ref_doan_ngay_item_id)
@@ -866,12 +913,12 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       // Dòng CHƯA có ĐNTT → entry riêng (số tiền = thành tiền dòng).
       type DNTTLite = (typeof dnttList)[number];
       const activeDnttById = new Map<number, DNTTLite>(
-        dnttList
+        dntts
           .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
           .map((d) => [d.id, d] as const),
       );
       const pendingDnttOf = (rowId: number): DNTTLite | null => {
-        const allocs = allocByChiPhi.get(rowId);
+        const allocs = allocFor.get(rowId);
         if (!allocs) return null;
         const cands = [...allocs.keys()]
           .map((id) => activeDnttById.get(id))
@@ -897,8 +944,89 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         const items: { so_luong: number; don_gia: number; ghi_chu: string }[] = [];
         let soKhachSum = 0;
         let thanhTienSum = 0;
-        for (const { row } of grows) {
-          const rowExtras = (extrasMap[row.id!] ?? []).filter((e) => e.nguoi_tt !== "hdv" && e.don_gia > 0);
+        for (const { row: rowCache } of grows) {
+          // Số tiền IN lấy theo bản DB mới nhất của dòng (fallback bản trên màn hình).
+          const row = (rowCache.id != null ? cpById[rowCache.id] : undefined) ?? rowCache;
+          const rowDiff = diffPrintLine(
+            rowCache.mo_ta || "Dịch vụ",
+            { so_luong: rowCache.so_luong, don_gia: rowCache.don_gia },
+            rowCache.id != null && cpById[rowCache.id]
+              ? { so_luong: row.so_luong, don_gia: row.don_gia }
+              : null,
+          );
+          if (rowDiff) printDiffs.push({ ...rowDiff, chiPhiId: rowCache.id, loai: "sua" });
+          // Dòng đã bị xóa ở nơi khác nhưng màn hình còn giữ → vẫn in (không tự ý
+          // bỏ dòng của người dùng) nhưng phải báo để kế toán kiểm lại.
+          if (rowCache.id != null && cpFresh.length > 0 && !cpById[rowCache.id]) {
+            printDiffs.push({
+              ten: rowCache.mo_ta || "Dịch vụ",
+              truoc: { so_luong: rowCache.so_luong, don_gia: rowCache.don_gia },
+              sau: { so_luong: rowCache.so_luong, don_gia: rowCache.don_gia },
+              chiPhiId: rowCache.id,
+              loai: "xoa",
+            });
+          }
+
+          // Dòng phát sinh IN dựng từ DB (nguồn thật) + gộp dòng local chưa lưu.
+          // extrasMap chỉ seed 1 lần/đoàn: giữ số cũ VÀ không thấy dòng tab khác
+          // vừa thêm → tổng in thiếu hẳn dòng.
+          const localExtras = extrasMap[rowCache.id!] ?? [];
+          const dbExtras: LocalDVExtra[] = cpFresh
+            .filter((cp) => cp.mo_ta?.startsWith(`[dvps_${rowCache.id}] `))
+            .map((cp) => ({
+              id: cp.id,
+              mo_ta: (cp.mo_ta ?? "").replace(`[dvps_${rowCache.id}] `, ""),
+              so_luong: cp.so_luong,
+              don_gia: cp.don_gia,
+              // nguoi_tt theo DB: dòng vừa chuyển sang HDV trả ở nơi khác mà in
+              // như công ty trả thì tờ giấy đòi NCC tiền HDV đã trả tay.
+              nguoi_tt: (cp.tien_hdv ?? 0) > 0 ? "hdv" : "cong_ty",
+              trang_thai_hoa_don: cp.trang_thai_hoa_don ?? null,
+            }));
+          const extrasForPrint: LocalDVExtra[] =
+            cpFresh.length > 0
+              ? [...dbExtras, ...localExtras.filter((e) => e.id == null)]
+              : localExtras;
+          const localExtraById = new Map(
+            localExtras.filter((e) => e.id != null).map((e) => [e.id as number, e]),
+          );
+          if (cpFresh.length > 0) {
+            const dbIds = new Set(dbExtras.map((e) => e.id));
+            for (const e of localExtras) {
+              if (e.id != null && !dbIds.has(e.id) && e.don_gia > 0 && e.nguoi_tt !== "hdv") {
+                printDiffs.push({
+                  ten: e.mo_ta || "Phát sinh",
+                  truoc: { so_luong: e.so_luong, don_gia: e.don_gia },
+                  sau: { so_luong: 0, don_gia: 0 },
+                  chiPhiId: e.id,
+                  loai: "xoa",
+                });
+              }
+            }
+          }
+          const rowExtras: LocalDVExtra[] = [];
+          for (const e of extrasForPrint) {
+            // Dòng không in (HDV trả / giá 0) thì cũng không cảnh báo lệch.
+            if (e.nguoi_tt === "hdv" || e.don_gia <= 0) continue;
+            const eLocal = e.id != null ? localExtraById.get(e.id) : undefined;
+            if (eLocal) {
+              const eDiff = diffPrintLine(
+                e.mo_ta || "Phát sinh",
+                { so_luong: eLocal.so_luong, don_gia: eLocal.don_gia },
+                { so_luong: e.so_luong, don_gia: e.don_gia },
+              );
+              if (eDiff) printDiffs.push({ ...eDiff, chiPhiId: e.id, loai: "sua" });
+            } else if (e.id != null) {
+              printDiffs.push({
+                ten: e.mo_ta || "Phát sinh",
+                truoc: { so_luong: 0, don_gia: 0 },
+                sau: { so_luong: e.so_luong, don_gia: e.don_gia },
+                chiPhiId: e.id,
+                loai: "them",
+              });
+            }
+            rowExtras.push(e);
+          }
           // Số lượng IN cho dòng chính = SAU TRỪ FOC (giống NH dùng soLuongThuc) → cột
           // "Thành tiền" trong Word = so_luong_thuc × đơn giá khớp màn hình. Cột "Số khách"
           // vẫn in gross qua entry.so_khach; cột FOC in số miễn riêng.
@@ -911,7 +1039,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           thanhTienSum += row.tien_cong_ty + rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
         }
 
-        const first = grows[0].row;
+        const firstCache = grows[0].row;
+        const first = (firstCache.id != null ? cpById[firstCache.id] : undefined) ?? firstCache;
         const firstDay = grows[0].day;
         const nccId = first.nha_cung_cap_id ?? null;
 
@@ -920,8 +1049,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         let canTruNote: string | undefined;
         if (nccId && !canTruShownByNcc[nccId]) {
           const canTruPays = dntt
-            ? paymentsList.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
-            : grows.flatMap(({ row }) => paymentsList.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru"));
+            ? pmts.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
+            : grows.flatMap(({ row }) => pmts.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru"));
           canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
           if (canTruAmount > 0) {
             canTruShownByNcc[nccId] = true;
@@ -938,9 +1067,9 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         if (dntt) {
           const priorDnttIds = new Set<number>();
           for (const { row } of grows) {
-            const allocs = allocByChiPhi.get(row.id!);
+            const allocs = allocFor.get(row.id!);
             if (allocs) for (const id of allocs.keys()) priorDnttIds.add(id);
-            dnttList
+            dntts
               .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id)
               .forEach((d) => priorDnttIds.add(d.id));
           }
@@ -949,7 +1078,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
             .filter((d): d is DNTTLite => !!d);
           soCoc = calcDnttPriorPaid(priorDntts, dntt.id);
         } else {
-          soCoc = grows.reduce((s, { row }) => s + dnttList
+          soCoc = grows.reduce((s, { row }) => s + dntts
             .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id && d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
             .reduce((a, d) => a + d.so_tien, 0), 0);
         }
@@ -958,6 +1087,19 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         const soTienConTT = dntt
           ? Math.max(0, dntt.so_tien - canTruAmount)
           : Math.max(0, thanhTienSum - soCoc - canTruAmount);
+
+        // Phần mệnh giá ĐNTT thuộc về CHÍNH các dòng đang in (ĐNTT gộp có thể trải
+        // ra dòng khác) — dùng để đối chiếu tổng dòng, không dùng để in.
+        const dnttSoTienNhom = (() => {
+          if (!dntt) return 0;
+          const tongAlloc = allocTotalByDntt.get(dntt.id) ?? 0;
+          if (tongAlloc <= 0) return dntt.so_tien;
+          const allocTrongNhom = grows.reduce(
+            (s, { row }) => s + (allocFor.get(row.id!)?.get(dntt.id) ?? 0),
+            0,
+          );
+          return Math.round((dntt.so_tien * allocTrongNhom) / tongAlloc);
+        })();
 
         const nccFromDntt = dntt?.ten_nha_cung_cap
           ? { ten: dntt.ten_nha_cung_cap, so_tai_khoan: dntt.so_tai_khoan || undefined, ngan_hang: dntt.ngan_hang || undefined }
@@ -984,11 +1126,30 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           la_coc: !!dntt?.la_coc,
           multi_service: isGop,
           tai_khoan_thanh_toan: first.ref_doan_ngay_item_id ? (tkttMap[first.ref_doan_ngay_item_id] ?? null) : null,
+          // Metadata cho modal xem trước đối chiếu tổng dòng ↔ số tiền ĐNTT.
+          dntt_id: dntt?.id,
+          // ĐNTT gộp có thể còn allocate cho dòng NGOÀI nhóm đang in → so tổng dòng
+          // với MỆNH GIÁ cả phiếu sẽ lệch giả. Quy về PHẦN của nhóm theo tỷ lệ
+          // allocation thay vì tắt cảnh báo (tắt đi thì đúng ca "còn thanh toán in
+          // nhiều hơn tổng dòng" lại lọt lưới — chính lỗi cần bắt).
+          dntt_so_tien: dntt ? dnttSoTienNhom : undefined,
+          dntt_lech_bo_qua: isDnttLechBoQua(dntt),
         });
       }
 
+    if (printDiffs.length > 0) {
+      const chiTiet = printDiffs.slice(0, 3).map(moTaPrintDiff).join("; ");
+      toast.warning(
+        `Bản in lấy số MỚI NHẤT trong hệ thống — ${printDiffs.length} dòng khác số đang hiện trên màn hình: ${chiTiet}${printDiffs.length > 3 ? "…" : ""}`,
+        { duration: 8000 },
+      );
+    }
+
     return entries;
-  }, [selectedIds, dvRows, dnttList, paymentsList, extrasMap, sortedDays, allocByChiPhi, dvCdMap]);
+  }, [
+    selectedIds, dvRows, dnttList, paymentsList, extrasMap, sortedDays,
+    chiPhiRows, allocRows, qc, doanId, doanNhomId,
+  ]);
 
   const handlePrintSelected = async () => {
     try {

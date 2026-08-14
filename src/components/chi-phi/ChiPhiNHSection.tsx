@@ -26,8 +26,9 @@ interface Props {
 }
 
 export interface ChiPhiNHSectionHandle {
-  /** Build entries từ selection hiện tại (undefined nếu không có gì chọn) */
-  buildSelectedEntries: () => NHDocEntry[] | undefined;
+  /** Build entries từ selection hiện tại (undefined nếu không có gì chọn).
+   *  Async: refetch chi phí/ĐNTT/cấn trừ trước khi dựng để không in số cũ. */
+  buildSelectedEntries: () => Promise<NHDocEntry[] | undefined>;
   clearSelection: () => void;
   getSelectedCount: () => number;
 }
