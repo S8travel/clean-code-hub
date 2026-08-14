@@ -15,6 +15,8 @@ import {
   giaPhongWritebacks,
   applyKsBuaRules,
   toKsBuaRules,
+  newResolvedItem,
+  aliasesToLearn,
   type AiExtractResult,
   type AiExtractItem,
   type ResolveMaps,
@@ -579,5 +581,51 @@ describe("toBaoGiaItems — chuyển sang BaoGiaItem", () => {
     expect(items[0]).toMatchObject({ loai: "meal", mo_ta: "Cơm", don_gia: 300_000, ngay_so: 1, bua_an: "trua", foc: 0 });
     expect(items[1].bua_an).toBeUndefined();
     expect(items[1]).toMatchObject({ loai: "ticket", don_gia: 120_000 });
+  });
+});
+
+describe("newResolvedItem — dòng OP tự thêm khi AI đọc sót mục", () => {
+  it("không mang ref danh mục, chưa có giá, và KHÔNG bị coi là AI khớp trượt", () => {
+    const r = newResolvedItem("ticket", 2);
+    expect(r).toMatchObject({
+      loai: "ticket", ngay_so: 2, mo_ta: "", don_gia: 0,
+      match_table: null, match_id: null, match_set_menu_id: null,
+      match_label: "", from_alias: false,
+    });
+    // "no_price" = thiếu giá (tô vàng nhắc điền). "unmatched" nghĩa là AI khớp
+    // trượt — dòng này chẳng qua tay ai khớp đâu mà trượt.
+    expect(r.status).toBe("no_price");
+    // confidence 1 → tắt dấu cảnh báo "độ tin cậy thấp" trên bảng review.
+    expect(r.confidence).toBe(1);
+  });
+
+  it("bua_an CHỈ gắn cho dòng ăn; ngày rác bị kẹp về 1", () => {
+    expect(newResolvedItem("meal", 3, "toi").bua_an).toBe("toi");
+    expect(newResolvedItem("ticket", 3, "toi").bua_an).toBeUndefined();
+    expect(newResolvedItem("meal", 0).ngay_so).toBe(1);
+    expect(newResolvedItem("meal", NaN).ngay_so).toBe(1);
+  });
+
+  it("Áp dụng khi CHƯA điền gì → không dạy bậy vào bộ nhớ khớp danh mục", () => {
+    expect(aliasesToLearn([newResolvedItem("ticket", 1)])).toEqual([]);
+  });
+
+  it("điền tên + giá tay rồi Áp dụng → học đúng tên đó kèm giá", () => {
+    const r: ResolvedItem = { ...newResolvedItem("ticket", 1), mo_ta: "Vé xe điện", don_gia: 40_000 };
+    const out = aliasesToLearn([r], "u1");
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      text_key: "ve xe dien", loai: "ticket",
+      match_table: null, target_id: null, gia_override: 40_000, ten_hien_thi: "Vé xe điện",
+    });
+  });
+
+  it("chọn danh mục cho dòng thêm tay → học ref, KHÔNG khoá cứng giá", () => {
+    const r: ResolvedItem = {
+      ...newResolvedItem("ticket", 1),
+      mo_ta: "Cáp treo", don_gia: 962_000, match_table: "canh_diem", match_id: 7, match_label: "Cáp treo",
+    };
+    const out = aliasesToLearn([r]);
+    expect(out[0]).toMatchObject({ match_table: "canh_diem", target_id: 7, gia_override: null });
   });
 });

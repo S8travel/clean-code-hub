@@ -110,6 +110,34 @@ export interface ResolvedItem {
   tinh_rieng?: boolean;
 }
 
+/** Dòng TRỐNG do OP tự thêm trong màn review (AI đọc sót mục). Chưa có tên/giá
+ *  → `status: "no_price"` để bảng tô vàng nhắc điền, KHÔNG dùng "unmatched"
+ *  (nghĩa là AI khớp trượt — dòng này có ai khớp đâu mà trượt).
+ *  `confidence: 1` vì người tự thêm là chắc chắn, không phải phỏng đoán. */
+export function newResolvedItem(
+  loai: BaoGiaItem["loai"],
+  ngay_so: number,
+  bua_an?: "trua" | "toi",
+): ResolvedItem {
+  return {
+    ngay_so: Math.max(1, Math.round(ngay_so) || 1),
+    loai,
+    ...(loai === "meal" && bua_an ? { bua_an } : {}),
+    mo_ta: "",
+    don_gia: 0,
+    ten_zh: "",
+    ten_vi: "",
+    ghi_chu: "",
+    confidence: 1,
+    status: "no_price",
+    match_label: "",
+    match_table: null,
+    match_id: null,
+    match_set_menu_id: null,
+    from_alias: false,
+  };
+}
+
 /** 1 dòng bộ nhớ alias đã học (bao_gia_match_alias). */
 export interface AliasEntry {
   loai: BaoGiaItem["loai"];

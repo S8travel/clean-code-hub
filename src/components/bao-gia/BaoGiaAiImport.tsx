@@ -21,12 +21,13 @@ import {
   resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks,
   applyKsBuaRules, toKsBuaRules,
   hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
-  analyzeCombo, comboPatchForRef, sanitizeDraftRows, BUA_LABEL,
+  analyzeCombo, comboPatchForRef, sanitizeDraftRows, newResolvedItem, BUA_LABEL,
   type ResolvedItem, type AiReviewDraft, type BaoGomBuaAn, type KsBuaRule,
 } from "@/lib/bao-gia-ai-resolve";
 import { useBaoGiaAliasMap, useLearnAliases } from "@/hooks/use-bao-gia-aliases";
 import { useBaoGiaRuleList } from "@/hooks/use-bao-gia-rules";
 import { BaoGiaRuleChatPanel } from "@/components/bao-gia/BaoGiaRuleChat";
+import { AddServiceRow } from "@/components/bao-gia/AddServiceRow";
 import { fileKind, imageMime, extractItineraryText, unsupportedFileInfo } from "@/lib/itinerary-file";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
@@ -362,6 +363,16 @@ export function BaoGiaAiImport({
       setSelection(defaultHotelSelection(next, hotelChoiceGroups(next)));
       return next;
     });
+  // AI đọc sót mục → OP thêm dòng trống ngay tại đây, khỏi phải phân tích lại
+  // (phân tích lại = mất sạch phần đã sửa tay). Tên/giá điền inline trên dòng mới.
+  // Thêm KS vào đêm đã có KS = thêm PHƯƠNG ÁN → phải dựng lại selection, nếu
+  // không đêm đó mất radio mặc định và dòng mới bị loại khỏi báo giá.
+  const addRow = (loai: ResolvedItem["loai"], ngay_so: number, bua_an?: "trua" | "toi") =>
+    setRows((rs) => {
+      const next = [...(rs ?? []), newResolvedItem(loai, ngay_so, bua_an)];
+      if (loai === "hotel") setSelection(defaultHotelSelection(next, hotelChoiceGroups(next)));
+      return next;
+    });
 
   // ── Combo đã gồm bữa ăn ──
   /** id cảnh điểm được phép GHI cờ combo vào danh mục, hoặc null (chỉ sửa cục bộ).
@@ -608,7 +619,8 @@ export function BaoGiaAiImport({
                       .map((r, idx) => ({ r, idx }))
                       .filter(({ r }) => r.loai === g.key)
                       .sort((a, b) => (a.r.ngay_so - b.r.ngay_so) || (buaOrder(a.r.bua_an) - buaOrder(b.r.bua_an)));
-                    if (list.length === 0) return null;
+                    // Nhóm rỗng VẪN hiện (trước đây ẩn) — không thì AI bỏ sót cả
+                    // nhóm là mất luôn chỗ bấm thêm, đúng ngõ cụt cần gỡ.
                     return (
                       <Fragment key={g.key}>
                         <tr>
@@ -799,6 +811,16 @@ export function BaoGiaAiImport({
                             </tr>
                           );
                         })}
+                        <tr className="border-t border-slate-100">
+                          <td colSpan={7} className="py-1 px-2">
+                            <AddServiceRow
+                              loai={g.key}
+                              soNgay={soNgay}
+                              onAdd={(ngay, bua) => addRow(g.key, ngay, bua)}
+                              disabled={readOnly}
+                            />
+                          </td>
+                        </tr>
                       </Fragment>
                     );
                   })}
