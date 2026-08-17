@@ -31,7 +31,7 @@ import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, type KSLoaiRow,
 import { useAuditLogger } from "@/hooks/use-activity-log";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { buildCanTruNote } from "@/lib/can-tru-note";
-import { computeInitialDinhKyKsIds } from "@/lib/ks-dinh-ky";
+import { computeInitialDinhKyKsIds, nccPatchKhiBatDinhKy } from "@/lib/ks-dinh-ky";
 import { calcPhiHuySurplus } from "@/lib/phi-huy";
 import { proRataInts } from "@/lib/pro-rata";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
@@ -737,19 +737,34 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     });
   }, [doanId, upsertMut]);
 
+  // Bật/tắt định kỳ cho CẢ khách sạn (mọi dòng phòng + dịch vụ của KS đó).
+  //
+  // Ghi kèm NCC khi bật: dòng KS chỉ được gắn `nha_cung_cap_id` ở handleBlurSave,
+  // mà chỗ đó bỏ qua khi master chưa load (`ksInfo` null). OP nhập nhanh lúc danh
+  // mục KS chưa về rồi bật định kỳ → dòng nằm NULL NCC vĩnh viễn (không có lần lưu
+  // nào sau đó để vá) → kẹt ở cụm "Chưa có NCC" của trang định kỳ. Xem nccPatchKhiBatDinhKy.
   const handleToggleDinhKy = useCallback((ksId: number) => {
+    const newVal = !dinhKyKsIdsRef.current.has(ksId);
+    const masterNccId = ksData?.khachSanMap[ksId]?.nha_cung_cap_id ?? null;
+
     setDinhKyKsIds((prev) => {
       const next = new Set(prev);
-      const newVal = !next.has(ksId);
       if (newVal) next.add(ksId); else next.delete(ksId);
-      // Cập nhật tất cả chi phí rows của KS này trong DB
-      const rowsForKs = localRowsRef.current.filter((r) => r.khach_san_id === ksId && r.id);
-      rowsForKs.forEach((r) => {
-        upsertMut.mutate({ id: r.id, doan_id: doanId, thanh_toan_dinh_ky: newVal });
-      });
       return next;
     });
-  }, [doanId, upsertMut]);
+
+    // Cập nhật tất cả chi phí rows của KS này trong DB
+    const rowsForKs = localRowsRef.current.filter((r) => r.khach_san_id === ksId && r.id);
+    rowsForKs.forEach((r) => {
+      const rowNccId = chiPhiRowsRef.current.find((c) => c.id === r.id)?.nha_cung_cap_id ?? null;
+      upsertMut.mutate({
+        id: r.id,
+        doan_id: doanId,
+        thanh_toan_dinh_ky: newVal,
+        ...nccPatchKhiBatDinhKy(newVal, rowNccId, masterNccId),
+      });
+    });
+  }, [doanId, upsertMut, ksData]);
 
   const handleFieldChange = useCallback((idx: number, field: string, value: string | number) => {
     const editId = localRowsRef.current[idx]?.id;
