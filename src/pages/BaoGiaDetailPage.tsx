@@ -11,7 +11,8 @@ import { liveKetQua, baoGiaCode } from "@/components/bao-gia/detail/helpers";
 import { extractItineraryText, imageMime } from "@/lib/itinerary-file";
 import { pickProgramFile, renderPdfToPageImages, imageToPageImages, MAX_PROGRAM_PAGES, type PageImage } from "@/lib/itinerary-images";
 import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
-import { buildPortalBaoGiaSnapshot } from "@/lib/portal-payload";
+import { buildPhienBan, maPhienBan, type PhienBanMoi } from "@/lib/bao-gia-phien-ban";
+import { useTaoPhienBan, useMoPhienBanMoi } from "@/hooks/use-bao-gia-phien-ban";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { CostingSheetSection } from "@/components/bao-gia/detail/CostingSheetSection";
@@ -21,6 +22,8 @@ import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSecti
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
 import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
 import { PortalShareSection } from "@/components/bao-gia/detail/PortalShareSection";
+import { PhienBanSection } from "@/components/bao-gia/detail/PhienBanSection";
+import { GuiPhienBanModal } from "@/components/bao-gia/detail/GuiPhienBanModal";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 import { resolveStorageUrl } from "@/lib/storage-url";
 
@@ -38,6 +41,10 @@ export default function BaoGiaDetailPage() {
   const [draft, setDraft] = useState<BaoGiaRow | null>(null);
   useEffect(() => { if (row) setDraft(row); }, [row]);
   const [aiOpen, setAiOpen] = useState(false);
+  const [guiOpen, setGuiOpen] = useState(false);
+  const [phienBanMoi, setPhienBanMoi] = useState<PhienBanMoi | null>(null);
+  const taoPhienBan = useTaoPhienBan();
+  const moPhienBanMoi = useMoPhienBanMoi();
 
   // Pax dự kiến của lead gắn báo giá → highlight bậc giá áp dụng.
   const { data: lead } = useLead(draft?.lead_id ?? null);
@@ -163,13 +170,13 @@ export default function BaoGiaDetailPage() {
     }
   };
 
-  // Gửi khách = chốt giá (freeze): trạng thái 'sent', khóa chỉnh sửa. Mở lại được.
-  // Kèm ĐÓNG BĂNG bảng giá đã chào vào portal_noi_dung — trước nay bảng giá tính
-  // live mỗi lần render nên sửa đơn giá vốn hôm nay là đổi luôn con số đã chào
-  // tuần trước. Bản đóng băng này cũng là thứ đẩy sang cổng đối tác.
-  const handleSend = () => {
+  // Gửi khách = chốt MỘT PHIÊN BẢN. Bản đã chốt khoá vĩnh viễn (DB chặn sửa/xoá),
+  // muốn đổi thì ra bản kế tiếp — nhờ vậy sửa đơn giá vốn hôm nay không làm đổi
+  // con số đã chào tuần trước, và tra lại được đã chào gì, lúc nào, vì sao đổi.
+  const soPhienBanSapTao = (draft.so_phien_ban_cuoi ?? 0) + 1;
+  const openGuiModal = () => {
     if (isSent) return;
-    // Mode 'gia_cuoi': bảng giá vốn đã là số chào nhập tay, chưa dựng snapshot.
+    // Mode 'gia_cuoi': bảng giá nhập tay theo bậc, chưa dựng được bản chào.
     const fresh = isGiaCuoi ? null : liveKetQua(draft);
     if (!fresh) {
       saveField("trang_thai", "sent");
@@ -177,17 +184,37 @@ export default function BaoGiaDetailPage() {
       return;
     }
     try {
-      savePatch({ trang_thai: "sent", portal_noi_dung: buildPortalBaoGiaSnapshot(draft, fresh) });
-      toast.success("Đã gửi khách — đã chốt giá và lưu lại đúng bảng giá vừa chào.");
+      setPhienBanMoi(buildPhienBan(draft, fresh));
+      setGuiOpen(true);
     } catch (e) {
-      // buildPortalBaoGiaSnapshot ném lỗi khi phát hiện field giá vốn lọt vào
-      // bản gửi ra ngoài — thà không chốt còn hơn chốt bằng dữ liệu sai.
+      // buildPhienBan ném lỗi khi phát hiện field giá vốn lọt vào lớp chào —
+      // thà không chốt còn hơn chốt bằng dữ liệu sai.
       toast.error(e instanceof Error ? e.message : "Lỗi chốt giá");
     }
   };
-  const handleReopen = () => {
-    saveField("trang_thai", "draft");
-    toast.info("Đã mở lại để chỉnh sửa.");
+
+  const handleGui = (lyDo: string) => {
+    if (!phienBanMoi) return;
+    taoPhienBan.mutate(
+      { baoGiaId: draft.id, chao: phienBanMoi.noi_dung_chao, von: phienBanMoi.noi_dung_von, lyDo },
+      {
+        onSuccess: () => {
+          setGuiOpen(false);
+          setPhienBanMoi(null);
+          toast.success(`Đã chốt và gửi bản ${maPhienBan(baoGiaCode(draft), soPhienBanSapTao)}.`);
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi chốt phiên bản"),
+      },
+    );
+  };
+
+  // Không phải "mở lại để sửa bản cũ" — bản cũ vẫn nguyên vẹn và vẫn là bản đối
+  // tác đang xem; đây chỉ là mở bàn làm việc ra soạn bản kế tiếp.
+  const handleSoanBanMoi = () => {
+    moPhienBanMoi.mutate(draft.id, {
+      onSuccess: () => toast.info("Đã mở để soạn bản mới. Bản đang gửi vẫn giữ nguyên cho tới khi bạn gửi bản kế tiếp."),
+      onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi mở phiên bản"),
+    });
   };
   const todo = (label: string) => toast.info(`${label}: tính năng đang phát triển`);
 
@@ -197,24 +224,27 @@ export default function BaoGiaDetailPage() {
         row={draft}
         onSaveDraft={() => todo("Lưu nháp")}
         onExportPdf={handleExportPdf}
-        onSendCustomer={handleSend}
+        onSendCustomer={openGuiModal}
       />
       <div className="flex-1 px-4 py-4">
         {isSent && (
           <div className="max-w-[1400px] mx-auto mb-3 flex items-center justify-between gap-2 rounded-md border border-violet-200 bg-violet-50 px-4 py-2">
             <span className="inline-flex items-center gap-1.5 text-xs text-violet-800">
-              <Lock className="h-3.5 w-3.5" /> Báo giá đã gửi khách — đã chốt giá, khóa chỉnh sửa.
+              <Lock className="h-3.5 w-3.5" /> Bản {maPhienBan(baoGiaCode(draft), draft.so_phien_ban_cuoi ?? 1)} đã gửi — khoá vĩnh viễn, không sửa được.
             </span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReopen}>Mở lại để sửa</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSoanBanMoi}>Soạn bản mới</Button>
           </div>
         )}
         {/* NGOÀI fieldset: chia sẻ cổng chỉ dùng được SAU khi đã gửi khách, mà
             lúc đó cả fieldset bị disabled → để bên trong là bấm không được. */}
         {!isGiaCuoi && (
           <div className="max-w-[1400px] mx-auto mb-3">
-            <PortalShareSection draft={draft} savePatch={savePatch} />
+            <PortalShareSection draft={draft} />
           </div>
         )}
+        <div className="max-w-[1400px] mx-auto mb-3">
+          <PhienBanSection draft={draft} />
+        </div>
         <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
         {isGiaCuoi ? (
           <div className="max-w-[1400px] mx-auto space-y-4 min-w-0">
@@ -297,6 +327,15 @@ export default function BaoGiaDetailPage() {
           });
           toast.success(`Đã nạp ${items.length} mục từ lịch trình. Kiểm tra giá & nhập bậc số khách.`);
         }}
+      />
+      <GuiPhienBanModal
+        open={guiOpen}
+        onClose={() => { setGuiOpen(false); setPhienBanMoi(null); }}
+        soPhienBan={soPhienBanSapTao}
+        maHienThi={maPhienBan(baoGiaCode(draft), soPhienBanSapTao)}
+        phienBan={phienBanMoi}
+        dangGui={taoPhienBan.isPending}
+        onGui={handleGui}
       />
       <BaoGiaFooter
         onSaveDraft={() => todo("Lưu nháp")}

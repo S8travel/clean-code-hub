@@ -4,20 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { BaoGiaRow } from "@/hooks/use-bao-gia";
 import { usePushPortal, useSetPortalEnabled } from "@/hooks/use-portal-push";
-import { buildPortalBaoGiaSnapshot } from "@/lib/portal-payload";
+import { buildPhienBan } from "@/lib/bao-gia-phien-ban";
+import { useTaoPhienBan } from "@/hooks/use-bao-gia-phien-ban";
 import { liveKetQua } from "./helpers";
 
 interface Props {
   draft: BaoGiaRow;
-  /** Lưu bản đóng băng vào portal_noi_dung (không đụng trạng thái báo giá). */
-  savePatch: (patch: Partial<BaoGiaRow>) => void;
 }
 
 // Chia sẻ báo giá này cho đối tác xem trên cổng (外網).
 // Điều kiện: bảng giá phải được đóng băng trước — cổng chỉ hiện bản đã chốt, sửa
 // giá vốn sau không làm đổi con số đã chào.
-export function PortalShareSection({ draft, savePatch }: Props) {
+export function PortalShareSection({ draft }: Props) {
   const setEnabled = useSetPortalEnabled("bao_gia");
+  const taoPhienBan = useTaoPhienBan();
   const push = usePushPortal();
 
   const daDongBang = !!draft.portal_noi_dung;
@@ -38,8 +38,21 @@ export function PortalShareSection({ draft, savePatch }: Props) {
       // (hieu_luc_ngay), chốt muộn mà lấy hôm nay là tự kéo dài hạn đã hứa với
       // khách — đối tác đặt theo giá đã hết hạn thì mình chịu.
       const chaoLuc = draft.created_at ? new Date(draft.created_at) : new Date();
-      savePatch({ portal_noi_dung: buildPortalBaoGiaSnapshot(draft, fresh, chaoLuc) });
-      toast.success("Đã chốt bảng giá hiện tại. Bật công tắc để đối tác xem.");
+      const pb = buildPhienBan(draft, fresh, chaoLuc);
+      // Đi qua RPC như mọi lần gửi khác: portal_noi_dung chỉ được ghi bởi RPC, nếu
+      // ghi thẳng ở đây thì bảng phiên bản sẽ thiếu mất bản này.
+      taoPhienBan.mutate(
+        {
+          baoGiaId: draft.id,
+          chao: pb.noi_dung_chao,
+          von: pb.noi_dung_von,
+          lyDo: "Chốt lại bản đã gửi khách trước khi có tính năng phiên bản",
+        },
+        {
+          onSuccess: () => toast.success("Đã chốt bảng giá hiện tại. Bật công tắc để đối tác xem."),
+          onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi chốt giá"),
+        },
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Lỗi chốt giá");
     }

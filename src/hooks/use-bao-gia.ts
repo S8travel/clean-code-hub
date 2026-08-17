@@ -144,6 +144,11 @@ export interface BaoGiaRow {
   loai_bao_gia: LoaiBaoGia;
   // File lịch trình đính kèm (mode 'gia_cuoi'). jsonb mảng LichTrinhFile.
   lich_trinh_files: LichTrinhFile[];
+  // ── Phiên bản báo giá ──
+  // Mỗi lần bấm Gửi tạo một dòng bao_gia_phien_ban khoá vĩnh viễn. Hai cột này
+  // do RPC tao_phien_ban_bao_gia ghi, KHÔNG sửa tay.
+  so_phien_ban_cuoi: number;
+  phien_ban_hien_hanh_id: number | null;
   // ── Cổng đối tác (外網) ──
   // Bản báo giá ĐÓNG BĂNG lúc bấm "Gửi khách": bảng giá đã chào không đổi theo
   // giá vốn sửa sau. Chỉ chứa giá bán — xem lib/portal-payload.ts.
