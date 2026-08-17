@@ -15,8 +15,9 @@ import {
 } from "docx";
 import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
-import type { BaoGiaKetQua, BaoGiaItem, BaoGiaExportBracket, BaoGiaExportConfig } from "@/hooks/use-bao-gia";
+import type { BaoGiaKetQua, BaoGiaItem, BaoGiaExportBracket } from "@/hooks/use-bao-gia";
 import { fitPageSize, type PageImage } from "@/lib/itinerary-images";
+import { taiwanQuoteContent } from "@/lib/bao-gia-taiwan-content";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface ManualDayData {
@@ -617,15 +618,8 @@ function buildManualDoc(
 }
 
 // ── Taiwan format (報價 — bảng giá kiểu Đài Loan + 報價包含/不含) ───────────────
-// 報價包含 mặc định mỗi báo giá đều có 5 mục này, rồi thêm các cảnh điểm (mất phí)
-// của chương trình vào sau.
-const DEFAULT_INCLUDED_ZH = [
-  "全程新款冷氣巴士",
-  "華語導遊",
-  "景點門票",
-  "餐食費用。餐標如行程上。",
-  "全程住宿飯店",
-];
+// Nội dung (bậc giá, 單房差, 包含/不含, KS theo ngày) giải ở lib
+// bao-gia-taiwan-content.ts — dùng chung với cổng đối tác để 2 bên không lệch số.
 
 /** Xuất báo giá kiểu Đài Loan (報價) — Word. maBg = mã code duy nhất (ma_bg).
  *  行程內容: ưu tiên `programImages` (ảnh từng trang lịch trình gốc — giữ nguyên
@@ -645,66 +639,6 @@ export async function exportBaoGiaTaiwanWord(
   saveAs(blob, `bao_gia_${maBg}_${safeName}.docx`);
 }
 
-/** Bớt so với giá chuẩn 20 pax (USD/khách) cho các mốc đoàn lớn. */
-export const BOT_25PAX_USD = 7;
-export const BOT_30PAX_USD = 12;
-
-/** Mốc giá MẶC ĐỊNH của bảng báo giá Đài Loan (chính sách 08/2026):
- *    10-14  → giữ nguyên cách cũ (giá trung bình + 30)
- *    15-19  → đúng giá chuẩn bậc 16 pax
- *    20-24  → đúng giá chuẩn bậc 20 pax
- *    25-29  → giá 20 pax − 7 USD
- *    30+    → giá 20 pax − 12 USD
- *  Lấy `case_16`/`case_20` (luôn tính cho đúng 16 và 20 khách) chứ KHÔNG lấy
- *  theo `tier_guests` — OP đổi cỡ đoàn trên bảng chi phí không được làm trôi
- *  mốc giá chào khách. Thiếu case (báo giá cũ) → lùi về giá trung bình.
- *  OP sửa tay trong "Nội dung file xuất" vẫn đè được toàn bộ. */
-export function taiwanDefaultBrackets(ketQua: BaoGiaKetQua): BaoGiaExportBracket[] {
-  const base = Math.round(ketQua.gia_trung_binh_usd);
-  const p16 = Math.round(ketQua.case_16?.final_price_usd ?? ketQua.gia_trung_binh_usd);
-  const p20 = Math.round(ketQua.case_20?.final_price_usd ?? ketQua.gia_trung_binh_usd);
-  return [
-    { label: "10-14 pax", price_usd: base + 30 },
-    { label: "15-19 pax", price_usd: p16 },
-    { label: "20-24 pax", price_usd: p20 },
-    { label: "25-29 pax", price_usd: p20 - BOT_25PAX_USD },
-    { label: "30pax以上", price_usd: p20 - BOT_30PAX_USD },
-  ];
-}
-
-/** Giá trị MẶC ĐỊNH (tính live) cho cấu hình xuất báo giá Đài Loan. Editor +
- *  export dùng chung; ket_qua.export_config override từng field. */
-export function taiwanExportDefaults(
-  ketQua: BaoGiaKetQua,
-  items: BaoGiaItem[],
-  exchangeRate: number,
-): Required<BaoGiaExportConfig> {
-  const soNgay = ketQua.so_ngay ?? 1;
-  const base = Math.round(ketQua.gia_trung_binh_usd);
-  const totalHotelVnd = items.filter((i) => i.loai === "hotel").reduce((s, i) => s + (i.don_gia || 0), 0);
-  return {
-    brackets: taiwanDefaultBrackets(ketQua),
-    single_supplement_usd: Math.round(totalHotelVnd / 2 / (exchangeRate || 1)) + 10,
-    above_notes: `1. 司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n2. 簽證、機票、私人費用\n3. 越南特殊節日另外報價`,
-    included: DEFAULT_INCLUDED_ZH.join("\n"),
-    excluded: `司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n簽證、機票、私人費用`,
-    notes: "",
-  };
-}
-
-/** Merge config đã lưu lên mặc định (chỉ field có giá trị mới override). */
-function mergeExportConfig(base: Required<BaoGiaExportConfig>, cfg?: BaoGiaExportConfig | null): Required<BaoGiaExportConfig> {
-  const c = cfg ?? {};
-  return {
-    brackets: c.brackets && c.brackets.length ? c.brackets : base.brackets,
-    single_supplement_usd: c.single_supplement_usd ?? base.single_supplement_usd,
-    above_notes: c.above_notes ?? base.above_notes,
-    included: c.included ?? base.included,
-    excluded: c.excluded ?? base.excluded,
-    notes: c.notes ?? base.notes,
-  };
-}
-
 function buildTaiwanDoc(
   ketQua: BaoGiaKetQua,
   items: BaoGiaItem[],
@@ -715,23 +649,12 @@ function buildTaiwanDoc(
 ): Document {
   const today = new Date();
   const todayStr = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
-  // Cấu hình xuất: mặc định live + override từ ket_qua.export_config (user sửa).
-  const cfg = mergeExportConfig(taiwanExportDefaults(ketQua, items, exchangeRate), ketQua.export_config);
+  // Nội dung: mặc định tính live + override từ ket_qua.export_config (user sửa).
+  // Cùng hàm mà cổng đối tác dùng → file Word và trang web không lệch số.
+  const cfg = taiwanQuoteContent(ketQua, items, exchangeRate);
   const brackets: BaoGiaExportBracket[] = cfg.brackets;
   const singleRoom = cfg.single_supplement_usd;
-
-  const hotelDays = items
-    .filter((i) => i.loai === "hotel" && (i.mo_ta || "").trim())
-    .map((i) => ({ ngay: i.ngay_so ?? 1, name: i.mo_ta.trim() }))
-    .sort((a, b) => a.ngay - b.ngay);
-
-  // Cảnh điểm mất phí (ưu tiên tên tiếng Trung), lọc trùng — nối thêm vào 報價包含.
-  const sights = [...new Set(
-    items
-      .filter((i) => i.loai === "ticket")
-      .map((i) => (i.ten_zh || i.mo_ta || "").trim())
-      .filter(Boolean),
-  )];
+  const hotelDays = cfg.hotel_days;
 
   const nCol = brackets.length + 1; // + cột 單房差
   const LEFT_W = 4200;
@@ -777,8 +700,8 @@ function buildTaiwanDoc(
     : hotelDays.map((d, idx) =>
         new TableRow({
           children: idx === 0
-            ? [cell([p(`D${d.ngay}${IDEO}${IDEO}${d.name}`, { size: 18 })], { width: LEFT_W, margins: { top: 60, bottom: 60, left: 100, right: 100 } }), ...priceCells(hotelDays.length)]
-            : [cell([p(`D${d.ngay}${IDEO}${IDEO}${d.name}`, { size: 18 })], { width: LEFT_W, margins: { top: 60, bottom: 60, left: 100, right: 100 } })],
+            ? [cell([p(`D${d.ngay}${IDEO}${IDEO}${d.ten}`, { size: 18 })], { width: LEFT_W, margins: { top: 60, bottom: 60, left: 100, right: 100 } }), ...priceCells(hotelDays.length)]
+            : [cell([p(`D${d.ngay}${IDEO}${IDEO}${d.ten}`, { size: 18 })], { width: LEFT_W, margins: { top: 60, bottom: 60, left: 100, right: 100 } })],
         }),
       );
 
@@ -790,13 +713,13 @@ function buildTaiwanDoc(
   // ── 以上價格不含 ────────────────────────────────────────────────────────────
   const notesBlock = [
     p("以上價格不含：", { bold: true, size: 18 }),
-    ...cfg.above_notes.split(/\r?\n/).filter((l) => l.trim()).map((l) => p(l, { size: 18 })),
+    ...cfg.above_notes.map((l) => p(l, { size: 18 })),
   ];
 
   // ── 報價包含 / 報價不含 / 備註 (từ config; cảnh điểm tự nối vào 包含) ──────────
-  const includedLines = [...cfg.included.split(/\r?\n/).filter((l) => l.trim()), ...sights];
-  const excludedLines = cfg.excluded.split(/\r?\n/).filter((l) => l.trim());
-  const noteLines = cfg.notes.split(/\r?\n/).filter((l) => l.trim());
+  const includedLines = cfg.included;   // đã nối sẵn cảnh điểm mất phí
+  const excludedLines = cfg.excluded;
+  const noteLines = cfg.notes;
   const LABEL_W2 = 1600;
   const incExcTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },

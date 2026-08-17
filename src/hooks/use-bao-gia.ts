@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
 import { resolveStorageUrl } from "@/lib/storage-url";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
+import type { PortalBaoGiaSnapshot } from "@/lib/portal-payload";
 
 export interface BaoGiaItem {
   loai: "hotel" | "meal" | "ticket" | "transport";
@@ -143,6 +144,13 @@ export interface BaoGiaRow {
   loai_bao_gia: LoaiBaoGia;
   // File lịch trình đính kèm (mode 'gia_cuoi'). jsonb mảng LichTrinhFile.
   lich_trinh_files: LichTrinhFile[];
+  // ── Cổng đối tác (外網) ──
+  // Bản báo giá ĐÓNG BĂNG lúc bấm "Gửi khách": bảng giá đã chào không đổi theo
+  // giá vốn sửa sau. Chỉ chứa giá bán — xem lib/portal-payload.ts.
+  portal_noi_dung: PortalBaoGiaSnapshot | null;
+  // Đã mở cho đối tác xem trên cổng.
+  portal_enabled: boolean;
+  portal_pushed_at: string | null;
 }
 
 // ── Queries ──

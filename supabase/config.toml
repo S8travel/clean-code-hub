@@ -48,3 +48,10 @@ verify_jwt = false
 # notify: điểm nhận thông báo, gọi không kèm user JWT.
 [functions.notify]
 verify_jwt = false
+
+# push-portal: đẩy báo giá + chương trình đoàn sang project cổng đối tác (外網).
+# pg_cron gọi 30 phút/lần nên không có user JWT → verify_jwt = false.
+# Bảo vệ: header 'x-portal-secret' khớp env PORTAL_CRON_SECRET, HOẶC access token
+# của phiên đăng nhập (nút "Đẩy ngay" trong CRM). Xem index.ts.
+[functions.push-portal]
+verify_jwt = false
