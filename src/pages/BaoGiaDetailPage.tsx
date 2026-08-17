@@ -209,12 +209,18 @@ export default function BaoGiaDetailPage() {
           </div>
         )}
         {/* NGOÀI fieldset: chia sẻ cổng chỉ dùng được SAU khi đã gửi khách, mà
-            lúc đó cả fieldset bị disabled → để bên trong là bấm không được. */}
-        {!isGiaCuoi && (
-          <div className="max-w-[1400px] mx-auto mb-3">
-            <PortalShareSection draft={draft} savePatch={savePatch} />
-          </div>
-        )}
+            lúc đó cả fieldset bị disabled → để bên trong là bấm không được.
+            Báo giá "giá cuối" chưa hỗ trợ: vẫn HIỆN khối kèm lý do, ẩn hẳn thì
+            OP tưởng mình thiếu quyền hoặc trang lỗi. */}
+        <div className="max-w-[1400px] mx-auto mb-3">
+          <PortalShareSection
+            draft={draft}
+            savePatch={savePatch}
+            khoaLyDo={isGiaCuoi
+              ? "Báo giá loại “giá cuối” chưa đưa lên cổng đối tác được — bảng giá loại này nhập tay theo bậc khách, chưa có bản đóng băng tương ứng. Gửi file cho đối tác như trước."
+              : undefined}
+          />
+        </div>
         <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
         {isGiaCuoi ? (
           <div className="max-w-[1400px] mx-auto space-y-4 min-w-0">

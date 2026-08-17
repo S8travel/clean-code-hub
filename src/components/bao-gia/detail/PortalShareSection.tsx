@@ -1,9 +1,10 @@
-import { Globe, Loader2, Lock, RefreshCw } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Lock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { BaoGiaRow } from "@/hooks/use-bao-gia";
-import { usePushPortal, useSetPortalEnabled } from "@/hooks/use-portal-push";
+import { usePushPortal, useSetPortalEnabled, type KetQuaDay } from "@/hooks/use-portal-push";
+import { ketQuaThanhLoi } from "@/lib/portal-thong-bao";
 import { buildPortalBaoGiaSnapshot } from "@/lib/portal-payload";
 import { liveKetQua } from "./helpers";
 
@@ -11,21 +12,38 @@ interface Props {
   draft: BaoGiaRow;
   /** Lưu bản đóng băng vào portal_noi_dung (không đụng trạng thái báo giá). */
   savePatch: (patch: Partial<BaoGiaRow>) => void;
+  /** Có giá trị = khoá cả khối, hiện đúng lý do thay vì ẩn đi cho OP tự đoán. */
+  khoaLyDo?: string;
 }
 
 // Chia sẻ báo giá này cho đối tác xem trên cổng (外網).
 // Điều kiện: bảng giá phải được đóng băng trước — cổng chỉ hiện bản đã chốt, sửa
 // giá vốn sau không làm đổi con số đã chào.
-export function PortalShareSection({ draft, savePatch }: Props) {
+export function PortalShareSection({ draft, savePatch, khoaLyDo }: Props) {
   const setEnabled = useSetPortalEnabled("bao_gia");
   const push = usePushPortal();
 
   const daDongBang = !!draft.portal_noi_dung;
   const dangChiaSe = draft.portal_enabled;
+  const chuaGanDoiTac = draft.agent_id == null;
   // Báo giá gửi khách TRƯỚC khi có tính năng này thì đang ở 'sent' mà chưa có bản
   // đóng băng. Bắt họ "Mở lại để sửa" rồi "Gửi khách" lần nữa chỉ để chốt giá là
   // vô lý (và làm mất dấu lần gửi thật) → cho chốt tại chỗ.
-  const chotDuocTaiCho = draft.trang_thai === "sent" && !daDongBang;
+  const chotDuocTaiCho = draft.trang_thai === "sent" && !daDongBang && !khoaLyDo;
+
+  const hanDen = draft.portal_noi_dung?.hieu_luc_den ?? null;
+  const hetHan = !!hanDen && hanDen < new Date().toISOString().slice(0, 10);
+
+  const bao = (r: KetQuaDay) => {
+    const { kieu, loi } = ketQuaThanhLoi(r);
+    (kieu === "success" ? toast.success : toast.warning)(loi, { duration: kieu === "success" ? 4000 : 8000 });
+  };
+
+  const day = () =>
+    push.mutate(undefined, {
+      onSuccess: bao,
+      onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi đẩy dữ liệu"),
+    });
 
   const chotGia = () => {
     const fresh = liveKetQua(draft);
@@ -46,14 +64,20 @@ export function PortalShareSection({ draft, savePatch }: Props) {
   };
 
   const toggle = (bat: boolean) => {
+    if (bat && chuaGanDoiTac) {
+      toast.error("Chọn Đối tác bán trước — cổng cần biết đưa báo giá này cho ai xem.");
+      return;
+    }
     if (bat && !daDongBang) {
-      toast.error('Bấm "Gửi khách" trước để chốt bảng giá, rồi mới chia sẻ được.');
+      toast.error('Chốt bảng giá trước (nút "Gửi khách" hoặc "Chốt bảng giá hiện tại").');
       return;
     }
     setEnabled.mutate(
       { id: draft.id, bat },
       {
-        onSuccess: () => toast.success(bat ? "Đã mở cho đối tác xem." : "Đã ngừng chia sẻ."),
+        // Đẩy luôn thay vì để OP đợi tới lượt cron 30 phút, và nhờ vậy họ biết
+        // ngay nếu đối tác chưa có tài khoản đăng nhập.
+        onSuccess: () => day(),
         onError: () => toast.error("Lỗi lưu"),
       },
     );
@@ -67,24 +91,41 @@ export function PortalShareSection({ draft, savePatch }: Props) {
         </h2>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-slate-600">Cho đối tác xem</span>
-          <Switch checked={dangChiaSe} onCheckedChange={toggle} disabled={setEnabled.isPending} />
+          <Switch
+            checked={dangChiaSe}
+            onCheckedChange={toggle}
+            disabled={setEnabled.isPending || !!khoaLyDo}
+          />
         </div>
       </div>
 
       <p className="text-[11px] text-slate-500">
-        {chotDuocTaiCho ? (
+        {khoaLyDo ? (
+          khoaLyDo
+        ) : chuaGanDoiTac ? (
+          <>Báo giá chưa chọn <b>Đối tác bán</b> nên chưa chia sẻ được — cổng cần biết đưa cho ai xem.</>
+        ) : chotDuocTaiCho ? (
           <>Báo giá này đã gửi khách từ trước khi có cổng đối tác nên chưa có bản chốt.
           Bấm <b>Chốt bảng giá hiện tại</b> để lưu lại đúng con số đang hiển thị.</>
         ) : !daDongBang ? (
           <>Chưa chốt giá. Bấm <b>Gửi khách</b> để khoá bảng giá lại — cổng chỉ hiện bản đã chốt,
           sửa đơn giá sau không làm đổi con số đã chào.</>
         ) : dangChiaSe ? (
-          <>Đối tác đăng nhập cổng là thấy bảng giá này. Hệ thống tự đẩy lại 30 phút/lần.
+          <>Đối tác đăng nhập cổng là thấy bảng giá này. Hệ thống tự đẩy lại 30 phút/lần; tắt
+          công tắc là gỡ khỏi cổng.
           {draft.portal_pushed_at && ` Lần đẩy gần nhất: ${new Date(draft.portal_pushed_at).toLocaleString("vi-VN")}.`}</>
         ) : (
           <>Đã chốt giá xong. Bật công tắc để đối tác xem được trên cổng.</>
         )}
       </p>
+
+      {hanDen && !khoaLyDo && (
+        <p className={"text-[11px] inline-flex items-center gap-1.5 " + (hetHan ? "text-amber-700" : "text-slate-500")}>
+          {hetHan && <AlertTriangle className="h-3.5 w-3.5" />}
+          Hiệu lực chào giá đến <b>{new Date(hanDen).toLocaleDateString("vi-VN")}</b>
+          {hetHan && " — cổng đang hiện 已過期. Sửa số ngày hiệu lực rồi chốt lại nếu muốn đối tác đặt theo giá này."}
+        </p>
+      )}
 
       {chotDuocTaiCho && (
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={chotGia}>
@@ -92,19 +133,8 @@ export function PortalShareSection({ draft, savePatch }: Props) {
         </Button>
       )}
 
-      {dangChiaSe && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs gap-1"
-          disabled={push.isPending}
-          onClick={() =>
-            push.mutate(undefined, {
-              onSuccess: (r) => toast.success(`Đã đẩy ${r.bao_gia} báo giá, ${r.doan} đoàn sang cổng.`),
-              onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi đẩy dữ liệu"),
-            })
-          }
-        >
+      {dangChiaSe && !khoaLyDo && (
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={push.isPending} onClick={day}>
           {push.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
           Đẩy ngay
         </Button>

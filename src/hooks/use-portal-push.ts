@@ -8,9 +8,21 @@ import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
 // Cron 30 phút/lần đẩy lại toàn bộ những gì đang bật; nút "Đẩy ngay" chỉ để không
 // phải chờ. Muốn thu hồi thì tắt cờ — lần đẩy sau đối tác không thấy nữa.
 
+export interface DongBoQua {
+  loai: "bao_gia" | "doan";
+  id: number;
+  ly_do: string;
+}
+
 export interface KetQuaDay {
   bao_gia: number;
   doan: number;
+  /** Số dòng bị gỡ khỏi cổng (tắt công tắc, đoàn hủy...). */
+  xoa: number;
+  /** Dòng đủ điều kiện nhưng thiếu thứ gì đó — kèm lý do để nói lại cho OP. */
+  bo_qua: DongBoQua[];
+  /** Đối tác đã nhận dữ liệu nhưng CHƯA có tài khoản đăng nhập cổng. */
+  agent_thieu_tai_khoan: Array<{ crm_agent_id: number; ten: string }>;
   luc?: string;
 }
 
