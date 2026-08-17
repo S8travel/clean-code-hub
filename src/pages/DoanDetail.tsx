@@ -35,6 +35,7 @@ import { useChiPhiList, useUpsertChiPhi, useDeleteChiPhi } from "@/hooks/use-chi
 import { giftMoTa, GIFT_DON_GIA } from "@/components/chi-phi/hdv-shared";
 import CompanyHeader from "@/components/dieu-tour/CompanyHeader";
 import DoanInfoSection from "@/components/dieu-tour/DoanInfoSection";
+import { DoanPortalSection } from "@/components/dieu-tour/DoanPortalSection";
 import GiftTagsSection from "@/components/dieu-tour/GiftTagsSection";
 import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
 import DoanNhomTabs from "@/components/dieu-tour/DoanNhomTabs";
@@ -859,6 +860,12 @@ export default function DoanDetail() {
                 {t("Xuất Word")}
               </Button>
             </div>
+            {doan && (
+              <DoanPortalSection
+                doan={doan}
+                soNgayCoLich={days.length}
+              />
+            )}
             <CompanyHeader />
             <DoanInfoSection
               doan={doan}
