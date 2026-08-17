@@ -13,7 +13,7 @@ import { extractItineraryText, imageMime } from "@/lib/itinerary-file";
 import { pickProgramFile, renderPdfToPageImages, imageToPageImages, MAX_PROGRAM_PAGES, type PageImage } from "@/lib/itinerary-images";
 import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { buildPhienBan, maPhienBan, type PhienBanMoi } from "@/lib/bao-gia-phien-ban";
-import { useTaoPhienBan, useMoPhienBanMoi } from "@/hooks/use-bao-gia-phien-ban";
+import { useTaoPhienBan } from "@/hooks/use-bao-gia-phien-ban";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { CostingSheetSection } from "@/components/bao-gia/detail/CostingSheetSection";
@@ -23,6 +23,7 @@ import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSecti
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
 import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
 import { PhienBanSection } from "@/components/bao-gia/detail/PhienBanSection";
+import { CanhBaoLech } from "@/components/bao-gia/detail/CanhBaoLech";
 import { GuiPhienBanModal } from "@/components/bao-gia/detail/GuiPhienBanModal";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 import { resolveStorageUrl } from "@/lib/storage-url";
@@ -45,7 +46,6 @@ export default function BaoGiaDetailPage() {
   const [guiOpen, setGuiOpen] = useState(false);
   const [phienBanMoi, setPhienBanMoi] = useState<PhienBanMoi | null>(null);
   const taoPhienBan = useTaoPhienBan();
-  const moPhienBanMoi = useMoPhienBanMoi();
 
   // Pax dự kiến của lead gắn báo giá → highlight bậc giá áp dụng.
   const { data: lead } = useLead(draft?.lead_id ?? null);
@@ -176,7 +176,6 @@ export default function BaoGiaDetailPage() {
   // con số đã chào tuần trước, và tra lại được đã chào gì, lúc nào, vì sao đổi.
   const soPhienBanSapTao = (draft.so_phien_ban_cuoi ?? 0) + 1;
   const openGuiModal = () => {
-    if (isSent) return;
     // Mode 'gia_cuoi': bảng giá nhập tay theo bậc, chưa dựng được bản chào.
     const fresh = isGiaCuoi ? null : liveKetQua(draft);
     if (!fresh) {
@@ -212,14 +211,6 @@ export default function BaoGiaDetailPage() {
     );
   };
 
-  // Không phải "mở lại để sửa bản cũ" — bản cũ vẫn nguyên vẹn và vẫn là bản đối
-  // tác đang xem; đây chỉ là mở bàn làm việc ra soạn bản kế tiếp.
-  const handleSoanBanMoi = () => {
-    moPhienBanMoi.mutate(draft.id, {
-      onSuccess: () => toast.info("Đã mở để soạn bản mới. Bản đang gửi vẫn giữ nguyên cho tới khi bạn gửi bản kế tiếp."),
-      onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi mở phiên bản"),
-    });
-  };
   const todo = (label: string) => toast.info(`${label}: tính năng đang phát triển`);
 
   return (
@@ -231,14 +222,18 @@ export default function BaoGiaDetailPage() {
         onSendCustomer={openGuiModal}
       />
       <div className="flex-1 px-4 py-4">
-        {isSent && (
-          <div className="max-w-[1400px] mx-auto mb-3 flex items-center justify-between gap-2 rounded-md border border-violet-200 bg-violet-50 px-4 py-2">
-            <span className="inline-flex items-center gap-1.5 text-xs text-violet-800">
-              <Lock className="h-3.5 w-3.5" /> Bản {maPhienBan(baoGiaCode(draft), draft.so_phien_ban_cuoi ?? 1)} đã gửi — khoá vĩnh viễn, không sửa được.
-            </span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSoanBanMoi}>Soạn bản mới</Button>
-          </div>
-        )}
+        <div className="max-w-[1400px] mx-auto">
+          {isSent && (
+            <div className="mb-3 rounded-md border border-violet-200 bg-violet-50 px-4 py-2">
+              <span className="inline-flex items-center gap-1.5 text-xs text-violet-800">
+                <Lock className="h-3.5 w-3.5" />
+                Đối tác đang xem bản {maPhienBan(baoGiaCode(draft), draft.so_phien_ban_cuoi ?? 1)} — bản đó khoá vĩnh viễn, sửa ở đây không đụng tới nó.
+              </span>
+            </div>
+          )}
+          {/* Sửa thoải mái, nhưng lệch với bản đã chào thì phải nói ra. */}
+          <CanhBaoLech draft={draft} onGuiBanMoi={openGuiModal} />
+        </div>
         {/* Hai tab: bàn làm việc và sổ các bản đã chào. Gửi khách là tự sang tab
             Phiên bản một dòng mới — OP không phải bấm thêm gì. */}
         <Tabs value={tab} onValueChange={setTab} className="max-w-[1400px] mx-auto">
@@ -259,7 +254,7 @@ export default function BaoGiaDetailPage() {
           </TabsContent>
 
           <TabsContent value="bang-tinh-gia" className="mt-0">
-        <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
+        <fieldset className="border-0 p-0 m-0 min-w-0">
         {isGiaCuoi ? (
           <div className="space-y-4 min-w-0">
             <GiaCuoiInfoSection

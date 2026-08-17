@@ -96,21 +96,3 @@ export function useTaoPhienBan() {
     },
   });
 }
-
-/** Mở bàn làm việc ra soạn bản kế tiếp. Bản đã gửi vẫn nguyên vẹn và vẫn là bản
- *  đối tác đang xem cho tới khi gửi bản mới. */
-export function useMoPhienBanMoi() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (baoGiaId: number) => {
-      const { error } = await externalSupabase.rpc("mo_phien_ban_moi", { p_bao_gia_id: baoGiaId });
-      if (error) throw new Error(error.message);
-      return baoGiaId;
-    },
-    onSuccess: (baoGiaId) => {
-      qc.invalidateQueries({ queryKey: ["bao_gia"] });
-      qc.invalidateQueries({ queryKey: ["bao_gia", baoGiaId] });
-      qc.invalidateQueries({ queryKey: [QK_LOG, baoGiaId] });
-    },
-  });
-}
