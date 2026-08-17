@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BaoGiaAiImport } from "@/components/bao-gia/BaoGiaAiImport";
 import { useBaoGia, useUpdateBaoGia, type BaoGiaKetQua, type BaoGiaRow } from "@/hooks/use-bao-gia";
 import { useLead } from "@/hooks/use-leads";
@@ -21,7 +22,6 @@ import { TongHopChiPhiPanel } from "@/components/bao-gia/detail/TongHopChiPhiPan
 import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSection";
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
 import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
-import { PortalShareSection } from "@/components/bao-gia/detail/PortalShareSection";
 import { PhienBanSection } from "@/components/bao-gia/detail/PhienBanSection";
 import { GuiPhienBanModal } from "@/components/bao-gia/detail/GuiPhienBanModal";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
@@ -41,6 +41,7 @@ export default function BaoGiaDetailPage() {
   const [draft, setDraft] = useState<BaoGiaRow | null>(null);
   useEffect(() => { if (row) setDraft(row); }, [row]);
   const [aiOpen, setAiOpen] = useState(false);
+  const [tab, setTab] = useState("bang-tinh-gia");
   const [guiOpen, setGuiOpen] = useState(false);
   const [phienBanMoi, setPhienBanMoi] = useState<PhienBanMoi | null>(null);
   const taoPhienBan = useTaoPhienBan();
@@ -201,6 +202,9 @@ export default function BaoGiaDetailPage() {
         onSuccess: () => {
           setGuiOpen(false);
           setPhienBanMoi(null);
+          // Gửi xong nhảy thẳng sang tab Phiên bản: OP thấy ngay bản vừa chốt nằm
+          // trong sổ, không phải tự đi tìm để biết đã lưu hay chưa.
+          setTab("phien-ban");
           toast.success(`Đã chốt và gửi bản ${maPhienBan(baoGiaCode(draft), soPhienBanSapTao)}.`);
         },
         onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi chốt phiên bản"),
@@ -235,19 +239,29 @@ export default function BaoGiaDetailPage() {
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSoanBanMoi}>Soạn bản mới</Button>
           </div>
         )}
-        {/* NGOÀI fieldset: chia sẻ cổng chỉ dùng được SAU khi đã gửi khách, mà
-            lúc đó cả fieldset bị disabled → để bên trong là bấm không được. */}
-        {!isGiaCuoi && (
-          <div className="max-w-[1400px] mx-auto mb-3">
-            <PortalShareSection draft={draft} />
-          </div>
-        )}
-        <div className="max-w-[1400px] mx-auto mb-3">
-          <PhienBanSection draft={draft} />
-        </div>
+        {/* Hai tab: bàn làm việc và sổ các bản đã chào. Gửi khách là tự sang tab
+            Phiên bản một dòng mới — OP không phải bấm thêm gì. */}
+        <Tabs value={tab} onValueChange={setTab} className="max-w-[1400px] mx-auto">
+          <TabsList className="mb-3">
+            <TabsTrigger value="bang-tinh-gia">Bảng tính giá</TabsTrigger>
+            <TabsTrigger value="phien-ban">
+              Phiên bản
+              {(draft.so_phien_ban_cuoi ?? 0) > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-violet-500 text-white text-[10px] font-bold px-1.5 min-w-[18px]">
+                  {draft.so_phien_ban_cuoi}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="phien-ban" className="mt-0">
+            <PhienBanSection draft={draft} />
+          </TabsContent>
+
+          <TabsContent value="bang-tinh-gia" className="mt-0">
         <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">
         {isGiaCuoi ? (
-          <div className="max-w-[1400px] mx-auto space-y-4 min-w-0">
+          <div className="space-y-4 min-w-0">
             <GiaCuoiInfoSection
               draft={draft}
               row={row}
@@ -265,7 +279,7 @@ export default function BaoGiaDetailPage() {
             <LichTrinhFilesSection draft={draft} />
           </div>
         ) : (
-          <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
             <div className="space-y-4 min-w-0">
               <div className="flex justify-end">
                 <Button size="sm" variant="outline" className="h-8 gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
@@ -299,6 +313,8 @@ export default function BaoGiaDetailPage() {
           </div>
         )}
         </fieldset>
+          </TabsContent>
+        </Tabs>
       </div>
       <BaoGiaAiImport
         open={aiOpen}

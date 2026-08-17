@@ -189,10 +189,13 @@ BEGIN
 
   -- portal_noi_dung từ nay là BẢN SAO lớp chào của phiên bản hiện hành → đường đẩy
   -- sang cổng và cổng đối tác chạy y như cũ, không phải sửa cùng lúc.
+  -- portal_enabled = true: "Gửi khách" NGHĨA LÀ gửi cho đối tác, nên không bắt OP
+  -- bật thêm công tắc nào nữa — gửi bản mới là đối tác thấy bản mới.
   UPDATE bao_gia
   SET so_phien_ban_cuoi = v_so,
       phien_ban_hien_hanh_id = v_id,
       portal_noi_dung = p_chao,
+      portal_enabled = true,
       trang_thai = 'sent'
   WHERE id = p_bao_gia_id;
 
