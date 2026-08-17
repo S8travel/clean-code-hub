@@ -14,6 +14,8 @@ import { pickProgramFile, renderPdfToPageImages, imageToPageImages, MAX_PROGRAM_
 import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { buildPhienBan, maPhienBan, type PhienBanMoi } from "@/lib/bao-gia-phien-ban";
 import { useTaoPhienBan } from "@/hooks/use-bao-gia-phien-ban";
+import { usePushPortal } from "@/hooks/use-portal-push";
+import { ketQuaThanhLoi } from "@/lib/portal-thong-bao";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { CostingSheetSection } from "@/components/bao-gia/detail/CostingSheetSection";
@@ -46,6 +48,7 @@ export default function BaoGiaDetailPage() {
   const [guiOpen, setGuiOpen] = useState(false);
   const [phienBanMoi, setPhienBanMoi] = useState<PhienBanMoi | null>(null);
   const taoPhienBan = useTaoPhienBan();
+  const pushPortal = usePushPortal();
 
   // Pax dự kiến của lead gắn báo giá → highlight bậc giá áp dụng.
   const { data: lead } = useLead(draft?.lead_id ?? null);
@@ -205,6 +208,20 @@ export default function BaoGiaDetailPage() {
           // trong sổ, không phải tự đi tìm để biết đã lưu hay chưa.
           setTab("phien-ban");
           toast.success(`Đã chốt và gửi bản ${maPhienBan(baoGiaCode(draft), soPhienBanSapTao)}.`);
+          // Đẩy sang cổng NGAY, không đợi lượt đồng bộ định kỳ: "gửi báo giá" mà đối
+          // tác phải chờ tới mai mới thấy thì không còn là gửi nữa.
+          pushPortal.mutate(undefined, {
+            onSuccess: (r) => {
+              const { kieu, loi } = ketQuaThanhLoi(r);
+              if (kieu === "warning") toast.warning(loi, { duration: 8000 });
+            },
+            // Bản chào đã chốt an toàn trong DB rồi; đẩy hỏng chỉ là chậm chứ không
+            // mất gì — lượt đồng bộ kế tiếp sẽ đẩy lại.
+            onError: () => toast.warning(
+              "Đã chốt bản, nhưng chưa đẩy được sang cổng — hệ thống sẽ tự đẩy lại ở lượt đồng bộ tới.",
+              { duration: 8000 },
+            ),
+          });
         },
         onError: (e) => toast.error(e instanceof Error ? e.message : "Lỗi chốt phiên bản"),
       },
