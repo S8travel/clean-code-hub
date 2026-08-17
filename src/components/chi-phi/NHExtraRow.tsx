@@ -132,6 +132,12 @@ export default function NHExtraRow({
           <span className={cn("text-[11px] font-semibold", extra.nguoi_tt === "hdv" ? "text-amber-600" : "text-primary")}>
             {fmt(applyChietKhau(extra.so_luong * extra.don_gia, extra.chiet_khau_phan_tram))}
           </span>
+        ) : extra.mo_ta.trim() ? (
+          // Đã đặt tên mà chưa có giá: ô trống trông y như khoản miễn phí, OP bỏ dở
+          // rồi xuất Excel là dòng in ra "SL 1 / đơn giá 0". Nói thẳng ở đúng chỗ.
+          <span className="text-[10px] text-orange-600 font-medium" title={t("Nhập số lượng và đơn giá, nếu không dòng này in ra trống")}>
+            {t("chưa nhập giá")}
+          </span>
         ) : ""}
       </td>
       {/* Col 9: Ai trả — toggle giống main row */}
