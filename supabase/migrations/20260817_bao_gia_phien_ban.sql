@@ -146,6 +146,11 @@ DECLARE
   v_ten     text;
   v_ly_do   text;
 BEGIN
+  -- is_tk_chi_xem() chỉ phân biệt "tài khoản chỉ xem", KHÔNG phân biệt "chưa đăng
+  -- nhập" (auth.uid() NULL → trả false → đi lọt). Cần cả hai.
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Chưa đăng nhập' USING ERRCODE = '42501';
+  END IF;
   IF public.is_tk_chi_xem() THEN
     RAISE EXCEPTION 'Tài khoản chỉ xem — không thực hiện được thao tác này'
       USING ERRCODE = '42501';
@@ -207,6 +212,10 @@ BEGIN
 END;
 $$;
 
+-- Postgres TỰ CẤP EXECUTE cho PUBLIC (gồm cả anon) trên mọi function mới. Chỉ GRANT
+-- thêm cho authenticated là chưa đủ — phải REVOKE, nếu không người cầm publishable key
+-- gọi thẳng /rest/v1/rpc được, mà hàm SECURITY DEFINER thì bỏ qua RLS.
+REVOKE ALL ON FUNCTION public.tao_phien_ban_bao_gia(bigint, jsonb, jsonb, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.tao_phien_ban_bao_gia(bigint, jsonb, jsonb, text)
   TO authenticated, service_role;
 
@@ -223,6 +232,11 @@ AS $$
 DECLARE
   v_ten text;
 BEGIN
+  -- is_tk_chi_xem() chỉ phân biệt "tài khoản chỉ xem", KHÔNG phân biệt "chưa đăng
+  -- nhập" (auth.uid() NULL → trả false → đi lọt). Cần cả hai.
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Chưa đăng nhập' USING ERRCODE = '42501';
+  END IF;
   IF public.is_tk_chi_xem() THEN
     RAISE EXCEPTION 'Tài khoản chỉ xem — không thực hiện được thao tác này'
       USING ERRCODE = '42501';
@@ -237,6 +251,7 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.mo_phien_ban_moi(bigint) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mo_phien_ban_moi(bigint) TO authenticated, service_role;
 
 -- ───────────────────────────────────────────────────────────────────────────
