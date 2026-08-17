@@ -23,6 +23,7 @@ import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import { useCanhDiemList } from "@/hooks/use-canh-diem";
+import { parseSoLuongBaoHiem } from "@/lib/bao-hiem-calc";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -81,7 +82,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
   const existing = chiPhiRows.find((r) => r.danh_muc === "bao_hiem");
   const [donGia, setDonGia] = useState<number>(0);
   // SL có thể edit thủ công — default = soKhach × soNgay nhưng user override được.
-  const [soLuong, setSoLuong] = useState<number>(0);
+  // Giữ dạng chuỗi để phân biệt "0" (không mua bảo hiểm) với ô đang gõ dở.
+  const [soLuongStr, setSoLuongStr] = useState<string>("");
+  const soLuong = parseSoLuongBaoHiem(soLuongStr).value;
   const [saving, setSaving] = useState(false);
   const autoSaved = useRef(false);
 
@@ -99,7 +102,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
     lastSyncedKeyRef.current = externalKey;
     if (existing) {
       setDonGia(existing.don_gia ?? 0);
-      setSoLuong(existing.so_luong ?? 0);
+      setSoLuongStr(String(existing.so_luong ?? 0));
       autoSaved.current = true;
     } else if (giaMacDinh) {
       setDonGia(giaMacDinh);
@@ -109,7 +112,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
   // Khi chưa có record + soKhach/soNgay đổi → seed soLuong = soKhach × soNgay.
   useEffect(() => {
     if (existing) return;
-    setSoLuong(soKhach * soNgay);
+    setSoLuongStr(String(soKhach * soNgay));
   }, [existing, soKhach, soNgay]);
 
   // Auto-save với giá mặc định khi chưa có record và đủ dữ liệu
@@ -151,8 +154,13 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
   };
 
   const handleSave = async () => {
-    if (!soLuong) {
-      toast.warning(t("Số lượng phải lớn hơn 0"));
+    if (!parseSoLuongBaoHiem(soLuongStr).ok) {
+      toast.warning(t("Số lượng không hợp lệ"));
+      return;
+    }
+    // Chưa có dòng bảo hiểm + SL 0 → không tạo dòng 0 đ vô nghĩa.
+    if (!existing && soLuong === 0) {
+      dirtyRef.current = false;
       return;
     }
     setSaving(true);
@@ -208,7 +216,6 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
   const pendingDntts = activeDntts.filter((d) => d.payment_status !== "paid");
   const daTT = activeDntts.reduce((s, d) => s + (d.paid_amount || 0), 0);
   const daDeNghi = pendingDntts.reduce((s, d) => s + (d.so_tien - (d.paid_amount || 0)), 0);
-  const isDaTT = thanhTien > 0 && daTT >= thanhTien;
   const conLai = Math.max(0, thanhTien - daTT);
   const dnttIds = allDntts.map((d) => d.id);
   const congNoAmount = congNoList
@@ -329,18 +336,25 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
               {/* Mô tả */}
               <td className="px-4 py-2.5">
                 <div className="font-medium">{baoHiemCD ? baoHiemCD.ten : t("Bảo hiểm")}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">
-                  {soKhach} {t("khách")} × {soNgay} {t("ngày")}
-                </div>
+                {existing && (existing.so_luong ?? 0) === 0 ? (
+                  <span className="inline-block mt-0.5 px-1 py-px rounded bg-slate-100 text-slate-600 text-[10px] font-medium">
+                    {t("Không mua bảo hiểm")}
+                  </span>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    {soKhach} {t("khách")} × {soNgay} {t("ngày")}
+                  </div>
+                )}
               </td>
 
-              {/* SL — editable, default = soKhach × soNgay */}
+              {/* SL — editable, default = soKhach × soNgay. Nhập 0 = không mua bảo hiểm. */}
               <td className="px-2 py-2.5">
                 <div className="flex justify-center">
                   <Input
                     type="number"
-                    value={soLuong || ""}
-                    onChange={(e) => { dirtyRef.current = true; setSoLuong(Number(e.target.value) || 0); }}
+                    min={0}
+                    value={soLuongStr}
+                    onChange={(e) => { dirtyRef.current = true; setSoLuongStr(e.target.value); }}
                     onBlur={handleSave}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
                     disabled={saving || locked}
@@ -473,7 +487,10 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
               <td className="px-2 py-2.5">
                 {existing && (
                   <div className="flex items-center gap-1 justify-end">
-                    {nguoiTt === "cong_ty" && isDaTT && paidDntts.length > 0 && (
+                    {/* Đã trả tiền → luôn giữ nút Điều chỉnh, KỂ CẢ khi hạ SL về 0
+                        (thanhTien = 0) — nếu ẩn theo thành tiền thì tiền đã trả bị kẹt,
+                        không còn đường tạo công nợ hoàn lại. */}
+                    {nguoiTt === "cong_ty" && paidDntts.length > 0 && (
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
                         title={t("Điều chỉnh sau thanh toán")}
                         onClick={() => {

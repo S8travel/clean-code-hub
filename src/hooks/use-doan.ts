@@ -693,6 +693,11 @@ export function useUpdateDoan() {
           if (/^\[dvps_\d+\]\s/.test(moTa)) continue;
           if (moTa.startsWith("[trua] ") || moTa.startsWith("[toi] ")) continue;
 
+          // Bảo hiểm SL=0 = OP chủ động "đoàn không mua bảo hiểm". Dòng bảo hiểm
+          // chỉ tự tạo khi soKhach & soNgay > 0 nên 0 luôn là do người nhập tay
+          // → rebooking KHÔNG được bật lại.
+          if (cp.danh_muc === "bao_hiem" && Number(cp.so_luong) === 0) continue;
+
           const newSoLuong = cp.danh_muc === "bao_hiem" ? newTotal * soNgay : newTotal;
           if (Number(cp.so_luong) === newSoLuong) continue;
 
