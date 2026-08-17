@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { taiwanDefaultBrackets, taiwanExportDefaults } from "./export-bao-gia-word";
-import type { BaoGiaCase, BaoGiaKetQua } from "@/hooks/use-bao-gia";
+import { taiwanDefaultBrackets, taiwanExportDefaults, taiwanQuoteContent } from "./bao-gia-taiwan-content";
+import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 
 const kase = (guests: number, usd: number): BaoGiaCase => ({
   guests, pax: guests + 1, rooms: Math.ceil(guests / 2) + 1,
@@ -68,5 +68,61 @@ describe("taiwanDefaultBrackets — mốc giá mặc định bảng báo giá Đ
   it("taiwanExportDefaults dùng chính bộ mốc này (editor + file Word cùng nguồn)", () => {
     const k = ket(365, 352);
     expect(taiwanExportDefaults(k, [], 26000).brackets).toEqual(taiwanDefaultBrackets(k));
+  });
+});
+
+describe("taiwanQuoteContent — nội dung 報價 dùng chung Word + cổng đối tác", () => {
+  const items: BaoGiaItem[] = [
+    { loai: "hotel", mo_ta: "Hotel B", don_gia: 1_000_000, ghi_chu: "", ngay_so: 2 },
+    { loai: "hotel", mo_ta: "Hotel A", don_gia: 1_600_000, ghi_chu: "", ngay_so: 1 },
+    { loai: "hotel", mo_ta: "   ",     don_gia: 500_000,   ghi_chu: "", ngay_so: 3 },
+    { loai: "ticket", mo_ta: "Vịnh Hạ Long", don_gia: 300_000, ghi_chu: "", ngay_so: 2, ten_zh: "下龍灣" },
+    { loai: "ticket", mo_ta: "Vịnh Hạ Long", don_gia: 300_000, ghi_chu: "", ngay_so: 3, ten_zh: "下龍灣" },
+    { loai: "ticket", mo_ta: "Bà Nà Hills", don_gia: 900_000, ghi_chu: "", ngay_so: 4 },
+    { loai: "meal",  mo_ta: "Nhà hàng X", don_gia: 150_000, ghi_chu: "", ngay_so: 1 },
+  ];
+
+  it("khách sạn xếp theo ngày tăng dần, bỏ dòng trống tên", () => {
+    const c = taiwanQuoteContent(ket(365, 352), items, 26000);
+    expect(c.hotel_days).toEqual([
+      { ngay: 1, ten: "Hotel A" },
+      { ngay: 2, ten: "Hotel B" },
+    ]);
+  });
+
+  it("cảnh điểm mất phí: ưu tiên tên tiếng Trung, lọc trùng, nối vào 報價包含", () => {
+    const c = taiwanQuoteContent(ket(365, 352), items, 26000);
+    expect(c.sights).toEqual(["下龍灣", "Bà Nà Hills"]);
+    // 5 mục mặc định + 2 cảnh điểm
+    expect(c.included).toHaveLength(7);
+    expect(c.included.slice(-2)).toEqual(["下龍灣", "Bà Nà Hills"]);
+  });
+
+  it("單房差 mặc định = nửa tiền phòng cả tour quy USD + 10", () => {
+    const c = taiwanQuoteContent(ket(365, 352), items, 26000);
+    // (1.000.000 + 1.600.000 + 500.000) / 2 / 26.000 ≈ 60 → +10
+    expect(c.single_supplement_usd).toBe(Math.round(3_100_000 / 2 / 26000) + 10);
+  });
+
+  it("OP sửa tay (export_config) ĐÈ lên mặc định — cả bậc giá lẫn text", () => {
+    const k = ket(365, 352, {
+      export_config: {
+        brackets: [{ label: "16 pax", price_usd: 400 }],
+        single_supplement_usd: 99,
+        notes: "特別備註\n\n第二行",
+      },
+    });
+    const c = taiwanQuoteContent(k, items, 26000);
+    expect(c.brackets).toEqual([{ label: "16 pax", price_usd: 400 }]);
+    expect(c.single_supplement_usd).toBe(99);
+    expect(c.notes).toEqual(["特別備註", "第二行"]); // dòng trống bị loại
+  });
+
+  it("chỉ chứa giá BÁN — không mang theo đơn giá vốn của bất kỳ dòng nào", () => {
+    const c = taiwanQuoteContent(ket(365, 352), items, 26000);
+    const blob = JSON.stringify(c);
+    for (const gia of ["1000000", "1600000", "300000", "900000", "150000"]) {
+      expect(blob).not.toContain(gia);
+    }
   });
 });

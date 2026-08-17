@@ -11,6 +11,7 @@ import { liveKetQua, baoGiaCode } from "@/components/bao-gia/detail/helpers";
 import { extractItineraryText, imageMime } from "@/lib/itinerary-file";
 import { pickProgramFile, renderPdfToPageImages, imageToPageImages, MAX_PROGRAM_PAGES, type PageImage } from "@/lib/itinerary-images";
 import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
+import { buildPortalBaoGiaSnapshot } from "@/lib/portal-payload";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
 import { ThongTinTourSection } from "@/components/bao-gia/detail/ThongTinTourSection";
 import { CostingSheetSection } from "@/components/bao-gia/detail/CostingSheetSection";
@@ -19,6 +20,7 @@ import { TongHopChiPhiPanel } from "@/components/bao-gia/detail/TongHopChiPhiPan
 import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSection";
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
 import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
+import { PortalShareSection } from "@/components/bao-gia/detail/PortalShareSection";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 import { resolveStorageUrl } from "@/lib/storage-url";
 
@@ -162,10 +164,26 @@ export default function BaoGiaDetailPage() {
   };
 
   // Gửi khách = chốt giá (freeze): trạng thái 'sent', khóa chỉnh sửa. Mở lại được.
+  // Kèm ĐÓNG BĂNG bảng giá đã chào vào portal_noi_dung — trước nay bảng giá tính
+  // live mỗi lần render nên sửa đơn giá vốn hôm nay là đổi luôn con số đã chào
+  // tuần trước. Bản đóng băng này cũng là thứ đẩy sang cổng đối tác.
   const handleSend = () => {
     if (isSent) return;
-    saveField("trang_thai", "sent");
-    toast.success("Đã gửi khách — báo giá đã chốt giá (khóa sửa).");
+    // Mode 'gia_cuoi': bảng giá vốn đã là số chào nhập tay, chưa dựng snapshot.
+    const fresh = isGiaCuoi ? null : liveKetQua(draft);
+    if (!fresh) {
+      saveField("trang_thai", "sent");
+      toast.success("Đã gửi khách — báo giá đã chốt giá (khóa sửa).");
+      return;
+    }
+    try {
+      savePatch({ trang_thai: "sent", portal_noi_dung: buildPortalBaoGiaSnapshot(draft, fresh) });
+      toast.success("Đã gửi khách — đã chốt giá và lưu lại đúng bảng giá vừa chào.");
+    } catch (e) {
+      // buildPortalBaoGiaSnapshot ném lỗi khi phát hiện field giá vốn lọt vào
+      // bản gửi ra ngoài — thà không chốt còn hơn chốt bằng dữ liệu sai.
+      toast.error(e instanceof Error ? e.message : "Lỗi chốt giá");
+    }
   };
   const handleReopen = () => {
     saveField("trang_thai", "draft");
@@ -188,6 +206,13 @@ export default function BaoGiaDetailPage() {
               <Lock className="h-3.5 w-3.5" /> Báo giá đã gửi khách — đã chốt giá, khóa chỉnh sửa.
             </span>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleReopen}>Mở lại để sửa</Button>
+          </div>
+        )}
+        {/* NGOÀI fieldset: chia sẻ cổng chỉ dùng được SAU khi đã gửi khách, mà
+            lúc đó cả fieldset bị disabled → để bên trong là bấm không được. */}
+        {!isGiaCuoi && (
+          <div className="max-w-[1400px] mx-auto mb-3">
+            <PortalShareSection draft={draft} savePatch={savePatch} />
           </div>
         )}
         <fieldset disabled={isSent} className="border-0 p-0 m-0 min-w-0 [&:disabled]:opacity-100">

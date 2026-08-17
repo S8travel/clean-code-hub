@@ -4,7 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { BaoGiaExportBracket, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { liveKetQua } from "./helpers";
-import { taiwanExportDefaults } from "@/lib/export-bao-gia-word";
+import { taiwanExportDefaults } from "@/lib/bao-gia-taiwan-content";
 
 interface Props {
   draft: BaoGiaRow;

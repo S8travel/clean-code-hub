@@ -114,6 +114,9 @@ export type Database = {
           ngay_ve: string | null
           noi_dung_goc: string | null
           phu_thu: number
+          portal_enabled: boolean
+          portal_noi_dung: Json | null
+          portal_pushed_at: string | null
           profit_usd: number | null
           tieu_de: string | null
           trang_thai: string | null
@@ -139,6 +142,9 @@ export type Database = {
           ngay_ve?: string | null
           noi_dung_goc?: string | null
           phu_thu?: number
+          portal_enabled?: boolean
+          portal_noi_dung?: Json | null
+          portal_pushed_at?: string | null
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
@@ -164,6 +170,9 @@ export type Database = {
           ngay_ve?: string | null
           noi_dung_goc?: string | null
           phu_thu?: number
+          portal_enabled?: boolean
+          portal_noi_dung?: Json | null
+          portal_pushed_at?: string | null
           profit_usd?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
@@ -723,6 +732,8 @@ export type Database = {
           ngay_di: string | null
           ngay_ve: string | null
           nh_escalate_level: number
+          portal_enabled: boolean
+          portal_pushed_at: string | null
           seri_id: number | null
           shopping: boolean | null
           so_khach: number | null
@@ -773,6 +784,8 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           nh_escalate_level?: number
+          portal_enabled?: boolean
+          portal_pushed_at?: string | null
           seri_id?: number | null
           shopping?: boolean | null
           so_khach?: number | null
@@ -823,6 +836,8 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           nh_escalate_level?: number
+          portal_enabled?: boolean
+          portal_pushed_at?: string | null
           seri_id?: number | null
           shopping?: boolean | null
           so_khach?: number | null
