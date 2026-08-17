@@ -17,7 +17,7 @@ import type { ITableCellBorders, TableVerticalAlign } from "docx";
 import { saveAs } from "file-saver";
 import type { BaoGiaKetQua, BaoGiaItem, BaoGiaExportBracket } from "@/hooks/use-bao-gia";
 import { fitPageSize, type PageImage } from "@/lib/itinerary-images";
-import { taiwanQuoteContent } from "@/lib/bao-gia-taiwan-content";
+import { taiwanQuoteContent, type TaiwanQuoteContent } from "@/lib/bao-gia-taiwan-content";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface ManualDayData {
@@ -632,26 +632,45 @@ export async function exportBaoGiaTaiwanWord(
   programText?: string,
   programImages?: PageImage[],
 ) {
-  const doc = buildTaiwanDoc(ketQua, items, exchangeRate, maBg, programText, programImages);
+  const cfg = taiwanQuoteContent(ketQua, items, exchangeRate);
+  await xuatTaiwanDoc(cfg, maBg, programText, programImages);
+}
+
+/** In lại file Word của MỘT PHIÊN BẢN ĐÃ GỬI — dựng thẳng từ nội dung đã đóng
+ *  băng, không tính lại gì. Nhờ vậy tải bản #1 hôm nay vẫn ra đúng con số đã chào
+ *  hôm đó, kể cả khi đơn giá vốn đã đổi mấy lần. */
+export async function exportBaoGiaTaiwanWordTuNoiDung(
+  noiDung: TaiwanQuoteContent,
+  maHienThi: string,
+  programText?: string,
+  programImages?: PageImage[],
+) {
+  await xuatTaiwanDoc(noiDung, maHienThi, programText, programImages);
+}
+
+async function xuatTaiwanDoc(
+  cfg: TaiwanQuoteContent,
+  maBg: string,
+  programText?: string,
+  programImages?: PageImage[],
+) {
+  const doc = buildTaiwanDoc(cfg, maBg, programText, programImages);
   const blob = await Packer.toBlob(doc);
   const safeName =
-    ketQua.ten_chuong_trinh.replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "").trim() || "tour";
+    (cfg.ten_chuong_trinh ?? "").replace(/[^a-zA-Z0-9À-ɏ一-鿿\s]/g, "").trim() || "tour";
   saveAs(blob, `bao_gia_${maBg}_${safeName}.docx`);
 }
 
+// Nhận NỘI DUNG đã giải sẵn (taiwanQuoteContent) chứ không tự tính: nhờ vậy in
+// bản đang soạn và in lại một phiên bản đã đóng băng dùng chung một đường.
 function buildTaiwanDoc(
-  ketQua: BaoGiaKetQua,
-  items: BaoGiaItem[],
-  exchangeRate: number,
+  cfg: TaiwanQuoteContent,
   maBg: string,
   programText?: string,
   programImages?: PageImage[],
 ): Document {
   const today = new Date();
   const todayStr = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
-  // Nội dung: mặc định tính live + override từ ket_qua.export_config (user sửa).
-  // Cùng hàm mà cổng đối tác dùng → file Word và trang web không lệch số.
-  const cfg = taiwanQuoteContent(ketQua, items, exchangeRate);
   const brackets: BaoGiaExportBracket[] = cfg.brackets;
   const singleRoom = cfg.single_supplement_usd;
   const hotelDays = cfg.hotel_days;
@@ -696,7 +715,7 @@ function buildTaiwanDoc(
   ];
 
   const hotelRows: TableRow[] = hotelDays.length === 0
-    ? [new TableRow({ children: [cell([p(ketQua.ten_chuong_trinh || "—", { size: 18 })], { width: LEFT_W }), ...priceCells(1)] })]
+    ? [new TableRow({ children: [cell([p(cfg.ten_chuong_trinh || "—", { size: 18 })], { width: LEFT_W }), ...priceCells(1)] })]
     : hotelDays.map((d, idx) =>
         new TableRow({
           children: idx === 0

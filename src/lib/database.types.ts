@@ -113,11 +113,13 @@ export type Database = {
           ngay_di: string | null
           ngay_ve: string | null
           noi_dung_goc: string | null
+          phien_ban_hien_hanh_id: number | null
           phu_thu: number
           portal_enabled: boolean
           portal_noi_dung: Json | null
           portal_pushed_at: string | null
           profit_usd: number | null
+          so_phien_ban_cuoi: number
           tieu_de: string | null
           trang_thai: string | null
           vcb_rate: number | null
@@ -141,11 +143,13 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           noi_dung_goc?: string | null
+          phien_ban_hien_hanh_id?: number | null
           phu_thu?: number
           portal_enabled?: boolean
           portal_noi_dung?: Json | null
           portal_pushed_at?: string | null
           profit_usd?: number | null
+          so_phien_ban_cuoi?: number
           tieu_de?: string | null
           trang_thai?: string | null
           vcb_rate?: number | null
@@ -169,11 +173,13 @@ export type Database = {
           ngay_di?: string | null
           ngay_ve?: string | null
           noi_dung_goc?: string | null
+          phien_ban_hien_hanh_id?: number | null
           phu_thu?: number
           portal_enabled?: boolean
           portal_noi_dung?: Json | null
           portal_pushed_at?: string | null
           profit_usd?: number | null
+          so_phien_ban_cuoi?: number
           tieu_de?: string | null
           trang_thai?: string | null
           vcb_rate?: number | null
@@ -193,6 +199,97 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "lead"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bao_gia_log: {
+        Row: {
+          bao_gia_id: number
+          id: number
+          loai: string
+          noi_dung: string | null
+          tao_boi: string | null
+          tao_boi_ten: string | null
+          tao_luc: string
+        }
+        Insert: {
+          bao_gia_id: number
+          id?: number
+          loai: string
+          noi_dung?: string | null
+          tao_boi?: string | null
+          tao_boi_ten?: string | null
+          tao_luc?: string
+        }
+        Update: {
+          bao_gia_id?: number
+          id?: number
+          loai?: string
+          noi_dung?: string | null
+          tao_boi?: string | null
+          tao_boi_ten?: string | null
+          tao_luc?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bao_gia_log_bao_gia_id_fkey"
+            columns: ["bao_gia_id"]
+            isOneToOne: false
+            referencedRelation: "bao_gia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bao_gia_phien_ban: {
+        Row: {
+          bao_gia_id: number
+          chao_ngay: string
+          gui_boi: string | null
+          gui_boi_ten: string | null
+          gui_luc: string
+          hieu_luc_den: string | null
+          id: number
+          ly_do: string | null
+          ma_hien_thi: string
+          noi_dung_chao: Json
+          noi_dung_von: Json | null
+          so_phien_ban: number
+        }
+        Insert: {
+          bao_gia_id: number
+          chao_ngay: string
+          gui_boi?: string | null
+          gui_boi_ten?: string | null
+          gui_luc?: string
+          hieu_luc_den?: string | null
+          id?: number
+          ly_do?: string | null
+          ma_hien_thi: string
+          noi_dung_chao: Json
+          noi_dung_von?: Json | null
+          so_phien_ban: number
+        }
+        Update: {
+          bao_gia_id?: number
+          chao_ngay?: string
+          gui_boi?: string | null
+          gui_boi_ten?: string | null
+          gui_luc?: string
+          hieu_luc_den?: string | null
+          id?: number
+          ly_do?: string | null
+          ma_hien_thi?: string
+          noi_dung_chao?: Json
+          noi_dung_von?: Json | null
+          so_phien_ban?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bao_gia_phien_ban_bao_gia_id_fkey"
+            columns: ["bao_gia_id"]
+            isOneToOne: false
+            referencedRelation: "bao_gia"
             referencedColumns: ["id"]
           },
         ]
@@ -4813,6 +4910,7 @@ export type Database = {
         Args: { p_booking_id: number; p_type: string }
         Returns: number
       }
+      mo_phien_ban_moi: { Args: { p_bao_gia_id: number }; Returns: undefined }
       recalc_chi_phi_payment_status: {
         Args: { p_chi_phi_ids: number[] }
         Returns: undefined
@@ -4824,6 +4922,15 @@ export type Database = {
       remap_nha_hang_theo_ngay: {
         Args: { p_doan_id: number; p_mapping: Json }
         Returns: Json
+      }
+      tao_phien_ban_bao_gia: {
+        Args: {
+          p_bao_gia_id: number
+          p_chao: Json
+          p_ly_do?: string
+          p_von?: Json
+        }
+        Returns: number
       }
       update_lead_status: {
         Args: {
