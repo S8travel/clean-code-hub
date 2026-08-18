@@ -17,11 +17,13 @@ import {
   useDoanTaiLieuList,
   useUploadDoanTaiLieu,
   useDeleteDoanTaiLieu,
+  useSetTaiLieuPortal,
   TAI_LIEU_LABEL,
   type DoanTaiLieuLoai,
   type DoanTaiLieuRow,
 } from "@/hooks/use-doan-tai-lieu";
 import { useAuth } from "@/hooks/use-auth";
+import { chiaSeVoiDoiTac } from "../../../supabase/functions/_shared/portal-tai-lieu";
 import { t, useTranslate } from "@/lib/i18n";
 
 // Hợp đồng + Danh sách khách: 1 file/đoàn (replace). Báo giá: nhiều file (xem MultiFileSection).
@@ -105,6 +107,39 @@ export default function DoanTaiLieuTab({ doanId }: Props) {
   );
 }
 
+/**
+ * Công tắc chia sẻ file cho đối tác trên cổng 外網.
+ *
+ * Dùng chung hàm quyết định với push-portal (chiaSeVoiDoiTac) thay vì chép lại
+ * luật ở đây: hai nơi lệch nhau thì OP nhìn thấy một đằng, cổng đẩy một nẻo.
+ * File báo giá không bao giờ đi nên cũng không bày công tắc cho khỏi hiểu lầm.
+ */
+function ChiaSeDoiTac({ doc, doanId }: { doc: DoanTaiLieuRow; doanId: number }) {
+  useTranslate();
+  const mut = useSetTaiLieuPortal();
+  if (doc.loai === "bao_gia") return null;
+
+  const dangChiaSe = chiaSeVoiDoiTac({ loai: doc.loai, portal_enabled: doc.portal_enabled });
+
+  return (
+    <label className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer w-fit">
+      <input
+        type="checkbox"
+        className="h-3 w-3"
+        checked={dangChiaSe}
+        disabled={mut.isPending}
+        onChange={(e) =>
+          mut.mutate(
+            { id: doc.id, bat: e.target.checked, doanId },
+            { onError: (err: unknown) => toast.error(errMsg(err)) },
+          )
+        }
+      />
+      {t("Cho đối tác xem trên cổng")}
+    </label>
+  );
+}
+
 /** Một dòng file: link + ngày upload + nút xóa (có xác nhận). Dùng chung mọi section. */
 function FileLine({ doc, doanId }: { doc: DoanTaiLieuRow; doanId: number }) {
   useTranslate();
@@ -140,6 +175,7 @@ function FileLine({ doc, doanId }: { doc: DoanTaiLieuRow; doanId: number }) {
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {t("Upload")} {format(new Date(doc.uploaded_at), "dd/MM/yyyy HH:mm", { locale: vi })}
         </p>
+        <ChiaSeDoiTac doc={doc} doanId={doanId} />
       </div>
       {confirmDelete ? (
         <div className="flex items-center gap-1 shrink-0">

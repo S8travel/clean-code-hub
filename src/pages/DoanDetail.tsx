@@ -49,6 +49,8 @@ import KhaoSatTab from "@/components/khao-sat/KhaoSatTab";
 import { KhachLeTab } from "@/components/dieu-tour/KhachLeTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
 import DoanTaiLieuTab from "@/components/tai-lieu/DoanTaiLieuTab";
+import TraoDoiTab from "@/components/trao-doi/TraoDoiTab";
+import { demChuaTraLoi, useTraoDoiList } from "@/hooks/use-trao-doi";
 import DieuTourWordPreviewModal from "@/components/dieu-tour/DieuTourWordPreviewModal";
 import RemapNgayModal from "@/components/dieu-tour/RemapNgayModal";
 import DoiKsPhiHuyModal, { type DoiKsConfirmArgs } from "@/components/dieu-tour/DoiKsPhiHuyModal";
@@ -747,6 +749,11 @@ export default function DoanDetail() {
     ).length
   , [chiPhiRows, validNgayIds]);
 
+  // Đối tác hỏi mà chưa ai đáp — số này nằm ngay trên tab để không phải mở ra mới
+  // biết là đang có người chờ.
+  const { data: traoDoiRows } = useTraoDoiList(doanId);
+  const traoDoiBadgeCount = demChuaTraLoi(traoDoiRows);
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-4">
@@ -814,6 +821,7 @@ export default function DoanDetail() {
               )}
               <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
               <TabsTrigger value="tai-lieu">{t("Tài liệu")}</TabsTrigger>
+              <TabsTrigger value="trao-doi">{t("Liên hệ đối tác")}<TabBadge count={traoDoiBadgeCount} /></TabsTrigger>
               <TabsTrigger value="log">{t("Log")}</TabsTrigger>
               <TabsTrigger value="khao-sat">{t("Khảo sát khách")}</TabsTrigger>
             </TabsList>
@@ -1018,6 +1026,10 @@ export default function DoanDetail() {
 
           <TabsContent value="tai-lieu" className="mt-4">
             <DoanTaiLieuTab doanId={doanId} />
+          </TabsContent>
+
+          <TabsContent value="trao-doi" className="mt-4">
+            <TraoDoiTab doanId={doanId} />
           </TabsContent>
 
           <TabsContent value="log" className="mt-4">

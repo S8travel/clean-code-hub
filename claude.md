@@ -93,9 +93,14 @@ doan_booking_ks       (1 row/KS/đoàn)
   ks_final, ks_final_status, ks_final_sent_at/by/confirm_at
   ngay_snapshot (jsonb), chi_phi
 
-doan_ks_dem           (chi tiết phòng/đêm)
-  id, doan_id, booking_ks_id
-  ngay_date, loai_phong, so_phong, gia_phong
+doan_ks_dem           ⚠️ BẢNG CHẾT — 0 dòng toàn DB (đo 18/08/2026). ĐỪNG đọc.
+  id, doan_id, booking_ks_id, ngay_date, loai_phong, so_phong, gia_phong
+  ← Phòng/đêm THẬT nằm ở doan_booking_ks.ks_final (chưa có thì ks_dat_truoc):
+    TEXT NHIỀU DÒNG, mỗi dòng một đêm, free text ("10 twn", "5 cabin ( 4 người
+    1 cabin ) + 1 vé lẻ HDV"). Dãn dòng → đêm bằng expandRoomValues
+    (lib/booking-ks-rooms.ts); 1 dòng = dùng chung cho mọi đêm.
+    Đêm ở = doan_ngay.ngay_date có khach_san_id trỏ đúng KS đó.
+    Đây là nguồn bản Word 訂房確認單 và bản 飯店確認單 trên cổng đối tác.
 
 doan_booking_nh       (1 row/ngày/bữa)
   id, doan_id, doan_ngay_id, nha_hang_id
