@@ -116,6 +116,17 @@ serve(async (req) => {
     // ── 1) Agent nào ĐÃ CÓ TÀI KHOẢN cổng ────────────────────────────────────
     // Đây là định nghĩa của "đối tác đang dùng cổng". Đẩy đoàn cho agent chưa có
     // tài khoản chỉ tổ phình dữ liệu mà không ai xem.
+    // Đọc luôn danh sách đoàn đã có bên cổng: dùng nó để biết "đoàn nào đã từng
+    // đẩy", thay cho cột doan.portal_pushed_at bên CRM. Lý do đổi: ghi cột đó cho
+    // 187 đoàn một lệnh sinh 187 sự kiện realtime, mỗi sự kiện làm MỌI tab CRM nạp
+    // lại danh sách đoàn — 126 request trong 4 giây, cạn pool PostgREST, auth đói
+    // theo và OP không đăng nhập được (sự cố 18/08 08:34).
+    const rDaCo = await portal("doan?select=crm_doan_id");
+    if (!rDaCo.ok) throw new Error(`Đọc doan bên cổng hỏng: ${(await rDaCo.text()).slice(0, 200)}`);
+    const daCoBenCong = new Set(
+      ((await rDaCo.json()) as Array<{ crm_doan_id: number }>).map((d) => d.crm_doan_id),
+    );
+
     const rAgent = await portal("agent?select=id,crm_agent_id");
     if (!rAgent.ok) throw new Error(`Đọc agent bên cổng hỏng: ${(await rAgent.text()).slice(0, 200)}`);
     const dsAgent = (await rAgent.json()) as Array<{ id: number; crm_agent_id: number | null }>;
@@ -151,7 +162,15 @@ serve(async (req) => {
       doanRaw = data ?? [];
     }
     const homNay = new Date().toISOString().slice(0, 10);
-    const locDN = locDoan(doanRaw as never, homNay);
+    const locDN = locDoan(
+      (doanRaw as Array<{ id: number }>).map((d) => ({
+        ...d,
+        // "Đã từng đẩy" = đã có mặt bên cổng. Nguồn sự thật nằm ở cổng, không phải
+        // ở cột bên CRM.
+        portal_pushed_at: daCoBenCong.has(d.id) ? "da-co" : null,
+      })) as never,
+      homNay,
+    );
     boQua.push(...locBG.boQua, ...locDN.boQua);
 
     // ── 4) Đồng bộ danh sách agent (tên có thể đổi bên CRM) ─────────────────
@@ -217,7 +236,6 @@ serve(async (req) => {
 
     // ── 6) Đẩy đoàn — dựng chương trình THEO LÔ trong một lần gọi RPC ───────
     let soDoan = 0;
-    const daDay: number[] = [];
     for (const lo of chiaLo(locDN.canDay, CO_LO)) {
       const ids = lo.map((d) => d.id);
       const { data: nd, error } = await crm.rpc("build_portal_doan_batch", { p_doan_ids: ids });
@@ -248,13 +266,11 @@ serve(async (req) => {
       try {
         await upsert("doan", "crm_doan_id", rows);
         soDoan += rows.length;
-        daDay.push(...rows.map((r) => r.crm_doan_id));
       } catch {
         for (const row of rows) {
           try {
             await upsert("doan", "crm_doan_id", [row]);
             soDoan++;
-            daDay.push(row.crm_doan_id);
           } catch (err) {
             boQua.push({
               loai: "doan", id: row.crm_doan_id,
@@ -274,9 +290,9 @@ serve(async (req) => {
       await crm.from("bao_gia").update({ portal_pushed_at: now })
         .in("id", bgRows.map((r) => r.crm_bao_gia_id));
     }
-    for (const lo of chiaLo(daDay, 200)) {
-      await crm.from("doan").update({ portal_pushed_at: now }).in("id", lo);
-    }
+    // KHÔNG ghi gì vào bảng doan: bảng này nằm trong publication realtime, cập nhật
+    // hàng loạt là làm mọi tab CRM nạp lại danh sách đoàn cùng lúc. Trạng thái đã đẩy
+    // đọc từ bên cổng (xem daCoBenCong ở trên).
 
     // Đối tác có báo giá nhưng chưa ai đăng nhập được thì đẩy xong cũng vô nghĩa.
     const thieuTaiKhoan = [...new Set(locBG.canDay.map((b) => b.agent_id as number))]
