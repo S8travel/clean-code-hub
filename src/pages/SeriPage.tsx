@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePermission } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
-import { Plus, Pencil, Trash2, Save, ChevronLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, ChevronLeft, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +29,7 @@ import type { DayLocal } from "@/hooks/use-dieu-tour";
 import { getWeekday } from "@/hooks/use-dieu-tour";
 import DayScheduleTable from "@/components/dieu-tour/DayScheduleTable";
 import { t, useTranslate } from "@/lib/i18n";
+import { locSeri } from "@/lib/seri-filter";
 
 // ── Seri detail: table editor ──
 function SeriDetail({ seri }: { seri: SeriTour }) {
@@ -133,6 +134,7 @@ function SeriPageContent() {
   const deleteSeri = useDeleteSeri();
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SeriTour | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SeriTour | null>(null);
@@ -145,6 +147,8 @@ function SeriPageContent() {
     () => seriList.find((s) => s.id === selectedId) ?? null,
     [seriList, selectedId]
   );
+
+  const filteredList = useMemo(() => locSeri(seriList, search), [seriList, search]);
 
   const openCreate = () => {
     setEditTarget(null);
@@ -193,11 +197,22 @@ function SeriPageContent() {
         "w-full md:w-64 shrink-0 border-r flex-col h-full",
         selectedSeri ? "hidden md:flex" : "flex",
       )}>
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h1 className="text-sm font-semibold">{t("Mẫu seri")}</h1>
-          <Button size="sm" className="h-7 text-xs px-2.5" onClick={openCreate}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> {t("Thêm")}
-          </Button>
+        <div className="px-4 py-3 border-b space-y-2">
+          <div className="flex items-center justify-between">
+            <h1 className="text-sm font-semibold">{t("Mẫu seri")}</h1>
+            <Button size="sm" className="h-7 text-xs px-2.5" onClick={openCreate}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> {t("Thêm")}
+            </Button>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              placeholder={t("Tìm tên seri...")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-7 text-xs pl-7"
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
@@ -207,8 +222,12 @@ function SeriPageContent() {
             <p className="text-xs text-muted-foreground px-2 py-8 text-center">
               {t("Chưa có mẫu seri nào")}
             </p>
+          ) : filteredList.length === 0 ? (
+            <p className="text-xs text-muted-foreground px-2 py-8 text-center">
+              {t("Không tìm thấy mẫu seri")}
+            </p>
           ) : (
-            seriList.map((s) => (
+            filteredList.map((s) => (
               <div
                 key={s.id}
                 className={cn(
