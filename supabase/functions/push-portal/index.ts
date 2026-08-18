@@ -19,6 +19,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { chiaLo, locBaoGia, locDoan, type BoQua } from "../_shared/portal-sync.ts";
+import {
+  dongBoKSXacNhan,
+  dongBoTaiLieu,
+  dongBoTraoDoi,
+  type DoanDaDay,
+  type TaiLenKho,
+} from "./dong-bo-them.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,6 +98,13 @@ serve(async (req) => {
   let nguon: "cron" | "tay" = "cron";
   const boQua: BoQua[] = [];
 
+  // Log chỉ chứa được 50 dòng bỏ qua, mà "đoàn đã hủy" là chuyện thường ngày và
+  // đủ sức chiếm sạch 50 chỗ đó — lỗi thật của giấy tờ / 飯店確認單 / hỏi đáp bị
+  // đẩy ra ngoài tầm nhìn (mất một lượt truy vết vì chuyện này 18/08). Xếp lý do
+  // bất thường lên trước rồi mới cắt.
+  const thuongNgay = (b: BoQua) => (b.ly_do.startsWith("đoàn đã hủy") ? 1 : 0);
+  const xepBoQua = (): BoQua[] => [...boQua].sort((a, b) => thuongNgay(a) - thuongNgay(b));
+
   // Ghi lại MỌI lần chạy: cron.job_run_details chỉ biết request đã được xếp hàng,
   // không biết hàm này chạy ra sao. Không có bảng log thì luồng chết cả tuần cũng
   // không ai hay.
@@ -101,7 +115,7 @@ serve(async (req) => {
   ) => {
     await crm.from("portal_push_log").insert({
       nguon, so_bao_gia: so.bao_gia, so_doan: so.doan, so_xoa: so.xoa, loi,
-      chi_tiet: { bo_qua: boQua.slice(0, 50), so_bo_qua: boQua.length, ...them },
+      chi_tiet: { bo_qua: xepBoQua().slice(0, 50), so_bo_qua: boQua.length, ...them },
     });
   };
 
@@ -156,7 +170,7 @@ serve(async (req) => {
     if (crmIdCoTaiKhoan.length) {
       const { data, error } = await crm
         .from("doan")
-        .select("id, agent_id, ten_doan, ngay_di, ngay_ve, so_khach, trang_thai, portal_pushed_at")
+        .select("id, agent_id, ten_doan, ngay_di, ngay_ve, so_khach, trang_thai, portal_pushed_at, assigned_to")
         .in("agent_id", crmIdCoTaiKhoan);
       if (error) throw error;
       doanRaw = data ?? [];
@@ -285,7 +299,64 @@ serve(async (req) => {
     const soXoa = (await xoaDoi("bao_gia", "crm_bao_gia_id", locBG.hienThi))
       + (await xoaDoi("doan", "crm_doan_id", locDN.hienThi));
 
-    // ── 8) Ghi dấu đã đẩy ───────────────────────────────────────────────────
+    // ── 8) Ba bảng con của màn đoàn: giấy tờ, 飯店確認單, hỏi/đáp ────────────
+    // Chạy SAU bước gỡ: đoàn vừa bị gỡ khỏi cổng thì bảng con cũng đã cascade đi
+    // theo, đọc lại danh sách ở đây là đọc đúng những đoàn còn sống.
+    const rDoanCong = await portal("doan?select=id,crm_doan_id,agent_id");
+    if (!rDoanCong.ok) throw new Error(`Đọc lại doan bên cổng hỏng: ${(await rDoanCong.text()).slice(0, 200)}`);
+    const opTheoDoan = new Map(
+      (doanRaw as Array<{ id: number; assigned_to: string | null }>).map((d) => [d.id, d.assigned_to]),
+    );
+    const doanDaDay: DoanDaDay[] = (
+      (await rDoanCong.json()) as Array<{ id: number; crm_doan_id: number; agent_id: number }>
+    )
+      .filter((d) => locDN.hienThi.includes(d.crm_doan_id))
+      .map((d) => ({
+        crm_id: d.crm_doan_id,
+        cong_id: d.id,
+        agent_id: d.agent_id,
+        assigned_to: opTheoDoan.get(d.crm_doan_id) ?? null,
+      }));
+
+    const taiLenKho: TaiLenKho = async (duongDan, dulieu, kieu) => {
+      const r = await fetch(`${PORTAL_URL}/storage/v1/object/tai-lieu/${encodeURI(duongDan)}`, {
+        method: "POST",
+        headers: {
+          apikey: PORTAL_SERVICE_KEY,
+          Authorization: `Bearer ${PORTAL_SERVICE_KEY}`,
+          "Content-Type": kieu,
+          // OP thay file hợp đồng thì đường dẫn giữ nguyên (theo id tài liệu),
+          // nên phải cho ghi đè, không thì lần thay thứ hai văng 409.
+          "x-upsert": "true",
+        },
+        body: dulieu,
+      });
+      if (!r.ok) throw new Error(`(${r.status}) ${(await r.text()).slice(0, 200)}`);
+    };
+
+    // Một luồng hỏng không được kéo cả lần chạy xuống: mỗi luồng tự nuốt lỗi vào
+    // boQua để OP còn đọc được lý do, thay vì cả lượt đẩy báo đỏ mà không rõ vì sao.
+    let soKS = 0, soTaiLieu = { chep: 0, go: 0 }, soTraoDoi = 0;
+    for (const lo of chiaLo(doanDaDay, CO_LO)) {
+      try {
+        soKS += await dongBoKSXacNhan(crm, portal, lo, boQua);
+      } catch (err) {
+        boQua.push({ loai: "doan", id: lo[0].crm_id, ly_do: `飯店確認單: ${err instanceof Error ? err.message : String(err)}` });
+      }
+      try {
+        const kq = await dongBoTaiLieu(crm, portal, taiLenKho, lo, boQua);
+        soTaiLieu = { chep: soTaiLieu.chep + kq.chep, go: soTaiLieu.go + kq.go };
+      } catch (err) {
+        boQua.push({ loai: "doan", id: lo[0].crm_id, ly_do: `giấy tờ: ${err instanceof Error ? err.message : String(err)}` });
+      }
+      try {
+        soTraoDoi += await dongBoTraoDoi(crm, portal, lo);
+      } catch (err) {
+        boQua.push({ loai: "doan", id: lo[0].crm_id, ly_do: `hỏi/đáp: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    }
+
+    // ── 9) Ghi dấu đã đẩy ───────────────────────────────────────────────────
     if (bgRows.length) {
       await crm.from("bao_gia").update({ portal_pushed_at: now })
         .in("id", bgRows.map((r) => r.crm_bao_gia_id));
@@ -301,19 +372,26 @@ serve(async (req) => {
     const ketQua = {
       bao_gia: soBaoGia,
       doan: soDoan,
-      xoa: soXoa,
-      bo_qua: boQua.slice(0, 20),
+      xoa: soXoa + soTaiLieu.go,
+      ks_xac_nhan: soKS,
+      tai_lieu: soTaiLieu.chep,
+      trao_doi: soTraoDoi,
+      bo_qua: xepBoQua().slice(0, 20),
       agent_thieu_tai_khoan: thieuTaiKhoan.map((id) => ({ crm_agent_id: id, ten: `#${id}` })),
       luc: now,
     };
     await ghiLog({ bao_gia: soBaoGia, doan: soDoan, xoa: soXoa }, null, {
       agent_co_tai_khoan: crmIdCoTaiKhoan,
       agent_thieu_tai_khoan: thieuTaiKhoan,
+      ks_xac_nhan: soKS,
+      tai_lieu_chep: soTaiLieu.chep,
+      tai_lieu_go: soTaiLieu.go,
+      trao_doi: soTraoDoi,
     });
     return json(ketQua);
   } catch (err) {
     const loi = err instanceof Error ? err.message : String(err);
     await ghiLog({ bao_gia: 0, doan: 0, xoa: 0 }, loi).catch(() => {});
-    return json({ error: loi, bo_qua: boQua.slice(0, 20) }, 500);
+    return json({ error: loi, bo_qua: xepBoQua().slice(0, 20) }, 500);
   }
 });

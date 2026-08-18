@@ -55,3 +55,9 @@ verify_jwt = false
 # của phiên đăng nhập (nút "Đẩy ngay" trong CRM). Xem index.ts.
 [functions.push-portal]
 verify_jwt = false
+
+# trao-doi: hỏi/đáp giữa OP và đối tác trên cổng 外網.
+# Cổng gọi sang bằng 'x-portal-secret' (không có JWT của CRM) nên verify_jwt=false;
+# chiều OP thì hàm tự kiểm access token. Xem index.ts.
+[functions.trao-doi]
+verify_jwt = false
