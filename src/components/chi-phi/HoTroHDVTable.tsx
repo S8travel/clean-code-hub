@@ -28,7 +28,7 @@ import { exportDnttKhacHoanUngWord } from "@/lib/export-dntt-khac-word";
 import { t } from "@/lib/i18n";
 import { useCancelDNTT, type HDVHoTroItem } from "@/hooks/use-chi-phi-hdv";
 import type { HDVDoanInfo, KhacModalItem, KhacModalTarget, KhacCancelTarget } from "./hdv-shared";
-import { resolveHoTroNguoiTt, isTipLaiXeRow, missingDefaultKhacMoTas, orderKhacItems } from "./hdv-shared";
+import { resolveHoTroNguoiTt, isTipLaiXeRow, missingDefaultKhacMoTas, orderKhacItems, laDoanConHieuLuc } from "./hdv-shared";
 import { HDVHoTroRow } from "./HDVHoTroRow";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -102,12 +102,8 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
 
   // Đoàn "đang chạy / chưa kết thúc" (ngày về ≥ hôm nay) → mới auto-thêm 7 khoản
   // mặc định. Đoàn cũ đã đi xong KHÔNG bị chèn dòng trống (chỉ Tip lái xe giữ
-  // nguyên hành vi cũ). Thiếu ngày về → coi như còn hiệu lực.
-  const isActiveDoan = useMemo(() => {
-    const ngayVe = doan?.ngay_ve;
-    if (!ngayVe) return true;
-    return ngayVe >= new Date().toISOString().slice(0, 10);
-  }, [doan?.ngay_ve]);
+  // nguyên hành vi cũ). So sánh theo ngày ĐỊA PHƯƠNG (xem laDoanConHieuLuc).
+  const isActiveDoan = useMemo(() => laDoanConHieuLuc(doan?.ngay_ve), [doan?.ngay_ve]);
 
   // Multi-select cho ĐNTT gộp
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -178,9 +174,14 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
 
   // Khoản "Khác" mặc định luôn có sẵn mỗi đoàn (đơn giá 0, Nguồn HDV — OP nhập
   // sau): Tip lái xe cho MỌI đoàn; 7 khoản chuẩn (Nước Aqua, CTP HDV...) chỉ cho
-  // đoàn đang chạy/sắp đi. Thiếu dòng nào → tự tạo. Guard theo doanId để không
-  // tạo trùng trong lúc chờ refetch; lỗi thì reset cho phép thử lại render sau.
-  // Đoàn đã quyết toán (locked) → bỏ qua: lockGuard sẽ chặn insert (gây vòng lặp).
+  // đoàn đang chạy/sắp đi. Đoàn đã quyết toán (locked) → bỏ qua: lockGuard sẽ chặn
+  // insert (gây vòng lặp).
+  //
+  // Danh sách trên màn hình CHỈ dùng để biết "có cần gọi hay không". Quyết định
+  // thiếu-hay-đủ do DB làm (RPC ensure_khac_mac_dinh: NOT EXISTS đọc thẳng bảng +
+  // advisory lock theo đoàn) — trước đây client tự so rồi insert từng dòng nên khi
+  // đọc chi phí lỗi/timeout (danh sách rỗng-giả) hoặc 2 tab mở song song là chèn
+  // lại toàn bộ → section "Khác" x2 dòng. Xem migration 20260819_ensure_khac_mac_dinh.
   const defaultsEnsuredForDoanRef = useRef<number | null>(null);
   useEffect(() => {
     if (!doanId || locked) return;
@@ -191,24 +192,20 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
     }
     if (defaultsEnsuredForDoanRef.current === doanId) return;
     defaultsEnsuredForDoanRef.current = doanId;
-    Promise.all(
-      missing.map((mo_ta) =>
-        upsertMut.mutateAsync({
-          doan_id: doanId,
-          danh_muc: "hdv_ho_tro",
-          loai: "khac",
-          mo_ta,
-          so_luong: 1,
-          don_gia: 0,
-          tien_cong_ty: 0,
-          tien_hdv: 0,
-        }),
-      ),
-    )
-      .then(() => invalidate())
-      .catch(() => {
+    void (async () => {
+      try {
+        const { data, error } = await externalSupabase.rpc("ensure_khac_mac_dinh", {
+          p_doan_id: doanId,
+          p_mo_tas: missing,
+        });
+        if (error) throw error;
+        if ((data ?? 0) > 0) invalidate();
+      } catch {
+        // Lỗi (mạng/RLS) → mở khóa guard để render sau thử lại; RPC idempotent nên
+        // gọi lại không sinh dòng trùng.
         if (defaultsEnsuredForDoanRef.current === doanId) defaultsEnsuredForDoanRef.current = null;
-      });
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doanId, hoTroItems, isActiveDoan, locked]);
 
