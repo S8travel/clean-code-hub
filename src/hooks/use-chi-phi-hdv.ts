@@ -86,23 +86,30 @@ export function useChiPhiHDVSection(doanId?: number) {
     queryKey: ["chi_phi_hdv_section", doanId],
     enabled: !!doanId,
     queryFn: async (): Promise<HDVSectionData> => {
+      // MỌI select dưới đây PHẢI check error rồi throw. supabase-js trả
+      // { data: null, error } khi lỗi/timeout — bỏ qua error thì query vẫn "thành
+      // công" với danh sách RỖNG-GIẢ. Section "Khác" từng bị x2 dòng vì thế: effect
+      // auto-seed đọc danh sách rỗng đó, tưởng đoàn chưa có khoản nào nên chèn lại
+      // toàn bộ (xem HoTroHDVTable + migration 20260819_ensure_khac_mac_dinh).
       // 1. Load HDV id từ doan
-      const { data: doanRow } = await externalSupabase
+      const { data: doanRow, error: doanErr } = await externalSupabase
         .from("doan")
         .select("huong_dan_vien_id")
         .eq("id", doanId!)
         .single();
+      if (doanErr) throw doanErr;
 
       const hdvId: number | null = doanRow?.huong_dan_vien_id ?? null;
 
       // 2. Load HDV info nếu có
       let hdv: HDVInfo | null = null;
       if (hdvId) {
-        const { data: hdvRow } = await externalSupabase
+        const { data: hdvRow, error: hdvErr } = await externalSupabase
           .from("huong_dan_vien")
           .select("id, ten, so_tai_khoan, ngan_hang")
           .eq("id", hdvId)
           .single();
+        if (hdvErr) throw hdvErr;
         if (hdvRow) {
           hdv = {
             id: hdvRow.id,
@@ -114,12 +121,13 @@ export function useChiPhiHDVSection(doanId?: number) {
       }
 
       // 3. Load chi phí HDV ứng (tien_hdv > 0) — không phụ thuộc vào có HDV hay không
-      const { data: cpRows } = await externalSupabase
+      const { data: cpRows, error: cpErr } = await externalSupabase
         .from("doan_chi_phi")
         .select("id, mo_ta, danh_muc, so_luong, don_gia, tien_hdv")
         .eq("doan_id", doanId!)
         .gt("tien_hdv", 0)
         .order("created_at", { ascending: true });
+      if (cpErr) throw cpErr;
 
       const chiPhiItems: HDVChiPhiItem[] = (cpRows || []).map((r) => ({
         id: r.id,
@@ -132,12 +140,13 @@ export function useChiPhiHDVSection(doanId?: number) {
       const tongHdvChi = chiPhiItems.reduce((s, r) => s + r.tien_hdv, 0);
 
       // 3b. Load chi phí hỗ trợ HDV (công ty chi cho HDV)
-      const { data: hoTroRows } = await externalSupabase
+      const { data: hoTroRows, error: hoTroErr } = await externalSupabase
         .from("doan_chi_phi")
         .select("id, mo_ta, loai, so_luong, don_gia, tien_cong_ty, tien_hdv, nha_cung_cap_id")
         .eq("doan_id", doanId!)
         .eq("danh_muc", "hdv_ho_tro")
         .order("created_at", { ascending: true });
+      if (hoTroErr) throw hoTroErr;
 
       const hoTroItems: HDVHoTroItem[] = (hoTroRows || []).map((r) => ({
         id: r.id,
@@ -156,12 +165,13 @@ export function useChiPhiHDVSection(doanId?: number) {
       const tongHoTroHDV = hoTroItems.reduce((s, r) => s + r.tien_cong_ty + r.tien_hdv, 0);
 
       // 4. Load DNTT liên quan HDV (qua view có payment_status)
-      const { data: dnttRows } = await externalSupabase
+      const { data: dnttRows, error: dnttErr } = await externalSupabase
         .from("dntt_with_payment_status")
         .select("id, doan_id, ref_loai, mo_ta, so_tien, trang_thai_duyet, payment_status, paid_amount, ghi_chu, created_at, quyet_toan_data")
         .eq("doan_id", doanId!)
         .in("ref_loai", ["hdv_tam_ung", "hdv_quyet_toan"])
         .order("created_at", { ascending: true });
+      if (dnttErr) throw dnttErr;
 
       const allHdvDntts = (dnttRows || []).map((d) => ({
         ...d,

@@ -4905,6 +4905,10 @@ export type Database = {
       is_admin:
         | { Args: never; Returns: boolean }
         | { Args: { user_id: string }; Returns: boolean }
+      ensure_khac_mac_dinh: {
+        Args: { p_doan_id: number; p_mo_tas: string[] }
+        Returns: number
+      }
       is_web_admin: { Args: never; Returns: boolean }
       mark_deadline_done: {
         Args: { p_booking_id: number; p_type: string }

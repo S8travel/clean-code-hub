@@ -115,6 +115,26 @@ export const DEFAULT_KHAC_MO_TAS: string[] = [
 // Phần còn lại (quà tặng + khoản OP tự thêm) giữ thứ tự created_at.
 export const SYSTEM_KHAC_ORDER: string[] = [TIP_LAI_XE_MO_TA, ...DEFAULT_KHAC_MO_TAS];
 
+// Ngày hôm nay theo LỊCH ĐỊA PHƯƠNG (yyyy-MM-dd). KHÔNG dùng toISOString(): nó trả
+// ngày theo UTC nên từ 00:00–07:00 giờ VN sẽ lùi lại một ngày — đoàn về hôm qua vẫn
+// bị coi là "chưa về" và bị chèn thêm dòng mặc định.
+export function todayLocalISO(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Đoàn "đang chạy / chưa kết thúc" (ngày về ≥ hôm nay) → mới auto-thêm 7 khoản mặc
+// định. Thiếu ngày về → coi như còn hiệu lực.
+export function laDoanConHieuLuc(
+  ngayVe: string | null | undefined,
+  homNay: string = todayLocalISO(),
+): boolean {
+  if (!ngayVe) return true;
+  return ngayVe >= homNay;
+}
+
 // Các mo_ta còn THIẾU cần auto-thêm cho 1 đoàn (so khớp sau khi trim, phân biệt
 // hoa/thường — chủ ý: "ctp hdv" tự gõ KHÔNG khớp "CTP HDV" chuẩn nên vẫn seed
 // dòng chuẩn cạnh nó để OP gộp). Tip lái xe luôn đảm bảo cho mọi đoàn; 7 khoản

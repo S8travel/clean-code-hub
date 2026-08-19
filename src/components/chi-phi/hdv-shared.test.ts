@@ -10,8 +10,7 @@ import {
   DEFAULT_KHAC_MO_TAS,
   SYSTEM_KHAC_ORDER,
   missingDefaultKhacMoTas,
-  orderKhacItems,
-} from "./hdv-shared";
+  orderKhacItems, todayLocalISO, laDoanConHieuLuc } from "./hdv-shared";
 
 describe("quà tặng khách (hdv_ho_tro)", () => {
   it("giftMoTa ghép mô tả '{Quà} tặng khách'", () => {
@@ -152,5 +151,36 @@ describe("resolveHoTroNguoiTt — nguồn người trả mặc định", () => {
 
   it("cả 2 = 0 → HDV (mặc định cho mọi row, kể cả quà & tip lái xe)", () => {
     expect(resolveHoTroNguoiTt({ tien_cong_ty: 0, tien_hdv: 0 })).toBe("hdv");
+  });
+});
+
+describe("todayLocalISO", () => {
+  it("lấy ngày theo lịch địa phương, KHÔNG lệch như toISOString()", () => {
+    // 00:30 sáng 18/08 giờ VN = 17:30 ngày 17/08 UTC → toISOString() sẽ ra 17/08.
+    const nuaDemVN = new Date(2026, 7, 18, 0, 30, 0);
+    expect(todayLocalISO(nuaDemVN)).toBe("2026-08-18");
+  });
+
+  it("đệm 0 cho tháng/ngày một chữ số", () => {
+    expect(todayLocalISO(new Date(2026, 0, 5, 12, 0, 0))).toBe("2026-01-05");
+  });
+});
+
+describe("laDoanConHieuLuc", () => {
+  it("đoàn về đúng hôm nay vẫn còn hiệu lực", () => {
+    expect(laDoanConHieuLuc("2026-08-18", "2026-08-18")).toBe(true);
+  });
+
+  it("đoàn đã về hôm qua → hết hiệu lực (chỉ giữ Tip lái xe)", () => {
+    expect(laDoanConHieuLuc("2026-08-17", "2026-08-18")).toBe(false);
+  });
+
+  it("đoàn sắp đi → còn hiệu lực", () => {
+    expect(laDoanConHieuLuc("2026-09-01", "2026-08-18")).toBe(true);
+  });
+
+  it("thiếu ngày về → coi như còn hiệu lực", () => {
+    expect(laDoanConHieuLuc(null, "2026-08-18")).toBe(true);
+    expect(laDoanConHieuLuc(undefined, "2026-08-18")).toBe(true);
   });
 });
