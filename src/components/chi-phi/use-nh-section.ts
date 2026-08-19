@@ -25,6 +25,7 @@ import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
 import { calcSoKhachThucTe, resolveNHFoc, resolveNHChietKhau } from "@/lib/foc-calc";
 import { applyChietKhau, calcDnttPriorPaid } from "@/lib/chi-phi-calc";
 import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
+import { laDongHdvTra } from "@/lib/print-nguoi-tra";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { nhMainMoTa, resolveNhMainId } from "@/lib/nh-chi-phi-resolve";
 import { computeInitialDinhKyNhKeys } from "@/lib/nh-dinh-ky";
@@ -1873,7 +1874,15 @@ export function useNHSection({
             chiet_khau_phan_tram: resolveNHChietKhau({ chiet_khau_phan_tram_snapshot: ckSnap }, nh),
           };
         }
-        const mainDiff = diffPrintLine(
+        // Suất chính do HDV ứng tiền mặt → KHÔNG in vào Giấy ĐNTT: công ty không chi
+        // khoản này (nó được quyết toán ở tab HDV). In vào thì cột "Tổng tiền" gồm cả
+        // phần HDV trong khi "Số tiền còn thanh toán" lấy theo ĐNTT (chỉ phần công ty)
+        // → Tổng − cọc − cấn trừ ≠ còn TT, kế toán trừ nhẩm ra số lệch.
+        const mainHdvTra = laDongHdvTra(
+          cpMainRow,
+          row.nguoi_tt ?? (nh.nguoi_thanh_toan === "hdv" ? "hdv" : "cong_ty"),
+        );
+        const mainDiff = mainHdvTra ? null : diffPrintLine(
           nh.ten,
           { so_luong: row.so_khach, don_gia: row.don_gia, chiet_khau_phan_tram: row.chiet_khau_phan_tram },
           { so_luong: rowPrint.so_khach, don_gia: rowPrint.don_gia, chiet_khau_phan_tram: rowPrint.chiet_khau_phan_tram },
@@ -1881,7 +1890,7 @@ export function useNHSection({
         if (mainDiff) outDiffs?.push({ ...mainDiff, chiPhiId: row.id, loai: "sua", key });
         // Dòng chi phí đã bị XÓA ở nơi khác nhưng màn hình còn giữ → vẫn in (không
         // tự ý bỏ dòng của người dùng) nhưng phải báo để kế toán biết mà kiểm.
-        if (row.id != null && cpRowsForPrint.length > 0 && !cpById[row.id]) {
+        if (!mainHdvTra && row.id != null && cpRowsForPrint.length > 0 && !cpById[row.id]) {
           outDiffs?.push({
             ten: nh.ten,
             truoc: { so_luong: row.so_khach, don_gia: row.don_gia },
@@ -1949,16 +1958,19 @@ export function useNHSection({
         const isTangMain = redMain?.voucherLoai === "tang";
         const tangVeMain = isTangMain ? Math.min(redMain.soVe ?? soLuongThuc, soLuongThuc) : 0;
         const tangPhuHetMain = isTangMain && (soLuongThuc - tangVeMain) <= 0;
-        if (!tangPhuHetMain && rowPrint.don_gia > 0) {
+        if (!tangPhuHetMain && rowPrint.don_gia > 0 && !mainHdvTra) {
           items.push({ so_luong: soLuongThuc, don_gia: rowPrint.don_gia, ghi_chu: "", chiet_khau_phan_tram: mainCkPct });
         }
         // Extras: voucher TẶNG → loại khỏi bản in (miễn phí); MUA → in dòng nhưng cộng
         // giá trị voucher vào extraVoucherMua để trừ khỏi cash phải trả ĐNTT bổ sung.
         // Số tiền cũng lấy theo DB (extrasMap seed 1 lần/đoàn, không tự sync lại).
         let extraVoucherMua = 0;
-        let extraNgoaiDntt = 0;
         extras.forEach((e) => {
           if (e.don_gia <= 0) return;
+          // Phát sinh HDV trả tiền mặt (nước uống…) → KHÔNG in, cùng lý do với suất
+          // chính ở trên. Trước đây vẫn in "để NCC thấy đủ suất", nhưng tờ giấy này
+          // là chứng từ công ty chi (gửi Giám đốc ký), không gửi NCC.
+          if (e.nguoi_tt === "hdv") return;
           const eRed = e.id != null ? redMap[e.id] : undefined;
           if (eRed?.voucherLoai === "tang") return;
           // Chỉ cảnh báo cho dòng THỰC SỰ được in (dòng bị loại không gây nhiễu).
@@ -1985,12 +1997,6 @@ export function useNHSection({
           const eDonGia = e.don_gia;
           const eCk = e.chiet_khau_phan_tram;
           items.push({ so_luong: eSoLuong, don_gia: eDonGia, ghi_chu: e.mo_ta, chiet_khau_phan_tram: eCk });
-          // Phát sinh HDV trả tiền mặt: VẪN in (NCC thấy đủ suất) nhưng KHÔNG nằm
-          // trong ĐNTT công ty (calcNHDnttAmount loại nguoi_tt='hdv') → tách ra để
-          // đối chiếu tổng dòng ↔ ĐNTT không báo lệch giả.
-          if (e.nguoi_tt === "hdv") {
-            extraNgoaiDntt += applyChietKhau(eSoLuong * eDonGia, eCk);
-          }
           if (eRed?.voucherLoai === "mua") {
             // Nguồn chuẩn = redeemGiaTri (cache-independent), KHÔNG dựa payment.
             extraVoucherMua += resolveVoucherPrintAmount({ voucherLoai: "mua", redeemGiaTri: eRed.giaTri, paymentVoucherAmount: 0 });
@@ -2096,9 +2102,11 @@ export function useNHSection({
         entries.push({
           ngay_date: ngayDisplay,
           ten_nh: nh.ten,
-          so_khach: rowPrint.so_khach,
-          foc_khach: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_khach : null,
-          foc: focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_mien : null,
+          // Suất chính bị loại (HDV trả) → dòng đầu tờ giấy là dòng phát sinh: in số
+          // lượng của chính nó, và không in FOC của suất chính (suất đó không có mặt).
+          so_khach: mainHdvTra ? (items[0]?.so_luong ?? 0) : rowPrint.so_khach,
+          foc_khach: !mainHdvTra && focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_khach : null,
+          foc: !mainHdvTra && focResolvedNH.foc_khach && focResolvedNH.foc_mien ? focResolvedNH.foc_mien : null,
           items,
           chiet_khau_phan_tram: mainCkPct,
           ncc: { ten: nh.ten_ncc || undefined, so_tai_khoan: nh.ncc_so_tai_khoan || undefined, ngan_hang: nh.ncc_ngan_hang || undefined },
@@ -2114,7 +2122,7 @@ export function useNHSection({
           dntt_id: activeDntt?.id,
           dntt_so_tien: activeDntt?.so_tien,
           dntt_lech_bo_qua: isDnttLechBoQua(activeDntt),
-          dntt_ngoai_dntt: (voucherReducesDntt ? 0 : voucherAmount) + extraNgoaiDntt,
+          dntt_ngoai_dntt: voucherReducesDntt ? 0 : voucherAmount,
         });
     }
 
@@ -2237,7 +2245,11 @@ export function useNHSection({
     try {
       const entries = await buildSelectedEntries();
       if (!entries || entries.length === 0) {
-        toast.error("Không có dữ liệu để xuất");
+        toast.error(
+          selectedKeys.length > 0
+            ? "Các dòng đã chọn đều do HDV trả (hoặc chưa có số tiền) — không có khoản nào công ty cần thanh toán."
+            : "Không có dữ liệu để xuất",
+        );
         return;
       }
       setPreviewNHData({

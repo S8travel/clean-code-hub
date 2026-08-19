@@ -21,6 +21,7 @@ import { waitForChiPhiWrites } from "@/lib/chi-phi-writes";
 import { useCongNoList, isDnttPaidFromPrepaid } from "@/hooks/use-cong-no";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
+import { laDongHdvTra } from "@/lib/print-nguoi-tra";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import { useDVCanhDiemMap } from "@/hooks/use-chi-phi-nh";
 import { type CanTruSelection } from "./KSCongNoPanel";
@@ -947,7 +948,12 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         for (const { row: rowCache } of grows) {
           // Số tiền IN lấy theo bản DB mới nhất của dòng (fallback bản trên màn hình).
           const row = (rowCache.id != null ? cpById[rowCache.id] : undefined) ?? rowCache;
-          const rowDiff = diffPrintLine(
+          // Dịch vụ do HDV ứng tiền mặt → KHÔNG in vào Giấy ĐNTT (công ty không chi
+          // khoản này; nó quyết toán ở tab HDV). In vào thì cột "Tổng tiền" gồm cả
+          // phần HDV còn "Số tiền còn thanh toán" thì không → tờ giấy tự mâu thuẫn.
+          // Dòng phát sinh HDV đã bị lọc sẵn ở vòng extras bên dưới.
+          const mainHdvTra = laDongHdvTra(row, "cong_ty");
+          const rowDiff = mainHdvTra ? null : diffPrintLine(
             rowCache.mo_ta || "Dịch vụ",
             { so_luong: rowCache.so_luong, don_gia: rowCache.don_gia },
             rowCache.id != null && cpById[rowCache.id]
@@ -957,7 +963,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           if (rowDiff) printDiffs.push({ ...rowDiff, chiPhiId: rowCache.id, loai: "sua" });
           // Dòng đã bị xóa ở nơi khác nhưng màn hình còn giữ → vẫn in (không tự ý
           // bỏ dòng của người dùng) nhưng phải báo để kế toán kiểm lại.
-          if (rowCache.id != null && cpFresh.length > 0 && !cpById[rowCache.id]) {
+          if (!mainHdvTra && rowCache.id != null && cpFresh.length > 0 && !cpById[rowCache.id]) {
             printDiffs.push({
               ten: rowCache.mo_ta || "Dịch vụ",
               truoc: { so_luong: rowCache.so_luong, don_gia: rowCache.don_gia },
@@ -1033,11 +1039,16 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           const rowFoc = resolveDVFoc(row);
           const rowBilled = calcSoKhachThucTe(row.so_luong, rowFoc.foc_khach, rowFoc.foc_mien);
           // Gộp → ghi tên dịch vụ vào ghi_chu (vì ten_nh dùng cho tên NCC chung).
-          items.push({ so_luong: rowBilled, don_gia: row.don_gia, ghi_chu: isGop ? (row.mo_ta || "Dịch vụ") : "" });
+          if (!mainHdvTra) {
+            items.push({ so_luong: rowBilled, don_gia: row.don_gia, ghi_chu: isGop ? (row.mo_ta || "Dịch vụ") : "" });
+            soKhachSum += row.so_luong;
+          }
           items.push(...rowExtras.map((e) => ({ so_luong: e.so_luong, don_gia: e.don_gia, ghi_chu: e.mo_ta || "" })));
-          soKhachSum += row.so_luong;
           thanhTienSum += row.tien_cong_ty + rowExtras.reduce((s, e) => s + e.so_luong * e.don_gia, 0);
         }
+
+        // Cả nhóm đều do HDV trả → không có gì để đề nghị thanh toán.
+        if (items.length === 0) continue;
 
         const firstCache = grows[0].row;
         const first = (firstCache.id != null ? cpById[firstCache.id] : undefined) ?? firstCache;
@@ -1111,9 +1122,12 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           // Gộp: ten_nh dùng tên NCC (chỉ cho tên file / fallback) — cột TÊN in word
           // sẽ lấy tên dịch vụ per-dòng từ item.ghi_chu (multi_service).
           ten_nh: isGop ? (nccFinal?.ten ?? "Gộp dịch vụ") : (first.mo_ta || "Dịch vụ"),
-          so_khach: isGop ? first.so_luong : soKhachSum,
+          // Dòng main bị loại (HDV trả) → dòng đầu tờ giấy là dòng phát sinh: in số
+          // lượng của chính nó thay vì 0, và bỏ FOC của dòng main (không có mặt).
+          so_khach: isGop ? first.so_luong : (soKhachSum > 0 ? soKhachSum : (items[0]?.so_luong ?? 0)),
           // FOC dịch vụ của dòng main (chỉ snapshot — khớp tien_cong_ty in bản ĐNTT).
           ...(() => {
+            if (laDongHdvTra(first, "cong_ty")) return { foc_khach: null, foc: null };
             const f = resolveDVFoc(first);
             return { foc_khach: f.foc_khach, foc: f.foc_mien };
           })(),
@@ -1155,7 +1169,11 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     try {
       const entries = await buildSelectedEntries();
       if (!entries || entries.length === 0) {
-        toast.error("Không có dịch vụ nào được chọn để xuất");
+        toast.error(
+          selectedIds.length > 0
+            ? "Các dịch vụ đã chọn đều do HDV trả (hoặc chưa có số tiền) — không có khoản nào công ty cần thanh toán."
+            : "Không có dịch vụ nào được chọn để xuất",
+        );
         return;
       }
       setPreviewDVData({
