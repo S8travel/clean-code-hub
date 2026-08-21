@@ -31,6 +31,7 @@ import { useKhachHang } from "@/hooks/use-khach-hang";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
 import { LeadBaoGiaTab } from "@/components/leads/LeadBaoGiaTab";
+import { LeadTepDinhKem } from "@/components/leads/LeadTepDinhKem";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
@@ -557,6 +558,9 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                         rows={2} className="resize-none text-xs" />
                     </Field>
                   </Section>
+
+                  {/* Tệp đối tác gửi kèm (yêu cầu báo giá từ cổng 外網) */}
+                  <LeadTepDinhKem leadId={lead.id} />
 
                   {/* Phân công */}
                   <Section title={t("Phân công")}>

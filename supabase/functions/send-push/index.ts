@@ -36,6 +36,8 @@ function targetUrl(tb: ThongBaoRecord): string {
   if (loai === "giao_viec" && doan_id) return `/doan/${doan_id}`;
   if (loai === "dntt_can_duyet") return "/de-nghi-thanh-toan";
   if (loai === "su_co" && doan_id) return `/doan/${doan_id}?tab=log`;
+  // Yêu cầu báo giá đối tác: xử lý ở tab trong trang Báo giá, không phải phễu Leads.
+  if (loai === "lead_yeu_cau_doi_tac") return "/bao-gia?tab=yeu-cau";
   if (loai.startsWith("lead_")) return lead_id ? `/leads?lead=${lead_id}` : "/leads";
   if (loai === "gia" && doan_id) return `/doan/${doan_id}`;
   if (loai === "thong_tin_doan" && doan_id) return `/doan/${doan_id}`;

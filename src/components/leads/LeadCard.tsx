@@ -30,6 +30,7 @@ const NGUON_COLOR: Record<string, string> = {
   walk_in: "bg-green-50 text-green-600 border-green-100",
   referral: "bg-pink-50 text-pink-600 border-pink-100",
   doi_tac: "bg-indigo-50 text-indigo-600 border-indigo-100",
+  agent_portal: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
 const UU_TIEN_COLOR: Record<string, string> = {

@@ -61,3 +61,9 @@ verify_jwt = false
 # chiều OP thì hàm tự kiểm access token. Xem index.ts.
 [functions.trao-doi]
 verify_jwt = false
+
+# yeu-cau-doi-tac: đối tác gửi yêu cầu báo giá từ cổng 外網 → lead bên CRM.
+# Chỉ cổng gọi, bằng 'x-portal-secret' khớp PORTAL_TRAO_DOI_SECRET (không có JWT
+# của CRM) → verify_jwt = false. Xem index.ts.
+[functions.yeu-cau-doi-tac]
+verify_jwt = false

@@ -50,7 +50,7 @@ export function tachStorageUrl(url: string): { bucket: string; path: string } | 
 
 // Storage không nhận mọi ký tự trong tên file; tên gốc tiếng Việt có dấu vẫn giữ
 // được ở cột file_name để hiện cho người dùng, còn đường dẫn thì rút về ASCII.
-const lamSachTen = (ten: string): string => {
+export const lamSachTen = (ten: string): string => {
   const sach = ten
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/đ/g, "d").replace(/Đ/g, "D")
