@@ -20,6 +20,7 @@ import {
 import { THI_TRUONG_OPTS } from "@/hooks/use-doan";
 import { type VanPhongRow } from "@/hooks/use-van-phong";
 import { useLogActivity } from "@/hooks/use-activity-log";
+import { useRolePermissions } from "@/hooks/use-permissions";
 import { useAuth } from "@/hooks/use-auth";
 import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ const formFrom = (u: UserRoleRow): DetailForm => ({
   ghi_chu: u.ghi_chu,
   active: u.active,
   chi_xem: u.chi_xem,
+  nhan_yeu_cau_doi_tac: u.nhan_yeu_cau_doi_tac,
   password_hash: u.password_hash,
 });
 
@@ -57,11 +59,17 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
   const { user: me } = useAuth();
   // Chỉ admin/giám đốc được cấp quyền truy cập đa-VP cho NV.
   const canGrantVp = me?.role === "admin" || me?.role === "giam_doc";
+  const { data: rolePerms = [] } = useRolePermissions();
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
   const logActivity = useLogActivity();
 
   const [form, setForm] = useState<DetailForm>(() => formFrom(selected));
+  // Nhận yêu cầu đối tác mà không thấy mục Báo Giá thì chuông báo xong lại không
+  // có đường vào tab để xử lý — nói ngay tại chỗ bật cờ.
+  const xemDuocBaoGia =
+    form.role === "admin" ||
+    rolePerms.some((p) => p.role === form.role && p.resource === "bao_gia" && p.can_view);
   const [dirty, setDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [newPass, setNewPass] = useState("");
@@ -344,6 +352,27 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
               onCheckedChange={(v) => set("chi_xem", v)}
             />
           </div>
+
+          {/* Yêu cầu báo giá đối tác gửi từ cổng 外網 → lead. Bật cho ai thì người
+              đó được chia lượt và nhận chuông; không ai bật thì rơi về sales. */}
+          <div className="flex items-center justify-between rounded-md border px-3 py-2 col-span-2">
+            <div>
+              <p className="text-sm font-medium">{t("Nhận yêu cầu từ cổng đối tác")}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Đối tác gửi yêu cầu báo giá trên cổng thì người này nhận việc và nhận thông báo")}
+              </p>
+            </div>
+            <Switch
+              checked={form.nhan_yeu_cau_doi_tac}
+              onCheckedChange={(v) => set("nhan_yeu_cau_doi_tac", v)}
+            />
+          </div>
+
+          {form.nhan_yeu_cau_doi_tac && !xemDuocBaoGia && (
+            <p className="col-span-2 rounded-md bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-800">
+              {t("Vai trò này chưa được xem mục Báo Giá — người dùng vẫn nhận thông báo nhưng menu không có lối vào tab \"Yêu cầu báo giá\". Bật quyền Báo Giá ở tab Phân quyền nếu muốn họ tự xử lý.")}
+            </p>
+          )}
 
         </div>
 

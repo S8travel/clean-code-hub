@@ -54,6 +54,7 @@ const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   portal_noi_dung: null,
   portal_enabled: false,
   portal_pushed_at: null,
+  yeu_cau_id: null,
   ...over,
 });
 

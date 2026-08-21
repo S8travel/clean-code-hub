@@ -2467,5 +2467,12 @@
   "Gửi trả lời": "送出回覆",
   "Chưa trả lời": "尚未回覆",
   "Bỏ": "取消",
-  "Cho đối tác xem trên cổng": "在合作夥伴專區顯示"
+  "Cho đối tác xem trên cổng": "在合作夥伴專區顯示",
+  "Cổng đối tác": "合作夥伴專區",
+  "Tệp đính kèm": "附件",
+  "Đối tác gửi kèm khi yêu cầu báo giá.": "合作夥伴詢價時一併上傳的檔案。",
+  "Không mở được file — có thể file đã bị gỡ.": "無法開啟檔案，可能已被移除。",
+  "Nhận yêu cầu từ cổng đối tác": "接收合作夥伴專區的詢價",
+  "Đối tác gửi yêu cầu báo giá trên cổng thì người này nhận việc và nhận thông báo": "合作夥伴在專區送出詢價時，由此人接手並收到通知",
+  "Vai trò này chưa được xem mục Báo Giá — người dùng vẫn nhận thông báo nhưng menu không có lối vào tab \"Yêu cầu báo giá\". Bật quyền Báo Giá ở tab Phân quyền nếu muốn họ tự xử lý.": "此角色尚無「報價」選單權限 — 使用者仍會收到通知，但選單沒有進入「詢價」分頁的入口。若要讓他自行處理，請到權限分頁開啟「報價」權限。"
 }

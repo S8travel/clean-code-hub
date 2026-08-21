@@ -19,6 +19,8 @@ export interface UserRoleRow {
   active: boolean;
   /** true = tài khoản chỉ xem. Khóa ghi thật ở DB (RLS restrictive), xem lib/readonly-mode.ts */
   chi_xem: boolean;
+  /** true = nhận yêu cầu báo giá đối tác gửi từ cổng 外網 (được chia lượt + nhận chuông). */
+  nhan_yeu_cau_doi_tac: boolean;
   password_hash: string | null;
   created_at: string;
 }

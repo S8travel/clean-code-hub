@@ -156,6 +156,11 @@ export interface BaoGiaRow {
   // Đã mở cho đối tác xem trên cổng.
   portal_enabled: boolean;
   portal_pushed_at: string | null;
+  // Báo giá này làm từ yêu cầu nào của đối tác (tab "Yêu cầu báo giá").
+  // NGUỒN SỰ THẬT cho trạng thái "yêu cầu đã xử lý chưa" — view yeu_cau_bao_gia_view
+  // đếm theo cột này, không tin cột trang_thai. Gán NGAY lúc INSERT, không để
+  // bước sau: hỏng giữa chừng là báo giá mồ côi, yêu cầu vẫn báo "chưa xử lý".
+  yeu_cau_id: number | null;
 }
 
 // ── Queries ──
@@ -259,6 +264,8 @@ export function useCloneBaoGia() {
         lich_trinh_files: s.lich_trinh_files,
         trang_thai: "draft",
         lead_id: leadId ?? null,
+        // CỐ Ý không chép `yeu_cau_id`: bản sao là báo giá cho việc khác, không
+        // được tính là đã xử lý yêu cầu gốc của đối tác.
       };
       const { data, error } = await externalSupabase
         .from("bao_gia")
@@ -301,6 +308,10 @@ export function useDeleteBaoGia() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bao_gia"] });
+      // Tab "Yêu cầu báo giá" tính trạng thái từ chính bảng bao_gia: xoá báo giá
+      // thì yêu cầu phải quay về "chưa xử lý". Không làm mới thì màn hình vẫn báo
+      // "Đã báo giá" và không ai biết là phải làm lại.
+      qc.invalidateQueries({ queryKey: ["yeu_cau_bao_gia"] });
     },
   });
 }

@@ -814,6 +814,21 @@ CREATE POLICY chi_xem_block_delete ON public.ten_bang AS RESTRICTIVE
 
 Áp dụng tương tự cho VIEW (GRANT SELECT) và FUNCTION/RPC (GRANT EXECUTE).
 
+**⚠️ Hai bẫy đã vấp 21/08/2026 khi thêm `yeu_cau_bao_gia` + view của nó:**
+1. **VIEW mặc định là SECURITY DEFINER** → chạy bằng quyền owner và ĐI VÒNG QUA RLS
+   của mọi bảng bên dưới. Luôn khai `WITH (security_invoker = on)`:
+   ```sql
+   CREATE VIEW public.ten_view WITH (security_invoker = on) AS SELECT ...;
+   ```
+   (`dntt_with_payment_status`, `cong_no_with_status` đã đúng; view mới quên là thủng.)
+2. **`GRANT SELECT ... TO anon` chỉ dành cho bảng thật sự công khai.** Bảng dữ liệu nội
+   bộ phải `REVOKE ALL ... FROM anon` — khoá publishable nằm sẵn trong bundle web, RLS
+   là hàng rào duy nhất còn lại và một view definer là đủ để đi vòng.
+3. View dùng `bang.*`: thêm cột vào bảng thì `CREATE OR REPLACE VIEW` báo lỗi
+   "cannot change name of view column" → phải `DROP VIEW` rồi `CREATE` lại.
+4. `GREATEST`/`LEAST` **bỏ qua NULL**: `GREATEST(NULL, 1)` ra `1`. Muốn "không nhập thì
+   để trống" phải bọc `CASE WHEN ... IS NULL THEN NULL ELSE ... END`.
+
 **RPC mới `SECURITY DEFINER` có ghi**: chạy bằng quyền owner → BYPASS toàn bộ RLS
 trên, kể cả policy `chi_xem_*`. Phải tự chèn guard đầu thân hàm:
 ```sql
@@ -891,4 +906,42 @@ moi → da_lien_he → dang_tu_van → da_bao_gia
 ["lead", id]
 ["lead_activities", leadId]
 ["lead_next_action", leadId]
-["my_next_actions"]
+["my_next_actions"]["lead_tai_lieu", leadId]           // file đối tác gửi kèm khi yêu cầu báo giá
+["yeu_cau_bao_gia"]                 // tab Yêu cầu báo giá (đọc view)
+["yeu_cau_tep", yeuCauId | "tat_ca"]
+
+### 詢價 — yêu cầu báo giá từ cổng đối tác (外網)
+> Đối tác gửi yêu cầu trên cổng (repo riêng `../s8-agent-portal`, project Supabase
+> khác) → lead bên CRM. Ship 21/08/2026.
+
+```
+cổng /yeu-cau → edge fn gui-yeu-cau (bên cổng, verify_jwt)
+              → edge fn yeu-cau-doi-tac (bên CRM, x-portal-secret = PORTAL_TRAO_DOI_SECRET)
+              → RPC create_lead_from_agent_portal (RETURNS jsonb {lead_id, yeu_cau_id, so_tep})
+              → yeu_cau_bao_gia (bản gốc) + lead (phễu sales) + lead_tai_lieu + thong_bao
+```
+
+**Chỗ XỬ LÝ yêu cầu là tab "Yêu cầu báo giá" trong trang Báo giá** (`/bao-gia?tab=yeu-cau`),
+KHÔNG phải trang Leads — lead chỉ để sales theo phễu.
+- Bảng `yeu_cau_bao_gia`: đối tác + `tai_khoan_email`/`tai_khoan_ten` (TÀI KHOẢN cổng đã bấm
+  gửi, lấy từ JWT bên cổng — khác `nguoi_lien_he` họ tự gõ) + nội dung + `lead_id`.
+- Đọc qua VIEW `yeu_cau_bao_gia_view`. Trạng thái hiển thị **là cột `trang_thai_hien_thi`**,
+  KHÔNG phải `trang_thai`: `bo_qua` > tồn tại `bao_gia.yeu_cau_id` > `moi`. Xoá báo giá →
+  yêu cầu tự về "chưa xử lý" thay vì treo ở "đã báo giá".
+- Nút "Báo giá" mở `BaoGiaCreateModal` với prefill (đối tác, tên chương trình, ngày, số ngày,
+  lead, file). `yeu_cau_id` gán **ngay lúc INSERT bao_gia** — không để bước sau, kẻo hỏng giữa
+  chừng là báo giá mồ côi.
+- File đối tác được **CHÉP** từ `lead-files` sang kho lịch trình của báo giá (`taiTepDoiTac` →
+  `useUploadLichTrinhFile`), không trỏ chéo bucket: gỡ file khỏi báo giá không được xoá bản gốc.
+- `useCloneBaoGia` CỐ Ý không chép `yeu_cau_id`.
+- `lead.nguon = 'agent_portal'`, `lead.agent_id` → `agents.id`, `ten_to_chuc` = tên đối tác.
+- **Người nhận**: `user_roles.nhan_yeu_cau_doi_tac` (bật ở trang Người dùng). Chia lượt
+  trong nhóm bật cờ; chuông bắn cho CẢ nhóm. Không ai bật → rơi về `bo_phan='sales'`.
+- **File đính kèm**: tối đa 3, ≤10MB. Đối tác upload lên bucket `yeu-cau` bên cổng,
+  CRM tải qua link ký rồi chép vào bucket **private `lead-files`**; đường dẫn lưu ở
+  `lead_tai_lieu.duong_dan` (KHÔNG lưu URL — link ký hết hạn). Mở bằng `moFileLead`.
+- RPC `create_lead_from_agent_portal` chỉ còn `service_role` (trước đây mở cho `anon`
+  = ai có publishable key CRM cũng tạo được lead). Rate-limit 10 yêu cầu/đối tác/giờ.
+- Cổng **KHÔNG** hiện trạng thái xử lý — chốt nghiệp vụ, đừng tự thêm.
+- Chuông `lead_yeu_cau_doi_tac` trỏ `/bao-gia?tab=yeu-cau` (nhánh này phải đứng TRƯỚC nhánh
+  chung `loai.startsWith("lead_")` trong `targetUrl`, và có bản sao trong edge fn `send-push`).

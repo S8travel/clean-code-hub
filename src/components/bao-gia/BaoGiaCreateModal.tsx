@@ -23,6 +23,8 @@ import { unsupportedFileInfo } from "@/lib/itinerary-file";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { emptyBaoGiaKetQua, emptyGiaCuoiKetQua } from "@/components/bao-gia/detail/helpers";
 import { AgentSelect, LoaiTourSelect } from "@/components/bao-gia/BaoGiaFields";
+import { taiTepDoiTac, type TepYeuCauRow } from "@/hooks/use-yeu-cau-bao-gia";
+import { coChuGon } from "@/lib/yeu-cau-bao-gia";
 
 export interface BaoGiaCreatePrefill {
   leadId?: number | null;
@@ -31,6 +33,15 @@ export interface BaoGiaCreatePrefill {
   ngayDi?: string | null;
   ngayVe?: string | null;
   agentId?: number | null;
+  /** Yêu cầu (tab "Yêu cầu báo giá") mà báo giá này trả lời. Gán ngay lúc INSERT
+   *  để không có khoảnh khắc báo giá tồn tại mà yêu cầu vẫn "chưa xử lý". */
+  yeuCauId?: number | null;
+  /** Tên chương trình là do hệ thống nhặt từ lời nhắn của đối tác, không phải tên
+   *  thật → nhắc sửa trước khi xuất file gửi khách. */
+  tenTuGhep?: boolean;
+  /** File đối tác đã gửi kèm yêu cầu báo giá — tick sẵn, tạo xong thì chép vào
+   *  danh sách file lịch trình của báo giá. Bản gốc bên kho yêu cầu GIỮ NGUYÊN. */
+  tepDoiTac?: TepYeuCauRow[];
 }
 
 interface Props {
@@ -55,6 +66,9 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
   const [tenChuongTrinh, setTenChuongTrinh] = useState("");
   const [soNgay, setSoNgay] = useState(1);
   const [file, setFile] = useState<File | null>(null);
+  // Id các file đối tác được tick để đính kèm. Mặc định tick hết: gần như luôn
+  // muốn kèm, mà bỏ tick thì dễ hơn phải nhớ đi tick.
+  const [tepChon, setTepChon] = useState<number[]>([]);
 
   // Reset / nạp prefill mỗi lần mở.
   useEffect(() => {
@@ -65,6 +79,7 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
     setTenChuongTrinh(prefill?.tenChuongTrinh ?? "");
     setSoNgay(prefill?.soNgay && prefill.soNgay > 0 ? prefill.soNgay : 1);
     setFile(null);
+    setTepChon((prefill?.tepDoiTac ?? []).map((t) => t.id));
   }, [open, prefill]);
 
   const submitting = createBaoGia.isPending || uploadFile.isPending;
@@ -99,13 +114,26 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
         agent_id: agentId,
         loai_tour: loaiTour,
         lead_id: prefill?.leadId ?? null,
+        yeu_cau_id: prefill?.yeuCauId ?? null,
         ngay_di: prefill?.ngayDi ?? null,
         ngay_ve: prefill?.ngayVe ?? null,
       });
       // Upload file lịch trình (nếu có) — chỉ khi đã có id để tạo path.
-      if (file) {
+      // Gồm file vừa chọn từ máy + file đối tác đã gửi kèm yêu cầu (tick ở trên).
+      const dsTep: File[] = [];
+      if (file) dsTep.push(file);
+      const tepDoiTac = (prefill?.tepDoiTac ?? []).filter((t) => tepChon.includes(t.id));
+      for (const t of tepDoiTac) {
         try {
-          await uploadFile.mutateAsync({ baoGiaId: id, files: [file], current: [], uploadedBy: user?.user_id });
+          dsTep.push(await taiTepDoiTac(t));
+        } catch {
+          // Một file hỏng không chặn phần còn lại — bản gốc vẫn nằm ở yêu cầu.
+          toast.warning(`Không lấy được file "${t.file_name || t.ten}" của đối tác — mở lại từ tab Yêu cầu báo giá.`);
+        }
+      }
+      if (dsTep.length) {
+        try {
+          await uploadFile.mutateAsync({ baoGiaId: id, files: dsTep, current: [], uploadedBy: user?.user_id });
         } catch (e: unknown) {
           // Báo giá đã tạo — chỉ cảnh báo phần file, không chặn.
           toast.error("Đã tạo báo giá nhưng lỗi tải file: " + (errMsg(e) || ""));
@@ -174,6 +202,12 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
               className="h-9 mt-1"
               autoFocus
             />
+            {prefill?.tenTuGhep && tenChuongTrinh === (prefill?.tenChuongTrinh ?? "") && (
+              <p className="mt-1 rounded bg-amber-50 px-1.5 py-1 text-[10px] leading-snug text-amber-800">
+                Đối tác không đặt tên chương trình — tên này lấy tạm từ lời nhắn của họ. Sửa lại
+                trước khi xuất file gửi khách.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -204,6 +238,42 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
               />
             </div>
           </div>
+
+          {/* File đối tác gửi kèm yêu cầu — chỉ hiện khi mở từ tab Yêu cầu báo giá */}
+          {(prefill?.tepDoiTac?.length ?? 0) > 0 && (
+            <div>
+              <Label className="text-xs text-slate-600">
+                File đối tác gửi kèm{" "}
+                <span className="text-[10px] text-slate-400 font-normal">(bỏ tick nếu không cần đính vào báo giá)</span>
+              </Label>
+              <div className="mt-1 space-y-1">
+                {prefill!.tepDoiTac!.map((t) => {
+                  const ten = t.file_name || t.ten || `#${t.id}`;
+                  const ticked = tepChon.includes(t.id);
+                  return (
+                    <label
+                      key={t.id}
+                      className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={ticked}
+                        onChange={() =>
+                          setTepChon((p) => (ticked ? p.filter((x) => x !== t.id) : [...p, t.id]))
+                        }
+                        className="h-3.5 w-3.5"
+                      />
+                      <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+                      <span className="flex-1 min-w-0 truncate text-xs">{ten}</span>
+                      {t.co_chu ? (
+                        <span className="shrink-0 text-[10px] text-slate-400">{coChuGon(t.co_chu)}</span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* File lịch trình — cả 2 mode (không bắt buộc) */}
           <div {...dropProps}>
