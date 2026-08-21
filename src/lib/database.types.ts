@@ -4091,6 +4091,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_quyen_them: {
+        Row: {
+          can_create: boolean
+          can_delete: boolean
+          can_edit: boolean
+          can_view: boolean
+          ghi_chu: string | null
+          id: number
+          resource: string
+          tao_boi: string | null
+          tao_luc: string
+          user_id: string
+        }
+        Insert: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          ghi_chu?: string | null
+          id?: number
+          resource: string
+          tao_boi?: string | null
+          tao_luc?: string
+          user_id: string
+        }
+        Update: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          ghi_chu?: string | null
+          id?: number
+          resource?: string
+          tao_boi?: string | null
+          tao_luc?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           active: boolean

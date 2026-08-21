@@ -840,6 +840,24 @@ END IF;
 
 ---
 
+## 🔑 Phân quyền — ba nguồn, cộng dồn
+
+Luật tính ở `src/lib/quyen.ts` (thuần, có unit test); hook `usePermission` chỉ nạp dữ liệu.
+
+| Vai trò | Đọc từ |
+|---|---|
+| `admin` | được tất cả, không đọc bảng nào |
+| `specialist` | **CHỈ** `user_permissions` — vai trò này vốn không dùng ma trận |
+| còn lại | `role_permissions` (nền) **CỘNG THÊM** `user_quyen_them` (riêng từng người) |
+
+- `user_quyen_them` **chỉ mở thêm, không cấm được gì**. Muốn cấm ai → sửa ma trận
+  ở tab Phân quyền hoặc đổi vai trò. Đừng viết logic suy diễn từ dòng `false`.
+- ⛔ **KHÔNG cho code đọc `user_permissions` với vai trò thường.** Bảng đó đang có
+  342 dòng chết của 19 người vai trò thường (đo 21/08/2026), tất cả bật đủ 4 quyền
+  trên 18 mục — bật lên là thăng cấp 20 tài khoản gần bằng admin trong một lần deploy.
+- Quyền chỉ là tầng GIAO DIỆN: `bao_gia` (và nhiều bảng khác) chỉ có policy
+  "đã đăng nhập" ở DB. Ẩn menu ≠ giấu được dữ liệu — xem lại mục "⛔ ĐÃ THỬ VÀ BỎ".
+
 ## 🔒 Tính năng tạm tắt
 
 ### Per-tour permission (doan_permissions) — tắt từ 2026-04-24
