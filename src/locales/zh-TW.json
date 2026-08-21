@@ -2474,5 +2474,8 @@
   "Không mở được file — có thể file đã bị gỡ.": "無法開啟檔案，可能已被移除。",
   "Nhận yêu cầu từ cổng đối tác": "接收合作夥伴專區的詢價",
   "Đối tác gửi yêu cầu báo giá trên cổng thì người này nhận việc và nhận thông báo": "合作夥伴在專區送出詢價時，由此人接手並收到通知",
-  "Vai trò này chưa được xem mục Báo Giá — người dùng vẫn nhận thông báo nhưng menu không có lối vào tab \"Yêu cầu báo giá\". Bật quyền Báo Giá ở tab Phân quyền nếu muốn họ tự xử lý.": "此角色尚無「報價」選單權限 — 使用者仍會收到通知，但選單沒有進入「詢價」分頁的入口。若要讓他自行處理，請到權限分頁開啟「報價」權限。"
+  "Đã lưu quyền cấp thêm": "已儲存額外授權",
+  "Quyền cấp thêm cho riêng người này": "僅授予此人的額外權限",
+  "Cộng thêm vào quyền của vai trò. Bỏ tick ở đây KHÔNG cấm được thứ vai trò đã cho — muốn cấm thì sửa ở tab Phân quyền.": "在角色權限之上額外增加。取消勾選並不會收回角色已給的權限 — 要收回請到權限分頁調整。",
+  "Người này chưa xem được mục Báo Giá — vẫn nhận thông báo nhưng menu không có lối vào tab \"Yêu cầu báo giá\". Tick Xem ở ô \"Quyền cấp thêm\" bên dưới (chỉ riêng người này), hoặc mở cho cả vai trò ở tab Phân quyền.": "此人尚無法檢視「報價」— 仍會收到通知，但選單沒有進入「詢價」分頁的入口。請在下方「額外權限」勾選「檢視」（僅此人），或到權限分頁開放給整個角色。"
 }

@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import { useAuth } from "@/hooks/use-auth";
+import { tinhQuyen, type PermAction } from "@/lib/quyen";
 
-export type PermAction = "view" | "create" | "edit" | "delete";
+export type { PermAction };
 export type Resource =
   // Khách hàng
   | "lead"
@@ -51,6 +52,28 @@ export interface UserPermission {
   can_delete: boolean;
 }
 
+/**
+ * Quyền cấp THÊM cho một người, cộng vào quyền của vai trò.
+ *
+ * KHÁC `user_permissions`: bảng kia là TOÀN BỘ quyền của một 'specialist' (vai
+ * trò đó không dùng ma trận). Bảng này chỉ mở thêm cho người vai trò thường —
+ * bỏ tick ở đây KHÔNG cấm được thứ vai trò đã cho.
+ *
+ * Vì sao không dùng lại `user_permissions`: bảng đó đang chứa 342 dòng chết của
+ * 19 người vai trò thường, tất cả bật đủ 4 quyền trên 18 mục. Cho code đọc nó
+ * với vai trò thường là thăng cấp 20 tài khoản trong một lần deploy.
+ */
+export interface UserQuyenThem {
+  id: number;
+  user_id: string;
+  resource: Resource;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  ghi_chu: string | null;
+}
+
 export function useRolePermissions() {
   return useQuery({
     queryKey: ["role_permissions"],
@@ -84,36 +107,46 @@ export function useUserPermissions(userId?: string | null) {
   });
 }
 
-/** Trả về true/false cho action của current user trên resource */
+/** Quyền cấp thêm của một người (bảng user_quyen_them). */
+export function useQuyenThem(userId?: string | null) {
+  return useQuery({
+    queryKey: ["user_quyen_them", userId],
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_quyen_them")
+        .select("*")
+        .eq("user_id", userId!);
+      if (error) throw error;
+      return (data || []) as UserQuyenThem[];
+    },
+  });
+}
+
+/**
+ * Trả về true/false cho action của current user trên resource.
+ *
+ * Luật nằm ở `lib/quyen.ts` (thuần, có unit test). Ở đây chỉ nạp đúng nguồn:
+ * 'specialist' đọc `user_permissions` (toàn bộ quyền của họ), vai trò khác lấy
+ * ma trận vai trò rồi CỘNG THÊM `user_quyen_them`.
+ */
 export function usePermission(resource: Resource, action: PermAction): boolean {
   const { user } = useAuth();
+  const laSpecialist = user?.role === "specialist";
   const { data: perms = [] } = useRolePermissions();
-  const { data: userPerms = [] } = useUserPermissions(
-    user?.role === "specialist" ? user.user_id : null,
-  );
+  const { data: userPerms = [] } = useUserPermissions(laSpecialist ? user?.user_id : null);
+  const { data: quyenThem = [] } = useQuyenThem(!laSpecialist ? user?.user_id : null);
 
-  if (!user) return false;
-  if (user.role === "admin") return true;
-
-  // Specialist: chỉ check user_permissions (per-user override), KHÔNG dùng role matrix
-  if (user.role === "specialist") {
-    const row = userPerms.find((p) => p.resource === resource);
-    if (!row) return false;
-    if (action === "view") return row.can_view;
-    if (action === "create") return row.can_create;
-    if (action === "edit") return row.can_edit;
-    if (action === "delete") return row.can_delete;
-    return false;
-  }
-
-  const row = perms.find((p) => p.role === user.role && p.resource === resource);
-  if (!row) return false;
-
-  if (action === "view") return row.can_view;
-  if (action === "create") return row.can_create;
-  if (action === "edit") return row.can_edit;
-  if (action === "delete") return row.can_delete;
-  return false;
+  return tinhQuyen({
+    role: user?.role ?? null,
+    resource,
+    action,
+    theoVaiTro: perms.find((p) => p.role === user?.role && p.resource === resource),
+    theoNguoi: laSpecialist
+      ? userPerms.find((p) => p.resource === resource)
+      : quyenThem.find((p) => p.resource === resource),
+  });
 }
 
 /**
@@ -183,6 +216,46 @@ export function useUpsertRolePermissions() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["role_permissions"] }),
+  });
+}
+
+/** Mutation lưu quyền CẤP THÊM cho 1 người (bảng user_quyen_them). */
+export function useUpsertQuyenThem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId, rows, ghiChu,
+    }: {
+      userId: string;
+      rows: Omit<UserQuyenThem, "id" | "user_id" | "ghi_chu">[];
+      ghiChu?: string | null;
+    }) => {
+      // Bỏ tick hết một resource = gỡ dòng đó; giữ lại dòng rỗng chỉ làm bảng
+      // phình ra và khiến người đọc tưởng có cấp gì đó.
+      const giu = rows.filter((r) => r.can_view || r.can_create || r.can_edit || r.can_delete);
+      const boDi = rows.filter((r) => !giu.some((g) => g.resource === r.resource)).map((r) => r.resource);
+
+      if (giu.length) {
+        const { error } = await externalSupabase
+          .from("user_quyen_them")
+          .upsert(
+            giu.map((r) => ({ ...r, user_id: userId, ghi_chu: ghiChu ?? null })),
+            { onConflict: "user_id,resource" },
+          );
+        if (error) throw error;
+      }
+      if (boDi.length) {
+        const { error } = await externalSupabase
+          .from("user_quyen_them")
+          .delete()
+          .eq("user_id", userId)
+          .in("resource", boDi);
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_d, { userId }) => {
+      qc.invalidateQueries({ queryKey: ["user_quyen_them", userId] });
+    },
   });
 }
 

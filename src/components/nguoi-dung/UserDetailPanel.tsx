@@ -20,13 +20,15 @@ import {
 import { THI_TRUONG_OPTS } from "@/hooks/use-doan";
 import { type VanPhongRow } from "@/hooks/use-van-phong";
 import { useLogActivity } from "@/hooks/use-activity-log";
-import { useRolePermissions } from "@/hooks/use-permissions";
+import { useQuyenThem, useRolePermissions } from "@/hooks/use-permissions";
+import { tinhQuyen } from "@/lib/quyen";
 import { useAuth } from "@/hooks/use-auth";
 import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
 import { VAI_TRO_OPTS, BO_PHAN_OPTS, THI_TRUONG_GROUPS } from "./constants";
 import { SpecialistPermissionsSection } from "./SpecialistPermissionsSection";
+import { QuyenThemSection } from "./QuyenThemSection";
 
 type DetailForm = Omit<UserRoleRow, "id" | "created_at">;
 
@@ -60,6 +62,7 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
   // Chỉ admin/giám đốc được cấp quyền truy cập đa-VP cho NV.
   const canGrantVp = me?.role === "admin" || me?.role === "giam_doc";
   const { data: rolePerms = [] } = useRolePermissions();
+  const { data: quyenThem = [] } = useQuyenThem(selected.user_id);
   const updateMut = useUpdateNguoiDung();
   const deleteMut = useDeleteNguoiDung();
   const logActivity = useLogActivity();
@@ -67,9 +70,15 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
   const [form, setForm] = useState<DetailForm>(() => formFrom(selected));
   // Nhận yêu cầu đối tác mà không thấy mục Báo Giá thì chuông báo xong lại không
   // có đường vào tab để xử lý — nói ngay tại chỗ bật cờ.
-  const xemDuocBaoGia =
-    form.role === "admin" ||
-    rolePerms.some((p) => p.role === form.role && p.resource === "bao_gia" && p.can_view);
+  // Tính đúng luật thật (gồm cả quyền cấp thêm), không chỉ nhìn ma trận vai trò —
+  // cấp riêng Báo Giá cho người này xong mà cảnh báo vẫn đỏ thì hoá ra nói dối.
+  const xemDuocBaoGia = tinhQuyen({
+    role: form.role,
+    resource: "bao_gia",
+    action: "view",
+    theoVaiTro: rolePerms.find((p) => p.role === form.role && p.resource === "bao_gia"),
+    theoNguoi: quyenThem.find((p) => p.resource === "bao_gia"),
+  });
   const [dirty, setDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [newPass, setNewPass] = useState("");
@@ -370,7 +379,7 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
 
           {form.nhan_yeu_cau_doi_tac && !xemDuocBaoGia && (
             <p className="col-span-2 rounded-md bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-800">
-              {t("Vai trò này chưa được xem mục Báo Giá — người dùng vẫn nhận thông báo nhưng menu không có lối vào tab \"Yêu cầu báo giá\". Bật quyền Báo Giá ở tab Phân quyền nếu muốn họ tự xử lý.")}
+              {t("Người này chưa xem được mục Báo Giá — vẫn nhận thông báo nhưng menu không có lối vào tab \"Yêu cầu báo giá\". Tick Xem ở ô \"Quyền cấp thêm\" bên dưới (chỉ riêng người này), hoặc mở cho cả vai trò ở tab Phân quyền.")}
             </p>
           )}
 
@@ -444,6 +453,12 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
 
         {form.role === "specialist" && selected.user_id && (
           <SpecialistPermissionsSection userId={selected.user_id} />
+        )}
+
+        {/* Vai trò thường: cấp thêm đúng mục cần, không phải mở cho cả nhóm.
+            Specialist không có khối này — quyền của họ vốn đã là per-user. */}
+        {form.role !== "specialist" && selected.user_id && (
+          <QuyenThemSection userId={selected.user_id} />
         )}
 
         <div className="text-[11px] text-muted-foreground border-t pt-3">
