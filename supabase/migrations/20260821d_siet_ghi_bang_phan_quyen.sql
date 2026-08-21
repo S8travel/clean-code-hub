@@ -1,8 +1,16 @@
--- ⚠️ CHƯA APPLY LÊN PRODUCTION — chờ chủ hệ thống duyệt (viết 21/08/2026).
+-- ĐÃ APPLY LÊN PRODUCTION 21/08/2026 (chủ hệ thống duyệt).
 --
--- Vì sao tách riêng: đây KHÔNG phải phần việc "mở Báo Giá cho một người", mà là
--- bịt một lỗ phát hiện lúc làm việc đó. Nó đổi ai được sửa phân quyền của cả
--- công ty, nên phải là quyết định có chủ đích chứ không đi kèm âm thầm.
+-- Tách riêng khỏi migration 'c' vì đây KHÔNG phải phần việc "mở Báo Giá cho một
+-- người", mà là bịt một lỗ phát hiện lúc làm việc đó. Nó đổi ai được sửa phân
+-- quyền của cả công ty, nên phải là quyết định có chủ đích chứ không đi kèm âm thầm.
+--
+-- Đã nghiệm thu bằng cách đóng vai người dùng thật (JWT giả + transaction tự huỷ):
+--   · nhân viên thường tự chèn dòng quyền cho mình  → BỊ CHẶN (cả 2 bảng)
+--   · nhân viên thường đọc ma trận quyền            → vẫn được (không phá màn hình)
+--   · admin sửa ma trận / cấp quyền riêng           → vẫn được
+--
+-- LƯU Ý: hiện chỉ có MỘT tài khoản admin. Mất tài khoản đó thì không ai sửa được
+-- phân quyền qua giao diện nữa — đường còn lại là SQL Editor trên Dashboard.
 --
 -- LỖ: `role_permissions` và `user_permissions` chỉ có policy 'auth_required'
 -- FOR ALL — nghĩa là BẤT KỲ nhân viên nào có tài khoản (trừ tài khoản chỉ xem)
