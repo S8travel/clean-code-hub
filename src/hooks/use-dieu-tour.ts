@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useChiPhiLockGuard } from "@/hooks/use-chi-phi-lock";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
-import { buildExpectedNhKeys, findOrphanNhChiPhi, buildOccupiedMealSlots, buildOccupiedMealSlotIds, findOrphanNhExtras, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
+import { buildExpectedNhKeys, coTheDonNhMoCoi, findOrphanNhChiPhi, buildOccupiedMealSlots, buildOccupiedMealSlotIds, findOrphanNhExtras, findRemovedPaidNhChiPhi, nhChiPhiSlot } from "@/lib/nh-orphan-cleanup";
 import { cascadeInsertDinhKyNH } from "@/lib/nh-dinh-ky";
 import { extraParentId } from "@/lib/dntt-gop-calc";
 import { getActiveDnttIdsForChiPhi, getActiveDnttIdsForChiPhiBatch } from "@/lib/dntt-guard";
@@ -389,6 +389,12 @@ export function useInitDoanNgay() {
 // getActiveDnttIdsForChiPhi: chuyển sang @/lib/dntt-guard (dùng chung cho use-doan,
 // use-doan-nhom — tránh circular import). Import ở đầu file.
 
+// Lý do chung khi KHÔNG kiểm tra được ràng buộc (ĐNTT / booking) vì lỗi đọc DB.
+// Guard chặn xóa phải fail-CLOSED: thà bắt OP thử lại còn hơn cho xóa nhầm dòng
+// đã cam kết tiền rồi mất dấu qua CASCADE.
+const KHONG_KIEM_TRA_DUOC =
+  "Không kiểm tra được ràng buộc (ĐNTT / booking) do lỗi kết nối — thử lại sau vài giây.";
+
 // Pre-check trước khi user xóa cảnh điểm khỏi điều tour.
 //   1. chi_phi liên kết đã có dntt_allocations ACTIVE → block (data integrity)
 //   2. doan_booking_dv với NCC tương ứng đã gửi mail & chưa hủy → block (tránh lệch state booking)
@@ -397,13 +403,24 @@ export async function checkCanhDiemDeletable(
   itemId: number,
   options?: { doanId: number; canhDiem: CanhDiemItem },
 ): Promise<{ ok: boolean; reason?: string }> {
-  const { data: cpRow } = await externalSupabase
+  // Guard KHÔNG được fail-open: đọc hỏng (mạng/RLS/timeout) mà trả ok:true thì OP
+  // gỡ được cảnh điểm đã có ĐNTT / đã trả tiền — mất dấu tiền. "Không kiểm tra
+  // được" phải chặn và bảo thử lại.
+  const { data: cpRow, error: eCp } = await externalSupabase
     .from("doan_chi_phi")
     .select("id, mo_ta, so_tien_da_tt")
     .eq("ref_doan_ngay_item_id", itemId)
     .maybeSingle();
+  if (eCp) {
+    return { ok: false, reason: KHONG_KIEM_TRA_DUOC };
+  }
   if (cpRow) {
-    const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+    let activeDnttIds: number[];
+    try {
+      activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+    } catch {
+      return { ok: false, reason: KHONG_KIEM_TRA_DUOC };
+    }
     const cdName = cpRow.mo_ta || `cảnh điểm #${itemId}`;
     if (activeDnttIds.length > 0) {
       const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
@@ -424,12 +441,15 @@ export async function checkCanhDiemDeletable(
     // Khóa Booking DV gom theo NCC (đồng bộ dvGroupName trong sync).
     const nccNameById = await fetchNccNames([options.canhDiem.nha_cung_cap_id]);
     const ncc = dvGroupName(options.canhDiem, nccNameById);
-    const { data: bookingDv } = await externalSupabase
+    const { data: bookingDv, error: eBkDv } = await externalSupabase
       .from("doan_booking_dv")
       .select("id, booking_status")
       .eq("doan_id", options.doanId)
       .eq("ten_nha_cung_cap", ncc)
       .maybeSingle();
+    if (eBkDv) {
+      return { ok: false, reason: KHONG_KIEM_TRA_DUOC };
+    }
     if (bookingDv && ["cho_xac_nhan", "da_xac_nhan"].includes(bookingDv.booking_status)) {
       const statusLabel = bookingDv.booking_status === "da_xac_nhan" ? "đã xác nhận" : "đã gửi mail booking";
       return {
@@ -454,14 +474,22 @@ export async function checkNhaHangDeletable(
   const mealSuffix = buaAn === "trua" ? "(trưa)" : "(tối)";
 
   // 1. chi_phi NH cho bữa này
-  const { data: cpRows } = await externalSupabase
+  const { data: cpRows, error: eCpNh } = await externalSupabase
     .from("doan_chi_phi")
     .select("id, mo_ta, so_tien_da_tt")
     .eq("ref_doan_ngay_id", doanNgayId)
     .eq("danh_muc", "nha_hang");
+  if (eCpNh) {
+    return { ok: false, reason: KHONG_KIEM_TRA_DUOC };
+  }
   const cpRow = (cpRows || []).find((r) => typeof r.mo_ta === "string" && r.mo_ta.endsWith(mealSuffix));
   if (cpRow) {
-    const activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+    let activeDnttIds: number[];
+    try {
+      activeDnttIds = await getActiveDnttIdsForChiPhi(cpRow.id);
+    } catch {
+      return { ok: false, reason: KHONG_KIEM_TRA_DUOC };
+    }
     if (activeDnttIds.length > 0) {
       const dnttIds = activeDnttIds.map((id) => `#${id}`).join(", ");
       return {
@@ -479,13 +507,16 @@ export async function checkNhaHangDeletable(
   }
 
   // 2. booking_nh — block nếu đã gửi mail và chưa vào luồng hủy
-  const { data: bookingNh } = await externalSupabase
+  const { data: bookingNh, error: eBkNh } = await externalSupabase
     .from("doan_booking_nh")
     .select("id, booking_status")
     .eq("doan_ngay_id", doanNgayId)
     .eq("nha_hang_id", nhaHangId)
     .eq("bua_an", buaAn)
     .maybeSingle();
+  if (eBkNh) {
+    return { ok: false, reason: KHONG_KIEM_TRA_DUOC };
+  }
   if (bookingNh && ["da_gui", "nh_xac_nhan"].includes(bookingNh.booking_status)) {
     const statusLabel = bookingNh.booking_status === "nh_xac_nhan" ? "đã xác nhận" : "đã gửi mail booking";
     return {
@@ -518,7 +549,7 @@ export function useSaveDieuTour() {
       const { doanId, doanNhomId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
 
       // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
-      const counters = { thucTeClearCount: 0, nhOrphanDeleted: 0, nhOrphanKept: 0 };
+      const counters = { thucTeClearCount: 0, nhOrphanDeleted: 0, nhOrphanKept: 0, nhOrphanSkipped: 0 };
 
       let defaultDoanNhomId: number | null = doanNhomId ?? null;
 
@@ -1283,7 +1314,10 @@ export function useSaveDieuTour() {
       // Excel → double). Đối chiếu với chương trình của MỌI nhóm (đoàn-nhóm merge chi
       // phí cross-nhóm), không chỉ nhóm đang lưu.
       {
-        const { data: allNgayRows } = await externalSupabase
+        // Đọc hỏng ở ĐÂY là nguy hiểm nhất trong cả hàm: data = null → tập kỳ vọng
+        // RỖNG → mọi dòng chi phí NH của đoàn bị coi là mồ côi → vòng lặp bên dưới
+        // xóa sạch. Không nuốt lỗi, và cũng không dựa vào mảng rỗng (xem coTheDonNhMoCoi).
+        const { data: allNgayRows, error: eAllNgay } = await externalSupabase
           .from("doan_ngay")
           .select("id, ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id")
           .eq("doan_id", doanId);
@@ -1291,14 +1325,24 @@ export function useSaveDieuTour() {
           allNgayRows ?? [],
           nhNameMap,
         );
-        // NH trong chương trình không còn trong catalog → không build được key chuẩn,
-        // mọi dòng của NH đó sẽ bị coi nhầm là mồ côi → bỏ qua cleanup cho an toàn.
-        if (!hasUnknownNh) {
-          const { data: nhCpRows } = await externalSupabase
+        // Không đọc được ngày / đoàn chưa có ngày nào / có NH ngoài catalog → BỎ QUA
+        // cleanup (dòng thừa nằm lại thì OP còn thấy và xử lý được; xóa nhầm thì không).
+        if (eAllNgay || !coTheDonNhMoCoi((allNgayRows ?? []).length, hasUnknownNh)) {
+          counters.nhOrphanSkipped++;
+          // Ghi vào log đoàn thay vì im lặng: dòng NH cũ còn nằm lại sẽ in ra Excel,
+          // người đọc log cần biết vì sao lần lưu này không dọn.
+          dieuTourLogs.push(
+            eAllNgay
+              ? "Bỏ qua dọn chi phí nhà hàng cũ: không đọc được chương trình (lỗi kết nối)"
+              : "Bỏ qua dọn chi phí nhà hàng cũ: chương trình chưa có ngày hoặc có nhà hàng ngoài danh mục",
+          );
+        } else {
+          const { data: nhCpRows, error: eNhCp } = await externalSupabase
             .from("doan_chi_phi")
             .select("id, ngay_so, mo_ta, ref_doan_ngay_id, so_tien_da_tt")
             .eq("doan_id", doanId)
             .eq("danh_muc", "nha_hang");
+          if (eNhCp) throw eNhCp; // đọc hỏng → không dọn (giữ nguyên dữ liệu)
           // Dòng phát sinh của ô bữa đã bị bỏ trống: phải dọn CÙNG dòng chính.
           // Chúng mang cờ định kỳ + NCC của bữa (lib/dinh-ky-nhom.ts) nên nếu ở lại
           // sẽ tiếp tục nằm trong cụm NCC × tháng và được TRẢ TIỀN, trong khi tab
@@ -1315,18 +1359,26 @@ export function useSaveDieuTour() {
               continue;
             }
             // Còn ĐNTT hiệu lực → giữ lại cho luồng điều chỉnh/công nợ, báo caller toast.
-            const activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
+            // Không đọc được ĐNTT cũng GIỮ: "không thấy" ≠ "không có".
+            let activeDnttIds: number[];
+            try {
+              activeDnttIds = await getActiveDnttIdsForChiPhi(cp.id);
+            } catch {
+              counters.nhOrphanKept++;
+              continue;
+            }
             if (activeDnttIds.length > 0) {
               counters.nhOrphanKept++;
               continue;
             }
             // Đang được voucher phủ → xóa sẽ mồ côi voucher_su_dung (FK SET NULL).
-            const { data: voucherRefs } = await externalSupabase
+            // Lỗi đọc cũng giữ dòng, cùng lý do trên.
+            const { data: voucherRefs, error: eVoucher } = await externalSupabase
               .from("voucher_su_dung")
               .select("id")
               .eq("chi_phi_id", cp.id)
               .limit(1);
-            if (voucherRefs && voucherRefs.length > 0) {
+            if (eVoucher || (voucherRefs && voucherRefs.length > 0)) {
               counters.nhOrphanKept++;
               continue;
             }

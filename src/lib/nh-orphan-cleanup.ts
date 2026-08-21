@@ -31,6 +31,16 @@ export function nhMealKey(ngaySo: number, moTa: string): string {
   return `${ngaySo}|${moTa}`;
 }
 
+// Có được phép chạy dọn mồ côi không? Cleanup so dòng chi phí với tập kỳ vọng dựng
+// từ chương trình — tập kỳ vọng RỖNG nghĩa là "không dòng nào hợp lệ", tức vơ cả
+// bảng. Rỗng vì hai lý do đều KHÔNG được dọn:
+//   soNgayDocDuoc = 0 → đọc doan_ngay hỏng (supabase-js trả data null) hoặc đoàn
+//     chưa có ngày nào. Cả hai đều không đủ căn cứ để xoá hàng loạt.
+//   hasUnknownNh    → có bữa trỏ tới NH ngoài catalog, không dựng được key chuẩn.
+export function coTheDonNhMoCoi(soNgayDocDuoc: number, hasUnknownNh: boolean): boolean {
+  return soNgayDocDuoc > 0 && !hasUnknownNh;
+}
+
 // Build tập key (ngày, mo_ta) hợp lệ từ chương trình hiện tại của MỌI nhóm
 // (đoàn-nhóm merge chi phí cross-nhóm theo ngay_so + mo_ta).
 // hasUnknownNh=true khi có bữa trỏ tới NH không còn trong catalog → caller phải
