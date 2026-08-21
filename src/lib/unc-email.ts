@@ -17,12 +17,6 @@ export interface EmailTarget {
   source: "booking" | "ncc" | "none";
 }
 
-export interface UserProfileLite {
-  ho_ten?: string | null;
-  email?: string | null;
-  so_dien_thoai?: string | null;
-}
-
 export function fmtVnd(n: number): string {
   return (n ?? 0).toLocaleString("vi-VN") + " VND";
 }
@@ -259,7 +253,6 @@ export async function getCanTruAmount(dnttId: number): Promise<number> {
 export function buildUncEmailBody(
   row: HoaDonUNCRow,
   canTruAmount: number,
-  userProfile: UserProfileLite | null | undefined,
 ): string {
   const ncc = row.ten_nha_cung_cap || "Quý đối tác";
   // KS: kèm code khách sạn ngay cạnh code đoàn. Bỏ qua nếu trống / sentinel.
@@ -309,7 +302,7 @@ export function buildUncEmailBody(
 </div>
 ${canTruNote}
 <p>File ủy nhiệm chi được đính kèm trong email này. Nếu cần đối chiếu hoặc làm rõ vui lòng phản hồi email giúp S8.</p>
-<p>Trân trọng,<br><strong>${userProfile?.ho_ten || "S8 Travel"}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}</p>
+<p>Trân trọng,<br><strong>Phòng Kế toán — Công ty TNHH Du lịch S8</strong></p>
 <div style="margin-top:20px;padding:12px 16px;border-top:1px solid #e2e8f0;font-size:13px;color:#374151;line-height:1.6">
   <p style="margin:0 0 6px 0"><strong>THÔNG TIN XUẤT HÓA ĐƠN</strong></p>
   CÔNG TY TNHH DU LỊCH S8 &nbsp;&nbsp;&nbsp; MST: 0402021137<br>
