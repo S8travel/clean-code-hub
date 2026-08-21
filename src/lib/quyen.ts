@@ -2,7 +2,12 @@
 //
 // Hai nguồn quyền:
 //   1. Ma trận theo VAI TRÒ (`role_permissions`) — nền chung của cả nhóm.
-//   2. Quyền RIÊNG theo người (`user_permissions`) — mở thêm cho đúng một người.
+//   2. Quyền RIÊNG theo người — mở thêm cho đúng một người. Nguồn của nó KHÁC
+//      nhau theo vai trò, và chỗ gọi (usePermission) chịu trách nhiệm nạp đúng:
+//        · 'specialist'  → `user_permissions` (bảng cũ, là TOÀN BỘ quyền của họ)
+//        · vai trò khác  → `user_quyen_them`  (bảng cấp thêm)
+//      ⛔ ĐỪNG nạp `user_permissions` cho vai trò thường — xem CLAUDE.md, bảng
+//      đó từng chứa 342 dòng full quyền của 19 người vai trò thường.
 //
 // Quyền riêng chỉ CỘNG THÊM, không bao giờ thu bớt (trừ 'specialist' giữ luật
 // cũ, xem bên dưới). Lý do: một dòng quyền riêng sót lại từ lần cấu hình cũ mà

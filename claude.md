@@ -852,9 +852,13 @@ Luật tính ở `src/lib/quyen.ts` (thuần, có unit test); hook `usePermissio
 
 - `user_quyen_them` **chỉ mở thêm, không cấm được gì**. Muốn cấm ai → sửa ma trận
   ở tab Phân quyền hoặc đổi vai trò. Đừng viết logic suy diễn từ dòng `false`.
-- ⛔ **KHÔNG cho code đọc `user_permissions` với vai trò thường.** Bảng đó đang có
-  342 dòng chết của 19 người vai trò thường (đo 21/08/2026), tất cả bật đủ 4 quyền
-  trên 18 mục — bật lên là thăng cấp 20 tài khoản gần bằng admin trong một lần deploy.
+- ⛔ **KHÔNG cho code đọc `user_permissions` với vai trò thường.** Bảng đó từng có
+  342 dòng chết của 19 người vai trò thường, tất cả bật đủ 4 quyền trên 18 mục —
+  bật lên là thăng cấp 20 tài khoản gần bằng admin trong một lần deploy.
+  **Đã dọn 21/08/2026** (migration `20260821e`, còn đúng 25 dòng của 3 specialist;
+  bản sao ở `user_permissions_backup_20260821`, xoá sau ~1 tháng). Luật vẫn giữ:
+  bảng đó chỉ dành cho `specialist`, cấp thêm cho người thường thì dùng
+  `user_quyen_them`.
 - Quyền chỉ là tầng GIAO DIỆN: `bao_gia` (và nhiều bảng khác) chỉ có policy
   "đã đăng nhập" ở DB. Ẩn menu ≠ giấu được dữ liệu — xem lại mục "⛔ ĐÃ THỬ VÀ BỎ".
 
