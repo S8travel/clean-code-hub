@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { format, addDays } from "date-fns";
 import { FileDown } from "lucide-react";
 import { toast } from "sonner";
@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +31,10 @@ const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 interface CreateModalProps {
   doanId: number;
+  /** HDV chính của đoàn — mặc định đứng tên phiếu. */
   hdvId: number | null;
+  /** HDV của đoàn (chính → phụ). Từ 2 người trở lên thì hiện ô chọn người đứng tên. */
+  hdvList?: HDVInfo[];
   refLoai: "hdv_tam_ung" | "hdv_quyet_toan";
   title: string;
   defaultSoTien?: number;
@@ -42,11 +48,16 @@ interface CreateModalProps {
 }
 
 export function CreateHDVPaymentModal({
-  doanId, hdvId, refLoai, title, defaultSoTien, defaultLaThuHoi,
+  doanId, hdvId, hdvList = [], refLoai, title, defaultSoTien, defaultLaThuHoi,
   doan, tongHdvChi, tamUngDaTT, hdv,
   onClose,
 }: CreateModalProps) {
-  const hdvName = hdv?.ten ?? "";
+  // Người đứng tên phiếu. Đoàn 2 HDV vẫn chỉ một bản quyết toán cho cả túi tiền
+  // chung — chọn ở đây là chọn ai nhận/trả phần chênh lệch, vì tên + số tài
+  // khoản trên bản in lấy theo người này và lưu vào ĐNTT (ref_id).
+  const [nguoiDungTenId, setNguoiDungTenId] = useState<number | null>(hdvId);
+  const nguoiDungTen = hdvList.find((h) => h.id === nguoiDungTenId) ?? hdv ?? null;
+  const hdvName = nguoiDungTen?.ten ?? "";
   const createMut = useCreateHDVPayment();
   const { user } = useAuth();
   const isQT = refLoai === "hdv_quyet_toan";
@@ -72,11 +83,17 @@ export function CreateHDVPaymentModal({
 
   // Common state
   const [soTien, setSoTien] = useState(defaultSoTien ?? 0);
-  const [moTa, setMoTa] = useState(
-    isQT
-      ? `${t("Quyết toán HDV")} ${hdvName} ${soKhachThuc}p ${soNgayDefault}`.replace(/\s+/g, " ").trim()
-      : t("Tạm ứng cho hướng dẫn viên"),
-  );
+  // Mô tả mặc định bám theo người đứng tên — đổi người thì đổi theo, trừ khi OP đã sửa tay.
+  const moTaTuDong = isQT
+    ? [t("Quyết toán HDV"), hdvName, `${soKhachThuc}p`, String(soNgayDefault)]
+        .filter(Boolean).join(" ").trim()
+    : t("Tạm ứng cho hướng dẫn viên");
+  const [moTa, setMoTa] = useState(moTaTuDong);
+  const moTaDaSua = useRef(false);
+  useEffect(() => {
+    if (moTaDaSua.current) return;
+    setMoTa(moTaTuDong);
+  }, [moTaTuDong]);
   const [ghiChu, setGhiChu] = useState("");
   const [laThuHoi, setLaThuHoi] = useState(defaultLaThuHoi ?? false);
   // Default = hôm nay + 2 ngày; null sort xuống cuối list ĐNTT page → user dễ bỏ sót.
@@ -144,7 +161,7 @@ export function CreateHDVPaymentModal({
     const soTienVnd = Math.round(soTien);
     try {
       await createMut.mutateAsync({
-        doanId, hdvId, refLoai, soTien: soTienVnd, laThuHoi, moTa,
+        doanId, hdvId: nguoiDungTenId, refLoai, soTien: soTienVnd, laThuHoi, moTa,
         ghiChu: ghiChu || undefined,
         quyetToanData: isQT ? buildQuyetToanData() : null,
         ngayCanThanhToan: ngayCanTT || null,
@@ -161,7 +178,7 @@ export function CreateHDVPaymentModal({
     try {
       await exportHDVQuyetToanExcel({
         data: buildQuyetToanData(),
-        hdv: hdv ?? null,
+        hdv: nguoiDungTen,
         nguoiDeNghi: user?.ho_ten ?? "",
       });
       toast.success(t("Đã xuất file Excel"));
@@ -175,6 +192,32 @@ export function CreateHDVPaymentModal({
       <DialogContent className={cn(isQT ? "max-w-2xl max-h-[90vh] overflow-y-auto" : "max-w-md")}>
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
+          {/* Đoàn 2 HDV → chọn ai đứng tên phiếu (mặc định HDV chính) */}
+          {hdvList.length > 1 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("Người đứng tên phiếu")}</Label>
+              <Select
+                value={nguoiDungTenId != null ? String(nguoiDungTenId) : ""}
+                onValueChange={(v) => setNguoiDungTenId(Number(v))}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder={t("Chọn HDV")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {hdvList.map((h, idx) => (
+                    <SelectItem key={h.id} value={String(h.id)}>
+                      {h.ten} — {idx === 0 ? t("HDV chính") : t("HDV phụ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Tên và số tài khoản trên bản in lấy theo người này:")}{" "}
+                {[nguoiDungTen?.so_tai_khoan, nguoiDungTen?.ngan_hang].filter(Boolean).join(" · ") || "—"}
+              </p>
+            </div>
+          )}
+
           {/* Chi tiết quyết toán (form S8 BM02.1-20) */}
           {isQT && (
             <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
@@ -313,7 +356,10 @@ export function CreateHDVPaymentModal({
 
           <div className="space-y-1.5">
             <Label className="text-xs">{t("Mô tả")}</Label>
-            <Input className="h-8 text-sm" value={moTa} onChange={(e) => setMoTa(e.target.value)} />
+            <Input
+              className="h-8 text-sm" value={moTa}
+              onChange={(e) => { moTaDaSua.current = true; setMoTa(e.target.value); }}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">{t("Số tiền ĐNTT (VND)")}</Label>
