@@ -19,6 +19,7 @@ import { exportHDVTamUngExcel } from "@/lib/export-hdv-tam-ung-excel";
 import { tipDaysInclusive } from "@/lib/tip-calc";
 import { computePhaiThu, TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { t, useTranslate } from "@/lib/i18n";
+import { nguoiDungTenPhieu } from "@/lib/hdv-dung-ten";
 import type { HDVDoanInfo } from "./hdv-shared";
 import { HoTroHDVTable } from "./HoTroHDVTable";
 import { CreateHDVPaymentModal } from "./CreateHDVPaymentModal";
@@ -60,6 +61,10 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
   }
 
   const hdv = data?.hdv ?? null;
+  // Đoàn có thể đi 2 HDV. Tiền vẫn gom một túi → vẫn một bản quyết toán, chỉ
+  // cần chọn ai đứng tên phiếu (bản in lấy số tài khoản theo người đó).
+  const hdvList = data?.hdvList ?? [];
+  const hdvAll = data?.hdvAll ?? [];
   const hoTroItems = data?.hoTroItems ?? [];
   const tongHdvChi = data?.tongHdvChi ?? 0;
   const tongHoTroHDV = data?.tongHoTroHDV ?? 0;
@@ -78,14 +83,25 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
         {/* HDV info + summary */}
         <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4 flex-wrap">
-            {hdv ? (
-              <div>
-                <p className="text-sm font-semibold">{hdv.ten}</p>
-                {(hdv.so_tai_khoan || hdv.ngan_hang) && (
-                  <p className="text-xs text-muted-foreground">
-                    {[hdv.so_tai_khoan, hdv.ngan_hang].filter(Boolean).join(" · ")}
-                  </p>
-                )}
+            {hdvList.length > 0 ? (
+              <div className="space-y-1">
+                {hdvList.map((h, i) => (
+                  <div key={h.id}>
+                    <p className="text-sm font-semibold">
+                      {h.ten}
+                      {hdvList.length > 1 && (
+                        <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+                          {i === 0 ? t("HDV chính") : t("HDV phụ")}
+                        </span>
+                      )}
+                    </p>
+                    {(h.so_tai_khoan || h.ngan_hang) && (
+                      <p className="text-xs text-muted-foreground">
+                        {[h.so_tai_khoan, h.ngan_hang].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground italic">{t("Chưa chỉ định HDV")}</p>
@@ -152,7 +168,7 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
             </div>
             <div className="divide-y divide-border">
               {tamUngList.map((d) => (
-                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} doan={doan} />
+                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} hdvAll={hdvAll} nhieuHdv={hdvList.length > 1} doan={doan} />
               ))}
             </div>
           </div>
@@ -166,7 +182,7 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
             </div>
             <div className="divide-y divide-border">
               {quyetToanList.map((d) => (
-                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} doan={doan} />
+                <HDVDNTTCard key={d.id} d={d} doanId={doanId} hdv={hdv} hdvAll={hdvAll} nhieuHdv={hdvList.length > 1} doan={doan} />
               ))}
             </div>
           </div>
@@ -186,6 +202,7 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
         <CreateHDVPaymentModal
           doanId={doanId}
           hdvId={hdv?.id ?? null}
+          hdvList={hdvList}
           refLoai="hdv_tam_ung"
           title={t("Tạo tạm ứng HDV")}
           onClose={() => setShowTamUng(false)}
@@ -195,6 +212,7 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
         <CreateHDVPaymentModal
           doanId={doanId}
           hdvId={hdv?.id ?? null}
+          hdvList={hdvList}
           refLoai="hdv_quyet_toan"
           title={t("Tạo quyết toán HDV")}
           defaultSoTien={Math.abs(netConPhaiTra)}
@@ -219,9 +237,16 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function HDVDNTTCard({ d, hdv, doan }: { d: HDVDNTTRow; doanId: number; hdv: HDVInfo | null; doan?: HDVDoanInfo }) {
+function HDVDNTTCard({ d, hdv, hdvAll, nhieuHdv, doan }: {
+  d: HDVDNTTRow; doanId: number; hdv: HDVInfo | null;
+  hdvAll: HDVInfo[]; nhieuHdv: boolean; doan?: HDVDoanInfo;
+}) {
   const cancelMut = useCancelDNTT();
   const { user } = useAuth();
+  // Tên + số tài khoản trên bản in lấy theo NGƯỜI ĐỨNG TÊN phiếu (ref_id ghi
+  // lúc tạo), KHÔNG theo HDV chính hiện tại: đoàn 2 HDV hoặc đoàn đổi HDV sau
+  // khi quyết toán thì hai thứ đó khác nhau → in ra là chuyển nhầm tiền.
+  const nguoiDungTen = nguoiDungTenPhieu(d.ref_id, hdvAll, hdv);
 
   const isHuy = d.trang_thai_duyet === "da_huy";
   const isTuChoi = d.trang_thai_duyet === "tu_choi";
@@ -239,14 +264,14 @@ function HDVDNTTCard({ d, hdv, doan }: { d: HDVDNTTRow; doanId: number; hdv: HDV
     try {
       await exportHDVTamUngExcel({
         maDoan: doan?.ten_doan ?? "",
-        tenHdv: hdv?.ten ?? "",
+        tenHdv: nguoiDungTen?.ten ?? "",
         soKhach,
         soNgay,
         soTien: d.so_tien,
         // NỘI DUNG để mặc định "Tạm ứng đoàn <maDoan> - HDV <tenHdv>"
         ghiChu: d.ghi_chu ?? undefined,
         nguoiDeNghi: user?.ho_ten ?? "",
-        hdv,
+        hdv: nguoiDungTen,
         ngayLap: d.created_at,
       });
     } catch (e: unknown) {
@@ -262,7 +287,7 @@ function HDVDNTTCard({ d, hdv, doan }: { d: HDVDNTTRow; doanId: number; hdv: HDV
     try {
       await exportHDVQuyetToanExcel({
         data: d.quyet_toan_data,
-        hdv,
+        hdv: nguoiDungTen,
         nguoiDeNghi: user?.ho_ten ?? "",
         ngayLap: d.created_at,
       });
@@ -279,6 +304,9 @@ function HDVDNTTCard({ d, hdv, doan }: { d: HDVDNTTRow; doanId: number; hdv: HDV
         </p>
         <p className="text-[11px] text-muted-foreground">
           {format(new Date(d.created_at), "dd/MM/yyyy HH:mm")}
+          {nhieuHdv && nguoiDungTen && (
+            <span className="ml-2">{t("Đứng tên")}: <span className="font-medium">{nguoiDungTen.ten}</span></span>
+          )}
           {d.ghi_chu && <span className="ml-2 italic">{d.ghi_chu}</span>}
         </p>
       </div>
