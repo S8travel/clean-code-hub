@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,8 @@ interface Props {
   maHienThi: string;
   phienBan: PhienBanMoi | null;
   dangGui: boolean;
+  /** Lý do điền sẵn — ghép từ yêu cầu sửa đối tác gửi mà mình chưa trả lời. */
+  goiY?: string;
   onGui: (lyDo: string) => void;
 }
 
@@ -20,9 +22,14 @@ interface Props {
 // chỗ cuối cùng nhìn lại con số — và là chỗ ghi lại VÌ SAO bản này khác bản trước,
 // thứ duy nhất cứu được mình khi vài tháng sau đối tác hỏi "sao báo giá khác".
 export function GuiPhienBanModal({
-  open, onClose, soPhienBan, maHienThi, phienBan, dangGui, onGui,
+  open, onClose, soPhienBan, maHienThi, phienBan, dangGui, goiY, onGui,
 }: Props) {
   const [lyDo, setLyDo] = useState("");
+
+  // Mở modal thì điền sẵn yêu cầu đối tác đã gửi — chính nó là lý do bản này
+  // khác bản trước. OP sửa lại chữ thoải mái, nhưng không phải gõ lại từ đầu và
+  // cũng không còn cớ gõ cho có.
+  useEffect(() => { if (open) setLyDo(goiY ?? ""); }, [open, goiY]);
   const batBuocLyDo = soPhienBan > 1;
   const thieuLyDo = batBuocLyDo && !lyDo.trim();
 

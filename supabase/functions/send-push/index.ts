@@ -24,18 +24,21 @@ interface ThongBaoRecord {
   doan_id: number | null;
   cong_viec_id: number | null;
   lead_id: number | null;
+  bao_gia_id: number | null;
 }
 
 // Bản sao của targetUrl trong src/lib/thong-bao-utils.ts — sửa bên đó
 // thì sửa cả đây (edge fn không import được code src/).
 function targetUrl(tb: ThongBaoRecord): string {
-  const { loai, doan_id, cong_viec_id, lead_id } = tb;
+  const { loai, doan_id, cong_viec_id, lead_id, bao_gia_id } = tb;
   if (!loai) return "/";
   if (loai.startsWith("deadline") && doan_id) return `/doan/${doan_id}`;
   if (loai === "giao_viec" && cong_viec_id) return `/my-job?cong_viec=${cong_viec_id}`;
   if (loai === "giao_viec" && doan_id) return `/doan/${doan_id}`;
   if (loai === "dntt_can_duyet") return "/de-nghi-thanh-toan";
   if (loai === "su_co" && doan_id) return `/doan/${doan_id}?tab=log`;
+  // Đối tác yêu cầu sửa chương trình: mở thẳng báo giá đó.
+  if (loai === "bao_gia_yeu_cau_sua" && bao_gia_id) return `/bao-gia/${bao_gia_id}`;
   // Yêu cầu báo giá đối tác: xử lý ở tab trong trang Báo giá, không phải phễu Leads.
   if (loai === "lead_yeu_cau_doi_tac") return "/bao-gia?tab=yeu-cau";
   if (loai.startsWith("lead_")) return lead_id ? `/leads?lead=${lead_id}` : "/leads";

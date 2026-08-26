@@ -17,6 +17,8 @@ export interface ThongBaoRow {
   cong_viec_id: number | null;
   dntt_id: number | null;
   lead_id: number | null;
+  /** Đối tác yêu cầu sửa một báo giá — chuông trỏ về /bao-gia/:id. */
+  bao_gia_id: number | null;
 }
 
 const QK = "thong_bao";
