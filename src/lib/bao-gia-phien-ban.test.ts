@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPhienBan, maPhienBan, soSanhPhienBan, type PhienBanDeSoSanh } from "./bao-gia-phien-ban";
+import { buildPhienBan, lyDoTuYeuCau, maPhienBan, soSanhPhienBan, yeuCauSuaChuaTraLoi, type PhienBanDeSoSanh } from "./bao-gia-phien-ban";
 import { assertNoCostLeak } from "./portal-payload";
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 
@@ -141,5 +141,53 @@ describe("soSanhPhienBan — vì sao bản mới khác bản cũ", () => {
     const kq = soSanhPhienBan(banCu(), moi);
     expect(kq.single_supplement).toMatchObject({ moi: 99 });
     expect(kq.bac_gia).toEqual([]);
+  });
+});
+
+describe("yeuCauSuaChuaTraLoi / lyDoTuYeuCau", () => {
+  const log = (loai: string, tao_luc: string, noi_dung: string | null = null) =>
+    ({ loai, tao_luc, noi_dung });
+
+  it("yêu cầu gửi SAU lần chào gần nhất là chưa trả lời", () => {
+    const ds = yeuCauSuaChuaTraLoi([
+      log("gui_ban", "2026-08-20T02:00:00Z"),
+      log("yeu_cau_sua", "2026-08-21T02:00:00Z", "đổi khách sạn ngày 2"),
+    ]);
+    expect(ds.map((l) => l.noi_dung)).toEqual(["đổi khách sạn ngày 2"]);
+  });
+
+  it("chào bản mới xong thì yêu cầu cũ coi như đã trả lời", () => {
+    const ds = yeuCauSuaChuaTraLoi([
+      log("yeu_cau_sua", "2026-08-21T02:00:00Z", "đổi khách sạn"),
+      log("gui_ban", "2026-08-22T02:00:00Z"),
+    ]);
+    expect(ds).toEqual([]);
+  });
+
+  it("chưa chào bản nào thì mọi yêu cầu đều đang chờ", () => {
+    const ds = yeuCauSuaChuaTraLoi([log("yeu_cau_sua", "2026-08-21T02:00:00Z", "x")]);
+    expect(ds).toHaveLength(1);
+  });
+
+  it("nhiều yêu cầu xếp CŨ TRƯỚC — đọc xuôi mới hiểu ý bổ sung", () => {
+    const ds = yeuCauSuaChuaTraLoi([
+      log("yeu_cau_sua", "2026-08-23T02:00:00Z", "sau"),
+      log("yeu_cau_sua", "2026-08-21T02:00:00Z", "trước"),
+    ]);
+    expect(ds.map((l) => l.noi_dung)).toEqual(["trước", "sau"]);
+  });
+
+  it("lý do gợi ý ghép các yêu cầu và cắt theo giới hạn của DB", () => {
+    expect(lyDoTuYeuCau([
+      log("yeu_cau_sua", "2026-08-21T02:00:00Z", "đổi KS"),
+      log("yeu_cau_sua", "2026-08-22T02:00:00Z", "thêm bữa tối"),
+    ])).toBe("đổi KS · thêm bữa tối");
+
+    const dai = lyDoTuYeuCau([log("yeu_cau_sua", "2026-08-21T02:00:00Z", "x".repeat(900))]);
+    expect(dai).toHaveLength(500);
+  });
+
+  it("dòng log khác loại không lọt vào lý do", () => {
+    expect(lyDoTuYeuCau([log("mo_phien_ban", "2026-08-21T02:00:00Z", "Mở soạn bản mới")])).toBe("");
   });
 });

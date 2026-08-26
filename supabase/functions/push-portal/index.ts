@@ -20,12 +20,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { chiaLo, locBaoGia, locDoan, type BoQua } from "../_shared/portal-sync.ts";
 import {
+  tinhBackfillYeuCau,
+  tinhPatchBaoGia,
+  type BaoGiaCanNoi,
+  type DongYeuCauCong,
+  type YeuCauCrm,
+} from "../_shared/noi-bao-gia-yeu-cau.ts";
+import {
   dongBoKSXacNhan,
   dongBoTaiLieu,
   dongBoTraoDoi,
   type DoanDaDay,
   type TaiLenKho,
 } from "./dong-bo-them.ts";
+import { dongBoPhienBan, type BaoGiaDaDay } from "./dong-bo-phien-ban.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -160,10 +168,30 @@ serve(async (req) => {
     // ── 2) Báo giá đang mở chia sẻ ──────────────────────────────────────────
     const { data: bgRaw, error: e1 } = await crm
       .from("bao_gia")
-      .select("id, agent_id, ma_bg, tieu_de, ngay_di, ngay_ve, portal_noi_dung")
+      .select("id, agent_id, ma_bg, tieu_de, ngay_di, ngay_ve, portal_noi_dung, yeu_cau_id, phien_ban_hien_hanh_id")
       .eq("portal_enabled", true);
     if (e1) throw e1;
     const locBG = locBaoGia((bgRaw ?? []) as never);
+
+    // Mã bản đang gửi đối tác (BG00025-v3). Đọc riêng một lượt cho tất cả báo giá
+    // thay vì nối bảng: cột này quyết định hai bên có gọi cùng một tên hay không —
+    // trước đây cổng luôn hiện BG00025 dù bên mình đã chào tới bản thứ ba.
+    const idHienHanh = (bgRaw ?? [])
+      .map((b) => (b as { phien_ban_hien_hanh_id: number | null }).phien_ban_hien_hanh_id)
+      .filter((v): v is number => v != null);
+    const banHienHanh = new Map<number, { so_phien_ban: number; ma_hien_thi: string }>();
+    if (idHienHanh.length) {
+      for (const lo of chiaLo(idHienHanh, CO_LO)) {
+        const { data, error } = await crm
+          .from("bao_gia_phien_ban")
+          .select("id, so_phien_ban, ma_hien_thi")
+          .in("id", lo);
+        if (error) throw error;
+        for (const p of (data ?? []) as Array<{ id: number; so_phien_ban: number; ma_hien_thi: string }>) {
+          banHienHanh.set(p.id, { so_phien_ban: p.so_phien_ban, ma_hien_thi: p.ma_hien_thi });
+        }
+      }
+    }
 
     // ── 3) TẤT CẢ đoàn của agent có tài khoản (trừ đoàn đã hủy) ─────────────
     let doanRaw: unknown[] = [];
@@ -212,10 +240,17 @@ serve(async (req) => {
       .map((b) => {
         const snap = b.portal_noi_dung as Record<string, unknown>;
         const r = b as unknown as Record<string, string | null>;
+        const ban = banHienHanh.get(
+          (b as unknown as { phien_ban_hien_hanh_id: number | null }).phien_ban_hien_hanh_id ?? -1,
+        );
         return {
           crm_bao_gia_id: b.id,
           agent_id: map.get(b.agent_id as number),
           ma_bg: (snap?.ma_bg as string) ?? r.ma_bg ?? `BG${b.id}`,
+          // Báo giá chưa có dòng phiên bản nào (dữ liệu cũ chưa backfill) thì để
+          // trống chứ đừng bịa số 1: cổng sẽ hiện mã trơn như trước, không nói sai.
+          so_phien_ban: ban?.so_phien_ban ?? null,
+          ma_hien_thi: ban?.ma_hien_thi ?? null,
           tieu_de: (snap?.tieu_de as string) ?? r.tieu_de ?? null,
           chao_ngay: (snap?.chao_ngay as string) ?? null,
           hieu_luc_den: (snap?.hieu_luc_den as string) ?? null,
@@ -225,6 +260,16 @@ serve(async (req) => {
           pushed_at: now,
         };
       });
+
+    // Yêu cầu (詢價) mà mỗi báo giá trả lời — ĐI RIÊNG, không nhét vào payload
+    // upsert: id bên cổng khác id bên CRM, phải dịch qua yeu_cau.crm_yeu_cau_id
+    // ở bước 5b. Nhét thẳng id CRM vào là gắn bảng giá sang nhầm luồng.
+    const canNoi: BaoGiaCanNoi[] = locBG.canDay
+      .filter((b) => map.has(b.agent_id as number))
+      .map((b) => ({
+        crm_bao_gia_id: b.id,
+        crm_yeu_cau_id: (b as unknown as Record<string, number | null>).yeu_cau_id ?? null,
+      }));
 
     let soBaoGia = 0;
     for (const lo of chiaLo(bgRows, CO_LO)) {
@@ -246,6 +291,100 @@ serve(async (req) => {
           }
         }
       }
+    }
+
+    // ── 5b) Nối báo giá về đúng yêu cầu (詢價) đã sinh ra nó ────────────────
+    // Đây là thứ làm cổng gộp được hai danh sách thành một luồng: đối tác mở một
+    // dòng ra là thấy mình đã hỏi gì và S8 chào lại cái gì.
+    //
+    // Cả bước bọc trong try: nối hỏng thì báo giá VẪN sang, chỉ là hiện thành
+    // luồng riêng — mất liên kết còn chữa được ở lượt sau, chứ để nó kéo cả lượt
+    // đồng bộ đổ thì đoàn và giấy tờ cũng đứng theo.
+    let soNoi = 0;
+    try {
+      const rYc = await portal("yeu_cau?select=id,crm_lead_id,crm_yeu_cau_id");
+      if (!rYc.ok) throw new Error(`đọc yeu_cau (${rYc.status}): ${(await rYc.text()).slice(0, 200)}`);
+      const dongCong = (await rYc.json()) as DongYeuCauCong[];
+
+      // Dòng gửi trước 24/08/2026 chưa có crm_yeu_cau_id — bắc cầu qua lead một
+      // lần rồi thôi, lượt sau chúng đã có id nên không tra lại nữa.
+      const leadThieu = [...new Set(
+        dongCong.filter((d) => d.crm_yeu_cau_id == null && d.crm_lead_id != null)
+          .map((d) => d.crm_lead_id as number),
+      )];
+      if (leadThieu.length) {
+        const { data: ycCrm, error } = await crm
+          .from("yeu_cau_bao_gia").select("id, lead_id").in("lead_id", leadThieu);
+        if (error) throw error;
+        for (const v of tinhBackfillYeuCau(dongCong, (ycCrm ?? []) as YeuCauCrm[])) {
+          const r = await portal(`yeu_cau?id=eq.${v.id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ crm_yeu_cau_id: v.crm_yeu_cau_id }),
+          });
+          if (!r.ok) {
+            boQua.push({
+              loai: "bao_gia", id: v.crm_yeu_cau_id,
+              ly_do: `gắn yêu cầu #${v.crm_yeu_cau_id} vào dòng cổng #${v.id} hỏng (${r.status})`,
+            });
+            continue;
+          }
+          const d = dongCong.find((x) => x.id === v.id);
+          if (d) d.crm_yeu_cau_id = v.crm_yeu_cau_id;
+        }
+      }
+
+      const mapYeuCau = new Map<number, number>();
+      for (const d of dongCong) if (d.crm_yeu_cau_id != null) mapYeuCau.set(d.crm_yeu_cau_id, d.id);
+
+      const rBg = await portal("bao_gia?select=crm_bao_gia_id,yeu_cau_id");
+      if (!rBg.ok) throw new Error(`đọc bao_gia (${rBg.status}): ${(await rBg.text()).slice(0, 200)}`);
+      const hienTai = new Map<number, number | null>(
+        ((await rBg.json()) as Array<{ crm_bao_gia_id: number; yeu_cau_id: number | null }>)
+          .map((b) => [b.crm_bao_gia_id, b.yeu_cau_id]),
+      );
+
+      for (const nhom of tinhPatchBaoGia(canNoi, mapYeuCau, hienTai)) {
+        // Cắt lô: bộ lọc `in.(...)` nằm trên URL, danh sách id dài quá là server
+        // chặt cụt hoặc từ chối cả request.
+        for (const lo of chiaLo(nhom.crmBaoGiaIds, CO_LO)) {
+          const r = await portal(`bao_gia?crm_bao_gia_id=in.(${lo.join(",")})`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ yeu_cau_id: nhom.yeuCauId }),
+          });
+          if (!r.ok) throw new Error(`gắn báo giá (${r.status}): ${(await r.text()).slice(0, 200)}`);
+          soNoi += lo.length;
+        }
+      }
+    } catch (err) {
+      boQua.push({
+        loai: "bao_gia", id: 0,
+        ly_do: `nối báo giá với yêu cầu: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+
+    // ── 5c) Đẩy lịch sử các bản chào ────────────────────────────────────────
+    // Bản mới KHÔNG đè bản cũ: đối tác có thể đã in bản cũ gửi khách của họ, nên
+    // bản nào đã chào ra ngoài thì còn nguyên ở đó, kèm "khác bản trước ở chỗ nào".
+    //
+    // Bọc try như bước trên: hỏng ở đây thì bảng giá hiện hành vẫn sang được, chỉ
+    // là chưa có lịch sử — lượt sau đẩy tiếp, không mất gì.
+    let soPhienBan = 0;
+    try {
+      const rBgCong = await portal("bao_gia?select=id,crm_bao_gia_id,agent_id");
+      if (!rBgCong.ok) throw new Error(`đọc bao_gia bên cổng hỏng: ${(await rBgCong.text()).slice(0, 200)}`);
+      const daDay: BaoGiaDaDay[] = (
+        (await rBgCong.json()) as Array<{ id: number; crm_bao_gia_id: number; agent_id: number }>
+      )
+        .filter((b) => locBG.hienThi.includes(b.crm_bao_gia_id))
+        .map((b) => ({ crm_id: b.crm_bao_gia_id, cong_id: b.id, agent_id: b.agent_id }));
+      soPhienBan = await dongBoPhienBan(crm, portal, daDay, boQua);
+    } catch (err) {
+      boQua.push({
+        loai: "bao_gia", id: 0,
+        ly_do: `đẩy lịch sử bản chào: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
 
     // ── 6) Đẩy đoàn — dựng chương trình THEO LÔ trong một lần gọi RPC ───────
@@ -371,6 +510,8 @@ serve(async (req) => {
 
     const ketQua = {
       bao_gia: soBaoGia,
+      phien_ban: soPhienBan,
+      noi_yeu_cau: soNoi,
       doan: soDoan,
       xoa: soXoa + soTaiLieu.go,
       ks_xac_nhan: soKS,
@@ -383,6 +524,8 @@ serve(async (req) => {
     await ghiLog({ bao_gia: soBaoGia, doan: soDoan, xoa: soXoa }, null, {
       agent_co_tai_khoan: crmIdCoTaiKhoan,
       agent_thieu_tai_khoan: thieuTaiKhoan,
+      noi_yeu_cau: soNoi,
+      phien_ban: soPhienBan,
       ks_xac_nhan: soKS,
       tai_lieu_chep: soTaiLieu.chep,
       tai_lieu_go: soTaiLieu.go,

@@ -286,8 +286,15 @@ export function YeuCauBaoGiaTab({ onTaoBaoGia }: Props) {
                           {row.so_bao_gia > 1 ? `${row.so_bao_gia} báo giá` : "Mở báo giá"}
                         </button>
                       )}
-                      {tt === "da_bao_gia" && row.bao_gia_da_gui_cong && (
-                        <span className="mt-0.5 block text-[10px] text-emerald-700">Đã gửi cổng</span>
+                      {tt === "da_bao_gia" && (
+                        row.bao_gia_da_gui_cong ? (
+                          <span className="mt-0.5 block text-[10px] text-emerald-700">Đã gửi cổng</span>
+                        ) : (
+                          // Bên mình xong rồi nhưng đối tác vẫn CHƯA thấy gì: trên
+                          // cổng, yêu cầu này còn nằm ở "chờ báo giá". Không nói ra
+                          // thì hai bên tưởng đã trao đổi xong với nhau.
+                          <span className="mt-0.5 block text-[10px] text-amber-600">Chưa gửi cổng</span>
+                        )
                       )}
                       {tt === "bo_qua" && row.ly_do_bo_qua && (
                         <span className="mt-0.5 block text-[10px] text-muted-foreground break-words">

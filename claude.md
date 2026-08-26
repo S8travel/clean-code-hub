@@ -964,6 +964,28 @@ KHÔNG phải trang Leads — lead chỉ để sales theo phễu.
   `lead_tai_lieu.duong_dan` (KHÔNG lưu URL — link ký hết hạn). Mở bằng `moFileLead`.
 - RPC `create_lead_from_agent_portal` chỉ còn `service_role` (trước đây mở cho `anon`
   = ai có publishable key CRM cũng tạo được lead). Rate-limit 10 yêu cầu/đối tác/giờ.
-- Cổng **KHÔNG** hiện trạng thái xử lý — chốt nghiệp vụ, đừng tự thêm.
+- **Bên cổng, yêu cầu và báo giá nằm CHUNG một danh sách** (gộp 24/08/2026): mỗi dòng
+  là một luồng `chờ báo giá → đã có báo giá → hết hạn`. Nối bằng `bao_gia.yeu_cau_id`
+  (bên cổng) ↔ `yeu_cau.crm_yeu_cau_id`; `push-portal` dịch id qua
+  `_shared/noi-bao-gia-yeu-cau.ts`. Báo giá đã tạo mà chưa bấm "Gửi khách"
+  (`portal_enabled=false`) thì đối tác VẪN thấy "chờ báo giá" — tab Yêu cầu bên CRM
+  hiện nhãn "Chưa gửi cổng" cho đúng trường hợp này.
+- **Đối tác thấy ĐỦ các bản đã chào** (24/08/2026): bảng `bao_gia_phien_ban` bên cổng
+  (mỗi bản một dòng, chỉ ghi thêm, kèm `thay_doi`), `bao_gia.ma_hien_thi/so_phien_ban`
+  = bản đang hiệu lực nên hai bên gọi cùng tên `BG00025-v3`. Câu "khác bản trước" tính
+  ở `_shared/bao-gia-chao-diff.ts` khi đẩy — **CHỈ so lớp chào**, `noi_dung_von` không
+  bao giờ rời CRM (câu select trong `push-portal/dong-bo-phien-ban.ts` cố ý kê tên cột,
+  đừng đổi thành `*`). Chuông bên cổng đọc `gui_luc` của bản chào, KHÔNG đọc
+  `bao_gia.pushed_at` (cột đó bị ghi lại mọi lượt đồng bộ → ngày nào chuông cũng đỏ).
+- **Đối tác yêu cầu sửa chương trình từ cổng** (24/08/2026): nút trên bảng giá → edge
+  fn `gui-yeu-cau-sua` (cổng) → `yeu-cau-sua-bao-gia` (CRM, `x-portal-secret`) →
+  `bao_gia_log` loai='yeu_cau_sua' + `thong_bao` loai='bao_gia_yeu_cau_sua'
+  (cột mới `thong_bao.bao_gia_id`, chuông trỏ `/bao-gia/:id`). KHÔNG có bảng mới bên
+  CRM và KHÔNG có nút "đánh dấu đã xử lý": yêu cầu tự coi là đã trả lời khi có một
+  `gui_ban` mới hơn (`yeuCauSuaChuaTraLoi` trong lib/bao-gia-phien-ban.ts, có test).
+- Cổng **KHÔNG** hiện trạng thái xử lý nội bộ (đang tư vấn / chờ chốt / bỏ qua) —
+  chốt nghiệp vụ, đừng tự thêm. Ba trạng thái luồng ở trên chỉ nói thứ đối tác tự
+  nhìn thấy: có bảng giá hay chưa, còn hạn hay hết. Hệ quả: bấm "bỏ qua" bên CRM thì
+  bên cổng yêu cầu đó vẫn nằm ở "chờ báo giá" — đóng bằng cách trả lời đối tác.
 - Chuông `lead_yeu_cau_doi_tac` trỏ `/bao-gia?tab=yeu-cau` (nhánh này phải đứng TRƯỚC nhánh
   chung `loai.startsWith("lead_")` trong `targetUrl`, và có bản sao trong edge fn `send-push`).

@@ -67,3 +67,9 @@ verify_jwt = false
 # của CRM) → verify_jwt = false. Xem index.ts.
 [functions.yeu-cau-doi-tac]
 verify_jwt = false
+
+# yeu-cau-sua-bao-gia: đối tác bấm "yêu cầu sửa chương trình" trên cổng 外網.
+# Gọi bởi edge fn 'gui-yeu-cau-sua' bên cổng (không có user JWT của CRM), chặn
+# bằng header 'x-portal-secret' khớp PORTAL_TRAO_DOI_SECRET.
+[functions.yeu-cau-sua-bao-gia]
+verify_jwt = false

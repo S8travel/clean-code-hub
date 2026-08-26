@@ -26,6 +26,7 @@ export const ICON_BY_LOAI: Record<string, string> = {
   lead_lanh:                 "🥶",
   lead_tin_nhan_fb:          "💬",
   lead_yeu_cau_doi_tac:      "🤝",
+  bao_gia_yeu_cau_sua:       "✏️",
 };
 
 export function iconFor(loai: string) {
@@ -59,7 +60,7 @@ export function groupByTime(items: ThongBaoRow[]) {
 // Bản sao logic này nằm trong edge fn supabase/functions/send-push/index.ts
 // (không import được code src/) — sửa bên đây thì sửa cả bên đó.
 export function targetUrl(tb: ThongBaoRow): string | null {
-  const { loai, doan_id, cong_viec_id, lead_id } = tb;
+  const { loai, doan_id, cong_viec_id, lead_id, bao_gia_id } = tb;
   if (loai.startsWith("deadline") && doan_id) return `/doan/${doan_id}`;
   if (loai === "giao_viec" && cong_viec_id)   return `/my-job?cong_viec=${cong_viec_id}`;
   // Hủy đoàn: trigger tạo thong_bao loai='giao_viec' KHÔNG kèm cong_viec_id
@@ -67,6 +68,9 @@ export function targetUrl(tb: ThongBaoRow): string | null {
   if (loai === "giao_viec" && doan_id)        return `/doan/${doan_id}`;
   if (loai === "dntt_can_duyet")              return `/de-nghi-thanh-toan`;
   if (loai === "su_co" && doan_id)            return `/doan/${doan_id}?tab=log`;
+  // Đối tác yêu cầu sửa chương trình: mở thẳng báo giá đó để xem yêu cầu rồi
+  // chào bản mới.
+  if (loai === "bao_gia_yeu_cau_sua" && bao_gia_id) return `/bao-gia/${bao_gia_id}`;
   // Yêu cầu báo giá của đối tác: chỗ XỬ LÝ nó là tab trong trang Báo giá, không
   // phải phễu Leads. Phải đứng TRƯỚC nhánh "lead_" bên dưới.
   if (loai === "lead_yeu_cau_doi_tac")        return `/bao-gia?tab=yeu-cau`;

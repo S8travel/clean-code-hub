@@ -4,28 +4,19 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { BaoGiaRow } from "@/hooks/use-bao-gia";
-import { usePhienBanList, useBaoGiaLog, type PhienBanRow } from "@/hooks/use-bao-gia-phien-ban";
+import { usePhienBanList, type PhienBanRow } from "@/hooks/use-bao-gia-phien-ban";
 import { soSanhPhienBan, type KetQuaSoSanh } from "@/lib/bao-gia-phien-ban";
 import { BangSoSanh } from "./BangSoSanh";
 import { exportBaoGiaTaiwanWordTuNoiDung } from "@/lib/export-bao-gia-word";
 
-const LOAI_LABEL: Record<string, string> = {
-  gui_ban: "Gửi bản",
-  mo_phien_ban: "Mở soạn bản mới",
-  thu_hoi: "Thu hồi",
-  yeu_cau_sua: "Đối tác yêu cầu sửa",
-  doi_tac_xem: "Đối tác xem",
-};
-
 const ngay = (s: string | null) => (s ? new Date(s).toLocaleDateString("vi-VN") : "—");
-const gio = (s: string) => new Date(s).toLocaleString("vi-VN");
 
-// Lịch sử các bản đã chào + dòng thời gian gửi qua lại.
+// Lịch sử các bản đã chào. Dòng thời gian (gửi bản nào lúc nào, đối tác đòi đổi
+// gì) đã tách sang tab riêng 25/08/2026 — xem DongThoiGianSection.
 // Bản đã gửi là bằng chứng: xem lại được, in lại được, nhưng không sửa được —
 // DB chặn UPDATE/DELETE nên ở đây cũng không có nút nào để sửa.
 export function PhienBanSection({ draft }: { draft: BaoGiaRow }) {
   const { data: dsPhienBan = [], isLoading } = usePhienBanList(draft.id);
-  const { data: dsLog = [] } = useBaoGiaLog(draft.id);
   const [xemBang, setXemBang] = useState<PhienBanRow | null>(null);
   const [soSanh, setSoSanh] = useState<{ cu: PhienBanRow; moi: PhienBanRow; kq: KetQuaSoSanh } | null>(null);
 
@@ -47,7 +38,7 @@ export function PhienBanSection({ draft }: { draft: BaoGiaRow }) {
   };
 
   if (isLoading) return null;
-  if (!dsPhienBan.length && !dsLog.length) return null;
+  if (!dsPhienBan.length) return null;
 
   return (
     <section className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
@@ -104,21 +95,6 @@ export function PhienBanSection({ draft }: { draft: BaoGiaRow }) {
           );
         })}
       </ul>
-
-      {dsLog.length > 0 && (
-        <div className="pt-1">
-          <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400 mb-1.5">Dòng thời gian</p>
-          <ul className="space-y-1">
-            {dsLog.map((l) => (
-              <li key={l.id} className="text-[11px] text-slate-600 flex gap-2">
-                <span className="text-slate-400 shrink-0">{gio(l.tao_luc)}</span>
-                <span className="font-medium shrink-0">{LOAI_LABEL[l.loai] ?? l.loai}</span>
-                <span className="break-words">{l.noi_dung}{l.tao_boi_ten ? ` · ${l.tao_boi_ten}` : ""}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {/* Xem lại bảng giá của một bản đã gửi */}
       <Dialog open={!!xemBang} onOpenChange={(o) => !o && setXemBang(null)}>
