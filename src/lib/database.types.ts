@@ -297,6 +297,66 @@ export type Database = {
           },
         ]
       }
+      bao_gia_so_tay: {
+        Row: {
+          cap_nhat_luc: string
+          dia_diem: string | null
+          don_gia: number | null
+          foc_khach: number | null
+          foc_mien: number | null
+          ghi_chu: string | null
+          id: number
+          khoa_zh: string
+          lan_cuoi_dung: string | null
+          loai: string
+          ngung: boolean
+          nguon: string
+          so_lan_dung: number
+          tao_boi: string | null
+          tao_luc: string
+          ten_vi: string | null
+          zh_goc: string | null
+        }
+        Insert: {
+          cap_nhat_luc?: string
+          dia_diem?: string | null
+          don_gia?: number | null
+          foc_khach?: number | null
+          foc_mien?: number | null
+          ghi_chu?: string | null
+          id?: number
+          khoa_zh: string
+          lan_cuoi_dung?: string | null
+          loai: string
+          ngung?: boolean
+          nguon?: string
+          so_lan_dung?: number
+          tao_boi?: string | null
+          tao_luc?: string
+          ten_vi?: string | null
+          zh_goc?: string | null
+        }
+        Update: {
+          cap_nhat_luc?: string
+          dia_diem?: string | null
+          don_gia?: number | null
+          foc_khach?: number | null
+          foc_mien?: number | null
+          ghi_chu?: string | null
+          id?: number
+          khoa_zh?: string
+          lan_cuoi_dung?: string | null
+          loai?: string
+          ngung?: boolean
+          nguon?: string
+          so_lan_dung?: number
+          tao_boi?: string | null
+          tao_luc?: string
+          ten_vi?: string | null
+          zh_goc?: string | null
+        }
+        Relationships: []
+      }
       canh_diem: {
         Row: {
           bao_gom_bua_an: string | null
@@ -4978,6 +5038,10 @@ export type Database = {
       }
     }
     Functions: {
+      hoc_so_tay_bao_gia: {
+        Args: { p_items: Json }
+        Returns: number
+      }
       cong_no_ghi_can_tru: {
         Args: { p_cong_no_id: number; p_log_entry?: string }
         Returns: undefined

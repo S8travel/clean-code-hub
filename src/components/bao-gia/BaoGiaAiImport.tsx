@@ -16,9 +16,14 @@ import {
 import { aiPreviewSheet, fmtVnd, fmtUsd, tierGuestsOf } from "@/components/bao-gia/detail/helpers";
 import { VehicleSelector } from "@/components/bao-gia/detail/VehicleSelector";
 import { useBaoGiaResolveMaps, useMarkCanhDiemCombo, useWriteGiaPhongFromBaoGia } from "@/hooks/use-bao-gia-ai-maps";
+import { useSoTay, useHocSoTay } from "@/hooks/use-bao-gia-so-tay";
+import {
+  apSoTay, banDoSoTay, locDongDeHoc, LOAI_SO_TAY,
+  type LoaiSoTay,
+} from "@/lib/bao-gia-so-tay";
 import { useIsReadOnly } from "@/hooks/use-permissions";
 import {
-  resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks, dongChuaChac,
+  resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks, dongChuaChac, usdBudgetPrice,
   applyKsBuaRules, toKsBuaRules,
   hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
   analyzeCombo, comboPatchForRef, sanitizeDraftRows, newResolvedItem, BUA_LABEL,
@@ -64,11 +69,6 @@ const REVIEW_GROUPS: { key: ResolvedItem["loai"]; label: string; icon: React.Rea
 const buaOrder = (b?: "trua" | "toi") => (b === "trua" ? 0 : b === "toi" ? 1 : 2);
 
 // 1 lựa chọn danh mục cho picker (KS / cảnh điểm / set menu NH / loại xe).
-interface CatalogOption {
-  id: number; ten: string; gia?: number | null; nhaHangId?: number;
-  /** Tên tiếng Trung có sẵn trong danh mục — CHỈ để tìm và để đối chiếu bằng mắt. */
-  ten_zh?: string | null;
-}
 
 // Modal "AI điền từ lịch trình": ưu tiên đọc FILE lịch trình đính kèm (PDF/ảnh);
 // không có file thì upload; vẫn cho dán text. AI trích xuất + khớp danh mục →
@@ -84,6 +84,14 @@ export function BaoGiaAiImport({
   const [mode, setMode] = useState<"file" | "text">("file");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState("");
+  // ── Sổ tay báo giá ──
+  // Bộ nhớ tiếng Trung ↔ tiếng Việt ↔ giá VỐN, dựng từ chính thao tác của người
+  // nhập. Đây là nguồn giá được ưu tiên: nó phản ánh thứ công ty THỰC SỰ chào,
+  // khác với danh mục vận hành vốn dựng ra để điều đoàn.
+  const { data: soTay = [] } = useSoTay(open);
+  const hocSoTay = useHocSoTay();
+  const banDo = useMemo(() => banDoSoTay(soTay), [soTay]);
+
   const [rows, setRows] = useState<ResolvedItem[] | null>(null);
   const [selection, setSelection] = useState<Record<number, number>>({});
   const [ten, setTen] = useState("");
@@ -203,9 +211,20 @@ export function BaoGiaAiImport({
       const result = await extract.mutateAsync(input);
       // Quy tắc đã dạy qua chat (vd KS giá kèm ăn tối) áp NGAY sau resolve —
       // chỉ lần phân tích này, không re-apply lên nháp/rows user đã sửa.
-      const resolved = applyKsBuaRules(
-        resolveAiItems(result, maps, tourDate, aliasMap),
-        toKsBuaRules(ruleRows),
+      // Sổ tay chạy SAU cùng và ĐÈ LÊN kết quả khớp danh mục: giá người mình
+      // từng gõ đáng tin hơn giá suy ra từ kho vận hành. Dòng nào sổ tay chưa
+      // biết thì giữ nguyên thứ đang có (có thể AI khớp được), chứ không xoá.
+      const resolved = apSoTay(
+        applyKsBuaRules(
+          resolveAiItems(result, maps, tourDate, aliasMap),
+          toKsBuaRules(ruleRows),
+        ),
+        banDo,
+        // usdBudgetPrice nhận loại của dòng chi phí báo giá (có "transport"),
+        // còn sổ tay chỉ 4 loại. "dich_vu" tính như vé — cùng công thức, không
+        // cộng phụ trội bữa ăn.
+        (usd, loai) => usdBudgetPrice(usd, loai === "dich_vu" ? "ticket" : loai),
+        (r) => !!r.sua_tay,
       );
       setTen(result.ten_chuong_trinh ?? "");
       setSoNgay(result.so_ngay && result.so_ngay > 0 ? result.so_ngay : 1);
@@ -277,32 +296,28 @@ export function BaoGiaAiImport({
   const { dragging, dropProps } = useFileDrop(handleUpload, upload.isPending);
 
   // Danh mục master cho picker đổi/chọn dịch vụ (mọi loại — giống KS).
-  const sortByTen = (a: CatalogOption, b: CatalogOption) => a.ten.localeCompare(b.ten);
-  const ksOptions = useMemo(
-    () => (maps ? [...maps.khachSan.entries()].map(([id, v]) => ({ id, ten: v.ten, ten_zh: v.ten_zh })).sort(sortByTen) : []),
-    [maps],
-  );
-  const canhDiemOptions = useMemo(
-    () => (maps ? [...maps.canhDiem.entries()].map(([id, v]) => ({ id, ten: v.ten, gia: v.gia })).sort(sortByTen) : []),
-    [maps],
-  );
-  const xeOptions = useMemo(
-    () => (maps ? [...maps.xe.entries()].map(([id, v]) => ({ id, ten: v.ten, gia: v.gia })).sort(sortByTen) : []),
-    [maps],
-  );
-  const setMenuOptions = useMemo(
-    () => (maps
-      ? [...maps.setMenu.entries()].map(([id, v]) => ({
-          id, ten: `${v.nhaHangTen} · ${v.ten}`, gia: v.gia, nhaHangId: v.nhaHangId,
-          // Tên tiếng Trung của NHÀ HÀNG (set menu không có tên Trung riêng) —
-          // gõ 河內 tìm ra mọi set của nhà hàng đó.
-          ten_zh: maps.nhaHang.get(v.nhaHangId)?.ten_zh ?? null,
-        })).sort(sortByTen)
-      : []),
-    [maps],
-  );
-  const optionsFor = (loai: ResolvedItem["loai"]): CatalogOption[] =>
-    loai === "hotel" ? ksOptions : loai === "meal" ? setMenuOptions : loai === "transport" ? xeOptions : canhDiemOptions;
+
+  /** Nhãn nhỏ cho biết GIÁ trên dòng này ở đâu ra — người nhập cần phân biệt
+   *  "sổ tay đã nhớ" với "máy đoán" với "chưa ai điền". */
+  const nhanNguon = (r: ResolvedItem) => {
+    if (r.sua_tay) {
+      return <span className="text-[9px] text-blue-600" title="Bạn vừa sửa — sẽ được ghi vào sổ tay">vừa sửa</span>;
+    }
+    if (r.nguon_gia === "so_tay") {
+      return (
+        <span className="text-[9px] text-emerald-700" title="Lấy từ sổ tay — giá do người mình từng gõ">
+          sổ tay{r.so_lan_dung ? ` · đã dùng ${r.so_lan_dung} lần` : ""}
+        </span>
+      );
+    }
+    if (r.nguon_gia === "dong_ghi") {
+      return <span className="text-[9px] text-slate-500" title="Đối tác ghi thẳng mức tiền trong lịch trình">theo mức trong lịch trình</span>;
+    }
+    if (r.don_gia > 0) {
+      return <span className="text-[9px] text-amber-600" title="Máy đoán — kiểm lại trước khi áp dụng">máy đoán</span>;
+    }
+    return <span className="text-[9px] text-orange-600" title="Chưa có trong sổ tay — gõ giá vào ô ĐG VND">cần điền giá</span>;
+  };
 
   const patchRow = (idx: number, patch: Partial<ResolvedItem>) =>
     setRows((rs) => rs ? rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)) : rs);
@@ -316,35 +331,9 @@ export function BaoGiaAiImport({
   // Chỉ hạ nguồn về 'user' vì cờ không còn được dòng danh mục nào bảo chứng.
   // sua_tay: gõ tên = DẠY bản dịch. Không đánh dấu thì dòng không giá không ref sẽ
   // không được học, lần sau AI dịch sai y hệt (xem aliasesToLearn).
-  const clearRef = (idx: number, text: string) =>
-    patchRow(idx, {
-      mo_ta: text, match_table: null, match_id: null, match_set_menu_id: null, from_alias: false,
-      sua_tay: true,
-      ...(rows?.[idx]?.bao_gom_bua_an ? { bao_gom_nguon: "user" as const } : {}),
-    });
   // Chọn từ danh mục → fill tên + giá + ref (để học alias). KS lấy giá theo mùa.
   // confidence=1: người chọn tay thì khớp là CHẮC, không còn là phỏng đoán của AI
   // — tắt dấu ⚠ "độ tin cậy thấp" và mở khoá ghi cờ combo vào danh mục.
-  const pickCatalogForRow = (idx: number, loai: ResolvedItem["loai"], opt: CatalogOption) => {
-    if (loai === "hotel") {
-      const gia = resolveGiaPhongValue(maps?.khachSanGia.get(opt.id) ?? [], tourDate);
-      patchRow(idx, {
-        mo_ta: opt.ten, match_label: opt.ten, confidence: 1, sua_tay: true,
-        match_table: "khach_san", match_id: opt.id, match_set_menu_id: null, from_alias: false,
-        ...comboPatch("khach_san", opt.id),
-        ...(gia && gia > 0 ? { don_gia: gia, status: "matched" as const } : { status: "no_price" as const }),
-      });
-      return;
-    }
-    const patch: Partial<ResolvedItem> = { mo_ta: opt.ten, match_label: opt.ten, confidence: 1, from_alias: false, sua_tay: true };
-    if (loai === "meal") { patch.match_table = "nha_hang"; patch.match_id = opt.nhaHangId ?? null; patch.match_set_menu_id = opt.id; }
-    else if (loai === "transport") { patch.match_table = "nha_xe_loai_xe"; patch.match_id = opt.id; patch.match_set_menu_id = null; }
-    else { patch.match_table = "canh_diem"; patch.match_id = opt.id; patch.match_set_menu_id = null; }
-    Object.assign(patch, comboPatch(patch.match_table ?? null, patch.match_id ?? null));
-    if (opt.gia != null && opt.gia > 0) { patch.don_gia = opt.gia; patch.status = "matched"; }
-    else { patch.status = "no_price"; }
-    patchRow(idx, patch);
-  };
   // Đổi loại/nhóm dòng (Ăn trưa/tối, Vé, KS, Xe). Giữ tên + giá; xoá ref danh
   // mục (khác loại → ref cũ không còn đúng) → thành dòng tự nhập, chọn lại được.
   // Dòng ăn chưa rõ bữa để value = "meal:" (KHÔNG mặc định "meal:trua"): nếu hiển
@@ -460,6 +449,27 @@ export function BaoGiaAiImport({
     // Học bộ nhớ khớp từ các dòng đã áp dụng (fire-and-forget) → lần sau tự khớp.
     const toLearn = aliasesToLearn(included, user?.user_id);
     if (toLearn.length) learn.mutate(toLearn);
+
+    // Ghi vào SỔ TAY: cặp (tiếng Trung ↔ tiếng Việt ↔ giá) người nhập vừa chốt.
+    // Đây là chỗ sổ tay dày lên. Fire-and-forget như trên — hỏng thì báo giá này
+    // vẫn đúng, chỉ là lần sau chưa nhớ.
+    const deHoc = locDongDeHoc(
+      included
+        .filter((r) => (LOAI_SO_TAY as readonly string[]).includes(r.loai))
+        .map((r) => ({
+          ten_zh: r.ten_zh,
+          mo_ta: r.mo_ta,
+          loai: r.loai as LoaiSoTay,
+          don_gia: r.don_gia,
+          foc_khach: r.foc_khach,
+          foc_mien: r.foc_mien,
+        })),
+    );
+    if (deHoc.length) {
+      hocSoTay.mutate(deHoc, {
+        onError: () => toast.warning("Đã áp dụng, nhưng chưa ghi được vào sổ tay — lần sau có thể phải gõ lại giá."),
+      });
+    }
     // Giá KS nhập tay + master chưa có giá → ghi ngược vào danh mục (nguồn "báo
     // giá", chỉ chèn mới — không đè giá sẵn có). Fire-and-forget: hỏng (thiếu
     // quyền...) không chặn áp dụng, báo giá này vẫn đúng.
@@ -662,8 +672,8 @@ export function BaoGiaAiImport({
                 <thead className="bg-[#E6F1FB] sticky top-0 z-10">
                   <tr>
                     <th className="py-1.5 px-2 text-center font-semibold w-[48px]">Ngày</th>
-                    <th className="py-1.5 px-2 text-left font-semibold">Hạng mục (VI / 中文)</th>
-                    <th className="py-1.5 px-2 text-left font-semibold">Khớp danh mục</th>
+                    <th className="py-1.5 px-2 text-left font-semibold">中文 (AI đọc được)</th>
+                    <th className="py-1.5 px-2 text-left font-semibold">Tên tiếng Việt — lưu vào sổ tay</th>
                     <th className="py-1.5 px-2 text-right font-semibold w-[84px]">ĐG USD</th>
                     <th className="py-1.5 px-2 text-right font-semibold w-[120px]">ĐG VND</th>
                     <th className="py-1.5 px-2 text-center font-semibold w-[64px]" title="FOC: số suất/phòng miễn (NH tự tính theo chính sách)">FOC</th>
@@ -710,16 +720,16 @@ export function BaoGiaAiImport({
                                       title="Chọn khách sạn này cho đêm" className="shrink-0" />
                                   )}
                                   <span className="min-w-0 flex-1">
-                                    <span className="flex items-center gap-1">
-                                      <CatalogPicker
-                                        value={r.mo_ta}
-                                        options={optionsFor(r.loai)}
-                                        onType={(t) => clearRef(idx, t)}
-                                        onPick={(opt) => pickCatalogForRow(idx, r.loai, opt)}
-                                      />
+                                    {/* Nguyên văn AI đọc được. Hiện ĐẦY ĐỦ, xuống dòng — trước đây
+                                        cắt cụt ở 240px nên dòng dài (đa số dòng thật) không đọc hết,
+                                        mà đây chính là thứ cần so bằng mắt với sổ tay.
+                                        Chỉ tiếng Trung, KHÔNG kèm ô chọn danh mục. */}
+                                    <span className="flex items-start gap-1">
+                                      <span className="block text-[11px] leading-snug text-slate-700 break-words whitespace-pre-wrap flex-1">
+                                        {r.ten_zh || <span className="text-slate-400 italic">(AI không đọc được chữ Trung)</span>}
+                                      </span>
                                       {isAltHotel && <span className="text-[9px] text-violet-600 shrink-0">PA</span>}
                                     </span>
-                                    {r.ten_zh && r.ten_zh !== r.mo_ta && <span className="block text-[10px] text-slate-400 truncate max-w-[240px] px-1">{r.ten_zh}</span>}
                                     <select
                                       value={loaiValue(r)}
                                       onChange={(e) => changeLoai(idx, e.target.value)}
@@ -805,21 +815,20 @@ export function BaoGiaAiImport({
                                   </span>
                                 </div>
                               </td>
-                              <td className="py-1 px-2">
-                                {r.status === "unmatched" ? (
-                                  <span className="inline-flex items-center gap-1 text-amber-700"><HelpCircle className="h-3 w-3" />Chưa khớp</span>
-                                ) : (
-                                  <span className={`inline-flex items-center gap-1 ${r.from_alias ? "text-violet-700" : ""}`}>
-                                    <span className={`truncate max-w-[150px] ${r.match_label ? "" : "text-slate-400 italic"}`}
-                                      title={r.from_alias ? "Tự điền từ bộ nhớ đã học — sửa lại được" : (r.match_label || "Tự nhập (không khớp danh mục)")}>
-                                      {r.match_label || "(tự nhập)"}
-                                    </span>
-                                    {r.from_alias && <span className="text-[9px] text-violet-500" title="Bộ nhớ đã học">đã nhớ</span>}
-                                    {!r.from_alias && r.confidence > 0 && r.confidence < 0.6 && (
-                                      <span className="text-[9px] text-amber-600" title="Độ tin cậy thấp — kiểm tra lại">⚠</span>
-                                    )}
-                                  </span>
-                                )}
+                              {/* Tên tiếng Việt — SỬA ĐƯỢC, và chính nó được cất vào sổ tay khi
+                                  bấm Áp dụng. Trước đây ô này chỉ hiện tên dòng danh mục đã khớp,
+                                  không sửa được, nên OP sửa xong là mất. */}
+                              <td className="py-1 px-2 align-top">
+                                <input
+                                  value={r.mo_ta}
+                                  onChange={(e) => patchRow(idx, { mo_ta: e.target.value, sua_tay: true })}
+                                  placeholder="Gõ tên tiếng Việt…"
+                                  title="Tên này được ghi vào sổ tay — lần sau gặp lại chữ Trung bên trái là tự điền"
+                                  className="w-full bg-transparent text-xs font-medium text-slate-700 outline-none rounded px-1 py-0.5 border border-transparent hover:border-slate-200 focus:border-blue-300 focus:bg-blue-50/40"
+                                />
+                                <span className="flex items-center gap-1 px-1 mt-0.5">
+                                  {nhanNguon(r)}
+                                </span>
                               </td>
                               <td className={`py-1 px-2 text-right text-slate-500 tabular-nums ${sup ? "line-through" : ""}`}>
                                 {r.don_gia > 0 ? (r.don_gia / xr).toFixed(2) : "—"}
@@ -1142,87 +1151,6 @@ function ComboChooser({ current, label, tone, title, ghiVaoDanhMuc, onPick }: {
             ? <>Ghi vào danh mục cảnh điểm <b>“{ghiVaoDanhMuc}”</b> → mọi báo giá sau tự trừ.</>
             : <>Chỉ áp dụng cho báo giá này (không đủ điều kiện ghi vào danh mục).</>}
         </p>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// Picker đổi/chọn dịch vụ trong review (mọi loại): gõ tự do (tên tự nhập + giá
-// tay) HOẶC chọn từ danh mục master (tự điền giá). Quote được dịch vụ không có
-// trong chương trình gốc.
-function CatalogPicker({ value, options, onType, onPick }: {
-  value: string;
-  options: CatalogOption[];
-  onType: (text: string) => void;
-  onPick: (opt: CatalogOption) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  // AI khớp sai thường kèm tên lạ ("Món Trung", "Nhà hàng địa phương") → lọc theo
-  // tên đó ra RỖNG → popover không mở, OP tưởng picker hỏng và kết luận là không
-  // chọn lại được. Không khớp chữ nào thì mở NGUYÊN danh mục, kèm dòng nói rõ
-  // đang hiện tất cả — chỗ chọn lại phải luôn có đường vào.
-  const { suggestions, khongKhop, conLai } = useMemo(() => {
-    const q = value.toLowerCase().trim();
-    // Tìm bằng CẢ tên tiếng Việt lẫn tên tiếng Trung. Ô này được điền sẵn bản dịch
-    // AI đoán, nên khi AI dịch lạ thì gõ lại chữ Hán trong lịch trình là đường tìm
-    // tự nhiên nhất — trước đây gõ chữ Hán ra rỗng.
-    const hit = q
-      ? options.filter((o) =>
-          o.ten.toLowerCase().includes(q) || (o.ten_zh ?? "").toLowerCase().includes(q))
-      : options;
-    const pool = hit.length > 0 ? hit : options;
-    return {
-      suggestions: pool.slice(0, 40),
-      khongKhop: q.length > 0 && hit.length === 0 && options.length > 0,
-      conLai: Math.max(0, pool.length - 40),
-    };
-  }, [options, value]);
-
-  return (
-    <Popover open={open && suggestions.length > 0} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <input
-          value={value}
-          onChange={(e) => { onType(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="Chọn danh mục / gõ tay"
-          className="w-full max-w-[220px] bg-transparent text-xs font-medium text-slate-700 outline-none rounded px-1 py-0.5 border border-transparent hover:border-slate-200 focus:border-blue-300 focus:bg-blue-50/40"
-        />
-      </PopoverAnchor>
-      <PopoverContent
-        align="start" sideOffset={4}
-        className="w-[280px] p-0 max-h-[240px] overflow-y-auto"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        {khongKhop && (
-          <p className="sticky top-0 z-10 border-b bg-amber-50 px-2.5 py-1 text-[10px] text-amber-800 break-words">
-            Không có mục nào khớp “{value}” — đang hiện toàn bộ danh mục, chọn lại bên dưới.
-          </p>
-        )}
-        {suggestions.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            onMouseDown={(e) => { e.preventDefault(); onPick(o); setOpen(false); }}
-            className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-left hover:bg-slate-50"
-          >
-            <span className="truncate flex-1">
-              {o.ten}
-              {/* Hiện luôn tên tiếng Trung của danh mục để đối chiếu bằng mắt với
-                  dòng đối tác viết — đó mới là thứ cần so, không phải bản dịch. */}
-              {o.ten_zh && <span className="ml-1.5 text-[10px] text-slate-400">{o.ten_zh}</span>}
-            </span>
-            {o.gia != null && o.gia > 0 && (
-              <span className="shrink-0 text-[10px] tabular-nums text-slate-500">{o.gia.toLocaleString("vi-VN")} ₫</span>
-            )}
-          </button>
-        ))}
-        {conLai > 0 && (
-          <p className="border-t px-2.5 py-1 text-[10px] text-muted-foreground">
-            còn {conLai} mục nữa — gõ thêm chữ để lọc
-          </p>
-        )}
       </PopoverContent>
     </Popover>
   );
