@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPhienBan, lyDoTuYeuCau, maPhienBan, soSanhPhienBan, yeuCauSuaChuaTraLoi, type PhienBanDeSoSanh } from "./bao-gia-phien-ban";
+import { buildPhienBan, lyDoTuYeuCau, maPhienBan, nhomYeuCauChuaTraLoi, soSanhPhienBan, yeuCauSuaChuaTraLoi, type PhienBanDeSoSanh } from "./bao-gia-phien-ban";
 import { assertNoCostLeak } from "./portal-payload";
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 
@@ -36,6 +36,8 @@ const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   phu_thu: 0, vcb_rate: null, agent_id: 2, loai_tour: "inbound",
   loai_bao_gia: "tu_tinh", lich_trinh_files: [],
   so_phien_ban_cuoi: 0, phien_ban_hien_hanh_id: null,
+  link_token: null, link_het_han: null, link_thu_hoi: false,
+  link_tao_luc: null, link_so_lan_mo: 0, link_mo_gan_nhat: null,
   portal_noi_dung: null, portal_enabled: false, portal_pushed_at: null, yeu_cau_id: null,
   ...over,
 });
@@ -189,5 +191,47 @@ describe("yeuCauSuaChuaTraLoi / lyDoTuYeuCau", () => {
 
   it("dòng log khác loại không lọt vào lý do", () => {
     expect(lyDoTuYeuCau([log("mo_phien_ban", "2026-08-21T02:00:00Z", "Mở soạn bản mới")])).toBe("");
+  });
+});
+
+describe("nhomYeuCauChuaTraLoi", () => {
+  const log = (bao_gia_id: number, loai: string, tao_luc: string, noi_dung: string | null = null) =>
+    ({ bao_gia_id, loai, tao_luc, noi_dung });
+
+  it("chỉ trả về báo giá đang thật sự chờ mình trả lời", () => {
+    const kq = nhomYeuCauChuaTraLoi([
+      // 35: đối tác nhắn SAU lần chào gần nhất → đang chờ
+      log(35, "gui_ban", "2026-08-21T10:00:00Z"),
+      log(35, "yeu_cau_sua", "2026-08-25T09:00:00Z", "đổi khách sạn ngày 2"),
+      // 36: đã chào lại sau khi họ nhắn → xong
+      log(36, "yeu_cau_sua", "2026-08-20T02:00:00Z", "thêm bữa tối"),
+      log(36, "gui_ban", "2026-08-22T02:00:00Z"),
+      // 37: chưa ai nhắn gì
+      log(37, "gui_ban", "2026-08-23T02:00:00Z"),
+    ]);
+
+    expect([...kq.keys()]).toEqual([35]);
+    expect(kq.get(35)!.map((l) => l.noi_dung)).toEqual(["đổi khách sạn ngày 2"]);
+  });
+
+  it("một báo giá nhắn nhiều lần thì đếm đủ, đọc xuôi cũ trước", () => {
+    const kq = nhomYeuCauChuaTraLoi([
+      log(35, "yeu_cau_sua", "2026-08-26T02:00:00Z", "lần hai"),
+      log(35, "gui_ban", "2026-08-21T10:00:00Z"),
+      log(35, "yeu_cau_sua", "2026-08-25T02:00:00Z", "lần một"),
+    ]);
+    expect(kq.get(35)!.map((l) => l.noi_dung)).toEqual(["lần một", "lần hai"]);
+  });
+
+  it("chưa chào bản nào mà đối tác đã nhắn thì vẫn tính là đang chờ", () => {
+    const kq = nhomYeuCauChuaTraLoi([
+      log(40, "yeu_cau_sua", "2026-08-25T02:00:00Z", "gửi lại giúp em"),
+    ]);
+    expect(kq.get(40)).toHaveLength(1);
+  });
+
+  it("không có yêu cầu nào thì bản đồ rỗng, không phải map đầy khoá rỗng", () => {
+    const kq = nhomYeuCauChuaTraLoi([log(35, "gui_ban", "2026-08-21T10:00:00Z")]);
+    expect(kq.size).toBe(0);
   });
 });
