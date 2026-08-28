@@ -88,6 +88,34 @@ export function yeuCauSuaChuaTraLoi(logs: DongLogBaoGia[]): DongLogBaoGia[] {
     .sort((a, b) => (a.tao_luc < b.tao_luc ? -1 : a.tao_luc > b.tao_luc ? 1 : 0));
 }
 
+/**
+ * Gom "đối tác đang chờ mình trả lời" cho CẢ danh sách báo giá, một lần.
+ *
+ * Vì sao cần: yêu cầu sửa đối tác gửi từ cổng chỉ nằm trong dòng thời gian của
+ * TỪNG báo giá. Ở màn danh sách, một báo giá đối tác đang chờ trông y hệt một
+ * báo giá không ai đụng tới — muốn biết thì phải mở lần lượt từng cái.
+ *
+ * Dùng lại đúng hàm yeuCauSuaChuaTraLoi cho từng nhóm, KHÔNG chép luật sang đây:
+ * hai chỗ đếm theo hai luật là kiểu lỗi mà danh sách báo một đằng, mở ra một nẻo.
+ */
+export function nhomYeuCauChuaTraLoi<T extends DongLogBaoGia & { bao_gia_id: number }>(
+  logs: T[],
+): Map<number, T[]> {
+  const theoBaoGia = new Map<number, T[]>();
+  for (const l of logs) {
+    const ds = theoBaoGia.get(l.bao_gia_id);
+    if (ds) ds.push(l);
+    else theoBaoGia.set(l.bao_gia_id, [l]);
+  }
+
+  const kq = new Map<number, T[]>();
+  for (const [id, ds] of theoBaoGia) {
+    const cho = yeuCauSuaChuaTraLoi(ds) as T[];
+    if (cho.length) kq.set(id, cho);
+  }
+  return kq;
+}
+
 /** Lý do gợi ý cho bản kế tiếp, ghép từ các yêu cầu chưa trả lời. */
 export function lyDoTuYeuCau(logs: DongLogBaoGia[], toiDa = 500): string {
   const cau = yeuCauSuaChuaTraLoi(logs)

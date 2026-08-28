@@ -50,6 +50,8 @@ const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   loai_bao_gia: "tu_tinh",
   lich_trinh_files: [],
   so_phien_ban_cuoi: 0,
+  link_token: null, link_het_han: null, link_thu_hoi: false,
+  link_tao_luc: null, link_so_lan_mo: 0, link_mo_gan_nhat: null,
   phien_ban_hien_hanh_id: null,
   portal_noi_dung: null,
   portal_enabled: false,

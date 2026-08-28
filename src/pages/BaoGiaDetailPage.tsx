@@ -25,6 +25,7 @@ import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSecti
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
 import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
 import { PhienBanSection } from "@/components/bao-gia/detail/PhienBanSection";
+import { LinkKhachSection } from "@/components/bao-gia/detail/LinkKhachSection";
 import { DongThoiGianSection } from "@/components/bao-gia/detail/DongThoiGianSection";
 import { CanhBaoLech } from "@/components/bao-gia/detail/CanhBaoLech";
 import { GuiPhienBanModal } from "@/components/bao-gia/detail/GuiPhienBanModal";
@@ -316,7 +317,9 @@ export default function BaoGiaDetailPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="phien-ban" className="mt-0">
+          <TabsContent value="phien-ban" className="mt-0 space-y-3">
+            {/* Gửi cho người KHÔNG có cổng — nhóm đông hơn nhóm có cổng. */}
+            <LinkKhachSection draft={draft} />
             <PhienBanSection draft={draft} />
           </TabsContent>
 
