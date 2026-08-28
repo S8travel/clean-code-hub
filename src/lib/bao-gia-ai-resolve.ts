@@ -4,6 +4,7 @@
 
 import type { BaoGiaItem } from "@/hooks/use-bao-gia";
 import { resolveGiaPhongValue, type GiaPhongRow } from "@/lib/khach-san-gia-phong";
+import type { NguonGia } from "@/lib/bao-gia-so-tay";
 
 // ── Shape AI trả về (khớp schema edge fn) ──
 export type MatchTable = "khach_san" | "nha_hang" | "canh_diem" | "nha_xe_loai_xe";
@@ -98,6 +99,12 @@ export interface ResolvedItem {
   match_set_menu_id?: number | null;
   /** TRUE = giá/khớp lấy từ bộ nhớ alias đã học (hiển thị nhãn ↺). */
   from_alias?: boolean;
+  /** Giá này ở đâu ra sau khi áp sổ tay — xem lib/bao-gia-so-tay.ts.
+   *  "so_tay" = người mình từng gõ · "dong_ghi" = đối tác ghi mức tiền trong
+   *  lịch trình · "chua_co" = chưa ai điền, cần người nhập gõ. */
+  nguon_gia?: NguonGia;
+  /** Dòng sổ tay đã trúng đã được dùng bao nhiêu lần (hiện cho người nhập yên tâm). */
+  so_lan_dung?: number;
   /** TRUE = OP đã ĐỘNG TAY vào dòng này trong màn review (chọn lại danh mục, gõ
    *  tên, sửa giá, đổi loại, tự thêm dòng). Quyết định 2 việc khi Áp dụng:
    *  học alias kể cả dòng chỉ sửa mỗi tên, và alias đó được quyền thắng AI
