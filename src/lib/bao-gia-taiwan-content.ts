@@ -117,6 +117,26 @@ export interface TaiwanQuoteContent {
 
 const lines = (s: string): string[] => s.split(/\r?\n/).filter((l) => l.trim());
 
+/** Cắt mức tiền khỏi một dòng trưng cho khách, giữ nguyên phần chữ.
+ *
+ *  Bắt các dạng OP hay gõ: "$700/位", "7USD", "8 美金", "NT$1200", "700元",
+ *  "US$10". KHÔNG đụng số đi kèm đơn vị vô hại ("90分鐘", "36古街", "4小時",
+ *  "四人一艘") — cắt nhầm mấy cái đó là làm hỏng chính tên dịch vụ.
+ *
+ *  Thuần + có test: đây là hàng rào cuối trước khi chữ rời CRM. */
+export function boMucTien(s: string): string {
+  return s
+    // số đứng TRƯỚC đơn vị tiền: 7USD · 8 美金 · 700元 · 10 US$
+    .replace(/\d+(?:[.,]\d+)?\s*(?:usd|us\$|美金|美元|元|nt\$|ntd|vnd|đ|₫)/gi, "")
+    // ký hiệu tiền đứng TRƯỚC số: $700 · US$10 · NT$1200 — kèm phần "/người" nếu có
+    .replace(/(?:us\$|nt\$|\$|₫)\s*\d+(?:[.,]\d+)?(?:\s*\/\s*(?:位|人|pax|khách))?/gi, "")
+    // dọn rác còn lại: dấu ngoặc rỗng, dấu câu thừa, khoảng trắng đôi
+    .replace(/[（(]\s*[)）]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[\s、,，/·]+$/g, "")
+    .trim();
+}
+
 /** Giải toàn bộ nội dung 報價 từ báo giá: mặc định tính live + phần OP sửa tay
  *  (ket_qua.export_config) đè lên. File Word và cổng đối tác đều gọi hàm này. */
 export function taiwanQuoteContent(
@@ -132,10 +152,19 @@ export function taiwanQuoteContent(
     .sort((a, b) => a.ngay - b.ngay);
 
   // Cảnh điểm mất phí (ưu tiên tên tiếng Trung), lọc trùng — nối thêm vào 報價包含.
+  //
+  // ten_zh là dòng NGUYÊN VĂN chép từ lịch trình đối tác, và OP được dặn giữ cả
+  // mức tiền ghi kèm để hệ thống còn tính được đơn giá ("越式料理 7USD"). Nhưng
+  // chuỗi này lại đi thẳng vào ô 報價包含 của file Word VÀ bản đẩy sang cổng —
+  // tức mức tiền nội bộ được in cho khách đọc. Đã có trong kho:
+  // "越式SPA／按摩 90分鐘$700/位".
+  //
+  // Cắt mức tiền, GIỮ NGUYÊN phần còn lại: "送古街下午茶", "加贈...紅酒一杯" là
+  // điểm bán, khách phải thấy — chỉ con số là thứ không được ra ngoài.
   const sights = [...new Set(
     items
       .filter((i) => i.loai === "ticket")
-      .map((i) => (i.ten_zh || i.mo_ta || "").trim())
+      .map((i) => boMucTien(i.ten_zh || "") || (i.mo_ta || "").trim())
       .filter(Boolean),
   )];
 
