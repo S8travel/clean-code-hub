@@ -66,6 +66,31 @@ export function useBaoGiaLog(baoGiaId?: number) {
   });
 }
 
+/**
+ * Log của MỌI báo giá — để màn danh sách biết cái nào đối tác đang chờ trả lời.
+ *
+ * Lấy hết một lần thay vì hỏi từng dòng: bảng này chỉ ghi thêm khi có người bấm
+ * gửi hoặc đối tác nhắn, nên nó nhỏ hơn danh sách báo giá nhiều lần. Hỏi 19 câu
+ * để vẽ 19 dòng mới là thứ nên tránh.
+ *
+ * CHỈ lấy hai loại dòng cần cho phép tính "còn chờ trả lời không" — nội dung
+ * đầy đủ vẫn đọc ở tab Dòng thời gian trong từng báo giá.
+ */
+export function useBaoGiaLogTatCa() {
+  return useQuery({
+    queryKey: [QK_LOG, "tat-ca"],
+    queryFn: async (): Promise<BaoGiaLogRow[]> => {
+      const { data, error } = await externalSupabase
+        .from("bao_gia_log")
+        .select("id, bao_gia_id, loai, noi_dung, tao_boi_ten, tao_luc")
+        .in("loai", ["gui_ban", "yeu_cau_sua"])
+        .order("tao_luc", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as BaoGiaLogRow[];
+    },
+  });
+}
+
 /** Chốt một bản chào. RPC khoá dòng báo giá rồi mới cấp số nên bấm hai lần
  *  không ra hai phiên bản trùng số. */
 export function useTaoPhienBan() {

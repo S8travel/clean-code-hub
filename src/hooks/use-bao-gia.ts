@@ -149,6 +149,14 @@ export interface BaoGiaRow {
   // do RPC tao_phien_ban_bao_gia ghi, KHÔNG sửa tay.
   so_phien_ban_cuoi: number;
   phien_ban_hien_hanh_id: number | null;
+  // Link xem báo giá cho người không có tài khoản cổng. Do edge fn
+  // tao-link-bao-gia ghi; hai cột "mở" do lượt đồng bộ kéo ngược từ cổng về.
+  link_token: string | null;
+  link_het_han: string | null;
+  link_thu_hoi: boolean;
+  link_tao_luc: string | null;
+  link_so_lan_mo: number;
+  link_mo_gan_nhat: string | null;
   // ── Cổng đối tác (外網) ──
   // Bản báo giá ĐÓNG BĂNG lúc bấm "Gửi khách": bảng giá đã chào không đổi theo
   // giá vốn sửa sau. Chỉ chứa giá bán — xem lib/portal-payload.ts.

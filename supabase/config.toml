@@ -73,3 +73,9 @@ verify_jwt = false
 # bằng header 'x-portal-secret' khớp PORTAL_TRAO_DOI_SECRET.
 [functions.yeu-cau-sua-bao-gia]
 verify_jwt = false
+
+# tao-link-bao-gia: tạo trang xem báo giá công khai cho khách không có tài khoản.
+# verify_jwt = TRUE và ĐỪNG hạ xuống: hàm này quyết định thứ gì được mở ra ngoài
+# internet — để mở là ai cũng tự tạo được trang công khai chứa bảng giá khách khác.
+[functions.tao-link-bao-gia]
+verify_jwt = true

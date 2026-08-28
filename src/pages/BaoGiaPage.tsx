@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, Trash2, FileDown, FileText, Settings, Copy, Inbox } from "lucide-react";
+import { Plus, Trash2, FileDown, FileText, Settings, Copy, Inbox, MessageSquareWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -28,12 +28,14 @@ import {
   type BaoGiaKetQua,
 } from "@/hooks/use-bao-gia";
 import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
+import { useBaoGiaLogTatCa } from "@/hooks/use-bao-gia-phien-ban";
+import { nhomYeuCauChuaTraLoi } from "@/lib/bao-gia-phien-ban";
 import { useLeadsList } from "@/hooks/use-leads";
 import { useAuth } from "@/hooks/use-auth";
 import { useGanBaoGiaVaoYeuCau, useYeuCauBaoGiaList } from "@/hooks/use-yeu-cau-bao-gia";
 import { soNgayTuNgay, tenChuongTrinhTuYeuCau } from "@/lib/yeu-cau-bao-gia";
 import { exportBaoGiaWord, exportBaoGiaGiaCuoiWord, type TierPrice } from "@/lib/export-bao-gia-word";
-import { costBreakdown, liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
+import { baoGiaCode, costBreakdown, liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
 import { giaCuoiTierLines, giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { toast } from "sonner";
 
@@ -51,6 +53,7 @@ export default function BaoGiaPage() {
   const { data: bangGia = [] } = useBangGiaDichVu();
   const { data: leads = [] } = useLeadsList();
   const { data: yeuCau = [] } = useYeuCauBaoGiaList();
+  const { data: dsLog = [] } = useBaoGiaLogTatCa();
   const cloneMutation = useCloneBaoGia();
   const deleteMutation = useDeleteBaoGia();
   const ganYeuCau = useGanBaoGiaVaoYeuCau();
@@ -62,6 +65,13 @@ export default function BaoGiaPage() {
   const yeuCauDangLam = useRef<number | null>(null);
 
   const soChuaXuLy = yeuCau.filter((y) => y.trang_thai_hien_thi === "moi").length;
+
+  // Đối tác nhắn "sửa chương trình" từ cổng thì lời nhắn đó nằm trong dòng thời
+  // gian của TỪNG báo giá — ở đây trước giờ không thấy gì. Kéo lên thành dấu ở
+  // danh sách: mất một câu hỏi DB, đổi lại không phải mở lần lượt từng báo giá
+  // mới biết ai đang chờ mình.
+  const dangCho = nhomYeuCauChuaTraLoi(dsLog);
+  const soDangCho = dangCho.size;
 
   // Bấm "Báo giá" ở tab Yêu cầu → mở modal đã điền sẵn thứ đối tác gửi: đối tác,
   // tên chương trình, ngày đi/về, số ngày suy từ ngày, lead, và file họ đính kèm.
@@ -167,6 +177,11 @@ export default function BaoGiaPage() {
           <TabsTrigger value="bao-gia">
             <FileText className="h-4 w-4 mr-1" />Danh sách báo giá
             {list.length > 0 && <span className="ml-1.5 text-[10px] bg-primary/10 text-primary rounded-full px-1.5">{list.length}</span>}
+            {soDangCho > 0 && (
+              <span className="ml-1 text-[10px] bg-amber-100 text-amber-800 rounded-full px-1.5" title="Đối tác đang chờ mình trả lời">
+                {soDangCho} chờ
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="yeu-cau">
             <Inbox className="h-4 w-4 mr-1" />Yêu cầu báo giá
@@ -189,10 +204,23 @@ export default function BaoGiaPage() {
               <p className="text-xs text-muted-foreground mt-1">Nhấn "Tạo báo giá" để bắt đầu</p>
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="space-y-2">
+              {soDangCho > 0 && (
+                // Nói thẳng ra là danh sách vừa bị xếp lại — dòng tự nhảy lên đầu
+                // mà không giải thích thì lần sau OP tưởng hệ thống loạn thứ tự.
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <MessageSquareWarning className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    <b>{soDangCho} báo giá</b> đối tác đã nhắn xin sửa chương trình mà mình chưa chào lại bản nào —
+                    đã đưa lên đầu danh sách. Trả lời bằng cách chào một bản mới.
+                  </span>
+                </div>
+              )}
+              <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-[#E6F1FB]">
+                    <th className="py-2 px-3 text-left font-semibold whitespace-nowrap">Mã BG</th>
                     <th className="py-2 px-3 text-left font-semibold">Tên chương trình</th>
                     <th className="py-2 px-3 text-left font-semibold">Khách (Lead)</th>
                     <th className="py-2 px-3 text-right font-semibold">Giá TB / pax (VND)</th>
@@ -203,7 +231,12 @@ export default function BaoGiaPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((row) => {
+                  {/* Đang chờ trả lời lên đầu; phần còn lại giữ NGUYÊN thứ tự ngày
+                      tạo cũ. Dùng sort ổn định của JS nên hai dòng cùng nhóm không
+                      đảo chỗ nhau giữa các lần vẽ lại. */}
+                  {[...list]
+                    .sort((a, b) => Number(dangCho.has(b.id)) - Number(dangCho.has(a.id)))
+                    .map((row) => {
                     const xr = row.exchange_rate ?? 26000;
                     const isGiaCuoi = row.loai_bao_gia === "gia_cuoi";
                     // Giá cuối: lấy bậc thấp nhất (số khách nhỏ nhất) làm đại diện.
@@ -228,8 +261,27 @@ export default function BaoGiaPage() {
                     }
                     return (
                       <tr key={row.id} className="border-t hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/bao-gia/${row.id}`)}>
+                        {/* Mã BG là tên chung của báo giá này ở MỌI nơi: bản Word gửi
+                            khách, cổng đối tác, trang xem qua link. Đối tác nhắn "cho
+                            hỏi BG00025-v3" thì OP phải dò ra được ngay ở danh sách —
+                            nên hiện cả số bản đang hiệu lực, đúng cách cổng gọi tên. */}
+                        <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
+                          {baoGiaCode(row)}
+                          {row.so_phien_ban_cuoi > 0 && (
+                            <span className="text-slate-400">-v{row.so_phien_ban_cuoi}</span>
+                          )}
+                        </td>
                         <td className="py-2 px-3">
                           <span className="font-medium">{row.tieu_de || "(chưa có tên)"}</span>
+                          {dangCho.has(row.id) && (
+                            <span
+                              className="ml-2 inline-flex items-center gap-1 rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-medium align-middle"
+                              title={dangCho.get(row.id)!.map((l) => l.noi_dung).filter(Boolean).join(" · ")}
+                            >
+                              <MessageSquareWarning className="h-3 w-3" />
+                              Đối tác chờ trả lời
+                            </span>
+                          )}
                           {isGiaCuoi && (
                             <span className="ml-2 inline-block rounded bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] font-medium align-middle">Giá cuối</span>
                           )}
@@ -309,6 +361,7 @@ export default function BaoGiaPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </TabsContent>
