@@ -18,7 +18,7 @@ import { VehicleSelector } from "@/components/bao-gia/detail/VehicleSelector";
 import { useBaoGiaResolveMaps, useMarkCanhDiemCombo, useWriteGiaPhongFromBaoGia } from "@/hooks/use-bao-gia-ai-maps";
 import { useIsReadOnly } from "@/hooks/use-permissions";
 import {
-  resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks,
+  resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks, dongChuaChac,
   applyKsBuaRules, toKsBuaRules,
   hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
   analyzeCombo, comboPatchForRef, sanitizeDraftRows, newResolvedItem, BUA_LABEL,
@@ -64,7 +64,11 @@ const REVIEW_GROUPS: { key: ResolvedItem["loai"]; label: string; icon: React.Rea
 const buaOrder = (b?: "trua" | "toi") => (b === "trua" ? 0 : b === "toi" ? 1 : 2);
 
 // 1 lựa chọn danh mục cho picker (KS / cảnh điểm / set menu NH / loại xe).
-interface CatalogOption { id: number; ten: string; gia?: number | null; nhaHangId?: number }
+interface CatalogOption {
+  id: number; ten: string; gia?: number | null; nhaHangId?: number;
+  /** Tên tiếng Trung có sẵn trong danh mục — CHỈ để tìm và để đối chiếu bằng mắt. */
+  ten_zh?: string | null;
+}
 
 // Modal "AI điền từ lịch trình": ưu tiên đọc FILE lịch trình đính kèm (PDF/ảnh);
 // không có file thì upload; vẫn cho dán text. AI trích xuất + khớp danh mục →
@@ -139,6 +143,17 @@ export function BaoGiaAiImport({
     () => (rows ? applyExclusions(rows, groups, selection, combo) : []),
     [rows, groups, selection, combo],
   );
+  // Dòng máy ĐOÁN KHÔNG CHẮC mà vẫn ra một con số trông như thật — loại sai khó
+  // thấy nhất. Trước đây chỉ có một dấu ⚠ nhỏ xíu cuối ô tên; giờ đếm lên đầu màn
+  // và chặn nút Áp dụng cho tới khi người nhập xác nhận đã xem.
+  const chuaChac = useMemo(() => dongChuaChac(included), [included]);
+  // Xác nhận phải HẾT HẠN khi danh sách đổi: đã xem bản cũ không có nghĩa là đã
+  // xem bản mới. Ký theo nội dung chứ không theo số lượng — sửa một dòng thành
+  // dòng khác mà số lượng giữ nguyên thì vẫn phải xem lại.
+  const chuKyChuaChac = chuaChac.map((r) => `${r.ngay_so}|${r.ten_zh}|${r.match_label}`).join("~");
+  const [daXemChuaChac, setDaXemChuaChac] = useState("");
+  const canXacNhan = chuaChac.length > 0 && daXemChuaChac !== chuKyChuaChac;
+
   // Dòng ăn đang bị nghi tính trùng (để gắn nhãn ngay trên chính dòng ăn đó).
   const warnedMeals = useMemo(() => {
     const s = new Set<number>();
@@ -264,7 +279,7 @@ export function BaoGiaAiImport({
   // Danh mục master cho picker đổi/chọn dịch vụ (mọi loại — giống KS).
   const sortByTen = (a: CatalogOption, b: CatalogOption) => a.ten.localeCompare(b.ten);
   const ksOptions = useMemo(
-    () => (maps ? [...maps.khachSan.entries()].map(([id, v]) => ({ id, ten: v.ten })).sort(sortByTen) : []),
+    () => (maps ? [...maps.khachSan.entries()].map(([id, v]) => ({ id, ten: v.ten, ten_zh: v.ten_zh })).sort(sortByTen) : []),
     [maps],
   );
   const canhDiemOptions = useMemo(
@@ -276,7 +291,14 @@ export function BaoGiaAiImport({
     [maps],
   );
   const setMenuOptions = useMemo(
-    () => (maps ? [...maps.setMenu.entries()].map(([id, v]) => ({ id, ten: `${v.nhaHangTen} · ${v.ten}`, gia: v.gia, nhaHangId: v.nhaHangId })).sort(sortByTen) : []),
+    () => (maps
+      ? [...maps.setMenu.entries()].map(([id, v]) => ({
+          id, ten: `${v.nhaHangTen} · ${v.ten}`, gia: v.gia, nhaHangId: v.nhaHangId,
+          // Tên tiếng Trung của NHÀ HÀNG (set menu không có tên Trung riêng) —
+          // gõ 河內 tìm ra mọi set của nhà hàng đó.
+          ten_zh: maps.nhaHang.get(v.nhaHangId)?.ten_zh ?? null,
+        })).sort(sortByTen)
+      : []),
     [maps],
   );
   const optionsFor = (loai: ResolvedItem["loai"]): CatalogOption[] =>
@@ -490,6 +512,38 @@ export function BaoGiaAiImport({
             Kiểm tra & điền giá còn thiếu, chọn 1 khách sạn cho đêm có nhiều phương án — giá tour tính sống ngay ở bảng “Tính tiền” bên dưới, không cần Áp dụng mới thấy.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Dải cảnh báo dòng máy đoán không chắc. Đặt NGOÀI vùng cuộn để nó không
+            trôi mất khi người nhập kéo xuống xem bảng — cái cần thấy nhất mà cuộn
+            là mất thì coi như không có. */}
+        {rows && chuaChac.length > 0 && (
+          <div className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 space-y-1.5">
+            <div className="flex items-start gap-2 text-xs text-amber-900">
+              <HelpCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>
+                <b>{chuaChac.length} dòng máy đoán chưa chắc</b> nhưng vẫn điền sẵn một mức giá.
+                Đây là chỗ sai khó thấy nhất — số trông như thật. Xem lại tên đã khớp ở cột
+                “Khớp danh mục”, sai thì bấm vào đó chọn lại.
+              </span>
+            </div>
+            <ul className="text-[11px] text-amber-800 pl-6 space-y-0.5">
+              {chuaChac.slice(0, 4).map((r, i) => (
+                <li key={i} className="truncate">
+                  Ngày {r.ngay_so} · {r.ten_zh || r.ten_vi} → <b>{r.match_label}</b>
+                </li>
+              ))}
+              {chuaChac.length > 4 && <li>… và {chuaChac.length - 4} dòng nữa</li>}
+            </ul>
+            <label className="flex items-center gap-1.5 text-xs text-amber-900 cursor-pointer pl-6">
+              <input
+                type="checkbox"
+                checked={!canXacNhan}
+                onChange={(e) => setDaXemChuaChac(e.target.checked ? chuKyChuaChac : "")}
+              />
+              Đã xem các dòng này
+            </label>
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 flex gap-3">
         <div className="flex-1 min-w-0 overflow-auto">
@@ -1015,7 +1069,13 @@ export function BaoGiaAiImport({
               <Button variant="outline" className="gap-1.5" onClick={handleSaveDraft}>
                 <Save className="h-3.5 w-3.5" /> Lưu nháp
               </Button>
-              <Button onClick={handleApply} disabled={included.length === 0}>Áp dụng {included.length} mục</Button>
+              <Button
+                onClick={handleApply}
+                disabled={included.length === 0 || canXacNhan}
+                title={canXacNhan ? `Còn ${chuaChac.length} dòng máy đoán chưa chắc — tick "Đã xem" ở dải vàng phía trên` : undefined}
+              >
+                Áp dụng {included.length} mục
+              </Button>
             </>
           )}
         </DialogFooter>
@@ -1103,7 +1163,13 @@ function CatalogPicker({ value, options, onType, onPick }: {
   // đang hiện tất cả — chỗ chọn lại phải luôn có đường vào.
   const { suggestions, khongKhop, conLai } = useMemo(() => {
     const q = value.toLowerCase().trim();
-    const hit = q ? options.filter((o) => o.ten.toLowerCase().includes(q)) : options;
+    // Tìm bằng CẢ tên tiếng Việt lẫn tên tiếng Trung. Ô này được điền sẵn bản dịch
+    // AI đoán, nên khi AI dịch lạ thì gõ lại chữ Hán trong lịch trình là đường tìm
+    // tự nhiên nhất — trước đây gõ chữ Hán ra rỗng.
+    const hit = q
+      ? options.filter((o) =>
+          o.ten.toLowerCase().includes(q) || (o.ten_zh ?? "").toLowerCase().includes(q))
+      : options;
     const pool = hit.length > 0 ? hit : options;
     return {
       suggestions: pool.slice(0, 40),
@@ -1141,7 +1207,12 @@ function CatalogPicker({ value, options, onType, onPick }: {
             onMouseDown={(e) => { e.preventDefault(); onPick(o); setOpen(false); }}
             className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-left hover:bg-slate-50"
           >
-            <span className="truncate flex-1">{o.ten}</span>
+            <span className="truncate flex-1">
+              {o.ten}
+              {/* Hiện luôn tên tiếng Trung của danh mục để đối chiếu bằng mắt với
+                  dòng đối tác viết — đó mới là thứ cần so, không phải bản dịch. */}
+              {o.ten_zh && <span className="ml-1.5 text-[10px] text-slate-400">{o.ten_zh}</span>}
+            </span>
             {o.gia != null && o.gia > 0 && (
               <span className="shrink-0 text-[10px] tabular-nums text-slate-500">{o.gia.toLocaleString("vi-VN")} ₫</span>
             )}

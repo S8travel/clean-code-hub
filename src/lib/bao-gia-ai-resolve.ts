@@ -48,10 +48,15 @@ export interface ResolveMaps {
   }>;
   /** nha_hang_set_menu.id → { ten, gia, nhaHangTen, nhaHangId } */
   setMenu: Map<number, { ten: string; gia: number | null; nhaHangTen: string; nhaHangId: number }>;
-  /** nha_hang.id → { ten, foc_khach, foc_mien } (chính sách FOC để snapshot) */
-  nhaHang: Map<number, { ten: string; foc_khach: number | null; foc_mien: number | null }>;
-  /** khach_san.id → { ten } */
-  khachSan: Map<number, { ten: string }>;
+  /** nha_hang.id → { ten, foc_khach, foc_mien } (chính sách FOC để snapshot).
+   *  ten_zh: tên tiếng Trung có sẵn trong danh mục (124/336 nhà hàng đã điền) —
+   *  dùng để TÌM bằng chữ Hán ở ô chọn lại, không tham gia tính tiền. */
+  nhaHang: Map<number, {
+    ten: string; ten_zh?: string | null;
+    foc_khach: number | null; foc_mien: number | null;
+  }>;
+  /** khach_san.id → { ten } (+ ten_zh nếu danh mục đã điền, 13/266) */
+  khachSan: Map<number, { ten: string; ten_zh?: string | null }>;
   /** khach_san.id → các dòng giá theo giai đoạn (resolve theo ngày tour) */
   khachSanGia: Map<number, GiaPhongRow[]>;
   /** nha_xe_loai_xe.id → { ten, gia } */
@@ -199,6 +204,41 @@ function toBaoGiaLoai(loai: AiExtractItem["loai"]): BaoGiaItem["loai"] {
   if (loai === "meal") return "meal";
   if (loai === "transport") return "transport";
   return "ticket";
+}
+
+/** Dưới ngưỡng này thì AI khớp danh mục KHÔNG được coi là chắc.
+ *
+ *  Trước đây con số 0.6 nằm rải rác dạng chữ số trần trong lib lẫn UI, và nó chỉ
+ *  quyết định hai việc thầm lặng (alias có thắng AI không, có học không). Người
+ *  nhập thì vẫn thấy một đơn giá thật, gọn gàng, không phân biệt được với dòng
+ *  khớp chắc — nên khớp nhầm ở mức tin 0,1 vẫn đi thẳng vào bảng giá.
+ *
+ *  Đặt tên và gom về một chỗ để nó còn dùng được cho việc thứ ba: BÁO CHO NGƯỜI
+ *  NHẬP BIẾT dòng nào cần nhìn lại. */
+export const NGUONG_CHAC = 0.6;
+
+/** Dòng AI tự khớp mà KHÔNG chắc — cần người nhìn lại trước khi áp dụng.
+ *
+ *  Cố ý KHÔNG tính vào đây:
+ *  · dòng lấy từ bộ nhớ đã học (`from_alias`) — người đã dạy một lần rồi
+ *  · dòng người vừa động tay (`sua_tay`) — vừa xem xong thì hỏi lại là phiền
+ *  · dòng chưa khớp (`unmatched`) — đã hiện rõ "Chưa khớp", không giả vờ đúng
+ *  · dòng ăn theo định mức USD (`confidence` 0 nhưng giá tính từ chính con số
+ *    đối tác ghi trong lịch trình, không phải máy đoán)
+ *
+ *  Tức là chỉ còn đúng loại nguy hiểm nhất: MÁY ĐOÁN, ĐOÁN KHÔNG CHẮC, MÀ VẪN RA
+ *  MỘT CON SỐ TRÔNG NHƯ THẬT. */
+export function dongChuaChac<T extends {
+  status: ResolveStatus; confidence: number;
+  from_alias?: boolean; sua_tay?: boolean; match_table?: MatchTable | null;
+}>(rows: T[]): T[] {
+  return rows.filter((r) =>
+    r.status !== "unmatched"
+    && !r.from_alias
+    && !r.sua_tay
+    && r.match_table != null
+    && r.confidence > 0
+    && r.confidence < NGUONG_CHAC);
 }
 
 /** Tỷ giá CỐ ĐỊNH quy đổi định mức USD → đơn giá khi mô tả chỉ ghi USD, KHÔNG
@@ -408,7 +448,7 @@ function resolveOne(
   aliasMap?: Map<string, AliasEntry>,
 ): ResolvedItem {
   const res = resolveOneCore(it, maps, tourDate);
-  const strong = res.status === "matched" && (res.confidence ?? 0) >= 0.6;
+  const strong = res.status === "matched" && (res.confidence ?? 0) >= NGUONG_CHAC;
 
   let cur = res;
   const a = aliasMap?.get(aliasKeyOf(it.ten_zh || it.ten_vi || "", res.loai));

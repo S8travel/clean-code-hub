@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { taiwanDefaultBrackets, taiwanExportDefaults, taiwanQuoteContent } from "./bao-gia-taiwan-content";
+import { boMucTien, taiwanDefaultBrackets, taiwanExportDefaults, taiwanQuoteContent } from "./bao-gia-taiwan-content";
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 
 const kase = (guests: number, usd: number): BaoGiaCase => ({
@@ -124,5 +124,39 @@ describe("taiwanQuoteContent — nội dung 報價 dùng chung Word + cổng đ�
     for (const gia of ["1000000", "1600000", "300000", "900000", "150000"]) {
       expect(blob).not.toContain(gia);
     }
+  });
+});
+
+describe("boMucTien — chặn mức tiền lọt vào bản gửi khách, giữ nguyên chữ", () => {
+  it("cắt ký hiệu tiền đứng trước số, kèm phần /người", () => {
+    expect(boMucTien("越式SPA／按摩 90分鐘$700/位")).toBe("越式SPA／按摩 90分鐘");
+  });
+
+  it("cắt số đứng trước đơn vị tiền", () => {
+    expect(boMucTien("越式料理 7USD")).toBe("越式料理");
+    expect(boMucTien("海鮮餐合菜 8美金")).toBe("海鮮餐合菜");
+  });
+
+  it("GIỮ NGUYÊN lời hứa tặng — đó là điểm bán, khách phải thấy", () => {
+    expect(boMucTien("電瓶車遊36古街(送古街下午茶)")).toBe("電瓶車遊36古街(送古街下午茶)");
+    expect(boMucTien("百年酒窖贈紅酒一杯")).toBe("百年酒窖贈紅酒一杯");
+    expect(boMucTien("加贈法國山城百年酒窖(含每人一杯葡萄酒或無酒精飲料)"))
+      .toBe("加贈法國山城百年酒窖(含每人一杯葡萄酒或無酒精飲料)");
+  });
+
+  it("KHÔNG đụng số đi kèm đơn vị vô hại — cắt nhầm là hỏng tên dịch vụ", () => {
+    expect(boMucTien("下龍灣遊船4小時")).toBe("下龍灣遊船4小時");
+    expect(boMucTien("三十六古街")).toBe("三十六古街");
+    expect(boMucTien("長安生態保護區 含遊船四人一艘")).toBe("長安生態保護區 含遊船四人一艘");
+  });
+
+  it("dọn dấu ngoặc rỗng và dấu câu thừa còn lại sau khi cắt", () => {
+    expect(boMucTien("按摩 ($700)")).toBe("按摩");
+    expect(boMucTien("Buffet trưa, 10USD")).toBe("Buffet trưa");
+  });
+
+  it("chuỗi không có tiền thì trả về y nguyên", () => {
+    expect(boMucTien("會安古鎮")).toBe("會安古鎮");
+    expect(boMucTien("")).toBe("");
   });
 });
