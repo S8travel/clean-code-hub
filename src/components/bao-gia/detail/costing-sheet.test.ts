@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { calcTier, effItemFoc, type ManualItem } from "@/lib/bao-gia-calc";
+import { calcTier, effItemFoc, effItemQty, slOverrideOf, type ManualItem } from "@/lib/bao-gia-calc";
 import {
   aiPreviewSheet, clampNgay, costingSheet, emptyBaoGiaCase, isSapaTour,
-  newBaoGiaItem, resolveHdvGiaNgay,
+  newBaoGiaItem, resolveHdvGiaNgay, setSlOverride,
 } from "./helpers";
 import type { BaoGiaRow, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 
@@ -324,5 +324,124 @@ describe("costingSheet — FOC per-tier", () => {
     expect(meal.foc_manual).toBeNull(); // auto
     expect(meal.cells[0].total).toBe(1_600_000);
     expect(meal.cells[1].total).toBe(3_900_000);
+  });
+});
+
+// ── SL nhập tay theo cỡ đoàn (đoàn FIT) ──────────────────────────────────────
+// Đoàn FIT không theo công thức rooms = ceil(khách/2)+1 / pax = khách+1 →
+// OP phải chốt đúng số phòng / số suất cho từng cột cỡ đoàn.
+
+describe("slOverrideOf / effItemQty — SL nhập tay theo bậc", () => {
+  it("có số cho bậc nào thì dùng số đó, bậc khác vẫn tự tính", () => {
+    const it = { sl_override: { "16": 7 } };
+    expect(effItemQty(it, 16, 9)).toBe(7);
+    expect(effItemQty(it, 20, 11)).toBe(11); // bậc 20 chưa nhập → auto
+  });
+
+  it("0 là số hợp lệ (FIT không dùng dịch vụ đó ở cỡ này)", () => {
+    expect(slOverrideOf({ sl_override: { "16": 0 } }, 16)).toBe(0);
+    expect(effItemQty({ sl_override: { "16": 0 } }, 16, 9)).toBe(0);
+  });
+
+  it("số âm / rác / vắng → coi như chưa nhập, KHÔNG âm thầm làm lệch giá", () => {
+    expect(effItemQty({ sl_override: { "16": -3 } }, 16, 9)).toBe(9);
+    expect(effItemQty({ sl_override: { "16": NaN } }, 16, 9)).toBe(9);
+    expect(effItemQty({}, 16, 9)).toBe(9);
+  });
+});
+
+describe("setSlOverride — sửa ô SL của 1 cột", () => {
+  it("gõ số → ghi vào đúng bậc, các bậc khác giữ nguyên", () => {
+    expect(setSlOverride({ "20": 11 }, 16, "7")).toEqual({ "16": 7, "20": 11 });
+  });
+
+  it("xoá trắng ô → bậc đó về tự tính, bậc khác còn nguyên", () => {
+    expect(setSlOverride({ "16": 7, "20": 11 }, 16, "")).toEqual({ "20": 11 });
+  });
+
+  it("xoá khoá cuối cùng → undefined (không đọng object rỗng trong JSON)", () => {
+    expect(setSlOverride({ "16": 7 }, 16, "")).toBeUndefined();
+  });
+
+  it("số lẻ / số âm: làm tròn, số âm coi như xoá", () => {
+    expect(setSlOverride(undefined, 16, "7.4")).toEqual({ "16": 7 });
+    expect(setSlOverride({ "16": 7 }, 16, "-2")).toBeUndefined();
+  });
+});
+
+describe("calcCase — SL nhập tay đổi tiền vốn", () => {
+  it("hotel: 7 phòng nhập tay thay cho 9 phòng tự tính (bậc 16)", () => {
+    const items: ManualItem[] = [
+      { id: "h", ngay: 1, loai: "hotel", mo_ta: "", bang_gia_ten: "", gia: 1_000_000,
+        so_luong: 1, sl_override: { "16": 7 } },
+    ];
+    expect(calcTier(items, 3, 26000, 0, 16).hotel).toBe(7_000_000);  // 7 phòng × 1M
+    expect(calcTier(items, 3, 26000, 0, 20).hotel).toBe(11_000_000); // bậc 20 vẫn auto 11 phòng
+  });
+
+  it("meal: FOC tự tính chạy theo SL nhập tay, không theo pax gốc", () => {
+    const items: ManualItem[] = [
+      { id: "m", ngay: 1, loai: "meal", mo_ta: "", bang_gia_ten: "", gia: 100_000,
+        foc_khach: 16, foc_mien: 1, sl_override: { "16": 10 } },
+    ];
+    // SL 10 < 16 → chưa đủ suất miễn nào (pax gốc 17 thì được miễn 1)
+    expect(calcTier(items, 3, 26000, 0, 16).meal).toBe(1_000_000);
+  });
+
+  it("SL nhập tay = 0 → dòng đó không tính tiền ở bậc đó", () => {
+    const items: ManualItem[] = [
+      { id: "t", ngay: 1, loai: "ticket", mo_ta: "", bang_gia_ten: "", gia: 50_000,
+        sl_override: { "16": 0 } },
+    ];
+    expect(calcTier(items, 3, 26000, 0, 16).ticket).toBe(0);
+    expect(calcTier(items, 3, 26000, 0, 20).ticket).toBe(1_050_000); // 50k × 21
+  });
+});
+
+describe("costingSheet — ô SL nhập tay", () => {
+  const hotelFit: BaoGiaItem = {
+    loai: "hotel", mo_ta: "KS test", don_gia: 1_000_000, ghi_chu: "", ngay_so: 1,
+    so_luong: 1, sl_override: { "16": 7 },
+  };
+
+  it("cell mang cả SL đang dùng, SL tự tính và cờ sửa tay", () => {
+    const s = costingSheet(makeDraft([hotelFit]))!;
+    const row = s.groups[1].rows[0];
+    expect(row.cells[0]).toMatchObject({ guests: 16, qty: 7, auto: 9, manual: true });
+    expect(row.cells[1]).toMatchObject({ guests: 20, qty: 11, auto: 11, manual: false });
+    expect(row.sl_override).toEqual({ "16": 7 });
+  });
+
+  it("thành tiền + cộng nhóm dùng SL nhập tay", () => {
+    const s = costingSheet(makeDraft([hotelFit]))!;
+    expect(s.groups[1].rows[0].cells[0].total).toBe(7_000_000);
+    expect(s.groups[1].subtotals[0]).toBe(7_000_000);
+    expect(s.groups[1].subtotals[1]).toBe(11_000_000); // bậc 20 vẫn auto 11 phòng
+  });
+
+  it("bảng khớp calcTier — giá bán cuối cùng cũng đổi theo SL nhập tay", () => {
+    const draft = makeDraft([hotelFit], { xe_gia: 10_000_000, profit_usd: 10 });
+    const s = costingSheet(draft)!;
+    const manual: ManualItem[] = [
+      { id: "0", ngay: 1, loai: "hotel", mo_ta: "KS test", bang_gia_ten: "KS test",
+        gia: 1_000_000, so_luong: 1, sl_override: { "16": 7 } },
+    ];
+    const tongVon = s.footer.find((f) => f.key === "tong_von")!;
+    const giaPax = s.footer.find((f) => f.key === "gia_pax")!;
+    s.configs.forEach((c, ti) => {
+      const ref = calcTier(manual, 3, 26000, 10, c.guests, 10_000_000, 0);
+      expect(tongVon.values[ti]).toBe(ref.total_cost);
+      expect(giaPax.values[ti]).toBe(ref.final_price_vnd);
+    });
+  });
+
+  it("xe (lump) không nhận SL nhập tay — vẫn là dòng trọn gói", () => {
+    const s = costingSheet(makeDraft([
+      { loai: "transport", mo_ta: "Xe thêm", don_gia: 2_000_000, ghi_chu: "", ngay_so: 1,
+        so_luong: 1, sl_override: { "16": 5 } },
+    ]))!;
+    const row = s.groups[0].rows[0];
+    expect(row.cells[0]).toMatchObject({ qty: 1, auto: 1, manual: false });
+    expect(row.cells[0].total).toBe(2_000_000);
   });
 });

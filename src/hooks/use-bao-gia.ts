@@ -26,6 +26,11 @@ export interface BaoGiaItem {
   // N (次/N数): số đêm (KS) / số lần (ăn, vé) / số chuyến (xe). Nhân vào thành
   // tiền. Item cũ không có → mặc định 1.
   so_luong?: number;
+  // SL (số phòng / số suất) NHẬP TAY theo từng cỡ đoàn — cho đoàn FIT, nơi số
+  // phòng/suất thực tế không theo công thức (rooms = ceil(khách/2)+1, pax =
+  // khách+1). Khoá = số khách của bậc (dạng chuỗi vì lưu JSONB), giá trị = SL
+  // dùng thay số tự tính. Bậc KHÔNG có khoá → vẫn tự tính như cũ.
+  sl_override?: Record<string, number>;
   // Tên gốc tiếng Trung (từ AI trích lịch trình ZH) — hiển thị song ngữ trong
   // bảng costing kiểu Excel. Item nhập tay/không có → bỏ trống.
   ten_zh?: string;

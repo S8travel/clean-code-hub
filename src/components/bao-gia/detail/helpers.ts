@@ -3,7 +3,7 @@
 
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import {
-  calcBaoGia, calcTiers, tierConfig, effItemFoc,
+  calcBaoGia, calcTiers, tierConfig, effItemFoc, effItemQty, slOverrideOf,
   HDV_GIA_NGAY_MAC_DINH, HDV_GIA_NGAY_SAPA, type ManualItem,
 } from "@/lib/bao-gia-calc";
 
@@ -128,6 +128,7 @@ export function liveKetQua(draft: BaoGiaRow): BaoGiaKetQua | null {
     foc_khach: it.foc_khach,
     foc_mien: it.foc_mien,
     so_luong: it.so_luong ?? 1,
+    sl_override: it.sl_override,
   }));
 
   const phuThu = draft.phu_thu ?? 0;
@@ -210,6 +211,7 @@ export function costBreakdown(args: {
     id: `${i}`, ngay: it.ngay_so ?? 1, loai: it.loai,
     mo_ta: it.mo_ta, bang_gia_ten: it.mo_ta, gia: it.don_gia,
     foc: it.foc, foc_khach: it.foc_khach, foc_mien: it.foc_mien, so_luong: it.so_luong ?? 1,
+    sl_override: it.sl_override,
   }));
   // Truyền 0 cho phuThu trong calc — phụ thu hiển thị dòng riêng (KHÔNG gộp
   // vào "Xe vận chuyển"). Cộng vào tổng cost vốn ngoài calc.
@@ -258,6 +260,7 @@ export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
     id: `${i}`, ngay: it.ngay_so ?? 1, loai: it.loai,
     mo_ta: it.mo_ta, bang_gia_ten: it.mo_ta, gia: it.don_gia, foc: it.foc,
     foc_khach: it.foc_khach, foc_mien: it.foc_mien, so_luong: it.so_luong ?? 1,
+    sl_override: it.sl_override,
   }));
   const xr = draft.exchange_rate ?? 26000;
   const profitUsd = draft.profit_usd ?? 0;
@@ -333,6 +336,23 @@ export function newBaoGiaItem(
   };
 }
 
+/** Ghi đè / xoá SL nhập tay của MỘT bậc số khách trên 1 dòng dịch vụ.
+ *  Ô để trống (hoặc số không hợp lệ) → xoá khoá của bậc đó, bậc quay về tự
+ *  tính; hết khoá → trả `undefined` để JSON gọn, không đọng object rỗng.
+ *  Các bậc khác GIỮ NGUYÊN — sửa cột 16 khách không được đụng cột 20 khách. */
+export function setSlOverride(
+  cur: Record<string, number> | undefined,
+  guests: number,
+  raw: string,
+): Record<string, number> | undefined {
+  const next = { ...(cur ?? {}) };
+  const s = raw.trim();
+  const v = Number(s);
+  if (s === "" || !Number.isFinite(v) || v < 0) delete next[String(guests)];
+  else next[String(guests)] = Math.round(v);
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
 // ── Costing sheet (bố cục Excel: nhóm Xe/KS/Ăn/Vé × nhiều cột số khách) ───────
 
 export type CostingUnit = "rooms" | "pax" | "lump";
@@ -340,7 +360,9 @@ export type CostingUnit = "rooms" | "pax" | "lump";
 /** 1 ô (cell) chi phí của 1 item ở 1 bậc số khách. */
 export interface CostingTierCell {
   guests: number;
-  qty: number;    // số phòng (hotel) | pax (meal/ticket) | 1 (lump xe/phụ thu)
+  qty: number;    // SL dùng để tính: số phòng (hotel) | pax (meal/ticket) | 1 (lump)
+  auto: number;   // SL hệ thống tự tính cho bậc này (placeholder ô nhập)
+  manual: boolean;// true = SL do OP nhập tay cho bậc này (đoàn FIT), khác auto
   foc: number;    // số miễn áp dụng cho bậc này (auto theo chính sách hoặc override)
   total: number;  // don_gia × so_luong × max(0, qty − foc)  (lump: × so_luong)
 }
@@ -361,6 +383,7 @@ export interface CostingRow {
   foc_manual: number | null;  // số miễn nhập tay (override). null = auto theo policy
   foc_khach?: number;         // chính sách FOC nhà hàng (auto)
   foc_mien?: number;
+  sl_override?: Record<string, number>; // SL nhập tay theo bậc (khoá = số khách)
   editable: boolean;
   cells: CostingTierCell[];   // 1 cell / bậc số khách
 }
@@ -421,10 +444,13 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
 
   const cellsFor = (it: BaoGiaItem, don_gia: number, sl: number): CostingTierCell[] =>
     configs.map((c) => {
-      const qty = it.loai === "hotel" ? c.rooms : it.loai === "transport" ? 1 : c.pax;
-      const foc = it.loai === "transport" ? 0 : effItemFoc(it, qty); // số miễn theo bậc
+      const auto = it.loai === "hotel" ? c.rooms : it.loai === "transport" ? 1 : c.pax;
+      // Xe (lump) không tính theo đầu khách → không cho ghi đè SL.
+      const manual = it.loai !== "transport" && slOverrideOf(it, c.guests) != null;
+      const qty = it.loai === "transport" ? auto : effItemQty(it, c.guests, auto);
+      const foc = it.loai === "transport" ? 0 : effItemFoc(it, qty); // số miễn theo SL thực
       const eff = Math.max(0, qty - foc);
-      return { guests: c.guests, qty, foc, total: don_gia * sl * eff };
+      return { guests: c.guests, qty, auto, manual, foc, total: don_gia * sl * eff };
     });
 
   const rowFromItem = (it: BaoGiaItem, idx: number): CostingRow => {
@@ -435,6 +461,7 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
       ngay_so: it.ngay_so ?? 1, bua_an: it.bua_an, mo_ta: it.mo_ta, ten_zh: it.ten_zh,
       don_gia, don_gia_usd: xr > 0 ? don_gia / xr : 0, so_luong: sl,
       foc_manual: it.foc ?? null, foc_khach: it.foc_khach, foc_mien: it.foc_mien,
+      sl_override: it.sl_override,
       editable: true, cells: cellsFor(it, don_gia, sl),
     };
   };
@@ -450,7 +477,7 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
     itemIndex: -1, loai: "transport", unit: "lump", ngay_so: 0, mo_ta: label,
     don_gia: gia, don_gia_usd: xr > 0 ? gia / xr : 0, so_luong: 1,
     foc_manual: null, editable: false,
-    cells: configs.map((c) => ({ guests: c.guests, qty: 1, foc: 0, total: gia })),
+    cells: configs.map((c) => ({ guests: c.guests, qty: 1, auto: 1, manual: false, foc: 0, total: gia })),
   });
 
   // Nhóm Xe = xe (lump từ draft) + transport items + phụ thu (lump từ draft).

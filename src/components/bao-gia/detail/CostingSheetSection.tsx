@@ -218,7 +218,11 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
               <th className="py-1.5 px-2 font-semibold text-center border border-slate-200" title="Số đêm / số lần (次/N数)">N</th>
               <th className="py-1.5 px-2 font-semibold text-center border border-slate-200" title="FOC: số phòng/suất miễn phí">FOC</th>
               {sheet.configs.map((c, i) => (
-                <th key={c.guests} colSpan={2} className={cn("py-1 px-2 font-semibold text-center border border-slate-200", tierBg(i))}>
+                <th
+                  key={c.guests} colSpan={2}
+                  className={cn("py-1 px-2 font-semibold text-center border border-slate-200", tierBg(i))}
+                  title={`Số phòng/pax hệ thống tự tính cho cỡ này (${c.guests} khách + 1 HDV, phòng đôi). Chỉ là SL mặc định — sửa được ở từng ô SL bên dưới.`}
+                >
                   <div className="text-blue-800">{c.guests} khách</div>
                   <div className="text-[10px] font-normal text-slate-500">{c.rooms} phòng · {c.pax} pax</div>
                 </th>
@@ -229,8 +233,8 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
               <th className="sticky left-0 z-20 bg-[#F2F7FC] border border-slate-200" colSpan={6}></th>
               {sheet.configs.map((c, i) => (
                 <th key={c.guests} className={cn("py-0.5 px-2 text-center border border-slate-200", tierBg(i))} colSpan={2}>
-                  <span className="inline-flex gap-3">
-                    <span className="w-10 text-center">SL</span>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="w-16 text-center">SL</span>
                     <span>Thành tiền</span>
                   </span>
                 </th>
@@ -306,7 +310,10 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
 
       <p className="text-[11px] text-slate-500">
         Cột <b>N</b> = số đêm (KS) / số lần (ăn, vé). <b>FOC</b> nhà hàng <b>tự tính</b> theo chính sách (vd 16免1)
-        cho từng cỡ đoàn — để trống ô FOC = auto, nhập số = ghi đè. Mỗi cột hiện <b>SL−miễn</b> (số đã trừ FOC).
+        cho từng cỡ đoàn — để trống ô FOC = auto, nhập số = ghi đè.
+        Ô <b>SL</b> trong mỗi cột cỡ đoàn cũng <b>sửa được</b>: để trống = tự tính (số phòng / số suất theo cỡ đoàn),
+        gõ số = chốt đúng SL cho riêng cột đó (đoàn FIT, số phòng lẻ…) — ô sửa tay tô <b className="text-amber-700">vàng</b>,
+        xoá trắng để về tự tính. Số nhỏ cạnh ô là phần <b>miễn</b> bị trừ (FOC).
         Xe & phụ thu sửa ở phần thông tin tour phía trên (hoặc trong màn “AI điền từ lịch trình”).
         <b>Thiếu mục</b>: bấm “＋ Thêm dòng…” ở cuối nhóm rồi điền tên + giá ngay trên dòng mới.
         <b>Thừa</b>: rê chuột vào dòng → biểu tượng thùng rác cạnh tên.
