@@ -113,5 +113,6 @@ export const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   ghi_chu: null,
   active: true,
   chi_xem: false,
+  nhan_yeu_cau_doi_tac: false,
   password_hash: null,
 });

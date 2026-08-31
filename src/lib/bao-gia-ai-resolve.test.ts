@@ -17,6 +17,8 @@ import {
   toKsBuaRules,
   newResolvedItem,
   aliasesToLearn,
+  dongChuaChac,
+  NGUONG_CHAC,
   type AiExtractResult,
   type AiExtractItem,
   type ResolveMaps,
@@ -627,5 +629,45 @@ describe("newResolvedItem — dòng OP tự thêm khi AI đọc sót mục", () 
     };
     const out = aliasesToLearn([r]);
     expect(out[0]).toMatchObject({ match_table: "canh_diem", target_id: 7, gia_override: null });
+  });
+});
+
+describe("dongChuaChac — dòng AI đoán không chắc mà vẫn ra số", () => {
+  const dong = (over: Partial<ResolvedItem> = {}): ResolvedItem => ({
+    ngay_so: 1, loai: "ticket", mo_ta: "X", don_gia: 500_000, foc: 0,
+    ten_zh: "下龍灣遊船", ten_vi: "Vịnh Hạ Long", ghi_chu: "",
+    confidence: 0.9, status: "matched", match_label: "Hạ Long",
+    match_table: "canh_diem", match_id: 1, match_set_menu_id: null,
+    ...over,
+  });
+
+  it("bắt đúng dòng máy đoán yếu mà vẫn điền giá", () => {
+    const ds = dongChuaChac([dong({ confidence: 0.2 })]);
+    expect(ds).toHaveLength(1);
+  });
+
+  it("bỏ qua dòng khớp chắc", () => {
+    expect(dongChuaChac([dong({ confidence: 0.9 })])).toHaveLength(0);
+    expect(dongChuaChac([dong({ confidence: NGUONG_CHAC })])).toHaveLength(0);
+  });
+
+  it("bỏ qua dòng từ bộ nhớ đã học và dòng người vừa sửa tay", () => {
+    expect(dongChuaChac([dong({ confidence: 0.2, from_alias: true })])).toHaveLength(0);
+    expect(dongChuaChac([dong({ confidence: 0.2, sua_tay: true })])).toHaveLength(0);
+  });
+
+  it("bỏ qua dòng chưa khớp — nó đã tự nói rõ là chưa khớp", () => {
+    const ds = dongChuaChac([
+      dong({ confidence: 0.2, status: "unmatched", match_table: null, don_gia: 0 }),
+    ]);
+    expect(ds).toHaveLength(0);
+  });
+
+  it("bỏ qua dòng ăn theo định mức USD — giá từ con số đối tác ghi, không phải máy đoán", () => {
+    // Nhánh định mức trả confidence 0 + không có tham chiếu danh mục.
+    const ds = dongChuaChac([
+      dong({ confidence: 0, match_table: null, match_id: null, match_label: "Định mức 7 USD × 20.000" }),
+    ]);
+    expect(ds).toHaveLength(0);
   });
 });

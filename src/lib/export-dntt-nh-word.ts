@@ -132,7 +132,8 @@ export interface NHDocEntry {
   /** ĐNTT cọc / [Bổ sung] → so_tien CỐ Ý khác tổng dòng, không cảnh báo lệch. */
   dntt_lech_bo_qua?: boolean;
   /** Phần ĐÃ in trong "Tổng tiền" nhưng CỐ Ý không nằm trong so_tien ĐNTT:
-   *  voucher TẶNG (dòng chính in gross) + dòng phát sinh HDV trả tiền mặt. */
+   *  voucher TẶNG (dòng chính in gross). Dòng HDV trả tiền mặt KHÔNG được in nữa
+   *  (xem lib/print-nguoi-tra.ts) nên không còn cộng vào đây. */
   dntt_ngoai_dntt?: number;
 }
 

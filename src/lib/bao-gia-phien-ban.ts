@@ -59,6 +59,71 @@ export function buildPhienBan(
   };
 }
 
+// ── Yêu cầu sửa của đối tác ──────────────────────────────────────────────────
+
+/** Một dòng trong dòng thời gian của báo giá (bao_gia_log). */
+export interface DongLogBaoGia {
+  loai: string;
+  noi_dung: string | null;
+  tao_luc: string;
+}
+
+/**
+ * Yêu cầu sửa mà mình CHƯA trả lời — tức là gửi sau lần chào bản gần nhất.
+ *
+ * Vì sao mốc là "lần chào gần nhất" chứ không phải một cột "đã xử lý": trả lời
+ * một yêu cầu sửa NGHĨA LÀ chào lại một bản. Không có hành động nào khác đóng nó
+ * được, nên đừng đẻ thêm nút "đánh dấu đã xong" để rồi hai chỗ lệch nhau.
+ *
+ * Trả về theo thứ tự CŨ TRƯỚC: đối tác nhắn hai lần thì lần sau thường là bổ
+ * sung cho lần đầu, đọc xuôi mới hiểu.
+ */
+export function yeuCauSuaChuaTraLoi(logs: DongLogBaoGia[]): DongLogBaoGia[] {
+  let mocChao = "";
+  for (const l of logs) {
+    if (l.loai === "gui_ban" && l.tao_luc > mocChao) mocChao = l.tao_luc;
+  }
+  return logs
+    .filter((l) => l.loai === "yeu_cau_sua" && l.tao_luc > mocChao)
+    .sort((a, b) => (a.tao_luc < b.tao_luc ? -1 : a.tao_luc > b.tao_luc ? 1 : 0));
+}
+
+/**
+ * Gom "đối tác đang chờ mình trả lời" cho CẢ danh sách báo giá, một lần.
+ *
+ * Vì sao cần: yêu cầu sửa đối tác gửi từ cổng chỉ nằm trong dòng thời gian của
+ * TỪNG báo giá. Ở màn danh sách, một báo giá đối tác đang chờ trông y hệt một
+ * báo giá không ai đụng tới — muốn biết thì phải mở lần lượt từng cái.
+ *
+ * Dùng lại đúng hàm yeuCauSuaChuaTraLoi cho từng nhóm, KHÔNG chép luật sang đây:
+ * hai chỗ đếm theo hai luật là kiểu lỗi mà danh sách báo một đằng, mở ra một nẻo.
+ */
+export function nhomYeuCauChuaTraLoi<T extends DongLogBaoGia & { bao_gia_id: number }>(
+  logs: T[],
+): Map<number, T[]> {
+  const theoBaoGia = new Map<number, T[]>();
+  for (const l of logs) {
+    const ds = theoBaoGia.get(l.bao_gia_id);
+    if (ds) ds.push(l);
+    else theoBaoGia.set(l.bao_gia_id, [l]);
+  }
+
+  const kq = new Map<number, T[]>();
+  for (const [id, ds] of theoBaoGia) {
+    const cho = yeuCauSuaChuaTraLoi(ds) as T[];
+    if (cho.length) kq.set(id, cho);
+  }
+  return kq;
+}
+
+/** Lý do gợi ý cho bản kế tiếp, ghép từ các yêu cầu chưa trả lời. */
+export function lyDoTuYeuCau(logs: DongLogBaoGia[], toiDa = 500): string {
+  const cau = yeuCauSuaChuaTraLoi(logs)
+    .map((l) => (l.noi_dung ?? "").trim())
+    .filter(Boolean);
+  return cau.join(" · ").slice(0, toiDa);
+}
+
 // ── So sánh hai phiên bản ────────────────────────────────────────────────────
 
 export interface ChenhBacGia {

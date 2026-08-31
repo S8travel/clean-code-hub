@@ -38,6 +38,7 @@ const BAC_OPTS = [1, 2, 3, 4, 5];
 
 const emptyForm = (): Omit<HDVRow, "id"> => ({
   ten: "",
+  ten_zh: null,
   gioi_tinh: null,
   nam_sinh: null,
   kinh_nghiem: null,
@@ -86,6 +87,7 @@ function HDVPageContent() {
         chuyen_mon: selected.chuyen_mon,
         agent_ids: selected.agent_ids ?? [],
         ghi_chu: selected.ghi_chu,
+        ten_zh: selected.ten_zh ?? null,
         so_dien_thoai: selected.so_dien_thoai ?? null,
         so_tai_khoan: selected.so_tai_khoan ?? null,
         ngan_hang: selected.ngan_hang ?? null,
@@ -315,6 +317,20 @@ function HDVPageContent() {
                   className="h-8 text-sm"
                   value={form.ten}
                   onChange={(e) => set("ten", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                {/* Đối tác Đài Loan không đọc được tên tiếng Việt, cũng không
+                    nhắn lại cho khách của họ được. Để trống thì cổng hiện tên
+                    tiếng Việt — KHÔNG tự phiên âm, tên người đoán sai một chữ là
+                    chuyện khó chịu. */}
+                <Label className="text-xs">{t("Tên tiếng Trung")}</Label>
+                <Input
+                  className="h-8 text-sm"
+                  placeholder={t("VD: 阮文海 — hiện cho đối tác trên cổng")}
+                  value={form.ten_zh ?? ""}
+                  onChange={(e) => set("ten_zh", e.target.value || null)}
                 />
               </div>
 

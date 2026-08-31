@@ -55,3 +55,27 @@ verify_jwt = false
 # của phiên đăng nhập (nút "Đẩy ngay" trong CRM). Xem index.ts.
 [functions.push-portal]
 verify_jwt = false
+
+# trao-doi: hỏi/đáp giữa OP và đối tác trên cổng 外網.
+# Cổng gọi sang bằng 'x-portal-secret' (không có JWT của CRM) nên verify_jwt=false;
+# chiều OP thì hàm tự kiểm access token. Xem index.ts.
+[functions.trao-doi]
+verify_jwt = false
+
+# yeu-cau-doi-tac: đối tác gửi yêu cầu báo giá từ cổng 外網 → lead bên CRM.
+# Chỉ cổng gọi, bằng 'x-portal-secret' khớp PORTAL_TRAO_DOI_SECRET (không có JWT
+# của CRM) → verify_jwt = false. Xem index.ts.
+[functions.yeu-cau-doi-tac]
+verify_jwt = false
+
+# yeu-cau-sua-bao-gia: đối tác bấm "yêu cầu sửa chương trình" trên cổng 外網.
+# Gọi bởi edge fn 'gui-yeu-cau-sua' bên cổng (không có user JWT của CRM), chặn
+# bằng header 'x-portal-secret' khớp PORTAL_TRAO_DOI_SECRET.
+[functions.yeu-cau-sua-bao-gia]
+verify_jwt = false
+
+# tao-link-bao-gia: tạo trang xem báo giá công khai cho khách không có tài khoản.
+# verify_jwt = TRUE và ĐỪNG hạ xuống: hàm này quyết định thứ gì được mở ra ngoài
+# internet — để mở là ai cũng tự tạo được trang công khai chứa bảng giá khách khác.
+[functions.tao-link-bao-gia]
+verify_jwt = true

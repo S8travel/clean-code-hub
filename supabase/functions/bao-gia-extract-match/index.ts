@@ -86,10 +86,32 @@ serve(async (req) => {
 
     const [canhDiemRes, nhaHangRes, khachSanRes, xeRes] = await Promise.all([
       supabase.from("canh_diem").select("id, ten, dia_diem, loai, bao_gom_bua_an").eq("co_phi", true).limit(1000),
-      supabase.from("nha_hang").select("id, ten, dia_diem, set_menu:nha_hang_set_menu(id, ten_set)").limit(1000),
-      supabase.from("khach_san").select("id, ten, dia_diem").limit(1000),
+      // ten_zh: 124 nhà hàng và 13 khách sạn đã có sẵn tên tiếng Trung trong danh
+      // mục. Trước đây câu select bỏ qua cột này, nên model phải tự dịch tên tiếng
+      // Trung của đối tác rồi mò trong một danh sách THUẦN TIẾNG VIỆT — đó là chỗ
+      // khớp sai nhiều nhất, và nó sai theo thiết kế chứ không phải model kém.
+      supabase.from("nha_hang").select("id, ten, ten_zh, dia_diem, set_menu:nha_hang_set_menu(id, ten_set)").limit(1000),
+      supabase.from("khach_san").select("id, ten, ten_zh, dia_diem").limit(1000),
       supabase.from("nha_xe_loai_xe").select("id, ten_xe, so_cho, nha_xe:nha_xe_id(ten)").limit(1000),
     ]);
+
+    // FAIL-CLOSED. Trước đây bốn câu này nuốt lỗi bằng `?? []`: danh mục nạp hỏng
+    // thì model nhận danh sách RỖNG, khớp trượt sạch, và màn hình vẫn hiện "đã
+    // phân tích xong" với mọi dòng 0 đồng. Thà báo hỏng còn hơn ra một bảng giá
+    // trông như thật mà thiếu tiền.
+    const loiNap = [
+      ["cảnh điểm", canhDiemRes.error],
+      ["nhà hàng", nhaHangRes.error],
+      ["khách sạn", khachSanRes.error],
+      ["loại xe", xeRes.error],
+    ].filter(([, e]) => e) as Array<[string, { message: string }]>;
+    if (loiNap.length) {
+      return json({
+        error: `Không nạp được danh mục ${loiNap.map(([t]) => t).join(", ")} — `
+          + `chưa phân tích được lịch trình. Thử lại sau giây lát. `
+          + `(${loiNap.map(([, e]) => e.message).join("; ")})`,
+      }, 502);
+    }
 
     const catalog = {
       canh_diem: (canhDiemRes.data ?? []).map((c: Record<string, unknown>) => ({
@@ -99,10 +121,14 @@ serve(async (req) => {
       })),
       nha_hang: (nhaHangRes.data ?? []).map((n: Record<string, unknown>) => ({
         id: n.id, ten: n.ten, dia_diem: n.dia_diem,
+        // Chỉ gửi khi có → giữ prompt gọn, và để model hiểu "thiếu" nghĩa là
+        // chưa ai điền, không phải "tên tiếng Trung là chuỗi rỗng".
+        ...(n.ten_zh ? { ten_zh: n.ten_zh } : {}),
         set_menu: ((n.set_menu as Array<Record<string, unknown>>) ?? []).map((s) => ({ id: s.id, ten: s.ten_set })),
       })),
       khach_san: (khachSanRes.data ?? []).map((k: Record<string, unknown>) => ({
         id: k.id, ten: k.ten, dia_diem: k.dia_diem,
+        ...(k.ten_zh ? { ten_zh: k.ten_zh } : {}),
       })),
       nha_xe_loai_xe: (xeRes.data ?? []).map((x: Record<string, unknown>) => ({
         id: x.id, ten_xe: x.ten_xe, so_cho: x.so_cho,
@@ -128,6 +154,18 @@ GIỮ NGUYÊN MỨC TIỀN GHI TRONG LỊCH TRÌNH — QUAN TRỌNG:
 - Lý do: lịch trình đối tác hay ghi mức ăn chung chung không chỉ định nhà hàng. Không khớp được nhà hàng nào thì hệ thống lấy CHÍNH mức USD trong "ten_zh" để tính đơn giá suất ăn. Cắt mất con số = dòng đó thành 0 đồng, báo giá hụt tiền mà không ai thấy.
 - "ten_vi" ngược lại: chỉ TÊN tiếng Việt cho gọn, KHÔNG kèm tiền.
 - Chép lại con số CÓ SẴN trong text không phải là bịa giá. Cấm bịa nghĩa là: không có số thì để nguyên không có, đừng tự nghĩ ra.
+
+QUÀ TẶNG VẪN LÀ MỘT KHOẢN CHI — QUAN TRỌNG, ĐỪNG NHẦM VỚI MỤC DƯỚI:
+- Lịch trình ghi 贈 / 送 / 加贈 / 特別加贈 / 免費 / "tặng" / "biếu" / "miễn phí" nghĩa là
+  KHÁCH không trả riêng khoản đó. Nhưng công ty VẪN TRẢ TIỀN cho nhà cung cấp.
+- Vậy nên: hạng mục được tặng PHẢI trích thành một dòng RIÊNG, có khớp danh mục như
+  mọi dòng khác. TUYỆT ĐỐI KHÔNG bỏ qua nó, KHÔNG gộp nó vào dòng khác, KHÔNG coi nó
+  là "hạng mục không mất tiền".
+- Ví dụ đúng: "電瓶車遊36古街(送古街下午茶)" → HAI dòng: vé xe điện 36 phố phường, VÀ
+  trà chiều phố cổ. "加贈法國山城百年酒窖(含每人一杯葡萄酒)" → dòng hầm rượu.
+- Phân biệt với mục ngay dưới: 贈/送 = khách được tặng nhưng công ty vẫn mua (TÍNH TIỀN).
+  含 = đã nằm sẵn trong giá vé đó rồi (KHÔNG tính lần hai). Một dòng có thể có cả hai
+  chữ — "加贈...(含每人一杯葡萄酒)" là quà tặng, không phải combo đã gồm bữa ăn.
 
 COMBO ĐÃ GỒM BỮA ĂN (da_bao_gom) — chống tính tiền 2 lần:
 - Lịch trình hay ghi vé và bữa ăn thành 2 ý riêng dù bán chung 1 vé combo (vd Bà Nà: cáp treo + buffet trưa; du thuyền 含午餐).

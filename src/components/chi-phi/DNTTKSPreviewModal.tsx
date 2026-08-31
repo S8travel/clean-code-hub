@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileDown } from "lucide-react";
 import { exportDNTTKSWordFromData, exportDNTTKSBatchWordFromData } from "@/lib/export-dntt-ks-word";
 import type { EdgeFunctionData } from "@/lib/export-dntt-ks-word";
+import { computeLyDoDNTTKS } from "@/lib/dntt-ks-ly-do";
 import { t, useTranslate } from "@/lib/i18n";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -21,10 +22,13 @@ type RoomEntry = EdgeFunctionData["roomEntries"][number];
 type EditableItem = EdgeFunctionData & { roomEntries: RoomEntry[] };
 
 function computeLyDo(item: EdgeFunctionData, isBatch: boolean): string {
-  const suffix = item.doan.so_khach ? ` - ${item.doan.so_khach} khách` : "";
-  if (item.la_coc) return `Đề nghị thanh toán tiền cọc khách sạn ${item.ks.ten} cho đoàn ${item.doan.ten_doan}${suffix}`;
-  if (isBatch) return `Đề nghị thanh toán tiền khách sạn cho đoàn ${item.doan.ten_doan}${suffix}`;
-  return `Đề nghị thanh toán tiền khách sạn ${item.ks.ten} cho đoàn ${item.doan.ten_doan}${suffix}`;
+  return computeLyDoDNTTKS({
+    tenDoan: item.doan.ten_doan,
+    soKhach: item.doan.so_khach,
+    tenKS: item.ks.ten,
+    laCoc: item.la_coc,
+    gopNhieuDichVu: isBatch,
+  });
 }
 
 export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
@@ -82,20 +86,20 @@ export default function DNTTKSPreviewModal({ open, items, onClose }: Props) {
         </DialogHeader>
 
         <div className="flex-1 overflow-auto px-5 space-y-5">
+          {/* Lý do — phiếu gộp nhiều dịch vụ chỉ in MỘT dòng chú giải chung */}
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">{t("Lý do")}</label>
+            <Input
+              value={editItems[0]?.lyDoText ?? ""}
+              onChange={(e) => updateItem(0, { lyDoText: e.target.value })}
+              className="text-xs h-8"
+            />
+          </div>
+
           {editItems.map((item, i) => (
             <div key={i} className="border rounded-lg p-3 space-y-3">
               {/* Hotel name header */}
               <p className="text-xs font-semibold text-blue-700">{item.ks.ten}{item.codeKS ? ` — Code: ${item.codeKS}` : ""}</p>
-
-              {/* Lý do */}
-              <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">{t("Lý do")}</label>
-                <Input
-                  value={item.lyDoText ?? ""}
-                  onChange={(e) => updateItem(i, { lyDoText: e.target.value })}
-                  className="text-xs h-8"
-                />
-              </div>
 
               {/* Room entries table */}
               <div className="space-y-1">

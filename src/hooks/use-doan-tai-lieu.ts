@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { externalSupabase } from "@/lib/supabase-external";
 
 export type DoanTaiLieuLoai = "bao_gia" | "hop_dong" | "danh_sach_khach" | "khac";
@@ -23,6 +24,8 @@ export interface DoanTaiLieuRow {
   ten: string | null;
   /** Mô tả ngắn — chỉ dùng khi loai='khac' */
   mo_ta: string | null;
+  /** Chia sẻ cho đối tác trên cổng 外網. NULL = theo mặc định của loại. */
+  portal_enabled: boolean | null;
 }
 
 const QK = "doan_tai_lieu";
@@ -159,6 +162,30 @@ export function useDeleteDoanTaiLieu() {
         .from("doan_tai_lieu")
         .delete()
         .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [QK, vars.doanId] });
+      qc.invalidateQueries({ queryKey: [QK, "bulk"] });
+    },
+  });
+}
+
+/**
+ * Bật/tắt chia sẻ một file cho đối tác trên cổng 外網.
+ *
+ * NULL = theo mặc định của loại (hợp đồng + danh sách khách có, còn lại không) —
+ * xem chiaSeVoiDoiTac trong supabase/functions/_shared/portal-tai-lieu.ts, đó là
+ * nơi push-portal quyết định thật. Ở đây chỉ ghi cờ.
+ */
+export function useSetTaiLieuPortal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, bat }: { id: number; bat: boolean; doanId: number }) => {
+      // Cột portal_enabled mới thêm ở migration 20260818, database.types.ts sinh
+      // từ schema prod nên chưa biết — bỏ generic đúng chỗ này.
+      const db = externalSupabase as unknown as SupabaseClient;
+      const { error } = await db.from("doan_tai_lieu").update({ portal_enabled: bat }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_, vars) => {

@@ -21,9 +21,9 @@ export function useBaoGiaResolveMaps(enabled = true) {
     queryFn: async (): Promise<ResolveMaps> => {
       const [cdRes, nhRes, smRes, ksRes, gpRes, xeRes] = await Promise.all([
         externalSupabase.from("canh_diem").select("id, ten, gia_mac_dinh, bao_gom_bua_an, bao_gom_ghi_chu"),
-        externalSupabase.from("nha_hang").select("id, ten, foc_khach, foc_mien"),
+        externalSupabase.from("nha_hang").select("id, ten, ten_zh, foc_khach, foc_mien"),
         externalSupabase.from("nha_hang_set_menu").select("id, ten_set, gia, nha_hang_id"),
-        externalSupabase.from("khach_san").select("id, ten"),
+        externalSupabase.from("khach_san").select("id, ten, ten_zh"),
         externalSupabase.from("khach_san_gia_phong").select("*"),
         externalSupabase.from("nha_xe_loai_xe").select("id, ten_xe, gia"),
       ]);
@@ -45,6 +45,7 @@ export function useBaoGiaResolveMaps(enabled = true) {
       for (const n of nhRes.data ?? []) {
         nhaHang.set(n.id as number, {
           ten: (n.ten as string) ?? "",
+          ten_zh: (n.ten_zh as string) || null,
           foc_khach: (n.foc_khach as number) ?? null,
           foc_mien: (n.foc_mien as number) ?? null,
         });
@@ -63,7 +64,10 @@ export function useBaoGiaResolveMaps(enabled = true) {
 
       const khachSan: ResolveMaps["khachSan"] = new Map();
       for (const k of ksRes.data ?? []) {
-        khachSan.set(k.id as number, { ten: (k.ten as string) ?? "" });
+        khachSan.set(k.id as number, {
+          ten: (k.ten as string) ?? "",
+          ten_zh: (k.ten_zh as string) || null,
+        });
       }
 
       const khachSanGia: ResolveMaps["khachSanGia"] = new Map();

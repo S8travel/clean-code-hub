@@ -118,6 +118,8 @@ export const LEAD_NGUON_OPTS: { value: string; label: string }[] = [
   { value: "walk_in",           label: "Walk-in" },
   { value: "referral",          label: "Giới thiệu" },
   { value: "doi_tac",           label: "Đối tác" },
+  // Đối tác tự gửi yêu cầu báo giá trên cổng 外網 (edge fn yeu-cau-doi-tac).
+  { value: "agent_portal",      label: "Cổng đối tác" },
 ];
 
 export const LEAD_LOAI_KHACH_OPTS: { value: string; label: string }[] = [

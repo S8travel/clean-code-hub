@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Lock, Sparkles } from "lucide-react";
+import { Lock, MessageSquareWarning, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BaoGiaAiImport } from "@/components/bao-gia/BaoGiaAiImport";
@@ -12,8 +12,8 @@ import { liveKetQua, baoGiaCode } from "@/components/bao-gia/detail/helpers";
 import { extractItineraryText, imageMime } from "@/lib/itinerary-file";
 import { pickProgramFile, renderPdfToPageImages, imageToPageImages, MAX_PROGRAM_PAGES, type PageImage } from "@/lib/itinerary-images";
 import { giaCuoiBrackets } from "@/lib/bao-gia-calc";
-import { buildPhienBan, maPhienBan, type PhienBanMoi } from "@/lib/bao-gia-phien-ban";
-import { useTaoPhienBan } from "@/hooks/use-bao-gia-phien-ban";
+import { buildPhienBan, lyDoTuYeuCau, maPhienBan, yeuCauSuaChuaTraLoi, type PhienBanMoi } from "@/lib/bao-gia-phien-ban";
+import { useBaoGiaLog, useTaoPhienBan } from "@/hooks/use-bao-gia-phien-ban";
 import { usePushPortal } from "@/hooks/use-portal-push";
 import { ketQuaThanhLoi } from "@/lib/portal-thong-bao";
 import { BaoGiaHeader } from "@/components/bao-gia/detail/BaoGiaHeader";
@@ -25,6 +25,8 @@ import { GiaCuoiInfoSection } from "@/components/bao-gia/detail/GiaCuoiInfoSecti
 import { GiaCuoiPriceSection } from "@/components/bao-gia/detail/GiaCuoiPriceSection";
 import { LichTrinhFilesSection } from "@/components/bao-gia/detail/LichTrinhFilesSection";
 import { PhienBanSection } from "@/components/bao-gia/detail/PhienBanSection";
+import { LinkKhachSection } from "@/components/bao-gia/detail/LinkKhachSection";
+import { DongThoiGianSection } from "@/components/bao-gia/detail/DongThoiGianSection";
 import { CanhBaoLech } from "@/components/bao-gia/detail/CanhBaoLech";
 import { GuiPhienBanModal } from "@/components/bao-gia/detail/GuiPhienBanModal";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
@@ -49,6 +51,10 @@ export default function BaoGiaDetailPage() {
   const [phienBanMoi, setPhienBanMoi] = useState<PhienBanMoi | null>(null);
   const taoPhienBan = useTaoPhienBan();
   const pushPortal = usePushPortal();
+
+  // Yêu cầu sửa đối tác gửi từ cổng mà mình chưa chào lại bản nào.
+  const { data: dsLog = [] } = useBaoGiaLog(draft?.id);
+  const yeuCauCho = yeuCauSuaChuaTraLoi(dsLog);
 
   // Pax dự kiến của lead gắn báo giá → highlight bậc giá áp dụng.
   const { data: lead } = useLead(draft?.lead_id ?? null);
@@ -100,7 +106,14 @@ export default function BaoGiaDetailPage() {
   const isSent = draft.trang_thai === "sent";
   const isGiaCuoi = draft.loai_bao_gia === "gia_cuoi";
 
-  const handleExportPdf = async () => {
+  /**
+   * Xuất file Word gửi khách.
+   *
+   * `maBg` để trống = mã trơn (BG00035) — đây là bản NHÁP đang soạn, chưa chốt
+   * nên chưa có số bản nào để ghi. Sau khi chốt, hàm này được gọi lại với đúng
+   * mã bản vừa khoá (BG00035-v3) — xem handleGui.
+   */
+  const handleExportPdf = async (maBg?: string) => {
     if (!draft.ket_qua) return;
     try {
       const xr = draft.exchange_rate ?? 26000;
@@ -167,8 +180,9 @@ export default function BaoGiaDetailPage() {
         }
       }
       // Xuất kiểu Đài Loan (報價): bảng giá 3 mốc + 單房差 + 報價包含/不含 + mã code + 行程內容.
-      await exportBaoGiaTaiwanWord(fresh, fresh.items, xr, baoGiaCode(draft), programText, programImages);
-      toast.success("Đã xuất file Word!");
+      const ma = maBg ?? baoGiaCode(draft);
+      await exportBaoGiaTaiwanWord(fresh, fresh.items, xr, ma, programText, programImages);
+      toast.success(`Đã xuất file Word ${ma}`);
     } catch {
       toast.error("Lỗi xuất file");
     }
@@ -207,7 +221,15 @@ export default function BaoGiaDetailPage() {
           // Gửi xong nhảy thẳng sang tab Phiên bản: OP thấy ngay bản vừa chốt nằm
           // trong sổ, không phải tự đi tìm để biết đã lưu hay chưa.
           setTab("phien-ban");
-          toast.success(`Đã chốt và gửi bản ${maPhienBan(baoGiaCode(draft), soPhienBanSapTao)}.`);
+          const maBan = maPhienBan(baoGiaCode(draft), soPhienBanSapTao);
+          toast.success(`Đã chốt và gửi bản ${maBan}.`);
+          // File Word mang ĐÚNG mã bản vừa khoá, tự về máy để đính kèm mail.
+          //
+          // Trước đây OP tải file từ bàn làm việc rồi mới bấm gửi, nên file nào
+          // cũng mang mã trơn: đối tác nhận ba lần sửa giá là ba file trùng tên
+          // nhau, không biết cái nào mới. Sinh file SAU khi chốt thì số bản không
+          // bao giờ sai được — bản đó đã có thật trong sổ rồi mới có file.
+          void handleExportPdf(maBan);
           // Đẩy sang cổng NGAY, không đợi lượt đồng bộ định kỳ: "gửi báo giá" mà đối
           // tác phải chờ tới mai mới thấy thì không còn là gửi nữa.
           pushPortal.mutate(undefined, {
@@ -248,11 +270,30 @@ export default function BaoGiaDetailPage() {
               </span>
             </div>
           )}
+          {/* Đối tác đòi đổi gì thì hiện ngay đầu trang, không bắt OP đi tìm
+              trong tab Phiên bản. Còn dòng nào ở đây nghĩa là chưa chào lại. */}
+          {yeuCauCho.length > 0 && (
+            <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5">
+              <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+                <MessageSquareWarning className="h-3.5 w-3.5" />
+                Đối tác yêu cầu sửa — chưa chào lại bản nào
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {yeuCauCho.map((l, i) => (
+                  <li key={i} className="text-xs text-amber-900 break-words">· {l.noi_dung}</li>
+                ))}
+              </ul>
+              <Button size="sm" className="h-7 text-xs mt-2" onClick={openGuiModal}>
+                Chào bản mới
+              </Button>
+            </div>
+          )}
           {/* Sửa thoải mái, nhưng lệch với bản đã chào thì phải nói ra. */}
           <CanhBaoLech draft={draft} onGuiBanMoi={openGuiModal} />
         </div>
-        {/* Hai tab: bàn làm việc và sổ các bản đã chào. Gửi khách là tự sang tab
-            Phiên bản một dòng mới — OP không phải bấm thêm gì. */}
+        {/* Ba tab, ba câu hỏi khác nhau: đang tính giá thế nào · đã chào những bản
+            nào · chuyện gì đã xảy ra theo thứ tự. Gửi khách là tự sang tab Phiên
+            bản — OP không phải bấm thêm gì. */}
         <Tabs value={tab} onValueChange={setTab} className="max-w-[1400px] mx-auto">
           <TabsList className="mb-3">
             <TabsTrigger value="bang-tinh-gia">Bảng tính giá</TabsTrigger>
@@ -264,10 +305,26 @@ export default function BaoGiaDetailPage() {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="dong-thoi-gian">
+              Dòng thời gian
+              {/* Còn yêu cầu chưa chào lại thì báo số ngay trên tab — nằm im trong
+                  tab đóng thì cũng như không có. */}
+              {yeuCauCho.length > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 min-w-[18px]">
+                  {yeuCauCho.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="phien-ban" className="mt-0">
+          <TabsContent value="phien-ban" className="mt-0 space-y-3">
+            {/* Gửi cho người KHÔNG có cổng — nhóm đông hơn nhóm có cổng. */}
+            <LinkKhachSection draft={draft} />
             <PhienBanSection draft={draft} />
+          </TabsContent>
+
+          <TabsContent value="dong-thoi-gian" className="mt-0">
+            <DongThoiGianSection baoGiaId={draft.id} />
           </TabsContent>
 
           <TabsContent value="bang-tinh-gia" className="mt-0">
@@ -363,6 +420,7 @@ export default function BaoGiaDetailPage() {
         maHienThi={maPhienBan(baoGiaCode(draft), soPhienBanSapTao)}
         phienBan={phienBanMoi}
         dangGui={taoPhienBan.isPending}
+        goiY={lyDoTuYeuCau(dsLog)}
         onGui={handleGui}
       />
       <BaoGiaFooter

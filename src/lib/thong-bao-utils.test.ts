@@ -6,8 +6,18 @@ const tb = (p: Partial<ThongBaoRow>): ThongBaoRow => ({
   id: 1, user_id: "u", log_id: null, doan_id: null, doan_ten: null,
   loai: "", tieu_de: "", noi_dung: null, is_read: false,
   created_at: "2026-08-03T00:00:00Z", cong_viec_id: null, dntt_id: null,
-  lead_id: null,
+  lead_id: null, bao_gia_id: null,
   ...p,
+});
+
+describe("targetUrl — đối tác yêu cầu sửa báo giá", () => {
+  it("mở thẳng báo giá đó, không đáp xuống trang danh sách", () => {
+    expect(targetUrl(tb({ loai: "bao_gia_yeu_cau_sua", bao_gia_id: 25 }))).toBe("/bao-gia/25");
+  });
+
+  it("thiếu bao_gia_id thì không bịa đường dẫn", () => {
+    expect(targetUrl(tb({ loai: "bao_gia_yeu_cau_sua" }))).toBeNull();
+  });
 });
 
 // Thông báo lead từ webhook Messenger phải mở ĐÚNG lead (deep-link ?lead=:id),

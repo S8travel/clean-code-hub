@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { externalSupabase } from "@/lib/supabase-external";
+import { gomLaiMotLan } from "@/lib/gom-invalidate";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
@@ -371,11 +372,14 @@ export function useDoanRealtime() {
   useQuery({
     queryKey: ["doan_realtime_sub"],
     queryFn: () => {
+      // GOM sự kiện: một lệnh UPDATE chạm hàng trăm dòng doan sinh hàng trăm sự
+      // kiện, mỗi cái invalidate danh sách đoàn — câu query nặng nhất hệ thống.
+      // Không gom thì vài trăm request dội trong vài giây, cạn pool PostgREST và
+      // auth đói theo (sự cố 18/08/2026: OP không đăng nhập được).
+      const napLai = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan"] }));
       const channel = externalSupabase
         .channel("doan_changes")
-        .on("postgres_changes", { event: "*", schema: "public", table: "doan" }, () => {
-          qc.invalidateQueries({ queryKey: ["doan"] });
-        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "doan" }, napLai)
         .subscribe();
       return channel;
     },
@@ -392,22 +396,26 @@ export function useDoanDetailRealtime(doanId: number | null | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
     if (!doanId || Number.isNaN(doanId)) return;
+    // Lưu lịch trình chạm hàng chục dòng doan_ngay_item một lúc → gom y như trên.
+    const napDoan = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan"] }));
+    const napNgay = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan_ngay", doanId] }));
+    const napItem = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] }));
     const channel = externalSupabase
       .channel(`doan_detail_${doanId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "doan", filter: `id=eq.${doanId}` },
-        () => qc.invalidateQueries({ queryKey: ["doan"] }),
+        napDoan,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "doan_ngay", filter: `doan_id=eq.${doanId}` },
-        () => qc.invalidateQueries({ queryKey: ["doan_ngay", doanId] }),
+        napNgay,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "doan_ngay_item", filter: `doan_id=eq.${doanId}` },
-        () => qc.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] }),
+        napItem,
       )
       .subscribe();
     return () => {

@@ -2,12 +2,16 @@ import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
 import { buildCostingXlsxSheet, costingFileName } from "./export-bao-gia-costing-excel";
 import { buildXlsxBlob, type XlsxCell } from "./xlsx-simple";
-import type { CostingSheet, CostingRow } from "@/components/bao-gia/detail/helpers";
+import type { CostingSheet, CostingRow, CostingTierCell } from "@/components/bao-gia/detail/helpers";
 
 const row = (p: Partial<CostingRow> & Pick<CostingRow, "loai" | "unit" | "mo_ta" | "don_gia">): CostingRow => ({
   itemIndex: 0, ngay_so: 1, don_gia_usd: p.don_gia / 26000, so_luong: 1,
   foc_manual: null, editable: true, cells: [], ...p,
 });
+
+/** 1 ô bậc — SL để hệ thống tự tính (auto = qty, không sửa tay). */
+const cell = (guests: number, qty: number, foc: number, total: number): CostingTierCell =>
+  ({ guests, qty, auto: qty, manual: false, foc, total });
 
 /** Bảng đầy đủ như app dựng thật: 2 bậc, đủ 4 nhóm + đủ 9 dòng footer.
  *  Số liệu tự nhất quán (tổng vốn = dịch vụ + HDV + BH + tip …) để test kiểm
@@ -20,14 +24,14 @@ function makeSheet(): CostingSheet {
       key: "transport", label: "Xe / Vận chuyển", subtotals: [5_000_000, 5_000_000],
       rows: [row({
         loai: "transport", unit: "lump", mo_ta: "Xe 29 chỗ", don_gia: 5_000_000, ngay_so: 0,
-        cells: [{ guests: 16, qty: 1, foc: 0, total: 5_000_000 }, { guests: 20, qty: 1, foc: 0, total: 5_000_000 }],
+        cells: [cell(16, 1, 0, 5_000_000), cell(20, 1, 0, 5_000_000)],
       })],
     },
     {
       key: "hotel", label: "Khách sạn", subtotals: [10_800_000, 13_200_000],
       rows: [row({
         loai: "hotel", unit: "rooms", mo_ta: "KS 4* Đà Nẵng", don_gia: 1_200_000, so_luong: 1,
-        cells: [{ guests: 16, qty: 9, foc: 0, total: 10_800_000 }, { guests: 20, qty: 11, foc: 0, total: 13_200_000 }],
+        cells: [cell(16, 9, 0, 10_800_000), cell(20, 11, 0, 13_200_000)],
       })],
     },
     {
@@ -35,7 +39,7 @@ function makeSheet(): CostingSheet {
       rows: [row({
         loai: "meal", unit: "pax", mo_ta: "Cơm trưa NH ABC", ten_zh: "午餐", don_gia: 300_000,
         bua_an: "trua", foc_khach: 16, foc_mien: 1,
-        cells: [{ guests: 16, qty: 17, foc: 1, total: 4_800_000 }, { guests: 20, qty: 21, foc: 1, total: 6_000_000 }],
+        cells: [cell(16, 17, 1, 4_800_000), cell(20, 21, 1, 6_000_000)],
       })],
     },
     { key: "ticket", label: "Vé tham quan", rows: [], subtotals: [0, 0] },

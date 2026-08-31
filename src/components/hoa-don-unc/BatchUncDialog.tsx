@@ -372,7 +372,7 @@ export default function BatchUncDialog({ open, onClose, doanLabel, rows }: Props
             to: tgt.email,
             cc: ccForLoai(tgt.row.loai),
             subject: buildUncEmailSubject(tgt.row, tgt.target.bookingSubject),
-            html: buildUncEmailBody(tgt.row, canTruAmount, userProfile ?? null),
+            html: buildUncEmailBody(tgt.row, canTruAmount),
             replyTo: userProfile?.email || currentUserEmail || undefined,
             attachments: [attachment],
           });

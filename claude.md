@@ -93,9 +93,14 @@ doan_booking_ks       (1 row/KS/đoàn)
   ks_final, ks_final_status, ks_final_sent_at/by/confirm_at
   ngay_snapshot (jsonb), chi_phi
 
-doan_ks_dem           (chi tiết phòng/đêm)
-  id, doan_id, booking_ks_id
-  ngay_date, loai_phong, so_phong, gia_phong
+doan_ks_dem           ⚠️ BẢNG CHẾT — 0 dòng toàn DB (đo 18/08/2026). ĐỪNG đọc.
+  id, doan_id, booking_ks_id, ngay_date, loai_phong, so_phong, gia_phong
+  ← Phòng/đêm THẬT nằm ở doan_booking_ks.ks_final (chưa có thì ks_dat_truoc):
+    TEXT NHIỀU DÒNG, mỗi dòng một đêm, free text ("10 twn", "5 cabin ( 4 người
+    1 cabin ) + 1 vé lẻ HDV"). Dãn dòng → đêm bằng expandRoomValues
+    (lib/booking-ks-rooms.ts); 1 dòng = dùng chung cho mọi đêm.
+    Đêm ở = doan_ngay.ngay_date có khach_san_id trỏ đúng KS đó.
+    Đây là nguồn bản Word 訂房確認單 và bản 飯店確認單 trên cổng đối tác.
 
 doan_booking_nh       (1 row/ngày/bữa)
   id, doan_id, doan_ngay_id, nha_hang_id
@@ -809,6 +814,21 @@ CREATE POLICY chi_xem_block_delete ON public.ten_bang AS RESTRICTIVE
 
 Áp dụng tương tự cho VIEW (GRANT SELECT) và FUNCTION/RPC (GRANT EXECUTE).
 
+**⚠️ Hai bẫy đã vấp 21/08/2026 khi thêm `yeu_cau_bao_gia` + view của nó:**
+1. **VIEW mặc định là SECURITY DEFINER** → chạy bằng quyền owner và ĐI VÒNG QUA RLS
+   của mọi bảng bên dưới. Luôn khai `WITH (security_invoker = on)`:
+   ```sql
+   CREATE VIEW public.ten_view WITH (security_invoker = on) AS SELECT ...;
+   ```
+   (`dntt_with_payment_status`, `cong_no_with_status` đã đúng; view mới quên là thủng.)
+2. **`GRANT SELECT ... TO anon` chỉ dành cho bảng thật sự công khai.** Bảng dữ liệu nội
+   bộ phải `REVOKE ALL ... FROM anon` — khoá publishable nằm sẵn trong bundle web, RLS
+   là hàng rào duy nhất còn lại và một view definer là đủ để đi vòng.
+3. View dùng `bang.*`: thêm cột vào bảng thì `CREATE OR REPLACE VIEW` báo lỗi
+   "cannot change name of view column" → phải `DROP VIEW` rồi `CREATE` lại.
+4. `GREATEST`/`LEAST` **bỏ qua NULL**: `GREATEST(NULL, 1)` ra `1`. Muốn "không nhập thì
+   để trống" phải bọc `CASE WHEN ... IS NULL THEN NULL ELSE ... END`.
+
 **RPC mới `SECURITY DEFINER` có ghi**: chạy bằng quyền owner → BYPASS toàn bộ RLS
 trên, kể cả policy `chi_xem_*`. Phải tự chèn guard đầu thân hàm:
 ```sql
@@ -819,6 +839,28 @@ END IF;
 ```
 
 ---
+
+## 🔑 Phân quyền — ba nguồn, cộng dồn
+
+Luật tính ở `src/lib/quyen.ts` (thuần, có unit test); hook `usePermission` chỉ nạp dữ liệu.
+
+| Vai trò | Đọc từ |
+|---|---|
+| `admin` | được tất cả, không đọc bảng nào |
+| `specialist` | **CHỈ** `user_permissions` — vai trò này vốn không dùng ma trận |
+| còn lại | `role_permissions` (nền) **CỘNG THÊM** `user_quyen_them` (riêng từng người) |
+
+- `user_quyen_them` **chỉ mở thêm, không cấm được gì**. Muốn cấm ai → sửa ma trận
+  ở tab Phân quyền hoặc đổi vai trò. Đừng viết logic suy diễn từ dòng `false`.
+- ⛔ **KHÔNG cho code đọc `user_permissions` với vai trò thường.** Bảng đó từng có
+  342 dòng chết của 19 người vai trò thường, tất cả bật đủ 4 quyền trên 18 mục —
+  bật lên là thăng cấp 20 tài khoản gần bằng admin trong một lần deploy.
+  **Đã dọn 21/08/2026** (migration `20260821e`, còn đúng 25 dòng của 3 specialist;
+  bản sao ở `user_permissions_backup_20260821`, xoá sau ~1 tháng). Luật vẫn giữ:
+  bảng đó chỉ dành cho `specialist`, cấp thêm cho người thường thì dùng
+  `user_quyen_them`.
+- Quyền chỉ là tầng GIAO DIỆN: `bao_gia` (và nhiều bảng khác) chỉ có policy
+  "đã đăng nhập" ở DB. Ẩn menu ≠ giấu được dữ liệu — xem lại mục "⛔ ĐÃ THỬ VÀ BỎ".
 
 ## 🔒 Tính năng tạm tắt
 
@@ -886,4 +928,64 @@ moi → da_lien_he → dang_tu_van → da_bao_gia
 ["lead", id]
 ["lead_activities", leadId]
 ["lead_next_action", leadId]
-["my_next_actions"]
+["my_next_actions"]["lead_tai_lieu", leadId]           // file đối tác gửi kèm khi yêu cầu báo giá
+["yeu_cau_bao_gia"]                 // tab Yêu cầu báo giá (đọc view)
+["yeu_cau_tep", yeuCauId | "tat_ca"]
+
+### 詢價 — yêu cầu báo giá từ cổng đối tác (外網)
+> Đối tác gửi yêu cầu trên cổng (repo riêng `../s8-agent-portal`, project Supabase
+> khác) → lead bên CRM. Ship 21/08/2026.
+
+```
+cổng /yeu-cau → edge fn gui-yeu-cau (bên cổng, verify_jwt)
+              → edge fn yeu-cau-doi-tac (bên CRM, x-portal-secret = PORTAL_TRAO_DOI_SECRET)
+              → RPC create_lead_from_agent_portal (RETURNS jsonb {lead_id, yeu_cau_id, so_tep})
+              → yeu_cau_bao_gia (bản gốc) + lead (phễu sales) + lead_tai_lieu + thong_bao
+```
+
+**Chỗ XỬ LÝ yêu cầu là tab "Yêu cầu báo giá" trong trang Báo giá** (`/bao-gia?tab=yeu-cau`),
+KHÔNG phải trang Leads — lead chỉ để sales theo phễu.
+- Bảng `yeu_cau_bao_gia`: đối tác + `tai_khoan_email`/`tai_khoan_ten` (TÀI KHOẢN cổng đã bấm
+  gửi, lấy từ JWT bên cổng — khác `nguoi_lien_he` họ tự gõ) + nội dung + `lead_id`.
+- Đọc qua VIEW `yeu_cau_bao_gia_view`. Trạng thái hiển thị **là cột `trang_thai_hien_thi`**,
+  KHÔNG phải `trang_thai`: `bo_qua` > tồn tại `bao_gia.yeu_cau_id` > `moi`. Xoá báo giá →
+  yêu cầu tự về "chưa xử lý" thay vì treo ở "đã báo giá".
+- Nút "Báo giá" mở `BaoGiaCreateModal` với prefill (đối tác, tên chương trình, ngày, số ngày,
+  lead, file). `yeu_cau_id` gán **ngay lúc INSERT bao_gia** — không để bước sau, kẻo hỏng giữa
+  chừng là báo giá mồ côi.
+- File đối tác được **CHÉP** từ `lead-files` sang kho lịch trình của báo giá (`taiTepDoiTac` →
+  `useUploadLichTrinhFile`), không trỏ chéo bucket: gỡ file khỏi báo giá không được xoá bản gốc.
+- `useCloneBaoGia` CỐ Ý không chép `yeu_cau_id`.
+- `lead.nguon = 'agent_portal'`, `lead.agent_id` → `agents.id`, `ten_to_chuc` = tên đối tác.
+- **Người nhận**: `user_roles.nhan_yeu_cau_doi_tac` (bật ở trang Người dùng). Chia lượt
+  trong nhóm bật cờ; chuông bắn cho CẢ nhóm. Không ai bật → rơi về `bo_phan='sales'`.
+- **File đính kèm**: tối đa 3, ≤10MB. Đối tác upload lên bucket `yeu-cau` bên cổng,
+  CRM tải qua link ký rồi chép vào bucket **private `lead-files`**; đường dẫn lưu ở
+  `lead_tai_lieu.duong_dan` (KHÔNG lưu URL — link ký hết hạn). Mở bằng `moFileLead`.
+- RPC `create_lead_from_agent_portal` chỉ còn `service_role` (trước đây mở cho `anon`
+  = ai có publishable key CRM cũng tạo được lead). Rate-limit 10 yêu cầu/đối tác/giờ.
+- **Bên cổng, yêu cầu và báo giá nằm CHUNG một danh sách** (gộp 24/08/2026): mỗi dòng
+  là một luồng `chờ báo giá → đã có báo giá → hết hạn`. Nối bằng `bao_gia.yeu_cau_id`
+  (bên cổng) ↔ `yeu_cau.crm_yeu_cau_id`; `push-portal` dịch id qua
+  `_shared/noi-bao-gia-yeu-cau.ts`. Báo giá đã tạo mà chưa bấm "Gửi khách"
+  (`portal_enabled=false`) thì đối tác VẪN thấy "chờ báo giá" — tab Yêu cầu bên CRM
+  hiện nhãn "Chưa gửi cổng" cho đúng trường hợp này.
+- **Đối tác thấy ĐỦ các bản đã chào** (24/08/2026): bảng `bao_gia_phien_ban` bên cổng
+  (mỗi bản một dòng, chỉ ghi thêm, kèm `thay_doi`), `bao_gia.ma_hien_thi/so_phien_ban`
+  = bản đang hiệu lực nên hai bên gọi cùng tên `BG00025-v3`. Câu "khác bản trước" tính
+  ở `_shared/bao-gia-chao-diff.ts` khi đẩy — **CHỈ so lớp chào**, `noi_dung_von` không
+  bao giờ rời CRM (câu select trong `push-portal/dong-bo-phien-ban.ts` cố ý kê tên cột,
+  đừng đổi thành `*`). Chuông bên cổng đọc `gui_luc` của bản chào, KHÔNG đọc
+  `bao_gia.pushed_at` (cột đó bị ghi lại mọi lượt đồng bộ → ngày nào chuông cũng đỏ).
+- **Đối tác yêu cầu sửa chương trình từ cổng** (24/08/2026): nút trên bảng giá → edge
+  fn `gui-yeu-cau-sua` (cổng) → `yeu-cau-sua-bao-gia` (CRM, `x-portal-secret`) →
+  `bao_gia_log` loai='yeu_cau_sua' + `thong_bao` loai='bao_gia_yeu_cau_sua'
+  (cột mới `thong_bao.bao_gia_id`, chuông trỏ `/bao-gia/:id`). KHÔNG có bảng mới bên
+  CRM và KHÔNG có nút "đánh dấu đã xử lý": yêu cầu tự coi là đã trả lời khi có một
+  `gui_ban` mới hơn (`yeuCauSuaChuaTraLoi` trong lib/bao-gia-phien-ban.ts, có test).
+- Cổng **KHÔNG** hiện trạng thái xử lý nội bộ (đang tư vấn / chờ chốt / bỏ qua) —
+  chốt nghiệp vụ, đừng tự thêm. Ba trạng thái luồng ở trên chỉ nói thứ đối tác tự
+  nhìn thấy: có bảng giá hay chưa, còn hạn hay hết. Hệ quả: bấm "bỏ qua" bên CRM thì
+  bên cổng yêu cầu đó vẫn nằm ở "chờ báo giá" — đóng bằng cách trả lời đối tác.
+- Chuông `lead_yeu_cau_doi_tac` trỏ `/bao-gia?tab=yeu-cau` (nhánh này phải đứng TRƯỚC nhánh
+  chung `loai.startsWith("lead_")` trong `targetUrl`, và có bản sao trong edge fn `send-push`).

@@ -120,6 +120,7 @@ export type Database = {
           portal_pushed_at: string | null
           profit_usd: number | null
           so_phien_ban_cuoi: number
+          yeu_cau_id: number | null
           tieu_de: string | null
           trang_thai: string | null
           vcb_rate: number | null
@@ -150,6 +151,7 @@ export type Database = {
           portal_pushed_at?: string | null
           profit_usd?: number | null
           so_phien_ban_cuoi?: number
+          yeu_cau_id?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
           vcb_rate?: number | null
@@ -180,6 +182,7 @@ export type Database = {
           portal_pushed_at?: string | null
           profit_usd?: number | null
           so_phien_ban_cuoi?: number
+          yeu_cau_id?: number | null
           tieu_de?: string | null
           trang_thai?: string | null
           vcb_rate?: number | null
@@ -293,6 +296,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      bao_gia_so_tay: {
+        Row: {
+          cap_nhat_luc: string
+          dia_diem: string | null
+          don_gia: number | null
+          foc_khach: number | null
+          foc_mien: number | null
+          ghi_chu: string | null
+          id: number
+          khoa_zh: string
+          lan_cuoi_dung: string | null
+          loai: string
+          ngung: boolean
+          nguon: string
+          so_lan_dung: number
+          tao_boi: string | null
+          tao_luc: string
+          ten_vi: string | null
+          zh_goc: string | null
+        }
+        Insert: {
+          cap_nhat_luc?: string
+          dia_diem?: string | null
+          don_gia?: number | null
+          foc_khach?: number | null
+          foc_mien?: number | null
+          ghi_chu?: string | null
+          id?: number
+          khoa_zh: string
+          lan_cuoi_dung?: string | null
+          loai: string
+          ngung?: boolean
+          nguon?: string
+          so_lan_dung?: number
+          tao_boi?: string | null
+          tao_luc?: string
+          ten_vi?: string | null
+          zh_goc?: string | null
+        }
+        Update: {
+          cap_nhat_luc?: string
+          dia_diem?: string | null
+          don_gia?: number | null
+          foc_khach?: number | null
+          foc_mien?: number | null
+          ghi_chu?: string | null
+          id?: number
+          khoa_zh?: string
+          lan_cuoi_dung?: string | null
+          loai?: string
+          ngung?: boolean
+          nguon?: string
+          so_lan_dung?: number
+          tao_boi?: string | null
+          tao_luc?: string
+          ten_vi?: string | null
+          zh_goc?: string | null
+        }
+        Relationships: []
       }
       canh_diem: {
         Row: {
@@ -2505,6 +2568,7 @@ export type Database = {
       lead: {
         Row: {
           assigned_to: string | null
+          agent_id: number | null
           campaign_id: number | null
           chuc_vu: string | null
           created_at: string | null
@@ -2544,6 +2608,7 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          agent_id?: number | null
           campaign_id?: number | null
           chuc_vu?: string | null
           created_at?: string | null
@@ -2583,6 +2648,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          agent_id?: number | null
           campaign_id?: number | null
           chuc_vu?: string | null
           created_at?: string | null
@@ -2889,6 +2955,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "lead_next_action_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "lead"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_tai_lieu: {
+        Row: {
+          co_chu: number | null
+          duong_dan: string
+          file_name: string | null
+          id: number
+          lead_id: number | null
+          yeu_cau_id: number | null
+          mime: string | null
+          nguon: string
+          tao_luc: string
+          ten: string | null
+        }
+        Insert: {
+          co_chu?: number | null
+          duong_dan: string
+          file_name?: string | null
+          id?: number
+          lead_id?: number | null
+          yeu_cau_id?: number | null
+          mime?: string | null
+          nguon?: string
+          tao_luc?: string
+          ten?: string | null
+        }
+        Update: {
+          co_chu?: number | null
+          duong_dan?: string
+          file_name?: string | null
+          id?: number
+          lead_id?: number | null
+          yeu_cau_id?: number | null
+          mime?: string | null
+          nguon?: string
+          tao_luc?: string
+          ten?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_tai_lieu_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "lead"
@@ -4038,11 +4151,51 @@ export type Database = {
         }
         Relationships: []
       }
+      user_quyen_them: {
+        Row: {
+          can_create: boolean
+          can_delete: boolean
+          can_edit: boolean
+          can_view: boolean
+          ghi_chu: string | null
+          id: number
+          resource: string
+          tao_boi: string | null
+          tao_luc: string
+          user_id: string
+        }
+        Insert: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          ghi_chu?: string | null
+          id?: number
+          resource: string
+          tao_boi?: string | null
+          tao_luc?: string
+          user_id: string
+        }
+        Update: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          ghi_chu?: string | null
+          id?: number
+          resource?: string
+          tao_boi?: string | null
+          tao_luc?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           active: boolean
           bo_phan: string | null
           chi_xem: boolean
+          nhan_yeu_cau_doi_tac: boolean
           created_at: string | null
           email: string | null
           ghi_chu: string | null
@@ -4062,6 +4215,7 @@ export type Database = {
           active?: boolean
           bo_phan?: string | null
           chi_xem?: boolean
+          nhan_yeu_cau_doi_tac?: boolean
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null
@@ -4081,6 +4235,7 @@ export type Database = {
           active?: boolean
           bo_phan?: string | null
           chi_xem?: boolean
+          nhan_yeu_cau_doi_tac?: boolean
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null
@@ -4538,6 +4693,93 @@ export type Database = {
           },
         ]
       }
+      yeu_cau_bao_gia: {
+        Row: {
+          agent_id: number | null
+          email: string | null
+          id: number
+          lead_id: number | null
+          ly_do_bo_qua: string | null
+          ngay_di_du_kien: string | null
+          ngay_ve_du_kien: string | null
+          nguoi_lien_he: string | null
+          noi_dung: string | null
+          so_dien_thoai: string | null
+          so_khach: number | null
+          so_tep_gui: number | null
+          tai_khoan_email: string | null
+          tai_khoan_ten: string | null
+          tao_luc: string
+          ten_agent: string | null
+          tep_hong: Json
+          tieu_de: string | null
+          trang_thai: string
+          xu_ly_boi: string | null
+          xu_ly_luc: string | null
+        }
+        Insert: {
+          agent_id?: number | null
+          email?: string | null
+          id?: number
+          lead_id?: number | null
+          ly_do_bo_qua?: string | null
+          ngay_di_du_kien?: string | null
+          ngay_ve_du_kien?: string | null
+          nguoi_lien_he?: string | null
+          noi_dung?: string | null
+          so_dien_thoai?: string | null
+          so_khach?: number | null
+          so_tep_gui?: number | null
+          tai_khoan_email?: string | null
+          tai_khoan_ten?: string | null
+          tao_luc?: string
+          ten_agent?: string | null
+          tep_hong?: Json
+          tieu_de?: string | null
+          trang_thai?: string
+          xu_ly_boi?: string | null
+          xu_ly_luc?: string | null
+        }
+        Update: {
+          agent_id?: number | null
+          email?: string | null
+          id?: number
+          lead_id?: number | null
+          ly_do_bo_qua?: string | null
+          ngay_di_du_kien?: string | null
+          ngay_ve_du_kien?: string | null
+          nguoi_lien_he?: string | null
+          noi_dung?: string | null
+          so_dien_thoai?: string | null
+          so_khach?: number | null
+          so_tep_gui?: number | null
+          tai_khoan_email?: string | null
+          tai_khoan_ten?: string | null
+          tao_luc?: string
+          ten_agent?: string | null
+          tep_hong?: Json
+          tieu_de?: string | null
+          trang_thai?: string
+          xu_ly_boi?: string | null
+          xu_ly_luc?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "yeu_cau_bao_gia_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yeu_cau_bao_gia_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "lead"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       khao_sat_summary_per_doan: {
@@ -4746,8 +4988,60 @@ export type Database = {
           },
         ]
       }
+      yeu_cau_bao_gia_view: {
+        Row: {
+          agent_id: number | null
+          bao_gia_da_gui_cong: boolean | null
+          bao_gia_moi_nhat_id: number | null
+          bao_gia_moi_nhat_ten: string | null
+          email: string | null
+          id: number | null
+          lead_id: number | null
+          ly_do_bo_qua: string | null
+          ngay_di_du_kien: string | null
+          ngay_ve_du_kien: string | null
+          nguoi_lien_he: string | null
+          noi_dung: string | null
+          so_bao_gia: number | null
+          so_dien_thoai: string | null
+          so_khach: number | null
+          so_tep: number | null
+          so_tep_gui: number | null
+          tai_khoan_email: string | null
+          tai_khoan_ten: string | null
+          tao_luc: string | null
+          ten_agent: string | null
+          tep_hong: Json | null
+          tieu_de: string | null
+          trang_thai: string | null
+          trang_thai_hien_thi: string | null
+          xu_ly_boi: string | null
+          xu_ly_luc: string | null
+          xu_ly_ten: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "yeu_cau_bao_gia_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yeu_cau_bao_gia_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "lead"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      hoc_so_tay_bao_gia: {
+        Args: { p_items: Json }
+        Returns: number
+      }
       cong_no_ghi_can_tru: {
         Args: { p_cong_no_id: number; p_log_entry?: string }
         Returns: undefined
@@ -4905,6 +5199,10 @@ export type Database = {
       is_admin:
         | { Args: never; Returns: boolean }
         | { Args: { user_id: string }; Returns: boolean }
+      ensure_khac_mac_dinh: {
+        Args: { p_doan_id: number; p_mo_tas: string[] }
+        Returns: number
+      }
       is_web_admin: { Args: never; Returns: boolean }
       mark_deadline_done: {
         Args: { p_booking_id: number; p_type: string }

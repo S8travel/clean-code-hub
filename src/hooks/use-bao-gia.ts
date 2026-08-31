@@ -26,6 +26,11 @@ export interface BaoGiaItem {
   // N (次/N数): số đêm (KS) / số lần (ăn, vé) / số chuyến (xe). Nhân vào thành
   // tiền. Item cũ không có → mặc định 1.
   so_luong?: number;
+  // SL (số phòng / số suất) NHẬP TAY theo từng cỡ đoàn — cho đoàn FIT, nơi số
+  // phòng/suất thực tế không theo công thức (rooms = ceil(khách/2)+1, pax =
+  // khách+1). Khoá = số khách của bậc (dạng chuỗi vì lưu JSONB), giá trị = SL
+  // dùng thay số tự tính. Bậc KHÔNG có khoá → vẫn tự tính như cũ.
+  sl_override?: Record<string, number>;
   // Tên gốc tiếng Trung (từ AI trích lịch trình ZH) — hiển thị song ngữ trong
   // bảng costing kiểu Excel. Item nhập tay/không có → bỏ trống.
   ten_zh?: string;
@@ -149,6 +154,14 @@ export interface BaoGiaRow {
   // do RPC tao_phien_ban_bao_gia ghi, KHÔNG sửa tay.
   so_phien_ban_cuoi: number;
   phien_ban_hien_hanh_id: number | null;
+  // Link xem báo giá cho người không có tài khoản cổng. Do edge fn
+  // tao-link-bao-gia ghi; hai cột "mở" do lượt đồng bộ kéo ngược từ cổng về.
+  link_token: string | null;
+  link_het_han: string | null;
+  link_thu_hoi: boolean;
+  link_tao_luc: string | null;
+  link_so_lan_mo: number;
+  link_mo_gan_nhat: string | null;
   // ── Cổng đối tác (外網) ──
   // Bản báo giá ĐÓNG BĂNG lúc bấm "Gửi khách": bảng giá đã chào không đổi theo
   // giá vốn sửa sau. Chỉ chứa giá bán — xem lib/portal-payload.ts.
@@ -156,6 +169,11 @@ export interface BaoGiaRow {
   // Đã mở cho đối tác xem trên cổng.
   portal_enabled: boolean;
   portal_pushed_at: string | null;
+  // Báo giá này làm từ yêu cầu nào của đối tác (tab "Yêu cầu báo giá").
+  // NGUỒN SỰ THẬT cho trạng thái "yêu cầu đã xử lý chưa" — view yeu_cau_bao_gia_view
+  // đếm theo cột này, không tin cột trang_thai. Gán NGAY lúc INSERT, không để
+  // bước sau: hỏng giữa chừng là báo giá mồ côi, yêu cầu vẫn báo "chưa xử lý".
+  yeu_cau_id: number | null;
 }
 
 // ── Queries ──
@@ -259,6 +277,8 @@ export function useCloneBaoGia() {
         lich_trinh_files: s.lich_trinh_files,
         trang_thai: "draft",
         lead_id: leadId ?? null,
+        // CỐ Ý không chép `yeu_cau_id`: bản sao là báo giá cho việc khác, không
+        // được tính là đã xử lý yêu cầu gốc của đối tác.
       };
       const { data, error } = await externalSupabase
         .from("bao_gia")
@@ -301,6 +321,10 @@ export function useDeleteBaoGia() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bao_gia"] });
+      // Tab "Yêu cầu báo giá" tính trạng thái từ chính bảng bao_gia: xoá báo giá
+      // thì yêu cầu phải quay về "chưa xử lý". Không làm mới thì màn hình vẫn báo
+      // "Đã báo giá" và không ai biết là phải làm lại.
+      qc.invalidateQueries({ queryKey: ["yeu_cau_bao_gia"] });
     },
   });
 }

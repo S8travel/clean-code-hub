@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getSoKhachText, groupKsRows, ksLeftoverDisplay,
   getActualSummaryValue, getChiPhiNetBase, getChiPhiThucTe,
-  parseNHMoTa, mergeNHRows, buildVoucherNote,
+  parseNHMoTa, mergeNHRows, buildVoucherNote, sortVeRows, veDisplayName,
 } from "./export-chi-phi-excel";
 import type { ExportDoan } from "./export-chi-phi-excel";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
@@ -233,5 +233,75 @@ describe("parseNHMoTa", () => {
     expect(parseNHMoTa("NHÀ HÀNG X (tối)")).toEqual({ bua: "toi", name: "NHÀ HÀNG X" });
     expect(parseNHMoTa("NƯỚC SUỐI ĐOÀN")).toEqual({ bua: null, name: "NƯỚC SUỐI ĐOÀN" });
     expect(parseNHMoTa(null)).toEqual({ bua: null, name: "—" });
+  });
+});
+
+// Bug đoàn DAD05JX260817Z: file xuất ra khác thứ tự màn Chi phí — dòng chính bị in
+// ngược (sort ref_doan_ngay_item_id giảm dần) và dòng phát sinh [dvps_] (cột đó NULL)
+// bị dồn xuống cuối ngày, tách khỏi dòng chính của nó.
+describe("sortVeRows — thứ tự section VÉ THẮNG CẢNH khớp màn Chi phí", () => {
+  const ve = (p: Partial<ChiPhiRow> & { id: number }) =>
+    ksRow({ danh_muc: "canh_diem", ...p });
+
+  it("ngày 20/8 đoàn DAD05JX260817Z: mỗi phát sinh nằm ngay dưới dòng chính, không bị dồn cuối ngày", () => {
+    // Thứ tự vào = thứ tự màn hình (useChiPhiList sắp theo created_at).
+    const rows = [
+      ve({ id: 18298, ngay_so: 4, mo_ta: "Bà nà hill ( combo)", ref_doan_ngay_item_id: 18798 }),
+      ve({ id: 18303, ngay_so: 4, mo_ta: "Show Charming", ref_doan_ngay_item_id: 18805 }),
+      ve({ id: 18405, ngay_so: 4, mo_ta: "[dvps_18303] Show Charming" }),
+      ve({ id: 20625, ngay_so: 4, mo_ta: "[dvps_18303] Show Charming NL  ( hdv thanh toán bổ sung)" }),
+      ve({ id: 21140, ngay_so: 4, mo_ta: "[dvps_18298] Bà nà hill ( combo) TE" }),
+    ];
+    expect(sortVeRows(rows).map((r) => r.id)).toEqual([18298, 21140, 18303, 18405, 20625]);
+  });
+
+  it("nhiều ngày: ngày tăng dần, trong ngày giữ nguyên thứ tự dòng chính như màn hình", () => {
+    const rows = [
+      ve({ id: 18293, ngay_so: 3, mo_ta: "Rừng dừa", ref_doan_ngay_item_id: 18795 }),
+      ve({ id: 18294, ngay_so: 3, mo_ta: "Ký ức Hội An - vé Eco", ref_doan_ngay_item_id: 18796 }),
+      ve({ id: 19558, ngay_so: 3, mo_ta: "[dvps_18294] Ký ức Hội An - vé Eco" }),
+      ve({ id: 18295, ngay_so: 3, mo_ta: "Thánh địa Mỹ Sơn", ref_doan_ngay_item_id: 18797 }),
+      ve({ id: 18290, ngay_so: 2, mo_ta: "Xe điện Phố cổ hội an ( 10k)", ref_doan_ngay_item_id: 18794 }),
+      ve({ id: 22178, ngay_so: 4, mo_ta: "Hầm rượu bà nà", ref_doan_ngay_item_id: 20100 }),
+    ];
+    expect(sortVeRows(rows).map((r) => r.id)).toEqual([18290, 18293, 18294, 19558, 18295, 22178]);
+  });
+
+  it("phát sinh mồ côi (dòng chính không có trong bản in) vẫn được in, xếp cuối ngày của nó", () => {
+    const rows = [
+      ve({ id: 1, ngay_so: 2, mo_ta: "Vé A" }),
+      ve({ id: 9, ngay_so: 2, mo_ta: "[dvps_777] Vé đã xoá dòng chính" }),
+      ve({ id: 2, ngay_so: 3, mo_ta: "Vé B" }),
+    ];
+    expect(sortVeRows(rows).map((r) => r.id)).toEqual([1, 9, 2]);
+  });
+
+  it("không có phát sinh → chỉ sắp theo ngày, giữ nguyên thứ tự trong ngày", () => {
+    const rows = [
+      ve({ id: 3, ngay_so: 5, mo_ta: "Vé C" }),
+      ve({ id: 1, ngay_so: 2, mo_ta: "Vé A" }),
+      ve({ id: 2, ngay_so: 2, mo_ta: "Vé B" }),
+    ];
+    expect(sortVeRows(rows).map((r) => r.id)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("veDisplayName — dòng phát sinh in kèm '↳' như màn Chi phí", () => {
+  it("dòng phát sinh: bỏ tiền tố [dvps_<id>] và thêm '↳ '", () => {
+    expect(veDisplayName("[dvps_18303] Show Charming NL  ( hdv thanh toán bổ sung)"))
+      .toBe("↳ Show Charming NL  ( hdv thanh toán bổ sung)");
+  });
+
+  it("dòng chính: giữ nguyên tên, KHÔNG thêm '↳'", () => {
+    expect(veDisplayName("Show Charming")).toBe("Show Charming");
+  });
+
+  it("tiền tố kỹ thuật khác vẫn bị bỏ nhưng không phải phát sinh → không có '↳'", () => {
+    expect(veDisplayName("[trua] NHÀ HÀNG Y")).toBe("NHÀ HÀNG Y");
+  });
+
+  it("rỗng / chỉ có tiền tố → '—' (ô không bỏ trắng)", () => {
+    expect(veDisplayName(null)).toBe("—");
+    expect(veDisplayName("[dvps_1] ")).toBe("—");
   });
 });
