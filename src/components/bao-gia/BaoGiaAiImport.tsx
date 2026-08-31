@@ -298,8 +298,26 @@ export function BaoGiaAiImport({
   // Danh mục master cho picker đổi/chọn dịch vụ (mọi loại — giống KS).
 
   /** Nhãn nhỏ cho biết GIÁ trên dòng này ở đâu ra — người nhập cần phân biệt
-   *  "sổ tay đã nhớ" với "máy đoán" với "chưa ai điền". */
+   *  "sổ tay đã nhớ" với "máy đoán" với "chưa ai điền". Kèm nhãn LỆCH khi bên
+   *  mình tính khác mức tiền đối tác ghi trong lịch trình. */
   const nhanNguon = (r: ResolvedItem) => {
+    const chinh = nhanNguonChinh(r);
+    const lech = r.gia_dong_ghi != null && r.don_gia > 0 && r.gia_dong_ghi !== r.don_gia;
+    if (!lech) return chinh;
+    return (
+      <span className="inline-flex items-center gap-1">
+        {chinh}
+        <span
+          className="text-[9px] text-amber-700 border border-amber-300 rounded px-1"
+          title={`Đối tác ghi mức ${fmtVnd(r.gia_dong_ghi ?? 0)} trong lịch trình, bên mình đang tính ${fmtVnd(r.don_gia)} theo giá của mình. Muốn theo đối tác thì sửa ô ĐG VND.`}
+        >
+          ≠ đối tác ghi {fmtVnd(r.gia_dong_ghi ?? 0)}
+        </span>
+      </span>
+    );
+  };
+
+  const nhanNguonChinh = (r: ResolvedItem) => {
     if (r.sua_tay) {
       return <span className="text-[9px] text-blue-600" title="Bạn vừa sửa — sẽ được ghi vào sổ tay">vừa sửa</span>;
     }
@@ -453,9 +471,12 @@ export function BaoGiaAiImport({
     // Ghi vào SỔ TAY: cặp (tiếng Trung ↔ tiếng Việt ↔ giá) người nhập vừa chốt.
     // Đây là chỗ sổ tay dày lên. Fire-and-forget như trên — hỏng thì báo giá này
     // vẫn đúng, chỉ là lần sau chưa nhớ.
+    // Dòng máy đoán chưa chắc KHÔNG được vào sổ tay: người nhập mới chỉ tick "đã
+    // xem", chưa xác nhận là đúng — ghi vào là biến phỏng đoán thành giá chuẩn.
+    const chuaChacSet = new Set(chuaChac);
     const deHoc = locDongDeHoc(
       included
-        .filter((r) => (LOAI_SO_TAY as readonly string[]).includes(r.loai))
+        .filter((r) => !chuaChacSet.has(r) && (LOAI_SO_TAY as readonly string[]).includes(r.loai))
         .map((r) => ({
           ten_zh: r.ten_zh,
           mo_ta: r.mo_ta,

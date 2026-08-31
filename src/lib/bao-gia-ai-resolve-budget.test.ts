@@ -284,10 +284,32 @@ describe("aliasesToLearn", () => {
     expect(aliasesToLearn(rows, "user-1")[0].sua_tay).toBe(false);
   });
 
+  // Ca thật đã gặp: dòng "đi bộ" bị gán vé xe điện theo đúng đường này —
+  // AI đoán yếu → không ai sửa → Áp dụng → lời đoán thành trí nhớ.
+  it("AI khớp KHÔNG chắc mà không ai sửa → KHÔNG ghi nhớ tham chiếu lẫn giá", () => {
+    const rows = [res({ loai: "ticket", ten_zh: "漫步三十六古街", mo_ta: "Xe điện 36 phố phường",
+      don_gia: 50_000, match_table: "canh_diem", match_id: 71, confidence: 0.2 })];
+    expect(aliasesToLearn(rows, "user-1")).toEqual([]);
+  });
+
+  it("AI khớp chắc (≥ ngưỡng) vẫn được ghi nhớ như cũ", () => {
+    const rows = [res({ loai: "ticket", ten_zh: "電瓶車遊36古街", mo_ta: "Xe điện 36 phố phường",
+      don_gia: 50_000, match_table: "canh_diem", match_id: 71, confidence: 0.9 })];
+    expect(aliasesToLearn(rows, "user-1")[0].target_id).toBe(71);
+  });
+
+  it("người sửa tay thì học kể cả khi máy không chắc", () => {
+    const rows = [res({ loai: "ticket", ten_zh: "漫步三十六古街", mo_ta: "36 phố phường (đi bộ)",
+      don_gia: 0, match_table: "canh_diem", match_id: 72, confidence: 0.1, sua_tay: true })];
+    const [a] = aliasesToLearn(rows, "user-1");
+    expect(a.target_id).toBe(72);
+    expect(a.sua_tay).toBe(true);
+  });
+
   it("dòng có ref danh mục → gia_override null (giá động); chỉ-giá → học giá; rỗng → bỏ", () => {
     const rows = [
       res({ loai: "hotel", ten_zh: "某酒店", mo_ta: "KS X", don_gia: 1_500_000,
-        match_table: "khach_san", match_id: 9 }),
+        match_table: "khach_san", match_id: 9, confidence: 0.9 }),
       res({ loai: "meal", ten_zh: "海鮮 8USD", mo_ta: "Set hải sản", don_gia: 160_000 }),
       res({ loai: "ticket", ten_zh: "", ten_vi: "", mo_ta: "", don_gia: 0 }),
     ];

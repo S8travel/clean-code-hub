@@ -45,8 +45,18 @@ const maps: ResolveMaps = {
     }],
     [13, { ten: "Du thuyền trọn gói", gia: 2_000_000, bao_gom_bua_an: "ca_hai" as const }],
   ]),
-  setMenu: new Map([[5, { ten: "Set 300k", gia: 300_000, nhaHangTen: "NH ABC", nhaHangId: 3 }]]),
-  nhaHang: new Map([[3, { ten: "NH ABC", foc_khach: null, foc_mien: null }]]),
+  setMenu: new Map([
+    [5, { ten: "Set 300k", gia: 300_000, nhaHangTen: "NH ABC", nhaHangId: 3 }],
+    // NH có 4 set theo bữa + ngày trong tuần — hình dạng hay gặp ở buffet
+    [21, { ten: "SET BF TRƯA ( T2 - T6)", gia: 100_000, nhaHangTen: "NH Buffet", nhaHangId: 4 }],
+    [22, { ten: "SET BF TRƯA ( T7 - CN)", gia: 200_000, nhaHangTen: "NH Buffet", nhaHangId: 4 }],
+    [23, { ten: "SET BF TỐI ( T2 - T6)", gia: 300_000, nhaHangTen: "NH Buffet", nhaHangId: 4 }],
+    [24, { ten: "SET BF TỐI ( T7 - CN)", gia: 400_000, nhaHangTen: "NH Buffet", nhaHangId: 4 }],
+  ]),
+  nhaHang: new Map([
+    [3, { ten: "NH ABC", foc_khach: null, foc_mien: null }],
+    [4, { ten: "NH Buffet", foc_khach: 16, foc_mien: 1 }],
+  ]),
   khachSan: new Map([[2, { ten: "KS Biển" }]]),
   khachSanGia: new Map([[2, [
     gp({ id: 1, gia: 1_500_000 }),
@@ -113,13 +123,56 @@ describe("resolveAiItems — ghép AI với master", () => {
     expect(r.match_label).toBe("NH ABC · Set 300k");
   });
 
-  it("nhà hàng KHÔNG set_menu_id → no_price (chờ user chọn set)", () => {
+  it("nhà hàng chỉ có 1 set → tự lấy set đó (giá duy nhất danh mục có)", () => {
     const [r] = resolveAiItems(wrap([
       item({ loai: "meal", bua_an: "toi", match: { table: "nha_hang", id: 3, set_menu_id: null, confidence: 0.6 } }),
     ]), maps);
+    expect(r.status).toBe("matched");
+    expect(r.don_gia).toBe(300_000);
+    expect(r.match_set_menu_id).toBe(5);
+  });
+
+  // AI gần như luôn bỏ trống ô set → trước đây nhà hàng nhiều set ra 0₫ dù danh
+  // mục có đủ giá. Chọn bằng luật: bữa + thứ trong tuần.
+  it("nhà hàng nhiều set: chọn đúng set theo bữa + ngày thường/cuối tuần", () => {
+    // 2026-09-02 là thứ Tư → ngày thường
+    const truaThuong = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: "trua", match: { table: "nha_hang", id: 4, set_menu_id: null, confidence: 0.8 } }),
+    ]), maps, "2026-09-02")[0];
+    expect(truaThuong.don_gia).toBe(100_000);
+    expect(truaThuong.match_set_menu_id).toBe(21);
+
+    const toiThuong = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: "toi", match: { table: "nha_hang", id: 4, set_menu_id: null, confidence: 0.8 } }),
+    ]), maps, "2026-09-02")[0];
+    expect(toiThuong.don_gia).toBe(300_000);
+    expect(toiThuong.match_set_menu_id).toBe(23);
+
+    // 2026-09-05 là thứ Bảy → set cuối tuần
+    const toiCuoiTuan = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: "toi", match: { table: "nha_hang", id: 4, set_menu_id: null, confidence: 0.8 } }),
+    ]), maps, "2026-09-05")[0];
+    expect(toiCuoiTuan.don_gia).toBe(400_000);
+    expect(toiCuoiTuan.match_set_menu_id).toBe(24);
+  });
+
+  it("ngày thứ N tính từ ngày đi — đêm cuối tuần rơi vào giữa tour vẫn đúng set", () => {
+    // đi thứ Năm 03/09, ngày thứ 3 của tour = thứ Bảy 05/09
+    const [r] = resolveAiItems(wrap([
+      item({ ngay_so: 3, loai: "meal", bua_an: "trua",
+        match: { table: "nha_hang", id: 4, set_menu_id: null, confidence: 0.8 } }),
+    ]), maps, "2026-09-03");
+    expect(r.don_gia).toBe(200_000);
+    expect(r.match_set_menu_id).toBe(22);
+  });
+
+  it("không biết bữa lẫn ngày → KHÔNG tự chọn, để người nhập quyết", () => {
+    const [r] = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: null, match: { table: "nha_hang", id: 4, set_menu_id: null, confidence: 0.8 } }),
+    ]), maps);
     expect(r.status).toBe("no_price");
     expect(r.don_gia).toBe(0);
-    expect(r.match_label).toBe("NH ABC");
+    expect(r.match_label).toBe("NH Buffet");
   });
 
   it("khách sạn → giá theo ngày tour (resolveGiaPhong)", () => {

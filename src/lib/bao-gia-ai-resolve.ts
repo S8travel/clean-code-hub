@@ -105,6 +105,9 @@ export interface ResolvedItem {
   nguon_gia?: NguonGia;
   /** Dòng sổ tay đã trúng đã được dùng bao nhiêu lần (hiện cho người nhập yên tâm). */
   so_lan_dung?: number;
+  /** Mức USD đối tác ghi trong dòng, đã quy đổi. Khác `don_gia` = bên mình tính
+   *  theo giá của mình, lệch với dự trù đối tác → màn review hiện cảnh báo. */
+  gia_dong_ghi?: number | null;
   /** TRUE = OP đã ĐỘNG TAY vào dòng này trong màn review (chọn lại danh mục, gõ
    *  tên, sửa giá, đổi loại, tự thêm dòng). Quyết định 2 việc khi Áp dụng:
    *  học alias kể cả dòng chỉ sửa mỗi tên, và alias đó được quyền thắng AI
@@ -292,6 +295,115 @@ export function parseUsdAmount(text: string | null | undefined): number | null {
   return null;
 }
 
+/** Ngày dương lịch của "ngày thứ N" trong tour. null khi chưa biết ngày đi. */
+export function ngayCuaNgaySo(tourDate: string | null | undefined, ngay_so: number): string | null {
+  if (!tourDate) return null;
+  const d = new Date(`${tourDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + Math.max(0, Math.round(ngay_so) - 1));
+  // Ghép tay theo giờ ĐỊA PHƯƠNG. toISOString() quy về UTC nên ở múi giờ VN
+  // (UTC+7) nửa đêm bị lùi thành ngày hôm trước — đủ để thứ Bảy thành thứ Sáu
+  // và bốc nhầm set cuối tuần sang set ngày thường.
+  const hai = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${hai(d.getMonth() + 1)}-${hai(d.getDate())}`;
+}
+
+/** Nắn tên set thành chuỗi TỪ có đệm khoảng trắng hai đầu (" SET BF TOI T7 CN ")
+ *  để dò từ khoá bằng includes — khỏi cần biên giới từ trong regex. */
+function nanTenSet(s: string): string {
+  const t = (s ?? "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d")
+    .toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+  return ` ${t} `;
+}
+
+/** Tên set nói bữa nào? null = không nói gì. */
+function buaTrongTenSet(ten: string): "trua" | "toi" | null {
+  const t = nanTenSet(ten);
+  const toi = t.includes(" TOI ") || t.includes(" DINNER ");
+  const trua = t.includes(" TRUA ") || t.includes(" LUNCH ");
+  if (toi && !trua) return "toi";
+  if (trua && !toi) return "trua";
+  return null;
+}
+
+/** Tên set nói cuối tuần hay ngày thường? true=cuối tuần, false=ngày thường, null=không nói. */
+function cuoiTuanTrongTenSet(ten: string): boolean | null {
+  const t = nanTenSet(ten);
+  const cuoiTuan = t.includes(" T7 ") || t.includes(" CN ")
+    || t.includes(" CUOI TUAN ") || t.includes(" WEEKEND ");
+  const ngayThuong = (t.includes(" T2 ") && t.includes(" T6 "))
+    || t.includes(" NGAY THUONG ") || t.includes(" WEEKDAY ");
+  if (cuoiTuan && !ngayThuong) return true;
+  if (ngayThuong && !cuoiTuan) return false;
+  return null;
+}
+
+/**
+ * Chọn set menu cho một bữa khi AI khớp được nhà hàng nhưng bỏ trống ô set.
+ *
+ * Vì sao cần: buffet hay có 4 set cho 4 hoàn cảnh (trưa/tối × ngày thường/cuối
+ * tuần), chênh nhau cả trăm nghìn một suất. Model gần như luôn để trống ô set →
+ * dòng ra 0₫ và người nhập phải tự dò. Ở đây chọn bằng LUẬT (bữa + thứ trong
+ * tuần), không đoán.
+ *
+ * Trả null khi không đủ căn cứ để chắc — thà để người nhập chọn còn hơn gán
+ * nhầm set đắt hơn rồi báo giá sai mà không ai thấy.
+ */
+export function chonSetMenuTheoBua(
+  sets: readonly { id: number; ten: string; gia: number | null }[],
+  ctx: { bua?: "trua" | "toi" | null; ngayDate?: string | null },
+): number | null {
+  const dung = sets.filter((s) => (s.gia ?? 0) > 0);
+  if (dung.length === 0) return null;
+
+  const d = ctx.ngayDate ? new Date(`${ctx.ngayDate}T00:00:00`) : null;
+  const thu = d && !Number.isNaN(d.getTime()) ? d.getDay() : null; // 0=CN, 6=T7
+  const laCuoiTuan = thu == null ? null : thu === 0 || thu === 6;
+
+  // Loại thẳng set nói rõ hoàn cảnh KHÁC: set ghi "TỐI" không dùng cho bữa trưa,
+  // set "T7 - CN" không dùng cho ngày thường.
+  const hopLe = dung.filter((s) => {
+    const bua = buaTrongTenSet(s.ten);
+    const ct = cuoiTuanTrongTenSet(s.ten);
+    if (bua && ctx.bua && bua !== ctx.bua) return false;
+    if (ct != null && laCuoiTuan != null && ct !== laCuoiTuan) return false;
+    return true;
+  });
+  if (hopLe.length === 0) return null;
+  if (hopLe.length === 1) return hopLe[0].id; // còn đúng một khả năng
+
+  let tot: { id: number; diem: number } | null = null;
+  let hoa = false;
+  for (const s of hopLe) {
+    const bua = buaTrongTenSet(s.ten);
+    const ct = cuoiTuanTrongTenSet(s.ten);
+    let diem = 0;
+    if (bua && ctx.bua && bua === ctx.bua) diem += 2;
+    if (ct != null && laCuoiTuan != null && ct === laCuoiTuan) diem += 1;
+    if (!tot || diem > tot.diem) { tot = { id: s.id, diem }; hoa = false; }
+    else if (diem === tot.diem) hoa = true;
+  }
+  // Hoà ở đỉnh, hoặc không dòng nào có căn cứ (điểm 0) → để người nhập chọn.
+  return tot && tot.diem > 0 && !hoa ? tot.id : null;
+}
+
+/** Set menu theo từng nhà hàng, dựng 1 lần cho mỗi bộ maps (memo hoá). */
+const setTheoNhaHangCache = new WeakMap<ResolveMaps, Map<number, { id: number; ten: string; gia: number | null }[]>>();
+function setMenuCuaNhaHang(maps: ResolveMaps, nhaHangId: number) {
+  let idx = setTheoNhaHangCache.get(maps);
+  if (!idx) {
+    idx = new Map();
+    for (const [id, s] of maps.setMenu) {
+      const ds = idx.get(s.nhaHangId) ?? [];
+      ds.push({ id, ten: s.ten, gia: s.gia });
+      idx.set(s.nhaHangId, ds);
+    }
+    setTheoNhaHangCache.set(maps, idx);
+  }
+  return idx.get(nhaHangId) ?? [];
+}
+
 /** Giải 1 tham chiếu danh mục → {label, giá}. Dùng chung cho AI match lẫn alias.
  *  ok=false khi id không tồn tại trong master. KS lấy giá theo mùa (tourDate). */
 interface MatchRefResult {
@@ -302,8 +414,15 @@ interface MatchRefResult {
   foc_mien: number | null;
   bao_gom_bua_an?: BaoGomBuaAn | null; // combo đã gồm bữa ăn (chỉ cảnh điểm)
   bao_gom_ghi_chu?: string | null;
+  /** Set menu do LUẬT chọn hộ khi AI bỏ trống ô set (chỉ nhà hàng). */
+  set_menu_id?: number | null;
 }
-function resolveMatchRef(m: AiMatchRef, maps: ResolveMaps, tourDate?: string | null): MatchRefResult {
+/** Hoàn cảnh của dòng đang giải — để chọn đúng set menu (bữa nào, ngày nào). */
+interface NguCanhDong { bua?: "trua" | "toi" | null; ngayDate?: string | null }
+
+function resolveMatchRef(
+  m: AiMatchRef, maps: ResolveMaps, tourDate?: string | null, ctx?: NguCanhDong,
+): MatchRefResult {
   const noFoc = { foc_khach: null, foc_mien: null };
   if (m.table === "khach_san") {
     const ks = maps.khachSan.get(m.id);
@@ -318,6 +437,19 @@ function resolveMatchRef(m: AiMatchRef, maps: ResolveMaps, tourDate?: string | n
     }
     const nh = maps.nhaHang.get(m.id);
     if (!nh) return { ok: false, label: "", gia: null, ...noFoc };
+    // Model gần như luôn để trống ô set → trước đây dòng ra 0₫ dù danh mục có
+    // đủ giá. Chọn theo LUẬT (bữa + thứ trong tuần); không đủ căn cứ thì vẫn để
+    // người nhập chọn, chứ không gán bừa.
+    const tuChon = chonSetMenuTheoBua(setMenuCuaNhaHang(maps, m.id), {
+      bua: ctx?.bua ?? null, ngayDate: ctx?.ngayDate ?? null,
+    });
+    const sTuChon = tuChon != null ? maps.setMenu.get(tuChon) : undefined;
+    if (sTuChon) {
+      return {
+        ok: true, label: `${nh.ten} · ${sTuChon.ten}`, gia: sTuChon.gia,
+        foc_khach: nh.foc_khach, foc_mien: nh.foc_mien, set_menu_id: tuChon,
+      };
+    }
     return { ok: true, label: nh.ten, gia: null, foc_khach: nh.foc_khach, foc_mien: nh.foc_mien }; // chưa chọn set → thiếu giá
   }
   if (m.table === "canh_diem") {
@@ -373,7 +505,9 @@ function resolveOneCore(it: AiExtractItem, maps: ResolveMaps, tourDate?: string 
   const noRef = { match_table: null, match_id: null, match_set_menu_id: null } as const;
   if (!m) return { ...base, don_gia: 0, status: "unmatched", match_label: "Chưa khớp", ...noRef };
 
-  const r = resolveMatchRef(m, maps, tourDate);
+  const r = resolveMatchRef(m, maps, tourDate, {
+    bua: base.bua_an ?? null, ngayDate: ngayCuaNgaySo(tourDate, it.ngay_so),
+  });
   if (!r.ok) return { ...base, don_gia: 0, status: "unmatched", match_label: "Chưa khớp", ...noRef };
 
   const don_gia = r.gia != null && r.gia > 0 ? r.gia : 0;
@@ -386,7 +520,7 @@ function resolveOneCore(it: AiExtractItem, maps: ResolveMaps, tourDate?: string 
     match_label: r.label,
     match_table: m.table,
     match_id: m.id,
-    match_set_menu_id: m.set_menu_id ?? null,
+    match_set_menu_id: m.set_menu_id ?? r.set_menu_id ?? null,
   };
 }
 
@@ -406,14 +540,17 @@ function applyAlias(
   // Alias trỏ sang dòng danh mục KHÁC → cờ combo phải lấy lại theo dòng mới
   // (kể cả khi dòng mới KHÔNG phải combo → xoá cờ cũ, tránh ẩn nhầm bữa ăn).
   let comboPatch: Pick<ResolvedItem, "bao_gom_bua_an" | "bao_gom_nguon" | "bao_gom_ghi_chu"> = {};
+  let setTuLuat: number | null = null;
   if (a.match_table && a.target_id) {
     const r = resolveMatchRef(
       { table: a.match_table, id: a.target_id, set_menu_id: a.set_menu_id, confidence: 1 },
       maps, tourDate,
+      { bua: res.bua_an ?? null, ngayDate: ngayCuaNgaySo(tourDate, res.ngay_so) },
     );
     if (r.ok) {
       if (!a.ten_hien_thi) label = r.label;
       if (gia == null) gia = r.gia;
+      setTuLuat = r.set_menu_id ?? null;
       focPatch = withFoc(r);
       comboPatch = r.bao_gom_bua_an
         ? withCombo(r)
@@ -437,7 +574,7 @@ function applyAlias(
     match_label: `↺ ${label}`,
     match_table: a.match_table ?? res.match_table ?? null,
     match_id: a.target_id ?? res.match_id ?? null,
-    match_set_menu_id: a.set_menu_id ?? res.match_set_menu_id ?? null,
+    match_set_menu_id: a.set_menu_id ?? setTuLuat ?? res.match_set_menu_id ?? null,
     from_alias: true,
   };
 }
@@ -959,8 +1096,15 @@ export function aliasesToLearn(rows: ResolvedItem[], userId?: string | null): Al
   for (const r of rows) {
     const key = normalizeAliasKey(r.ten_zh || r.ten_vi || r.mo_ta);
     if (!key) continue;
-    const hasRef = r.match_table != null && r.match_id != null;
-    const hasPrice = r.don_gia > 0;
+    // Chỉ ghi nhớ THAM CHIẾU khi có căn cứ: người sửa tay, hoặc AI khớp chắc.
+    // Trước đây học cả dòng AI đoán 0,1 điểm tin — chỉ cần một lần Áp dụng là
+    // lời đoán thành "trí nhớ", lần sau hiện nhãn ↺ trông đáng tin hơn hẳn, và
+    // càng dùng càng khoá chặt cái sai (ca thật: mọi dòng "đi bộ" của một phố cổ
+    // đều bị gán vé xe điện, tất cả đều do học thụ động).
+    const refDangTin = r.sua_tay === true || (r.confidence ?? 0) >= NGUONG_CHAC;
+    const hasRef = refDangTin && r.match_table != null && r.match_id != null;
+    // Giá suy ra TỪ một khớp không đáng tin thì cũng không đáng ghi nhớ.
+    const hasPrice = r.don_gia > 0 && (refDangTin || r.match_table == null);
     // Dạy TÊN: chỉ nhận khi OP thật sự động tay + tên không rỗng, tránh ghi vào
     // bộ nhớ chung những dòng trống hoặc tên do chính AI đặt.
     const dayTen = r.sua_tay === true && (r.mo_ta ?? "").trim() !== "";

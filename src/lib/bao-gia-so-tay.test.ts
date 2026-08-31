@@ -100,13 +100,30 @@ describe("traSoTay", () => {
     expect(traSoTay(bd, "下龍灣遊船", "ticket", quyDoi).nguon).toBe("so_tay");
   });
 
-  it("DÒNG TỰ GHI TIỀN thì thắng sổ tay — đối tác ghi 9USD không được đè bằng giá cũ", () => {
+  it("GIÁ MÌNH ĐÃ CHỐT thắng mức USD đối tác ghi — đây là chỗ 'sửa rồi vẫn không nhớ'", () => {
     const bd = banDoSoTay([dong({
-      khoa_zh: chuanHoaZh("越式料理"), loai: "meal", don_gia: 160_000, // học từ lần 7USD
+      // khoá GIỮ cả tiền tố 中餐/晚餐 → cùng một nhà hàng có thể nằm ở nhiều dòng
+      khoa_zh: chuanHoaZh("中餐：海鮮自助餐"), loai: "meal", don_gia: 250_000,
     })]);
+    const kq = traSoTay(bd, "中餐：海鮮自助餐 18USD", "meal", quyDoi);
+    expect(kq.nguon).toBe("so_tay");
+    expect(kq.don_gia).toBe(250_000);
+    // mức đối tác ghi vẫn giữ lại để màn review nói ra chỗ lệch
+    expect(kq.gia_dong_ghi).toBe(18 * 20_000 + 20_000);
+  });
+
+  it("sổ tay chưa có giá → mới dùng mức USD trong dòng", () => {
+    const bd = banDoSoTay([dong({ khoa_zh: chuanHoaZh("越式料理"), loai: "meal", don_gia: null })]);
     const kq = traSoTay(bd, "越式料理 9USD", "meal", quyDoi);
     expect(kq.nguon).toBe("dong_ghi");
     expect(kq.don_gia).toBe(9 * 20_000 + 20_000);
+  });
+
+  it("giá 0 trong sổ tay là MIỄN PHÍ THẬT, không phải chưa điền", () => {
+    const bd = banDoSoTay([dong({ khoa_zh: chuanHoaZh("漫步三十六古街"), loai: "ticket", don_gia: 0 })]);
+    const kq = traSoTay(bd, "漫步三十六古街", "ticket", quyDoi);
+    expect(kq.nguon).toBe("so_tay");
+    expect(kq.don_gia).toBe(0);
   });
 
   it("dòng sổ tay chưa có giá thì cho TÊN nhưng KHÔNG cho giá", () => {
@@ -233,10 +250,42 @@ describe("apSoTay — áp sổ tay lên kết quả AI vừa đọc", () => {
     expect(r.so_lan_dung).toBe(7);
   });
 
-  it("mức tiền ghi trong dòng thắng giá đã học", () => {
+  it("giá đã học thắng mức USD trong dòng, và ghi lại mức kia để cảnh báo lệch", () => {
     const [r] = apSoTay<DongApSoTay>([{ ten_zh: "越式料理 9USD", mo_ta: "", loai: "meal", don_gia: 0 }], bd, quyDoi);
+    expect(r.nguon_gia).toBe("so_tay");
+    expect(r.don_gia).toBe(160_000);
+    expect(r.gia_dong_ghi).toBe(200_000);
+  });
+
+  it("dòng đã khớp danh mục + đối tác ghi USD → GIỮ giá danh mục, chỉ ghi mức lệch", () => {
+    // 250k = set menu danh mục; sổ tay không biết chuỗi này; đối tác ghi 18USD.
+    const [r] = apSoTay<DongApSoTay>(
+      [{ ten_zh: "河內某餐廳自助餐 18USD", mo_ta: "NH buffet", loai: "meal", don_gia: 250_000 }],
+      bd, quyDoi,
+    );
+    expect(r.don_gia).toBe(250_000);
+    expect(r.gia_dong_ghi).toBe(18 * 20_000 + 20_000);
+  });
+
+  it("chưa có giá nào + đối tác ghi USD → mới lấy mức USD", () => {
+    const [r] = apSoTay<DongApSoTay>(
+      [{ ten_zh: "海鮮合菜 8USD", mo_ta: "", loai: "meal", don_gia: 0 }], bd, quyDoi,
+    );
     expect(r.nguon_gia).toBe("dong_ghi");
-    expect(r.don_gia).toBe(200_000);
+    expect(r.don_gia).toBe(8 * 20_000 + 20_000);
+  });
+
+  it("sổ tay ghi 0 (miễn phí thật) đè cả giá đang có — 36 phố phường đi bộ", () => {
+    const bdDiBo = banDoSoTay([
+      dong({ id: 9, khoa_zh: chuanHoaZh("漫步三十六古街"), loai: "ticket",
+        ten_vi: "36 phố phường (đi bộ)", don_gia: 0 }),
+    ]);
+    const [r] = apSoTay<DongApSoTay>(
+      [{ ten_zh: "漫步三十六古街", mo_ta: "Xe điện 36 phố phường", loai: "ticket", don_gia: 50_000 }],
+      bdDiBo, quyDoi,
+    );
+    expect(r.don_gia).toBe(0);
+    expect(r.mo_ta).toBe("36 phố phường (đi bộ)");
   });
 
   it("sổ tay có tên nhưng chưa có giá → cho tên, để giá cho người nhập", () => {
