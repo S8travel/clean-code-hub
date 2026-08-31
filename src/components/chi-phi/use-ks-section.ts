@@ -739,10 +739,22 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
 
   // Bật/tắt định kỳ cho CẢ khách sạn (mọi dòng phòng + dịch vụ của KS đó).
   //
-  // Ghi kèm NCC khi bật: dòng KS chỉ được gắn `nha_cung_cap_id` ở handleBlurSave,
-  // mà chỗ đó bỏ qua khi master chưa load (`ksInfo` null). OP nhập nhanh lúc danh
-  // mục KS chưa về rồi bật định kỳ → dòng nằm NULL NCC vĩnh viễn (không có lần lưu
-  // nào sau đó để vá) → kẹt ở cụm "Chưa có NCC" của trang định kỳ. Xem nccPatchKhiBatDinhKy.
+  // Ghi kèm NCC khi bật: trong hook này `nha_cung_cap_id` CHỈ được ghi ở một chỗ
+  // duy nhất là handleBlurSave, mà chỗ đó bỏ qua khi KS trong danh mục chưa gắn NCC
+  // (`ksNccId == null`). Dòng nào rơi vào đó thì nằm NULL cho tới khi có người sửa
+  // danh mục RỒI mở lại tab và blur từng ô — thực tế là không bao giờ.
+  //
+  // Đo prod 31/08/2026 trên 2.826 dòng chi phí khách sạn: 1.116 dòng (12,5 tỷ) NULL
+  // NCC dù danh mục ĐÃ có NCC (dòng tạo trước khi blur-save biết ghi cột này), và
+  // 196 dòng (2,9 tỷ) NULL vì chính danh mục cũng trống. Bật định kỳ là dịp vá lại
+  // nhóm đầu, nên gộp việc ghi NCC vào đây.
+  //
+  // KHÔNG phải do đua tải danh mục: ksLoading và khachSanMap đến từ cùng một query
+  // (useChiPhiKSData) và ChiPhiKSSection chặn render khi đang tải, nên không có ô
+  // nhập nào tồn tại trước lúc master về.
+  //
+  // Nhóm 196 dòng kia helper không cứu được (cả dòng lẫn master đều trống) — phải
+  // gắn NCC ở trang danh mục. Xem nccPatchKhiBatDinhKy.
   const handleToggleDinhKy = useCallback((ksId: number) => {
     const newVal = !dinhKyKsIdsRef.current.has(ksId);
     const masterNccId = ksData?.khachSanMap[ksId]?.nha_cung_cap_id ?? null;
