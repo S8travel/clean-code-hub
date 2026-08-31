@@ -497,6 +497,7 @@ export function BaoGiaAiImport({
   // Flush phần lệch khi đóng (blur đã lưu rồi thì savePatch lặp lại vô hại).
   const handleClose = () => {
     const patch: Partial<BaoGiaRow> = {};
+    if ((draft.xe_gia ?? null) !== (row.xe_gia ?? null)) patch.xe_gia = draft.xe_gia ?? null;
     if ((draft.phu_thu ?? 0) !== (row.phu_thu ?? 0)) patch.phu_thu = draft.phu_thu ?? 0;
     if (draft.profit_usd !== row.profit_usd) patch.profit_usd = draft.profit_usd;
     if (draft.exchange_rate !== row.exchange_rate && (draft.exchange_rate ?? 0) > 0) {
@@ -905,6 +906,7 @@ export function BaoGiaAiImport({
                       <VehicleSelector
                         xeTen={draft.xe_ten}
                         xeGia={draft.xe_gia}
+                        onDraftGia={(xeGia) => updateDraftField("xe_gia", xeGia)}
                         onChange={(xeTen, xeGia) => {
                           if (xeTen === row.xe_ten && xeGia === row.xe_gia) return;
                           savePatch({ xe_ten: xeTen, xe_gia: xeGia });
