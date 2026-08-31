@@ -17,6 +17,27 @@ export interface ManualItem {
   // N (次/N数): số đêm (KS) / số lần (ăn, vé) / số chuyến (xe). Nhân thêm vào
   // thành tiền. Default 1 nếu không khai báo (back-compat item cũ).
   so_luong?: number;
+  // SL nhập tay theo cỡ đoàn (đoàn FIT). Khoá = số khách của bậc, giá trị = số
+  // phòng/suất dùng THAY cho rooms/pax tự tính. Vắng khoá → tự tính.
+  sl_override?: Record<string, number>;
+}
+
+/** SL OP đã nhập tay cho bậc `guests`, hoặc null nếu bậc đó để tự tính.
+ *  Chấp nhận 0 (đoàn FIT không dùng dịch vụ đó ở cỡ này); số âm/rác coi như
+ *  chưa nhập để một giá trị hỏng không âm thầm làm lệch giá. */
+export function slOverrideOf(
+  i: { sl_override?: Record<string, number> }, guests: number,
+): number | null {
+  const v = i.sl_override?.[String(guests)];
+  return v != null && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+/** SL (số phòng cho KS, số suất cho ăn/vé) THỰC dùng cho 1 item ở 1 bậc:
+ *  số OP nhập tay nếu có, else autoQty (rooms / pax của bậc). */
+export function effItemQty(
+  i: { sl_override?: Record<string, number> }, guests: number, autoQty: number,
+): number {
+  return slOverrideOf(i, guests) ?? autoQty;
 }
 
 /** Số suất/phòng MIỄN của 1 item ở quy mô `count` (pax cho ăn/vé, rooms cho KS):
@@ -61,19 +82,25 @@ export function calcCase(
 ): BaoGiaCase {
   const { guests, pax, rooms } = cfg;
 
-  // FOC (số miễn) trừ khỏi multiplier per item — auto theo chính sách hoặc
-  // override nhập tay (effItemFoc), rồi nhân N (so_luong). clamp 0.
+  // SL = rooms/pax của bậc, trừ khi OP nhập tay cho bậc đó (effItemQty).
+  // FOC (số miễn) trừ khỏi SL đó — auto theo chính sách hoặc override nhập tay
+  // (effItemFoc) — rồi nhân N (so_luong). clamp 0.
+  const tien = (i: ManualItem, autoQty: number): number => {
+    const qty = effItemQty(i, guests, autoQty);
+    return Math.max(0, qty - effItemFoc(i, qty)) * i.gia! * (i.so_luong ?? 1);
+  };
+
   const hotel = items
     .filter((i) => i.loai === "hotel" && i.gia)
-    .reduce((s, i) => s + Math.max(0, rooms - effItemFoc(i, rooms)) * i.gia! * (i.so_luong ?? 1), 0);
+    .reduce((s, i) => s + tien(i, rooms), 0);
 
   const meal = items
     .filter((i) => i.loai === "meal" && i.gia)
-    .reduce((s, i) => s + Math.max(0, pax - effItemFoc(i, pax)) * i.gia! * (i.so_luong ?? 1), 0);
+    .reduce((s, i) => s + tien(i, pax), 0);
 
   const ticket = items
     .filter((i) => i.loai === "ticket" && i.gia)
-    .reduce((s, i) => s + Math.max(0, pax - effItemFoc(i, pax)) * i.gia! * (i.so_luong ?? 1), 0);
+    .reduce((s, i) => s + tien(i, pax), 0);
 
   // transport: lump-sum × N, KHÔNG áp FOC (catalog xe luôn foc=0).
   const transport = tienXe + tienPhuThu + items
@@ -148,6 +175,7 @@ export function calcBaoGia(
       foc_khach: i.foc_khach,
       foc_mien: i.foc_mien,
       so_luong: i.so_luong ?? 1,
+      sl_override: i.sl_override,
     }));
 
   return {
