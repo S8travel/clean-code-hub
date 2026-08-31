@@ -31,7 +31,7 @@ import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, type KSLoaiRow,
 import { useAuditLogger } from "@/hooks/use-activity-log";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { buildCanTruNote } from "@/lib/can-tru-note";
-import { computeInitialDinhKyKsIds } from "@/lib/ks-dinh-ky";
+import { computeInitialDinhKyKsIds, nccPatchKhiBatDinhKy } from "@/lib/ks-dinh-ky";
 import { calcPhiHuySurplus } from "@/lib/phi-huy";
 import { proRataInts } from "@/lib/pro-rata";
 import { type AggCommitKSTarget } from "./KSAggCommitModal";
@@ -737,19 +737,46 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     });
   }, [doanId, upsertMut]);
 
+  // Bật/tắt định kỳ cho CẢ khách sạn (mọi dòng phòng + dịch vụ của KS đó).
+  //
+  // Ghi kèm NCC khi bật: trong hook này `nha_cung_cap_id` CHỈ được ghi ở một chỗ
+  // duy nhất là handleBlurSave, mà chỗ đó bỏ qua khi KS trong danh mục chưa gắn NCC
+  // (`ksNccId == null`). Dòng nào rơi vào đó thì nằm NULL cho tới khi có người sửa
+  // danh mục RỒI mở lại tab và blur từng ô — thực tế là không bao giờ.
+  //
+  // Đo prod 31/08/2026 trên 2.826 dòng chi phí khách sạn: 1.116 dòng (12,5 tỷ) NULL
+  // NCC dù danh mục ĐÃ có NCC (dòng tạo trước khi blur-save biết ghi cột này), và
+  // 196 dòng (2,9 tỷ) NULL vì chính danh mục cũng trống. Bật định kỳ là dịp vá lại
+  // nhóm đầu, nên gộp việc ghi NCC vào đây.
+  //
+  // KHÔNG phải do đua tải danh mục: ksLoading và khachSanMap đến từ cùng một query
+  // (useChiPhiKSData) và ChiPhiKSSection chặn render khi đang tải, nên không có ô
+  // nhập nào tồn tại trước lúc master về.
+  //
+  // Nhóm 196 dòng kia helper không cứu được (cả dòng lẫn master đều trống) — phải
+  // gắn NCC ở trang danh mục. Xem nccPatchKhiBatDinhKy.
   const handleToggleDinhKy = useCallback((ksId: number) => {
+    const newVal = !dinhKyKsIdsRef.current.has(ksId);
+    const masterNccId = ksData?.khachSanMap[ksId]?.nha_cung_cap_id ?? null;
+
     setDinhKyKsIds((prev) => {
       const next = new Set(prev);
-      const newVal = !next.has(ksId);
       if (newVal) next.add(ksId); else next.delete(ksId);
-      // Cập nhật tất cả chi phí rows của KS này trong DB
-      const rowsForKs = localRowsRef.current.filter((r) => r.khach_san_id === ksId && r.id);
-      rowsForKs.forEach((r) => {
-        upsertMut.mutate({ id: r.id, doan_id: doanId, thanh_toan_dinh_ky: newVal });
-      });
       return next;
     });
-  }, [doanId, upsertMut]);
+
+    // Cập nhật tất cả chi phí rows của KS này trong DB
+    const rowsForKs = localRowsRef.current.filter((r) => r.khach_san_id === ksId && r.id);
+    rowsForKs.forEach((r) => {
+      const rowNccId = chiPhiRowsRef.current.find((c) => c.id === r.id)?.nha_cung_cap_id ?? null;
+      upsertMut.mutate({
+        id: r.id,
+        doan_id: doanId,
+        thanh_toan_dinh_ky: newVal,
+        ...nccPatchKhiBatDinhKy(newVal, rowNccId, masterNccId),
+      });
+    });
+  }, [doanId, upsertMut, ksData]);
 
   const handleFieldChange = useCallback((idx: number, field: string, value: string | number) => {
     const editId = localRowsRef.current[idx]?.id;

@@ -20,6 +20,29 @@ export interface DinhKyKsDefault {
   thanh_toan_dinh_ky_mac_dinh?: boolean | null;
 }
 
+/**
+ * NCC ghi kèm khi BẬT cờ định kỳ cho một dòng chi phí.
+ *
+ * Trang Thanh toán định kỳ gom cụm theo `doan_chi_phi.nha_cung_cap_id`; dòng thiếu
+ * NCC rơi vào cụm "Chưa có NCC" và cụm đó bấm gộp bị chặn ("Tháng này không có NCC
+ * hợp lệ") → tiền hiện ra nhưng không đề nghị được. Nên cờ định kỳ và NCC phải đi
+ * cùng nhau, đừng trông vào đường lưu khác gắn NCC hộ.
+ *
+ * NCC của CHÍNH DÒNG trước, master chỉ fallback: ghi đè bằng master sẽ làm dòng cũ
+ * nhảy sang NCC mới trong cửa sổ danh mục vừa đổi NCC → một KS bị chẻ thành hai thẻ
+ * trên trang định kỳ. Chỉ ghi khi BẬT — lúc tắt, luồng ĐNTT KS thường đọc NCC từ
+ * master (khachSanMap) nên không cần đụng tới cột này.
+ */
+export function nccPatchKhiBatDinhKy(
+  batDinhKy: boolean,
+  rowNccId: number | null | undefined,
+  masterNccId: number | null | undefined,
+): { nha_cung_cap_id?: number } {
+  if (!batDinhKy) return {};
+  const nccId = rowNccId ?? masterNccId ?? null;
+  return nccId != null ? { nha_cung_cap_id: nccId } : {};
+}
+
 export function computeInitialDinhKyKsIds(
   ksChiPhi: DinhKyChiPhiRow[],
   /** ref_doan_ngay_id (= doan_ngay.id) → khach_san_id của ngày đó */

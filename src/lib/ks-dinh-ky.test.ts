@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeInitialDinhKyKsIds } from "./ks-dinh-ky";
+import { computeInitialDinhKyKsIds, nccPatchKhiBatDinhKy } from "./ks-dinh-ky";
 
 // ngayKsMap: doan_ngay.id → khach_san_id
 const ngayKsMap = {
@@ -68,5 +68,25 @@ describe("computeInitialDinhKyKsIds", () => {
     ];
     const r = computeInitialDinhKyKsIds(rows, ngayKsMap, []);
     expect(r.size).toBe(0);
+  });
+});
+
+describe("nccPatchKhiBatDinhKy", () => {
+  it("bật + dòng chưa có NCC → lấy NCC master (thoát cụm 'Chưa có NCC')", () => {
+    expect(nccPatchKhiBatDinhKy(true, null, 120)).toEqual({ nha_cung_cap_id: 120 });
+  });
+
+  it("bật + dòng đã có NCC → GIỮ NCC của dòng, không đè bằng master", () => {
+    expect(nccPatchKhiBatDinhKy(true, 120, 999)).toEqual({ nha_cung_cap_id: 120 });
+  });
+
+  it("bật nhưng cả dòng lẫn master đều chưa có NCC → không ghi cột (đừng ghi null)", () => {
+    expect(nccPatchKhiBatDinhKy(true, null, null)).toEqual({});
+    expect(nccPatchKhiBatDinhKy(true, undefined, undefined)).toEqual({});
+  });
+
+  it("TẮT định kỳ → không đụng NCC dù master có", () => {
+    expect(nccPatchKhiBatDinhKy(false, null, 120)).toEqual({});
+    expect(nccPatchKhiBatDinhKy(false, 120, 120)).toEqual({});
   });
 });
