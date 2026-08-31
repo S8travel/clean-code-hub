@@ -477,14 +477,140 @@ function resolveOne(
   return cur;
 }
 
-/** Resolve toàn bộ kết quả AI. aliasMap (tuỳ chọn) = bộ nhớ khớp tự học. */
+/** Resolve toàn bộ kết quả AI. aliasMap (tuỳ chọn) = bộ nhớ khớp tự học.
+ *  Dãn "住宿同上" TRƯỚC khi ghép master: dòng chép ra phải đi qua đủ khớp danh
+ *  mục / alias / định mức USD như mọi dòng khác. */
 export function resolveAiItems(
   result: AiExtractResult,
   maps: ResolveMaps,
   tourDate?: string | null,
   aliasMap?: Map<string, AliasEntry>,
 ): ResolvedItem[] {
-  return (result.items ?? []).map((it) => resolveOne(it, maps, tourDate, aliasMap));
+  const daDan = expandHotelSameAsAbove(result);
+  return (daDan.items ?? []).map((it) => resolveOne(it, maps, tourDate, aliasMap));
+}
+
+// ── "住宿同上" — đêm này ở CÙNG khách sạn đêm liền trước ──────────────────────
+// Lịch trình đối tác rất hay viết đêm 2, 3 là 「住宿同上」/「飯店同上」 thay vì
+// chép lại tên khách sạn. Dòng đó KHÔNG có tên nào để khớp danh mục nên model
+// trả match=null (có khi bỏ luôn) → báo giá HỤT HẲN tiền phòng những đêm sau,
+// mà bảng review chỉ hiện "Chưa khớp" nên rất dễ trôi qua.
+//
+// Prompt edge fn đã dặn model tự dãn ra; đây là lớp CHẶN CUỐI tất định — thấy
+// dấu 同上 mà model chưa khớp được thì chép nguyên phương án KS của đêm nguồn
+// sang, kể cả đêm đó có NHIỀU khách sạn lựa chọn (giữ nguyên nhóm chọn-1).
+
+/** Chữ chỉ chỗ ngủ — để bắt cả dòng model xếp nhầm loại (vd dich_vu "住宿同上"). */
+const HAN_LUU_TRU = ["住宿", "宿泊", "飯店", "酒店", "旅館", "民宿"];
+const TU_LUU_TRU = ["khach san", "luu tru", "nghi dem", "ngu dem", "hotel", "resort"];
+/** Chữ "giống ở trên". 同 đứng một mình KHÔNG tính — dễ trúng tên riêng. */
+const HAN_GIONG_TREN = ["同上", "同前", "如上", "上述", "同樣", "同样", "同一"];
+const TU_GIONG_TREN = [
+  "nhu tren", "nhu ngay truoc", "giong ngay truoc", "giong tren",
+  "same as above", "as above",
+];
+
+/** Số ngày viết bằng chữ Hán — đủ dùng cho lịch trình tour (≤ 10 ngày). */
+const SO_HAN: Record<string, number> = {
+  一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
+};
+
+/** Đêm nguồn ghi ĐÍCH DANH trong dấu nhắc: "同第3天" / "同D2" / "như ngày 2".
+ *  Không ghi rõ → null (khi đó lấy đêm gần nhất phía trước có khách sạn). */
+export function ngayNguonTuDauNhac(text: string | null | undefined): number | null {
+  const s = String(text ?? "");
+  const han = s.match(/第\s*([0-9]{1,2}|[一二三四五六七八九十])\s*[天日晚]/);
+  if (han) {
+    const v = SO_HAN[han[1]] ?? Number(han[1]);
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+  const la = normalizeAliasKey(s).match(/\b(?:d|day|ngay)\s*([0-9]{1,2})\b/);
+  if (la) {
+    const v = Number(la[1]);
+    if (v > 0) return v;
+  }
+  return null;
+}
+
+/** Dòng kiểu "住宿同上": nói tới chỗ ngủ + "giống ở trên" + model chưa khớp được
+ *  khách sạn nào. Model khớp được KS thật rồi thì để yên, không đụng vào. */
+function laDauKsGiongTruoc(it: AiExtractItem): boolean {
+  if (it.match) return false;
+  const raw = normalizeAliasKey(`${it.ten_zh ?? ""} ${it.ten_vi ?? ""} ${it.ghi_chu ?? ""}`);
+  if (!raw) return false;
+  const lien = raw.replace(/\s+/g, "");
+  const coTu = (list: string[]) => list.some((k) => ` ${raw} `.includes(` ${k} `));
+  // "同第2天" / "同D2" / "như ngày 2": chữ "giống" đi kèm số ngày, không có chữ
+  // 上/trên nào để bắt → phải nhận qua cặp (dấu giống + ngày ghi đích danh).
+  const theoNgayKhac = ngayNguonTuDauNhac(raw) != null
+    && (/[同如]/.test(lien) || coTu(["nhu", "giong"]));
+  const giongTren = HAN_GIONG_TREN.some((k) => lien.includes(k)) || coTu(TU_GIONG_TREN) || theoNgayKhac;
+  if (!giongTren) return false;
+  if (it.loai === "hotel") return true;
+  return HAN_LUU_TRU.some((k) => lien.includes(k)) || coTu(TU_LUU_TRU);
+}
+
+function ghiChuChepKs(marker: AiExtractItem, demNguon: number): string {
+  const goc = (marker.ghi_chu ?? "").trim();
+  const dauNhac = (marker.ten_zh || marker.ten_vi || "同上").trim();
+  const nhan = `Lịch trình ghi "${dauNhac}" → lấy khách sạn của ngày ${demNguon}`;
+  return goc ? `${goc} · ${nhan}` : nhan;
+}
+
+/** Dãn các dòng "住宿同上" thành khách sạn thật của đêm nguồn.
+ *
+ *  · Đêm nguồn = ngày ghi đích danh ("同第2天"), không có thì đêm gần nhất phía
+ *    trước CÓ khách sạn. Đêm 3 ghi 同上 trỏ đêm 2 vốn cũng 同上 vẫn ra đúng KS
+ *    của đêm 1 (dãn theo thứ tự đêm tăng dần nên nối được chuỗi).
+ *  · Đêm nguồn có 2 phương án KS → chép cả 2, người nhập vẫn chọn 1 như thường.
+ *  · KHÔNG tìm được đêm nguồn (dòng 同上 nằm ngay ngày đầu, hoặc đêm trước cũng
+ *    chưa khớp được KS nào) → GIỮ NGUYÊN dòng đó để bảng review hiện "Chưa khớp".
+ *    Im lặng bỏ đi là mất hẳn một đêm phòng khỏi báo giá. */
+export function expandHotelSameAsAbove(result: AiExtractResult): AiExtractResult {
+  const items = result.items ?? [];
+  const laDau = items.map(laDauKsGiongTruoc);
+  if (!laDau.some(Boolean)) return result;
+
+  // Đêm → các dòng KS CÓ TÊN THẬT (nguồn để chép).
+  const coTen = new Map<number, AiExtractItem[]>();
+  items.forEach((it, i) => {
+    if (laDau[i] || it.loai !== "hotel") return;
+    const arr = coTen.get(it.ngay_so);
+    if (arr) arr.push(it);
+    else coTen.set(it.ngay_so, [it]);
+  });
+
+  const demCanDan = [...new Set(items.filter((_, i) => laDau[i]).map((it) => it.ngay_so))]
+    .sort((a, b) => a - b);
+  const daDan = new Map<number, AiExtractItem[]>();
+  for (const dem of demCanDan) {
+    if (coTen.has(dem)) continue; // đêm này đã có KS thật rồi, dòng 同上 là thừa
+    const marker = items.find((it, i) => laDau[i] && it.ngay_so === dem)!;
+    const chiDinh = ngayNguonTuDauNhac(`${marker.ten_zh ?? ""} ${marker.ten_vi ?? ""} ${marker.ghi_chu ?? ""}`);
+    let nguon: number | null = null;
+    if (chiDinh != null && chiDinh !== dem && coTen.has(chiDinh)) nguon = chiDinh;
+    else for (let n = dem - 1; n >= 1; n--) if (coTen.has(n)) { nguon = n; break; }
+    if (nguon == null) continue;
+
+    const chep = coTen.get(nguon)!.map((s) => ({
+      ...s, ngay_so: dem, bua_an: null, ghi_chu: ghiChuChepKs(marker, nguon!),
+    }));
+    daDan.set(dem, chep);
+    coTen.set(dem, chep); // đêm sau ghi 同上 nữa thì nối tiếp được
+  }
+  if (!daDan.size) return result;
+
+  const out: AiExtractItem[] = [];
+  const daChen = new Set<number>();
+  items.forEach((it, i) => {
+    if (!laDau[i]) { out.push(it); return; }
+    const chep = daDan.get(it.ngay_so);
+    if (!chep) { out.push(it); return; }
+    if (daChen.has(it.ngay_so)) return; // 2 dòng 同上 cùng đêm → chỉ dãn 1 lần
+    daChen.add(it.ngay_so);
+    out.push(...chep);
+  });
+  return { ...result, items: out };
 }
 
 // ── Phương án khách sạn (chọn 1 / đêm) ──
