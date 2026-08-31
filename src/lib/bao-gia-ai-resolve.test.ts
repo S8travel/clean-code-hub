@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveAiItems,
+  expandHotelSameAsAbove,
+  ngayNguonTuDauNhac,
   toBaoGiaItems,
   hotelChoiceGroups,
   defaultHotelSelection,
@@ -669,5 +671,103 @@ describe("dongChuaChac — dòng AI đoán không chắc mà vẫn ra số", () 
       dong({ confidence: 0, match_table: null, match_id: null, match_label: "Định mức 7 USD × 20.000" }),
     ]);
     expect(ds).toHaveLength(0);
+  });
+});
+
+// ── "住宿同上" (đêm sau ở cùng khách sạn đêm trước) ──────────────────────────
+const ks = (id: number, ngay_so: number, ten: string): AiExtractItem => item({
+  ngay_so, loai: "hotel", ten_zh: ten, ten_vi: ten,
+  match: { table: "khach_san", id, set_menu_id: null, confidence: 0.9 },
+});
+const dongDongThuong = (ngay_so: number, ten = "住宿同上"): AiExtractItem =>
+  item({ ngay_so, loai: "hotel", ten_zh: ten, ten_vi: "", match: null });
+
+describe("ngayNguonTuDauNhac — đêm nguồn ghi đích danh", () => {
+  it("đọc 第N天 (số Ả Rập lẫn chữ Hán)", () => {
+    expect(ngayNguonTuDauNhac("住宿同第3天")).toBe(3);
+    expect(ngayNguonTuDauNhac("住宿同第二天")).toBe(2);
+  });
+  it("đọc D2 / ngày 2", () => {
+    expect(ngayNguonTuDauNhac("住宿同D2")).toBe(2);
+    expect(ngayNguonTuDauNhac("Khách sạn như ngày 2")).toBe(2);
+  });
+  it("không ghi ngày → null (lấy đêm gần nhất phía trước)", () => {
+    expect(ngayNguonTuDauNhac("住宿同上")).toBeNull();
+    expect(ngayNguonTuDauNhac("")).toBeNull();
+  });
+});
+
+describe("expandHotelSameAsAbove — 住宿同上", () => {
+  it("đêm 2 ghi 住宿同上 → chép khách sạn (và giá) của đêm 1", () => {
+    const rows = resolveAiItems(wrap([ks(2, 1, "KS Biển"), dongDongThuong(2)]), maps, "2026-03-10");
+    expect(rows).toHaveLength(2);
+    expect(rows[1].ngay_so).toBe(2);
+    expect(rows[1].loai).toBe("hotel");
+    expect(rows[1].match_id).toBe(2);
+    expect(rows[1].don_gia).toBe(1_500_000);
+    expect(rows[1].status).toBe("matched");
+    expect(rows[1].ghi_chu).toContain("住宿同上");
+  });
+
+  it("nhiều đêm liên tiếp ghi 同上 → nối chuỗi về đêm có tên thật", () => {
+    const out = expandHotelSameAsAbove(wrap([
+      ks(2, 1, "KS Biển"), dongDongThuong(2), dongDongThuong(3, "飯店同上"),
+    ]));
+    expect(out.items.map((i) => i.ngay_so)).toEqual([1, 2, 3]);
+    expect(out.items.every((i) => i.match?.id === 2)).toBe(true);
+  });
+
+  it("đêm nguồn có 2 phương án KS → chép cả 2 (vẫn là nhóm chọn 1)", () => {
+    const out = expandHotelSameAsAbove(wrap([
+      ks(2, 1, "KS Biển"), ks(99, 1, "KS Núi"), dongDongThuong(2),
+    ]));
+    const dem2 = out.items.filter((i) => i.ngay_so === 2);
+    expect(dem2.map((i) => i.match?.id)).toEqual([2, 99]);
+  });
+
+  it("ghi đích danh 同第1天 → lấy đúng đêm đó, không lấy đêm liền trước", () => {
+    const out = expandHotelSameAsAbove(wrap([
+      ks(2, 1, "KS Biển"), ks(99, 2, "KS Núi"), dongDongThuong(3, "住宿同第1天"),
+    ]));
+    expect(out.items.find((i) => i.ngay_so === 3)?.match?.id).toBe(2);
+  });
+
+  it("model xếp nhầm loại (dich_vu '住宿同上') vẫn dãn ra dòng khách sạn", () => {
+    const out = expandHotelSameAsAbove(wrap([
+      ks(2, 1, "KS Biển"),
+      item({ ngay_so: 2, loai: "dich_vu", ten_zh: "住宿同上", match: null }),
+    ]));
+    const dem2 = out.items.find((i) => i.ngay_so === 2)!;
+    expect(dem2.loai).toBe("hotel");
+    expect(dem2.match?.id).toBe(2);
+  });
+
+  it("không có đêm nguồn phía trước → GIỮ dòng lại (không im lặng bỏ đêm phòng)", () => {
+    const out = expandHotelSameAsAbove(wrap([dongDongThuong(1), ks(2, 2, "KS Biển")]));
+    expect(out.items).toHaveLength(2);
+    expect(out.items[0].ten_zh).toBe("住宿同上");
+    const [r] = resolveAiItems(wrap([dongDongThuong(1)]), maps);
+    expect(r.status).toBe("unmatched"); // hiện "Chưa khớp" cho người nhập tự chọn
+  });
+
+  it("model đã tự khớp được khách sạn → không đụng vào, không nhân đôi dòng", () => {
+    const daKhop = item({
+      ngay_so: 2, loai: "hotel", ten_zh: "住宿同上", ten_vi: "KS Biển",
+      match: { table: "khach_san", id: 2, set_menu_id: null, confidence: 0.8 },
+    });
+    const input = wrap([ks(2, 1, "KS Biển"), daKhop]);
+    expect(expandHotelSameAsAbove(input)).toBe(input);
+  });
+
+  it("đêm đã có khách sạn thật thì dòng 同上 thừa không sinh thêm phòng", () => {
+    const out = expandHotelSameAsAbove(wrap([
+      ks(2, 1, "KS Biển"), ks(2, 2, "KS Biển"), dongDongThuong(2),
+    ]));
+    expect(out.items.filter((i) => i.ngay_so === 2)).toHaveLength(2); // giữ nguyên, không chép thêm
+  });
+
+  it("lịch trình không có dấu 同上 → trả nguyên kết quả cũ", () => {
+    const input = wrap([ks(2, 1, "KS Biển"), item({ loai: "ticket", ten_vi: "Tây Hồ" })]);
+    expect(expandHotelSameAsAbove(input)).toBe(input);
   });
 });
