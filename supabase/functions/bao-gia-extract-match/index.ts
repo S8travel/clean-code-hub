@@ -147,6 +147,13 @@ PHÂN LOẠI (loai):
 - "transport": xe → khớp nha_xe_loai_xe
 - "dich_vu": dịch vụ mất tiền khác → ưu tiên canh_diem; không có thì match=null
 
+"住宿同上" — ĐÊM SAU Ở CÙNG KHÁCH SẠN ĐÊM TRƯỚC, QUAN TRỌNG:
+- Lịch trình hay viết đêm 2, 3 gọn lại là 「住宿同上」/「飯店同上」/「酒店同上」/「住宿：同上」/「同前」/「如上」/「như trên」/「khách sạn như ngày trước」 thay vì chép lại tên khách sạn.
+- Đó VẪN LÀ MỘT ĐÊM PHÒNG PHẢI TRẢ TIỀN. TUYỆT ĐỐI KHÔNG bỏ qua, KHÔNG coi là "hạng mục không mất tiền".
+- Cách làm: tự tra ngược lên đêm gần nhất phía trước có ghi tên khách sạn, rồi trả về item hotel cho ĐÊM NÀY với ĐÚNG tên + match (id khách sạn) của đêm đó — y như chép lại. ten_zh/ten_vi ghi TÊN KHÁCH SẠN thật (không ghi "同上"), ghi_chu ghi "住宿同上 — theo ngày N".
+- Ghi rõ ngày nguồn ("同第2天", "同D2") thì lấy theo ngày đó. Đêm nguồn có NHIỀU khách sạn lựa chọn thì chép LẠI ĐỦ các phương án cho đêm này (mỗi phương án 1 item).
+- Không tra ra được khách sạn nào phía trước → vẫn trả item hotel cho đêm đó với ten_zh chép nguyên văn dòng lịch trình và match=null, để người nhập tự chọn. Đừng im lặng bỏ dòng.
+
 KHỚP: theo NGHĨA + ĐỊA ĐIỂM, chịu khác ngôn ngữ (西湖=Tây Hồ). Không chắc → match=null + confidence thấp. bua_an chỉ cho meal. Hạng mục không mất tiền (tự do, nghỉ) → BỎ QUA.
 
 GIỮ NGUYÊN MỨC TIỀN GHI TRONG LỊCH TRÌNH — QUAN TRỌNG:
