@@ -212,6 +212,69 @@ export function mergeNHRows(list: ChiPhiRow[]): MergedNHRow[] {
 }
 
 /**
+ * Thứ tự in section VÉ THẮNG CẢNH — phải KHỚP màn Chi phí (tab Chi phí → mục Dịch vụ):
+ * - Ngày tăng dần; trong 1 ngày giữ nguyên thứ tự dòng chính như màn hình
+ *   (useChiPhiList sắp theo created_at, sort ở đây stable nên không đảo).
+ * - Mỗi dòng phát sinh `[dvps_<mainId>] ` đứng NGAY DƯỚI dòng chính của nó.
+ *
+ * Trước đây sắp theo `ref_doan_ngay_item_id` giảm dần: dòng chính bị in ngược so với
+ * màn hình, còn phát sinh (cột đó NULL) bị dồn xuống cuối ngày, tách khỏi dòng chính
+ * → file ra khác hẳn thứ tự người nhập.
+ *
+ * Phát sinh mồ côi (dòng chính đã bị xoá / lọc khỏi bản in) vẫn được in ở cuối ngày —
+ * bỏ đi là mất tiền khỏi tổng.
+ */
+export function sortVeRows(list: ChiPhiRow[]): ChiPhiRow[] {
+  const extrasByMain = new Map<number, ChiPhiRow[]>();
+  const mainRows: ChiPhiRow[] = [];
+  for (const r of list) {
+    const m = r.mo_ta?.match(/^\[dvps_(\d+)\] /);
+    if (!m) {
+      mainRows.push(r);
+      continue;
+    }
+    const mainId = Number(m[1]);
+    const arr = extrasByMain.get(mainId);
+    if (arr) arr.push(r);
+    else extrasByMain.set(mainId, [r]);
+  }
+
+  // Khoá ngày của phát sinh = ngày của DÒNG CHÍNH (không phải ngay_so của chính nó),
+  // để sort theo ngày không xé nhóm nếu 2 dòng lệch ngày.
+  const seq: { row: ChiPhiRow; day: number }[] = [];
+  const daXep = new Set<number>();
+  for (const main of mainRows) {
+    const day = main.ngay_so ?? 0;
+    seq.push({ row: main, day });
+    for (const ex of extrasByMain.get(main.id) ?? []) {
+      seq.push({ row: ex, day });
+      daXep.add(ex.id);
+    }
+  }
+  for (const [, arr] of extrasByMain) {
+    for (const ex of arr) {
+      if (!daXep.has(ex.id)) seq.push({ row: ex, day: ex.ngay_so ?? 0 });
+    }
+  }
+
+  // sort stable → trong cùng 1 ngày giữ nguyên thứ tự đã dựng ở trên.
+  return seq.sort((a, b) => a.day - b.day).map((e) => e.row);
+}
+
+/**
+ * Tên in cho 1 dòng vé thắng cảnh. Dòng phát sinh mang tiền tố kỹ thuật
+ * `[dvps_<mainId>] ` — bỏ tiền tố và in kèm "↳ " để nhìn ra nó thuộc dòng chính
+ * ngay phía trên, y như màn Chi phí (sortVeRows lo phần thứ tự).
+ */
+export function veDisplayName(moTa: string | null): string {
+  if (!moTa) return "—";
+  const laPhatSinh = /^\[dvps_\d+\] /.test(moTa);
+  const ten = moTa.replace(/^\[[^\]]+\]\s*/, "").trim();
+  if (!ten) return "—";
+  return laPhatSinh ? `↳ ${ten}` : ten;
+}
+
+/**
  * Ghi chú voucher cho 1 dòng in Excel. `withTen` → kèm tên voucher (sheet Chi tiết);
  * mặc định gọn cho sheet Hành trình. Trả "" khi dòng không phủ voucher.
  * VD: "Voucher 17 vé" / "Voucher 17 vé — Voucher NH Động X".
@@ -1086,10 +1149,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     cell("CTY TT 公司付款", "header"),
   ]);
 
-  const sortedVeRows = [...veRows].sort((a, b) => {
-    if ((a.ngay_so ?? 0) !== (b.ngay_so ?? 0)) return (a.ngay_so ?? 0) - (b.ngay_so ?? 0);
-    return (b.ref_doan_ngay_item_id ?? 0) - (a.ref_doan_ngay_item_id ?? 0);
-  });
+  const sortedVeRows = sortVeRows(veRows);
   let totalHdvVE = 0, totalCtyVE = 0;
   for (const row of sortedVeRows) {
     const dateStr = ngaySoToDate(row.ngay_so);
@@ -1097,7 +1157,7 @@ function buildHanhTrinhSheet(params: ExportChiPhiDoanExcelParams): SheetDefiniti
     const ctyAmt = row.tien_cong_ty || 0;
     totalHdvVE += hdvAmt;
     totalCtyVE += ctyAmt;
-    const displayName = (row.mo_ta || "—").replace(/^\[[^\]]+\]\s*/, "");
+    const displayName = veDisplayName(row.mo_ta);
     // Dịch vụ phủ voucher (Phase 2 DV) — ghi chú giống section NH.
     const vNote = buildVoucherNote([row.id], redemptionMap);
     rows.push([
