@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { BaoGiaItem } from "@/hooks/use-bao-gia";
 import { AddServiceRow } from "@/components/bao-gia/AddServiceRow";
-import { fmtVnd, fmtUsd, type CostingGroup, type CostingRow } from "./helpers";
+import { fmtVnd, fmtUsd, setSlOverride, type CostingGroup, type CostingRow } from "./helpers";
 
 // Dòng của bảng chi phí — tách khỏi CostingSheetSection cho file khỏi phình.
 // GroupBlock = dải tiêu đề nhóm + các dòng + form thêm dòng + cộng nhóm.
@@ -187,13 +187,39 @@ function ItemRow({
           <span className="text-slate-300">—</span>
         )}
       </td>
-      {/* Per-tier: SL + Thành tiền */}
+      {/* Per-tier: SL (sửa được cho đoàn FIT) + Thành tiền */}
       {row.cells.map((cell, ti) => (
         <td key={ti} colSpan={2} className={cn("border border-slate-200 px-2 py-1", ti === matchIdx && "bg-emerald-50")}>
           <span className="flex items-center justify-between gap-2 tabular-nums">
-            <span className="w-12 text-center text-slate-400" title={cell.foc > 0 ? `${cell.qty} − ${cell.foc} miễn` : undefined}>
-              {row.unit === "lump" ? "—" : cell.foc > 0 ? `${cell.qty}−${cell.foc}` : cell.qty}
-            </span>
+            {row.unit === "lump" ? (
+              <span className="w-16 text-center text-slate-400">—</span>
+            ) : editable ? (
+              <span className="flex w-16 shrink-0 items-center gap-0.5">
+                <Input
+                  type="number" min={0} step={1}
+                  value={cell.manual ? cell.qty : ""}
+                  placeholder={String(cell.auto)}
+                  title={cell.manual
+                    ? `Đang dùng SL nhập tay ${cell.qty} (tự tính: ${cell.auto}). Xoá ô để về tự tính.`
+                    : `Tự tính ${cell.auto} ${row.unit === "rooms" ? "phòng" : "suất"} cho ${cell.guests} khách — gõ số để chốt đúng SL (đoàn FIT)`}
+                  onChange={(e) => onLive(idx, {
+                    sl_override: setSlOverride(row.sl_override, cell.guests, e.target.value),
+                  })}
+                  onBlur={onCommit}
+                  className={cn(
+                    numInput, "h-6 w-12 px-1 text-center",
+                    cell.manual && "border-amber-300 bg-amber-50 font-medium text-amber-800",
+                  )}
+                />
+                {cell.foc > 0 && (
+                  <span className="text-[10px] text-slate-400" title={`Trừ ${cell.foc} miễn`}>−{cell.foc}</span>
+                )}
+              </span>
+            ) : (
+              <span className="w-16 text-center text-slate-400" title={cell.foc > 0 ? `${cell.qty} − ${cell.foc} miễn` : undefined}>
+                {cell.foc > 0 ? `${cell.qty}−${cell.foc}` : cell.qty}
+              </span>
+            )}
             <span className="text-slate-700">{fmtVnd(cell.total)}</span>
           </span>
         </td>
