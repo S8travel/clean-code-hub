@@ -4,7 +4,6 @@ import { errMsg } from "@/lib/error";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, MessageCircle, Mail, Facebook, Plus, Trash2, Check, Trophy } from "lucide-react";
 import { format, isBefore, isToday, startOfDay, formatDistanceToNow } from "date-fns";
-import { vi } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,7 +31,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { LeadNextActionBox } from "@/components/leads/LeadNextActionBox";
 import { LeadBaoGiaTab } from "@/components/leads/LeadBaoGiaTab";
 import { LeadTepDinhKem } from "@/components/leads/LeadTepDinhKem";
-import { t, useTranslate } from "@/lib/i18n";
+import { t, useTranslate, getDateLocale } from "@/lib/i18n";
 
 interface Props {
   leadId: number | null;
@@ -293,12 +292,12 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                     })}>
                     <SelectTrigger className="h-7 w-auto text-xs gap-1">
                       <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", STATUS_COLOR[lead.trang_thai])}>
-                        {LEAD_TRANG_THAI_OPTS.find((o) => o.value === lead.trang_thai)?.label}
+                        {t(LEAD_TRANG_THAI_OPTS.find((o) => o.value === lead.trang_thai)?.label ?? "")}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
                       {LEAD_TRANG_THAI_OPTS.map((o) => (
-                        <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                        <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -462,7 +461,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                             className={cn("px-2.5 py-1 rounded-full text-xs border transition-colors",
                               lead.loai_khach === o.value ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
                             )}>
-                            {o.label}
+                            {t(o.label)}
                           </button>
                         ))}
                       </div>
@@ -596,7 +595,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                       <select value={activityLoai} onChange={(e) => setActivityLoai(e.target.value)}
                         className="text-xs border rounded-md px-2 py-1 bg-background">
                         {LEAD_ACTIVITY_LOAI_OPTS.filter((o) => o.value !== "doi_trang_thai").map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
+                          <option key={o.value} value={o.value}>{t(o.label)}</option>
                         ))}
                       </select>
                       {activityLoai === "goi_dien" && (
@@ -604,7 +603,7 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                           className="text-xs border rounded-md px-2 py-1 bg-background">
                           <option value="">{t("Kết quả...")}</option>
                           {LEAD_KET_QUA_OPTS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
+                            <option key={o.value} value={o.value}>{t(o.label)}</option>
                           ))}
                         </select>
                       )}
@@ -628,11 +627,11 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                           {act.loai === "doi_trang_thai" ? (
                             <p className="text-xs">
                               <span className="font-medium">
-                                {LEAD_TRANG_THAI_OPTS.find((o) => o.value === act.trang_thai_cu)?.label ?? act.trang_thai_cu ?? "?"}
+                                {t(LEAD_TRANG_THAI_OPTS.find((o) => o.value === act.trang_thai_cu)?.label ?? act.trang_thai_cu ?? "?")}
                               </span>
                               <span className="text-muted-foreground"> → </span>
                               <span className="font-medium">
-                                {LEAD_TRANG_THAI_OPTS.find((o) => o.value === act.trang_thai_moi)?.label ?? act.trang_thai_moi}
+                                {t(LEAD_TRANG_THAI_OPTS.find((o) => o.value === act.trang_thai_moi)?.label ?? act.trang_thai_moi ?? "")}
                               </span>
                             </p>
                           ) : (
@@ -640,11 +639,11 @@ export function LeadDrawer({ leadId, open, onClose, onEdit }: Props) {
                           )}
                           {act.ket_qua && (
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {t("Kết quả:")} {LEAD_KET_QUA_OPTS.find((o) => o.value === act.ket_qua)?.label ?? act.ket_qua}
+                              {t("Kết quả:")} {t(LEAD_KET_QUA_OPTS.find((o) => o.value === act.ket_qua)?.label ?? act.ket_qua)}
                             </p>
                           )}
                           <p className="text-[10px] text-muted-foreground mt-1">
-                            {formatDistanceToNow(new Date(act.created_at), { addSuffix: true, locale: vi })}
+                            {formatDistanceToNow(new Date(act.created_at), { addSuffix: true, locale: getDateLocale() })}
                           </p>
                         </div>
                       </div>

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "fs";
 import { join, resolve } from "path";
 import zhTW from "@/locales/zh-TW.json";
+import enUS from "@/locales/en.json";
 import { findNearMiss } from "./i18n-near-miss";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,6 +102,46 @@ describe("i18n key coverage", () => {
       if (k.startsWith("_")) continue;
       if (typeof v !== "string" || v.length === 0) empties.push(k);
     }
+    expect(empties).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// en.json là locale PARTIAL (chỉ phủ sidebar / chuông / Lead cho video App
+// Review của Meta) → KHÔNG bắt buộc phủ hết key như zh-TW.json; key thiếu tự
+// fallback về tiếng Việt.
+//
+// Nhưng key thừa/gõ sai thì im lặng vô dụng — bản dịch nằm đó mà không bao giờ
+// khớp. Guard: mọi key EN phải là key thật, tức đã có trong zh-TW.json (file
+// này buộc phủ đủ mọi t("...") literal + các label động đã dịch).
+// ─────────────────────────────────────────────────────────────────────────────
+describe("en.json (partial locale)", () => {
+  const en = enUS as Record<string, string>;
+  const zh = zhTW as Record<string, string>;
+
+  it("every en.json key also exists in zh-TW.json (no typo / stale key)", () => {
+    const daCo = Object.keys(zh);
+    const orphan = Object.keys(en).filter((k) => !k.startsWith("_") && !(k in zh));
+    if (orphan.length > 0) {
+      const sample = orphan.map((k) => {
+        const gan = findNearMiss(k, daCo);
+        return gan
+          ? `  ${JSON.stringify(k)}\n      ⚠ GẦN GIỐNG key đã có: ${JSON.stringify(gan.keyDaCo)}\n        → khác nhau ở: ${gan.khacBiet}`
+          : `  ${JSON.stringify(k)}`;
+      }).join("\n");
+      throw new Error(
+        `${orphan.length} key trong en.json không có trong zh-TW.json — gõ sai hoặc chuỗi gốc đã đổi.\n` +
+        `Sửa cho khớp chuỗi tiếng Việt trong source, hoặc thêm bản dịch zh-TW tương ứng:\n${sample}`,
+      );
+    }
+    expect(orphan).toEqual([]);
+  });
+
+  it("all en.json values are non-empty strings", () => {
+    const empties = Object.entries(en)
+      .filter(([k]) => !k.startsWith("_"))
+      .filter(([, v]) => typeof v !== "string" || v.length === 0)
+      .map(([k]) => k);
     expect(empties).toEqual([]);
   });
 });

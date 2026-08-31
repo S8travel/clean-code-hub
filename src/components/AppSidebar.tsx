@@ -34,7 +34,7 @@ import {
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { t, useTranslate, notifyLanguageChange } from "@/lib/i18n";
+import { t, useTranslate, notifyLanguageChange, getLang, LANG_COOKIE, type Lang } from "@/lib/i18n";
 import {
   Sidebar,
   SidebarContent,
@@ -60,16 +60,21 @@ import { useMyOverdueCount } from "@/hooks/use-lead-next-action";
 import { UserSettingsMenu } from "@/components/UserSettingsMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 
-// ── Language toggle button (VI ↔ zh-TW) ──
+// ── Language toggle button (VI → 中文 → EN → VI) ──
 //
 // Trước đây kết hợp Google Translate widget — đã gỡ vì:
 // (1) GT đoán nhầm khá nhiều từ kỹ thuật (vd "Loại xe" → "男友");
 // (2) Race condition: GT chiếm DOM trước khi t() kịp re-render.
-// Giờ chỉ toggle cookie `googtrans=/vi/zh-TW` (giữ tên cũ để session cũ
+// Giờ chỉ đổi cookie `googtrans=/vi/<lang>` (giữ tên cũ để session cũ
 // không bị reset) → notifyLanguageChange → các component dùng t() tự re-render.
+//
+// EN thêm 04/2026 cho video App Review của Meta (reviewer yêu cầu giao diện
+// tiếng Anh). en.json là locale partial — key chưa dịch hiện nguyên tiếng Việt.
 
-function isTranslated(): boolean {
-  return document.cookie.includes("googtrans=/vi/zh-TW");
+const LANG_CYCLE: Lang[] = ["vi", "zh-TW", "en"];
+
+function nextLang(cur: Lang): Lang {
+  return LANG_CYCLE[(LANG_CYCLE.indexOf(cur) + 1) % LANG_CYCLE.length];
 }
 
 function getAllDomainVariants(): (string | undefined)[] {
@@ -91,8 +96,12 @@ function setLangCookie(value: string | null) {
   const sameSiteAttr = `; SameSite=Lax${isSecure ? "; Secure" : ""}`;
 
   if (value) {
+    // Max-Age 1 năm: nút đổi ngôn ngữ nằm trong sidebar nên KHÔNG bấm được ở
+    // màn đăng nhập — cookie phiên (mất khi đóng trình duyệt) sẽ làm màn login
+    // luôn hiện tiếng Việt dù user đã chọn ngôn ngữ khác.
+    const maxAge = 60 * 60 * 24 * 365;
     for (const d of domains) {
-      document.cookie = `googtrans=${value}; path=/${d ? `; domain=${d}` : ""}${sameSiteAttr}`;
+      document.cookie = `googtrans=${value}; path=/; max-age=${maxAge}${d ? `; domain=${d}` : ""}${sameSiteAttr}`;
     }
   } else {
     for (const d of domains) {
@@ -103,17 +112,22 @@ function setLangCookie(value: string | null) {
   }
 }
 
+// Nhãn nút = ngôn ngữ SẼ bật khi bấm (không phải ngôn ngữ hiện tại).
+const LANG_BUTTON: Record<Lang, { flag: string; full: string; short: string; title: string }> = {
+  vi: { flag: "🇻🇳", full: "VI", short: "VI", title: "Khôi phục tiếng Việt" },
+  "zh-TW": { flag: "🇹🇼", full: "中文", short: "中", title: "Dịch sang tiếng Trung (phồn thể)" },
+  en: { flag: "🇬🇧", full: "EN", short: "EN", title: "Dịch sang tiếng Anh" },
+};
+
 function TranslateButton({ collapsed }: { collapsed: boolean }) {
-  const [translated, setTranslated] = useState(isTranslated);
+  const [lang, setLang] = useState<Lang>(getLang);
+  const target = nextLang(lang);
+  const btn = LANG_BUTTON[target];
+  const translated = lang !== "vi";
 
   const handleToggle = () => {
-    if (translated) {
-      setLangCookie(null);
-      setTranslated(false);
-    } else {
-      setLangCookie("/vi/zh-TW");
-      setTranslated(true);
-    }
+    setLangCookie(target === "vi" ? null : LANG_COOKIE[target]);
+    setLang(target);
     notifyLanguageChange();
   };
 
@@ -121,7 +135,7 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
     <button
       type="button"
       onClick={handleToggle}
-      title={translated ? t("Khôi phục tiếng Việt") : t("Dịch sang tiếng Trung (phồn thể)")}
+      title={t(btn.title)}
       className={`
         flex items-center justify-center rounded-md border text-[11px] font-semibold
         transition-colors h-6 shrink-0
@@ -132,11 +146,7 @@ function TranslateButton({ collapsed }: { collapsed: boolean }) {
         }
       `}
     >
-      {translated ? (
-        collapsed ? "VI" : <><span>🇻🇳</span><span>VI</span></>
-      ) : (
-        collapsed ? "中" : <><span>🇹🇼</span><span>中文</span></>
-      )}
+      {collapsed ? btn.short : <><span>{btn.flag}</span><span>{btn.full}</span></>}
     </button>
   );
 }

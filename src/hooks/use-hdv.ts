@@ -4,6 +4,8 @@ import { externalSupabase } from "@/lib/supabase-external";
 export interface HDVRow {
   id: number;
   ten: string;
+  /** Tên tiếng Trung hiện cho đối tác trên cổng 外網. Rỗng = cổng hiện tên tiếng Việt. */
+  ten_zh: string | null;
   gioi_tinh: string | null;   // "nam" | "nu" | "khac"
   nam_sinh: number | null;
   kinh_nghiem: string | null;
