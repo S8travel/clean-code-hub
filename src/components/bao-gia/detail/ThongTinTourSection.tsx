@@ -287,6 +287,7 @@ export function ThongTinTourSection({
             <VehicleSelector
               xeTen={draft.xe_ten}
               xeGia={draft.xe_gia}
+              onDraftGia={(xeGia) => updateDraftField("xe_gia", xeGia)}
               onChange={(xeTen, xeGia) => {
                 if (xeTen === row.xe_ten && xeGia === row.xe_gia) return;
                 savePatch({ xe_ten: xeTen, xe_gia: xeGia });
