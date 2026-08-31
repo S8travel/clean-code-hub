@@ -57,3 +57,10 @@ supabase/.temp/
 
 # Ảnh nguồn cho website giới thiệu (logo KS / du thuyền / nhà hàng) — chỉ là kho ảnh tạm, không commit
 _S8_WEB_ANH/
+
+# Tài liệu nội bộ / thuyết trình / đào tạo để tạm ở thư mục gốc (S8-*.html, S8-*.docx).
+# Repo NÀY LÀ PUBLIC — trong đó có tên nhà cung cấp thật kèm giá vốn, số liệu quy mô
+# kinh doanh và bài chuẩn bị đàm phán đối tác. Lỡ commit là không thu hồi được (xoá
+# sau vẫn còn trong lịch sử git). Cần lưu trữ thì để ngoài repo.
+S8-*.html
+S8-*.docx
