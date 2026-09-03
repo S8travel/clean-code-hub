@@ -1,11 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRightLeft } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { AgentSelect, LoaiTourSelect } from "@/components/bao-gia/BaoGiaFields";
 import { LeadSelector } from "./LeadSelector";
 import { fmtVnd } from "./helpers";
+import { TyGiaMacDinhButton } from "./TyGiaMacDinhButton";
+import { TY_GIA_BAO_GIA_MAC_DINH } from "@/lib/bao-gia-ty-gia";
 
 interface Props {
   draft: BaoGiaRow;
@@ -13,19 +16,27 @@ interface Props {
   updateDraftField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
   updateDraftKetQua: (next: BaoGiaKetQua) => void;
   saveField: <K extends keyof BaoGiaRow>(field: K, value: BaoGiaRow[K]) => void;
+  savePatch: (patch: Partial<BaoGiaRow>) => void;
   saveKetQua: (next: BaoGiaKetQua) => void;
 }
 
 // Thông tin tour cho báo giá GIÁ CUỐI — gọn hơn ThongTinTourSection (không có
 // pax / profit / xe / phụ thu vì không tính từ dịch vụ). Tỷ giá vẫn cần để quy đổi USD.
 export function GiaCuoiInfoSection({
-  draft, row, updateDraftField, updateDraftKetQua, saveField, saveKetQua,
+  draft, row, updateDraftField, updateDraftKetQua, saveField, savePatch, saveKetQua,
 }: Props) {
   const navigate = useNavigate();
   const ket = draft.ket_qua;
 
   const patchKet = (patch: Partial<BaoGiaKetQua>) => {
     if (ket) updateDraftKetQua({ ...ket, ...patch });
+  };
+
+  // Nút "Mặc định": ghi thẳng DB bằng savePatch. saveField bỏ qua khi trùng `row`
+  // (bản DB đã fetch, có thể cũ hơn số vừa gõ) → sẽ báo xong mà không lưu gì.
+  const applyTyGiaMacDinh = (rate: number) => {
+    savePatch({ exchange_rate: rate });
+    toast.success(`Đã điền tỷ giá mặc định ${rate.toLocaleString("vi-VN")} VND`);
   };
 
   return (
@@ -69,10 +80,11 @@ export function GiaCuoiInfoSection({
           <div className="relative mt-1">
             <Input
               type="number"
-              value={draft.exchange_rate ?? 26000}
+              value={draft.exchange_rate ?? TY_GIA_BAO_GIA_MAC_DINH}
               onChange={(e) => {
                 const v = parseFloat(e.target.value);
-                if (!isNaN(v)) updateDraftField("exchange_rate", v);
+                // Chặn 0/âm: `?? mặc định` không bắt số 0 → chia cho 0 khi quy đổi USD.
+                if (!isNaN(v) && v > 0) updateDraftField("exchange_rate", v);
               }}
               onBlur={() => {
                 const v = draft.exchange_rate;
@@ -82,7 +94,10 @@ export function GiaCuoiInfoSection({
             />
             <ArrowRightLeft className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{fmtVnd(draft.exchange_rate || 0)} VND/USD</p>
+          <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5 mt-0.5">
+            <p className="text-[10px] text-slate-400 tabular-nums">{fmtVnd(draft.exchange_rate || 0)} VND/USD</p>
+            <TyGiaMacDinhButton onApply={applyTyGiaMacDinh} />
+          </div>
         </div>
 
         {/* Agent + Loại tour */}

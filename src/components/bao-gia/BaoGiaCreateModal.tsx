@@ -25,6 +25,7 @@ import { emptyBaoGiaKetQua, emptyGiaCuoiKetQua } from "@/components/bao-gia/deta
 import { AgentSelect, LoaiTourSelect } from "@/components/bao-gia/BaoGiaFields";
 import { taiTepDoiTac, type TepYeuCauRow } from "@/hooks/use-yeu-cau-bao-gia";
 import { coChuGon } from "@/lib/yeu-cau-bao-gia";
+import { useLayTyGiaMacDinh } from "@/hooks/use-cai-dat";
 
 export interface BaoGiaCreatePrefill {
   leadId?: number | null;
@@ -57,6 +58,8 @@ interface Props {
 export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) {
   const { user } = useAuth();
   const createBaoGia = useCreateBaoGia();
+  // Tỷ giá điền sẵn cho báo giá mới — lấy từ cài đặt chung (sửa được ở màn báo giá).
+  const layTyGiaMacDinh = useLayTyGiaMacDinh();
   const uploadFile = useUploadLichTrinhFile();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,7 +85,10 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
     setTepChon((prefill?.tepDoiTac ?? []).map((t) => t.id));
   }, [open, prefill]);
 
-  const submitting = createBaoGia.isPending || uploadFile.isPending;
+  // dangTao bật NGAY khi bấm Tạo: khoảng chờ đọc tỷ giá mặc định (trước lúc
+  // mutateAsync chạy) không có isPending nào che, bấm 2 lần là ra 2 báo giá.
+  const [dangTao, setDangTao] = useState(false);
+  const submitting = dangTao || createBaoGia.isPending || uploadFile.isPending;
 
   // Chọn / kéo-thả file. Định dạng AI không đọc được vẫn đính kèm bình thường,
   // nhưng báo ngay tại đây — biết sớm còn kịp lưu lại thành .docx trước khi tạo.
@@ -98,6 +104,8 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
   const fileUnsup = file ? unsupportedFileInfo(file.name) : null;
 
   const handleSubmit = async () => {
+    if (submitting) return;
+    setDangTao(true);
     const ten = tenChuongTrinh.trim();
     const days = soNgay > 0 ? soNgay : 1;
     const ketQua = loaiBaoGia === "gia_cuoi"
@@ -107,7 +115,7 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
       const { id } = await createBaoGia.mutateAsync({
         tieu_de: ten,
         ket_qua: ketQua,
-        exchange_rate: 26000,
+        exchange_rate: await layTyGiaMacDinh(),
         profit_usd: 15,
         trang_thai: "draft",
         loai_bao_gia: loaiBaoGia,
@@ -143,6 +151,8 @@ export function BaoGiaCreateModal({ open, onClose, onCreated, prefill }: Props) 
       onCreated(id);
     } catch (e: unknown) {
       toast.error(errMsg(e) || "Lỗi tạo báo giá");
+    } finally {
+      setDangTao(false);
     }
   };
 

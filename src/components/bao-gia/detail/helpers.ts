@@ -6,6 +6,7 @@ import {
   calcBaoGia, calcTiers, tierConfig, effItemFoc, effItemQty, slOverrideOf,
   HDV_GIA_NGAY_MAC_DINH, HDV_GIA_NGAY_SAPA, type ManualItem,
 } from "@/lib/bao-gia-calc";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
 export const fmtVnd = (n: number | null | undefined) =>
   Math.round(Number(n) || 0).toLocaleString("vi-VN");
@@ -136,7 +137,7 @@ export function liveKetQua(draft: BaoGiaRow): BaoGiaKetQua | null {
     manualItems,
     ket.ten_chuong_trinh,
     ket.so_ngay ?? 1,
-    draft.exchange_rate ?? 26000,
+    tyGiaCuaBaoGia(draft.exchange_rate),
     draft.profit_usd ?? 0,
     draft.xe_gia ?? 0,
     phuThu, // lump-sum vào transport
@@ -262,7 +263,7 @@ export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
     foc_khach: it.foc_khach, foc_mien: it.foc_mien, so_luong: it.so_luong ?? 1,
     sl_override: it.sl_override,
   }));
-  const xr = draft.exchange_rate ?? 26000;
+  const xr = tyGiaCuaBaoGia(draft.exchange_rate);
   const profitUsd = draft.profit_usd ?? 0;
   const phuThu = draft.phu_thu ?? 0;
   // phuThu = 0 trong calc (hiển thị dòng riêng), cộng ngoài qua buildCase — KHỚP costBreakdown.
@@ -431,7 +432,7 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
   const ket = draft.ket_qua;
   if (!ket) return null;
 
-  const xr = draft.exchange_rate ?? 26000;
+  const xr = tyGiaCuaBaoGia(draft.exchange_rate);
   const profitUsd = draft.profit_usd ?? 0;
   const soNgay = ket.so_ngay ?? 1;
   const vcb = draft.vcb_rate ?? null;

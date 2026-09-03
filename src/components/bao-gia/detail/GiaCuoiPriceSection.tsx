@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { BaoGiaKetQua, BaoGiaRow, GiaCuoiTier } from "@/hooks/use-bao-gia";
 import { giaCuoiBrackets, findBracketIndexForPax } from "@/lib/bao-gia-calc";
 import { fmtVnd } from "./helpers";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
 interface Props {
   draft: BaoGiaRow;
@@ -18,7 +19,7 @@ interface Props {
 // Mô hình "ngưỡng": mỗi bậc nhập 1 số = số khách TỐI THIỂU; khoảng tự suy ra.
 export function GiaCuoiPriceSection({ draft, updateDraftKetQua, saveKetQua, leadPax }: Props) {
   const ket = draft.ket_qua;
-  const xr = draft.exchange_rate ?? 26000;
+  const xr = tyGiaCuaBaoGia(draft.exchange_rate);
   if (!ket) return null;
 
   const tiers: GiaCuoiTier[] = ket.gia_cuoi_tiers ?? [];

@@ -5,6 +5,7 @@ import {
   newBaoGiaItem, resolveHdvGiaNgay, setSlOverride,
 } from "./helpers";
 import type { BaoGiaRow, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
+import { TY_GIA_BAO_GIA_MAC_DINH } from "@/lib/bao-gia-ty-gia";
 
 function makeDraft(items: BaoGiaItem[], over: Partial<BaoGiaRow> = {}): BaoGiaRow {
   const ket: BaoGiaKetQua = {
@@ -31,6 +32,31 @@ function makeDraft(items: BaoGiaItem[], over: Partial<BaoGiaRow> = {}): BaoGiaRo
     ...over,
   };
 }
+
+describe("costingSheet — báo giá không có tỷ giá dùng được", () => {
+  const sheetVoiXr = (xr: number | null) => {
+    const item = newBaoGiaItem("ticket", 1);
+    item.don_gia = 100_000;
+    return costingSheet(makeDraft([item], { exchange_rate: xr }));
+  };
+
+  it("exchange_rate NULL → dùng hằng số mặc định", () => {
+    expect(sheetVoiXr(null)?.xr).toBe(TY_GIA_BAO_GIA_MAC_DINH);
+  });
+
+  it("exchange_rate = 0 cũng phải về hằng số — `??` không bắt được số 0", () => {
+    const sheet = sheetVoiXr(0);
+    expect(sheet?.xr).toBe(TY_GIA_BAO_GIA_MAC_DINH);
+    // Không dòng nào của bảng costing được ra Infinity/NaN.
+    expect(sheet?.footer.every((f) => f.values.every((v) => Number.isFinite(v)))).toBe(true);
+    const usd = sheet?.footer.find((f) => f.kind === "usd");
+    expect(usd?.values.some((v) => v > 0)).toBe(true);
+  });
+
+  it("có tỷ giá riêng thì giữ nguyên, không bị mức mặc định đè", () => {
+    expect(sheetVoiXr(26_000)?.xr).toBe(26_000);
+  });
+});
 
 describe("calcCase — N (so_luong) nhân thành tiền", () => {
   it("hotel so_luong=2 (2 đêm) → rooms × giá × 2", () => {

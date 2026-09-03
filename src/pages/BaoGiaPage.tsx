@@ -38,6 +38,7 @@ import { exportBaoGiaWord, exportBaoGiaGiaCuoiWord, type TierPrice } from "@/lib
 import { baoGiaCode, costBreakdown, liveKetQua, liveTierBreakdown } from "@/components/bao-gia/detail/helpers";
 import { giaCuoiTierLines, giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { toast } from "sonner";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 const fmtUsd = (n: number) => n.toFixed(2);
@@ -237,7 +238,7 @@ export default function BaoGiaPage() {
                   {[...list]
                     .sort((a, b) => Number(dangCho.has(b.id)) - Number(dangCho.has(a.id)))
                     .map((row) => {
-                    const xr = row.exchange_rate ?? 26000;
+                    const xr = tyGiaCuaBaoGia(row.exchange_rate);
                     const isGiaCuoi = row.loai_bao_gia === "gia_cuoi";
                     // Giá cuối: lấy bậc thấp nhất (số khách nhỏ nhất) làm đại diện.
                     // Tự tính: giá TB 2 phương án — match DETAIL panel.
@@ -319,7 +320,7 @@ export default function BaoGiaPage() {
                                   ? "Xuất Word — bản gửi khách (chỉ giá bán)"
                                   : "Xuất Word NỘI BỘ — có giá vốn, tổng chi phí, lợi nhuận. KHÔNG gửi đối tác."}
                                 onClick={() => {
-                                  const xr = row.exchange_rate ?? 26000;
+                                  const xr = tyGiaCuaBaoGia(row.exchange_rate);
                                   if (isGiaCuoi) {
                                     handleExportGiaCuoi(row.ket_qua!, xr);
                                     return;

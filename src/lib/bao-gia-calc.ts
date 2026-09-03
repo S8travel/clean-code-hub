@@ -114,7 +114,9 @@ export function calcCase(
   const total_cost = hotel + meal + ticket + transport + insurance + guide + tips;
   const profit_vnd = profitUsd * exchangeRate * guests;
   const final_price_vnd = Math.round((total_cost + profit_vnd) / guests);
-  const final_price_usd = final_price_vnd / exchangeRate;
+  // Guard 0 như các dòng anh em (:219): tỷ giá 0 lọt vào là ra Infinity, JSON hoá
+  // thành null rồi trôi ra file Word / bản đẩy cổng mà không có lỗi nào.
+  const final_price_usd = exchangeRate > 0 ? final_price_vnd / exchangeRate : 0;
 
   return { guests, pax, rooms, hotel, meal, ticket, transport, insurance, guide, tips, total_cost, profit_vnd, final_price_vnd, final_price_usd };
 }

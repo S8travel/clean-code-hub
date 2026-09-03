@@ -357,6 +357,30 @@ export type Database = {
         }
         Relationships: []
       }
+      cai_dat_he_thong: {
+        Row: {
+          cap_nhat_boi: string | null
+          cap_nhat_luc: string
+          gia_tri: string | null
+          khoa: string
+          mo_ta: string | null
+        }
+        Insert: {
+          cap_nhat_boi?: string | null
+          cap_nhat_luc?: string
+          gia_tri?: string | null
+          khoa: string
+          mo_ta?: string | null
+        }
+        Update: {
+          cap_nhat_boi?: string | null
+          cap_nhat_luc?: string
+          gia_tri?: string | null
+          khoa?: string
+          mo_ta?: string | null
+        }
+        Relationships: []
+      }
       canh_diem: {
         Row: {
           bao_gom_bua_an: string | null

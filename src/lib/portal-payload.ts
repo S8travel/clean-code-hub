@@ -11,6 +11,7 @@
 
 import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { taiwanQuoteContent, type TaiwanQuoteContent } from "./bao-gia-taiwan-content";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "./bao-gia-ty-gia";
 
 /** Hiệu lực báo giá mặc định — khớp câu in trên file Word: 報價效期：3 個月. */
 export const HIEU_LUC_MAC_DINH_NGAY = 90;
@@ -89,7 +90,7 @@ export function buildPortalBaoGiaSnapshot(
     hieu_luc_den: isoDate(den),
     ngay_di: row.ngay_di,
     ngay_ve: row.ngay_ve,
-    noi_dung: taiwanQuoteContent(ketQua, ketQua.items ?? [], row.exchange_rate ?? 26000),
+    noi_dung: taiwanQuoteContent(ketQua, ketQua.items ?? [], tyGiaCuaBaoGia(row.exchange_rate)),
   };
 
   assertNoCostLeak(snapshot);
