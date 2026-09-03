@@ -34,6 +34,7 @@ import { useBaoGiaRuleList } from "@/hooks/use-bao-gia-rules";
 import { AddServiceRow } from "@/components/bao-gia/AddServiceRow";
 import { fileKind, imageMime, extractItineraryText, extractPdfText, unsupportedFileInfo, type FileKind } from "@/lib/itinerary-file";
 import { ChuongTrinhGocPanel, type NguonChuongTrinh } from "@/components/bao-gia/ChuongTrinhGocPanel";
+import { nhanDangTheoByte, loiNhanDinhDang } from "@/lib/file-nhan-dang";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -166,7 +167,7 @@ export function BaoGiaAiImport({
   // Auto-chọn file đọc được (PDF/ảnh/Word/Excel) đầu tiên khi danh sách đổi.
   useEffect(() => {
     if (!open) return;
-    const firstSupported = files.find((f) => fileKind(f.ten) !== "other");
+    const firstSupported = files.find((f) => fileKind(f.ten) !== "other" || unsupportedFileInfo(f.ten)?.thuDuoc);
     setSelectedUrl((cur) => (cur && files.some((f) => f.url === cur) ? cur : firstSupported?.url ?? null));
   }, [open, files]);
 
@@ -338,14 +339,55 @@ export function BaoGiaAiImport({
       }
       return;
     }
-    toast.warning(unsupportedFileInfo(f.ten)?.help ?? "File này chưa đọc được — chuyển sang dán text");
+    // Đuôi lạ (chủ yếu .doc): tin RUỘT file chứ không tin tên. Rất nhiều file
+    // ".doc" của đối tác thực ra là .docx / RTF đổi đuôi — trước đây bị chặn oan.
+    await thuDocFileLa(f, prov);
+  };
+
+  /** Đọc thử file có đuôi app chưa nhận: nhận dạng theo byte đầu rồi đưa về
+   *  đúng nhánh sẵn có. Không nhận ra thì nói ĐÚNG file đó là gì, đừng bắt người
+   *  nhập đoán. */
+  const thuDocFileLa = async (f: { ten: string; url: string }, prov: "claude" | "keystone") => {
+    try {
+      setExtracting(true);
+      setRunningProvider(prov);
+      const ky = await resolveStorageUrl(f.url);
+      const buf = await (await fetch(ky)).arrayBuffer();
+      const that = nhanDangTheoByte(buf);
+
+      if (that === "pdf") {
+        void dungNguonGocTuFile(f.url, "pdf");
+        await runExtract({ fileUrl: f.url, fileType: "application/pdf", provider: prov });
+        return;
+      }
+      if (that === "docx" || that === "xlsx" || that === "xls97") {
+        const text = await extractItineraryText(buf, that === "docx" ? "docx" : "xlsx");
+        if (!text.trim()) { toast.warning("File rỗng / không đọc được nội dung"); return; }
+        toast.info(`"${f.ten}" thực ra là ${that === "docx" ? "Word (.docx)" : "Excel"} đổi đuôi — đã đọc được.`);
+        setNguonGoc({ kieu: "text", noiDung: text, fileUrl: ky });
+        luuNoiDungGoc(text);
+        await runExtract({ itinerary: text, provider: prov });
+        return;
+      }
+      toast.warning(loiNhanDinhDang(that), { duration: 10000 });
+    } catch (e: unknown) {
+      toast.error(errMsg(e) || "Lỗi đọc file");
+    } finally {
+      setExtracting(false);
+      setRunningProvider(null);
+    }
   };
 
   const handleUpload = async (picked: File[]) => {
     if (!picked.length) return;
     // Báo NGAY lúc tải, không để user phát hiện sau khi file đã nằm im lìm mờ
     // trong danh sách (ca .doc: tải lại 3 lần vẫn không bấm chọn được).
-    const unreadable = picked.filter((f) => unsupportedFileInfo(f.name));
+    // File .doc KHÔNG cảnh báo ở đây nữa: chưa mở ruột ra thì chưa biết nó có
+    // đọc được hay không, doạ trước là doạ oan phần lớn trường hợp.
+    const unreadable = picked.filter((f) => {
+      const u = unsupportedFileInfo(f.name);
+      return u && !u.thuDuoc;
+    });
     for (const f of unreadable) {
       toast.warning(`${f.name} — ${unsupportedFileInfo(f.name)!.help}`, { duration: 10000 });
     }
@@ -353,7 +395,7 @@ export function BaoGiaAiImport({
       const next = await upload.mutateAsync({ baoGiaId, files: picked, current: files, uploadedBy: user?.user_id });
       // Chọn sẵn file vừa tải mà đọc được → bấm Phân tích luôn, khỏi đi tìm.
       const justAdded = next.slice(files.length);
-      const firstOk = justAdded.find((f) => fileKind(f.ten) !== "other");
+      const firstOk = justAdded.find((f) => fileKind(f.ten) !== "other" || unsupportedFileInfo(f.ten)?.thuDuoc);
       if (firstOk) setSelectedUrl(firstOk.url);
       toast.success(firstOk
         ? "Đã tải file — chọn rồi Phân tích"
@@ -712,7 +754,7 @@ export function BaoGiaAiImport({
                         return (
                           <label key={f.url} className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${unsup ? "opacity-70" : "hover:bg-muted/40"}`}>
                             <input
-                              type="radio" name="lt-file" disabled={!!unsup}
+                              type="radio" name="lt-file" disabled={!!unsup && !unsup.thuDuoc}
                               checked={selectedUrl === f.url}
                               onChange={() => setSelectedUrl(f.url)}
                             />

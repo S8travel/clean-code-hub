@@ -24,12 +24,16 @@ export function fileKind(name: string): FileKind {
  *  gửi Word 97-2003) và cách chữa rất khác — lưu lại thành .docx là xong. Báo
  *  chung chung "chưa đọc được" thì OP không biết làm gì, tải lại nhiều lần cùng
  *  1 file mà vẫn không chọn được để phân tích. */
-export function unsupportedFileInfo(name: string): { badge: string; help: string } | null {
+export function unsupportedFileInfo(name: string): { badge: string; help: string; thuDuoc?: boolean } | null {
   if (fileKind(name) !== "other") return null;
   if (ext(name) === "doc") {
+    // KHÔNG chặn nữa: rất nhiều file tên .doc thực ra là .docx / RTF đổi đuôi,
+    // chỉ biết chắc khi đọc mấy byte đầu (xem lib/file-nhan-dang.ts). Cho chọn
+    // và thử; đúng là Word 97 nhị phân thì lúc đó mới báo cách chữa.
     return {
-      badge: "Word bản cũ — lưu lại thành .docx",
-      help: "Word 97-2003 (.doc) chưa đọc được. Mở bằng Word → Lưu thành .docx (hoặc in ra PDF) rồi tải lại.",
+      badge: "Word bản cũ — bấm Phân tích để thử đọc",
+      thuDuoc: true,
+      help: "File .doc: hệ thống sẽ đọc thử. Nếu đúng là Word 97-2003 bản nhị phân thì mở bằng Word → Lưu thành .docx rồi tải lại.",
     };
   }
   return {
