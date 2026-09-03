@@ -9,6 +9,7 @@ import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { resolveNhom1SoKhach } from "@/lib/doan-nhom-sync";
 import { isChiPhiLocked } from "@/lib/chi-phi-lock";
 import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
+import { chonEmailPhanHoi } from "@/lib/email-phan-hoi";
 
 export interface Doan {
   id: number;
@@ -311,15 +312,19 @@ export function useCurrentUserProfile() {
     queryFn: async () => {
       const { data: auth } = await externalSupabase.auth.getUser();
       if (!auth.user) return { ho_ten: "", so_dien_thoai: null as string | null, email: null as string | null };
-      const { data } = await externalSupabase
+      // KHÔNG nuốt error: `email` ở đây là Reply-To của mail booking. Nuốt lỗi →
+      // rơi âm thầm về mail đăng nhập, mà mail đăng nhập có thể là hộp không tồn
+      // tại (xem lib/email-phan-hoi.ts). Thà để React Query retry.
+      const { data, error } = await externalSupabase
         .from("user_roles")
-        .select("ho_ten, so_dien_thoai")
+        .select("ho_ten, so_dien_thoai, email")
         .eq("user_id", auth.user.id)
         .maybeSingle();
+      if (error) throw error;
       return {
         ho_ten: (data?.ho_ten || auth.user.email || "") as string,
         so_dien_thoai: (data?.so_dien_thoai || null) as string | null,
-        email: (auth.user.email || null) as string | null,
+        email: chonEmailPhanHoi(data?.email, auth.user.email) ?? null,
       };
     },
   });

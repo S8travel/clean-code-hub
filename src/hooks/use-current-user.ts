@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Session } from "@supabase/supabase-js";
 import { externalSupabase } from "@/lib/supabase-external";
+import { chonEmailPhanHoi } from "@/lib/email-phan-hoi";
 
 type SessionState = { loading: true; session: null } | { loading: false; session: Session | null };
 
@@ -83,4 +84,25 @@ export function useCurrentUserEmail() {
   });
 
   return { email: data ?? null };
+}
+
+/**
+ * Địa chỉ nhận phản hồi gắn vào mail gửi NCC/khách — dùng ở tầng hook gửi mail,
+ * khi component không truyền sẵn `replyTo` (mới tải trang, query hồ sơ chưa xong).
+ *
+ * Ưu tiên ô "Email" trong hồ sơ Người dùng, KHÔNG dùng mail đăng nhập:
+ * mail đăng nhập chỉ là tên đăng nhập, không bảo đảm là hộp thư có thật.
+ * Xem lib/email-phan-hoi.ts.
+ */
+export async function layEmailPhanHoi(): Promise<string | undefined> {
+  const { data: auth } = await externalSupabase.auth.getUser();
+  if (!auth.user) return undefined;
+
+  const { data } = await externalSupabase
+    .from("user_roles")
+    .select("email")
+    .eq("user_id", auth.user.id)
+    .maybeSingle();
+
+  return chonEmailPhanHoi(data?.email, auth.user.email);
 }

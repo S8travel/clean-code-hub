@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
+import { layEmailPhanHoi } from "@/hooks/use-current-user";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import { normalizeEmailList } from "@/lib/unc-email";
@@ -104,7 +105,7 @@ export async function callSendBookingEmail(params: {
   const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
     method: "POST",
     headers: await edgeAuthHeaders(),
-    body: JSON.stringify({ ...params, to, replyTo: params.replyTo || (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined }),
+    body: JSON.stringify({ ...params, to, replyTo: params.replyTo || (await layEmailPhanHoi()) }),
   });
   if (!res.ok) {
     const errText = await res.text();

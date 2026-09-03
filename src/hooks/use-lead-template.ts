@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
+import { layEmailPhanHoi } from "@/hooks/use-current-user";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { htmlFromText } from "@/lib/lead-template";
 
@@ -68,8 +69,7 @@ export function useSendLeadEmail() {
       to: string; subject: string; bodyText: string;
       templateId?: number | null;
     }) => {
-      const replyTo =
-        (await externalSupabase.auth.getSession()).data.session?.user?.email || undefined;
+      const replyTo = await layEmailPhanHoi();
       const res = await fetch(`${SUPABASE_EDGE_URL}/send-booking-email`, {
         method: "POST",
         headers: await edgeAuthHeaders(),
