@@ -284,10 +284,15 @@ export function BaoGiaAiImport({
     try {
       const ky = await resolveStorageUrl(url);
       if (kind === "image") { setNguonGoc({ kieu: "file", url: ky, anh: true }); return; }
-      const text = await extractPdfText(await (await fetch(ky)).arrayBuffer());
+      const { text, soTrang, catBot } = await extractPdfText(await (await fetch(ky)).arrayBuffer());
       // PDF scan không có lớp chữ → mở thẳng file thay vì bày một cột trống.
-      if (text.trim()) { setNguonGoc({ kieu: "text", noiDung: text }); luuNoiDungGoc(text); }
-      else setNguonGoc({ kieu: "file", url: ky, anh: false });
+      if (text.trim()) {
+        setNguonGoc({
+          kieu: "text", noiDung: text, fileUrl: ky,
+          ...(catBot ? { catBot: { doc: Math.min(soTrang, 40), tong: soTrang } } : {}),
+        });
+        luuNoiDungGoc(text);
+      } else setNguonGoc({ kieu: "file", url: ky, anh: false });
     } catch {
       setNguonGoc(null);
     }
@@ -316,10 +321,13 @@ export function BaoGiaAiImport({
         setExtracting(true);
         setRunningProvider(prov);
         // Bucket lịch trình là bucket riêng tư → ký link tạm rồi mới đọc được.
-        const buf = await (await fetch(await resolveStorageUrl(f.url))).arrayBuffer();
+        const ky = await resolveStorageUrl(f.url);
+        const buf = await (await fetch(ky)).arrayBuffer();
         const text = await extractItineraryText(buf, kind);
         if (!text.trim()) { toast.warning("File rỗng / không đọc được nội dung"); return; }
-        setNguonGoc({ kieu: "text", noiDung: text });
+        // Word/Excel đọc ra chữ thuần (mất bảng biểu, Excel thành CSV kèm tên
+        // sheet) → luôn kèm link file gốc để đối chiếu khi bố cục quan trọng.
+        setNguonGoc({ kieu: "text", noiDung: text, fileUrl: ky });
         luuNoiDungGoc(text);
         await runExtract({ itinerary: text, provider: prov });
       } catch (e: unknown) {
@@ -853,8 +861,8 @@ export function BaoGiaAiImport({
                                         mà đây chính là thứ cần so bằng mắt với sổ tay.
                                         Chỉ tiếng Trung, KHÔNG kèm ô chọn danh mục. */}
                                     <span className="flex items-start gap-1">
-                                      <span className="block text-[11px] leading-snug text-slate-700 break-words whitespace-pre-wrap flex-1">
-                                        {r.ten_zh || <span className="text-slate-400 italic">(AI không đọc được chữ Trung)</span>}
+                                      <span className="block text-[13px] leading-snug text-slate-700 break-words whitespace-pre-wrap flex-1">
+                                        {r.ten_zh || <span className="text-[11px] text-slate-400 italic">(AI không đọc được chữ Trung)</span>}
                                       </span>
                                       {isAltHotel && <span className="text-[9px] text-violet-600 shrink-0">PA</span>}
                                     </span>

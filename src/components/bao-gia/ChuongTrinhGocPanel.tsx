@@ -7,7 +7,15 @@ import type { ResolvedItem } from "@/lib/bao-gia-ai-resolve";
  *  - `text`: dán tay / Word / Excel / PDF có lớp chữ → đối chiếu được từng dòng.
  *  - `file`: PDF scan hoặc ảnh chụp → không có chữ để dò, mở thẳng file cho xem. */
 export type NguonChuongTrinh =
-  | { kieu: "text"; noiDung: string }
+  | {
+      kieu: "text";
+      /** Chép NGUYÊN VĂN nội dung đọc được — không tóm tắt, không lọc dòng. */
+      noiDung: string;
+      /** Link file gốc (nếu nguồn là file) để đối chiếu khi cần. */
+      fileUrl?: string;
+      /** File dài quá trần đọc → phần sau chưa hiện. Phải nói ra, không giấu. */
+      catBot?: { doc: number; tong: number };
+    }
   | { kieu: "file"; url: string; anh: boolean };
 
 interface Props {
@@ -87,8 +95,14 @@ export function ChuongTrinhGocPanel({ nguon, rows, hoverIdx }: Props) {
         </div>
       )}
 
+      {nguon?.kieu === "text" && nguon.catBot && (
+        <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1 mb-1 shrink-0">
+          File {nguon.catBot.tong} trang, cột này mới đọc {nguon.catBot.doc} trang đầu — mở file gốc để xem đủ.
+        </p>
+      )}
+
       {nguon?.kieu === "text" && (
-        <div className="flex-1 min-h-0 overflow-auto border rounded bg-white p-1.5 text-[11px] leading-relaxed">
+        <div className="flex-1 min-h-0 overflow-auto border rounded bg-white p-2 text-[13px] leading-relaxed">
           {dong.map((d, i) => {
             const sang = i === dongSang;
             return (
@@ -109,8 +123,16 @@ export function ChuongTrinhGocPanel({ nguon, rows, hoverIdx }: Props) {
 
       {nguon?.kieu === "text" && (
         <p className="text-[10px] text-muted-foreground mt-1 shrink-0">
-          Rê chuột vào một mục chi phí bên trái → dòng gốc sinh ra nó sáng lên.
-          Vạch xanh = dòng đã có mục chi phí bám vào.
+          Chép nguyên văn từ file, không thêm bớt. Rê chuột vào một mục chi phí bên trái →
+          dòng gốc sinh ra nó sáng lên. Vạch xanh = dòng đã có mục chi phí bám vào.
+          {nguon.fileUrl && (
+            <>
+              {" "}
+              <a href={nguon.fileUrl} target="_blank" rel="noreferrer" className="text-sky-700 hover:underline inline-flex items-center gap-0.5">
+                <ExternalLink className="h-2.5 w-2.5" /> mở file gốc
+              </a>
+            </>
+          )}
         </p>
       )}
     </div>

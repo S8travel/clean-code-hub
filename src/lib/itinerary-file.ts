@@ -51,8 +51,17 @@ export function imageMime(name: string): string {
 /** Trích text từ docx/xlsx (đọc client). PDF/ảnh KHÔNG dùng hàm này.
  *  Dynamic import mammoth/xlsx → chỉ tải khi user thực sự đọc file (không nặng trang). */
 /** Số trang PDF tối đa đọc text ĐỂ HIỂN THỊ. Chương trình tour dài nhất đo được
- *  là 8 trang; cắt ở 20 để một file lạ 300 trang không treo trình duyệt. */
-const MAX_TRANG_TEXT = 20;
+ *  là 8 trang; chặn ở 40 để một file lạ 300 trang không treo trình duyệt. Chạm
+ *  trần thì BÁO RA (`catBot`), tuyệt đối không cắt im lặng. */
+const MAX_TRANG_TEXT = 40;
+
+export interface TextPdf {
+  /** Text đọc được, giữ NGUYÊN thứ tự và nội dung từng dòng của file. */
+  text: string;
+  soTrang: number;
+  /** File dài hơn trần → phần sau chưa đọc. Phía gọi PHẢI nói cho người dùng biết. */
+  catBot: boolean;
+}
 
 /**
  * Trích text từ PDF ngay trên trình duyệt — CHỈ để hiển thị cột "Chương trình
@@ -63,9 +72,13 @@ const MAX_TRANG_TEXT = 20;
  * PDF scan (ảnh chụp) không có lớp text → trả chuỗi rỗng, phía gọi tự chuyển
  * sang mở thẳng file.
  *
+ * KHÔNG thêm, KHÔNG bớt: chép đúng những gì có trong lớp text của file, kể cả
+ * dòng trống. Việc duy nhất được làm là dựng lại DÒNG (pdfjs trả từng mảnh chữ
+ * rời kèm toạ độ, không trả dòng) và bỏ khoảng trắng cuối dòng.
+ *
  * Dùng bản LEGACY của pdfjs y như renderPdfToPageImages — xem chú thích ở đó.
  */
-export async function extractPdfText(buf: ArrayBuffer): Promise<string> {
+export async function extractPdfText(buf: ArrayBuffer): Promise<TextPdf> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
     const { default: workerUrl } = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
@@ -91,12 +104,13 @@ export async function extractPdfText(buf: ArrayBuffer): Promise<string> {
       }
       const dong = [...theoY.entries()]
         .sort((a, b) => b[0] - a[0]) // Y trong PDF tính từ đáy lên → giảm dần = trên xuống
-        .map(([, ds]) => ds.sort((a, b) => a.x - b.x).map((d) => d.s).join("").trimEnd())
-        .filter((d) => d !== "");
+        // Giữ cả dòng trắng: bố cục thưa/dày của chương trình cũng là thông tin,
+        // và lọc bớt dòng là bắt đầu "sửa" bản gốc.
+        .map(([, ds]) => ds.sort((a, b) => a.x - b.x).map((d) => d.s).join("").trimEnd());
       trang.push(dong.join("\n"));
       page.cleanup();
     }
-    return trang.join("\n\n").trim();
+    return { text: trang.join("\n\n"), soTrang: pdf.numPages, catBot: pdf.numPages > n };
   } finally {
     await pdf.destroy();
   }
