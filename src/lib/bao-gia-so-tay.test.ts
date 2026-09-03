@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   chuanHoaZh, khoaSoTay, banDoSoTay, traSoTay, usdTrongDong,
-  locDongDeHoc, dongThieuGia, diemGiong, goiYSoTay, apSoTay,
-  type DongSoTay, type LoaiSoTay, type DongApSoTay,
+  locDongDeHoc, dongDeHocKhiLuuNhap, dongThieuGia, diemGiong, goiYSoTay, apSoTay,
+  type DongSoTay, type LoaiSoTay, type DongApSoTay, type DongLuuNhap,
 } from "./bao-gia-so-tay";
 
 const dong = (over: Partial<DongSoTay> = {}): DongSoTay => ({
@@ -308,6 +308,22 @@ describe("apSoTay — áp sổ tay lên kết quả AI vừa đọc", () => {
     expect(r.mo_ta).toBe("Tên tôi tự gõ");
   });
 
+  it("mở lại bản nháp: giá cũ sai của lần trước được sổ tay tra lại", () => {
+    // Đúng ca đã gặp: danh mục ghi nhầm set 300k thành 30.000 → bản nháp cất
+    // con số sai; sau đó người nhập dạy sổ tay 320.000 ở báo giá khác. Mở nháp
+    // ra phải ăn giá đã dạy, chứ không phải bày lại số sai.
+    const bdLaoCai = banDoSoTay([
+      dong({ id: 5, khoa_zh: chuanHoaZh("老街風味餐15 usd含酒水"), loai: "meal",
+        ten_vi: "Cơm phong vị Lào Cai", don_gia: 320_000 }),
+    ]);
+    const [r] = apSoTay<DongApSoTay>(
+      [{ ten_zh: "老街風味餐15 usd含酒水", mo_ta: "Cơm phong vị Lào Cai", loai: "meal", don_gia: 30_000 }],
+      bdLaoCai, quyDoi,
+    );
+    expect(r.don_gia).toBe(320_000);
+    expect(r.nguon_gia).toBe("so_tay");
+  });
+
   it("trả mảng MỚI, không sửa tại chỗ", () => {
     const goc: DongApSoTay[] = [{ ten_zh: "水上木偶戲", mo_ta: "", loai: "ticket", don_gia: 0 }];
     const ra = apSoTay(goc, bd, quyDoi);
@@ -318,5 +334,31 @@ describe("apSoTay — áp sổ tay lên kết quả AI vừa đọc", () => {
   it("dòng không có chữ Trung thì đánh dấu chưa có giá, không nổ", () => {
     const [r] = apSoTay<DongApSoTay>([{ ten_zh: null, mo_ta: "Gì đó", loai: "ticket", don_gia: 0 }], bd, quyDoi);
     expect(r.nguon_gia).toBe("chua_co");
+  });
+});
+
+describe("dongDeHocKhiLuuNhap — lưu nháp cũng phải nhớ giá vừa gõ", () => {
+  const r = (over: Partial<DongLuuNhap>): DongLuuNhap => ({
+    ten_zh: "老街風味餐15 usd含酒水", mo_ta: "Cơm phong vị Lào Cai",
+    loai: "meal", don_gia: 320_000, ...over,
+  });
+
+  it("học dòng người nhập tự tay sửa", () => {
+    const ra = dongDeHocKhiLuuNhap([r({ sua_tay: true })]);
+    expect(ra).toHaveLength(1);
+    expect(ra[0].don_gia).toBe(320_000);
+    expect(ra[0].khoa_zh).toBe(chuanHoaZh("老街風味餐15 usd含酒水"));
+  });
+
+  it("KHÔNG học số máy đoán — lưu nháp là còn làm dở, chưa ai gật", () => {
+    expect(dongDeHocKhiLuuNhap([r({ don_gia: 30_000 })])).toHaveLength(0);
+  });
+
+  it("bỏ loại sổ tay không nhận (xe) dù người nhập có sửa tay", () => {
+    expect(dongDeHocKhiLuuNhap([r({ loai: "transport", sua_tay: true })])).toHaveLength(0);
+  });
+
+  it("dòng sửa tay mà không có chữ Trung thì không có khoá để nhớ", () => {
+    expect(dongDeHocKhiLuuNhap([r({ ten_zh: null, sua_tay: true })])).toHaveLength(0);
   });
 });
