@@ -246,7 +246,7 @@ export default function BookingVisaCard({
         cc: BOOKING_CC.visa,
         subject: emailSubject,
         html: emailBody,
-        replyTo: currentUserEmail ?? undefined,
+        replyTo: userProfile?.email || currentUserEmail || undefined,
         attachments,
       });
 

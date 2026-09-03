@@ -1,5 +1,6 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { edgeAuthHeaders } from "@/lib/edge-fn-auth";
+import { layEmailPhanHoi } from "@/hooks/use-current-user";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BOOKING_CC } from "@/lib/booking-cc";
 import type { TablesUpdate } from "@/lib/database.types";
@@ -513,9 +514,7 @@ export function useSendLockPhongEmail() {
           subject: params.subject,
           html: params.html,
           replyTo:
-            params.replyTo ||
-            (await externalSupabase.auth.getSession()).data.session?.user?.email ||
-            undefined,
+            params.replyTo || (await layEmailPhanHoi()),
         }),
       });
 

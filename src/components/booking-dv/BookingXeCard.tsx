@@ -267,7 +267,7 @@ export default function BookingXeCard({
         cc: BOOKING_CC.xe,
         subject: emailSubject,
         html: emailBody,
-        replyTo: currentUserEmail ?? undefined,
+        replyTo: userProfile?.email || currentUserEmail || undefined,
       });
 
       const threadId = isFirst ? newThreadId : booking?.email_thread_id;
