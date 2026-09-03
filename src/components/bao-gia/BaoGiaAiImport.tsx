@@ -27,13 +27,13 @@ import {
   applyKsBuaRules, toKsBuaRules,
   hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
   analyzeCombo, comboPatchForRef, sanitizeDraftRows, newResolvedItem, BUA_LABEL,
-  type ResolvedItem, type AiReviewDraft, type BaoGomBuaAn, type KsBuaRule,
+  type ResolvedItem, type AiReviewDraft, type BaoGomBuaAn,
 } from "@/lib/bao-gia-ai-resolve";
 import { useBaoGiaAliasMap, useLearnAliases } from "@/hooks/use-bao-gia-aliases";
 import { useBaoGiaRuleList } from "@/hooks/use-bao-gia-rules";
-import { BaoGiaRuleChatPanel } from "@/components/bao-gia/BaoGiaRuleChat";
 import { AddServiceRow } from "@/components/bao-gia/AddServiceRow";
-import { fileKind, imageMime, extractItineraryText, unsupportedFileInfo } from "@/lib/itinerary-file";
+import { fileKind, imageMime, extractItineraryText, extractPdfText, unsupportedFileInfo, type FileKind } from "@/lib/itinerary-file";
+import { ChuongTrinhGocPanel, type NguonChuongTrinh } from "@/components/bao-gia/ChuongTrinhGocPanel";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -110,6 +110,9 @@ export function BaoGiaAiImport({
   const [extracting, setExtracting] = useState(false); // đang trích text docx/xlsx
   const [runningProvider, setRunningProvider] = useState<"claude" | "keystone" | null>(null);
   const [newTier, setNewTier] = useState(""); // ô "thêm cỡ đoàn" ở phần tính tiền
+  // Chương trình gốc để đối chiếu ở cột phải + dòng chi phí đang rê chuột.
+  const [nguonGoc, setNguonGoc] = useState<NguonChuongTrinh | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadedRef = useRef(false); // đã nạp bản nháp lưu chưa (1 lần/lần mở)
 
@@ -128,6 +131,7 @@ export function BaoGiaAiImport({
     if (!open) {
       setMode("file"); setSelectedUrl(null); setItinerary("");
       setRows(null); setSelection({}); setTen(""); setSoNgay(1); setExtracting(false);
+      setNguonGoc(null); setHoverIdx(null);
       loadedRef.current = false;
       return;
     }
@@ -149,12 +153,15 @@ export function BaoGiaAiImport({
           banDo, quyDoiUsdSoTay, giuNguyenDongSuaTay,
         );
         setRows(maps ? apGiaTauHaLong(daSoTay, maps, tourDate) : daSoTay);
+        // Bản gốc đã cất ở lượt phân tích trước → cột đối chiếu có ngay, khỏi
+        // phải phân tích lại chỉ để xem file.
+        if (draft.noi_dung_goc?.trim()) setNguonGoc({ kieu: "text", noiDung: draft.noi_dung_goc });
         setSelection(savedReview.selection ?? {});
         setTen(savedReview.ten ?? "");
         setSoNgay(savedReview.so_ngay && savedReview.so_ngay > 0 ? savedReview.so_ngay : 1);
       }
     }
-  }, [open, savedReview, soTayDaNap, banDo, mapsDaNap, maps, tourDate]);
+  }, [open, savedReview, soTayDaNap, banDo, mapsDaNap, maps, tourDate, draft.noi_dung_goc]);
 
   // Auto-chọn file đọc được (PDF/ảnh/Word/Excel) đầu tiên khi danh sách đổi.
   useEffect(() => {
@@ -262,9 +269,35 @@ export function BaoGiaAiImport({
     }
   };
 
+  /** Cất text chương trình vào chính báo giá (cột noi_dung_goc, trước nay bỏ
+   *  trống với file PDF). Nhờ vậy mở lại bản nháp ngày hôm sau vẫn còn bản gốc
+   *  để đối chiếu, không phải phân tích lại chỉ để xem file. */
+  const luuNoiDungGoc = (text: string) => {
+    const t = text.trim();
+    if (t && t !== (row.noi_dung_goc ?? "")) saveField("noi_dung_goc", t);
+  };
+
+  /** Dựng cột "Chương trình gốc" cho file đã chọn. Chạy SONG SONG với việc phân
+   *  tích và nuốt mọi lỗi: đây chỉ là cột đối chiếu, hỏng thì cùng lắm mất chỗ
+   *  soi, tuyệt đối không được làm hỏng lượt phân tích. */
+  const dungNguonGocTuFile = async (url: string, kind: FileKind) => {
+    try {
+      const ky = await resolveStorageUrl(url);
+      if (kind === "image") { setNguonGoc({ kieu: "file", url: ky, anh: true }); return; }
+      const text = await extractPdfText(await (await fetch(ky)).arrayBuffer());
+      // PDF scan không có lớp chữ → mở thẳng file thay vì bày một cột trống.
+      if (text.trim()) { setNguonGoc({ kieu: "text", noiDung: text }); luuNoiDungGoc(text); }
+      else setNguonGoc({ kieu: "file", url: ky, anh: false });
+    } catch {
+      setNguonGoc(null);
+    }
+  };
+
   const handleAnalyze = async (prov: "claude" | "keystone") => {
     if (mode === "text") {
       if (!itinerary.trim()) { toast.warning("Dán lịch trình trước đã"); return; }
+      setNguonGoc({ kieu: "text", noiDung: itinerary });
+      luuNoiDungGoc(itinerary);
       runExtract({ itinerary, provider: prov });
       return;
     }
@@ -272,8 +305,12 @@ export function BaoGiaAiImport({
     if (!f) { toast.warning("Chọn 1 file lịch trình"); return; }
     const kind = fileKind(f.ten);
     // PDF/ảnh → đọc file trực tiếp (edge fn gửi cho model). Word/Excel → trích text ở client.
-    if (kind === "pdf") return runExtract({ fileUrl: f.url, fileType: "application/pdf", provider: prov });
-    if (kind === "image") return runExtract({ fileUrl: f.url, fileType: imageMime(f.ten), provider: prov });
+    if (kind === "pdf" || kind === "image") {
+      void dungNguonGocTuFile(f.url, kind);
+      return runExtract(kind === "pdf"
+        ? { fileUrl: f.url, fileType: "application/pdf", provider: prov }
+        : { fileUrl: f.url, fileType: imageMime(f.ten), provider: prov });
+    }
     if (kind === "docx" || kind === "xlsx") {
       try {
         setExtracting(true);
@@ -282,6 +319,8 @@ export function BaoGiaAiImport({
         const buf = await (await fetch(await resolveStorageUrl(f.url))).arrayBuffer();
         const text = await extractItineraryText(buf, kind);
         if (!text.trim()) { toast.warning("File rỗng / không đọc được nội dung"); return; }
+        setNguonGoc({ kieu: "text", noiDung: text });
+        luuNoiDungGoc(text);
         await runExtract({ itinerary: text, provider: prov });
       } catch (e: unknown) {
         toast.error(errMsg(e) || "Lỗi đọc file");
@@ -436,12 +475,6 @@ export function BaoGiaAiImport({
     setRows(next);
     setSelection(defaultHotelSelection(next, hotelChoiceGroups(next)));
   };
-
-  // Quy tắc vừa dạy trong panel chat → áp NGAY vào rows đang review (chỉ đụng
-  // dòng hotel của đúng KS đó — sửa tay ở các dòng khác giữ nguyên). Combo/tiền
-  // tự tính lại vì analyzeCombo là memo trên rows.
-  const handleRuleSaved = (rule: KsBuaRule) =>
-    setRows((rs) => (rs ? applyKsBuaRules(rs, [rule]) : rs));
 
   const setGia = (idx: number, gia: number) =>
     setRows((rs) => rs ? rs.map((r, i) => (i === idx ? { ...r, don_gia: gia, sua_tay: true } : r)) : rs);
@@ -606,7 +639,7 @@ export function BaoGiaAiImport({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className={`${rows ? "sm:max-w-6xl" : "sm:max-w-4xl"} max-h-[90vh] flex flex-col`}>
+      <DialogContent className={`${rows ? "sm:max-w-7xl" : "sm:max-w-4xl"} max-h-[90vh] flex flex-col`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-violet-600" /> AI điền từ lịch trình
@@ -801,7 +834,8 @@ export function BaoGiaAiImport({
                             : !chosen ? "opacity-50"
                             : ok ? "" : "bg-amber-50/50";
                           return (
-                            <tr key={idx} className={`border-t border-slate-100 ${rowCls}`}>
+                            <tr key={idx} className={`border-t border-slate-100 ${rowCls}`}
+                              onMouseEnter={() => setHoverIdx(idx)} onMouseLeave={() => setHoverIdx(null)}>
                               <td className="py-1 px-2 text-center text-slate-500 align-top">
                                 {r.ngay_so}
                                 {r.bua_an && <span className="block text-[9px] text-slate-400">{r.bua_an === "trua" ? "trưa" : "tối"}</span>}
@@ -1145,11 +1179,11 @@ export function BaoGiaAiImport({
           </div>
         )}
         </div>
-        {/* Cột chat "Sửa & dạy quy tắc" — chỉ hiện ở bước review: thấy sai thì
-            gõ sửa tại chỗ, quy tắc lưu DB + áp ngay vào rows đang xem. */}
+        {/* Cột "Chương trình gốc" — chỉ hiện ở bước review: đặt file đối tác gửi
+            ngay cạnh bảng chi phí, rê chuột một mục là thấy dòng sinh ra nó. */}
         {rows && (
-          <div className="hidden md:block w-[300px] shrink-0 border-l pl-3 min-h-0">
-            <BaoGiaRuleChatPanel onRuleSaved={handleRuleSaved} />
+          <div className="hidden lg:block w-[340px] shrink-0 border-l pl-3 min-h-0">
+            <ChuongTrinhGocPanel nguon={nguonGoc} rows={rows} hoverIdx={hoverIdx} />
           </div>
         )}
         </div>

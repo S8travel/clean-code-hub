@@ -50,6 +50,58 @@ export function imageMime(name: string): string {
 
 /** Trích text từ docx/xlsx (đọc client). PDF/ảnh KHÔNG dùng hàm này.
  *  Dynamic import mammoth/xlsx → chỉ tải khi user thực sự đọc file (không nặng trang). */
+/** Số trang PDF tối đa đọc text ĐỂ HIỂN THỊ. Chương trình tour dài nhất đo được
+ *  là 8 trang; cắt ở 20 để một file lạ 300 trang không treo trình duyệt. */
+const MAX_TRANG_TEXT = 20;
+
+/**
+ * Trích text từ PDF ngay trên trình duyệt — CHỈ để hiển thị cột "Chương trình
+ * gốc" và tô sáng dòng. Bản gửi cho AI vẫn là chính file PDF (model đọc bố cục
+ * tốt hơn text phẳng), nên hàm này hỏng thì cùng lắm mất cột đối chiếu, không
+ * ảnh hưởng gì tới việc trích chi phí.
+ *
+ * PDF scan (ảnh chụp) không có lớp text → trả chuỗi rỗng, phía gọi tự chuyển
+ * sang mở thẳng file.
+ *
+ * Dùng bản LEGACY của pdfjs y như renderPdfToPageImages — xem chú thích ở đó.
+ */
+export async function extractPdfText(buf: ArrayBuffer): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+    const { default: workerUrl } = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
+    pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  }
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+  try {
+    const trang: string[] = [];
+    const n = Math.min(pdf.numPages, MAX_TRANG_TEXT);
+    for (let i = 1; i <= n; i++) {
+      const page = await pdf.getPage(i);
+      const noiDung = await page.getTextContent();
+      // pdfjs trả từng MẢNH chữ kèm toạ độ, không trả dòng. Gom theo toạ độ Y
+      // (transform[5]) rồi xếp theo X — không gom thì cả trang dính thành một
+      // dòng dài, tô sáng chỉ tô được đúng một vệt vô nghĩa.
+      const theoY = new Map<number, { x: number; s: string }[]>();
+      for (const it of noiDung.items) {
+        if (!("str" in it) || !it.str) continue;
+        const y = Math.round((it.transform?.[5] ?? 0) * 2) / 2;
+        const ds = theoY.get(y) ?? [];
+        ds.push({ x: it.transform?.[4] ?? 0, s: it.str });
+        theoY.set(y, ds);
+      }
+      const dong = [...theoY.entries()]
+        .sort((a, b) => b[0] - a[0]) // Y trong PDF tính từ đáy lên → giảm dần = trên xuống
+        .map(([, ds]) => ds.sort((a, b) => a.x - b.x).map((d) => d.s).join("").trimEnd())
+        .filter((d) => d !== "");
+      trang.push(dong.join("\n"));
+      page.cleanup();
+    }
+    return trang.join("\n\n").trim();
+  } finally {
+    await pdf.destroy();
+  }
+}
+
 export async function extractItineraryText(buf: ArrayBuffer, kind: FileKind): Promise<string> {
   if (kind === "docx") {
     const mammoth = (await import("mammoth")).default;
