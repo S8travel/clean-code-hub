@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { BaoGiaExportBracket, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { liveKetQua } from "./helpers";
 import { taiwanExportDefaults } from "@/lib/bao-gia-taiwan-content";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
 interface Props {
   draft: BaoGiaRow;
@@ -17,7 +18,7 @@ interface Props {
 export function TaiwanExportSection({ draft, updateDraftKetQua, saveKetQua }: Props) {
   const ket = draft.ket_qua;
   if (!ket) return null;
-  const xr = draft.exchange_rate ?? 26000;
+  const xr = tyGiaCuaBaoGia(draft.exchange_rate);
   const fresh = liveKetQua(draft) ?? ket;
   const def = taiwanExportDefaults(fresh, fresh.items, xr);
   const cfg = ket.export_config ?? {};

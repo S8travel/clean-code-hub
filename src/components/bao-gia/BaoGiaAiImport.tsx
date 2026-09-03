@@ -18,7 +18,7 @@ import { VehicleSelector } from "@/components/bao-gia/detail/VehicleSelector";
 import { useBaoGiaResolveMaps, useMarkCanhDiemCombo, useWriteGiaPhongFromBaoGia } from "@/hooks/use-bao-gia-ai-maps";
 import { useSoTay, useHocSoTay } from "@/hooks/use-bao-gia-so-tay";
 import {
-  apSoTay, banDoSoTay, locDongDeHoc, LOAI_SO_TAY,
+  apSoTay, banDoSoTay, locDongDeHoc, dongDeHocKhiLuuNhap, LOAI_SO_TAY,
   type LoaiSoTay,
 } from "@/lib/bao-gia-so-tay";
 import { useIsReadOnly } from "@/hooks/use-permissions";
@@ -38,6 +38,17 @@ import { useFileDrop } from "@/hooks/use-file-drop";
 import { resolveGiaPhongValue } from "@/lib/khach-san-gia-phong";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { resolveStorageUrl } from "@/lib/storage-url";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
+import { apGiaTauHaLong } from "@/lib/bao-gia-tau-ha-long";
+
+/** Quy đổi mức USD đối tác ghi → tiền Việt, cho sổ tay dùng khi bên mình chưa
+ *  chốt giá nào. Dòng chi phí báo giá có thêm loại "dich_vu" mà sổ tay không
+ *  biết — tính như vé (cùng công thức, không cộng phụ trội bữa ăn). */
+const quyDoiUsdSoTay = (usd: number, loai: LoaiSoTay) =>
+  usdBudgetPrice(usd, loai === "dich_vu" ? "ticket" : loai);
+
+/** Dòng người nhập đã tự tay sửa → sổ tay KHÔNG được đè lại. */
+const giuNguyenDongSuaTay = (r: ResolvedItem) => !!r.sua_tay;
 
 interface Props {
   open: boolean;
@@ -80,7 +91,7 @@ export function BaoGiaAiImport({
   const baoGiaId = draft.id;
   const tourDate = draft.ngay_di;
   const files = useMemo(() => draft.lich_trinh_files ?? [], [draft.lich_trinh_files]);
-  const xr = draft.exchange_rate && draft.exchange_rate > 0 ? draft.exchange_rate : 26000;
+  const xr = tyGiaCuaBaoGia(draft.exchange_rate);
   const [mode, setMode] = useState<"file" | "text">("file");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState("");
@@ -88,7 +99,7 @@ export function BaoGiaAiImport({
   // Bộ nhớ tiếng Trung ↔ tiếng Việt ↔ giá VỐN, dựng từ chính thao tác của người
   // nhập. Đây là nguồn giá được ưu tiên: nó phản ánh thứ công ty THỰC SỰ chào,
   // khác với danh mục vận hành vốn dựng ra để điều đoàn.
-  const { data: soTay = [] } = useSoTay(open);
+  const { data: soTay = [], isFetched: soTayDaNap } = useSoTay(open);
   const hocSoTay = useHocSoTay();
   const banDo = useMemo(() => banDoSoTay(soTay), [soTay]);
 
@@ -108,7 +119,7 @@ export function BaoGiaAiImport({
   const markCombo = useMarkCanhDiemCombo();
   const writeGiaPhong = useWriteGiaPhongFromBaoGia();
   const upload = useUploadLichTrinhFile();
-  const { data: maps, isLoading: mapsLoading } = useBaoGiaResolveMaps(open);
+  const { data: maps, isLoading: mapsLoading, isFetched: mapsDaNap } = useBaoGiaResolveMaps(open);
   const { data: aliasMap } = useBaoGiaAliasMap(open);
   const { data: ruleRows } = useBaoGiaRuleList(open);
   const learn = useLearnAliases();
@@ -120,17 +131,30 @@ export function BaoGiaAiImport({
       loadedRef.current = false;
       return;
     }
-    // Mở lại có bản nháp đã lưu → nạp thẳng vào review (1 lần/lần mở).
-    if (!loadedRef.current) {
+    // Mở lại có bản nháp đã lưu → nạp vào review (1 lần/lần mở).
+    //
+    // CHỜ sổ tay nạp xong rồi mới nạp nháp, và TRA LẠI SỔ TAY trên dòng nháp:
+    // bản nháp là ảnh chụp giá của lần trước, trong khi giữa hai lần mở người
+    // nhập có thể đã dạy sổ tay giá đúng (ở báo giá khác). Nạp nguyên si = mở
+    // nháp ra vẫn thấy con số cũ đã biết là sai, tưởng sổ tay không nhớ gì.
+    // Dòng đã sửa tay thì giữ nguyên — thứ người vừa gõ đáng tin nhất.
+    //
+    // `soTayDaNap` là "đã cố nạp xong", kể cả khi hỏng: sổ tay lỗi mạng không
+    // được phép khoá luôn bản nháp của người ta.
+    if (!loadedRef.current && soTayDaNap && mapsDaNap) {
       loadedRef.current = true;
       if (savedReview?.items?.length) {
-        setRows(sanitizeDraftRows(savedReview.items));
+        const daSoTay = apSoTay(
+          sanitizeDraftRows(savedReview.items),
+          banDo, quyDoiUsdSoTay, giuNguyenDongSuaTay,
+        );
+        setRows(maps ? apGiaTauHaLong(daSoTay, maps, tourDate) : daSoTay);
         setSelection(savedReview.selection ?? {});
         setTen(savedReview.ten ?? "");
         setSoNgay(savedReview.so_ngay && savedReview.so_ngay > 0 ? savedReview.so_ngay : 1);
       }
     }
-  }, [open, savedReview]);
+  }, [open, savedReview, soTayDaNap, banDo, mapsDaNap, maps, tourDate]);
 
   // Auto-chọn file đọc được (PDF/ảnh/Word/Excel) đầu tiên khi danh sách đổi.
   useEffect(() => {
@@ -220,16 +244,17 @@ export function BaoGiaAiImport({
           toKsBuaRules(ruleRows),
         ),
         banDo,
-        // usdBudgetPrice nhận loại của dòng chi phí báo giá (có "transport"),
-        // còn sổ tay chỉ 4 loại. "dich_vu" tính như vé — cùng công thức, không
-        // cộng phụ trội bữa ăn.
-        (usd, loai) => usdBudgetPrice(usd, loai === "dich_vu" ? "ticket" : loai),
-        (r) => !!r.sua_tay,
+        quyDoiUsdSoTay,
+        giuNguyenDongSuaTay,
       );
+      // Luật tàu Hạ Long chạy SAU sổ tay: dòng ăn ghi chung chung ("船上自助餐")
+      // được sổ tay điền giá con tàu nào đó từng gõ, nhưng tên tàu THẬT nằm ở
+      // dòng vé cùng ngày — bằng chứng của chính đoàn này thắng trí nhớ chung.
+      const daApTau = apGiaTauHaLong(resolved, maps, tourDate);
       setTen(result.ten_chuong_trinh ?? "");
       setSoNgay(result.so_ngay && result.so_ngay > 0 ? result.so_ngay : 1);
-      setRows(resolved);
-      setSelection(defaultHotelSelection(resolved, hotelChoiceGroups(resolved)));
+      setRows(daApTau);
+      setSelection(defaultHotelSelection(daApTau, hotelChoiceGroups(daApTau)));
     } catch (e: unknown) {
       toast.error(errMsg(e) || "Lỗi phân tích lịch trình");
     } finally {
@@ -301,7 +326,11 @@ export function BaoGiaAiImport({
    *  "sổ tay đã nhớ" với "máy đoán" với "chưa ai điền". Kèm nhãn LỆCH khi bên
    *  mình tính khác mức tiền đối tác ghi trong lịch trình. */
   const nhanNguon = (r: ResolvedItem) => {
-    const chinh = nhanNguonChinh(r);
+    // Dòng ăn đã lấy giá theo tàu thì NHÃN TÀU chính là nguồn giá — thêm nhãn
+    // "máy đoán" bên cạnh chỉ làm người nhập không biết tin cái nào.
+    const t = r.tau_ha_long;
+    const nguonLaTau = !!t?.ten && !t.thieu_gia && !r.sua_tay;
+    const chinh = <>{nguonLaTau ? null : nhanNguonChinh(r)}{nhanTau(r)}</>;
     const lech = r.gia_dong_ghi != null && r.don_gia > 0 && r.gia_dong_ghi !== r.don_gia;
     if (!lech) return chinh;
     return (
@@ -313,6 +342,37 @@ export function BaoGiaAiImport({
         >
           ≠ đối tác ghi {fmtVnd(r.gia_dong_ghi ?? 0)}
         </span>
+      </span>
+    );
+  };
+
+  /** Nhãn TÀU HẠ LONG: nói thẳng giá bữa ăn đang theo con tàu nào. Chỗ sai đắt
+   *  nhất ở đây là im lặng dùng tàu mặc định — nên ca đó phải là nhãn cam. */
+  const nhanTau = (r: ResolvedItem) => {
+    const t = r.tau_ha_long;
+    if (r.ve_vinh_da_gom) {
+      return (
+        <span className="ml-1 text-[9px] text-emerald-700 border border-emerald-300 rounded px-1"
+          title="Vé vịnh đã nằm trong giá bữa ăn trên tàu cùng ngày — để 0 cho khỏi tính tiền hai lần.">
+          đã gồm ở bữa trên tàu
+        </span>
+      );
+    }
+    if (!t) return null;
+    if (t.thieu_gia || !t.ten) {
+      return (
+        <span className="ml-1 text-[9px] text-orange-600 border border-orange-300 rounded px-1"
+          title={t.ten
+            ? `Đọc ra tàu "${t.ten}" nhưng danh mục chưa có giá set cho bữa này — gõ giá vào ô ĐG VND.`
+            : "Cả ngày không dòng nào nêu tên tàu — giá đang lấy theo tàu mặc định. Kiểm lại đoàn đi tàu nào."}>
+          {t.ten ? `tàu ${t.ten} — chưa có giá set` : "chưa rõ tàu"}
+        </span>
+      );
+    }
+    return (
+      <span className={`ml-1 text-[9px] border rounded px-1 ${t.doan ? "text-orange-600 border-orange-300" : "text-sky-700 border-sky-300"}`}
+        title={`Giá lấy theo tàu ${t.ten}${t.ve_vinh ? ` + vé vịnh ${fmtVnd(t.ve_vinh)}` : " (giá danh mục đã gồm vé vịnh)"}.${t.doan ? " Không thấy tên tàu trong lịch trình — đây là tàu mặc định, kiểm lại." : ""}`}>
+        tàu {t.ten}{t.ve_vinh ? " + vé vịnh" : ""}{t.doan ? " (mặc định)" : ""}
       </span>
     );
   };
@@ -510,6 +570,18 @@ export function BaoGiaAiImport({
   const handleSaveDraft = () => {
     if (!rows) return;
     onSaveDraft({ items: rows, selection, ten, so_ngay: soNgay, saved_at: new Date().toISOString() });
+    // Ghi luôn phần người nhập đã tự tay gõ vào SỔ TAY, không đợi tới lúc Áp
+    // dụng: nhiều báo giá dừng ở nháp (chờ đối tác chốt) và giá vừa gõ là thứ
+    // tốn công nhất trong cả màn hình này — để nó chết theo bản nháp thì lần
+    // sau máy lại đoán ra đúng con số sai cũ.
+    const deHoc = dongDeHocKhiLuuNhap(rows);
+    if (deHoc.length) {
+      hocSoTay.mutate(deHoc, {
+        onSuccess: () => toast.success(`Đã lưu nháp · nhớ giá ${deHoc.length} mục vào sổ tay`),
+        onError: () => toast.warning("Đã lưu nháp, nhưng chưa ghi được vào sổ tay — lần sau có thể phải gõ lại giá."),
+      });
+      return;
+    }
     toast.success("Đã lưu nháp — lần sau mở lại tiếp tục được");
   };
 
@@ -969,7 +1041,7 @@ export function BaoGiaAiImport({
                       <span className="block text-[11px] text-slate-600 mb-1">Tỷ giá (VND/USD)</span>
                       <Input
                         type="number"
-                        value={draft.exchange_rate ?? 26000}
+                        value={draft.exchange_rate ?? TY_GIA_BAO_GIA_MAC_DINH}
                         onChange={(e) => {
                           const v = parseFloat(e.target.value);
                           if (!isNaN(v)) updateDraftField("exchange_rate", v);

@@ -96,6 +96,16 @@ describe("buildPortalBaoGiaSnapshot", () => {
     expect(s.hieu_luc_den).toBe("2026-11-12");
   });
 
+  it("báo giá không có tỷ giá dùng được (NULL / 0) — bản đẩy cổng vẫn ra số hữu hạn", () => {
+    for (const xr of [null, 0]) {
+      const s = buildPortalBaoGiaSnapshot(row({ exchange_rate: xr }), ketQua, now);
+      const soLieu = JSON.stringify(s.noi_dung);
+      // Infinity/NaN bị JSON hoá thành null → đối tác nhận giá trống mà không ai biết.
+      expect(soLieu).not.toContain("null");
+      expect(soLieu).not.toContain("Infinity");
+    }
+  });
+
   it("tôn trọng hieu_luc_ngay nhập tay trên báo giá", () => {
     const s = buildPortalBaoGiaSnapshot(row({ hieu_luc_ngay: 30 }), ketQua, now);
     expect(s.hieu_luc_den).toBe("2026-09-13");

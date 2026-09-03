@@ -128,6 +128,21 @@ export interface ResolvedItem {
   bo_qua_combo?: boolean;
   /** Dòng ĂN: OP bắt tính riêng dù combo cùng ngày khai đã gồm bữa đó. */
   tinh_rieng?: boolean;
+
+  // ── Tàu du lịch Hạ Long (xem lib/bao-gia-tau-ha-long.ts) ──
+  /** Dòng ăn trên tàu: giá đang theo con tàu nào. */
+  tau_ha_long?: {
+    /** Tên tàu đọc được trong ngày; null = cả ngày không dòng nào nêu tên tàu. */
+    ten: string | null;
+    /** Vé vịnh đã cộng vào đơn giá (0 = giá danh mục của tàu đó đã gồm sẵn). */
+    ve_vinh: number;
+    /** Nhận ra tàu nhưng danh mục chưa có giá set cho bữa này → giá để người nhập gõ. */
+    thieu_gia?: boolean;
+    /** Giá lấy theo TÀU MẶC ĐỊNH vì không thấy tên tàu nào — cần người nhập soi lại. */
+    doan?: boolean;
+  } | null;
+  /** Dòng vé du thuyền đã được gộp vào giá bữa ăn cùng ngày → để 0 cho khỏi tính đúp. */
+  ve_vinh_da_gom?: boolean;
 }
 
 /** Dòng TRỐNG do OP tự thêm trong màn review (AI đọc sót mục). Chưa có tên/giá

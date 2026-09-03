@@ -325,7 +325,7 @@ function buildManualDoc(
   const price1014   = price1523 + 30;
   const price24plus = price1523 - 10;
   const totalHotelVnd = manualDays.reduce((s, d) => s + (d.khachSan.gia ?? 0), 0);
-  const singleRoom  = Math.round(totalHotelVnd / 2 / exchangeRate) + 10;
+  const singleRoom  = exchangeRate > 0 ? Math.round(totalHotelVnd / 2 / exchangeRate) + 10 : 0;
 
   // Hotel days (for price table left column)
   const hotelDays = manualDays

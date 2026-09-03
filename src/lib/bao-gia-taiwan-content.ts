@@ -62,7 +62,10 @@ export function taiwanExportDefaults(
   const totalHotelVnd = items.filter((i) => i.loai === "hotel").reduce((s, i) => s + (i.don_gia || 0), 0);
   return {
     brackets: taiwanDefaultBrackets(ketQua),
-    single_supplement_usd: Math.round(totalHotelVnd / 2 / (exchangeRate || 1)) + 10,
+    // `|| 1` cũ biến tỷ giá 0 thành 單房差 khổng lồ trong file gửi khách — thà ra 0.
+    single_supplement_usd: exchangeRate > 0
+      ? Math.round(totalHotelVnd / 2 / exchangeRate) + 10
+      : 0,
     above_notes: `1. 司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n2. 簽證、機票、私人費用\n3. 越南特殊節日另外報價`,
     included: DEFAULT_INCLUDED_ZH.join("\n"),
     excluded: `司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n簽證、機票、私人費用`,

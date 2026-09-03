@@ -31,6 +31,7 @@ import { CanhBaoLech } from "@/components/bao-gia/detail/CanhBaoLech";
 import { GuiPhienBanModal } from "@/components/bao-gia/detail/GuiPhienBanModal";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 import { resolveStorageUrl } from "@/lib/storage-url";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
 // Trang chi tiết Báo giá. State pattern: PARENT giữ `draft` (mirror row +
 // live edits). Children controlled bởi draft. Mỗi field change → setDraft
@@ -116,7 +117,7 @@ export default function BaoGiaDetailPage() {
   const handleExportPdf = async (maBg?: string) => {
     if (!draft.ket_qua) return;
     try {
-      const xr = draft.exchange_rate ?? 26000;
+      const xr = tyGiaCuaBaoGia(draft.exchange_rate);
       if (isGiaCuoi) {
         // Giá cuối: chỉ bảng giá theo khoảng khách (nhập tay) — không section costing.
         const tiers = giaCuoiBrackets(draft.ket_qua.gia_cuoi_tiers, xr).map((b) => ({
@@ -337,6 +338,7 @@ export default function BaoGiaDetailPage() {
               updateDraftField={updateDraftField}
               updateDraftKetQua={updateDraftKetQua}
               saveField={saveField}
+              savePatch={savePatch}
               saveKetQua={saveKetQua}
             />
             <GiaCuoiPriceSection

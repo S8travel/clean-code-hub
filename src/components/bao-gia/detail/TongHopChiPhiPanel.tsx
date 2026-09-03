@@ -2,6 +2,7 @@ import { RefreshCw, AlertTriangle, ChevronRight, TrendingUp } from "lucide-react
 import { Button } from "@/components/ui/button";
 import type { BaoGiaRow } from "@/hooks/use-bao-gia";
 import { costBreakdown, fmtVnd } from "./helpers";
+import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
 interface Props {
   draft: BaoGiaRow;
@@ -13,7 +14,7 @@ interface Props {
 export function TongHopChiPhiPanel({ draft }: Props) {
   const c = costBreakdown({
     ket: draft.ket_qua,
-    exchangeRate: draft.exchange_rate ?? 26000,
+    exchangeRate: tyGiaCuaBaoGia(draft.exchange_rate),
     profitUsd: draft.profit_usd ?? 0,
     xeGia: draft.xe_gia,
     phuThu: draft.phu_thu,
