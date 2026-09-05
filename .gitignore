@@ -64,3 +64,6 @@ _S8_WEB_ANH/
 # sau vẫn còn trong lịch sử git). Cần lưu trữ thì để ngoài repo.
 S8-*.html
 S8-*.docx
+
+# File tạm do công cụ sinh ra ở thư mục gốc (live.tmp...) — đừng để lọt vào commit.
+*.tmp
