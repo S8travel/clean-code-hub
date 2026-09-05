@@ -388,6 +388,13 @@ Rà 05/09/2026. Ba nhóm dưới đây advisor sẽ kêu mãi, sửa là hỏng 
   là RPC app đang gọi thật (`recalc_chi_phi_payment_status`, `mark_deadline_done`,
   `update_my_profile`, `cong_no_*`, `remap_*`…). Revoke = gãy app.
 
+**Lỗ rò dữ liệu đã vá cùng đợt (05/09/2026):** `xuat-word-booking-ks` chạy bằng
+service key (bỏ qua RLS) mà không hỏi người gọi là ai — chỉ cần publishable key là tải
+được file Word 訂房確認單 của bất kỳ `doan_id` nào (đã kiểm chứng: đoàn 704, 9 KB, đủ
+tên khách sạn + SĐT + loại phòng). `process-bao-gia` hở cùng kiểu và đã bị gỡ hẳn.
+Luật rút ra: **hàm nào chạy bằng service key thì bắt buộc tự xác thực người gọi** —
+`verify_jwt = true` chỉ chặn request không có khoá, không chặn được publishable key.
+
 Đã siết trong đợt này (migration `20260905d`): thu hồi EXECUTE của PUBLIC/`anon`
 trên 5 trigger-function + 7 RPC nội bộ, và khoá `search_path` cho 8 hàm còn thiếu.
 Kiểm chứng bằng khoá publishable: RPC nội bộ trả 401/404, trang web công khai và

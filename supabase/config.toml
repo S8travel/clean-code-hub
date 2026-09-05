@@ -53,7 +53,10 @@ verify_jwt = true
 [functions.extract-chuong-trinh]
 verify_jwt = true
 
-# notify: điểm nhận thông báo, gọi không kèm user JWT.
+# notify: Database Webhook (AFTER INSERT trên web_bookings / contact_messages) gửi
+# mail cho OP khi có khách đặt tour hoặc gửi liên hệ từ website. Webhook không kèm
+# user JWT → verify_jwt = false; chặn bằng header 'x-webhook-secret' khớp env
+# WEBHOOK_SECRET (xem index.ts). Source đã kéo về repo 05/09/2026.
 [functions.notify]
 verify_jwt = false
 
@@ -112,10 +115,19 @@ verify_jwt = true
 [functions.Change-password]
 verify_jwt = true
 
-# ── ⚠️ CÒN TRÊN PROD NHƯNG KHÔNG CÓ SOURCE TRONG REPO (rà 05/09/2026).
-# Đừng deploy đè khi chưa kéo source về, sẽ mất bản đang chạy:
-#   • notify              (verify_jwt=false, tự kiểm 'x-webhook-secret' — Database
-#                          Webhook cho web_bookings/contact_messages)
-#   • process-bao-gia     (verify_jwt=true; hook useProcessBaoGia không màn hình nào dùng)
-#   • xuat-word-booking-ks(verify_jwt=true; không thấy nơi gọi trong repo CRM)
-#   • ai-chat             (xem ghi chú phía trên — cần gỡ hẳn)
+# process-bao-gia: ⛔ ĐÃ GỠ khỏi prod 05/09/2026. Source vẫn nằm trong
+# supabase/functions/process-bao-gia/ làm tư liệu — CỐ Ý không khai [functions.*] ở đây
+# để không ai vô tình dựng lại. Đọc chú thích đầu file đó trước khi deploy lại.
+
+# xuat-word-booking-ks: xuất Word 訂房確認單. Không tìm thấy nơi gọi trong repo CRM —
+# ĐỪNG xoá trên prod khi chưa xác minh cổng đối tác (repo s8-agent-portal) không dùng.
+# Source đã kéo về repo 05/09/2026 và VÁ lỗ rò dữ liệu: hàm chạy bằng service key (bỏ
+# qua RLS) mà không hỏi người gọi là ai → người lạ tải được bản đặt phòng của mọi đoàn
+# chỉ bằng publishable key. Nay có guard /auth/v1/user trong index.ts (deploy v56).
+[functions.xuat-word-booking-ks]
+verify_jwt = true
+
+# ── ⚠️ CÒN TRÊN PROD MÀ REPO KHÔNG CÓ SOURCE (rà 05/09/2026):
+#   • ai-chat — xem ghi chú phía trên, cần gỡ hẳn chứ không phải chỉ bỏ khai ở file này.
+# Ba hàm trước đây trong danh sách này (notify, process-bao-gia, xuat-word-booking-ks)
+# đã được kéo source về repo, xem các khối ngay trên.
