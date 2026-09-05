@@ -35,6 +35,8 @@ function targetUrl(tb: ThongBaoRecord): string {
   if (loai.startsWith("deadline") && doan_id) return `/doan/${doan_id}`;
   if (loai === "giao_viec" && cong_viec_id) return `/my-job?cong_viec=${cong_viec_id}`;
   if (loai === "giao_viec" && doan_id) return `/doan/${doan_id}`;
+  // Nhắc gộp "Còn N đoàn chưa phân người": không kèm id nào → về danh sách việc.
+  if (loai === "giao_viec") return `/my-job`;
   if (loai === "dntt_can_duyet") return "/de-nghi-thanh-toan";
   if (loai === "su_co" && doan_id) return `/doan/${doan_id}?tab=log`;
   // Đối tác yêu cầu sửa chương trình: mở thẳng báo giá đó.

@@ -36,21 +36,33 @@ verify_jwt = false
 [functions.send-booking-email]
 verify_jwt = true
 
-# ai-chat: ĐÃ GỠ 13/08/2026. Hàm trợ lý AI cũ không xác thực người gọi và nạp
+# ai-chat: ⚠️ TƯỞNG đã gỡ 13/08/2026 nhưng RÀ 05/09/2026 THẤY VẪN ĐANG ACTIVE trên
+# prod (verify_jwt=true, không màn hình nào gọi, 0 lượt gọi trong log 24h). Việc "gỡ"
+# hồi đó mới dừng ở bỏ khai trong file này. Cần gỡ hẳn bằng
+# `npx supabase functions delete ai-chat`. Hàm trợ lý AI cũ không xác thực người gọi và nạp
 # thẳng dữ liệu danh mục vào prompt, trong khi màn hình gọi nó đã bỏ từ lâu.
 # ĐỪNG khai lại tên này. Muốn làm trợ lý AI thì viết hàm mới: bắt buộc xác thực,
 # whitelist đúng cột được phép đọc, và không đưa dữ liệu giá vốn vào prompt.
 
-# extract-chuong-trinh: trích lịch trình từ file OP tải lên, gọi bằng publishable key.
+# extract-chuong-trinh: trích lịch trình từ file OP tải lên.
+# 05/09/2026: SIẾT LẠI. Trước đó verify_jwt=false + không kiểm tra gì → ai biết URL
+# cũng gọi được và ANTHROPIC_API_KEY của công ty trả tiền. Nay verify_jwt=true VÀ
+# hàm tự hỏi /auth/v1/user (xem index.ts) — vì verify_jwt một mình KHÔNG đủ:
+# publishable key nằm trong bundle web và gateway tính nó là JWT hợp lệ.
+# Hiện KHÔNG màn hình nào gọi hàm này (hook useExtractChuongTrinh không được dùng).
 [functions.extract-chuong-trinh]
-verify_jwt = false
+verify_jwt = true
 
-# notify: điểm nhận thông báo, gọi không kèm user JWT.
+# notify: Database Webhook (AFTER INSERT trên web_bookings / contact_messages) gửi
+# mail cho OP khi có khách đặt tour hoặc gửi liên hệ từ website. Webhook không kèm
+# user JWT → verify_jwt = false; chặn bằng header 'x-webhook-secret' khớp env
+# WEBHOOK_SECRET (xem index.ts). Source đã kéo về repo 05/09/2026.
 [functions.notify]
 verify_jwt = false
 
 # push-portal: đẩy báo giá + chương trình đoàn sang project cổng đối tác (外網).
-# pg_cron gọi 30 phút/lần nên không có user JWT → verify_jwt = false.
+# pg_cron gọi 2 lần/ngày (08:00 và 16:00 giờ VN, xem 20260814_portal_cron.sql) nên
+# không có user JWT → verify_jwt = false.
 # Bảo vệ: header 'x-portal-secret' khớp env PORTAL_CRON_SECRET, HOẶC access token
 # của phiên đăng nhập (nút "Đẩy ngay" trong CRM). Xem index.ts.
 [functions.push-portal]
@@ -79,3 +91,43 @@ verify_jwt = false
 # internet — để mở là ai cũng tự tạo được trang công khai chứa bảng giá khách khác.
 [functions.tao-link-bao-gia]
 verify_jwt = true
+
+# ── Các hàm dưới đây chạy verify_jwt = TRUE trên prod (mặc định). Khai rõ để lệnh
+# deploy không vô tình đổi trạng thái, và để file này liệt kê đủ những gì đang chạy.
+[functions.bao-gia-extract-match]
+verify_jwt = true
+
+[functions.bao-gia-teach-rule]
+verify_jwt = true
+
+[functions.get-exchange-rate]
+verify_jwt = true
+
+[functions.sync-dntt-to-sheet]
+verify_jwt = true
+
+[functions.sync-dntt-du-chi-to-sheet]
+verify_jwt = true
+
+[functions.xuat-word-dntt-ks]
+verify_jwt = true
+
+[functions.Change-password]
+verify_jwt = true
+
+# process-bao-gia: ⛔ ĐÃ GỠ khỏi prod 05/09/2026. Source vẫn nằm trong
+# supabase/functions/process-bao-gia/ làm tư liệu — CỐ Ý không khai [functions.*] ở đây
+# để không ai vô tình dựng lại. Đọc chú thích đầu file đó trước khi deploy lại.
+
+# xuat-word-booking-ks: xuất Word 訂房確認單. Không tìm thấy nơi gọi trong repo CRM —
+# ĐỪNG xoá trên prod khi chưa xác minh cổng đối tác (repo s8-agent-portal) không dùng.
+# Source đã kéo về repo 05/09/2026 và VÁ lỗ rò dữ liệu: hàm chạy bằng service key (bỏ
+# qua RLS) mà không hỏi người gọi là ai → người lạ tải được bản đặt phòng của mọi đoàn
+# chỉ bằng publishable key. Nay có guard /auth/v1/user trong index.ts (deploy v56).
+[functions.xuat-word-booking-ks]
+verify_jwt = true
+
+# ── ⚠️ CÒN TRÊN PROD MÀ REPO KHÔNG CÓ SOURCE (rà 05/09/2026):
+#   • ai-chat — xem ghi chú phía trên, cần gỡ hẳn chứ không phải chỉ bỏ khai ở file này.
+# Ba hàm trước đây trong danh sách này (notify, process-bao-gia, xuat-word-booking-ks)
+# đã được kéo source về repo, xem các khối ngay trên.

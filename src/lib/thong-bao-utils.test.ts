@@ -36,6 +36,8 @@ describe("targetUrl — thông báo lead deep-link vào LeadDrawer", () => {
   it("các loai khác giữ nguyên hành vi cũ", () => {
     expect(targetUrl(tb({ loai: "deadline_booking", doan_id: 9 }))).toBe("/doan/9");
     expect(targetUrl(tb({ loai: "giao_viec", cong_viec_id: 3 }))).toBe("/my-job?cong_viec=3");
+    // Nhắc gộp "Còn N đoàn chưa phân người" không kèm id nào.
+    expect(targetUrl(tb({ loai: "giao_viec" }))).toBe("/my-job");
     expect(targetUrl(tb({ loai: "dntt_can_duyet" }))).toBe("/de-nghi-thanh-toan");
     expect(targetUrl(tb({ loai: "khong_biet" }))).toBeNull();
   });
