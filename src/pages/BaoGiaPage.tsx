@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, Trash2, FileDown, FileText, Settings, Copy, Inbox, MessageSquareWarning, Search, X } from "lucide-react";
+import { Plus, Trash2, FileDown, FileText, Settings, Copy, CopyPlus, Inbox, MessageSquareWarning, Search, X, CornerDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -32,6 +32,7 @@ import { YeuCauBaoGiaTab, type YeuCauChonBaoGia } from "@/components/bao-gia/Yeu
 import {
   useBaoGiaList,
   useCloneBaoGia,
+  useTaoBanPhu,
   useDeleteBaoGia,
   type BaoGiaKetQua,
 } from "@/hooks/use-bao-gia";
@@ -49,6 +50,7 @@ import { giaCuoiTierLines, giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { toast } from "sonner";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 import { locBaoGia, coDangLoc, type LocDoiTac } from "@/lib/bao-gia-loc";
+import { xepNhomBaoGia, demBanPhu } from "@/lib/bao-gia-nhom";
 import { useBaoGiaListFilters } from "@/hooks/use-bao-gia-list-filters";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -68,6 +70,7 @@ export default function BaoGiaPage() {
   const { data: yeuCau = [] } = useYeuCauBaoGiaList();
   const { data: dsLog = [] } = useBaoGiaLogTatCa();
   const cloneMutation = useCloneBaoGia();
+  const banPhuMutation = useTaoBanPhu();
   const deleteMutation = useDeleteBaoGia();
   const ganYeuCau = useGanBaoGiaVaoYeuCau();
   const [createOpen, setCreateOpen] = useState(false);
@@ -123,6 +126,26 @@ export default function BaoGiaPage() {
   // trên mảng đã lọc. Thẻ "N chờ" cạnh tên tab thì cố ý giữ tổng toàn hệ thống.
   const soDangChoHienThi = daLoc.filter((r) => dangCho.has(r.id)).length;
   const dangLoc = coDangLoc(boLoc);
+
+  // Đếm bản phụ trên danh sách ĐẦY ĐỦ (chưa lọc) — để nhãn nói được "1/3 bản phụ"
+  // khi bộ lọc giấu bớt, thay vì im lặng báo 1 rồi để OP tưởng chỉ có ngần đó.
+  const demCon = useMemo(() => demBanPhu(list), [list]);
+  const maTheoId = useMemo(() => {
+    const m = new Map<number, string>();
+    list.forEach((r) => m.set(r.id, baoGiaCode(r)));
+    return m;
+  }, [list]);
+
+  // Gom chùm rồi trải phẳng lại thành danh sách dòng để vẽ. Mỗi dòng khớp bộ lọc
+  // xuất hiện đúng MỘT lần, nên dòng đếm "Hiện X / Y" vẫn đúng tuyệt đối.
+  const dongHienThi = useMemo(
+    () =>
+      xepNhomBaoGia(daLoc, (r) => dangCho.has(r.id)).flatMap((n) => [
+        { row: n.dau, laCon: false, gocVang: n.gocVang, soConHien: n.con.length },
+        ...n.con.map((c) => ({ row: c, laCon: true, gocVang: null as number | null, soConHien: 0 })),
+      ]),
+    [daLoc, dangCho],
+  );
   const xoaLoc = () => loc.clear();
 
   // Bấm "Báo giá" ở tab Yêu cầu → mở modal đã điền sẵn thứ đối tác gửi: đối tác,
@@ -179,6 +202,16 @@ export default function BaoGiaPage() {
   // Map lead_id → tên khách (hiển thị cột "Khách" trong list báo giá).
   const leadName: Record<number, string> = {};
   leads.forEach((l) => { leadName[l.id] = l.ho_ten; });
+
+  const handleTaoBanPhu = (id: number) => {
+    banPhuMutation.mutate(
+      { id },
+      {
+        onSuccess: ({ id: newId }) => { toast.success("Đã tạo bản phụ"); navigate(`/bao-gia/${newId}`); },
+        onError: () => toast.error("Lỗi tạo bản phụ"),
+      },
+    );
+  };
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id, {
@@ -378,12 +411,11 @@ export default function BaoGiaPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Đang chờ trả lời lên đầu; phần còn lại giữ NGUYÊN thứ tự ngày
-                      tạo cũ. Dùng sort ổn định của JS nên hai dòng cùng nhóm không
-                      đảo chỗ nhau giữa các lần vẽ lại. */}
-                  {[...daLoc]
-                    .sort((a, b) => Number(dangCho.has(b.id)) - Number(dangCho.has(a.id)))
-                    .map((row) => {
+                  {/* Chùm nào có thành viên đang chờ trả lời thì CẢ CHÙM lên đầu —
+                      xét ở cấp chùm chứ không cấp dòng, kẻo bản phụ đang chờ nhảy
+                      lên bỏ bản gốc lại giữa bảng. Phần còn lại giữ nguyên thứ tự
+                      ngày tạo (sort ổn định). Xem lib/bao-gia-nhom.ts. */}
+                  {dongHienThi.map(({ row, laCon, gocVang, soConHien }) => {
                     const xr = tyGiaCuaBaoGia(row.exchange_rate);
                     const isGiaCuoi = row.loai_bao_gia === "gia_cuoi";
                     // Giá cuối: lấy bậc thấp nhất (số khách nhỏ nhất) làm đại diện.
@@ -407,12 +439,21 @@ export default function BaoGiaPage() {
                       giaPaxUsd = breakdown?.gia_ban_tb_per_pax_usd ?? null;
                     }
                     return (
-                      <tr key={row.id} className="border-t hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/bao-gia/${row.id}`)}>
+                      <tr
+                        key={row.id}
+                        className={`border-t hover:bg-muted/20 cursor-pointer${laCon ? " bg-muted/10" : ""}`}
+                        onClick={() => navigate(`/bao-gia/${row.id}`)}
+                      >
                         {/* Mã BG là tên chung của báo giá này ở MỌI nơi: bản Word gửi
                             khách, cổng đối tác, trang xem qua link. Đối tác nhắn "cho
                             hỏi BG00025-v3" thì OP phải dò ra được ngay ở danh sách —
                             nên hiện cả số bản đang hiệu lực, đúng cách cổng gọi tên. */}
                         <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
+                          {/* Bản phụ thụt vào dưới bản gốc — mũi tên + lề trái, giống
+                              cách các bảng chi phí đang vẽ dòng phát sinh. */}
+                          {laCon && (
+                            <CornerDownRight className="mr-1 inline h-3 w-3 shrink-0 text-slate-400 align-[-2px]" />
+                          )}
                           {baoGiaCode(row)}
                           {/* Chỉ hiện số từ bản 2. Bản đầu tiên mang CHÍNH mã gốc —
                               RPC tao_phien_ban_bao_gia ghi ma_hien_thi = "BG00025" cho
@@ -437,6 +478,30 @@ export default function BaoGiaPage() {
                           {isGiaCuoi && (
                             <span className="ml-2 inline-block rounded bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] font-medium align-middle">Giá cuối</span>
                           )}
+                          {/* Bản gốc: cho biết nó có mấy bản phụ. Nếu bộ lọc đang giấu
+                              bớt thì ghi "1/3" chứ không im lặng báo 1. */}
+                          {!laCon && (demCon.get(row.id) ?? 0) > 0 && (
+                            <span
+                              className="ml-2 inline-block rounded bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[10px] font-medium align-middle"
+                              title={soConHien < (demCon.get(row.id) ?? 0)
+                                ? "Bộ lọc đang giấu bớt bản phụ của báo giá này"
+                                : undefined}
+                            >
+                              {soConHien < (demCon.get(row.id) ?? 0)
+                                ? `${soConHien}/${demCon.get(row.id)} bản phụ`
+                                : `${demCon.get(row.id)} bản phụ`}
+                            </span>
+                          )}
+                          {/* Bản phụ khớp bộ lọc mà bản gốc thì không — nó đứng riêng ở
+                              tầng ngoài, nên phải tự nói mình là bản phụ của ai. */}
+                          {gocVang != null && (
+                            <span
+                              className="ml-2 inline-block rounded bg-slate-100 text-slate-600 px-1.5 py-0.5 text-[10px] font-medium align-middle"
+                              title="Bản gốc không nằm trong kết quả lọc hiện tại"
+                            >
+                              bản phụ của {maTheoId.get(gocVang) ?? `#${gocVang}`}
+                            </span>
+                          )}
                           {row.ket_qua && <span className="ml-2 text-muted-foreground">{row.ket_qua.so_ngay} ngày</span>}
                         </td>
                         <td className="py-2 px-3 text-muted-foreground">
@@ -454,9 +519,13 @@ export default function BaoGiaPage() {
                         </td>
                         <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-1 justify-center">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Nhân bản"
+                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Nhân bản — ra một báo giá RỜI, không thuộc chùm nào"
                               onClick={() => handleClone(row.id)} disabled={cloneMutation.isPending}>
                               <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Tạo bản phụ — báo giá con của báo giá này, giữ nguyên khách"
+                              onClick={() => handleTaoBanPhu(row.id)} disabled={banPhuMutation.isPending}>
+                              <CopyPlus className="h-3.5 w-3.5" />
                             </Button>
                             {/* CÙNG một nút ra 2 loại file khác hẳn nhau: mode "giá cuối"
                                 ra bản gửi khách (chỉ giá bán), mode tự tính ra bản NỘI BỘ
@@ -498,7 +567,15 @@ export default function BaoGiaPage() {
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Xóa báo giá?</AlertDialogTitle>
-                                  <AlertDialogDescription>Hành động này không thể hoàn tác.</AlertDialogDescription>
+                                  <AlertDialogDescription>
+                                    Hành động này không thể hoàn tác.
+                                    {(demCon.get(row.id) ?? 0) > 0 && (
+                                      <>
+                                        {" "}Báo giá này đang có <b>{demCon.get(row.id)} bản phụ</b> — các bản phụ
+                                        sẽ KHÔNG bị xoá theo, chỉ đứt liên kết và thành báo giá độc lập.
+                                      </>
+                                    )}
+                                  </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Hủy</AlertDialogCancel>
