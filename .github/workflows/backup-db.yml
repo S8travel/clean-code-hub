@@ -3,6 +3,16 @@ name: Backup Supabase DB
 # Sao lưu toàn bộ DB Supabase định kỳ, lưu file dump dưới dạng artifact
 # (tải về từ tab Actions → run → Artifacts). Chạy độc lập, không cần máy bạn bật.
 #
+# ⚠️ REPO NÀY ĐANG PUBLIC. Artifact của repo public tải được bởi bất kỳ ai có tài
+# khoản GitHub, và DANH SÁCH artifact thì xem được mà KHÔNG cần đăng nhập (đã thử
+# 07/09/2026: API trả về 96 bản backup kèm tên/dung lượng/ngày). Bản dump là TOÀN BỘ
+# dữ liệu công ty — khách hàng, giá vốn, công nợ, lương HDV, số tài khoản.
+# → Từ 07/09/2026 bản dump được MÃ HOÁ (GPG AES-256) trước khi upload; bản thô bị xoá
+#   ngay trong runner. Không có secret BACKUP_PASSPHRASE thì job DỪNG, tuyệt đối
+#   không upload bản chưa mã hoá.
+# Mật khẩu nằm ở secret repo `BACKUP_PASSPHRASE` (GitHub không cho xem lại — bản giấy
+# đã giao cho chủ hệ thống). Giải mã: gpg --output ban.dump --decrypt <file>.dump.gpg
+#
 # YÊU CẦU: thêm secret repo `SUPABASE_DB_URL` (Settings → Secrets and variables →
 # Actions → New repository secret). Dùng SESSION POOLER URI (IPv4, hợp CI):
 #   postgresql://postgres.lflsbwoqzmbknzdpaequ:<MẬT-KHẨU>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres
@@ -55,10 +65,37 @@ jobs:
           # KEEP_DAYS=0: không tự xoá trong CI (mỗi run là máy mới); retention do artifact lo.
           KEEP_DAYS=0 BACKUP_DIR=backups BACKUP_FORMAT=dump bash scripts/backup-supabase-db.sh
 
-      - name: Upload artifact
+      - name: Mã hoá bản dump trước khi upload
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -e
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Thiếu secret BACKUP_PASSPHRASE — DỪNG, không upload bản dump thô lên repo public."
+            exit 1
+          fi
+          shopt -s nullglob
+          n=0
+          for f in backups/*.dump; do
+            gpg --batch --yes --symmetric --cipher-algo AES256                 --passphrase "$BACKUP_PASSPHRASE" --output "$f.gpg" "$f"
+            rm -f "$f"   # bản thô KHÔNG được lọt vào artifact
+            n=$((n+1))
+          done
+          if [ "$n" -eq 0 ]; then
+            echo "::error::Không tìm thấy file .dump nào để mã hoá."
+            exit 1
+          fi
+          echo "Đã mã hoá $n file:"
+          ls -lh backups/
+          if ls backups/*.dump >/dev/null 2>&1; then
+            echo "::error::Còn file .dump chưa mã hoá trong thư mục — dừng."
+            exit 1
+          fi
+
+      - name: Upload artifact (đã mã hoá)
         uses: actions/upload-artifact@v4
         with:
           name: supabase-db-backup-${{ github.run_id }}
-          path: backups/*.dump
+          path: backups/*.dump.gpg
           retention-days: 14
           if-no-files-found: error
