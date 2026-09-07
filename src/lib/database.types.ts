@@ -98,6 +98,7 @@ export type Database = {
       bao_gia: {
         Row: {
           agent_id: number | null
+          bao_gia_goc_id: number | null
           created_at: string | null
           created_by: string | null
           exchange_rate: number | null
@@ -129,6 +130,7 @@ export type Database = {
         }
         Insert: {
           agent_id?: number | null
+          bao_gia_goc_id?: number | null
           created_at?: string | null
           created_by?: string | null
           exchange_rate?: number | null
@@ -160,6 +162,7 @@ export type Database = {
         }
         Update: {
           agent_id?: number | null
+          bao_gia_goc_id?: number | null
           created_at?: string | null
           created_by?: string | null
           exchange_rate?: number | null

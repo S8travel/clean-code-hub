@@ -8,6 +8,7 @@
 
 import type { BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { buildPortalBaoGiaSnapshot, type PortalBaoGiaSnapshot } from "./portal-payload";
+import { BAO_HIEM_MOI_KHACH_MAC_DINH, TIP_DOAN_MAC_DINH } from "./bao-gia-calc";
 
 /** Lớp vốn — bản chụp nội bộ, KHÔNG BAO GIỜ đẩy ra ngoài CRM. */
 export interface LopVon {
@@ -19,6 +20,12 @@ export interface LopVon {
   xe_gia: number | null;
   phu_thu: number;
   hdv_gia_ngay: number | null;
+  // Lưu mức ĐÃ RESOLVE (không lưu null): từ lúc hai khoản này sửa tay được, chúng
+  // thành nguồn làm đổi giá chào. Thiếu chúng ở đây thì bảng "khác bản trước" chỉ
+  // nói được "giá tụt 3 USD" mà không nêu được vì sao. Bản chốt trước đây không có
+  // khoá này — đọc ra undefined rồi rơi về đúng hằng số engine hồi đó đang chạy.
+  bao_hiem_moi_khach: number;
+  tip_doan: number;
   tier_guests: number[];
   items: BaoGiaItem[];
 }
@@ -53,6 +60,8 @@ export function buildPhienBan(
       xe_gia: row.xe_gia,
       phu_thu: row.phu_thu ?? 0,
       hdv_gia_ngay: ketQua.hdv_gia_ngay ?? null,
+      bao_hiem_moi_khach: ketQua.bao_hiem_moi_khach ?? BAO_HIEM_MOI_KHACH_MAC_DINH,
+      tip_doan: ketQua.tip_doan ?? TIP_DOAN_MAC_DINH,
       tier_guests: ketQua.tier_guests ?? [],
       items: ketQua.items ?? [],
     },
@@ -222,6 +231,15 @@ export function soSanhPhienBan(cu: PhienBanDeSoSanh, moi: PhienBanDeSoSanh): Ket
     them("Xe", `${vCu.xe_ten ?? "—"} · ${soTien(vCu.xe_gia)}`, `${vMoi.xe_ten ?? "—"} · ${soTien(vMoi.xe_gia)}`);
     them("Phụ thu", soTien(vCu.phu_thu), soTien(vMoi.phu_thu));
     them("Công HDV/ngày", soTien(vCu.hdv_gia_ngay), soTien(vMoi.hdv_gia_ngay));
+    // ?? mặc định cho CẢ HAI vế: bản chốt trước khi mở khoá không có khoá này, mà
+    // engine hồi đó chạy đúng hai hằng số ấy — gán mặc định là ĐÚNG dữ liệu, không
+    // phải đoán. Thiếu ?? thì mọi bản cũ đẻ ra chênh lệch giả "— → 500.000".
+    them("Bảo hiểm / khách",
+      soTien(vCu.bao_hiem_moi_khach ?? BAO_HIEM_MOI_KHACH_MAC_DINH),
+      soTien(vMoi.bao_hiem_moi_khach ?? BAO_HIEM_MOI_KHACH_MAC_DINH));
+    them("Tip / đoàn",
+      soTien(vCu.tip_doan ?? TIP_DOAN_MAC_DINH),
+      soTien(vMoi.tip_doan ?? TIP_DOAN_MAC_DINH));
   }
 
   return {

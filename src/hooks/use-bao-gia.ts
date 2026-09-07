@@ -3,6 +3,7 @@ import { externalSupabase, EXTERNAL_SUPABASE_URL } from "@/lib/supabase-external
 import { resolveStorageUrl } from "@/lib/storage-url";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 import type { PortalBaoGiaSnapshot } from "@/lib/portal-payload";
+import { idGocCua, tenBanPhu } from "@/lib/bao-gia-nhom";
 
 export interface BaoGiaItem {
   loai: "hotel" | "meal" | "ticket" | "transport";
@@ -99,6 +100,10 @@ export interface BaoGiaKetQua {
   // (Sapa 700k, còn lại 200k — resolveHdvGiaNgay). OP gõ số = chốt cứng số đó,
   // không bị đổi ngược khi lịch trình thay đổi.
   hdv_gia_ngay?: number | null;
+  // Bảo hiểm / khách và Tip / đoàn cho báo giá NÀY. null/vắng = dùng mặc định
+  // (100.000 và 500.000). OP gõ số = chốt cứng, kể cả gõ 0.
+  bao_hiem_moi_khach?: number | null;
+  tip_doan?: number | null;
 }
 
 // File lịch trình đính kèm (loai_bao_gia='gia_cuoi' — chương trình lấy của bên
@@ -143,6 +148,9 @@ export interface BaoGiaRow {
   vcb_rate: number | null;
   // Đối tác bán (agents.id) — báo giá làm cho agent này. Nullable (nháp chưa rõ).
   agent_id: number | null;
+  // Báo giá gốc của bản phụ này. NULL = báo giá độc lập. Chùm PHẲNG một tầng —
+  // bản phụ không có bản phụ của riêng nó (trigger bao_gia_chum_phang chặn ở DB).
+  bao_gia_goc_id: number | null;
   // Nhãn loại tour ('inbound'|'outbound'|'noi_dia'); map sang doan.loai_tour khi chốt.
   loai_tour: string | null;
   // 'tu_tinh' (tính từ dịch vụ) | 'gia_cuoi' (giá chốt sẵn theo bậc). Default 'tu_tinh'.
@@ -224,6 +232,37 @@ export function useBaoGia(id?: number) {
   });
 }
 
+/** Một dòng trong chùm — chỉ lấy đủ để vẽ danh sách anh em, không kéo cả ket_qua. */
+export interface ChumBaoGiaRow {
+  id: number;
+  ma_bg: string | null;
+  tieu_de: string | null;
+  trang_thai: string;
+  so_phien_ban_cuoi: number;
+  bao_gia_goc_id: number | null;
+  created_at: string;
+}
+
+/** Bản gốc + toàn bộ bản phụ của một chùm. Truyền id BẢN GỐC. */
+export function useBaoGiaChum(gocId?: number | null) {
+  return useQuery({
+    // Giữ tiền tố ["bao_gia"] để 6 chỗ đang invalidate ["bao_gia"] tự làm mới cả
+    // danh sách anh em. KHÔNG được đặt ["bao_gia", gocId] — trùng khít key của
+    // useBaoGia(id), hai truy vấn tranh một ô cache, lúc là object lúc là mảng.
+    queryKey: ["bao_gia", "chum", gocId],
+    enabled: !!gocId,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("bao_gia")
+        .select("id, ma_bg, tieu_de, trang_thai, so_phien_ban_cuoi, bao_gia_goc_id, created_at")
+        .or(`id.eq.${gocId},bao_gia_goc_id.eq.${gocId}`)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as unknown as ChumBaoGiaRow[];
+    },
+  });
+}
+
 // ── Mutations ──
 
 export function useCreateBaoGia() {
@@ -279,6 +318,9 @@ export function useCloneBaoGia() {
         lead_id: leadId ?? null,
         // CỐ Ý không chép `yeu_cau_id`: bản sao là báo giá cho việc khác, không
         // được tính là đã xử lý yêu cầu gốc của đối tác.
+        // Cùng lý do, bản sao KHÔNG thuộc chùm của nguồn — nhân bản một bản phụ
+        // ra một báo giá độc lập. Muốn ở lại trong chùm thì dùng "Tạo bản phụ".
+        bao_gia_goc_id: null,
       };
       const { data, error } = await externalSupabase
         .from("bao_gia")
@@ -308,6 +350,81 @@ export function useUpdateBaoGia() {
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ["bao_gia"] });
       qc.invalidateQueries({ queryKey: ["bao_gia", id] });
+    },
+  });
+}
+
+/**
+ * Tạo BẢN PHỤ của một báo giá — cùng khách, đổi vài thứ rồi chào song song.
+ *
+ * Khác `useCloneBaoGia` đúng ba chỗ: gắn `bao_gia_goc_id`, GIỮ khách (`lead_id`)
+ * vì vẫn là một thương vụ, và tên mang hậu tố "(bản phụ N)".
+ *
+ * KHÔNG chép — mỗi thứ một lý do riêng:
+ *   `yeu_cau_id`  view yeu_cau_bao_gia_view đếm trạng thái theo cột này; hai báo
+ *                 giá cùng trỏ một yêu cầu là báo "đã xử lý" ở hai chỗ.
+ *   `created_by`  cột có DEFAULT auth.uid() và nó quyết định AI NHẬN CHUÔNG khi
+ *                 đối tác xin sửa. Chép sang là gán nhầm cho người làm bản gốc.
+ *   `portal_*`, `link_*`, `so_phien_ban_cuoi`, `phien_ban_hien_hanh_id`
+ *                 bản phụ sinh ra là NHÁP, chưa chào ai. Nếu nó thừa hưởng
+ *                 portal_enabled + portal_noi_dung thì lượt đồng bộ kế tiếp đẩy
+ *                 sang đối tác một bảng giá thứ hai y hệt, dưới mã BG khác.
+ */
+export function useTaoBanPhu() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const { data: src, error: e1 } = await externalSupabase
+        .from("bao_gia")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (e1) throw e1;
+      const s = src as unknown as BaoGiaRow;
+      // Tạo bản phụ TỪ một bản phụ thì gắn vào bản gốc chung — chùm phẳng một
+      // tầng. DB còn một trigger chặn nữa cho trường hợp hai người bấm cùng lúc.
+      const gocId = idGocCua(s);
+
+      // Đếm để đánh số tên. Đọc rồi mới ghi nên hai người bấm cùng lúc có thể ra
+      // hai cái tên trùng số — đó chỉ là NHÃN, sửa lại được, không đáng đánh đổi
+      // lấy một RPC khoá bảng.
+      const { count } = await externalSupabase
+        .from("bao_gia")
+        .select("id", { count: "exact", head: true })
+        .eq("bao_gia_goc_id", gocId);
+
+      const payload: Omit<Partial<BaoGiaRow>, "id" | "created_at"> = {
+        tieu_de: tenBanPhu(s.tieu_de, count ?? 0),
+        noi_dung_goc: s.noi_dung_goc,
+        ket_qua: s.ket_qua,
+        exchange_rate: s.exchange_rate,
+        profit_usd: s.profit_usd,
+        ngay_di: s.ngay_di,
+        ngay_ve: s.ngay_ve,
+        ghi_chu: s.ghi_chu,
+        hieu_luc_ngay: s.hieu_luc_ngay,
+        xe_ten: s.xe_ten,
+        xe_gia: s.xe_gia,
+        phu_thu: s.phu_thu,
+        vcb_rate: s.vcb_rate,
+        agent_id: s.agent_id,
+        loai_tour: s.loai_tour,
+        loai_bao_gia: s.loai_bao_gia,
+        lich_trinh_files: s.lich_trinh_files,
+        lead_id: s.lead_id,
+        bao_gia_goc_id: gocId,
+        trang_thai: "draft",
+      };
+      const { data, error } = await externalSupabase
+        .from("bao_gia")
+        .insert(payload as unknown as TablesInsert<"bao_gia">)
+        .select("id")
+        .single();
+      if (error) throw error;
+      return data as { id: number };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bao_gia"] });
     },
   });
 }

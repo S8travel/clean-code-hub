@@ -33,7 +33,7 @@ const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   created_at: "2026-08-13T02:00:00Z", created_by: null,
   ngay_di: "2027-02-27", ngay_ve: "2027-03-03", ghi_chu: null, hieu_luc_ngay: 30,
   ma_bg: "BG00025", lead_id: null, xe_ten: "Xe 29 chỗ", xe_gia: 10_000_000,
-  phu_thu: 0, vcb_rate: null, agent_id: 2, loai_tour: "inbound",
+  phu_thu: 0, vcb_rate: null, agent_id: 2, bao_gia_goc_id: null, loai_tour: "inbound",
   loai_bao_gia: "tu_tinh", lich_trinh_files: [],
   so_phien_ban_cuoi: 0, phien_ban_hien_hanh_id: null,
   link_token: null, link_het_han: null, link_thu_hoi: false,
@@ -83,6 +83,44 @@ describe("buildPhienBan — chụp hai lớp", () => {
     const pb = buildPhienBan(row({ hieu_luc_ngay: 30 }), ket(), now);
     expect(pb.noi_dung_chao.chao_ngay).toBe("2026-08-17");
     expect(pb.noi_dung_chao.hieu_luc_den).toBe("2026-09-16");
+  });
+});
+
+describe("lớp vốn chụp cả Bảo hiểm / Tip", () => {
+  const now = new Date("2026-08-17T03:00:00Z");
+
+  it("chưa gõ tay thì chụp mức mặc định, không chụp null", () => {
+    const von = buildPhienBan(row(), ket(), now).noi_dung_von;
+    expect(von.bao_hiem_moi_khach).toBe(100_000);
+    expect(von.tip_doan).toBe(500_000);
+  });
+
+  it("OP gõ tay thì chụp đúng số đã gõ, kể cả 0", () => {
+    const von = buildPhienBan(row(), ket({ bao_hiem_moi_khach: 250_000, tip_doan: 0 }), now).noi_dung_von;
+    expect(von.bao_hiem_moi_khach).toBe(250_000);
+    expect(von.tip_doan).toBe(0);
+  });
+
+  it("đổi Tip hay Bảo hiểm thì bảng so sánh NÓI RA, không để giá tụt mà không rõ vì sao", () => {
+    const cu = buildPhienBan(row(), ket(), now);
+    const moi = buildPhienBan(row(), ket({ tip_doan: 3_000_000 }), now);
+    const ten = soSanhPhienBan(cu, moi).thong_so.map((t) => t.ten);
+    expect(ten).toContain("Tip / đoàn");
+
+    const moi2 = buildPhienBan(row(), ket({ bao_hiem_moi_khach: 250_000 }), now);
+    expect(soSanhPhienBan(cu, moi2).thong_so.map((t) => t.ten)).toContain("Bảo hiểm / khách");
+  });
+
+  it("bản chốt TRƯỚC khi mở khoá (thiếu hẳn khoá) không đẻ ra chênh lệch giả", () => {
+    // Hồi đó engine chạy đúng hai hằng số này, nên gán mặc định là ĐÚNG dữ liệu.
+    const moi = buildPhienBan(row(), ket(), now);
+    const cuThieuKhoa = {
+      ...moi,
+      noi_dung_von: { ...moi.noi_dung_von, bao_hiem_moi_khach: undefined, tip_doan: undefined },
+    } as unknown as PhienBanDeSoSanh;
+    const ten = soSanhPhienBan(cuThieuKhoa, moi).thong_so.map((t) => t.ten);
+    expect(ten).not.toContain("Tip / đoàn");
+    expect(ten).not.toContain("Bảo hiểm / khách");
   });
 });
 
