@@ -1,6 +1,9 @@
 import { externalSupabase } from "@/lib/supabase-external";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TablesInsert } from "@/lib/database.types";
+import {
+  PHAN_VIEC_ITEMS as PV_ITEMS, pvBatBuoc, type PvKey,
+} from "@/lib/phan-viec-muc";
 
 // Bộ đầu việc phân cho đoàn (rows cong_viec với loai_viec prefix pv_)
 // "Người giao" cho việc auto khi tạo đoàn = Hệ thống.
@@ -8,38 +11,16 @@ import type { TablesInsert } from "@/lib/database.types";
 // Hiển thị "Hệ thống" xử lý ở use-cong-viec (không cần auth.users).
 export const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 
-export type PvKey = "pv_ks" | "pv_nh_dv" | "pv_xe" | "pv_visa" | "pv_ve_mb";
+// Danh mục mục việc + luật "mục nào bắt buộc" đã tách sang lib để test được.
+// Re-export để mọi import cũ (PhanViecModal, PhanViecEditModal...) không phải đổi.
+export {
+  PHAN_VIEC_ITEMS, defaultPhanViec, pvBatBuoc, daPhanXong,
+} from "@/lib/phan-viec-muc";
+export type { PvKey, PvDefault } from "@/lib/phan-viec-muc";
 
-export const PHAN_VIEC_ITEMS: { key: PvKey; label: string }[] = [
-  { key: "pv_ks",    label: "Khách sạn" },
-  { key: "pv_nh_dv", label: "Nhà hàng & DV" },
-  { key: "pv_xe",    label: "Xe" },
-  { key: "pv_visa",  label: "Visa" },
-  { key: "pv_ve_mb", label: "Vé máy bay" },
-];
 const LABEL: Record<string, string> = Object.fromEntries(
-  PHAN_VIEC_ITEMS.map((i) => [i.key, i.label]),
+  PV_ITEMS.map((i) => [i.key, i.label]),
 );
-
-export interface PvDefault { key: PvKey; label: string; checked: boolean }
-
-// Default theo loại tour (inbound/outbound/noi_dia) — xem DOAN_PHAN_VIEC.md §1
-export function defaultPhanViec(loaiTour: string | null | undefined): PvDefault[] {
-  // v = hiện trong modal, c = tích sẵn
-  const m: Record<PvKey, { v: boolean; c: boolean }> = {
-    pv_ks:    { v: true, c: true },
-    pv_nh_dv: { v: true, c: true },
-    pv_xe:    { v: true, c: true },
-    pv_visa:  { v: true, c: false },
-    pv_ve_mb: { v: true, c: false },
-  };
-  // Vé máy bay LUÔN hiện, KHÔNG tick sẵn (cần thì mới tick) — kể cả inbound
-  if (loaiTour === "outbound") m.pv_visa = { v: true, c: true };
-  else if (loaiTour === "noi_dia") m.pv_visa = { v: false, c: false };
-  return PHAN_VIEC_ITEMS.filter((i) => m[i.key].v).map((i) => ({
-    ...i, checked: m[i.key].c,
-  }));
-}
 
 // Cột OP của danh sách đoàn = người phụ trách Nhà hàng & DV (pv_nh_dv)
 export function useDoanOpMap(doanIds: number[]) {
@@ -317,7 +298,12 @@ export function useCreatePhanViec() {
 
       const assigned = p.assignments.filter((a) => a.assignedTo && !adminSet.has(a.assignedTo!) && !done.has(a.key));
       const adminAssigned = p.assignments.filter((a) => a.assignedTo && adminSet.has(a.assignedTo!) && !done.has(a.key));
-      const missing = p.assignments.filter((a) => !a.assignedTo && !done.has(a.key));
+      // Chỉ mục BẮT BUỘC mới tính là "thiếu người". Tour inbound để trống Visa/Vé máy
+      // bay là chuyện bình thường — trước đây tính luôn nên đoàn nào cũng bị nhắc mãi.
+      const batBuoc = new Set<PvKey>(pvBatBuoc(doan.loai_tour));
+      const missing = p.assignments.filter(
+        (a) => !a.assignedTo && !done.has(a.key) && batBuoc.has(a.key),
+      );
 
       // Tên người được giao (cho summary giám đốc)
       const uids = [...new Set(assigned.map((a) => a.assignedTo!))];

@@ -40,9 +40,17 @@ jobs:
       - name: Load schema (subset tables hàm đọc/ghi)
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/recalc_chi_phi_payment_status/schema.sql
 
-      - name: Load function (latest migration)
-        # Migration mới nhất define recalc_chi_phi_payment_status. Trailing
-        # SELECT backfill an toàn trên DB rỗng (array rỗng, no-op).
+      - name: Load function (bản định nghĩa recalc_chi_phi_payment_status)
+        # File 20260521 là migration CUỐI CÙNG viết trọn thân hàm
+        # recalc_chi_phi_payment_status (không phải "migration mới nhất" của repo —
+        # mới nhất hiện là 20260905d). Trailing SELECT backfill an toàn trên DB
+        # rỗng (array rỗng, no-op).
+        #
+        # ⚠️ GIỚI HẠN đã biết: 20260728_tai_khoan_chi_xem vá thêm guard
+        # `is_tk_chi_xem()` vào thân hàm ngay trên DB (regexp trên
+        # pg_get_functiondef), nên bản chạy ở CI KHÔNG có guard đó — CI kiểm phần
+        # tính tiền, không kiểm chặn tài khoản chỉ xem.
+        # Sửa lại thân hàm ở migration nào thì phải trỏ dòng dưới sang file đó.
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260521_dntt_tu_choi_no_commitment.sql
 
       - name: Run tests

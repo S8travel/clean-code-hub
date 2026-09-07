@@ -15,7 +15,7 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useUserListForAssign } from "@/hooks/use-cong-viec";
 import {
   PHAN_VIEC_ITEMS, useDoanPhanViecMatrix, useAssignPvItem,
-  useSetPvKhongCan, useResolvePhanCong, type PvKey,
+  useSetPvKhongCan, useResolvePhanCong, daPhanXong, type PvKey,
 } from "@/hooks/use-phan-viec";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -89,8 +89,13 @@ export function PhanViecEditModal({ open, onClose, doanId, onDone }: Props) {
         if (v === KC) await kcMut.mutateAsync(base);
         else await assignMut.mutateAsync({ ...base, userId: v });
       }
-      // Còn mục để trống → giữ pv_phancong mở (điều phối sẽ được nhắc lại); hết → đóng
-      const stillMissing = PHAN_VIEC_ITEMS.some((it) => (sel[it.key] ?? NONE) === NONE);
+      // Còn mục BẮT BUỘC để trống → giữ pv_phancong mở (điều phối sẽ được nhắc lại).
+      // Mục không bắt buộc (Visa/Vé máy bay của tour inbound) để trống KHÔNG chặn đóng việc
+      // — xem lib/phan-viec-muc.ts, đây là chỗ 28 đoàn từng bị treo "chưa phân người".
+      const stillMissing = !daPhanXong(doan.loai_tour, (k) => {
+        const v = sel[k];
+        return v === NONE ? null : v;
+      });
       if (!stillMissing) await resolveMut.mutateAsync(did);
       toast.success(
         stillMissing

@@ -367,6 +367,39 @@ trừ: mail phải tách Tổng / Cấn trừ / Thực chuyển khoản.
   guard kiểu Điều tour (vùng nhạy cảm FOC/snapshot, làm cẩn thận).
 - Concurrent edit = last-write-wins (chưa có optimistic-lock).
 
+### 11.1 Cảnh báo Security Advisor CỐ Ý bỏ qua (đừng "sửa" lần sau)
+
+Rà 05/09/2026. Ba nhóm dưới đây advisor sẽ kêu mãi, sửa là hỏng hệ thống:
+
+- **ERROR `security_definer_view`** trên `web_khach_san`, `web_nha_hang`,
+  `web_canh_diem`. Đổi sang `security_invoker` = trang web giới thiệu trắng trang,
+  vì bảng gốc chỉ cho người đăng nhập đọc. (memory
+  `project_web_view_security_definer_co_y`)
+- **WARN `anon_security_definer_function_executable`** còn 8 mục, đều cố ý:
+  · `is_tk_chi_xem()` — **268 policy** dùng, gồm policy áp cho role `public`;
+    · `is_web_admin()` (8 policy public: `site_text`, `site_menus`, `web_posts`…);
+    · `is_admin()` / `is_admin(uuid)` (4 policy public trên `user_roles`);
+    · `can_view_hoan_ung()` (2 policy public trên `de_nghi_thanh_toan`).
+    Policy chạy bằng quyền của chính người truy vấn → cắt EXECUTE của `anon` là
+    khách vãng lai đọc `site_text`/`web_posts` sẽ "permission denied".
+  · `create_lead_from_form`, `create_khao_sat_from_form`, `get_khao_sat_doan_info`
+    — phục vụ `/lead-form` và `/khao-sat/:doanId`, hai trang không cần đăng nhập.
+- **WARN `authenticated_security_definer_function_executable`** (22 mục) — phần lớn
+  là RPC app đang gọi thật (`recalc_chi_phi_payment_status`, `mark_deadline_done`,
+  `update_my_profile`, `cong_no_*`, `remap_*`…). Revoke = gãy app.
+
+**Lỗ rò dữ liệu đã vá cùng đợt (05/09/2026):** `xuat-word-booking-ks` chạy bằng
+service key (bỏ qua RLS) mà không hỏi người gọi là ai — chỉ cần publishable key là tải
+được file Word 訂房確認單 của bất kỳ `doan_id` nào (đã kiểm chứng: đoàn 704, 9 KB, đủ
+tên khách sạn + SĐT + loại phòng). `process-bao-gia` hở cùng kiểu và đã bị gỡ hẳn.
+Luật rút ra: **hàm nào chạy bằng service key thì bắt buộc tự xác thực người gọi** —
+`verify_jwt = true` chỉ chặn request không có khoá, không chặn được publishable key.
+
+Đã siết trong đợt này (migration `20260905d`): thu hồi EXECUTE của PUBLIC/`anon`
+trên 5 trigger-function + 7 RPC nội bộ, và khoá `search_path` cho 8 hàm còn thiếu.
+Kiểm chứng bằng khoá publishable: RPC nội bộ trả 401/404, trang web công khai và
+form khảo sát vẫn 200.
+
 ## 12. Tài liệu liên quan
 
 - `CLAUDE.md` — schema DB verify + file structure + rules (source of truth).

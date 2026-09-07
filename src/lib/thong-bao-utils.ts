@@ -66,6 +66,9 @@ export function targetUrl(tb: ThongBaoRow): string | null {
   // Hủy đoàn: trigger tạo thong_bao loai='giao_viec' KHÔNG kèm cong_viec_id
   // (task tạo riêng) → fallback về trang đoàn để OP thấy & đi hủy dịch vụ.
   if (loai === "giao_viec" && doan_id)        return `/doan/${doan_id}`;
+  // Nhắc GỘP "Còn N đoàn chưa phân người" (cron fn_remind_pv_phancong) không gắn
+  // một việc cụ thể nào → đưa về danh sách việc để tự chọn đoàn mà phân.
+  if (loai === "giao_viec")                   return `/my-job`;
   if (loai === "dntt_can_duyet")              return `/de-nghi-thanh-toan`;
   if (loai === "su_co" && doan_id)            return `/doan/${doan_id}?tab=log`;
   // Đối tác yêu cầu sửa chương trình: mở thẳng báo giá đó để xem yêu cầu rồi
