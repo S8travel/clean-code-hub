@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Plus, Trash2, FileDown, FileText, Settings, Copy, Inbox, MessageSquareWarning } from "lucide-react";
+import { Plus, Trash2, FileDown, FileText, Settings, Copy, Inbox, MessageSquareWarning, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -16,7 +16,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useMemo, useRef, useState } from "react";
 import { BangGiaImport } from "@/components/bao-gia/BangGiaImport";
 import { BangGiaTable } from "@/components/bao-gia/BangGiaTable";
 import { BaoGiaCreateModal, type BaoGiaCreatePrefill } from "@/components/bao-gia/BaoGiaCreateModal";
@@ -31,6 +39,7 @@ import { useBangGiaDichVu } from "@/hooks/use-bang-gia-dich-vu";
 import { useBaoGiaLogTatCa } from "@/hooks/use-bao-gia-phien-ban";
 import { nhomYeuCauChuaTraLoi } from "@/lib/bao-gia-phien-ban";
 import { useLeadsList } from "@/hooks/use-leads";
+import { useAgents } from "@/hooks/use-doan";
 import { useAuth } from "@/hooks/use-auth";
 import { useGanBaoGiaVaoYeuCau, useYeuCauBaoGiaList } from "@/hooks/use-yeu-cau-bao-gia";
 import { soNgayTuNgay, tenChuongTrinhTuYeuCau } from "@/lib/yeu-cau-bao-gia";
@@ -39,6 +48,8 @@ import { baoGiaCode, costBreakdown, liveKetQua, liveTierBreakdown } from "@/comp
 import { giaCuoiTierLines, giaCuoiBrackets } from "@/lib/bao-gia-calc";
 import { toast } from "sonner";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
+import { locBaoGia, coDangLoc, type LocDoiTac } from "@/lib/bao-gia-loc";
+import { useBaoGiaListFilters } from "@/hooks/use-bao-gia-list-filters";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 const fmtUsd = (n: number) => n.toFixed(2);
@@ -53,6 +64,7 @@ export default function BaoGiaPage() {
   const { data: list = [], isLoading } = useBaoGiaList();
   const { data: bangGia = [] } = useBangGiaDichVu();
   const { data: leads = [] } = useLeadsList();
+  const { data: agents = [] } = useAgents();
   const { data: yeuCau = [] } = useYeuCauBaoGiaList();
   const { data: dsLog = [] } = useBaoGiaLogTatCa();
   const cloneMutation = useCloneBaoGia();
@@ -65,6 +77,25 @@ export default function BaoGiaPage() {
   // onClose dọn state — đọc state ở bước sau là đọc trúng giá trị đã bị xoá.
   const yeuCauDangLam = useRef<number | null>(null);
 
+  // ── Lọc / tìm kiếm danh sách báo giá ──
+  // Giữ trên URL + sessionStorage: mở một báo giá rồi bấm quay lại là thao tác
+  // chính của trang này, để ở state trong trang thì lần nào quay lại cũng phải
+  // lọc lại từ đầu.
+  const loc = useBaoGiaListFilters();
+  const q = loc.get("q");
+  const fTrangThai = loc.get("tt");
+  const fLoai = loc.get("loai");
+  const fTuNgay = loc.get("tu");
+  const fDenNgay = loc.get("den");
+  const agentRaw = loc.get("agent");
+  // Giá trị rác trên URL (người dùng tự sửa thanh địa chỉ) rơi về "mọi đối tác"
+  // thay vì thành NaN — NaN so sánh với gì cũng lệch, bảng sẽ trắng không lý do.
+  const fAgent: LocDoiTac =
+    agentRaw === "" ? null
+      : agentRaw === "chua_gan" ? "chua_gan"
+        : Number.isFinite(Number(agentRaw)) ? Number(agentRaw)
+          : null;
+
   const soChuaXuLy = yeuCau.filter((y) => y.trang_thai_hien_thi === "moi").length;
 
   // Đối tác nhắn "sửa chương trình" từ cổng thì lời nhắn đó nằm trong dòng thời
@@ -73,6 +104,26 @@ export default function BaoGiaPage() {
   // mới biết ai đang chờ mình.
   const dangCho = nhomYeuCauChuaTraLoi(dsLog);
   const soDangCho = dangCho.size;
+
+  // Tên đối tác đưa vào ô tìm: OP nhớ "báo giá của Guo" chứ ít khi nhớ mã BG.
+  const tenDoiTac = useMemo(() => {
+    const m: Record<number, string> = {};
+    agents.forEach((a) => { m[a.id] = a.ten ?? ""; });
+    return m;
+  }, [agents]);
+
+  const boLoc = { q, trangThai: fTrangThai, loaiBaoGia: fLoai, agentId: fAgent, tuNgay: fTuNgay, denNgay: fDenNgay };
+  // Lọc ở trình duyệt: useBaoGiaList đã kéo sẵn cả danh sách, và queryKey của nó
+  // là ["bao_gia"] cố định — nhét bộ lọc vào hook sẽ làm hỏng mọi chỗ invalidate.
+  const daLoc = useMemo(
+    () => locBaoGia(list, { q, trangThai: fTrangThai, loaiBaoGia: fLoai, agentId: fAgent, tuNgay: fTuNgay, denNgay: fDenNgay }, tenDoiTac),
+    [list, q, fTrangThai, fLoai, fAgent, fTuNgay, fDenNgay, tenDoiTac],
+  );
+  // Dải cảnh báo bên dưới mô tả THỨ TỰ CỦA CHÍNH BẢNG ĐANG HIỆN, nên phải đếm
+  // trên mảng đã lọc. Thẻ "N chờ" cạnh tên tab thì cố ý giữ tổng toàn hệ thống.
+  const soDangChoHienThi = daLoc.filter((r) => dangCho.has(r.id)).length;
+  const dangLoc = coDangLoc(boLoc);
+  const xoaLoc = () => loc.clear();
 
   // Bấm "Báo giá" ở tab Yêu cầu → mở modal đã điền sẵn thứ đối tác gửi: đối tác,
   // tên chương trình, ngày đi/về, số ngày suy từ ngày, lead, và file họ đính kèm.
@@ -172,7 +223,13 @@ export default function BaoGiaPage() {
 
       <Tabs
         value={tabHienTai}
-        onValueChange={(v) => setSearchParams(v === "bao-gia" ? {} : { tab: v }, { replace: true })}
+        onValueChange={(v) => setSearchParams((prev) => {
+          // Dạng hàm để GIỮ các param khác (bộ lọc). Trước đây gán thẳng {} /
+          // { tab } nên đổi tab một cái là bộ lọc bay sạch.
+          const next = new URLSearchParams(prev);
+          if (v === "bao-gia") next.delete("tab"); else next.set("tab", v);
+          return next;
+        }, { replace: true })}
       >
         <TabsList>
           <TabsTrigger value="bao-gia">
@@ -206,17 +263,106 @@ export default function BaoGiaPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {soDangCho > 0 && (
+              {/* Điều kiện ngoài phải khớp với hai nhánh câu chữ bên trong, kẻo vẽ ra
+                  một dải vàng rỗng chỉ có mỗi cái biểu tượng. */}
+              {soDangCho > 0 && (soDangChoHienThi > 0 || dangLoc) && (
                 // Nói thẳng ra là danh sách vừa bị xếp lại — dòng tự nhảy lên đầu
                 // mà không giải thích thì lần sau OP tưởng hệ thống loạn thứ tự.
                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   <MessageSquareWarning className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>
-                    <b>{soDangCho} báo giá</b> đối tác đã nhắn xin sửa chương trình mà mình chưa chào lại bản nào —
-                    đã đưa lên đầu danh sách. Trả lời bằng cách chào một bản mới.
-                  </span>
+                  {soDangChoHienThi > 0 ? (
+                    <span>
+                      <b>{soDangChoHienThi} báo giá</b> đối tác đã nhắn xin sửa chương trình mà mình chưa chào lại bản nào —
+                      đã đưa lên đầu danh sách. Trả lời bằng cách chào một bản mới.
+                      {soDangCho > soDangChoHienThi && (
+                        <>
+                          {" "}Còn <b>{soDangCho - soDangChoHienThi} cái</b> nữa đang bị bộ lọc giấu —{" "}
+                          <button type="button" onClick={xoaLoc} className="underline font-medium">xoá lọc</button> để xem hết.
+                        </>
+                      )}
+                    </span>
+                  ) : (
+                    // Bộ lọc giấu hết rồi thì CẤM nói "đã đưa lên đầu danh sách" — câu
+                    // đó đang tả một cái bảng không có trên màn hình, đọc lên mâu thuẫn
+                    // hẳn với dòng "Không có báo giá nào khớp bộ lọc" ngay bên dưới.
+                    // Và chỉ được đổ cho bộ lọc khi thật sự CÓ bộ lọc đang bật, kẻo mời
+                    // người ta bấm "xoá lọc" trong khi chẳng có gì để xoá.
+                    <span>
+                      <b>{soDangCho} báo giá</b> đối tác đang chờ mình trả lời, nhưng bộ lọc hiện tại giấu hết —{" "}
+                      <button type="button" onClick={xoaLoc} className="underline font-medium">xoá lọc</button> để xem.
+                    </span>
+                  )}
                 </div>
               )}
+              {/* Thanh lọc — danh sách chỉ dài thêm theo thời gian, không có ô tìm
+                  thì phải dò mắt cả bảng mới ra một mã BG. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[200px] max-w-[280px]">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={q}
+                    onChange={(e) => loc.set({ q: e.target.value })}
+                    placeholder="Tìm mã BG, tên chương trình, đối tác..."
+                    className="pl-8 h-8 text-xs"
+                  />
+                </div>
+
+                <Select value={fTrangThai || "_all"} onValueChange={(v) => loc.set({ tt: v === "_all" ? "" : v })}>
+                  <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_all" className="text-xs">Mọi trạng thái</SelectItem>
+                    <SelectItem value="draft" className="text-xs">Nháp</SelectItem>
+                    <SelectItem value="sent" className="text-xs">Đã gửi</SelectItem>
+                    {/* KHÔNG có mục "Chính thức": không luồng nào trong app ghi
+                        trang_thai='final' (chỉ 'draft' lúc tạo và 'sent' lúc gửi
+                        khách), nên mục đó chọn vào là bảng trắng — OP sẽ tưởng
+                        chưa chốt cái nào. Thêm lại khi nào thật sự có luồng chốt. */}
+                  </SelectContent>
+                </Select>
+
+                <Select value={fLoai || "_all"} onValueChange={(v) => loc.set({ loai: v === "_all" ? "" : v })}>
+                  <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Loại báo giá" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_all" className="text-xs">Mọi loại</SelectItem>
+                    <SelectItem value="tu_tinh" className="text-xs">Tự tính</SelectItem>
+                    <SelectItem value="gia_cuoi" className="text-xs">Giá cuối</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={fAgent == null ? "_all" : String(fAgent)}
+                  onValueChange={(v) => loc.set({ agent: v === "_all" ? "" : v })}
+                >
+                  <SelectTrigger className="h-8 text-xs w-[170px]"><SelectValue placeholder="Đối tác" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_all" className="text-xs">Mọi đối tác</SelectItem>
+                    <SelectItem value="chua_gan" className="text-xs">— Chưa gắn đối tác —</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)} className="text-xs">{a.ten ?? `Agent #${a.id}`}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-muted-foreground">Ngày tạo</span>
+                  <Input type="date" value={fTuNgay} onChange={(e) => loc.set({ tu: e.target.value })}
+                    className="h-8 text-xs w-[132px]" title="Từ ngày" />
+                  <span className="text-[11px] text-muted-foreground">→</span>
+                  <Input type="date" value={fDenNgay} onChange={(e) => loc.set({ den: e.target.value })}
+                    className="h-8 text-xs w-[132px]" title="Đến ngày" />
+                </div>
+
+                {dangLoc && (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={xoaLoc}>
+                    <X className="h-3.5 w-3.5 mr-1" />Xoá lọc
+                  </Button>
+                )}
+
+                <span className="ml-auto text-[11px] text-muted-foreground">
+                  Hiện <b className="text-foreground">{daLoc.length}</b> / {list.length} báo giá
+                </span>
+              </div>
+
               <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
@@ -235,7 +381,7 @@ export default function BaoGiaPage() {
                   {/* Đang chờ trả lời lên đầu; phần còn lại giữ NGUYÊN thứ tự ngày
                       tạo cũ. Dùng sort ổn định của JS nên hai dòng cùng nhóm không
                       đảo chỗ nhau giữa các lần vẽ lại. */}
-                  {[...list]
+                  {[...daLoc]
                     .sort((a, b) => Number(dangCho.has(b.id)) - Number(dangCho.has(a.id)))
                     .map((row) => {
                     const xr = tyGiaCuaBaoGia(row.exchange_rate);
@@ -268,7 +414,12 @@ export default function BaoGiaPage() {
                             nên hiện cả số bản đang hiệu lực, đúng cách cổng gọi tên. */}
                         <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
                           {baoGiaCode(row)}
-                          {row.so_phien_ban_cuoi > 0 && (
+                          {/* Chỉ hiện số từ bản 2. Bản đầu tiên mang CHÍNH mã gốc —
+                              RPC tao_phien_ban_bao_gia ghi ma_hien_thi = "BG00025" cho
+                              bản 1, cổng và file Word gửi khách cũng gọi thế. In "-v1"
+                              là bịa ra một cái tên không nơi nào khác dùng, dán vào ô
+                              tìm sẽ ra 0 kết quả. */}
+                          {row.so_phien_ban_cuoi > 1 && (
                             <span className="text-slate-400">-v{row.so_phien_ban_cuoi}</span>
                           )}
                         </td>
@@ -360,6 +511,16 @@ export default function BaoGiaPage() {
                       </tr>
                     );
                   })}
+                  {daLoc.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 px-3 text-center text-muted-foreground">
+                        Không có báo giá nào khớp bộ lọc.{" "}
+                        <button type="button" onClick={xoaLoc} className="text-primary hover:underline">
+                          Xoá lọc
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
               </div>
