@@ -87,10 +87,15 @@ jobs:
           fi
           echo "Đã mã hoá $n file:"
           ls -lh backups/
-          if ls backups/*.dump >/dev/null 2>&1; then
-            echo "::error::Còn file .dump chưa mã hoá trong thư mục — dừng."
+          # Dùng find chứ KHÔNG `ls backups/*.dump`: đang bật `nullglob` nên khi
+          # không còn file nào, glob biến mất và câu lệnh thành `ls` trần → exit 0 →
+          # báo nhầm là "còn sót" (đã dính đúng bẫy này ở run 34111008059).
+          leftover=$(find backups -maxdepth 1 -type f -name '*.dump' | wc -l)
+          if [ "$leftover" -ne 0 ]; then
+            echo "::error::Còn $leftover file .dump chưa mã hoá trong thư mục — dừng."
             exit 1
           fi
+          echo "✓ Không còn bản thô, chỉ upload file đã mã hoá"
 
       - name: Upload artifact (đã mã hoá)
         uses: actions/upload-artifact@v4
