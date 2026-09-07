@@ -121,6 +121,31 @@ rclone copy supabase:doan-files gdrive:s8-supabase-backup/doan-files -v
 ## Lưu ý bảo mật
 
 - Thư mục `backups/` đã được thêm vào `.gitignore` — **không bao giờ commit**.
-- File dump chứa **dữ liệu thật**; lưu nơi an toàn, cân nhắc mã hoá khi sao lưu xa.
+- File dump chứa **dữ liệu thật**; lưu nơi an toàn.
+- ⚠️ **Repo này PUBLIC nên artifact KHÔNG kín.** Danh sách artifact xem được mà không
+  cần đăng nhập (đã thử 07/09/2026: API trả về 96 bản backup kèm tên, dung lượng,
+  ngày), và file thì tải được bởi bất kỳ ai có tài khoản GitHub — repo public cấp
+  quyền đọc cho mọi người. Vì vậy từ 07/09/2026 bản dump được **mã hoá GPG AES-256**
+  ngay trong runner, bản thô bị xoá trước bước upload, và job sẽ DỪNG ĐỎ nếu thiếu
+  secret `BACKUP_PASSPHRASE` (thà không có backup còn hơn đưa bản thô lên repo public).
+  96 artifact thô cũ đã bị xoá.
+
+### Giải mã bản sao lưu khi cần phục hồi
+
+```bash
+# 1. Tải file .dump.gpg: GitHub → tab Actions → chọn lần chạy → mục Artifacts
+# 2. Giải mã (sẽ hỏi mật khẩu — xem secret BACKUP_PASSPHRASE, bản giấy do chủ hệ
+#    thống giữ; GitHub KHÔNG cho xem lại secret)
+gpg --output ban-sao-luu.dump --decrypt supabase_20260907_102905.dump.gpg
+
+# 3. Kiểm tra đúng định dạng (4 byte đầu phải là PGDMP)
+head -c 5 ban-sao-luu.dump
+
+# 4. Phục hồi
+pg_restore -d "<chuỗi kết nối>" ban-sao-luu.dump
+```
+
+Đã diễn tập 07/09/2026: mật khẩu sai bị từ chối (`Bad session key`), mật khẩu đúng
+cho ra file 6,7 MB có magic `PGDMP` hợp lệ.
 - Secret `SUPABASE_DB_URL`, `RCLONE_CONF` chứa thông tin nhạy cảm — chỉ để trong
   GitHub Secrets, KHÔNG commit vào repo.
