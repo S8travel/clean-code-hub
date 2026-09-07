@@ -24,7 +24,7 @@ function makeDraft(items: BaoGiaItem[], over: Partial<BaoGiaRow> = {}): BaoGiaRo
     created_at: "", created_by: null, ngay_di: null, ngay_ve: null,
     ghi_chu: null, hieu_luc_ngay: null, ma_bg: null, lead_id: null,
     xe_ten: null, xe_gia: null, phu_thu: 0, vcb_rate: null,
-    agent_id: null, loai_tour: null, loai_bao_gia: "tu_tinh", lich_trinh_files: [],
+    agent_id: null, bao_gia_goc_id: null, loai_tour: null, loai_bao_gia: "tu_tinh", lich_trinh_files: [],
     so_phien_ban_cuoi: 0, phien_ban_hien_hanh_id: null,
     link_token: null, link_het_han: null, link_thu_hoi: false,
     link_tao_luc: null, link_so_lan_mo: 0, link_mo_gan_nhat: null,

@@ -33,7 +33,7 @@ const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   created_at: "2026-08-13T02:00:00Z", created_by: null,
   ngay_di: "2027-02-27", ngay_ve: "2027-03-03", ghi_chu: null, hieu_luc_ngay: 30,
   ma_bg: "BG00025", lead_id: null, xe_ten: "Xe 29 chỗ", xe_gia: 10_000_000,
-  phu_thu: 0, vcb_rate: null, agent_id: 2, loai_tour: "inbound",
+  phu_thu: 0, vcb_rate: null, agent_id: 2, bao_gia_goc_id: null, loai_tour: "inbound",
   loai_bao_gia: "tu_tinh", lich_trinh_files: [],
   so_phien_ban_cuoi: 0, phien_ban_hien_hanh_id: null,
   link_token: null, link_het_han: null, link_thu_hoi: false,

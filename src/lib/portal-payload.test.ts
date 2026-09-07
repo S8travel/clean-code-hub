@@ -45,7 +45,7 @@ const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   xe_gia: 10_000_000,
   phu_thu: 400_000,
   vcb_rate: 25_000,
-  agent_id: 3,
+  agent_id: 3, bao_gia_goc_id: null,
   loai_tour: "inbound",
   loai_bao_gia: "tu_tinh",
   lich_trinh_files: [],

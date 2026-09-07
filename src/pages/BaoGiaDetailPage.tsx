@@ -29,6 +29,7 @@ import { LinkKhachSection } from "@/components/bao-gia/detail/LinkKhachSection";
 import { DongThoiGianSection } from "@/components/bao-gia/detail/DongThoiGianSection";
 import { CanhBaoLech } from "@/components/bao-gia/detail/CanhBaoLech";
 import { GuiPhienBanModal } from "@/components/bao-gia/detail/GuiPhienBanModal";
+import { ChumBanner } from "@/components/bao-gia/detail/ChumBanner";
 import { BaoGiaFooter } from "@/components/bao-gia/detail/BaoGiaFooter";
 import { resolveStorageUrl } from "@/lib/storage-url";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
@@ -263,6 +264,8 @@ export default function BaoGiaDetailPage() {
       />
       <div className="flex-1 px-4 py-4">
         <div className="max-w-[1400px] mx-auto">
+          {/* Báo giá nằm trong chùm gốc–bản phụ thì nói ngay, kẻo sửa nhầm bản. */}
+          <ChumBanner row={draft} />
           {isSent && (
             <div className="mb-3 rounded-md border border-violet-200 bg-violet-50 px-4 py-2">
               <span className="inline-flex items-center gap-1.5 text-xs text-violet-800">
