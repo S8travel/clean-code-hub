@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { calcTier, effItemFoc, effItemQty, slOverrideOf, type ManualItem } from "@/lib/bao-gia-calc";
 import {
   aiPreviewSheet, clampNgay, costingSheet, emptyBaoGiaCase, isSapaTour,
-  newBaoGiaItem, resolveHdvGiaNgay, setSlOverride,
+  isMienTrungTour, isHcmTour, hdvGiaNgayTheoTuyen,
+  newBaoGiaItem, resolveHdvGiaNgay, resolveBaoHiemMoiKhach, resolveTipDoan, setSlOverride,
 } from "./helpers";
 import type { BaoGiaRow, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 import { TY_GIA_BAO_GIA_MAC_DINH } from "@/lib/bao-gia-ty-gia";
@@ -164,9 +165,10 @@ describe("HDV / ngày — tuyến Sapa 700k cho CẢ tour", () => {
     expect(isSapaTour(null)).toBe(false);
   });
 
-  it("chưa gõ tay → tự đặt 700k cho tour Sapa, 200k cho tour thường", () => {
+  it("chưa gõ tay → tự đặt theo tuyến", () => {
     expect(resolveHdvGiaNgay(ketOf([], "Tour Sapa"))).toBe(700_000);
-    expect(resolveHdvGiaNgay(ketOf([], "Tour Đà Nẵng"))).toBe(200_000);
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Đà Nẵng"))).toBe(600_000);
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Hạ Long"))).toBe(200_000);
   });
 
   it("OP gõ tay thì tôn trọng tuyệt đối, kể cả 0 và kể cả tour Sapa", () => {
@@ -198,7 +200,157 @@ describe("HDV / ngày — tuyến Sapa 700k cho CẢ tour", () => {
     });
     const s = costingSheet(draft)!;
     const manual: ManualItem[] = [{ id: "0", ngay: 1, loai: "ticket", mo_ta: "Vé", bang_gia_ten: "Vé", gia: 0 }];
-    const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, 700_000);
+    const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, { hdvGiaNgay: 700_000 });
+    expect(s.footer.find((f) => f.key === "gia_pax")!.values[0]).toBe(c.final_price_vnd);
+  });
+});
+
+describe("Công HDV theo tuyến — miền Trung 600k · HCM 1tr · chạm nhiều nơi lấy mức cao nhất", () => {
+  const ve = (mo_ta: string, ten_zh = ""): BaoGiaItem =>
+    ({ loai: "ticket", mo_ta, ten_zh, don_gia: 0, ghi_chu: "", ngay_so: 1 });
+  const an = (mo_ta: string, ten_zh = ""): BaoGiaItem =>
+    ({ loai: "meal", mo_ta, ten_zh, don_gia: 0, ghi_chu: "", ngay_so: 1 });
+  const ks = (mo_ta: string, ten_zh = ""): BaoGiaItem =>
+    ({ loai: "hotel", mo_ta, ten_zh, don_gia: 0, ghi_chu: "", ngay_so: 1 });
+  const ketOf = (items: BaoGiaItem[], ten = "Tour test", over: Partial<BaoGiaKetQua> = {}) =>
+    ({ ...makeDraft(items).ket_qua!, ten_chuong_trinh: ten, ...over });
+
+  it("nhận miền Trung qua mọi cách gõ Đà Nẵng", () => {
+    for (const ten of [
+      "Tour Đà Nẵng 4N", "tour da nang 4n", "Đà Nãng 5N",   // "Đà Nãng" sai chính tả có thật
+      "Khách sạn Danang Riverfront",                        // "danang" viết LIỀN, rất phổ biến
+      "峴港5日", "岘港5日",                                   // phồn thể + giản thể
+    ]) {
+      expect(isMienTrungTour(ketOf([], ten)), ten).toBe(true);
+    }
+  });
+
+  it("nhận cả vệ tinh miền Trung: Bà Nà · Hội An · Huế", () => {
+    // Có tour miền Trung thật mà cả chương trình KHÔNG hề có chữ Đà Nẵng nào,
+    // chỉ có Bà Nà và Hội An — chỉ dò mỗi "Đà Nẵng" là tour đó rớt về mức chung.
+    expect(isMienTrungTour(ketOf([ve("Bà Nà Hills", "巴拿山")], "Trung Việt 5N"))).toBe(true);
+    expect(isMienTrungTour(ketOf([ve("Phố cổ Hội An", "會安古鎮")], "Trung Việt 5N"))).toBe(true);
+    expect(isMienTrungTour(ketOf([ve("Đại Nội Huế", "順化皇城")], "Trung Việt 5N"))).toBe(true);
+  });
+
+  it("KHÔNG nhận nhầm khi chữ lọt giữa từ khác", () => {
+    expect(isMienTrungTour(ketOf([], "Tour Hạ Long - Ninh Bình"))).toBe(false);
+    expect(isMienTrungTour(ketOf([ve("Bánh mì Banana")]))).toBe(false);
+    expect(isMienTrungTour(null)).toBe(false);
+  });
+
+  it("nhận TP HCM qua các cách viết thật", () => {
+    expect(isHcmTour(ketOf([], "Tour Sài Gòn 4N"))).toBe(true);
+    expect(isHcmTour(ketOf([], "胡志明-美奈 5日"))).toBe(true);
+    expect(isHcmTour(ketOf([ve("Du thuyền sông", "西貢河遊船")]))).toBe(true);
+    expect(isHcmTour(ketOf([ve("Địa đạo Củ Chi", "古芝地道")]))).toBe(true);
+    expect(isHcmTour(ketOf([ve("Dinh Độc Lập", "統一宮")]))).toBe(true);
+    expect(isHcmTour(ketOf([ve("Xe buýt HCM")]))).toBe(true);
+    expect(isHcmTour(ketOf([], "Tour Hạ Long 3N"))).toBe(false);
+  });
+
+  it("LĂNG BÁC ở Hà Nội KHÔNG được tính là tour TP Hồ Chí Minh", () => {
+    // Bẫy đắt nhất của cả hàm. Đo trên dữ liệu thật: 5 dòng có chữ 胡志明 thì 3
+    // dòng là lăng Bác của tour Bắc; trong danh mục cảnh điểm, nhóm lăng / phủ /
+    // quảng trường nhiều gấp khoảng 18 lần số cảnh điểm HCM thật. Nhận nhầm là
+    // MỌI tour Hà Nội ăn mức 1.000.000 ₫/ngày mà nhìn bảng không thấy gì lạ.
+    expect(isHcmTour(ketOf([ve("Lăng Chủ tịch", "胡志明陵寢(外觀)")], "Bắc Việt 6N"))).toBe(false);
+    expect(isHcmTour(ketOf([ve("Phủ chủ tịch", "胡志明陵寢/總督府(外觀)")], "Bắc Việt 6N"))).toBe(false);
+    expect(isHcmTour(ketOf([ve("Lăng Chủ tịch Hồ Chí Minh")], "Hà Nội 4N"))).toBe(false);
+    expect(isHcmTour(ketOf([ve("Bảo tàng Hồ Chí Minh")], "Hà Nội 4N"))).toBe(false);
+    // Và mức HDV của tour Bắc đó phải giữ nguyên mức chung.
+    expect(resolveHdvGiaNgay(ketOf([ve("Lăng Chủ tịch", "胡志明陵寢")], "Bắc Việt 6N"))).toBe(200_000);
+  });
+
+  it("tên NHÀ HÀNG mang địa danh nơi khác không kéo cả tuyến theo", () => {
+    // Trong danh mục thật có nhà hàng tên "Sài Gòn" nằm ở Hà Nội, và nhà hàng
+    // tên "Hội An" nằm ở TP HCM. Khách sạn thì sạch nên vẫn được dùng để dò.
+    expect(isHcmTour(ketOf([an("Nhà hàng Sài Gòn Xưa")], "Hà Nội - Hạ Long 4N"))).toBe(false);
+    expect(isMienTrungTour(ketOf([an("Quán Hội An")], "Tour Sài Gòn 3N"))).toBe(false);
+    expect(isHcmTour(ketOf([ks("Khách sạn Sài Gòn Center")], "Tour Nam 4N"))).toBe(true);
+  });
+
+  it("chạm nhiều nơi thì lấy MỨC CAO NHẤT", () => {
+    expect(resolveHdvGiaNgay(ketOf([ve("Bà Nà", "巴拿山")], "Hà Nội - Đà Nẵng 6N"))).toBe(600_000);
+    expect(resolveHdvGiaNgay(
+      ketOf([ve("Bà Nà", "巴拿山"), ve("Củ Chi", "古芝")], "Xuyên Việt 8N"),
+    )).toBe(1_000_000);
+    // Sapa 700k vẫn thắng miền Trung 600k...
+    expect(resolveHdvGiaNgay(ketOf([ve("Bà Nà", "巴拿山")], "Sapa 7N"))).toBe(700_000);
+    // ...nhưng thua HCM 1tr.
+    expect(resolveHdvGiaNgay(ketOf([], "Sapa - Sài Gòn 7N"))).toBe(1_000_000);
+  });
+
+  it("kèm tên tuyến để màn hình nói được vì sao ra con số đó", () => {
+    expect(hdvGiaNgayTheoTuyen(ketOf([], "Tour Đà Nẵng")).tuyen).toBe("miền Trung");
+    expect(hdvGiaNgayTheoTuyen(ketOf([], "Tour Sài Gòn")).tuyen).toBe("TP Hồ Chí Minh");
+    expect(hdvGiaNgayTheoTuyen(ketOf([], "Tour Sapa")).tuyen).toBe("Sapa");
+    expect(hdvGiaNgayTheoTuyen(ketOf([], "Tour Hạ Long")).tuyen).toBe("");
+  });
+
+  it("OP gõ tay thì thắng mọi luật tuyến, kể cả gõ 0", () => {
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Sài Gòn", { hdv_gia_ngay: 300_000 }))).toBe(300_000);
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Sài Gòn", { hdv_gia_ngay: 0 }))).toBe(0);
+    expect(resolveHdvGiaNgay(ketOf([], "Tour Sài Gòn", { hdv_gia_ngay: null }))).toBe(1_000_000);
+  });
+});
+
+describe("Bảo hiểm / khách và Tip / đoàn — mở khoá cho sửa tay", () => {
+  const ve = (mo_ta: string): BaoGiaItem =>
+    ({ loai: "ticket", mo_ta, ten_zh: "", don_gia: 0, ghi_chu: "", ngay_so: 1 });
+  const ketOf = (over: Partial<BaoGiaKetQua> = {}) =>
+    ({ ...makeDraft([]).ket_qua!, ...over });
+
+  it("chưa gõ gì thì dùng mức mặc định", () => {
+    expect(resolveBaoHiemMoiKhach(ketOf())).toBe(100_000);
+    expect(resolveTipDoan(ketOf())).toBe(500_000);
+    expect(resolveBaoHiemMoiKhach(null)).toBe(100_000);
+    expect(resolveTipDoan(null)).toBe(500_000);
+  });
+
+  it("gõ tay thì tôn trọng tuyệt đối, kể cả gõ 0", () => {
+    expect(resolveBaoHiemMoiKhach(ketOf({ bao_hiem_moi_khach: 250_000 }))).toBe(250_000);
+    expect(resolveBaoHiemMoiKhach(ketOf({ bao_hiem_moi_khach: 0 }))).toBe(0);
+    expect(resolveTipDoan(ketOf({ tip_doan: 1_200_000 }))).toBe(1_200_000);
+    expect(resolveTipDoan(ketOf({ tip_doan: 0 }))).toBe(0);
+  });
+
+  it("xoá trắng ô (null) = trả về cho hệ thống tự đặt", () => {
+    expect(resolveBaoHiemMoiKhach(ketOf({ bao_hiem_moi_khach: null }))).toBe(100_000);
+    expect(resolveTipDoan(ketOf({ tip_doan: null }))).toBe(500_000);
+  });
+
+  it("bảng chi phí chạy theo số đã gõ (pax = khách + 1 HDV)", () => {
+    const items = [ve("Vé")];
+    const draft = makeDraft(items, {
+      ket_qua: { ...makeDraft(items).ket_qua!, bao_hiem_moi_khach: 250_000, tip_doan: 1_200_000 },
+    });
+    const s = costingSheet(draft)!;
+    expect(s.footer.find((f) => f.key === "bao_hiem")!.values).toEqual([250_000 * 17, 250_000 * 21]);
+    expect(s.footer.find((f) => f.key === "tip")!.values).toEqual([1_200_000, 1_200_000]);
+  });
+
+  it("đúng 3 dòng có ô cho sửa; Cộng dịch vụ vẫn là tổng tự động", () => {
+    const s = costingSheet(makeDraft([ve("Vé")]))!;
+    expect(s.footer.filter((f) => f.oNhap).map((f) => f.key)).toEqual(["hdv", "bao_hiem", "tip"]);
+    expect(s.footer.find((f) => f.key === "dich_vu")!.oNhap).toBeUndefined();
+    expect(s.footer.find((f) => f.key === "bao_hiem")!.label).toContain("100.000 ₫/khách");
+    expect(s.footer.find((f) => f.key === "tip")!.label).toContain("500.000 ₫/đoàn");
+  });
+
+  it("bảng chi phí và ma trận giá ra CÙNG một giá bán", () => {
+    // Công thức 3 khoản này từng bị viết HAI LẦN (engine + costingSheet). Test
+    // này là cái chốt: sửa một bên quên bên kia là đỏ ngay, không phải đợi tới
+    // lúc màn hình một giá còn file Word một giá.
+    const items = [ve("Vé")];
+    const draft = makeDraft(items, {
+      ket_qua: { ...makeDraft(items).ket_qua!, bao_hiem_moi_khach: 250_000, tip_doan: 1_200_000 },
+    });
+    const s = costingSheet(draft)!;
+    const manual: ManualItem[] = [{ id: "0", ngay: 1, loai: "ticket", mo_ta: "Vé", bang_gia_ten: "Vé", gia: 0 }];
+    const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, {
+      hdvGiaNgay: 200_000, baoHiemMoiKhach: 250_000, tipDoan: 1_200_000,
+    });
     expect(s.footer.find((f) => f.key === "gia_pax")!.values[0]).toBe(c.final_price_vnd);
   });
 });

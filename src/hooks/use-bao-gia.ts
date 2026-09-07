@@ -99,6 +99,10 @@ export interface BaoGiaKetQua {
   // (Sapa 700k, còn lại 200k — resolveHdvGiaNgay). OP gõ số = chốt cứng số đó,
   // không bị đổi ngược khi lịch trình thay đổi.
   hdv_gia_ngay?: number | null;
+  // Bảo hiểm / khách và Tip / đoàn cho báo giá NÀY. null/vắng = dùng mặc định
+  // (100.000 và 500.000). OP gõ số = chốt cứng, kể cả gõ 0.
+  bao_hiem_moi_khach?: number | null;
+  tip_doan?: number | null;
 }
 
 // File lịch trình đính kèm (loai_bao_gia='gia_cuoi' — chương trình lấy của bên
