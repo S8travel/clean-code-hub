@@ -10,6 +10,20 @@ name: Backup Supabase Storage
 #   [supabase]  type=s3 (Supabase Storage S3 access key, force_path_style=true)
 #   [gdrive]    type=drive (OAuth token tài khoản Google của bạn)
 # Xem hướng dẫn tạo trong scripts/README-backup.md.
+#
+# ⚠️ SỰ CỐ ĐÃ SỬA 07/09/2026 — job này CHƯA LẦN NÀO CHẠY XONG:
+# 4 lần liên tiếp (15/08, 22/08, 29/08, 05/09) đều kết thúc `cancelled`. Log cho thấy
+# Google Drive trả `RATE_LIMIT_EXCEEDED`, rclone tụt còn ~31 KiB/s rồi hết 60 phút và
+# bị cắt. Dữ liệu thực ra đã copy tới 100% ("88 MiB / 88 MiB"), chỗ kẹt là bước
+# "Updated modification time in destination" — mỗi file tốn thêm một lượt gọi API.
+# Ba thay đổi:
+#   1. `--no-update-modtime`: bỏ hẳn việc sửa mod-time trên bản sao (không ai cần
+#      mod-time chính xác ở bản backup) → cắt phần lớn lượt gọi API gây rate-limit.
+#   2. Hạ song song (8→4 luồng) + `--tpslimit` + pacer của Drive: chạy chậm mà đều,
+#      thay vì dồn dập rồi bị chặn.
+#   3. Bước đối chiếu số file nguồn ↔ đích ở cuối, THIẾU LÀ ĐỎ. Trước đây không có
+#      bước này nên "cancelled" trông cũng na ná "chắc là xong rồi".
+# Timeout job nâng 60 → 180 phút để lần chạy đầu (bù phần chưa copy) có chỗ thở.
 
 on:
   schedule:
@@ -23,10 +37,16 @@ concurrency:
   group: backup-storage
   cancel-in-progress: false
 
+env:
+  # Mọi bucket có file thật. web-images/hotel-logos/nha-hang-anh hiện rỗng nhưng cứ
+  # để đây, có ảnh là được sao lưu ngay mà không phải nhớ sửa workflow.
+  BUCKETS: "dntt-documents doan-files lead-files email-images web-images"
+  DEST_ROOT: "gdrive:s8-supabase-backup"
+
 jobs:
   backup:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     steps:
       - name: Cài rclone
         run: |
@@ -50,10 +70,38 @@ jobs:
       - name: Copy file Storage → Google Drive (chỉ thêm, không xoá)
         run: |
           set -e
-          DEST_ROOT="gdrive:s8-supabase-backup"
-          for b in dntt-documents doan-files web-images; do
+          for b in $BUCKETS; do
             echo "=== Bucket: $b ==="
             rclone copy "supabase:$b" "$DEST_ROOT/$b" \
-              --transfers=8 --checkers=16 --stats=15s --stats-one-line -v
+              --no-update-modtime \
+              --transfers=4 --checkers=8 \
+              --tpslimit=8 --tpslimit-burst=8 \
+              --drive-pacer-min-sleep=200ms --drive-pacer-burst=2 \
+              --drive-chunk-size=32M \
+              --retries=3 --low-level-retries=20 \
+              --stats=30s --stats-one-line -v
           done
           echo "✓ Hoàn tất copy Storage → Google Drive"
+
+      - name: Đối chiếu số file nguồn ↔ bản sao lưu
+        run: |
+          set -e
+          thieu=0
+          { echo "### Đối chiếu sao lưu Storage"; echo "| Bucket | Nguồn | Bản sao lưu |"; echo "|---|---:|---:|"; } >> "$GITHUB_STEP_SUMMARY"
+          for b in $BUCKETS; do
+            src=$(rclone size "supabase:$b" --json 2>/dev/null || echo '{"count":0,"bytes":0}')
+            dst=$(rclone size "$DEST_ROOT/$b" --json 2>/dev/null || echo '{"count":0,"bytes":0}')
+            sc=$(echo "$src" | jq -r '.count'); sb=$(echo "$src" | jq -r '.bytes')
+            dc=$(echo "$dst" | jq -r '.count'); db=$(echo "$dst" | jq -r '.bytes')
+            printf '%-16s nguồn %6s file (%s B) → sao lưu %6s file (%s B)\n' "$b" "$sc" "$sb" "$dc" "$db"
+            echo "| $b | $sc | $dc |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$dc" -lt "$sc" ]; then
+              echo "::error::Bucket $b: bản sao lưu thiếu $((sc - dc)) file"
+              thieu=1
+            fi
+          done
+          if [ "$thieu" -ne 0 ]; then
+            echo "::error::Sao lưu KHÔNG đầy đủ — xem bảng trên."
+            exit 1
+          fi
+          echo "✓ Bản sao lưu đủ file so với nguồn"
