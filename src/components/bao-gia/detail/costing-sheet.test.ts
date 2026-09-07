@@ -270,6 +270,24 @@ describe("Công HDV theo tuyến — miền Trung 600k · HCM 1tr · chạm nhi�
     expect(isHcmTour(ketOf([ks("Khách sạn Sài Gòn Center")], "Tour Nam 4N"))).toBe(true);
   });
 
+  it("KHÔNG nhận nhầm Nguyễn Huệ (tên đường ở Sài Gòn) là tuyến miền Trung", () => {
+    // Bỏ dấu ra "nguyen hue" nên biên từ \bhue\b khớp trúng nếu không chặn.
+    expect(isMienTrungTour(ketOf([ve("Phố đi bộ Nguyễn Huệ")], "Tour Nam 4N"))).toBe(false);
+    // Nhưng Huế thật thì vẫn phải nhận.
+    expect(isMienTrungTour(ketOf([ve("Đại Nội Huế")], "Trung Việt 5N"))).toBe(true);
+    expect(isMienTrungTour(ketOf([], "Huế 3N2Đ"))).toBe(true);
+  });
+
+  it("bữa ăn bị xếp nhầm vào loại vé vẫn KHÔNG được dùng để dò tuyến", () => {
+    // AI đọc lịch trình đôi khi để một bữa ăn ở loai='ticket' (vé đã gồm suất ăn).
+    // Lọc theo mỗi `loai` là thủng — tên nhà hàng lại kéo cả tuyến theo.
+    const buaAnDoiLot: BaoGiaItem =
+      { loai: "ticket", mo_ta: "Nhà hàng Sài Gòn Xưa", ten_zh: "", don_gia: 0, ghi_chu: "", ngay_so: 1, bua_an: "trua" };
+    expect(isHcmTour(ketOf([buaAnDoiLot], "Hà Nội - Hạ Long 4N"))).toBe(false);
+    // Dòng vé THẬT (không có cờ bữa) thì vẫn dò bình thường.
+    expect(isHcmTour(ketOf([ve("Dinh Độc Lập", "統一宮")], "Tour Nam 4N"))).toBe(true);
+  });
+
   it("chạm nhiều nơi thì lấy MỨC CAO NHẤT", () => {
     expect(resolveHdvGiaNgay(ketOf([ve("Bà Nà", "巴拿山")], "Hà Nội - Đà Nẵng 6N"))).toBe(600_000);
     expect(resolveHdvGiaNgay(

@@ -299,7 +299,11 @@ function boDau(s: string): string {
  *  nằm sai nơi. */
 function nguonDoTuyen(ket: BaoGiaKetQua | null | undefined, boDongAn: boolean): string[] {
   if (!ket) return [];
-  const items = (ket.items ?? []).filter((i) => !(boDongAn && i.loai === "meal"));
+  // Nhận diện dòng ăn theo CẢ HAI dấu: `loai` và cờ bữa. AI đọc lịch trình đôi khi
+  // xếp một bữa ăn vào loai='ticket' (vé đã gồm suất ăn) — lúc đó lọc theo mỗi
+  // `loai` là thủng, tên nhà hàng lại kéo cả tuyến theo.
+  const laDongAn = (i: BaoGiaItem) => i.loai === "meal" || i.bua_an != null;
+  const items = (ket.items ?? []).filter((i) => !(boDongAn && laDongAn(i)));
   return [ket.ten_chuong_trinh ?? "", ...items.flatMap((i) => [i.mo_ta ?? "", i.ten_zh ?? ""])]
     .filter(Boolean);
 }
@@ -327,7 +331,11 @@ export function isSapaTour(ket: BaoGiaKetQua | null | undefined): boolean {
 export function isMienTrungTour(ket: BaoGiaKetQua | null | undefined): boolean {
   return nguonDoTuyen(ket, true).some((raw) => {
     if (/峴港|岘港|巴拿山|會安|会安|順化|顺化/.test(raw)) return true;
-    return /\bda ?nang\b|\bba ?na\b|\bhoi ?an\b|\bhue\b/.test(boDau(raw));
+    // (?<!nguyen ) — "Nguyễn Huệ" là tên đường ở Sài Gòn; bỏ dấu ra "nguyen hue"
+    // thì \bhue\b khớp trúng. Luật "mức cao nhất thắng" che được phần tiền
+    // (tour Sài Gòn vẫn ăn 1tr), nhưng một tour chỉ nhắc Nguyễn Huệ mà không có
+    // tín hiệu Sài Gòn nào khác thì bị đội lên 600k. Chặn cho sạch.
+    return /\bda ?nang\b|\bba ?na\b|\bhoi ?an\b|(?<!nguyen )\bhue\b/.test(boDau(raw));
   });
 }
 

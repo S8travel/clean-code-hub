@@ -256,7 +256,10 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
                         <span>{f.oNhap.nhan}</span>
                         <Input
                           type="text" inputMode="numeric"
-                          value={f.oNhap.donGia > 0 ? f.oNhap.donGia.toLocaleString("vi-VN") : ""}
+                          // Hiện LUÔN con số, kể cả 0. Trước đây `> 0` làm ô trống
+                          // trơn khi OP chốt 0 đồng — nhìn y hệt lúc chưa nhập gì,
+                          // mà hai thứ đó tính tiền khác hẳn nhau.
+                          value={f.oNhap.donGia.toLocaleString("vi-VN")}
                           onFocus={() => {
                             truocKhiSua.current[f.oNhap!.truong] = ket[f.oNhap!.truong] ?? null;
                           }}

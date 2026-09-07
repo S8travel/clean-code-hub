@@ -86,6 +86,44 @@ describe("buildPhienBan — chụp hai lớp", () => {
   });
 });
 
+describe("lớp vốn chụp cả Bảo hiểm / Tip", () => {
+  const now = new Date("2026-08-17T03:00:00Z");
+
+  it("chưa gõ tay thì chụp mức mặc định, không chụp null", () => {
+    const von = buildPhienBan(row(), ket(), now).noi_dung_von;
+    expect(von.bao_hiem_moi_khach).toBe(100_000);
+    expect(von.tip_doan).toBe(500_000);
+  });
+
+  it("OP gõ tay thì chụp đúng số đã gõ, kể cả 0", () => {
+    const von = buildPhienBan(row(), ket({ bao_hiem_moi_khach: 250_000, tip_doan: 0 }), now).noi_dung_von;
+    expect(von.bao_hiem_moi_khach).toBe(250_000);
+    expect(von.tip_doan).toBe(0);
+  });
+
+  it("đổi Tip hay Bảo hiểm thì bảng so sánh NÓI RA, không để giá tụt mà không rõ vì sao", () => {
+    const cu = buildPhienBan(row(), ket(), now);
+    const moi = buildPhienBan(row(), ket({ tip_doan: 3_000_000 }), now);
+    const ten = soSanhPhienBan(cu, moi).thong_so.map((t) => t.ten);
+    expect(ten).toContain("Tip / đoàn");
+
+    const moi2 = buildPhienBan(row(), ket({ bao_hiem_moi_khach: 250_000 }), now);
+    expect(soSanhPhienBan(cu, moi2).thong_so.map((t) => t.ten)).toContain("Bảo hiểm / khách");
+  });
+
+  it("bản chốt TRƯỚC khi mở khoá (thiếu hẳn khoá) không đẻ ra chênh lệch giả", () => {
+    // Hồi đó engine chạy đúng hai hằng số này, nên gán mặc định là ĐÚNG dữ liệu.
+    const moi = buildPhienBan(row(), ket(), now);
+    const cuThieuKhoa = {
+      ...moi,
+      noi_dung_von: { ...moi.noi_dung_von, bao_hiem_moi_khach: undefined, tip_doan: undefined },
+    } as unknown as PhienBanDeSoSanh;
+    const ten = soSanhPhienBan(cuThieuKhoa, moi).thong_so.map((t) => t.ten);
+    expect(ten).not.toContain("Tip / đoàn");
+    expect(ten).not.toContain("Bảo hiểm / khách");
+  });
+});
+
 describe("soSanhPhienBan — vì sao bản mới khác bản cũ", () => {
   const now = new Date("2026-08-17T03:00:00Z");
   const banCu = (): PhienBanDeSoSanh => buildPhienBan(row(), ket(), now);
