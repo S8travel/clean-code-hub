@@ -36,10 +36,9 @@ verify_jwt = false
 [functions.send-booking-email]
 verify_jwt = true
 
-# ai-chat: ⚠️ TƯỞNG đã gỡ 13/08/2026 nhưng RÀ 05/09/2026 THẤY VẪN ĐANG ACTIVE trên
-# prod (verify_jwt=true, không màn hình nào gọi, 0 lượt gọi trong log 24h). Việc "gỡ"
-# hồi đó mới dừng ở bỏ khai trong file này. Cần gỡ hẳn bằng
-# `npx supabase functions delete ai-chat`. Hàm trợ lý AI cũ không xác thực người gọi và nạp
+# ai-chat: ⛔ ĐÃ XOÁ HẲN KHỎI PROD 07/09/2026. Lần "gỡ" 13/08 mới chỉ thay thân hàm
+# bằng bản rỗng trả 410 và bỏ khai ở file này — hàm vẫn ACTIVE cho tới 07/09.
+# Hàm trợ lý AI cũ không xác thực người gọi và nạp
 # thẳng dữ liệu danh mục vào prompt, trong khi màn hình gọi nó đã bỏ từ lâu.
 # ĐỪNG khai lại tên này. Muốn làm trợ lý AI thì viết hàm mới: bắt buộc xác thực,
 # whitelist đúng cột được phép đọc, và không đưa dữ liệu giá vốn vào prompt.
@@ -127,7 +126,7 @@ verify_jwt = true
 [functions.xuat-word-booking-ks]
 verify_jwt = true
 
-# ── ⚠️ CÒN TRÊN PROD MÀ REPO KHÔNG CÓ SOURCE (rà 05/09/2026):
-#   • ai-chat — xem ghi chú phía trên, cần gỡ hẳn chứ không phải chỉ bỏ khai ở file này.
-# Ba hàm trước đây trong danh sách này (notify, process-bao-gia, xuat-word-booking-ks)
-# đã được kéo source về repo, xem các khối ngay trên.
+# ── ✅ 07/09/2026: KHÔNG CÒN hàm nào chạy trên prod mà repo thiếu source.
+# notify / process-bao-gia / xuat-word-booking-ks đã kéo source về repo (xem các khối
+# trên); ai-chat đã xoá hẳn. Prod còn 20 hàm; repo có 21 thư mục — chênh đúng
+# process-bao-gia (đã gỡ khỏi prod, giữ source làm tư liệu).
