@@ -939,6 +939,14 @@ function buildAutoDoc(
     ],
   });
 
+  // Đơn giá suy NGƯỢC từ chính con số sắp in, để cái nhãn không bao giờ nói khác
+  // con số nằm ngay cạnh nó. Trước đây nhãn ghi cứng "100k" và "200k", nên file
+  // Word nội bộ của mọi tour Sapa in "HDV (200k × N ngày)" bên cạnh số tính theo
+  // 700k — nay còn thêm mức miền Trung và HCM thì sai càng rõ.
+  const soNgayCp = Math.max(1, ketQua.so_ngay ?? 1);
+  const bhMoiKhach = case_16.pax > 0 ? Math.round(case_16.insurance / case_16.pax) : 0;
+  const hdvMoiNgay = Math.round(case_16.guide / soNgayCp);
+
   const COL_CP = Math.floor(CONTENT_W / 3);
   const fixedCostTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
@@ -952,9 +960,9 @@ function buildAutoDoc(
         ],
       }),
       ...[
-        { label: "Bảo hiểm (100k × pax)",             v16: case_16.insurance, v20: case_20.insurance },
-        { label: `HDV (200k × ${ketQua.so_ngay} ngày)`, v16: case_16.guide,    v20: case_20.guide    },
-        { label: "Tips",                               v16: case_16.tips,      v20: case_20.tips      },
+        { label: `Bảo hiểm (${fmt(bhMoiKhach)} × pax)`,        v16: case_16.insurance, v20: case_20.insurance },
+        { label: `HDV (${fmt(hdvMoiNgay)} × ${soNgayCp} ngày)`, v16: case_16.guide,     v20: case_20.guide     },
+        { label: "Tips",                                        v16: case_16.tips,      v20: case_20.tips      },
       ].map(({ label, v16, v20 }) =>
         new TableRow({
           children: [

@@ -4,7 +4,8 @@
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import {
   calcBaoGia, calcTiers, tierConfig, effItemFoc, effItemQty, slOverrideOf,
-  HDV_GIA_NGAY_MAC_DINH, HDV_GIA_NGAY_SAPA, type ManualItem,
+  HDV_GIA_NGAY_MAC_DINH, HDV_GIA_NGAY_SAPA, HDV_GIA_NGAY_MIEN_TRUNG, HDV_GIA_NGAY_HCM,
+  BAO_HIEM_MOI_KHACH_MAC_DINH, TIP_DOAN_MAC_DINH, type DinhMuc, type ManualItem,
 } from "@/lib/bao-gia-calc";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
@@ -141,7 +142,7 @@ export function liveKetQua(draft: BaoGiaRow): BaoGiaKetQua | null {
     draft.profit_usd ?? 0,
     draft.xe_gia ?? 0,
     phuThu, // lump-sum vào transport
-    resolveHdvGiaNgay(ket),
+    dinhMucCuaBaoGia(ket),
   );
 
   return {
@@ -218,7 +219,7 @@ export function costBreakdown(args: {
   // vào "Xe vận chuyển"). Cộng vào tổng cost vốn ngoài calc.
   const live = calcBaoGia(
     manualItems, ket.ten_chuong_trinh, ket.so_ngay ?? 1,
-    exchangeRate, profitUsd, xeGia ?? 0, 0, resolveHdvGiaNgay(ket),
+    exchangeRate, profitUsd, xeGia ?? 0, 0, dinhMucCuaBaoGia(ket),
   );
   const phuThuVal = args.phuThu ?? 0;
   const case16 = buildCase(live.case_16, 16, phuThuVal, profitUsd, exchangeRate, vcbRate);
@@ -269,7 +270,7 @@ export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
   // phuThu = 0 trong calc (hiển thị dòng riêng), cộng ngoài qua buildCase — KHỚP costBreakdown.
   const cases = calcTiers(
     manualItems, ket.so_ngay ?? 1, xr, profitUsd, guestsList,
-    draft.xe_gia ?? 0, 0, resolveHdvGiaNgay(ket),
+    draft.xe_gia ?? 0, 0, dinhMucCuaBaoGia(ket),
   );
   return cases.map((c) => ({
     guests: c.guests,
@@ -277,28 +278,93 @@ export function liveTierBreakdown(draft: BaoGiaRow): TierLine[] {
   }));
 }
 
-// ── Công HDV / ngày ──────────────────────────────────────────────────────────
-// Tuyến Sapa cần HDV chuyên tuyến đi suốt hành trình → 700k/ngày cho CẢ tour,
-// không phải chỉ mấy ngày ở Sapa.
+// ── Định mức tiền cố định: công HDV · bảo hiểm · tip ─────────────────────────
+// Công HDV/ngày tự đặt theo tuyến, vì một HDV đi suốt hành trình. Tour chạm
+// NHIỀU nơi thì lấy mức CAO NHẤT — trả theo nơi đắt nhất đoàn có ghé.
 
-/** Bỏ dấu tiếng Việt + gộp khoảng trắng để dò từ khoá không phụ thuộc cách gõ. */
+/** Bỏ dấu tiếng Việt + gộp khoảng trắng để dò từ khoá không phụ thuộc cách gõ.
+ *  Dải U+0300–U+036F viết bằng escape, KHÔNG dán ký tự thật: chúng vô hình,
+ *  editor/diff nuốt mất là hàm lặng lẽ ngừng bỏ dấu. */
 function boDau(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d").replace(/\s+/g, " ");
+}
+
+/** Các chuỗi đem đi dò tuyến.
+ *
+ *  `boDongAn` = bỏ các dòng ăn uống. Tên nhà hàng hay mang địa danh của nơi
+ *  KHÁC: trong danh mục có nhà hàng tên "Sài Gòn" nằm ở Hà Nội và nhà hàng tên
+ *  "Hội An" nằm ở TP HCM — đủ để gán nhầm cả tuyến. Khách sạn thì sạch, đã
+ *  kiểm: 10 khách sạn tên Sài Gòn / 24 khách sạn tên Đà Nẵng, không cái nào
+ *  nằm sai nơi. */
+function nguonDoTuyen(ket: BaoGiaKetQua | null | undefined, boDongAn: boolean): string[] {
+  if (!ket) return [];
+  const items = (ket.items ?? []).filter((i) => !(boDongAn && i.loai === "meal"));
+  return [ket.ten_chuong_trinh ?? "", ...items.flatMap((i) => [i.mo_ta ?? "", i.ten_zh ?? ""])]
+    .filter(Boolean);
 }
 
 /** Tour có ghé Sapa? Dò tên chương trình + tên mọi dòng dịch vụ (VI lẫn 中文).
  *  Tiếng Việt dò theo BIÊN TỪ (\bsa ?pa\b) để "casapark" không dính.
  *  Tiếng Trung CHỈ nhận 沙壩/沙坝 — 沙巴 là Sabah (Malaysia), gộp vào sẽ đội
- *  giá HDV của tour Malaysia lên 700k. */
+ *  giá HDV của tour Malaysia lên 700k.
+ *
+ *  CỐ Ý vẫn đọc cả dòng ăn uống (khác hai hàm dưới): đã có test nhận Sapa qua
+ *  tên nhà hàng, siết lại là mở đường cho hồi quy không cần thiết. */
 export function isSapaTour(ket: BaoGiaKetQua | null | undefined): boolean {
-  if (!ket) return false;
-  const nguon = [ket.ten_chuong_trinh ?? "", ...(ket.items ?? []).flatMap((i) => [i.mo_ta ?? "", i.ten_zh ?? ""])];
-  return nguon.some((raw) => {
-    if (!raw) return false;
+  return nguonDoTuyen(ket, false).some((raw) => {
     if (raw.includes("沙壩") || raw.includes("沙坝")) return true;
     return /\bsa ?pa\b/.test(boDau(raw));
   });
+}
+
+/** Tour có ghé miền Trung? Gồm Đà Nẵng · Bà Nà · Hội An · Huế (chốt 07/09/2026).
+ *
+ *  Phải nhận cả vệ tinh chứ không chỉ chữ "Đà Nẵng": có tour miền Trung thật
+ *  trong hệ thống mà cả chương trình không hề có chữ Đà Nẵng nào, chỉ có 巴拿山
+ *  (Bà Nà) và 會安 (Hội An).
+ *  "danang" viết LIỀN rất phổ biến trong tên khách sạn nên dấu cách phải tuỳ chọn. */
+export function isMienTrungTour(ket: BaoGiaKetQua | null | undefined): boolean {
+  return nguonDoTuyen(ket, true).some((raw) => {
+    if (/峴港|岘港|巴拿山|會安|会安|順化|顺化/.test(raw)) return true;
+    return /\bda ?nang\b|\bba ?na\b|\bhoi ?an\b|\bhue\b/.test(boDau(raw));
+  });
+}
+
+/** Xoá các cụm LĂNG / PHỦ / BẢO TÀNG Hồ Chí Minh trước khi dò TP HCM.
+ *
+ *  Đây là cái bẫy đắt nhất của cả hàm: lăng Bác nằm ở HÀ NỘI. Đo trên dữ liệu
+ *  thật — 5 dòng có chữ 胡志明 thì 3 dòng là 胡志明陵寢 của tour Bắc; trong danh
+ *  mục cảnh điểm, nhóm lăng/quảng trường Ba Đình/phủ chủ tịch nhiều gấp khoảng
+ *  18 lần số cảnh điểm HCM thật. Không xoá trước là MỌI tour Hà Nội ăn mức
+ *  1.000.000 ₫/ngày mà nhìn bảng không thấy gì bất thường. */
+function chuoiDoHcm(raw: string): string {
+  return boDau(raw)
+    .replace(/胡志明(?:主席)?(?:陵寢|陵寝|陵|紀念堂|纪念堂|博物館|博物馆|故居)/g, " ")
+    .replace(/(lang|phu|bao tang|nha san|khu di tich)[^,;./]{0,24}ho chi minh/g, " ");
+}
+
+/** Tour có ghé TP Hồ Chí Minh? */
+export function isHcmTour(ket: BaoGiaKetQua | null | undefined): boolean {
+  return nguonDoTuyen(ket, true).some((raw) => {
+    const t = chuoiDoHcm(raw);
+    // 胡志明市 gần như KHÔNG bao giờ được viết đủ chữ 市 trong dữ liệu thật, nên
+    // vẫn phải nhận 胡志明 trần — nhưng chỉ phần CÒN LẠI sau khi xoá cụm lăng.
+    if (/西貢|西贡|胡志明|古芝|獨立宮|独立宫|統一宮|统一宫/.test(t)) return true;
+    return /\bsai ?gon\b|\bho chi minh\b|hcm\b/.test(t);
+  });
+}
+
+/** Công HDV/ngày hệ thống TỰ ĐẶT theo tuyến (chưa xét việc OP gõ tay).
+ *  Chạm nhiều nơi → lấy mức cao nhất, kèm tên tuyến để màn hình nói được vì sao. */
+export function hdvGiaNgayTheoTuyen(
+  ket: BaoGiaKetQua | null | undefined,
+): { gia: number; tuyen: string } {
+  const nen = [{ gia: HDV_GIA_NGAY_MAC_DINH, tuyen: "" }];
+  if (isHcmTour(ket)) nen.push({ gia: HDV_GIA_NGAY_HCM, tuyen: "TP Hồ Chí Minh" });
+  if (isSapaTour(ket)) nen.push({ gia: HDV_GIA_NGAY_SAPA, tuyen: "Sapa" });
+  if (isMienTrungTour(ket)) nen.push({ gia: HDV_GIA_NGAY_MIEN_TRUNG, tuyen: "miền Trung" });
+  return nen.reduce((a, b) => (b.gia > a.gia ? b : a));
 }
 
 /** Công HDV/ngày dùng để tính báo giá này. OP đã gõ số → tôn trọng tuyệt đối
@@ -306,7 +372,31 @@ export function isSapaTour(ket: BaoGiaKetQua | null | undefined): boolean {
 export function resolveHdvGiaNgay(ket: BaoGiaKetQua | null | undefined): number {
   const v = ket?.hdv_gia_ngay;
   if (v != null && Number.isFinite(v) && v >= 0) return v;
-  return isSapaTour(ket) ? HDV_GIA_NGAY_SAPA : HDV_GIA_NGAY_MAC_DINH;
+  return hdvGiaNgayTheoTuyen(ket).gia;
+}
+
+/** Bảo hiểm / khách. OP gõ số → tôn trọng tuyệt đối, kể cả 0. */
+export function resolveBaoHiemMoiKhach(ket: BaoGiaKetQua | null | undefined): number {
+  const v = ket?.bao_hiem_moi_khach;
+  if (v != null && Number.isFinite(v) && v >= 0) return v;
+  return BAO_HIEM_MOI_KHACH_MAC_DINH;
+}
+
+/** Tip / đoàn (lump-sum). OP gõ số → tôn trọng tuyệt đối, kể cả 0. */
+export function resolveTipDoan(ket: BaoGiaKetQua | null | undefined): number {
+  const v = ket?.tip_doan;
+  if (v != null && Number.isFinite(v) && v >= 0) return v;
+  return TIP_DOAN_MAC_DINH;
+}
+
+/** Gói 3 định mức để truyền vào engine tính tiền. Dùng ở MỌI nơi gọi engine —
+ *  quên một chỗ là màn hình một giá, file Word một giá. */
+export function dinhMucCuaBaoGia(ket: BaoGiaKetQua | null | undefined): DinhMuc {
+  return {
+    hdvGiaNgay: resolveHdvGiaNgay(ket),
+    baoHiemMoiKhach: resolveBaoHiemMoiKhach(ket),
+    tipDoan: resolveTipDoan(ket),
+  };
 }
 
 /** Ép ngày của dòng thêm tay về [1, soNgay]. Ngày ngoài khoảng làm dòng biến
@@ -401,6 +491,16 @@ export interface CostingFooterRow {
   label: string;
   values: number[];           // theo từng bậc
   kind: "cost" | "total" | "profit" | "price" | "usd" | "pct";
+  /** Dòng cho OP gõ đè đơn giá. Chỉ MÀN HÌNH dùng — Excel và bảng xem trước AI
+   *  bỏ qua và vẫn đọc `label` như cũ, nên thêm field này không vỡ chỗ nào. */
+  oNhap?: {
+    truong: "hdv_gia_ngay" | "bao_hiem_moi_khach" | "tip_doan";
+    nhan: string;             // nhãn KHÔNG kèm số (số nằm trong ô nhập)
+    donGia: number;
+    donVi: string;            // "₫/ngày" | "₫/khách" | "₫/đoàn"
+    tuDat: boolean;           // true = đang để hệ thống tự đặt, OP chưa gõ
+    ghiChuTuDat?: string;     // vì sao ra con số này, vd "tuyến Đà Nẵng"
+  };
 }
 
 export interface CostingSheet {
@@ -502,10 +602,16 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
 
   // Footer — khớp calcCase: tổng vốn = dịch vụ + HDV + BH + tip.
   const dichVu = configs.map((_, ti) => groups.reduce((s, g) => s + g.subtotals[ti], 0));
+  // Ba định mức lấy CHUNG một nguồn với engine (dinhMucCuaBaoGia). Trước đây
+  // chỗ này chép lại công thức và đóng cứng 100.000 / 500.000 — sửa một bên là
+  // cùng một báo giá ra hai giá ở hai màn hình.
   const hdvGiaNgay = resolveHdvGiaNgay(ket);
+  const baoHiemMoiKhach = resolveBaoHiemMoiKhach(ket);
+  const tipDoan = resolveTipDoan(ket);
+  const tuyenHdv = hdvGiaNgayTheoTuyen(ket);
   const hdv = configs.map(() => hdvGiaNgay * soNgay);
-  const baoHiem = configs.map((c) => 100_000 * c.pax);
-  const tip = configs.map(() => 500_000);
+  const baoHiem = configs.map((c) => baoHiemMoiKhach * c.pax);
+  const tip = configs.map(() => tipDoan);
   const tongVon = configs.map((_, ti) => dichVu[ti] + hdv[ti] + baoHiem[ti] + tip[ti]);
   const loiNhuan = configs.map((c) => Math.round(profitUsd * xr * c.guests));
   const giaBan = configs.map((_, ti) => tongVon[ti] + loiNhuan[ti]);
@@ -516,9 +622,35 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
 
   const footer: CostingFooterRow[] = [
     { key: "dich_vu", label: "Cộng dịch vụ", values: dichVu, kind: "cost" },
-    { key: "hdv", label: `Hướng dẫn viên (${fmtVnd(hdvGiaNgay)} ₫/ngày)`, values: hdv, kind: "cost" },
-    { key: "bao_hiem", label: "Bảo hiểm", values: baoHiem, kind: "cost" },
-    { key: "tip", label: "Tip", values: tip, kind: "cost" },
+    {
+      key: "hdv",
+      // `label` GIỮ NGUYÊN kèm số — file Excel và bảng xem trước AI đọc nó.
+      label: `Hướng dẫn viên (${fmtVnd(hdvGiaNgay)} ₫/ngày)`,
+      values: hdv, kind: "cost",
+      oNhap: {
+        truong: "hdv_gia_ngay", nhan: "Hướng dẫn viên", donGia: hdvGiaNgay, donVi: "₫/ngày",
+        tuDat: ket.hdv_gia_ngay == null,
+        ghiChuTuDat: tuyenHdv.tuyen ? `tuyến ${tuyenHdv.tuyen}` : "mức chung",
+      },
+    },
+    {
+      key: "bao_hiem",
+      label: `Bảo hiểm (${fmtVnd(baoHiemMoiKhach)} ₫/khách)`,
+      values: baoHiem, kind: "cost",
+      oNhap: {
+        truong: "bao_hiem_moi_khach", nhan: "Bảo hiểm", donGia: baoHiemMoiKhach, donVi: "₫/khách",
+        tuDat: ket.bao_hiem_moi_khach == null,
+      },
+    },
+    {
+      key: "tip",
+      label: `Tip (${fmtVnd(tipDoan)} ₫/đoàn)`,
+      values: tip, kind: "cost",
+      oNhap: {
+        truong: "tip_doan", nhan: "Tip", donGia: tipDoan, donVi: "₫/đoàn",
+        tuDat: ket.tip_doan == null,
+      },
+    },
     { key: "tong_von", label: "TỔNG CHI PHÍ VỐN", values: tongVon, kind: "total" },
     { key: "loi_nhuan", label: `Lợi nhuận (${fmtUsd(profitUsd)} USD/khách)`, values: loiNhuan, kind: "profit" },
     { key: "gia_pax", label: "GIÁ BÁN / KHÁCH", values: giaPerPax, kind: "price" },

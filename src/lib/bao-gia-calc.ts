@@ -69,6 +69,32 @@ export function tierConfig(guests: number): CaseConfig {
 export const HDV_GIA_NGAY_MAC_DINH = 200_000;
 /** Tuyến Sapa phải dùng HDV chuyên tuyến, đi suốt hành trình → giá cả tour. */
 export const HDV_GIA_NGAY_SAPA = 700_000;
+/** Miền Trung (Đà Nẵng · Bà Nà · Hội An · Huế). */
+export const HDV_GIA_NGAY_MIEN_TRUNG = 600_000;
+/** TP Hồ Chí Minh. */
+export const HDV_GIA_NGAY_HCM = 1_000_000;
+
+/** Bảo hiểm mặc định cho mỗi khách (pax = khách + HDV). */
+export const BAO_HIEM_MOI_KHACH_MAC_DINH = 100_000;
+/** Tip mặc định, tính một lần cho cả đoàn — KHÔNG nhân số khách. */
+export const TIP_DOAN_MAC_DINH = 500_000;
+
+/**
+ * Ba khoản tiền cố định của một báo giá. Vắng / undefined = dùng mặc định;
+ * số 0 là giá trị HỢP LỆ (OP cố tình chốt 0 đồng), đừng coi 0 là "chưa nhập".
+ *
+ * Gói thành object thay vì thêm tham số thứ 9, 10: bốn hàm dưới đây vốn đã có 8
+ * tham số vị trí mà 3 cái cuối đều là number — thêm nữa là sớm muộn có người
+ * truyền nhầm thứ tự, mà nhầm kiểu đó không có lỗi nào báo, chỉ ra tiền sai.
+ */
+export interface DinhMuc {
+  /** Công HDV / ngày. */
+  hdvGiaNgay?: number;
+  /** Bảo hiểm / khách. */
+  baoHiemMoiKhach?: number;
+  /** Tip / đoàn (lump-sum). */
+  tipDoan?: number;
+}
 
 export function calcCase(
   items: ManualItem[],
@@ -78,7 +104,7 @@ export function calcCase(
   cfg: CaseConfig,
   tienXe: number,
   tienPhuThu: number,
-  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
+  dinhMuc: DinhMuc = {},
 ): BaoGiaCase {
   const { guests, pax, rooms } = cfg;
 
@@ -107,9 +133,10 @@ export function calcCase(
     .filter((i) => (i.loai === "transport" || i.loai === "extra") && i.gia)
     .reduce((s, i) => s + i.gia! * (i.so_luong ?? 1), 0);
 
-  const insurance = 100_000 * pax;
-  const guide = hdvGiaNgay * soNgay;
-  const tips = 500_000;
+  // ?? chứ KHÔNG phải ||: OP gõ 0 là chốt 0 đồng, || sẽ lẳng lặng kéo về mặc định.
+  const insurance = (dinhMuc.baoHiemMoiKhach ?? BAO_HIEM_MOI_KHACH_MAC_DINH) * pax;
+  const guide = (dinhMuc.hdvGiaNgay ?? HDV_GIA_NGAY_MAC_DINH) * soNgay;
+  const tips = dinhMuc.tipDoan ?? TIP_DOAN_MAC_DINH;
 
   const total_cost = hotel + meal + ticket + transport + insurance + guide + tips;
   const profit_vnd = profitUsd * exchangeRate * guests;
@@ -130,9 +157,9 @@ export function calcTier(
   guests: number,
   tienXe = 0,
   tienPhuThu = 0,
-  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
+  dinhMuc: DinhMuc = {},
 ): BaoGiaCase {
-  return calcCase(items, soNgay, exchangeRate, profitUsd, tierConfig(guests), tienXe, tienPhuThu, hdvGiaNgay);
+  return calcCase(items, soNgay, exchangeRate, profitUsd, tierConfig(guests), tienXe, tienPhuThu, dinhMuc);
 }
 
 /** Ma trận giá: 1 BaoGiaCase cho MỖI số khách trong danh sách (bậc tuỳ ý). */
@@ -144,9 +171,9 @@ export function calcTiers(
   guestsList: number[],
   tienXe = 0,
   tienPhuThu = 0,
-  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
+  dinhMuc: DinhMuc = {},
 ): BaoGiaCase[] {
-  return guestsList.map((g) => calcTier(items, soNgay, exchangeRate, profitUsd, g, tienXe, tienPhuThu, hdvGiaNgay));
+  return guestsList.map((g) => calcTier(items, soNgay, exchangeRate, profitUsd, g, tienXe, tienPhuThu, dinhMuc));
 }
 
 export function calcBaoGia(
@@ -157,10 +184,10 @@ export function calcBaoGia(
   profitUsd: number,
   tienXe = 0,
   tienPhuThu = 0,
-  hdvGiaNgay: number = HDV_GIA_NGAY_MAC_DINH,
+  dinhMuc: DinhMuc = {},
 ): BaoGiaKetQua {
   // 2 mức 16/20 (back-compat) — tái dùng engine bậc.
-  const [case_16, case_20] = calcTiers(items, soNgay, exchangeRate, profitUsd, [16, 20], tienXe, tienPhuThu, hdvGiaNgay);
+  const [case_16, case_20] = calcTiers(items, soNgay, exchangeRate, profitUsd, [16, 20], tienXe, tienPhuThu, dinhMuc);
 
   const gia_trung_binh_vnd = Math.round((case_16.final_price_vnd + case_20.final_price_vnd) / 2);
   const gia_trung_binh_usd = (case_16.final_price_usd + case_20.final_price_usd) / 2;

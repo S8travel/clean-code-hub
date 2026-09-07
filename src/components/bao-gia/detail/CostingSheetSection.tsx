@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Hotel, Utensils, Bus, Ticket, Plus, X, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,9 @@ interface Props {
   leadPax?: number;
 }
 
+/** Ba khoản tiền cố định sửa được ngay trên dòng footer. */
+type DinhMucTruong = "hdv_gia_ngay" | "bao_hiem_moi_khach" | "tip_doan";
+
 const GROUP_META: Record<CostingGroup["key"], { icon: React.ReactNode; tint: string }> = {
   transport: { icon: <Bus className="h-3.5 w-3.5" />,      tint: "text-cyan-700 bg-cyan-50" },
   hotel:     { icon: <Hotel className="h-3.5 w-3.5" />,    tint: "text-indigo-700 bg-indigo-50" },
@@ -34,6 +37,11 @@ const GROUP_META: Record<CostingGroup["key"], { icon: React.ReactNode; tint: str
 // + thành tiền). Sửa inline đơn giá / N / FOC (thêm-xoá dòng vẫn ở "Chương trình tour").
 export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, leadPax }: Props) {
   const [newG, setNewG] = useState("");
+  // Giá trị lúc bắt đầu sửa 3 ô định mức ở footer, để blur mà không đổi gì thì
+  // KHÔNG ghi DB — saveKetQua không tự kiểm tra chuyện đó.
+  // Phải khai TRƯỚC câu `return null` bên dưới: hook gọi sau một nhánh thoát sớm
+  // là sai thứ tự hook giữa các lần vẽ.
+  const truocKhiSua = useRef<Record<string, number | null>>({});
   const ket = draft.ket_qua;
   const sheet = costingSheet(draft);
   if (!ket || !sheet) return null;
@@ -64,6 +72,9 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
   const matchIdx = leadPax && leadPax > 0
     ? sheet.configs.reduce((acc, c, i) => (leadPax >= c.guests ? i : acc), -1)
     : -1;
+
+  const ghiDinhMuc = (truong: DinhMucTruong, giaTri: number | null) =>
+    updateDraftKetQua({ ...ket, [truong]: giaTri });
 
   // Live edit (onChange) → updateDraftKetQua; blur → saveKetQua persist.
   const liveItem = (idx: number, patch: Partial<BaoGiaItem>) => {
@@ -162,49 +173,6 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
         </span>
       </div>
 
-      {/* Công HDV/ngày — tự đặt theo tuyến, OP ghi đè được */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] text-slate-500 mr-1">HDV / ngày:</span>
-        <Input
-          type="text" inputMode="numeric"
-          value={hdvGiaNgay > 0 ? hdvGiaNgay.toLocaleString("vi-VN") : ""}
-          onChange={(e) => {
-            const digits = e.target.value.replace(/[^0-9]/g, "");
-            // Xoá trắng ô = trả về CHO hệ thống tự đặt, không phải "0 đồng".
-            updateDraftKetQua({ ...ket, hdv_gia_ngay: digits ? parseInt(digits, 10) : null });
-          }}
-          onBlur={() => saveKetQua({ ...ket, hdv_gia_ngay: ket.hdv_gia_ngay ?? null })}
-          placeholder="Tự đặt theo tuyến"
-          className="h-7 w-28 text-xs text-right"
-        />
-        <span className="text-[11px] text-slate-400">₫</span>
-        {ket.hdv_gia_ngay == null ? (
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 text-[10px]",
-              sapa ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500",
-            )}
-            title={sapa
-              ? "Lịch trình có Sapa → HDV chuyên tuyến 700.000 ₫/ngày cho cả tour. Gõ số khác để ghi đè."
-              : "Chưa chỉ định → dùng mức mặc định. Gõ số để ghi đè."}
-          >
-            {sapa ? "tự nhận: tuyến Sapa" : "mặc định"}
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => saveKetQua({ ...ket, hdv_gia_ngay: null })}
-            className="text-[10px] text-blue-600 hover:underline"
-            title="Bỏ số đã gõ, để hệ thống tự đặt theo tuyến"
-          >
-            ↺ về tự đặt
-          </button>
-        )}
-        <span className="text-[11px] text-slate-400">
-          × {ket.so_ngay ?? 1} ngày = <b className="text-slate-600">{fmtVnd(hdvGiaNgay * (ket.so_ngay ?? 1))} ₫</b>
-        </span>
-      </div>
-
       <div className="overflow-x-auto">
         <table className="text-xs border-collapse w-full min-w-[860px]">
           <thead>
@@ -283,7 +251,53 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
                       !isTotal && !isPrice && "bg-white text-slate-600",
                     )}
                   >
-                    {f.label}
+                    {f.oNhap ? (
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span>{f.oNhap.nhan}</span>
+                        <Input
+                          type="text" inputMode="numeric"
+                          value={f.oNhap.donGia > 0 ? f.oNhap.donGia.toLocaleString("vi-VN") : ""}
+                          onFocus={() => {
+                            truocKhiSua.current[f.oNhap!.truong] = ket[f.oNhap!.truong] ?? null;
+                          }}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/[^0-9]/g, "");
+                            // Xoá trắng ô = trả về CHO hệ thống tự đặt, KHÔNG phải "0 đồng".
+                            ghiDinhMuc(f.oNhap!.truong, digits ? parseInt(digits, 10) : null);
+                          }}
+                          onBlur={() => {
+                            const moi = ket[f.oNhap!.truong] ?? null;
+                            if (truocKhiSua.current[f.oNhap!.truong] === moi) return;
+                            saveKetQua({ ...ket, [f.oNhap!.truong]: moi });
+                          }}
+                          placeholder="tự đặt"
+                          className="h-6 w-24 text-xs text-right"
+                        />
+                        <span className="text-[11px] text-slate-400 w-12 text-left">{f.oNhap.donVi}</span>
+                        {f.oNhap.tuDat ? (
+                          <span
+                            className={cn(
+                              "rounded px-1.5 py-0.5 text-[10px] whitespace-nowrap",
+                              f.oNhap.ghiChuTuDat && f.oNhap.ghiChuTuDat !== "mức chung"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-slate-100 text-slate-500",
+                            )}
+                            title="Hệ thống tự đặt. Gõ số vào ô để ghi đè."
+                          >
+                            {f.oNhap.ghiChuTuDat ?? "mặc định"}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => saveKetQua({ ...ket, [f.oNhap!.truong]: null })}
+                            className="text-[10px] text-blue-600 hover:underline whitespace-nowrap"
+                            title="Bỏ số đã gõ, để hệ thống tự đặt lại"
+                          >
+                            ↺ về tự đặt
+                          </button>
+                        )}
+                      </div>
+                    ) : f.label}
                   </td>
                   {f.values.map((v, ti) => (
                     <td
