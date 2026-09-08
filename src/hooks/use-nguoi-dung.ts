@@ -21,6 +21,8 @@ export interface UserRoleRow {
   chi_xem: boolean;
   /** true = nhận yêu cầu báo giá đối tác gửi từ cổng 外網 (được chia lượt + nhận chuông). */
   nhan_yeu_cau_doi_tac: boolean;
+  /** true = phụ trách bảo hiểm: sửa được chi phí bảo hiểm kể cả khi đoàn đã quyết toán. */
+  phu_trach_bao_hiem: boolean;
   password_hash: string | null;
   created_at: string;
 }

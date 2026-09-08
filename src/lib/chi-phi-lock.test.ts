@@ -35,4 +35,20 @@ describe("isChiPhiLocked", () => {
     expect(isChiPhiLocked(null, qtSet, 10)).toBe(true);
     expect(isChiPhiLocked(undefined, qtSet, 10)).toBe(true);
   });
+
+  it("phụ trách bảo hiểm → sửa được RIÊNG dòng bảo hiểm dù đã quyết toán", () => {
+    const bh = { danhMuc: "bao_hiem", phuTrachBaoHiem: true };
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, bh)).toBe(false);
+  });
+
+  it("phụ trách bảo hiểm KHÔNG mở được mục khác", () => {
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "khach_san", phuTrachBaoHiem: true })).toBe(true);
+    // Không biết danh_muc (vd cascade nhiều mục) → vẫn khóa.
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { phuTrachBaoHiem: true })).toBe(true);
+  });
+
+  it("người KHÔNG được đánh dấu phụ trách → dòng bảo hiểm vẫn khóa", () => {
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "bao_hiem" })).toBe(true);
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "bao_hiem", phuTrachBaoHiem: false })).toBe(true);
+  });
 });

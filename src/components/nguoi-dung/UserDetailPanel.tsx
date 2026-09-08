@@ -46,6 +46,7 @@ const formFrom = (u: UserRoleRow): DetailForm => ({
   active: u.active,
   chi_xem: u.chi_xem,
   nhan_yeu_cau_doi_tac: u.nhan_yeu_cau_doi_tac,
+  phu_trach_bao_hiem: u.phu_trach_bao_hiem,
   password_hash: u.password_hash,
 });
 
@@ -374,6 +375,22 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
             <Switch
               checked={form.nhan_yeu_cau_doi_tac}
               onCheckedChange={(v) => set("nhan_yeu_cau_doi_tac", v)}
+            />
+          </div>
+
+          {/* Bảo hiểm về rất muộn (thanh toán định kỳ), thường sau khi đoàn đã
+              quyết toán và chi phí bị khóa. Bật cho người phụ trách để họ vào
+              được số bảo hiểm mà không phải nhờ admin — các mục khác vẫn khóa. */}
+          <div className="flex items-center justify-between rounded-md border px-3 py-2 col-span-2">
+            <div>
+              <p className="text-sm font-medium">{t("Phụ trách bảo hiểm")}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Sửa được chi phí bảo hiểm kể cả khi đoàn đã quyết toán (các mục chi phí khác vẫn khóa)")}
+              </p>
+            </div>
+            <Switch
+              checked={form.phu_trach_bao_hiem}
+              onCheckedChange={(v) => set("phu_trach_bao_hiem", v)}
             />
           </div>
 
