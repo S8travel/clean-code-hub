@@ -47,6 +47,7 @@ const formFrom = (u: UserRoleRow): DetailForm => ({
   chi_xem: u.chi_xem,
   nhan_yeu_cau_doi_tac: u.nhan_yeu_cau_doi_tac,
   phu_trach_bao_hiem: u.phu_trach_bao_hiem,
+  phu_trach_visa: u.phu_trach_visa,
   password_hash: u.password_hash,
 });
 
@@ -391,6 +392,20 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
             <Switch
               checked={form.phu_trach_bao_hiem}
               onCheckedChange={(v) => set("phu_trach_bao_hiem", v)}
+            />
+          </div>
+
+          {/* Visa cũng thanh toán định kỳ → số về muộn như bảo hiểm. */}
+          <div className="flex items-center justify-between rounded-md border px-3 py-2 col-span-2">
+            <div>
+              <p className="text-sm font-medium">{t("Phụ trách visa")}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Sửa được chi phí visa kể cả khi đoàn đã quyết toán (các mục chi phí khác vẫn khóa)")}
+              </p>
+            </div>
+            <Switch
+              checked={form.phu_trach_visa}
+              onCheckedChange={(v) => set("phu_trach_visa", v)}
             />
           </div>
 

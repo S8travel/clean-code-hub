@@ -51,4 +51,18 @@ describe("isChiPhiLocked", () => {
     expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "bao_hiem" })).toBe(true);
     expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "bao_hiem", phuTrachBaoHiem: false })).toBe(true);
   });
+
+  it("phụ trách visa → sửa được RIÊNG dòng visa dù đã quyết toán", () => {
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "visa", phuTrachVisa: true })).toBe(false);
+  });
+
+  it("hai cờ độc lập: phụ trách bảo hiểm KHÔNG mở visa và ngược lại", () => {
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "visa", phuTrachBaoHiem: true })).toBe(true);
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { danhMuc: "bao_hiem", phuTrachVisa: true })).toBe(true);
+    // Phụ trách cả hai → mở cả hai, mục khác vẫn khóa.
+    const ca2 = { phuTrachBaoHiem: true, phuTrachVisa: true };
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { ...ca2, danhMuc: "bao_hiem" })).toBe(false);
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { ...ca2, danhMuc: "visa" })).toBe(false);
+    expect(isChiPhiLocked("ke_toan", qtSet, 10, { ...ca2, danhMuc: "khach_san" })).toBe(true);
+  });
 });

@@ -23,6 +23,8 @@ export interface UserRoleRow {
   nhan_yeu_cau_doi_tac: boolean;
   /** true = phụ trách bảo hiểm: sửa được chi phí bảo hiểm kể cả khi đoàn đã quyết toán. */
   phu_trach_bao_hiem: boolean;
+  /** true = phụ trách visa: sửa được chi phí visa kể cả khi đoàn đã quyết toán. */
+  phu_trach_visa: boolean;
   password_hash: string | null;
   created_at: string;
 }
