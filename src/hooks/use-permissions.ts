@@ -74,6 +74,25 @@ export interface UserQuyenThem {
   ghi_chu: string | null;
 }
 
+/**
+ * Quyền THU HỒI của riêng một người (bảng `user_quyen_bo`) — ngược với
+ * `user_quyen_them`. Mỗi ô true = mất đúng quyền đó, dù vai trò có cho.
+ *
+ * Dùng khi một người không nên thấy một mục mà cả vai trò của họ thì vẫn cần —
+ * tắt ở ma trận là tắt cho cả nhóm, đổi vai trò thì kéo theo mọi quyền khác.
+ * KHÔNG áp cho admin (xem lib/quyen.ts).
+ */
+export interface UserQuyenBo {
+  id: number;
+  user_id: string;
+  resource: Resource;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  ghi_chu: string | null;
+}
+
 export function useRolePermissions() {
   return useQuery({
     queryKey: ["role_permissions"],
@@ -124,12 +143,30 @@ export function useQuyenThem(userId?: string | null) {
   });
 }
 
+/** Quyền bị thu hồi của một người (bảng user_quyen_bo). */
+export function useQuyenBo(userId?: string | null) {
+  return useQuery({
+    queryKey: ["user_quyen_bo", userId],
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("user_quyen_bo")
+        .select("*")
+        .eq("user_id", userId!);
+      if (error) throw error;
+      return (data || []) as UserQuyenBo[];
+    },
+  });
+}
+
 /**
  * Trả về true/false cho action của current user trên resource.
  *
  * Luật nằm ở `lib/quyen.ts` (thuần, có unit test). Ở đây chỉ nạp đúng nguồn:
  * 'specialist' đọc `user_permissions` (toàn bộ quyền của họ), vai trò khác lấy
- * ma trận vai trò rồi CỘNG THÊM `user_quyen_them`.
+ * ma trận vai trò rồi CỘNG THÊM `user_quyen_them`. Cuối cùng TRỪ ĐI
+ * `user_quyen_bo` (thu hồi riêng người này) — trừ chạy sau cùng và thắng.
  */
 export function usePermission(resource: Resource, action: PermAction): boolean {
   const { user } = useAuth();
@@ -137,6 +174,8 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
   const { data: perms = [] } = useRolePermissions();
   const { data: userPerms = [] } = useUserPermissions(laSpecialist ? user?.user_id : null);
   const { data: quyenThem = [] } = useQuyenThem(!laSpecialist ? user?.user_id : null);
+  // Nạp cho MỌI vai trò (kể cả specialist): thu hồi là lớp trừ chung.
+  const { data: quyenBo = [] } = useQuyenBo(user?.user_id);
 
   return tinhQuyen({
     role: user?.role ?? null,
@@ -146,6 +185,7 @@ export function usePermission(resource: Resource, action: PermAction): boolean {
     theoNguoi: laSpecialist
       ? userPerms.find((p) => p.resource === resource)
       : quyenThem.find((p) => p.resource === resource),
+    biThuHoi: quyenBo.find((p) => p.resource === resource),
   });
 }
 
@@ -255,6 +295,47 @@ export function useUpsertQuyenThem() {
     },
     onSuccess: (_d, { userId }) => {
       qc.invalidateQueries({ queryKey: ["user_quyen_them", userId] });
+    },
+  });
+}
+
+/**
+ * Lưu quyền THU HỒI của một người. Bỏ tick hết một resource = gỡ dòng đó (giữ
+ * dòng rỗng chỉ làm bảng phình ra và khiến người đọc tưởng đang thu hồi gì đó).
+ */
+export function useUpsertQuyenBo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId, rows, ghiChu,
+    }: {
+      userId: string;
+      rows: Omit<UserQuyenBo, "id" | "user_id" | "ghi_chu">[];
+      ghiChu?: string | null;
+    }) => {
+      const giu = rows.filter((r) => r.can_view || r.can_create || r.can_edit || r.can_delete);
+      const boDi = rows.filter((r) => !giu.some((g) => g.resource === r.resource)).map((r) => r.resource);
+
+      if (giu.length) {
+        const { error } = await externalSupabase
+          .from("user_quyen_bo")
+          .upsert(
+            giu.map((r) => ({ ...r, user_id: userId, ghi_chu: ghiChu ?? null })),
+            { onConflict: "user_id,resource" },
+          );
+        if (error) throw error;
+      }
+      if (boDi.length) {
+        const { error } = await externalSupabase
+          .from("user_quyen_bo")
+          .delete()
+          .eq("user_id", userId)
+          .in("resource", boDi);
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_d, { userId }) => {
+      qc.invalidateQueries({ queryKey: ["user_quyen_bo", userId] });
     },
   });
 }

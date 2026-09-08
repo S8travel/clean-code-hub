@@ -41,6 +41,11 @@ export interface ThamSoTinhQuyen<R extends string> {
   theoVaiTro: QuyenRow | undefined;
   /** Dòng quyền riêng của chính người này cho resource này. */
   theoNguoi: QuyenRow | undefined;
+  /**
+   * Dòng THU HỒI của chính người này cho resource này (`user_quyen_bo`).
+   * true ở một ô = mất đúng quyền đó, dù vai trò hay quyền riêng có cho.
+   */
+  biThuHoi?: QuyenRow | undefined;
 }
 
 /**
@@ -51,15 +56,23 @@ export interface ThamSoTinhQuyen<R extends string> {
  *   sẵn có của vai trò đó (nó vốn được dựng để cấu hình từng người), đổi đi là
  *   thay đổi quyền của những người đang chạy — nên giữ nguyên.
  * - Vai trò khác: ma trận là nền; quyền riêng chỉ mở thêm.
+ *
+ * `biThuHoi` chạy SAU CÙNG và thắng mọi nguồn cho: dùng khi một người không nên
+ * thấy một mục mà cả vai trò của họ thì vẫn cần. KHÔNG áp cho `admin` — admin là
+ * đường quay lại sửa phân quyền, thu hồi được của admin là tự khoá cửa.
  */
 export function tinhQuyen<R extends string>({
   role,
   action,
   theoVaiTro,
   theoNguoi,
+  biThuHoi,
 }: ThamSoTinhQuyen<R>): boolean {
   if (!role) return false;
   if (role === "admin") return true;
-  if (role === "specialist") return coQuyen(theoNguoi, action);
-  return coQuyen(theoVaiTro, action) || coQuyen(theoNguoi, action);
+  const duocCho = role === "specialist"
+    ? coQuyen(theoNguoi, action)
+    : coQuyen(theoVaiTro, action) || coQuyen(theoNguoi, action);
+  if (!duocCho) return false;
+  return !coQuyen(biThuHoi, action);
 }

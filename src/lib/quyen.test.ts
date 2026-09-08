@@ -83,3 +83,49 @@ describe("coQuyen", () => {
     expect(coQuyen(r, "delete")).toBe(true);
   });
 });
+
+describe("tinhQuyen — thu hồi theo người (user_quyen_bo)", () => {
+  const hoiBo = (
+    role: string | null,
+    theoVaiTro: QuyenRow | undefined,
+    biThuHoi: QuyenRow | undefined,
+    action: "view" | "create" | "edit" | "delete" = "view",
+  ) => tinhQuyen({ role, resource: "danh_muc", action, theoVaiTro, theoNguoi: undefined, biThuHoi });
+
+  it("thu hồi thắng quyền của vai trò", () => {
+    expect(hoiBo("truong_phong", row({ can_view: true }), row({ can_view: true }))).toBe(false);
+  });
+
+  it("thu hồi đúng ô nào mất ô đó, ô khác giữ nguyên", () => {
+    const vaiTro = row({ can_view: true, can_edit: true });
+    const bo = row({ can_edit: true });
+    expect(hoiBo("truong_phong", vaiTro, bo)).toBe(true);            // xem: còn
+    expect(hoiBo("truong_phong", vaiTro, bo, "edit")).toBe(false);   // sửa: mất
+  });
+
+  it("thu hồi cũng thắng quyền cấp thêm theo người", () => {
+    expect(tinhQuyen({
+      role: "nhan_vien", resource: "danh_muc", action: "view",
+      theoVaiTro: undefined,
+      theoNguoi: row({ can_view: true }),
+      biThuHoi: row({ can_view: true }),
+    })).toBe(false);
+  });
+
+  it("thu hồi áp cho cả specialist", () => {
+    expect(tinhQuyen({
+      role: "specialist", resource: "danh_muc", action: "view",
+      theoVaiTro: undefined,
+      theoNguoi: row({ can_view: true }),
+      biThuHoi: row({ can_view: true }),
+    })).toBe(false);
+  });
+
+  it("KHÔNG áp cho admin — admin là đường quay lại sửa phân quyền", () => {
+    expect(hoiBo("admin", undefined, row({ can_view: true }))).toBe(true);
+  });
+
+  it("không có dòng thu hồi → giữ nguyên luật cũ", () => {
+    expect(hoiBo("truong_phong", row({ can_view: true }), undefined)).toBe(true);
+  });
+});

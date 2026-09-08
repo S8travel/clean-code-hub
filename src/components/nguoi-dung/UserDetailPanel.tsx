@@ -29,6 +29,7 @@ import { t, useTranslate } from "@/lib/i18n";
 import { VAI_TRO_OPTS, BO_PHAN_OPTS, THI_TRUONG_GROUPS } from "./constants";
 import { SpecialistPermissionsSection } from "./SpecialistPermissionsSection";
 import { QuyenThemSection } from "./QuyenThemSection";
+import { QuyenBoSection } from "./QuyenBoSection";
 
 type DetailForm = Omit<UserRoleRow, "id" | "created_at">;
 
@@ -491,6 +492,12 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
             Specialist không có khối này — quyền của họ vốn đã là per-user. */}
         {form.role !== "specialist" && selected.user_id && (
           <QuyenThemSection userId={selected.user_id} />
+        )}
+
+        {/* Thu hồi riêng một người: mục mà cả vai trò của họ thì vẫn cần dùng.
+            Hiện cho mọi vai trò (kể cả specialist) — trừ chạy sau cùng. */}
+        {selected.user_id && (
+          <QuyenBoSection userId={selected.user_id} laAdmin={form.role === "admin"} />
         )}
 
         <div className="text-[11px] text-muted-foreground border-t pt-3">
