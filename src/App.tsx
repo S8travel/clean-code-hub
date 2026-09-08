@@ -14,6 +14,7 @@ import LoginPage from "./pages/LoginPage.tsx";
 import DashboardPage from "./pages/DashboardPage.tsx";
 import Index from "./pages/Index.tsx";
 import DoanDetail from "./pages/DoanDetail.tsx";
+import { CanQuyen } from "@/components/CanQuyen";
 
 // LAZY — split bundle, chỉ tải khi truy cập route
 const NhaHangPage          = lazy(() => import("./pages/NhaHangPage.tsx"));
@@ -101,19 +102,19 @@ const App = () => (
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/doan" element={<Index />} />
                 <Route path="/doan/:id" element={<DoanDetail />} />
-                <Route path="/quan-ly/nha-hang" element={<NhaHangPage />} />
-                <Route path="/quan-ly/khach-san" element={<KhachSanPage />} />
-                <Route path="/quan-ly/canh-diem" element={<CanhDiemPage />} />
-                <Route path="/quan-ly/chuyen-bay" element={<ChuyenBayPage />} />
-                <Route path="/quan-ly/xe" element={<NhaXePage />} />
-                <Route path="/quan-ly/visa" element={<VisaPage />} />
-                <Route path="/quan-ly/nha-cung-cap" element={<NhaCungCapPage />} />
+                <Route path="/quan-ly/nha-hang" element={<CanQuyen resource="danh_muc"><NhaHangPage /></CanQuyen>} />
+                <Route path="/quan-ly/khach-san" element={<CanQuyen resource="danh_muc"><KhachSanPage /></CanQuyen>} />
+                <Route path="/quan-ly/canh-diem" element={<CanQuyen resource="danh_muc"><CanhDiemPage /></CanQuyen>} />
+                <Route path="/quan-ly/chuyen-bay" element={<CanQuyen resource="danh_muc"><ChuyenBayPage /></CanQuyen>} />
+                <Route path="/quan-ly/xe" element={<CanQuyen resource="danh_muc"><NhaXePage /></CanQuyen>} />
+                <Route path="/quan-ly/visa" element={<CanQuyen resource="danh_muc"><VisaPage /></CanQuyen>} />
+                <Route path="/quan-ly/nha-cung-cap" element={<CanQuyen resource="danh_muc"><NhaCungCapPage /></CanQuyen>} />
                 <Route path="/quan-ly/voucher" element={<VoucherPage />} />
                 <Route path="/de-nghi-thanh-toan" element={<DNTTPage />} />
                 <Route path="/hoan-ung" element={<HoanUngPage />} />
                 <Route path="/thanh-toan-dinh-ky" element={<ThanhToanDinhKyPage />} />
                 <Route path="/cong-no" element={<CongNoPage />} />
-                <Route path="/quan-ly/hdv" element={<HDVPage />} />
+                <Route path="/quan-ly/hdv" element={<CanQuyen resource="danh_muc"><HDVPage /></CanQuyen>} />
                 <Route path="/quan-ly/nguoi-dung" element={<NguoiDungPage />} />
                 <Route path="/hoa-don-unc" element={<HoaDonUNCPage />} />
                 <Route path="/quan-ly/seri" element={<SeriPage />} />
