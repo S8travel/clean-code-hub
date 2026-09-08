@@ -6,9 +6,9 @@ import { isChiPhiLocked } from "@/lib/chi-phi-lock";
  * true = chi phí của đoàn bị khóa (đã quyết toán + user KHÔNG phải admin).
  * Dùng ở UI để disable control sửa con số chi phí. Giữ nguyên luồng thanh toán.
  *
- * `danhMuc`: truyền 'bao_hiem' để hỏi riêng mục bảo hiểm — người được đánh dấu
- * phụ trách bảo hiểm (user_roles.phu_trach_bao_hiem) vẫn sửa được mục đó sau
- * quyết toán, vì số bảo hiểm (thanh toán định kỳ) thường về muộn hơn quyết toán.
+ * `danhMuc`: truyền 'bao_hiem' / 'visa' để hỏi riêng mục đó — người được đánh dấu
+ * phụ trách mục ấy (user_roles.phu_trach_bao_hiem / phu_trach_visa) vẫn sửa được
+ * sau quyết toán, vì hai nhóm này thanh toán định kỳ nên số về muộn hơn quyết toán.
  */
 export function useChiPhiLocked(doanId?: number | null, danhMuc?: string | null): boolean {
   const { user } = useAuth();
@@ -16,6 +16,7 @@ export function useChiPhiLocked(doanId?: number | null, danhMuc?: string | null)
   return isChiPhiLocked(user?.role ?? null, qtPaidSet ?? null, doanId ?? null, {
     danhMuc,
     phuTrachBaoHiem: user?.phu_trach_bao_hiem,
+    phuTrachVisa: user?.phu_trach_visa,
   });
 }
 
@@ -35,6 +36,7 @@ export function useChiPhiLockGuard() {
       isChiPhiLocked(user?.role ?? null, qtPaidSet ?? null, doanId ?? null, {
         danhMuc,
         phuTrachBaoHiem: user?.phu_trach_bao_hiem,
+        phuTrachVisa: user?.phu_trach_visa,
       })
     ) {
       throw new Error("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được.");

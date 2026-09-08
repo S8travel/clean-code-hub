@@ -142,6 +142,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   // Bảo hiểm hỏi riêng: người phụ trách bảo hiểm vẫn sửa được mục này sau khi
   // đoàn quyết toán (số bảo hiểm — thanh toán định kỳ — thường về muộn hơn).
   const lockedBaoHiem = useChiPhiLocked(doanId, "bao_hiem");
+  const lockedVisa = useChiPhiLocked(doanId, "visa");
   const qc = useQueryClient();
   const { data: chiPhiRows = [], refetch: refetchChiPhi } = useChiPhiList(doanId, activeNhomId);
   const { data: dnttList = [], refetch: refetchDntt } = useDNTTList(doanId);
@@ -364,6 +365,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
             {!lockedBaoHiem && (
               <> {t("Riêng mục Bảo hiểm bạn vẫn sửa được vì đang phụ trách bảo hiểm.")}</>
             )}
+            {!lockedVisa && (
+              <> {t("Riêng mục Visa bạn vẫn sửa được vì đang phụ trách visa.")}</>
+            )}
           </span>
         </div>
       )}
@@ -405,7 +409,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
         {/* Visa — ẩn cho tour nội địa (xem tourProfile), khớp BookingVisaXeTab. */}
         {tourProfile(doan?.loai_tour).showVisa && (
-          <ChiPhiVisaSection doanId={doanId} locked={locked} />
+          <ChiPhiVisaSection doanId={doanId} locked={lockedVisa} />
         )}
 
         {/* Vé máy bay — chỉ outbound + nội địa (xem tourProfile). Inbound ẩn. */}

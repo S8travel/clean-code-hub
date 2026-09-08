@@ -6,21 +6,24 @@
 
 /** Nhóm chi phí được miễn khóa cho đúng người phụ trách. */
 export const DANH_MUC_BAO_HIEM = "bao_hiem";
+export const DANH_MUC_VISA = "visa";
 
 export interface MienTruKhoaChiPhi {
   /** danh_muc của dòng chi phí đang đụng tới. Không biết → coi như KHÔNG được miễn. */
   danhMuc?: string | null;
   /** user_roles.phu_trach_bao_hiem — người phụ trách mục bảo hiểm. */
   phuTrachBaoHiem?: boolean | null;
+  /** user_roles.phu_trach_visa — người phụ trách mục visa. */
+  phuTrachVisa?: boolean | null;
 }
 
 /**
  * true = chi phí của đoàn bị khóa (đã quyết toán + user KHÔNG phải admin).
  *
- * Ngoại lệ `mienTru`: bảo hiểm nằm trong nhóm thanh toán định kỳ nên số về rất
- * muộn — thường sau khi đoàn đã quyết toán. Người được đánh dấu phụ trách bảo
- * hiểm vẫn sửa được RIÊNG dòng danh_muc='bao_hiem'; mọi mục khác vẫn khóa.
- * An toàn vì bảo hiểm do công ty trả (tien_hdv = 0) → không lệch số quyết toán HDV.
+ * Ngoại lệ `mienTru`: bảo hiểm và visa nằm trong nhóm thanh toán định kỳ nên số
+ * về rất muộn — thường sau khi đoàn đã quyết toán. Người được đánh dấu phụ trách
+ * mục nào thì sửa được RIÊNG dòng của mục đó; mọi mục khác vẫn khóa. An toàn vì
+ * cả hai đều do công ty trả (tien_hdv = 0) → không lệch số quyết toán HDV.
  */
 export function isChiPhiLocked(
   role: string | null | undefined,
@@ -32,5 +35,6 @@ export function isChiPhiLocked(
   if (doanId == null) return false;
   if (!qtPaidSet?.has(doanId)) return false;
   if (mienTru?.phuTrachBaoHiem && mienTru.danhMuc === DANH_MUC_BAO_HIEM) return false;
+  if (mienTru?.phuTrachVisa && mienTru.danhMuc === DANH_MUC_VISA) return false;
   return true;
 }

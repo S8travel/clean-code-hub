@@ -280,6 +280,9 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
     upsertMut.mutate({
       id: row.id,
       doan_id: doanId,
+      // danh_muc để lockGuard nhận ra dòng visa (ngoại lệ khóa quyết toán cho
+      // người phụ trách visa) — không phải để đổi giá trị cột.
+      danh_muc: "visa",
       so_luong: local.so_luong,
       don_gia: donGiaVnd,
       don_gia_raw: local.don_gia_raw || null,
@@ -299,6 +302,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
     upsertMut.mutate({
       id: row.id,
       doan_id: doanId,
+      danh_muc: "visa",
       tien_cong_ty: next === "cong_ty" ? total : 0,
       tien_hdv: next === "hdv" ? total : 0,
     });
@@ -338,7 +342,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
   // ── Định kỳ toggle ────────────────────────────────────────────────────────
   const handleToggleDinhKy = (row: typeof visaRows[0]) => {
     const newVal = !row.thanh_toan_dinh_ky;
-    upsertMut.mutate({ id: row.id, doan_id: doanId, thanh_toan_dinh_ky: newVal }, {
+    upsertMut.mutate({ id: row.id, doan_id: doanId, danh_muc: "visa", thanh_toan_dinh_ky: newVal }, {
       onSuccess: () => toast.success(newVal ? t("Đã bật thanh toán định kỳ") : t("Đã tắt thanh toán định kỳ")),
     });
   };
@@ -729,7 +733,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                           <Plus className="h-3 w-3" />
                         </Button>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteMut.mutate({ id: row.id, doanId }, { onSuccess: () => toast.success(t("Đã xóa")) })}
+                          onClick={() => deleteMut.mutate({ id: row.id, doanId, danh_muc: "visa" }, { onSuccess: () => toast.success(t("Đã xóa")) })}
                           disabled={deleteMut.isPending || locked}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
