@@ -551,7 +551,9 @@ export function useUpsertChiPhi() {
   return useMutation({
     mutationKey: CHI_PHI_MUTATION_KEY,
     mutationFn: async (payload: Partial<ChiPhiRow> & { doan_id: number }) => {
-      lockGuard(payload.doan_id); // đoàn đã quyết toán → chặn (trừ admin)
+      // danh_muc: mở ngoại lệ cho người phụ trách bảo hiểm (xem lib/chi-phi-lock.ts).
+      // Update chỉ truyền id mà không kèm danh_muc → không được miễn, khóa như cũ.
+      lockGuard(payload.doan_id, payload.danh_muc); // đoàn đã quyết toán → chặn (trừ admin)
       // thanh_tien là generated column — loại trước khi insert/update.
       const { thanh_tien, ...clean } = payload;
       void thanh_tien;
@@ -609,7 +611,7 @@ export function useDeleteChiPhi() {
   return useMutation({
     mutationKey: CHI_PHI_MUTATION_KEY,
     mutationFn: async ({ id, doanId, mo_ta, danh_muc }: { id: number; doanId: number; mo_ta?: string | null; danh_muc?: string | null }) => {
-      lockGuard(doanId); // đoàn đã quyết toán → chặn (trừ admin)
+      lockGuard(doanId, danh_muc); // đoàn đã quyết toán → chặn (trừ admin)
 
       // Gom main + extras phát sinh ([dvps_<id>]) để xóa CÙNG nhau. Xóa dòng DV
       // chính mà bỏ extras → extras MỒ CÔI (group theo id cha đã mất nên vô hình

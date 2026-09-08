@@ -139,6 +139,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
   // Đoàn đã quyết toán → khóa sửa CON SỐ chi phí (trừ admin). Luồng thanh toán giữ nguyên.
   const locked = useChiPhiLocked(doanId);
+  // Bảo hiểm hỏi riêng: người phụ trách bảo hiểm vẫn sửa được mục này sau khi
+  // đoàn quyết toán (số bảo hiểm — thanh toán định kỳ — thường về muộn hơn).
+  const lockedBaoHiem = useChiPhiLocked(doanId, "bao_hiem");
   const qc = useQueryClient();
   const { data: chiPhiRows = [], refetch: refetchChiPhi } = useChiPhiList(doanId, activeNhomId);
   const { data: dnttList = [], refetch: refetchDntt } = useDNTTList(doanId);
@@ -356,7 +359,12 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       {locked && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 flex items-center gap-2 text-sm text-amber-800">
           <span className="text-base">🔒</span>
-          <span>{t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được số liệu. (Vẫn dùng được nút thanh toán / hóa đơn.)")}</span>
+          <span>
+            {t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được số liệu. (Vẫn dùng được nút thanh toán / hóa đơn.)")}
+            {!lockedBaoHiem && (
+              <> {t("Riêng mục Bảo hiểm bạn vẫn sửa được vì đang phụ trách bảo hiểm.")}</>
+            )}
+          </span>
         </div>
       )}
 
@@ -410,7 +418,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
           soKhach={soKhach}
           ngayDi={doan?.ngay_di ?? null}
           ngayVe={doan?.ngay_ve ?? null}
-          locked={locked}
+          locked={lockedBaoHiem}
         />
 
         <ChiPhiHDVSection doanId={doanId} doan={doan} locked={locked} />

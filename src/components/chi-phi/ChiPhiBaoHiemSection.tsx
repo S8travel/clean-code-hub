@@ -148,6 +148,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
     upsertMut.mutate({
       id: existing.id,
       doan_id: doanId,
+      // danh_muc để lockGuard nhận ra đây là dòng bảo hiểm (ngoại lệ khóa quyết
+      // toán cho người phụ trách bảo hiểm) — không phải để đổi giá trị cột.
+      danh_muc: "bao_hiem",
       tien_cong_ty: next === "cong_ty" ? thanhTien : 0,
       tien_hdv: next === "hdv" ? thanhTien : 0,
     });
