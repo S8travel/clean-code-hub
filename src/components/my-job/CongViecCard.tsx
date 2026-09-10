@@ -1,9 +1,9 @@
-import { format, isBefore, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CongViecRow } from "@/hooks/use-cong-viec";
 import { t, useTranslate } from "@/lib/i18n";
-import { soNgayTreo, tanSuatHieuLuc, thuocLuongNhac } from "@/lib/nhac-cong-viec";
+import { quaHan, soNgayTreo, tanSuatHieuLuc, thuocLuongNhac } from "@/lib/nhac-cong-viec";
 
 // Labels kept as keys; t() applied at render to pick up language switch.
 const UU_TIEN_CFG: Record<string, { labelKey: string; cls: string }> = {
@@ -41,11 +41,12 @@ export default function CongViecCard({ task, viewMode, onClick }: Props) {
   useTranslate();
   const uu = UU_TIEN_CFG[task.do_uu_tien] ?? { labelKey: task.do_uu_tien, cls: "bg-muted text-muted-foreground" };
   const tt = TRANG_THAI_CFG[task.trang_thai] ?? { labelKey: task.trang_thai, cls: "bg-muted text-muted-foreground" };
+  // Dùng chung định nghĩa quá hạn với luật nhắc (ngày lịch Việt Nam, đúng ngày
+  // hết hạn CHƯA tính là trễ) — kẻo thẻ bật đỏ mà chuông chưa coi là quá hạn.
   const isOverdue =
-    task.han_xu_ly &&
     task.trang_thai !== "hoan_thanh" &&
     task.trang_thai !== "tu_choi" &&
-    isBefore(parseISO(task.han_xu_ly), new Date());
+    quaHan(task.han_xu_ly, new Date());
 
   // Gần như không việc nào nhập hạn xử lý, nên "treo bao lâu" mới là dấu hiệu
   // cho thấy việc đang mốc. Chỉ kêu khi đã quá một tuần.

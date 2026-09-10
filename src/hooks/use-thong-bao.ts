@@ -58,10 +58,14 @@ export function useThongBaoInfinite(userId: string | null | undefined, tab: stri
       if (tab === "deadline") {
         q = q.or("loai.like.deadline%,loai.in.(lead_qua_han,lead_follow_up_today)");
       } else if (tab === "cong_viec") {
-        q = q.in("loai", ["giao_viec", "dntt_can_duyet", "thong_tin_doan"]);
+        q = q.in("loai", [
+          "giao_viec", "nhac_viec", "nhac_viec_tay", "nhac_viec_da_giao",
+          "dntt_can_duyet", "thong_tin_doan",
+        ]);
       } else if (tab === "khac") {
         q = q
           .not("loai", "like", "deadline%")
+          .not("loai", "like", "nhac_viec%")
           .not("loai", "in", "(giao_viec,dntt_can_duyet,thong_tin_doan,lead_qua_han,lead_follow_up_today)");
       }
       const { data, error, count } = await q

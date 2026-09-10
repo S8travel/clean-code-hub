@@ -13,6 +13,7 @@ export const ICON_BY_LOAI: Record<string, string> = {
   // Công việc
   giao_viec:                 "💼",
   nhac_viec:                 "⏰",
+  nhac_viec_tay:             "⏰",
   nhac_viec_da_giao:         "📤",
   thong_tin_doan:            "🔄",
   dntt_can_duyet:            "✅",
@@ -38,7 +39,7 @@ export function iconFor(loai: string) {
 export const TAB_FILTER: Record<string, (loai: string) => boolean> = {
   all:       () => true,
   deadline:  (l) => l.startsWith("deadline") || l === "lead_qua_han" || l === "lead_follow_up_today",
-  cong_viec: (l) => l === "giao_viec" || l === "nhac_viec" || l === "nhac_viec_da_giao" || l === "dntt_can_duyet" || l === "thong_tin_doan",
+  cong_viec: (l) => l === "giao_viec" || l.startsWith("nhac_viec") || l === "dntt_can_duyet" || l === "thong_tin_doan",
   khac:      (l) => !l.startsWith("deadline") && !l.startsWith("nhac_viec") && l !== "giao_viec" && l !== "dntt_can_duyet" && l !== "thong_tin_doan" && l !== "lead_qua_han" && l !== "lead_follow_up_today",
 };
 
@@ -75,6 +76,9 @@ export function targetUrl(tb: ThongBaoRow): string | null {
   // cong_viec_id → về danh sách; đúng một việc thì mở thẳng việc đó.
   if (loai === "nhac_viec" && cong_viec_id)   return `/my-job?cong_viec=${cong_viec_id}`;
   if (loai === "nhac_viec")                   return `/my-job?viec=duoc-giao`;
+  // Người giao bấm "Nhắc ngay" — luôn gắn đúng một việc.
+  if (loai === "nhac_viec_tay" && cong_viec_id) return `/my-job?cong_viec=${cong_viec_id}`;
+  if (loai === "nhac_viec_tay")               return `/my-job?viec=duoc-giao`;
   // Nhắc người giao: mở thẳng mục "Tôi đã giao" để đi giục.
   if (loai === "nhac_viec_da_giao")           return `/my-job?viec=da-giao`;
   if (loai === "dntt_can_duyet")              return `/de-nghi-thanh-toan`;

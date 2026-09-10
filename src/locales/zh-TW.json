@@ -2521,5 +2521,10 @@
   "Mức ưu tiên đang chọn sẽ nhắc": "目前優先等級的提醒頻率",
   "Việc này sẽ không bao giờ tự nhắc.": "此工作永遠不會自動提醒。",
   "Nhắc người nhận cho tới khi việc xong": "在完成之前持續提醒接收人",
-  "Việc quá hạn sẽ tự nhắc mỗi ngày": "逾期的工作會自動改為每天提醒"
+  "Việc quá hạn sẽ tự nhắc mỗi ngày": "逾期的工作會自動改為每天提醒",
+  "Không nhắc": "不提醒",
+  "Hàng ngày": "每天",
+  "3 ngày một lần": "每 3 天一次",
+  "Hàng tuần": "每週",
+  "Tự động theo độ ưu tiên": "依優先等級自動決定"
 }

@@ -381,6 +381,10 @@ interface NhacNgayPayload {
 /**
  * Nút "Nhắc ngay" của người giao: bắn chuông cho người nhận NGAY, không chờ
  * kỳ nhắc tự động. Ghi luôn `nhac_lan_cuoi` để cron sáng mai không nhắc trùng.
+ *
+ * Dùng loại riêng `nhac_viec_tay`, KHÔNG dùng `nhac_viec`: trần chống phiền của
+ * cron đếm theo NGƯỜI + loại `nhac_viec`, nên nếu giục tay ghi cùng loại thì một
+ * cú giục lẻ buổi chiều sẽ nuốt mất chuông tổng sáng hôm sau về mọi việc khác.
  */
 export function useNhacNgay() {
   const qc = useQueryClient();
@@ -389,7 +393,7 @@ export function useNhacNgay() {
       const { error } = await externalSupabase.from("thong_bao").insert({
         user_id: p.nguoi_nhan,
         cong_viec_id: p.id,
-        loai: "nhac_viec",
+        loai: "nhac_viec_tay",
         tieu_de: `Nhắc việc chưa xong: ${p.tieu_de}`,
         noi_dung: `${p.ten_nguoi_giao} vừa nhắc bạn hoàn thành việc này.`,
         is_read: false,
