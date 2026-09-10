@@ -2526,5 +2526,16 @@
   "Hàng ngày": "每天",
   "3 ngày một lần": "每 3 天一次",
   "Hàng tuần": "每週",
-  "Tự động theo độ ưu tiên": "依優先等級自動決定"
+  "Tự động theo độ ưu tiên": "依優先等級自動決定",
+  "Nhận thông báo": "接收通知",
+  "Tắt mảng nào thì người này không nhận chuông lẫn báo trên điện thoại của mảng đó nữa": "關閉某個項目後，此人將不再收到該項目的鈴鐺通知與手機推播",
+  "Đã tắt mọi mảng — người này sẽ không nhận bất kỳ thông báo nào ngoài cảnh báo hệ thống.": "已關閉所有項目，除系統警示外此人不會收到任何通知。",
+  "Được giao việc, người nhận cập nhật, bình luận, nhắc việc chưa xong": "指派工作、接收人更新、留言、未完成提醒",
+  "Đoàn mới, đổi thông tin đoàn, hạn booking, sự cố, thay đổi giá": "新團、團資訊變更、預訂期限、事故、價格變動",
+  "Khách tiềm năng": "潛在客戶",
+  "Lead mới, lead lạnh, lead quá hạn, tin nhắn Facebook": "新名單、冷名單、逾期名單、Facebook 訊息",
+  "Báo giá & đối tác": "報價與夥伴",
+  "Đối tác gửi yêu cầu báo giá hoặc xin sửa chương trình": "夥伴送出報價需求或請求修改行程",
+  "Kế toán": "會計",
+  "Đề nghị thanh toán chờ duyệt": "待審核的付款申請"
 }
