@@ -206,10 +206,13 @@ export default function MyJobPage() {
   // Mở từ thông báo: /my-job?cong_viec=ID → switch sang tab Giao việc + auto-mở
   // popup chi tiết. GiaoViecTab tự read param, mình chỉ cần force tab.
   const congViecParam = searchParams.get("cong_viec");
-  const [activeTab, setActiveTab] = useState(congViecParam ? "giao-viec" : "tong-quan");
+  // Chuông nhắc việc gộp (nhiều việc) không gắn id nào → dùng ?viec=duoc-giao |
+  // da-giao để mở đúng mục trong tab Giao việc.
+  const viecParam = searchParams.get("viec");
+  const [activeTab, setActiveTab] = useState(congViecParam || viecParam ? "giao-viec" : "tong-quan");
   useEffect(() => {
-    if (congViecParam) setActiveTab("giao-viec");
-  }, [congViecParam]);
+    if (congViecParam || viecParam) setActiveTab("giao-viec");
+  }, [congViecParam, viecParam]);
   const scope = useDoanScope();
   const { data: allDoan = [], isLoading: loadingDoan } = useDoanList(
     scope.phanLoaiTour,
@@ -827,6 +830,7 @@ export default function MyJobPage() {
                 userId={uid}
                 userName={user.ho_ten}
                 initialTaskId={congViecParam ? Number(congViecParam) : null}
+                initialView={viecParam === "da-giao" ? "sent" : viecParam === "duoc-giao" ? "received" : null}
                 onConsumeInitialTask={() => {
                   const next = new URLSearchParams(searchParams);
                   next.delete("cong_viec");

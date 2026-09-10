@@ -16,6 +16,15 @@ export interface CongViecRow {
   han_xu_ly: string | null;
   trang_thai: string;
   ghi_chu_ket_qua: string | null;
+  /**
+   * 'tay' = người tự bấm "Tạo việc" (được nhắc);
+   * 'tu_dong' = hệ thống sinh (hóa đơn lệch, phân việc đoàn, hủy đoàn) — không nhắc.
+   */
+  nguon_tao: string;
+  /** Người giao chọn khi tạo việc; null = để hệ thống suy theo độ ưu tiên. */
+  tan_suat_nhac: string | null;
+  /** Lần gần nhất việc bị nhắc (cron hoặc nút "Nhắc ngay"). */
+  nhac_lan_cuoi: string | null;
   created_at: string;
   updated_at: string;
   // Enriched
@@ -104,6 +113,9 @@ export function useCongViecList(userId: string | null | undefined) {
 
       return tasks.map((t): CongViecRow => ({
         ...t,
+        nguon_tao: t.nguon_tao ?? "tu_dong",
+        tan_suat_nhac: t.tan_suat_nhac ?? null,
+        nhac_lan_cuoi: t.nhac_lan_cuoi ?? null,
         created_at: t.created_at ?? "",
         updated_at: t.updated_at ?? "",
         ten_nguoi_giao: t.nguoi_giao === SYSTEM_USER_ID ? "Hệ thống" : (nameMap[t.nguoi_giao] ?? null),
@@ -186,6 +198,8 @@ interface CreateCongViecPayload {
   loai_viec: string;
   do_uu_tien: string;
   han_xu_ly?: string | null;
+  /** null = để hệ thống suy tần suất theo độ ưu tiên. */
+  tan_suat_nhac?: string | null;
   ten_nguoi_giao: string;
   ten_doan?: string | null;
 }
@@ -205,6 +219,9 @@ export function useCreateCongViec() {
           loai_viec: p.loai_viec,
           do_uu_tien: p.do_uu_tien,
           han_xu_ly: p.han_xu_ly || null,
+          tan_suat_nhac: p.tan_suat_nhac || null,
+          // Việc gõ tay từ màn "Tạo việc" — luồng DUY NHẤT được nhắc.
+          nguon_tao: "tay",
           trang_thai: "cho_nhan",
         })
         .select("id")
@@ -321,6 +338,78 @@ export function useCreateCongViecComment() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: [CV_CMT_QK, vars.cong_viec_id] });
       qc.invalidateQueries({ queryKey: ["thong_bao", "count", vars.notify_user_id] });
+    },
+  });
+}
+
+// ── Nhắc việc chưa xong ────────────────────────────────────────────────────────
+
+interface UpdateTanSuatPayload {
+  id: number;
+  /** null = trả về mặc định theo độ ưu tiên. */
+  tan_suat_nhac: string | null;
+  nguoi_giao: string;
+  nguoi_nhan: string;
+}
+
+/** Người giao đổi tần suất nhắc của một việc đã giao. */
+export function useUpdateTanSuatNhac() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: UpdateTanSuatPayload) => {
+      const { error } = await externalSupabase
+        .from("cong_viec")
+        .update({ tan_suat_nhac: p.tan_suat_nhac })
+        .eq("id", p.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [CV_QK, vars.nguoi_giao] });
+      qc.invalidateQueries({ queryKey: [CV_QK, vars.nguoi_nhan] });
+    },
+  });
+}
+
+interface NhacNgayPayload {
+  id: number;
+  tieu_de: string;
+  nguoi_giao: string;
+  nguoi_nhan: string;
+  ten_nguoi_giao: string;
+}
+
+/**
+ * Nút "Nhắc ngay" của người giao: bắn chuông cho người nhận NGAY, không chờ
+ * kỳ nhắc tự động. Ghi luôn `nhac_lan_cuoi` để cron sáng mai không nhắc trùng.
+ *
+ * Dùng loại riêng `nhac_viec_tay`, KHÔNG dùng `nhac_viec`: trần chống phiền của
+ * cron đếm theo NGƯỜI + loại `nhac_viec`, nên nếu giục tay ghi cùng loại thì một
+ * cú giục lẻ buổi chiều sẽ nuốt mất chuông tổng sáng hôm sau về mọi việc khác.
+ */
+export function useNhacNgay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: NhacNgayPayload) => {
+      const { error } = await externalSupabase.from("thong_bao").insert({
+        user_id: p.nguoi_nhan,
+        cong_viec_id: p.id,
+        loai: "nhac_viec_tay",
+        tieu_de: `Nhắc việc chưa xong: ${p.tieu_de}`,
+        noi_dung: `${p.ten_nguoi_giao} vừa nhắc bạn hoàn thành việc này.`,
+        is_read: false,
+      });
+      if (error) throw error;
+
+      const { error: errCv } = await externalSupabase
+        .from("cong_viec")
+        .update({ nhac_lan_cuoi: new Date().toISOString() })
+        .eq("id", p.id);
+      if (errCv) throw errCv;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [CV_QK, vars.nguoi_giao] });
+      qc.invalidateQueries({ queryKey: [CV_QK, vars.nguoi_nhan] });
+      qc.invalidateQueries({ queryKey: ["thong_bao", "count", vars.nguoi_nhan] });
     },
   });
 }

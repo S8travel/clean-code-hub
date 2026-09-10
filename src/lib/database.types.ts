@@ -596,6 +596,9 @@ export type Database = {
           mo_ta: string | null
           nguoi_giao: string
           nguoi_nhan: string
+          nguon_tao: string
+          nhac_lan_cuoi: string | null
+          tan_suat_nhac: string | null
           tieu_de: string
           trang_thai: string
           updated_at: string | null
@@ -611,6 +614,9 @@ export type Database = {
           mo_ta?: string | null
           nguoi_giao: string
           nguoi_nhan: string
+          nguon_tao?: string
+          nhac_lan_cuoi?: string | null
+          tan_suat_nhac?: string | null
           tieu_de: string
           trang_thai?: string
           updated_at?: string | null
@@ -626,6 +632,9 @@ export type Database = {
           mo_ta?: string | null
           nguoi_giao?: string
           nguoi_nhan?: string
+          nguon_tao?: string
+          nhac_lan_cuoi?: string | null
+          tan_suat_nhac?: string | null
           tieu_de?: string
           trang_thai?: string
           updated_at?: string | null

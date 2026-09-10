@@ -6,15 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Send } from "lucide-react";
+import { Send, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   useCongViecComments,
   useUpdateCongViecStatus,
   useCreateCongViecComment,
+  useUpdateTanSuatNhac,
+  useNhacNgay,
   type CongViecRow,
 } from "@/hooks/use-cong-viec";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { SYSTEM_USER_ID } from "@/hooks/use-phan-viec";
+import { TAN_SUAT_LABEL, coTheNhacNgay, lanNhacKe, quaHan, tanSuatHieuLuc, thuocLuongNhac } from "@/lib/nhac-cong-viec";
 import { PhanViecEditModal } from "@/components/doan/PhanViecEditModal";
 import { t, useTranslate } from "@/lib/i18n";
 
@@ -37,6 +42,15 @@ const PV_TT_LABEL: Record<string, string> = {
   hoan_thanh: "Hoàn thành", tu_choi: "Từ chối",
   huy: "Đã huỷ", khong_can: "Không cần",
 };
+
+/** "auto" = xoá lựa chọn riêng, quay lại suy theo độ ưu tiên. */
+const NHAC_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: "auto",      labelKey: "Tự động theo độ ưu tiên" },
+  { value: "hang_ngay", labelKey: "Hàng ngày" },
+  { value: "ba_ngay",   labelKey: "3 ngày một lần" },
+  { value: "hang_tuan", labelKey: "Hàng tuần" },
+  { value: "khong",     labelKey: "Không nhắc" },
+];
 
 const TRANG_THAI_CFG: Record<string, { labelKey: string; cls: string }> = {
   cho_nhan:   { labelKey: "Chờ nhận",   cls: "text-blue-600" },
@@ -69,6 +83,8 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
   const { data: comments = [] } = useCongViecComments(task?.id ?? null);
   const updateStatus = useUpdateCongViecStatus();
   const createComment = useCreateCongViecComment();
+  const updateTanSuat = useUpdateTanSuatNhac();
+  const nhacNgay = useNhacNgay();
 
   const [ghiChu, setGhiChu] = useState("");
   const [commentText, setCommentText] = useState("");
@@ -111,6 +127,35 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
       toast.success(t("Đã cập nhật trạng thái"));
       setGhiChu("");
       setActionMode(null);
+    } catch (err: unknown) {
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
+    }
+  };
+
+  const handleNhacNgay = async () => {
+    try {
+      await nhacNgay.mutateAsync({
+        id: task.id,
+        tieu_de: task.tieu_de,
+        nguoi_giao: task.nguoi_giao,
+        nguoi_nhan: task.nguoi_nhan,
+        ten_nguoi_giao: task.ten_nguoi_giao ?? userName,
+      });
+      toast.success(`${t("Đã nhắc")} ${task.ten_nguoi_nhan ?? ""}`.trim());
+    } catch (err: unknown) {
+      toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
+    }
+  };
+
+  const handleDoiTanSuat = async (value: string) => {
+    try {
+      await updateTanSuat.mutateAsync({
+        id: task.id,
+        tan_suat_nhac: value === "auto" ? null : value,
+        nguoi_giao: task.nguoi_giao,
+        nguoi_nhan: task.nguoi_nhan,
+      });
+      toast.success(t("Đã đổi tần suất nhắc"));
     } catch (err: unknown) {
       toast.error(t("Lỗi") + ": " + (errMsg(err) || ""));
     }
@@ -176,6 +221,66 @@ export default function CongViecDetail({ task, open, onClose, userId, userName }
               />
             )}
           </div>
+
+          {/* Nhắc lại khi chưa xong — chỉ việc người giao tay, việc còn treo */}
+          {!isPv && task.nguoi_giao !== SYSTEM_USER_ID && thuocLuongNhac(task) && (
+            <div className="rounded-md border px-3 py-2 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] text-muted-foreground font-medium">{t("Nhắc lại khi chưa xong")}</p>
+                {isAssigner && task.nguoi_nhan !== userId && (
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-6 text-[11px] gap-1 px-2"
+                    disabled={nhacNgay.isPending || !coTheNhacNgay(task, new Date())}
+                    title={
+                      coTheNhacNgay(task, new Date())
+                        ? t("Bắn chuông cho người nhận ngay bây giờ")
+                        : t("Việc này vừa được nhắc hôm nay rồi")
+                    }
+                    onClick={handleNhacNgay}
+                  >
+                    <BellRing className="h-3 w-3" />
+                    {nhacNgay.isPending ? t("Đang nhắc...") : t("Nhắc ngay")}
+                  </Button>
+                )}
+              </div>
+
+              {isAssigner ? (
+                <Select
+                  value={task.tan_suat_nhac ?? "auto"}
+                  onValueChange={handleDoiTanSuat}
+                  disabled={updateTanSuat.isPending}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <span>{t(NHAC_OPTIONS.find((o) => o.value === (task.tan_suat_nhac ?? "auto"))?.labelKey ?? "")}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {NHAC_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-xs font-medium">
+                  {t(TAN_SUAT_LABEL[tanSuatHieuLuc(task)])}
+                  {quaHan(task.han_xu_ly, new Date()) && tanSuatHieuLuc(task) !== "khong"
+                    ? ` — ${t("đang quá hạn nên nhắc mỗi ngày")}`
+                    : ""}
+                </p>
+              )}
+
+              {(() => {
+                const ke = lanNhacKe(task, new Date());
+                return (
+                  <p className="text-[11px] text-muted-foreground">
+                    {ke
+                      ? `${t("Lần nhắc kế tiếp")}: ${format(ke, "dd/MM/yyyy")}`
+                      : t("Việc này sẽ không tự nhắc.")}
+                  </p>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Description */}
           {task.mo_ta && (
