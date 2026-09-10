@@ -228,15 +228,17 @@ export function useCreateCongViec() {
         .single();
       if (error) throw error;
 
-      // Thông báo cho người nhận
-      await externalSupabase.from("thong_bao").insert({
+      // Tự giao việc cho chính mình thì không cần báo cho mình.
+      if (p.nguoi_nhan !== p.nguoi_giao) {
+        await externalSupabase.from("thong_bao").insert({
         user_id: p.nguoi_nhan,
         cong_viec_id: data.id,
         loai: "giao_viec",
         tieu_de: `Bạn có việc mới: ${p.tieu_de}`,
-        noi_dung: `Giao bởi: ${p.ten_nguoi_giao}${p.ten_doan ? ` · Đoàn: ${p.ten_doan}` : ""}`,
-        is_read: false,
-      });
+          noi_dung: `Giao bởi: ${p.ten_nguoi_giao}${p.ten_doan ? ` · Đoàn: ${p.ten_doan}` : ""}`,
+          is_read: false,
+        });
+      }
 
       return data;
     },
@@ -279,15 +281,17 @@ export function useUpdateCongViecStatus() {
         tu_choi: "không thể làm",
       };
 
-      // Thông báo cho người giao
-      await externalSupabase.from("thong_bao").insert({
-        user_id: p.nguoi_giao,
+      // Người giao chính là người vừa bấm thì thôi, khỏi tự báo cho mình.
+      if (p.nguoi_giao !== p.userId) {
+        await externalSupabase.from("thong_bao").insert({
+          user_id: p.nguoi_giao,
         cong_viec_id: p.id,
         loai: "cap_nhat_viec",
-        tieu_de: `${p.ten_nguoi_nhan} ${statusText[p.trang_thai] ?? "đã cập nhật"}: ${p.tieu_de}`,
-        noi_dung: p.ghi_chu_ket_qua || null,
-        is_read: false,
-      });
+          tieu_de: `${p.ten_nguoi_nhan} ${statusText[p.trang_thai] ?? "đã cập nhật"}: ${p.tieu_de}`,
+          noi_dung: p.ghi_chu_ket_qua || null,
+          is_read: false,
+        });
+      }
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: [CV_QK, vars.nguoi_giao] });
@@ -325,15 +329,17 @@ export function useCreateCongViecComment() {
         .update({ updated_at: new Date().toISOString() })
         .eq("id", p.cong_viec_id);
 
-      // Thông báo cho người còn lại
-      await externalSupabase.from("thong_bao").insert({
-        user_id: p.notify_user_id,
+      // Việc tự giao cho mình: "người còn lại" chính là mình, không báo.
+      if (p.notify_user_id !== p.user_id) {
+        await externalSupabase.from("thong_bao").insert({
+          user_id: p.notify_user_id,
         cong_viec_id: p.cong_viec_id,
         loai: "comment_viec",
-        tieu_de: `${p.ho_ten} bình luận: ${p.tieu_de_task}`,
-        noi_dung: p.noi_dung.slice(0, 100),
-        is_read: false,
-      });
+          tieu_de: `${p.ho_ten} bình luận: ${p.tieu_de_task}`,
+          noi_dung: p.noi_dung.slice(0, 100),
+          is_read: false,
+        });
+      }
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: [CV_CMT_QK, vars.cong_viec_id] });

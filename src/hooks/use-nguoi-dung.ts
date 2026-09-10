@@ -25,6 +25,8 @@ export interface UserRoleRow {
   phu_trach_bao_hiem: boolean;
   /** true = phụ trách visa: sửa được chi phí visa kể cả khi đoàn đã quyết toán. */
   phu_trach_visa: boolean;
+  /** Nhóm thông báo người này KHÔNG nhận. Mảng rỗng = nhận tất cả. */
+  thong_bao_tat: string[];
   password_hash: string | null;
   created_at: string;
 }

@@ -117,4 +117,5 @@ export const emptyForm = (): Omit<UserRoleRow, "id" | "created_at"> => ({
   phu_trach_bao_hiem: false,
   phu_trach_visa: false,
   password_hash: null,
+  thong_bao_tat: [] as string[],
 });

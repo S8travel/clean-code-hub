@@ -4273,6 +4273,7 @@ export type Database = {
           nhan_yeu_cau_doi_tac: boolean
           phu_trach_bao_hiem: boolean
           phu_trach_visa: boolean
+          thong_bao_tat: string[]
           created_at: string | null
           email: string | null
           ghi_chu: string | null
@@ -4295,6 +4296,7 @@ export type Database = {
           nhan_yeu_cau_doi_tac?: boolean
           phu_trach_bao_hiem?: boolean
           phu_trach_visa?: boolean
+          thong_bao_tat?: string[]
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null
@@ -4317,6 +4319,7 @@ export type Database = {
           nhan_yeu_cau_doi_tac?: boolean
           phu_trach_bao_hiem?: boolean
           phu_trach_visa?: boolean
+          thong_bao_tat?: string[]
           created_at?: string | null
           email?: string | null
           ghi_chu?: string | null

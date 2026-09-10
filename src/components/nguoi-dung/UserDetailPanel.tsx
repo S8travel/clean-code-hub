@@ -30,6 +30,7 @@ import { VAI_TRO_OPTS, BO_PHAN_OPTS, THI_TRUONG_GROUPS } from "./constants";
 import { SpecialistPermissionsSection } from "./SpecialistPermissionsSection";
 import { QuyenThemSection } from "./QuyenThemSection";
 import { QuyenBoSection } from "./QuyenBoSection";
+import { NHOM_THONG_BAO, dangNhan, datTrangThai, type NhomThongBao } from "@/lib/nhom-thong-bao";
 
 type DetailForm = Omit<UserRoleRow, "id" | "created_at">;
 
@@ -49,6 +50,7 @@ const formFrom = (u: UserRoleRow): DetailForm => ({
   nhan_yeu_cau_doi_tac: u.nhan_yeu_cau_doi_tac,
   phu_trach_bao_hiem: u.phu_trach_bao_hiem,
   phu_trach_visa: u.phu_trach_visa,
+  thong_bao_tat: u.thong_bao_tat ?? [],
   password_hash: u.password_hash,
 });
 
@@ -408,6 +410,43 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
               checked={form.phu_trach_visa}
               onCheckedChange={(v) => set("phu_trach_visa", v)}
             />
+          </div>
+
+          {/* Chuông chỉ có tác dụng khi người ta còn đọc nó. Ai không phụ trách
+              mảng nào thì tắt mảng đó, khỏi phải lướt qua hàng trăm thông báo
+              không liên quan để tìm cái của mình. Tắt là im cả chuông lẫn báo
+              trên điện thoại, vì thông báo bị chặn ngay trước khi ghi. */}
+          <div className="col-span-2 rounded-md border px-3 py-2 space-y-2">
+            <div>
+              <p className="text-sm font-medium">{t("Nhận thông báo")}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Tắt mảng nào thì người này không nhận chuông lẫn báo trên điện thoại của mảng đó nữa")}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              {NHOM_THONG_BAO.map((nhom) => (
+                <div key={nhom.key} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">{t(nhom.ten)}</p>
+                    <p className="text-[10px] leading-snug text-muted-foreground break-words">
+                      {t(nhom.mo_ta)}
+                    </p>
+                  </div>
+                  <Switch
+                    className="shrink-0"
+                    checked={dangNhan(nhom.key as NhomThongBao, form.thong_bao_tat)}
+                    onCheckedChange={(v) =>
+                      set("thong_bao_tat", datTrangThai(nhom.key as NhomThongBao, v, form.thong_bao_tat))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            {form.thong_bao_tat.length >= NHOM_THONG_BAO.length && (
+              <p className="rounded-md bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-800">
+                {t("Đã tắt mọi mảng — người này sẽ không nhận bất kỳ thông báo nào ngoài cảnh báo hệ thống.")}
+              </p>
+            )}
           </div>
 
           {form.nhan_yeu_cau_doi_tac && !xemDuocBaoGia && (
