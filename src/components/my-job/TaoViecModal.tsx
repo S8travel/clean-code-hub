@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useCreateCongViec, useUserListForAssign } from "@/hooks/use-cong-viec";
+import { TAN_SUAT_LABEL, tanSuatMacDinh } from "@/lib/nhac-cong-viec";
 import { useDoanList } from "@/hooks/use-doan";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
@@ -26,6 +27,15 @@ const UU_TIEN_OPTIONS = [
   { value: "cao",         labelKey: "🟠 Cao" },
   { value: "binh_thuong", labelKey: "🟡 Bình thường" },
   { value: "thap",        labelKey: "🟢 Thấp" },
+];
+
+/** "auto" = không ghi gì xuống DB, để hệ thống suy tần suất theo độ ưu tiên. */
+const NHAC_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: "auto",      labelKey: "Tự động theo độ ưu tiên" },
+  { value: "hang_ngay", labelKey: "Hàng ngày" },
+  { value: "ba_ngay",   labelKey: "3 ngày một lần" },
+  { value: "hang_tuan", labelKey: "Hàng tuần" },
+  { value: "khong",     labelKey: "Không nhắc" },
 ];
 
 interface Props {
@@ -48,6 +58,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
   const [loai_viec, setLoaiViec] = useState("khac");
   const [do_uu_tien, setDoUuTien] = useState("binh_thuong");
   const [han_xu_ly, setHanXuLy] = useState("");
+  const [tan_suat_nhac, setTanSuatNhac] = useState("auto");
   const [doanSearch, setDoanSearch] = useState("");
 
   // Reset người nhận về chính user mỗi lần mở modal (default: tự giao cho bản thân)
@@ -78,6 +89,7 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
         loai_viec,
         do_uu_tien,
         han_xu_ly: han_xu_ly || null,
+        tan_suat_nhac: tan_suat_nhac === "auto" ? null : tan_suat_nhac,
         ten_nguoi_giao: userName,
         ten_doan: tenDoan,
       });
@@ -90,7 +102,8 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
 
   const handleClose = () => {
     setTieuDe(""); setMoTa(""); setNguoiNhan(userId); setDoanId("");
-    setLoaiViec("khac"); setDoUuTien("binh_thuong"); setHanXuLy(""); setDoanSearch("");
+    setLoaiViec("khac"); setDoUuTien("binh_thuong"); setHanXuLy("");
+    setTanSuatNhac("auto"); setDoanSearch("");
     onClose();
   };
 
@@ -175,6 +188,28 @@ export default function TaoViecModal({ open, onClose, userId, userName }: Props)
                 onChange={setHanXuLy}
               />
             </div>
+          </div>
+
+          {/* Nhắc lại khi chưa xong */}
+          <div className="space-y-1">
+            <Label className="text-xs">{t("Nhắc lại khi chưa xong")}</Label>
+            <Select value={tan_suat_nhac} onValueChange={setTanSuatNhac}>
+              <SelectTrigger className="h-8 text-xs">
+                <span>{t(NHAC_OPTIONS.find((o) => o.value === tan_suat_nhac)?.labelKey ?? "")}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {NHAC_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value} className="text-xs">{t(o.labelKey)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {tan_suat_nhac === "auto"
+                ? `${t("Mức ưu tiên đang chọn sẽ nhắc")}: ${t(TAN_SUAT_LABEL[tanSuatMacDinh(do_uu_tien)]).toLowerCase()}.`
+                : tan_suat_nhac === "khong"
+                  ? t("Việc này sẽ không bao giờ tự nhắc.")
+                  : `${t("Nhắc người nhận cho tới khi việc xong")}. ${t("Việc quá hạn sẽ tự nhắc mỗi ngày")}.`}
+            </p>
           </div>
 
           {/* Đoàn liên quan */}

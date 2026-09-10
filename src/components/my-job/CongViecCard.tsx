@@ -3,6 +3,7 @@ import { MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CongViecRow } from "@/hooks/use-cong-viec";
 import { t, useTranslate } from "@/lib/i18n";
+import { soNgayTreo, tanSuatHieuLuc, thuocLuongNhac } from "@/lib/nhac-cong-viec";
 
 // Labels kept as keys; t() applied at render to pick up language switch.
 const UU_TIEN_CFG: Record<string, { labelKey: string; cls: string }> = {
@@ -46,6 +47,14 @@ export default function CongViecCard({ task, viewMode, onClick }: Props) {
     task.trang_thai !== "tu_choi" &&
     isBefore(parseISO(task.han_xu_ly), new Date());
 
+  // Gần như không việc nào nhập hạn xử lý, nên "treo bao lâu" mới là dấu hiệu
+  // cho thấy việc đang mốc. Chỉ kêu khi đã quá một tuần.
+  // Việc hệ thống tự sinh không nằm trong luồng nhắc → không gắn nhãn gì.
+  const conTreo = thuocLuongNhac(task);
+  const ngayTreo = conTreo ? soNgayTreo(task, new Date()) : 0;
+  const treoLau = conTreo && !task.han_xu_ly && ngayTreo >= 7;
+  const tatNhac = conTreo && tanSuatHieuLuc(task) === "khong";
+
   return (
     <button
       onClick={onClick}
@@ -77,6 +86,14 @@ export default function CongViecCard({ task, viewMode, onClick }: Props) {
             <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
               <MessageSquare className="h-3 w-3" />
               {task.comment_count}
+            </span>
+          )}
+          {tatNhac && (
+            <span className="text-[10px] text-muted-foreground" title={t("Việc này không tự nhắc")}>🔕</span>
+          )}
+          {treoLau && (
+            <span className="text-[10px] text-orange-600 font-medium">
+              {t("treo")} {ngayTreo} {t("ngày")}
             </span>
           )}
           {task.han_xu_ly && (

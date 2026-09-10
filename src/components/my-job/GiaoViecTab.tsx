@@ -16,13 +16,20 @@ interface Props {
   initialTaskId?: number | null;
   /** Gọi sau khi popup mở để clear param khỏi URL, tránh re-open khi user đóng. */
   onConsumeInitialTask?: () => void;
+  /** Chuông nhắc việc mở thẳng đúng mục: "received" = được giao, "sent" = tôi đã giao. */
+  initialView?: "received" | "sent" | null;
 }
 
-export default function GiaoViecTab({ userId, userName, initialTaskId, onConsumeInitialTask }: Props) {
+export default function GiaoViecTab({ userId, userName, initialTaskId, onConsumeInitialTask, initialView }: Props) {
   useTranslate();
   const { data: tasks = [], isLoading } = useCongViecList(userId);
 
-  const [view, setView] = useState<"received" | "sent">("received");
+  const [view, setView] = useState<"received" | "sent">(initialView ?? "received");
+
+  // Chuông "Bạn đã giao N việc chưa xong" trỏ thẳng vào mục Tôi đã giao.
+  useEffect(() => {
+    if (initialView) setView(initialView);
+  }, [initialView]);
   const [filterStatus, setFilterStatus] = useState("active");
   const [filterPriority, setFilterPriority] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
