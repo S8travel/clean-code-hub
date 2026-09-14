@@ -30,10 +30,11 @@ describe("unsupportedFileInfo — báo lý do + cách chữa", () => {
       expect(unsupportedFileInfo(n)).toBeNull();
     }
   });
-  it(".doc Word cũ → chỉ đúng cách chữa là lưu thành .docx", () => {
+  it(".doc KHÔNG bị chặn thẳng nữa — cho thử đọc, vì đa số là docx/RTF đổi đuôi", () => {
     const info = unsupportedFileInfo("chuong-trinh-VN04.doc");
     expect(info).not.toBeNull();
-    expect(info!.badge).toContain(".docx");
+    expect(info!.thuDuoc).toBe(true);
+    // Vẫn phải nói cách chữa cho ca Word 97 nhị phân thật.
     expect(info!.help).toContain(".docx");
   });
   it(".DOC viết hoa cũng nhận ra (không rơi vào nhánh chung)", () => {
