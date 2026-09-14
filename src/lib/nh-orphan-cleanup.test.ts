@@ -7,8 +7,7 @@ import {
   nhChiPhiSlot,
   findRemovedPaidNhChiPhi,
   buildOccupiedMealSlotIds,
-  findOrphanNhExtras,
-} from "./nh-orphan-cleanup";
+  findOrphanNhExtras, coTheDonNhMoCoi } from "./nh-orphan-cleanup";
 
 const nhNames = new Map<number, string>([
   [1, "NGON THỊ HOA"],
@@ -184,5 +183,25 @@ describe("findOrphanNhExtras", () => {
   it("thiếu ref_doan_ngay_id → bỏ qua (không đủ căn cứ, thà giữ còn hơn xoá nhầm)", () => {
     const rows = [{ id: 507, ref_doan_ngay_id: null, mo_ta: "[trua] Bia" }];
     expect(findOrphanNhExtras(rows, occupied)).toEqual([]);
+  });
+});
+
+describe("coTheDonNhMoCoi", () => {
+  it("chương trình đọc được + không có NH lạ → được dọn", () => {
+    expect(coTheDonNhMoCoi(5, false)).toBe(true);
+  });
+
+  it("đọc doan_ngay hỏng (data null → 0 dòng) → KHÔNG dọn, dù không thấy NH lạ nào", () => {
+    // Đây là ca đã suýt xóa sạch chi phí NH của đoàn: tập kỳ vọng rỗng thì MỌI dòng
+    // đều trông như mồ côi.
+    expect(coTheDonNhMoCoi(0, false)).toBe(false);
+  });
+
+  it("có NH ngoài danh mục → KHÔNG dọn", () => {
+    expect(coTheDonNhMoCoi(5, true)).toBe(false);
+  });
+
+  it("vừa rỗng vừa có NH lạ → KHÔNG dọn", () => {
+    expect(coTheDonNhMoCoi(0, true)).toBe(false);
   });
 });

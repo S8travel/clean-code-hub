@@ -4,18 +4,23 @@ import { externalSupabase } from "@/lib/supabase-external";
 // MÀ chưa bị hủy/từ chối. Dùng cho mọi guard "không gỡ/xóa chi phí đã cam kết".
 // Tách ra lib riêng (chỉ phụ thuộc supabase) để use-dieu-tour / use-doan /
 // use-doan-nhom cùng dùng — tránh circular import giữa các hook.
+// NÉM LỖI khi query hỏng, KHÔNG nuốt — y như bản batch bên dưới: "không đọc được
+// ĐNTT" ≠ "không có ĐNTT". Nuốt lỗi ở đây làm mọi guard gọi nó mở toang đúng lúc
+// mạng chập chờn → cho xoá chi phí đã cam kết → CASCADE mất dấu tiền.
 export async function getActiveDnttIdsForChiPhi(chiPhiId: number): Promise<number[]> {
-  const { data: rawAllocs } = await externalSupabase
+  const { data: rawAllocs, error: eAlloc } = await externalSupabase
     .from("dntt_allocations")
     .select("dntt_id")
     .eq("chi_phi_id", chiPhiId);
+  if (eAlloc) throw eAlloc;
   if (!rawAllocs || rawAllocs.length === 0) return [];
   const dnttIds = [...new Set(rawAllocs.map((a) => a.dntt_id))];
-  const { data: activeDntts } = await externalSupabase
+  const { data: activeDntts, error: eDntt } = await externalSupabase
     .from("de_nghi_thanh_toan")
     .select("id")
     .in("id", dnttIds)
     .not("trang_thai_duyet", "in", "(da_huy,tu_choi)");
+  if (eDntt) throw eDntt;
   return (activeDntts ?? []).map((d) => d.id);
 }
 
