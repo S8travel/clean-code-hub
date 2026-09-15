@@ -1529,6 +1529,7 @@ export type Database = {
           ghi_chu: string | null
           id: number
           mail_content_hash: string | null
+          mail_sent_snapshot: Json | null
           sent_at: string | null
           sent_by: string | null
           updated_at: string | null
@@ -1543,6 +1544,7 @@ export type Database = {
           ghi_chu?: string | null
           id?: never
           mail_content_hash?: string | null
+          mail_sent_snapshot?: Json | null
           sent_at?: string | null
           sent_by?: string | null
           updated_at?: string | null
@@ -1557,6 +1559,7 @@ export type Database = {
           ghi_chu?: string | null
           id?: never
           mail_content_hash?: string | null
+          mail_sent_snapshot?: Json | null
           sent_at?: string | null
           sent_by?: string | null
           updated_at?: string | null

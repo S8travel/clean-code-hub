@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
@@ -10,7 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
-import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
+import {
+  buildXeEmailHtml,
+  buildXeMailSnapshot,
+  diffXeMailSnapshot,
+  parseXeMailSnapshot,
+  type XeMailInput,
+} from "@/lib/booking-mail/xe-mail";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { useUpsertBookingXe, type BookingXeRow } from "@/hooks/use-booking-xe";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
@@ -24,7 +30,6 @@ import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
 import { formatXeForEmail } from "@/lib/xe-email";
 import {
   computeExportCells,
-  type DayExportCell,
   type DieuTourExportData,
 } from "@/lib/export-dieu-tour-word";
 import { t, useTranslate } from "@/lib/i18n";
@@ -40,9 +45,9 @@ function fmtDatetime(d: string | null | undefined) {
   if (!d) return "";
   try { return format(new Date(d), "dd/MM HH:mm", { locale: vi }); } catch { return ""; }
 }
-function fmtDate(d: string | null | undefined) {
-  if (!d) return "—";
-  try { return format(new Date(d + "T00:00:00"), "dd/MM/yyyy", { locale: vi }); } catch { return d ?? "—"; }
+/** Giờ gửi mail trước — ghi trong khung "Các thay đổi" của mail cập nhật (giờ máy người gửi). */
+function fmtSentAt(d: string) {
+  try { return format(new Date(d), "dd/MM/yyyy HH:mm", { locale: vi }); } catch { return ""; }
 }
 
 function TrackingStep({ label, time, active, by }: { label: string; time?: string | null; active: boolean; by?: string | null }) {
@@ -57,39 +62,6 @@ function TrackingStep({ label, time, active, by }: { label: string; time?: strin
 }
 function TrackingLine({ active }: { active: boolean }) {
   return <div className={cn("flex-1 h-0.5 mb-5 transition-colors", active ? "bg-primary" : "bg-muted-foreground/20")} />;
-}
-
-function buildScheduleHTML(cells: DayExportCell[]): string {
-  if (cells.length === 0) return "";
-  const COL = "border:1px solid #e2e8f0;padding:6px 10px;font-size:13px;vertical-align:top";
-  const HD  = COL + ";background:#f1f5f9;font-weight:600;text-align:center";
-  const toHtml = (text: string) => {
-    const lines = text.split("\n").filter((l) => !l.startsWith("Set:"));
-    return lines.length ? lines.join("<br>") : "—";
-  };
-
-  const header = `<tr>
-    <th style="${HD}">Ngày</th>
-    <th style="${HD}">Chương trình</th>
-    <th style="${HD}">Ăn trưa</th>
-    <th style="${HD}">Ăn tối</th>
-    <th style="${HD}">Khách sạn</th>
-  </tr>`;
-
-  const rows = cells.map((dc) => {
-    const d = new Date(dc.ngay_date + "T00:00:00");
-    const dateLabel = `${d.getDate()}/${d.getMonth() + 1}<br><span style="color:#64748b;font-size:11px">${dc.thu}</span>`;
-    return `<tr>
-      <td style="${COL};text-align:center;white-space:nowrap">${dateLabel}</td>
-      <td style="${COL}">${toHtml(dc.chuongTrinh)}</td>
-      <td style="${COL}">${toHtml(dc.anTrua)}</td>
-      <td style="${COL}">${toHtml(dc.anToi)}</td>
-      <td style="${COL}">${toHtml(dc.khachSan)}</td>
-    </tr>`;
-  }).join("");
-
-  return `<h3 style="margin:24px 0 8px;font-size:14px;color:#0f172a">Lịch trình</h3>
-<table style="border-collapse:collapse;width:100%;font-size:13px">${header}${rows}</table>`;
 }
 
 interface XeInfo {
@@ -133,6 +105,9 @@ export default function BookingXeCard({
   const [deadline, setDeadline] = useState(() => booking?.deadline ?? getDefaultDeadline(ngayDi ?? "") ?? "");
   const [huyDialogOpen, setHuyDialogOpen] = useState(false);
   const [huyTarget, setHuyTarget] = useState<HuyMailModalTarget | null>(null);
+  // Input mail CHỐT lúc mở modal: nội dung mail, khung "thay đổi" và bản chụp lưu khi
+  // gửi cùng dựng từ 1 input → lần cập nhật sau so đúng cái nhà xe đã nhận.
+  const [mailInput, setMailInput] = useState<XeMailInput | null>(null);
 
   const status = booking?.booking_status ?? "chua_dat";
   const statusCfg = STATUS_CFG[status as keyof typeof STATUS_CFG] ?? STATUS_CFG.chua_dat;
@@ -163,78 +138,33 @@ export default function BookingXeCard({
     if (corrected) save({ deadline: corrected });
   };
 
-  const buildEmailHTML = (mode: "first" | "update" = "first", note = "") => {
-    const nhaXeTen = xe?.nha_xe?.ten ?? "Quý đối tác";
-    // Xe thường → chỉ số chỗ; limousine → loại xe + số chỗ. Xem lib/xe-email.
-    const xeStr = xe ? formatXeForEmail(xe.ten_xe, xe.so_cho) : "—";
-    const hdvStr = formatHdvsForEmail(doanHdvs);
-    const soKhachStr = soKhach ? `${soKhach} khách` : "—";
-
-    if (mode === "update") {
-      const senderName = userProfile?.ho_ten || "";
-      const keyFields = buildKeyFieldsList([
-        { label: "Đoàn", value: tenDoan },
-        { label: "Nhà xe", value: nhaXeTen },
-        { label: "Loại xe", value: xeStr },
-        { label: "Ngày đón", value: `${fmtDate(ngayDi)}${chuyenBayDon ? ` · CB ${chuyenBayDon}` : ""}` },
-        { label: "Ngày tiễn", value: `${fmtDate(ngayVe)}${chuyenBayTien ? ` · CB ${chuyenBayTien}` : ""}` },
-        { label: "Số khách", value: soKhachStr },
-        { label: "HDV", value: hdvStr },
-      ]);
-      return buildUpdateEmailHtml({
-        greeting: `Kính gửi ${nhaXeTen},`,
-        intro: `Cập nhật booking đặt xe đoàn ${tenDoan}:`,
-        keyFieldsHtml: keyFields,
-        note,
-        senderName,
-        senderPhone: userProfile?.so_dien_thoai ?? null,
-      });
-    }
-
-    const cells = exportData ? computeExportCells(exportData) : [];
-    const scheduleHtml = buildScheduleHTML(cells);
-
-    return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
-  <div style="max-width:780px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
-    <div style="background:#0f172a;padding:24px 32px;text-align:center">
-      <h2 style="margin:0;color:#fff;font-size:18px;letter-spacing:.5px">CÔNG TY TNHH DU LỊCH S8</h2>
-      <p style="margin:4px 0 0;color:#94a3b8;font-size:12px">S8 TRAVEL COMPANY &nbsp;|&nbsp; MST: 0402021137</p>
-    </div>
-    <div style="padding:28px 32px">
-      <p style="margin:0 0 8px;font-size:15px">Kính gửi <strong>${nhaXeTen}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569">Công ty TNHH Du lịch S8 xin đặt xe cho đoàn <strong>${tenDoan}</strong>:</p>
-      <table style="border-collapse:collapse;width:100%;font-size:14px">
-        <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0;width:35%">Đoàn</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${tenDoan}</td></tr>
-        <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0">Xe</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${xeStr}</td></tr>
-        <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0">Ngày đón</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${fmtDate(ngayDi)}${chuyenBayDon ? ` &nbsp;|&nbsp; CB: ${chuyenBayDon}` : ""}</td></tr>
-        <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0">Ngày tiễn</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${fmtDate(ngayVe)}${chuyenBayTien ? ` &nbsp;|&nbsp; CB: ${chuyenBayTien}` : ""}</td></tr>
-        <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0">HDV</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${hdvStr}</td></tr>
-        <tr><td style="padding:6px 12px;font-weight:600;background:#f1f5f9;border:1px solid #e2e8f0">Số khách</td><td style="padding:6px 12px;border:1px solid #e2e8f0">${soKhachStr}</td></tr>
-      </table>
-      ${scheduleHtml}
-      ${ghiChu ? `<div style="margin-top:20px;background:#f8fafc;border-left:3px solid #3b82f6;padding:12px 16px;border-radius:0 4px 4px 0;font-size:13px"><strong>Ghi chú:</strong> ${ghiChu}</div>` : ""}
-      <p style="margin-top:20px;color:#475569;font-size:13px">
-        Kính nhờ xác nhận và báo giá trong vòng <strong>24 giờ</strong>. Trân trọng cảm ơn!
-      </p>
-      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="margin:0;font-size:13px;color:#475569;line-height:1.8">
-        <strong>${userProfile?.ho_ten || ""}</strong>${userProfile?.so_dien_thoai ? `<br>${userProfile.so_dien_thoai}` : ""}<br><br>
-        <strong style="color:#0f172a">CÔNG TY TNHH DU LỊCH S8</strong><br>
-        MST: 0402021137<br>
-        Đ/C: Tầng 2, Tòa nhà Kim Sơn, Số 18 Phan Thành Tài, Phường Hòa Cường, TP Đà Nẵng, VN<br>
-        Email: s8travel.hddt@gmail.com
-      </p>
-    </div>
-  </div>
-</body></html>`;
-  };
+  // Mail đặt lần đầu và mail cập nhật dựng CÙNG khuôn (lib/booking-mail/xe-mail):
+  // cập nhật gửi lại đủ lịch trình, không bảo nhà xe "xem mail booking gốc".
+  const buildMailInput = (): XeMailInput => ({
+    tenDoan,
+    nhaXeTen: xe?.nha_xe?.ten ?? null,
+    tenXe: xe?.ten_xe ?? null,
+    soCho: xe?.so_cho ?? null,
+    ngayDi,
+    ngayVe,
+    chuyenBayDon: chuyenBayDon ?? null,
+    chuyenBayTien: chuyenBayTien ?? null,
+    hdvText: formatHdvsForEmail(doanHdvs),
+    soKhach: soKhach ?? null,
+    ghiChu,
+    cells: exportData ? computeExportCells(exportData) : [],
+    senderName: userProfile?.ho_ten || "",
+    senderPhone: userProfile?.so_dien_thoai ?? null,
+    prevSnapshot: parseXeMailSnapshot(booking?.mail_sent_snapshot),
+    prevSentLabel: booking?.sent_at ? fmtSentAt(booking.sent_at) : null,
+  });
 
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
     setUpdateNote("");
+    const input = buildMailInput();
+    setMailInput(input);
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
     setEmailTo(xe?.nha_xe?.email ?? "");
     // Tiêu đề kèm loại xe/số chỗ (formatXeForEmail: xe thường "45 chỗ",
@@ -243,15 +173,21 @@ export default function BookingXeCard({
     const xeSubjectPart = xeSubject && xeSubject !== "—" ? ` – ${xeSubject}` : "";
     const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt xe – ${tenDoan}${xeSubjectPart}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`);
     setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
-    setEmailBody(buildEmailHTML(mode, ""));
+    setEmailBody(buildXeEmailHtml(input, mode, ""));
     setEmailModalOpen(true);
   };
 
   useEffect(() => {
-    if (!emailModalOpen || emailMode !== "update") return;
-    setEmailBody(buildEmailHTML("update", updateNote));
+    if (!emailModalOpen || emailMode !== "update" || !mailInput) return;
+    setEmailBody(buildXeEmailHtml(mailInput, "update", updateNote));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateNote]);
+
+  // Thay đổi hệ thống tự phát hiện so với mail trước — null = mail trước chưa có bản chụp.
+  const mailChanges = useMemo(
+    () => (mailInput?.prevSnapshot ? diffXeMailSnapshot(mailInput.prevSnapshot, buildXeMailSnapshot(mailInput)) : null),
+    [mailInput],
+  );
 
   const handleSendViaServer = async () => {
     if (!emailTo) { toast.error(t("Vui lòng nhập email nhà xe")); return; }
@@ -278,6 +214,8 @@ export default function BookingXeCard({
         email_thread_id: emailId ?? threadId ?? undefined,
         mail_content_hash: hashMailContent(buildMailFields()),
       };
+      // Bản chụp đúng nội dung vừa gửi → lần "Gửi cập nhật" sau tự liệt kê thay đổi.
+      if (mailInput) savePayload.mail_sent_snapshot = buildXeMailSnapshot(mailInput);
       if (emailMode !== "update") savePayload.booking_status = "cho_xac_nhan";
       save(savePayload);
       toast.success(emailMode === "update" ? t("Đã gửi email cập nhật xe") : t("Đã gửi email booking xe"));
@@ -472,6 +410,13 @@ export default function BookingXeCard({
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}
+        updateHint={
+          mailChanges === null
+            ? t("Mail trước được gửi khi hệ thống chưa biết so sánh, nên lần này chưa tự liệt kê được thay đổi — hãy ghi thay đổi vào ô trên. Từ lần gửi sau sẽ tự liệt kê.")
+            : mailChanges.length === 0
+              ? t("Không thấy thay đổi nào so với mail đã gửi gần nhất.")
+              : `${t("Đã tự liệt kê")} ${mailChanges.length} ${t("thay đổi so với mail trước và tô vàng trong nội dung mail.")}`
+        }
       />
 
       <HuyBookingConfirmDialog
