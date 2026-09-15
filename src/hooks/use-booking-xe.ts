@@ -15,6 +15,8 @@ export interface BookingXeRow {
   ghi_chu: string | null;
   updated_at: string;
   mail_content_hash: string | null;
+  /** Nội dung đã gửi nhà xe lần gần nhất (lib/booking-mail/xe-mail) — mail cập nhật tự liệt kê thay đổi. */
+  mail_sent_snapshot: Record<string, unknown> | null;
 }
 
 const QK = (doanId: number) => ["doan_booking_xe", doanId];

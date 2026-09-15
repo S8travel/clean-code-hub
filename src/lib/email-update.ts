@@ -10,10 +10,14 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function buildUpdateBanner(): string {
+const DEFAULT_UPDATE_SUBTITLE =
+  "Đây không phải booking mới — vui lòng tham chiếu mail booking gốc trong cùng thread và lưu ý các thay đổi sau:";
+
+// subtitle: mail gửi lại ĐỦ nội dung (vd booking xe) thì không được bảo NCC "xem mail gốc".
+export function buildUpdateBanner(subtitle = DEFAULT_UPDATE_SUBTITLE): string {
   return `<div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin-bottom:16px;border-radius:0 4px 4px 0">
     <strong style="color:#92400e;font-size:14px">📢 EMAIL CẬP NHẬT BOOKING</strong><br>
-    <span style="color:#78350f;font-size:13px">Đây không phải booking mới — vui lòng tham chiếu mail booking gốc trong cùng thread và lưu ý các thay đổi sau:</span>
+    <span style="color:#78350f;font-size:13px">${escapeHtml(subtitle)}</span>
   </div>`;
 }
 

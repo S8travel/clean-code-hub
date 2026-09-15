@@ -50,6 +50,8 @@ interface Props {
   mode?: "first" | "update";
   updateNote?: string;
   onUpdateNoteChange?: (v: string) => void;
+  /** Dòng nhắc dưới ô lời nhắn (mode update) — vd số thay đổi hệ thống tự liệt kê. */
+  updateHint?: React.ReactNode;
 }
 
 export default function EmailPreviewModal({
@@ -69,6 +71,7 @@ export default function EmailPreviewModal({
   mode = "first",
   updateNote = "",
   onUpdateNoteChange,
+  updateHint,
 }: Props) {
   useTranslate();
   const resolvedTitle = title ?? t("Gửi email");
@@ -307,6 +310,7 @@ export default function EmailPreviewModal({
                 placeholder={t("VD: Số khách tăng từ 16 → 18, đổi set menu sang 200k...")}
                 className="text-sm h-8"
               />
+              {updateHint && <p className="mt-1 text-[11px] text-amber-700">{updateHint}</p>}
             </div>
           )}
 
