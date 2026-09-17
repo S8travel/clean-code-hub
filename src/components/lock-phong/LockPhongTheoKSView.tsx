@@ -25,6 +25,7 @@ import LockPhongEmailModal from "./LockPhongEmailModal";
 import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
 import LockPhongBatchSeparateModal from "./LockPhongBatchSeparateModal";
 import { isLockPhongDirty } from "@/lib/booking-mail/lock-phong-mail";
+import { buildKSGroups, type KSGroup } from "./lock-phong-ks-groups";
 import { t, useTranslate } from "@/lib/i18n";
 
 function EmailStatusBadge({ status }: { status: string }) {
@@ -107,19 +108,6 @@ function deadlineDisplay(deadline: string | null, outcome?: string | null) {
 }
 
 
-interface MergedEntry {
-  lockPhong: LockPhongDisplay;
-  ksRows: LockPhongKSDisplay[]; // 1 hoặc nhiều stay của cùng đoàn ở cùng KS
-}
-
-interface KSGroup {
-  khach_san_id: number;
-  khach_san_ten: string;
-  khach_san_email: string | null;
-  khach_san_dia_diem: string | null;
-  entries: MergedEntry[];
-}
-
 /** KSGroup (gom theo đoàn, mỗi đoàn 1 hoặc nhiều stay) → shape phẳng 1 dòng =
  *  1 stay mà cả 2 modal gửi mail (gộp / riêng) dùng chung. */
 function buildKSGroup(group: KSGroup): KSGroupForBatch {
@@ -139,7 +127,7 @@ interface Props {
 
 export default function LockPhongTheoKSView({ data }: Props) {
   useTranslate();
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [emailTarget, setEmailTarget] = useState<{
     lockPhong: LockPhongDisplay;
     ksRow: LockPhongKSDisplay;
@@ -155,14 +143,14 @@ export default function LockPhongTheoKSView({ data }: Props) {
   const updateFields = useUpdateLockPhongKSFields();
   const updateDeadline = useUpdateLockPhongDeadline();
   const updateEmail = useUpdateLockPhongKSEmail();
-  const [confirmingKsId, setConfirmingKsId] = useState<number | null>(null);
+  const [confirmingGroup, setConfirmingGroup] = useState<string | null>(null);
   const [lpPage, setLpPage] = useState(1);
   const [lpPageSize, setLpPageSize] = useState(5);
-  // Phân trang nội bộ từng card khách sạn (số đoàn) — 5/trang
-  const [entryPage, setEntryPage] = useState<Record<number, number>>({});
+  // Phân trang nội bộ từng thẻ (số đoàn) — 5/trang
+  const [entryPage, setEntryPage] = useState<Record<string, number>>({});
 
   const handleConfirmAll = async (
-    khachSanId: number,
+    groupKey: string,
     khachSanTen: string,
     pendingIds: number[],
   ) => {
@@ -171,7 +159,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
       `${t("Xác nhận lock phòng cho")} ${pendingIds.length} ${t("đoàn tại")} ${khachSanTen}?`,
     );
     if (!ok) return;
-    setConfirmingKsId(khachSanId);
+    setConfirmingGroup(groupKey);
     try {
       const confirmAt = new Date().toISOString();
       await Promise.all(
@@ -186,7 +174,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
     } catch (e: unknown) {
       toast.error(t("Lỗi xác nhận") + ": " + (errMsg(e) || ""));
     } finally {
-      setConfirmingKsId(null);
+      setConfirmingGroup(null);
     }
   };
 
@@ -217,63 +205,12 @@ export default function LockPhongTheoKSView({ data }: Props) {
     }
   };
 
-  const groups = useMemo<KSGroup[]>(() => {
-    // Step 1: gom ksRows theo (khach_san_id, lockPhong.ten_doan) — merge stays cùng code đoàn ở cùng KS
-    // (kể cả khi 2 stay đó được tạo ở 2 lock_phong record khác nhau)
-    type MergeKey = string;
-    const ksMap = new Map<number, {
-      khach_san_id: number;
-      khach_san_ten: string;
-      khach_san_email: string | null;
-      khach_san_dia_diem: string | null;
-      mergedMap: Map<MergeKey, MergedEntry>;
-    }>();
-    for (const lp of data) {
-      for (const ks of lp.hotels) {
-        if (!ksMap.has(ks.khach_san_id)) {
-          ksMap.set(ks.khach_san_id, {
-            khach_san_id: ks.khach_san_id,
-            khach_san_ten: ks.khach_san_ten,
-            khach_san_email: ks.khach_san_email,
-            khach_san_dia_diem: ks.khach_san_dia_diem,
-            mergedMap: new Map(),
-          });
-        }
-        // Key dùng ten_doan (code đoàn) để gộp các stay cùng code dù khác lock_phong_id
-        const key: MergeKey = `${ks.khach_san_id}::${lp.ten_doan}`;
-        const grp = ksMap.get(ks.khach_san_id)!;
-        if (!grp.mergedMap.has(key)) {
-          grp.mergedMap.set(key, { lockPhong: lp, ksRows: [] });
-        }
-        grp.mergedMap.get(key)!.ksRows.push(ks);
-      }
-    }
-    // Step 2: sort + finalize
-    return Array.from(ksMap.values())
-      .sort((a, b) => a.khach_san_ten.localeCompare(b.khach_san_ten))
-      .map((g) => {
-        const entries: MergedEntry[] = Array.from(g.mergedMap.values())
-          .map((m) => ({
-            lockPhong: m.lockPhong,
-            ksRows: [...m.ksRows].sort((a, b) => a.check_in.localeCompare(b.check_in)),
-          }))
-          .sort((a, b) =>
-            a.ksRows[0].check_in.localeCompare(b.ksRows[0].check_in),
-          );
-        return {
-          khach_san_id: g.khach_san_id,
-          khach_san_ten: g.khach_san_ten,
-          khach_san_email: g.khach_san_email,
-          khach_san_dia_diem: g.khach_san_dia_diem,
-          entries,
-        };
-      });
-  }, [data]);
+  const groups = useMemo<KSGroup[]>(() => buildKSGroups(data), [data]);
 
   const TODAY = format(new Date(), "yyyy-MM-dd");
   const TODAY3 = format(addDays(new Date(), 3), "yyyy-MM-dd");
 
-  const toggleExpand = (id: number) => {
+  const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -297,10 +234,10 @@ export default function LockPhongTheoKSView({ data }: Props) {
   return (
     <div className="space-y-3">
       {pageGroups.map((group) => {
-        const isOpen = expandedIds.has(group.khach_san_id);
+        const isOpen = expandedIds.has(group.groupKey);
         const ePageSize = 5;
         const eTotalPages = Math.max(1, Math.ceil(group.entries.length / ePageSize));
-        const eCur = Math.min(entryPage[group.khach_san_id] ?? 1, eTotalPages);
+        const eCur = Math.min(entryPage[group.groupKey] ?? 1, eTotalPages);
         const pageEntries = group.entries.slice((eCur - 1) * ePageSize, eCur * ePageSize);
         const allRows = group.entries.flatMap((e) =>
           e.ksRows.map((r) => ({ r, lp: e.lockPhong })),
@@ -338,10 +275,10 @@ export default function LockPhongTheoKSView({ data }: Props) {
         const pendingIds = group.entries.flatMap(({ ksRows }) =>
           ksRows.filter((r) => r.email_status === "cho_xac_nhan").map((r) => r.id),
         );
-        const isConfirming = confirmingKsId === group.khach_san_id;
+        const isConfirming = confirmingGroup === group.groupKey;
         return (
           <div
-            key={group.khach_san_id}
+            key={group.groupKey}
             className="rounded-xl border border-border bg-card overflow-hidden"
           >
             {/* Hotel summary header */}
@@ -352,10 +289,13 @@ export default function LockPhongTheoKSView({ data }: Props) {
               <button
                 type="button"
                 className="min-w-0 flex-1 text-left"
-                onClick={() => toggleExpand(group.khach_san_id)}
+                onClick={() => toggleExpand(group.groupKey)}
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm">{group.khach_san_ten}</span>
+                  <Badge variant="outline" className="text-[10px] font-normal">
+                    {group.ten_seri || t("Chưa đặt tên seri")}
+                  </Badge>
                   <Badge className={cn("text-[10px] border-0", hotelStatus.c)}>{hotelStatus.l}</Badge>
                   <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
                     <Hotel className="h-3 w-3" />{group.entries.length} {t("đoàn")}
@@ -405,7 +345,11 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     disabled={isConfirming}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleConfirmAll(group.khach_san_id, group.khach_san_ten, pendingIds);
+                      handleConfirmAll(
+                        group.groupKey,
+                        group.ten_seri ? `${group.khach_san_ten} (${group.ten_seri})` : group.khach_san_ten,
+                        pendingIds,
+                      );
                     }}
                   >
                     <Check className="h-3.5 w-3.5" />
@@ -440,7 +384,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
                 </Button>
                 <button
                   type="button"
-                  onClick={() => toggleExpand(group.khach_san_id)}
+                  onClick={() => toggleExpand(group.groupKey)}
                   className="h-7 w-7 grid place-items-center rounded hover:bg-muted/50 text-muted-foreground"
                   title={isOpen ? t("Thu gọn") : t("Mở chi tiết")}
                 >
@@ -639,13 +583,13 @@ export default function LockPhongTheoKSView({ data }: Props) {
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="sm" className="h-6 text-xs px-2"
                         disabled={eCur <= 1}
-                        onClick={() => setEntryPage((m) => ({ ...m, [group.khach_san_id]: eCur - 1 }))}>
+                        onClick={() => setEntryPage((m) => ({ ...m, [group.groupKey]: eCur - 1 }))}>
                         <ChevronLeft className="h-3 w-3 mr-0.5" /> {t("Trước")}
                       </Button>
                       <span className="px-2">{t("Trang")} {eCur}/{eTotalPages}</span>
                       <Button variant="outline" size="sm" className="h-6 text-xs px-2"
                         disabled={eCur >= eTotalPages}
-                        onClick={() => setEntryPage((m) => ({ ...m, [group.khach_san_id]: eCur + 1 }))}>
+                        onClick={() => setEntryPage((m) => ({ ...m, [group.groupKey]: eCur + 1 }))}>
                         {t("Sau")} <ChevronRight className="h-3 w-3 ml-0.5" />
                       </Button>
                     </div>
