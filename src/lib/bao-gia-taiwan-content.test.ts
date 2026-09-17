@@ -25,24 +25,25 @@ describe("taiwanDefaultBrackets — mốc giá mặc định bảng báo giá Đ
   const b = taiwanDefaultBrackets(ket(365, 352));
   const at = (label: string) => b.find((x) => x.label.startsWith(label))!;
 
-  it("đủ 5 mốc, nhãn liền mạch không chồng khoảng", () => {
+  it("đủ 6 mốc, nhãn liền mạch không chồng khoảng", () => {
     expect(b.map((x) => x.label)).toEqual([
-      "10-14 pax", "15-19 pax", "20-24 pax", "25-29 pax", "30pax以上",
+      "6-9 pax", "10-14 pax", "15-19 pax", "20-24 pax", "25-29 pax", "30pax以上",
     ]);
   });
 
-  it("10-14 giữ nguyên cách cũ: giá trung bình + 30", () => {
-    expect(at("10-14").price_usd).toBe(Math.round((365 + 352) / 2) + 30); // 359 + 30
-  });
-
-  it("15-19 = ĐÚNG giá chuẩn 16 pax, 20-24 = ĐÚNG giá chuẩn 20 pax", () => {
+  it("15-19 = ĐÚNG giá chuẩn 16 pax — neo của cả bảng", () => {
     expect(at("15-19").price_usd).toBe(365);
-    expect(at("20-24").price_usd).toBe(352);
   });
 
-  it("25-29 = giá 20 pax − 7; 30+ = giá 20 pax − 12", () => {
-    expect(at("25-29").price_usd).toBe(345);
-    expect(at("30pax").price_usd).toBe(340);
+  it("đoàn nhỏ cộng lên: 10-14 = 15-19 + 30; 6-9 = 10-14 + 70", () => {
+    expect(at("10-14").price_usd).toBe(395);
+    expect(at("6-9").price_usd).toBe(465);
+  });
+
+  it("đoàn to bớt dần theo bậc liền trước: −15, rồi −7, rồi −7", () => {
+    expect(at("20-24").price_usd).toBe(350);
+    expect(at("25-29").price_usd).toBe(343);
+    expect(at("30pax").price_usd).toBe(336);
   });
 
   it("giá giảm dần theo cỡ đoàn — đoàn to không bao giờ đắt hơn đoàn nhỏ", () => {
@@ -50,19 +51,22 @@ describe("taiwanDefaultBrackets — mốc giá mặc định bảng báo giá Đ
     for (let i = 1; i < gia.length; i++) expect(gia[i]).toBeLessThanOrEqual(gia[i - 1]);
   });
 
-  it("mốc 15-19 và 20-24 KHÔNG trôi theo cỡ đoàn OP đặt ở bảng chi phí", () => {
-    // OP đổi tier_guests sang [12, 30] để xem thử — mốc chào khách vẫn neo 16/20.
+  it("KHÔNG mốc nào trôi theo cỡ đoàn OP đặt ở bảng chi phí", () => {
+    // OP đổi tier_guests sang [12, 30] để xem thử — bảng chào khách vẫn neo 16 pax.
     const b2 = taiwanDefaultBrackets(ket(365, 352, { tier_guests: [12, 30] }));
-    expect(b2[1].price_usd).toBe(365);
-    expect(b2[2].price_usd).toBe(352);
+    expect(b2).toEqual(b);
   });
 
-  it("báo giá cũ thiếu case_16/case_20 → lùi về giá trung bình, không ra NaN", () => {
+  it("bậc 20 pax trong bảng chi phí KHÔNG còn kéo giá chào (chính sách 09/2026)", () => {
+    expect(taiwanDefaultBrackets(ket(365, 300))).toEqual(b);
+  });
+
+  it("báo giá cũ thiếu case_16 → lùi về giá trung bình, không ra NaN", () => {
     const cu = { ...ket(0, 0), gia_trung_binh_usd: 300 } as unknown as BaoGiaKetQua;
     delete (cu as Partial<BaoGiaKetQua>).case_16;
     delete (cu as Partial<BaoGiaKetQua>).case_20;
     const b3 = taiwanDefaultBrackets(cu);
-    expect(b3.map((x) => x.price_usd)).toEqual([330, 300, 300, 293, 288]);
+    expect(b3.map((x) => x.price_usd)).toEqual([400, 330, 300, 285, 278, 271]);
   });
 
   it("taiwanExportDefaults dùng chính bộ mốc này (editor + file Word cùng nguồn)", () => {
@@ -102,6 +106,19 @@ describe("taiwanQuoteContent — nội dung 報價 dùng chung Word + cổng đ�
     const c = taiwanQuoteContent(ket(365, 352), items, 26000);
     // (1.000.000 + 1.600.000 + 500.000) / 2 / 26.000 ≈ 60 → +10
     expect(c.single_supplement_usd).toBe(Math.round(3_100_000 / 2 / 26000) + 10);
+  });
+
+  it("備註 mặc định nói trước: cao điểm phải đổi khách sạn thì thu bù chênh lệch", () => {
+    const c = taiwanQuoteContent(ket(365, 352), items, 26000);
+    expect(c.notes).toEqual([
+      "以上價格使用行程寫上的飯店為主",
+      "若遇到高峰期間 同等級都沒有房 需要拿到其他酒店價格過高 一定需要補價差的 價差多少會以實際狀況回報正確的價格",
+    ]);
+  });
+
+  it("OP xoá trắng ô 備註 thì tôn trọng — không tự dựng lại câu mặc định", () => {
+    const k = ket(365, 352, { export_config: { notes: "" } });
+    expect(taiwanQuoteContent(k, items, 26000).notes).toEqual([]);
   });
 
   it("OP sửa tay (export_config) ĐÈ lên mặc định — cả bậc giá lẫn text", () => {

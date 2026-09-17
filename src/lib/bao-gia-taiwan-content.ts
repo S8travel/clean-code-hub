@@ -14,9 +14,27 @@ import type {
   BaoGiaKetQua,
 } from "@/hooks/use-bao-gia";
 
-/** Bớt so với giá chuẩn 20 pax (USD/khách) cho các mốc đoàn lớn. */
-export const BOT_25PAX_USD = 7;
-export const BOT_30PAX_USD = 12;
+/** Bậc giá của bảng báo giá Đài Loan — chênh lệch USD/khách so với bậc LIỀN KỀ,
+ *  neo ở 15-19 pax. Chính sách 09/2026. Sửa mức ở đây là đổi cả bảng mặc định. */
+export const BAC_GIA_TAIWAN = [
+  { label: "6-9 pax",   chenh_usd: 70 },   // = 10-14 + 70
+  { label: "10-14 pax", chenh_usd: 30 },   // = 15-19 + 30
+  { label: "15-19 pax", chenh_usd: 0 },    // NEO — đúng giá chuẩn 16 pax
+  { label: "20-24 pax", chenh_usd: -15 },  // = 15-19 − 15
+  { label: "25-29 pax", chenh_usd: -7 },   // = 20-24 − 7
+  { label: "30pax以上",  chenh_usd: -7 },   // = 25-29 − 7
+] as const;
+
+/** Vị trí bậc neo (15-19 pax) trong BAC_GIA_TAIWAN. */
+export const BAC_NEO_INDEX = 2;
+
+// 備註 mặc định: giá chào tính theo đúng khách sạn ghi trong chương trình — mùa
+// cao điểm hết phòng cùng hạng phải chuyển khách sạn đắt hơn thì thu bù chênh
+// lệch. Nói trước ở mọi bản chào, đừng đợi lúc phát sinh mới báo.
+const DEFAULT_NOTES_ZH = [
+  "以上價格使用行程寫上的飯店為主",
+  "若遇到高峰期間 同等級都沒有房 需要拿到其他酒店價格過高 一定需要補價差的 價差多少會以實際狀況回報正確的價格",
+];
 
 // 報價包含 mặc định mỗi báo giá đều có 5 mục này, rồi thêm các cảnh điểm (mất phí)
 // của chương trình vào sau.
@@ -28,27 +46,28 @@ const DEFAULT_INCLUDED_ZH = [
   "全程住宿飯店",
 ];
 
-/** Mốc giá MẶC ĐỊNH của bảng báo giá Đài Loan (chính sách 08/2026):
- *    10-14  → giữ nguyên cách cũ (giá trung bình + 30)
- *    15-19  → đúng giá chuẩn bậc 16 pax
- *    20-24  → đúng giá chuẩn bậc 20 pax
- *    25-29  → giá 20 pax − 7 USD
- *    30+    → giá 20 pax − 12 USD
- *  Lấy `case_16`/`case_20` (luôn tính cho đúng 16 và 20 khách) chứ KHÔNG lấy
- *  theo `tier_guests` — OP đổi cỡ đoàn trên bảng chi phí không được làm trôi
- *  mốc giá chào khách. Thiếu case (báo giá cũ) → lùi về giá trung bình.
+/** Mốc giá MẶC ĐỊNH của bảng báo giá Đài Loan (chính sách 09/2026):
+ *    15-19  → đúng giá chuẩn bậc 16 pax  ← NEO của cả bảng
+ *    10-14  → 15-19 + 30      ·  6-9   → 10-14 + 70
+ *    20-24  → 15-19 − 15      ·  25-29 → 20-24 − 7   ·  30+ → 25-29 − 7
+ *  Cả bảng suy ra từ MỘT mốc chuẩn (16 pax) bằng bậc thang cố định
+ *  (BAC_GIA_TAIWAN) — mốc chào khách KHÔNG còn kéo theo bậc 20 pax, cũng không
+ *  trôi theo `tier_guests` (OP đổi cỡ đoàn trên bảng chi phí để xem thử thì giá
+ *  chào phải đứng yên). Thiếu `case_16` (báo giá cũ) → lùi về giá trung bình.
  *  OP sửa tay trong "Nội dung file xuất" vẫn đè được toàn bộ. */
 export function taiwanDefaultBrackets(ketQua: BaoGiaKetQua): BaoGiaExportBracket[] {
-  const base = Math.round(ketQua.gia_trung_binh_usd);
   const p16 = Math.round(ketQua.case_16?.final_price_usd ?? ketQua.gia_trung_binh_usd);
-  const p20 = Math.round(ketQua.case_20?.final_price_usd ?? ketQua.gia_trung_binh_usd);
-  return [
-    { label: "10-14 pax", price_usd: base + 30 },
-    { label: "15-19 pax", price_usd: p16 },
-    { label: "20-24 pax", price_usd: p20 },
-    { label: "25-29 pax", price_usd: p20 - BOT_25PAX_USD },
-    { label: "30pax以上", price_usd: p20 - BOT_30PAX_USD },
-  ];
+  const out: BaoGiaExportBracket[] = BAC_GIA_TAIWAN.map((b) => ({ label: b.label, price_usd: 0 }));
+  out[BAC_NEO_INDEX].price_usd = p16;
+  // Xuống dưới bậc neo (đoàn to dần): mỗi bậc bớt tiếp so với bậc ngay trên.
+  for (let i = BAC_NEO_INDEX + 1; i < out.length; i++) {
+    out[i].price_usd = out[i - 1].price_usd + BAC_GIA_TAIWAN[i].chenh_usd;
+  }
+  // Lên trên bậc neo (đoàn nhỏ dần): mỗi bậc cộng thêm so với bậc ngay dưới.
+  for (let i = BAC_NEO_INDEX - 1; i >= 0; i--) {
+    out[i].price_usd = out[i + 1].price_usd + BAC_GIA_TAIWAN[i].chenh_usd;
+  }
+  return out;
 }
 
 /** Giá trị MẶC ĐỊNH (tính live) cho cấu hình xuất báo giá Đài Loan. Editor +
@@ -69,7 +88,7 @@ export function taiwanExportDefaults(
     above_notes: `1. 司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n2. 簽證、機票、私人費用\n3. 越南特殊節日另外報價`,
     included: DEFAULT_INCLUDED_ZH.join("\n"),
     excluded: `司機導遊小費：150NTD/PAX*${soNgay}天（有領隊團）、300NTD/PAX*${soNgay}天（無領隊團）\n簽證、機票、私人費用`,
-    notes: "",
+    notes: DEFAULT_NOTES_ZH.join("\n"),
   };
 }
 

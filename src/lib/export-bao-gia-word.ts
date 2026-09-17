@@ -676,7 +676,10 @@ function buildTaiwanDoc(
   const hotelDays = cfg.hotel_days;
 
   const nCol = brackets.length + 1; // + cột 單房差
-  const LEFT_W = 4200;
+  // Từ 6 mốc trở lên (chính sách 09/2026: 6-9 … 30pax以上) mà vẫn giữ cột trái
+  // 4200 thì mỗi cột giá chỉ còn ~0,55 inch → "$465" bị bẻ dòng. Nhường bớt cho
+  // cột giá; tên khách sạn xuống dòng vẫn đọc được.
+  const LEFT_W = nCol >= 7 ? 3400 : 4200;
   const PRICE_W = Math.floor((CONTENT_W - LEFT_W) / nCol);
 
   // ── Bảng giá (price box) ────────────────────────────────────────────────────
