@@ -40,6 +40,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/compon
 import { resolveStorageUrl } from "@/lib/storage-url";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 import { apGiaTauHaLong } from "@/lib/bao-gia-tau-ha-long";
+import { apVeCumBaDinh } from "@/lib/bao-gia-cum-ba-dinh";
 
 /** Quy đổi mức USD đối tác ghi → tiền Việt, cho sổ tay dùng khi bên mình chưa
  *  chốt giá nào. Dòng chi phí báo giá có thêm loại "dich_vu" mà sổ tay không
@@ -152,7 +153,7 @@ export function BaoGiaAiImport({
           sanitizeDraftRows(savedReview.items),
           banDo, quyDoiUsdSoTay, giuNguyenDongSuaTay,
         );
-        setRows(maps ? apGiaTauHaLong(daSoTay, maps, tourDate) : daSoTay);
+        setRows(maps ? apVeCumBaDinh(apGiaTauHaLong(daSoTay, maps, tourDate), maps) : daSoTay);
         // Bản gốc đã cất ở lượt phân tích trước → cột đối chiếu có ngay, khỏi
         // phải phân tích lại chỉ để xem file.
         if (draft.noi_dung_goc?.trim()) setNguonGoc({ kieu: "text", noiDung: draft.noi_dung_goc });
@@ -257,7 +258,9 @@ export function BaoGiaAiImport({
       // Luật tàu Hạ Long chạy SAU sổ tay: dòng ăn ghi chung chung ("船上自助餐")
       // được sổ tay điền giá con tàu nào đó từng gõ, nhưng tên tàu THẬT nằm ở
       // dòng vé cùng ngày — bằng chứng của chính đoàn này thắng trí nhớ chung.
-      const daApTau = apGiaTauHaLong(resolved, maps, tourDate);
+      // Luật cụm Ba Đình chạy SAU sổ tay vì chính sổ tay đang nhớ sai cụm này:
+      // hai khoá học được đều ghi tiền vé cho dòng CHỈ ĐI NGOÀI.
+      const daApTau = apVeCumBaDinh(apGiaTauHaLong(resolved, maps, tourDate), maps);
       setTen(result.ten_chuong_trinh ?? "");
       setSoNgay(result.so_ngay && result.so_ngay > 0 ? result.so_ngay : 1);
       setRows(daApTau);
@@ -377,7 +380,10 @@ export function BaoGiaAiImport({
     // "máy đoán" bên cạnh chỉ làm người nhập không biết tin cái nào.
     const t = r.tau_ha_long;
     const nguonLaTau = !!t?.ten && !t.thieu_gia && !r.sua_tay;
-    const chinh = <>{nguonLaTau ? null : nhanNguonChinh(r)}{nhanTau(r)}</>;
+    // Dòng cụm Ba Đình để 0 là CỐ Ý (không vào, hoặc vé đã tính ở dòng cùng
+    // ngày) — nhãn cam "cần điền giá" ở đây chỉ dụ người nhập gõ thêm tiền.
+    const cumLa0 = r.cum_ba_dinh === "ngoai_quan" || r.cum_ba_dinh === "da_gom";
+    const chinh = <>{nguonLaTau || cumLa0 ? null : nhanNguonChinh(r)}{nhanTau(r)}{nhanCum(r)}</>;
     const lech = r.gia_dong_ghi != null && r.don_gia > 0 && r.gia_dong_ghi !== r.don_gia;
     if (!lech) return chinh;
     return (
@@ -422,6 +428,36 @@ export function BaoGiaAiImport({
         tàu {t.ten}{t.ve_vinh ? " + vé vịnh" : ""}{t.doan ? " (mặc định)" : ""}
       </span>
     );
+  };
+
+  /** Nhãn CỤM BA ĐÌNH: nói rõ vì sao dòng để 0 — không vào bên trong, hoặc một
+   *  vé đã tính ở dòng cùng ngày (xem lib/bao-gia-cum-ba-dinh.ts). */
+  const nhanCum = (r: ResolvedItem) => {
+    if (r.cum_ba_dinh === "ngoai_quan") {
+      return (
+        <span className="ml-1 text-[9px] text-emerald-700 border border-emerald-300 rounded px-1"
+          title="Lịch trình ghi chỉ nhìn từ ngoài (外觀) — quảng trường, lăng, chùa Một Cột không mất vé.">
+          không vào — 0 đ
+        </span>
+      );
+    }
+    if (r.cum_ba_dinh === "da_gom") {
+      return (
+        <span className="ml-1 text-[9px] text-emerald-700 border border-emerald-300 rounded px-1"
+          title="Một vé vào được cả Phủ Chủ tịch lẫn nhà sàn — vé đã tính ở dòng cùng ngày, để 0 cho khỏi tính hai lần.">
+          đã gồm vé cụm Ba Đình
+        </span>
+      );
+    }
+    if (r.cum_ba_dinh === "vao_trong") {
+      return (
+        <span className="ml-1 text-[9px] text-sky-700 border border-sky-300 rounded px-1"
+          title="Vào Phủ Chủ tịch / nhà sàn Bác Hồ — một vé chung cho cả hai nơi.">
+          vé cụm Ba Đình
+        </span>
+      );
+    }
+    return null;
   };
 
   const nhanNguonChinh = (r: ResolvedItem) => {

@@ -143,6 +143,11 @@ export interface ResolvedItem {
   } | null;
   /** Dòng vé du thuyền đã được gộp vào giá bữa ăn cùng ngày → để 0 cho khỏi tính đúp. */
   ve_vinh_da_gom?: boolean;
+
+  /** Dòng thuộc cụm Ba Đình (xem lib/bao-gia-cum-ba-dinh.ts):
+   *  'vao_trong' = có mua vé · 'ngoai_quan' = chỉ nhìn từ ngoài, 0 đồng ·
+   *  'da_gom' = cùng ngày đã tính vé cụm rồi, một vé vào được cả hai nơi. */
+  cum_ba_dinh?: "vao_trong" | "ngoai_quan" | "da_gom";
 }
 
 /** Dòng TRỐNG do OP tự thêm trong màn review (AI đọc sót mục). Chưa có tên/giá
