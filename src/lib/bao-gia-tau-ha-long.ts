@@ -8,10 +8,12 @@
 //
 // Ở đây lấy bằng chứng CỤ THỂ HƠN: tên tàu xuất hiện trong CÙNG NGÀY. Thứ tự
 // quyết định giá bữa ăn trên tàu:
-//   1. người nhập tự sửa (`sua_tay`)        → thắng tất, không đụng
-//   2. tên tàu đọc được trong ngày           → giá set của đúng tàu đó
-//   3. không thấy tên tàu, dòng đã có giá    → giữ giá cũ, gắn cảnh báo
-//   4. không thấy tên tàu, dòng chưa có giá  → tàu mặc định, gắn cảnh báo
+//   1. người nhập tự sửa (`sua_tay`)         → thắng tất, không đụng
+//   2. tên tàu trong CHỮ ĐỐI TÁC GỬI         → giá set của đúng tàu đó
+//   3. chương trình không nêu tên tàu nào:
+//      a. dòng ăn đã được MÁY khớp vào một tàu → theo tàu đó, gắn cảnh báo
+//      b. dòng đã có giá (sổ tay)              → giữ giá cũ, gắn cảnh báo
+//      c. còn lại                              → tàu mặc định, gắn cảnh báo
 //
 // Vì sao (2) được thắng cả sổ tay: sổ tay học theo CHUỖI CHỮ, mà "船上自助餐" là
 // chuỗi không nói tàu nào; tên tàu trong ngày là bằng chứng cho chính đoàn này.
@@ -146,14 +148,26 @@ function chuaDayTu(tu: readonly string[], loi: readonly string[]): boolean {
  *  Chấm điểm khi nhiều tàu cùng khớp: tàu CÓ GIÁ SET được ưu tiên, rồi tới tên
  *  khớp dài hơn. Cần đúng luật này cho ca thật "章魚號SEA OCTOPUS日遊船": tên
  *  tiếng Trung trùng với "TÀU CÂU MỰC" (章魚號船, danh mục chưa có giá) trong khi
- *  tàu thật là Sea Octopus. */
-export function tauTrongDong(r: ResolvedItem, ds: readonly TauHaLong[]): TauHaLong | null {
-  const tu = tuTrongTen(`${r.mo_ta ?? ""} ${r.match_label ?? ""} ${r.ten_vi ?? ""}`);
+ *  tàu thật là Sea Octopus.
+ *
+ *  `chiChuDoiTac` = CHỈ đọc chữ đối tác gửi (ten_zh / ten_vi / mo_ta), bỏ qua cả
+ *  `match_label` lẫn ref danh mục. Hai thứ đó là KẾT QUẢ KHỚP của máy, không phải
+ *  bằng chứng: máy khớp bừa dòng ăn "船上自助餐" vào một con tàu, rồi chính cái
+ *  nhãn ấy quay lại làm "tên tàu đọc được trong ngày". Ca thật 17/09: chương
+ *  trình ghi rõ 國賓號 (Ambassador) mà bữa trưa vẫn tính giá Dolphin. */
+export function tauTrongDong(
+  r: ResolvedItem,
+  ds: readonly TauHaLong[],
+  { chiChuDoiTac = false }: { chiChuDoiTac?: boolean } = {},
+): TauHaLong | null {
+  const tu = tuTrongTen(chiChuDoiTac
+    ? `${r.mo_ta ?? ""} ${r.ten_vi ?? ""}`
+    : `${r.mo_ta ?? ""} ${r.match_label ?? ""} ${r.ten_vi ?? ""}`);
   const zh = gianHoa(r.ten_zh ?? "").replace(/\s+/g, "");
   let tot: { tau: TauHaLong; diem: number } | null = null;
   for (const tau of ds) {
     // Dòng ăn đã khớp thẳng vào nhà hàng-tàu thì khỏi phải dò tên.
-    const khopRef = r.match_table === "nha_hang" && r.match_id === tau.nhaHangId;
+    const khopRef = !chiChuDoiTac && r.match_table === "nha_hang" && r.match_id === tau.nhaHangId;
     const khopVi = tau.loi.join("").length >= 4 && chuaDayTu(tu, tau.loi);
     const khopZh = tau.zh != null && zh.includes(tau.zh);
     if (!khopRef && !khopVi && !khopZh) continue;
@@ -163,6 +177,13 @@ export function tauTrongDong(r: ResolvedItem, ds: readonly TauHaLong[]): TauHaLo
     if (!tot || diem > tot.diem) tot = { tau, diem };
   }
   return tot?.tau ?? null;
+}
+
+/** Tàu do CHÍNH NGƯỜI NHẬP chọn cho dòng ăn (họ tự bấm chọn nhà hàng-tàu trong
+ *  màn review) — bằng chứng mạnh nhất, không có gì bàn thêm. */
+function tauNguoiChon(r: ResolvedItem, ds: readonly TauHaLong[]): TauHaLong | null {
+  if (!r.sua_tay || r.match_table !== "nha_hang" || r.match_id == null) return null;
+  return ds.find((t) => t.nhaHangId === r.match_id) ?? null;
 }
 
 /** Giá bữa ăn theo một con tàu: set đúng bữa + vé vịnh nếu tàu đó chưa gồm.
@@ -211,13 +232,25 @@ export function apGiaTauHaLong(
     const buaTau = idxs.filter((i) => laBuaTrenTau(ra[i]));
     if (!buaTau.length) continue; // ngày không ăn trên tàu → không đụng gì
 
-    // Tên tàu: ưu tiên chính dòng ăn (đã khớp danh mục), sau đó tới dòng vé.
+    // Tìm tàu theo thứ tự bằng chứng — xem đầu file.
+    const thuTu = [...buaTau, ...idxs.filter((i) => laDongTau(ra[i]))];
     let tau: TauHaLong | null = null;
-    for (const i of [...buaTau, ...idxs.filter((i) => laDongTau(ra[i]))]) {
-      tau = tauTrongDong(ra[i], ds);
-      if (tau) break;
+    let chacChan = false; // tàu do người nhập chọn, hoặc do chương trình nói ra
+
+    for (const i of buaTau) {
+      const t = tauNguoiChon(ra[i], ds);
+      if (t) { tau = t; chacChan = true; break; }
     }
-    const doanTau = tau == null;
+    if (!tau) {
+      for (const i of thuTu) {
+        tau = tauTrongDong(ra[i], ds, { chiChuDoiTac: true });
+        if (tau) { chacChan = true; break; }
+      }
+    }
+    // Chương trình không nêu tên tàu nào → mới tới dòng máy đã khớp danh mục.
+    if (!tau) for (const i of thuTu) { tau = tauTrongDong(ra[i], ds); if (tau) break; }
+
+    const doanTau = !chacChan;
     const dung = tau ?? tauMacDinh;
     const ngayDate = ngayCuaNgaySo(tourDate, ngay_so);
     let daApGia = false;
@@ -233,7 +266,10 @@ export function apGiaTauHaLong(
       if (!gia || giuGiaCu) {
         ra[i] = {
           ...r,
-          tau_ha_long: { ten: tau?.ten ?? null, ve_vinh: 0, thieu_gia: !gia && !giuGiaCu },
+          tau_ha_long: {
+            ten: tau?.ten ?? null, ve_vinh: 0, thieu_gia: !gia && !giuGiaCu,
+            ...(doanTau && tau ? { doan: true } : {}),
+          },
         };
         continue;
       }

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   chuanHoaZh, khoaSoTay, banDoSoTay, traSoTay, usdTrongDong,
   locDongDeHoc, dongDeHocKhiLuuNhap, dongThieuGia, diemGiong, goiYSoTay, apSoTay,
+  loiKhoa,
   type DongSoTay, type LoaiSoTay, type DongApSoTay, type DongLuuNhap,
 } from "./bao-gia-so-tay";
 
@@ -143,6 +144,70 @@ describe("traSoTay", () => {
     const kq = traSoTay(banDoSoTay([]), "會安古鎮", "ticket", quyDoi);
     expect(kq.nguon).toBe("chua_co");
     expect(kq.don_gia).toBeNull();
+  });
+});
+
+describe("nhãn bữa ở đầu dòng — 午餐 / 晚餐 không được làm lệch khoá", () => {
+  // Giá dưới đây là số BỊA — repo công khai, đừng ghép tên nhà cung cấp thật
+  // với giá vốn thật. Cái được kiểm ở đây là KHOÁ tra cứu, không phải con số.
+  // Ca thật 17/09: sổ tay học "午餐：英和餐廳越式料理10usd" = 220k; lượt đọc sau
+  // model bỏ tiền tố, tra trượt, giá rơi về 200k đoán từ danh mục.
+  it("loiKhoa bóc nhãn bữa, để nguyên chuỗi vốn không có nhãn", () => {
+    expect(loiKhoa(chuanHoaZh("午餐：英和餐廳越式料理10usd"))).toBe(chuanHoaZh("英和餐廳越式料理"));
+    expect(loiKhoa(chuanHoaZh("英和餐廳越式料理10usd"))).toBe("");
+    expect(loiKhoa(chuanHoaZh("午餐"))).toBe(""); // bóc xong rỗng → không tra gì
+  });
+
+  it("học CÓ nhãn, đọc lại KHÔNG nhãn → vẫn ra giá đã gõ", () => {
+    const bd = banDoSoTay([dong({
+      id: 759, khoa_zh: chuanHoaZh("午餐：英和餐廳越式料理10usd"),
+      loai: "meal", don_gia: 199_000, ten_vi: "Anh Hòa món Việt", so_lan_dung: 7,
+    })]);
+    const kq = traSoTay(bd, "英和餐廳越式料理10usd", "meal");
+    expect(kq.nguon).toBe("so_tay");
+    expect(kq.don_gia).toBe(199_000);
+  });
+
+  it("học KHÔNG nhãn, đọc lại CÓ nhãn → cũng ra giá đã gõ", () => {
+    const bd = banDoSoTay([dong({
+      id: 827, khoa_zh: chuanHoaZh("VUI GARDEN越式料理10usd"),
+      loai: "meal", don_gia: 199_000, ten_vi: "VUI GARDEN món Việt",
+    })]);
+    expect(traSoTay(bd, "午餐：VUI GARDEN越式料理10usd", "meal").don_gia).toBe(199_000);
+  });
+
+  it("KHOÁ NGUYÊN VĂN THẮNG bí danh — trưa và tối vẫn là hai giá", () => {
+    const bd = banDoSoTay([
+      dong({ id: 1, khoa_zh: chuanHoaZh("午餐：蓮花自助餐"), loai: "meal", don_gia: 188_000, so_lan_dung: 9 }),
+      dong({ id: 2, khoa_zh: chuanHoaZh("晚餐：蓮花自助餐"), loai: "meal", don_gia: 288_000, so_lan_dung: 1 }),
+    ]);
+    expect(traSoTay(bd, "午餐：蓮花自助餐", "meal").don_gia).toBe(188_000);
+    expect(traSoTay(bd, "晚餐：蓮花自助餐", "meal").don_gia).toBe(288_000);
+    // Không nhãn thì mới dùng bí danh — lấy dòng đáng tin nhất (dùng nhiều hơn).
+    expect(traSoTay(bd, "蓮花自助餐", "meal").don_gia).toBe(188_000);
+  });
+
+  it("bí danh không đè khoá thật của dòng khác", () => {
+    const bd = banDoSoTay([
+      dong({ id: 1, khoa_zh: chuanHoaZh("晚餐：中越式料理10USD"), loai: "meal", don_gia: 199_000, so_lan_dung: 5 }),
+      dong({ id: 2, khoa_zh: chuanHoaZh("中越式料理"), loai: "meal", don_gia: 155_000, so_lan_dung: 0 }),
+    ]);
+    expect(traSoTay(bd, "中越式料理", "meal").don_gia).toBe(155_000);
+  });
+
+  it("dòng CÓ giá được ưu tiên làm bí danh hơn dòng chưa ai điền", () => {
+    const bd = banDoSoTay([
+      dong({ id: 1, khoa_zh: chuanHoaZh("午餐 巴拿山自助餐"), loai: "meal", don_gia: null, so_lan_dung: 9 }),
+      dong({ id: 2, khoa_zh: chuanHoaZh("晚餐 巴拿山自助餐"), loai: "meal", don_gia: 177_000, so_lan_dung: 0 }),
+    ]);
+    expect(traSoTay(bd, "巴拿山自助餐", "meal").don_gia).toBe(177_000);
+  });
+
+  it("dòng đã ngưng không được làm bí danh", () => {
+    const bd = banDoSoTay([dong({
+      id: 1, khoa_zh: chuanHoaZh("午餐：英和餐廳越式料理"), loai: "meal", don_gia: 199_000, ngung: true,
+    })]);
+    expect(traSoTay(bd, "英和餐廳越式料理", "meal").nguon).toBe("chua_co");
   });
 });
 
