@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { format, parseISO, differenceInDays, addDays, formatDistanceToNow } from "date-fns";
 import { errMsg } from "@/lib/error";
 import { vi } from "date-fns/locale";
-import { Check, ChevronDown, ChevronRight, ChevronLeft, Hotel, Mail, MapPin, MailPlus, X as XIcon } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronLeft, Hotel, Mail, MapPin, MailPlus, Send, X as XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,8 @@ import {
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
 import LockPhongBatchEmailModal, { type KSGroupForBatch } from "./LockPhongBatchEmailModal";
-import { isLockPhongDirty } from "./LockPhongCard";
+import LockPhongBatchSeparateModal from "./LockPhongBatchSeparateModal";
+import { isLockPhongDirty } from "@/lib/booking-mail/lock-phong-mail";
 import { t, useTranslate } from "@/lib/i18n";
 
 function EmailStatusBadge({ status }: { status: string }) {
@@ -119,6 +120,19 @@ interface KSGroup {
   entries: MergedEntry[];
 }
 
+/** KSGroup (gom theo đoàn, mỗi đoàn 1 hoặc nhiều stay) → shape phẳng 1 dòng =
+ *  1 stay mà cả 2 modal gửi mail (gộp / riêng) dùng chung. */
+function buildKSGroup(group: KSGroup): KSGroupForBatch {
+  return {
+    khach_san_id: group.khach_san_id,
+    khach_san_ten: group.khach_san_ten,
+    khach_san_email: group.khach_san_email,
+    entries: group.entries.flatMap(({ lockPhong, ksRows }) =>
+      ksRows.map((ksRow) => ({ lockPhong, ksRow })),
+    ),
+  };
+}
+
 interface Props {
   data: LockPhongDisplay[];
 }
@@ -131,6 +145,7 @@ export default function LockPhongTheoKSView({ data }: Props) {
     ksRow: LockPhongKSDisplay;
   } | null>(null);
   const [batchTarget, setBatchTarget] = useState<KSGroupForBatch | null>(null);
+  const [separateTarget, setSeparateTarget] = useState<KSGroupForBatch | null>(null);
   const [thanhDoanTarget, setThanhDoanTarget] = useState<{
     ksRowIds: number[]; // all ksRows của đoàn ở KS này — apply code cho tất cả
     tenDoan: string;
@@ -404,19 +419,24 @@ export default function LockPhongTheoKSView({ data }: Props) {
                   title={t("Gửi 1 email gộp cho tất cả đoàn tại khách sạn này")}
                   onClick={(e) => {
                     e.stopPropagation();
-                    const flatEntries = group.entries.flatMap(({ lockPhong, ksRows }) =>
-                      ksRows.map((ksRow) => ({ lockPhong, ksRow }))
-                    );
-                    setBatchTarget({
-                      khach_san_id: group.khach_san_id,
-                      khach_san_ten: group.khach_san_ten,
-                      khach_san_email: group.khach_san_email,
-                      entries: flatEntries,
-                    });
+                    setBatchTarget(buildKSGroup(group));
                   }}
                 >
                   <MailPlus className="h-3.5 w-3.5" />
                   {t("Gửi gộp")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  title={t("Gửi mỗi đoàn 1 email riêng — khách sạn trả lời vào đúng đoàn")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSeparateTarget(buildKSGroup(group));
+                  }}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {t("Gửi riêng")}
                 </Button>
                 <button
                   type="button"
@@ -680,6 +700,14 @@ export default function LockPhongTheoKSView({ data }: Props) {
           open={true}
           onOpenChange={(v) => { if (!v) setBatchTarget(null); }}
           group={batchTarget}
+        />
+      )}
+
+      {separateTarget && (
+        <LockPhongBatchSeparateModal
+          open={true}
+          onClose={() => setSeparateTarget(null)}
+          group={separateTarget}
         />
       )}
 

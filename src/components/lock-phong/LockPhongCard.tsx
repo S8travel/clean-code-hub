@@ -14,24 +14,8 @@ import {
   type LockPhongKSDisplay,
 } from "@/hooks/use-lock-phong";
 import LockPhongEmailModal from "./LockPhongEmailModal";
-import { isMailDirty } from "@/lib/mail-content-hash";
+import { isLockPhongDirty } from "@/lib/booking-mail/lock-phong-mail";
 import { t, useTranslate } from "@/lib/i18n";
-
-function buildLockPhongMailFields(hotel: LockPhongKSDisplay) {
-  return {
-    khach_san_id: hotel.khach_san_id,
-    check_in: hotel.check_in,
-    check_out: hotel.check_out,
-    so_phong: hotel.so_phong ?? "",
-    ghi_chu: hotel.ghi_chu ?? "",
-  };
-}
-
-export function isLockPhongDirty(hotel: LockPhongKSDisplay): boolean {
-  const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(hotel.email_status);
-  if (!isActive) return false;
-  return isMailDirty(hotel.email_sent_at, hotel.mail_content_hash, buildLockPhongMailFields(hotel));
-}
 
 function fmtDate(d: string) {
   try {

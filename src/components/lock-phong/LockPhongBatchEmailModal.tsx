@@ -21,7 +21,7 @@ import { useCurrentUserName, useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { buildUpdateEmailHtml, escapeHtml } from "@/lib/email-update";
 import { hashMailContent } from "@/lib/mail-content-hash";
-import { isLockPhongDirty } from "./LockPhongCard";
+import { isLockPhongDirty } from "@/lib/booking-mail/lock-phong-mail";
 import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDate(d: string) {
