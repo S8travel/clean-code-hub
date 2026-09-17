@@ -80,6 +80,58 @@ describe("tauTrongDong — đọc tên tàu trong một dòng", () => {
   });
 });
 
+describe("tên tàu trong chương trình THẮNG dòng máy khớp nhầm", () => {
+  // Ca thật 17/09: chương trình D2 ghi 國賓號郵輪 (Ambassador) mà bữa trưa trên
+  // tàu lại tính giá Dolphin — vì máy khớp bừa dòng ăn "船上自助餐" vào Dolphin
+  // rồi lấy chính nhãn đó làm "tên tàu đọc được trong ngày".
+  const veAmbassadorChiChuHan = (over: Partial<ResolvedItem> = {}) => dong({
+    loai: "ticket", ten_zh: "國賓號郵輪出海-天堂島-驚訝洞",
+    mo_ta: "Du thuyền ra vịnh - đảo Thiên Đường - hang Sửng Sốt", don_gia: 0, ...over,
+  });
+  const anKhopNhamDolphin = (over: Partial<ResolvedItem> = {}) => buffetTrenTau({
+    match_table: "nha_hang", match_id: 153, match_set_menu_id: 3,
+    match_label: "Dolphin Cruise · Buffet", don_gia: 1_000_000, nguon_gia: undefined, ...over,
+  });
+
+  it("chương trình ghi Ambassador (chỉ chữ Hán) → bữa ăn theo Ambassador, không theo Dolphin", () => {
+    const [an, ve] = apGiaTauHaLong(
+      [anKhopNhamDolphin(), veAmbassadorChiChuHan()], maps, "2026-09-01",
+    );
+    expect(an.tau_ha_long?.ten).toBe("Ambassador Day Cruise");
+    expect(an.tau_ha_long?.doan).toBeUndefined(); // chương trình nói ra, không phải suy
+    expect(an.match_id).toBe(151);
+    expect(an.don_gia).toBe(1_200_000);
+    // vé của đúng con tàu đó → về 0, vé vịnh đã nằm trong giá bữa ăn
+    expect(ve.ve_vinh_da_gom).toBe(true);
+  });
+
+  it("người nhập tự chọn tàu cho bữa ăn → thắng cả tên trong chương trình", () => {
+    const anNguoiChon = anKhopNhamDolphin({ sua_tay: true, bua_an: "trua" });
+    const anKhac = buffetTrenTau({ bua_an: "toi", don_gia: 0, nguon_gia: undefined });
+    const [tuSua, khac] = apGiaTauHaLong(
+      [anNguoiChon, anKhac, veAmbassadorChiChuHan()], maps, "2026-09-01",
+    );
+    expect(tuSua.don_gia).toBe(1_000_000); // không đụng dòng người vừa gõ
+    expect(khac.tau_ha_long?.ten).toBe("Dolphin Cruise");
+    expect(khac.tau_ha_long?.doan).toBeUndefined();
+  });
+
+  it("chương trình không nêu tàu nào, chỉ có dòng máy khớp → vẫn dùng nhưng gắn cờ suy ra", () => {
+    const [an] = apGiaTauHaLong([anKhopNhamDolphin({ don_gia: 0 })], maps, "2026-09-01");
+    expect(an.tau_ha_long?.ten).toBe("Dolphin Cruise");
+    expect(an.tau_ha_long?.doan).toBe(true);
+    expect(an.don_gia).toBe(1_000_000);
+  });
+
+  it("chương trình không nêu tàu mà dòng ĐÃ có giá sổ tay → giữ giá đã gõ, chỉ cảnh báo", () => {
+    const [an] = apGiaTauHaLong(
+      [anKhopNhamDolphin({ don_gia: 777_000, nguon_gia: "so_tay" })], maps, "2026-09-01",
+    );
+    expect(an.don_gia).toBe(777_000);
+    expect(an.tau_ha_long?.doan).toBe(true);
+  });
+});
+
 describe("apGiaTauHaLong — áp giá theo đúng tàu của đoàn", () => {
   it("đoàn đi Dolphin: bữa trưa ăn giá Dolphin, KHÔNG còn giá Sea Octopus", () => {
     const [an, ve] = apGiaTauHaLong([buffetTrenTau(), veDolphin({ don_gia: 310_000 })], maps, "2026-09-01");

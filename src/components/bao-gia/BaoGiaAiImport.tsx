@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, Loader2, Check, AlertTriangle, HelpCircle, FileText, Upload, Save, Hotel, Utensils, Bus, Ticket, Plus, X } from "lucide-react";
+import { Sparkles, Loader2, Check, AlertTriangle, HelpCircle, FileText, Upload, Save, Hotel, Utensils, Bus, Ticket, Plus, X, Info } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -41,6 +41,7 @@ import { resolveStorageUrl } from "@/lib/storage-url";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 import { apGiaTauHaLong } from "@/lib/bao-gia-tau-ha-long";
 import { apVeCumBaDinh } from "@/lib/bao-gia-cum-ba-dinh";
+import { locDongMayDocTrung, type DongDaBo } from "@/lib/bao-gia-trung-lap";
 
 /** Quy đổi mức USD đối tác ghi → tiền Việt, cho sổ tay dùng khi bên mình chưa
  *  chốt giá nào. Dòng chi phí báo giá có thêm loại "dich_vu" mà sổ tay không
@@ -114,6 +115,8 @@ export function BaoGiaAiImport({
   // Chương trình gốc để đối chiếu ở cột phải + dòng chi phí đang rê chuột.
   const [nguonGoc, setNguonGoc] = useState<NguonChuongTrinh | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  // Dòng máy đọc lặp đã bị bỏ ở lượt phân tích — kê ra cho người nhập soi lại.
+  const [daBoTrung, setDaBoTrung] = useState<DongDaBo[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadedRef = useRef(false); // đã nạp bản nháp lưu chưa (1 lần/lần mở)
 
@@ -132,7 +135,7 @@ export function BaoGiaAiImport({
     if (!open) {
       setMode("file"); setSelectedUrl(null); setItinerary("");
       setRows(null); setSelection({}); setTen(""); setSoNgay(1); setExtracting(false);
-      setNguonGoc(null); setHoverIdx(null);
+      setNguonGoc(null); setHoverIdx(null); setDaBoTrung([]);
       loadedRef.current = false;
       return;
     }
@@ -236,21 +239,32 @@ export function BaoGiaAiImport({
     setNewTier("");
   };
 
-  const runExtract = async (input: { itinerary?: string; fileUrl?: string; fileType?: string; provider: "claude" | "keystone" }) => {
+  /** `banGoc` = bản gốc dạng CHỮ của chính lượt này (null khi là PDF scan / ảnh,
+   *  hoặc file dài đọc thiếu trang). Nhận cả promise vì với PDF thì việc trích
+   *  chữ chạy SONG SONG với lượt hỏi model — chờ ở đây không tốn thêm thời gian
+   *  vì model bao giờ cũng lâu hơn. Dùng để bỏ dòng máy đọc lặp (bao-gia-trung-lap). */
+  const runExtract = async (
+    input: { itinerary?: string; fileUrl?: string; fileType?: string; provider: "claude" | "keystone" },
+    banGoc?: string | Promise<string | null> | null,
+  ) => {
     if (!maps) { toast.warning("Đang tải danh mục, thử lại sau giây lát"); return; }
     setRunningProvider(input.provider);
     try {
       const result = await extract.mutateAsync(input);
+      const goc = await Promise.resolve(banGoc ?? null).catch(() => null);
+      // Bỏ dòng lặp TRƯỚC mọi bước tính giá: để nó đi tiếp là dòng thừa cũng có
+      // giá, cũng vào bảng tính tiền, và cũng được học vào sổ tay.
+      const { rows: khongLap, daBo } = locDongMayDocTrung(
+        resolveAiItems(result, maps, tourDate, aliasMap), goc,
+      );
+      setDaBoTrung(daBo);
       // Quy tắc đã dạy qua chat (vd KS giá kèm ăn tối) áp NGAY sau resolve —
       // chỉ lần phân tích này, không re-apply lên nháp/rows user đã sửa.
       // Sổ tay chạy SAU cùng và ĐÈ LÊN kết quả khớp danh mục: giá người mình
       // từng gõ đáng tin hơn giá suy ra từ kho vận hành. Dòng nào sổ tay chưa
       // biết thì giữ nguyên thứ đang có (có thể AI khớp được), chứ không xoá.
       const resolved = apSoTay(
-        applyKsBuaRules(
-          resolveAiItems(result, maps, tourDate, aliasMap),
-          toKsBuaRules(ruleRows),
-        ),
+        applyKsBuaRules(khongLap, toKsBuaRules(ruleRows)),
         banDo,
         quyDoiUsdSoTay,
         giuNguyenDongSuaTay,
@@ -283,10 +297,10 @@ export function BaoGiaAiImport({
   /** Dựng cột "Chương trình gốc" cho file đã chọn. Chạy SONG SONG với việc phân
    *  tích và nuốt mọi lỗi: đây chỉ là cột đối chiếu, hỏng thì cùng lắm mất chỗ
    *  soi, tuyệt đối không được làm hỏng lượt phân tích. */
-  const dungNguonGocTuFile = async (url: string, kind: FileKind) => {
+  const dungNguonGocTuFile = async (url: string, kind: FileKind): Promise<string | null> => {
     try {
       const ky = await resolveStorageUrl(url);
-      if (kind === "image") { setNguonGoc({ kieu: "file", url: ky, anh: true }); return; }
+      if (kind === "image") { setNguonGoc({ kieu: "file", url: ky, anh: true }); return null; }
       const { text, soTrang, catBot } = await extractPdfText(await (await fetch(ky)).arrayBuffer());
       // PDF scan không có lớp chữ → mở thẳng file thay vì bày một cột trống.
       if (text.trim()) {
@@ -295,9 +309,15 @@ export function BaoGiaAiImport({
           ...(catBot ? { catBot: { doc: Math.min(soTrang, 40), tong: soTrang } } : {}),
         });
         luuNoiDungGoc(text);
-      } else setNguonGoc({ kieu: "file", url: ky, anh: false });
+        // File dài mới đọc được vài trang đầu → KHÔNG dùng để lọc dòng lặp:
+        // lúc đó "không thấy trong bản gốc" chỉ nghĩa là chưa đọc tới.
+        return catBot ? null : text;
+      }
+      setNguonGoc({ kieu: "file", url: ky, anh: false });
+      return null;
     } catch {
       setNguonGoc(null);
+      return null;
     }
   };
 
@@ -306,7 +326,7 @@ export function BaoGiaAiImport({
       if (!itinerary.trim()) { toast.warning("Dán lịch trình trước đã"); return; }
       setNguonGoc({ kieu: "text", noiDung: itinerary });
       luuNoiDungGoc(itinerary);
-      runExtract({ itinerary, provider: prov });
+      runExtract({ itinerary, provider: prov }, itinerary);
       return;
     }
     const f = files.find((x) => x.url === selectedUrl);
@@ -314,10 +334,11 @@ export function BaoGiaAiImport({
     const kind = fileKind(f.ten);
     // PDF/ảnh → đọc file trực tiếp (edge fn gửi cho model). Word/Excel → trích text ở client.
     if (kind === "pdf" || kind === "image") {
-      void dungNguonGocTuFile(f.url, kind);
+      // Trích chữ chạy song song với lượt hỏi model, rồi mới dùng để lọc dòng lặp.
+      const banGoc = dungNguonGocTuFile(f.url, kind);
       return runExtract(kind === "pdf"
         ? { fileUrl: f.url, fileType: "application/pdf", provider: prov }
-        : { fileUrl: f.url, fileType: imageMime(f.ten), provider: prov });
+        : { fileUrl: f.url, fileType: imageMime(f.ten), provider: prov }, banGoc);
     }
     if (kind === "docx" || kind === "xlsx") {
       try {
@@ -332,7 +353,7 @@ export function BaoGiaAiImport({
         // sheet) → luôn kèm link file gốc để đối chiếu khi bố cục quan trọng.
         setNguonGoc({ kieu: "text", noiDung: text, fileUrl: ky });
         luuNoiDungGoc(text);
-        await runExtract({ itinerary: text, provider: prov });
+        await runExtract({ itinerary: text, provider: prov }, text);
       } catch (e: unknown) {
         toast.error(errMsg(e) || "Lỗi đọc file");
       } finally {
@@ -424,8 +445,8 @@ export function BaoGiaAiImport({
     }
     return (
       <span className={`ml-1 text-[9px] border rounded px-1 ${t.doan ? "text-orange-600 border-orange-300" : "text-sky-700 border-sky-300"}`}
-        title={`Giá lấy theo tàu ${t.ten}${t.ve_vinh ? ` + vé vịnh ${fmtVnd(t.ve_vinh)}` : " (giá danh mục đã gồm vé vịnh)"}.${t.doan ? " Không thấy tên tàu trong lịch trình — đây là tàu mặc định, kiểm lại." : ""}`}>
-        tàu {t.ten}{t.ve_vinh ? " + vé vịnh" : ""}{t.doan ? " (mặc định)" : ""}
+        title={`Giá lấy theo tàu ${t.ten}${t.ve_vinh ? ` + vé vịnh ${fmtVnd(t.ve_vinh)}` : " (giá danh mục đã gồm vé vịnh)"}.${t.doan ? " Chương trình KHÔNG nêu tên tàu nào — con tàu này là suy ra (dòng máy khớp danh mục, hoặc tàu mặc định). Kiểm lại." : ""}`}>
+        tàu {t.ten}{t.ve_vinh ? " + vé vịnh" : ""}{t.doan ? " (suy ra)" : ""}
       </span>
     );
   };
@@ -693,6 +714,22 @@ export function BaoGiaAiImport({
             Kiểm tra & điền giá còn thiếu, chọn 1 khách sạn cho đêm có nhiều phương án — giá tour tính sống ngay ở bảng “Tính tiền” bên dưới, không cần Áp dụng mới thấy.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Dòng máy đọc LẶP đã bị bỏ. Bỏ lặng lẽ thì người nhập không bao giờ biết
+            máy vừa sửa gì của họ — kê thẳng tên ra, muốn lấy lại thì tự thêm dòng. */}
+        {rows && daBoTrung.length > 0 && (
+          <div className="shrink-0 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2">
+            <div className="flex items-start gap-2 text-xs text-sky-900">
+              <Info className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>
+                Đã bỏ <b>{daBoTrung.length} dòng máy đọc lặp</b>: {daBoTrung
+                  .map((d) => `${d.ten || "?"} (ngày ${d.ngay_so})`).join(" · ")}.
+                Chương trình gốc chỉ nhắc các mục này ít lần hơn số dòng máy trả về.
+                Đi thật thì bấm ➕ thêm lại dòng ở đúng ngày.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Dải cảnh báo dòng máy đoán không chắc. Đặt NGOÀI vùng cuộn để nó không
             trôi mất khi người nhập kéo xuống xem bảng — cái cần thấy nhất mà cuộn

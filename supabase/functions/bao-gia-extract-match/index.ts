@@ -154,6 +154,12 @@ PHÂN LOẠI (loai):
 - Ghi rõ ngày nguồn ("同第2天", "同D2") thì lấy theo ngày đó. Đêm nguồn có NHIỀU khách sạn lựa chọn thì chép LẠI ĐỦ các phương án cho đêm này (mỗi phương án 1 item).
 - Không tra ra được khách sạn nào phía trước → vẫn trả item hotel cho đêm đó với ten_zh chép nguyên văn dòng lịch trình và match=null, để người nhập tự chọn. Đừng im lặng bỏ dòng.
 
+MỖI MỤC PHẢI CÓ THẬT TRONG NGÀY ĐÓ — chống đọc lặp, QUAN TRỌNG:
+- "ngay_so" là ngày mà ĐOẠN CHỮ sinh ra mục đó đang nằm (dưới mốc 「D4」/「第4天」/「DAY 4」/「Ngày 4」 gần nhất phía trên). Không được gán mục sang ngày khác.
+- Một điểm chỉ được trích thành NHIỀU dòng khi lịch trình NHẮC LẠI nó ở từng ngày. Chương trình chỉ ghi 文廟 ở D5 thì CHỈ có ĐÚNG MỘT dòng Văn Miếu với ngay_so=5 — TUYỆT ĐỐI không thêm một dòng nữa ở ngày khác.
+- Soát lại trước khi trả lời: với mỗi item phải chỉ được ra đoạn chữ của ĐÚNG ngày đó đã sinh ra nó. Không chỉ ra được thì BỎ item đó.
+- "ten_zh" chép nguyên văn cả nhãn bữa đứng đầu dòng (「午餐：」/「晚餐：」/「中餐：」) nếu lịch trình có ghi — chép trước sau như một thì hệ thống mới tra lại được giá đã chốt lần trước.
+
 KHỚP: theo NGHĨA + ĐỊA ĐIỂM, chịu khác ngôn ngữ (西湖=Tây Hồ). Không chắc → match=null + confidence thấp. bua_an chỉ cho meal. Hạng mục không mất tiền (tự do, nghỉ) → BỎ QUA.
 
 GIỮ NGUYÊN MỨC TIỀN GHI TRONG LỊCH TRÌNH — QUAN TRỌNG:
