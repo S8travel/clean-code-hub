@@ -57,7 +57,7 @@ describe("buildPhienBan — chụp hai lớp", () => {
 
   it("lớp chào mang bậc giá bán, lớp vốn mang đơn giá gốc", () => {
     const pb = buildPhienBan(row(), ket(), now);
-    expect(pb.noi_dung_chao.noi_dung.brackets.map((b) => b.price_usd)).toEqual([389, 365, 352, 345, 340]);
+    expect(pb.noi_dung_chao.noi_dung.brackets.map((b) => b.price_usd)).toEqual([465, 395, 365, 350, 343, 336]);
     expect(pb.noi_dung_von.items).toHaveLength(3);
     expect(pb.noi_dung_von.items[0].don_gia).toBe(2_000_000);
     expect(pb.noi_dung_von.xe_gia).toBe(10_000_000);
@@ -135,11 +135,12 @@ describe("soSanhPhienBan — vì sao bản mới khác bản cũ", () => {
     expect(kq.dich_vu).toEqual([]);
   });
 
-  it("hạ giá bậc 20 pax → nêu đúng bậc và mức chênh", () => {
-    const moi = buildPhienBan(row(), ket({ case_20: kase(20, 340) }), now);
+  it("hạ giá chuẩn 16 pax → cả bảng tụt theo, nêu đúng bậc và mức chênh", () => {
+    // Bảng chào neo hết vào giá chuẩn 16 pax nên hạ 10 USD là mọi bậc tụt 10.
+    const moi = buildPhienBan(row(), ket({ case_16: kase(16, 355) }), now);
     const kq = soSanhPhienBan(banCu(), moi);
-    const b = kq.bac_gia.find((x) => x.label === "20-24 pax")!;
-    expect(b).toMatchObject({ cu: 352, moi: 340, chenh: -12 });
+    expect(kq.bac_gia.find((x) => x.label === "15-19 pax")).toMatchObject({ cu: 365, moi: 355, chenh: -10 });
+    expect(kq.bac_gia.find((x) => x.label === "20-24 pax")).toMatchObject({ cu: 350, moi: 340, chenh: -10 });
     expect(kq.giong_nhau).toBe(false);
   });
 
@@ -169,7 +170,7 @@ describe("soSanhPhienBan — vì sao bản mới khác bản cũ", () => {
 
   it("bản backfill thiếu lớp vốn → vẫn so được bậc giá, chỉ bỏ phần dịch vụ", () => {
     const cuThieuVon: PhienBanDeSoSanh = { noi_dung_chao: banCu().noi_dung_chao, noi_dung_von: null };
-    const moi = buildPhienBan(row(), ket({ case_20: kase(20, 340) }), now);
+    const moi = buildPhienBan(row(), ket({ case_16: kase(16, 340) }), now);
     const kq = soSanhPhienBan(cuThieuVon, moi);
     expect(kq.bac_gia.length).toBeGreaterThan(0);
     expect(kq.dich_vu).toEqual([]);   // không bịa ra thay đổi khi không có dữ liệu

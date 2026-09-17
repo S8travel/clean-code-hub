@@ -118,7 +118,7 @@ describe("buildPortalBaoGiaSnapshot", () => {
 
   it("mang đúng bảng giá bán USD theo bậc + 單房差", () => {
     const s = buildPortalBaoGiaSnapshot(row(), ketQua, now);
-    expect(s.noi_dung.brackets.map((b) => b.price_usd)).toEqual([389, 365, 352, 345, 340]);
+    expect(s.noi_dung.brackets.map((b) => b.price_usd)).toEqual([465, 395, 365, 350, 343, 336]);
     expect(s.noi_dung.hotel_days).toEqual([{ ngay: 1, ten: "Khách sạn A" }]);
     expect(s.noi_dung.included).toContain("下龍灣");
   });
