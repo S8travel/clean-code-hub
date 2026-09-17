@@ -2541,5 +2541,13 @@
   "Báo giá & đối tác": "報價與夥伴",
   "Đối tác gửi yêu cầu báo giá hoặc xin sửa chương trình": "夥伴送出報價需求或請求修改行程",
   "Kế toán": "會計",
-  "Đề nghị thanh toán chờ duyệt": "待審核的付款申請"
+  "Đề nghị thanh toán chờ duyệt": "待審核的付款申請",
+  "Gửi riêng": "個別寄送",
+  "Gửi riêng từng đoàn": "逐團個別寄送",
+  "Gửi mỗi đoàn 1 email riêng — khách sạn trả lời vào đúng đoàn": "每團各寄一封 Email — 飯店回覆時直接對應該團",
+  "Mỗi đoàn một email riêng, tiêu đề riêng — khách sạn trả lời vào đúng đoàn đó. Bỏ tick dòng chưa muốn gửi; bấm tên đoàn để xem trước.": "每團一封獨立 Email、獨立主旨 — 飯店回覆時直接對應該團。尚不想寄的列請取消勾選；點團名可預覽。",
+  "Khách sạn này chưa có đoàn nào để gửi.": "此飯店目前沒有可寄送的團組。",
+  "Đoàn / Ngày ở": "團／住宿日期",
+  "VD: Đổi số phòng, đổi ngày ở…": "例：更改房數、更改住宿日期…",
+  "email lock phòng": "封鎖房郵件"
 }
