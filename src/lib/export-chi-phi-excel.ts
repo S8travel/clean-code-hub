@@ -3,6 +3,7 @@ import { saveAs } from "file-saver";
 import type { ChiPhiRow, DNTTRow } from "@/hooks/use-chi-phi";
 import type { HDVSectionData } from "@/hooks/use-chi-phi-hdv";
 import { computePhaiThu } from "@/lib/phai-thu-calc";
+import { nhanTrangThaiTTCanTru } from "@/lib/trang-thai-tt-can-tru";
 import type { CoveredInfo } from "@/lib/voucher";
 
 type CellStyle = "text" | "title" | "section" | "header" | "label" | "number" | "note" | "total" | "total_number";
@@ -100,6 +101,13 @@ interface ExportChiPhiDoanExcelParams {
   } | null;
   /** Tỷ giá NDT → VND (lưu local trong UI). Default 800. */
   tyGiaNdt?: number;
+  /**
+   * chi_phi_id → tổng cấn trừ công nợ đã ghi cho dòng đó.
+   * Cấn trừ ghi ngay lúc tạo ĐNTT, nhưng `trang_thai_thanh_toan` chỉ đổi sau khi
+   * phiếu được DUYỆT → không có map này thì dòng đã cấn trừ đủ in trơ "Chưa thanh
+   * toán", người đọc tưởng còn nợ và đề nghị trả lại lần nữa.
+   */
+  canTruByChiPhi?: Record<number, number>;
   /**
    * Chế độ xuất:
    * - "full" (mặc định): đủ 4 sheet (Hành trình + Tổng hợp + Chi tiết + Thanh toán).
@@ -1366,6 +1374,7 @@ function buildSummarySheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
 
 function buildChiTietSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition {
   const { doan, chiPhiRows } = params;
+  const canTruByChiPhi = params.canTruByChiPhi ?? {};
   const redemptionMap = params.redemptionMap ?? {};
   // Mô tả kèm ghi chú voucher (có tên voucher — sheet chi tiết đủ chỗ, phục vụ audit).
   const moTaText = (row: ChiPhiRow): string => {
@@ -1418,7 +1427,11 @@ function buildChiTietSheet(params: ExportChiPhiDoanExcelParams): SheetDefinition
         cell(row.tien_cong_ty || 0, "number"),
         cell(row.tien_hdv || 0, "number"),
         cell(getDnttStatusLabel(row.trang_thai_dntt)),
-        cell(getPaymentStatusLabel(row.trang_thai_thanh_toan)),
+        cell(nhanTrangThaiTTCanTru({
+          nhanGoc: getPaymentStatusLabel(row.trang_thai_thanh_toan),
+          trangThai: row.trang_thai_thanh_toan,
+          canTru: canTruByChiPhi[row.id] ?? 0,
+        })),
         cell(formatDateValue(row.ngay_thanh_toan)),
         cell(isActiveChiPhi(row) ? "Có" : "Không"),
         cell(row.thanh_toan_dinh_ky ? "Có" : "Không"),
