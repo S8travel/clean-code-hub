@@ -25,6 +25,9 @@ const ketQua: BaoGiaKetQua = {
   gia_trung_binh_usd: 359,
 };
 
+/** Cùng báo giá nhưng là chương trình đánh golf — bảng chào có thêm mốc 4-5 pax. */
+const ketQuaGolf: BaoGiaKetQua = { ...ketQua, ten_chuong_trinh: "GOLF SERI 5天3球" };
+
 const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   id: 12,
   tieu_de: "Báo giá mẫu 5N4Đ",
@@ -45,7 +48,7 @@ const row = (over: Partial<BaoGiaRow> = {}): BaoGiaRow => ({
   xe_gia: 10_000_000,
   phu_thu: 400_000,
   vcb_rate: 25_000,
-  agent_id: 3, bao_gia_goc_id: null,
+  agent_id: 1, bao_gia_goc_id: null,
   loai_tour: "inbound",
   loai_bao_gia: "tu_tinh",
   lich_trinh_files: [],
@@ -97,12 +100,15 @@ describe("buildPortalBaoGiaSnapshot", () => {
   });
 
   it("báo giá không có tỷ giá dùng được (NULL / 0) — bản đẩy cổng vẫn ra số hữu hạn", () => {
-    for (const xr of [null, 0]) {
-      const s = buildPortalBaoGiaSnapshot(row({ exchange_rate: xr }), ketQua, now);
-      const soLieu = JSON.stringify(s.noi_dung);
-      // Infinity/NaN bị JSON hoá thành null → đối tác nhận giá trống mà không ai biết.
-      expect(soLieu).not.toContain("null");
-      expect(soLieu).not.toContain("Infinity");
+    for (const kq of [ketQua, ketQuaGolf]) {
+      for (const xr of [null, 0]) {
+        const s = buildPortalBaoGiaSnapshot(row({ exchange_rate: xr }), kq, now);
+        const gia = [...s.noi_dung.brackets.map((b) => b.price_usd), s.noi_dung.single_supplement_usd];
+        // Infinity/NaN bị JSON hoá thành null → đối tác nhận giá trống mà không ai
+        // biết. null HỢP LỆ duy nhất ở bậc cố ý để trống (4-5 pax của tour golf).
+        for (const n of gia) expect(n === null || Number.isFinite(n)).toBe(true);
+        expect(JSON.stringify(s.noi_dung)).not.toContain("Infinity");
+      }
     }
   });
 
@@ -121,6 +127,18 @@ describe("buildPortalBaoGiaSnapshot", () => {
     expect(s.noi_dung.brackets.map((b) => b.price_usd)).toEqual([465, 395, 365, 350, 343, 336]);
     expect(s.noi_dung.hotel_days).toEqual([{ ngay: 1, ten: "Khách sạn A" }]);
     expect(s.noi_dung.included).toContain("下龍灣");
+  });
+
+  it("chương trình golf: cổng nhận thêm mốc 4-5 pax, giá để trống", () => {
+    const s = buildPortalBaoGiaSnapshot(row(), ketQuaGolf, now);
+    expect(s.noi_dung.brackets[0]).toEqual({ label: "4-5pax", price_usd: null, xe: "16人坐" });
+    expect(s.noi_dung.brackets).toHaveLength(7);
+  });
+
+  it("報價不含 bỏ hẳn — cổng ẩn khối đó, chỉ còn 以上價格不含", () => {
+    const s = buildPortalBaoGiaSnapshot(row(), ketQua, now);
+    expect(s.noi_dung.excluded).toEqual([]);
+    expect(s.noi_dung.above_notes.length).toBeGreaterThan(0);
   });
 
   it("KHÔNG mang theo bất kỳ con số giá vốn nào của đoàn", () => {

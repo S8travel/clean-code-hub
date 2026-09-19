@@ -48,8 +48,11 @@ export function PhienBanSection({ draft }: { draft: BaoGiaRow }) {
 
       <ul className="space-y-2">
         {dsPhienBan.map((pb) => {
-          const gia = pb.noi_dung_chao?.noi_dung?.brackets ?? [];
-          const thapNhat = gia.length ? Math.min(...gia.map((b) => b.price_usd)) : null;
+          // Bỏ bậc để trống giá (null) trước khi lấy min — không thì Math.min ra 0.
+          const gia = (pb.noi_dung_chao?.noi_dung?.brackets ?? [])
+            .map((b) => b.price_usd)
+            .filter((v): v is number => v != null);
+          const thapNhat = gia.length ? Math.min(...gia) : null;
           const hienHanh = pb.id === draft.phien_ban_hien_hanh_id;
           return (
             <li
@@ -111,9 +114,12 @@ export function PhienBanSection({ draft }: { draft: BaoGiaRow }) {
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100">
-                      <th className="border border-slate-200 px-2 py-1 text-left">TOUR FEE (USD/pax)</th>
+                      <th className="border border-slate-200 px-2 py-1 text-left">住宿飯店</th>
                       {xemBang.noi_dung_chao.noi_dung.brackets.map((b) => (
-                        <th key={b.label} className="border border-slate-200 px-2 py-1">{b.label}</th>
+                        <th key={b.label} className="border border-slate-200 px-2 py-1">
+                          {b.label}
+                          {b.xe ? <span className="block font-normal text-[10px] text-slate-500">{b.xe}</span> : null}
+                        </th>
                       ))}
                       <th className="border border-slate-200 px-2 py-1">單房差</th>
                     </tr>
@@ -125,7 +131,7 @@ export function PhienBanSection({ draft }: { draft: BaoGiaRow }) {
                       </td>
                       {xemBang.noi_dung_chao.noi_dung.brackets.map((b) => (
                         <td key={b.label} className="border border-slate-200 px-2 py-1 text-center font-semibold text-[#1E3A6E]">
-                          ${b.price_usd}
+                          {b.price_usd == null ? "—" : `$${b.price_usd}`}
                         </td>
                       ))}
                       <td className="border border-slate-200 px-2 py-1 text-center font-semibold text-[#1E3A6E]">
@@ -143,9 +149,9 @@ export function PhienBanSection({ draft }: { draft: BaoGiaRow }) {
                   </ul>
                 </div>
                 <div>
-                  <p className="font-semibold text-[#C00000] mb-1">報價不含</p>
+                  <p className="font-semibold text-[#C00000] mb-1">以上價格不含</p>
                   <ul className="space-y-0.5">
-                    {xemBang.noi_dung_chao.noi_dung.excluded.map((l, i) => <li key={i}>{l}</li>)}
+                    {xemBang.noi_dung_chao.noi_dung.above_notes.map((l, i) => <li key={i}>{l}</li>)}
                   </ul>
                 </div>
               </div>

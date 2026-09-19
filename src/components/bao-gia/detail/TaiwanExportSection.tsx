@@ -28,8 +28,8 @@ export function TaiwanExportSection({ draft, updateDraftKetQua, saveKetQua }: Pr
   const single = cfg.single_supplement_usd ?? def.single_supplement_usd;
   const above = cfg.above_notes ?? def.above_notes;
   const included = cfg.included ?? def.included;
-  const excluded = cfg.excluded ?? def.excluded;
   const notes = cfg.notes ?? def.notes;
+  const xeNangCap = cfg.xe_nang_cap ?? def.xe_nang_cap;
 
   const cfgNow = () => draft.ket_qua?.export_config ?? {};
   const live = (patch: Partial<typeof cfg>) => updateDraftKetQua({ ...ket, export_config: { ...cfgNow(), ...patch } });
@@ -56,7 +56,9 @@ export function TaiwanExportSection({ draft, updateDraftKetQua, saveKetQua }: Pr
 
       {/* Khoảng giá */}
       <div className="space-y-1.5">
-        <p className="text-[11px] font-medium text-slate-600">Khoảng giá (cột trong bảng) — giá bán/khách USD:</p>
+        <p className="text-[11px] font-medium text-slate-600">
+          Khoảng giá (cột trong bảng) — nhãn pax · giá bán/khách USD · cỡ xe in dưới nhãn:
+        </p>
         <div className="space-y-1">
           {brackets.map((b, i) => (
             <div key={i} className="flex items-center gap-1.5">
@@ -68,12 +70,25 @@ export function TaiwanExportSection({ draft, updateDraftKetQua, saveKetQua }: Pr
                 className="h-7 text-xs flex-1"
               />
               <span className="text-xs text-slate-400">$</span>
+              {/* Ô trống = chưa có giá (null) → file Word in ô trắng, không in "$0".
+                  Mốc 4-5 pax của chương trình golf mặc định rơi vào đây. */}
               <Input
                 type="number"
-                value={b.price_usd}
-                onChange={(e) => setBracket(i, { price_usd: parseInt(e.target.value, 10) || 0 })}
+                value={b.price_usd ?? ""}
+                placeholder="để trống"
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  setBracket(i, { price_usd: v === "" ? null : parseInt(v, 10) || 0 });
+                }}
                 onBlur={persist}
                 className="h-7 text-xs w-24 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <Input
+                value={b.xe ?? ""}
+                onChange={(e) => setBracket(i, { xe: e.target.value })}
+                onBlur={persist}
+                placeholder="Cỡ xe (vd 45人坐)"
+                className="h-7 text-xs w-32"
               />
               <button type="button" onClick={() => commit({ brackets: brackets.filter((_, j) => j !== i) })}
                 disabled={brackets.length <= 1}
@@ -84,7 +99,7 @@ export function TaiwanExportSection({ draft, updateDraftKetQua, saveKetQua }: Pr
           ))}
         </div>
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-          onClick={() => commit({ brackets: [...brackets, { label: "", price_usd: 0 }] })}>
+          onClick={() => commit({ brackets: [...brackets, { label: "", price_usd: null, xe: "" }] })}>
           <Plus className="h-3 w-3" /> Thêm khoảng giá
         </Button>
       </div>
@@ -107,7 +122,10 @@ export function TaiwanExportSection({ draft, updateDraftKetQua, saveKetQua }: Pr
         label="報價包含 (mỗi dòng 1 mục — cảnh điểm mất phí tự nối thêm khi xuất)"
         value={included} onChange={(v) => live({ included: v })} onBlur={persist} rows={5}
       />
-      <TextArea label="報價不含 (mỗi dòng 1 mục)" value={excluded} onChange={(v) => live({ excluded: v })} onBlur={persist} rows={2} />
+      <TextArea
+        label="升等車資 — bù tiền đổi loại xe (dòng đầu là câu dẫn, in đậm; để trống ô này thì không in)"
+        value={xeNangCap} onChange={(v) => live({ xe_nang_cap: v })} onBlur={persist} rows={5}
+      />
       <TextArea label="備註 (ghi chú, để trống nếu không có)" value={notes} onChange={(v) => live({ notes: v })} onBlur={persist} rows={2} />
 
       <p className="text-[11px] text-slate-500">
