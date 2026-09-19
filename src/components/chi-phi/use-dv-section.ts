@@ -10,6 +10,7 @@ import { useCancelDNTT, useUpdateDNTT, recalcChiPhiStatus } from "@/hooks/use-dn
 import { usePaymentsByChiPhi, createCanTruPayments } from "@/hooks/use-payments";
 import { buildCanTruNote } from "@/lib/can-tru-note";
 import { calcDnttPriorPaid } from "@/lib/chi-phi-calc";
+import { chonDnttInPhieu, tinhTienPhieuDntt } from "@/lib/dntt-print-group";
 import { resolveDVFoc, calcSoKhachThucTe } from "@/lib/foc-calc";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { lumpCanTruCash, type LumpRow, type DnttLump } from "@/lib/can-tru-lump";
@@ -822,7 +823,6 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
   const buildSelectedEntries = useCallback(async (): Promise<NHDocEntry[] | undefined> => {
     if (selectedIds.length === 0) return undefined;
     const entries: NHDocEntry[] = [];
-    const canTruShownByNcc: Record<number, boolean> = {};
 
     // Đọc TƯƠI chi phí + ĐNTT + cấn trừ + allocation trước khi dựng bản in. Bản in
     // là chứng từ kế toán nên phải khớp DB: cache React Query không tự refetch khi
@@ -918,13 +918,16 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           .filter((d) => d.trang_thai_duyet !== "da_huy" && d.trang_thai_duyet !== "tu_choi")
           .map((d) => [d.id, d] as const),
       );
-      const pendingDnttOf = (rowId: number): DNTTLite | null => {
+      // ĐNTT đã trả xong VẪN gom nhóm (chonDnttInPhieu): ĐNTT gộp cấn trừ đủ ngay
+      // lúc tạo từng bị coi là "xong" → nhóm vỡ ra từng dòng, cấn trừ chỉ in ở dòng
+      // đầu → 2 dòng sau in thành "còn phải thanh toán" dù đã tất toán.
+      const dnttInPhieuOf = (rowId: number): DNTTLite | null => {
         const allocs = allocFor.get(rowId);
         if (!allocs) return null;
         const cands = [...allocs.keys()]
           .map((id) => activeDnttById.get(id))
-          .filter((d): d is DNTTLite => !!d && d.payment_status !== "paid");
-        return cands.find((d) => d.la_coc) ?? cands[0] ?? null;
+          .filter((d): d is DNTTLite => !!d);
+        return chonDnttInPhieu(cands);
       };
 
       // key = ĐNTT id (gộp/đơn) | r<rowId> (chưa có ĐNTT). Giữ thứ tự theo ngày.
@@ -933,7 +936,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       for (const [day, rows] of sortedDays) {
         for (const row of rows) {
           if (!row.id || !selectedIds.includes(row.id)) continue;
-          const pd = pendingDnttOf(row.id);
+          const pd = dnttInPhieuOf(row.id);
           const key = pd ? `d${pd.id}` : `r${row.id}`;
           if (!groups.has(key)) groups.set(key, { dntt: pd, rows: [] });
           groups.get(key)!.rows.push({ row, day });
@@ -1055,19 +1058,23 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         const firstDay = grows[0].day;
         const nccId = first.nha_cung_cap_id ?? null;
 
-        // Cấn trừ: hiện 1 lần / NCC.
-        let canTruAmount = 0;
-        let canTruNote: string | undefined;
-        if (nccId && !canTruShownByNcc[nccId]) {
-          const canTruPays = dntt
-            ? pmts.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
-            : grows.flatMap(({ row }) => pmts.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru"));
-          canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
-          if (canTruAmount > 0) {
-            canTruShownByNcc[nccId] = true;
-            canTruNote = buildCanTruNote(canTruPays); // "Cấn trừ từ đoàn: <nguồn>"
-          }
-        }
+        // Cấn trừ của CHÍNH nhóm này (không dedupe theo NCC nữa — mỗi ĐNTT chỉ
+        // thuộc đúng 1 nhóm, mỗi dòng chưa-ĐNTT cũng chỉ thuộc 1 nhóm, nên không
+        // thể in trùng; chặn theo NCC lại nuốt cấn trừ của nhóm thứ 2 cùng NCC).
+        const canTruPays = dntt
+          ? pmts.filter((p) => p.dntt_id === dntt.id && p.method === "can_tru")
+          : grows.flatMap(({ row }) => pmts.filter((p) => p.chi_phi_id === row.id && p.method === "can_tru"));
+        const canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
+        const canTruNote = canTruAmount > 0 ? buildCanTruNote(canTruPays) : undefined;
+
+        // Đã trả bằng TIỀN (không phải cấn trừ) trên chính ĐNTT đang in — vào cột
+        // "Số tiền cọc" và trừ khỏi "còn thanh toán" để phiếu đã trả không in ra
+        // số phải trả lần nữa.
+        const daTraTrenPhieu = dntt
+          ? pmts
+              .filter((p) => p.dntt_id === dntt.id && p.method !== "can_tru")
+              .reduce((s, p) => s + p.payment_so_tien, 0)
+          : 0;
 
         // "Số tiền cọc" = tiền đã thanh toán TRƯỚC cho nhóm này. Có ĐNTT pending →
         // Σ paid_amount THỰC TẾ của các ĐNTT KHÁC (cọc HOẶC trả 1 phần) liên kết tới
@@ -1075,6 +1082,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         // để không nhân đôi khi gộp. KHÔNG lọc la_coc (trả 1 phần thường la_coc=false).
         // Trước đây ép 0 khi có pending → cột hiện "—" dù đã thanh toán 1 phần.
         let soCoc: number;
+        let soTienConTT: number;
         if (dntt) {
           const priorDnttIds = new Set<number>();
           for (const { row } of grows) {
@@ -1087,17 +1095,21 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           const priorDntts = [...priorDnttIds]
             .map((id) => activeDnttById.get(id))
             .filter((d): d is DNTTLite => !!d);
-          soCoc = calcDnttPriorPaid(priorDntts, dntt.id);
+          // ĐNTT (gộp/đơn) → in đúng số tiền ĐNTT, trừ cấn trừ + phần đã trả trên
+          // chính phiếu này (phiếu đã tất toán ra "còn 0", không đề nghị trả lại).
+          ({ soTienCoc: soCoc, soTienConTT } = tinhTienPhieuDntt({
+            soTienDntt: dntt.so_tien,
+            canTru: canTruAmount,
+            daTraTrenPhieu,
+            daTraPhieuKhac: calcDnttPriorPaid(priorDntts, dntt.id),
+          }));
         } else {
           soCoc = grows.reduce((s, { row }) => s + dntts
             .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === row.id && d.la_coc && d.trang_thai_duyet !== "da_huy" && d.payment_status === "paid")
             .reduce((a, d) => a + d.so_tien, 0), 0);
+          // Chưa có ĐNTT → đề nghị phần còn lại của chính các dòng đang in.
+          soTienConTT = Math.max(0, thanhTienSum - soCoc - canTruAmount);
         }
-
-        // ĐNTT (gộp/đơn) → in đúng số tiền ĐNTT (trừ cấn trừ), 1 khoản. Chưa có → còn lại.
-        const soTienConTT = dntt
-          ? Math.max(0, dntt.so_tien - canTruAmount)
-          : Math.max(0, thanhTienSum - soCoc - canTruAmount);
 
         // Phần mệnh giá ĐNTT thuộc về CHÍNH các dòng đang in (ĐNTT gộp có thể trải
         // ra dòng khác) — dùng để đối chiếu tổng dòng, không dùng để in.
