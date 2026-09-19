@@ -1824,7 +1824,6 @@ export function useNHSection({
     }
     const outDiffs = src?.outDiffs;
     const entries: NHDocEntry[] = [];
-    const canTruShownByNcc: Record<number, boolean> = {};
 
     // Bữa ăn + master NH: dùng bản TƯƠI khi caller truyền (giá set menu, tên NH,
     // tài khoản thanh toán, NCC đều in ra giấy nên cũng phải mới nhất).
@@ -2036,16 +2035,17 @@ export function useNHSection({
               .reduce((s, d) => s + d.so_tien, 0);
 
         // Cấn trừ: tổng can_tru payments — của ĐNTT đang in (nếu có) hoặc cả meal.
-        const nccId = nh.nha_cung_cap_id ?? null;
+        // KHÔNG chặn "1 lần / NCC" nữa: mỗi bữa có ĐNTT riêng (payments lọc theo
+        // ĐNTT / theo chính dòng chi phí) nên không thể in trùng, còn chặn theo NCC
+        // thì bữa thứ 2 cùng nhà hàng bị nuốt cấn trừ → in thành còn phải trả.
         let canTruAmount = 0;
         let canTruNote: string | undefined;
-        if (nccId && !canTruShownByNcc[nccId] && chiPhiId) {
+        if (chiPhiId) {
           const canTruPays = activeDntt
             ? pmts.filter((p) => p.dntt_id === activeDntt.id && p.method === "can_tru")
             : pmts.filter((p) => p.chi_phi_id === chiPhiId && p.method === "can_tru");
           canTruAmount = canTruPays.reduce((s, p) => s + p.payment_so_tien, 0);
           if (canTruAmount > 0) {
-            canTruShownByNcc[nccId] = true;
             canTruNote = buildCanTruNote(canTruPays); // "Cấn trừ từ đoàn: <nguồn>"
           }
         }
