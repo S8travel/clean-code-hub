@@ -10,6 +10,7 @@ import { useChiPhiLocked } from "@/hooks/use-chi-phi-lock";
 import { useDoanNhomList } from "@/hooks/use-doan-nhom";
 import { useChiPhiChangeSignal } from "@/hooks/use-chi-phi-realtime";
 import { useChiPhiHDVSection } from "@/hooks/use-chi-phi-hdv";
+import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useUserRoles, useCurrentUserName } from "@/hooks/use-doan";
 import { useRedemptionsByDoan } from "@/hooks/use-voucher";
 import { buildRedemptionMap } from "@/lib/voucher";
@@ -35,6 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import { tourProfile } from "@/lib/tour-profile";
 import { exportChiPhiDoanExcel } from "@/lib/export-chi-phi-excel";
+import { gomCanTruTheoChiPhi } from "@/lib/trang-thai-tt-can-tru";
 import { TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
@@ -152,6 +154,10 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
   // Voucher đã phủ của đoàn → xuất Excel ghi rõ dòng nào trả bằng voucher
   // (voucher 'tang' đưa tien_cong_ty về 0, không ghi chú thì bản in trống trơn).
   const { data: redemptions = [], refetch: refetchRedemptions } = useRedemptionsByDoan(doanId);
+  // Cấn trừ công nợ theo từng dòng chi phí — ghi ngay lúc tạo ĐNTT, trong khi
+  // trang_thai_thanh_toan chỉ đổi sau khi phiếu được duyệt. File Excel cần map này
+  // để dòng đã cấn trừ không in trơ "Chưa thanh toán".
+  const { refetch: refetchPayments } = usePaymentsByChiPhi(doanId);
   const redemptionMap = useMemo(() => buildRedemptionMap(redemptions), [redemptions]);
   const opName = useMemo(() => {
     if (!doan?.assigned_to) return "—";
@@ -239,12 +245,13 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       }
       // Đọc lại toàn bộ nguồn của file: cache React Query chỉ đổi ở render sau nên
       // trong cùng 1 tick vẫn là số cũ.
-      const [cpRes, dnttRes, hdvRes, ksRes, redRes] = await Promise.all([
+      const [cpRes, dnttRes, hdvRes, ksRes, redRes, payRes] = await Promise.all([
         refetchChiPhi(),
         refetchDntt(),
         refetchHdv(),
         refetchKs(),
         refetchRedemptions(),
+        refetchPayments(),
       ]);
       const freshRows = cpRes.data ?? chiPhiRows;
       const freshDntt = dnttRes.data ?? dnttList;
@@ -308,6 +315,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         tyGiaNdt,
         mode,
         redemptionMap: freshRedemptionMap,
+        canTruByChiPhi: gomCanTruTheoChiPhi(payRes.data ?? []),
       });
       toast.success(t("Đã xuất file Excel"));
     } catch (error: unknown) {
