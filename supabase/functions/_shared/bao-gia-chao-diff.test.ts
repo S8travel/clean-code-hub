@@ -16,7 +16,8 @@ const ban = (over: Partial<BanChao["noi_dung"]> = {}, hieuLuc = "2026-09-30"): B
       { ngay: 2, ten: "Paradise Cruise" },
     ],
     included: ["Xe đưa đón", "Vé thắng cảnh"],
-    excluded: ["Vé máy bay"],
+    above_notes: ["Vé máy bay"],
+    xe_nang_cap: ["Bù xe VIP 200USD/táp"],
     notes: [],
     ...over,
   },
@@ -65,14 +66,27 @@ describe("soSanhBanChao — bản này khác bản trước ở chỗ nào", () 
     ]);
   });
 
-  it("thêm và bỏ dòng trong phần bao gồm / không bao gồm", () => {
+  it("thêm và bỏ dòng trong phần bao gồm / giá chưa bao gồm", () => {
     const moi = ban({
       included: ["Xe đưa đón", "Vé thắng cảnh", "Bảo hiểm du lịch"],
-      excluded: [],
+      above_notes: [],
     });
     const kq = soSanhBanChao(ban(), moi);
     expect(kq).toContainEqual({ kieu: "them_dong", muc: "bao_gom", den: "Bảo hiểm du lịch" });
-    expect(kq).toContainEqual({ kieu: "bo_dong", muc: "khong_bao_gom", tu: "Vé máy bay" });
+    expect(kq).toContainEqual({ kieu: "bo_dong", muc: "gia_khong_gom", tu: "Vé máy bay" });
+  });
+
+  it("sửa mức bù đổi loại xe — đối tác phải thấy, đó là tiền họ trả thêm", () => {
+    const moi = ban({ xe_nang_cap: ["Bù xe VIP 250USD/táp"] });
+    const kq = soSanhBanChao(ban(), moi);
+    expect(kq).toContainEqual({ kieu: "bo_dong", muc: "nang_cap_xe", tu: "Bù xe VIP 200USD/táp" });
+    expect(kq).toContainEqual({ kieu: "them_dong", muc: "nang_cap_xe", den: "Bù xe VIP 250USD/táp" });
+  });
+
+  it("khối 報價不含 cũ KHÔNG còn được so — bỏ khối đó không phải đổi chào giá", () => {
+    const cu = ban({ excluded: ["Vé máy bay"] });
+    const moi = ban({ excluded: [] });
+    expect(soSanhBanChao(cu, moi)).toEqual([]);
   });
 
   it("đảo thứ tự dòng KHÔNG tính là thay đổi", () => {

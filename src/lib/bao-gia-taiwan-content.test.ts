@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { boMucTien, taiwanDefaultBrackets, taiwanExportDefaults, taiwanQuoteContent } from "./bao-gia-taiwan-content";
+import {
+  boMucTien, laChuongTrinhGolf, taiwanDefaultBrackets, taiwanExportDefaults, taiwanQuoteContent,
+} from "./bao-gia-taiwan-content";
 import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 
 const kase = (guests: number, usd: number): BaoGiaCase => ({
@@ -47,7 +49,7 @@ describe("taiwanDefaultBrackets — mốc giá mặc định bảng báo giá Đ
   });
 
   it("giá giảm dần theo cỡ đoàn — đoàn to không bao giờ đắt hơn đoàn nhỏ", () => {
-    const gia = b.map((x) => x.price_usd);
+    const gia = b.map((x) => x.price_usd!);
     for (let i = 1; i < gia.length; i++) expect(gia[i]).toBeLessThanOrEqual(gia[i - 1]);
   });
 
@@ -67,6 +69,12 @@ describe("taiwanDefaultBrackets — mốc giá mặc định bảng báo giá Đ
     delete (cu as Partial<BaoGiaKetQua>).case_20;
     const b3 = taiwanDefaultBrackets(cu);
     expect(b3.map((x) => x.price_usd)).toEqual([400, 330, 300, 285, 278, 271]);
+  });
+
+  it("mỗi mốc kèm cỡ xe — đoàn càng đông xe càng nhiều chỗ, từ 15-19 trở lên là 45 chỗ", () => {
+    expect(b.map((x) => x.xe)).toEqual([
+      "29人坐", "35人坐", "45人坐", "45人坐", "45人坐", "45人坐",
+    ]);
   });
 
   it("taiwanExportDefaults dùng chính bộ mốc này (editor + file Word cùng nguồn)", () => {
@@ -130,7 +138,7 @@ describe("taiwanQuoteContent — nội dung 報價 dùng chung Word + cổng đ�
       },
     });
     const c = taiwanQuoteContent(k, items, 26000);
-    expect(c.brackets).toEqual([{ label: "16 pax", price_usd: 400 }]);
+    expect(c.brackets).toEqual([{ label: "16 pax", price_usd: 400, xe: undefined }]);
     expect(c.single_supplement_usd).toBe(99);
     expect(c.notes).toEqual(["特別備註", "第二行"]); // dòng trống bị loại
   });
@@ -175,5 +183,137 @@ describe("boMucTien — chặn mức tiền lọt vào bản gửi khách, giữ
   it("chuỗi không có tiền thì trả về y nguyên", () => {
     expect(boMucTien("會安古鎮")).toBe("會安古鎮");
     expect(boMucTien("")).toBe("");
+  });
+});
+
+describe("mốc 4-5 pax — riêng chương trình đánh golf", () => {
+  const ve = (mo_ta: string, ten_zh?: string): BaoGiaItem =>
+    ({ loai: "ticket", mo_ta, don_gia: 100_000, ghi_chu: "", ngay_so: 1, ten_zh });
+
+  const thuong = ket(365, 352);
+  const golf = ket(365, 352, { ten_chuong_trinh: "GOLF SERI 5天3球" });
+
+  it("tour thường: vẫn 6 mốc như cũ, không tự đẻ thêm cột", () => {
+    expect(taiwanDefaultBrackets(thuong)).toHaveLength(6);
+    expect(taiwanDefaultBrackets(thuong)[0].label).toBe("6-9 pax");
+  });
+
+  it("tên chương trình có GOLF → thêm mốc 4-5 pax ở ĐẦU bảng, xe 16 chỗ", () => {
+    const b = taiwanDefaultBrackets(golf);
+    expect(b).toHaveLength(7);
+    expect(b[0]).toEqual({ label: "4-5pax", price_usd: null, xe: "16人坐" });
+  });
+
+  it("giá mốc 4-5 pax ĐỂ TRỐNG (null) — không phải 0, kẻo file in $0 cho khách", () => {
+    expect(taiwanDefaultBrackets(golf)[0].price_usd).toBeNull();
+  });
+
+  it("thêm mốc 4-5 pax KHÔNG làm xê dịch giá của 6 mốc còn lại", () => {
+    expect(taiwanDefaultBrackets(golf).slice(1).map((b) => b.price_usd))
+      .toEqual(taiwanDefaultBrackets(thuong).map((b) => b.price_usd));
+  });
+
+  it("dòng vé green fee cũng tính — tên chương trình không nhắc golf vẫn bắt được", () => {
+    expect(laChuongTrinhGolf(thuong, [ve("Sân golf 18 hố")])).toBe(true);
+    expect(laChuongTrinhGolf(thuong, [ve("Sân bóng", "高爾夫球場（18洞）")])).toBe(true);
+    expect(laChuongTrinhGolf(thuong, [ve("Vịnh Hạ Long", "下龍灣")])).toBe(false);
+  });
+
+  it("bắt cả chữ toàn chiều rộng và viết tắt Đài Loan", () => {
+    expect(laChuongTrinhGolf(thuong, [ve("ＧＯＬＦ ５Ｄ")])).toBe(true);
+    expect(laChuongTrinhGolf(thuong, [ve("", "高球套裝行程")])).toBe(true);
+    expect(laChuongTrinhGolf(thuong, [ve("", "高尔夫球场")])).toBe(true);
+  });
+
+  it("ngủ ở resort tên golf KHÔNG tính là đi đánh golf", () => {
+    const ksGolf: BaoGiaItem = {
+      loai: "hotel", mo_ta: "Resort Golf ven biển", don_gia: 2_000_000, ghi_chu: "", ngay_so: 1,
+    };
+    expect(laChuongTrinhGolf(thuong, [ksGolf])).toBe(false);
+  });
+
+  it("đi cả đường qua taiwanQuoteContent — file Word và cổng cùng thấy mốc này", () => {
+    const c = taiwanQuoteContent(thuong, [ve("Sân golf 18 hố")], 26000);
+    expect(c.brackets[0]).toEqual({ label: "4-5pax", price_usd: null, xe: "16人坐" });
+  });
+});
+
+describe("cỡ xe dưới nhãn pax", () => {
+  const k = ket(365, 352);
+
+  it("báo giá lưu trước khi có cột xe → tự điền cỡ xe theo nhãn bậc", () => {
+    const cu = ket(365, 352, {
+      export_config: { brackets: [{ label: "15-19 pax", price_usd: 365 }] },
+    });
+    expect(taiwanQuoteContent(cu, [], 26000).brackets[0].xe).toBe("45人坐");
+  });
+
+  it("OP xoá trắng ô xe thì tôn trọng — không tự dựng lại cỡ mặc định", () => {
+    const k2 = ket(365, 352, {
+      export_config: { brackets: [{ label: "15-19 pax", price_usd: 365, xe: "" }] },
+    });
+    expect(taiwanQuoteContent(k2, [], 26000).brackets[0].xe).toBe("");
+  });
+
+  it("nhãn tự gõ không có trong bảng → ô xe để trống, không đoán bừa", () => {
+    const k2 = ket(365, 352, {
+      export_config: { brackets: [{ label: "40 pax trở lên", price_usd: 300 }] },
+    });
+    expect(taiwanQuoteContent(k2, [], 26000).brackets[0].xe).toBeUndefined();
+  });
+
+  it("taiwanExportDefaults cũng mang cỡ xe — editor hiện đúng thứ file Word in", () => {
+    expect(taiwanExportDefaults(k, [], 26000).brackets.every((b) => !!b.xe)).toBe(true);
+  });
+});
+
+describe("報價不含 đã bỏ — chỉ còn MỘT khối không-bao-gồm", () => {
+  const k = ket(365, 352);
+
+  it("excluded luôn rỗng, kể cả báo giá cũ còn lưu nội dung đó", () => {
+    const cu = ket(365, 352, {
+      export_config: { excluded: "簽證、機票" } as BaoGiaKetQua["export_config"],
+    });
+    expect(taiwanQuoteContent(k, [], 26000).excluded).toEqual([]);
+    expect(taiwanQuoteContent(cu, [], 26000).excluded).toEqual([]);
+  });
+
+  it("nội dung không-bao-gồm vẫn còn nguyên ở 以上價格不含", () => {
+    const c = taiwanQuoteContent(k, [], 26000);
+    expect(c.above_notes.some((l) => l.includes("簽證"))).toBe(true);
+  });
+});
+
+describe("升等車資 — bù tiền đổi loại xe", () => {
+  const k = ket(365, 352);
+  const golf = ket(365, 352, { ten_chuong_trinh: "GOLF SERI 5天3球" });
+
+  it("mặc định có câu dẫn + đủ 4 mức bù, khớp đúng cỡ xe in trong bảng", () => {
+    const d = taiwanQuoteContent(k, [], 26000).xe_nang_cap;
+    expect(d).toHaveLength(5);
+    expect(d[0]).toContain("本報價用普通的遊覽車車資估價");
+    expect(d.slice(1)).toEqual([
+      "1. 16人坐改 9人坐保姆車 要補 250USD/台",
+      "2. 29人坐改VIP三排椅 要補 300USD/台",
+      "3. 35人坐改VIP三排椅 要補 250USD/台",
+      "4. 45人坐改 VIP 三排椅 要補 200USD/台",
+    ]);
+  });
+
+  it("mọi cỡ xe có trong bảng giá đều có mức bù tương ứng — không để hở cỡ nào", () => {
+    const c = taiwanQuoteContent(golf, [], 26000);
+    const coXe = [...new Set(c.brackets.map((b) => b.xe).filter(Boolean))];
+    const vanBan = c.xe_nang_cap.join(" ");
+    for (const xe of coXe) expect(vanBan).toContain(xe as string);
+  });
+
+  it("OP sửa tay thì đè lên mặc định", () => {
+    const k2 = ket(365, 352, { export_config: { xe_nang_cap: "自訂升等價" } });
+    expect(taiwanQuoteContent(k2, [], 26000).xe_nang_cap).toEqual(["自訂升等價"]);
+  });
+
+  it("OP xoá trắng thì tôn trọng — không dựng lại câu mặc định", () => {
+    const k2 = ket(365, 352, { export_config: { xe_nang_cap: "" } });
+    expect(taiwanQuoteContent(k2, [], 26000).xe_nang_cap).toEqual([]);
   });
 });

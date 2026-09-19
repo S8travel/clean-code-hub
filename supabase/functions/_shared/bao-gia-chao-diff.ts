@@ -14,7 +14,10 @@
 
 export interface BacGia {
   label: string;
-  price_usd: number;
+  /** null = bậc để trống giá (OP tự điền trên file), vd mốc 4-5 pax. */
+  price_usd: number | null;
+  /** Cỡ xe in dưới nhãn pax ("45人坐"). */
+  xe?: string;
 }
 
 export interface KhachSanNgay {
@@ -29,9 +32,13 @@ export interface NoiDungChao {
   brackets?: BacGia[];
   single_supplement_usd?: number;
   hotel_days?: KhachSanNgay[];
+  above_notes?: string[];
   included?: string[];
+  /** @deprecated 報價不含 — bỏ 09/2026, bản chào mới luôn rỗng. Còn đây để đọc bản cũ. */
   excluded?: string[];
   notes?: string[];
+  /** 升等車資 — bù tiền đổi loại xe. */
+  xe_nang_cap?: string[];
 }
 
 /** Bản chào đã đóng băng (bao_gia_phien_ban.noi_dung_chao). */
@@ -58,8 +65,9 @@ export interface ThayDoiChao {
   bac?: string;
   /** Ngày thứ mấy (với kiểu khach_san). */
   ngay?: number;
-  /** Mục nào của bản chào: bao_gom | khong_bao_gom | ghi_chu. */
-  muc?: "bao_gom" | "khong_bao_gom" | "ghi_chu";
+  /** Mục nào của bản chào. `khong_bao_gom` (報價不含) chỉ còn ở bản chào cũ
+   *  đã lưu — khối đó bỏ 09/2026, thay bằng `gia_khong_gom` (以上價格不含). */
+  muc?: "bao_gom" | "khong_bao_gom" | "gia_khong_gom" | "ghi_chu" | "nang_cap_xe";
   tu?: string;
   den?: string;
 }
@@ -112,14 +120,16 @@ export function soSanhBanChao(
   // thêm một bậc — đúng thứ đã xảy ra, và dễ đọc hơn là đoán bậc nào ứng bậc nào.
   const bacCu = new Map((a.brackets ?? []).map((x) => [chuoi(x.label), x.price_usd]));
   const bacMoi = new Map((b.brackets ?? []).map((x) => [chuoi(x.label), x.price_usd]));
+  // `chuoi` chứ không `String`: bậc để trống giá (null) mà String() thì đối tác
+  // đọc được chữ "null" trên cổng.
   for (const [nhan, gia] of bacCu) {
-    if (!bacMoi.has(nhan)) ra.push({ kieu: "bo_bac", bac: nhan, tu: String(gia) });
+    if (!bacMoi.has(nhan)) ra.push({ kieu: "bo_bac", bac: nhan, tu: chuoi(gia) });
     else if (bacMoi.get(nhan) !== gia) {
-      ra.push({ kieu: "gia", bac: nhan, tu: String(gia), den: String(bacMoi.get(nhan)) });
+      ra.push({ kieu: "gia", bac: nhan, tu: chuoi(gia), den: chuoi(bacMoi.get(nhan)) });
     }
   }
   for (const [nhan, gia] of bacMoi) {
-    if (!bacCu.has(nhan)) ra.push({ kieu: "them_bac", bac: nhan, den: String(gia) });
+    if (!bacCu.has(nhan)) ra.push({ kieu: "them_bac", bac: nhan, den: chuoi(gia) });
   }
 
   // ── 單房差 ────────────────────────────────────────────────────────────────
@@ -153,7 +163,11 @@ export function soSanhBanChao(
 
   // ── Điều kiện kèm theo ────────────────────────────────────────────────────
   soSanhDanhSach(a.included, b.included, "bao_gom", ra);
-  soSanhDanhSach(a.excluded, b.excluded, "khong_bao_gom", ra);
+  // ĐỔI 09/2026: so 以上價格不含 (above_notes) thay cho 報價不含 (excluded).
+  // Khối 報價不含 đã bỏ khỏi bản chào; trước đây above_notes KHÔNG được so
+  // — sửa điều kiện giá mà đối tác không thấy dòng "khác bản trước" nào.
+  soSanhDanhSach(a.above_notes, b.above_notes, "gia_khong_gom", ra);
+  soSanhDanhSach(a.xe_nang_cap, b.xe_nang_cap, "nang_cap_xe", ra);
   soSanhDanhSach(a.notes, b.notes, "ghi_chu", ra);
 
   // Sắp theo mức quan trọng với đối tác: tiền trước, rồi chương trình, rồi chữ.

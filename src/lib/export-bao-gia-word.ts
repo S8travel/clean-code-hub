@@ -617,7 +617,7 @@ function buildManualDoc(
   });
 }
 
-// ── Taiwan format (報價 — bảng giá kiểu Đài Loan + 報價包含/不含) ───────────────
+// ── Taiwan format (報價 — bảng giá kiểu Đài Loan + 報價包含 / 備註) ─────────────
 // Nội dung (bậc giá, 單房差, 包含/不含, KS theo ngày) giải ở lib
 // bao-gia-taiwan-content.ts — dùng chung với cổng đối tác để 2 bên không lệch số.
 
@@ -678,8 +678,9 @@ function buildTaiwanDoc(
   const nCol = brackets.length + 1; // + cột 單房差
   // Từ 6 mốc trở lên (chính sách 09/2026: 6-9 … 30pax以上) mà vẫn giữ cột trái
   // 4200 thì mỗi cột giá chỉ còn ~0,55 inch → "$465" bị bẻ dòng. Nhường bớt cho
-  // cột giá; tên khách sạn xuống dòng vẫn đọc được.
-  const LEFT_W = nCol >= 7 ? 3400 : 4200;
+  // cột giá; tên khách sạn xuống dòng vẫn đọc được. Bảng tour golf có thêm mốc
+  // 4-5 pax (8 cột) → nhường tiếp, kẻo cả "$550" lẫn "45人坐" đều gãy dòng.
+  const LEFT_W = nCol >= 8 ? 2900 : nCol >= 7 ? 3400 : 4200;
   const PRICE_W = Math.floor((CONTENT_W - LEFT_W) / nCol);
 
   // ── Bảng giá (price box) ────────────────────────────────────────────────────
@@ -706,14 +707,29 @@ function buildTaiwanDoc(
 
   const priceHeaderRow2 = new TableRow({
     children: [
-      cell([p("TOUR FEE (USD/pax)", { bold: true, size: 18 })], { width: LEFT_W, shading: HEADER_SHADING }),
+      // Cột trái liệt kê khách sạn từng đêm — nhãn "TOUR FEE (USD/pax)" cũ nói về
+      // cột giá chứ không phải thứ nằm dưới nó. Đổi 09/2026 theo bản Word đối tác.
+      cell([p("住宿飯店", { bold: true, size: 18 })], { width: LEFT_W, shading: HEADER_SHADING, rowSpan: 2 }),
       ...brackets.map((b) => cell([p(b.label, { bold: true, size: 18, align: AlignmentType.CENTER })], { width: PRICE_W, shading: HEADER_SHADING })),
-      cell([p("單房差", { bold: true, size: 18, align: AlignmentType.CENTER })], { width: PRICE_W, shading: HEADER_SHADING }),
+      cell([p("單房差", { bold: true, size: 18, align: AlignmentType.CENTER })], { width: PRICE_W, shading: HEADER_SHADING, rowSpan: 2 }),
     ],
   });
 
+  // Dòng cỡ xe — NGAY DƯỚI nhãn pax: đối tác nhìn một phát biết đoàn cỡ đó đi xe
+  // mấy chỗ, khỏi hỏi lại. Chữ nhỏ hơn + lề hẹp hơn nhãn pax vì "45人坐" toàn
+  // ký tự Trung (rộng gấp đôi chữ Latin) mà cột giá chỉ ~0,6 inch.
+  const priceHeaderRow3 = new TableRow({
+    children: brackets.map((b) =>
+      cell([p(b.xe ?? "", { bold: true, size: 16, align: AlignmentType.CENTER })], {
+        width: PRICE_W, shading: HEADER_SHADING, margins: { top: 40, bottom: 40, left: 30, right: 30 },
+      }),
+    ),
+  });
+
   const priceCells = (rowSpan: number) => [
-    ...brackets.map((b) => cell([p(`$${b.price_usd}`, { bold: true, align: AlignmentType.CENTER, size: 24, color: "1E3A6E" })], { width: PRICE_W, rowSpan, shading: LIGHTBLUE_SHADING, vertAlign: VerticalAlign.CENTER })),
+    // price_usd null = mốc chưa có giá (4-5 pax của tour golf) → ô TRẮNG để OP
+    // điền tay trên file, KHÔNG in "$0" cho khách đọc.
+    ...brackets.map((b) => cell([p(b.price_usd == null ? "" : `$${b.price_usd}`, { bold: true, align: AlignmentType.CENTER, size: 24, color: "1E3A6E" })], { width: PRICE_W, rowSpan, shading: LIGHTBLUE_SHADING, vertAlign: VerticalAlign.CENTER })),
     cell([p(`$${singleRoom}`, { bold: true, align: AlignmentType.CENTER, size: 24, color: "1E3A6E" })], { width: PRICE_W, rowSpan, shading: LIGHTBLUE_SHADING, vertAlign: VerticalAlign.CENTER }),
   ];
 
@@ -729,7 +745,7 @@ function buildTaiwanDoc(
 
   const priceTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
-    rows: [priceHeaderRow1, priceHeaderRow2, ...hotelRows],
+    rows: [priceHeaderRow1, priceHeaderRow2, priceHeaderRow3, ...hotelRows],
   });
 
   // ── 以上價格不含 ────────────────────────────────────────────────────────────
@@ -738,9 +754,16 @@ function buildTaiwanDoc(
     ...cfg.above_notes.map((l) => p(l, { size: 18 })),
   ];
 
-  // ── 報價包含 / 報價不含 / 備註 (từ config; cảnh điểm tự nối vào 包含) ──────────
+  // ── 升等車資 (bù tiền đổi loại xe) ──────────────────────────────
+  // Đặt ngay dưới 以上價格不含 vì cùng là điều kiện của bảng giá vừa đọc ở trên,
+  // và mức bù gắn đúng cỡ xe in trong bảng. Dòng ĐẦU in đậm — nó là câu dẫn,
+  // mấy dòng sau là danh sách mức bù. OP xoá trắng ô thì không in gì.
+  const xeNangCapBlock = cfg.xe_nang_cap.map((l, i) => p(l, { size: 18, bold: i === 0 }));
+
+  // ── 報價包含 / 備註 (từ config; cảnh điểm tự nối vào 包含) ────────────────────
+  // KHÔNG còn dòng 報價不含: nội dung trùng hệt khối 以上價格不含 ngay dưới bảng
+  // giá, in hai lần làm bản chào rối. Giữ MỘT chỗ — chỗ sát bảng giá.
   const includedLines = cfg.included;   // đã nối sẵn cảnh điểm mất phí
-  const excludedLines = cfg.excluded;
   const noteLines = cfg.notes;
   const LABEL_W2 = 1600;
   const incExcTable = new Table({
@@ -750,12 +773,6 @@ function buildTaiwanDoc(
         children: [
           cell([p("報價包含", { bold: true, color: "C00000" })], { width: LABEL_W2, shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
           cell(includedLines.map((l) => p(l, { size: 18 })), { width: CONTENT_W - LABEL_W2 }),
-        ],
-      }),
-      new TableRow({
-        children: [
-          cell([p("報價不含", { bold: true, color: "C00000" })], { width: LABEL_W2, shading: HEADER_SHADING, vertAlign: VerticalAlign.CENTER }),
-          cell(excludedLines.map((l) => p(l, { size: 18 })), { width: CONTENT_W - LABEL_W2 }),
         ],
       }),
       new TableRow({
@@ -823,6 +840,7 @@ function buildTaiwanDoc(
           priceTable,
           spacer(),
           ...notesBlock,
+          ...(xeNangCapBlock.length ? [spacer(), ...xeNangCapBlock] : []),
           spacer(),
           incExcTable,
           ...programBlock,

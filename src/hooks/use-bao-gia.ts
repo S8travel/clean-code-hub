@@ -63,8 +63,12 @@ export interface GiaCuoiTier {
 
 // 1 cột giá trong bảng xuất Đài Loan (nhãn khoảng khách + giá/khách USD).
 export interface BaoGiaExportBracket {
-  label: string;      // "10-14 pax"
-  price_usd: number;  // giá bán/khách (USD) cho khoảng này
+  label: string;             // "10-14 pax"
+  // Giá bán/khách (USD) cho khoảng này. null = ĐỂ TRỐNG (ô trắng trong file
+  // Word, OP tự điền) — dùng cho mốc hệ thống không suy ra được, vd 4-5 pax.
+  // KHÔNG dùng 0 thay cho "chưa có giá": 0 sẽ in ra "$0" cho khách đọc.
+  price_usd: number | null;
+  xe?: string;               // cỡ xe in ngay dưới nhãn pax ("45人坐"); vắng = ô trống
 }
 
 // Cấu hình nội dung xuất báo giá Đài Loan — SỬA ĐƯỢC + LƯU theo báo giá (ket_qua).
@@ -74,8 +78,11 @@ export interface BaoGiaExportConfig {
   single_supplement_usd?: number;      // 單房差
   above_notes?: string;                // 以上價格不含 (nhiều dòng)
   included?: string;                   // 報價包含 (nhiều dòng; cảnh điểm tự nối thêm khi xuất)
-  excluded?: string;                   // 報價不含 (nhiều dòng)
   notes?: string;                      // 備註
+  xe_nang_cap?: string;                // 升等車資 — bù tiền đổi xe (nhiều dòng, dòng đầu là câu dẫn)
+  // KHÔNG còn `excluded` (報價不含): trùng nội dung với `above_notes` nên bản
+  // chào in "không bao gồm" hai lần. Bỏ 09/2026 — báo giá cũ còn key này trong
+  // JSON thì kệ, không đọc tới nữa.
 }
 
 export interface BaoGiaKetQua {

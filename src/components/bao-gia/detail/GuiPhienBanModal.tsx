@@ -53,7 +53,7 @@ export function GuiPhienBanModal({
             <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
               <p className="font-medium text-slate-700">{nd.noi_dung.ten_chuong_trinh}</p>
               <p className="text-slate-600">
-                {nd.noi_dung.brackets.map((b) => `${b.label}: $${b.price_usd}`).join(" · ")}
+                {nd.noi_dung.brackets.map((b) => `${b.label}: ${b.price_usd == null ? "—" : `$${b.price_usd}`}`).join(" · ")}
               </p>
               <p className="text-slate-600">單房差 ${nd.noi_dung.single_supplement_usd}</p>
               <p className="text-slate-500">
