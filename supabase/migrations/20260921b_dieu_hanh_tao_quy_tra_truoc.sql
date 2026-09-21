@@ -6,13 +6,16 @@
 -- security policy". User chốt 21/09/2026 mở cho điều hành.
 --
 -- Chỉ MỞ THÊM (policy permissive mới), không sửa van_phong_scope:
---   - INSERT: chỉ phiếu tra_truoc, chờ duyệt, chưa ai duyệt, tao_boi = chính mình.
+--   - INSERT: chỉ phiếu tra_truoc, chờ duyệt, cấp KTT + duyệt cuối trống, tao_boi = chính mình.
 --   - SELECT: phiếu tra_truoc (cần cho RETURNING id sau insert + xem trạng thái).
 --   - payments SELECT: lần chi của phiếu tra_truoc (view dntt_with_payment_status
 --     là security_invoker → thiếu dòng này thì paid_amount luôn 0 với điều hành).
 -- KHÔNG mở UPDATE/DELETE: duyệt / chi / hủy vẫn là việc của kế toán + cấp duyệt.
 -- cong_no KHÔNG đổi: cấn trừ quỹ đã đi qua RPC definer (20260629_cong_no_can_tru_rpc).
 -- Policy chi_xem_* (RESTRICTIVE) vẫn chặn tài khoản chỉ xem.
+-- ĐÃ APPLY PROD 21/09/2026 (bản đầu + ALTER POLICY 20260921c); nghiệm thu đóng vai
+-- điều hành 10/10: tạo hợp lệ được; đã duyệt / tự KTT / giả TP / loại khác /
+-- mạo danh / chỉ xem đều bị chặn; UPDATE + DELETE 0 dòng.
 
 CREATE OR REPLACE FUNCTION public.current_user_is_dieu_hanh()
 RETURNS boolean
@@ -37,9 +40,12 @@ CREATE POLICY tra_truoc_dieu_hanh_insert ON public.de_nghi_thanh_toan
     AND loai = 'tra_truoc'
     AND trang_thai_duyet = 'cho_duyet'
     AND duyet_boi IS NULL AND duyet_luc IS NULL
-    AND tp_dh_duyet_boi IS NULL AND tp_dh_duyet_luc IS NULL
     AND ktt_duyet_boi IS NULL AND ktt_duyet_luc IS NULL
-    AND kttt_duyet_boi IS NULL AND kttt_duyet_luc IS NULL
+    -- Trigger BEFORE INSERT auto_pass_dntt_level_1 tự điền cấp TP điều hành + KT
+    -- thanh toán = tao_boi cho MỌI phiếu mới (chạy TRƯỚC khi kiểm WITH CHECK) →
+    -- đòi NULL là chặn luôn phiếu hợp lệ. Chỉ cho NULL hoặc chính người tạo.
+    AND (tp_dh_duyet_boi IS NULL OR tp_dh_duyet_boi = tao_boi)
+    AND (kttt_duyet_boi IS NULL OR kttt_duyet_boi = tao_boi)
     AND tu_choi_cap IS NULL
     AND tao_boi = (SELECT auth.uid())
     AND (SELECT public.current_user_is_dieu_hanh())
