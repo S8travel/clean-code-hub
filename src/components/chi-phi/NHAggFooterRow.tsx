@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { fmt } from "./nh-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 interface Props {
   effectiveDelta: number;
@@ -16,6 +17,9 @@ export default function NHAggFooterRow({
   effectiveDelta, sumActual, sumPaid, groupCongNoTotal, onCommit,
 }: Props) {
   useTranslate();
+  // Cả dòng là UI thanh toán (Đã TT / CN/HT / lệch + nút bổ sung) → đối tác không thấy.
+  const anTT = useAnThanhToan();
+  if (anTT) return null;
   return (
     <tr className={cn(
       "border-b border-border/50",

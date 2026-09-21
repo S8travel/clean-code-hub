@@ -15,6 +15,7 @@ import { useUserRoles, useCurrentUserName } from "@/hooks/use-doan";
 import { useRedemptionsByDoan } from "@/hooks/use-voucher";
 import { buildRedemptionMap } from "@/lib/voucher";
 import ChiPhiHeader from "./ChiPhiHeader";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 import ChiPhiKSSection from "./ChiPhiKSSection";
 import ChiPhiNHSection, { type ChiPhiNHSectionHandle } from "./ChiPhiNHSection";
 import ChiPhiDVSection, { type ChiPhiDVSectionHandle } from "./ChiPhiDVSection";
@@ -112,6 +113,8 @@ interface Props {
 
 export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang, activeNhomId }: Props) {
   useTranslate();
+  // Tài khoản đối tác: chỉ xem dòng chi phí, ẩn ĐNTT / thanh toán / xuất file có số thanh toán.
+  const anTT = useAnThanhToan();
   // Chuẩn hoá row đoàn về ChiPhiTabDoan (các quan hệ join có kiểu chính xác).
   const doan = doanInput as ChiPhiTabDoan;
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -327,6 +330,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
 
   return (
     <div className="space-y-5">
+      {!anTT && (
       <div className="flex justify-end gap-2">
         <Button
           size="sm"
@@ -361,6 +365,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      )}
 
       <ChiPhiHeader doan={doan} opName={opName} />
 
@@ -369,7 +374,9 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 flex items-center gap-2 text-sm text-amber-800">
           <span className="text-base">🔒</span>
           <span>
-            {t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được số liệu. (Vẫn dùng được nút thanh toán / hóa đơn.)")}
+            {anTT
+              ? t("Đoàn đã quyết toán — chi phí đã khóa.")
+              : t("Đoàn đã quyết toán — chi phí đã khóa. Chỉ admin mới sửa được số liệu. (Vẫn dùng được nút thanh toán / hóa đơn.)")}
             {!lockedBaoHiem && (
               <> {t("Riêng mục Bảo hiểm bạn vẫn sửa được vì đang phụ trách bảo hiểm.")}</>
             )}
@@ -383,7 +390,7 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
       {/* ── Summary bar ── */}
       {hasData && (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="grid grid-cols-4 divide-x divide-border">
+          <div className={cn("grid divide-x divide-border", anTT ? "grid-cols-3" : "grid-cols-4")}>
             <div className="px-4 py-3">
               <p className="text-[11px] text-muted-foreground mb-0.5">{t("Chi phí dự trù")}</p>
               <p className="text-sm font-semibold text-foreground">{fmt(summary.total)} ₫</p>
@@ -398,10 +405,12 @@ export default function ChiPhiTab({ doanId, doan: doanInput, coTinhSuatTLNhaHang
               <p className="text-[11px] text-muted-foreground mb-0.5">{t("Công ty thanh toán")}</p>
               <p className="text-sm font-semibold text-blue-600">{fmt(summary.congTy)} ₫</p>
             </div>
-            <div className="px-4 py-3">
-              <p className="text-[11px] text-muted-foreground mb-0.5">{t("Tiền đã thanh toán")}</p>
-              <p className="text-sm font-semibold text-emerald-600">{fmt(summary.daTT)} ₫</p>
-            </div>
+            {!anTT && (
+              <div className="px-4 py-3">
+                <p className="text-[11px] text-muted-foreground mb-0.5">{t("Tiền đã thanh toán")}</p>
+                <p className="text-sm font-semibold text-emerald-600">{fmt(summary.daTT)} ₫</p>
+              </div>
+            )}
           </div>
         </div>
       )}

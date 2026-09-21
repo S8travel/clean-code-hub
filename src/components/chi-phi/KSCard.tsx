@@ -23,6 +23,7 @@ import { HoaDonBadge } from "./HoaDonBadge";
 import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import type { KSCardData, KSCardHandlers } from "./use-ks-section";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 interface Props {
   ksId: number;
@@ -36,6 +37,8 @@ interface Props {
 // Tách verbatim từ ChiPhiKSSection — giữ nguyên 100% logic/hành vi.
 export default function KSCard({ ksId, data, handlers, locked = false }: Props) {
   useTranslate();
+  // Tài khoản đối tác → ẩn mọi thứ về ĐNTT / thanh toán / công nợ / định kỳ.
+  const anTT = useAnThanhToan();
   const {
     ksData, khachSanMap, ngayRows, dayUseItemMap, dayUseKsIds, orphanedKsIds,
     grouped, localRows, dnttList, congNoList,
@@ -216,11 +219,13 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
       <CardHeader className="py-1 px-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-sm font-medium flex items-center gap-2 flex-wrap min-w-0">
-            <Checkbox
-              checked={selectedKsIds.includes(ksId)}
-              onCheckedChange={() => toggleSelectKs(ksId)}
-              className="shrink-0"
-            />
+            {!anTT && (
+              <Checkbox
+                checked={selectedKsIds.includes(ksId)}
+                onCheckedChange={() => toggleSelectKs(ksId)}
+                className="shrink-0"
+              />
+            )}
             <button
               className="flex items-center gap-2 flex-wrap text-left"
               onClick={() => toggleCollapse(ksId)}
@@ -231,12 +236,12 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                   Day Use
                 </span>
               )}
-              {effectiveKsStatus === "cong_no" && congNoAmount > 0 && (
+              {!anTT && effectiveKsStatus === "cong_no" && congNoAmount > 0 && (
                 <span className="text-purple-600 font-semibold text-xs">
                   — {t("Công nợ")}: {fmt(congNoAmount)} VND
                 </span>
               )}
-              {effectiveKsStatus === "hoan_tien" && hoanTienAmount > 0 && (
+              {!anTT && effectiveKsStatus === "hoan_tien" && hoanTienAmount > 0 && (
                 <span className="text-blue-600 font-semibold text-xs">
                   — {t("Hoàn tiền")}: {fmt(hoanTienAmount)} VND
                 </span>
@@ -244,7 +249,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
             </button>
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
-            {isKsDinhKy && (
+            {!anTT && isKsDinhKy && (
               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700">{t("Định kỳ")}</span>
             )}
             {totalKS > 0 && (
@@ -255,7 +260,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                 }
               </span>
             )}
-            {dnttMismatch !== 0 && (
+            {!anTT && dnttMismatch !== 0 && (
               <span
                 className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
                 title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Sửa giá/số phòng cho khớp, hoặc trả nốt phần đã đề nghị rồi bổ sung phần lệch. Đừng hủy nếu ĐNTT có cấn trừ.")}`}
@@ -276,16 +281,18 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
               focMien={ksFoc.foc_mien}
               disabled={locked}
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn("h-7 text-xs px-2 gap-1", isKsDinhKy ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
-              onClick={() => handleToggleDinhKy(ksId)}
-              title={isKsDinhKy ? t("Đang thanh toán định kỳ — bấm để bỏ") : t("Đặt thanh toán định kỳ")}
-            >
-              <CalendarClock className="h-3.5 w-3.5" />
-              {isKsDinhKy && t("Định kỳ")}
-            </Button>
+            {!anTT && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn("h-7 text-xs px-2 gap-1", isKsDinhKy ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
+                onClick={() => handleToggleDinhKy(ksId)}
+                title={isKsDinhKy ? t("Đang thanh toán định kỳ — bấm để bỏ") : t("Đặt thanh toán định kỳ")}
+              >
+                <CalendarClock className="h-3.5 w-3.5" />
+                {isKsDinhKy && t("Định kỳ")}
+              </Button>
+            )}
             <button onClick={() => toggleCollapse(ksId)} className="text-muted-foreground hover:text-foreground">
               {showContent
                 ? <ChevronDown className="h-4 w-4" />
@@ -293,7 +300,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
             </button>
           </div>
         </div>
-        {ks?.ncc_so_tai_khoan && (
+        {!anTT && ks?.ncc_so_tai_khoan && (
           <p className="text-xs text-muted-foreground mt-1">
             STK: {ks.ncc_so_tai_khoan} · {ks.ncc_ngan_hang || "—"}
             {ks.ten_ncc && <span> ({ks.ten_ncc})</span>}
@@ -419,8 +426,8 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
           )}
         </div>}
 
-        {/* ── Thanh toán section ── */}
-        <div className="mt-2 pt-2 border-t border-border space-y-1.5">
+        {/* ── Thanh toán section ── (ẩn hẳn với tài khoản đối tác) */}
+        {!anTT && <div className="mt-2 pt-2 border-t border-border space-y-1.5">
           {/* ĐNTT history list */}
           {(() => {
             const allKsDntts = dnttList.filter(
@@ -738,7 +745,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
               {/* "Đề nghị TT bổ sung / còn lại" cũ — REMOVED, replaced by aggregate breakdown button. */}
             </div>
           </div>
-        </div>
+        </div>}
       </CardContent>}
     </Card>
   );

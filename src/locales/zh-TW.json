@@ -2550,5 +2550,8 @@
   "Đoàn / Ngày ở": "團／住宿日期",
   "VD: Đổi số phòng, đổi ngày ở…": "例：更改房數、更改住宿日期…",
   "email lock phòng": "封鎖房郵件",
-  "Chưa đặt tên seri": "未命名系列"
+  "Chưa đặt tên seri": "未命名系列",
+  "Chỉ xem đoàn của agent": "僅檢視此旅行社的團",
+  "Để trống = tài khoản thường. Tích agent → chỉ xem danh sách + chi tiết đoàn của agent đó; ẩn danh mục, ĐNTT, thanh toán, UNC. Chỉ ẩn trên giao diện, không chặn ở DB.": "留空 = 一般帳號。勾選旅行社 → 僅能檢視該旅行社的團列表與團詳情；隱藏目錄、付款申請、付款、匯款單。僅在介面隱藏，資料庫未封鎖。",
+  "Đoàn đã quyết toán — chi phí đã khóa.": "團隊已結算 — 費用已鎖定。"
 }

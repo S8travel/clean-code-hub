@@ -2,8 +2,13 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import QuickActions from "@/components/quick-actions/QuickActions";
 import { InstallPWA } from "@/components/InstallPWA";
+import { useAuth } from "@/hooks/use-auth";
+import { resolveAgentScope } from "@/lib/agent-scope";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  // Tài khoản đối tác: bỏ nút thao tác nhanh (tạo sự cố / giao việc liệt kê MỌI đoàn).
+  const laTaiKhoanAgent = resolveAgentScope(user?.agent_ids) != null;
   return (
     <SidebarProvider>
       {/* 100dvh: chiều cao "động" — đúng trên mobile khi thanh địa chỉ ẩn/hiện. */}
@@ -21,7 +26,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="flex-1 min-w-0">{children}</main>
         </div>
       </div>
-      <QuickActions />
+      {!laTaiKhoanAgent && <QuickActions />}
       <InstallPWA />
     </SidebarProvider>
   );

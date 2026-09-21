@@ -862,6 +862,17 @@ Luật tính ở `src/lib/quyen.ts` (thuần, có unit test); hook `usePermissio
 - Quyền chỉ là tầng GIAO DIỆN: `bao_gia` (và nhiều bảng khác) chỉ có policy
   "đã đăng nhập" ở DB. Ẩn menu ≠ giấu được dữ liệu — xem lại mục "⛔ ĐÃ THỬ VÀ BỎ".
 
+### Tài khoản đối tác — `user_roles.agent_ids` (21/09/2026, CHỈ tầng giao diện)
+User chốt cấp tài khoản cho đại diện agent dù đã được nhắc
+mục "⛔ ĐÃ THỬ VÀ BỎ". `agent_ids` có phần tử ⇒ (luật ở `src/lib/agent-scope.ts`, có test):
+- Chỉ mở `/doan`, `/doan/:id`, `/thong-bao` (guard ở `ProtectedLayout`, menu lọc cùng luật).
+- Danh sách + chi tiết đoàn lọc `agent_id ∈ agent_ids` (`useDoanScope.agentScope`, `useDoanList`).
+- Tab Chi phí: `AnThanhToanContext` (provider ở DoanDetail) ẩn ĐNTT, trạng thái thanh
+  toán, hóa đơn/UNC, công nợ, định kỳ, nút in/xuất. Tab Log ẩn. Thêm cột/nút thanh toán
+  mới trong `chi-phi/` → nhớ bọc `{!anTT && …}`.
+- ⚠️ DB KHÔNG chặn theo agent: dữ liệu vẫn tải về trình duyệt, gọi API thẳng là đọc được
+  danh mục/ĐNTT/giá vốn. Nên bật kèm `chi_xem`.
+
 ## 🔒 Tính năng tạm tắt
 
 ### Per-tour permission (doan_permissions) — tắt từ 2026-04-24

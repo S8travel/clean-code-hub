@@ -14,6 +14,8 @@ export interface UserRoleRow {
   bo_phan: BoPhan | null;
   van_phong_id: number | null;
   van_phong_ids: number[] | null;
+  /** Có phần tử = tài khoản đối tác, chỉ xem đoàn của các agent này (tầng giao diện, xem lib/agent-scope.ts). */
+  agent_ids: number[] | null;
   phan_loai_tour: string[] | null;
   ghi_chu: string | null;
   active: boolean;

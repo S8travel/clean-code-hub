@@ -10,6 +10,7 @@ import type { TrangThaiDoc } from "@/hooks/use-hoa-don-unc";
 import { fmt, type LocalNHExtra } from "./nh-section-shared";
 import type { VoucherTarget } from "./DungVoucherModal";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 interface Props {
   mealKey: string;
@@ -47,12 +48,14 @@ export default function NHExtraRow({
   voucherEligible = false, onOpenVoucher, onEditVoucher, voucherTarget = null,
 }: Props) {
   useTranslate();
+  // Tài khoản đối tác: ẩn ô dưới cột checkbox / TT ĐNTT / Hóa đơn (khớp header).
+  const anTT = useAnThanhToan();
   // Khóa sửa giá/SL/CK khi đã phủ voucher (giá trị đã chốt vào redemption.gia_tri).
   const inputDisabled = locked || covered;
   return (
     <tr className="border-b border-border/50 last:border-b-0 bg-muted/20">
       {/* Col 1: empty */}
-      <td />
+      {!anTT && <td />}
       {/* Col 2: empty */}
       <td />
       {/* Col 3: description */}
@@ -159,14 +162,18 @@ export default function NHExtraRow({
           {extra.nguoi_tt === "cong_ty" ? t("Công ty") : t("HDV")}
         </button>
       </td>
-      {/* Col 10: empty */}
-      <td />
-      {/* Col Hóa đơn: extra HDV trả → badge riêng (kế toán bấm tay). Extra công ty gộp nhóm → trống. */}
-      <td className="px-2 py-1 text-center">
-        {extra.nguoi_tt === "hdv" && extra.id != null && (
-          <HoaDonChiPhiBadge chiPhiId={extra.id} trangThai={(trangThaiHoaDon ?? "chua_co") as TrangThaiDoc} />
-        )}
-      </td>
+      {!anTT && (
+        <>
+          {/* Col 10: empty */}
+          <td />
+          {/* Col Hóa đơn: extra HDV trả → badge riêng (kế toán bấm tay). Extra công ty gộp nhóm → trống. */}
+          <td className="px-2 py-1 text-center">
+            {extra.nguoi_tt === "hdv" && extra.id != null && (
+              <HoaDonChiPhiBadge chiPhiId={extra.id} trangThai={(trangThaiHoaDon ?? "chua_co") as TrangThaiDoc} />
+            )}
+          </td>
+        </>
+      )}
       {/* Col 11: voucher (dùng/gỡ) + delete — sticky mép phải khớp cột Actions hàng chính */}
       <td className="px-2 py-1 sticky right-0 z-10 bg-card shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.12)]">
         <div className="flex justify-end items-center gap-0.5">

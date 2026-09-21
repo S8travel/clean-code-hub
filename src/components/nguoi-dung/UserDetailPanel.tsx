@@ -17,7 +17,7 @@ import {
   useUpdateNguoiDung, useDeleteNguoiDung,
   type UserRoleRow, type VaiTro, type BoPhan,
 } from "@/hooks/use-nguoi-dung";
-import { THI_TRUONG_OPTS } from "@/hooks/use-doan";
+import { THI_TRUONG_OPTS, useAgents } from "@/hooks/use-doan";
 import { type VanPhongRow } from "@/hooks/use-van-phong";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { useQuyenThem, useRolePermissions } from "@/hooks/use-permissions";
@@ -42,6 +42,7 @@ const formFrom = (u: UserRoleRow): DetailForm => ({
   bo_phan: u.bo_phan,
   van_phong_id: u.van_phong_id,
   van_phong_ids: u.van_phong_ids,
+  agent_ids: u.agent_ids ?? null,
   phan_loai_tour: u.phan_loai_tour,
   so_dien_thoai: u.so_dien_thoai,
   ghi_chu: u.ghi_chu,
@@ -66,6 +67,7 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
   const { user: me } = useAuth();
   // Chỉ admin/giám đốc được cấp quyền truy cập đa-VP cho NV.
   const canGrantVp = me?.role === "admin" || me?.role === "giam_doc";
+  const { data: agents = [] } = useAgents();
   const { data: rolePerms = [] } = useRolePermissions();
   const { data: quyenThem = [] } = useQuyenThem(selected.user_id);
   const updateMut = useUpdateNguoiDung();
@@ -353,6 +355,35 @@ export function UserDetailPanel({ selected, vanPhongList, onDeleted }: Props) {
               onCheckedChange={(v) => set("active", v)}
             />
           </div>
+
+          {/* Tài khoản đối tác: chỉ thấy đoàn của agent được tích, không thấy danh mục /
+              ĐNTT / thanh toán / UNC. CHỈ ẩn ở giao diện — xem lib/agent-scope.ts. */}
+          {canGrantVp && (
+            <div className="col-span-2 space-y-1.5">
+              <Label className="text-xs">{t("Chỉ xem đoàn của agent")}</Label>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 py-1">
+                {agents.map((ag) => {
+                  const checked = (form.agent_ids ?? []).includes(ag.id);
+                  return (
+                    <label key={ag.id} className="flex items-center gap-1.5 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          const current = form.agent_ids ?? [];
+                          const next = v ? [...current, ag.id] : current.filter((x) => x !== ag.id);
+                          set("agent_ids", next.length > 0 ? next : null);
+                        }}
+                      />
+                      {ag.ten}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Để trống = tài khoản thường. Tích agent → chỉ xem danh sách + chi tiết đoàn của agent đó; ẩn danh mục, ĐNTT, thanh toán, UNC. Chỉ ẩn trên giao diện, không chặn ở DB.")}
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>

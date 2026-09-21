@@ -5,6 +5,7 @@ import type { NHMealRow } from "@/hooks/use-chi-phi-nh";
 import { fmt, STATUS_LABEL, parseNHMoTa } from "./nh-section-shared";
 import { HoaDonCell } from "./HoaDonBadge";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 interface Props {
   meals: NHMealRow[];
@@ -17,6 +18,8 @@ interface Props {
 // Tách verbatim từ ChiPhiNHSection.
 export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }: Props) {
   useTranslate();
+  // Tài khoản đối tác: ẩn ô checkbox / ĐNTT / thanh toán / hóa đơn (khớp header).
+  const anTT = useAnThanhToan();
   const currentNgayIds = new Set(meals.map((m) => m.doan_ngay_id));
   const orphanedCps = chiPhiRows.filter((cp) => {
     if (cp.danh_muc !== "nha_hang") return false;
@@ -34,7 +37,7 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
   return (
     <>
       <tr>
-        <td colSpan={12} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
+        <td colSpan={anTT ? 8 : 12} className="px-3 py-1 text-[11px] text-muted-foreground bg-muted/40 border-t border-border">
           {t("Không còn trong lịch trình điều tour")}
         </td>
       </tr>
@@ -60,7 +63,7 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
         const cpIsDaTT = cpTotal > 0 && cpDaTT >= cpTotal;
         return (
           <tr key={`orphan-${cp.id}`} className="border-t border-border bg-muted/10 opacity-80">
-            <td className="px-2 py-1.5" />
+            {!anTT && <td className="px-2 py-1.5" />}
             <td className="px-2 py-1.5 text-center text-muted-foreground text-[11px]">
               N{cp.ngay_so}
             </td>
@@ -75,49 +78,53 @@ export default function NHOrphanRows({ meals, chiPhiRows, dnttList, congNoList }
             <td className="px-2 py-1.5 text-right font-semibold text-muted-foreground">
               {fmt(cpTotal)}
             </td>
-            {/* Trạng thái ĐNTT - orphaned */}
-            <td className="px-2 py-1.5 align-top">
-              {cpActiveDntts.length === 0 ? (
-                <span className="text-[10px] text-muted-foreground">—</span>
-              ) : (
-                <div className="space-y-1">
-                  {cpActiveDntts.map(d => {
-                    const si = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
-                    return (
-                      <span key={d.id} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${si.cls}`}>
-                        {t(si.textKey)} · {fmt(d.so_tien)}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </td>
-            {/* Trạng thái TT - orphaned */}
-            <td className="px-2 py-1.5 align-top">
-              <div className="space-y-1">
-                {cpActiveDntts.map(d => (
-                  <div key={d.id}>
-                    {d.payment_status === "paid" ? (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">{t("Đã TT")}</span>
-                    ) : (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">{t("Chờ UNC")}</span>
+            {!anTT && (
+              <>
+                {/* Trạng thái ĐNTT - orphaned */}
+                <td className="px-2 py-1.5 align-top">
+                  {cpActiveDntts.length === 0 ? (
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                  ) : (
+                    <div className="space-y-1">
+                      {cpActiveDntts.map(d => {
+                        const si = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
+                        return (
+                          <span key={d.id} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${si.cls}`}>
+                            {t(si.textKey)} · {fmt(d.so_tien)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </td>
+                {/* Trạng thái TT - orphaned */}
+                <td className="px-2 py-1.5 align-top">
+                  <div className="space-y-1">
+                    {cpActiveDntts.map(d => (
+                      <div key={d.id}>
+                        {d.payment_status === "paid" ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">{t("Đã TT")}</span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">{t("Chờ UNC")}</span>
+                        )}
+                      </div>
+                    ))}
+                    {cpCongNo > 0 && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">CN: {fmt(cpCongNo)}</span>
+                    )}
+                    {cpHoanTien > 0 && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">HT: {fmt(cpHoanTien)}</span>
+                    )}
+                    {cpActiveDntts.length === 0 && cpCongNo === 0 && cpHoanTien === 0 && (
+                      <span className="text-[10px] text-muted-foreground">—</span>
                     )}
                   </div>
-                ))}
-                {cpCongNo > 0 && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">CN: {fmt(cpCongNo)}</span>
-                )}
-                {cpHoanTien > 0 && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">HT: {fmt(cpHoanTien)}</span>
-                )}
-                {cpActiveDntts.length === 0 && cpCongNo === 0 && cpHoanTien === 0 && (
-                  <span className="text-[10px] text-muted-foreground">—</span>
-                )}
-              </div>
-            </td>
-            <td className="px-2 py-1.5 align-top text-center">
-              <HoaDonCell dntts={cpActiveDntts} />
-            </td>
+                </td>
+                <td className="px-2 py-1.5 align-top text-center">
+                  <HoaDonCell dntts={cpActiveDntts} />
+                </td>
+              </>
+            )}
             <td className="sticky right-0 z-10 bg-card shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.12)]" />
           </tr>
         );

@@ -13,6 +13,7 @@ import {
 import DoiKsPhiHuyModal, { type DoiKsConfirmArgs } from "@/components/dieu-tour/DoiKsPhiHuyModal";
 import { errMsg } from "@/lib/error";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -28,6 +29,8 @@ interface Props {
 // (group theo khach_san_id), booking row cấp metadata (phi_huy/ly_do/huy_luc/cong_no).
 export default function KSDaHuyStrip({ doanId, locked = false }: Props) {
   useTranslate();
+  // Tài khoản đối tác → ẩn "đã thanh toán", công nợ thu hồi, nút "Xử lý ngay" (tạo công nợ).
+  const anTT = useAnThanhToan();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: ksList = [] } = useKhachSanList();
   const doiKsMut = useDoiKsPhiHuy();
@@ -174,10 +177,12 @@ export default function KSDaHuyStrip({ doanId, locked = false }: Props) {
                 <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold">
                   {t("CHƯA nhập phí hủy")}
                 </span>
-                <span className="text-muted-foreground tabular-nums">
-                  {t("đã thanh toán")} <span className="font-medium text-orange-700">{fmt(e.daTT)} ₫</span>
-                </span>
-                {!locked && (
+                {!anTT && (
+                  <span className="text-muted-foreground tabular-nums">
+                    {t("đã thanh toán")} <span className="font-medium text-orange-700">{fmt(e.daTT)} ₫</span>
+                  </span>
+                )}
+                {!anTT && !locked && (
                   <Button size="sm"
                     className="h-6 px-2 text-[11px] ml-auto bg-amber-600 hover:bg-amber-700 text-white"
                     disabled={doiKsMut.isPending}
@@ -191,7 +196,7 @@ export default function KSDaHuyStrip({ doanId, locked = false }: Props) {
                 <span className="tabular-nums text-muted-foreground">
                   {t("phí hủy")} <span className="font-medium text-orange-700">{fmt(e.phiHuy!)} ₫</span>
                 </span>
-                {e.congNoConLai != null && (
+                {!anTT && e.congNoConLai != null && (
                   <span className="tabular-nums text-muted-foreground">
                     · {t("công nợ thu hồi")}{" "}
                     {e.congNoConLai > 0

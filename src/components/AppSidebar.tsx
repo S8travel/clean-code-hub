@@ -59,6 +59,7 @@ import { useLeadStats } from "@/hooks/use-lead-stats";
 import { useMyOverdueCount } from "@/hooks/use-lead-next-action";
 import { UserSettingsMenu } from "@/components/UserSettingsMenu";
 import { NotificationBell } from "@/components/NotificationBell";
+import { resolveAgentScope, duongDanChoPhepAgent } from "@/lib/agent-scope";
 
 // ── Language toggle button (VI → 中文 → EN → VI) ──
 //
@@ -227,19 +228,24 @@ function loadCollapsedGroups(): Record<string, boolean> {
   }
 }
 
-function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor = "bg-orange-500" }: { item: MenuItem; collapsed: boolean; isActive: boolean; badgeCount?: number; badgeColor?: string }) {
+function MenuItemWrapper({ item, collapsed, isActive, badgeCount = 0, badgeColor = "bg-orange-500", laTaiKhoanAgent = false }: { item: MenuItem; collapsed: boolean; isActive: boolean; badgeCount?: number; badgeColor?: string; laTaiKhoanAgent?: boolean }) {
   const allowed = usePermission(item.resource ?? "doan", "view");
   const roleOk = useRoleAtLeast(item.minRole ?? "nhan_vien");
   const boPhanOk = useBoPhan(item.boPhanOnly ?? "");
 
-  if (item.resource && !allowed) return null;
-  // Khi có cả minRole và boPhanOnly → semantic OR (match bộ phận HOẶC đạt minRole).
-  // Khi chỉ có một → AND như cũ.
-  if (item.minRole && item.boPhanOnly) {
-    if (!roleOk && !boPhanOk) return null;
+  // Tài khoản đối tác: menu theo đúng danh sách trang được mở, bỏ qua ma trận quyền.
+  if (laTaiKhoanAgent) {
+    if (!duongDanChoPhepAgent(item.url)) return null;
   } else {
-    if (item.minRole && !roleOk) return null;
-    if (item.boPhanOnly && !boPhanOk) return null;
+    if (item.resource && !allowed) return null;
+    // Khi có cả minRole và boPhanOnly → semantic OR (match bộ phận HOẶC đạt minRole).
+    // Khi chỉ có một → AND như cũ.
+    if (item.minRole && item.boPhanOnly) {
+      if (!roleOk && !boPhanOk) return null;
+    } else {
+      if (item.minRole && !roleOk) return null;
+      if (item.boPhanOnly && !boPhanOk) return null;
+    }
   }
 
   const displayTitle = t(item.title);
@@ -279,6 +285,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { session } = useCurrentSession();
+  const laTaiKhoanAgent = resolveAgentScope(user?.agent_ids) != null;
   // Điều hành / admin: thấy alert deadline của TẤT CẢ lock phòng.
   const includeAllAlerts = user?.bo_phan === "dieu_hanh" || user?.role === "admin";
   const deadlineAlerts = useLockPhongDeadlineAlerts(session?.user?.id ?? null, { includeAll: includeAllAlerts });
@@ -344,7 +351,10 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {menuGroups.map((group) => {
+        {menuGroups
+          // Tài khoản đối tác: bỏ hẳn nhóm không còn mục nào (khỏi hiện nhãn nhóm rỗng).
+          .filter((group) => !laTaiKhoanAgent || group.items.some((it) => duongDanChoPhepAgent(it.url)))
+          .map((group) => {
           // Chỉ thu gọn khi sidebar đang mở rộng (icon mode đã ẩn label + items).
           const groupCollapsed = !collapsed && !!collapsedGroups[group.label];
           // Tổng badge của nhóm — hiện trên label khi thu gọn để không bỏ sót thông báo.
@@ -390,6 +400,7 @@ export function AppSidebar() {
                         isActive={isActive(item.url)}
                         badgeCount={badgeFor(item.url)}
                         badgeColor={badgeColorFor(item.url)}
+                        laTaiKhoanAgent={laTaiKhoanAgent}
                       />
                     ))}
                   </SidebarMenu>
