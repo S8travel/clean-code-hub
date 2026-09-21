@@ -45,6 +45,7 @@ import BookingNHTab from "@/components/booking-nh/BookingNHTab";
 import BookingDVTab from "@/components/booking-dv/BookingDVTab";
 import BookingVisaXeTab from "@/components/booking-dv/BookingVisaXeTab";
 import ChiPhiTab from "@/components/chi-phi/ChiPhiTab";
+import { AnThanhToanContext } from "@/components/chi-phi/an-thanh-toan-context";
 import KhaoSatTab from "@/components/khao-sat/KhaoSatTab";
 import { KhachLeTab } from "@/components/dieu-tour/KhachLeTab";
 import DoanLogTab from "@/components/doan-log/DoanLogTab";
@@ -56,6 +57,7 @@ import RemapNgayModal from "@/components/dieu-tour/RemapNgayModal";
 import DoiKsPhiHuyModal, { type DoiKsConfirmArgs } from "@/components/dieu-tour/DoiKsPhiHuyModal";
 import KsHuyMailModal from "@/components/dieu-tour/KsHuyMailModal";
 import KsBotDemCanhBaoDialog from "@/components/dieu-tour/KsBotDemCanhBaoDialog";
+import { resolveAgentScope, doanInAgentScope } from "@/lib/agent-scope";
 import {
   useDoiKsPhiHuy, checkKsPhiHuyOnChange, checkKsBotDemOnChange,
   KsDnttNgoaiPhamViError, type KsPhiHuyPending,
@@ -112,7 +114,12 @@ export default function DoanDetail() {
   const upsertChiPhi = useUpsertChiPhi();
   const deleteChiPhi = useDeleteChiPhi();
 
-  const doan = groups?.find((g) => String(g.id) === id);
+  // Tài khoản đối tác (agent_ids): đoàn ngoài agent của họ coi như không tồn tại.
+  const agentScope = resolveAgentScope(currentUser?.agent_ids);
+  const laTaiKhoanAgent = agentScope != null;
+  const doan = groups?.find(
+    (g) => String(g.id) === id && doanInAgentScope(g.agent_id, agentScope),
+  );
 
   // Local state for editable fields
   const [bangDon, setBangDon] = useState("");
@@ -819,10 +826,11 @@ export default function DoanDetail() {
               {doan?.kieu_gom === "ghep" && (
                 <TabsTrigger value="khach-le">{t("Khách lẻ")}</TabsTrigger>
               )}
-              <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={chiPhiBadgeCount} /></TabsTrigger>
+              <TabsTrigger value="chi-phi">{t("Chi phí")}<TabBadge count={laTaiKhoanAgent ? 0 : chiPhiBadgeCount} /></TabsTrigger>
               <TabsTrigger value="tai-lieu">{t("Tài liệu")}</TabsTrigger>
               <TabsTrigger value="trao-doi">{t("Liên hệ đối tác")}<TabBadge count={traoDoiBadgeCount} /></TabsTrigger>
-              <TabsTrigger value="log">{t("Log")}</TabsTrigger>
+              {/* Log ghi cả thao tác ĐNTT/thanh toán → ẩn với tài khoản đối tác. */}
+              {!laTaiKhoanAgent && <TabsTrigger value="log">{t("Log")}</TabsTrigger>}
               <TabsTrigger value="khao-sat">{t("Khảo sát khách")}</TabsTrigger>
             </TabsList>
           </div>
@@ -1017,11 +1025,14 @@ export default function DoanDetail() {
           <TabsContent value="chi-phi" className="mt-4">
             {/* Phase 3: KHÔNG hiện DoanNhomTabs ở Chi phí tab.
                 Chi phí query cả 2 nhóm gộp lại, merge same NH-bữa hoặc same cảnh điểm. */}
-            <ChiPhiTab
-              doanId={doanId}
-              doan={doan}
-              coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
-            />
+            {/* Tài khoản đối tác: tab Chi phí ẩn ĐNTT / thanh toán / hóa đơn / công nợ. */}
+            <AnThanhToanContext.Provider value={laTaiKhoanAgent}>
+              <ChiPhiTab
+                doanId={doanId}
+                doan={doan}
+                coTinhSuatTLNhaHang={coTinhSuatTLNhaHang}
+              />
+            </AnThanhToanContext.Provider>
           </TabsContent>
 
           <TabsContent value="tai-lieu" className="mt-4">
@@ -1032,9 +1043,11 @@ export default function DoanDetail() {
             <TraoDoiTab doanId={doanId} />
           </TabsContent>
 
-          <TabsContent value="log" className="mt-4">
-            <DoanLogTab doanId={doanId} />
-          </TabsContent>
+          {!laTaiKhoanAgent && (
+            <TabsContent value="log" className="mt-4">
+              <DoanLogTab doanId={doanId} />
+            </TabsContent>
+          )}
 
           {doan?.kieu_gom === "ghep" && (
             <TabsContent value="khach-le" className="mt-4">

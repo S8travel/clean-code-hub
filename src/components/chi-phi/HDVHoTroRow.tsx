@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { HDVHoTroItem } from "@/hooks/use-chi-phi-hdv";
 import { STATUS_LABEL, type DnttLite, type CongNoLite, type KhacCancelTarget } from "./hdv-shared";
 import { resolveHoTroNguoiTt, TIP_LAI_XE_REF, TIP_LAI_XE_NOTES } from "./hdv-shared";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -53,6 +54,9 @@ export function HDVHoTroRow({
   /** Đoàn đã quyết toán → khóa sửa con số chi phí (trừ admin). */
   locked?: boolean;
 }) {
+  // Tài khoản đối tác: ẩn ô chọn ĐNTT, TT ĐNTT, TT Thanh toán + nút ĐNTT/Hủy ĐNTT.
+  // Phải khớp cột với header ở HoTroHDVTable.
+  const anTT = useAnThanhToan();
   const [moTa, setMoTaState] = useState(item.mo_ta ?? "");
   const [soLuong, setSoLuongState] = useState(item.so_luong);
   const [donGia, setDonGiaState] = useState(item.don_gia);
@@ -134,6 +138,7 @@ export function HDVHoTroRow({
 
   return (
     <tr className={cn("hover:bg-muted/20", isSelected && "bg-sky-50/60")}>
+      {!anTT && (
       <td className="px-2 py-2 text-center align-middle">
         <Checkbox
           checked={isSelected}
@@ -142,6 +147,7 @@ export function HDVHoTroRow({
           className="h-3.5 w-3.5"
         />
       </td>
+      )}
       <td className="px-3 py-2">
         {isTipLaiXe ? (
           <Tooltip>
@@ -239,6 +245,7 @@ export function HDVHoTroRow({
       </td>
 
       {/* TT ĐNTT */}
+      {!anTT && (
       <td className="px-3 py-2 align-top">
         {nguoiTt === "hdv" ? (
           <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
@@ -313,8 +320,10 @@ export function HDVHoTroRow({
           </div>
         )}
       </td>
+      )}
 
       {/* TT Thanh toán */}
+      {!anTT && (
       <td className="px-3 py-2 align-top">
         {nguoiTt === "hdv" ? (
           <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
@@ -350,18 +359,19 @@ export function HDVHoTroRow({
           </div>
         )}
       </td>
+      )}
 
       {/* Actions */}
       <td className="px-2 py-2">
         <div className="flex items-center gap-1 justify-end">
-          {nguoiTt === "cong_ty" && canCancel && activeDntt && (
+          {!anTT && nguoiTt === "cong_ty" && canCancel && activeDntt && (
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
               title={t("Hủy ĐNTT")}
               onClick={() => onOpenCancel({ dnttId: activeDntt.id, isPaid: activeDntt.payment_status === "paid" })}>
               <Ban className="h-3 w-3" />
             </Button>
           )}
-          {nguoiTt === "cong_ty" && activeDntts.length === 0 && thanhTien > 0 && (
+          {!anTT && nguoiTt === "cong_ty" && activeDntts.length === 0 && thanhTien > 0 && (
             <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
               onClick={onOpenModal}>
               {t("ĐNTT")}

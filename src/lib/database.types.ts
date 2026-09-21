@@ -4271,6 +4271,7 @@ export type Database = {
       user_roles: {
         Row: {
           active: boolean
+          agent_ids: number[] | null
           bo_phan: string | null
           chi_xem: boolean
           nhan_yeu_cau_doi_tac: boolean
@@ -4294,6 +4295,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          agent_ids?: number[] | null
           bo_phan?: string | null
           chi_xem?: boolean
           nhan_yeu_cau_doi_tac?: boolean
@@ -4317,6 +4319,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          agent_ids?: number[] | null
           bo_phan?: string | null
           chi_xem?: boolean
           nhan_yeu_cau_doi_tac?: boolean

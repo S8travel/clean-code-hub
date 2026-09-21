@@ -21,6 +21,7 @@ import KSNgoaiTourPanel from "./KSNgoaiTourPanel";
 import KSDaHuyStrip from "./KSDaHuyStrip";
 import { useKSSection } from "./use-ks-section";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 // Re-export shared types — giữ tương thích cho importer cũ.
 export type { KSLoaiRow, LocalKSRow } from "./ks-section-shared";
@@ -36,6 +37,8 @@ interface Props {
 // Tab Chi phí Khách sạn — chỉ render. Toàn bộ state/logic ở useKSSection.
 export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", locked = false }: Props) {
   useTranslate();
+  // Tài khoản đối tác → ẩn toolbar chọn KS để in/xuất ĐNTT.
+  const anTT = useAnThanhToan();
   const s = useKSSection({ doanId, soKhach, tenDoan });
   const {
     ksLoading,
@@ -125,7 +128,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
       )}
 
       {/* Toolbar chọn + in (GỘP KS trong tour + KS ngoài tour) */}
-      {totalSelectable > 0 && (
+      {!anTT && totalSelectable > 0 && (
         <div className="flex items-center gap-3 py-1">
           <div className="flex items-center gap-2">
             <Checkbox

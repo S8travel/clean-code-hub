@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDoanList } from "@/hooks/use-doan";
+import { resolveAgentScope, doanInAgentScope } from "@/lib/agent-scope";
 
 /**
  * Tập VP user được truy cập = `van_phong_ids ∪ {van_phong_id}` (VP nhà luôn nằm trong).
@@ -71,9 +72,12 @@ export function useDoanScope() {
   const phanLoaiTour = isPrivileged ? null : (user?.phan_loai_tour ?? null);
   // Cross-VP → null (không filter VP); còn lại → tập VP truy cập.
   const vanPhongIds: number[] | null = isCrossVp ? null : vpScope;
+  // Tài khoản đối tác: chỉ đoàn của agent được gán (tầng giao diện, xem lib/agent-scope.ts).
+  const agentScope = useMemo(() => resolveAgentScope(user?.agent_ids), [user?.agent_ids]);
   const { data: scopedDoanRows = [], isLoading } = useDoanList(
     phanLoaiTour,
     vanPhongIds,
+    agentScope,
   );
 
   const allowedDoanIds = useMemo(() => {
@@ -85,11 +89,12 @@ export function useDoanScope() {
   }, [scopedDoanRows]);
 
   const filterDoan = useMemo(() => {
-    return <T extends { van_phong_id?: number | null; thi_truong?: string | null }>(
+    return <T extends { van_phong_id?: number | null; thi_truong?: string | null; agent_id?: number | null }>(
       list: T[],
     ): T[] => {
       if (isPrivileged) return list;
       return list.filter((d) => {
+        if (!doanInAgentScope(d.agent_id, agentScope)) return false;
         // VP filter (khớp RLS): non-cross chỉ thấy đoàn van_phong_id ∈ vpScope.
         // Đoàn van_phong_id NULL → RLS chỉ cho cross-VP, nên non-cross cũng ẩn.
         if (!isCrossVp && !doanInVpScope(d.van_phong_id, vpScope)) return false;
@@ -101,7 +106,7 @@ export function useDoanScope() {
         return true;
       });
     };
-  }, [isPrivileged, isCrossVp, vpScope, phanLoaiTour]);
+  }, [isPrivileged, isCrossVp, vpScope, phanLoaiTour, agentScope]);
 
   // Lọc list có field `doan_id`. Row có `doan_id=null` (vd ĐNTT định kỳ
   // gộp nhiều đoàn) → giữ lại vì không thuộc đoàn cụ thể nào.
@@ -118,6 +123,7 @@ export function useDoanScope() {
     vpScope,
     vanPhongIds,
     phanLoaiTour,
+    agentScope,
     allowedDoanIds,
     filterDoan,
     filterByDoanId,

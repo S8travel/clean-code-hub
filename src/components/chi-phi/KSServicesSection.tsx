@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import KSServiceRowInput from "./KSServiceRowInput";
 import { dayLabel, type LocalKSRow } from "./ks-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 // ── Dịch vụ KS sub-section ──
 // Render flat table với group rows theo ngày. Nút "+ Thêm DV" trong mỗi day group
@@ -42,6 +43,8 @@ export default function KSServicesSection({
   cpCommittedById?: Record<number, boolean>;
 }) {
   useTranslate();
+  // Tài khoản đối tác → ẩn cột Hóa đơn (và thu colSpan header ngày).
+  const anTT = useAnThanhToan();
   return (
     <div className="mt-3 border-t border-border pt-2">
       <div className="flex items-center gap-2 px-1 py-0.5 mb-1">
@@ -58,7 +61,7 @@ export default function KSServicesSection({
             <TableHead className="w-[60px] h-auto py-1 px-2">FOC</TableHead>
             <TableHead className="w-[110px] h-auto py-1 px-2 text-right">{t("Đơn giá")}</TableHead>
             <TableHead className="w-[110px] h-auto py-1 px-2">{t("Thành tiền")}</TableHead>
-            <TableHead className="w-[100px] h-auto py-1 px-2 text-center">{t("Hóa đơn")}</TableHead>
+            {!anTT && <TableHead className="w-[100px] h-auto py-1 px-2 text-center">{t("Hóa đơn")}</TableHead>}
             <TableHead className="w-[32px] h-auto py-1 px-2" />
           </TableRow>
         </TableHeader>
@@ -73,7 +76,7 @@ export default function KSServicesSection({
             return (
               <Fragment key={dateStr}>
                 <TableRow className="bg-[#E6F1FB] hover:bg-[#E6F1FB]">
-                  <TableCell colSpan={7} className="py-1 px-2 text-xs font-medium">
+                  <TableCell colSpan={anTT ? 6 : 7} className="py-1 px-2 text-xs font-medium">
                     {label}
                   </TableCell>
                   <TableCell className="py-1 px-2 text-right">

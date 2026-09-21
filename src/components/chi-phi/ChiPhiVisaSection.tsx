@@ -33,6 +33,7 @@ import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import { useDonViVisaList, useLoaiVisaList } from "@/hooks/use-visa";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -175,6 +176,8 @@ function AddVisaRow({ doanId, onAdded, locked = false }: { doanId: number; onAdd
 
 export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
   useTranslate();
+  // Tài khoản đối tác: chỉ hiện dòng chi phí, ẩn ĐNTT / trạng thái thanh toán / định kỳ.
+  const anTT = useAnThanhToan();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
@@ -421,8 +424,8 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
               <col style={{ width: "70px" }} />
               <col style={{ width: "120px" }} />
               <col style={{ width: "76px" }} />
-              <col style={{ width: "180px" }} />
-              <col style={{ width: "140px" }} />
+              {!anTT && <col style={{ width: "180px" }} />}
+              {!anTT && <col style={{ width: "140px" }} />}
               <col style={{ width: "130px" }} />
             </colgroup>
             <thead>
@@ -434,8 +437,8 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                 <th className="text-center px-2 py-2.5">{t("CK (VND)")}</th>
                 <th className="text-right px-3 py-2.5">{t("Thành tiền")}</th>
                 <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
-                <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
-                <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
+                {!anTT && <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>}
+                {!anTT && <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>}
                 <th className="px-2 py-2.5" />
               </tr>
             </thead>
@@ -581,6 +584,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                     </td>
 
                     {/* TT ĐNTT */}
+                    {!anTT && (
                     <td className="px-3 py-2.5 align-top">
                       {nguoiTt === "hdv" ? (
                         <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
@@ -644,8 +648,10 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                         </div>
                       )}
                     </td>
+                    )}
 
                     {/* TT Thanh toán */}
+                    {!anTT && (
                     <td className="px-3 py-2.5 align-top">
                       {nguoiTt === "hdv" ? (
                         <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
@@ -680,11 +686,12 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                       </div>
                       )}
                     </td>
+                    )}
 
                     {/* Actions */}
                     <td className="px-2 py-2.5">
                       <div className="flex items-center gap-1 justify-end">
-                        {nguoiTt === "cong_ty" && isDaTT && paidDntts.length > 0 && (
+                        {!anTT && nguoiTt === "cong_ty" && isDaTT && paidDntts.length > 0 && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-500 hover:text-blue-600"
                             title={t("Điều chỉnh sau thanh toán")}
                             onClick={() => {
@@ -696,7 +703,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                             <SlidersHorizontal className="h-3 w-3" />
                           </Button>
                         )}
-                        {nguoiTt === "cong_ty" && canCancel && activeDntt && (
+                        {!anTT && nguoiTt === "cong_ty" && canCancel && activeDntt && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             title={t("Hủy ĐNTT")}
                             onClick={() => {
@@ -706,6 +713,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                             <Ban className="h-3 w-3" />
                           </Button>
                         )}
+                        {!anTT && (
                         <Button variant="ghost" size="sm"
                           className={cn("h-7 text-xs px-2 gap-1", row.thanh_toan_dinh_ky ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
                           title={row.thanh_toan_dinh_ky ? t("Đang định kỳ — bấm để tắt") : t("Đặt thanh toán định kỳ")}
@@ -714,13 +722,14 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                           <CalendarClock className="h-3.5 w-3.5" />
                           {row.thanh_toan_dinh_ky && t("Định kỳ")}
                         </Button>
-                        {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
+                        )}
+                        {!anTT && nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && thanhTien > 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
                             onClick={() => openModal(row.id!, thanhTien, row.mo_ta || "", row.nha_cung_cap_id)}>
                             {t("ĐNTT")}
                           </Button>
                         )}
-                        {nguoiTt === "cong_ty" && activeDntts.length > 0 && daDeNghi === 0 && (
+                        {!anTT && nguoiTt === "cong_ty" && activeDntts.length > 0 && daDeNghi === 0 && (
                           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
                             onClick={() => openModal(row.id!, conLai > 0 ? conLai : thanhTien, row.mo_ta || "", row.nha_cung_cap_id)}>
                             {conLai > 0 ? t("ĐNTT còn lại") : t("ĐNTT bổ sung")}
@@ -742,7 +751,7 @@ export default function ChiPhiVisaSection({ doanId, locked = false }: Props) {
                   </tr>
                   {addExtraForId === row.id && (
                     <tr className="bg-amber-50/60 border-b border-dashed border-amber-200">
-                      <td colSpan={10} className="px-4 py-2">
+                      <td colSpan={anTT ? 8 : 10} className="px-4 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ {t("Phụ phí")}</span>
                           <Input

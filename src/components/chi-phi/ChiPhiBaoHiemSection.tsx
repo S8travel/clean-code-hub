@@ -25,6 +25,7 @@ import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
 import { useCanhDiemList } from "@/hooks/use-canh-diem";
 import { parseSoLuongBaoHiem } from "@/lib/bao-hiem-calc";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -47,6 +48,9 @@ interface Props {
 
 export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, locked = false }: Props) {
   useTranslate();
+  // Tài khoản đối tác: chỉ hiện dòng chi phí, ẩn ĐNTT / trạng thái thanh toán / định kỳ.
+  // Cột thao tác ở section này toàn nút thanh toán → ẩn luôn cả cột.
+  const anTT = useAnThanhToan();
   const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
@@ -318,9 +322,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
             <col style={{ width: "110px" }} />
             <col style={{ width: "120px" }} />
             <col style={{ width: "76px" }} />
-            <col style={{ width: "180px" }} />
-            <col style={{ width: "140px" }} />
-            <col style={{ width: "130px" }} />
+            {!anTT && <col style={{ width: "180px" }} />}
+            {!anTT && <col style={{ width: "140px" }} />}
+            {!anTT && <col style={{ width: "130px" }} />}
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
@@ -329,9 +333,9 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
               <th className="text-center px-3 py-2.5">{t("Giá/người/ngày")}</th>
               <th className="text-right px-3 py-2.5">{t("Thành tiền")}</th>
               <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
-              <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
-              <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
-              <th className="px-2 py-2.5" />
+              {!anTT && <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>}
+              {!anTT && <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>}
+              {!anTT && <th className="px-2 py-2.5" />}
             </tr>
           </thead>
           <tbody>
@@ -402,6 +406,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
               </td>
 
               {/* TT ĐNTT */}
+              {!anTT && (
               <td className="px-3 py-2.5">
                 {nguoiTt === "hdv" ? (
                   <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
@@ -459,8 +464,10 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
                   </div>
                 )}
               </td>
+              )}
 
               {/* TT Thanh toán */}
+              {!anTT && (
               <td className="px-3 py-2.5">
                 {nguoiTt === "hdv" ? (
                   <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
@@ -485,8 +492,10 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
                 </div>
                 )}
               </td>
+              )}
 
               {/* Actions */}
+              {!anTT && (
               <td className="px-2 py-2.5">
                 {existing && (
                   <div className="flex items-center gap-1 justify-end">
@@ -542,6 +551,7 @@ export default function ChiPhiBaoHiemSection({ doanId, soKhach, ngayDi, ngayVe, 
                   </div>
                 )}
               </td>
+              )}
             </tr>
           </tbody>
         </table>

@@ -19,6 +19,7 @@ import { exportHDVTamUngExcel } from "@/lib/export-hdv-tam-ung-excel";
 import { tipDaysInclusive } from "@/lib/tip-calc";
 import { computePhaiThu, TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 import { nguoiDungTenPhieu } from "@/lib/hdv-dung-ten";
 import type { HDVDoanInfo } from "./hdv-shared";
 import { HoTroHDVTable } from "./HoTroHDVTable";
@@ -47,6 +48,8 @@ function computeHdvPhaiThuVND(doan: HDVDoanInfo | undefined): number {
 
 export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props) {
   useTranslate();
+  // Tài khoản đối tác: ẩn tạm ứng / quyết toán HDV (ĐNTT) + số còn phải trả.
+  const anTT = useAnThanhToan();
   const { data, isLoading } = useChiPhiHDVSection(doanId);
   const [showTamUng, setShowTamUng] = useState(false);
   const [showQuyetToan, setShowQuyetToan] = useState(false);
@@ -107,7 +110,7 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
               <p className="text-xs text-muted-foreground italic">{t("Chưa chỉ định HDV")}</p>
             )}
 
-            {(tongHdvChi > 0 || tongHoTroHDV > 0 || hdvPhaiThuVND > 0) && (
+            {(anTT ? (tongHdvChi > 0 || hdvPhaiThuVND > 0) : (tongHdvChi > 0 || tongHoTroHDV > 0 || hdvPhaiThuVND > 0)) && (
               <div className="flex gap-4 flex-wrap">
                 {tongHdvChi > 0 && (
                   <div>
@@ -121,12 +124,13 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
                     <p className="text-sm font-semibold text-amber-600">{fmt(hdvPhaiThuVND)} ₫</p>
                   </div>
                 )}
-                {tamUngDaTT > 0 && (
+                {!anTT && tamUngDaTT > 0 && (
                   <div>
                     <p className="text-[11px] text-muted-foreground">{t("Đã tạm ứng")}</p>
                     <p className="text-sm font-semibold text-emerald-600">{fmt(tamUngDaTT)} ₫</p>
                   </div>
                 )}
+                {!anTT && (
                 <div>
                   <p className="text-[11px] text-muted-foreground">
                     {netConPhaiTra > 0 ? t("Công ty còn phải trả") : netConPhaiTra < 0 ? t("HDV phải trả lại") : t("Đã đủ")}
@@ -138,11 +142,13 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
                     {netConPhaiTra < 0 ? "-" : ""}{fmt(Math.abs(netConPhaiTra))} ₫
                   </p>
                 </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Buttons */}
+          {/* Buttons — bản in thống kê có cả tạm ứng/quyết toán → ẩn luôn với đối tác */}
+          {!anTT && (
           <div className="flex gap-2 shrink-0 flex-wrap">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowPreview(true)}>
               <Printer className="h-3 w-3 mr-1" /> {t("In thống kê")}
@@ -158,10 +164,11 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
               </Button>
             )}
           </div>
+          )}
         </div>
 
         {/* Danh sách tạm ứng */}
-        {tamUngList.length > 0 && (
+        {!anTT && tamUngList.length > 0 && (
           <div className="border-b border-border">
             <div className="px-4 py-1.5 bg-muted/20">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("Tạm ứng")}</p>
@@ -175,7 +182,7 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
         )}
 
         {/* Danh sách quyết toán */}
-        {quyetToanList.length > 0 && (
+        {!anTT && quyetToanList.length > 0 && (
           <div>
             <div className="px-4 py-1.5 bg-muted/20 border-b border-border">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("Quyết toán")}</p>
@@ -189,7 +196,7 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
         )}
 
         {/* Empty state nếu chưa có gì */}
-        {tamUngList.length === 0 && quyetToanList.length === 0 && (
+        {!anTT && tamUngList.length === 0 && quyetToanList.length === 0 && (
           <p className="px-4 py-3 text-sm text-muted-foreground">{t("Chưa có tạm ứng hoặc quyết toán.")}</p>
         )}
       </div>

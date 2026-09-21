@@ -12,6 +12,7 @@ import DVRow from "./DVRow";
 import { useDVSection } from "./use-dv-section";
 import { groupGopByNcc } from "@/lib/dntt-gop-calc";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -33,6 +34,8 @@ export interface ChiPhiDVSectionHandle {
 // Tab Chi phí Dịch vụ — chỉ render. Toàn bộ state/logic ở useDVSection.
 const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhiDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId, locked = false }, ref) {
   useTranslate();
+  // Tài khoản đối tác: ẩn ĐNTT / trạng thái thanh toán / hóa đơn — chỉ còn dòng chi phí.
+  const anTT = useAnThanhToan();
   const s = useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId });
   const {
     dvRows, total, sortedDays, dvData, dvHandlers,
@@ -77,7 +80,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
       <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
         <p className="text-sm font-semibold text-purple-900">🎫 {t("Dịch vụ")}</p>
         <div className="flex items-center gap-2">
-          {selectedIds.length > 0 && (
+          {!anTT && selectedIds.length > 0 && (
             <>
               <Button size="sm" className="h-7 text-xs" onClick={handlePrintSelected}>
                 <Printer className="h-3.5 w-3.5 mr-1" />
@@ -88,7 +91,7 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
               </Button>
             </>
           )}
-          {gopGroupCount > 0 && (
+          {!anTT && gopGroupCount > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowGop(true)}>
               <Layers className="h-3.5 w-3.5 mr-1" />
               {t("ĐNTT gộp NCC")} ({gopGroupCount})
@@ -101,36 +104,46 @@ const ChiPhiDVSection = forwardRef<ChiPhiDVSectionHandle, Props>(function ChiPhi
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <colgroup>
-            <col style={{ width: "32px" }} />
+            {!anTT && <col style={{ width: "32px" }} />}
             <col style={{ width: "60px" }} />
             <col />
             <col style={{ width: "60px" }} />
             <col style={{ width: "136px" }} />
             <col style={{ width: "120px" }} />
             <col style={{ width: "76px" }} />
-            <col style={{ width: "180px" }} />
-            <col style={{ width: "140px" }} />
-            <col style={{ width: "104px" }} />
+            {!anTT && (
+              <>
+                <col style={{ width: "180px" }} />
+                <col style={{ width: "140px" }} />
+                <col style={{ width: "104px" }} />
+              </>
+            )}
             <col style={{ width: "130px" }} />
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/20 text-[11px] font-medium text-muted-foreground">
-              <th className="px-2 py-2.5 text-center">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={(v) => v ? setSelectedIds(dvRows.map(r => r.id!)) : setSelectedIds([])}
-                  className="h-3.5 w-3.5"
-                />
-              </th>
+              {!anTT && (
+                <th className="px-2 py-2.5 text-center">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(v) => v ? setSelectedIds(dvRows.map(r => r.id!)) : setSelectedIds([])}
+                    className="h-3.5 w-3.5"
+                  />
+                </th>
+              )}
               <th className="text-left px-3 py-2.5">{t("Ngày")}</th>
               <th className="text-left px-3 py-2.5">{t("Dịch vụ")}</th>
               <th className="text-center px-2 py-2.5">{t("SL")}</th>
               <th className="text-center px-3 py-2.5">{t("Đơn giá")}</th>
               <th className="text-right px-3 py-2.5">{t("Thành tiền")}</th>
               <th className="text-center px-2 py-2.5">{t("Nguồn")}</th>
-              <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
-              <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
-              <th className="text-center px-2 py-2.5">{t("Hóa đơn")}</th>
+              {!anTT && (
+                <>
+                  <th className="text-center px-3 py-2.5">{t("TT ĐNTT")}</th>
+                  <th className="text-center px-3 py-2.5">{t("TT Thanh toán")}</th>
+                  <th className="text-center px-2 py-2.5">{t("Hóa đơn")}</th>
+                </>
+              )}
               <th className="px-2 py-2.5" />
             </tr>
           </thead>

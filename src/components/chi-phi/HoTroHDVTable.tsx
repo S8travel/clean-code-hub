@@ -30,6 +30,7 @@ import { useCancelDNTT, type HDVHoTroItem } from "@/hooks/use-chi-phi-hdv";
 import type { HDVDoanInfo, KhacModalItem, KhacModalTarget, KhacCancelTarget } from "./hdv-shared";
 import { resolveHoTroNguoiTt, isTipLaiXeRow, missingDefaultKhacMoTas, orderKhacItems, laDoanConHieuLuc } from "./hdv-shared";
 import { HDVHoTroRow } from "./HDVHoTroRow";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -45,6 +46,8 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
   locked?: boolean;
 }) {
   const qc = useQueryClient();
+  // Tài khoản đối tác: ẩn ĐNTT gộp, cột chọn ĐNTT, TT ĐNTT, TT Thanh toán.
+  const anTT = useAnThanhToan();
   const upsertMut = useUpsertChiPhi();
   const deleteMut = useDeleteChiPhi();
   const insertDNTT = useInsertDNTT();
@@ -456,7 +459,7 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
           {t("Khác")}
         </p>
         <div className="flex items-center gap-2">
-          {selectedIds.length > 0 && (
+          {!anTT && selectedIds.length > 0 && (
             <Button
               size="sm"
               className="h-6 text-xs bg-sky-600 hover:bg-sky-700 text-white"
@@ -477,6 +480,7 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/20">
+              {!anTT && (
               <th className="px-2 py-2 w-8 text-center">
                 <Checkbox
                   checked={allSelected ? true : someSelected ? "indeterminate" : false}
@@ -488,13 +492,14 @@ export function HoTroHDVTable({ doanId, doan, hoTroItems, locked = false }: {
                   className="h-3.5 w-3.5"
                 />
               </th>
+              )}
               <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">{t("Loại")}</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-24">{t("SL")}</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">{t("Đơn giá")}</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground w-32">{t("Thành tiền")}</th>
               <th className="text-center px-2 py-2 text-xs font-medium text-muted-foreground w-20">{t("Nguồn")}</th>
-              <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-44">{t("TT ĐNTT")}</th>
-              <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">{t("TT Thanh toán")}</th>
+              {!anTT && <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-44">{t("TT ĐNTT")}</th>}
+              {!anTT && <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">{t("TT Thanh toán")}</th>}
               <th className="px-2 py-2 w-32" />
             </tr>
           </thead>

@@ -26,6 +26,7 @@ import {
   type KsNgoaiTourLoaiRow,
 } from "@/lib/ks-ngoai-tour";
 import { errMsg } from "@/lib/error";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
@@ -66,6 +67,8 @@ interface Props {
 export default function KSNgoaiTourPanel({
   doanId, tenDoan = "", locked = false, selectedKsIds, onToggleSelect,
 }: Props) {
+  // Tài khoản đối tác → ẩn checkbox in ĐNTT, Định kỳ, footer ĐNTT mức thẻ.
+  const anTT = useAnThanhToan();
   const { data: chiPhiRows = [] } = useChiPhiList(doanId);
   const { data: ksList = [] } = useKhachSanList();
   const { data: nccList = [] } = useNhaCungCapList();
@@ -341,7 +344,7 @@ export default function KSNgoaiTourPanel({
             {/* Header thẻ */}
             <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-blue-50/60 border-b border-blue-100">
               <div className="flex items-center gap-2">
-                {!cardDinhKy && liveCount > 0 && (
+                {!anTT && !cardDinhKy && liveCount > 0 && (
                   <Checkbox checked={selectedKsIds.has(ksId)}
                     onCheckedChange={() => onToggleSelect(ksId)}
                     title="Chọn để in chung với KS trong tour" />
@@ -349,11 +352,13 @@ export default function KSNgoaiTourPanel({
                 <span className="text-xs font-semibold text-blue-900">{hotelName}</span>
               </div>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
-                  <Checkbox checked={cardDinhKy} disabled={locked}
-                    onCheckedChange={(c) => toggleCardDinhKy(ksId, !!c)} />
-                  Định kỳ
-                </label>
+                {!anTT && (
+                  <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
+                    <Checkbox checked={cardDinhKy} disabled={locked}
+                      onCheckedChange={(c) => toggleCardDinhKy(ksId, !!c)} />
+                    Định kỳ
+                  </label>
+                )}
                 <span className="text-xs font-medium text-blue-900 tabular-nums">{fmt(subtotal)} ₫</span>
                 {!locked && (
                   <div className="flex items-center gap-1">
@@ -450,8 +455,8 @@ export default function KSNgoaiTourPanel({
             </table>
             </div>
 
-            {/* Footer ĐNTT mức thẻ (pattern KS trong tour) */}
-            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-blue-100 bg-blue-50/30">
+            {/* Footer ĐNTT mức thẻ (pattern KS trong tour) — ẩn hẳn với tài khoản đối tác */}
+            {!anTT && <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-blue-100 bg-blue-50/30">
               {cardDinhKy ? (
                 <span className="text-[11px] text-muted-foreground italic">→ Thanh toán định kỳ (gộp theo NCC)</span>
               ) : (
@@ -490,7 +495,7 @@ export default function KSNgoaiTourPanel({
                   )}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         );
       })}
@@ -545,6 +550,8 @@ function SavedRoomRow({
   locked: boolean;
   onDelete: () => void;
 }) {
+  // Tài khoản đối tác → ẩn icon khóa "Thẻ đã có ĐNTT".
+  const anTT = useAnThanhToan();
   const upsert = useUpsertChiPhi();
   const loaiRow: KsNgoaiTourLoaiRow = row.loai_row === "phong" || row.loai_row == null ? "phong" : "dich_vu_khac";
   const [loaiPhong, setLoaiPhong] = useState(row.mo_ta ?? "");
@@ -581,7 +588,7 @@ function SavedRoomRow({
     <tr className="border-t border-blue-100/60">
       <td className="py-1 px-1.5">
         <div className="flex items-center gap-1">
-          {committed && (
+          {!anTT && committed && (
             <span title="Thẻ đã có ĐNTT — hủy ĐNTT để sửa số liệu" className="shrink-0 text-[11px] leading-none">🔒</span>
           )}
           <Input value={loaiPhong} disabled={editLocked}

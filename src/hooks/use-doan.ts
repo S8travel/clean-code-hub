@@ -337,9 +337,11 @@ export function useCurrentUserProfile() {
 export function useDoanList(
   phanLoaiTour?: string[] | null,
   vanPhongIds?: number[] | null,
+  /** Tài khoản giới hạn theo agent (lib/agent-scope.ts). null = không lọc. */
+  agentIds?: number[] | null,
 ) {
   return useQuery({
-    queryKey: ["doan", phanLoaiTour ?? null, vanPhongIds ?? null],
+    queryKey: ["doan", phanLoaiTour ?? null, vanPhongIds ?? null, agentIds ?? null],
     staleTime: 30_000,
     queryFn: async () => {
       let query = externalSupabase
@@ -362,6 +364,9 @@ export function useDoanList(
       }
       if (vanPhongIds && vanPhongIds.length > 0) {
         query = query.in("van_phong_id", vanPhongIds);
+      }
+      if (agentIds && agentIds.length > 0) {
+        query = query.in("agent_id", agentIds);
       }
       const { data, error } = await query.order("ngay_di", { ascending: true });
       if (error) throw error;

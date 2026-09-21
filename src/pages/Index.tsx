@@ -94,6 +94,7 @@ export default function Index() {
   const { data: groupsRaw, isLoading, error } = useDoanList(
     scope.phanLoaiTour,
     scope.vanPhongIds,
+    scope.agentScope,
   );
   const groups = groupsRaw as unknown as DoanRow[] | undefined;
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();

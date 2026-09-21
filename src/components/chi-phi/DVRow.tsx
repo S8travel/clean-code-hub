@@ -22,6 +22,7 @@ import { needAskNcc } from "@/lib/cancel-ncc";
 import type { AggCommitTarget } from "./DVAggCommitModal";
 import { type CanTruSelection } from "./KSCongNoPanel";
 import { t, useTranslate } from "@/lib/i18n";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -111,6 +112,8 @@ interface Props {
 // Tách verbatim từ ChiPhiDVSection — giữ nguyên 100% logic/hành vi.
 export default function DVRow({ row, day, data, handlers, locked = false }: Props) {
   useTranslate();
+  // Tài khoản đối tác: ẩn checkbox chọn in, cột ĐNTT/Thanh toán/Hóa đơn, nút ĐNTT/Hủy/Định kỳ, footer chênh lệch.
+  const anTT = useAnThanhToan();
   const {
     dnttList, extrasMap, paymentsList, congNoList, allDvRows, dvCdMap, doanId,
     allocByChiPhi, lumpedByDntt, clusterByGroupKey, selectedIds, editingId, editAmount, ngayBatDau,
@@ -279,17 +282,19 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   return [
     <tr key={row.id} className={cn("hover:bg-muted/20", isSelected && "bg-primary/5")}>
       {/* Checkbox — per main row (không gộp theo ngày) */}
-      <td className="px-2 py-2.5 text-center align-top">
-        <Checkbox
-          checked={isSelected}
-          onCheckedChange={(v) => {
-            if (!row.id) return;
-            // Tích 1 dòng → kéo theo cả nhóm cùng ĐNTT gộp (xem toggleSelectRow).
-            toggleSelectRow(row.id, !!v);
-          }}
-          className="h-3.5 w-3.5"
-        />
-      </td>
+      {!anTT && (
+        <td className="px-2 py-2.5 text-center align-top">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(v) => {
+              if (!row.id) return;
+              // Tích 1 dòng → kéo theo cả nhóm cùng ĐNTT gộp (xem toggleSelectRow).
+              toggleSelectRow(row.id, !!v);
+            }}
+            className="h-3.5 w-3.5"
+          />
+        </td>
+      )}
 
       {/* Ngày — per main row */}
       <td className="px-3 py-2.5 text-muted-foreground align-top whitespace-nowrap text-[11px]">
@@ -392,139 +397,143 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
         </button>
       </td>
 
-      {/* TT ĐNTT */}
-      <td className="px-3 py-2.5 align-top text-center">
-        {nguoiTt === "hdv" ? (
-          <span className="text-[10px] text-muted-foreground">—</span>
-        ) : shownDntts.length === 0 ? (
-          <span className="text-[10px] text-muted-foreground">—</span>
-        ) : (
-          <div className="flex flex-col gap-0.5 items-center">
-            {shownDntts.map(d => {
-              const isRejected = d.trang_thai_duyet === "tu_choi";
-              const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
-              return (
-                <div key={d.id} className="flex items-center gap-0.5">
-                  {isRejected ? (
-                    <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                      {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
+      {!anTT && (
+        <>
+          {/* TT ĐNTT */}
+          <td className="px-3 py-2.5 align-top text-center">
+            {nguoiTt === "hdv" ? (
+              <span className="text-[10px] text-muted-foreground">—</span>
+            ) : shownDntts.length === 0 ? (
+              <span className="text-[10px] text-muted-foreground">—</span>
+            ) : (
+              <div className="flex flex-col gap-0.5 items-center">
+                {shownDntts.map(d => {
+                  const isRejected = d.trang_thai_duyet === "tu_choi";
+                  const statusInfo = STATUS_LABEL[d.trang_thai_duyet] ?? STATUS_LABEL.cho_duyet;
+                  return (
+                    <div key={d.id} className="flex items-center gap-0.5">
+                      {isRejected ? (
+                        <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                          {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
+                        </span>
+                      ) : editingId === d.id ? (
+                        <>
+                          <Input autoFocus type="number" value={editAmount}
+                            onChange={e => setEditAmount(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") handleEditSave(d.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            className="h-5 w-20 text-[10px] px-1.5 py-0" />
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-emerald-600"
+                            disabled={updateDNTT.isPending}
+                            onClick={() => handleEditSave(d.id)}>
+                            <Check className="h-2.5 w-2.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-muted-foreground"
+                            onClick={() => setEditingId(null)}>
+                            <X className="h-2.5 w-2.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {(() => {
+                            // Cấn trừ dồn vào dòng đầu (lump): chỉ dòng gánh cấn trừ mới hiện CT → TT.
+                            const lump = lumpFor(d);
+                            const ct = lump?.canTru ?? 0;
+                            // TT = còn phải trả (sau cấn trừ & tiền mặt đã trả) — KHỚP cột "Chờ UNC".
+                            const thucTT = lump?.choUNC ?? Math.max(0, allocAmt(d) - ct);
+                            return (
+                              <div className="inline-flex flex-col items-start gap-0.5">
+                                <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
+                                  {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
+                                  {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
+                                </span>
+                                {ct > 0 && (
+                                  <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap" title={canTruNoteFor(d)}>
+                                    CT {fmt(ct)} → TT {fmt(thucTT)}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          {/* ĐNTT sai → hủy, KHÔNG sửa inline (gỡ pencil 2026-05-26) */}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                {dnttMismatch !== 0 && (
+                  <span
+                    className="inline-flex items-center px-1 py-px rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
+                    title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Hủy ĐNTT & tạo lại.")}`}
+                  >
+                    ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
+                  </span>
+                )}
+              </div>
+            )}
+          </td>
+
+          {/* TT Thanh toán */}
+          <td className="px-3 py-2.5 align-top">
+            {nguoiTt === "hdv" ? (
+              <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
+            ) : (
+            <div className="flex flex-col gap-0.5 items-center">
+              {activeDntts.map(d => (
+                <div key={d.id}>
+                  {d.payment_status === "paid" ? (
+                    <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                      {t("Đã TT")}{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
                     </span>
-                  ) : editingId === d.id ? (
-                    <>
-                      <Input autoFocus type="number" value={editAmount}
-                        onChange={e => setEditAmount(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") handleEditSave(d.id);
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                        className="h-5 w-20 text-[10px] px-1.5 py-0" />
-                      <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-emerald-600"
-                        disabled={updateDNTT.isPending}
-                        onClick={() => handleEditSave(d.id)}>
-                        <Check className="h-2.5 w-2.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-4 w-4 p-0 text-muted-foreground"
-                        onClick={() => setEditingId(null)}>
-                        <X className="h-2.5 w-2.5" />
-                      </Button>
-                    </>
                   ) : (
-                    <>
-                      {(() => {
-                        // Cấn trừ dồn vào dòng đầu (lump): chỉ dòng gánh cấn trừ mới hiện CT → TT.
-                        const lump = lumpFor(d);
-                        const ct = lump?.canTru ?? 0;
-                        // TT = còn phải trả (sau cấn trừ & tiền mặt đã trả) — KHỚP cột "Chờ UNC".
-                        const thucTT = lump?.choUNC ?? Math.max(0, allocAmt(d) - ct);
-                        return (
-                          <div className="inline-flex flex-col items-start gap-0.5">
-                            <span className={`px-1 py-px rounded text-[10px] leading-tight font-medium whitespace-nowrap ${statusInfo.cls}`}>
-                              {t(statusInfo.textKey)} · {fmt(allocAmt(d))}
-                              {d.la_coc && <span className="ml-1 opacity-70">·{t("Cọc")}</span>}
-                            </span>
-                            {ct > 0 && (
-                              <span className="text-[9px] text-amber-700 leading-tight whitespace-nowrap" title={canTruNoteFor(d)}>
-                                CT {fmt(ct)} → TT {fmt(thucTT)}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                      {/* ĐNTT sai → hủy, KHÔNG sửa inline (gỡ pencil 2026-05-26) */}
-                    </>
+                    <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                      {/* Lump: ĐNTT có cấn trừ → còn lại = alloc − cấn trừ dồn − tiền mặt (tương ứng cột CT).
+                          ĐNTT không cấn trừ → giữ logic cũ (alloc − đã trả pro-rata). */}
+                      {t("Chờ UNC")} · {fmt(lumpFor(d)?.choUNC ?? Math.max(0, allocAmt(d) - paidForDntt(d)))}
+                    </span>
                   )}
                 </div>
-              );
-            })}
-            {dnttMismatch !== 0 && (
-              <span
-                className="inline-flex items-center px-1 py-px rounded text-[10px] leading-tight font-medium bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
-                title={`${t("Số tiền DNTT đã commit")} (${fmt(sumCommitted)} ₫) ${t("khác chi phí thực tế")} (${fmt(sumActual)} ₫). ${t("Hủy ĐNTT & tạo lại.")}`}
-              >
-                ⚠ {t("DNTT lệch")} {dnttMismatch > 0 ? "+" : "−"}{fmt(Math.abs(dnttMismatch))}
-              </span>
-            )}
-          </div>
-        )}
-      </td>
-
-      {/* TT Thanh toán */}
-      <td className="px-3 py-2.5 align-top">
-        {nguoiTt === "hdv" ? (
-          <span className="text-[10px] text-muted-foreground flex justify-center">—</span>
-        ) : (
-        <div className="flex flex-col gap-0.5 items-center">
-          {activeDntts.map(d => (
-            <div key={d.id}>
-              {d.payment_status === "paid" ? (
-                <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                  {t("Đã TT")}{d.thanh_toan_luc ? ` ${format(new Date(d.thanh_toan_luc), "dd/MM")}` : ""}
-                </span>
-              ) : (
-                <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                  {/* Lump: ĐNTT có cấn trừ → còn lại = alloc − cấn trừ dồn − tiền mặt (tương ứng cột CT).
-                      ĐNTT không cấn trừ → giữ logic cũ (alloc − đã trả pro-rata). */}
-                  {t("Chờ UNC")} · {fmt(lumpFor(d)?.choUNC ?? Math.max(0, allocAmt(d) - paidForDntt(d)))}
+              ))}
+              {congNoAmount > 0 && (
+                <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
+                  CN: {fmt(congNoAmount)}
                 </span>
               )}
+              {congNoDaCanTru > 0 && (
+                <span
+                  className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-purple-50 text-purple-500 whitespace-nowrap"
+                  title={t("Khoản này đã được ghi công nợ và cấn trừ hết")}
+                >
+                  CN: {fmt(congNoDaCanTru)} · {t("đã cấn trừ")}
+                </span>
+              )}
+              {hoanTienAmount > 0 && (
+                <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
+                  HT: {fmt(hoanTienAmount)}
+                </span>
+              )}
+              {activeDntts.length === 0 && congNoAmount === 0 && congNoDaCanTru === 0 && hoanTienAmount === 0 && (
+                <span className="text-[10px] text-muted-foreground">—</span>
+              )}
             </div>
-          ))}
-          {congNoAmount > 0 && (
-            <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
-              CN: {fmt(congNoAmount)}
-            </span>
-          )}
-          {congNoDaCanTru > 0 && (
-            <span
-              className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-purple-50 text-purple-500 whitespace-nowrap"
-              title={t("Khoản này đã được ghi công nợ và cấn trừ hết")}
-            >
-              CN: {fmt(congNoDaCanTru)} · {t("đã cấn trừ")}
-            </span>
-          )}
-          {hoanTienAmount > 0 && (
-            <span className="px-1 py-px rounded text-[10px] leading-tight font-medium bg-blue-100 text-blue-700 whitespace-nowrap">
-              HT: {fmt(hoanTienAmount)}
-            </span>
-          )}
-          {activeDntts.length === 0 && congNoAmount === 0 && congNoDaCanTru === 0 && hoanTienAmount === 0 && (
-            <span className="text-[10px] text-muted-foreground">—</span>
-          )}
-        </div>
-        )}
-      </td>
+            )}
+          </td>
 
-      {/* Hóa đơn — dòng công ty: theo ĐNTT; dòng HDV trả: theo chi_phi (kế toán bấm tay). */}
-      <td className="px-2 py-2.5 align-top text-center">
-        {nguoiTt === "hdv"
-          ? <HoaDonChiPhiBadge chiPhiId={row.id!} trangThai={(row.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc} />
-          : <HoaDonCell dntts={activeDntts} />}
-      </td>
+          {/* Hóa đơn — dòng công ty: theo ĐNTT; dòng HDV trả: theo chi_phi (kế toán bấm tay). */}
+          <td className="px-2 py-2.5 align-top text-center">
+            {nguoiTt === "hdv"
+              ? <HoaDonChiPhiBadge chiPhiId={row.id!} trangThai={(row.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc} />
+              : <HoaDonCell dntts={activeDntts} />}
+          </td>
+        </>
+      )}
 
       {/* Actions */}
       <td className="px-2 py-2.5">
         <div className="flex items-center gap-1 justify-end">
-          {nguoiTt === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid || dnttCashPaid(activeDntt.id) === 0) && (
+          {!anTT && nguoiTt === "cong_ty" && canCancel && activeDntt && (activeDntt.payment_status !== "paid" || groupCongNoTotal < sumPaid || dnttCashPaid(activeDntt.id) === 0) && (
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
               title={t("Hủy ĐNTT")}
               onClick={() => {
@@ -543,21 +552,23 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
               <Ban className="h-3 w-3" />
             </Button>
           )}
-          <Button variant="ghost" size="sm"
-            className={cn("h-7 text-xs px-2 gap-1", row.thanh_toan_dinh_ky ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
-            title={row.thanh_toan_dinh_ky ? t("Đang định kỳ — bấm để tắt") : t("Đặt thanh toán định kỳ")}
-            disabled={upsertMut.isPending}
-            onClick={() => handleToggleDinhKy(row)}>
-            <CalendarClock className="h-3.5 w-3.5" />
-            {row.thanh_toan_dinh_ky && t("Định kỳ")}
-          </Button>
+          {!anTT && (
+            <Button variant="ghost" size="sm"
+              className={cn("h-7 text-xs px-2 gap-1", row.thanh_toan_dinh_ky ? "text-indigo-700 hover:text-indigo-800" : "text-muted-foreground hover:text-foreground")}
+              title={row.thanh_toan_dinh_ky ? t("Đang định kỳ — bấm để tắt") : t("Đặt thanh toán định kỳ")}
+              disabled={upsertMut.isPending}
+              onClick={() => handleToggleDinhKy(row)}>
+              <CalendarClock className="h-3.5 w-3.5" />
+              {row.thanh_toan_dinh_ky && t("Định kỳ")}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             title={t("Thêm dịch vụ phát sinh")}
             disabled={locked}
             onClick={() => handleExtraAdd(row.id!)}>
             <Plus className="h-3 w-3" />
           </Button>
-          {nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && totalTienCt > 0 && (
+          {!anTT && nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && totalTienCt > 0 && (
             <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
               onClick={() => openDvModal(row.id!, totalTienCt, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
               {t("ĐNTT")}
@@ -570,7 +581,7 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
     /* Extra rows for this main row */
     ...rowExtras.map((extra, idx) => (
       <tr key={`extra-${row.id}-${idx}`} className="bg-muted/10 hover:bg-muted/20">
-        <td /> {/* skip checkbox */}
+        {!anTT && <td />} {/* skip checkbox */}
         <td /> {/* skip ngày */}
         {/* Tên dịch vụ phát sinh */}
         <td className="px-3 py-1.5">
@@ -635,24 +646,30 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
             {extra.nguoi_tt === "cong_ty" ? t("Công ty") : t("HDV")}
           </button>
         </td>
-        <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
-        {/* Hóa đơn — extra HDV trả → badge riêng. Đọc trang_thai_hoa_don từ allDvRows
-            (tươi) vì extrasMap chỉ init 1 lần, không reconcile sau khi đổi badge. */}
-        <td className="px-2 py-1.5 text-center">
-          {extra.nguoi_tt === "hdv" && extra.id != null && (
-            <HoaDonChiPhiBadge
-              chiPhiId={extra.id}
-              trangThai={(allDvRows.find((r) => r.id === extra.id)?.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc}
-            />
-          )}
-        </td>
+        {!anTT && (
+          <>
+            <td colSpan={2} /> {/* TT ĐNTT + TT Thanh toán */}
+            {/* Hóa đơn — extra HDV trả → badge riêng. Đọc trang_thai_hoa_don từ allDvRows
+                (tươi) vì extrasMap chỉ init 1 lần, không reconcile sau khi đổi badge. */}
+            <td className="px-2 py-1.5 text-center">
+              {extra.nguoi_tt === "hdv" && extra.id != null && (
+                <HoaDonChiPhiBadge
+                  chiPhiId={extra.id}
+                  trangThai={(allDvRows.find((r) => r.id === extra.id)?.trang_thai_hoa_don ?? "chua_co") as TrangThaiDoc}
+                />
+              )}
+            </td>
+          </>
+        )}
         {/* Delete — khóa khi nhóm còn ĐNTT hiệu lực: tiền extra đã nằm trong alloc
             của main (per-row/gộp), xóa row sẽ làm committed lệch khỏi thực tế.
             Muốn bỏ → sửa SL/đơn giá về 0 (footer aggregate tự tính công nợ). */}
         <td className="px-2 py-1.5 text-right">
           <button
             disabled={locked || activeDntts.length > 0}
-            title={activeDntts.length > 0 ? t("Nhóm còn ĐNTT hiệu lực — sửa SL/đơn giá về 0 thay vì xóa") : undefined}
+            title={activeDntts.length > 0
+              ? (anTT ? t("Không thể xóa") : t("Nhóm còn ĐNTT hiệu lực — sửa SL/đơn giá về 0 thay vì xóa"))
+              : undefined}
             onClick={() => handleExtraDelete(row.id!, idx)}
             className="text-destructive hover:text-destructive/80 p-0.5 disabled:opacity-40"
           >
@@ -662,7 +679,7 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
       </tr>
     )),
     /* Aggregate commit footer row — chỉ hiện khi còn chênh lệch SAU TRỪ cong_no đã ghi nhận */
-    showAggBtn && (
+    !anTT && showAggBtn && (
       <tr key={`agg-${row.id}`} className={cn(
         effectiveDelta > 0 ? "bg-orange-50/50" : "bg-purple-50/50"
       )}>

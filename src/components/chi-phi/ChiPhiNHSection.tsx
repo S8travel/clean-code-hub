@@ -12,6 +12,7 @@ import NHAggCommitModal from "./NHAggCommitModal";
 import NHCancelModal from "./NHCancelModal";
 import DungVoucherModal from "./DungVoucherModal";
 import { useNHSection } from "./use-nh-section";
+import { useAnThanhToan } from "./an-thanh-toan-context";
 import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
@@ -39,6 +40,8 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
   ref,
 ) {
   useTranslate();
+  // Tài khoản đối tác: ẩn ĐNTT / trạng thái thanh toán / hóa đơn — chỉ còn dòng chi phí.
+  const anTT = useAnThanhToan();
   const s = useNHSection({ doanId, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan, doanNhomId, locked });
   const {
     isLoading, meals, nhRowData, nhRowHandlers,
@@ -88,7 +91,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
           🍽️ {t("Nhà hàng")}
           <Badge variant="secondary" className="text-xs">{t("Điều tour")}</Badge>
         </h3>
-        {selectedKeys.length > 0 && (
+        {!anTT && selectedKeys.length > 0 && (
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -109,7 +112,7 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
       <div className="rounded-lg border border-border overflow-x-auto print:overflow-visible">
         <table className="w-full border-collapse text-xs min-w-[820px] print:min-w-0">
           <colgroup>
-            <col className="w-[28px]" />
+            {!anTT && <col className="w-[28px]" />}
             <col className="w-[64px]" />
             <col />
             <col className="w-[56px]" />
@@ -117,21 +120,28 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
             <col className="w-[136px]" />
             <col className="w-[64px]" />
             <col className="w-[110px]" />
-            <col className="w-[70px]" />
-            <col className="w-[180px]" />
-            <col className="w-[150px]" />
+            {/* Ẩn theo vị trí cột 9–11 (dưới th TT ĐNTT / TT Thanh toán / Hóa đơn). */}
+            {!anTT && (
+              <>
+                <col className="w-[70px]" />
+                <col className="w-[180px]" />
+                <col className="w-[150px]" />
+              </>
+            )}
             <col className="w-[104px]" />
             <col className="w-[100px]" />
           </colgroup>
           <thead>
             <tr className="bg-muted/50 border-b border-border text-[11px] font-medium text-muted-foreground">
-              <th className="px-2 py-1.5 text-left">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={(v) => v ? setSelectedKeys(mealKeys) : setSelectedKeys([])}
-                  className="h-3.5 w-3.5"
-                />
-              </th>
+              {!anTT && (
+                <th className="px-2 py-1.5 text-left">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(v) => v ? setSelectedKeys(mealKeys) : setSelectedKeys([])}
+                    className="h-3.5 w-3.5"
+                  />
+                </th>
+              )}
               <th className="px-3 py-2 text-center font-medium">{t("Ngày")}</th>
               <th className="px-3 py-2 text-left font-medium">{t("Nhà hàng")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("Số khách")}</th>
@@ -139,9 +149,13 @@ const ChiPhiNHSection = forwardRef<ChiPhiNHSectionHandle, Props>(function ChiPhi
               <th className="px-3 py-2 text-center font-medium">{t("CK%")}</th>
               <th className="px-3 py-2 text-right font-medium">{t("Thành tiền")}</th>
               <th className="px-2 py-2 text-center font-medium">{t("Nguồn")}</th>
-              <th className="px-3 py-2 text-center font-medium">{t("TT ĐNTT")}</th>
-              <th className="px-3 py-2 text-center font-medium">{t("TT Thanh toán")}</th>
-              <th className="px-2 py-2 text-center font-medium">{t("Hóa đơn")}</th>
+              {!anTT && (
+                <>
+                  <th className="px-3 py-2 text-center font-medium">{t("TT ĐNTT")}</th>
+                  <th className="px-3 py-2 text-center font-medium">{t("TT Thanh toán")}</th>
+                  <th className="px-2 py-2 text-center font-medium">{t("Hóa đơn")}</th>
+                </>
+              )}
               <th className="px-2 py-2 sticky right-0 z-20 bg-muted" />
             </tr>
           </thead>
