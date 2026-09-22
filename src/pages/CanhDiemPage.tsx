@@ -33,8 +33,9 @@ function CanhDiemPageContent() {
   const [newLoai, setNewLoai] = useState("canh_diem");
   const [newNccId, setNewNccId] = useState("");
 
+  const q = search.toLowerCase();
   const filtered = (list ?? []).filter(
-    (cd) => cd.ten.toLowerCase().includes(search.toLowerCase())
+    (cd) => cd.ten.toLowerCase().includes(q) || (cd.ten_zh ?? "").includes(search)
   );
 
   const selected = (list ?? []).find((cd) => cd.id === selectedId) ?? null;
@@ -141,6 +142,9 @@ function CanhDiemPageContent() {
                       {canGuiBookingDV(cd) ? t("Có mail") : t("Không mail")}
                     </Badge>
                   </div>
+                  {cd.ten_zh && (
+                    <div className="text-[11px] text-slate-500 truncate">{cd.ten_zh}</div>
+                  )}
                   {cd.dia_diem && (
                     <div className="text-[11px] text-muted-foreground truncate">{cd.dia_diem}</div>
                   )}
