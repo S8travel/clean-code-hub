@@ -408,6 +408,7 @@ export type Database = {
           tai_khoan_thanh_toan: string | null
           ten: string | null
           ten_nha_cung_cap: string | null
+          ten_zh: string | null
           thong_tin_chung: string | null
         }
         Insert: {
@@ -433,6 +434,7 @@ export type Database = {
           tai_khoan_thanh_toan?: string | null
           ten?: string | null
           ten_nha_cung_cap?: string | null
+          ten_zh?: string | null
           thong_tin_chung?: string | null
         }
         Update: {
@@ -458,6 +460,7 @@ export type Database = {
           tai_khoan_thanh_toan?: string | null
           ten?: string | null
           ten_nha_cung_cap?: string | null
+          ten_zh?: string | null
           thong_tin_chung?: string | null
         }
         Relationships: [

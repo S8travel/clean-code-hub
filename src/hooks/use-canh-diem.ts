@@ -11,6 +11,8 @@ const NCC_STALE_MSG =
 export interface CanhDiem {
   id: number;
   ten: string;
+  /** Tên tiếng Trung (phồn thể) — cùng kiểu khach_san.ten_zh / nha_hang.ten_zh. */
+  ten_zh: string | null;
   dia_diem: string | null;
   gia_mac_dinh: number | null;
   don_vi: string | null;

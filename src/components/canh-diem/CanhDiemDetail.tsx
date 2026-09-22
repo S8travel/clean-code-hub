@@ -33,6 +33,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   const ksOptions = (ksList ?? []).map((k) => ({ value: String(k.id), label: k.ten }));
 
   const [ten, setTen] = useState("");
+  const [tenZh, setTenZh] = useState("");
   const [loai, setLoai] = useState("canh_diem");
   const [diaDiem, setDiaDiem] = useState("");
   const [icon, setIcon] = useState("");
@@ -56,6 +57,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
 
   useEffect(() => {
     setTen(canhDiem.ten || "");
+    setTenZh(canhDiem.ten_zh || "");
     setLoai(canhDiem.loai || "canh_diem");
     setDiaDiem(canhDiem.dia_diem || "");
     setIcon(canhDiem.icon || "");
@@ -87,6 +89,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
         id: canhDiem.id,
         updates: {
           ten: ten.trim(),
+          ten_zh: tenZh.trim() || null,
           loai,
           dia_diem: diaDiem || null,
           icon: icon || null,
@@ -161,6 +164,10 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
               <SelectItem value="dich_vu">Có gửi mail</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs">Tên tiếng Trung</Label>
+          <Input value={tenZh} onChange={(e) => setTenZh(e.target.value)} placeholder="景點名稱..." className="h-9 text-sm" />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Địa điểm</Label>
