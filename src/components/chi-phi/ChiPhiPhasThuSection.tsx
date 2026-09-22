@@ -305,7 +305,9 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                   value={localSoKhach}
                   onChange={(e) => setLocalSoKhach(e.target.value.replace(/\D/g, ""))}
                   onBlur={() => {
-                    const v = localSoKhach ? Number(localSoKhach) : 0;
+                    // Ô trống = trả về tự tính. KHÔNG lưu 0: số khách 0 làm dòng Tip tự ẩn
+                    // → OP mất luôn ô để sửa lại (lỗi báo 22/09/2026).
+                    const v = localSoKhach ? Number(localSoKhach) : autoSoKhach;
                     saveOverride("tip_so_khach_override", v, autoSoKhach, doan?.tip_so_khach_override);
                   }}
                   disabled={locked}
@@ -323,7 +325,7 @@ export default function ChiPhiPhasThuSection({ doanId, doan, locked = false }: P
                   value={localSoNgay}
                   onChange={(e) => setLocalSoNgay(e.target.value.replace(/\D/g, ""))}
                   onBlur={() => {
-                    const v = localSoNgay ? Number(localSoNgay) : 0;
+                    const v = localSoNgay ? Number(localSoNgay) : autoSoNgay;
                     saveOverride("tip_so_ngay_override", v, autoSoNgay, doan?.tip_so_ngay_override);
                   }}
                   disabled={locked}
