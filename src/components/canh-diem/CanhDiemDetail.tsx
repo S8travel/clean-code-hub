@@ -18,6 +18,7 @@ import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
 import { useKhachSanList } from "@/hooks/use-khach-san";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { lyDoKhongBookingDV, NHAN_LY_DO_KHONG_BOOKING } from "@/lib/booking-dv-filter";
+import { t, useTranslate } from "@/lib/i18n";
 
 interface Props {
   canhDiem: CanhDiem;
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
+  useTranslate();
   const updateMut = useUpdateCanhDiem();
   const deleteMut = useDeleteCanhDiem();
   const { data: nccList } = useNhaCungCapList();
@@ -80,7 +82,7 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
 
   const handleSave = async () => {
     if (!ten.trim()) {
-      toast.warning("Tên cảnh điểm không được để trống");
+      toast.warning(t("Tên cảnh điểm không được để trống"));
       return;
     }
 
@@ -111,19 +113,19 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
           khong_can_booking: khongCanBooking,
         },
       });
-      toast.success("Đã lưu");
+      toast.success(t("Đã lưu"));
     } catch (e) {
-      toast.error(errMsg(e) || "Lỗi khi lưu");
+      toast.error(errMsg(e) || t("Lỗi khi lưu"));
     }
   };
 
   const handleDelete = async () => {
     try {
       await deleteMut.mutateAsync(canhDiem.id);
-      toast.success("Đã xóa");
+      toast.success(t("Đã xóa"));
       onDeleted();
     } catch {
-      toast.error("Lỗi khi xóa");
+      toast.error(t("Lỗi khi xóa"));
     }
   };
 
@@ -139,38 +141,38 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
   return (
     <div className="p-6 max-w-2xl space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Chi tiết cảnh điểm</h2>
+        <h2 className="text-lg font-semibold">{t("Chi tiết cảnh điểm")}</h2>
         <Badge
           className={lyDo === null ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}
-          title={lyDo ? NHAN_LY_DO_KHONG_BOOKING[lyDo] : undefined}
+          title={lyDo ? t(NHAN_LY_DO_KHONG_BOOKING[lyDo]) : undefined}
         >
-          {lyDo === null ? "Có gửi mail" : "Không gửi mail"}
+          {lyDo === null ? t("Có gửi mail") : t("Không gửi mail")}
         </Badge>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-xs">Tên *</Label>
+          <Label className="text-xs">{t("Tên *")}</Label>
           <Input value={ten} onChange={(e) => setTen(e.target.value)} className="h-9 text-sm" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Loại</Label>
+          <Label className="text-xs">{t("Loại")}</Label>
           <Select value={loai} onValueChange={setLoai}>
             <SelectTrigger className="h-9 text-sm">
-              <span>{loai === "canh_diem" ? "Không gửi mail" : loai === "dich_vu" ? "Có gửi mail" : ""}</span>
+              <span>{loai === "canh_diem" ? t("Không gửi mail") : loai === "dich_vu" ? t("Có gửi mail") : ""}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="canh_diem">Không gửi mail</SelectItem>
-              <SelectItem value="dich_vu">Có gửi mail</SelectItem>
+              <SelectItem value="canh_diem">{t("Không gửi mail")}</SelectItem>
+              <SelectItem value="dich_vu">{t("Có gửi mail")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5 col-span-2">
-          <Label className="text-xs">Tên tiếng Trung</Label>
+          <Label className="text-xs">{t("Tên tiếng Trung (cảnh điểm)")}</Label>
           <Input value={tenZh} onChange={(e) => setTenZh(e.target.value)} placeholder="景點名稱..." className="h-9 text-sm" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Địa điểm</Label>
+          <Label className="text-xs">{t("Địa điểm")}</Label>
           <Input value={diaDiem} onChange={(e) => setDiaDiem(e.target.value)} className="h-9 text-sm" />
         </div>
         <div className="space-y-1.5">
@@ -183,88 +185,87 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
 
       <div className="flex items-center gap-3">
         <Switch checked={coPhi} onCheckedChange={setCoPhi} />
-        <Label className="text-sm">Có phí</Label>
+        <Label className="text-sm">{t("Có phí")}</Label>
       </div>
 
       {coPhi && (
         <div className="grid grid-cols-2 gap-4 pl-2 border-l-2 border-accent/30">
           <div className="space-y-1.5">
-            <Label className="text-xs">Giá mặc định</Label>
+            <Label className="text-xs">{t("Giá mặc định")}</Label>
             <Input type="number" value={giaMacDinh} onChange={(e) => setGiaMacDinh(e.target.value)} className="h-9 text-sm" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Đơn vị</Label>
-            <Input value={donVi} onChange={(e) => setDonVi(e.target.value)} placeholder="VND/người" className="h-9 text-sm" />
+            <Label className="text-xs">{t("Đơn vị")}</Label>
+            <Input value={donVi} onChange={(e) => setDonVi(e.target.value)} placeholder={t("VND/người")} className="h-9 text-sm" />
           </div>
           <div className="space-y-1.5 col-span-2">
-            <Label className="text-xs">Người thanh toán</Label>
+            <Label className="text-xs">{t("Người thanh toán")}</Label>
             <Select value={nguoiThanhToan} onValueChange={setNguoiThanhToan}>
               <SelectTrigger className="h-9 text-sm">
-                <span>{nguoiThanhToan === "cong_ty" ? "Công ty" : nguoiThanhToan === "hdv" ? "Hướng dẫn viên" : "-- Chọn --"}</span>
+                <span>{nguoiThanhToan === "cong_ty" ? t("Công ty") : nguoiThanhToan === "hdv" ? t("Hướng dẫn viên") : t("-- Chọn --")}</span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cong_ty">Công ty</SelectItem>
-                <SelectItem value="hdv">Hướng dẫn viên</SelectItem>
+                <SelectItem value="cong_ty">{t("Công ty")}</SelectItem>
+                <SelectItem value="hdv">{t("Hướng dẫn viên")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5 col-span-2">
             <Label className="text-xs flex items-center gap-2">
-              FOC (miễn phí)
+              {t("FOC (miễn phí)")}
               <span className="text-[11px] font-normal text-muted-foreground italic">
-                cứ X khách miễn Y suất — mặc định khi tạo chi phí (sửa lại được ở tour)
+                {t("cứ X khách miễn Y suất — mặc định khi tạo chi phí (sửa lại được ở tour)")}
               </span>
             </Label>
             <div className="flex items-center gap-2">
               <Input
                 type="number" min={0} value={focKhach}
                 onChange={(e) => setFocKhach(e.target.value)}
-                placeholder="X khách" className="h-9 text-sm w-28"
+                placeholder={t("X khách")} className="h-9 text-sm w-28"
               />
               <span className="text-sm text-muted-foreground">免</span>
               <Input
                 type="number" min={0} value={focMien}
                 onChange={(e) => setFocMien(e.target.value)}
-                placeholder="Y suất" className="h-9 text-sm w-28"
+                placeholder={t("Y suất")} className="h-9 text-sm w-28"
               />
             </div>
           </div>
           <div className="space-y-1.5 col-span-2">
             <Label className="text-xs flex items-center gap-2">
-              Vé combo đã bao gồm bữa ăn
+              {t("Vé combo đã bao gồm bữa ăn")}
               <span className="text-[11px] font-normal text-muted-foreground italic">
-                vd Bà Nà: vé cáp treo đã kèm buffet trưa
+                {t("vd Bà Nà: vé cáp treo đã kèm buffet trưa")}
               </span>
             </Label>
             <div className="flex items-center gap-2">
               <Select value={baoGomBuaAn} onValueChange={setBaoGomBuaAn}>
                 <SelectTrigger className="h-9 text-sm w-44">
                   <span>
-                    {baoGomBuaAn === "trua" ? "Gồm ăn trưa"
-                      : baoGomBuaAn === "toi" ? "Gồm ăn tối"
-                      : baoGomBuaAn === "ca_hai" ? "Gồm cả trưa + tối"
-                      : "Không gồm bữa nào"}
+                    {baoGomBuaAn === "trua" ? t("Gồm ăn trưa")
+                      : baoGomBuaAn === "toi" ? t("Gồm ăn tối")
+                      : baoGomBuaAn === "ca_hai" ? t("Gồm cả trưa + tối")
+                      : t("Không gồm bữa nào")}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="khong">Không gồm bữa nào</SelectItem>
-                  <SelectItem value="trua">Gồm ăn trưa</SelectItem>
-                  <SelectItem value="toi">Gồm ăn tối</SelectItem>
-                  <SelectItem value="ca_hai">Gồm cả trưa + tối</SelectItem>
+                  <SelectItem value="khong">{t("Không gồm bữa nào")}</SelectItem>
+                  <SelectItem value="trua">{t("Gồm ăn trưa")}</SelectItem>
+                  <SelectItem value="toi">{t("Gồm ăn tối")}</SelectItem>
+                  <SelectItem value="ca_hai">{t("Gồm cả trưa + tối")}</SelectItem>
                 </SelectContent>
               </Select>
               {baoGomBuaAn !== "khong" && (
                 <Input
                   value={baoGomGhiChu}
                   onChange={(e) => setBaoGomGhiChu(e.target.value)}
-                  placeholder="Mô tả bữa đã gồm (buffet trưa trên đỉnh...)"
+                  placeholder={t("Mô tả bữa đã gồm (buffet trưa trên đỉnh...)")}
                   className="h-9 text-sm flex-1"
                 />
               )}
             </div>
             <p className="text-[11px] text-muted-foreground italic">
-              Bật cờ này thì báo giá AI sẽ tự ẩn bữa ăn cùng ngày, không tính tiền 2 lần.
-              Áp dụng cho mọi báo giá lập sau đó.
+              {t("Bật cờ này thì báo giá AI sẽ tự ẩn bữa ăn cùng ngày, không tính tiền 2 lần. Áp dụng cho mọi báo giá lập sau đó.")}
             </p>
           </div>
         </div>
@@ -274,18 +275,18 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5 col-span-2">
-          <Label className="text-xs">Nhà cung cấp</Label>
+          <Label className="text-xs">{t("Nhà cung cấp")}</Label>
           <SearchableSelect
             options={nccOptions}
             value={nhaCungCapId}
             onChange={setNhaCungCapId}
-            placeholder="Chọn nhà cung cấp"
+            placeholder={t("Chọn nhà cung cấp")}
             className="h-9 text-sm"
           />
         </div>
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs flex items-center gap-2">
-            Liên kết KS Day Use
+            {t("Liên kết KS Day Use")}
             {khachSanId && (
               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">Day Use</span>
             )}
@@ -294,12 +295,11 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
             options={ksOptions}
             value={khachSanId}
             onChange={setKhachSanId}
-            placeholder="(Không) — chọn nếu cảnh điểm này là KS day-use"
+            placeholder={t("(Không) — chọn nếu cảnh điểm này là KS day-use")}
             className="h-9 text-sm"
           />
           <p className="text-[11px] text-muted-foreground italic">
-            Khi liên kết: cảnh điểm này được điền vào "Chương trình" sẽ tự tạo booking KS và đẩy chi phí vào Section Khách sạn.
-            Booking đã nằm bên tab Khách sạn nên dịch vụ này KHÔNG hiện ở tab Booking DV nữa.
+            {t("Khi liên kết: cảnh điểm này được điền vào \"Chương trình\" sẽ tự tạo booking KS và đẩy chi phí vào Section Khách sạn. Booking đã nằm bên tab Khách sạn nên dịch vụ này KHÔNG hiện ở tab Booking DV nữa.")}
           </p>
         </div>
         <div className="space-y-1.5 col-span-2">
@@ -309,37 +309,35 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
               onCheckedChange={setKhongCanBooking}
               disabled={!!khachSanId}
             />
-            <Label className="text-sm">Đặt ngoài hệ thống — không cần gửi booking</Label>
+            <Label className="text-sm">{t("Đặt ngoài hệ thống — không cần gửi booking")}</Label>
           </div>
           <p className="text-[11px] text-muted-foreground italic">
-            Bật khi dịch vụ này luôn đặt qua Zalo / điện thoại / quan hệ sẵn. Dịch vụ sẽ không
-            xuất hiện ở tab Booking DV của bất kỳ đoàn nào, không bị nhắc "chưa gửi booking".
-            Chi phí vẫn tính bình thường.
-            {khachSanId && " (Đã liên kết KS day-use nên vốn dĩ không gửi booking DV.)"}
+            {t("Bật khi dịch vụ này luôn đặt qua Zalo / điện thoại / quan hệ sẵn. Dịch vụ sẽ không xuất hiện ở tab Booking DV của bất kỳ đoàn nào, không bị nhắc \"chưa gửi booking\". Chi phí vẫn tính bình thường.")}
+            {khachSanId && " " + t("(Đã liên kết KS day-use nên vốn dĩ không gửi booking DV.)")}
           </p>
         </div>
         <div className="space-y-1.5 col-span-2">
-          <Label className="text-xs">Email booking</Label>
+          <Label className="text-xs">{t("Email booking")}</Label>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-9 text-sm" />
         </div>
         <div className="space-y-1.5 col-span-2">
-          <Label className="text-xs">Tài khoản thanh toán</Label>
+          <Label className="text-xs">{t("Tài khoản thanh toán")}</Label>
           <Textarea value={taiKhoanThanhToan} onChange={(e) => setTaiKhoanThanhToan(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={2} />
         </div>
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs flex items-center gap-2">
-            Thông tin chung
+            {t("Thông tin chung")}
             <span className="text-[11px] font-normal text-muted-foreground italic">
-              (hiện khi hover ở chi phí — đặt phòng, FOC, lưu ý vận hành...)
+              {t("(hiện khi hover ở chi phí — đặt phòng, FOC, lưu ý vận hành...)")}
             </span>
           </Label>
           <Textarea value={thongTinChung} onChange={(e) => setThongTinChung(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={3} />
         </div>
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs flex items-center gap-2">
-            Ghi chú
+            {t("Ghi chú")}
             <span className="text-[11px] font-normal text-muted-foreground italic">
-              (nội dung này sẽ hiển thị trong Điều tour, dưới tên cảnh điểm)
+              {t("(nội dung này sẽ hiển thị trong Điều tour, dưới tên cảnh điểm)")}
             </span>
           </Label>
           <Textarea value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} className="text-sm min-h-[60px] resize-none" rows={3} />
@@ -348,10 +346,10 @@ export default function CanhDiemDetail({ canhDiem, onDeleted }: Props) {
 
       <div className="flex items-center gap-2 pt-2">
         <Button size="sm" onClick={handleSave} disabled={updateMut.isPending} className="bg-green-600 hover:bg-green-700 text-white">
-          <Save className="h-4 w-4 mr-1" /> {updateMut.isPending ? "Đang lưu..." : "Lưu"}
+          <Save className="h-4 w-4 mr-1" /> {updateMut.isPending ? t("Đang lưu...") : t("Lưu")}
         </Button>
         <Button size="sm" variant="destructive" onClick={() => setDelOpen(true)}>
-          <Trash2 className="h-4 w-4 mr-1" /> Xóa
+          <Trash2 className="h-4 w-4 mr-1" /> {t("Xóa")}
         </Button>
         <DeleteDialog
           open={delOpen}
