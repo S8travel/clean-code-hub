@@ -12,7 +12,7 @@ import {
   calcTotalKS,
   resolveKSFoc,
 } from "@/lib/foc-calc";
-import { calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { calcAggregateDelta, calcDnttMismatch, calcChuaDeNghi } from "@/lib/aggregate-calc";
 import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import { DayGroup, EmptyDayHeader } from "./DayGroup";
 import KSServicesSection from "./KSServicesSection";
@@ -195,6 +195,23 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
 
   const isOrphaned = orphanedKsIds.includes(ksId); // không còn trong điều tour
   const isKsDinhKy = dinhKyKsIds.has(ksId);
+
+  // Phần chi phí CHƯA nằm trong phiếu nào — nút "Đề nghị TT bổ sung" cho thẻ đã có
+  // phiếu chờ duyệt / đã duyệt mà chi phí phát sinh thêm sau đó (trước đây thẻ có
+  // phiếu là mất hẳn nút, OP kẹt: chỉ còn nước hủy phiếu đã duyệt rồi tạo lại).
+  // Đo theo tiền ĐÃ ĐỀ NGHỊ — khác showAggBtn (đo theo tiền ĐÃ TRẢ) nên hai nút không
+  // hiện cùng lúc. Dùng totalKS (chưa cộng adjustDelta) để khớp đúng `conLai` mà
+  // KSDNTTModal tự tính; thẻ đã điều chỉnh thực tế thì phần chênh thuộc luồng
+  // aggregate → loại bằng !daDieuChinh.
+  const chuaDeNghi = calcChuaDeNghi({
+    sumActual: totalKS,
+    sumCommitted,
+    // Cam kết TOÀN CỤC — thấy cả phiếu gộp định kỳ mà dnttList của đoàn lọc mất.
+    sumDaDeNghi: daDeNghiByKs[ksId] || 0,
+  });
+  // Định kỳ: kế toán gộp phiếu theo NCC ở trang riêng → không mở phiếu lẻ ở đây.
+  const showBoSungBtn =
+    !isKsDinhKy && hasCommittedDntt && !showAggBtn && !daDieuChinh && chuaDeNghi > 0;
 
   // Orphaned + công nợ → auto-xóa, ẩn luôn khỏi UI
   if (isOrphaned && ksStatus === "cong_no") return null;
@@ -742,7 +759,20 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                   {t("Đề nghị TT")}
                 </Button>
               )}
-              {/* "Đề nghị TT bổ sung / còn lại" cũ — REMOVED, replaced by aggregate breakdown button. */}
+              {/* Đã có phiếu nhưng chi phí tăng thêm → đề nghị phần CHƯA nằm trong
+                  phiếu nào. Không đụng nút aggregate footer (nó lo phần đã TRẢ). */}
+              {showBoSungBtn && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+                  title={t("Phần chi phí chưa nằm trong đề nghị thanh toán nào")}
+                  onClick={() => { setModalKsId(ksId); setModalOpen(true); }}
+                >
+                  <ArrowRight className="h-3 w-3 mr-1" />
+                  {t("Đề nghị TT bổ sung")} {fmt(chuaDeNghi)} ₫
+                </Button>
+              )}
             </div>
           </div>
         </div>}

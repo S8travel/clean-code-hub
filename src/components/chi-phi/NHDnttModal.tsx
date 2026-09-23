@@ -76,9 +76,11 @@ export default function NHDnttModal({
           ) : (
             <p>{t("Tổng bữa ăn")}: <span className="font-semibold">{fmt(totalBua)} VND</span></p>
           )}
+          {/* alreadyPaid = phần ĐÃ ĐỀ NGHỊ (Σ so_tien phiếu sống / Σ so_tien_da_dntt),
+              không phải tiền đã chi — nhãn "Đã thanh toán" cũ làm OP hiểu sai. */}
           {alreadyPaid > 0 && (
             <>
-              <p>{t("Đã thanh toán")}: <span className="font-semibold text-amber-600">- {fmt(alreadyPaid)} VND</span></p>
+              <p>{t("Đã đề nghị (phiếu trước)")}: <span className="font-semibold text-amber-600">- {fmt(alreadyPaid)} VND</span></p>
               {!isBSMode && <p>{t("Còn lại")}: <span className="font-semibold text-primary">{fmt(effectiveTotalBua)} VND</span></p>}
             </>
           )}

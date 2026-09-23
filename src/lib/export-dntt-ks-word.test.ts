@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcTotalThanhTien, calcThucChuyen, dungLayoutCanTru, calcConLaiPrint } from "./export-dntt-ks-word";
+import { calcTotalThanhTien, calcThucChuyen, dungLayoutCanTru, calcConLaiPrint, moTaDongPhuThanhToan } from "./export-dntt-ks-word";
 import type { EdgeFunctionData } from "./export-dntt-ks-word";
 
 type Room = EdgeFunctionData["roomEntries"][number];
@@ -91,5 +91,20 @@ describe("dungLayoutCanTru — chọn layout 16 cột", () => {
   it("ĐNTT cọc có cấn trừ VẪN dùng layout cấn trừ (đây là bug đã sửa)", () => {
     // Trước fix: la_coc chặn layout cấn trừ → in nguyên mệnh giá cọc.
     expect(dungLayoutCanTru(10_000_000)).toBe(true);
+  });
+});
+
+describe("moTaDongPhuThanhToan — chú thích dưới số tiền (layout 14 cột)", () => {
+  it("phiếu thường phủ đủ tổng → không chú thích", () => {
+    expect(moTaDongPhuThanhToan(false, 0)).toBeNull();
+  });
+  it("phiếu bổ sung (phần còn lại nằm ở phiếu khác) → in Còn lại", () => {
+    expect(moTaDongPhuThanhToan(false, 900_000)).toBe("Còn lại: 900.000");
+  });
+  it("cọc phủ đủ → chỉ nhãn cọc", () => {
+    expect(moTaDongPhuThanhToan(true, 0)).toBe("(cọc)");
+  });
+  it("cọc chưa phủ hết → gộp 1 dòng, không đẩy ô thành 3 dòng (hàng cao EXACT)", () => {
+    expect(moTaDongPhuThanhToan(true, 3_050_000)).toBe("(cọc) · Còn lại: 3.050.000");
   });
 });

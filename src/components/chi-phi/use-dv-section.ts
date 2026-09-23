@@ -550,7 +550,11 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
 
   // ── ĐNTT handlers ─────────────────────────────────────────────────────────
 
-  const openDvModal = (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null, ngaySo: number | null) => {
+  const openDvModal = (
+    chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null, ngaySo: number | null,
+    /** Phần đã nằm trong phiếu trước → phiếu này chỉ lo phần còn lại. */
+    daDeNghiTruoc = 0,
+  ) => {
     let ngayCan = "";
     if (ngayBatDau && ngaySo != null && ngaySo > 0) {
       try {
@@ -559,7 +563,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         ngayCan = format(subDays(serviceDate, 1), "yyyy-MM-dd");
       } catch { /* ignore */ }
     }
-    setDvModal({ chiPhiId, thanhTien, moTa, nccId, nhaySo: ngaySo });
+    setDvModal({ chiPhiId, thanhTien, moTa, nccId, nhaySo: ngaySo, daDeNghiTruoc });
     setDvModalMode("full");
     setDvDepositAmount(0);
     setDvNgayCan(ngayCan);
@@ -569,7 +573,10 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     if (!dvModal) return;
     const { chiPhiId, thanhTien, moTa, nccId } = dvModal;
     const sels = canTruByDv[chiPhiId] ?? [];
-    const baseAmount = dvModalMode === "full" ? thanhTien : dvDepositAmount;
+    // Phiếu bổ sung: chỉ đề nghị phần CHƯA nằm trong phiếu nào (thanhTien là tổng nhóm).
+    const daDeNghiTruoc = Math.max(0, dvModal.daDeNghiTruoc ?? 0);
+    const conLaiNhom = Math.max(0, thanhTien - daDeNghiTruoc);
+    const baseAmount = dvModalMode === "full" ? conLaiNhom : dvDepositAmount;
     // Gộp nhiều cấn trừ cùng NCC — clamp tổng ≤ baseAmount
     const canTruItems: { congNoId: number; soTien: number; sourceTenDoan: string }[] = [];
     let ctRemain = baseAmount;
@@ -585,7 +592,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
     const canTruAmount = canTruItems.reduce((a, b) => a + b.soTien, 0);
     const fullAmount = baseAmount;
     if (fullAmount <= 0) { toast.error("Số tiền phải lớn hơn 0"); return; }
-    if (dvModalMode === "deposit" && dvDepositAmount >= thanhTien) { toast.error("Số tiền cọc phải nhỏ hơn tổng tiền"); return; }
+    if (dvModalMode === "deposit" && dvDepositAmount >= conLaiNhom) { toast.error("Số tiền cọc phải nhỏ hơn số còn lại"); return; }
 
     // Guard chống tạo ĐNTT TRÙNG (vd bấm "Tạo ĐNTT" 2 lần) — xem use-nh-section.
     // Chỉ check ở chế độ full (cọc là chủ ý nên bỏ qua).
@@ -623,11 +630,36 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
       }
     }
 
+    // Phiếu BỔ SUNG: chia theo phần CÒN LẠI của từng dòng (chính + phát sinh) thay vì
+    // dồn hết vào dòng chính — dồn thì dòng phát sinh ở lại `so_tien_da_dntt = 0` và
+    // trang Thanh toán định kỳ đề nghị nó lần hai. Phiếu đầu tiên giữ nguyên đường cũ.
+    // Xem lib/alloc-remaining.ts.
+    const dvAllocations = daDeNghiTruoc > 0
+      ? (() => {
+          const groupRows = [
+            ...allDvRows.filter((r) => r.id === chiPhiId),
+            ...allDvRows.filter((r) => r.mo_ta?.startsWith(`[dvps_${chiPhiId}] `)),
+          ];
+          const spread = buildRemainingAllocations(
+            fullAmount,
+            groupRows
+              .filter((r) => r.id != null && Number(r.tien_cong_ty ?? 0) > 0)
+              .map((r) => ({
+                id: r.id!,
+                thanh_tien: Number(r.tien_cong_ty ?? 0),
+                committed: Number(r.so_tien_da_dntt ?? 0),
+              })),
+          );
+          return spread.length > 0 ? spread : [{ chi_phi_id: chiPhiId, so_tien: fullAmount }];
+        })()
+      : [{ chi_phi_id: chiPhiId, so_tien: fullAmount }];
+
     try {
       const mainRecord = await insertDNTT.mutateAsync({
         doan_id: doanId,
         loai: "dich_vu",
-        mo_ta: moTa || tenDoan || "Dịch vụ",
+        // Prefix "[Bổ sung]" → bản in biết so_tien cố ý nhỏ hơn tổng dòng (isDnttLechBoQua).
+        mo_ta: `${daDeNghiTruoc > 0 ? "[Bổ sung] " : ""}${moTa || tenDoan || "Dịch vụ"}`,
         nha_cung_cap_id: nccId,
         so_tien: fullAmount,
         la_coc: dvModalMode === "deposit",
@@ -635,7 +667,7 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
         ref_loai: "doan_chi_phi",
         ref_id: chiPhiId,
         ngay_can_thanh_toan: dvNgayCan || null,
-        allocations: [{ chi_phi_id: chiPhiId, so_tien: fullAmount }],
+        allocations: dvAllocations,
       });
       const mainDvId = mainRecord?.id ?? null;
 
@@ -644,7 +676,8 @@ export function useDVSection({ doanId, tenDoan, ngayBatDau, doanNhomId }: DVSect
           dnttId: mainDvId,
           consumingDoanLog: tenDoan || `#${doanId}`,
           items: canTruItems,
-          recalcChiPhiIds: [chiPhiId],
+          // Recalc đủ các dòng nhận allocation (phiếu bổ sung rải sang dòng phát sinh).
+          recalcChiPhiIds: dvAllocations.map((a) => a.chi_phi_id),
         });
         setCanTruByDv((prev) => ({ ...prev, [chiPhiId]: [] }));
         qc.invalidateQueries({ queryKey: ["cong-no"] });

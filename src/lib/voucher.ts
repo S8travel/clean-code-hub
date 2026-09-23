@@ -290,6 +290,30 @@ export function calcCoveredSoKhachEdit(params: {
  * `overpaidFromKho` = coverCu − coverMoi khi keepPaid (chênh payment giữ-lại so với
  * giá trị phủ thực) → cũng chính là voucherKhoRefund mà UI cần loại khỏi lệch.
  */
+/**
+ * Phần voucher MUA còn được phép ghi thành payment khi tạo MỘT phiếu ĐNTT nữa cho
+ * cùng dòng chi phí.
+ *
+ * Vì sao phải trừ `daGhi`: một bữa/dòng có thể có NHIỀU phiếu (cọc → còn lại, hoặc
+ * phiếu bổ sung cho phần phát sinh). Giá trị voucher chỉ được ghi MỘT LẦN cho cả
+ * dòng; ghi lại ở phiếu sau thì phiếu đó tự có `paid_amount` → hiện "đã thanh toán",
+ * kế toán không chuyển khoản, NCC mất tiền — còn `so_tien_da_tt` của nhóm thì phồng
+ * lên bằng tiền ảo.
+ *
+ * Kẹp thêm theo `soTienPhieu`: payment không bao giờ vượt nghĩa vụ của chính phiếu đó.
+ */
+export function voucherConChuaGhi(params: {
+  /** Giá trị voucher phủ dòng đó (voucher_su_dung.gia_tri). */
+  giaTriVoucher: number;
+  /** Tổng payment 'voucher' đã ghi cho dòng qua các phiếu còn hiệu lực. */
+  daGhi: number;
+  /** so_tien của phiếu đang tạo. */
+  soTienPhieu: number;
+}): number {
+  const conLai = Math.max(0, Math.round(params.giaTriVoucher) - Math.round(params.daGhi));
+  return Math.max(0, Math.min(conLai, Math.round(params.soTienPhieu)));
+}
+
 export function calcMuaVoucherPaymentSync(params: {
   coverMoi: number;
   coverCu: number;

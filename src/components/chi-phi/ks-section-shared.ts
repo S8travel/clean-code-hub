@@ -164,6 +164,18 @@ export function buildKSRowFromCp(
 }
 
 /**
+ * Các dòng của thẻ KS được đưa vào GIẤY ĐỀ NGHỊ THANH TOÁN (và vào "Tổng tiền" của nó).
+ *
+ * Loại dòng dịch vụ HDV trả tay (`is_hdv`): công ty không chuyển khoản khoản đó cho
+ * khách sạn — nó quyết toán ở tab HDV. Giữ nó lại thì "Tổng tiền" trên giấy phồng hơn
+ * số tiền phiếu, và dòng "Còn lại" đòi thêm một khoản không ai nợ.
+ * Cùng bộ lọc mà `ChiPhiKSSection` / `KSDNTTModal` dùng để tính số tiền phiếu.
+ */
+export function locDongVaoDntt<T extends { is_hdv?: boolean }>(rows: T[]): T[] {
+  return rows.filter((r) => !r.is_hdv);
+}
+
+/**
  * Item day-use của (KS, ngày) — LINK STRUCTURAL phải gắn vào MỌI dòng chi phí tạo mới
  * trên thẻ Day Use (dòng phòng LẪN dòng dịch vụ).
  *

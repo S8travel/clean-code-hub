@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { EdgeFunctionData } from "./export-dntt-ks-word";
+import { calcConLaiPrint, calcTotalThanhTien, type EdgeFunctionData } from "./export-dntt-ks-word";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -38,6 +38,20 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
       const thucChuyen = Math.max(0, soTien - (canTruTotal ?? 0));
       const thanhToanCol = isFirst ? (la_coc ? "—" : fmt(thucChuyen)) : "";
 
+      // Phiếu chỉ phủ một phần (cọc / bổ sung) → ghép "Còn lại" vào cột Ghi chú, khớp
+      // dòng "Còn lại" của bản Word. Excel không có cột Tổng tiền nên đây là chỗ duy nhất.
+      const conLaiKS = calcConLaiPrint(calcTotalThanhTien(roomEntries), cocTotal, soTien);
+      // Sheet ở chế độ cọc dùng cột "Thanh toán trước" cho SỐ TIỀN PHIẾU, nên phần đã
+      // chi ở phiếu trước (cocTotal) không xuất hiện ở cột nào — ghi vào đây để người
+      // đọc cộng trừ khớp: Σ Thành tiền − Đã trả trước − Thanh toán trước = Còn lại.
+      const ghiChuCol = isFirst
+        ? [
+            ghiChu || "",
+            la_coc && cocTotal > 0 ? `Đã trả trước: ${fmt(cocTotal)}` : "",
+            conLaiKS > 0 ? `Còn lại: ${fmt(conLaiKS)}` : "",
+          ].filter(Boolean).join(" · ")
+        : "";
+
       const canTruCols = hasCanTru
         ? [
             isFirst && (canTruTotal ?? 0) > 0 ? fmt(canTruTotal!) : (isFirst ? "—" : ""),
@@ -63,7 +77,7 @@ export function exportDNTTKSExcel(items: EdgeFunctionData[], tenDoan: string): v
         thanhToanCol,
         isFirst ? (ncc?.so_tai_khoan || "—") : "",
         isFirst ? (ncc?.ngan_hang || "—") : "",
-        isFirst ? (ghiChu || "") : "",
+        ghiChuCol,
       ]);
       void focDisplay; // legacy — replaced by per-row foc_count
     });

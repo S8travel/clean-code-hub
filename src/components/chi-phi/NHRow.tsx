@@ -12,7 +12,7 @@ import type { PaymentByChiPhi } from "@/hooks/use-payments";
 import type { CongNoRow } from "@/hooks/use-cong-no";
 import { calcSoKhachThucTe, resolveNHFoc } from "@/lib/foc-calc";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
-import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch, calcChuaDeNghi } from "@/lib/aggregate-calc";
 import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import { canApplyVoucher, sumGroupVoucherMua, type CoveredInfo } from "@/lib/voucher";
 import { type VoucherTarget } from "./DungVoucherModal";
@@ -278,6 +278,18 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   const dnttMismatch = sumActual > 0
     ? calcDnttMismatch({ sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn })
     : 0;
+
+  // ── ĐNTT bổ sung: bữa ĐÃ có phiếu (chờ duyệt / đã duyệt) mà chi phí tăng thêm ──
+  // Trước đây nút ĐNTT tắt hẳn khi đã có phiếu, còn nút aggregate đòi tiền ĐÃ TRẢ > 0
+  // → phiếu duyệt-chưa-chi + thêm dòng phát sinh là OP kẹt, phải hủy phiếu tạo lại.
+  // Đo theo tiền ĐÃ ĐỀ NGHỊ nên phần đang nằm trong phiếu chưa trả vẫn được trừ.
+  const daCamKet = Math.max(sumCommitted, sumDaDeNghi);
+  const chuaDeNghi = calcChuaDeNghi({ sumActual, sumCommitted, sumDaDeNghi });
+  // Dòng đã điều chỉnh thực tế (thanh_tien_thuc_te) thuộc luồng aggregate — phần
+  // chênh ở đó chốt bằng nút footer, không mở phiếu mới.
+  const nhomDaDieuChinh = groupChiPhi.some((cp) => cp.thanh_tien_thuc_te != null);
+  const showDnttBoSung =
+    activeDntts.length > 0 && !showAggBtn && !nhomDaDieuChinh && chuaDeNghi > 0;
 
   // ── Voucher: chỉ suất chính, chỉ khi chưa có ĐNTT + công ty ────────────────
   // MUA → suất chính giữ giá trị (ĐNTT gồm đủ); TẶNG → miễn phí (loại khỏi ĐNTT).
@@ -645,18 +657,24 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                 {isMealDinhKy && t("Định kỳ")}
               </Button>
             )}
-            {!anTT && nguoiTtMain === "cong_ty" && !isMealDinhKy && activeDntts.length === 0 && !!row &&
+            {!anTT && nguoiTtMain === "cong_ty" && !isMealDinhKy && !!row &&
+             (activeDntts.length === 0 || showDnttBoSung) &&
              (!isVoucherCoveredTangFull || companyExtrasTotal > 0) && (
-              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
-                title={isVoucherCoveredTangFull ? t("Tạo ĐNTT cho phần phát sinh (suất chính đã dùng voucher)") : undefined}
+              <Button variant="outline" size="sm"
+                className={cn("h-6 text-[10px] px-2",
+                  showDnttBoSung && "border-orange-300 text-orange-700 hover:bg-orange-50 hover:text-orange-800")}
+                title={showDnttBoSung
+                  ? t("Phần chi phí chưa nằm trong đề nghị thanh toán nào")
+                  : isVoucherCoveredTangFull ? t("Tạo ĐNTT cho phần phát sinh (suất chính đã dùng voucher)") : undefined}
                 onClick={() => {
-                  setDnttAlreadyPaid(0);
+                  // Đã có phiếu → phiếu này chỉ lo phần CHƯA đề nghị (modal tự trừ).
+                  setDnttAlreadyPaid(showDnttBoSung ? daCamKet : 0);
                   setDnttModalMode("full");
                   setDnttDepositAmount(0);
                   setDnttNgayCan(meal.ngay_date ? (() => { try { return format(subDays(parseISO(meal.ngay_date), 1), "yyyy-MM-dd"); } catch { return ""; } })() : "");
                   setDnttModalKey(key);
                 }}>
-                {t("ĐNTT")}
+                {showDnttBoSung ? `${t("ĐNTT bổ sung")} ${fmt(chuaDeNghi)}` : t("ĐNTT")}
               </Button>
             )}
             {/* Voucher: dùng (đủ điều kiện) / sửa vé tại chỗ (đã phủ). Chỉ suất chính. */}

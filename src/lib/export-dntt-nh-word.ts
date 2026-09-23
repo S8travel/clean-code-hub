@@ -112,6 +112,11 @@ export interface NHDocEntry {
   /** Phần suất chính trả bằng voucher → cộng vào cột Cấn trừ + trừ khỏi "còn TT".
    *  Dòng chính ghi chú "Voucher". */
   voucher_amount?: number;
+  /** Phần ĐÃ in trong "Tổng tiền" nhưng KHÔNG nằm trong số tiền phiếu VÀ cũng KHÔNG
+   *  xuất hiện ở cột "Cấn trừ" — hiện chỉ có: vé voucher TẶNG của suất chính khi đang
+   *  in một phiếu [Bổ sung]. Chỉ dùng để dòng "Còn lại" không đòi tiền phần được tặng;
+   *  KHÁC `dntt_ngoai_dntt` (metadata cảnh báo lệch, gồm cả phần đã vào cột Cấn trừ). */
+  phan_ngoai_phieu?: number;
   so_tien_con_tt: number;
   /** True khi đây là ĐNTT cọc (in cho mục đích "Đề nghị thanh toán tiền cọc").
    *  Ô "Số tiền còn thanh toán" hiển thị "(cọc)" + đỏ đậm. */
@@ -141,6 +146,31 @@ export interface NHDocData {
   doan: { ten_doan: string };
   entries: NHDocEntry[];
   nguoiDeNghi?: string;
+}
+
+/**
+ * Phần CÒN LẠI của tờ giấy = Tổng tiền − đã cọc/trả trước − cấn trừ (gồm voucher) −
+ * số tiền phiếu này. In dưới cột "Số tiền còn thanh toán" khi > 0, để kế toán biết
+ * phiếu CỐ Ý chỉ lo một phần (ĐNTT cọc, hoặc ĐNTT bổ sung khi phần kia đã nằm ở phiếu
+ * khác) chứ không phải tờ giấy tự mâu thuẫn số học.
+ *
+ * Dùng ĐÚNG các con số đang in trên giấy (không đọc lại DB) → người cầm tờ giấy cộng
+ * trừ ra đúng số này.
+ */
+export function calcConLaiPrintNH(p: {
+  tongTien: number;
+  soTienCoc: number;
+  /** Cột "Cấn trừ" đang in = cấn trừ công nợ + phần trả bằng voucher. */
+  canTruHienThi: number;
+  soTienConTT: number;
+  /** Phần in trong Tổng tiền nhưng không nằm trong phiếu và không có ở cột Cấn trừ
+   *  (vé TẶNG khi in phiếu [Bổ sung]) — không ai còn phải trả nó. */
+  phanNgoaiPhieu?: number;
+}): number {
+  return Math.max(
+    0,
+    p.tongTien - p.soTienCoc - p.canTruHienThi - p.soTienConTT - (p.phanNgoaiPhieu ?? 0),
+  );
 }
 
 /** Tổng tiền 1 entry NH/DV = Σ thành tiền các item (đã trừ chiết khấu riêng từng dòng). */
@@ -328,14 +358,26 @@ export async function exportDNTTNHWordFromData(data: NHDocData) {
             width: COL_W[10], rowSpan: itemCount,
           }),
         );
-        // Số tiền còn TT — la_coc → kèm "(cọc)" để rõ tính chất khoản này
+        // Số tiền còn TT — la_coc → kèm "(cọc)" để rõ tính chất khoản này.
+        // Phiếu chỉ phủ một phần (cọc / bổ sung) → thêm "Còn lại" để tờ giấy tự giải
+        // thích chỗ chênh giữa "Tổng tiền" và số phải chuyển.
         const conTTText = entry.so_tien_con_tt > 0 ? fmt(entry.so_tien_con_tt) : "—";
-        const conTTChildren = entry.la_coc && entry.so_tien_con_tt > 0
-          ? [
-              p(conTTText, { bold: true, size: 14, color: "CC0000" }),
-              p("(cọc)", { size: 12, color: "CC0000", italic: true }),
-            ]
-          : [p(conTTText, { bold: true, size: 14, color: "CC0000" })];
+        const conLaiNH = calcConLaiPrintNH({
+          tongTien: entryTongTien,
+          soTienCoc: entry.so_tien_coc,
+          canTruHienThi: tongCanTru,
+          soTienConTT: entry.so_tien_con_tt,
+          phanNgoaiPhieu: entry.phan_ngoai_phieu,
+        });
+        const conTTChildren = [
+          p(conTTText, { bold: true, size: 14, color: "CC0000" }),
+          ...(entry.la_coc && entry.so_tien_con_tt > 0
+            ? [p("(cọc)", { size: 12, color: "CC0000", italic: true })]
+            : []),
+          ...(conLaiNH > 0
+            ? [p(`Còn lại: ${fmt(conLaiNH)}`, { size: 12, color: "FF6600", italic: true })]
+            : []),
+        ];
         cells.push(
           cell(conTTChildren, { width: COL_W[11], rowSpan: itemCount }),
         );

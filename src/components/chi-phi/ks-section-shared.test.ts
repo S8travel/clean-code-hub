@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   calcKSPaidTotal, buildKSRowFromCp, resolveKsIds, resolveDayUseItemId,
   type KSPaidDnttInfo, type KSNgayInfo, type KSDayUseInfo,
+  locDongVaoDntt,
 } from "./ks-section-shared";
 import type { ChiPhiRow } from "@/hooks/use-chi-phi";
 
@@ -223,5 +224,22 @@ describe("resolveKsIds — card KS phải hiện cho MỌI KS có dòng chi phí
     expect(resolveKsIds({ ngay: [], dntt: [], dayUse: [], chiPhi: [] })).toEqual({
       allKsIds: [], orphanedKsIds: [],
     });
+  });
+});
+
+describe("locDongVaoDntt — dòng vào giấy đề nghị thanh toán", () => {
+  it("bỏ dòng dịch vụ HDV trả tay (công ty không chuyển khoản khoản đó)", () => {
+    const rows = [
+      { loai_phong: "TWN", is_hdv: false },
+      { loai_phong: "Xe đưa đón", is_hdv: true },
+    ];
+    expect(locDongVaoDntt(rows).map((r) => r.loai_phong)).toEqual(["TWN"]);
+  });
+  it("dòng không khai is_hdv → giữ nguyên (tương thích dòng cũ)", () => {
+    const rows: { loai_phong: string; is_hdv?: boolean }[] = [{ loai_phong: "DBL" }, { loai_phong: "SGL" }];
+    expect(locDongVaoDntt(rows)).toHaveLength(2);
+  });
+  it("toàn bộ là dòng HDV → rỗng, không dựng tổng tiền ảo", () => {
+    expect(locDongVaoDntt([{ is_hdv: true }, { is_hdv: true }])).toEqual([]);
   });
 });

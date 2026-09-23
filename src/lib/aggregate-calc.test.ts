@@ -4,6 +4,7 @@ import {
   splitGroupCongNo,
   calcAggregateDelta,
   calcDnttMismatch,
+  calcChuaDeNghi,
 } from "./aggregate-calc";
 
 // ─── sumCompanyChiPhi ────────────────────────────────────────────────────────
@@ -226,5 +227,41 @@ describe("calcDnttMismatch", () => {
   });
   it("lệch âm (thực tế < cam kết) → trả số âm", () => {
     expect(calcDnttMismatch({ ...base, sumActual: 800_000 })).toBe(-200_000);
+  });
+});
+
+// ─── calcChuaDeNghi ──────────────────────────────────────────────────────────
+
+describe("calcChuaDeNghi", () => {
+  it("phiếu 900k đã duyệt, chi phí 1.2tr → còn 300k chưa đề nghị", () => {
+    expect(calcChuaDeNghi({ sumActual: 1_200_000, sumCommitted: 900_000 })).toBe(300_000);
+  });
+  it("đã đề nghị đủ → 0 (ẩn nút, không tạo phiếu rỗng)", () => {
+    expect(calcChuaDeNghi({ sumActual: 1_200_000, sumCommitted: 1_200_000 })).toBe(0);
+  });
+  it("cam kết vượt chi phí (rebooking giảm khách) → 0, không âm", () => {
+    expect(calcChuaDeNghi({ sumActual: 900_000, sumCommitted: 1_200_000 })).toBe(0);
+  });
+  it("khoản đã nằm trong phiếu gộp định kỳ (section mù) → 0, không đề nghị lần hai", () => {
+    // sumCommitted = 0 vì phiếu định kỳ có doan_id = NULL, ref_loai = 'dinh_ky'.
+    expect(calcChuaDeNghi({
+      sumActual: 1_200_000, sumCommitted: 0, sumDaDeNghi: 1_200_000,
+    })).toBe(0);
+  });
+  it("phiếu KS 900k + định kỳ gộp thêm 300k → 0", () => {
+    expect(calcChuaDeNghi({
+      sumActual: 1_200_000, sumCommitted: 900_000, sumDaDeNghi: 1_200_000,
+    })).toBe(0);
+  });
+  it("cam kết toàn cục nhỏ hơn phiếu của thẻ (phiếu chưa có allocation) → lấy vế lớn", () => {
+    expect(calcChuaDeNghi({
+      sumActual: 1_200_000, sumCommitted: 900_000, sumDaDeNghi: 0,
+    })).toBe(300_000);
+  });
+  it("làm tròn số lẻ trước khi trừ", () => {
+    expect(calcChuaDeNghi({ sumActual: 1_200_000.4, sumCommitted: 899_999.6 })).toBe(300_000);
+  });
+  it("cam kết âm (dữ liệu hỏng) → kẹp 0, không phồng số đề nghị", () => {
+    expect(calcChuaDeNghi({ sumActual: 1_000_000, sumCommitted: -500_000 })).toBe(1_000_000);
   });
 });

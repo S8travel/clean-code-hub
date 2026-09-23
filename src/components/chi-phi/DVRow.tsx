@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch } from "@/lib/aggregate-calc";
+import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch, calcChuaDeNghi } from "@/lib/aggregate-calc";
 import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
 import type { AggCluster } from "@/lib/agg-cluster";
 import type { DnttLump } from "@/lib/can-tru-lump";
@@ -86,7 +86,7 @@ export interface DVRowHandlers {
   handleEditSave: (id: number) => void;
   handleToggleDinhKy: (row: ChiPhiRow) => void;
   handleExtraAdd: (mainId: number) => void;
-  openDvModal: (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null, ngaySo: number | null) => void;
+  openDvModal: (chiPhiId: number, thanhTien: number, moTa: string, nccId: number | null, ngaySo: number | null, daDeNghiTruoc?: number) => void;
   setCancelMode: (v: "cong_no" | "hoan_tien") => void;
   setCancelTarget: (v: CancelTarget | null) => void;
   setAggCommit: (v: AggCommitTarget | null) => void;
@@ -278,6 +278,24 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
   const dnttMismatch = isAggAnchor
     ? calcDnttMismatch({ sumActual, effectiveCommitted, hasCommittedDntt, showAggBtn })
     : 0;
+
+  // ── ĐNTT bổ sung: dòng ĐÃ có phiếu (chờ duyệt / đã duyệt) mà chi phí tăng thêm ──
+  // Trước đây nút ĐNTT tắt hẳn khi đã có phiếu, còn nút chênh lệch ở footer đòi tiền
+  // ĐÃ TRẢ > 0 → phiếu duyệt-chưa-chi + thêm phát sinh là OP kẹt. Đo theo tiền ĐÃ ĐỀ
+  // NGHỊ nên phần đang nằm trong phiếu chưa trả vẫn được trừ.
+  // Cam kết lấy vế LỚN giữa allocation per-dòng (so_tien_da_dntt) và mệnh giá phiếu
+  // sống — phiếu gộp cả cụm thì ước lượng cao, nút ẩn, thà bỏ sót còn hơn đề nghị trùng.
+  const nhomDaDeNghi = groupChiPhi.reduce((s, r) => s + Number(r.so_tien_da_dntt ?? 0), 0);
+  const nhomCommitted = activeDntts.reduce((s, d) => s + Number(d.so_tien), 0);
+  const chuaDeNghi = calcChuaDeNghi({
+    sumActual: totalTienCt, sumCommitted: nhomCommitted, sumDaDeNghi: nhomDaDeNghi,
+  });
+  // Cụm đang ở luồng chênh lệch (tiền đã ra) hoặc dòng đã điều chỉnh thực tế →
+  // phần chênh chốt bằng nút footer, không mở phiếu mới.
+  const aggFlowActive = clusterPendingAmt === 0 && sumPaid > 0 && effectiveDelta !== 0;
+  const nhomDaDieuChinh = groupChiPhi.some(r => r.thanh_tien_thuc_te != null);
+  const showDnttBoSung =
+    activeDntts.length > 0 && !aggFlowActive && !nhomDaDieuChinh && chuaDeNghi > 0;
 
   return [
     <tr key={row.id} className={cn("hover:bg-muted/20", isSelected && "bg-primary/5")}>
@@ -568,13 +586,20 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
             onClick={() => handleExtraAdd(row.id!)}>
             <Plus className="h-3 w-3" />
           </Button>
-          {!anTT && nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && activeDntts.length === 0 && totalTienCt > 0 && (
-            <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
-              onClick={() => openDvModal(row.id!, totalTienCt, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so)}>
-              {t("ĐNTT")}
+          {!anTT && nguoiTt === "cong_ty" && !row.thanh_toan_dinh_ky && totalTienCt > 0 &&
+           (activeDntts.length === 0 || showDnttBoSung) && (
+            <Button variant="outline" size="sm"
+              className={cn("h-6 text-[10px] px-2",
+                showDnttBoSung && "border-orange-300 text-orange-700 hover:bg-orange-50 hover:text-orange-800")}
+              title={showDnttBoSung ? t("Phần chi phí chưa nằm trong đề nghị thanh toán nào") : undefined}
+              onClick={() => openDvModal(
+                row.id!, totalTienCt, row.mo_ta || "", row.nha_cung_cap_id, row.ngay_so,
+                // Đã có phiếu → modal chỉ đề nghị phần còn lại.
+                showDnttBoSung ? Math.max(nhomCommitted, nhomDaDeNghi) : 0,
+              )}>
+              {showDnttBoSung ? `${t("ĐNTT bổ sung")} ${fmt(chuaDeNghi)}` : t("ĐNTT")}
             </Button>
           )}
-          {/* "ĐNTT bổ sung" cũ — REMOVED, replaced by aggregate footer button (showAggBtn) */}
         </div>
       </td>
     </tr>,

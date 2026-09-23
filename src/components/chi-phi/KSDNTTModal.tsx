@@ -201,9 +201,11 @@ export default function KSDNTTModal({
               <span>{t("Tổng tiền KS")}:</span>
               <span className="font-semibold">{fmt(totalKS)} VND</span>
             </div>
+            {/* daCoc = Σ so_tien các phiếu SỐNG của thẻ — tiền đã ĐỀ NGHỊ, chưa chắc
+                đã chi. Nhãn "Đã thanh toán" cũ làm OP tưởng phiếu trước đã trả xong. */}
             {daCoc > 0 && (
               <div className="flex justify-between text-muted-foreground">
-                <span>{t("Đã thanh toán")}:</span>
+                <span>{t("Đã đề nghị (phiếu trước)")}:</span>
                 <span>{fmt(daCoc)} VND</span>
               </div>
             )}
