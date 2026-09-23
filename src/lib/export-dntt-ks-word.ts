@@ -163,6 +163,21 @@ export function calcConLaiPrint(tongTien: number, cocTotal: number, soTien: numb
   return Math.max(0, tongTien - cocTotal - soTien);
 }
 
+/**
+ * Dòng chú thích dưới số tiền ở cột "Thanh toán" của layout THƯỜNG (14 cột — layout
+ * này không có ô Ghi chú để in "Còn lại" như layout cấn trừ).
+ *
+ * Gộp "(cọc)" và "Còn lại" vào MỘT dòng: chiều cao hàng là `HeightRule.EXACT` nên ô ba
+ * dòng bị cắt chữ khi thẻ chỉ có một dòng phòng.
+ *
+ * `null` = không cần chú thích (phiếu phủ đủ tổng và không phải cọc).
+ */
+export function moTaDongPhuThanhToan(laCoc: boolean, conLai: number): string | null {
+  const con = conLai > 0 ? `Còn lại: ${fmt(conLai)}` : null;
+  if (laCoc) return con ? `(cọc) · ${con}` : "(cọc)";
+  return con;
+}
+
 function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[] {
   const { ks, ncc, codeKS, roomEntries, cocTotal, focDisplay, soTien, la_coc } = data;
   const canTruTotal = data.canTruTotal ?? 0;
@@ -233,11 +248,18 @@ function buildDataRows(data: EdgeFunctionData, layoutCanTru = false): TableRow[]
         // ĐNTT thường & cọc thật: col11 "Đã thanh toán"/"Đã cọc" = cọc đã trả trước;
         // col12 = soTien (cọc thật → đỏ + nhãn "(cọc)"); col13 "Thông tin NH"
         const cocText = cocTotal > 0 ? `(${fmt(cocTotal)})` : "—";
+        // Phiếu chỉ phủ MỘT PHẦN tổng (cọc, hoặc phiếu bổ sung khi phần còn lại đã nằm
+        // ở phiếu khác) → in "Còn lại" để kế toán khỏi tưởng phiếu sai số học. Trước
+        // đây chỉ layout cấn trừ mới có dòng này (nó có ô Ghi chú).
+        const ghiChuTT = moTaDongPhuThanhToan(!!la_coc, calcConLaiPrint(tongTien, cocTotal, soTien));
         cells.push(cell([p(cocText, { size: 14, color: cocTotal > 0 ? "FF0000" : undefined })], { width: colWidths[11], rowSpan: totalRoomRows }));
         cells.push(cell(
-          la_coc
-            ? [p(fmt(soTien), { bold: true, size: 14, color: "FF0000" }), p("(cọc)", { size: 13, color: "FF0000", italics: true })]
-            : [p(fmt(soTien), { bold: true, size: 14 })],
+          [
+            p(fmt(soTien), { bold: true, size: 14, color: la_coc ? "FF0000" : undefined }),
+            ...(ghiChuTT
+              ? [p(ghiChuTT, { size: 12, color: la_coc ? "FF0000" : "FF6600", italics: true })]
+              : []),
+          ],
           { width: colWidths[12], rowSpan: totalRoomRows },
         ));
         cells.push(cell(bankChildren, { width: colWidths[13], rowSpan: totalRoomRows }));

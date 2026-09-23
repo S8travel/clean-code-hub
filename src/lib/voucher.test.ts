@@ -10,6 +10,7 @@ import {
   calcMuaVoucherPaymentSync,
   type RedemptionLike,
   type CoveredInfo,
+  voucherConChuaGhi,
 } from "./voucher";
 
 const mkCovered = (giaTri: number, loai: "mua" | "tang"): CoveredInfo => ({
@@ -401,5 +402,28 @@ describe("calcMuaVoucherPaymentSync", () => {
     });
     expect(r.keepPaid).toBe(true);
     expect(r.overpaidFromKho).toBe(100);
+  });
+});
+
+describe("voucherConChuaGhi — chống ghi payment voucher hai lần", () => {
+  it("phiếu đầu tiên, chưa ghi gì → ghi trọn giá trị voucher", () => {
+    expect(voucherConChuaGhi({ giaTriVoucher: 5_000_000, daGhi: 0, soTienPhieu: 7_000_000 }))
+      .toBe(5_000_000);
+  });
+  it("phiếu bổ sung sau khi voucher đã ghi đủ → 0 (nếu không, NCC mất tiền phát sinh)", () => {
+    expect(voucherConChuaGhi({ giaTriVoucher: 5_000_000, daGhi: 5_000_000, soTienPhieu: 2_000_000 }))
+      .toBe(0);
+  });
+  it("cọc ghi một phần voucher → phiếu còn lại ghi nốt phần chưa ghi", () => {
+    expect(voucherConChuaGhi({ giaTriVoucher: 5_000_000, daGhi: 2_000_000, soTienPhieu: 8_000_000 }))
+      .toBe(3_000_000);
+  });
+  it("kẹp theo số tiền phiếu — payment không vượt nghĩa vụ của chính phiếu", () => {
+    expect(voucherConChuaGhi({ giaTriVoucher: 5_000_000, daGhi: 0, soTienPhieu: 1_000_000 }))
+      .toBe(1_000_000);
+  });
+  it("đã ghi vượt giá trị (dữ liệu lệch) → 0, không âm", () => {
+    expect(voucherConChuaGhi({ giaTriVoucher: 2_000_000, daGhi: 3_000_000, soTienPhieu: 5_000_000 }))
+      .toBe(0);
   });
 });

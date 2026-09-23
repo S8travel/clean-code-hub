@@ -134,3 +134,29 @@ export function calcDnttMismatch(input: {
     ? sumActual - effectiveCommitted
     : 0;
 }
+
+/**
+ * Phần chi phí CHƯA nằm trong phiếu ĐNTT nào — số tiền của nút "Đề nghị TT bổ sung"
+ * trên thẻ khách sạn (dùng khi phiếu trước đã duyệt/chờ duyệt nhưng chi phí tăng thêm).
+ *
+ * Khác `calcAggregateDelta` ở CÁI ĐEM TRỪ: ở đây trừ theo tiền đã ĐỀ NGHỊ, không phải
+ * tiền đã TRẢ — nên phiếu đã duyệt mà chưa chi vẫn được trừ, không đề nghị trùng.
+ *
+ * Trừ theo cam kết LỚN NHẤT trong hai nguồn:
+ * - `sumCommitted` = Σ `so_tien` phiếu sống của thẻ (section thấy, kể cả phiếu chưa
+ *   kịp có allocation);
+ * - `sumDaDeNghi` = Σ `chi_phi.so_tien_da_dntt` (RPC recalc tính TOÀN CỤC → thấy cả
+ *   phiếu gộp định kỳ có `doan_id = NULL` mà `useDNTTList(doanId)` lọc mất).
+ *
+ * CỐ Ý không cộng lại `groupCongNoTotal` như `effectiveCommitted`: thẻ đã ghi công nợ
+ * là đã đi qua luồng aggregate (tiền đã ra khỏi tài khoản), phần chênh còn lại thuộc
+ * nút aggregate footer — cộng vào đây sẽ đề nghị chồng lên khoản đã xử lý.
+ */
+export function calcChuaDeNghi(input: {
+  sumActual: number;
+  sumCommitted: number;
+  sumDaDeNghi?: number;
+}): number {
+  const daCamKet = Math.max(input.sumCommitted, input.sumDaDeNghi ?? 0, 0);
+  return Math.max(0, Math.round(input.sumActual) - Math.round(daCamKet));
+}

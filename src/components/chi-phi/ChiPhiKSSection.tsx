@@ -52,7 +52,7 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
     activeDnttByKs,
     previewItems, setPreviewItems,
     modalOpen, setModalOpen, modalKsId, setModalKsId,
-    khachSanMap, grouped, cocByKs,
+    khachSanMap, grouped, cocByKs, daDeNghiByKs,
     canTruByKs, setCanTruByKs,
     ksAdjustTarget, setKsAdjustTarget,
     aggCommit, aggCommitMode, setAggCommitMode,
@@ -231,7 +231,11 @@ export default function ChiPhiKSSection({ doanId, soKhach = 0, tenDoan = "", loc
           // cocByKs = Σ so_tien ĐNTT sống, mà so_tien = tiền mặt + cấn trừ → ĐÃ gồm
           // cấn trừ. KHÔNG cộng canTruAmtByKsId nữa (cộng = đếm cấn trừ 2 lần → daCoc
           // phồng → conLai âm → chặn tạo phiếu bù sai).
-          daCoc={cocByKs[modalKsId] || 0}
+          // Lấy vế LỚN HƠN giữa cocByKs (phiếu KS của đoàn) và daDeNghiByKs (Σ
+          // so_tien_da_dntt — RPC tính toàn cục nên thấy cả phiếu gộp định kỳ mà
+          // dnttList của đoàn lọc mất): thiếu vế sau thì khoản đã nằm trong phiếu
+          // cuối tháng vẫn hiện "còn lại" đủ tiền → đề nghị lần hai.
+          daCoc={Math.max(cocByKs[modalKsId] || 0, daDeNghiByKs[modalKsId] || 0)}
           localRows={(grouped[modalKsId] || []).filter((r) => !r.is_hdv)}
           chiPhiRowIds={(grouped[modalKsId] || []).filter((r) => r.id && !r.is_hdv).map((r) => r.id!)}
           committedById={committedById}

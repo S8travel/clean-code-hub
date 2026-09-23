@@ -12,10 +12,14 @@ const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
 export interface DVModalTarget {
   chiPhiId: number;
+  /** Tổng tiền công ty của NHÓM (dòng chính + phát sinh) — không trừ gì. */
   thanhTien: number;
   moTa: string;
   nccId: number | null;
   nhaySo: number | null;
+  /** Phần đã nằm trong phiếu trước (Σ so_tien phiếu sống / Σ so_tien_da_dntt).
+   *  > 0 → phiếu này chỉ lo phần CÒN LẠI. Mặc định 0 = phiếu đầu tiên. */
+  daDeNghiTruoc?: number;
 }
 
 interface Props {
@@ -39,19 +43,31 @@ export default function DVDnttModal({
   ngayCan, onNgayCanChange, canTru, onCanTruChange, onClose, onSubmit, submitting,
 }: Props) {
   useTranslate();
+  const daDeNghiTruoc = Math.max(0, target?.daDeNghiTruoc ?? 0);
+  const conLai = Math.max(0, (target?.thanhTien ?? 0) - daDeNghiTruoc);
   return (
     <Dialog open={!!target} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-sm">{t("Tạo đề nghị thanh toán")} — {target?.moTa || t("Dịch vụ")}</DialogTitle>
+          <DialogTitle className="text-sm">
+            {daDeNghiTruoc > 0 ? t("ĐNTT còn lại") : t("Tạo đề nghị thanh toán")} — {target?.moTa || t("Dịch vụ")}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2 text-xs">
           <p>{t("Tổng tiền")}: <span className="font-semibold">{fmt(target?.thanhTien ?? 0)} VND</span></p>
+          {/* daDeNghiTruoc = phần ĐÃ ĐỀ NGHỊ ở phiếu trước (chưa chắc đã chi) — phiếu
+              này chỉ lo phần còn lại, y như "ĐNTT còn lại" bên nhà hàng. */}
+          {daDeNghiTruoc > 0 && (
+            <>
+              <p>{t("Đã đề nghị (phiếu trước)")}: <span className="font-semibold text-amber-600">- {fmt(daDeNghiTruoc)} VND</span></p>
+              <p>{t("Còn lại")}: <span className="font-semibold text-primary">{fmt(conLai)} VND</span></p>
+            </>
+          )}
           <RadioGroup value={mode} onValueChange={v => onModeChange(v as "full" | "deposit")} className="space-y-2">
             <div className="flex items-center gap-2">
               <RadioGroupItem value="full" id="dv-full" />
               <Label htmlFor="dv-full" className="text-xs cursor-pointer">
-                {t("Toàn bộ")} — {fmt(target?.thanhTien ?? 0)} VND
+                {t("Toàn bộ")} — {fmt(conLai)} VND
               </Label>
             </div>
             <div className="flex items-center gap-2">
@@ -65,9 +81,9 @@ export default function DVDnttModal({
               <Input type="number" className="h-8 text-xs"
                 value={depositAmount || ""}
                 onChange={e => onDepositAmountChange(Number(e.target.value) || 0)}
-                max={target?.thanhTien} />
+                max={conLai} />
               {depositAmount > 0 && target && (
-                <p className="text-[11px] text-muted-foreground">{t("Còn lại")}: {fmt(target.thanhTien - depositAmount)} VND</p>
+                <p className="text-[11px] text-muted-foreground">{t("Còn lại")}: {fmt(conLai - depositAmount)} VND</p>
               )}
             </div>
           )}
@@ -77,7 +93,7 @@ export default function DVDnttModal({
           </div>
           <KSCongNoMultiPanel
             nccId={target?.nccId ?? undefined}
-            maxAmount={mode === "deposit" ? depositAmount || 0 : target?.thanhTien ?? 0}
+            maxAmount={mode === "deposit" ? depositAmount || 0 : conLai}
             value={canTru}
             onChange={onCanTruChange}
           />

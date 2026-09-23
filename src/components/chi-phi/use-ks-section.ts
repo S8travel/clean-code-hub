@@ -27,7 +27,7 @@ import {
   calcRowFocBreakdown,
   resolveKSFoc,
 } from "@/lib/foc-calc";
-import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
+import { fmt, fmtDateDisplay, buildKSRowFromCp, calcKSPaidTotal, locDongVaoDntt, type KSLoaiRow, type LocalKSRow } from "./ks-section-shared";
 import { useAuditLogger } from "@/hooks/use-activity-log";
 import { mergeConsecutiveKSNights, addDaysIso, type KSRoomNight } from "@/lib/ks-dntt-merge";
 import { buildCanTruNote } from "@/lib/can-tru-note";
@@ -112,8 +112,9 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
 
     // Room entries from localRows for this KS — sort theo ngày, sau đó loại phòng
     // để DNTT hiển thị nhất quán giữa các KS (tránh case 1 KS sort theo ngày, KS khác sort theo loại phòng).
-    const ksRows = localRowsRef.current
-      .filter((r) => r.khach_san_id === ksId)
+    // locDongVaoDntt: dòng dịch vụ HDV trả tay không thuộc giấy đề nghị công ty chuyển
+    // khoản — giữ lại thì "Tổng tiền" in ra lớn hơn số tiền phiếu.
+    const ksRows = locDongVaoDntt(localRowsRef.current.filter((r) => r.khach_san_id === ksId))
       .slice()
       .sort((a, b) => {
         const da = ngayDateMap[a.doan_ngay_id] || a.ngay_date || "";
@@ -1225,7 +1226,7 @@ export function useKSSection({ doanId, soKhach = 0, tenDoan = "" }: KSSectionPar
     previewItems, setPreviewItems,
     // ĐNTT modal
     modalOpen, setModalOpen, modalKsId, setModalKsId,
-    khachSanMap, grouped, cocByKs, canTruAmtByKsId,
+    khachSanMap, grouped, cocByKs, daDeNghiByKs, canTruAmtByKsId,
     canTruByKs, setCanTruByKs,
     // KSAdjustModal
     ksAdjustTarget, setKsAdjustTarget,
