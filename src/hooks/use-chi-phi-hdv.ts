@@ -3,7 +3,8 @@ import { externalSupabase } from "@/lib/supabase-external";
 import { useApproveDNTT, useMarkPaidDNTT, useCancelDNTT } from "@/hooks/use-dntt";
 import { useAuth } from "@/hooks/use-auth";
 import type { TablesInsert } from "@/lib/database.types";
-import { danhSachHdvDoan, type HdvDungTen } from "@/lib/hdv-dung-ten";
+import type { HdvDungTen } from "@/lib/hdv-dung-ten";
+import { idsHdvDoan, danhSachHdvCoVaiTro, type VaiTroHdv } from "@/lib/hdv-doan";
 
 export interface HDVChiPhiItem {
   id: number;
@@ -15,6 +16,8 @@ export interface HDVChiPhiItem {
 }
 
 export type HDVInfo = HdvDungTen;
+/** HDV của đoàn kèm vai trò (chính / phụ / đi cùng) — nhãn trong ô chọn người đứng tên. */
+export type HDVInfoCoVaiTro = HDVInfo & { vai_tro: VaiTroHdv };
 
 // Chi tiết quyết toán theo form S8 (BM02.1-20/2024/QT-S8)
 export interface QuyetToanData {
@@ -68,8 +71,8 @@ export interface HDVHoTroItem {
 export interface HDVSectionData {
   /** HDV chính của đoàn — mặc định đứng tên phiếu mới. */
   hdv: HDVInfo | null;
-  /** HDV của đoàn, thứ tự chính → phụ (đoàn lớn hay đi 2 HDV). */
-  hdvList: HDVInfo[];
+  /** HDV của đoàn, thứ tự chính → phụ → đi cùng (đoàn lớn đi 2–6 HDV). */
+  hdvList: HDVInfoCoVaiTro[];
   /** hdvList + người đứng tên các phiếu đã lưu (kể cả HDV đã gỡ khỏi đoàn). */
   hdvAll: HDVInfo[];
   chiPhiItems: HDVChiPhiItem[];
@@ -94,10 +97,10 @@ export function useChiPhiHDVSection(doanId?: number) {
       // công" với danh sách RỖNG-GIẢ. Section "Khác" từng bị x2 dòng vì thế: effect
       // auto-seed đọc danh sách rỗng đó, tưởng đoàn chưa có khoản nào nên chèn lại
       // toàn bộ (xem HoTroHDVTable + migration 20260819_ensure_khac_mac_dinh).
-      // 1. Load id HDV của đoàn (chính + phụ — đoàn lớn hay đi 2 HDV)
+      // 1. Load id HDV của đoàn (chính + phụ + đi cùng — đoàn lớn đi 2–6 HDV)
       const { data: doanRow, error: doanErr } = await externalSupabase
         .from("doan")
-        .select("huong_dan_vien_id, huong_dan_vien_id_2")
+        .select("huong_dan_vien_id, huong_dan_vien_id_2, hdv_di_cung_ids")
         .eq("id", doanId!)
         .single();
       if (doanErr) throw doanErr;
@@ -174,8 +177,7 @@ export function useChiPhiHDVSection(doanId?: number) {
       //    người đứng tên phiếu cũ, nên không được chỉ nạp HDV hiện tại của đoàn.
       const hdvIds = [...new Set(
         [
-          doanRow?.huong_dan_vien_id ?? null,
-          doanRow?.huong_dan_vien_id_2 ?? null,
+          ...idsHdvDoan(doanRow),
           ...allHdvDntts.map((d) => d.ref_id),
         ].filter((x): x is number => typeof x === "number"),
       )];
@@ -193,10 +195,7 @@ export function useChiPhiHDVSection(doanId?: number) {
           ngan_hang: r.ngan_hang ?? null,
         }));
       }
-      const hdvList = danhSachHdvDoan(
-        [doanRow?.huong_dan_vien_id, doanRow?.huong_dan_vien_id_2],
-        hdvAll,
-      );
+      const hdvList = danhSachHdvCoVaiTro(doanRow, hdvAll);
       const hdv: HDVInfo | null = hdvList[0] ?? null;
 
       const tamUngDaTT = tamUngList

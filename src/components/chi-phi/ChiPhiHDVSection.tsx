@@ -21,7 +21,7 @@ import { computePhaiThu, TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { t, useTranslate } from "@/lib/i18n";
 import { useAnThanhToan } from "./an-thanh-toan-context";
 import { nguoiDungTenPhieu } from "@/lib/hdv-dung-ten";
-import type { HDVDoanInfo } from "./hdv-shared";
+import { nhanVaiTroHdv, type HDVDoanInfo } from "./hdv-shared";
 import { HoTroHDVTable } from "./HoTroHDVTable";
 import { CreateHDVPaymentModal } from "./CreateHDVPaymentModal";
 
@@ -88,13 +88,13 @@ export default function ChiPhiHDVSection({ doanId, doan, locked = false }: Props
           <div className="flex items-center gap-4 flex-wrap">
             {hdvList.length > 0 ? (
               <div className="space-y-1">
-                {hdvList.map((h, i) => (
+                {hdvList.map((h) => (
                   <div key={h.id}>
                     <p className="text-sm font-semibold">
                       {h.ten}
                       {hdvList.length > 1 && (
                         <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
-                          {i === 0 ? t("HDV chính") : t("HDV phụ")}
+                          {nhanVaiTroHdv(h.vai_tro)}
                         </span>
                       )}
                     </p>

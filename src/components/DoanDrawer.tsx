@@ -31,6 +31,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { t, useTranslate } from "@/lib/i18n";
+import { chuanHoaHdvDiCung } from "@/lib/hdv-doan";
 
 const transition = { duration: 0.25, ease: [0.2, 0, 0, 1] as const };
 
@@ -60,6 +61,7 @@ const EMPTY_FORM: DoanInsert = {
   dia_diem_id: null,
   huong_dan_vien_id: null,
   huong_dan_vien_id_2: null,
+  hdv_di_cung_ids: [],
   xe_id: null,
   xe_da_huy: false,
   xe_id_2: null,
@@ -153,6 +155,9 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: P
         dia_diem_id: num(doan.dia_diem_id),
         huong_dan_vien_id: num(doan.huong_dan_vien_id),
         huong_dan_vien_id_2: num(doan.huong_dan_vien_id_2),
+        hdv_di_cung_ids: Array.isArray(doan.hdv_di_cung_ids)
+          ? doan.hdv_di_cung_ids.filter((x): x is number => typeof x === "number")
+          : [],
         xe_id: num(doan.xe_id),
         xe_da_huy: doan.xe_da_huy === true,
         xe_id_2: num(doan.xe_id_2),
@@ -193,6 +198,8 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: P
     }
     const payload: DoanInsert = {
       ...form,
+      // Bỏ người trùng ô chính/phụ + trùng nhau — danh sách chỉ giữ người thứ 3 trở đi.
+      hdv_di_cung_ids: chuanHoaHdvDiCung(form.hdv_di_cung_ids, form.huong_dan_vien_id, form.huong_dan_vien_id_2),
       so_khach: total,
       assigned_to: form.assigned_to || null,
     };
@@ -230,6 +237,29 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: P
 
   const hdvOptions = useMemo(() =>
     [{ value: "", label: t("— Không có —") }, ...(hdv ?? []).map((h) => ({ value: h.id.toString(), label: h.ten }))], [hdv]);
+
+  // HDV đi cùng (người thứ 3 trở đi) — chip đang chọn + ô thêm người.
+  // Người đang ở ô chính/phụ không hiện ở đây (lúc lưu cũng bị lọc bỏ).
+  const hdvDiCungIds = useMemo(
+    () => chuanHoaHdvDiCung(form.hdv_di_cung_ids, form.huong_dan_vien_id, form.huong_dan_vien_id_2),
+    [form.hdv_di_cung_ids, form.huong_dan_vien_id, form.huong_dan_vien_id_2],
+  );
+  const hdvTenById = useMemo(() => new Map((hdv ?? []).map((h) => [h.id, h.ten])), [hdv]);
+  const hdvDiCungOptions = useMemo(() => {
+    const boQua = new Set<number>([...hdvDiCungIds]);
+    if (form.huong_dan_vien_id) boQua.add(form.huong_dan_vien_id);
+    if (form.huong_dan_vien_id_2) boQua.add(form.huong_dan_vien_id_2);
+    return (hdv ?? [])
+      .filter((h) => !boQua.has(h.id))
+      .map((h) => ({ value: h.id.toString(), label: h.ten }));
+  }, [hdv, hdvDiCungIds, form.huong_dan_vien_id, form.huong_dan_vien_id_2]);
+  const themHdvDiCung = (v: string) => {
+    const id = parseInt(v);
+    if (!Number.isInteger(id)) return;
+    set("hdv_di_cung_ids", [...hdvDiCungIds, id]);
+  };
+  const boHdvDiCung = (id: number) =>
+    set("hdv_di_cung_ids", hdvDiCungIds.filter((x) => x !== id));
 
   const xeOptions = useMemo(() => {
     const huyOpt = {
@@ -458,6 +488,41 @@ export function DoanDrawer({ open, doan, onClose, onSave, isSaving, prefill }: P
                 {form.huong_dan_vien_id_2 && !form.huong_dan_vien_id && (
                   <p className="text-xs text-amber-600 mt-1">
                     {t("Có HDV phụ mà chưa có HDV chính — nên gán HDV chính trước.")}
+                  </p>
+                )}
+              </Field>
+
+              <Field label={t("HDV đi cùng (tuỳ chọn)")}>
+                {hdvDiCungIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {hdvDiCungIds.map((id) => (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs"
+                      >
+                        {hdvTenById.get(id) ?? `${t("HDV")} #${id}`}
+                        <button
+                          type="button"
+                          onClick={() => boHdvDiCung(id)}
+                          className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          title={t("Bỏ HDV này")}
+                          aria-label={t("Bỏ HDV này")}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <SearchableSelect
+                  options={hdvDiCungOptions}
+                  value=""
+                  onChange={themHdvDiCung}
+                  placeholder={t("Thêm HDV đi cùng (đoàn từ 3 HDV)")}
+                />
+                {hdvDiCungIds.length > 0 && !form.huong_dan_vien_id && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    {t("Có HDV đi cùng mà chưa có HDV chính — nên gán HDV chính trước.")}
                   </p>
                 )}
               </Field>

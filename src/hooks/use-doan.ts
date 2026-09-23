@@ -10,6 +10,7 @@ import { resolveNhom1SoKhach } from "@/lib/doan-nhom-sync";
 import { isChiPhiLocked } from "@/lib/chi-phi-lock";
 import { getActiveDnttIdsForChiPhi } from "@/lib/dntt-guard";
 import { chonEmailPhanHoi } from "@/lib/email-phan-hoi";
+import { cungDanhSachHdv } from "@/lib/hdv-doan";
 
 export interface Doan {
   id: number;
@@ -19,6 +20,8 @@ export interface Doan {
   dia_diem_id: number | null;
   huong_dan_vien_id: number | null;
   huong_dan_vien_id_2: number | null;
+  /** HDV đi cùng — người thứ 3 trở đi (không gồm chính/phụ). Đọc qua lib/hdv-doan.ts. */
+  hdv_di_cung_ids: number[];
   xe_id: number | null;
   xe_da_huy: boolean | null;
   xe_id_2: number | null;
@@ -82,6 +85,7 @@ export interface DoanInsert {
   dia_diem_id?: number | null;
   huong_dan_vien_id?: number | null;
   huong_dan_vien_id_2?: number | null;
+  hdv_di_cung_ids?: number[];
   xe_id?: number | null;
   xe_da_huy?: boolean | null;
   xe_id_2?: number | null;
@@ -505,7 +509,7 @@ export function useUpdateDoan() {
       // 1. Fetch OLD để detect so_khach change + lấy ngay_di/ve cho bao_hiem + diff log
       const { data: oldDoan, error: oldErr } = await externalSupabase
         .from("doan")
-        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, xe_id, xe_id_2, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
+        .select("ten_doan, agent_id, agent_huy_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, hdv_di_cung_ids, xe_id, xe_id_2, seri_id, chuyen_bay_don, chuyen_bay_tien, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, ngay_di, ngay_ve, trang_thai, ghi_chu, ghi_chu_dieu_tour, van_phong_id, loai_tour, thi_truong, shopping")
         .eq("id", id)
         .single();
       if (oldErr) throw oldErr;
@@ -876,6 +880,13 @@ export function useUpdateDoan() {
           diffLogs.push(`Đổi ${label}: ${labelTxt(oldV)} → ${labelTxt(newV)}`);
         }
       }
+      if (
+        updates.hdv_di_cung_ids !== undefined
+        && !cungDanhSachHdv(oldDoan.hdv_di_cung_ids, updates.hdv_di_cung_ids)
+      ) {
+        const ds = (v: number[] | null | undefined) => (v && v.length > 0 ? v.join(", ") : "—");
+        diffLogs.push(`Đổi HDV đi cùng: ${ds(oldDoan.hdv_di_cung_ids)} → ${ds(updates.hdv_di_cung_ids)}`);
+      }
       if (updates.shopping !== undefined && oldDoanRec.shopping !== updates.shopping) {
         diffLogs.push(updates.shopping ? "Bật shopping" : "Tắt shopping");
       }
@@ -902,6 +913,10 @@ export function useUpdateDoan() {
       qc.invalidateQueries({ queryKey: ["doan_booking_ks", vars.id] });
       qc.invalidateQueries({ queryKey: ["doan_booking_dv", vars.id] });
       qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", vars.id] });
+      // HDV của đoàn (chính/phụ/đi cùng) — mail booking + người đứng tên phiếu HDV.
+      qc.invalidateQueries({ queryKey: ["hdvs-by-doan", vars.id] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", vars.id] });
+      qc.invalidateQueries({ queryKey: ["doan-for-xep"] });
     },
   });
 }
