@@ -917,6 +917,7 @@ export function useUpdateDoan() {
       qc.invalidateQueries({ queryKey: ["hdvs-by-doan", vars.id] });
       qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section", vars.id] });
       qc.invalidateQueries({ queryKey: ["doan-for-xep"] });
+      qc.invalidateQueries({ queryKey: ["doan-chan-lich"] });
     },
   });
 }

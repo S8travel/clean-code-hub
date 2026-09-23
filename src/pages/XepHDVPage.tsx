@@ -31,6 +31,9 @@ import { useHDVList } from "@/hooks/use-hdv";
 import { useAgents, useDiaDiem } from "@/hooks/use-doan";
 import {
   useDoanForXep,
+  useDoanChanLich,
+  ghepDoanChanLich,
+  boDoanChanLich,
   useSaveHDVAssignments,
   assignHDVs,
   getSuggestions,
@@ -667,6 +670,9 @@ function XepHDVPageContent() {
     data: (TourInput & { _has_hdv?: boolean })[];
     isFetching: boolean;
   };
+  // Đoàn khác trùng ngày đã có HDV — không xếp, chỉ nạp vào để chặn lịch HDV
+  // (đoàn bị ẩn, đoàn không tích chọn, đoàn khởi hành trước "từ ngày").
+  const { data: doanChanLich = [] } = useDoanChanLich(filterActive);
 
   // Danh sách đoàn đã chọn
   const [selectedDoanIds, setSelectedDoanIds] = useState<Set<string>>(new Set());
@@ -746,6 +752,11 @@ function XepHDVPageContent() {
       (skipped > 0 ? ` · ${t("bỏ qua")} ${skipped} ${t("hàng lỗi")}` : "")
     );
   }
+
+  // Số đoàn khác thực sự đang chặn lịch (đoàn đã tích chọn thì tự xếp, không chặn).
+  const soDoanChanLich = doanChanLich.filter(
+    (b) => !selectedDoanIds.has(`db-${b.doan_id}`),
+  ).length;
 
   const activeHdvs = hdvList.filter((h) => h.active);
   const poolHdvs = hdvMode === "all" ? activeHdvs : activeHdvs.filter((h) => selectedHdvIds.has(h.id));
@@ -886,7 +897,9 @@ function XepHDVPageContent() {
     const tours = getSelectedTours();
     if (tours.length === 0) { toast.error(t("Chưa chọn đoàn nào")); return; }
     if (poolHdvs.length === 0) { toast.error(t("Không có hướng dẫn viên nào trong pool")); return; }
-    setResult(assignHDVs(tours, poolHdvs, maxToursPerHDV));
+    setResult(boDoanChanLich(
+      assignHDVs(ghepDoanChanLich(tours, doanChanLich), poolHdvs, maxToursPerHDV),
+    ));
     setLockedTourKeys(new Set());
     setViewMode("cards");
     setShowInputSchedule(false);
@@ -905,7 +918,9 @@ function XepHDVPageContent() {
         locked_hdv_id: t.assigned_hdv_id,
       };
     });
-    setResult(assignHDVs(toursForRerun, poolHdvs, maxToursPerHDV));
+    setResult(boDoanChanLich(
+      assignHDVs(ghepDoanChanLich(toursForRerun, doanChanLich), poolHdvs, maxToursPerHDV),
+    ));
     setViewMode("cards");
     setShowInputSchedule(false);
   }
@@ -1283,6 +1298,11 @@ function XepHDVPageContent() {
                       {dbFetching ? t("Đang tải...") : t("Tải")}
                     </Button>
                   </div>
+                  {filterActive && soDoanChanLich > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {t("Tự tính thêm")} {soDoanChanLich} {t("đoàn khác trùng ngày (kể cả đoàn đang ẩn) để không xếp trùng HDV")}
+                    </p>
+                  )}
                   {displayDbTours.length > 0 && (() => {
                     const allKeys = displayDbTours.map((tour) => `db-${tour.doan_id}`);
                     const selCount = allKeys.filter((k) => selectedDoanIds.has(k)).length;
@@ -1863,7 +1883,7 @@ function XepHDVPageContent() {
                         const globalIdx = result.findIndex((tour) => tour === unassigned[idx]);
                         handleReassign(globalIdx, newHdvId);
                       }}
-                      getSuggestionsForTour={(tour) => getSuggestions(tour, result, poolHdvs)}
+                      getSuggestionsForTour={(tour) => getSuggestions(tour, ghepDoanChanLich(result, doanChanLich), poolHdvs)}
                     />
                   )}
 
