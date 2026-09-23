@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
 import type { HDVRow } from "@/hooks/use-hdv";
+import { idsHdvDoan } from "@/lib/hdv-doan";
 
 export interface TourInput {
   doan_id?: number;           // undefined nếu nhập tay
@@ -18,9 +19,10 @@ export interface TourInput {
   // kết quả xếp HDV chính
   assigned_hdv_id: number | null;
   locked_hdv_id: number | null;  // HDV chính đã chỉ định trước (DB/Excel)
-  // HDV phụ — đoàn đông cần 2 HDV cùng đi suốt tour. Thuật toán KHÔNG tự xếp
-  // HDV phụ; chỉ dùng để block lịch (HDV phụ bận = không thể nhận đoàn khác).
-  locked_hdv_id_2: number | null;
+  // HDV phụ + HDV đi cùng — đoàn đông đi 2–6 HDV suốt tour. Thuật toán KHÔNG tự
+  // xếp những người này; chỉ dùng để block lịch (đang đi đoàn này = không nhận
+  // được đoàn khác trùng ngày). Không gồm HDV chính.
+  locked_hdv_ids_phu: number[];
   _hard_locked?: boolean;        // true = không cho thuật toán thay đổi (khi tái xếp)
   _prev_hdv_id?: number | null;  // HDV trước khi xếp lại (để đánh dấu thay đổi)
   is_chained?: boolean;
@@ -34,7 +36,7 @@ export function useDoanForXep(filter: { from: string; to: string } | null) {
     queryFn: async () => {
       const { data, error } = await externalSupabase
         .from("doan")
-        .select("id, ten_doan, ngay_di, ngay_ve, chuyen_bay_don, chuyen_bay_tien, agent_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, dia_diem:dia_diem_id(ten), agents:agent_id(ten)")
+        .select("id, ten_doan, ngay_di, ngay_ve, chuyen_bay_don, chuyen_bay_tien, agent_id, dia_diem_id, huong_dan_vien_id, huong_dan_vien_id_2, hdv_di_cung_ids, dia_diem:dia_diem_id(ten), agents:agent_id(ten)")
         .gte("ngay_di", filter!.from)
         .lte("ngay_di", filter!.to)
         .neq("trang_thai", "huy")
@@ -53,7 +55,9 @@ export function useDoanForXep(filter: { from: string; to: string } | null) {
         agent_ten: (d.agents as { ten?: string | null } | null)?.ten ?? null,
         assigned_hdv_id: d.huong_dan_vien_id ?? null,
         locked_hdv_id: d.huong_dan_vien_id ?? null,
-        locked_hdv_id_2: d.huong_dan_vien_id_2 ?? null,
+        // Phụ + đi cùng, trừ người trùng với HDV chính (có đoàn nhập một người
+        // vào hai ô) — không thì người đó tự chặn lịch mình khi xếp lại đoàn này.
+        locked_hdv_ids_phu: idsHdvDoan(d).filter((id) => id !== d.huong_dan_vien_id),
         is_chained: false,
         _has_hdv: !!d.huong_dan_vien_id,
       } as TourInput & { _has_hdv: boolean }));
@@ -78,6 +82,8 @@ export function useSaveHDVAssignments() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["doan"] });
       qc.invalidateQueries({ queryKey: ["doan-for-xep"] });
+      qc.invalidateQueries({ queryKey: ["hdvs-by-doan"] });
+      qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section"] });
     },
   });
 }
@@ -121,14 +127,14 @@ export function getSuggestions(
 
   // Build schedule từ kết quả hiện tại, bỏ qua tour đang xét
   // Dùng cả assigned_hdv_id (kết quả xếp) lẫn locked_hdv_id (gốc từ DB/Excel)
-  // VÀ locked_hdv_id_2 (HDV phụ) — cả 2 HDV của đoàn đông đều bị block.
+  // VÀ locked_hdv_ids_phu (phụ + đi cùng) — mọi HDV của đoàn đông đều bị block.
   const schedule = new Map<number, TourInput[]>();
   for (const t of result) {
     if (t === tour) continue;
     const idsToBlock = new Set<number>();
     if (t.assigned_hdv_id !== null) idsToBlock.add(Number(t.assigned_hdv_id));
     if (t.locked_hdv_id !== null) idsToBlock.add(Number(t.locked_hdv_id));
-    if (t.locked_hdv_id_2 !== null) idsToBlock.add(Number(t.locked_hdv_id_2));
+    for (const id of t.locked_hdv_ids_phu ?? []) idsToBlock.add(Number(id));
     for (const id of idsToBlock) {
       if (isNaN(id)) continue;
       const sched = schedule.get(id) ?? [];
@@ -139,8 +145,12 @@ export function getSuggestions(
 
   const primary: HDVRow[] = [];
   const secondary: HDVRow[] = [];
+  // Người đang là phụ/đi cùng của CHÍNH đoàn này không gợi ý làm HDV chính —
+  // chọn họ thì đoàn mất một người mà không ai báo (khớp pass 1 của assignHDVs).
+  const daDiCungDoanNay = new Set((tour.locked_hdv_ids_phu ?? []).map(Number));
 
   for (const hdv of activeHdvs) {
+    if (daDiCungDoanNay.has(Number(hdv.id))) continue;
     const assigned = schedule.get(Number(hdv.id)) ?? [];
     if (assigned.some((t) => toursOverlap(t, tour))) continue;
     if (isEligible(hdv, tour)) {
@@ -164,16 +174,19 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[], maxToursPerHDV?: 
   activeHdvs.forEach((h) => hdvSchedule.set(h.id, []));
 
   // Pass 1: nạp hard-locked tours vào schedule, không xếp lại
-  // Cả HDV chính + HDV phụ (locked_hdv_id_2) đều phải nạp lịch để pass 2 không
-  // gán cùng HDV cho đoàn khác overlap.
+  // Cả HDV chính + phụ + đi cùng (locked_hdv_ids_phu) đều phải nạp lịch để pass
+  // 2 không gán cùng HDV cho đoàn khác overlap. Nạp luôn cả chính đoàn đó vào
+  // lịch người phụ/đi cùng → pass 2 cũng không đôn họ lên làm HDV chính của
+  // chính đoàn đó (tự trùng ngày với mình).
   for (const tour of sorted) {
     if (tour._hard_locked && tour.assigned_hdv_id !== null) {
       const sched = hdvSchedule.get(tour.assigned_hdv_id);
       if (sched) sched.push(tour);
     }
-    if (tour.locked_hdv_id_2 !== null) {
-      const sched2 = hdvSchedule.get(tour.locked_hdv_id_2);
-      if (sched2) sched2.push(tour);
+    for (const id of new Set(tour.locked_hdv_ids_phu ?? [])) {
+      if (tour._hard_locked && id === tour.assigned_hdv_id) continue;
+      const schedPhu = hdvSchedule.get(id);
+      if (schedPhu) schedPhu.push(tour);
     }
   }
 

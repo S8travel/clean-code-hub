@@ -15,6 +15,8 @@ import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDoanList, useDoanDetailRealtime, useUserRoles } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
 import { useAuth } from "@/hooks/use-auth";
+import { useHDVList, formatHdvsForEmail } from "@/hooks/use-hdv";
+import { danhSachHdvCoVaiTro } from "@/lib/hdv-doan";
 import {
   useCanhDiem,
   useNhaHang,
@@ -677,18 +679,16 @@ export default function DoanDetail() {
     scheduleSave();
   }, [scheduleSave]);
 
-  // Ghép HDV chính + phụ thành 1 chuỗi cho export Word + mail. Format:
-  //   "A — sdt | B — sdt" (chỉ A nếu không có phụ; "" nếu không có ai).
-  const hdvDisplayStr = useMemo(() => {
-    if (!doan) return "";
-    type HdvJoin = { ten?: string | null; so_dien_thoai?: string | null } | null | undefined;
-    const fmt = (h: HdvJoin) =>
-      h?.so_dien_thoai?.trim() ? `${h.ten} — ${h.so_dien_thoai.trim()}` : h?.ten ?? "";
-    return ([doan.huong_dan_vien, doan.huong_dan_vien_2] as HdvJoin[])
-      .filter((h) => h?.ten)
-      .map(fmt)
-      .join(" | ");
-  }, [doan]);
+  // Mọi HDV của đoàn (chính → phụ → đi cùng) tra từ danh mục — cột
+  // hdv_di_cung_ids là mảng nên không embed được như 2 cột FK cũ.
+  const { data: hdvDanhMuc = [] } = useHDVList();
+  const hdvsDoan = useMemo(() => danhSachHdvCoVaiTro(doan, hdvDanhMuc), [doan, hdvDanhMuc]);
+  // Ghép thành 1 chuỗi cho export Word + mail. Format:
+  //   "A — sdt | B — sdt | C — sdt" ("" nếu không có ai).
+  const hdvDisplayStr = useMemo(
+    () => (hdvsDoan.length > 0 ? formatHdvsForEmail(hdvsDoan) : ""),
+    [hdvsDoan],
+  );
 
   // OP phụ trách (doan.assigned_to) → "Tên — SĐT" cho bảng điều tour in ra.
   const opDisplayStr = useMemo(() => {
@@ -878,6 +878,7 @@ export default function DoanDetail() {
             <CompanyHeader />
             <DoanInfoSection
               doan={doan}
+              hdvs={hdvsDoan}
               op={opDisplayStr}
               bangDon={bangDon}
               setBangDon={handleSetBangDon}

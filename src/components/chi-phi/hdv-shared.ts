@@ -1,6 +1,9 @@
 // Shared types + constants cho HDV section — tách từ ChiPhiHDVSection.tsx để
 // giảm kích thước file khổng lồ. Không chứa JSX / logic.
 
+import { t } from "@/lib/i18n";
+import type { VaiTroHdv } from "@/lib/hdv-doan";
+
 // Subset thông tin đoàn mà các sub-component HDV cần (số khách + ngày + tên + tip overrides).
 export interface HDVDoanInfo {
   ten_doan?: string | null;
@@ -180,3 +183,10 @@ export type KhacModalTarget =
   | { type: "single"; item: KhacModalItem }
   | { type: "bulk"; items: KhacModalItem[]; thanhTien: number; defaultNccId: number | null };
 export interface KhacCancelTarget { dnttId: number; isPaid: boolean }
+
+/** Nhãn vai trò của một HDV trong đoàn (ô chọn người đứng tên, đầu section HDV). */
+export function nhanVaiTroHdv(vaiTro: VaiTroHdv): string {
+  if (vaiTro === "chinh") return t("HDV chính");
+  if (vaiTro === "phu") return t("HDV phụ");
+  return t("HDV đi cùng");
+}

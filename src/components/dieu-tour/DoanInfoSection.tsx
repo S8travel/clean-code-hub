@@ -29,8 +29,6 @@ interface HdvInfo {
 
 interface DoanInfo {
   ten_doan: string | null;
-  huong_dan_vien?: HdvInfo | null;
-  huong_dan_vien_2?: HdvInfo | null;
   xe?: XeInfo | null;
   xe_2?: XeInfo | null;
   ngay_di: string | null;
@@ -54,6 +52,8 @@ function hdvLabel(hdv: HdvInfo | null | undefined): string {
 
 interface Props {
   doan: DoanInfo;
+  /** Mọi HDV của đoàn, thứ tự chính → phụ → đi cùng (lib/hdv-doan.ts). */
+  hdvs: HdvInfo[];
   /** OP phụ trách — "Tên — SĐT" (rỗng nếu đoàn chưa phân OP hoặc OP chưa có SĐT). */
   op: string;
   bangDon: string;
@@ -78,7 +78,7 @@ interface Props {
 }
 
 export default function DoanInfoSection({
-  doan, op, bangDon, setBangDon, shopping, setShopping,
+  doan, hdvs, op, bangDon, setBangDon, shopping, setShopping,
   truongDoan, setTruongDoan, chuyenBayDon, setChuyenBayDon,
   chuyenBayTien, setChuyenBayTien,
   soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, totalFromDoan,
@@ -99,10 +99,8 @@ export default function DoanInfoSection({
           </Row>
           <Row label={t("HDV")} icon={User}>
             {(() => {
-              const hdv1 = doan.huong_dan_vien;
-              const hdv2 = doan.huong_dan_vien_2;
-              if (!hdv1 && !hdv2) return <span>—</span>;
-              const parts = [hdv1, hdv2].filter(Boolean).map(hdvLabel);
+              if (hdvs.length === 0) return <span>—</span>;
+              const parts = hdvs.map(hdvLabel);
               return (
                 <span className="break-words">
                   {parts.map((p, i) => (

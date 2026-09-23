@@ -725,7 +725,7 @@ function XepHDVPageContent() {
         agent_ten: r.agent_ten || undefined,
         assigned_hdv_id: locked_hdv_id,
         locked_hdv_id,
-        locked_hdv_id_2: null,
+        locked_hdv_ids_phu: [],
         is_chained: false,
         so_khach: r.so_khach ? Number(r.so_khach) || null : null,
         ghi_chu: r.ghi_chu.trim() || null,
@@ -868,15 +868,15 @@ function XepHDVPageContent() {
   }
 
   // Lịch từ input: assigned_hdv_id = locked_hdv_id (getSelectedTours đã set sẵn),
-  // nhân đôi tour có HDV phụ để hiện trên cả 2 hàng HDV
+  // nhân bản tour có HDV phụ / đi cùng để hiện trên hàng của từng người
   const inputSchedule = (() => {
     if (!showInputSchedule) return null;
     const base = getSelectedTours();
     const expanded: TourInput[] = [];
     for (const tour of base) {
       expanded.push(tour);
-      if (tour.locked_hdv_id_2 != null && tour.locked_hdv_id_2 !== tour.assigned_hdv_id) {
-        expanded.push({ ...tour, assigned_hdv_id: tour.locked_hdv_id_2 });
+      for (const idPhu of new Set(tour.locked_hdv_ids_phu)) {
+        if (idPhu !== tour.assigned_hdv_id) expanded.push({ ...tour, assigned_hdv_id: idPhu });
       }
     }
     return { expanded, noHdv: base.filter((tour) => tour.assigned_hdv_id == null) };

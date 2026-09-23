@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { externalSupabase } from "@/lib/supabase-external";
+import { idsHdvDoan, danhSachHdvCoVaiTro } from "@/lib/hdv-doan";
 
 export interface HDVRow {
   id: number;
@@ -26,7 +27,7 @@ export interface HdvMailInfo {
   so_dien_thoai: string | null;
 }
 
-/** Lấy danh sách HDV (chính + phụ) của đoàn — empty array nếu chưa gán. */
+/** Lấy danh sách HDV (chính → phụ → đi cùng) của đoàn — empty array nếu chưa gán. */
 export function useHdvsByDoanId(doanId: number | null | undefined) {
   return useQuery({
     queryKey: ["hdvs-by-doan", doanId],
@@ -35,20 +36,20 @@ export function useHdvsByDoanId(doanId: number | null | undefined) {
     queryFn: async (): Promise<HdvMailInfo[]> => {
       const { data: doan, error: e1 } = await externalSupabase
         .from("doan")
-        .select("huong_dan_vien_id, huong_dan_vien_id_2")
+        .select("huong_dan_vien_id, huong_dan_vien_id_2, hdv_di_cung_ids")
         .eq("id", doanId!)
         .maybeSingle();
       if (e1) throw e1;
-      const ids = [doan?.huong_dan_vien_id, doan?.huong_dan_vien_id_2].filter(Boolean) as number[];
+      const ids = idsHdvDoan(doan);
       if (ids.length === 0) return [];
       const { data, error } = await externalSupabase
         .from("huong_dan_vien")
         .select("id, ten, so_dien_thoai")
         .in("id", ids);
       if (error) throw error;
-      // Giữ thứ tự HDV chính trước, phụ sau
-      const byId = new Map((data ?? []).map((h) => [h.id, h as HdvMailInfo]));
-      return ids.map((id) => byId.get(id)).filter(Boolean) as HdvMailInfo[];
+      // Giữ thứ tự của đoàn: chính → phụ → đi cùng
+      return danhSachHdvCoVaiTro(doan, (data ?? []) as HdvMailInfo[])
+        .map(({ id, ten, so_dien_thoai }) => ({ id, ten, so_dien_thoai }));
     },
   });
 }
@@ -59,7 +60,7 @@ function formatOneHdv(hdv: HdvMailInfo): string {
   return sdt ? `${hdv.ten} — ${sdt}` : hdv.ten;
 }
 
-/** Format HDV (chính + phụ) cho email/Word: ghép bằng " | ". Empty → "Bổ sung sau". */
+/** Format HDV (chính + phụ + đi cùng) cho email/Word: ghép bằng " | ". Empty → "Bổ sung sau". */
 export function formatHdvsForEmail(hdvs: HdvMailInfo[] | null | undefined): string {
   if (!hdvs || hdvs.length === 0) return "Bổ sung sau";
   return hdvs.map(formatOneHdv).join(" | ");

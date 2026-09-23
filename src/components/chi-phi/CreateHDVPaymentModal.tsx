@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { errMsg } from "@/lib/error";
-import { useCreateHDVPayment, type HDVInfo } from "@/hooks/use-chi-phi-hdv";
+import { useCreateHDVPayment, type HDVInfo, type HDVInfoCoVaiTro } from "@/hooks/use-chi-phi-hdv";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { exportHDVQuyetToanExcel } from "@/lib/export-hdv-quyet-toan-excel";
@@ -25,7 +25,7 @@ import { calcQuyetToanHDV } from "@/lib/quyet-toan-hdv-calc";
 import { buildQuyetToanSeed } from "@/lib/quyet-toan-hdv-seed";
 import { TY_GIA_NDT_DEFAULT } from "@/lib/phai-thu-calc";
 import { t } from "@/lib/i18n";
-import type { HDVDoanInfo } from "./hdv-shared";
+import { nhanVaiTroHdv, type HDVDoanInfo } from "./hdv-shared";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
 
@@ -34,7 +34,7 @@ interface CreateModalProps {
   /** HDV chính của đoàn — mặc định đứng tên phiếu. */
   hdvId: number | null;
   /** HDV của đoàn (chính → phụ). Từ 2 người trở lên thì hiện ô chọn người đứng tên. */
-  hdvList?: HDVInfo[];
+  hdvList?: HDVInfoCoVaiTro[];
   refLoai: "hdv_tam_ung" | "hdv_quyet_toan";
   title: string;
   defaultSoTien?: number;
@@ -192,7 +192,7 @@ export function CreateHDVPaymentModal({
       <DialogContent className={cn(isQT ? "max-w-2xl max-h-[90vh] overflow-y-auto" : "max-w-md")}>
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
-          {/* Đoàn 2 HDV → chọn ai đứng tên phiếu (mặc định HDV chính) */}
+          {/* Đoàn nhiều HDV → chọn ai đứng tên phiếu (mặc định HDV chính) */}
           {hdvList.length > 1 && (
             <div className="space-y-1.5">
               <Label className="text-xs">{t("Người đứng tên phiếu")}</Label>
@@ -204,9 +204,9 @@ export function CreateHDVPaymentModal({
                   <SelectValue placeholder={t("Chọn HDV")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {hdvList.map((h, idx) => (
+                  {hdvList.map((h) => (
                     <SelectItem key={h.id} value={String(h.id)}>
-                      {h.ten} — {idx === 0 ? t("HDV chính") : t("HDV phụ")}
+                      {h.ten} — {nhanVaiTroHdv(h.vai_tro)}
                     </SelectItem>
                   ))}
                 </SelectContent>

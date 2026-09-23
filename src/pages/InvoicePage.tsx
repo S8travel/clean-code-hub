@@ -5,6 +5,8 @@ import { useRoleAtLeast } from "@/hooks/use-permissions";
 import { AccessDenied } from "@/components/PermissionGate";
 import { useAuth } from "@/hooks/use-auth";
 import { useDoanList, useAgents, useDiaDiem, useUserRoles } from "@/hooks/use-doan";
+import { useHDVList, formatHdvsForEmail } from "@/hooks/use-hdv";
+import { danhSachHdvCoVaiTro } from "@/lib/hdv-doan";
 import {
   useChiPhiSummaryMap,
   useDoanInvoiceData,
@@ -67,8 +69,10 @@ interface DoanWithRel {
   assigned_to?: string | null;
   agents?: { id: number; ten: string } | null;
   dia_diem?: { ten: string } | null;
-  huong_dan_vien?: { id: number; ten: string; so_dien_thoai?: string | null } | null;
-  huong_dan_vien_2?: { id: number; ten: string; so_dien_thoai?: string | null } | null;
+  // HDV chính / phụ / đi cùng — tra tên + SĐT qua danh mục (lib/hdv-doan.ts).
+  huong_dan_vien_id?: number | null;
+  huong_dan_vien_id_2?: number | null;
+  hdv_di_cung_ids?: number[] | null;
   xe?: {
     id: number;
     ten_xe: string | null;
@@ -109,6 +113,7 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
   const { data: userRoles = [] } = useUserRoles();
   const { data: dbNgayRows = [] } = useDoanNgayList(doan.id);
   const { data: dbNgayItems = [] } = useDoanNgayItems(doan.id);
+  const { data: hdvDanhMuc = [] } = useHDVList();
   const [showPreview, setShowPreview] = useState(false);
 
   const days = useMemo<DayLocal[]>(() => {
@@ -129,12 +134,8 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
       khachSanList,
       tenDoan: doan.ten_doan,
       hdv: (() => {
-        const fmt = (h: { ten: string; so_dien_thoai?: string | null }) =>
-          h.so_dien_thoai?.trim() ? `${h.ten} — ${h.so_dien_thoai.trim()}` : h.ten ?? "";
-        return [doan.huong_dan_vien, doan.huong_dan_vien_2]
-          .filter((h): h is NonNullable<typeof h> => !!h?.ten)
-          .map(fmt)
-          .join(" | ");
+        const hdvs = danhSachHdvCoVaiTro(doan, hdvDanhMuc);
+        return hdvs.length > 0 ? formatHdvsForEmail(hdvs) : "";
       })(),
       op: (() => {
         const u = doan.assigned_to ? userRoles.find((r) => r.user_id === doan.assigned_to) : null;
@@ -159,7 +160,7 @@ function InvoiceDieuTourSection({ doan }: { doan: DoanWithRel }) {
       gifts: Array.isArray(doan.tang_pham) ? doan.tang_pham : [],
       ghiChuDieuTour: doan.ghi_chu_dieu_tour || "",
     };
-  }, [doan, days, canhDiemList, nhaHangList, khachSanList, userRoles]);
+  }, [doan, days, canhDiemList, nhaHangList, khachSanList, userRoles, hdvDanhMuc]);
 
   return (
     <div className="space-y-3">

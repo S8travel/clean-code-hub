@@ -920,6 +920,7 @@ export type Database = {
           file_chuong_trinh: string | null
           ghi_chu: string | null
           ghi_chu_dieu_tour: string | null
+          hdv_di_cung_ids: number[]
           huong_dan_vien_id: number | null
           huong_dan_vien_id_2: number | null
           id: number
@@ -972,6 +973,7 @@ export type Database = {
           file_chuong_trinh?: string | null
           ghi_chu?: string | null
           ghi_chu_dieu_tour?: string | null
+          hdv_di_cung_ids?: number[]
           huong_dan_vien_id?: number | null
           huong_dan_vien_id_2?: number | null
           id?: never
@@ -1024,6 +1026,7 @@ export type Database = {
           file_chuong_trinh?: string | null
           ghi_chu?: string | null
           ghi_chu_dieu_tour?: string | null
+          hdv_di_cung_ids?: number[]
           huong_dan_vien_id?: number | null
           huong_dan_vien_id_2?: number | null
           id?: never
