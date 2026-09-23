@@ -24,6 +24,9 @@ export interface TourInput {
   // được đoàn khác trùng ngày). Không gồm HDV chính.
   locked_hdv_ids_phu: number[];
   _hard_locked?: boolean;        // true = không cho thuật toán thay đổi (khi tái xếp)
+  // true = đoàn KHÔNG được xếp, chỉ nạp vào để chặn lịch HDV của nó (xem
+  // useDoanChanLich). Gỡ khỏi kết quả bằng boDoanChanLich trước khi hiển thị/lưu.
+  _chi_chan_lich?: boolean;
   _prev_hdv_id?: number | null;  // HDV trước khi xếp lại (để đánh dấu thay đổi)
   is_chained?: boolean;
 }
@@ -65,6 +68,96 @@ export function useDoanForXep(filter: { from: string; to: string } | null) {
   });
 }
 
+// Đoàn TRÙNG KHOẢNG NGÀY đã có HDV — chỉ để CHẶN LỊCH, không đưa vào bộ xếp.
+//
+// Vì sao cần: danh sách chọn đoàn (useDoanForXep) lọc theo ngay_di trong khoảng,
+// và mặc định còn ẩn đoàn đã có HDV. Không có truy vấn này thì HDV của những đoàn
+// đó (cả chính lẫn phụ/đi cùng) trông như đang rảnh → bị xếp trùng sang đoàn khác.
+// Hai chỗ hụt được vá ở đây:
+//   1. đoàn đã có HDV nhưng bị ẩn / không được tích chọn;
+//   2. đoàn khởi hành TRƯỚC "từ ngày" mà vẫn đang chạy trong khoảng (lọc theo
+//      giao nhau: ngay_di <= to AND ngay_ve >= from).
+// Đoàn không có HDV nào thì bỏ — không chặn được gì.
+// LƯU Ý: RLS văn phòng vẫn áp dụng, đoàn ngoài phạm vi người dùng không chặn được.
+interface DoanChanLichRow {
+  id: number;
+  ten_doan: string;
+  ngay_di: string;
+  ngay_ve: string;
+  huong_dan_vien_id: number | null;
+  huong_dan_vien_id_2: number | null;
+  hdv_di_cung_ids: number[] | null;
+}
+
+export function useDoanChanLich(filter: { from: string; to: string } | null) {
+  return useQuery({
+    queryKey: ["doan-chan-lich", filter],
+    enabled: !!filter,
+    queryFn: async (): Promise<TourInput[]> => {
+      // Đọc theo trang: PostgREST cắt ở 1000 dòng/lượt. Khoảng lọc rộng (cả năm)
+      // đã sát mốc đó — bị cắt là mất đúng những đoàn cần chặn, mà lại im lặng.
+      const MOI_TRANG = 1000;
+      const rows: DoanChanLichRow[] = [];
+      for (let tu = 0; ; tu += MOI_TRANG) {
+        const { data, error } = await externalSupabase
+          .from("doan")
+          .select("id, ten_doan, ngay_di, ngay_ve, huong_dan_vien_id, huong_dan_vien_id_2, hdv_di_cung_ids")
+          .lte("ngay_di", filter!.to)
+          .gte("ngay_ve", filter!.from)
+          .neq("trang_thai", "huy")
+          .order("id")
+          .range(tu, tu + MOI_TRANG - 1);
+        if (error) throw error;
+        rows.push(...((data ?? []) as DoanChanLichRow[]));
+        if ((data?.length ?? 0) < MOI_TRANG) break;
+      }
+      return rows
+        .map((d) => {
+          const ids = idsHdvDoan(d);
+          return {
+            doan_id: d.id,
+            ten_doan: d.ten_doan,
+            ngay_di: d.ngay_di,
+            ngay_ve: d.ngay_ve,
+            chuyen_bay_don: null,
+            chuyen_bay_tien: null,
+            agent_id: null,
+            dia_diem_id: null,
+            assigned_hdv_id: d.huong_dan_vien_id ?? null,
+            locked_hdv_id: d.huong_dan_vien_id ?? null,
+            locked_hdv_ids_phu: ids.filter((id) => id !== d.huong_dan_vien_id),
+            _hard_locked: true,
+            _chi_chan_lich: true,
+          } as TourInput;
+        })
+        .filter((t) => t.assigned_hdv_id !== null || t.locked_hdv_ids_phu.length > 0);
+    },
+  });
+}
+
+/**
+ * Gộp đoàn chỉ-để-chặn-lịch vào bộ đoàn đang xếp.
+ *
+ * Bỏ đoàn đã nằm trong bộ xếp: giữ lại thì đoàn đó tự chặn lịch chính nó —
+ * HDV hiện tại của nó trông như bận, thuật toán không giữ được người cũ (mất
+ * điểm ổn định) hoặc để trống đoàn.
+ * Luôn ép `_hard_locked` + `_chi_chan_lich` để thuật toán không xếp lại chúng.
+ */
+export function ghepDoanChanLich(tours: TourInput[], chanLich: TourInput[]): TourInput[] {
+  const dangXep = new Set(
+    tours.map((t) => t.doan_id).filter((id): id is number => id != null),
+  );
+  const them = chanLich
+    .filter((b) => b.doan_id != null && !dangXep.has(b.doan_id))
+    .map((b) => ({ ...b, _hard_locked: true, _chi_chan_lich: true }));
+  return [...tours, ...them];
+}
+
+/** Gỡ đoàn chỉ-để-chặn-lịch khỏi kết quả — chúng không được hiển thị hay lưu. */
+export function boDoanChanLich(tours: TourInput[]): TourInput[] {
+  return tours.filter((t) => !t._chi_chan_lich);
+}
+
 // Batch save kết quả xếp vào DB
 export function useSaveHDVAssignments() {
   const qc = useQueryClient();
@@ -82,6 +175,9 @@ export function useSaveHDVAssignments() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["doan"] });
       qc.invalidateQueries({ queryKey: ["doan-for-xep"] });
+      // Bắt buộc: lưu xong mà bộ chặn lịch còn là bản chụp cũ thì lượt xếp tiếp
+      // theo vẫn tưởng HDV vừa gán đang rảnh → xếp trùng đúng người.
+      qc.invalidateQueries({ queryKey: ["doan-chan-lich"] });
       qc.invalidateQueries({ queryKey: ["hdvs-by-doan"] });
       qc.invalidateQueries({ queryKey: ["chi_phi_hdv_section"] });
     },
@@ -198,7 +294,12 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[], maxToursPerHDV?: 
     for (const hdv of pool) {
       const assigned = hdvSchedule.get(hdv.id) ?? [];
       if (assigned.some((t) => toursOverlap(t, tour))) continue;
-      if (maxToursPerHDV != null && assigned.length >= maxToursPerHDV) continue;
+      // Hạn mức "đoàn tối đa mỗi HDV" CHỈ đếm đoàn trong bộ đang xếp. Đoàn
+      // chỉ-chặn-lịch (đoàn khác trùng ngày, OP không xếp) mà tính vào đây thì
+      // mặc định 3 đủ loại sạch HDV dù họ rảnh đúng ngày cần — đoàn không xếp
+      // được mà màn hình không nói vì sao.
+      const soTrongBoXep = assigned.filter((t) => !t._chi_chan_lich).length;
+      if (maxToursPerHDV != null && soTrongBoXep >= maxToursPerHDV) continue;
 
       let score = 0;
 
@@ -210,7 +311,8 @@ export function assignHDVs(tours: TourInput[], hdvs: HDVRow[], maxToursPerHDV?: 
       const isChained = !!lastTour && lastTour.ngay_ve === tour.ngay_di;
       if (isChained) score += 3;
 
-      // Cân bằng tải
+      // Cân bằng tải — đếm CẢ đoàn chặn lịch: ai đang chạy nhiều trong kỳ thì
+      // nhường bớt. Chỉ là điểm ưu tiên, không loại ai khỏi danh sách.
       score += Math.max(0, 5 - assigned.length);
 
       // Stability: ưu tiên giữ HDV cũ

@@ -1299,6 +1299,8 @@
   "Chọn HDV phụ (đoàn đông)": "選擇副導遊（大團）",
   "Có HDV phụ mà chưa có HDV chính — nên gán HDV chính trước.": "已有副導遊但尚未指定主導遊 — 請先指定主導遊。",
   "HDV đi cùng": "隨團導遊",
+  "Tự tính thêm": "另計入",
+  "đoàn khác trùng ngày (kể cả đoàn đang ẩn) để không xếp trùng HDV": "個同期其他團（含已隱藏的團），避免導遊排班衝突",
   "HDV đi cùng (tuỳ chọn)": "隨團導遊（選填）",
   "Thêm HDV đi cùng (đoàn từ 3 HDV)": "新增隨團導遊（3 位導遊以上的團）",
   "Bỏ HDV này": "移除此導遊",
