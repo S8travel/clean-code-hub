@@ -76,8 +76,17 @@ export const HDV_GIA_NGAY_HCM = 1_000_000;
 
 /** Bảo hiểm mặc định cho mỗi khách (pax = khách + HDV). */
 export const BAO_HIEM_MOI_KHACH_MAC_DINH = 100_000;
-/** Tip mặc định, tính một lần cho cả đoàn — KHÔNG nhân số khách. */
-export const TIP_DOAN_MAC_DINH = 500_000;
+
+// ── Tip: tính THEO NGÀY, một mức cho cả đoàn — KHÔNG nhân số khách ──────────
+// Mức phụ thuộc tuyến y như công HDV (dò tuyến ở helpers.ts, hàm tipNgayTheoTuyen).
+/** Mức chung — Hà Nội · Hạ Long · Ninh Bình. */
+export const TIP_NGAY_MAC_DINH = 200_000;
+/** Miền Trung (Đà Nẵng · Bà Nà · Hội An · Huế). */
+export const TIP_NGAY_MIEN_TRUNG = 500_000;
+/** Sapa. */
+export const TIP_NGAY_SAPA = 700_000;
+/** Phú Quốc. */
+export const TIP_NGAY_PHU_QUOC = 1_000_000;
 
 /**
  * Ba khoản tiền cố định của một báo giá. Vắng / undefined = dùng mặc định;
@@ -92,8 +101,8 @@ export interface DinhMuc {
   hdvGiaNgay?: number;
   /** Bảo hiểm / khách. */
   baoHiemMoiKhach?: number;
-  /** Tip / đoàn (lump-sum). */
-  tipDoan?: number;
+  /** Tip / ngày (một mức cho cả đoàn, KHÔNG nhân số khách). */
+  tipNgay?: number;
 }
 
 export function calcCase(
@@ -136,7 +145,7 @@ export function calcCase(
   // ?? chứ KHÔNG phải ||: OP gõ 0 là chốt 0 đồng, || sẽ lẳng lặng kéo về mặc định.
   const insurance = (dinhMuc.baoHiemMoiKhach ?? BAO_HIEM_MOI_KHACH_MAC_DINH) * pax;
   const guide = (dinhMuc.hdvGiaNgay ?? HDV_GIA_NGAY_MAC_DINH) * soNgay;
-  const tips = dinhMuc.tipDoan ?? TIP_DOAN_MAC_DINH;
+  const tips = (dinhMuc.tipNgay ?? TIP_NGAY_MAC_DINH) * soNgay;
 
   const total_cost = hotel + meal + ticket + transport + insurance + guide + tips;
   const profit_vnd = profitUsd * exchangeRate * guests;

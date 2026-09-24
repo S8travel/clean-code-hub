@@ -136,11 +136,11 @@ export function buildCostingXlsxSheet(sheet: CostingSheet, meta: CostingExcelMet
   const soNgay = meta.soNgay > 0 ? meta.soNgay : 0;
   const hdvPerDay = derivedUnitCost(footerOf("hdv")?.values, sheet.configs.map(() => soNgay));
   const bhPerPax = derivedUnitCost(footerOf("bao_hiem")?.values, sheet.configs.map((c) => c.pax));
-  const tipTotal = derivedUnitCost(footerOf("tip")?.values, sheet.configs.map(() => 1));
+  const tipPerDay = derivedUnitCost(footerOf("tip")?.values, sheet.configs.map(() => soNgay));
 
   // ── Đầu file ──
   // Dải cảnh báo NỘI BỘ: file này có khối THAM SỐ (tỷ giá, lợi nhuận/khách,
-  // HDV/ngày, bảo hiểm/khách, tip/đoàn) + công thức sống → người nhận tự bấm
+  // HDV/ngày, bảo hiểm/khách, tip/ngày) + công thức sống → người nhận tự bấm
   // lại được giá vốn theo từng bậc khách. Gửi nhầm là mất sạch biên lợi nhuận.
   // Địa chỉ ô trong công thức tính động qua nextRow() nên thêm dòng này KHÔNG
   // làm lệch công thức; freezeRows cũng lấy theo rows.length.
@@ -174,7 +174,7 @@ export function buildCostingXlsxSheet(sheet: CostingSheet, meta: CostingExcelMet
   }
   if (hdvPerDay != null) refs.hdv = param("HDV / ngày 導遊每天", num(hdvPerDay), "VND");
   if (bhPerPax != null) refs.baoHiem = param("Bảo hiểm / khách 保險每人", num(bhPerPax), "VND");
-  if (tipTotal != null) refs.tip = param("Tip / đoàn 小費", num(tipTotal), "VND");
+  if (tipPerDay != null) refs.tip = param("Tip / ngày 小費每天", num(tipPerDay), "VND");
   rows.push([txt("")]);
 
   // ── 2 dòng tiêu đề: dải bậc số khách, rồi nhãn từng cột ──
@@ -273,8 +273,8 @@ export function buildCostingXlsxSheet(sheet: CostingSheet, meta: CostingExcelMet
         if (!refs.baoHiem || bhPerPax == null) break;
         return fx(v, `${refs.baoHiem}*${cfg.pax}`, bhPerPax * cfg.pax, "total_number");
       case "tip":
-        if (!refs.tip || tipTotal == null) break;
-        return fx(v, `${refs.tip}`, tipTotal, "total_number");
+        if (!refs.tip || tipPerDay == null) break;
+        return fx(v, `${refs.tip}*${refs.soNgay}`, tipPerDay * soNgay, "total_number");
       case "tong_von": {
         const parts = costKeys.map((k) => at(k)).filter((r): r is string => r != null);
         if (parts.length !== costKeys.length || parts.length === 0) break;

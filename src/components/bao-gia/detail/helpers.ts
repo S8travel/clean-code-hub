@@ -5,7 +5,9 @@ import type { BaoGiaCase, BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/us
 import {
   calcBaoGia, calcTiers, tierConfig, effItemFoc, effItemQty, slOverrideOf,
   HDV_GIA_NGAY_MAC_DINH, HDV_GIA_NGAY_SAPA, HDV_GIA_NGAY_MIEN_TRUNG, HDV_GIA_NGAY_HCM,
-  BAO_HIEM_MOI_KHACH_MAC_DINH, TIP_DOAN_MAC_DINH, type DinhMuc, type ManualItem,
+  BAO_HIEM_MOI_KHACH_MAC_DINH,
+  TIP_NGAY_MAC_DINH, TIP_NGAY_MIEN_TRUNG, TIP_NGAY_SAPA, TIP_NGAY_PHU_QUOC,
+  type DinhMuc, type ManualItem,
 } from "@/lib/bao-gia-calc";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
@@ -363,6 +365,15 @@ export function isHcmTour(ket: BaoGiaKetQua | null | undefined): boolean {
   });
 }
 
+/** Tour có ghé Phú Quốc? Đảo riêng, mức tip cao nhất trong bảng.
+ *  中文 富國 (phồn thể) / 富国 (giản thể), thường đi kèm 島/岛. */
+export function isPhuQuocTour(ket: BaoGiaKetQua | null | undefined): boolean {
+  return nguonDoTuyen(ket, true).some((raw) => {
+    if (/富國|富国/.test(raw)) return true;
+    return /\bphu quoc\b/.test(boDau(raw));
+  });
+}
+
 /** Công HDV/ngày hệ thống TỰ ĐẶT theo tuyến (chưa xét việc OP gõ tay).
  *  Chạm nhiều nơi → lấy mức cao nhất, kèm tên tuyến để màn hình nói được vì sao. */
 export function hdvGiaNgayTheoTuyen(
@@ -390,11 +401,27 @@ export function resolveBaoHiemMoiKhach(ket: BaoGiaKetQua | null | undefined): nu
   return BAO_HIEM_MOI_KHACH_MAC_DINH;
 }
 
-/** Tip / đoàn (lump-sum). OP gõ số → tôn trọng tuyệt đối, kể cả 0. */
-export function resolveTipDoan(ket: BaoGiaKetQua | null | undefined): number {
-  const v = ket?.tip_doan;
+/** Tip/ngày hệ thống TỰ ĐẶT theo tuyến (chưa xét việc OP gõ tay). Cùng luật
+ *  "chạm nhiều nơi thì lấy mức cao nhất" với công HDV — một tour Hà Nội – Sapa
+ *  vẫn phải trả theo mức Sapa cho cả hành trình, không chia đôi theo ngày.
+ *
+ *  Mức tip KHÔNG bám theo mức công HDV: miền Trung công 600k nhưng tip 500k. */
+export function tipNgayTheoTuyen(
+  ket: BaoGiaKetQua | null | undefined,
+): { gia: number; tuyen: string } {
+  const nen = [{ gia: TIP_NGAY_MAC_DINH, tuyen: "" }];
+  if (isMienTrungTour(ket)) nen.push({ gia: TIP_NGAY_MIEN_TRUNG, tuyen: "miền Trung" });
+  if (isSapaTour(ket)) nen.push({ gia: TIP_NGAY_SAPA, tuyen: "Sapa" });
+  if (isPhuQuocTour(ket)) nen.push({ gia: TIP_NGAY_PHU_QUOC, tuyen: "Phú Quốc" });
+  return nen.reduce((a, b) => (b.gia > a.gia ? b : a));
+}
+
+/** Tip / ngày dùng để tính báo giá này. OP đã gõ số → tôn trọng tuyệt đối
+ *  (kể cả 0); chưa gõ → tự đặt theo tuyến. */
+export function resolveTipNgay(ket: BaoGiaKetQua | null | undefined): number {
+  const v = ket?.tip_ngay;
   if (v != null && Number.isFinite(v) && v >= 0) return v;
-  return TIP_DOAN_MAC_DINH;
+  return tipNgayTheoTuyen(ket).gia;
 }
 
 /** Gói 3 định mức để truyền vào engine tính tiền. Dùng ở MỌI nơi gọi engine —
@@ -403,7 +430,7 @@ export function dinhMucCuaBaoGia(ket: BaoGiaKetQua | null | undefined): DinhMuc 
   return {
     hdvGiaNgay: resolveHdvGiaNgay(ket),
     baoHiemMoiKhach: resolveBaoHiemMoiKhach(ket),
-    tipDoan: resolveTipDoan(ket),
+    tipNgay: resolveTipNgay(ket),
   };
 }
 
@@ -502,10 +529,10 @@ export interface CostingFooterRow {
   /** Dòng cho OP gõ đè đơn giá. Chỉ MÀN HÌNH dùng — Excel và bảng xem trước AI
    *  bỏ qua và vẫn đọc `label` như cũ, nên thêm field này không vỡ chỗ nào. */
   oNhap?: {
-    truong: "hdv_gia_ngay" | "bao_hiem_moi_khach" | "tip_doan";
+    truong: "hdv_gia_ngay" | "bao_hiem_moi_khach" | "tip_ngay";
     nhan: string;             // nhãn KHÔNG kèm số (số nằm trong ô nhập)
     donGia: number;
-    donVi: string;            // "₫/ngày" | "₫/khách" | "₫/đoàn"
+    donVi: string;            // "₫/ngày" (HDV, tip) | "₫/khách" (bảo hiểm)
     tuDat: boolean;           // true = đang để hệ thống tự đặt, OP chưa gõ
     ghiChuTuDat?: string;     // vì sao ra con số này, vd "tuyến Đà Nẵng"
   };
@@ -615,11 +642,12 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
   // cùng một báo giá ra hai giá ở hai màn hình.
   const hdvGiaNgay = resolveHdvGiaNgay(ket);
   const baoHiemMoiKhach = resolveBaoHiemMoiKhach(ket);
-  const tipDoan = resolveTipDoan(ket);
+  const tipNgay = resolveTipNgay(ket);
   const tuyenHdv = hdvGiaNgayTheoTuyen(ket);
+  const tuyenTip = tipNgayTheoTuyen(ket);
   const hdv = configs.map(() => hdvGiaNgay * soNgay);
   const baoHiem = configs.map((c) => baoHiemMoiKhach * c.pax);
-  const tip = configs.map(() => tipDoan);
+  const tip = configs.map(() => tipNgay * soNgay);
   const tongVon = configs.map((_, ti) => dichVu[ti] + hdv[ti] + baoHiem[ti] + tip[ti]);
   const loiNhuan = configs.map((c) => Math.round(profitUsd * xr * c.guests));
   const giaBan = configs.map((_, ti) => tongVon[ti] + loiNhuan[ti]);
@@ -652,11 +680,12 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
     },
     {
       key: "tip",
-      label: `Tip (${fmtVnd(tipDoan)} ₫/đoàn)`,
+      label: `Tip (${fmtVnd(tipNgay)} ₫/ngày)`,
       values: tip, kind: "cost",
       oNhap: {
-        truong: "tip_doan", nhan: "Tip", donGia: tipDoan, donVi: "₫/đoàn",
-        tuDat: ket.tip_doan == null,
+        truong: "tip_ngay", nhan: "Tip", donGia: tipNgay, donVi: "₫/ngày",
+        tuDat: ket.tip_ngay == null,
+        ghiChuTuDat: tuyenTip.tuyen ? `tuyến ${tuyenTip.tuyen}` : "mức chung",
       },
     },
     { key: "tong_von", label: "TỔNG CHI PHÍ VỐN", values: tongVon, kind: "total" },
