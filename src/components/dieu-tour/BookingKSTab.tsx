@@ -1,4 +1,4 @@
-import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { normalizeEmails } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Mail, Check, X, FileDown, Loader2, Trash2,
-  MapPin, Phone, AlertTriangle,
+  MapPin, Phone, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -36,6 +36,7 @@ import { errMsg } from "@/lib/error";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { soSanhMailKS, type KsMailSnapshot } from "@/lib/mail-drift";
 import TauNgayCard from "@/components/booking-ks/TauNgayCard";
 import {
   expandRoomValues,
@@ -308,6 +309,11 @@ function BookingKSCard({
   const [emailHtml, setEmailHtml] = useState("");
   const [updateNote, setUpdateNote] = useState("");
   const [sending, setSending] = useState(false);
+  // Bản chốt dữ liệu đã dùng để dựng nội dung mail đang soạn. Điều tour lưu tự
+  // động (debounce 1,5s) nên đêm cuối có thể ghi xong SAU khi mail đã dựng →
+  // mail đi thiếu đêm mà không ai hay. Đã xảy ra thật.
+  const mailSnapshotRef = useRef<KsMailSnapshot | null>(null);
+  const [boQuaDrift, setBoQuaDrift] = useState(false);
 
   useEffect(() => {
     setSoPhongByNight(expandRoomValues(row.ks_dat_truoc, row.ngay_dates));
@@ -426,15 +432,33 @@ function BookingKSCard({
   };
 
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
-  const openEmailModal = (mode: "first" | "update" = "first") => {
-    setEmailMode(mode);
-    setUpdateNote("");
+
+  const buildSubject = (mode: "first" | "update") => {
     const datesStr = roomDates.length > 0
       ? roomDates.map(fmtDate).join(", ") + ` (${roomDates.length} đêm)`
       : "";
-    setEmailTo(normalizeEmails(row.khach_san_email));
     const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt phòng – ${tenDoan} – ${row.khach_san_ten}${datesStr ? ` – ${datesStr}` : ""}`);
-    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
+    return mode === "update" ? `Re: ${baseSubject}` : baseSubject;
+  };
+
+  // Dựng lại tiêu đề + nội dung theo dữ liệu HIỆN TẠI và chốt lại bản so sánh.
+  // GHI ĐÈ phần OP đã gõ tay trong khung soạn → chỉ chạy khi OP tự bấm.
+  const dungLaiNoiDungMail = () => {
+    mailSnapshotRef.current = buildMailFields();
+    setBoQuaDrift(false);
+    setEmailSubject(buildSubject(emailMode));
+    setEmailHtml(buildEmailHtml(emailMode, updateNote));
+    toast.success(t("Đã dựng lại nội dung mail theo dữ liệu mới"));
+  };
+
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
+    setUpdateNote("");
+    setBoQuaDrift(false);
+    // Chốt đúng bộ dữ liệu dùng để dựng nội dung ngay dưới đây — lúc gửi so lại.
+    mailSnapshotRef.current = buildMailFields();
+    setEmailTo(normalizeEmails(row.khach_san_email));
+    setEmailSubject(buildSubject(mode));
     setEmailHtml(buildEmailHtml(mode, ""));
     setEmailModalOpen(true);
   };
@@ -475,7 +499,13 @@ MST: 0402021137
 Email: s8travel.hddt@gmail.com`;
   };
 
+  // Dấu vân tay phải đóng theo bản ĐÃ DỰNG ra mail, không theo dữ liệu sống lúc
+  // bấm Gửi. Đóng theo dữ liệu sống thì mail sai ngày vẫn "khớp hiện trạng" →
+  // badge "Có thay đổi" không bao giờ sáng, mất luôn lưới an toàn cuối cùng.
+  const hashBanDaGui = () => hashMailContent(mailSnapshotRef.current ?? buildMailFields());
+
   const handleSendViaServer = async () => {
+    if (chanGui) return;
     setSending(true);
     try {
       await sendMut.mutateAsync({
@@ -487,7 +517,7 @@ Email: s8travel.hddt@gmail.com`;
         sentBy: currentUserName,
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
-        mailContentHash: hashMailContent(buildMailFields()),
+        mailContentHash: hashBanDaGui(),
       });
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? t("Đã gửi email cập nhật") : t("Đã gửi email đặt phòng"));
@@ -499,9 +529,10 @@ Email: s8travel.hddt@gmail.com`;
   };
 
   const handleMailtoFallback = () => {
+    if (chanGui) return;
     const mailtoBody = buildMailtoBody();
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    const hash = hashMailContent(buildMailFields());
+    const hash = hashBanDaGui();
     if (emailMode === "update") {
       updateStatus(row, { ks_dat_truoc_sent_at: new Date().toISOString(), ks_dat_truoc_sent_by: currentUserName, mail_content_hash: hash });
     } else {
@@ -561,12 +592,17 @@ Email: s8travel.hddt@gmail.com`;
     }
   };
 
-  const buildMailFields = () => ({
+  const buildMailFields = (): KsMailSnapshot => ({
     khach_san_id: row.khach_san_id,
     check_in_dates: roomDates,
     so_phong: preferredRoomText || "",
     ghi_chu: ghiChu,
   });
+
+  // Dữ liệu đổi sau khi nội dung mail đã dựng (thường là điều tour vừa lưu xong
+  // đêm cuối). Tính thẳng khi render — chỉ so 4 trường, không cần state.
+  const driftItems = emailModalOpen ? soSanhMailKS(mailSnapshotRef.current, buildMailFields()) : [];
+  const chanGui = driftItems.length > 0 && !boQuaDrift;
 
   // Dùng CHUNG vị từ với gate đổi KS (use-doi-ks-phi-huy). Định nghĩa cũ chỉ loại
   // 'ks_xac_nhan_huy' nên booking ở 'cho_ks_xac_nhan_huy' (vừa bấm Hủy booking) vẫn
@@ -817,6 +853,50 @@ Email: s8travel.hddt@gmail.com`;
       onSendViaServer={handleSendViaServer}
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
+      disableSend={chanGui}
+      warning={driftItems.length > 0 ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="min-w-0 text-xs text-amber-900 space-y-1">
+              <p className="font-semibold">{t("Dữ liệu booking đã đổi sau khi nội dung mail được dựng")}</p>
+              <ul className="space-y-0.5">
+                {driftItems.map((it) => (
+                  <li key={it.nhan} className="break-words">
+                    <span className="font-medium">{t(it.nhan)}:</span>{" "}
+                    <span className="line-through opacity-70">{it.truoc}</span>
+                    {" → "}
+                    <span className="font-semibold">{it.sau}</span>
+                  </li>
+                ))}
+              </ul>
+              <p>{t("Nội dung đang soạn vẫn theo số liệu cũ — gửi đi là khách sạn nhận sai.")}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pl-6">
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={dungLaiNoiDungMail}
+              title={t("Ghi đè nội dung đang soạn bằng bản dựng lại từ dữ liệu mới")}
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              {t("Dựng lại nội dung mail")}
+            </Button>
+            {chanGui && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => setBoQuaDrift(true)}
+                title={t("Booking sẽ bị đánh dấu \"Có thay đổi\" để nhớ gửi cập nhật sau")}
+              >
+                {t("Vẫn gửi bản đang soạn")}
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : undefined}
       mode={emailMode}
       updateNote={updateNote}
       onUpdateNoteChange={setUpdateNote}
