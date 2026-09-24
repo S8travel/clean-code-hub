@@ -2599,10 +2599,20 @@
   "Đặt ngoài hệ thống (Zalo/điện thoại)": "系統外預訂（Zalo/電話）",
   "Ngày ở": "住宿日期",
   "Dữ liệu booking đã đổi sau khi nội dung mail được dựng": "郵件內容產生後，訂房資料已變更",
-  "Nội dung đang soạn vẫn theo số liệu cũ — gửi đi là khách sạn nhận sai.": "目前草稿仍是舊數據 — 直接寄出飯店會收到錯誤資訊。",
   "Dựng lại nội dung mail": "依最新資料重新產生郵件",
   "Đã dựng lại nội dung mail theo dữ liệu mới": "已依最新資料重新產生郵件內容",
   "Vẫn gửi bản đang soạn": "仍寄出目前草稿",
   "Booking sẽ bị đánh dấu \"Có thay đổi\" để nhớ gửi cập nhật sau": "此訂房將標記「有變更」，提醒稍後補寄更新",
-  "Ghi đè nội dung đang soạn bằng bản dựng lại từ dữ liệu mới": "以最新資料重新產生，將覆蓋目前草稿內容"
+  "Ghi đè nội dung đang soạn bằng bản dựng lại từ dữ liệu mới": "以最新資料重新產生，將覆蓋目前草稿內容",
+  "Nội dung đang soạn vẫn theo số liệu cũ — gửi đi là đối tác nhận sai.": "目前草稿仍是舊數據 — 直接寄出合作夥伴會收到錯誤資訊。",
+  "Số dịch vụ": "服務筆數",
+  "Số món": "菜色數量",
+  "Tên set": "套餐名稱",
+  "Món ăn": "菜色",
+  "Nội bộ": "內部",
+  "Trẻ em 1": "兒童1",
+  "Trẻ em 2": "兒童2",
+  "Số chỗ": "座位數",
+  "Chuyến bay đón": "接機航班",
+  "Chuyến bay tiễn": "送機航班"
 }

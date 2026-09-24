@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { errMsg } from "@/lib/error";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ import DvHuyMailModal, { type DvHuyMailTarget } from "@/components/booking-dv/Dv
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { soSanhBanChotMail, NHAN_DV } from "@/lib/mail-drift";
+import MailDriftWarning from "@/components/shared/MailDriftWarning";
 import { useCurrentUserProfile } from "@/hooks/use-doan";
 import { useCurrentUserEmail } from "@/hooks/use-current-user";
 import { useHdvsByDoanId, formatHdvsForEmail } from "@/hooks/use-hdv";
@@ -139,6 +141,17 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
   const isActive = allRows.some((r) => ["cho_xac_nhan", "da_xac_nhan"].includes(r.booking_status));
   const fields = buildMailFields();
   const isDirty = isActive && allRows.some((r) => isMailDirty(r.sent_at, r.mail_content_hash, fields));
+
+  // Bản chốt dữ liệu đã dùng để dựng nội dung mail đang soạn — lúc gửi so lại.
+  // Xem lib/mail-drift.ts: điều tour lưu tự động nên dữ liệu có thể đổi sau khi
+  // mail đã dựng, mail đi số liệu cũ mà không ai hay.
+  const mailSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const zaloSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const [boQuaDrift, setBoQuaDrift] = useState(false);
+  const driftItems = emailModalOpen
+    ? soSanhBanChotMail(mailSnapshotRef.current, fields, { nhan: NHAN_DV, demMang: { dich_vu: "Số dịch vụ" } })
+    : [];
+  const chanGui = driftItems.length > 0 && !boQuaDrift;
 
   // Tên hiển thị header (subtitle): nếu merged → liệt kê các NCC, ngược lại
   // hiện tenNCC (editable).
@@ -279,9 +292,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
 </html>`;
   };
 
-  const openEmailModal = (mode: "first" | "update" = "first") => {
-    setEmailMode(mode);
-    setUpdateNote("");
+  const buildSubject = (mode: "first" | "update") => {
     const ncc = tenNCC || row.ten_nha_cung_cap || "";
     // Tiêu đề dùng NGÀY DÙNG DỊCH VỤ (lấy từ dich_vu_list — sort ASC). 1 ngày
     // duy nhất → "dd/MM"; nhiều ngày → "dd/MM–dd/MM". Bỏ qua ngày đi đoàn.
@@ -292,11 +303,29 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
       : dvDates.length === 1 ? fmtShort(dvDates[0])
       : `${fmtShort(dvDates[0])}–${fmtShort(dvDates[dvDates.length - 1])}`;
     void ngayDi; // legacy — không còn dùng cho subject
-    setEmailTo(email || row.email_nha_cung_cap || "");
     const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt dịch vụ – ${tenDoan}${dvDateStr ? ` – ${dvDateStr}` : ""}${ncc ? ` – ${ncc}` : ""}`);
-    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
+    return mode === "update" ? `Re: ${baseSubject}` : baseSubject;
+  };
+
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
+    setUpdateNote("");
+    setBoQuaDrift(false);
+    mailSnapshotRef.current = buildMailFields();
+    setEmailTo(email || row.email_nha_cung_cap || "");
+    setEmailSubject(buildSubject(mode));
     setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);
+  };
+
+  // Dựng lại tiêu đề + nội dung theo dữ liệu HIỆN TẠI, chốt lại bản so sánh.
+  // GHI ĐÈ phần OP gõ tay trong khung soạn → chỉ chạy khi OP tự bấm.
+  const dungLaiNoiDungMail = () => {
+    mailSnapshotRef.current = buildMailFields();
+    setBoQuaDrift(false);
+    setEmailSubject(buildSubject(emailMode));
+    setEmailBody(buildEmailHTML(emailMode, updateNote));
+    toast.success(t("Đã dựng lại nội dung mail theo dữ liệu mới"));
   };
 
   useEffect(() => {
@@ -305,11 +334,16 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateNote]);
 
+  // Dấu vân tay phải theo bản ĐÃ DỰNG ra mail, không theo dữ liệu sống lúc bấm
+  // Gửi — kẻo mail sai vẫn "khớp hiện trạng", badge "Có thay đổi" không sáng.
+  const banDaGui = () => mailSnapshotRef.current ?? buildMailFields();
+
   const handleSendViaServer = async () => {
+    if (chanGui) return;
     if (!emailTo) { toast.error(t("Vui lòng nhập email nhà cung cấp")); return; }
     setSending(true);
     try {
-      const hash = hashMailContent(buildMailFields());
+      const hash = hashMailContent(banDaGui());
       await sendEmailMut.mutateAsync({
         bookingId: row.id,
         doanId: row.doan_id,
@@ -382,7 +416,7 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
     ].join("\n");
 
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    const hash = hashMailContent(buildMailFields());
+    const hash = hashMailContent(banDaGui());
     if (emailMode === "update") {
       save({ sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash });
     } else {
@@ -417,11 +451,12 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
 
   const handleSendZalo = () => {
     setZaloText(buildZaloText());
+    zaloSnapshotRef.current = buildMailFields();
     setZaloModalOpen(true);
   };
 
   const handleConfirmZaloSent = () => {
-    saveAll({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hashMailContent(buildMailFields()) });
+    saveAll({ booking_status: "cho_xac_nhan", sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hashMailContent(zaloSnapshotRef.current ?? buildMailFields()) });
     setZaloModalOpen(false);
   };
 
@@ -723,6 +758,15 @@ export default function BookingDVCard({ row, siblings = [], tenDoan, currentUser
         onSendViaServer={handleSendViaServer}
         onMailtoFallback={handleMailtoFallback}
         sending={sending}
+        disableSend={chanGui}
+        warning={
+          <MailDriftWarning
+            items={driftItems}
+            chanGui={chanGui}
+            onDungLai={dungLaiNoiDungMail}
+            onBoQua={() => setBoQuaDrift(true)}
+          />
+        }
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}

@@ -28,6 +28,8 @@ import HuyBookingConfirmDialog, { type HuyBookingConfirmArgs } from "@/component
 import NhHuyMailModal, { type NhHuyMailTarget } from "@/components/booking-nh/NhHuyMailModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { soSanhBanChotMail, NHAN_NH } from "@/lib/mail-drift";
+import MailDriftWarning from "@/components/shared/MailDriftWarning";
 import {
   buildNhMailFields, buildNhSubject, buildNhEmailHtml, type NhMailInput,
 } from "@/lib/booking-mail/nh-mail";
@@ -109,6 +111,13 @@ function MealCardInner({
   const { data: doanHdvs = [] } = useHdvsByDoanId(doanId);
   const { data: chuThichKhach } = useDoanChuThich(doanId);
   const { data: setMenuOptions = [] } = useSetMenuOptions(nhaHangId);
+
+  // Bản chốt dữ liệu đã dùng để dựng nội dung mail đang soạn — lúc gửi so lại.
+  // Xem lib/mail-drift.ts: điều tour lưu tự động nên dữ liệu có thể đổi sau khi
+  // mail đã dựng, mail đi số liệu cũ mà không ai hay.
+  const mailSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const zaloSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const [boQuaDrift, setBoQuaDrift] = useState(false);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
@@ -270,6 +279,13 @@ function MealCardInner({
     ["da_gui", "nh_xac_nhan"].includes(booking.booking_status) &&
     isMailDirty(booking.sent_at, booking.mail_content_hash, buildMailFields());
 
+  // Dữ liệu đổi sau khi nội dung mail đã dựng. Tính thẳng khi render — chỉ so
+  // vài field, không cần state.
+  const driftItems = emailModalOpen
+    ? soSanhBanChotMail(mailSnapshotRef.current, buildMailFields(), { nhan: NHAN_NH, demMang: { mon_an: "Số món" } })
+    : [];
+  const chanGui = driftItems.length > 0 && !boQuaDrift;
+
   const saveBooking = (overrides: Partial<BookingNHRow> = {}) => {
     const setMenuPayload = selectedSetMenuId
       ? {
@@ -362,10 +378,22 @@ function MealCardInner({
     // updateNote = lời nhắn tự do (tùy chọn). Diff thay đổi KHÔNG prefill vào
     // đây nữa — đã ghép thẳng vào nội dung mail (mục "Nội dung thay đổi…").
     setUpdateNote("");
+    setBoQuaDrift(false);
+    mailSnapshotRef.current = buildMailFields();
     setEmailTo(normalizeEmails(nhaHangEmail));
     setEmailSubject(buildNhSubject(buildMailInput(), mode));
     setEmailHtml(buildEmailHtml(mode, ""));
     setEmailModalOpen(true);
+  };
+
+  // Dựng lại tiêu đề + nội dung theo dữ liệu HIỆN TẠI, chốt lại bản so sánh.
+  // GHI ĐÈ phần OP gõ tay trong khung soạn → chỉ chạy khi OP tự bấm.
+  const dungLaiNoiDungMail = () => {
+    mailSnapshotRef.current = buildMailFields();
+    setBoQuaDrift(false);
+    setEmailSubject(buildNhSubject(buildMailInput(), emailMode));
+    setEmailHtml(buildEmailHtml(emailMode, updateNote));
+    toast.success(t("Đã dựng lại nội dung mail theo dữ liệu mới"));
   };
 
   // Rebuild HTML khi: user nhập lời nhắn (update mode) HOẶC các input async
@@ -375,6 +403,10 @@ function MealCardInner({
   useEffect(() => {
     if (!emailModalOpen) return;
     setEmailHtml(buildEmailHtml(emailMode, updateNote));
+    // Nội dung vừa dựng lại từ dữ liệu hiện tại → chốt lại bản so sánh, kẻo
+    // mấy giá trị load async (set menu, HDV) bị báo "lệch" oan ngay khi mở.
+    setEmailSubject(buildNhSubject(buildMailInput(), emailMode));
+    mailSnapshotRef.current = buildMailFields();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateNote, doanHdvs, chuThichKhach, selectedMenu, emailMode, emailModalOpen]);
 
@@ -406,7 +438,13 @@ function MealCardInner({
     ].filter(Boolean).join("\n");
   };
 
+  // Dấu vân tay + snapshot lưu DB phải theo bản ĐÃ DỰNG ra mail, không theo dữ
+  // liệu sống lúc bấm Gửi — kẻo mail sai vẫn "khớp hiện trạng" và badge "Có
+  // thay đổi" không bao giờ sáng.
+  const banDaGui = () => mailSnapshotRef.current ?? buildMailFields();
+
   const handleSendViaServer = async () => {
+    if (chanGui) return;
     setSending(true);
     try {
       // `booking` là prop từ query cha — sau upsert nó KHÔNG refetch kịp trong
@@ -427,8 +465,8 @@ function MealCardInner({
       await sendEmailMut.mutateAsync({
         bookingId, doanId, to: emailTo, subject: emailSubject, html: emailHtml, sentBy: currentUserName, replyTo: userProfile?.email || currentUserEmail || undefined, emailThreadId: threadId,
         mode: emailMode,
-        mailContentHash: hashMailContent(buildMailFields()),
-        mailSentSnapshot: buildMailFields(),
+        mailContentHash: hashMailContent(banDaGui()),
+        mailSentSnapshot: banDaGui(),
       });
       setEmailModalOpen(false);
       toast.success(emailMode === "update" ? t("Đã gửi email cập nhật") : t("Đã gửi email booking"));
@@ -440,9 +478,10 @@ function MealCardInner({
   };
 
   const handleMailtoFallback = () => {
+    if (chanGui) return;
     const mailtoBody = buildMailtoBody();
     window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-    const snap = buildMailFields();
+    const snap = banDaGui();
     const hash = hashMailContent(snap);
     if (emailMode === "update") {
       saveBooking({ sent_at: new Date().toISOString(), sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap } as Partial<BookingNHRow>);
@@ -491,11 +530,12 @@ function MealCardInner({
   const handleSend = () => openEmailModal();
   const handleSendZalo = () => {
     setZaloText(buildZaloText());
+    zaloSnapshotRef.current = buildMailFields();
     setZaloModalOpen(true);
   };
   const handleConfirmZaloSent = () => {
     const now = new Date().toISOString();
-    const snap = buildMailFields();
+    const snap = zaloSnapshotRef.current ?? buildMailFields();
     const hash = hashMailContent(snap);
     if (booking?.id) {
       updateMut.mutate({ id: booking.id, doan_id: doanId, booking_status: "da_gui", sent_at: now, sent_by: currentUserName, mail_content_hash: hash, mail_sent_snapshot: snap } as Partial<BookingNHRow> & { id: number; doan_id: number });
@@ -802,6 +842,15 @@ function MealCardInner({
       onSendViaServer={handleSendViaServer}
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
+      disableSend={chanGui}
+      warning={
+        <MailDriftWarning
+          items={driftItems}
+          chanGui={chanGui}
+          onDungLai={dungLaiNoiDungMail}
+          onBoQua={() => setBoQuaDrift(true)}
+        />
+      }
       mode={emailMode}
       updateNote={updateNote}
       onUpdateNoteChange={setUpdateNote}

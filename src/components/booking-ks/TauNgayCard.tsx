@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { normalizeEmails } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
@@ -26,6 +26,8 @@ import HuyMailModal, { type HuyMailModalTarget } from "@/components/shared/HuyMa
 import { buildTauHuySubject, buildTauHuyEmailHtml, buildTauHuyMailtoBody } from "@/lib/booking-mail/tau-huy-mail";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { soSanhBanChotMail, NHAN_NH } from "@/lib/mail-drift";
+import MailDriftWarning from "@/components/shared/MailDriftWarning";
 import { t, useTranslate } from "@/lib/i18n";
 
 function fmtDatetime(d: string | null | undefined) {
@@ -74,6 +76,11 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   const [deadline, setDeadline] = useState(row.deadline || "");
   const [collapsed, setCollapsed] = useState(false);
 
+  // Bản chốt dữ liệu đã dùng để dựng nội dung mail đang soạn — lúc gửi so lại.
+  // Xem lib/mail-drift.ts: điều tour lưu tự động nên dữ liệu có thể đổi sau khi
+  // mail đã dựng, mail đi số liệu cũ mà không ai hay.
+  const mailSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const [boQuaDrift, setBoQuaDrift] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
   const [emailTo, setEmailTo] = useState("");
@@ -250,16 +257,32 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
 </body></html>`;
   };
 
+  const buildSubject = (mode: "first" | "update") => {
+    const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
+    const buaStr = row.bua_an === "trua" ? "Trưa" : "Tối";
+    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`);
+    return mode === "update" ? `Re: ${baseSubject}` : baseSubject;
+  };
+
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
     setUpdateNote("");
-    const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
-    const buaStr = row.bua_an === "trua" ? "Trưa" : "Tối";
+    setBoQuaDrift(false);
+    mailSnapshotRef.current = buildMailFields();
     setEmailTo(normalizeEmails(row.nha_hang_email));
-    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt tàu – ${tenDoan} – ${ngayStr} – ${buaStr}${soKhach ? ` – ${soKhach} khách` : ""}`);
-    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
+    setEmailSubject(buildSubject(mode));
     setEmailHtml(buildEmailHtml(selectedSetMenu, mode, ""));
     setEmailModalOpen(true);
+  };
+
+  // Dựng lại tiêu đề + nội dung theo dữ liệu HIỆN TẠI, chốt lại bản so sánh.
+  // GHI ĐÈ phần OP gõ tay trong khung soạn → chỉ chạy khi OP tự bấm.
+  const dungLaiNoiDungMail = () => {
+    mailSnapshotRef.current = buildMailFields();
+    setBoQuaDrift(false);
+    setEmailSubject(buildSubject(emailMode));
+    setEmailHtml(buildEmailHtml(selectedSetMenu, emailMode, updateNote));
+    toast.success(t("Đã dựng lại nội dung mail theo dữ liệu mới"));
   };
 
   useEffect(() => {
@@ -274,6 +297,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   };
 
   const handleSendViaServer = async () => {
+    if (chanGui) return;
     if (!effectiveBookingId) { toast.error(t("Cần lưu booking trước khi gửi email")); return; }
     setSending(true);
     try {
@@ -287,7 +311,9 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         replyTo: userProfile?.email || currentUserEmail || undefined,
         emailThreadId: row.email_thread_id,
         mode: emailMode,
-        mailContentHash: hashMailContent(buildMailFields()),
+        // Theo bản ĐÃ DỰNG ra mail, không theo dữ liệu sống lúc bấm Gửi — kẻo
+        // mail sai vẫn "khớp hiện trạng", badge "Có thay đổi" không sáng.
+        mailContentHash: hashMailContent(mailSnapshotRef.current ?? buildMailFields()),
       });
       // mode='update' → giữ nguyên dat_truoc_status, không ghi đè dat_truoc_sent_at
       if (emailMode !== "update") {
@@ -307,6 +333,7 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
   };
 
   const handleMailtoFallback = () => {
+    if (chanGui) return;
     const ngayStr = fmtNgayTau(row.ngay_date, row.ngay_so);
     const buaStr = row.bua_an === "trua" ? "Bữa trưa" : "Bữa tối";
     const sm = setMenuOptions.find((s) => s.id === selectedSetMenu);
@@ -338,6 +365,12 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
     (["cho_xac_nhan", "xac_nhan"].includes(row.dat_truoc_status) ||
       ["cho_xac_nhan", "xac_nhan_final"].includes(row.final_status));
   const isDirty = isActive && isMailDirty(row.dat_truoc_sent_at, row.mail_content_hash, buildMailFields());
+
+  // Dữ liệu đổi sau khi nội dung mail đã dựng → chặn gửi, hỏi lại OP.
+  const driftItems = emailModalOpen
+    ? soSanhBanChotMail(mailSnapshotRef.current, buildMailFields(), { nhan: NHAN_NH })
+    : [];
+  const chanGui = driftItems.length > 0 && !boQuaDrift;
 
   return (
     <>
@@ -438,6 +471,15 @@ export default function TauNgayCard({ row, tenDoan, soKhach, currentUserName }: 
         onSendViaServer={handleSendViaServer}
         onMailtoFallback={handleMailtoFallback}
         sending={sending}
+        disableSend={chanGui}
+        warning={
+          <MailDriftWarning
+            items={driftItems}
+            chanGui={chanGui}
+            onDungLai={dungLaiNoiDungMail}
+            onBoQua={() => setBoQuaDrift(true)}
+          />
+        }
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}
