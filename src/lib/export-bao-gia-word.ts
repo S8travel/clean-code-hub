@@ -967,6 +967,7 @@ function buildAutoDoc(
   const soNgayCp = Math.max(1, ketQua.so_ngay ?? 1);
   const bhMoiKhach = case_16.pax > 0 ? Math.round(case_16.insurance / case_16.pax) : 0;
   const hdvMoiNgay = Math.round(case_16.guide / soNgayCp);
+  const tipMoiNgay = Math.round(case_16.tips / soNgayCp);
 
   const COL_CP = Math.floor(CONTENT_W / 3);
   const fixedCostTable = new Table({
@@ -983,7 +984,7 @@ function buildAutoDoc(
       ...[
         { label: `Bảo hiểm (${fmt(bhMoiKhach)} × pax)`,        v16: case_16.insurance, v20: case_20.insurance },
         { label: `HDV (${fmt(hdvMoiNgay)} × ${soNgayCp} ngày)`, v16: case_16.guide,     v20: case_20.guide     },
-        { label: "Tips",                                        v16: case_16.tips,      v20: case_20.tips      },
+        { label: `Tips (${fmt(tipMoiNgay)} × ${soNgayCp} ngày)`, v16: case_16.tips,      v20: case_20.tips      },
       ].map(({ label, v16, v20 }) =>
         new TableRow({
           children: [

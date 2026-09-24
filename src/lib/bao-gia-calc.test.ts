@@ -8,7 +8,8 @@ import {
 // CASES (hard-coded trong calcBaoGia):
 //   case_16: { guests: 16, pax: 17, rooms: 9 }
 //   case_20: { guests: 20, pax: 21, rooms: 11 }
-// Hằng số: insurance=100k×pax, guide=200k×soNgay, tips=500k (lump).
+// Hằng số: insurance=100k×pax, guide=200k×soNgay, tips=200k×soNgay (mức chung,
+// một mức cho cả đoàn — không nhân khách).
 
 const item = (
   loai: ManualItem["loai"],
@@ -26,23 +27,23 @@ const item = (
 });
 
 describe("calcBaoGia — hằng số (insurance/guide/tips)", () => {
-  it("không item, soNgay=3 → case_16: insurance 1.7M + guide 600k + tips 500k = 2.8M", () => {
+  it("không item, soNgay=3 → case_16: insurance 1.7M + guide 600k + tips 600k = 2.9M", () => {
     const r = calcBaoGia([], "Test", 3, 24_000, 0);
     expect(r.case_16.insurance).toBe(1_700_000); // 100k × 17 pax
     expect(r.case_16.guide).toBe(600_000); // 200k × 3 ngày
-    expect(r.case_16.tips).toBe(500_000);
+    expect(r.case_16.tips).toBe(600_000); // 200k × 3 ngày
     expect(r.case_16.hotel).toBe(0);
     expect(r.case_16.meal).toBe(0);
     expect(r.case_16.ticket).toBe(0);
     expect(r.case_16.transport).toBe(0);
-    expect(r.case_16.total_cost).toBe(2_800_000);
+    expect(r.case_16.total_cost).toBe(2_900_000);
   });
 
   it("case_20 dùng pax=21 (insurance) & rooms=11, guide vẫn theo ngày", () => {
     const r = calcBaoGia([], "Test", 5, 24_000, 0);
     expect(r.case_20.insurance).toBe(2_100_000); // 100k × 21
     expect(r.case_20.guide).toBe(1_000_000); // 200k × 5
-    expect(r.case_20.tips).toBe(500_000);
+    expect(r.case_20.tips).toBe(1_000_000); // 200k × 5 — tip cũng theo ngày
   });
 });
 
@@ -122,12 +123,12 @@ describe("calcBaoGia — profit & final price", () => {
 
   it("final_price_vnd = round((total + profit) / guests)", () => {
     const r = calcBaoGia([], "T", 3, 24_000, 10);
-    // case_16: insurance 1.7M + guide 600k + tips 500k = 2.8M
-    //          + profit 3.84M = 6.64M; / 16 = 415_000
-    expect(r.case_16.final_price_vnd).toBe(415_000);
-    // case_20: insurance 2.1M + guide 600k + tips 500k = 3.2M
-    //          + profit 4.8M = 8.0M; / 20 = 400_000
-    expect(r.case_20.final_price_vnd).toBe(400_000);
+    // case_16: insurance 1.7M + guide 600k + tips 600k = 2.9M
+    //          + profit 3.84M = 6.74M; / 16 = 421_250
+    expect(r.case_16.final_price_vnd).toBe(421_250);
+    // case_20: insurance 2.1M + guide 600k + tips 600k = 3.3M
+    //          + profit 4.8M = 8.1M; / 20 = 405_000
+    expect(r.case_20.final_price_vnd).toBe(405_000);
   });
 
   it("final_price_vnd luôn là số nguyên (Math.round)", () => {
@@ -140,8 +141,8 @@ describe("calcBaoGia — profit & final price", () => {
 
   it("final_price_usd = final_price_vnd / exchangeRate (KHÔNG round)", () => {
     const r = calcBaoGia([], "T", 3, 24_000, 10);
-    expect(r.case_16.final_price_usd).toBeCloseTo(415_000 / 24_000, 6);
-    expect(r.case_20.final_price_usd).toBeCloseTo(400_000 / 24_000, 6);
+    expect(r.case_16.final_price_usd).toBeCloseTo(421_250 / 24_000, 6);
+    expect(r.case_20.final_price_usd).toBeCloseTo(405_000 / 24_000, 6);
   });
 });
 
@@ -257,15 +258,15 @@ describe("calcBaoGia — kịch bản nghiệp vụ thực tế", () => {
     // transport = 8M
     // insurance = 100k × 17 = 1.7M
     // guide = 200k × 5 = 1M
-    // tips = 500k
+    // tips = 200k × 5 = 1M
     expect(r.case_16.hotel).toBe(22_950_000);
     expect(r.case_16.meal).toBe(16_320_000);
     expect(r.case_16.ticket).toBe(5_440_000);
     expect(r.case_16.transport).toBe(8_000_000);
-    expect(r.case_16.total_cost).toBe(55_910_000);
+    expect(r.case_16.total_cost).toBe(56_410_000);
     expect(r.case_16.profit_vnd).toBe(16_000_000); // 40 × 25k × 16
-    // final = round((55.91M + 16M) / 16) = round(4_494_375) = 4_494_375
-    expect(r.case_16.final_price_vnd).toBe(4_494_375);
+    // final = round((56.41M + 16M) / 16) = 4_525_625
+    expect(r.case_16.final_price_vnd).toBe(4_525_625);
   });
 });
 
@@ -303,18 +304,18 @@ describe("calcTier / calcTiers — ma trận nhiều bậc", () => {
     expect(cases.map((c) => c.guests)).toEqual([10, 16, 25]);
   });
 
-  it("giá/khách bậc 16 = 1,031,250 (16.5M / 16)", () => {
+  it("giá/khách bậc 16 = 1,012,500 (16.2M / 16)", () => {
     const c = calcTier(items, 1, 26_000, 0, 16);
-    expect(c.total_cost).toBe(16_500_000);
-    expect(c.final_price_vnd).toBe(1_031_250);
+    expect(c.total_cost).toBe(16_200_000);
+    expect(c.final_price_vnd).toBe(1_012_500);
   });
 
   it("nhóm đông hơn → giá/khách GIẢM (chi phí cố định chia đều)", () => {
     const [c10, c20, c30] = calcTiers(items, 1, 26_000, 0, [10, 20, 30]);
     expect(c10.final_price_vnd).toBeGreaterThan(c20.final_price_vnd);
     expect(c20.final_price_vnd).toBeGreaterThan(c30.final_price_vnd);
-    expect(c10.final_price_vnd).toBe(1_110_000);
-    expect(c30.final_price_vnd).toBe(970_000);
+    expect(c10.final_price_vnd).toBe(1_080_000);
+    expect(c30.final_price_vnd).toBe(960_000);
   });
 });
 

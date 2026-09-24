@@ -47,7 +47,7 @@ function makeSheet(): CostingSheet {
   const dichVu = configs.map((_, ti) => groups.reduce((s, g) => s + g.subtotals[ti], 0));
   const hdv = configs.map(() => 200_000 * soNgay);
   const baoHiem = configs.map((c) => 100_000 * c.pax);
-  const tip = configs.map(() => 500_000);
+  const tip = configs.map(() => 200_000 * soNgay);
   const tongVon = configs.map((_, ti) => dichVu[ti] + hdv[ti] + baoHiem[ti] + tip[ti]);
   const loiNhuan = configs.map((c) => Math.round(profitUsd * xr * c.guests));
   const giaBan = configs.map((_, ti) => tongVon[ti] + loiNhuan[ti]);
@@ -118,7 +118,7 @@ describe("buildCostingXlsxSheet — bảng tính giá song ngữ", () => {
     // HDV / BH / Tip suy ngược từ footer → đúng đơn giá gốc, không hardcode lại
     expect(findParam("HDV / ngày").cells[1].value).toBe(200_000);
     expect(findParam("Bảo hiểm / khách").cells[1].value).toBe(100_000);
-    expect(findParam("Tip / đoàn").cells[1].value).toBe(500_000);
+    expect(findParam("Tip / ngày").cells[1].value).toBe(200_000);
   });
 
   it("tiêu đề cột có tiếng Trung + mỗi bậc 2 cột SL / Thành tiền", () => {

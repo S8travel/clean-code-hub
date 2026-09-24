@@ -107,10 +107,13 @@ export interface BaoGiaKetQua {
   // (Sapa 700k, còn lại 200k — resolveHdvGiaNgay). OP gõ số = chốt cứng số đó,
   // không bị đổi ngược khi lịch trình thay đổi.
   hdv_gia_ngay?: number | null;
-  // Bảo hiểm / khách và Tip / đoàn cho báo giá NÀY. null/vắng = dùng mặc định
-  // (100.000 và 500.000). OP gõ số = chốt cứng, kể cả gõ 0.
+  // Bảo hiểm / khách cho báo giá NÀY. null/vắng = mặc định 100.000.
+  // OP gõ số = chốt cứng, kể cả gõ 0.
   bao_hiem_moi_khach?: number | null;
-  tip_doan?: number | null;
+  // Tip / NGÀY (một mức cho cả đoàn, không nhân khách). null/vắng = để hệ thống
+  // tự đặt theo tuyến (Sapa 700k · Phú Quốc 1tr · miền Trung 500k · còn lại 200k
+  // — resolveTipNgay). OP gõ số = chốt cứng, kể cả gõ 0.
+  tip_ngay?: number | null;
 }
 
 // File lịch trình đính kèm (loai_bao_gia='gia_cuoi' — chương trình lấy của bên

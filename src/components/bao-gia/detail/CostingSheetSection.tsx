@@ -23,7 +23,7 @@ interface Props {
 }
 
 /** Ba khoản tiền cố định sửa được ngay trên dòng footer. */
-type DinhMucTruong = "hdv_gia_ngay" | "bao_hiem_moi_khach" | "tip_doan";
+type DinhMucTruong = "hdv_gia_ngay" | "bao_hiem_moi_khach" | "tip_ngay";
 
 const GROUP_META: Record<CostingGroup["key"], { icon: React.ReactNode; tint: string }> = {
   transport: { icon: <Bus className="h-3.5 w-3.5" />,      tint: "text-cyan-700 bg-cyan-50" },

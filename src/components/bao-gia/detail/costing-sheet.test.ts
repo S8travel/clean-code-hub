@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { calcTier, effItemFoc, effItemQty, slOverrideOf, type ManualItem } from "@/lib/bao-gia-calc";
 import {
   aiPreviewSheet, clampNgay, costingSheet, emptyBaoGiaCase, isSapaTour,
-  isMienTrungTour, isHcmTour, hdvGiaNgayTheoTuyen,
-  newBaoGiaItem, resolveHdvGiaNgay, resolveBaoHiemMoiKhach, resolveTipDoan, setSlOverride,
+  isMienTrungTour, isHcmTour, isPhuQuocTour, hdvGiaNgayTheoTuyen, tipNgayTheoTuyen,
+  newBaoGiaItem, resolveHdvGiaNgay, resolveBaoHiemMoiKhach, resolveTipNgay, setSlOverride,
 } from "./helpers";
 import type { BaoGiaRow, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 import { TY_GIA_BAO_GIA_MAC_DINH } from "@/lib/bao-gia-ty-gia";
@@ -188,9 +188,13 @@ describe("HDV / ngày — tuyến Sapa 700k cho CẢ tour", () => {
     expect(hdvOf(thuong).values).toEqual([600_000, 600_000]);            // 200k × 3
     expect(hdvOf(sapa).values).toEqual([2_100_000, 2_100_000]);          // 700k × 3
     expect(hdvOf(sapa).label).toContain("700.000 ₫/ngày");               // hiện rõ mức đang dùng
-    // Chênh 1,5tr dồn hết vào tổng vốn → giá bán/khách bậc 16 tăng đúng 1.5M/16.
+    // Tuyến Sapa đẩy CẢ công HDV (200k→700k) lẫn tip (200k→700k): mỗi khoản
+    // chênh 1,5tr trên 3 ngày → 3tr dồn vào tổng vốn, chia đều cho 16 khách.
+    const tipOf = (s: typeof thuong) => s.footer.find((f) => f.key === "tip")!;
+    expect(tipOf(thuong).values).toEqual([600_000, 600_000]);
+    expect(tipOf(sapa).values).toEqual([2_100_000, 2_100_000]);
     const gia = (s: typeof thuong) => s.footer.find((f) => f.key === "gia_pax")!.values[0];
-    expect(gia(sapa) - gia(thuong)).toBe(1_500_000 / 16);
+    expect(gia(sapa) - gia(thuong)).toBe(3_000_000 / 16);
   });
 
   it("calcTier (ma trận giá) dùng CÙNG mức HDV với bảng chi phí", () => {
@@ -200,7 +204,7 @@ describe("HDV / ngày — tuyến Sapa 700k cho CẢ tour", () => {
     });
     const s = costingSheet(draft)!;
     const manual: ManualItem[] = [{ id: "0", ngay: 1, loai: "ticket", mo_ta: "Vé", bang_gia_ten: "Vé", gia: 0 }];
-    const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, { hdvGiaNgay: 700_000 });
+    const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, { hdvGiaNgay: 700_000, tipNgay: 700_000 });
     expect(s.footer.find((f) => f.key === "gia_pax")!.values[0]).toBe(c.final_price_vnd);
   });
 });
@@ -313,7 +317,90 @@ describe("Công HDV theo tuyến — miền Trung 600k · HCM 1tr · chạm nhi�
   });
 });
 
-describe("Bảo hiểm / khách và Tip / đoàn — mở khoá cho sửa tay", () => {
+describe("Tip theo tuyến — 200k chung · Đà Nẵng 500k · Sapa 700k · Phú Quốc 1tr", () => {
+  const ve = (mo_ta: string, ten_zh = ""): BaoGiaItem =>
+    ({ loai: "ticket", mo_ta, ten_zh, don_gia: 0, ghi_chu: "", ngay_so: 1 });
+  const an = (mo_ta: string, ten_zh = ""): BaoGiaItem =>
+    ({ loai: "meal", mo_ta, ten_zh, don_gia: 0, ghi_chu: "", ngay_so: 1 });
+  const ketOf = (items: BaoGiaItem[], ten = "Tour test", over: Partial<BaoGiaKetQua> = {}) =>
+    ({ ...makeDraft(items).ket_qua!, ten_chuong_trinh: ten, ...over });
+
+  it("chưa gõ tay → mức tip tự đặt theo tuyến", () => {
+    expect(resolveTipNgay(ketOf([], "Hà Nội - Hạ Long - Ninh Bình 5N"))).toBe(200_000);
+    expect(resolveTipNgay(ketOf([], "Tour Đà Nẵng 4N"))).toBe(500_000);
+    expect(resolveTipNgay(ketOf([], "Tour Sapa 4N"))).toBe(700_000);
+    expect(resolveTipNgay(ketOf([], "Tour Phú Quốc 4N"))).toBe(1_000_000);
+  });
+
+  it("nhận Phú Quốc qua mọi cách gõ, kể cả 中文", () => {
+    for (const ten of ["Tour Phú Quốc 4N", "tour phu quoc 4n", "富國島5日", "富国岛5日"]) {
+      expect(isPhuQuocTour(ketOf([], ten)), ten).toBe(true);
+    }
+    expect(isPhuQuocTour(ketOf([], "Hà Nội - Hạ Long 4N"))).toBe(false);
+    expect(isPhuQuocTour(null)).toBe(false);
+  });
+
+  it("tên nhà hàng KHÔNG được kéo tuyến theo (giống miền Trung / HCM)", () => {
+    // Nhà hàng trùng tên địa danh là chuyện thường; ăn ở "Nhà hàng Phú Quốc"
+    // giữa Hà Nội mà đội tip lên 1tr/ngày thì báo giá đắt oan 800k mỗi ngày.
+    expect(isPhuQuocTour(ketOf([an("Nhà hàng Phú Quốc")], "Hà Nội - Hạ Long 4N"))).toBe(false);
+    expect(isPhuQuocTour(ketOf([ve("Cáp treo Hòn Thơm", "富國島纜車")], "Nam đảo 4N"))).toBe(true);
+  });
+
+  it("chạm nhiều nơi thì lấy MỨC CAO NHẤT", () => {
+    expect(resolveTipNgay(ketOf([], "Hà Nội - Sapa 5N"))).toBe(700_000);
+    expect(resolveTipNgay(ketOf([ve("Bà Nà", "巴拿山")], "Sapa - Đà Nẵng 7N"))).toBe(700_000);
+    expect(resolveTipNgay(ketOf([], "Sapa - Phú Quốc 8N"))).toBe(1_000_000);
+  });
+
+  it("mức tip KHÔNG ăn theo mức công HDV — miền Trung: HDV 600k mà tip 500k", () => {
+    // Hai bảng giá riêng, tình cờ cùng dò một tuyến. Ai đó gộp chung hằng số là
+    // tour miền Trung đội tip lên 600k/ngày mà nhìn màn hình không thấy gì lạ.
+    const ket = ketOf([], "Tour Đà Nẵng 4N");
+    expect(resolveHdvGiaNgay(ket)).toBe(600_000);
+    expect(resolveTipNgay(ket)).toBe(500_000);
+    // Và tuyến TP.HCM đội công HDV lên 1tr nhưng KHÔNG đội tip.
+    expect(resolveTipNgay(ketOf([], "Tour Sài Gòn 4N"))).toBe(200_000);
+  });
+
+  it("kèm tên tuyến để màn hình nói được vì sao ra con số đó", () => {
+    expect(tipNgayTheoTuyen(ketOf([], "Tour Phú Quốc")).tuyen).toBe("Phú Quốc");
+    expect(tipNgayTheoTuyen(ketOf([], "Tour Sapa")).tuyen).toBe("Sapa");
+    expect(tipNgayTheoTuyen(ketOf([], "Tour Đà Nẵng")).tuyen).toBe("miền Trung");
+    expect(tipNgayTheoTuyen(ketOf([], "Tour Hạ Long")).tuyen).toBe("");
+  });
+
+  it("OP gõ tay thì thắng mọi luật tuyến, kể cả gõ 0", () => {
+    expect(resolveTipNgay(ketOf([], "Tour Phú Quốc", { tip_ngay: 300_000 }))).toBe(300_000);
+    expect(resolveTipNgay(ketOf([], "Tour Phú Quốc", { tip_ngay: 0 }))).toBe(0);
+    expect(resolveTipNgay(ketOf([], "Tour Phú Quốc", { tip_ngay: null }))).toBe(1_000_000);
+  });
+
+  it("footer bảng chi phí nhân SỐ NGÀY, không nhân số khách", () => {
+    const items: BaoGiaItem[] = [ve("Vé")];
+    const draftOf = (ten: string) => makeDraft(items, {
+      ket_qua: { ...makeDraft(items).ket_qua!, ten_chuong_trinh: ten },  // so_ngay = 3
+    });
+    const tipOf = (ten: string) => costingSheet(draftOf(ten))!.footer.find((f) => f.key === "tip")!;
+    expect(tipOf("Hà Nội - Hạ Long 3N").values).toEqual([600_000, 600_000]);       // 200k × 3
+    expect(tipOf("Tour Phú Quốc 3N").values).toEqual([3_000_000, 3_000_000]);      // 1tr × 3
+    expect(tipOf("Tour Phú Quốc 3N").label).toContain("1.000.000 ₫/ngày");
+    expect(tipOf("Tour Phú Quốc 3N").oNhap!.ghiChuTuDat).toBe("tuyến Phú Quốc");
+  });
+
+  it("calcTier (ma trận giá) dùng CÙNG mức tip với bảng chi phí", () => {
+    const items: BaoGiaItem[] = [ve("Vé")];
+    const draft = makeDraft(items, {
+      ket_qua: { ...makeDraft(items).ket_qua!, ten_chuong_trinh: "Tour Phú Quốc 3N" },
+    });
+    const s = costingSheet(draft)!;
+    const manual: ManualItem[] = [{ id: "0", ngay: 1, loai: "ticket", mo_ta: "Vé", bang_gia_ten: "Vé", gia: 0 }];
+    const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, { tipNgay: 1_000_000 });
+    expect(s.footer.find((f) => f.key === "gia_pax")!.values[0]).toBe(c.final_price_vnd);
+  });
+});
+
+describe("Bảo hiểm / khách và Tip / ngày — mở khoá cho sửa tay", () => {
   const ve = (mo_ta: string): BaoGiaItem =>
     ({ loai: "ticket", mo_ta, ten_zh: "", don_gia: 0, ghi_chu: "", ngay_so: 1 });
   const ketOf = (over: Partial<BaoGiaKetQua> = {}) =>
@@ -321,31 +408,32 @@ describe("Bảo hiểm / khách và Tip / đoàn — mở khoá cho sửa tay", 
 
   it("chưa gõ gì thì dùng mức mặc định", () => {
     expect(resolveBaoHiemMoiKhach(ketOf())).toBe(100_000);
-    expect(resolveTipDoan(ketOf())).toBe(500_000);
+    expect(resolveTipNgay(ketOf())).toBe(200_000);
     expect(resolveBaoHiemMoiKhach(null)).toBe(100_000);
-    expect(resolveTipDoan(null)).toBe(500_000);
+    expect(resolveTipNgay(null)).toBe(200_000);
   });
 
   it("gõ tay thì tôn trọng tuyệt đối, kể cả gõ 0", () => {
     expect(resolveBaoHiemMoiKhach(ketOf({ bao_hiem_moi_khach: 250_000 }))).toBe(250_000);
     expect(resolveBaoHiemMoiKhach(ketOf({ bao_hiem_moi_khach: 0 }))).toBe(0);
-    expect(resolveTipDoan(ketOf({ tip_doan: 1_200_000 }))).toBe(1_200_000);
-    expect(resolveTipDoan(ketOf({ tip_doan: 0 }))).toBe(0);
+    expect(resolveTipNgay(ketOf({ tip_ngay: 1_200_000 }))).toBe(1_200_000);
+    expect(resolveTipNgay(ketOf({ tip_ngay: 0 }))).toBe(0);
   });
 
   it("xoá trắng ô (null) = trả về cho hệ thống tự đặt", () => {
     expect(resolveBaoHiemMoiKhach(ketOf({ bao_hiem_moi_khach: null }))).toBe(100_000);
-    expect(resolveTipDoan(ketOf({ tip_doan: null }))).toBe(500_000);
+    expect(resolveTipNgay(ketOf({ tip_ngay: null }))).toBe(200_000);
   });
 
   it("bảng chi phí chạy theo số đã gõ (pax = khách + 1 HDV)", () => {
     const items = [ve("Vé")];
     const draft = makeDraft(items, {
-      ket_qua: { ...makeDraft(items).ket_qua!, bao_hiem_moi_khach: 250_000, tip_doan: 1_200_000 },
+      ket_qua: { ...makeDraft(items).ket_qua!, bao_hiem_moi_khach: 250_000, tip_ngay: 1_200_000 },
     });
     const s = costingSheet(draft)!;
     expect(s.footer.find((f) => f.key === "bao_hiem")!.values).toEqual([250_000 * 17, 250_000 * 21]);
-    expect(s.footer.find((f) => f.key === "tip")!.values).toEqual([1_200_000, 1_200_000]);
+    // Tip nhân SỐ NGÀY (so_ngay = 3), KHÔNG nhân số khách → hai bậc bằng nhau.
+    expect(s.footer.find((f) => f.key === "tip")!.values).toEqual([3_600_000, 3_600_000]);
   });
 
   it("đúng 3 dòng có ô cho sửa; Cộng dịch vụ vẫn là tổng tự động", () => {
@@ -353,7 +441,7 @@ describe("Bảo hiểm / khách và Tip / đoàn — mở khoá cho sửa tay", 
     expect(s.footer.filter((f) => f.oNhap).map((f) => f.key)).toEqual(["hdv", "bao_hiem", "tip"]);
     expect(s.footer.find((f) => f.key === "dich_vu")!.oNhap).toBeUndefined();
     expect(s.footer.find((f) => f.key === "bao_hiem")!.label).toContain("100.000 ₫/khách");
-    expect(s.footer.find((f) => f.key === "tip")!.label).toContain("500.000 ₫/đoàn");
+    expect(s.footer.find((f) => f.key === "tip")!.label).toContain("200.000 ₫/ngày");
   });
 
   it("bảng chi phí và ma trận giá ra CÙNG một giá bán", () => {
@@ -362,12 +450,12 @@ describe("Bảo hiểm / khách và Tip / đoàn — mở khoá cho sửa tay", 
     // lúc màn hình một giá còn file Word một giá.
     const items = [ve("Vé")];
     const draft = makeDraft(items, {
-      ket_qua: { ...makeDraft(items).ket_qua!, bao_hiem_moi_khach: 250_000, tip_doan: 1_200_000 },
+      ket_qua: { ...makeDraft(items).ket_qua!, bao_hiem_moi_khach: 250_000, tip_ngay: 1_200_000 },
     });
     const s = costingSheet(draft)!;
     const manual: ManualItem[] = [{ id: "0", ngay: 1, loai: "ticket", mo_ta: "Vé", bang_gia_ten: "Vé", gia: 0 }];
     const c = calcTier(manual, 3, 26000, 0, 16, 0, 0, {
-      hdvGiaNgay: 200_000, baoHiemMoiKhach: 250_000, tipDoan: 1_200_000,
+      hdvGiaNgay: 200_000, baoHiemMoiKhach: 250_000, tipNgay: 1_200_000,
     });
     expect(s.footer.find((f) => f.key === "gia_pax")!.values[0]).toBe(c.final_price_vnd);
   });
