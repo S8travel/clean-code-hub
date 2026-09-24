@@ -8,6 +8,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
+import CanhBaoHuyDaDuyet from "./CanhBaoHuyDaDuyet";
 import { t, useTranslate } from "@/lib/i18n";
 
 export interface CancelTarget {
@@ -17,6 +18,9 @@ export interface CancelTarget {
   missingNcc?: boolean;
   /** NCC gợi ý điền sẵn. DV thường không có master → null, OP tự chọn. */
   suggestedNccId?: number | null;
+  /** Trạng thái duyệt + tiền mặt đã chi — để cảnh báo "hủy là mất chữ ký duyệt". */
+  trangThaiDuyet?: string | null;
+  daChiCash?: number;
 }
 
 interface Props {
@@ -77,6 +81,8 @@ export default function ChiPhiCancelModal({
               </RadioGroup>
             </>
           )}
+
+          <CanhBaoHuyDaDuyet trangThaiDuyet={target?.trangThaiDuyet} daChiCash={target?.daChiCash ?? 0} />
 
           {/* Dịch vụ chưa gắn NCC → bắt chọn NCC để công nợ cấn trừ/thu hồi được. */}
           {needNcc && (

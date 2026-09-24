@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { fmt } from "./ks-section-shared";
 import { t, useTranslate } from "@/lib/i18n";
+import CanhBaoHuyDaDuyet from "./CanhBaoHuyDaDuyet";
 
 export interface KSCancelTarget {
   type: "dntt" | "dich_vu"; // "dntt" = hủy khoản đề nghị, "dich_vu" = hủy toàn bộ dịch vụ
@@ -12,6 +13,8 @@ export interface KSCancelTarget {
   paidDnttIds: number[];
   unpaidDnttIds: number[];
   paidTotal: number;
+  /** Trạng thái duyệt của (các) phiếu chưa chi — để cảnh báo "hủy là mất chữ ký duyệt". */
+  trangThaiDuyet?: string | null;
 }
 
 interface Props {
@@ -87,6 +90,11 @@ export default function KSCancelModal({
               </div>
             </div>
           )}
+
+          <CanhBaoHuyDaDuyet
+            trangThaiDuyet={target?.trangThaiDuyet}
+            daChiCash={target?.paidTotal ?? 0}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>{t("Đóng")}</Button>

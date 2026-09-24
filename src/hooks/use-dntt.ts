@@ -4,6 +4,8 @@ import { proRataInts } from "@/lib/pro-rata";
 import { useAuth } from "@/hooks/use-auth";
 import { isDnttPaidFromPrepaid, revertCongNoIfRecovered } from "@/hooks/use-cong-no";
 import { coCanTruCheoDntt } from "@/lib/huy-doan-guards";
+import { buildAuditLogger } from "@/hooks/use-activity-log";
+import { chonNccChoCongNo, moTaHuyDntt, moTaThanhToan } from "@/lib/nhat-ky-dntt";
 import type { Tables, TablesUpdate } from "@/lib/database.types";
 
 export interface DNTTRow {
@@ -480,8 +482,35 @@ export function useRejectDNTT() {
   });
 }
 
-// Mark paid: tạo payment cash cho phần chưa thanh toán (so_tien - paid_amount)
-async function markPaidImpl(id: number, ngayISO: string, nguon?: string | null): Promise<number> {
+// Ghi nhật ký cho lần chi tiền vừa tạo. Bỏ qua khi remaining = 0 (bấm lại nút
+// trên phiếu đã trả đủ — không có bản ghi chi tiền nào sinh ra, ghi log là nói dối).
+function ghiNhatKyThanhToan(
+  logAudit: ReturnType<typeof buildAuditLogger>,
+  dnttId: number,
+  kq: { doanId: number | null; soTienDaChi: number; nguon: string | null },
+) {
+  if (kq.soTienDaChi <= 0) return;
+  logAudit({
+    doan_id: kq.doanId,
+    action: "thanh_toan",
+    table_name: "de_nghi_thanh_toan",
+    record_id: dnttId,
+    mo_ta: moTaThanhToan({
+      dnttId,
+      soTien: kq.soTienDaChi,
+      method: "cash",
+      nguon: kq.nguon,
+    }),
+  });
+}
+
+// Mark paid: tạo payment cash cho phần chưa thanh toán (so_tien - paid_amount).
+// Trả kèm số tiền vừa chi để caller ghi nhật ký (0 = phiếu đã trả đủ từ trước).
+async function markPaidImpl(
+  id: number,
+  ngayISO: string,
+  nguon?: string | null,
+): Promise<{ doanId: number | null; soTienDaChi: number; nguon: string | null }> {
   const { data: dntt, error: fetchErr } = await externalSupabase
     .from("de_nghi_thanh_toan")
     .select("id, doan_id, so_tien, trang_thai_duyet, loai, nha_cung_cap_id, ten_nha_cung_cap")
@@ -541,14 +570,24 @@ async function markPaidImpl(id: number, ngayISO: string, nguon?: string | null):
       }
     }
   }
-  return dntt.doan_id as number;
+  return {
+    doanId: (dntt.doan_id as number | null) ?? null,
+    soTienDaChi: remaining > 0 ? remaining : 0,
+    nguon: nguon ?? null,
+  };
 }
 
 export function useMarkPaidDNTT() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const logAudit = buildAuditLogger(user?.user_id, user?.ho_ten);
   return useMutation({
-    mutationFn: async (id: number) => markPaidImpl(id, new Date().toISOString()),
-    onSuccess: (doanId) => {
+    mutationFn: async (id: number) => {
+      const kq = await markPaidImpl(id, new Date().toISOString());
+      ghiNhatKyThanhToan(logAudit, id, kq);
+      return kq;
+    },
+    onSuccess: ({ doanId }) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
       qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
@@ -562,10 +601,15 @@ export function useMarkPaidDNTT() {
 
 export function useMarkPaidWithDate() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const logAudit = buildAuditLogger(user?.user_id, user?.ho_ten);
   return useMutation({
-    mutationFn: async ({ id, ngayThanhToan, nguon }: { id: number; ngayThanhToan: string; nguon?: string | null }) =>
-      markPaidImpl(id, new Date(ngayThanhToan).toISOString(), nguon ?? null),
-    onSuccess: (doanId) => {
+    mutationFn: async ({ id, ngayThanhToan, nguon }: { id: number; ngayThanhToan: string; nguon?: string | null }) => {
+      const kq = await markPaidImpl(id, new Date(ngayThanhToan).toISOString(), nguon ?? null);
+      ghiNhatKyThanhToan(logAudit, id, kq);
+      return kq;
+    },
+    onSuccess: ({ doanId }) => {
       qc.invalidateQueries({ queryKey: ["dntt-list"] });
       qc.invalidateQueries({ queryKey: ["dinh_ky_dntt_list"] });
       qc.invalidateQueries({ queryKey: ["hoa-don-unc"] });
@@ -645,11 +689,12 @@ async function resolveNccForCancel(dntt: {
 export function useCancelDNTT() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const logAudit = buildAuditLogger(user?.user_id, user?.ho_ten);
   return useMutation({
     mutationFn: async ({ id, mode, userId, nccId, nccTen }: { id: number; mode?: "cong_no" | "hoan_tien"; userId?: string | null; nccId?: number | null; nccTen?: string | null }) => {
       const { data: dntt, error: fetchErr } = await externalSupabase
         .from("de_nghi_thanh_toan")
-        .select("id, doan_id, ref_loai, ref_id, nha_cung_cap_id, ten_nha_cung_cap, loai, mo_ta")
+        .select("id, doan_id, ref_loai, ref_id, nha_cung_cap_id, ten_nha_cung_cap, loai, mo_ta, so_tien, trang_thai_duyet")
         .eq("id", id)
         .single();
       if (fetchErr) throw fetchErr;
@@ -780,13 +825,32 @@ export function useCancelDNTT() {
         .eq("id", id);
       if (error) throw error;
 
+      // Ghi nhật ký NGAY sau khi phiếu đổi trạng thái — đây là hành động không lùi
+      // được. Để xuống cuối hàm thì lỗi ở bước tạo công nợ sẽ nuốt luôn dòng log,
+      // đúng ca khiến tab Log chỉ thấy "duyệt" rồi phiếu biến mất.
+      logAudit({
+        doan_id: dntt.doan_id ?? null,
+        action: "huy",
+        table_name: "de_nghi_thanh_toan",
+        record_id: id,
+        mo_ta: moTaHuyDntt({
+          id,
+          soTien: Number(dntt.so_tien ?? 0),
+          trangThaiDuyet: dntt.trang_thai_duyet ?? null,
+          daChiCash: cashPaid,
+          mode,
+        }),
+      });
+
       // Nếu đã có cash payment và user chọn mode → tạo cong_no record (chỉ phần cash).
       // NCC resolve qua helper (DNTT → ref KS/NH/cảnh điểm/dịch vụ). Với mode='cong_no'
       // NCC đã được validate ở bước 0; 'hoan_tien' chỉ là record audit nên NCC có thể null.
       if (mode && cashPaid > 0) {
         const resolved = await resolveNccForCancel(dntt);
         // Ưu tiên NCC resolve được từ ĐNTT/ref; nếu không có, dùng NCC OP chọn ở modal.
-        const ncc = { id: resolved.id ?? nccId ?? null, ten: resolved.ten ?? nccTen ?? null };
+        // Lấy TRỌN CẶP id+tên của một nguồn — ghép rời thì công nợ mang id NCC này
+        // mà tên lại là mô tả dòng chi phí (resolveNccForCancel fallback về mo_ta).
+        const ncc = chonNccChoCongNo(resolved, { id: nccId ?? null, ten: nccTen ?? null });
         const { error: cnErr } = await externalSupabase.from("cong_no").insert({
           doan_id: dntt.doan_id,
           dntt_goc_id: id,

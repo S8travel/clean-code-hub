@@ -48,6 +48,7 @@ import { toast } from "@/hooks/use-toast";
 import { useLogActivity } from "@/hooks/use-activity-log";
 import { errMsg } from "@/lib/error";
 import { t, useTranslate } from "@/lib/i18n";
+import CanhBaoHuyDaDuyet from "@/components/chi-phi/CanhBaoHuyDaDuyet";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN");
 
@@ -254,7 +255,7 @@ function DNTTPageContent() {
   const [rejectLevel, setRejectLevel] = useState<ApprovalLevel | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<{ id: number; isPaid: boolean; moTa: string } | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{ id: number; isPaid: boolean; moTa: string; trangThaiDuyet?: string | null } | null>(null);
   const [cancelMode, setCancelMode] = useState<"cong_no" | "hoan_tien">("hoan_tien");
   const [adjustTarget, setAdjustTarget] = useState<DNTTRow | null>(null);
   const [adjustAmount, setAdjustAmount] = useState("");
@@ -795,7 +796,7 @@ function DNTTPageContent() {
                       )}
                       {row.trang_thai_duyet === "da_duyet" && row.payment_status === "unpaid" && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title={t("Hủy đề nghị")}
-                          onClick={() => setCancelTarget({ id: row.id, isPaid: false, moTa: row.mo_ta || "ĐNTT" })}>
+                          onClick={() => setCancelTarget({ id: row.id, isPaid: false, moTa: row.mo_ta || "ĐNTT", trangThaiDuyet: row.trang_thai_duyet })}>
                           <Ban className="h-4 w-4" />
                         </Button>
                       )}
@@ -983,6 +984,11 @@ function DNTTPageContent() {
             ) : (
               <p className="text-xs">{t("Đề nghị sẽ bị hủy, chi phí sẽ trở về trạng thái chưa gửi duyệt.")}</p>
             )}
+
+            <CanhBaoHuyDaDuyet
+              trangThaiDuyet={cancelTarget?.trangThaiDuyet}
+              daChiCash={cancelTarget?.isPaid ? 1 : 0}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" className="text-xs" onClick={() => setCancelTarget(null)}>{t("Đóng")}</Button>

@@ -10,6 +10,7 @@ import { DieuTourGuardError } from "@/lib/dieu-tour-guard-error";
 import { parseDoanTab } from "@/lib/doan-cancel-check";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
+import { duocDienNhaHangTuBooking } from "@/lib/nh-booking-dong-bo";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
@@ -170,10 +171,6 @@ export default function DoanDetail() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doSaveRef = useRef<(() => void) | null>(null);
   const hasPendingChangesRef = useRef(false);
-  // Track doan đã apply menu-fallback (chỉ cho legacy data lần đầu load).
-  // Sau lần đầu, tin DB hoàn toàn — nếu không, user xóa NH ở điều tour
-  // sẽ bị "phục hồi" từ booking NH cũ qua menuData.
-  const menuFallbackAppliedRef = useRef<Set<number>>(new Set());
 
   // Số khách hiển thị + tính toán: ưu tiên nhóm active (Phase 2+), fallback đoàn.
   // (Save tour KHÔNG ghi đè doan.so_khach_* — DoanDrawer là chỗ chính edit số khách đoàn.)
@@ -197,11 +194,17 @@ export default function DoanDetail() {
     const generatedDays = generateDays(doan.ngay_di, doan.ngay_ve);
     const merged = mergeDaysWithDB(generatedDays, dbNgayRows, dbNgayItems);
 
-    // Menu-fallback chỉ chạy LẦN ĐẦU per doan (legacy data: doan_ngay null
-    // nhưng booking NH có row). Sau đó tin DB — nếu không, user xóa NH khỏi
-    // điều tour sẽ bị "phục hồi" từ menuData (orphan recovered từ booking).
+    // Menu-fallback chỉ để vá DỮ LIỆU CŨ: đoàn có booking NH nhưng điều tour
+    // chưa hề có nhà hàng nào (chưa migrate). Điều kiện đọc thẳng từ dữ liệu —
+    // chương trình đã có dù chỉ một nhà hàng thì ô trống còn lại là do OP CỐ Ý
+    // gỡ ra, không được điền đè.
+    //
+    // Chốt chặn cũ là một `useRef` "đoàn này vá rồi": ref chết theo vòng đời
+    // trang, OP ra khỏi đoàn rồi vào lại là chặn coi như không có → nhà hàng vừa
+    // gỡ tự quay về, lần lưu sau ghi xuống DB. Đó là lỗi "đổi nhà hàng mà hắn
+    // không chịu ghi nhận, ra vô lại thấy y sì ban đầu" (24/09/2026).
     const applyMenuFallback =
-      doanId != null && !menuFallbackAppliedRef.current.has(doanId) && menuData.length > 0;
+      doanId != null && menuData.length > 0 && duocDienNhaHangTuBooking(merged);
     let mergedWithBookingNh = merged;
     if (applyMenuFallback) {
       const menuDataByDay = new Map(menuData.map((m) => [m.doan_ngay_id, m]));
@@ -217,7 +220,6 @@ export default function DoanDetail() {
           an_toi_set_menu_id: day.an_toi_set_menu_id ?? menuDay.an_toi_set_menu_id,
         };
       });
-      menuFallbackAppliedRef.current.add(doanId);
     }
 
     if (!initialized) {
@@ -350,6 +352,15 @@ export default function DoanDetail() {
               { duration: 6000 }
             );
           }
+          // Booking NH đã gửi mà ô bữa nay đổi / bị gỡ: nhà hàng vẫn đang chờ đoàn.
+          const bookingLacKept = result?.nhBookingLacKept ?? 0;
+          if (bookingLacKept > 0) {
+            toast.warning(
+              `${bookingLacKept} ${t("booking nhà hàng đã gửi nhưng bữa đó đã đổi/gỡ khỏi chương trình — cần gửi thư hủy cho nhà hàng.")}`,
+              { duration: 8000 }
+            );
+          }
+
           const orphanKept = result?.nhOrphanKept ?? 0;
           if (orphanKept > 0) {
             toast.warning(
