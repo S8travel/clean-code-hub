@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
@@ -15,6 +15,8 @@ import { cn, getDefaultDeadline, blockWeekendDate } from "@/lib/utils";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { soSanhBanChotMail, NHAN_VISA } from "@/lib/mail-drift";
+import MailDriftWarning from "@/components/shared/MailDriftWarning";
 import { useUpsertBookingVisa, useDeleteBookingVisa, type BookingVisaRow } from "@/hooks/use-booking-visa";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
@@ -125,6 +127,16 @@ export default function BookingVisaCard({
   const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(status);
   const isDirty = isActive && isMailDirty(booking.sent_at, booking.mail_content_hash, buildMailFields());
 
+  // Bản chốt dữ liệu đã dùng để dựng nội dung mail đang soạn — lúc gửi so lại.
+  // Xem lib/mail-drift.ts: điều tour lưu tự động nên dữ liệu có thể đổi sau khi
+  // mail đã dựng, mail đi số liệu cũ mà không ai hay.
+  const mailSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const [boQuaDrift, setBoQuaDrift] = useState(false);
+  const driftItems = emailModalOpen
+    ? soSanhBanChotMail(mailSnapshotRef.current, buildMailFields(), { nhan: NHAN_VISA })
+    : [];
+  const chanGui = driftItems.length > 0 && !boQuaDrift;
+
   const save = (updates: Partial<BookingVisaRow>) =>
     upsert.mutate({ ...booking, doan_id: doanId, ...updates });
 
@@ -203,15 +215,32 @@ export default function BookingVisaCard({
   };
 
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
+
+  const buildSubject = (mode: "first" | "update") => {
+    const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
+    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Xin visa – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`);
+    return mode === "update" ? `Re: ${baseSubject}` : baseSubject;
+  };
+
   const openEmailModal = (mode: "first" | "update" = "first") => {
     setEmailMode(mode);
     setUpdateNote("");
-    const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
+    setBoQuaDrift(false);
+    mailSnapshotRef.current = buildMailFields();
     setEmailTo(donVi?.email ?? "");
-    const baseSubject = sanitizeEmailSubject(`[S8 Travel] Xin visa – ${tenDoan}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`);
-    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
+    setEmailSubject(buildSubject(mode));
     setEmailBody(buildEmailHTML(mode, ""));
     setEmailModalOpen(true);
+  };
+
+  // Dựng lại tiêu đề + nội dung theo dữ liệu HIỆN TẠI, chốt lại bản so sánh.
+  // GHI ĐÈ phần OP gõ tay trong khung soạn → chỉ chạy khi OP tự bấm.
+  const dungLaiNoiDungMail = () => {
+    mailSnapshotRef.current = buildMailFields();
+    setBoQuaDrift(false);
+    setEmailSubject(buildSubject(emailMode));
+    setEmailBody(buildEmailHTML(emailMode, updateNote));
+    toast.success(t("Đã dựng lại nội dung mail theo dữ liệu mới"));
   };
 
   useEffect(() => {
@@ -221,6 +250,7 @@ export default function BookingVisaCard({
   }, [updateNote]);
 
   const handleSendViaServer = async () => {
+    if (chanGui) return;
     if (!emailTo) { toast.error(t("Vui lòng nhập email đơn vị visa")); return; }
     setSending(true);
     try {
@@ -256,7 +286,9 @@ export default function BookingVisaCard({
         sent_at: new Date().toISOString(),
         sent_by: userProfile?.ho_ten ?? "",
         email_thread_id: emailId ?? threadId ?? undefined,
-        mail_content_hash: hashMailContent(buildMailFields()),
+        // Theo bản ĐÃ DỰNG ra mail, không theo dữ liệu sống lúc bấm Gửi — kẻo
+        // mail sai vẫn "khớp hiện trạng", badge "Có thay đổi" không sáng.
+        mail_content_hash: hashMailContent(mailSnapshotRef.current ?? buildMailFields()),
       };
       if (emailMode !== "update") savePayload.booking_status = "cho_xac_nhan";
       save(savePayload);
@@ -471,9 +503,19 @@ export default function BookingVisaCard({
         onHtmlChange={setEmailBody}
         onSendViaServer={handleSendViaServer}
         onMailtoFallback={() => {
+          if (chanGui) return;
           window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}`;
         }}
         sending={sending}
+        disableSend={chanGui}
+        warning={
+          <MailDriftWarning
+            items={driftItems}
+            chanGui={chanGui}
+            onDungLai={dungLaiNoiDungMail}
+            onBoQua={() => setBoQuaDrift(true)}
+          />
+        }
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { sanitizeEmailSubject } from "@/lib/email-subject";
 import { errMsg } from "@/lib/error";
 import { format } from "date-fns";
@@ -18,6 +18,8 @@ import {
   type XeMailInput,
 } from "@/lib/booking-mail/xe-mail";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
+import { soSanhBanChotMail, NHAN_XE } from "@/lib/mail-drift";
+import MailDriftWarning from "@/components/shared/MailDriftWarning";
 import { useUpsertBookingXe, type BookingXeRow } from "@/hooks/use-booking-xe";
 import { callSendBookingEmail } from "@/hooks/use-booking-dv";
 import { BOOKING_CC } from "@/lib/booking-cc";
@@ -128,6 +130,16 @@ export default function BookingXeCard({
   const isActive = ["cho_xac_nhan", "da_xac_nhan"].includes(status);
   const isDirty = isActive && isMailDirty(booking?.sent_at, booking?.mail_content_hash, buildMailFields());
 
+  // Bản chốt dữ liệu đã dùng để dựng nội dung mail đang soạn — lúc gửi so lại.
+  // Xem lib/mail-drift.ts: điều tour lưu tự động nên dữ liệu có thể đổi sau khi
+  // mail đã dựng, mail đi số liệu cũ mà không ai hay.
+  const mailSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const [boQuaDrift, setBoQuaDrift] = useState(false);
+  const driftItems = emailModalOpen
+    ? soSanhBanChotMail(mailSnapshotRef.current, buildMailFields(), { nhan: NHAN_XE })
+    : [];
+  const chanGui = driftItems.length > 0 && !boQuaDrift;
+
   // xe_id BẮT BUỘC để upsert đúng booking của nhà xe này (mỗi xe 1 booking).
   const save = (updates: Partial<BookingXeRow>) =>
     upsert.mutate({ doan_id: doanId, xe_id: xe?.id ?? null, ...updates });
@@ -160,21 +172,40 @@ export default function BookingXeCard({
   });
 
   const [emailMode, setEmailMode] = useState<"first" | "update">("first");
-  const openEmailModal = (mode: "first" | "update" = "first") => {
-    setEmailMode(mode);
-    setUpdateNote("");
-    const input = buildMailInput();
-    setMailInput(input);
+
+  const buildSubject = (mode: "first" | "update") => {
     const ngayDiStr = ngayDi ? format(new Date(ngayDi + "T00:00:00"), "dd/MM/yyyy", { locale: vi }) : "";
-    setEmailTo(xe?.nha_xe?.email ?? "");
     // Tiêu đề kèm loại xe/số chỗ (formatXeForEmail: xe thường "45 chỗ",
     // limousine "LMS 9C (9 chỗ)") — nhà xe nhìn tiêu đề là biết loại xe.
     const xeSubject = xe ? formatXeForEmail(xe.ten_xe, xe.so_cho) : "";
     const xeSubjectPart = xeSubject && xeSubject !== "—" ? ` – ${xeSubject}` : "";
     const baseSubject = sanitizeEmailSubject(`[S8 Travel] Đặt xe – ${tenDoan}${xeSubjectPart}${ngayDiStr ? ` – ${ngayDiStr}` : ""}`);
-    setEmailSubject(mode === "update" ? `Re: ${baseSubject}` : baseSubject);
+    return mode === "update" ? `Re: ${baseSubject}` : baseSubject;
+  };
+
+  const openEmailModal = (mode: "first" | "update" = "first") => {
+    setEmailMode(mode);
+    setUpdateNote("");
+    setBoQuaDrift(false);
+    const input = buildMailInput();
+    setMailInput(input);
+    mailSnapshotRef.current = buildMailFields();
+    setEmailTo(xe?.nha_xe?.email ?? "");
+    setEmailSubject(buildSubject(mode));
     setEmailBody(buildXeEmailHtml(input, mode, ""));
     setEmailModalOpen(true);
+  };
+
+  // Dựng lại tiêu đề + nội dung theo dữ liệu HIỆN TẠI, chốt lại bản so sánh.
+  // GHI ĐÈ phần OP gõ tay trong khung soạn → chỉ chạy khi OP tự bấm.
+  const dungLaiNoiDungMail = () => {
+    const input = buildMailInput();
+    setMailInput(input);
+    mailSnapshotRef.current = buildMailFields();
+    setBoQuaDrift(false);
+    setEmailSubject(buildSubject(emailMode));
+    setEmailBody(buildXeEmailHtml(input, emailMode, updateNote));
+    toast.success(t("Đã dựng lại nội dung mail theo dữ liệu mới"));
   };
 
   useEffect(() => {
@@ -190,6 +221,7 @@ export default function BookingXeCard({
   );
 
   const handleSendViaServer = async () => {
+    if (chanGui) return;
     if (!emailTo) { toast.error(t("Vui lòng nhập email nhà xe")); return; }
     setSending(true);
     try {
@@ -212,7 +244,9 @@ export default function BookingXeCard({
         sent_at: new Date().toISOString(),
         sent_by: userProfile?.ho_ten ?? "",
         email_thread_id: emailId ?? threadId ?? undefined,
-        mail_content_hash: hashMailContent(buildMailFields()),
+        // Theo bản ĐÃ DỰNG ra mail, không theo dữ liệu sống lúc bấm Gửi — kẻo
+        // mail sai vẫn "khớp hiện trạng", badge "Có thay đổi" không sáng.
+        mail_content_hash: hashMailContent(mailSnapshotRef.current ?? buildMailFields()),
       };
       // Bản chụp đúng nội dung vừa gửi → lần "Gửi cập nhật" sau tự liệt kê thay đổi.
       if (mailInput) savePayload.mail_sent_snapshot = buildXeMailSnapshot(mailInput);
@@ -404,9 +438,19 @@ export default function BookingXeCard({
         onHtmlChange={setEmailBody}
         onSendViaServer={handleSendViaServer}
         onMailtoFallback={() => {
+          if (chanGui) return;
           window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(emailSubject)}`;
         }}
         sending={sending}
+        disableSend={chanGui}
+        warning={
+          <MailDriftWarning
+            items={driftItems}
+            chanGui={chanGui}
+            onDungLai={dungLaiNoiDungMail}
+            onBoQua={() => setBoQuaDrift(true)}
+          />
+        }
         mode={emailMode}
         updateNote={updateNote}
         onUpdateNoteChange={setUpdateNote}

@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Mail, Check, X, FileDown, Loader2, Trash2,
-  MapPin, Phone, AlertTriangle, RefreshCw,
+  MapPin, Phone, AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -34,6 +34,7 @@ import { isKsBookingActive } from "@/hooks/use-doi-ks-phi-huy";
 import { cn } from "@/lib/utils";
 import { errMsg } from "@/lib/error";
 import EmailPreviewModal from "@/components/shared/EmailPreviewModal";
+import MailDriftWarning from "@/components/shared/MailDriftWarning";
 import { buildUpdateEmailHtml, buildKeyFieldsList } from "@/lib/email-update";
 import { hashMailContent, isMailDirty } from "@/lib/mail-content-hash";
 import { soSanhMailKS, type KsMailSnapshot } from "@/lib/mail-drift";
@@ -854,49 +855,14 @@ Email: s8travel.hddt@gmail.com`;
       onMailtoFallback={handleMailtoFallback}
       sending={sending}
       disableSend={chanGui}
-      warning={driftItems.length > 0 ? (
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <div className="min-w-0 text-xs text-amber-900 space-y-1">
-              <p className="font-semibold">{t("Dữ liệu booking đã đổi sau khi nội dung mail được dựng")}</p>
-              <ul className="space-y-0.5">
-                {driftItems.map((it) => (
-                  <li key={it.nhan} className="break-words">
-                    <span className="font-medium">{t(it.nhan)}:</span>{" "}
-                    <span className="line-through opacity-70">{it.truoc}</span>
-                    {" → "}
-                    <span className="font-semibold">{it.sau}</span>
-                  </li>
-                ))}
-              </ul>
-              <p>{t("Nội dung đang soạn vẫn theo số liệu cũ — gửi đi là khách sạn nhận sai.")}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 pl-6">
-            <Button
-              size="sm"
-              className="h-7 text-xs"
-              onClick={dungLaiNoiDungMail}
-              title={t("Ghi đè nội dung đang soạn bằng bản dựng lại từ dữ liệu mới")}
-            >
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              {t("Dựng lại nội dung mail")}
-            </Button>
-            {chanGui && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={() => setBoQuaDrift(true)}
-                title={t("Booking sẽ bị đánh dấu \"Có thay đổi\" để nhớ gửi cập nhật sau")}
-              >
-                {t("Vẫn gửi bản đang soạn")}
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : undefined}
+      warning={
+        <MailDriftWarning
+          items={driftItems}
+          chanGui={chanGui}
+          onDungLai={dungLaiNoiDungMail}
+          onBoQua={() => setBoQuaDrift(true)}
+        />
+      }
       mode={emailMode}
       updateNote={updateNote}
       onUpdateNoteChange={setUpdateNote}
