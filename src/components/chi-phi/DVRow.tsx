@@ -565,6 +565,8 @@ export default function DVRow({ row, day, data, handlers, locked = false }: Prop
                   // đọc doan_chi_phi.nha_cung_cap_id). DV không có master → không gợi ý sẵn.
                   missingNcc: needAskNcc({ chiPhiNccId: row.nha_cung_cap_id }),
                   suggestedNccId: null,
+                  trangThaiDuyet: activeDntt.trang_thai_duyet,
+                  daChiCash: dnttCashPaid(activeDntt.id),
                 });
               }}>
               <Ban className="h-3 w-3" />

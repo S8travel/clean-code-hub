@@ -518,7 +518,10 @@ export function useSaveDieuTour() {
       const { doanId, doanNhomId, doanFields, days, soKhach, canhDiemList, nhaHangList, khachSanList } = payload;
 
       // Counter cho toast notification ở caller (UX warning user về cascade side-effects)
-      const counters = { thucTeClearCount: 0, nhOrphanDeleted: 0, nhOrphanKept: 0 };
+      const counters = {
+        thucTeClearCount: 0, nhOrphanDeleted: 0, nhOrphanKept: 0,
+        nhBookingLacDeleted: 0, nhBookingLacKept: 0,
+      };
 
       let defaultDoanNhomId: number | null = doanNhomId ?? null;
 
@@ -897,24 +900,34 @@ export function useSaveDieuTour() {
 
         let doanNgayId = day.id;
 
+        // Ghi doan_ngay — 3 đường dưới đây trước đây KHÔNG kiểm `error`, nên một
+        // lần ghi hỏng là im lặng: hàm lưu vẫn báo thành công, màn hình vẫn hiện
+        // thay đổi, mở lại mới thấy mất. Đúng triệu chứng OP báo 24/09/2026.
         if (doanNgayId) {
-          await externalSupabase.from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
+          const { error: eUpd } = await externalSupabase
+            .from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
+          if (eUpd) throw eUpd;
         } else {
           // Tìm existing row PER NHÓM — không filter doan_nhom_id sẽ trúng nhóm khác
           // và overwrite dữ liệu nhóm 1 khi user save nhóm 2.
-          const { data: existingRow } = await externalSupabase
+          const { data: existingRow, error: eSel } = await externalSupabase
             .from("doan_ngay")
             .select("id")
             .eq("doan_id", doanId)
             .eq("ngay_so", day.ngay_so)
             .eq("doan_nhom_id", defaultDoanNhomId)
             .maybeSingle();
+          if (eSel) throw eSel;
 
           if (existingRow) {
             doanNgayId = existingRow.id;
-            await externalSupabase.from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
+            const { error: eUpd2 } = await externalSupabase
+              .from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
+            if (eUpd2) throw eUpd2;
           } else {
-            const { data } = await externalSupabase.from("doan_ngay").insert(ngayPayload).select("id").single();
+            const { data, error: eIns } = await externalSupabase
+              .from("doan_ngay").insert(ngayPayload).select("id").single();
+            if (eIns) throw eIns;
             if (data) doanNgayId = data.id;
           }
         }
@@ -1352,6 +1365,13 @@ export function useSaveDieuTour() {
           if (existingBkNh.nha_hang_id !== nhId) {
             if (["chua_gui", "khong_dat"].includes(existingBkNh.booking_status)) {
               await externalSupabase.from("doan_booking_nh").delete().eq("id", existingBkNh.id);
+              counters.nhBookingLacDeleted++;
+            } else {
+              // Booking ĐÃ gửi cho nhà hàng mà ô bữa nay đổi / bị gỡ → không tự xóa
+              // (đã hứa với NCC), nhưng PHẢI báo OP: nhà hàng vẫn đang chờ đoàn tới.
+              // Trước đây im lặng nên booking lạc nằm lại vô thời hạn — cũng chính
+              // là nguồn nuôi lỗi "nhà hàng tự quay về" khi mở lại đoàn.
+              counters.nhBookingLacKept++;
             }
             continue;
           }

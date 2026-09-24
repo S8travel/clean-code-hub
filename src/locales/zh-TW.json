@@ -1700,6 +1700,8 @@
   "đề nghị thanh toán đang chờ xử lý. Sau khi hủy, bạn có thể tạo đề nghị mới với số tiền chính xác hơn.": "付款申請正在處理中。取消後，您可建立金額更準確的新申請。",
   "Giữ lại làm công nợ, cấn trừ vào booking sau": "保留為應付帳款，於後續預訂沖抵",
   "Đề nghị sẽ bị hủy, chi phí trở về trạng thái chưa gửi duyệt.": "申請將被取消，費用回到未送審狀態。",
+  "Phiếu này kế toán ĐÃ duyệt. Hủy xong là mất chữ ký duyệt — phải tạo phiếu mới và trình duyệt lại từ đầu.": "此申請單會計「已核准」。取消後核准即失效——必須另開新單並重新送審。",
+  "booking nhà hàng đã gửi nhưng bữa đó đã đổi/gỡ khỏi chương trình — cần gửi thư hủy cho nhà hàng.": "筆餐廳訂位已寄出，但該餐已變更或自行程移除——須另寄取消信給餐廳。",
   "(Chưa có tên)": "（尚無名稱）",
   "(nhiều email cách nhau bằng dấu phẩy)": "（多個 Email 以逗號分隔）",
   "(optional — hiện callout vàng đầu mail)": "（選填 — 顯示郵件頂部黃色提示）",

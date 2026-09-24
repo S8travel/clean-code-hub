@@ -4,6 +4,9 @@ import { getChiPhiIdsForDNTT, recalcChiPhiStatus, type PaymentRow } from "@/hook
 import { appendCanTruLog, markCongNoCanTruIfExhausted, revertCongNoIfRecovered } from "@/hooks/use-cong-no";
 import { proRataInts } from "@/lib/pro-rata";
 import { canTruGhiChu } from "@/lib/can-tru-note";
+import { useAuth } from "@/hooks/use-auth";
+import { buildAuditLogger } from "@/hooks/use-activity-log";
+import { moTaThanhToan, moTaGoThanhToan } from "@/lib/nhat-ky-dntt";
 
 /**
  * Tạo NHIỀU payment can_tru cho 1 ĐNTT (cấn trừ nhiều cong_no cùng NCC 1 lúc).
@@ -239,6 +242,8 @@ interface CreatePaymentArgs {
 // Tạo 1 payment row. Sau khi tạo gọi recalc cho các chi phí liên quan.
 export function useCreatePayment() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const logAudit = buildAuditLogger(user?.user_id, user?.ho_ten);
   return useMutation({
     mutationFn: async (args: CreatePaymentArgs) => {
       const { dnttId, method, soTien, ngayThanhToan, congNoId, ghiChu } = args;
@@ -260,8 +265,17 @@ export function useCreatePayment() {
         ngay_thanh_toan: ngayThanhToan || new Date().toISOString(),
         cong_no_id: method === "can_tru" ? congNoId : null,
         ghi_chu: ghiChu || null,
+        tao_boi: user?.user_id ?? null,
       });
       if (error) throw error;
+
+      logAudit({
+        doan_id: (dntt?.doan_id as number | null) ?? null,
+        action: "thanh_toan",
+        table_name: "de_nghi_thanh_toan",
+        record_id: dnttId,
+        mo_ta: moTaThanhToan({ dnttId, soTien, method }),
+      });
 
       // Nếu cấn trừ hết cong_no → đánh dấu da_can_tru (qua RPC definer: quỹ NCC
       // doan_id=NULL bị RLS van_phong_scope chặn đọc/ghi trực tiếp).
@@ -293,16 +307,37 @@ export function useCreatePayment() {
 
 export function useDeletePayment() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const logAudit = buildAuditLogger(user?.user_id, user?.ho_ten);
   return useMutation({
     mutationFn: async (id: number) => {
       const { data: pay } = await externalSupabase
         .from("payments")
-        .select("dntt_id, cong_no_id")
+        .select("dntt_id, cong_no_id, so_tien, method")
         .eq("id", id)
         .single();
 
       const { error } = await externalSupabase.from("payments").delete().eq("id", id);
       if (error) throw error;
+
+      if (pay?.dntt_id) {
+        const { data: dntt } = await externalSupabase
+          .from("de_nghi_thanh_toan")
+          .select("doan_id")
+          .eq("id", pay.dntt_id)
+          .maybeSingle();
+        logAudit({
+          doan_id: (dntt?.doan_id as number | null) ?? null,
+          action: "xoa",
+          table_name: "de_nghi_thanh_toan",
+          record_id: pay.dntt_id,
+          mo_ta: moTaGoThanhToan({
+            dnttId: pay.dntt_id,
+            soTien: Number(pay.so_tien ?? 0),
+            method: String(pay.method ?? ""),
+          }),
+        });
+      }
 
       // Nếu xoá can_tru payment → cong_no có thể về 'con_du' (nếu trước đó da_can_tru).
       // Qua RPC definer: quỹ NCC doan_id=NULL bị RLS chặn đọc/ghi trực tiếp.

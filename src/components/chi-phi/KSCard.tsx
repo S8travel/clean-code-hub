@@ -581,6 +581,7 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                                     paidDnttIds: [],
                                     unpaidDnttIds: [dntt.id],
                                     paidTotal: 0,
+                                    trangThaiDuyet: dntt.trang_thai_duyet,
                                   });
                                 }}
                               >
@@ -736,6 +737,10 @@ export default function KSCard({ ksId, data, handlers, locked = false }: Props) 
                       paidDnttIds: paidDnttsForKs.map((d) => d.id),
                       unpaidDnttIds: unpaidDnttsForKs.map((d) => d.id),
                       paidTotal: paidDnttsForKs.reduce((sum, d) => sum + d.so_tien, 0),
+                      // Hủy cả cụm: cảnh báo nếu có phiếu chưa chi nào đã được duyệt.
+                      trangThaiDuyet: unpaidDnttsForKs.some((d) => d.trang_thai_duyet === "da_duyet")
+                        ? "da_duyet"
+                        : null,
                     });
                   }}
                 >

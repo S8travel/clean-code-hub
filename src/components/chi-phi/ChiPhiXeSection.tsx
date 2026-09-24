@@ -737,6 +737,8 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
                                 // Dòng xe chưa gắn NCC → mode "Ghi công nợ" cần OP chọn NCC.
                                 missingNcc: needAskNcc({ chiPhiNccId: row.nha_cung_cap_id }),
                                 suggestedNccId: null,
+                                trangThaiDuyet: activeDntt.trang_thai_duyet,
+                                daChiCash: activeDntt.payment_status === "paid" ? Number(activeDntt.so_tien) : 0,
                               });
                             }}>
                             <Ban className="h-3 w-3" />

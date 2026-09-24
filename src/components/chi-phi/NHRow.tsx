@@ -642,6 +642,8 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
                       chiPhiNccId: mainChiPhiRow?.nha_cung_cap_id,
                       masterNccId: nh?.nha_cung_cap_id ?? null,
                     }),
+                    trangThaiDuyet: activeDntt.trang_thai_duyet,
+                    daChiCash: dnttCashPaid(activeDntt.id),
                   });
                 }}>
                 <Ban className="h-3 w-3" />

@@ -8,6 +8,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNhaCungCapList } from "@/hooks/use-nha-cung-cap";
+import CanhBaoHuyDaDuyet from "./CanhBaoHuyDaDuyet";
 import { t, useTranslate } from "@/lib/i18n";
 
 export interface NHCancelTarget {
@@ -18,6 +19,9 @@ export interface NHCancelTarget {
   missingNcc?: boolean;
   /** NCC gợi ý (từ master nhà hàng) — điền sẵn để OP chỉ cần xác nhận, không phải tự tìm. */
   suggestedNccId?: number | null;
+  /** Trạng thái duyệt + tiền mặt đã chi — để cảnh báo "hủy là mất chữ ký duyệt". */
+  trangThaiDuyet?: string | null;
+  daChiCash?: number;
 }
 
 interface Props {
@@ -92,6 +96,8 @@ export default function NHCancelModal({
           ) : (
             <p className="text-xs">{t("Đề nghị sẽ bị hủy, chi phí trở về trạng thái chưa gửi duyệt.")}</p>
           )}
+
+          <CanhBaoHuyDaDuyet trangThaiDuyet={target?.trangThaiDuyet} daChiCash={target?.daChiCash ?? 0} />
 
           {/* Dịch vụ phát sinh chưa gắn NCC → bắt chọn NCC để công nợ cấn trừ được. */}
           {needNcc && (
