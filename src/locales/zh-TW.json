@@ -2596,5 +2596,13 @@
   "(nội dung này sẽ hiển thị trong Điều tour, dưới tên cảnh điểm)": "（此內容會顯示在排團中，景點名稱下方）",
   "Không phải dịch vụ có phí": "非收費服務",
   "Đã liên kết KS/tàu — booking bên tab Booking KS": "已連結飯店/遊船 — 在飯店預訂分頁預訂",
-  "Đặt ngoài hệ thống (Zalo/điện thoại)": "系統外預訂（Zalo/電話）"
+  "Đặt ngoài hệ thống (Zalo/điện thoại)": "系統外預訂（Zalo/電話）",
+  "Ngày ở": "住宿日期",
+  "Dữ liệu booking đã đổi sau khi nội dung mail được dựng": "郵件內容產生後，訂房資料已變更",
+  "Nội dung đang soạn vẫn theo số liệu cũ — gửi đi là khách sạn nhận sai.": "目前草稿仍是舊數據 — 直接寄出飯店會收到錯誤資訊。",
+  "Dựng lại nội dung mail": "依最新資料重新產生郵件",
+  "Đã dựng lại nội dung mail theo dữ liệu mới": "已依最新資料重新產生郵件內容",
+  "Vẫn gửi bản đang soạn": "仍寄出目前草稿",
+  "Booking sẽ bị đánh dấu \"Có thay đổi\" để nhớ gửi cập nhật sau": "此訂房將標記「有變更」，提醒稍後補寄更新",
+  "Ghi đè nội dung đang soạn bằng bản dựng lại từ dữ liệu mới": "以最新資料重新產生，將覆蓋目前草稿內容"
 }

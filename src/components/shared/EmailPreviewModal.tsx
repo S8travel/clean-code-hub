@@ -52,6 +52,10 @@ interface Props {
   onUpdateNoteChange?: (v: string) => void;
   /** Dòng nhắc dưới ô lời nhắn (mode update) — vd số thay đổi hệ thống tự liệt kê. */
   updateHint?: React.ReactNode;
+  /** Banner cảnh báo đầu cửa sổ soạn — vd dữ liệu booking đổi sau khi mail đã dựng. */
+  warning?: React.ReactNode;
+  /** Chặn gửi (cả server lẫn mailto) khi cảnh báo trên chưa được xử lý. */
+  disableSend?: boolean;
 }
 
 export default function EmailPreviewModal({
@@ -72,6 +76,8 @@ export default function EmailPreviewModal({
   updateNote = "",
   onUpdateNoteChange,
   updateHint,
+  warning,
+  disableSend = false,
 }: Props) {
   useTranslate();
   const resolvedTitle = title ?? t("Gửi email");
@@ -273,6 +279,8 @@ export default function EmailPreviewModal({
         </DialogHeader>
 
         <div className="px-6 py-4 space-y-3 overflow-y-auto flex-1">
+          {warning}
+
           {/* To / Subject */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -503,11 +511,11 @@ export default function EmailPreviewModal({
         </div>
 
         <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2">
-          <Button variant="outline" onClick={onMailtoFallback} type="button">
+          <Button variant="outline" onClick={onMailtoFallback} type="button" disabled={disableSend}>
             <Mail className="h-4 w-4 mr-1.5" />
             {t("Mở email client")}
           </Button>
-          <Button onClick={onSendViaServer} disabled={sending || !to || imgUploading}>
+          <Button onClick={onSendViaServer} disabled={disableSend || sending || !to || imgUploading}>
             <Send className="h-4 w-4 mr-1.5" />
             {imgUploading ? t("Đang tải ảnh...") : sending ? t("Đang gửi...") : t("Gửi qua server")}
           </Button>
