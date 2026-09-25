@@ -352,6 +352,7 @@ src/
 /leads/bao-cao          → LeadReportPage
 /quan-ly/nha-hang  /quan-ly/khach-san  /quan-ly/canh-diem  /quan-ly/xe (NhaXePage)
 /quan-ly/visa  /quan-ly/nha-cung-cap  /quan-ly/hdv  /quan-ly/seri  /quan-ly/nguoi-dung
+/quan-ly/web-gioi-thieu → WebGioiThieuPage (ảnh + logo + ẩn/hiện + slide cho trang giới thiệu đối tác s8-gioi-thieu)
 ```
 
 ---

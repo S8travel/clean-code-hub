@@ -22,6 +22,7 @@ const KhachSanPage         = lazy(() => import("./pages/KhachSanPage.tsx"));
 const CanhDiemPage         = lazy(() => import("./pages/CanhDiemPage.tsx"));
 const ChuyenBayPage        = lazy(() => import("./pages/ChuyenBayPage.tsx"));
 const NhaCungCapPage       = lazy(() => import("./pages/NhaCungCapPage.tsx"));
+const WebGioiThieuPage     = lazy(() => import("./pages/WebGioiThieuPage.tsx"));
 const VoucherPage          = lazy(() => import("./pages/VoucherPage.tsx"));
 const DNTTPage             = lazy(() => import("./pages/DNTTPage.tsx"));
 const CongNoPage           = lazy(() => import("./pages/CongNoPage.tsx"));
@@ -109,6 +110,7 @@ const App = () => (
                 <Route path="/quan-ly/xe" element={<CanQuyen resource="danh_muc"><NhaXePage /></CanQuyen>} />
                 <Route path="/quan-ly/visa" element={<CanQuyen resource="danh_muc"><VisaPage /></CanQuyen>} />
                 <Route path="/quan-ly/nha-cung-cap" element={<CanQuyen resource="danh_muc"><NhaCungCapPage /></CanQuyen>} />
+                <Route path="/quan-ly/web-gioi-thieu" element={<CanQuyen resource="danh_muc"><WebGioiThieuPage /></CanQuyen>} />
                 <Route path="/quan-ly/voucher" element={<VoucherPage />} />
                 <Route path="/de-nghi-thanh-toan" element={<DNTTPage />} />
                 <Route path="/hoan-ung" element={<HoanUngPage />} />
