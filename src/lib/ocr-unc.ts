@@ -77,14 +77,39 @@ function fuzzyNumWord(tok: string): string {
   return tok;
 }
 
-function vnWordsToNumber(phrase: string): number | null {
-  const toks = stripDiacritics(phrase)
+// Token chữ: `w` = bỏ dấu + chữ thường (để so vocab), `raw` = bản gốc CÒN dấu (để
+// phân biệt "mười" = 10 với "mươi" = hàng chục — bỏ dấu thì hai từ như nhau).
+// Tách theo mọi ký tự không phải chữ/số → "chữ:", "đồng)" vẫn ra "chu", "dong".
+interface WordTok { raw: string; w: string }
+
+function tokenizeWords(text: string): WordTok[] {
+  return text
+    .normalize("NFC")
     .toLowerCase()
-    .replace(/[.,]/g, " ")
-    .split(/\s+/)
+    .split(/[^\p{L}\p{M}\p{N}]+/u)
     .filter(Boolean)
-    .map(fuzzyNumWord)
-    .filter((w) => w !== "linh" && w !== "le"); // lẻ/linh = 0 chục — bỏ
+    .map((raw) => ({ raw, w: stripDiacritics(raw) }));
+}
+
+// Dấu thanh (huyền, sắc, ngã, hỏi, nặng) — KHÔNG gồm dấu móc của "ơ"/"ư".
+const TONE_MARK_RE = /[̣̀́̃̉]/;
+
+const SCALE = new Map<string, number>([
+  ["nghin", 1_000], ["ngan", 1_000], ["trieu", 1_000_000],
+  ["ty", 1_000_000_000], ["ti", 1_000_000_000],
+]);
+
+export interface WordsAmount {
+  amount: number;
+  /**
+   * Cụm chữ MẤT chữ số đầu: gặp bậc (mươi / trăm / nghìn…) mà trước đó chưa có
+   * chữ số nào. Ca thật: "Bảy mươi chín triệu…" OCR ra "By mươi chín triệu…" —
+   * "By" không phải từ-số nên bị bỏ, đọc thành 19 triệu thay vì 79 triệu.
+   */
+  cut: boolean;
+}
+
+function vnWordsToNumber(toks: WordTok[]): WordsAmount | null {
   let total = 0;
   let group = 0;
   // cur = null khi CHƯA gặp chữ số (vd "trăm" đứng 1 mình do OCR rớt số → ngầm 1).
@@ -92,30 +117,43 @@ function vnWordsToNumber(phrase: string): number | null {
   // (cur ?? 1) thay (cur || 1) để phân biệt 2 ca này — nếu không "không trăm" ra 100.
   let cur: number | null = null;
   let sawAny = false;
-  for (const w of toks) {
+  let cut = false;
+  for (const t of toks) {
+    const w = fuzzyNumWord(t.w);
+    if (w === "linh" || w === "le") continue; // lẻ/linh = 0 chục — bỏ
     if (w in VN_UNIT) { cur = VN_UNIT[w]; sawAny = true; }
-    else if (w === "muoi" || w === "muop") { group += (cur ?? 1) * 10; cur = null; sawAny = true; }
-    else if (w === "tram") { group += (cur ?? 1) * 100; cur = null; sawAny = true; }
-    else if (w === "nghin" || w === "ngan") { total += (group + (cur ?? 0)) * 1_000; group = 0; cur = null; }
-    else if (w === "trieu") { total += (group + (cur ?? 0)) * 1_000_000; group = 0; cur = null; }
-    else if (w === "ty" || w === "ti") { total += (group + (cur ?? 0)) * 1_000_000_000; group = 0; cur = null; }
-    else if (w === "dong" || w === "chan" || w === "vnd" || w === "vnđ") break;
+    else if (w === "muoi" || w === "muop") {
+      // "mười" (có dấu thanh) đứng đầu = 10, hợp lệ. "mươi" (không dấu thanh) luôn
+      // đi sau 1 chữ số ("bảy mươi") → không có chữ số trước = chữ số đã bị rớt.
+      if (cur === null && !TONE_MARK_RE.test(t.raw.normalize("NFD"))) cut = true;
+      group += (cur ?? 1) * 10; cur = null; sawAny = true;
+    }
+    else if (w === "tram") {
+      if (cur === null) cut = true; // luôn viết "một trăm", không có "trăm" trơn
+      group += (cur ?? 1) * 100; cur = null; sawAny = true;
+    }
+    else if (SCALE.has(w)) {
+      if (group === 0 && cur === null) cut = true;
+      total += (group + (cur ?? 0)) * (SCALE.get(w) ?? 0); group = 0; cur = null;
+    }
+    else if (w === "dong" || w === "chan" || w === "vnd") break;
   }
   total += group + (cur ?? 0);
-  return sawAny && total > 0 ? total : null;
+  return sawAny && total > 0 ? { amount: total, cut } : null;
 }
 
-/** Tìm "...bằng chữ: <...> đồng" trong text OCR → số. */
-export function parseAmountInWords(text: string): number | null {
-  // Strip diacritics rồi tìm + cắt TRÊN CÙNG chuỗi (NFD đổi độ dài → không
-  // được lấy index của chuỗi này cắt chuỗi kia).
-  const flat = stripDiacritics(text).toLowerCase();
-  const i = flat.indexOf("bang chu");
+/** Tìm "...bằng chữ: <...> đồng" trong text OCR → số (kèm cờ cụt đầu). */
+export function readAmountInWords(text: string): WordsAmount | null {
+  const toks = tokenizeWords(text);
+  const i = toks.findIndex((t, k) => t.w === "bang" && toks[k + 1]?.w === "chu");
   if (i < 0) return null;
-  // Cửa sổ ~220 ký tự sau "bằng chữ", GỘP xuống dòng thành cách (OCR hay tự
-  // wrap giữa câu chữ → cắt ở \n đầu sẽ cụt số). vnWordsToNumber tự dừng ở "đồng".
-  const after = flat.slice(i + 8, i + 8 + 220).replace(/[\r\n]+/g, " ");
-  return vnWordsToNumber(after);
+  // Cửa sổ 40 token sau "bằng chữ" (số dài nhất cỡ ~25 từ), đã gộp xuống dòng
+  // (OCR hay tự wrap giữa câu chữ). vnWordsToNumber tự dừng ở "đồng".
+  return vnWordsToNumber(toks.slice(i + 2, i + 2 + 40));
+}
+
+export function parseAmountInWords(text: string): number | null {
+  return readAmountInWords(text)?.amount ?? null;
 }
 
 /**
@@ -128,31 +166,28 @@ export function parseAmountInWords(text: string): number | null {
  * Tránh trường hợp text "17974,500 VND <words> đồng" — "vnd" và "17974" ở
  * giữa sẽ làm vnWordsToNumber break sớm hoặc parse sai.
  */
-export function parseAmountFromDongWord(text: string): number | null {
-  const flat = stripDiacritics(text).toLowerCase().replace(/[\r\n]+/g, " ");
-  // Tokenize RAW (KHÔNG fuzzy) để tìm "dong" thật. fuzzy("cong"→"dong") sẽ map
-  // "CÔNG TY" thành "dong" → lastIndexOf trả vị trí sai.
-  const rawToks = flat
-    .replace(/[.,/]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-
-  const lastDongIdx = rawToks.lastIndexOf("dong");
+export function readAmountFromDongWord(text: string): WordsAmount | null {
+  const toks = tokenizeWords(text);
+  // So "dong" trên bản bỏ dấu KHÔNG fuzzy để tìm "đồng" thật. fuzzy("cong"→"dong")
+  // sẽ map "CÔNG TY" thành "dong" → lấy nhầm vị trí.
+  let lastDongIdx = -1;
+  for (let k = toks.length - 1; k >= 0; k--) {
+    if (toks[k].w === "dong") { lastDongIdx = k; break; }
+  }
   if (lastDongIdx < 0) return null;
 
   // Walk back từ "dong" lấy chuỗi VN-word liên tiếp (sau fuzzy). Dừng khi gặp
   // non-VN-word (vd "vnd", "17974", "tp", "efast") để không bị lẫn.
   let startIdx = lastDongIdx;
-  while (startIdx > 0) {
-    const fuzzed = fuzzyNumWord(rawToks[startIdx - 1]);
-    if (!isVnNumberWord(fuzzed)) break;
-    startIdx--;
-  }
+  while (startIdx > 0 && isVnNumberWord(fuzzyNumWord(toks[startIdx - 1].w))) startIdx--;
   if (startIdx === lastDongIdx) return null;
 
-  // Phrase: fuzzy từng token để bắt OCR sai chính tả ("sóu"→"sáu", "trdm"→"tram")
-  const phrase = rawToks.slice(startIdx, lastDongIdx + 1).map(fuzzyNumWord).join(" ");
-  return vnWordsToNumber(phrase);
+  // vnWordsToNumber tự fuzzy từng token ("sóu"→"sáu", "trdm"→"tram").
+  return vnWordsToNumber(toks.slice(startIdx, lastDongIdx + 1));
+}
+
+export function parseAmountFromDongWord(text: string): number | null {
+  return readAmountFromDongWord(text)?.amount ?? null;
 }
 
 /** Token có phải là từ trong vocab số tiếng Việt không (sau fuzzy). */
@@ -165,15 +200,9 @@ function isVnNumberWord(tok: string): boolean {
   return VN_FN_WORDS.has(tok);
 }
 
-export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
-  if (file.type === "application/pdf") return { amount: null, text: "" };
-
-  const { data } = await Tesseract.recognize(file, "vie+eng");
-  const raw = (data.text || "").slice(0, 4000);
+/** Số tiền chuyển từ toàn văn OCR của UNC (thuần — test được không cần Tesseract). */
+export function extractUncAmount(raw: string): number | null {
   const text = normalizeOcrDigits(raw);
-  // Log để soi khi OCR sai — mở DevTools (F12) → Console.
-  // eslint-disable-next-line no-console
-  console.log(`[OCR UNC] ${file.name}\n` + raw);
 
   // 1) Số cạnh "VND"/"đồng" → loại 0 (phí giao dịch), lấy lớn nhất.
   const moneyNums: number[] = [];
@@ -199,10 +228,24 @@ export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
   // luôn có dòng số viết bằng chữ kết bằng "đồng"). Đọc được CHỮ hợp lệ → ƯU TIÊN,
   // ghi đè số đọc ở (1)/(2) — KỂ CẢ khi 2 bên LỆCH nhau (đó chính là lúc chữ số OCR
   // sai). Không đọc được chữ → giữ số ở (1)/(2).
-  const wordsAmount = parseAmountInWords(raw) ?? parseAmountFromDongWord(raw);
-  if (wordsAmount != null && wordsAmount >= MIN_AMOUNT && wordsAmount <= MAX_AMOUNT) {
-    amount = wordsAmount;
+  // NGOẠI LỆ: cụm chữ bị cụt đầu (`cut`) thì chữ mới là bên sai → giữ số ở (1)/(2);
+  // chỉ dùng chữ khi (1)/(2) không đọc được gì.
+  const words = readAmountInWords(raw) ?? readAmountFromDongWord(raw);
+  if (words && words.amount >= MIN_AMOUNT && words.amount <= MAX_AMOUNT) {
+    if (!words.cut || amount == null) amount = words.amount;
   }
 
-  return { amount, text };
+  return amount;
+}
+
+export async function ocrUncSlip(file: File): Promise<OcrUncResult> {
+  if (file.type === "application/pdf") return { amount: null, text: "" };
+
+  const { data } = await Tesseract.recognize(file, "vie+eng");
+  const raw = (data.text || "").slice(0, 4000);
+  // Log để soi khi OCR sai — mở DevTools (F12) → Console.
+  // eslint-disable-next-line no-console
+  console.log(`[OCR UNC] ${file.name}\n` + raw);
+
+  return { amount: extractUncAmount(raw), text: normalizeOcrDigits(raw) };
 }
