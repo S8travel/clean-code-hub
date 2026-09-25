@@ -28,7 +28,9 @@ import { calcNHDnttAmount } from "@/lib/nh-dntt-calc";
 import { laDongHdvTra } from "@/lib/print-nguoi-tra";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { buildRemainingAllocations } from "@/lib/alloc-remaining";
-import { nhMainMoTa, resolveNhMainId } from "@/lib/nh-chi-phi-resolve";
+import {
+  nhMainMoTa, resolveNhMainId, oBuaCanDungLai, tenNhaHangDeGhi, dangGiuCacheCu,
+} from "@/lib/nh-chi-phi-resolve";
 import { computeInitialDinhKyNhKeys } from "@/lib/nh-dinh-ky";
 import { tienDeNghiTrung } from "@/lib/dinh-ky-nhom";
 import { type CanTruSelection } from "./KSCongNoPanel";
@@ -55,8 +57,13 @@ export function useNHSection({
   doanId, soKhachDefault = 0, soKhachKhongTL, coTinhSuatTLNhaHang, tenDoan = "",
   doanNhomId, locked = false,
 }: NHSectionParams) {
-  const { data: nhData, isLoading } = useChiPhiNHSection(doanId, doanNhomId);
-  const { data: chiPhiRows = [], isLoading: chiPhiLoading } = useChiPhiList(doanId, doanNhomId);
+  const nhQuery = useChiPhiNHSection(doanId, doanNhomId);
+  const { data: nhData, isLoading } = nhQuery;
+  const chiPhiQuery = useChiPhiList(doanId, doanNhomId);
+  const { data: chiPhiRows = [], isLoading: chiPhiLoading } = chiPhiQuery;
+  // Tab vừa mở lại mà còn cầm bản cache TRƯỚC lần lưu Điều tour gần nhất → chưa dựng
+  // state (dựng là ghim nhà hàng cũ vào ô bữa), đợi bản tải lại. Xem lib/nh-chi-phi-resolve.ts.
+  const choTaiLai = dangGiuCacheCu(nhQuery) || dangGiuCacheCu(chiPhiQuery);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
@@ -155,6 +162,7 @@ export function useNHSection({
     // condition do 2 query parallel), localRows[key].id sẽ undefined → handleDnttSubmit
     // fall back vào INSERT chi phí mới → duplicate key vs row đã tồn tại trong DB.
     if (chiPhiLoading) return;
+    if (choTaiLai) return;
 
     const nhChiPhi = chiPhiRows.filter((c) => c.danh_muc === "nha_hang");
     const rows: Record<string, LocalNHRow> = {};
@@ -243,7 +251,7 @@ export function useNHSection({
     if (dkSet.size > 0) setDinhKyKeys(dkSet);
 
     initializedRef.current = true;
-  }, [nhData, chiPhiRows, soKhachDefault, chiPhiLoading]);
+  }, [nhData, chiPhiRows, soKhachDefault, chiPhiLoading, choTaiLai]);
 
   // Chỉ reset khi doanId THỰC SỰ thay đổi, không chạy khi mount lần đầu
   const prevDoanIdRef = useRef(doanId);
@@ -256,18 +264,22 @@ export function useNHSection({
     setExtrasMap({});
   }, [doanId]);
 
-  // Sync NEW meals added in Điều Tour SAU init (giữ lại edits của user trên rows cũ).
-  // Không chạy nếu chưa init (init effect bên trên đã handle). Không overwrite key đã có.
+  // Dựng state cho ô bữa MỚI xuất hiện sau init, và DỰNG LẠI ô bữa mà lịch trình đã đổi
+  // sang nhà hàng khác (máy khác lưu Điều tour, realtime đẩy về). Giữ nhà hàng cũ trong
+  // state là nguồn gốc lỗi dòng chi phí bị đổi tên "Nhà hàng (…)" — xem
+  // lib/nh-chi-phi-resolve.ts. Ô không đổi nhà hàng giữ nguyên edit của OP.
+  // Không chạy nếu chưa init (init effect bên trên đã handle).
   useEffect(() => {
     if (!nhData || !initializedRef.current) return;
     if (nhData.meals.length === 0) return;
 
     const nhChiPhi = chiPhiRows.filter((c) => c.danh_muc === "nha_hang");
-    const existingKeys = new Set(Object.keys(localRowsRef.current));
-    const newMeals = nhData.meals.filter(
-      (m) => !existingKeys.has(`${m.doan_ngay_id}_${m.bua_an}`),
-    );
+    const newMeals = oBuaCanDungLai(nhData.meals, localRowsRef.current);
     if (newMeals.length === 0) return;
+    // Ô đã có state = ô vừa đổi nhà hàng (ô mới thì chưa có).
+    const oDoiNhaHang = newMeals
+      .map((m) => `${m.doan_ngay_id}_${m.bua_an}`)
+      .filter((k) => localRowsRef.current[k] != null);
 
     setLocalRows((prev) => {
       const next = { ...prev };
@@ -339,6 +351,47 @@ export function useNHSection({
       }
       return changed ? next : prev;
     });
+
+    // Cờ định kỳ của các ô vừa dựng: tính như lúc init (lib/nh-dinh-ky.ts). Ô đổi nhà
+    // hàng mà giữ cờ của nhà hàng cũ thì lần lưu kế tiếp ghi nhầm cờ sang dòng mới.
+    const dkDungLai = computeInitialDinhKyNhKeys(
+      newMeals.map((meal) => {
+        const nh = nhData.nhaHangMap[meal.nha_hang_id];
+        const mainMoTa = nhMainMoTa(nh?.ten || "Nhà hàng", meal.bua_an);
+        const mainCp = nhChiPhi.find(
+          (cp) => cp.ref_doan_ngay_id === meal.doan_ngay_id && cp.mo_ta === mainMoTa,
+        );
+        return {
+          key: `${meal.doan_ngay_id}_${meal.bua_an}`,
+          daCoChiPhi: !!mainCp,
+          chiPhiDinhKy: mainCp?.thanh_toan_dinh_ky ?? null,
+          nhMacDinh: nh?.thanh_toan_dinh_ky_mac_dinh ?? null,
+        };
+      }),
+    );
+    setDinhKyKeys((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const meal of newMeals) {
+        const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
+        const want = dkDungLai.has(key);
+        if (want === next.has(key)) continue;
+        if (want) next.add(key); else next.delete(key);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+
+    // Cấn trừ đã chọn cho ô đổi nhà hàng là công nợ của NCC CŨ → bỏ, kẻo bị áp vào
+    // ĐNTT của NCC mới.
+    if (oDoiNhaHang.length > 0) {
+      setCanTruByMeal((prev) => {
+        if (!oDoiNhaHang.some((k) => k in prev)) return prev;
+        const next = { ...prev };
+        for (const k of oDoiNhaHang) delete next[k];
+        return next;
+      });
+    }
   }, [nhData, chiPhiRows, soKhachDefault, soKhachKhongTL, coTinhSuatTLNhaHang]);
 
   // Nhận lại id dòng chi phí chính khi cascade Điều tour đã XÓA rồi TẠO LẠI dòng đó.
@@ -361,6 +414,10 @@ export function useNHSection({
         const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
         const row = next[key];
         if (!row) continue;
+        // Ô vừa đổi nhà hàng: effect dựng lại ô ở trên lo cả id lẫn nhà hàng. Nhận id
+        // dòng của nhà hàng MỚI vào state còn giữ nhà hàng CŨ chính là lỗi đổi tên
+        // "Nhà hàng (…)" — lần lưu sau ghi đè mo_ta dòng vừa nhận.
+        if (row.nha_hang_id !== meal.nha_hang_id) continue;
         const nhTen = nhData.nhaHangMap[meal.nha_hang_id]?.ten || "Nhà hàng";
         const { id, adopted } = resolveNhMainId({
           currentId: row.id,
@@ -535,8 +592,19 @@ export function useNHSection({
     const row = localRowsRef.current[key];
     if (!row || (!row.don_gia && !row.so_khach)) return;
 
+    // mo_ta là khóa nối dòng chi phí với ô bữa — chỉ ghi khi state khớp lịch trình và
+    // có tên thật; không bao giờ ghi chữ dự phòng (xem lib/nh-chi-phi-resolve.ts).
+    const tenGhi = tenNhaHangDeGhi({
+      nhaHangIdState: row.nha_hang_id,
+      nhaHangIdLichTrinh: nhData?.meals.find((m) => `${m.doan_ngay_id}_${m.bua_an}` === key)?.nha_hang_id,
+      nhaHangMap: nhData?.nhaHangMap ?? {},
+    });
+    if (!tenGhi.ok) {
+      toast.error(tenGhi.lyDo);
+      return;
+    }
     const nh = nhData?.nhaHangMap[row.nha_hang_id];
-    const nhName = nh?.ten || "Nhà hàng";
+    const nhName = tenGhi.ten;
     const buaStr = row.bua_an === "trua" ? "trưa" : "tối";
     const focResolved = resolveNHFoc(row, nh);
     const soKhachThucTe = calcSoKhachThucTe(row.so_khach, focResolved.foc_khach, focResolved.foc_mien);
@@ -816,6 +884,18 @@ export function useNHSection({
     const extras = extrasMap[key] || [];
     if (!row) return;
 
+    // Tên nhà hàng ghi vào ĐNTT + dòng chi phí (nếu phải tạo): state phải khớp lịch
+    // trình. Lệch = state còn nhà hàng cũ → ĐNTT mang mô tả "Nhà hàng (…)", mất NCC.
+    const tenGhi = tenNhaHangDeGhi({
+      nhaHangIdState: row.nha_hang_id,
+      nhaHangIdLichTrinh: nhData?.meals.find((m) => `${m.doan_ngay_id}_${m.bua_an}` === key)?.nha_hang_id,
+      nhaHangMap: nhData?.nhaHangMap ?? {},
+    });
+    if (!tenGhi.ok) {
+      toast.error(tenGhi.lyDo);
+      return;
+    }
+
     // Chốt chặn "dòng ma": id trong state có thể trỏ vào dòng chi phí đã bị cascade
     // Điều tour xóa (state chỉ gán id lúc init). Tạo ĐNTT trên id chết → allocation vi
     // phạm FK; guard chống trùng cũng câm vì nó tra allocation theo id chết → OP bấm
@@ -847,7 +927,7 @@ export function useNHSection({
     // Auto-save chi_phi nếu chưa có id
     if (!row.id) {
       const nh0 = nhData?.nhaHangMap[row.nha_hang_id];
-      const nhName0 = nh0?.ten || "Nhà hàng";
+      const nhName0 = tenGhi.ten;
       const buaStr0 = row.bua_an === "trua" ? "trưa" : "tối";
       const expectedMoTa = nhMainMoTa(nhName0, row.bua_an);
       // Defensive: lookup chi phí có sẵn trong DB. Trường hợp localRows lệch
@@ -998,7 +1078,7 @@ export function useNHSection({
           });
         }
       }
-      const nhName = nh?.ten || "Nhà hàng";
+      const nhName = tenGhi.ten;
       const buaLabel = row.bua_an === "trua" ? "trưa" : "tối";
       const dateLabel = row.ngay_date
         ? format(new Date(row.ngay_date + "T00:00:00"), "dd/MM")
@@ -2372,7 +2452,8 @@ export function useNHSection({
   };
 
   return {
-    isLoading,
+    // choTaiLai: hiện "Đang tải" thay vì bảng dựng từ cache cũ (~1 lượt tải lại).
+    isLoading: isLoading || choTaiLai,
     meals: nhData?.meals ?? [],
     nhRowData, nhRowHandlers,
     selectedKeys, setSelectedKeys,
