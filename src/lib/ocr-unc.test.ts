@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { normCode, parseAmountInWords, parseAmountFromDongWord } from "./ocr-unc";
+import {
+  normCode, parseAmountInWords, parseAmountFromDongWord,
+  readAmountInWords, readAmountFromDongWord, extractUncAmount,
+} from "./ocr-unc";
 
 describe("normCode — chuẩn hoá mã đoàn để so khớp với OCR text", () => {
   it("giữ A-Z và 0-9, bỏ ký tự khác", () => {
@@ -88,5 +91,74 @@ describe("parseAmountFromDongWord — fallback không cần nhãn 'bằng chữ'
       "S8 tt CTCP du lich ABC code 291726 doan AGENT-ELU-HAN5D-0623 " +
       "Ba triệu không trăm hơi mươi bốn nghìn đồng";
     expect(parseAmountFromDongWord(text)).toBe(3_024_000);
+  });
+});
+
+describe("cờ cut — cụm chữ mất chữ số đầu", () => {
+  it("'Bảy mươi…' OCR ra 'By mươi…' → 19 triệu nhưng cắm cờ cut", () => {
+    expect(readAmountFromDongWord("By mươi chin triệu ba trăm nghìn đồng"))
+      .toEqual({ amount: 19_300_000, cut: true });
+  });
+
+  it("'Mười' (có dấu huyền) đứng đầu là 10 hợp lệ → KHÔNG cut", () => {
+    expect(readAmountFromDongWord("Mười triệu đồng"))
+      .toEqual({ amount: 10_000_000, cut: false });
+    expect(readAmountFromDongWord("Mười lăm triệu đồng"))
+      .toEqual({ amount: 15_000_000, cut: false });
+  });
+
+  it("'mươi' không dấu thanh đứng đầu → cut", () => {
+    expect(readAmountFromDongWord("Mươi triệu đồng")?.cut).toBe(true);
+  });
+
+  it("'trăm' / 'triệu' đứng đầu (thiếu 'một') → cut", () => {
+    expect(readAmountFromDongWord("trăm nghìn đồng")?.cut).toBe(true);
+    expect(readAmountFromDongWord("triệu hai trăm nghìn đồng")?.cut).toBe(true);
+  });
+
+  it("cụm đầy đủ → KHÔNG cut", () => {
+    expect(readAmountFromDongWord("Bảy mươi chín triệu ba trăm nghìn đồng"))
+      .toEqual({ amount: 79_300_000, cut: false });
+    expect(readAmountFromDongWord("Ba triệu không trăm hai mươi bốn nghìn đồng"))
+      .toEqual({ amount: 3_024_000, cut: false });
+  });
+
+  it("đường nhãn 'bằng chữ' cũng bắt cut (từ lạ đầu câu bị bỏ qua)", () => {
+    expect(readAmountInWords("Số tiền bằng chữ: By mươi chín triệu đồng"))
+      .toEqual({ amount: 19_000_000, cut: true });
+  });
+
+  it("'bằng chứng' KHÔNG bị nhận nhầm là nhãn 'bằng chữ'", () => {
+    expect(readAmountInWords("bằng chứng hai triệu đồng")).toBeNull();
+  });
+});
+
+describe("extractUncAmount — chọn giữa số đọc bằng chữ số và bằng chữ", () => {
+  // Ca thật (đã bỏ tên NCC / mã đoàn / STK): chữ số đọc ĐÚNG, chữ "Bảy" bị OCR
+  // thành "By" → trước đây chữ ghi đè chữ số → ra 19.300.000 thay vì 79.300.000.
+  const efastByMuoi = [
+    "VietinBank eFAST =",
+    "Nhanh 24/7",
+    "79,300,000 VND",
+    "By mươi chin triệu ba trăm nghìn đồng",
+    "CONG TY TNHH ABC",
+    "CONG TY CO PHAN XYZ",
+    "Nội dung S8 tt CONG TY CO PHAN XYZ- ks",
+    "code XYZ doan AGENT-TEST 5D-",
+    "Phí giao dịch 0 VND",
+    "Thời gian giao dich 01/01/2026 10:00:00",
+  ].join("\n");
+
+  it("chữ bị cụt đầu → giữ số đọc bằng chữ số (79.300.000)", () => {
+    expect(extractUncAmount(efastByMuoi)).toBe(79_300_000);
+  });
+
+  it("chữ đầy đủ mà LỆCH chữ số → vẫn tin chữ (chữ số OCR nhầm 3↔5)", () => {
+    const text = "5,024,000 VND\nBa triệu không trăm hơi mươi bốn nghìn đồng";
+    expect(extractUncAmount(text)).toBe(3_024_000);
+  });
+
+  it("chữ bị cụt nhưng KHÔNG đọc được chữ số nào → dùng tạm chữ", () => {
+    expect(extractUncAmount("By mươi chin triệu ba trăm nghìn đồng")).toBe(19_300_000);
   });
 });
