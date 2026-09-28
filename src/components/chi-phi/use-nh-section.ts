@@ -29,8 +29,9 @@ import { laDongHdvTra } from "@/lib/print-nguoi-tra";
 import { wouldOverCommit } from "@/lib/dntt-duplicate-guard";
 import { buildRemainingAllocations } from "@/lib/alloc-remaining";
 import {
-  nhMainMoTa, resolveNhMainId, oBuaCanDungLai, tenNhaHangDeGhi, dangGiuCacheCu,
+  nhMainMoTa, resolveNhMainId, oBuaCanDungLai, tenNhaHangDeGhi, quyetDinhDonNhMoCoi,
 } from "@/lib/nh-chi-phi-resolve";
+import { useChoTaiLai } from "@/hooks/use-cho-tai-lai";
 import { computeInitialDinhKyNhKeys } from "@/lib/nh-dinh-ky";
 import { tienDeNghiTrung } from "@/lib/dinh-ky-nhom";
 import { type CanTruSelection } from "./KSCongNoPanel";
@@ -62,8 +63,10 @@ export function useNHSection({
   const chiPhiQuery = useChiPhiList(doanId, doanNhomId);
   const { data: chiPhiRows = [], isLoading: chiPhiLoading } = chiPhiQuery;
   // Tab vừa mở lại mà còn cầm bản cache TRƯỚC lần lưu Điều tour gần nhất → chưa dựng
-  // state (dựng là ghim nhà hàng cũ vào ô bữa), đợi bản tải lại. Xem lib/nh-chi-phi-resolve.ts.
-  const choTaiLai = dangGiuCacheCu(nhQuery) || dangGiuCacheCu(chiPhiQuery);
+  // state (dựng là ghim nhà hàng cũ vào ô bữa), đợi bản tải lại. Trong cùng một đoàn|nhóm,
+  // thả một lần là thôi: cache tự hết hạn sau 30s hay tải lại ngầm KHÔNG được tháo bảng
+  // đang hiện. Xem hooks/use-cho-tai-lai.ts.
+  const choTaiLai = useChoTaiLai(`${doanId}|${doanNhomId ?? ""}`, [nhQuery, chiPhiQuery]);
   const { data: dnttList = [] } = useDNTTList(doanId);
   const { data: paymentsList = [] } = usePaymentsByChiPhi(doanId);
   const { data: congNoList = [] } = useCongNoList({ doanId });
@@ -550,6 +553,14 @@ export function useNHSection({
   const autoDeletedNhIdsRef = useRef<Set<number>>(new Set());
   useEffect(() => {
     if (!nhData || chiPhiRows.length === 0) return;
+    // Danh sách bữa cũ hơn bản chi phí → dòng cascade vừa tạo cho ngày mới gắn NH trông
+    // như mồ côi → đừng xóa (xem quyetDinhDonNhMoCoi).
+    const quyetDinh = quyetDinhDonNhMoCoi({
+      choTaiLai,
+      dsBua: { fetchStatus: nhQuery.fetchStatus, isError: nhQuery.isError, dataUpdatedAt: nhQuery.dataUpdatedAt },
+      chiPhi: { fetchStatus: chiPhiQuery.fetchStatus, isError: chiPhiQuery.isError, dataUpdatedAt: chiPhiQuery.dataUpdatedAt },
+    });
+    if (quyetDinh === "cho") return;
     const currentNgayIds = new Set(nhData.meals.map((m) => m.doan_ngay_id));
     const toDelete = chiPhiRows.filter((cp) => {
       if (cp.danh_muc !== "nha_hang") return false;
@@ -574,11 +585,21 @@ export function useNHSection({
         .reduce((s, c) => s + Number(c.so_tien_goc || 0), 0);
       return sumPaid > 0 && sumCongNo >= sumPaid;
     });
+    if (toDelete.length === 0) return;
+    if (quyetDinh === "tai_lai_ds_bua") {
+      // Tải xong effect tự chạy lại (fetchStatus/dataUpdatedAt trong deps) với bản mới.
+      qc.invalidateQueries({ queryKey: ["chi_phi_nh_section", doanId] });
+      return;
+    }
     for (const cp of toDelete) {
       autoDeletedNhIdsRef.current.add(cp.id!);
       deleteMut.mutate({ id: cp.id!, doanId });
     }
-  }, [nhData, chiPhiRows, dnttList, congNoList, doanId, deleteMut, redemptionByChiPhiId]);
+  }, [
+    nhData, chiPhiRows, dnttList, congNoList, doanId, deleteMut, redemptionByChiPhiId, qc, choTaiLai,
+    nhQuery.fetchStatus, nhQuery.isError, nhQuery.dataUpdatedAt,
+    chiPhiQuery.fetchStatus, chiPhiQuery.isError, chiPhiQuery.dataUpdatedAt,
+  ]);
 
   // ── Main row handlers ─────────────────────────────────────────────────────
 
@@ -2452,7 +2473,8 @@ export function useNHSection({
   };
 
   return {
-    // choTaiLai: hiện "Đang tải" thay vì bảng dựng từ cache cũ (~1 lượt tải lại).
+    // choTaiLai: chờ lượt tải lúc mở khi cache đã cũ; trong cùng một đoàn|nhóm, đã hiện
+    // bảng thì không quay lại "Đang tải".
     isLoading: isLoading || choTaiLai,
     meals: nhData?.meals ?? [],
     nhRowData, nhRowHandlers,

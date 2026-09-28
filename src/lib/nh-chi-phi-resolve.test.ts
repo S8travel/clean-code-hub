@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   nhMainMoTa, nhMealSuffix, findNhMainChiPhi, resolveNhMainId, type ChiPhiLite,
-  oBuaCanDungLai, tenNhaHangDeGhi, dangGiuCacheCu,
+  oBuaCanDungLai, tenNhaHangDeGhi, quyetDinhDonNhMoCoi,
 } from "./nh-chi-phi-resolve";
+import type { TrangThaiTai } from "./cho-tai-lai";
 
 const cp = (id: number, ref: number | null, moTa: string | null, dm = "nha_hang"): ChiPhiLite =>
   ({ id, danh_muc: dm, ref_doan_ngay_id: ref, mo_ta: moTa });
@@ -183,15 +184,27 @@ describe("tenNhaHangDeGhi", () => {
   });
 });
 
-describe("dangGiuCacheCu", () => {
-  it("cache cũ, chưa tải lại kể từ khi mở tab → đang giữ cache cũ", () => {
-    expect(dangGiuCacheCu({ isStale: true, isFetchedAfterMount: false })).toBe(true);
+describe("quyetDinhDonNhMoCoi", () => {
+  const qd = (fetchStatus: TrangThaiTai, dataUpdatedAt: number, isError = false) => ({ fetchStatus, isError, dataUpdatedAt });
+  const XONG = qd("idle", 100);
+
+  it("cả hai đã tải xong, danh sách bữa không cũ hơn chi phí, cổng đã thả → được dọn", () => {
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: qd("idle", 200), chiPhi: XONG })).toBe("don");
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: XONG, chiPhi: XONG })).toBe("don");
   });
-  it("đã tải lại sau khi mở tab → không còn là cache cũ (dù sau đó lại hết hạn)", () => {
-    expect(dangGiuCacheCu({ isStale: true, isFetchedAfterMount: true })).toBe(false);
+  it("vừa quay lại tab sau khi lưu Điều tour (cổng còn chờ) → chờ", () => {
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: true, dsBua: XONG, chiPhi: XONG })).toBe("cho");
   });
-  it("cache còn trong hạn → coi là tươi", () => {
-    expect(dangGiuCacheCu({ isStale: false, isFetchedAfterMount: false })).toBe(false);
-    expect(dangGiuCacheCu({ isStale: false, isFetchedAfterMount: true })).toBe(false);
+  it("danh sách bữa hoặc chi phí đang tải / treo vì mất mạng → chờ", () => {
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: qd("fetching", 100), chiPhi: XONG })).toBe("cho");
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: XONG, chiPhi: qd("fetching", 100) })).toBe("cho");
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: qd("paused", 100), chiPhi: XONG })).toBe("cho");
+  });
+  it("lượt tải lỗi (vẫn cầm bản cũ) → chờ", () => {
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: qd("idle", 100, true), chiPhi: XONG })).toBe("cho");
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: XONG, chiPhi: qd("idle", 100, true) })).toBe("cho");
+  });
+  it("danh sách bữa còn tươi theo giờ nhưng CŨ HƠN chi phí (quay lại lúc lượt lưu còn chạy) → tải lại danh sách bữa", () => {
+    expect(quyetDinhDonNhMoCoi({ choTaiLai: false, dsBua: qd("idle", 100), chiPhi: qd("idle", 200) })).toBe("tai_lai_ds_bua");
   });
 });

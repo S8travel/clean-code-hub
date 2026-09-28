@@ -13,6 +13,8 @@
 // Lệch một ký tự là mất dấu dòng → sinh dòng trùng (vi phạm ux_doan_chi_phi_nh_unique)
 // hoặc tạo ĐNTT trỏ sai. Vì vậy nó sống ở đây, một nguồn duy nhất, có test.
 
+import type { TrangThaiTai } from "./cho-tai-lai";
+
 export type BuaAn = "trua" | "toi";
 
 export const BUA_AN_LABEL: Record<BuaAn, string> = { trua: "trưa", toi: "tối" };
@@ -156,14 +158,35 @@ export function tenNhaHangDeGhi(opts: {
   return { ok: true, ten };
 }
 
+export interface TrangThaiQueryDon {
+  fetchStatus: TrangThaiTai;
+  isError: boolean;
+  /** Mốc bản data hiện có về tới máy (ms) — React Query `dataUpdatedAt`. */
+  dataUpdatedAt: number;
+}
+
 /**
- * Query đang trả bản cache CŨ và chưa tải lại lần nào kể từ khi tab mở?
+ * Dọn dòng chi phí NH "mồ côi" (ngày không còn bữa NH) lúc này được chưa?
+ *   "cho"           — chưa: dữ liệu còn đang tải / lỗi / cổng chưa thả.
+ *   "tai_lai_ds_bua" — danh sách bữa CŨ HƠN bản chi phí → tải lại danh sách bữa trước.
+ *   "don"           — được dọn.
  *
- * Tab Chi phí bị tháo khi OP sang tab Điều tour. Quay lại trong vòng gcTime, React
- * Query trả NGAY bản cache — bản trước lần lưu Điều tour — rồi mới tải lại ngầm. Dựng
- * state từ bản đó là ghim nhà hàng cũ vào ô bữa. Cache còn trong staleTime thì coi là
- * tươi (không bị ai đánh dấu cũ).
+ * Hiểm họa: chi phí đã có dòng NH mà cascade Điều tour vừa INSERT cho ngày mới gắn nhà
+ * hàng, còn danh sách bữa (chi_phi_nh_section) là bản TRƯỚC khi lưu → ngày đó chưa có →
+ * dòng mới trông như mồ côi → bị xóa. Gặp khi: quay lại tab Chi phí sau khi lưu (DoanDetail
+ * luôn theo dõi chi phí → tải lại ngay, danh sách bữa thì chưa); tải lại ngầm mà chi phí về
+ * trước; quay lại lúc lượt lưu còn đang chạy (danh sách bữa còn "tươi" theo giờ nhưng cũ
+ * hơn chi phí). Lượt tải lỗi thì data vẫn là bản cũ → cũng chờ (bước 5b lúc lưu Điều tour
+ * vẫn dọn mồ côi phía DB).
  */
-export function dangGiuCacheCu(q: { isStale: boolean; isFetchedAfterMount: boolean }): boolean {
-  return q.isStale && !q.isFetchedAfterMount;
+export function quyetDinhDonNhMoCoi(s: {
+  choTaiLai: boolean;
+  dsBua: TrangThaiQueryDon;
+  chiPhi: TrangThaiQueryDon;
+}): "cho" | "tai_lai_ds_bua" | "don" {
+  if (s.choTaiLai) return "cho";
+  if (s.dsBua.fetchStatus !== "idle" || s.dsBua.isError) return "cho";
+  if (s.chiPhi.fetchStatus !== "idle" || s.chiPhi.isError) return "cho";
+  if (s.dsBua.dataUpdatedAt < s.chiPhi.dataUpdatedAt) return "tai_lai_ds_bua";
+  return "don";
 }
