@@ -32,6 +32,7 @@ import {
   nhMainMoTa, resolveNhMainId, oBuaCanDungLai, tenNhaHangDeGhi, quyetDinhDonNhMoCoi,
 } from "@/lib/nh-chi-phi-resolve";
 import { useChoTaiLai } from "@/hooks/use-cho-tai-lai";
+import { chonFocChoDong, cungFoc, focDangLuuDaVe, type FocCap, type FocDangLuu } from "@/lib/nh-foc-dong-bo";
 import { computeInitialDinhKyNhKeys } from "@/lib/nh-dinh-ky";
 import { tienDeNghiTrung } from "@/lib/dinh-ky-nhom";
 import { type CanTruSelection } from "./KSCongNoPanel";
@@ -116,6 +117,11 @@ export function useNHSection({
   const extrasMapRef = useRef(extrasMap);
   const redemptionByChiPhiIdRef = useRef(redemptionByChiPhiId);
   useEffect(() => { localRowsRef.current = localRows; }, [localRows]);
+  // Ô bữa có lượt lưu FOC đang chạy (ô FOC ghi thẳng DB) → giữ số OP vừa gõ tới khi
+  // dữ liệu chi phí về khớp. Xem lib/nh-foc-dong-bo.ts.
+  const focDangLuuRef = useRef<Record<string, FocDangLuu>>({});
+  const chiPhiRowsRef = useRef(chiPhiRows);
+  useEffect(() => { chiPhiRowsRef.current = chiPhiRows; }, [chiPhiRows]);
   useEffect(() => { extrasMapRef.current = extrasMap; }, [extrasMap]);
   useEffect(() => { redemptionByChiPhiIdRef.current = redemptionByChiPhiId; }, [redemptionByChiPhiId]);
 
@@ -263,6 +269,7 @@ export function useNHSection({
     prevDoanIdRef.current = doanId;
     initializedRef.current = false;
     autoFixedHdvRef.current = false;
+    focDangLuuRef.current = {};
     setLocalRows({});
     setExtrasMap({});
   }, [doanId]);
@@ -279,6 +286,8 @@ export function useNHSection({
     const nhChiPhi = chiPhiRows.filter((c) => c.danh_muc === "nha_hang");
     const newMeals = oBuaCanDungLai(nhData.meals, localRowsRef.current);
     if (newMeals.length === 0) return;
+    // Ô dựng lại theo nhà hàng khác → số FOC đang lưu (của nhà hàng cũ) không còn ý nghĩa.
+    for (const m of newMeals) delete focDangLuuRef.current[`${m.doan_ngay_id}_${m.bua_an}`];
     // Ô đã có state = ô vừa đổi nhà hàng (ô mới thì chưa có).
     const oDoiNhaHang = newMeals
       .map((m) => `${m.doan_ngay_id}_${m.bua_an}`)
@@ -437,12 +446,22 @@ export function useNHSection({
     });
   }, [nhData, chiPhiRows, chiPhiLoading]);
 
-  // Sync localRows cho rows KHÔNG override khi Điều tour đổi set menu.
-  // NH cascade ở useSaveDieuTour chỉ update master metadata, KHÔNG đụng don_gia
-  // (để tránh đè user edit). Effect này tự detect: meal.gia_set_menu khác → sync.
-  // Override rows giữ nguyên user edit.
+  // Sync localRows khi dữ liệu đổi:
+  //   - FOC: MỌI dòng, KỂ CẢ override — FOC chỉ sửa qua ô FOC (ghi thẳng DB), bảng làm
+  //     việc không có số OP gõ nào cần giữ. Bỏ qua dòng override ở đây từng làm lần lưu
+  //     kế tiếp ghi FOC cũ ngược lại DB (lib/nh-foc-dong-bo.ts).
+  //   - Đơn giá / CK: chỉ dòng KHÔNG override. NH cascade ở useSaveDieuTour chỉ update
+  //     master metadata, KHÔNG đụng don_gia (để tránh đè user edit). Effect này tự
+  //     detect: meal.gia_set_menu khác → sync. Override rows giữ nguyên user edit.
+  const chiPhiDataUpdatedAt = chiPhiQuery.dataUpdatedAt;
   useEffect(() => {
     if (!nhData || !initializedRef.current) return;
+    // Lượt lưu ô FOC đã về tới dữ liệu chi phí → thôi giữ số vừa gõ, theo DB.
+    for (const [key, dangLuu] of Object.entries(focDangLuuRef.current)) {
+      const id = localRowsRef.current[key]?.id;
+      const db = id ? chiPhiRows.find((cp) => cp.id === id) ?? null : null;
+      if (focDangLuuDaVe(dangLuu, db, chiPhiDataUpdatedAt)) delete focDangLuuRef.current[key];
+    }
     setLocalRows((prev) => {
       let changed = false;
       const next = { ...prev };
@@ -450,9 +469,17 @@ export function useNHSection({
         const key = `${meal.doan_ngay_id}_${meal.bua_an}`;
         const row = next[key];
         if (!row) continue;
-        if (row.is_overridden) continue; // override → giữ user edit
-        // Ưu tiên meal.gia_set_menu (mới nhất từ Điều tour). Fallback DB don_gia.
         const dbRow = row.id ? chiPhiRows.find((cp) => cp.id === row.id) : null;
+        const foc = chonFocChoDong(row, dbRow ?? null, focDangLuuRef.current[key] ?? null);
+        if (row.is_overridden) {
+          // override → giữ user edit SL/giá/CK, CHỈ theo FOC.
+          if (!cungFoc(foc, row)) {
+            next[key] = { ...row, ...foc };
+            changed = true;
+          }
+          continue;
+        }
+        // Ưu tiên meal.gia_set_menu (mới nhất từ Điều tour). Fallback DB don_gia.
         const nh = nhData.nhaHangMap[meal.nha_hang_id];
         const targetDonGia = meal.gia_set_menu ?? dbRow?.don_gia ?? row.don_gia;
         // ⚠️ KHÔNG sync so_khach từ dbRow.so_luong ở đây. Số khách của row
@@ -463,8 +490,8 @@ export function useNHSection({
         // FOC + chiết khấu: lấy từ snapshot CỦA TOUR (dbRow = doan_chi_phi),
         // KHÔNG đọc master. resolveNHChietKhau chỉ fallback master khi
         // snapshot null (legacy) — đúng hành vi init.
-        const targetFocK = dbRow ? (dbRow.foc_khach_snapshot ?? null) : (row.foc_khach_snapshot ?? null);
-        const targetFocM = dbRow ? (dbRow.foc_mien_snapshot ?? null) : (row.foc_mien_snapshot ?? null);
+        const targetFocK = foc.foc_khach_snapshot;
+        const targetFocM = foc.foc_mien_snapshot;
         const targetCkSnap = dbRow ? (dbRow.chiet_khau_phan_tram_snapshot ?? null) : (row.chiet_khau_phan_tram_snapshot ?? null);
         const targetCk = resolveNHChietKhau({ chiet_khau_phan_tram_snapshot: targetCkSnap }, nh);
         if (
@@ -487,7 +514,7 @@ export function useNHSection({
       }
       return changed ? next : prev;
     });
-  }, [nhData, chiPhiRows]);
+  }, [nhData, chiPhiRows, chiPhiDataUpdatedAt]);
 
   // Khi soKhachDefault load xong (async), cập nhật rows chưa có số khách.
   // SKIP overridden rows — user đã chốt giá trị, không được auto-cascade.
@@ -608,6 +635,36 @@ export function useNHSection({
     // effect "Sync localRows" (cascade Điều tour) không ghi đè giá trị vừa nhập.
     setLocalRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value, is_overridden: true } }));
   }, []);
+
+  // Ô FOC bắt đầu lưu → đưa số OP vừa gõ vào bảng làm việc NGAY (trước khi DB trả về),
+  // để lần lưu dòng kế tiếp (handleSave / Tạo ĐNTT) không ghi FOC cũ đè lên.
+  const handleFocDangLuu = useCallback((key: string, foc: FocCap) => {
+    focDangLuuRef.current[key] = { ...foc, xongLuc: null };
+    const row = localRowsRef.current[key];
+    if (row) localRowsRef.current = { ...localRowsRef.current, [key]: { ...row, ...foc } };
+    setLocalRows((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], ...foc } } : prev));
+  }, []);
+
+  const handleFocLuuXong = useCallback((key: string, foc: FocCap, ok: boolean) => {
+    const dangLuu = focDangLuuRef.current[key];
+    if (!dangLuu || !cungFoc(dangLuu, foc)) return; // đã có lượt lưu mới hơn
+    if (ok) {
+      dangLuu.xongLuc = Date.now();
+      return;
+    }
+    // Lưu lỗi → DB vẫn giữ số cũ: bỏ số vừa gõ, đưa bảng làm việc về FOC của dòng DB
+    // NGAY (không chờ tải lại — mạng chập chờn thì lượt tải cũng hỏng, E5 không chạy, lần
+    // lưu dòng kế tiếp sẽ ghi số vừa báo lỗi), rồi tải lại cho chắc.
+    delete focDangLuuRef.current[key];
+    const row = localRowsRef.current[key];
+    const dbRow = row?.id != null ? chiPhiRowsRef.current.find((cp) => cp.id === row.id) ?? null : null;
+    if (row && dbRow) {
+      const focDb = chonFocChoDong(row, dbRow, null);
+      localRowsRef.current = { ...localRowsRef.current, [key]: { ...row, ...focDb } };
+      setLocalRows((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], ...focDb } } : prev));
+    }
+    qc.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
+  }, [qc, doanId]);
 
   const handleSave = useCallback((key: string, nguoiTtOverride?: "cong_ty" | "hdv") => {
     const row = localRowsRef.current[key];
@@ -2456,6 +2513,8 @@ export function useNHSection({
     onRemoveVoucher: handleRemoveVoucher,
     onEditVoucher: handleEditVoucher,
     onEditCoveredSoKhach: handleEditCoveredSoKhach,
+    onFocDangLuu: handleFocDangLuu,
+    onFocLuuXong: handleFocLuuXong,
   };
 
   // ── DNTT modal derived ─────────────────────────────────────────────────────

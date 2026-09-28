@@ -11,6 +11,7 @@ import type { NHMealRow, NhaHangDetail } from "@/hooks/use-chi-phi-nh";
 import type { PaymentByChiPhi } from "@/hooks/use-payments";
 import type { CongNoRow } from "@/hooks/use-cong-no";
 import { calcSoKhachThucTe, resolveNHFoc } from "@/lib/foc-calc";
+import type { FocCap } from "@/lib/nh-foc-dong-bo";
 import { applyChietKhau } from "@/lib/chi-phi-calc";
 import { sumCompanyChiPhi, splitGroupCongNo, calcAggregateDelta, calcDnttMismatch, calcChuaDeNghi } from "@/lib/aggregate-calc";
 import { tinhDnttConTreo } from "@/lib/dntt-con-treo";
@@ -86,6 +87,9 @@ export interface NHRowHandlers {
   onEditVoucher: (chiPhiId: number, veMoi: number) => void;
   /** Sửa số khách suất ĐÃ phủ voucher → vé kẹp + tính lại tiền (đọc so_khach từ localRows). */
   onEditCoveredSoKhach: (key: string) => void;
+  /** Ô FOC bắt đầu lưu / lưu xong — giữ bảng làm việc khớp số FOC OP vừa gõ. */
+  onFocDangLuu: (key: string, foc: FocCap) => void;
+  onFocLuuXong: (key: string, foc: FocCap, ok: boolean) => void;
 }
 
 interface Props {
@@ -123,11 +127,13 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
   const nh = nhaHangMap[meal.nha_hang_id];
   const selected = selectedKeys.includes(key);
 
-  // FOC snapshot đọc trực tiếp từ chi_phi (DB cache) — không qua localRows vì
-  // localRows chỉ init 1 lần, NHFocEditor cập nhật DB → cache invalidate mới reflect.
+  // Dòng chi phí DB (cache) — cho tien_cong_ty / hóa đơn / đã trả.
   const mainCpForFoc = row?.id ? chiPhiRows.find((c) => c.id === row.id) : null;
-  const focSource = mainCpForFoc ?? row;
-  const focResolvedRow = resolveNHFoc(focSource, nh);
+  // FOC đọc từ bảng làm việc: use-nh-section giữ nó khớp DB cho MỌI dòng (kể cả 🔒) và
+  // mang NGAY số OP vừa gõ khi ô FOC đang lưu (lib/nh-foc-dong-bo.ts). Đọc cache DB ở
+  // đây từng làm "Dùng voucher" bấm ngay sau khi gõ FOC chốt số vé theo FOC cũ, và ô FOC
+  // so sánh với số cũ → sửa ngược nhanh bị bỏ qua.
+  const focResolvedRow = resolveNHFoc(row, nh);
   const soKhachThucTe = row
     ? calcSoKhachThucTe(row.so_khach, focResolvedRow.foc_khach, focResolvedRow.foc_mien)
     : 0;
@@ -355,6 +361,8 @@ export default function NHRow({ meal, data, handlers, locked = false }: Props) {
               focKhach={focResolvedRow.foc_khach}
               focMien={focResolvedRow.foc_mien}
               disabled={locked || isVoucherCovered}
+              onDangLuu={(foc) => handlers.onFocDangLuu(key, foc)}
+              onLuuXong={(foc, ok) => handlers.onFocLuuXong(key, foc, ok)}
             />
           )}
         </td>

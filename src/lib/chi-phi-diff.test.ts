@@ -96,4 +96,19 @@ describe("buildChiPhiChangeList", () => {
     );
     expect(out).toEqual([]);
   });
+  it("FOC NH bị ghi đè về số cũ (sự cố 28/09) → nhật ký thấy FOC, ẩn tiền", () => {
+    const out = buildChiPhiChangeList(
+      { don_gia: 300_000, foc_khach_snapshot: 16, foc_mien_snapshot: 1, tien_cong_ty: 5_700_000 },
+      { don_gia: 350_000, foc_khach_snapshot: null, foc_mien_snapshot: null, tien_cong_ty: 7_000_000 },
+    );
+    expect(out).toEqual(["Đơn giá: 300.000 → 350.000", "FOC khách: 16 → —", "FOC miễn: 1 → —"]);
+  });
+
+  it("chỉ đổi FOC (ô FOC) → ghi FOC, ẩn tiền", () => {
+    const out = buildChiPhiChangeList(
+      { foc_khach_snapshot: null, foc_mien_snapshot: null, tien_cong_ty: 6_000_000 },
+      { foc_khach_snapshot: 16, foc_mien_snapshot: 1, tien_cong_ty: 5_700_000 },
+    );
+    expect(out).toEqual(["FOC khách: — → 16", "FOC miễn: — → 1"]);
+  });
 });

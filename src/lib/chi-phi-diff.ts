@@ -20,6 +20,10 @@ export const CHI_PHI_DIFF_FIELDS: ChiPhiDiffField[] = [
   { key: "chiet_khau_phan_tram_snapshot", label: "Chiết khấu (%)" },
   { key: "chiet_khau_pct", label: "Chiết khấu" }, // visa: VND trừ trên mỗi đơn vị
   { key: "foc_count", label: "FOC" },
+  // FOC NH/DV "cứ X khách miễn Y". Thiếu 2 field này nhật ký KHÔNG thấy lần FOC bị ghi
+  // đè về số cũ (sự cố 28/09 — lib/nh-foc-dong-bo.ts), chỉ thấy "Đơn giá: a → b".
+  { key: "foc_khach_snapshot", label: "FOC khách" },
+  { key: "foc_mien_snapshot", label: "FOC miễn" },
   { key: "thanh_tien_thuc_te", label: "TT thực tế" },
   // Derived — tiền suy ra từ các input trên. Vẫn cần track riêng vì toggle
   // người thanh toán (công ty ↔ HDV) chỉ đổi 2 field này.
