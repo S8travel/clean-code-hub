@@ -985,6 +985,12 @@ function buildAutoDoc(
         { label: `Bảo hiểm (${fmt(bhMoiKhach)} × pax)`,        v16: case_16.insurance, v20: case_20.insurance },
         { label: `HDV (${fmt(hdvMoiNgay)} × ${soNgayCp} ngày)`, v16: case_16.guide,     v20: case_20.guide     },
         { label: `Tips (${fmt(tipMoiNgay)} × ${soNgayCp} ngày)`, v16: case_16.tips,      v20: case_20.tips      },
+        // Chi phí khác (nón lá, nước suối, công tác phí tài xế…) đã nằm trong
+        // "Tổng chi phí" — thiếu dòng này là các khoản trong file cộng không ra tổng.
+        // Chỉ in khi có tiền, để báo giá tuyến thường không thêm một dòng 0 vô nghĩa.
+        ...((case_16.others ?? 0) > 0 || (case_20.others ?? 0) > 0
+          ? [{ label: "Chi phí khác", v16: case_16.others ?? 0, v20: case_20.others ?? 0 }]
+          : []),
       ].map(({ label, v16, v20 }) =>
         new TableRow({
           children: [

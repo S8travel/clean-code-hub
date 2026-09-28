@@ -128,6 +128,69 @@ describe("lớp vốn chụp cả Bảo hiểm / Tip", () => {
   });
 });
 
+describe("lớp vốn chụp cả Chi phí khác", () => {
+  const now = new Date("2026-09-28T03:00:00Z");
+  // Cùng fixture, chỉ đổi tên chương trình sang miền Trung → hệ thống tự đặt bộ mẫu.
+  const ketMT = (over: Partial<BaoGiaKetQua> = {}) => ket({ ten_chuong_trinh: "峴港會安 5 天", ...over });
+  const boKhoa = (pb: PhienBanDeSoSanh): PhienBanDeSoSanh =>
+    ({ ...pb, noi_dung_von: pb.noi_dung_von ? { ...pb.noi_dung_von, chi_phi_khac: undefined } : null });
+
+  it("tour miền Trung: chụp các khoản ĐÃ RESOLVE — N là số thật đã dùng để tính", () => {
+    const von = buildPhienBan(row(), ketMT(), now).noi_dung_von;
+    const ds = von.chi_phi_khac ?? [];
+    expect(ds.map((r) => r.ten_zh)).toContain("斗笠");
+    // Fixture có 1 bữa ăn, 5 ngày.
+    expect(ds.find((r) => r.ten_zh === "啤酒汽水")).toMatchObject({ so_lan: 1, tinh_theo: "khach" });
+    expect(ds.find((r) => r.ten_zh === "礦泉水")).toMatchObject({ so_lan: 5, tinh_theo: "doan", don_gia: 100_000 });
+  });
+
+  it("tour tuyến khác: không có khoản nào", () => {
+    expect(buildPhienBan(row(), ket(), now).noi_dung_von.chi_phi_khac).toEqual([]);
+  });
+
+  it("lớp CHÀO không mang chi phí khác — khoản này chỉ ở lại CRM", () => {
+    const pb = buildPhienBan(row(), ketMT(), now);
+    const chao = JSON.stringify(pb.noi_dung_chao);
+    expect(chao).not.toContain("chi_phi_khac");
+    expect(chao).not.toContain("司機出差費");
+    expect(() => assertNoCostLeak(pb.noi_dung_chao)).not.toThrow();
+  });
+
+  it("đổi giá / thêm / bỏ một khoản → bảng so sánh nêu đúng tên khoản", () => {
+    const cu = buildPhienBan(row(), ketMT(), now);
+    const moi = buildPhienBan(row(), ketMT({
+      chi_phi_khac: [
+        { ten: "Nón lá", ten_zh: "斗笠", don_gia: 25_000, tinh_theo: "khach" },
+        { ten: "Khăn lạnh", don_gia: 5_000, tinh_theo: "khach" },
+      ],
+    }), now);
+    const ts = soSanhPhienBan(cu, moi).thong_so;
+    expect(ts.find((t) => t.ten === "Chi phí khác · Nón lá")).toMatchObject({
+      cu: "20.000 × 1 /khách", moi: "25.000 × 1 /khách",
+    });
+    expect(ts.find((t) => t.ten === "Chi phí khác · Khăn lạnh")).toMatchObject({ cu: "—", moi: "5.000 × 1 /khách" });
+    expect(ts.find((t) => t.ten === "Chi phí khác · Nước suối")).toMatchObject({ cu: "100.000 × 5 /đoàn", moi: "—" });
+    // Dòng 0 đồng ở bản cũ (phòng tài xế 0 đêm, dừa chưa giá) bị bỏ → giá không đổi → không kể.
+    expect(ts.map((t) => t.ten)).not.toContain("Chi phí khác · Dừa");
+  });
+
+  it("bản chốt TRƯỚC khi có khoản này (thiếu khoá) không đẻ chênh lệch giả cho tour thường", () => {
+    const moi = buildPhienBan(row(), ket(), now);
+    const kq = soSanhPhienBan(boKhoa(moi), moi);
+    expect(kq.thong_so.filter((t) => t.ten.startsWith("Chi phí khác"))).toEqual([]);
+    expect(kq.giong_nhau).toBe(true);
+  });
+
+  it("…còn tour miền Trung thì NÓI RA các khoản mới được cộng — giá đổi phải có lý do", () => {
+    const moi = buildPhienBan(row(), ketMT(), now);
+    const ten = soSanhPhienBan(boKhoa(moi), moi).thong_so.map((t) => t.ten);
+    expect(ten).toContain("Chi phí khác · Nón lá");
+    expect(ten).toContain("Chi phí khác · Công tác phí tài xế");
+    // Khoản đang 0 đồng thì không kể — nó không làm đổi giá.
+    expect(ten).not.toContain("Chi phí khác · Phòng tài xế + HDV (đoàn không ở Đà Nẵng)");
+  });
+});
+
 describe("soSanhPhienBan — vì sao bản mới khác bản cũ", () => {
   const now = new Date("2026-08-17T03:00:00Z");
   const banCu = (): PhienBanDeSoSanh => buildPhienBan(row(), ket(), now);

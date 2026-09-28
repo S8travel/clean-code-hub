@@ -7,8 +7,12 @@ import {
   HDV_GIA_NGAY_MAC_DINH, HDV_GIA_NGAY_SAPA, HDV_GIA_NGAY_MIEN_TRUNG, HDV_GIA_NGAY_HCM,
   BAO_HIEM_MOI_KHACH_MAC_DINH,
   TIP_NGAY_MAC_DINH, TIP_NGAY_MIEN_TRUNG, TIP_NGAY_SAPA, TIP_NGAY_PHU_QUOC,
+  tienChiPhiKhac,
   type DinhMuc, type ManualItem,
 } from "@/lib/bao-gia-calc";
+import {
+  cachTinhCua, resolveChiPhiKhac, type CachTinhChiPhiKhac, type ChiPhiKhacDong, type VungMau,
+} from "@/lib/bao-gia-chi-phi-khac";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 
 export const fmtVnd = (n: number | null | undefined) =>
@@ -72,7 +76,7 @@ export function emptyBaoGiaCase(guests: number): BaoGiaCase {
   return {
     guests, pax: 0, rooms: 0,
     hotel: 0, meal: 0, ticket: 0, transport: 0,
-    insurance: 0, guide: 0, tips: 0,
+    insurance: 0, guide: 0, tips: 0, others: 0,
     total_cost: 0, profit_vnd: 0,
     final_price_vnd: 0, final_price_usd: 0,
   };
@@ -164,7 +168,8 @@ export interface CaseLine {
   phu_thu_xe: number;
   ve_tham_quan: number;
   hdv: number;
-  khac: number;
+  khac: number;          // bảo hiểm + tip
+  chi_phi_khac: number;  // nón lá, nước suối, công tác phí tài xế… (ket_qua.chi_phi_khac)
   tong_von: number;
   profit_vnd: number;
   chenh_lech_xr: number; // chênh lệch tỷ giá VCB vs báo giá rate
@@ -189,6 +194,7 @@ function buildCase(c: BaoGiaCase, guests: number, phuThu: number, profitUsd: num
     ve_tham_quan:c.ticket,
     hdv:         c.guide,
     khac:        c.tips + c.insurance,
+    chi_phi_khac: c.others ?? 0,
     tong_von:    tongVon,
     profit_vnd:  profitVnd,
     chenh_lech_xr: chenhLech,
@@ -424,13 +430,30 @@ export function resolveTipNgay(ket: BaoGiaKetQua | null | undefined): number {
   return tipNgayTheoTuyen(ket).gia;
 }
 
-/** Gói 3 định mức để truyền vào engine tính tiền. Dùng ở MỌI nơi gọi engine —
+/** Vùng có bộ mẫu chi phí khác mà tour chạm tới. Miền Nam dò CHUNG luật với công
+ *  HDV 1tr/ngày (tuyến TP HCM) — HDV và chi phí khác không được mỗi bên hiểu một
+ *  kiểu "tour miền Nam". Phú Quốc là tuyến riêng (tip riêng), không tính vào đây. */
+export function vungChiPhiKhac(ket: BaoGiaKetQua | null | undefined): VungMau[] {
+  const vung: VungMau[] = [];
+  if (isMienTrungTour(ket)) vung.push("mien_trung");
+  if (isHcmTour(ket)) vung.push("mien_nam");
+  return vung;
+}
+
+/** Chi phí khác dùng để tính báo giá này: danh sách OP đã chốt, hoặc — chưa chốt
+ *  — bộ mẫu theo vùng tour chạm tới. N đã tính xong. */
+export function chiPhiKhacCuaBaoGia(ket: BaoGiaKetQua | null | undefined): ChiPhiKhacDong[] {
+  return resolveChiPhiKhac(ket, vungChiPhiKhac(ket));
+}
+
+/** Gói các định mức để truyền vào engine tính tiền. Dùng ở MỌI nơi gọi engine —
  *  quên một chỗ là màn hình một giá, file Word một giá. */
 export function dinhMucCuaBaoGia(ket: BaoGiaKetQua | null | undefined): DinhMuc {
   return {
     hdvGiaNgay: resolveHdvGiaNgay(ket),
     baoHiemMoiKhach: resolveBaoHiemMoiKhach(ket),
     tipNgay: resolveTipNgay(ket),
+    chiPhiKhac: chiPhiKhacCuaBaoGia(ket),
   };
 }
 
@@ -493,11 +516,21 @@ export interface CostingTierCell {
   total: number;  // don_gia × so_luong × max(0, qty − foc)  (lump: × so_luong)
 }
 
+/** Phần riêng của dòng CHI PHÍ KHÁC — đủ để vẽ ô sửa trên bảng. */
+export interface CostingKhacMeta {
+  index: number;              // vị trí trong danh sách chi phí khác (dsChiPhiKhacGoc)
+  cach_tinh: CachTinhChiPhiKhac;
+  n_tu_dong: number | null;   // N hệ thống tự tính (số ngày / đêm / bữa), null = không có
+  n_la_tu_dong: boolean;      // true = N đang theo số tự tính, OP chưa gõ đè
+}
+
 /** 1 dòng item trong bảng costing. itemIndex = vị trí trong ket.items (để sửa);
- *  -1 = dòng tổng hợp (xe lump / phụ thu) lấy từ field draft, KHÔNG sửa inline. */
+ *  -1 = dòng không phải item: xe lump / phụ thu (lấy từ field draft, KHÔNG sửa
+ *  inline) hoặc dòng chi phí khác (`khac` có giá trị, sửa qua ChiPhiKhacRows). */
 export interface CostingRow {
   itemIndex: number;
-  loai: BaoGiaItem["loai"];
+  khac?: CostingKhacMeta;
+  loai: BaoGiaItem["loai"] | "khac";
   unit: CostingUnit;
   ngay_so: number;            // 0 = không gắn ngày (xe lump / phụ thu)
   bua_an?: "trua" | "toi";
@@ -515,7 +548,7 @@ export interface CostingRow {
 }
 
 export interface CostingGroup {
-  key: "transport" | "hotel" | "meal" | "ticket";
+  key: BaoGiaItem["loai"] | "khac";
   label: string;
   rows: CostingRow[];
   subtotals: number[];        // tổng theo từng bậc
@@ -551,6 +584,7 @@ const GROUP_LABEL: Record<CostingGroup["key"], string> = {
   hotel: "Khách sạn",
   meal: "Ăn uống",
   ticket: "Vé tham quan",
+  khac: "Chi phí khác",
 };
 
 // Thứ tự trong nhóm Ăn: trưa → tối → generic.
@@ -622,11 +656,32 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
   rowsOf("transport").forEach((r) => xeRows.push(r));
   if ((draft.phu_thu ?? 0) > 0) xeRows.push(lumpRow("Phụ thu (cầu đường, trung chuyển…)", draft.phu_thu));
 
+  // Chi phí khác: pax (khách + 1 HDV) nếu tính theo khách, 1 nếu trọn đoàn. Tiền
+  // đi qua CHÍNH tienChiPhiKhac của engine — hai nơi một công thức.
+  const khacRows: CostingRow[] = chiPhiKhacCuaBaoGia(ket).map((r, k) => {
+    const unit: CostingUnit = r.tinh_theo === "khach" ? "pax" : "lump";
+    return {
+      itemIndex: -1,
+      khac: {
+        index: k, cach_tinh: cachTinhCua(r),
+        n_tu_dong: r.n_tu_dong, n_la_tu_dong: r.n_la_tu_dong,
+      },
+      loai: "khac", unit, ngay_so: 0, mo_ta: r.ten, ten_zh: r.ten_zh || undefined,
+      don_gia: r.don_gia, don_gia_usd: xr > 0 ? r.don_gia / xr : 0, so_luong: r.so_lan,
+      foc_manual: null, editable: false,
+      cells: configs.map((c) => {
+        const qty = unit === "pax" ? c.pax : 1;
+        return { guests: c.guests, qty, auto: qty, manual: false, foc: 0, total: tienChiPhiKhac(r, c.pax) };
+      }),
+    };
+  });
+
   const rawGroups: { key: CostingGroup["key"]; rows: CostingRow[] }[] = [
     { key: "transport", rows: xeRows },
     { key: "hotel", rows: rowsOf("hotel") },
     { key: "meal", rows: rowsOf("meal") },
     { key: "ticket", rows: rowsOf("ticket") },
+    { key: "khac", rows: khacRows },
   ];
   const groups: CostingGroup[] = rawGroups.map((g) => ({
     key: g.key,
@@ -635,7 +690,8 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
     subtotals: configs.map((_, ti) => g.rows.reduce((s, r) => s + r.cells[ti].total, 0)),
   }));
 
-  // Footer — khớp calcCase: tổng vốn = dịch vụ + HDV + BH + tip.
+  // Footer — khớp calcCase: tổng vốn = dịch vụ (mọi nhóm, kể cả chi phí khác)
+  // + HDV + BH + tip.
   const dichVu = configs.map((_, ti) => groups.reduce((s, g) => s + g.subtotals[ti], 0));
   // Ba định mức lấy CHUNG một nguồn với engine (dinhMucCuaBaoGia). Trước đây
   // chỗ này chép lại công thức và đóng cứng 100.000 / 500.000 — sửa một bên là

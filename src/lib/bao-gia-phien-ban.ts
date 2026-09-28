@@ -7,8 +7,18 @@
 // — đổi khách sạn, bớt lãi, hay tỷ giá? — thì chịu.
 
 import type { BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
+import { chiPhiKhacCuaBaoGia } from "@/components/bao-gia/detail/helpers";
 import { buildPortalBaoGiaSnapshot, type PortalBaoGiaSnapshot } from "./portal-payload";
 import { BAO_HIEM_MOI_KHACH_MAC_DINH } from "./bao-gia-calc";
+
+/** Một dòng chi phí khác trong lớp vốn — đã RESOLVE (N là số thật đã dùng). */
+export interface ChiPhiKhacVon {
+  ten: string;
+  ten_zh: string;
+  don_gia: number;
+  so_lan: number;
+  tinh_theo: "khach" | "doan";
+}
 
 /** Lớp vốn — bản chụp nội bộ, KHÔNG BAO GIỜ đẩy ra ngoài CRM. */
 export interface LopVon {
@@ -28,6 +38,11 @@ export interface LopVon {
   // Tip/ngày — lưu THÔ như hdv_gia_ngay (null = để hệ thống tự đặt theo tuyến):
   // mức tự đặt suy lại được từ chính `items` cũng nằm trong bản chụp này.
   tip_ngay: number | null;
+  // Chi phí khác ĐÃ RESOLVE (không lưu null như tip_ngay): mẫu theo tuyến là hằng
+  // số trong code, đổi mẫu thì chụp thô sẽ không dựng lại được bản đã chào.
+  // Bản chốt trước khi có khoản này thiếu khoá → coi như rỗng (đúng: engine hồi
+  // đó chưa tính dòng nào).
+  chi_phi_khac?: ChiPhiKhacVon[];
   tier_guests: number[];
   items: BaoGiaItem[];
 }
@@ -64,6 +79,9 @@ export function buildPhienBan(
       hdv_gia_ngay: ketQua.hdv_gia_ngay ?? null,
       bao_hiem_moi_khach: ketQua.bao_hiem_moi_khach ?? BAO_HIEM_MOI_KHACH_MAC_DINH,
       tip_ngay: ketQua.tip_ngay ?? null,
+      chi_phi_khac: chiPhiKhacCuaBaoGia(ketQua).map((r) => ({
+        ten: r.ten, ten_zh: r.ten_zh, don_gia: r.don_gia, so_lan: r.so_lan, tinh_theo: r.tinh_theo,
+      })),
       tier_guests: ketQua.tier_guests ?? [],
       items: ketQua.items ?? [],
     },
@@ -240,6 +258,24 @@ export function soSanhPhienBan(cu: PhienBanDeSoSanh, moi: PhienBanDeSoSanh): Ket
       soTien(vCu.bao_hiem_moi_khach ?? BAO_HIEM_MOI_KHACH_MAC_DINH),
       soTien(vMoi.bao_hiem_moi_khach ?? BAO_HIEM_MOI_KHACH_MAC_DINH));
     them("Tip / ngày", soTien(vCu.tip_ngay), soTien(vMoi.tip_ngay));
+
+    // Chi phí khác: so từng khoản theo tên (中文 trước, vì OP hay sửa tên Việt).
+    // `?? []` cho CẢ HAI vế: bản chốt trước khi có khoản này thiếu khoá, mà engine
+    // hồi đó đúng là chưa tính dòng nào — rỗng là đúng dữ liệu, không phải đoán.
+    const khoaKhac = (r: ChiPhiKhacVon) => (r.ten_zh || r.ten).trim().toLowerCase();
+    const moTaKhac = (r: ChiPhiKhacVon) =>
+      `${soTien(r.don_gia)} × ${r.so_lan} ${r.tinh_theo === "khach" ? "/khách" : "/đoàn"}`;
+    // Dòng 0 đồng (vd "phòng tài xế" 0 đêm) không làm đổi giá — vắng hay 0 như nhau.
+    const khongTien = (r: ChiPhiKhacVon | undefined) => !r || r.don_gia * r.so_lan === 0;
+    const khacCu = new Map((vCu.chi_phi_khac ?? []).map((r) => [khoaKhac(r), r]));
+    const khacMoi = new Map((vMoi.chi_phi_khac ?? []).map((r) => [khoaKhac(r), r]));
+    for (const k of new Set([...khacCu.keys(), ...khacMoi.keys()])) {
+      const a = khacCu.get(k);
+      const b = khacMoi.get(k);
+      if (khongTien(a) && khongTien(b)) continue;
+      const ten = (b?.ten || a?.ten || b?.ten_zh || a?.ten_zh || "(chưa đặt tên)").trim();
+      them(`Chi phí khác · ${ten}`, a ? moTaKhac(a) : "—", b ? moTaKhac(b) : "—");
+    }
   }
 
   return {

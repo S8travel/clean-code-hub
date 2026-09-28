@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Hotel, Utensils, Bus, Ticket, Plus, X, FileSpreadsheet } from "lucide-react";
+import { Hotel, Utensils, Bus, Ticket, Receipt, Plus, X, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,10 @@ import { errMsg } from "@/lib/error";
 import type { BaoGiaItem, BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 import { exportBaoGiaCostingExcel } from "@/lib/export-bao-gia-costing-excel";
 import { GroupBlock } from "./CostingRows";
+import { ChiPhiKhacBlock } from "./ChiPhiKhacRows";
 import {
   costingSheet, fmtVnd, fmtUsd, newBaoGiaItem, tierGuestsOf, baoGiaCode,
-  isSapaTour, resolveHdvGiaNgay,
+  isSapaTour, resolveHdvGiaNgay, vungChiPhiKhac,
   type CostingGroup,
 } from "./helpers";
 
@@ -30,6 +31,7 @@ const GROUP_META: Record<CostingGroup["key"], { icon: React.ReactNode; tint: str
   hotel:     { icon: <Hotel className="h-3.5 w-3.5" />,    tint: "text-indigo-700 bg-indigo-50" },
   meal:      { icon: <Utensils className="h-3.5 w-3.5" />, tint: "text-orange-700 bg-orange-50" },
   ticket:    { icon: <Ticket className="h-3.5 w-3.5" />,   tint: "text-rose-700 bg-rose-50" },
+  khac:      { icon: <Receipt className="h-3.5 w-3.5" />,  tint: "text-teal-700 bg-teal-50" },
 };
 
 // Bảng chi phí bố cục Excel: gom theo nhóm Xe/KS/Ăn/Vé, song ngữ ZH+VI, đơn giá
@@ -212,10 +214,27 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
           <tbody>
             {sheet.groups.map((g) => {
               const meta = GROUP_META[g.key];
+              if (g.key === "khac") {
+                return (
+                  <ChiPhiKhacBlock
+                    key={g.key}
+                    group={g}
+                    ket={ket}
+                    vung={vungChiPhiKhac(ket)}
+                    metaIcon={meta.icon}
+                    metaTint={meta.tint}
+                    nTier={nTier}
+                    matchIdx={matchIdx}
+                    updateDraftKetQua={updateDraftKetQua}
+                    saveKetQua={saveKetQua}
+                  />
+                );
+              }
               return (
                 <GroupBlock
                   key={g.key}
                   group={g}
+                  loai={g.key}
                   metaIcon={meta.icon}
                   metaTint={meta.tint}
                   nTier={nTier}
@@ -334,6 +353,10 @@ export function CostingSheetSection({ draft, updateDraftKetQua, saveKetQua, lead
         Xe & phụ thu sửa ở phần thông tin tour phía trên (hoặc trong màn “AI điền từ lịch trình”).
         <b>Thiếu mục</b>: bấm “＋ Thêm dòng…” ở cuối nhóm rồi điền tên + giá ngay trên dòng mới.
         <b>Thừa</b>: rê chuột vào dòng → biểu tượng thùng rác cạnh tên.
+        Nhóm <b>Chi phí khác</b> (nón lá, nước suối, công tác phí tài xế…): đoàn <b>miền Trung</b> / <b>miền Nam</b> hệ
+        thống tự điền theo mẫu của vùng; ô chọn cạnh tên 中文 là cách tính (/khách = nhân khách + 1 HDV, /đoàn = trọn
+        đoàn, “× ngày / × đêm / × bữa” = N tự chạy theo số ngày tour / số đêm / số bữa ăn). Sửa bất kỳ ô nào là chốt
+        danh sách cho riêng báo giá này.
       </p>
     </section>
   );

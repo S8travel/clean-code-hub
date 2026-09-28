@@ -37,6 +37,7 @@ const GROUP_ZH: Record<CostingSheet["groups"][number]["key"], string> = {
   hotel: "飯店",
   meal: "餐食",
   ticket: "景點門票",
+  khac: "其他費用",
 };
 
 const UNIT_LABEL: Record<CostingUnit, string> = {

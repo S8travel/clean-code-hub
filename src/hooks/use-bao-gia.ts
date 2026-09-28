@@ -37,6 +37,24 @@ export interface BaoGiaItem {
   ten_zh?: string;
 }
 
+// Một khoản CHI PHÍ KHÁC — thu thêm ngoài dịch vụ theo ngày (KS/ăn/vé/xe) và ngoài
+// 3 định mức HDV · bảo hiểm · tip: nón lá, ảnh kỷ niệm, bia nước ngọt, nước suối,
+// công tác phí tài xế… Không gắn ngày. Luật tự đặt theo tuyến + mẫu miền Trung ở
+// lib/bao-gia-chi-phi-khac.ts.
+export interface ChiPhiKhacItem {
+  ten: string;                    // tên tiếng Việt
+  ten_zh?: string;                // tên tiếng Trung (bảng chi phí song ngữ, Excel)
+  don_gia: number;                // VND / lần
+  // "khach" = nhân số suất (khách + 1 HDV, như bảo hiểm) · "doan" = trọn đoàn.
+  tinh_theo: "khach" | "doan";
+  // N = số lần. Dòng có `n_theo`: null/vắng = tự tính, số = OP chốt đè.
+  // Dòng không có `n_theo`: số lần cố định, vắng = 1.
+  so_lan?: number | null;
+  // N tự tính: "ngay" = số ngày tour · "dem" = số đêm (số ngày − 1)
+  // · "bua" = số bữa trong nhóm Ăn uống.
+  n_theo?: "ngay" | "dem" | "bua";
+}
+
 export interface BaoGiaCase {
   guests: number;
   pax: number;
@@ -48,6 +66,8 @@ export interface BaoGiaCase {
   insurance: number;
   guide: number;
   tips: number;
+  // Chi phí khác (ket_qua.chi_phi_khac). Vắng ở case lưu trước khi có khoản này.
+  others?: number;
   total_cost: number;
   profit_vnd: number;
   final_price_vnd: number;
@@ -114,6 +134,10 @@ export interface BaoGiaKetQua {
   // tự đặt theo tuyến (Sapa 700k · Phú Quốc 1tr · miền Trung 500k · còn lại 200k
   // — resolveTipNgay). OP gõ số = chốt cứng, kể cả gõ 0.
   tip_ngay?: number | null;
+  // Chi phí khác cho báo giá NÀY. null/vắng = để hệ thống tự đặt theo tuyến
+  // (miền Trung / miền Nam → bộ mẫu nón lá / nước suối / công tác phí tài xế…,
+  // tuyến khác → không có dòng nào). Mảng = OP đã chốt, kể cả mảng rỗng (đã xoá hết).
+  chi_phi_khac?: ChiPhiKhacItem[] | null;
 }
 
 // File lịch trình đính kèm (loai_bao_gia='gia_cuoi' — chương trình lấy của bên
