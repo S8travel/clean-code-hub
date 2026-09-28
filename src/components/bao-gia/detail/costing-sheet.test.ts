@@ -4,6 +4,7 @@ import {
   aiPreviewSheet, clampNgay, costingSheet, emptyBaoGiaCase, isSapaTour,
   isMienTrungTour, isHcmTour, isPhuQuocTour, hdvGiaNgayTheoTuyen, tipNgayTheoTuyen,
   newBaoGiaItem, resolveHdvGiaNgay, resolveBaoHiemMoiKhach, resolveTipNgay, setSlOverride,
+  chiPhiKhacCuaBaoGia, costBreakdown, dinhMucCuaBaoGia, liveKetQua, liveTierBreakdown, vungChiPhiKhac,
 } from "./helpers";
 import type { BaoGiaRow, BaoGiaItem, BaoGiaKetQua } from "@/hooks/use-bao-gia";
 import { TY_GIA_BAO_GIA_MAC_DINH } from "@/lib/bao-gia-ty-gia";
@@ -94,9 +95,12 @@ describe("costingSheet — bố cục nhóm + nhiều bậc", () => {
   ];
   const draft = makeDraft(items, { xe_gia: 10_000_000, xe_ten: "Xe 45 chỗ", phu_thu: 500_000 });
 
-  it("4 nhóm Xe/KS/Ăn/Vé + bậc theo tier_guests", () => {
+  it("5 nhóm Xe/KS/Ăn/Vé/Chi phí khác + bậc theo tier_guests", () => {
     const s = costingSheet(draft)!;
-    expect(s.groups.map((g) => g.key)).toEqual(["transport", "hotel", "meal", "ticket"]);
+    expect(s.groups.map((g) => g.key)).toEqual(["transport", "hotel", "meal", "ticket", "khac"]);
+    // Tour này không phải miền Trung, OP chưa thêm gì → nhóm chi phí khác rỗng.
+    expect(s.groups[4].rows).toEqual([]);
+    expect(s.groups[4].subtotals).toEqual([0, 0]);
     expect(s.guests).toEqual([16, 20]);
     // Nhóm Xe gồm xe lump + phụ thu (không có transport item)
     expect(s.groups[0].rows.map((r) => r.mo_ta)).toEqual(["Xe 45 chỗ", "Phụ thu (cầu đường, trung chuyển…)"]);
@@ -727,5 +731,166 @@ describe("costingSheet — ô SL nhập tay", () => {
     const row = s.groups[0].rows[0];
     expect(row.cells[0]).toMatchObject({ qty: 1, auto: 1, manual: false });
     expect(row.cells[0].total).toBe(2_000_000);
+  });
+});
+
+describe("Chi phí khác — nhóm cuối bảng chi phí (đoàn miền Trung tự có mẫu)", () => {
+  const bua = (mo_ta: string, ngay: number): BaoGiaItem =>
+    ({ loai: "meal", mo_ta, don_gia: 150_000, ghi_chu: "", ngay_so: ngay });
+  // 5 ngày, 7 bữa — đúng tình huống bảng tính giá mẫu (啤酒汽水 × 7, 礦泉水 × 5).
+  const items: BaoGiaItem[] = [
+    { loai: "ticket", mo_ta: "Cáp treo Bà Nà", ten_zh: "巴拿山纜車", don_gia: 900_000, ghi_chu: "", ngay_so: 2 },
+    bua("Trưa D1", 1), bua("Tối D1", 1), bua("Trưa D2", 2), bua("Tối D2", 2),
+    bua("Trưa D3", 3), bua("Tối D3", 3), bua("Trưa D4", 4),
+  ];
+  const mienTrung = (over: Partial<BaoGiaKetQua> = {}): BaoGiaRow => {
+    const d = makeDraft(items);
+    return { ...d, ket_qua: { ...d.ket_qua!, ten_chuong_trinh: "Đà Nẵng – Hội An", so_ngay: 5, ...over } };
+  };
+  const nhomKhac = (d: BaoGiaRow) => costingSheet(d)!.groups.find((g) => g.key === "khac")!;
+
+  it("tour miền Trung chưa ai sửa → nhóm tự có đủ mẫu, N chạy theo số ngày / số bữa", () => {
+    const g = nhomKhac(mienTrung());
+    expect(g.rows.map((r) => r.ten_zh)).toEqual([
+      "斗笠", "紀念照片", "啤酒汽水", "礦泉水", "司機出差費", "司機導遊住宿（團體不住峴港）", "椰子",
+    ]);
+    const [non, , bia, nuoc] = g.rows;
+    expect(non.unit).toBe("pax");
+    expect(non.cells.map((c) => c.qty)).toEqual([17, 21]); // khách + 1 HDV, như bảo hiểm
+    expect(bia.so_luong).toBe(7);
+    expect(bia.khac).toMatchObject({ cach_tinh: "khach_bua", n_tu_dong: 7, n_la_tu_dong: true });
+    expect(nuoc.unit).toBe("lump");
+    expect(nuoc.so_luong).toBe(5);
+    expect(nuoc.khac).toMatchObject({ cach_tinh: "doan_ngay", n_tu_dong: 5 });
+    // 16 khách: 340k + 255k + 1.428k + 500k + 1.500k · 20 khách: 420k + 315k + 1.764k + 500k + 1.500k
+    expect(g.subtotals).toEqual([4_023_000, 4_499_000]);
+  });
+
+  it("bảng chi phí, ma trận giá và panel tổng hợp ra CÙNG một tổng vốn / giá bán", () => {
+    const d = mienTrung();
+    const s = costingSheet(d)!;
+    const tongVon = s.footer.find((f) => f.key === "tong_von")!;
+    const giaPax = s.footer.find((f) => f.key === "gia_pax")!;
+    const tiers = liveTierBreakdown(d);
+    s.configs.forEach((_, ti) => {
+      expect(tiers[ti].line.chi_phi_khac).toBe(nhomKhac(d).subtotals[ti]);
+      expect(tiers[ti].line.tong_von).toBe(tongVon.values[ti]);
+      expect(tiers[ti].line.gia_ban_per_pax).toBe(giaPax.values[ti]);
+    });
+  });
+
+  it("liveKetQua mang khoản này → file Word / bản chào đọc cùng số với màn hình", () => {
+    const fresh = liveKetQua(mienTrung())!;
+    expect(fresh.case_16.others).toBe(4_023_000);
+    expect(fresh.case_20.others).toBe(4_499_000);
+  });
+
+  it("panel Tổng hợp chi phí: các dòng cộng lại đúng bằng tổng vốn", () => {
+    const d = mienTrung();
+    const c = costBreakdown({
+      ket: d.ket_qua, exchangeRate: 26000, profitUsd: 0, xeGia: 5_000_000, phuThu: 300_000, vcbRate: null,
+    })!;
+    for (const l of [c.case16, c.case20]) {
+      expect(l.khach_san + l.an_uong + l.xe + l.phu_thu_xe + l.ve_tham_quan + l.hdv + l.khac + l.chi_phi_khac)
+        .toBe(l.tong_von);
+    }
+    expect(c.case16.chi_phi_khac).toBe(4_023_000);
+  });
+
+  it("OP đã xoá hết (mảng rỗng) → nhóm rỗng dù tour miền Trung", () => {
+    const g = nhomKhac(mienTrung({ chi_phi_khac: [] }));
+    expect(g.rows).toEqual([]);
+    expect(g.subtotals).toEqual([0, 0]);
+  });
+
+  it("OP gõ đè N / đổi giá → bảng theo số đã chốt, vẫn nhớ số tự tính để hiện gợi ý", () => {
+    const g = nhomKhac(mienTrung({
+      chi_phi_khac: [
+        { ten: "Nước suối", ten_zh: "礦泉水", don_gia: 120_000, tinh_theo: "doan", n_theo: "ngay", so_lan: 4 },
+      ],
+    }));
+    expect(g.rows[0].so_luong).toBe(4);
+    expect(g.rows[0].khac).toMatchObject({ index: 0, n_tu_dong: 5, n_la_tu_dong: false });
+    expect(g.subtotals).toEqual([480_000, 480_000]);
+  });
+
+  it("tour tuyến khác vẫn tự thêm tay được", () => {
+    const base = makeDraft([]);
+    const d = makeDraft([], {
+      ket_qua: { ...base.ket_qua!, chi_phi_khac: [{ ten: "Nón lá", don_gia: 20_000, tinh_theo: "khach" }] },
+    });
+    expect(nhomKhac(d).subtotals).toEqual([20_000 * 17, 20_000 * 21]);
+  });
+
+  it("dò tuyến như công HDV — tên NHÀ HÀNG mang chữ Đà Nẵng không kéo mẫu vào tour miền Bắc", () => {
+    const d = makeDraft([
+      { loai: "meal", bua_an: "trua", mo_ta: "Nhà hàng Đà Nẵng (phố Huế, Hà Nội)", don_gia: 100_000, ghi_chu: "", ngay_so: 1 },
+    ]);
+    expect(chiPhiKhacCuaBaoGia(d.ket_qua)).toEqual([]);
+  });
+
+  it("dinhMucCuaBaoGia mang theo chi phí khác — mọi nơi gọi engine đều tính", () => {
+    expect(dinhMucCuaBaoGia(mienTrung().ket_qua).chiPhiKhac).toHaveLength(7);
+    expect(dinhMucCuaBaoGia(makeDraft([]).ket_qua).chiPhiKhac).toEqual([]);
+  });
+
+  it("màn xem trước AI: lịch trình vừa đọc là miền Trung thì đã thấy khoản này trước khi Áp dụng", () => {
+    const prev = aiPreviewSheet(makeDraft([]), items, 5)!;
+    expect(prev.groups.find((g) => g.key === "khac")!.subtotals).toEqual([4_023_000, 4_499_000]);
+  });
+});
+
+describe("Chi phí khác — đoàn miền Nam (dò chung luật tuyến TP HCM với công HDV)", () => {
+  const bua = (mo_ta: string, ngay: number): BaoGiaItem =>
+    ({ loai: "meal", mo_ta, don_gia: 150_000, ghi_chu: "", ngay_so: ngay });
+  const BAY_BUA = [
+    bua("Trưa D1", 1), bua("Tối D1", 1), bua("Trưa D2", 2), bua("Tối D2", 2),
+    bua("Trưa D3", 3), bua("Tối D3", 3), bua("Trưa D4", 4),
+  ];
+  const draftVoi = (ten: string, items: BaoGiaItem[] = BAY_BUA): BaoGiaRow => {
+    const d = makeDraft(items);
+    return { ...d, ket_qua: { ...d.ket_qua!, ten_chuong_trinh: ten, so_ngay: 5 } };
+  };
+  const nhomKhac = (d: BaoGiaRow) => costingSheet(d)!.groups.find((g) => g.key === "khac")!;
+
+  it("tour Sài Gòn → mẫu miền Nam; phòng tài xế + HDV tự lấy 4 đêm cho tour 5 ngày", () => {
+    const d = draftVoi("Sài Gòn – Mỹ Tho 5 ngày");
+    expect(vungChiPhiKhac(d.ket_qua)).toEqual(["mien_nam"]);
+    const g = nhomKhac(d);
+    expect(g.rows.map((r) => r.ten_zh)).toEqual(["斗笠", "紀念照片", "啤酒汽水", "礦泉水", "司機出差費", "司機導遊住宿"]);
+    expect(g.rows[5]).toMatchObject({ don_gia: 300_000, so_luong: 4, unit: "lump" });
+    expect(g.rows[5].khac).toMatchObject({ cach_tinh: "doan_dem", n_tu_dong: 4, n_la_tu_dong: true });
+    // 16 khách: 340k + 255k + 1.428k + 500k + tài xế 200k×5 + phòng 300k×4
+    expect(g.subtotals).toEqual([4_723_000, 5_199_000]);
+  });
+
+  it("công HDV của tour miền Nam đã là 1.000.000/ngày — đúng dòng 導遊出差費 của bảng miền Nam", () => {
+    const s = costingSheet(draftVoi("Sài Gòn – Mỹ Tho 5 ngày"))!;
+    expect(s.footer.find((f) => f.key === "hdv")!.values).toEqual([5_000_000, 5_000_000]);
+  });
+
+  it("nhận miền Nam qua tên tiếng Trung (胡志明市 / 西貢) như công HDV", () => {
+    expect(vungChiPhiKhac(draftVoi("胡志明市 湄公河 5天").ket_qua)).toEqual(["mien_nam"]);
+    expect(vungChiPhiKhac(draftVoi("西貢 5天").ket_qua)).toEqual(["mien_nam"]);
+  });
+
+  it("LĂNG BÁC ở Hà Nội KHÔNG kéo mẫu miền Nam vào tour miền Bắc", () => {
+    const d = draftVoi("Hà Nội – Hạ Long", [
+      { loai: "ticket", mo_ta: "Lăng Chủ tịch Hồ Chí Minh", ten_zh: "胡志明陵寢", don_gia: 0, ghi_chu: "", ngay_so: 1 },
+    ]);
+    expect(vungChiPhiKhac(d.ket_qua)).toEqual([]);
+    expect(chiPhiKhacCuaBaoGia(d.ket_qua)).toEqual([]);
+  });
+
+  it("Phú Quốc là tuyến riêng — không tự nhận mẫu miền Nam", () => {
+    expect(vungChiPhiKhac(draftVoi("Phú Quốc 4 ngày").ket_qua)).toEqual([]);
+  });
+
+  it("chạm cả miền Trung lẫn miền Nam → gộp, tài xế lấy mức cao hơn (300k)", () => {
+    const d = draftVoi("Đà Nẵng – Hội An – Sài Gòn");
+    expect(vungChiPhiKhac(d.ket_qua)).toEqual(["mien_trung", "mien_nam"]);
+    const g = nhomKhac(d);
+    expect(g.rows.filter((r) => r.ten_zh === "司機出差費").map((r) => r.don_gia)).toEqual([300_000]);
+    expect(g.rows.map((r) => r.ten_zh)).toEqual(expect.arrayContaining(["司機導遊住宿（團體不住峴港）", "司機導遊住宿"]));
   });
 });

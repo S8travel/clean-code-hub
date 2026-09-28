@@ -88,8 +88,25 @@ export const TIP_NGAY_SAPA = 700_000;
 /** Phú Quốc. */
 export const TIP_NGAY_PHU_QUOC = 1_000_000;
 
+/** Một dòng chi phí khác ĐÃ RESOLVE (N tính xong) — đủ để ra tiền.
+ *  Luật tự đặt theo tuyến / N tự tính nằm ở lib/bao-gia-chi-phi-khac.ts. */
+export interface ChiPhiKhacTinh {
+  don_gia: number;
+  so_lan: number;
+  tinh_theo: "khach" | "doan";
+}
+
+/** Tiền 1 dòng chi phí khác ở 1 bậc: đơn giá × N × (pax nếu tính theo khách).
+ *  pax = khách + 1 HDV, cùng cách đếm với bảo hiểm. Số âm / rác → 0, để một ô
+ *  hỏng không kéo cả báo giá xuống âm mà không ai hay. */
+export function tienChiPhiKhac(r: ChiPhiKhacTinh, pax: number): number {
+  const gia = Number.isFinite(r.don_gia) && r.don_gia > 0 ? r.don_gia : 0;
+  const n = Number.isFinite(r.so_lan) && r.so_lan > 0 ? r.so_lan : 0;
+  return gia * n * (r.tinh_theo === "khach" ? pax : 1);
+}
+
 /**
- * Ba khoản tiền cố định của một báo giá. Vắng / undefined = dùng mặc định;
+ * Các khoản tiền cố định của một báo giá. Vắng / undefined = dùng mặc định;
  * số 0 là giá trị HỢP LỆ (OP cố tình chốt 0 đồng), đừng coi 0 là "chưa nhập".
  *
  * Gói thành object thay vì thêm tham số thứ 9, 10: bốn hàm dưới đây vốn đã có 8
@@ -103,6 +120,8 @@ export interface DinhMuc {
   baoHiemMoiKhach?: number;
   /** Tip / ngày (một mức cho cả đoàn, KHÔNG nhân số khách). */
   tipNgay?: number;
+  /** Chi phí khác (nón lá, nước suối, công tác phí tài xế…). Vắng = không có. */
+  chiPhiKhac?: readonly ChiPhiKhacTinh[];
 }
 
 export function calcCase(
@@ -146,15 +165,16 @@ export function calcCase(
   const insurance = (dinhMuc.baoHiemMoiKhach ?? BAO_HIEM_MOI_KHACH_MAC_DINH) * pax;
   const guide = (dinhMuc.hdvGiaNgay ?? HDV_GIA_NGAY_MAC_DINH) * soNgay;
   const tips = (dinhMuc.tipNgay ?? TIP_NGAY_MAC_DINH) * soNgay;
+  const others = (dinhMuc.chiPhiKhac ?? []).reduce((s, r) => s + tienChiPhiKhac(r, pax), 0);
 
-  const total_cost = hotel + meal + ticket + transport + insurance + guide + tips;
+  const total_cost = hotel + meal + ticket + transport + insurance + guide + tips + others;
   const profit_vnd = profitUsd * exchangeRate * guests;
   const final_price_vnd = Math.round((total_cost + profit_vnd) / guests);
   // Guard 0 như các dòng anh em (:219): tỷ giá 0 lọt vào là ra Infinity, JSON hoá
   // thành null rồi trôi ra file Word / bản đẩy cổng mà không có lỗi nào.
   const final_price_usd = exchangeRate > 0 ? final_price_vnd / exchangeRate : 0;
 
-  return { guests, pax, rooms, hotel, meal, ticket, transport, insurance, guide, tips, total_cost, profit_vnd, final_price_vnd, final_price_usd };
+  return { guests, pax, rooms, hotel, meal, ticket, transport, insurance, guide, tips, others, total_cost, profit_vnd, final_price_vnd, final_price_usd };
 }
 
 /** Tính 1 BaoGiaCase cho 1 số khách bất kỳ (1 bậc). */

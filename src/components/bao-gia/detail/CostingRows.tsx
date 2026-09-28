@@ -9,9 +9,12 @@ import { fmtVnd, fmtUsd, setSlOverride, type CostingGroup, type CostingRow } fro
 // GroupBlock = dải tiêu đề nhóm + các dòng + form thêm dòng + cộng nhóm.
 
 export function GroupBlock({
-  group, metaIcon, metaTint, nTier, matchIdx, soNgay, onLive, onCommit, onAdd, onRemove,
+  group, loai, metaIcon, metaTint, nTier, matchIdx, soNgay, onLive, onCommit, onAdd, onRemove,
 }: {
   group: CostingGroup;
+  /** Loại item của nhóm (dòng thêm tay mang loại này). Nhóm "Chi phí khác" không
+   *  đi qua đây — dòng của nó không phải item, xem ChiPhiKhacRows. */
+  loai: BaoGiaItem["loai"];
   metaIcon: React.ReactNode;
   metaTint: string;
   nTier: number;
@@ -53,9 +56,9 @@ export function GroupBlock({
       <tr>
         <td colSpan={totalCols} className="border border-slate-200 px-2 py-1">
           <AddServiceRow
-            loai={group.key}
+            loai={loai}
             soNgay={soNgay}
-            onAdd={(ngay, bua) => onAdd(group.key, ngay, bua)}
+            onAdd={(ngay, bua) => onAdd(loai, ngay, bua)}
           />
         </td>
       </tr>

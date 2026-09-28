@@ -3,6 +3,8 @@ import * as XLSX from "xlsx";
 import { buildCostingXlsxSheet, costingFileName } from "./export-bao-gia-costing-excel";
 import { buildXlsxBlob, type XlsxCell } from "./xlsx-simple";
 import type { CostingSheet, CostingRow, CostingTierCell } from "@/components/bao-gia/detail/helpers";
+import { costingSheet, emptyBaoGiaCase } from "@/components/bao-gia/detail/helpers";
+import type { BaoGiaKetQua, BaoGiaRow } from "@/hooks/use-bao-gia";
 
 const row = (p: Partial<CostingRow> & Pick<CostingRow, "loai" | "unit" | "mo_ta" | "don_gia">): CostingRow => ({
   itemIndex: 0, ngay_so: 1, don_gia_usd: p.don_gia / 26000, so_luong: 1,
@@ -301,5 +303,68 @@ describe("buildCostingXlsxSheet — bảng tính giá song ngữ", () => {
     expect(an.cells[9]?.formula).toBe(`F${an.rowNo}*G${an.rowNo}*I${an.rowNo}`);
     // freezeRows phải bao trọn phần đầu (gồm cả dải cảnh báo) chứ không kẹt ở số cũ.
     expect(out.freezeRows).toBeGreaterThan(1);
+  });
+});
+
+describe("buildCostingXlsxSheet — nhóm Chi phí khác (đoàn miền Trung)", () => {
+  // Dựng bảng bằng CHÍNH costingSheet như nút "Xuất Excel" → lệch giữa app và file
+  // là đỏ ngay, không đợi tới lúc cấp trên mở file thấy số khác màn hình.
+  const ket: BaoGiaKetQua = {
+    ten_chuong_trinh: "Đà Nẵng – Hội An", so_ngay: 5,
+    items: [{ loai: "meal", bua_an: "trua", mo_ta: "Trưa D1", don_gia: 150_000, ghi_chu: "", ngay_so: 1 }],
+    case_16: emptyBaoGiaCase(16), case_20: emptyBaoGiaCase(20),
+    gia_trung_binh_vnd: 0, gia_trung_binh_usd: 0, tier_guests: [16, 20],
+  };
+  // costingSheet chỉ đọc mấy field dưới đây của báo giá.
+  const draft = {
+    ket_qua: ket, exchange_rate: 26_000, profit_usd: 10, vcb_rate: null,
+    xe_ten: null, xe_gia: null, phu_thu: 0,
+  } as unknown as BaoGiaRow;
+  const out = buildCostingXlsxSheet(costingSheet(draft)!, { tenChuongTrinh: "Đà Nẵng – Hội An", soNgay: 5, profitUsd: 10 });
+  const byName = (name: string) => {
+    const i = out.rows.findIndex((r) => r[1]?.value === name);
+    return { cells: out.rows[i], rowNo: i + 1 };
+  };
+  const find = (pre: string) => {
+    const i = out.rows.findIndex((r) => (r[0]?.colSpan ?? 1) === 8 && String(r[0]?.value).startsWith(pre));
+    return { cells: out.rows[i], rowNo: i + 1 };
+  };
+
+  it("có dải nhóm song ngữ", () => {
+    expect(flat(out.rows).some((l) => l.includes("CHI PHÍ KHÁC 其他費用"))).toBe(true);
+  });
+
+  it("dòng tính theo khách: SL = khách + 1 HDV, tiền là công thức ĐG × N × SL", () => {
+    const { cells: r, rowNo } = byName("Nón lá");
+    expect(r[2].value).toBe("斗笠");
+    expect(r[3].value).toBe("Khách 人");
+    expect(r[5].value).toBe(20_000);
+    expect(r[6].value).toBe(1);
+    expect(r[8].value).toBe(17);
+    expect(r[9].value).toBe(340_000);
+    expect(r[9].formula).toBe(`F${rowNo}*G${rowNo}*I${rowNo}`);
+    // Bia: N tự tính = số bữa (1) → vẫn là SỐ trong ô N để cấp trên sửa được.
+    const bia = byName("Bia / nước ngọt");
+    expect(bia.cells[6].value).toBe(1);
+    expect(bia.cells[9].value).toBe(12_000 * 17);
+    expect(bia.cells[9].formula).toBe(`F${bia.rowNo}*G${bia.rowNo}*I${bia.rowNo}`);
+  });
+
+  it("dòng trọn đoàn: không có SL, tiền là ĐG × N (N = số ngày)", () => {
+    const { cells: r, rowNo } = byName("Nước suối");
+    expect(r[3].value).toBe("Trọn gói 總價");
+    expect(r[6].value).toBe(5);
+    expect(r[8].value).toBe("—");
+    expect(r[9].value).toBe(500_000);
+    expect(r[9].formula).toBe(`F${rowNo}*G${rowNo}`);
+  });
+
+  it("cộng nhóm = SUM dải dòng, và Cộng dịch vụ cộng đủ 5 nhóm bằng công thức", () => {
+    const sub = find("Cộng chi phí khác");
+    // 16 khách: nón 340k + ảnh 255k + bia 204k + nước suối 500k + tài xế 1.500k
+    expect(sub.cells[2].value).toBe(2_799_000);
+    expect(sub.cells[2].formula).toMatch(/^SUM\(J\d+:J\d+\)$/);
+    expect(find("Cộng dịch vụ").cells[2].formula).toMatch(/^J\d+\+J\d+\+J\d+\+J\d+\+J\d+$/);
+    expect(find("TỔNG CHI PHÍ VỐN").cells[2].formula).toBeTruthy();
   });
 });

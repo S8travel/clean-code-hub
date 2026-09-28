@@ -48,7 +48,8 @@ export function TongHopChiPhiPanel({ draft }: Props) {
           <CostRow label="Phụ thu (cầu đường, transfer...)" v16={c?.case16.phu_thu_xe} v20={c?.case20.phu_thu_xe} />
           <CostRow label="Vé tham quan"   v16={c?.case16.ve_tham_quan} v20={c?.case20.ve_tham_quan} />
           <CostRow label="Hướng dẫn viên" v16={c?.case16.hdv}          v20={c?.case20.hdv} />
-          <CostRow label="Khác"           v16={c?.case16.khac}         v20={c?.case20.khac} />
+          <CostRow label="Bảo hiểm + tip" v16={c?.case16.khac}         v20={c?.case20.khac} />
+          <CostRow label="Chi phí khác"   v16={c?.case16.chi_phi_khac} v20={c?.case20.chi_phi_khac} />
         </ul>
         <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-[1fr_auto_auto] gap-x-3 text-sm items-center">
           <span className="font-semibold text-slate-700">Tổng chi phí vốn</span>
