@@ -63,3 +63,53 @@ export function resolveXeTaiKhoan(
   const tk = m?.nha_xe?.tai_khoan_thanh_toan?.trim();
   return tk || null;
 }
+
+/** Một dòng chi phí xe sau khi xếp theo nhóm xe (để hiển thị). */
+export interface DongXeTheoNhom<R> {
+  row: R;
+  /** Dòng đầu nhóm. Các dòng sau cùng `xe_id` là dòng phụ của CÙNG nhà xe → thụt vào dưới nó. */
+  dauNhom: boolean;
+  /** 1 = xe chính, 2 = xe phụ của đoàn; null = xe không còn gắn với đoàn / dòng chưa gắn xe. */
+  slot: 1 | 2 | null;
+}
+
+/**
+ * Xếp dòng chi phí xe theo nhóm xe để hiển thị.
+ *
+ * Dòng phụ (nút "+" trên một dòng xe) chép `xe_id` + NCC của dòng cha nhưng id lớn hơn
+ * → xếp theo id nó rơi xuống SAU dòng của xe kia, trông như một xe riêng. Gom theo
+ * `xe_id`: nhóm xe 1 trước, xe 2 sau, xe khác (đoàn đã đổi xe) theo thứ tự xuất hiện,
+ * dòng chưa gắn xe cuối cùng. Trong nhóm giữ thứ tự id. Dòng chưa gắn xe không biết
+ * thuộc nhà xe nào → mỗi dòng tự đứng một nhóm, KHÔNG gom chung.
+ */
+export function xepDongXeTheoNhom<R extends { id: number; xe_id?: number | null }>(
+  rows: readonly R[],
+  xe1Id: number | null | undefined,
+  xe2Id: number | null | undefined,
+): DongXeTheoNhom<R>[] {
+  const slotOf = (xeId: number | null | undefined): 1 | 2 | null =>
+    xeId == null ? null : xeId === xe1Id ? 1 : xeId === xe2Id ? 2 : null;
+
+  const nhom = new Map<number, R[]>();
+  const chuaGanXe: R[] = [];
+  for (const r of [...rows].sort((a, b) => a.id - b.id)) {
+    if (r.xe_id == null) { chuaGanXe.push(r); continue; }
+    const g = nhom.get(r.xe_id);
+    if (g) g.push(r); else nhom.set(r.xe_id, [r]);
+  }
+
+  const hang = (xeId: number) => {
+    const s = slotOf(xeId);
+    return s === 1 ? 0 : s === 2 ? 1 : 2;
+  };
+  // Array.prototype.sort ổn định → xe khác giữ thứ tự xuất hiện (id nhỏ nhất của nhóm).
+  const cacNhom = Array.from(nhom.entries()).sort(([a], [b]) => hang(a) - hang(b));
+
+  const out: DongXeTheoNhom<R>[] = [];
+  for (const [xeId, g] of cacNhom) {
+    const slot = slotOf(xeId);
+    g.forEach((row, i) => out.push({ row, dauNhom: i === 0, slot }));
+  }
+  for (const row of chuaGanXe) out.push({ row, dauNhom: true, slot: null });
+  return out;
+}

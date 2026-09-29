@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId, resolveXeTaiKhoan } from "./xe-calc";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId, resolveXeTaiKhoan, xepDongXeTheoNhom } from "./xe-calc";
 
 describe("applyVat", () => {
   it("VAT 8% mặc định", () => {
@@ -111,5 +111,73 @@ describe("resolveXeTaiKhoan", () => {
 
   it("master null/undefined trong mảng → bỏ qua an toàn", () => {
     expect(resolveXeTaiKhoan({ xe_id: 43 }, [null, undefined, anhMinh])).toContain("VietinBank");
+  });
+});
+
+describe("xepDongXeTheoNhom", () => {
+  // Nhà xe A = xe 1 (id 17), nhà xe B = xe 2 (id 54); dòng phụ bấm "+" trên dòng
+  // nhà xe A SAU khi đã thêm dòng xe 2 → id lớn nhất.
+  const rows = [
+    { id: 26792, xe_id: 17, mo_ta: "Nhà xe A · 45 chỗ" },
+    { id: 26794, xe_id: 54, mo_ta: "Nhà xe B · 7 chỗ" },
+    { id: 26796, xe_id: 17, mo_ta: "Phụ phí" },
+  ];
+
+  it("dòng phụ đứng ngay dưới dòng cùng nhà xe, không nằm sau xe 2", () => {
+    const out = xepDongXeTheoNhom(rows, 17, 54);
+    expect(out.map((d) => [d.row.id, d.dauNhom, d.slot])).toEqual([
+      [26792, true, 1],
+      [26796, false, 1],
+      [26794, true, 2],
+    ]);
+  });
+
+  it("xe 1 luôn đứng trước xe 2 dù dòng xe 2 tạo trước", () => {
+    const out = xepDongXeTheoNhom(
+      [{ id: 1, xe_id: 54 }, { id: 2, xe_id: 17 }],
+      17, 54,
+    );
+    expect(out.map((d) => d.row.id)).toEqual([2, 1]);
+  });
+
+  it("trong nhóm giữ thứ tự id, không phụ thuộc thứ tự đầu vào", () => {
+    const out = xepDongXeTheoNhom(
+      [{ id: 30, xe_id: 17 }, { id: 10, xe_id: 17 }, { id: 20, xe_id: 17 }],
+      17, null,
+    );
+    expect(out.map((d) => [d.row.id, d.dauNhom])).toEqual([[10, true], [20, false], [30, false]]);
+  });
+
+  it("xe không còn gắn với đoàn (đã đổi xe): slot null, vẫn gom nhóm, đứng sau xe 1/xe 2", () => {
+    const out = xepDongXeTheoNhom(
+      [{ id: 1, xe_id: 99 }, { id: 2, xe_id: 17 }, { id: 3, xe_id: 99 }],
+      17, null,
+    );
+    expect(out.map((d) => [d.row.id, d.dauNhom, d.slot])).toEqual([
+      [2, true, 1],
+      [1, true, null],
+      [3, false, null],
+    ]);
+  });
+
+  it("dòng chưa gắn xe: mỗi dòng tự đứng đầu (không biết cùng nhà xe), xếp cuối", () => {
+    const out = xepDongXeTheoNhom(
+      [{ id: 1, xe_id: null }, { id: 2 }, { id: 3, xe_id: 17 }],
+      17, null,
+    );
+    expect(out.map((d) => [d.row.id, d.dauNhom, d.slot])).toEqual([
+      [3, true, 1],
+      [1, true, null],
+      [2, true, null],
+    ]);
+  });
+
+  it("đoàn chưa chọn xe (xe1Id null) → không dòng nào nhận slot 1", () => {
+    const out = xepDongXeTheoNhom([{ id: 1, xe_id: 17 }], null, null);
+    expect(out[0].slot).toBeNull();
+  });
+
+  it("danh sách rỗng", () => {
+    expect(xepDongXeTheoNhom([], 17, 54)).toEqual([]);
   });
 });
