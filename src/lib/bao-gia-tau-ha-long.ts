@@ -25,15 +25,18 @@ import {
   type ResolveMaps, type ResolvedItem,
 } from "./bao-gia-ai-resolve";
 
-/** Vé thăm vịnh Hạ Long, VND/khách — khớp dòng dịch vụ "Sea Octopus (vé vịnh)"
- *  trong danh mục. Vé lên giá thì sửa ở đây (giá đã áp vào báo giá cũ không đổi
- *  theo, vì đơn giá được cất vào từng báo giá lúc Áp dụng). */
-export const VE_VINH_HA_LONG = 310_000;
+/** Vé thăm vịnh Hạ Long, VND/khách — giá từ 01/07/2026 (trước đó 310.000), khớp
+ *  dòng "Vé vịnh" OP nhập ở chi phí đoàn. Vé lên giá thì sửa ở đây (giá đã áp vào
+ *  báo giá cũ không đổi theo, vì đơn giá được cất vào từng báo giá lúc Áp dụng). */
+export const VE_VINH_HA_LONG = 330_000;
 
 /** Tàu mà GIÁ SET trong danh mục là giá ĂN THUẦN, CHƯA gồm vé vịnh → phải cộng
  *  thêm. Các tàu còn lại: giá danh mục đã gồm vé vịnh (OP chốt 03/09/2026).
- *  So bằng tên đã bỏ dấu, khớp một phần — "Sea Octopus President" cũng dính. */
-const TAU_CHUA_GOM_VE_VINH = ["sea octopus"];
+ *  Dolphin + Queen thêm 29/09/2026: chi phí thật cho thấy hai tàu này thu vé vịnh
+ *  riêng ngoài giá set — coi là đã gồm thì báo giá hụt nguyên một vé mỗi khách.
+ *  So bằng tên đã bỏ dấu, khớp một phần — "Sea Octopus President" cũng dính.
+ *  "queen cruise" chứ không "queen": danh mục có nhà hàng "INDOCHINA QUEEN". */
+const TAU_CHUA_GOM_VE_VINH = ["sea octopus", "dolphin", "queen cruise"];
 
 /** Tàu dùng khi lịch trình chỉ ghi "ăn trên tàu" mà không nêu tên tàu nào —
  *  đúng thứ hệ thống vẫn ngầm làm từ trước, nay nói rõ ra bằng một cảnh báo. */
