@@ -24,7 +24,7 @@ import { usePaymentsByChiPhi } from "@/hooks/use-payments";
 import { useCongNoList } from "@/hooks/use-cong-no";
 import { useCurrentUserName } from "@/hooks/use-doan";
 import type { DNTTRow as DNTTRowDntt } from "@/hooks/use-dntt";
-import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId, resolveXeTaiKhoan } from "@/lib/xe-calc";
+import { applyVat, calcXeThanhTien, XE_VAT_DEFAULT, resolveXeNccId, resolveXeTaiKhoan, xepDongXeTheoNhom } from "@/lib/xe-calc";
 import { externalSupabase } from "@/lib/supabase-external";
 import DNTTNHPreviewModal from "./DNTTNHPreviewModal";
 import type { NHDocData, NHDocEntry } from "@/lib/export-dntt-nh-word";
@@ -149,7 +149,25 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
 
   const xeLabel = mkXeLabel(xe, t);
   const xe2Label = mkXeLabel(xe2, t);
-  // Map nha_cung_cap_id → TK ngân hàng nhà xe, gom CẢ 2 xe. ĐNTT in lấy STK theo
+
+  // Hoàn tiền → ẩn dòng khỏi tab (chỉ giữ record ở sidebar Thanh toán/UNC). Tính TRƯỚC
+  // khi xếp nhóm, kẻo dòng phụ bị thụt vào dưới một dòng xe đã ẩn.
+  const hoanTienCuaDong = (rowId: number) => {
+    const dnttIds = dnttList
+      .filter((d) => d.ref_loai === "doan_chi_phi" && d.ref_id === rowId)
+      .map((d) => d.id);
+    return congNoList
+      .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
+      .reduce((s, c) => s + c.so_tien_goc, 0);
+  };
+  // Dòng phụ ("+") đứng ngay dưới dòng cùng nhà xe, thay vì theo id (rơi xuống sau xe 2).
+  const dongXeHienThi = xepDongXeTheoNhom(
+    xeRows.filter((r) => hoanTienCuaDong(r.id) === 0),
+    xe?.id,
+    xe2?.id,
+  );
+  const tenNhaXeCuaSlot = (slot: 1 | 2 | null) =>
+    (slot === 1 ? xe : slot === 2 ? xe2 : null)?.nha_xe?.ten?.trim() || null;  // Map nha_cung_cap_id → TK ngân hàng nhà xe, gom CẢ 2 xe. ĐNTT in lấy STK theo
   // đúng NCC của từng nhóm (trước đây chỉ lấy xe 1 → xe 2 NCC khác thiếu STK).
   const xeTkttByNcc = useMemo(() => {
     const m: Record<number, string> = {};
@@ -490,8 +508,9 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {xeRows.map((row) => {
+              {dongXeHienThi.map(({ row, dauNhom, slot }) => {
                 const local = getRowEdit(row);
+                const tenNhaXe = tenNhaXeCuaSlot(slot);
                 const thanhTienLocal = calcXeThanhTien(local.so_luong, local.don_gia_raw, local.vat_pct);
 
                 const allDntts = dnttList.filter(
@@ -512,9 +531,7 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
                 const congNoAmount = congNoList
                   .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "con_du")
                   .reduce((s, c) => s + c.so_tien_con_lai, 0);
-                const hoanTienAmount = congNoList
-                  .filter((c) => c.dntt_goc_id != null && dnttIds.includes(c.dntt_goc_id) && c.trang_thai === "da_hoan_tien")
-                  .reduce((s, c) => s + c.so_tien_goc, 0);
+                const hoanTienAmount = hoanTienCuaDong(row.id);
                 // Hoàn tiền → ẩn khỏi tab Chi phí của đoàn, chỉ giữ record ở sidebar Thanh toán/UNC
                 if (hoanTienAmount > 0) return null;
                 const activeDntt = pendingDntts[0] ?? paidDntts[0] ?? null;
@@ -529,15 +546,31 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
 
                 return (
                   <React.Fragment key={row.id}>
-                  <tr className="hover:bg-muted/20">
-                    {/* Mô tả (+ badge thuộc xe nào khi đoàn có 2 xe) */}
+                  {/* Dòng phụ: viền trên nét đứt để dính với dòng xe phía trên (cùng nhà xe). */}
+                  <tr className={cn("hover:bg-muted/20", !dauNhom && "border-dashed")}>
+                    {/* Mô tả: dòng đầu nhóm có badge Xe 1/Xe 2 (đoàn 2 xe); dòng phụ thụt vào
+                        dưới nó + tên nhà xe, KHÔNG gắn badge (trông như một xe riêng). */}
                     <td className="px-4 py-2.5 font-medium">
-                      {xe2Label && row.xe_id != null && (
-                        <span className="mr-1.5 px-1 py-px rounded text-[9px] font-medium bg-green-100 text-green-700 align-middle">
-                          {xe2?.id != null && row.xe_id === xe2.id ? t("Xe 2") : t("Xe 1")}
+                      {dauNhom ? (
+                        <>
+                          {xe2Label && slot != null && (
+                            <span className="mr-1.5 px-1 py-px rounded text-[9px] font-medium bg-green-100 text-green-700 align-middle">
+                              {slot === 2 ? t("Xe 2") : t("Xe 1")}
+                            </span>
+                          )}
+                          {row.mo_ta || "—"}
+                        </>
+                      ) : (
+                        <span className="flex items-center gap-1.5 pl-3 min-w-0" title={t("Cùng nhà xe với dòng trên")}>
+                          <span className="text-muted-foreground shrink-0">↳</span>
+                          <span className="break-words min-w-0">{row.mo_ta || "—"}</span>
+                          {tenNhaXe && !(row.mo_ta ?? "").toLowerCase().includes(tenNhaXe.toLowerCase()) && (
+                            <span className="shrink-0 px-1 py-px rounded text-[9px] font-medium bg-green-50 text-green-700 border border-green-200 whitespace-nowrap">
+                              {tenNhaXe}
+                            </span>
+                          )}
                         </span>
                       )}
-                      {row.mo_ta || "—"}
                     </td>
 
                     {/* SL */}
@@ -784,7 +817,9 @@ export default function ChiPhiXeSection({ doanId, xe, xe2 = null, tenDoan, ngayB
                     <tr className="bg-amber-50/60 border-b border-dashed border-amber-200">
                       <td colSpan={anTT ? 7 : 9} className="px-4 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] text-amber-700 font-medium shrink-0">↳ {t("Phụ phí")}</span>
+                          <span className="text-[10px] text-amber-700 font-medium shrink-0">
+                            ↳ {t("Phụ phí")}{tenNhaXe ? ` · ${tenNhaXe}` : ""}
+                          </span>
                           <Input
                             autoFocus
                             placeholder={t("Mô tả (vd: Xe trung chuyển)")}
