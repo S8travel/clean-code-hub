@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { useDoanList, useCreateDoan, useUpdateDoan, useDeleteDoan, useCancelDoan } from "@/hooks/use-doan";
+import { useDoanList, useDoanChiTiet, useCreateDoan, useUpdateDoan, useDeleteDoan, useCancelDoan } from "@/hooks/use-doan";
 
 // Supabase chainable builder factory
 function makeBuilder(resolved: { data: unknown; error: unknown }) {
@@ -70,6 +70,29 @@ describe("useDoanList", () => {
 
     const { result } = renderHook(() => useDoanList(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe("useDoanChiTiet", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("tải ĐÚNG một đoàn theo id (không tải cả danh sách)", async () => {
+    const builder = makeBuilder({ data: { id: 42, ten_doan: "Tour B" }, error: null });
+    mockFrom.mockReturnValue(builder);
+
+    const { result } = renderHook(() => useDoanChiTiet(42), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ id: 42, ten_doan: "Tour B" });
+    expect(builder.eq).toHaveBeenCalledWith("id", 42);
+    expect(builder.maybeSingle).toHaveBeenCalled();
+  });
+
+  it("id không hợp lệ (URL rác) → không gọi DB", () => {
+    renderHook(() => useDoanChiTiet(Number("abc")), { wrapper: makeWrapper() });
+    renderHook(() => useDoanChiTiet(0), { wrapper: makeWrapper() });
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
 
