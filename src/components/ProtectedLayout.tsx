@@ -4,6 +4,14 @@ import { AppLayout } from "./AppLayout";
 import { DailyBriefModal } from "./DailyBriefModal";
 import { t, useTranslate } from "@/lib/i18n";
 import { resolveAgentScope, duongDanChoPhepAgent, TRANG_MAC_DINH_AGENT } from "@/lib/agent-scope";
+import { useDoanRealtime } from "@/hooks/use-doan";
+
+/** Một kênh realtime bảng `doan` cho cả app (vá cache tại chỗ — xem useDoanRealtime).
+ *  Component riêng để chỉ đăng ký SAU khi đã đăng nhập (realtime cần phiên để qua RLS). */
+function DongBoDoanRealtime() {
+  useDoanRealtime();
+  return null;
+}
 
 export function ProtectedLayout() {
   useTranslate();
@@ -31,6 +39,7 @@ export function ProtectedLayout() {
 
   return (
     <AppLayout>
+      <DongBoDoanRealtime />
       {!laTaiKhoanAgent && <DailyBriefModal />}
       <Outlet />
     </AppLayout>

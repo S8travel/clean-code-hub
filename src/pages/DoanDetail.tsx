@@ -11,10 +11,11 @@ import { parseDoanTab } from "@/lib/doan-cancel-check";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
 import { duocDienNhaHangTuBooking } from "@/lib/nh-booking-dong-bo";
+import { taoHangDoiLuu } from "@/lib/hang-doi-luu";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { type DieuTourExportData } from "@/lib/export-dieu-tour-word";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDoanList, useDoanDetailRealtime, useUserRoles } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
+import { useDoanChiTiet, useDoanDetailRealtime, useUserRoles } from "@/hooks/use-doan"; // useDoanPermissions: FEATURE_DOAN_PERM_DISABLED
 import { useAuth } from "@/hooks/use-auth";
 import { useHDVList, formatHdvsForEmail } from "@/hooks/use-hdv";
 import { danhSachHdvCoVaiTro } from "@/lib/hdv-doan";
@@ -87,7 +88,8 @@ export default function DoanDetail() {
   // (an toàn nhờ chốt hasPendingChangesRef ở local state điều tour).
   useDoanDetailRealtime(doanId);
 
-  const { data: groups, isLoading } = useDoanList();
+  // Chỉ tải ĐÚNG đoàn này — không tải cả danh sách để tìm một dòng.
+  const { data: doanRow, isLoading } = useDoanChiTiet(doanId);
   const { data: userRoles } = useUserRoles();
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
@@ -120,9 +122,7 @@ export default function DoanDetail() {
   // Tài khoản đối tác (agent_ids): đoàn ngoài agent của họ coi như không tồn tại.
   const agentScope = resolveAgentScope(currentUser?.agent_ids);
   const laTaiKhoanAgent = agentScope != null;
-  const doan = groups?.find(
-    (g) => String(g.id) === id && doanInAgentScope(g.agent_id, agentScope),
-  );
+  const doan = doanRow && doanInAgentScope(doanRow.agent_id, agentScope) ? doanRow : undefined;
 
   // Local state for editable fields
   const [bangDon, setBangDon] = useState("");
@@ -161,7 +161,10 @@ export default function DoanDetail() {
   const [ksHuyMail, setKsHuyMail] = useState<{
     pending: KsPhiHuyPending; phiHuy: number; lyDo: string; mode: "phi_huy" | "de_sau";
   } | null>(null);
-  const ksGateBusyRef = useRef(false);
+  // Một lượt lưu (gate + ghi DB) tại một thời điểm — xem lib/hang-doi-luu.ts. Thay cho cờ
+  // ksGateBusyRef cũ: cờ đó chỉ phủ bước gate, và lần lưu tới đúng lúc gate đang chạy bị
+  // BỎ QUA luôn (không hẹn lại) → sửa đổi nằm trên màn hình mà không xuống DB.
+  const hangDoiLuuRef = useRef(taoHangDoiLuu());
   // Đã ghi DB cho ít nhất 1 KS trong lượt đổi này (không hoàn tác được).
   const ksCommittedRef = useRef(false);
   // Cảnh báo "đêm đang giữ tiền bị đụng" — ca mà checkKsPhiHuyOnChange cố tình bỏ qua
@@ -297,9 +300,28 @@ export default function DoanDetail() {
   // Cleanup timer on unmount
   useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
 
+  // Chạy lại gate SAU khi React đã flush (setState ở trên đã vào state, doSaveRef đã
+  // trỏ closure mới).
+  //
+  // KHÔNG gọi `doSaveRef.current?.()` thẳng: lúc đó React chưa re-render, doSaveRef vẫn
+  // trỏ closure CŨ với `ksPhiHuyPending` truthy → doSave early-return → `runSave()`
+  // không chạy → `doan_ngay.khach_san_id` không bao giờ được lưu (đổi KS "mất tích").
+  // setTimeout(0) là macrotask, luôn chạy sau khi React commit.
+  const rerunGateSoon = useCallback(() => {
+    setTimeout(() => doSaveRef.current?.(), 0);
+  }, []);
+
+  // Nhả hàng đợi lưu. Có yêu cầu lưu dồn lại trong lúc chạy → chạy thêm MỘT lượt, qua
+  // doSaveRef để lấy dữ liệu mới nhất trên màn hình (không dùng closure cũ).
+  const xongLuotLuu = useCallback(() => {
+    if (hangDoiLuuRef.current.ketThuc()) rerunGateSoon();
+  }, [rerunGateSoon]);
+
   const runSave = useCallback(() => {
     if (!doanId) return;
     setSaveStatus("saving");
+    // Mốc số lần sửa lúc bắt đầu — xong lượt này mà OP đã gõ thêm thì màn hình mới hơn DB.
+    const mocSua = hangDoiLuuRef.current.moc;
     saveMutation.mutate(
       {
         doanId,
@@ -334,9 +356,16 @@ export default function DoanDetail() {
       },
       {
         onSuccess: async (result) => {
-          hasPendingChangesRef.current = false;
-          setSaveStatus("saved");
-          setTimeout(() => setSaveStatus("idle"), 800);
+          // OP sửa tiếp trong lúc lượt này chạy → GIỮ cờ sửa dở: refetch ngay dưới đây
+          // không được đè `days` trên màn hình bằng bản cũ hơn. Lượt lưu kế ghi nốt.
+          const suaThem = hangDoiLuuRef.current.coSuaSau(mocSua);
+          if (suaThem) {
+            setSaveStatus("pending");
+          } else {
+            hasPendingChangesRef.current = false;
+            setSaveStatus("saved");
+            setTimeout(() => setSaveStatus("idle"), 800);
+          }
           queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_booking_ks", doanId] });
@@ -392,6 +421,9 @@ export default function DoanDetail() {
               { duration: 6000 },
             );
           }
+          // Nhả hàng đợi SAU đồng bộ Booking DV — nó là đuôi của lượt lưu, lượt kế chạy
+          // chồng lên nó thì hai lượt cùng sửa doan_booking_dv.
+          xongLuotLuu();
         },
         onError: (err: unknown) => {
           setSaveStatus("error");
@@ -408,6 +440,9 @@ export default function DoanDetail() {
             // (trả cảnh điểm về, hoặc hủy ĐNTT). Để badge đỏ "Lỗi lưu" đứng mãi thì OP
             // tưởng hệ thống hỏng.
             setTimeout(() => setSaveStatus("idle"), 3000);
+            // `days` được giữ nguyên → chạy nốt lượt dồn lại là an toàn (có thể chính nó
+            // là thao tác OP vừa sửa để gỡ vướng).
+            xongLuotLuu();
             return;
           }
 
@@ -415,26 +450,19 @@ export default function DoanDetail() {
           // Lỗi KHÔNG phải guard → có thể đã ghi một phần (mạng đứt, race sau backstop).
           // Không biết DB đang ở đâu → refetch kéo UI về đúng sự thật.
           hasPendingChangesRef.current = false;
-          queryClient.invalidateQueries({ queryKey: ["doan", doanId] });
+          // (Khoá cũ ["doan", doanId] không khớp query nào → đoàn không hề được tải lại.)
+          queryClient.invalidateQueries({ queryKey: ["doan", "chi_tiet", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_ngay", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] });
           queryClient.invalidateQueries({ queryKey: ["doan_chi_phi", doanId] });
           setTimeout(() => setSaveStatus("idle"), 3000);
+          // Bỏ lượt dồn lại: màn hình sắp bị kéo về DB, lưu tiếp bản đang hiển thị lúc
+          // này là ghi đè sự thật vừa đọc về. OP sửa lần nữa thì autosave hẹn lại.
+          hangDoiLuuRef.current.ketThuc();
         },
       }
     );
-  }, [doanId, activeNhomId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, doanSoKhachLon, doanSoKhachEm1, doanSoKhachEm2, doanSoKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient]);
-
-  // Chạy lại gate SAU khi React đã flush (setState ở trên đã vào state, doSaveRef đã
-  // trỏ closure mới).
-  //
-  // KHÔNG gọi `doSaveRef.current?.()` thẳng: lúc đó React chưa re-render, doSaveRef vẫn
-  // trỏ closure CŨ với `ksPhiHuyPending` truthy → doSave early-return → `runSave()`
-  // không chạy → `doan_ngay.khach_san_id` không bao giờ được lưu (đổi KS "mất tích").
-  // setTimeout(0) là macrotask, luôn chạy sau khi React commit.
-  const rerunGateSoon = useCallback(() => {
-    setTimeout(() => doSaveRef.current?.(), 0);
-  }, []);
+  }, [doanId, activeNhomId, bangDon, shopping, truongDoan, chuyenBayDon, chuyenBayTien, soKhachLon, soKhachEm1, soKhachEm2, soKhachTl, doanSoKhachLon, doanSoKhachEm1, doanSoKhachEm2, doanSoKhachTl, coTinhSuatTLNhaHang, chuThichKhach, gifts, ghiChuDieuTour, thuTip, tipRate, tipSoNgayOverride, tipSoKhachOverride, tipLumpSum, days, totalKhach, doan, canhDiemList, nhaHangList, khachSanList, saveMutation, queryClient, xongLuotLuu]);
 
   // Gate TRƯỚC autosave: KS cũ rời khỏi lịch trình mà còn ĐNTT sống HOẶC còn booking
   // đã gửi mail → dừng, hỏi (phí hủy / mail hủy) RỒI mới lưu. Nếu chạy save trước thì
@@ -445,8 +473,11 @@ export default function DoanDetail() {
   // mồ côi, khách sạn không hề biết mình bị hủy. Nay mọi pending đều hỏi OP.
   const doSave = useCallback(async () => {
     if (!doanId) return;
-    if (ksPhiHuyPending || ksBotDem || ksGateBusyRef.current) return; // modal đang mở / gate đang chạy
-    ksGateBusyRef.current = true;
+    if (ksPhiHuyPending || ksBotDem) return; // modal đang mở — modal tự chạy lại gate khi đóng
+    // Lượt trước (gate hoặc ghi DB) chưa xong → KHÔNG chạy chồng; hàng đợi hẹn chạy lại
+    // đúng một lượt ngay khi lượt đó xong.
+    if (!hangDoiLuuRef.current.batDau()) return;
+    let quaGate = false;
     try {
       const pendings = await checkKsPhiHuyOnChange({ doanId, days, dbNgayRows });
       if (pendings.length > 0) {
@@ -471,12 +502,12 @@ export default function DoanDetail() {
         setSaveStatus("pending");
         return;
       }
+      quaGate = true;
     } catch (e) {
       // KS dính ĐNTT không thuộc riêng đoàn này (thanh toán định kỳ): KHÔNG đổi được,
       // nhưng cũng KHÔNG được để autosave chết cả tour. Trả riêng những ngày đó về KS
       // cũ rồi lưu tiếp mọi thay đổi khác của OP.
       if (e instanceof KsDnttNgoaiPhamViError) {
-        ksGateBusyRef.current = false;
         setDays((prev) => prev.map((d) =>
           d.id && e.dayIds.includes(d.id) ? { ...d, khach_san_id: e.oldKsId } : d,
         ));
@@ -488,12 +519,14 @@ export default function DoanDetail() {
       toast.error(errMsg(e) || t("Lỗi kiểm tra đổi khách sạn"), { duration: 12000 });
       return;
     } finally {
-      ksGateBusyRef.current = false;
+      // Dừng ở bước hỏi OP / lỗi kiểm tra → nhả hàng đợi ngay. Qua gate thì runSave nhả
+      // khi ghi DB xong (onSuccess / onError).
+      if (!quaGate) xongLuotLuu();
     }
     ksCommittedRef.current = false; // gate sạch → lượt đổi kết thúc, reset cờ batch
     ksBotDemOkRef.current.clear(); // lượt đổi xong → lần sửa sau phải hỏi lại từ đầu
     runSave();
-  }, [doanId, days, dbNgayRows, ksPhiHuyPending, ksBotDem, runSave, rerunGateSoon]);
+  }, [doanId, days, dbNgayRows, ksPhiHuyPending, ksBotDem, runSave, rerunGateSoon, xongLuotLuu]);
 
   // ── Cảnh báo "đêm đang giữ tiền" — 3 lối thoát, không lối nào tự đụng tiền ──────
   const botDemGiuNguyen = useCallback(() => {
@@ -623,6 +656,7 @@ export default function DoanDetail() {
 
   const scheduleSave = useCallback(() => {
     if (!canEdit || !doanId) return;
+    hangDoiLuuRef.current.daSua();
     setSaveStatus("pending");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
